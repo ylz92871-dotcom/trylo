@@ -1,0 +1,25 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Trylo — final brand mark</title>
+  <desc id="desc">Trylo gold 4-stroke X mark (Z-up / S-down) on a Trylo black rounded square.</desc>
+  <defs>
+    <linearGradient id="aurora" x1="232" y1="220" x2="812" y2="804" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F0DE91"/>
+      <stop offset="0.55" stop-color="#DEC86F"/>
+      <stop offset="1" stop-color="#C6AB50"/>
+    </linearGradient>
+    <clipPath id="chip">
+      <rect width="1024" height="1024" rx="224" ry="224"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#chip)">
+    <rect width="1024" height="1024" fill="#0E0E0E"/>
+  </g>
+  <!-- 图形放大到画布 ~76% 并做光学居中：先平移再把 1024 视图中的标记整体放大 1.36 倍
+       （描边随之变为 64 × 1.36 ≈ 87，保证小尺寸下的实心感） -->
+  <g transform="translate(-210.16 -146.24) scale(1.36)"
+     stroke="url(#aurora)" stroke-width="64" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M462 236 L462 420 L624 420"/>
+    <path d="M276 732 L424 644 L356 512"/>
+    <path d="M540 676 L622 546 L786 640"/>
+  </g>
+</svg>

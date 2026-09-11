@@ -1,167 +1,119 @@
 <div align="center">
 
-<img src="docs/images/trylo-mark.svg" width="88" alt="Trylo mark" />
+<img src="desktop/public/logo/trylo-logo-final.svg" width="96" alt="Trylo" />
 
 # Trylo
 
-**An agent-native development environment with a long-running personal agent at its core.**
+**Trylo Desktop — a Tauri 2 shell hosting two sub-apps: Code, for code work; Work, for document deliverables.**
+
+[English](README.md) | [简体中文](README.zh-CN.md)
 
 [![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android-4c8dd8)]()
 [![Status](https://img.shields.io/badge/status-alpha%20%2F%20WIP-orange)]()
-[![Built with](https://img.shields.io/badge/built%20with-Tauri%202%20%2B%20React-ffc233)]()
-
-[Website](https://trylocode.me) · [Web Chat](https://chat.trylocode.me) · [Android App](https://trylocode.me)
 
 </div>
 
----
+> **Status: work in progress.** The desktop client is an alpha in daily use. The `trylo` CLI is under active development and is **not** part of this repository. Interfaces and directory layout will move.
 
-Trylo is a workspace where a personal agent doesn't just answer questions — it
-**lives across sessions**: it plans on a board, works through task seats,
-keeps a memory that survives restarts, and drives real tools (Office
-documents, spreadsheets, presentations, browsers) on your machine.
+## The two sub-apps
 
-A year ago it was a panel in a sidebar. Now it has its own window, a desktop
-pet that follows your cursor, a phone in your pocket that can remote-command
-your machine — and a learning system that actually studies how *you* work.
+| Sub-app | Where it lives | What it does |
+|---|---|---|
+| **Code** | `desktop/` | IDE — Monaco editor, file tree, LSP, agent chat for code work, driven through `trylo-runner` |
+| **Work** | `work/` | Document / spreadsheet / presentation / web artifacts — generates `.docx` / `.xlsx` / `.pptx` |
+
+The two sub-apps are independent at the runtime level — they don't share code or process state. They share the Tauri shell (window, menu, tray), the design system (`desktop/src/styles/tokens.css`), and the workspace path.
 
 <p align="center">
-  <img src="docs/images/preview-code.png" width="820" alt="Trylo desktop — Code mode" />
+  <img src="docs/images/code-surface.png" width="49%" alt="Code sub-app" />
+  <img src="docs/images/work-surface.png" width="49%" alt="Work sub-app" />
 </p>
 
-> **Status: work in progress.** The desktop client is in daily use as an
-> alpha, and the Android app is released. The packaged `trylo` CLI is under
-> active development and is **not** part of this repository yet. Expect rough
-> edges, fast movement, and an honest commit history.
+Cross-device control: pair the Android app with the desktop over a QR code to watch tasks, send messages, and approve sensitive operations remotely.
 
-## Two rhythms, one conversation
+<p align="center">
+  <img src="docs/images/remote-pairing.png" width="300" alt="Remote pairing" />
+</p>
 
-**Code** owns the code. **Work** owns the deliverable. Thinking, executing and
-shipping happen in the same chat window — you just switch gears.
+## User learning
 
-| | **Code** — pair-programming mode | **Work** — delivery mode |
-|---|---|---|
-| **Chat** | Ask about any line of code like you'd ask a colleague. Answers land in real project context — no guessing, no making things up. | Knows what "done" means: a deck, a page, a set of docs — and pushes the task to an actual artifact. |
-| **Plan** | Reads the project, searches related code, unfolds its reasoning, then offers one-click implementation. | Advances through briefed stages — outline → visuals → per-page generation → QA — and pauses for your approval at the gates. |
-| **Agent** | Reads files, edits code, builds tests, runs verification — live progress, stoppable at any time. | Results land in a result dock; unhappy with a page? Revise just that page. |
-| **Cognition** | A single entry point where a few conversations become evidence the learning system starts from. | — |
+Beyond following instructions, the agent builds a model of how *you* work — and the learning is deliberately gated. The loop lives in `desktop/src/user-learning/` and `desktop-services/src/learning/`:
 
-## One partner, everywhere
-
-Four release surfaces, one memory and approval system.
-
-| Surface | Platform | What it does |
-|---|---|---|
-| **Trylo Desktop** | Windows · Tauri 2 *(alpha)* | The host: Code / Work dual mode, tool platform, desktop pet, remote gateway. |
-| **Trylo Code mobile** | Android · [released](https://trylocode.me) | Chat direct to 24 model providers; scan a QR to remote-command the desktop and approve sensitive operations. |
-| **Trylo Miu (pet)** | Windows · WPF | Acts out the agent's live state: analyzing, coding, reviewing, done. |
-| **Web chat** | [chat.trylocode.me](https://chat.trylocode.me) | No install needed; an early demo — desktop remains the source of truth. |
-
-## Under the hood
-
-Quiet, boring-on-purpose fundamentals — the kind you notice every day:
-
-- **Local-first** — OpenAI / Anthropic-compatible custom endpoints; the model
-  is your choice, and mobile sessions stay on the device.
-- **Keys never leave the machine** — desktop keys are stored locally; on
-  Android they sit in the Keystore with cloud backup disabled.
-- **Approval culture** — writes require approval, prompt-injection scanning,
-  skill safety review, and a fail-close default: suspicious means blocked.
-- **Cross-device** — QR pairing between phone and desktop over a
-  Cloudflare Tunnel + one-time ticket; watch tasks, send messages, grant
-  permissions remotely.
-- **Real tools** — Office documents, Playwright browser automation, Windows
-  control, DevTools debugging. Toggle per tool, health at a glance.
-- **Tested** — 1,386 + 353 + 301 automated tests kept green, strict Rust
-  Clippy, and persistent sessions that survive closing the window.
-
-## How the pieces fit
-
-```
-┌─────────────────────────────┐     ┌──────────────────────────────┐
-│  desktop (Tauri)            │     │  desktop-services (Node)     │
-│  chat · team seats · work   │◄───►│  host loop · learning · pet  │
-│  settings · tool cards      │IPC  │  chat · remote gateway       │
-└──────────────┬──────────────┘     └──────────────────────────────┘
-               │ drives
-        ┌──────▼──────────┐
-        │  agent runtime   │  installed separately (Claude Code),
-        │  + your tools    │  plus MCP tools (OfficeCLI, AutoCAD…)
-        └─────────────────┘
+```text
+evidence → conclusion → user model → policy
+(observed behaviour)   (enforced / shadow / off)
 ```
 
-The desktop client is an agent **host**, not an agent: it drives a locally
-installed agent runtime and MCP tools. One of those tools is
-[OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) — an AI-friendly CLI for
-Office documents that Trylo contributes to upstream.
+- **Grounding** — evidence comes only from what you actually did or said (`evidence.ts`, `evidence-grounding.ts`): approvals, stops, steering messages, artifact feedback. Inferred or invented preferences are not evidence.
+- **Scope isolation** — learning is scoped per project (`scope.ts`); habits picked up in one workspace don't leak into another.
+- **Shadow first** — every policy dimension has three states, `enforced` / `shadow` / `off` (`policy.ts`). A new rule runs in shadow and is only promoted once it has been observed to be non-disruptive.
+- **Brake** — when a preference is high-impact and still unsettled, the run doesn't start: `impact-check.ts` flags the impact and `decision-governor.ts` returns `pending_impact` instead of `ready`.
+- **Where it runs** — all of it is local. The slower half lives in the Node sidecar: `learning-loop-service`, `history-mining-service`, `shadow-runner`, `curation-service`, `pending-admin-service`.
+
+## Architecture
+
+<p align="center">
+  <img src="docs/images/architecture.svg" width="860" alt="Architecture" />
+</p>
+
+The desktop client is an agent **host**, not an agent: it drives a locally installed agent runtime and MCP tools. One of those tools is [OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) — an AI-friendly CLI for Office documents that Trylo contributes to upstream.
+
+At package time these ride along as Tauri resources: `desktop-services`, `work`, `workd`, `sidecars/desktop-companion` (the pet), `sidecars/hermes-capabilities`.
 
 ## Repository map
 
-```
-trylo/
-├── desktop/            Tauri desktop client (React/TS UI + Rust shell)
-├── desktop-services/   Node sidecar: service-host loop, learning loop,
-│                       pet-chat, remote gateway adapters, tool health
-├── work/               The Work module: task board, recordings, agent conduct
-├── mobile-app/         Capacitor mobile shell (Android)
-├── trylocode-site/     Product website (Cloudflare Pages)
-├── docs/               Test fixtures used by the desktop host-adapter suite
-└── scripts/            Workspace helper scripts
-```
+| Directory | Package | What it is |
+|---|---|---|
+| `desktop/` | `trylo-desktop` | Tauri client: React/TS front end + Rust shell |
+| `desktop-services/` | `@trylo/desktop-services` | Node sidecar: service-host loop, learning loop, pet-chat, remote gateway |
+| `work/` | `@trylo/work` | Work sub-app: `trylo-workd` daemon, control plane, deliverables |
+| `mobile-app/` | `trylocode` | Capacitor mobile shell (Android) |
+| `trylocode-site/` | — | Product website (Cloudflare Pages) |
+| `docs/` | — | Fixtures used by the desktop host-adapter test suite |
+| `scripts/` | — | Workspace helper scripts |
 
-## Getting started (development)
+## Getting started
 
-Prerequisites: Node 20+, pnpm 9+, Rust toolchain (for Tauri).
+Prerequisites: **Node 22+** (for `desktop` / `desktop-services`; `work` needs 20+), pnpm, and a Rust toolchain (for the Tauri build).
 
 ```bash
-# desktop client (dev loop)
-cd desktop
-pnpm install
-pnpm tauri:dev
+# desktop client
+cd desktop && pnpm install && pnpm tauri:dev
 
-# service sidecar
-cd desktop-services
-npm install
-npm start        # node src/host.mjs
+# desktop-services sidecar
+cd desktop-services && npm install && npm start   # node src/host.mjs
 
-# website (Cloudflare Pages)
-cd trylocode-site
-npm install
-node deploy.mjs  # deploy; see DEPLOY.md
+# Work daemon
+cd work && node ./bin/trylo-workd.mjs
+
+# website (Cloudflare Pages, see DEPLOY.md)
+cd trylocode-site && npm install && node deploy.mjs
 ```
 
-> The agent runtime is **not** bundled in this repository. Install
-> [Claude Code](https://code.claude.com/docs) locally; the desktop client
-> adapts to it. Vendored tooling (ripgrep) is attributed in [NOTICE](NOTICE).
+## Tests
 
-## Documentation
+Each package carries its own suite:
 
-This is the first public drop: code, tests, and the site. The architecture
-notes, audit reports, and product specifications that drove development so far
-were written as internal working documents — they will be curated for
-publication over time. Until then, the architecture sketch above is the source
-of truth, and the code comments in `desktop/src/host-adapter/` and
-`desktop-services/src/` carry the per-module detail.
+```bash
+cd desktop           && pnpm test   # vitest
+cd desktop-services  && npm test    # node --test + pet-chain smoke
+cd work              && npm test    # node --test (TS via register hook)
+```
+
+The desktop client also has `pnpm typecheck`, `pnpm lint`, and `pnpm format:check`.
+
+## Not in this repository
+
+- **The `trylo` CLI** — in development, not open-sourced yet.
+- **The agent runtime** — install it locally; the desktop client adapts to it via `host-adapter`.
+- **Internal docs** — architecture notes, audit reports, and specs were written as internal working documents and will be curated over time. Until then, the diagram above plus the comments in `desktop/src/host-adapter/` and `desktop-services/src/` are the best detail source.
+- Third-party components (including vendored ripgrep) are attributed in [NOTICE](NOTICE).
 
 ## Contributing
 
-Early days: the architecture is still moving. Issue reports and focused PRs
-are welcome — see the repository map above for where things live. Larger
-surfaces (team seats, learning loop) are in flux; open an issue to discuss
-before building against internals.
+Early days — the architecture is still moving. Issues and focused PRs are welcome; check the repository map to see where a change belongs. Surfaces that are still in flux (learning loop, team seats): open an issue before building against internals.
 
 ## License
 
-[Apache-2.0](LICENSE). Third-party components are attributed in
-[NOTICE](NOTICE). The separately installed agent runtime keeps its own license
-and terms.
-
----
-
-<div align="center">
-
-*Ideas deserve to be built — from an idea, to a try, to a product.*
-**Build fast. Learn faster. Keep shipping.**
-
-</div>
+[Apache-2.0](LICENSE). Third-party components are attributed in [NOTICE](NOTICE). The separately installed agent runtime keeps its own license and terms.
