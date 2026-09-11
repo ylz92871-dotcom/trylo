@@ -4,7 +4,7 @@
 
 # Trylo
 
-**Trylo Desktop — 一个 Tauri 2 外壳，里面跑着两个子应用：Code 管代码，Work 交成品。**
+**Trylo Desktop —— 一个会学习你怎么干活的 Agent 宿主。今天它有两个子应用：Code 管代码，Work 交成品。**
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
@@ -16,7 +16,28 @@
 
 > **状态：进行中。** 桌面端处于 alpha，日常自用。`trylo` CLI 仍在开发中，**不在本仓库**。接口与目录结构都可能变动。
 
-## 两个子应用
+## 理念：会反过来学习你的 Agent
+
+大多数 Agent 每次会话都从零开始——同样的问题、同样的纠正、同样的坑。Trylo 的赌注正好相反：**Agent 应该一点点积累出"你怎么工作"的模型**，而这个模型必须是**挣来的，不是猜来的**。
+
+整套设计的出发点只有一句：**误解你，比不了解你更糟**。所以学习不是"把聊天记录塞进向量库"，而是一条**带闸门的流水线**：
+
+<p align="center">
+  <img src="docs/images/learning-loop.svg" width="720" alt="学习闭环" />
+</p>
+
+**证据 → 结论 → 用户模型 → 策略。** 证据只来自你真实做过的事：审批、叫停、中途纠正、对产物的反馈（`evidence.ts`、`evidence-grounding.ts`）；结论从证据里归纳；模型按**用户 + 项目**两个维度沉淀；最后由策略去驱动 Code 与 Work。
+
+路上设了四道闸：
+
+- **证据必须真实（grounding）** —— 推断出来的不是证据，只有被观察到的行为才算（`evidence-grounding.ts`）。
+- **范围隔离（scoping）** —— 学习按项目隔离（`scope.ts`），这个项目养成的习惯永远不会变成那个项目的规矩。
+- **先跑影子模式（shadow-first）** —— 每条策略维度有 `enforced` / `shadow` / `off` 三态（`policy.ts`）。新规则先在暗处观察，确认无扰才真正生效。
+- **拿不准就刹车（brake）** —— 存在高影响且尚未确定的偏好时，任务不会启动：`impact-check.ts` 判定影响，`decision-governor.ts` 返回 `pending_impact` 而不是 `ready`。宁可停下，也不误解你。
+
+这一切都跑在你自己的机器上。慢的那一半在 `desktop-services` 这个 Node 侧车里：`learning-loop-service`、`history-mining-service`、`shadow-runner`、`curation-service`、`pending-admin-service`。代码在 `desktop/src/user-learning/`、`desktop/src/learning/` 和 `desktop-services/src/learning/`。
+
+## 今天它是什么：两个子应用
 
 | 子应用 | 位置 | 做什么 |
 |---|---|---|
@@ -35,21 +56,6 @@
 <p align="center">
   <img src="docs/images/remote-pairing.png" width="300" alt="远程配对" />
 </p>
-
-## Agent 学习：用户学习系统
-
-它不只是照指令干活，还会建立"你怎么工作"的模型——而且学习过程本身是带闸门的。代码在 `desktop/src/user-learning/` 与 `desktop-services/src/learning/`：
-
-```text
-证据 evidence → 结论 conclusion → 用户模型 user model → 策略 policy
-（真实行为）                      （enforced / shadow / off 三态）
-```
-
-- **证据必须真实（grounding）** —— 证据只来自你实际做过、说过的事（`evidence.ts`、`evidence-grounding.ts`）：审批、叫停、中途纠正、对产物的反馈。模型推断或脑补的偏好不算证据。
-- **范围隔离（scoping）** —— 学习按项目隔离（`scope.ts`），这个项目里养成的习惯不会串到另一个项目。
-- **先跑影子模式（shadow-first）** —— 每条策略维度都有 `enforced` / `shadow` / `off` 三态（`policy.ts`）。新规则先在暗处观察，确认无扰之后才真正生效。
-- **拿不准就刹车（brake）** —— 存在高影响且尚未确定的偏好时，任务不会直接启动：`impact-check.ts` 判定影响，`decision-governor.ts` 返回 `pending_impact` 而不是 `ready`。
-- **跑在哪** —— 全部在本地。慢的那一半在 Node 侧车里：`learning-loop-service`、`history-mining-service`、`shadow-runner`、`curation-service`、`pending-admin-service`。
 
 ## 架构
 

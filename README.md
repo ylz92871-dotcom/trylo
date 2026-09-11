@@ -4,7 +4,7 @@
 
 # Trylo
 
-**Trylo Desktop — a Tauri 2 shell hosting two sub-apps: Code, for code work; Work, for document deliverables.**
+**Trylo Desktop — an agent host that learns how you work. Two sub-apps today: Code for the code, Work for the deliverable.**
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
@@ -16,7 +16,28 @@
 
 > **Status: work in progress.** The desktop client is an alpha in daily use. The `trylo` CLI is under active development and is **not** part of this repository. Interfaces and directory layout will move.
 
-## The two sub-apps
+## The idea: an agent that learns you
+
+Most agents start every session from zero — same questions, same corrections, same mistakes. Trylo's bet is the opposite: **the agent should accumulate a model of how you work**, and that model should be *earned*, not assumed.
+
+The whole point of the design is that a wrong guess about you is worse than no guess at all. So learning is a pipeline with gates, not a vector store of vibes:
+
+<p align="center">
+  <img src="docs/images/learning-loop.svg" width="720" alt="The learning loop" />
+</p>
+
+**Evidence → Conclusion → User model → Policy.** Evidence is drawn from what you actually did — approvals, interruptions, mid-flight corrections, feedback on artifacts (`evidence.ts`, `evidence-grounding.ts`). Conclusions are induced from that. The model is per user *and* per project. Policy is what finally steers Code and Work.
+
+Four gates sit on the way in:
+
+- **Grounding** — inferred preferences are not evidence. Only observed behaviour counts (`evidence-grounding.ts`).
+- **Scoping** — learning is isolated per project (`scope.ts`); habits from one workspace never become another's rules.
+- **Shadow-first** — every policy dimension has three states, `enforced` / `shadow` / `off` (`policy.ts`). A new rule runs in shadow and is only promoted once it has been observed to be non-disruptive.
+- **Brake** — when a preference is high-impact and still unsettled, the run doesn't start: `impact-check.ts` flags the impact and `decision-governor.ts` returns `pending_impact` instead of `ready`. Better to stop than to misread you.
+
+All of it runs on your machine. The slower half lives in the `desktop-services` Node sidecar: `learning-loop-service`, `history-mining-service`, `shadow-runner`, `curation-service`, `pending-admin-service`. The code lives in `desktop/src/user-learning/`, `desktop/src/learning/` and `desktop-services/src/learning/`.
+
+## What it is today: two sub-apps
 
 | Sub-app | Where it lives | What it does |
 |---|---|---|
@@ -35,21 +56,6 @@ Cross-device control: pair the Android app with the desktop over a QR code to wa
 <p align="center">
   <img src="docs/images/remote-pairing.png" width="300" alt="Remote pairing" />
 </p>
-
-## User learning
-
-Beyond following instructions, the agent builds a model of how *you* work — and the learning is deliberately gated. The loop lives in `desktop/src/user-learning/` and `desktop-services/src/learning/`:
-
-```text
-evidence → conclusion → user model → policy
-(observed behaviour)   (enforced / shadow / off)
-```
-
-- **Grounding** — evidence comes only from what you actually did or said (`evidence.ts`, `evidence-grounding.ts`): approvals, stops, steering messages, artifact feedback. Inferred or invented preferences are not evidence.
-- **Scope isolation** — learning is scoped per project (`scope.ts`); habits picked up in one workspace don't leak into another.
-- **Shadow first** — every policy dimension has three states, `enforced` / `shadow` / `off` (`policy.ts`). A new rule runs in shadow and is only promoted once it has been observed to be non-disruptive.
-- **Brake** — when a preference is high-impact and still unsettled, the run doesn't start: `impact-check.ts` flags the impact and `decision-governor.ts` returns `pending_impact` instead of `ready`.
-- **Where it runs** — all of it is local. The slower half lives in the Node sidecar: `learning-loop-service`, `history-mining-service`, `shadow-runner`, `curation-service`, `pending-admin-service`.
 
 ## Architecture
 
