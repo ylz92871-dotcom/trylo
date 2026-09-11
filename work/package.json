@@ -1,0 +1,29 @@
+{
+  "name": "@trylo/work",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Trylo Work sub-app — forked from CoWork-OS. Provides the work surface (artifact viewer, document generation, MCP, Skills) for Trylo Desktop. Spawned as a Node sidecar by the Tauri shell.",
+  "type": "module",
+  "bin": {
+    "trylo-workd": "./bin/trylo-workd.mjs"
+  },
+  "scripts": {
+    "dev": "node ./bin/trylo-workd.mjs",
+    "start": "node ./bin/trylo-workd.mjs",
+    "test": "node --import ./tests/register-hook.mjs --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "lucide-react": "^1.31.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "typescript": "^5.9.3"
+  }
+}

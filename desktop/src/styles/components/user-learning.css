@@ -1,0 +1,762 @@
+/* Trylo Desktop — User Learning product surface.
+   Cognition / Impact cards follow ApprovalCard: inline stream
+   cards, left accent, quiet resolved states. The inspector is
+   a right-side product panel, not a debug overlay. */
+
+.cognition-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 720px;
+  margin: var(--space-2) auto 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brand-300, #DBC97F);
+  border-radius: var(--radius-md);
+}
+
+.cognition-card--impact {
+  border-left-color: var(--mode-accent, var(--brand-300));
+}
+
+.cognition-card--answered,
+.cognition-card--accepted {
+  border-left-color: var(--success);
+}
+
+.cognition-card--dismissed,
+.cognition-card--kept_baseline {
+  border-left-color: var(--fg-muted);
+  opacity: 0.86;
+}
+
+.cognition-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--brand-200, #ECE0A8);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.cognition-card--answered .cognition-card__head,
+.cognition-card--accepted .cognition-card__head {
+  color: var(--success);
+}
+
+.cognition-card--dismissed .cognition-card__head,
+.cognition-card--kept_baseline .cognition-card__head {
+  color: var(--fg-muted);
+}
+
+.cognition-card__kicker {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: var(--text-xs);
+}
+
+.cognition-card__dim {
+  color: var(--fg-muted);
+  font-weight: 400;
+  font-size: var(--text-xs);
+}
+
+.cognition-card__state {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--fg-muted);
+}
+
+.cognition-card__prompt {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  line-height: var(--leading-base);
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cognition-card__options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cognition-card__option {
+  text-align: left;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--fg);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.cognition-card__option:hover:not(:disabled) {
+  border-color: var(--brand-400);
+  background: var(--brand-soft);
+}
+
+.cognition-card__option:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cognition-card__input {
+  width: 100%;
+  resize: vertical;
+  min-height: 56px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg, var(--ink-deep));
+  color: var(--fg);
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.cognition-card__compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.cognition-card__compare h4 {
+  margin: 0 0 6px;
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  font-weight: 600;
+}
+
+.cognition-card__compare ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: var(--text-sm);
+  color: var(--fg);
+  line-height: 1.45;
+}
+
+.cognition-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  justify-content: flex-end;
+}
+
+.cognition-card__primary,
+.cognition-card__ghost {
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.cognition-card__primary {
+  background: var(--brand-300, #DBC97F);
+  color: #101210;
+}
+
+.cognition-card__primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cognition-card__ghost {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--fg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+@media (max-width: 640px) {
+  .cognition-card__compare {
+    grid-template-columns: 1fr;
+  }
+}
+
+.learning-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--chip-border, rgba(255, 255, 255, 0.08));
+  background: var(--chip-bg, rgba(255, 255, 255, 0.03));
+  color: var(--chip-fg, rgba(255, 255, 255, 0.92));
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  user-select: none;
+}
+
+.learning-chip:hover {
+  background: var(--chip-bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+.learning-chip:focus-visible {
+  outline: 2px solid var(--focus-ring, #6aa7ff);
+  outline-offset: 2px;
+}
+
+.learning-chip__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand-300, #DBC97F);
+}
+
+.learning-chip--enforced .learning-chip__dot {
+  background: var(--success, #6ec882);
+}
+
+.learning-chip--off .learning-chip__dot {
+  background: var(--fg-muted);
+}
+
+.learning-chip--enforced.is-injected {
+  border-color: rgba(110, 200, 130, 0.45);
+}
+
+.learning-chip__count {
+  min-width: 1.1em;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.input-bar--cognition {
+  border-color: var(--brand-300, #DBC97F);
+}
+
+.input-bar--cognition:focus-within {
+  border-color: var(--brand-300, #DBC97F);
+  box-shadow: 0 0 0 1px var(--brand-300, #DBC97F) inset;
+}
+
+.learning-inspector-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.learning-inspector {
+  position: fixed;
+  z-index: 36;
+  top: 52px;
+  right: 12px;
+  width: min(400px, calc(100vw - 24px));
+  max-height: calc(100vh - 68px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+  color: var(--fg);
+  font-family: var(--font-body);
+}
+
+.learning-inspector__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.learning-inspector__kicker {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brand-300);
+}
+
+.learning-inspector__title {
+  margin: 4px 0 0;
+  font-size: 16px;
+  font-family: var(--font-display);
+}
+
+.learning-inspector__close {
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.learning-inspector__tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.learning-inspector__tab {
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  padding: 8px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.learning-inspector__tab.is-active {
+  color: var(--fg);
+  border-bottom-color: var(--brand-300);
+}
+
+/* Single overall scroll container for everything below the module/tab
+   headers. flex min-height:0 is what makes the panel actually scroll
+   (overflow:hidden on the aside + auto on a flex child without min-height:0
+   clips content with no scrollbar). */
+.learning-inspector {
+  height: 100vh;
+  max-height: calc(100vh - 68px);
+}
+
+.learning-inspector__body {
+  flex: 1 1 auto;
+  height: calc(100vh - 220px);
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* The Evidence tab forces its section to fill the body and gives the Virtuoso
+   list a real pixel height, so virtualization is not fake (PR-4 §4.2). The
+   section itself becomes the scroll owner; the module/tab headers stay fixed. */
+.learning-inspector__section--filters {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 10px 12px 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.learning-inspector__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 2px 4px 8px;
+}
+
+.learning-inspector__filter-label {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+}
+
+.learning-inspector__filter-chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg-muted);
+  padding: 2px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.learning-inspector__filter-chip:hover {
+  border-color: var(--brand-400);
+  color: var(--fg);
+}
+
+.learning-inspector__filter-chip.is-active {
+  background: var(--brand-soft);
+  border-color: var(--brand-300);
+  color: var(--brand-700, var(--fg));
+}
+
+.learning-inspector__select {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font-size: 12px;
+  padding: 2px 6px;
+  max-width: 180px;
+}
+
+/* Work three-dimension coverage cluster (PR-4 §4.3). */
+.learning-inspector__work {
+  list-style: none;
+  margin: 8px 0 12px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.learning-inspector__work li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.learning-inspector__work li + li {
+  border-top: 1px solid var(--border);
+}
+
+.learning-inspector__work strong {
+  font-variant-caps: all-small-caps;
+  color: var(--fg-muted);
+}
+
+/* Evidence virtuoso rows (PR-4 §4.2). */
+.learning-inspector__virtuoso {
+  height: 100%;
+  min-height: 0;
+}
+
+.learning-inspector__evidence-row {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.learning-inspector__evidence-row.is-work {
+  border-left: 3px solid var(--brand-400);
+}
+
+.learning-inspector__evidence-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.learning-inspector__evidence-meta strong {
+  color: var(--fg);
+}
+
+.learning-inspector__kind {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: var(--brand-300);
+}
+
+.learning-inspector__evidence-claim {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.learning-inspector__section {
+  padding: 14px 16px 16px;
+}
+
+/* Top-level module switch: 用户认知 / 代理学习. */
+.learning-inspector__modules {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 10px 12px 0;
+}
+
+.learning-inspector__module {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  padding: 8px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.learning-inspector__module:hover {
+  border-color: var(--brand-400);
+  color: var(--fg);
+}
+
+.learning-inspector__module.is-active {
+  background: var(--brand-soft);
+  border-color: var(--brand-300);
+  color: var(--brand-100);
+}
+
+.learning-inspector__module-sub {
+  width: 100%;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+.learning-inspector__subhead {
+  margin: 16px 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--fg);
+}
+
+/* Post-action feedback banner (approve / discard results). */
+.learning-inspector__notice {
+  position: relative;
+  margin: 10px 0 0;
+  padding: 8px 30px 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.learning-inspector__notice--success {
+  background: rgba(72, 168, 112, 0.14);
+  border: 1px solid rgba(72, 168, 112, 0.5);
+  color: #88d0a0;
+}
+
+.learning-inspector__notice--warn {
+  background: rgba(210, 160, 60, 0.14);
+  border: 1px solid rgba(210, 160, 60, 0.5);
+  color: #e0b860;
+}
+
+.learning-inspector__notice--error {
+  background: rgba(212, 74, 58, 0.12);
+  border: 1px solid rgba(212, 74, 58, 0.5);
+  color: var(--brand-200, #d44a3a);
+}
+
+.learning-inspector__notice-close {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.approved-record__pre {
+  max-height: 220px;
+  overflow: auto;
+  margin: 6px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+}
+
+.learning-inspector__modes {
+  display: flex;
+  gap: 6px;
+}
+
+.learning-inspector__mode {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+
+.learning-inspector__mode.is-active {
+  background: var(--brand-soft);
+  border-color: var(--brand-300);
+  color: var(--brand-100);
+}
+
+.learning-inspector__hint,
+.learning-inspector__empty {
+  color: var(--fg-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.learning-inspector__chain {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 14px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.learning-inspector__chain li {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.learning-inspector__chain span {
+  display: block;
+  font-size: 11px;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.learning-inspector__chain strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.learning-inspector__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.learning-inspector__stats div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.learning-inspector__stats dt {
+  color: var(--fg-muted);
+}
+
+.learning-inspector__stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.learning-inspector__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.learning-inspector__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.learning-inspector__list li {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.learning-inspector__list strong {
+  font-size: 12px;
+}
+
+.learning-inspector__list p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.learning-inspector__raw {
+  color: var(--fg-muted);
+  font-size: 12px !important;
+}
+
+.learning-inspector__decision p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.top-bar__learning {
+  border: 1px solid var(--ink-divider, var(--border));
+  background: transparent;
+  color: var(--ink-fog, var(--fg-muted));
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.top-bar__learning.is-active,
+.top-bar__learning:hover {
+  color: var(--brand-200);
+  border-color: var(--brand-400);
+}
+
+/* Staged memory/skill approval surface (PendingProposals). */
+.learning-inspector__badge {
+  display: inline-block;
+  min-width: 16px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--brand-400, #d44a3a);
+  color: #fff;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.pending-proposal__badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.pending-proposal__badge--skills {
+  background: var(--brand-300, rgba(212, 74, 58, 0.18));
+  color: var(--brand-200, #d44a3a);
+}
+
+.pending-proposal__badge--memory {
+  background: rgba(80, 140, 220, 0.18);
+  color: #508cdc;
+}
+
+.pending-proposal__detail {
+  margin-top: 8px;
+}
+
+.pending-proposal__pre {
+  max-height: 260px;
+  overflow: auto;
+  margin: 6px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

@@ -1,0 +1,77 @@
+/* Trylo Desktop — Tabs styles. See the architecture doc §3 Phase 1
+   Week 1 Day 2. */
+
+.tabs {
+  display: flex;
+  align-items: stretch;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  overflow-x: auto;
+  flex: 0 0 auto;
+  min-height: 2rem;
+}
+
+.tabs--empty {
+  padding: 0.25rem 0.75rem;
+  align-items: center;
+  color: var(--fg-muted);
+  font-size: 0.8rem;
+}
+
+.tabs-empty-msg {
+  font-style: italic;
+}
+
+.tab {
+  display: flex;
+  align-items: stretch;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  background: transparent;
+  font-size: 0.85rem;
+  color: var(--fg-muted);
+  min-width: 8rem;
+  max-width: 16rem;
+}
+
+.tab--active {
+  background: var(--bg);
+  color: var(--fg);
+  border-bottom: 2px solid var(--accent);
+  margin-bottom: -1px; /* overlap the row's border */
+}
+
+.tab-label {
+  flex: 1 1 auto;
+  text-align: left;
+  padding: 0.25rem 0.6rem;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-label:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tab-close {
+  flex: 0 0 auto;
+  width: 1.5rem;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.tab-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  opacity: 1;
+}

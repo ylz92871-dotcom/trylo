@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Trylo Code — 会思考、执行、对话、记住你的 AI 编程搭档</title>
+<meta name="description" content="Trylo Code 是独立的多端 AI 编程搭档：桌面端 Code/Work 双模式、Android 口袋控制端、桌宠 Trylo Miu、本地优先与权限审批，还会通过 User Learning 记住你的工作方式。由 YL Z 打造。" />
+<link rel="icon" type="image/svg+xml" href="assets/trylo-icon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700;900&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ---------- tokens (mirrors the agent's webview palette) ---------- */
+  :root {
+    --bg: #0b0d10;
+    --bg-2: #0c1015;
+    --panel: #14171c;
+    --panel-2: #191d24;
+    --panel-3: #20252d;
+    --line: #333947;
+    --line-soft: #262b33;
+    --text: #edf0f4;
+    --text-soft: #b6bdc9;
+    --muted: #7f8898;
+    --accent: #dcc97e;
+    --accent-strong: #f3e3a6;
+    --accent-soft: rgba(220,201,126,.12);
+    --bone: #f2ede1;
+    --shadow: 0 18px 30px rgba(0,0,0,.24);
+    --font-display: "Space Grotesk", "Noto Sans SC", "Segoe UI Variable Display", system-ui, sans-serif;
+    --font-body: "Inter", "Noto Sans SC", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", "Cascadia Code", "Consolas", monospace;
+    --maxw: 1180px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--font-body);
+    background: linear-gradient(180deg, #090b0e 0%, #0c1015 100%);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  a { color: inherit; text-decoration: none; }
+  svg, img { display: block; }
+  ::selection { background: var(--accent); color: #0b0d10; }
+  :focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; border-radius: 2px; }
+
+  .wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 28px; }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--accent);
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  .eyebrow::before {
+    content: ""; width: 26px; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent));
+  }
+
+  /* ---------- ambient glow ---------- */
+  .ambient {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(620px circle at 82% 8%, rgba(220,201,126,.08), transparent 60%),
+      radial-gradient(540px circle at 12% 38%, rgba(220,201,126,.04), transparent 60%);
+  }
+
+  /* ---------- nav ---------- */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(11,13,16,.72);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 66px; }
+  .brand {
+    display: flex; align-items: center; gap: 11px;
+    font-family: var(--font-display); font-weight: 700; font-size: 18px;
+    letter-spacing: .02em; color: var(--bone);
+  }
+  .brand .brand-mark { width: 28px; height: 28px; color: var(--accent); transition: transform .4s cubic-bezier(.2,.8,.2,1); }
+  .brand .brand-mark path { stroke: currentColor; stroke-width: 76; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .brand:hover .brand-mark { transform: rotate(120deg); filter: drop-shadow(0 0 6px rgba(220,201,126,.45)); }
+  .nav-links { display: flex; gap: 30px; font-size: 14px; color: var(--text-soft); }
+  .nav-links a { transition: color .2s; }
+  .nav-links a:hover { color: var(--accent-strong); }
+  .nav-cta {
+    font-family: var(--font-mono); font-size: 13px; font-weight: 500;
+    padding: 9px 16px; border: 1px solid var(--line); border-radius: 999px;
+    color: var(--text); transition: all .2s;
+  }
+  .nav-cta:hover { border-color: var(--accent); color: var(--accent-strong); box-shadow: 0 0 18px rgba(220,201,126,.15); }
+  @media (max-width: 720px) { .nav-links { display: none; } }
+
+  /* ---------- hero ---------- */
+  .hero { position: relative; z-index: 1; padding: 90px 0 110px; }
+  .hero-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center; }
+  .hero h1 {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(40px, 6vw, 68px); line-height: 1.05;
+    letter-spacing: -0.025em; color: var(--bone);
+    margin: 22px 0 24px;
+  }
+  .hero h1 em {
+    font-style: normal; color: var(--accent-strong);
+    text-shadow: 0 0 40px rgba(220,201,126,.25);
+  }
+  .hero p.lead { font-size: 18px; color: var(--text-soft); max-width: 470px; margin-bottom: 34px; }
+  .hero-actions { display: flex; gap: 14px; flex-wrap: wrap; }
+  .btn {
+    font-family: var(--font-mono); font-size: 14px; font-weight: 500;
+    padding: 13px 22px; border-radius: 999px; display: inline-flex; align-items: center; gap: 9px;
+    transition: transform .18s, background .2s, color .2s, border-color .2s, box-shadow .2s;
+  }
+  .btn-primary { background: var(--accent); color: #0b0d10; border: 1px solid var(--accent); font-weight: 600; }
+  .btn-primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); transform: translateY(-1px); box-shadow: 0 10px 30px rgba(220,201,126,.22); }
+  .btn-ghost { border: 1px solid var(--line); color: var(--text); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent-strong); }
+  .hero-meta {
+    margin-top: 42px; display: flex; gap: 26px; flex-wrap: wrap;
+    font-family: var(--font-mono); font-size: 12.5px; color: var(--muted);
+  }
+  .hero-meta span { display: inline-flex; align-items: center; gap: 8px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px rgba(220,201,126,.7); }
+
+  /* signature mark — agent launch style: draw + rotate-settle, single gold with glow */
+  .hero-mark { position: relative; display: grid; place-items: center; }
+  .hero-mark .mark-aura {
+    position: absolute; width: 80%; aspect-ratio: 1; border-radius: 50%;
+    background: radial-gradient(circle, rgba(220,201,126,.16), transparent 62%);
+    filter: blur(8px);
+  }
+  .hero-mark .mark-svg {
+    position: relative; width: min(400px, 88%); height: auto; overflow: visible;
+    filter: drop-shadow(0 10px 24px rgba(0,0,0,.5)) drop-shadow(0 0 26px rgba(220,201,126,.28));
+    transform-origin: 50% 50%;
+    animation: markSettle 1800ms cubic-bezier(.2,.75,.2,1) both;
+  }
+  .hero-mark .mark-svg path {
+    fill: none; stroke: var(--accent); stroke-width: 76;
+    stroke-linecap: round; stroke-linejoin: round;
+    stroke-dasharray: 1; stroke-dashoffset: 1;
+    animation: markDraw 1050ms cubic-bezier(.55,0,.2,1) forwards;
+  }
+  .hero-mark .mark-svg .seg-b { animation-delay: 140ms; }
+  .hero-mark .mark-svg .seg-c { animation-delay: 280ms; }
+  @keyframes markDraw { from { stroke-dashoffset: 1; opacity: .18; } to { stroke-dashoffset: 0; opacity: 1; } }
+  @keyframes markSettle {
+    0% { transform: rotate(-300deg) scale(.68); opacity: 0; }
+    20% { opacity: 1; }
+    76% { transform: rotate(14deg) scale(1.04); }
+    100% { transform: rotate(0deg) scale(1); opacity: 1; }
+  }
+  .hero-mark .ring {
+    position: absolute; width: 86%; aspect-ratio: 1; border-radius: 50%;
+    border: 1px dashed rgba(220,201,126,.18);
+    animation: spin 60s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 900px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 50px; text-align: center; }
+    .hero p.lead { margin-left: auto; margin-right: auto; }
+    .hero-actions, .hero-meta { justify-content: center; }
+    .eyebrow { justify-content: center; }
+    .eyebrow::before { display: none; }
+    .hero-mark { order: -1; }
+    .hero-mark .mark-svg { width: 220px; }
+    .hero-mark .ring { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-mark .mark-svg, .hero-mark .mark-svg path, .hero-mark .ring { animation: none !important; }
+    .hero-mark .mark-svg path { stroke-dashoffset: 0; opacity: 1; }
+    html { scroll-behavior: auto; }
+  }
+
+  /* ---------- poster / manifesto ---------- */
+  .poster { position: relative; z-index: 1; padding: 120px 0 110px; overflow: hidden; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+  .poster::before {
+    content: ""; position: absolute; inset: 0;
+    background: radial-gradient(700px circle at 70% 50%, rgba(220,201,126,.06), transparent 60%);
+    pointer-events: none;
+  }
+  .poster .ghost-mark {
+    position: absolute; right: -5%; top: 50%; transform: translateY(-50%);
+    width: 600px; opacity: .07; overflow: visible;
+    filter: drop-shadow(0 0 60px rgba(220,201,126,.4));
+  }
+  .poster .ghost-mark path { stroke: var(--accent); stroke-width: 48; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .poster-grid { position: relative; z-index: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: end; }
+  .poster h2 {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(32px, 4.6vw, 52px); line-height: 1.12; letter-spacing: -0.02em; color: var(--bone);
+  }
+  .poster h2 .accent { color: var(--accent-strong); }
+  .poster .story { color: var(--text-soft); font-size: 16.5px; max-width: 440px; }
+  .poster .story p + p { margin-top: 18px; }
+  .poster .quote-mark { font-family: var(--font-display); font-size: 90px; line-height: .5; color: var(--accent); display: block; margin-bottom: 20px; opacity: .8; }
+  @media (max-width: 820px) { .poster-grid { grid-template-columns: 1fr; gap: 36px; } .poster .ghost-mark { width: 360px; } }
+
+  /* ---------- modes ---------- */
+  .modes { position: relative; z-index: 1; padding: 100px 0 80px; }
+  .section-head { max-width: 640px; margin-bottom: 56px; }
+  .section-head h2 {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(30px, 4vw, 44px); line-height: 1.1; letter-spacing: -0.02em;
+    color: var(--bone); margin: 16px 0 14px;
+  }
+  .section-head p { color: var(--text-soft); font-size: 17px; }
+
+  .mode-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+    background: var(--line); border: 1px solid var(--line);
+    border-radius: 18px; overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .mode-card {
+    background: var(--panel); padding: 30px 24px 28px;
+    display: flex; flex-direction: column; gap: 16px;
+    transition: background .25s, transform .25s;
+    position: relative;
+  }
+  .mode-card::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(220px circle at 50% 0%, rgba(220,201,126,.08), transparent 70%);
+    opacity: 0; transition: opacity .3s;
+  }
+  .mode-card:hover { background: var(--panel-2); }
+  .mode-card:hover::after { opacity: 1; }
+  .mode-card .mode-icon {
+    width: 42px; height: 42px; color: var(--accent);
+    transition: transform .4s cubic-bezier(.2,.8,.2,1), filter .3s;
+  }
+  .mode-card:hover .mode-icon { transform: rotate(120deg); filter: drop-shadow(0 0 8px rgba(220,201,126,.5)); }
+  .mode-card .mode-icon path { fill: none; stroke: currentColor; stroke-width: 48; stroke-linecap: round; stroke-linejoin: round; }
+  .mode-card .mode-tag { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+  .mode-card h3 { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: -0.01em; color: var(--bone); }
+  .mode-card h3 .en { color: var(--muted); font-weight: 500; font-size: 14px; margin-left: 8px; font-family: var(--font-body); }
+  .mode-card p { font-size: 14px; color: var(--text-soft); flex-grow: 1; }
+  .mode-card .say {
+    font-family: var(--font-mono); font-size: 12.5px; color: var(--accent);
+    padding-top: 14px; border-top: 1px dashed var(--line);
+  }
+  @media (max-width: 960px) { .mode-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 520px) { .mode-grid { grid-template-columns: 1fr; } }
+
+  /* ---------- features ---------- */
+  .features { position: relative; z-index: 1; padding: 50px 0 100px; }
+  .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .feat {
+    border: 1px solid var(--line); border-radius: 16px; padding: 26px 24px;
+    background: linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,0)), var(--panel);
+    transition: transform .2s, border-color .2s, box-shadow .2s;
+  }
+  .feat:hover { transform: translateY(-3px); border-color: rgba(220,201,126,.35); box-shadow: 0 16px 40px rgba(0,0,0,.35), 0 0 0 1px rgba(220,201,126,.08); }
+  .feat .k { font-family: var(--font-mono); font-size: 11.5px; color: var(--accent); margin-bottom: 10px; letter-spacing: .12em; text-transform: uppercase; }
+  .feat h4 { font-family: var(--font-display); font-weight: 700; font-size: 19px; margin-bottom: 8px; color: var(--bone); }
+  .feat p { font-size: 14px; color: var(--text-soft); }
+  .feat .pill {
+    display: inline-block; padding: 2px 8px; margin: 6px 4px 0 0; border-radius: 5px;
+    background: var(--accent-soft); color: var(--accent-strong);
+    font-family: var(--font-mono); font-size: 12px;
+    border: 1px solid rgba(220,201,126,.15);
+  }
+  @media (max-width: 820px) { .feat-grid { grid-template-columns: 1fr; } }
+
+  /* ---------- maker ---------- */
+  .maker { position: relative; z-index: 1; padding: 110px 0; border-top: 1px solid var(--line-soft); overflow: hidden; }
+  .maker::before {
+    content: ""; position: absolute; left: -10%; top: 50%; transform: translateY(-50%);
+    width: 520px; height: 520px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(220,201,126,.08), transparent 65%);
+    pointer-events: none;
+  }
+  .maker-grid { position: relative; display: grid; grid-template-columns: .75fr 1.25fr; gap: 60px; align-items: start; }
+  .sig-mark {
+    width: 150px; height: 150px; margin-bottom: 22px; overflow: visible;
+    filter: drop-shadow(0 6px 20px rgba(0,0,0,.45)) drop-shadow(0 0 20px rgba(220,201,126,.2));
+  }
+  .sig-mark path { fill: none; stroke: var(--accent); stroke-width: 76; stroke-linecap: round; stroke-linejoin: round; }
+  .maker .label { font-family: var(--font-mono); font-size: 12px; letter-spacing: .22em; text-transform: uppercase; color: var(--accent); }
+  .maker .byline { color: var(--muted); font-size: 13.5px; margin-top: 18px; max-width: 260px; line-height: 1.6; }
+  .maker .byline strong { color: var(--bone); font-weight: 600; }
+
+  .manifesto { display: flex; flex-direction: column; gap: 0; }
+  .manifesto .lead {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(30px, 4.2vw, 48px); line-height: 1.08; letter-spacing: -.02em;
+    color: var(--bone); margin-bottom: 26px;
+  }
+  .manifesto .lead em { font-style: italic; color: var(--accent-strong); font-weight: 600; }
+  .manifesto .couplet {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: clamp(20px, 2.2vw, 26px); line-height: 1.7; letter-spacing: .01em;
+    color: var(--text); padding-left: 18px; border-left: 2px solid var(--accent);
+    margin-bottom: 26px;
+  }
+  .manifesto .couplet .try { color: var(--accent-strong); }
+  .manifesto .namesake {
+    font-size: 17px; color: var(--text-soft); max-width: 520px; line-height: 1.7; margin-bottom: 26px;
+  }
+  .manifesto .namesake b { color: var(--bone); font-weight: 600; }
+  .manifesto .mantra {
+    display: inline-flex; flex-wrap: wrap; gap: 0; align-items: center;
+    font-family: var(--font-mono); font-size: 13px; letter-spacing: .06em;
+    color: var(--accent); padding: 12px 0;
+    border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft);
+    margin-bottom: 28px;
+  }
+  .manifesto .mantra span { padding: 0 16px; border-right: 1px solid var(--line); }
+  .manifesto .mantra span:first-child { padding-left: 0; }
+  .manifesto .mantra span:last-child { border-right: none; }
+  .manifest .contact { font-size: 15px; color: var(--text-soft); margin-bottom: 20px; }
+  .mail {
+    display: inline-flex; align-items: center; gap: 12px;
+    margin-top: 30px; padding: 14px 24px;
+    border: 1px solid var(--line); border-radius: 999px;
+    font-family: var(--font-mono); font-size: 14px; color: var(--bone);
+    transition: all .2s;
+  }
+  .mail:hover { border-color: var(--accent); color: var(--accent-strong); box-shadow: 0 0 24px rgba(220,201,126,.18); background: rgba(220,201,126,.05); }
+  .mail svg { width: 18px; height: 18px; }
+  @media (max-width: 820px) { .maker-grid { grid-template-columns: 1fr; gap: 36px; } }
+  @media (max-width: 560px) {
+    .manifesto .mantra { flex-direction: column; align-items: flex-start; gap: 8px; padding: 16px 0; }
+    .manifesto .mantra span { padding: 0; border-right: none; }
+  }
+
+  /* ---------- work spotlight ---------- */
+  .work { position: relative; z-index: 1; padding: 6px 0 90px; }
+  .work-card {
+    display: grid; grid-template-columns: 1.02fr .98fr; gap: 40px; align-items: center;
+    border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow);
+    background: linear-gradient(180deg, rgba(220,201,126,.05), rgba(220,201,126,0)), var(--panel);
+    padding: 38px 34px;
+  }
+  .work-card .mode-tag { font-family: var(--font-mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+  .work-card h3 { font-family: var(--font-display); font-weight: 700; font-size: clamp(23px, 2.8vw, 30px); color: var(--bone); letter-spacing: -.02em; margin: 12px 0 14px; }
+  .work-card p { color: var(--text-soft); font-size: 15.5px; max-width: 470px; }
+  .work-say { font-family: var(--font-mono); font-size: 12.5px; color: var(--accent); padding-top: 16px; margin-top: 20px; border-top: 1px dashed var(--line); }
+  .pipeline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .pipeline span { font-family: var(--font-mono); font-size: 12px; color: var(--text-soft); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; }
+  .pipeline i { font-style: normal; color: var(--muted); font-size: 11px; }
+  .work-cap { margin-top: 16px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  @media (max-width: 860px) { .work-card { grid-template-columns: 1fr; gap: 26px; padding: 28px 22px; } }
+
+  /* ---------- status pill ---------- */
+  .status { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); width: fit-content; }
+  .status i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+  .status.live { color: var(--accent-strong); border-color: rgba(220,201,126,.35); }
+  .status.live i { background: var(--accent); box-shadow: 0 0 8px rgba(220,201,126,.6); }
+
+  /* ---------- family ---------- */
+  .family { position: relative; z-index: 1; padding: 100px 0 60px; }
+  .fam-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .fam-card { border: 1px solid var(--line); border-radius: 16px; background: var(--panel); padding: 24px 22px; display: flex; flex-direction: column; gap: 12px; transition: transform .2s, border-color .2s, box-shadow .2s; }
+  .fam-card:hover { transform: translateY(-3px); border-color: rgba(220,201,126,.35); box-shadow: 0 16px 40px rgba(0,0,0,.35); }
+  .fam-card h4 { font-family: var(--font-display); font-weight: 700; font-size: 18px; color: var(--bone); }
+  .fam-card h4 .en { display: block; font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--muted); letter-spacing: .08em; margin-top: 4px; }
+  .fam-card p { font-size: 13.5px; color: var(--text-soft); flex-grow: 1; }
+  .fam-card .go { font-family: var(--font-mono); font-size: 12.5px; color: var(--accent); }
+  .fam-card .go:hover { color: var(--accent-strong); }
+  .fam-card.soon { opacity: .82; }
+  @media (max-width: 960px) { .fam-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .fam-grid { grid-template-columns: 1fr; } }
+
+  /* ---------- learning ---------- */
+  .learning { position: relative; z-index: 1; padding: 60px 0 100px; }
+  .learning::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(640px circle at 18% 30%, rgba(220,201,126,.05), transparent 60%);
+  }
+  .chain {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+    font-family: var(--font-display); font-weight: 700; font-size: clamp(17px, 2vw, 22px);
+    color: var(--bone); margin: -24px 0 44px; position: relative; z-index: 1;
+  }
+  .chain em { font-style: normal; color: var(--accent-strong); }
+  .chain .arrow { color: var(--muted); font-size: .72em; font-weight: 500; }
+  @media (max-width: 560px) { .chain { flex-direction: column; align-items: flex-start; gap: 6px; margin-top: -8px; } }
+
+  /* ---------- cta band ---------- */
+  .cta-band { position: relative; z-index: 1; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); padding: 90px 0; text-align: center; overflow: hidden; }
+  .cta-band::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(520px circle at 50% 118%, rgba(220,201,126,.12), transparent 70%);
+  }
+  .cta-band .eyebrow { justify-content: center; margin-bottom: 20px; }
+  .cta-band .eyebrow::before { display: none; }
+  .cta-band h2 { font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 4.4vw, 48px); letter-spacing: -.02em; color: var(--bone); margin-bottom: 30px; }
+  .cta-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .cta-note { margin-top: 20px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+  /* ---------- footer ---------- */
+  footer { position: relative; z-index: 1; border-top: 1px solid var(--line-soft); padding: 38px 0; }
+  .foot-inner { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+  .foot-inner .brand { color: var(--bone); font-size: 15px; }
+  .foot-meta { font-family: var(--font-mono); font-size: 12px; }
+  .foot-meta a { color: var(--text-soft); margin-left: 16px; transition: color .2s; }
+  .foot-meta a:hover { color: var(--accent-strong); }
+  .foot-copy { color: var(--muted); margin-top: 14px; font-size: 12px; width: 100%; }
+</style>
+</head>
+<body>
+
+<div class="ambient" aria-hidden="true"></div>
+
+<!-- NAV -->
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top">
+      <svg class="brand-mark" viewBox="0 0 1024 1024" aria-hidden="true">
+        <path d="M462 236 L462 420 L624 420"/>
+        <path d="M276 732 L424 644 L356 512"/>
+        <path d="M540 676 L622 546 L786 640"/>
+      </svg>
+      Trylo&nbsp;Code
+    </a>
+    <nav class="nav-links" aria-label="页面导航">
+      <a href="#modes">双模式</a>
+      <a href="#learning">会学习你</a>
+      <a href="#family">产品矩阵</a>
+      <a href="#features">技术特性</a>
+      <a href="https://chat.trylocode.me">在线体验 ↗</a>
+    </nav>
+    <a class="nav-cta" href="https://app.trylocode.me">手机 App 下载 ↗</a>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">Agent-native · Local-first</span>
+      <h1>从想法到交付，<br><em>只需要一次对话。</em></h1>
+      <p class="lead">Trylo 不再住在编辑器的侧边栏里——它是一台会思考的桌面：先在对话里想清楚，再让 Agent 动手改代码、交成品，口袋里还能用一部手机远程指挥它。</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#modes">了解 Code 与 Work
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+        <a class="btn btn-ghost" href="https://app.trylocode.me">下载手机 App</a>
+      </div>
+      <div class="hero-meta">
+        <span><i class="dot"></i>本地优先 · 密钥不出本机</span>
+        <span>Code / Work 双模式</span>
+        <span>Android 已发布 · 桌面版即将推出</span>
+      </div>
+    </div>
+
+    <div class="hero-mark">
+      <div class="mark-aura" aria-hidden="true"></div>
+      <div class="ring" aria-hidden="true"></div>
+      <svg class="mark-svg" viewBox="0 0 1024 1024" role="img" aria-label="Trylo Code 标志：三笔笔画构成隐藏的 Y">
+        <path class="seg-a" d="M462 236 L462 420 L624 420"/>
+        <path class="seg-b" d="M276 732 L424 644 L356 512"/>
+        <path class="seg-c" d="M540 676 L622 546 L786 640"/>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- POSTER -->
+<section class="poster">
+  <svg class="ghost-mark" viewBox="0 0 1024 1024" aria-hidden="true">
+    <path d="M462 236 L462 420 L624 420"/>
+    <path d="M276 732 L424 644 L356 512"/>
+    <path d="M540 676 L622 546 L786 640"/>
+  </svg>
+  <div class="wrap poster-grid">
+    <h2>不是只会补全的工具，<br>而是一个会<span class="accent">思考、执行、对话、记住你</span>的搭档。</h2>
+    <div class="story">
+      <span class="quote-mark" aria-hidden="true">"</span>
+      <p>凌晨 2:17，第 43 次重构失败，明天要演示的 PPT 还没动。Trylo 先展开思考流——读完代码、给出方案、一键实施；再让 Work 把 PPT 接过去：简报、大纲、页级生成、QA、导出。</p>
+      <p>一年前，它只是 VS Code 侧边栏里的一个面板；如今它有自己的窗口、会跟随指针的桌宠、口袋里的手机远程，和一套会学习你的记忆系统。</p>
+    </div>
+  </div>
+</section>
+
+<!-- MODES -->
+<section class="modes" id="modes">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Two rhythms</span>
+      <h2>一次对话，两种节奏</h2>
+      <p>Code 管代码，Work 管成品。思考、执行、交付，在同一个对话窗口里无缝切换。</p>
+    </div>
+
+    <div class="mode-grid">
+      <article class="mode-card">
+        <svg class="mode-icon" viewBox="0 0 1024 1024" aria-hidden="true">
+          <path d="M280 360 L744 360 M280 520 L600 520 M280 680 L680 680" />
+        </svg>
+        <span class="mode-tag">Code · chat</span>
+        <h3>Chat<span class="en">随时打断</span></h3>
+        <p>像问同事一样问任何一行代码。回答落在真实的项目上下文里，不猜、不编。</p>
+        <span class="say">"等等，这里为什么这么写？"</span>
+      </article>
+
+      <article class="mode-card">
+        <svg class="mode-icon" viewBox="0 0 1024 1024" aria-hidden="true">
+          <path d="M280 280 L280 560 M280 560 L560 560" />
+        </svg>
+        <span class="mode-tag">Code · plan</span>
+        <h3>Plan<span class="en">先想想</span></h3>
+        <p>不急着写代码。先读项目、搜相关代码，展开思考流，方案清晰后给出「一键实施」。</p>
+        <span class="say">"这个架构怎么改？先想想。"</span>
+      </article>
+
+      <article class="mode-card">
+        <svg class="mode-icon" viewBox="0 0 1024 1024" aria-hidden="true">
+          <path d="M300 720 L500 520 M500 520 L400 360 M500 520 L680 580" />
+        </svg>
+        <span class="mode-tag">Code · agent</span>
+        <h3>Agent<span class="en">交给我</span></h3>
+        <p>读文件、改代码、建测试、跑验证，实时进度、随时叫停。17 个文件，几分钟搞定。</p>
+        <span class="say">"重构这块，交给我就行。"</span>
+      </article>
+
+      <article class="mode-card">
+        <svg class="mode-icon" viewBox="0 0 1024 1024" aria-hidden="true">
+          <path d="M274 512 C360 396 664 396 750 512 C664 628 360 628 274 512 Z" />
+          <path d="M512 458 L512 566" />
+        </svg>
+        <span class="mode-tag">Code · cognition</span>
+        <h3>Cognition<span class="en">了解我</span></h3>
+        <p>一个入口，几段对话：你的回答会落地成证据，成为整套学习系统理解你的起点。</p>
+        <span class="say">"了解我 —— 你是谁，在做什么。"</span>
+      </article>
+    </div>
+    <div class="work" style="padding-top:44px">
+      <div class="work-card">
+        <div>
+          <span class="mode-tag">Work 模式</span>
+          <h3>Work · 把任务，交付成成品</h3>
+          <p>Work 知道自己要交付什么：一份 PPT、一页网页、一组文档。它按节奏推进，在关键节点停下来等你审批；成果放进产物面板，不满意可以逐页修订。</p>
+          <p class="work-say">"帮我做一份季度复盘 PPT，做好发我。"</p>
+        </div>
+        <div>
+          <div class="pipeline">
+            <span>简报</span><i>→</i><span>来源</span><i>→</i><span>大纲</span><i>→</i><span>视觉</span><i>→</i><span>页级生成</span><i>→</i><span>QA</span><i>→</i><span>导出</span><i>→</i><span>局部修订</span>
+          </div>
+          <p class="work-cap">PhaseRail 阶段导航 · ResultDock 产物面板 · 审批节点先过你这一关</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LEARNING -->
+<section class="learning" id="learning">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">User Learning</span>
+      <h2>会反过来学习你的搭档</h2>
+      <p>每一次纠正、每一个偏好，都会被认真对待——但学习有门槛，也有刹车。</p>
+    </div>
+
+    <div class="chain">
+      证据 <em>Evidence</em> <span class="arrow">→</span> 结论 <em>Conclusion</em> <span class="arrow">→</span> 用户模型 <em>Model</em> <span class="arrow">→</span> 策略 <em>Policy</em>
+    </div>
+
+    <div class="feat-grid">
+      <div class="feat">
+        <div class="k">grounding</div>
+        <h4>证据必须真实</h4>
+        <p>只有你实际做过、说过的行为才能成为证据——模型猜的、脑补的，一律不算。</p>
+      </div>
+      <div class="feat">
+        <div class="k">shadow-first</div>
+        <h4>策略先跑影子模式</h4>
+        <p>每条规则都有 enforced / shadow / off 三态，默认在暗处观察验证，确认无扰才真正生效。</p>
+      </div>
+      <div class="feat">
+        <div class="k">brake</div>
+        <h4>拿不准，就不启动</h4>
+        <p>存在高影响且未决的偏好时，Code 与 Work 不会擅自开始执行——宁可停下，也不误解你。</p>
+      </div>
+      <div class="feat">
+        <div class="k">scoping</div>
+        <h4>项目之间互不串台</h4>
+        <p>每个工作区的学习彼此隔离，这个项目的习惯不会被当成那个项目的规则。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAMILY -->
+<section class="family" id="family">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">One partner, everywhere</span>
+      <h2>在工位、在路上，搭档是同一个</h2>
+      <p>四个发行面，一套记忆与审批体系。</p>
+    </div>
+    <div class="fam-grid">
+      <article class="fam-card soon">
+        <span class="status"><i></i>即将发布</span>
+        <h4>Trylo Desktop<span class="en">Windows · Tauri 2</span></h4>
+        <p>独立桌面应用：Code / Work 双模式、工具平台、桌宠与远程网关的宿主。</p>
+      </article>
+      <article class="fam-card">
+        <span class="status live"><i></i>已发布 v1.1.6</span>
+        <h4>手机 App<span class="en">Android · Trylo Code</span></h4>
+        <p>聊天直连 24 家模型服务商，扫码远程指挥电脑上的 Trylo，审批敏感操作。</p>
+        <a class="go" href="https://app.trylocode.me">下载 APK →</a>
+      </article>
+      <article class="fam-card">
+        <span class="status live"><i></i>桌面版内嵌</span>
+        <h4>桌宠 Trylo Miu<span class="en">Windows · WPF</span></h4>
+        <p>按 Agent 状态实时演出：分析、编码、审查、完成——收工时还你一辆小跑车。</p>
+      </article>
+      <article class="fam-card">
+        <span class="status live"><i></i>网页抢先体验</span>
+        <h4>在线对话<span class="en">Web · chat.trylocode.me</span></h4>
+        <p>无需安装，打开就能聊。基于早期 Web Demo，新能力以桌面版为准。</p>
+        <a class="go" href="https://chat.trylocode.me">立即体验 →</a>
+      </article>
+    </div>
+  </div>
+</section>
+<section class="features" id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Under the hood</span>
+      <h2>安静而可靠的底层</h2>
+      <p>不花哨，但每一项都是你每天会在意的事情。</p>
+    </div>
+    <div class="feat-grid">
+      <div class="feat">
+        <div class="k">local-first</div>
+        <h4>本地优先</h4>
+        <p>兼容 OpenAI / Anthropic 双协议的自定义 API 配置，模型由你决定；手机端会话仅存本机。</p>
+      </div>
+      <div class="feat">
+        <div class="k">privacy</div>
+        <h4>密钥不出本机</h4>
+        <p>桌面端密钥本地存储，Android 端锁进 Keystore、禁用云备份——不上传、不追踪、不打扰。</p>
+      </div>
+      <div class="feat">
+        <div class="k">security</div>
+        <h4>安全审批文化</h4>
+        <p>写入前审批、威胁注入扫描、技能安全审查，默认 fail-closed：可疑即拦截。</p>
+      </div>
+      <div class="feat">
+        <div class="k">cross-device</div>
+        <h4>多端同步</h4>
+        <p>扫码配对手机与电脑，Cloudflare Tunnel + 一次性票据建立通道，远程看任务、发消息、批权限。</p>
+      </div>
+      <div class="feat">
+        <div class="k">real tools</div>
+        <h4>真实工具平台</h4>
+        <p>
+          <span class="pill">Office</span><span class="pill">浏览器自动化</span><span class="pill">电脑控制</span><span class="pill">调试</span><br>
+          Office 文档、Playwright、Windows 操作、DevTools——按需开关，健康状态一目了然。
+        </p>
+      </div>
+      <div class="feat">
+        <div class="k">tested · durable</div>
+        <h4>工程可靠性</h4>
+        <p>1386 + 353 + 301 项自动化测试全绿，Rust 严格 Clippy 把关；会话持久化，关掉窗口对话还在。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-band">
+  <div class="wrap">
+    <span class="eyebrow">Get Trylo</span>
+    <h2>把搭档装进你的口袋</h2>
+    <div class="cta-actions">
+      <a class="btn btn-primary" href="https://app.trylocode.me">下载手机 App
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-5-5m5 5l5-5M5 21h14"/></svg>
+      </a>
+      <a class="btn btn-ghost" href="#maker">桌面版发布时通知我</a>
+    </div>
+    <p class="cta-note">Android 8.0+ · 24 MB · 免费</p>
+  </div>
+</section>
+
+<!-- MAKER -->
+<section class="maker" id="maker">
+  <div class="wrap maker-grid">
+    <div>
+      <svg class="sig-mark" viewBox="0 0 1024 1024" role="img" aria-label="YL Z 的签名标志">
+        <path d="M462 236 L462 420 L624 420"/>
+        <path d="M276 732 L424 644 L356 512"/>
+        <path d="M540 676 L622 546 L786 640"/>
+      </svg>
+      <div class="label">Made by</div>
+      <p class="byline"><strong>YL Z</strong><br>独立设计与开发 Trylo Code，关于产品、技术与新的可能。</p>
+    </div>
+    <div class="manifesto">
+      <p class="lead"><em>Ideas deserve</em><br>to be built.</p>
+      <div class="couplet">
+        从想法，到尝试；<br>
+        从<span class="try">尝试</span>，到产品。
+      </div>
+      <p class="namesake">Trylo 始于 <b>try</b>，也始终相信 try——先动手，做出来，再变好。</p>
+      <div class="mantra">
+        <span>Build fast.</span><span>Learn faster.</span><span>Keep shipping.</span>
+      </div>
+      <p class="contact">关于产品、技术与新的可能，欢迎交流与合作。</p>
+      <a class="mail" href="mailto:ylz92871@gmail.com">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+        ylz92871@gmail.com
+      </a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-inner">
+    <a class="brand" href="#top">
+      <svg class="brand-mark" viewBox="0 0 1024 1024" aria-hidden="true">
+        <path d="M462 236 L462 420 L624 420"/>
+        <path d="M276 732 L424 644 L356 512"/>
+        <path d="M540 676 L622 546 L786 640"/>
+      </svg>
+      Trylo Code
+    </a>
+    <div class="foot-meta">
+      <a href="https://trylocode.me">官网</a>
+      <a href="https://app.trylocode.me">App 下载</a>
+      <a href="https://remote.trylocode.me">远程控制</a>
+      <a href="https://chat.trylocode.me">在线体验</a>
+      <a href="mailto:ylz92871@gmail.com" style="margin-left:14px">ylz92871@gmail.com</a>
+    </div>
+    <div class="foot-copy">© 2026 YL Z · Code smarter, not harder.</div>
+  </div>
+</footer>
+
+</body>
+</html>

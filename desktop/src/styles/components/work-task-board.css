@@ -1,0 +1,259 @@
+/* Trylo Work — a deliverable-oriented task board with one visual centre. */
+
+.work-task-board {
+  width: 100%;
+  margin: 5px 0 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.work-task-board__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 6px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-paper);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.work-task-board__head:hover {
+  color: var(--ink-paper);
+}
+
+.work-task-board__head:focus-visible {
+  outline: 0;
+  box-shadow: inset 2px 0 color-mix(in srgb, var(--brand) 48%, var(--border));
+}
+
+.work-task-board__state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 0;
+  color: color-mix(in srgb, var(--brand) 58%, var(--ink-fog));
+  background: transparent;
+}
+
+.work-task-board:not(.work-task-board--terminal):not(.work-task-board--awaiting) .work-task-board__state svg {
+  animation: work-task-board-spin 1.4s linear infinite;
+}
+
+@keyframes work-task-board-spin {
+  to { transform: rotate(360deg); }
+}
+
+.work-task-board__title {
+  overflow: hidden;
+  color: var(--ink-paper);
+  font-size: 13px;
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-task-board__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+
+.work-task-board__status {
+  max-width: 150px;
+  overflow: hidden;
+  color: var(--ink-fog);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+}
+
+.work-task-board__count {
+  color: var(--ink-mute);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.work-task-board__body {
+  padding: 0 2px 10px 26px;
+  border-top: 0;
+}
+
+.work-task-board__phases {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  margin: 10px 0 9px;
+  padding: 0;
+  list-style: none;
+}
+
+.work-task-board__phase {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ink-mute);
+  font-size: 11px;
+  text-align: center;
+}
+
+.work-task-board__phase:not(:last-child)::after {
+  position: absolute;
+  top: 8px;
+  left: calc(50% + 10px);
+  width: calc(100% - 20px);
+  height: 1px;
+  background: var(--border-strong);
+  content: '';
+}
+
+.work-task-board__phase-marker {
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  color: var(--ink-mute);
+  background: var(--bg-elevated);
+}
+
+.work-task-board__phase--completed,
+.work-task-board__phase--active {
+  color: var(--ink-paper);
+}
+
+.work-task-board__phase--completed .work-task-board__phase-marker {
+  color: var(--success);
+}
+
+.work-task-board__phase--active .work-task-board__phase-marker {
+  color: color-mix(in srgb, var(--brand) 58%, var(--ink-fog));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-soft) 34%, transparent);
+}
+
+.work-task-board:not(.work-task-board--terminal):not(.work-task-board--blocked):not(.work-task-board--awaiting) .work-task-board__phase--active .work-task-board__phase-marker svg {
+  animation: work-task-board-spin 1.4s linear infinite;
+}
+
+.work-task-board--terminal .work-task-board__phase-marker svg {
+  animation: none;
+}
+
+.work-task-board__phase--failed .work-task-board__phase-marker {
+  color: var(--danger);
+}
+
+.work-task-board__now {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 6px 0 6px 11px;
+  border-left: 1px solid color-mix(in srgb, var(--brand) 16%, var(--border));
+  border-radius: 0;
+  background: transparent;
+}
+
+.work-task-board__now-label {
+  padding-top: 2px;
+  color: color-mix(in srgb, var(--brand) 52%, var(--ink-fog));
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.work-task-board__now p,
+.work-task-board__history-list p {
+  margin: 0;
+  color: var(--ink-paper);
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.work-task-board__history {
+  margin-top: 8px;
+}
+
+.work-task-board__history-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-mute);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.work-task-board__history-toggle:hover { color: var(--ink-paper); }
+
+.work-task-board__history-list {
+  margin: 4px 0 0 17px;
+  padding: 0 0 0 17px;
+  border-left: 1px solid var(--border-strong);
+  list-style: none;
+}
+
+.work-task-board__history-list li {
+  padding: 7px 0;
+}
+
+.work-task-board__history-list li > span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--ink-mute);
+  font-size: 10.5px;
+}
+
+.work-task-board__activity {
+  margin-top: 8px;
+}
+
+.work-task-board__activity .work-activities {
+  margin: 0;
+  padding-left: 0;
+  border-left: 0;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+}
+
+.work-task-board__activity .work-activities__head {
+  padding: 7px 2px 3px;
+}
+
+.work-task-board__activity .work-activities__list {
+  margin-top: 5px;
+}
+
+@media (max-width: 640px) {
+  .work-task-board__head { padding-inline: 2px; }
+  .work-task-board__body { padding-inline: 22px 2px; }
+  .work-task-board__phase { font-size: 10px; }
+  .work-task-board__status { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-task-board:not(.work-task-board--terminal):not(.work-task-board--awaiting) .work-task-board__state svg {
+    animation: none;
+  }
+
+  .work-task-board:not(.work-task-board--terminal):not(.work-task-board--blocked):not(.work-task-board--awaiting) .work-task-board__phase--active .work-task-board__phase-marker svg {
+    animation: none;
+  }
+}

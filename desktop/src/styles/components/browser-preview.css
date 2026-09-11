@@ -1,0 +1,187 @@
+/* Trylo Desktop — Browser preview panel (the IDE-style embedded browser).
+ *
+ * Forked from auchenberg/vscode-browser-preview (MIT) screencast UI and
+ * restyled with Trylo's tokens: dark ink surfaces, gold accents, the same
+ * radius/typography scale as the chat panel.
+ *
+ * 2026-09-04 lightening pass: the SINGLE entry is one globe icon in the
+ * top bar (`top-bar__browser-btn`) and the drawer is a shell-level
+ * fixed overlay shared by Code AND Work — no per-surface chrome. */
+
+/* ── Top-bar entry (icon only) ──────────────────────────────────────── */
+
+.top-bar__browser-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--fg-muted, var(--ink-fog));
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.top-bar__browser-btn:hover {
+  background: var(--ink-hover);
+  color: var(--ink-paper);
+}
+
+.top-bar__browser-btn--on {
+  color: var(--brand);
+  border-color: var(--brand-500);
+  background: var(--brand-soft);
+}
+
+/* ── The panel (shell-level drawer) ─────────────────────────────────── */
+
+.browser-preview {
+  position: fixed;
+  top: calc(var(--top-bar-h, 56px) + 10px);
+  right: 12px;
+  bottom: 12px;
+  width: min(560px, 46vw);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--ink-divider-strong);
+  border-radius: 12px;
+  background: var(--ink-surface);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.browser-preview__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink-divider);
+  background: var(--ink-elevated);
+}
+
+.browser-preview__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--ink-mute);
+}
+
+.browser-preview__dot--running { background: var(--success); }
+.browser-preview__dot--starting { background: var(--brand); animation: browser-preview-pulse 1.2s ease-in-out infinite; }
+.browser-preview__dot--error { background: var(--danger); }
+
+@keyframes browser-preview-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.browser-preview__url {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--ink-divider-strong);
+  border-radius: 8px;
+  background: var(--ink-surface);
+  color: var(--ink-paper);
+  font-size: 12px;
+  outline: none;
+}
+
+.browser-preview__url:focus {
+  border-color: var(--brand-500);
+}
+
+.browser-preview__url:disabled {
+  color: var(--ink-mute);
+}
+
+.browser-preview__url::placeholder { color: var(--ink-mute); }
+
+.browser-preview__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-fog);
+  cursor: pointer;
+}
+
+.browser-preview__btn:hover:not(:disabled) {
+  background: var(--ink-hover);
+  color: var(--ink-paper);
+}
+
+.browser-preview__btn:disabled { color: var(--ink-mute); cursor: default; }
+
+.browser-preview__btn--danger:hover:not(:disabled) { color: var(--danger); }
+
+/* ── Body: canvas / placeholder ─────────────────────────────────────── */
+
+.browser-preview__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--ink-deep);
+}
+
+.browser-preview__canvas {
+  display: block;
+  width: 100%;
+  outline: none;
+  cursor: crosshair;
+}
+
+.browser-preview__placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  color: var(--ink-fog);
+  font-size: 13px;
+}
+
+.browser-preview__placeholder p { margin: 0; }
+
+.browser-preview__error { color: var(--danger); }
+
+.browser-preview__launch {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 16px;
+  border: 1px solid var(--brand-500);
+  border-radius: 8px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.browser-preview__launch:hover { background: var(--brand-glow); border-color: var(--brand); }
+
+.browser-preview__hint { font-size: 11px; color: var(--ink-mute); }
+
+.browser-preview__spin { animation: browser-preview-rotate 1s linear infinite; color: var(--brand); }
+
+@keyframes browser-preview-rotate {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browser-preview__dot--starting { animation: none; }
+  .browser-preview__spin { animation: none; }
+}

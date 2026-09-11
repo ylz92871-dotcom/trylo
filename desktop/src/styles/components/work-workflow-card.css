@@ -1,0 +1,284 @@
+/* Trylo Desktop — WorkWorkflowCard (2026-08-29).
+ *
+ * Visual language borrowed from the existing Code-side
+ * cards (ResultDock left accent, ToolSummary mono chip,
+ * ThinkingCard 14px left indent, shared `.disclosure`
+ * expand pattern). No outer box — the left 3px accent
+ * border + transparent body is what makes the card feel
+ * native to the chat surface.
+ *
+ * Token reference: tokens.css exposes --mode-accent,
+ * --border, --font-mono, --font-body, --radius-md,
+ * --space-{1..6}, --text-{xs,sm}, --duration-{fast,base}.
+ */
+
+.work-workflow {
+  margin: var(--space-2) 0;
+  padding: 0 0 0 var(--space-3);
+  border-left: 3px solid var(--mode-accent, var(--brand-300));
+  font-family: var(--font-mono, ui-monospace);
+  font-size: var(--text-xs, 12px);
+  line-height: var(--leading-snug, 1.4);
+  color: var(--fg, var(--ink-paper));
+  background: transparent;
+}
+
+.work-workflow--terminal {
+  border-left-color: var(--border, var(--ink-divider));
+}
+
+.work-workflow--failed {
+  border-left-color: var(--danger, #D96666);
+}
+
+/* Header — compact, mono, like a ToolSummary chip but
+ * inline-full. Disclosure chevron on the right. */
+.work-workflow__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  width: 100%;
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.work-workflow__head:hover .work-workflow__head-label {
+  color: var(--ink-paper);
+}
+
+.work-workflow__head:focus-visible {
+  outline: 1px solid var(--mode-accent, var(--brand));
+  outline-offset: 2px;
+  border-radius: var(--radius-xs, 3px);
+}
+
+.work-workflow__status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
+.work-workflow__status[data-status='completed'] {
+  color: var(--success, #6EBF7B);
+}
+
+.work-workflow__status[data-status='failed'] {
+  color: var(--danger, #D96666);
+}
+
+.work-workflow__status[data-status='running'] {
+  color: var(--mode-accent, var(--brand-300));
+  /* Spec §5.7: one active spinner. Reduced-motion stops
+   * it; no separate override needed. */
+  animation: work-workflow-spin 1.4s linear infinite;
+}
+
+@keyframes work-workflow-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-workflow__status[data-status='running'] {
+    animation: none;
+  }
+}
+
+.work-workflow__head-label {
+  color: var(--fg, var(--ink-paper));
+  font-weight: 500;
+}
+
+.work-workflow__head-sep {
+  color: var(--ink-mute, #888);
+}
+
+.work-workflow__head-count,
+.work-workflow__head-meta {
+  color: var(--fg-muted, var(--ink-fog));
+  font-variant-numeric: tabular-nums;
+}
+
+.work-workflow__head-chevron {
+  margin-left: auto;
+  color: var(--ink-mute, #888);
+}
+
+/* Phases — list of indented rows, like the spec §3.1
+ * mockup. Each row carries a status icon and a title. */
+.work-workflow__phases {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--space-4, 16px);
+  border-left: 1px solid var(--border, var(--ink-divider));
+  margin-left: var(--space-1, 4px);
+}
+
+.work-workflow__phase {
+  margin: 0;
+}
+
+.work-workflow__phase-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  width: 100%;
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.work-workflow__phase-head:focus-visible {
+  outline: 1px solid var(--mode-accent, var(--brand));
+  outline-offset: 2px;
+  border-radius: var(--radius-xs, 3px);
+}
+
+.work-workflow__phase-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+}
+
+.work-workflow__phase-icon--completed {
+  color: var(--success, #6EBF7B);
+}
+
+.work-workflow__phase-icon--failed {
+  color: var(--danger, #D96666);
+}
+
+.work-workflow__phase-icon--active {
+  color: var(--mode-accent, var(--brand-300));
+}
+
+.work-workflow__phase-icon--cancelled {
+  color: var(--ink-mute, #888);
+}
+
+.work-workflow__phase-icon--pending {
+  color: var(--ink-mute, #888);
+  opacity: 0.6;
+}
+
+.work-workflow__phase--pending .work-workflow__phase-title {
+  color: var(--fg-muted, var(--ink-fog));
+  opacity: 0.6;
+}
+
+.work-workflow__phase--active .work-workflow__phase-title {
+  color: var(--mode-accent, var(--brand-300));
+  font-weight: 500;
+}
+
+.work-workflow__phase--failed .work-workflow__phase-title {
+  color: var(--danger, #D96666);
+}
+
+.work-workflow__phase-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.work-workflow__phase-meta {
+  color: var(--fg-muted, var(--ink-fog));
+  font-variant-numeric: tabular-nums;
+}
+
+/* Activities — nested tree rows under the active phase.
+ * Mirrors the spec §3.1 mockup (`├─` / `└─` characters). */
+.work-workflow__activities {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--space-4, 16px);
+  border-left: 1px solid var(--border, var(--ink-divider));
+  margin-left: var(--space-1, 4px);
+}
+
+.work-workflow__activity {
+  margin: 0;
+}
+
+.work-workflow__activity-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  width: 100%;
+  padding: 2px var(--space-2, 8px);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  color: var(--fg-muted, var(--ink-fog));
+  text-align: left;
+  cursor: default;
+  border-radius: var(--radius-xs, 3px);
+}
+
+.work-workflow__activity-btn--clickable {
+  cursor: pointer;
+}
+
+.work-workflow__activity-btn--clickable:hover {
+  color: var(--fg, var(--ink-paper));
+  background: var(--bg-panel, var(--ink-surface));
+}
+
+.work-workflow__activity-btn--clickable:focus-visible {
+  outline: 1px solid var(--mode-accent, var(--brand));
+  outline-offset: 1px;
+}
+
+.work-workflow__activity-btn:disabled {
+  cursor: default;
+}
+
+.work-workflow__activity-branch {
+  flex: 0 0 auto;
+  color: var(--ink-mute, #888);
+  font-family: var(--font-mono, ui-monospace);
+  font-size: 11px;
+  white-space: pre;
+}
+
+.work-workflow__activity-kind {
+  flex: 0 0 auto;
+  color: var(--ink-mute, #888);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  min-width: 64px;
+}
+
+.work-workflow__activity-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.work-workflow__activity-overflow {
+  padding: 2px var(--space-2, 8px) 2px var(--space-6, 24px);
+  color: var(--fg-muted, var(--ink-fog));
+  font-style: italic;
+  font-family: var(--font-body, system-ui);
+}

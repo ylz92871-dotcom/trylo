@@ -1,0 +1,452 @@
+/* Trylo Desktop — InputBar.
+ *
+ * v1.5: a single horizontal pill. Left: code sub-mode
+ * chip with a + indicator (Phase 3 will open a popover
+ * to switch sub-modes). Center: text input. Right: send.
+ *
+ * v1.15: the wrapper holds the 24px status line (the
+ * ProcessHeader) above the pill. The wrapper itself is
+ * not styled; the ProcessHeader owns the top row, the
+ * .input-bar owns the pill.
+ *
+ * No visible "active" background on the sub-mode — the
+ * text color (brand cream) is the only signal. Restrained.
+ */
+
+.input-bar-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0;
+  /* 2026-08-29 (revert): the composer is a full-width WORKBENCH
+   * surface, not a narrow central island. It spans the content area
+   * with generous, but not ChatGPT-narrow, side margins. */
+  width: calc(100% - 64px);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.input-bar {
+  display: grid;
+  /* v1.16.2.1: 4 columns — mode | attach | input | send.
+     Earlier we had 3 (auto 1fr auto) and the attach
+     button (v1.16.2) wrapped the 4th item into row 2
+     column 1, putting the send button on the bottom-left
+     and squeezing the input. Four explicit columns fix
+     both the send position and the input width. */
+  grid-template-columns: auto auto 1fr auto;
+  align-items: flex-end;
+  gap: var(--space-2);
+  padding: 12px 14px;
+  background: var(--bg-elevated);
+  /* One notch clearer than the page so the composer reads as a
+     distinct, primary control tier (no glow, no gold flood). */
+  border: 1px solid var(--border-strong);
+  border-radius: 24px;
+  /* Centring is owned by .input-bar-wrapper now; the pill fills
+   * the wrapper width exactly so its left edge = the composer
+   * left boundary (status line + permission chip align to it). */
+  margin: 0;
+  position: relative;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+/* Work uses the same 4-column grid as Code (mode | attach
+   | input | send). An earlier override to `auto 1fr auto`
+   put the send button on a second row at column 1, which
+   looked like a floating return arrow at the bottom-left
+   of the pill. Keeping all four children on row 1 fixes
+   both the send position and the input width. */
+.input-bar--work {
+  grid-template-columns: auto auto 1fr auto;
+}
+
+.input-bar:focus-within {
+  border-color: var(--border-strong);
+}
+
+/* v1.16.3: plan mode gets a clearly different border
+   color so the user knows they're in read-only mode
+   (the agent can read files but can't modify them).
+   Uses --accent (the design-token blue) for "design /
+   plan" semantics; tier color stays gold. */
+.input-bar--plan {
+  border-color: var(--accent, #8AB4F8);
+}
+.input-bar--plan:focus-within {
+  border-color: var(--accent, #8AB4F8);
+  box-shadow: 0 0 0 1px var(--accent, #8AB4F8) inset;
+}
+
+/* v1.16.3: Tauri drag-drop highlight. When files are
+   over the webview, the input row shows a dashed
+   brand-tinted border to signal "drop here". */
+.input-bar--dragging {
+  border: 2px dashed var(--brand-300, #DBC97F);
+  /* Compensate the 2px border so the content doesn't
+     shift compared to the 1px state. Fills the wrapper
+     (no side margins — centring is owned by the wrapper). */
+  margin: -1px 0 calc(var(--space-4) + 1px) 0;
+}
+
+/* v1.17.3: Work mode group — static Work label + task
+   menu (+) button rendered as a single unit on the left
+   side of the input. Mirrors Code's [+ Chat/Plan/Agent]
+   mode picker layout. */
+.input-bar__work-mode-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.input-bar__mode {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px 4px 6px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brand);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.input-bar__mode:hover {
+  background: var(--ink-hover);
+}
+
+.input-bar__mode--static {
+  cursor: default;
+}
+
+.input-bar__mode--static:hover {
+  background: transparent;
+}
+
+.input-bar__kind-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.input-bar__mode-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  color: var(--brand);
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 400;
+}
+
+.input-bar__mode-label {
+  font-size: var(--text-sm);
+}
+
+.input-bar__input {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--fg);
+  padding: 4px var(--space-2);
+  min-width: 0;
+  width: 100%;
+  resize: none;
+  max-height: 160px;
+  min-height: 24px;
+  line-height: 1.5;
+  overflow-y: hidden;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.input-bar__input::placeholder {
+  /* A touch brighter than the muted text so the hint stays
+     legible at a glance without becoming a loud grey. */
+  color: rgba(236, 238, 242, 0.62);
+}
+
+.input-bar__send {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-muted);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out),
+              opacity var(--duration-fast) var(--ease-out);
+}
+
+.input-bar__send:hover:not(:disabled) {
+  background: var(--ink-hover);
+  color: var(--fg);
+}
+
+.input-bar__send:not(:disabled) {
+  color: var(--fg);
+}
+
+.input-bar__send:disabled {
+  color: var(--ink-mute);
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 2026-09-03 (run controls §UI-B): a compact "queued" pill shown while a
+   Code run is live and messages are pended behind it. Default is queue; an
+   inline "立即打断" steers the oldest one immediately. */
+.input-bar__queued {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  max-width: 220px;
+  padding: 3px 8px 3px 5px;
+  border-radius: 999px;
+  background: var(--accent-soft, rgba(212, 175, 55, 0.12));
+  border: 1px solid var(--accent, #D4AF37);
+  color: var(--fg);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.input-bar__queued-count {
+  opacity: 0.9;
+}
+
+.input-bar__queued-interrupt {
+  border: none;
+  background: var(--accent, #D4AF37);
+  color: #16110a;
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 1px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.input-bar__queued-interrupt:hover {
+  filter: brightness(1.08);
+}
+
+/* v1.16.0: bottom action row (Codex-style). Sits below
+   the input box. The leftmost slot is the context-window
+   ring; the right side is a flex spacer that pre-reserves
+   room for upcoming items (attach, permission dropdown,
+   model picker). Each new item lands in the right side,
+   in display order — don't disturb the ring on the left. */
+.input-bar__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  /* Align to the composer block (pill) edges, not the window. */
+  padding: 6px 4px 0 4px;
+  min-height: 24px;
+}
+
+.input-bar__actions-spare {
+  /* Flex spacer — reserves the right half for future
+     items (paperclip, permission, model picker) without
+     forcing a min-width. Invisible / non-interactive. */
+  flex: 1 1 auto;
+}
+
+/* 2026-08-28 (Work chat-mode split): the explicit 任务
+   send under the composer. The DEFAULT ⏎ send is a
+   conversation message; this pill is the one VISIBLE
+   work trigger — quiet gold outline, loud on hover. */
+.input-bar__run-task {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.input-bar__run-task:hover:not(:disabled) {
+  background: var(--brand);
+  color: var(--bg);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.input-bar__run-task:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* v1.16.2.6: attachment chip "thumbnail" styles. Each
+   chip has a kind-colored icon thumb on the left, a
+   2-line meta block (name + size) in the middle, and
+   an X remove button on the right. The loading chip
+   has a CSS-only spinner (no extra deps). */
+.attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  /* Align to the composer block (pill) edges, not the window. */
+  padding: 4px 4px 0 4px;
+}
+
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 4px 4px 4px 4px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 6px;
+  background: var(--bg-elevated, rgba(20, 20, 20, 0.6));
+  font-size: var(--text-xs, 12px);
+  line-height: 1.2;
+  user-select: none;
+}
+
+.attachment-chip__thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+/* Kind-tinted thumb backgrounds. Subtle, brand-aligned. */
+.attachment-chip--office .attachment-chip__thumb {
+  background: var(--brand-soft, rgba(219, 201, 127, 0.12));
+}
+.attachment-chip--image .attachment-chip__thumb {
+  background: rgba(138, 180, 248, 0.16);
+}
+.attachment-chip--text .attachment-chip__thumb {
+  background: rgba(255, 255, 255, 0.06);
+}
+.attachment-chip--loading .attachment-chip__thumb {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.attachment-chip__spinner {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--brand-300, #DBC97F);
+  border-radius: 50%;
+  animation: attachment-chip-spin 0.7s linear infinite;
+}
+
+@keyframes attachment-chip-spin {
+  to { transform: rotate(360deg); }
+}
+
+.attachment-chip__meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.attachment-chip__name {
+  font-weight: 500;
+  color: var(--text-primary, rgba(255, 255, 255, 0.92));
+  /* Truncate long names with ellipsis. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.attachment-chip__size {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.attachment-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 120ms ease-out, color 120ms ease-out;
+}
+.attachment-chip__remove:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary, rgba(255, 255, 255, 0.92));
+}
+
+/* v1.16.2.6: real image preview inside the chip's
+   thumb. Object-fit:cover so non-square images still
+   fill the 26x26 box. */
+.attachment-chip__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 4px;
+}
+
+/* v1.16.2.6: failed-attachment chip. Red-tinted to
+   stand out from successful chips; the ⚠ icon + a
+   short reason in the size slot. */
+.attachment-chip--failed .attachment-chip__thumb {
+  background: var(--danger-soft, rgba(217, 102, 102, 0.16));
+  color: var(--danger, #D96666);
+}
+.attachment-chip--failed {
+  border-color: var(--danger, #D96666);
+}
+.attachment-chip--failed .attachment-chip__name {
+  color: var(--danger, #D96666);
+}
+.attachment-chip--failed .attachment-chip__size {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+}

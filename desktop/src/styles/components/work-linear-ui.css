@@ -1,0 +1,877 @@
+/* Trylo Desktop — linear Work UI (redesign spec §4, 2026-08-29).
+ *
+ * Four message kinds share one visual language (borrowed from
+ * WorkWorkflowCard: left 3px accent, mono xs type, transparent
+ * body, shared `.disclosure` pattern):
+ *   .work-rail          — the phase rail (§4.1 / §7.3)
+ *   .work-narration     — the white narration line (§5.3)
+ *   .work-activities    — the collapsed activity aggregate (§4.2)
+ *   .deliverable-panel  — the deliverable axis (§8.5)
+ *
+ * Motion policy (§15 WP-6): the ONLY animation is the rail's
+ * active spinner; blockers and terminals stop it, and
+ * prefers-reduced-motion disables it entirely.
+ */
+
+/* ------------------------------------------------------------------ */
+/* Phase rail                                                          */
+/* ------------------------------------------------------------------ */
+
+.work-rail {
+  margin: var(--space-2) 0;
+  padding: 0 0 0 var(--space-3);
+  border-left: 3px solid var(--mode-accent, var(--brand-300));
+  font-family: var(--font-mono, ui-monospace);
+  font-size: var(--text-xs, 12px);
+  line-height: var(--leading-snug, 1.4);
+  color: var(--fg, var(--ink-paper));
+  background: transparent;
+  min-width: 0; /* WP-6 §14.2: truncate, don't overflow at narrow width */
+}
+
+.work-rail--terminal {
+  border-left-color: var(--border, var(--ink-divider));
+}
+
+.work-rail--failed {
+  border-left-color: var(--danger, #D96666);
+}
+
+.work-rail__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+}
+
+.work-rail__status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
+.work-rail__status[data-status='completed'] {
+  color: var(--success, #6EBF7B);
+}
+
+.work-rail__status[data-status='failed'] {
+  color: var(--danger, #D96666);
+}
+
+.work-rail__status[data-status='running'] {
+  color: var(--fg-muted, var(--ink-fog));
+  animation: work-rail-spin 1.4s linear infinite;
+}
+
+.work-rail__status[data-status='blocked'] {
+  color: var(--warn, #D9A666);
+  /* 阻塞停动画 (§9): a parked run never spins. */
+  animation: none;
+}
+
+@keyframes work-rail-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-rail__status[data-status='running'] {
+    animation: none;
+  }
+}
+
+.work-rail__head-label {
+  font-weight: 500;
+}
+
+.work-rail__head-sep {
+  color: var(--ink-mute, #888);
+}
+
+.work-rail__head-count {
+  color: var(--fg-muted, var(--ink-fog));
+  font-variant-numeric: tabular-nums;
+}
+
+.work-rail__blocker {
+  margin: 0 var(--space-2, 8px) var(--space-1, 4px);
+  padding: 2px var(--space-2, 8px);
+  border-radius: var(--radius-xs, 3px);
+  color: var(--warn, #D9A666);
+  font-family: var(--font-body, system-ui);
+}
+
+.work-rail__phases {
+  list-style: none;
+  margin: 0 0 0 var(--space-1, 4px);
+  padding: 0 0 0 var(--space-4, 16px);
+  border-left: 1px solid var(--border, var(--ink-divider));
+}
+
+.work-rail__phase {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+}
+
+.work-rail__phase-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+}
+
+.work-rail__phase-icon--completed {
+  color: var(--success, #6EBF7B);
+}
+
+.work-rail__phase-icon--failed {
+  color: var(--danger, #D96666);
+}
+
+.work-rail__phase-icon--active {
+  color: var(--fg-muted, var(--ink-fog));
+  animation: work-rail-spin 1.4s linear infinite;
+}
+
+.work-rail__phase-icon--blocked,
+.work-rail__phase-icon--pending {
+  color: var(--ink-mute, #888);
+}
+
+.work-rail__phase-icon--pending {
+  opacity: 0.6;
+}
+
+/* A blocked run parks the spinner too (spec §9). */
+.work-rail--blocked .work-rail__phase-icon--active {
+  animation: none;
+}
+
+/* Terminal freeze (spec §3.3): no residual spinner after the
+ * final lands — the mapper downgrades active phases, but the
+ * belt-and-braces rule kills the animation regardless. */
+.work-rail--terminal .work-rail__phase-icon--active {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-rail__phase-icon--active {
+    animation: none;
+  }
+}
+
+.work-rail__phase-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.work-rail__phase--pending .work-rail__phase-title {
+  color: var(--fg-muted, var(--ink-fog));
+  opacity: 0.6;
+}
+
+.work-rail__phase--active .work-rail__phase-title {
+  color: var(--fg-muted, var(--ink-fog));
+  font-weight: 500;
+}
+
+.work-rail__phase--failed .work-rail__phase-title {
+  color: var(--danger, #D96666);
+}
+
+.work-rail__phase-meta {
+  color: var(--fg-muted, var(--ink-fog));
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ */
+/* Narration — the WHITE line (§5.3): body font, full-contrast text,   */
+/* indented under the rail accent.                                     */
+/* ------------------------------------------------------------------ */
+
+.work-narration {
+  margin: var(--space-1) 0;
+  padding: 0 var(--space-2, 8px) 0 calc(var(--space-3) + 3px);
+  font-family: var(--font-body, system-ui);
+  font-size: var(--text-sm, 13px);
+  line-height: var(--leading-normal, 1.55);
+  color: var(--fg, var(--ink-paper));
+  white-space: pre-wrap;
+}
+
+/* ------------------------------------------------------------------ */
+/* Activity group (collapsed by default, §4.2)                         */
+/* ------------------------------------------------------------------ */
+
+.work-activities {
+  margin: var(--space-1) 0;
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--border, var(--ink-divider));
+  font-family: var(--font-mono, ui-monospace);
+  font-size: var(--text-xs, 12px);
+  color: var(--fg-muted, var(--ink-fog));
+  min-width: 0; /* WP-6 §14.2: truncate, don't overflow at narrow width */
+}
+
+.work-activities--live {
+  border-left-color: var(--fg-muted, var(--ink-fog));
+}
+
+.work-activities__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  width: 100%;
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.work-activities__head:focus-visible {
+  outline: 1px solid var(--mode-accent, var(--brand));
+  outline-offset: 2px;
+  border-radius: var(--radius-xs, 3px);
+}
+
+.work-activities__head-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  color: var(--fg-muted, var(--ink-fog));
+}
+
+.work-activities--live .work-activities__head-status {
+  animation: work-rail-spin 1.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-activities--live .work-activities__head-status {
+    animation: none;
+  }
+}
+
+.work-activities__head-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.work-activities__chevron {
+  margin-left: auto;
+  color: var(--ink-mute, #888);
+}
+
+.work-activities__list {
+  list-style: none;
+  margin: 0 0 0 var(--space-1, 4px);
+  padding: 0 0 0 var(--space-4, 16px);
+  border-left: 1px solid var(--border, var(--ink-divider));
+}
+
+.work-activities__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: 2px var(--space-2, 8px);
+}
+
+.work-activities__row-status {
+  display: inline-flex;
+  width: 11px;
+  flex: 0 0 11px;
+  color: var(--ink-mute, #888);
+}
+
+.work-activities__row--completed .work-activities__row-status {
+  color: var(--success, #6EBF7B);
+}
+
+.work-activities__row--failed .work-activities__row-status {
+  color: var(--danger, #D96666);
+}
+
+.work-activities__row--running .work-activities__row-status {
+  color: var(--fg-muted, var(--ink-fog));
+  animation: work-rail-spin 1.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-activities__row--running .work-activities__row-status {
+    animation: none;
+  }
+}
+
+.work-activities__row-kind {
+  flex: 0 0 auto;
+  min-width: 56px;
+  color: var(--ink-mute, #888);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.work-activities__row-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.work-activities__row-evidence {
+  flex: 0 1 auto;
+  color: var(--ink-mute, #888);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Deliverable panel (§8.5)                                            */
+/* ------------------------------------------------------------------ */
+
+.deliverable-panel {
+  margin: var(--space-2) 0;
+  padding: 0 0 0 var(--space-3);
+  border-left: 3px solid var(--mode-accent, var(--brand-300));
+  font-family: var(--font-mono, ui-monospace);
+  font-size: var(--text-xs, 12px);
+  line-height: var(--leading-snug, 1.4);
+  color: var(--fg, var(--ink-paper));
+  /* WP-6 (§14.2 窄宽/高缩放): the panel is a flex child of the
+   * message column — min-width:0 lets long paths/titles truncate
+   * instead of forcing horizontal overflow at narrow widths or high
+   * zoom. */
+  min-width: 0;
+}
+
+.deliverable-panel__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+}
+
+.deliverable-panel__head-kind {
+  font-weight: 500;
+}
+
+.deliverable-panel__head-count {
+  color: var(--fg-muted, var(--ink-fog));
+  font-variant-numeric: tabular-nums;
+}
+
+.deliverable-panel__head-progress {
+  color: var(--fg-muted, var(--ink-fog));
+}
+
+/* 2026-09-01 (IDE-style redesign): vertical step list replaces
+ * the old flex-wrap pills. Progress bar lives in the header. */
+
+/* ── Progress track ────────────────────────────────────────── */
+.deliverable-panel__progress-track {
+  height: 3px;
+  margin: 0 var(--space-2, 8px) var(--space-2, 8px);
+  border-radius: 2px;
+  background: var(--bg-panel, var(--ink-surface));
+  overflow: hidden;
+}
+
+.deliverable-panel__progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--mode-accent, var(--brand-300));
+  transition: width 180ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deliverable-panel__progress-fill {
+    transition: none;
+  }
+}
+
+/* ── Vertical step list (IDE-style) ─────────────────────────── */
+.deliverable-panel__steps {
+  list-style: none;
+  margin: 0 0 var(--space-2, 8px);
+  padding: 0 var(--space-2, 8px);
+}
+
+.deliverable-panel__step {
+  /* Connecting line between steps (like GitHub Actions). */
+  position: relative;
+  padding: 0 0 0 20px;
+}
+
+.deliverable-panel__step::before {
+  content: '';
+  position: absolute;
+  /* Align with icon center: 20px(padding) + 4px(step-head padding-left) + 5.5px(icon half) - 0.5px(line half) */
+  left: 29px;
+  /* Align with icon vertical center: 3px(step-head padding-top) + (16.8px line-height - 11px icon) / 2 + 5.5px(icon half) */
+  top: 12px;
+  bottom: 0;
+  width: 1px;
+  background: var(--border, var(--ink-divider));
+}
+
+.deliverable-panel__step:last-child::before {
+  display: none;
+}
+
+.deliverable-panel__step-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 4px;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-xs, 3px);
+  font: inherit;
+  font-size: var(--text-xs, 12px);
+  line-height: var(--leading-snug, 1.4);
+  color: var(--fg-muted, var(--ink-fog));
+  cursor: pointer;
+  text-align: left;
+  /* 14px icon + 1px line occupies the left 20px padding area */
+}
+
+.deliverable-panel__step-head:disabled {
+  cursor: default;
+}
+
+.deliverable-panel__step-head:focus-visible {
+  outline: 1px solid var(--mode-accent, var(--brand));
+  outline-offset: -1px;
+}
+
+.deliverable-panel__step-head:hover:not(:disabled) {
+  background: var(--bg-hover, rgba(128,128,128,0.06));
+}
+
+.deliverable-panel__step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 11px;
+  height: 11px;
+  flex: 0 0 11px;
+}
+
+.deliverable-panel__step-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deliverable-panel__step-chevron {
+  margin-left: auto;
+  color: var(--ink-mute, #888);
+  flex: 0 0 auto;
+}
+
+/* Status colors */
+.deliverable-panel__step--done .deliverable-panel__step-icon {
+  color: var(--success, #6EBF7B);
+}
+
+.deliverable-panel__step--done .deliverable-panel__step-label {
+  color: var(--fg, var(--ink-paper));
+}
+
+.deliverable-panel__step--failed .deliverable-panel__step-icon {
+  color: var(--danger, #D96666);
+}
+
+.deliverable-panel__step--failed .deliverable-panel__step-label {
+  color: var(--danger, #D96666);
+}
+
+.deliverable-panel__step--active .deliverable-panel__step-icon {
+  color: var(--fg-muted, var(--ink-fog));
+  animation: work-rail-spin 1.4s linear infinite;
+}
+
+.deliverable-panel__step--active .deliverable-panel__step-label {
+  color: var(--fg-muted, var(--ink-fog));
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deliverable-panel__step--active .deliverable-panel__step-icon {
+    animation: none;
+  }
+}
+
+/* Step expandable body */
+.deliverable-panel__step-body.disclosure {
+  /* nested disclosure within the step — content slides down */
+  padding-left: 17px; /* align with label text, past icon + gap */
+}
+
+.deliverable-panel__step-body .disclosure__inner > *:first-child {
+  margin-top: var(--space-1, 4px);
+}
+
+.deliverable-panel__section-title {
+  color: var(--ink-mute, #888);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-right: var(--space-2, 8px);
+}
+
+/* Outline checkpoint awaiting the user's decision (§8.6 /
+ * §8.8): parked-blocker look, warn accent, no spinner. */
+.deliverable-panel__checkpoint {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2, 8px);
+  margin: 0 var(--space-2, 8px) var(--space-2, 8px);
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+  border: 1px solid var(--warn, #D9A666);
+  border-radius: var(--radius-xs, 3px);
+  font-family: var(--font-body, system-ui);
+}
+
+.deliverable-panel__checkpoint-label {
+  flex: 0 0 auto;
+  color: var(--warn, #D9A666);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.deliverable-panel__checkpoint-text {
+  color: var(--fg, var(--ink-paper));
+}
+
+.deliverable-panel__brief {
+  padding: 0 var(--space-2, 8px);
+  font-family: var(--font-body, system-ui);
+}
+
+.deliverable-panel__brief-row {
+  display: flex;
+  gap: var(--space-2, 8px);
+  padding: 1px 0;
+}
+
+.deliverable-panel__brief-label {
+  flex: 0 0 64px;
+  color: var(--ink-mute, #888);
+}
+
+.deliverable-panel__brief-value {
+  color: var(--fg, var(--ink-paper));
+}
+
+.deliverable-panel__visual {
+  display: flex;
+  align-items: center;
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+}
+
+.deliverable-panel__visual-value {
+  font-family: var(--font-body, system-ui);
+}
+
+.deliverable-panel__outline {
+  margin: var(--space-2, 8px) var(--space-2, 8px);
+  padding: var(--space-2, 8px);
+  border: 1px solid var(--border, var(--ink-divider));
+  border-radius: var(--radius-md, 6px);
+}
+
+.deliverable-panel__outline-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  margin-bottom: var(--space-1, 4px);
+}
+
+.deliverable-panel__outline-title {
+  font-weight: 500;
+}
+
+.deliverable-panel__outline-status {
+  font-size: 10px;
+  padding: 1px var(--space-1, 4px);
+  border-radius: var(--radius-xs, 3px);
+  color: var(--ink-mute, #888);
+  border: 1px solid var(--border, var(--ink-divider));
+}
+
+.deliverable-panel__outline-status--approved {
+  color: var(--success, #6EBF7B);
+}
+
+.deliverable-panel__outline-status--awaiting_review {
+  color: var(--warn, #D9A666);
+}
+
+.deliverable-panel__outline-count {
+  margin-left: auto;
+  color: var(--fg-muted, var(--ink-fog));
+  font-variant-numeric: tabular-nums;
+}
+
+.deliverable-panel__outline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.deliverable-panel__outline-row {
+  display: flex;
+  gap: var(--space-2, 8px);
+  padding: 1px 0;
+}
+
+.deliverable-panel__outline-index {
+  flex: 0 0 24px;
+  color: var(--ink-mute, #888);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.deliverable-panel__outline-slide-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-body, system-ui);
+}
+
+.deliverable-panel__outline-overflow {
+  padding: 1px 0 1px 32px;
+  color: var(--fg-muted, var(--ink-fog));
+  font-style: italic;
+}
+
+.deliverable-panel__preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: var(--space-2, 8px);
+  padding: var(--space-2, 8px);
+  /* WP-6 (§14.2): a 30/100-page deck must not stretch the message
+   * into a huge scroll region — cap the grid height and scroll it in
+   * place so the surrounding timeline stays stable. */
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.deliverable-panel__preview-tile {
+  aspect-ratio: 16 / 9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 1px solid var(--border, var(--ink-divider));
+  border-radius: var(--radius-xs, 3px);
+  color: var(--fg-muted, var(--ink-fog));
+  background: var(--bg-panel, var(--ink-surface));
+}
+
+.deliverable-panel__preview-tile--rendered,
+.deliverable-panel__preview-tile--validated {
+  border-color: var(--success, #6EBF7B);
+}
+
+.deliverable-panel__preview-tile--issue {
+  border-color: var(--danger, #D96666);
+}
+
+.deliverable-panel__preview-tile--generating {
+  border-color: var(--fg-muted, var(--ink-fog));
+}
+
+.deliverable-panel__preview-index {
+  font-variant-numeric: tabular-nums;
+}
+
+.deliverable-panel__preview-state {
+  font-size: 10px;
+  color: var(--ink-mute, #888);
+}
+
+.deliverable-panel__validation {
+  list-style: none;
+  margin: var(--space-2, 8px) 0;
+  padding: 0 var(--space-2, 8px);
+}
+
+.deliverable-panel__validation-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: 1px 0;
+}
+
+.deliverable-panel__validation-label {
+  flex: 0 1 auto;
+  font-family: var(--font-body, system-ui);
+}
+
+.deliverable-panel__validation-status {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--ink-mute, #888);
+}
+
+.deliverable-panel__validation-row--passed .deliverable-panel__validation-status {
+  color: var(--success, #6EBF7B);
+}
+
+.deliverable-panel__validation-row--failed .deliverable-panel__validation-status {
+  color: var(--danger, #D96666);
+}
+
+.deliverable-panel__validation-row--warning .deliverable-panel__validation-status {
+  color: var(--warn, #D9A666);
+}
+
+/* §8.5 G-8 / §16-14: not_run is NEVER green — muted, honest. */
+.deliverable-panel__validation-row--not_run .deliverable-panel__validation-status {
+  color: var(--ink-mute, #888);
+  opacity: 0.8;
+}
+
+.deliverable-panel__validation-evidence {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg-muted, var(--ink-fog));
+}
+
+.deliverable-panel__exports {
+  list-style: none;
+  margin: var(--space-2, 8px) 0;
+  padding: 0 var(--space-2, 8px);
+}
+
+.deliverable-panel__export-row {
+  display: flex;
+  gap: var(--space-2, 8px);
+  padding: 1px 0;
+}
+
+.deliverable-panel__export-format {
+  flex: 0 0 40px;
+  color: var(--success, #6EBF7B);
+}
+
+.deliverable-panel__export-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg-muted, var(--ink-fog));
+}
+
+/* ------------------------------------------------------------------ */
+/* AutoNotice — non-blocking reminder (dont_ask: warn don't block)     */
+/* Mirrors work-activities: 3px left accent, mono xs, no spinner.     */
+/* ------------------------------------------------------------------ */
+
+.auto-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  margin: var(--space-1) 0;
+  padding: var(--space-1, 4px) var(--space-2, 8px) var(--space-1) var(--space-3);
+  border-left: 3px solid var(--border, var(--ink-divider));
+  font-family: var(--font-mono, ui-monospace);
+  font-size: var(--text-xs, 12px);
+  line-height: var(--leading-snug, 1.4);
+  color: var(--fg-muted, var(--ink-fog));
+  min-width: 0;
+}
+
+.auto-notice--info {
+  border-left-color: var(--border, var(--ink-divider));
+}
+
+.auto-notice--warn {
+  border-left-color: var(--warn, #D9A666);
+}
+
+.auto-notice--continued {
+  opacity: 0.7;
+}
+
+.auto-notice__title {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg, var(--ink-paper));
+}
+
+.auto-notice__detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink-mute, #888);
+}
+
+.auto-notice__countdown {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-mute, #888);
+  font-variant-numeric: tabular-nums;
+}
+
+.auto-notice__pause {
+  padding: 1px 6px;
+  border: 1px solid var(--border, var(--ink-divider));
+  border-radius: var(--radius-xs, 3px);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  color: var(--fg-muted, var(--ink-fog));
+  cursor: pointer;
+}
+
+.auto-notice__pause:hover {
+  background: var(--bg-hover, rgba(128,128,128,0.06));
+}
+
+.auto-notice__continued {
+  flex: 0 0 auto;
+  color: var(--success, #6EBF7B);
+  font-size: 11px;
+}

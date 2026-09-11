@@ -1,0 +1,236 @@
+/* Trylo Desktop — design tokens.
+ *
+ * The single source of truth for color, type, spacing, radius,
+ * and motion. Every component reads from these custom
+ * properties. No component defines its own colors, font sizes,
+ * or paddings. This is the contract for "all future UI is
+ * based on this style" (per the Phase 2 redesign).
+ The lamp-glow variable is OFF by default —
+ * flip it to 1 once the basic shape is signed off.
+ */
+
+:root {
+  /* ── Color ─────────────────────────────────────────────────── */
+
+  /* Backgrounds (charcoal, slight warm undertone) */
+  --ink-deep:        #0E0E0E;   /* page bg */
+  --ink-surface:     #161616;   /* panel surfaces */
+  --ink-elevated:    #1F1F1F;   /* input bar, popovers */
+  --ink-hover:       #2A2A2A;   /* hovered surface */
+
+  /* Foreground */
+  --ink-paper:       #ECEEF2;   /* primary text */
+  --ink-fog:         #8B92A1;   /* secondary text */
+  --ink-mute:        #5C6270;   /* disabled / placeholder */
+
+  /* Accents — Trylo brand color.
+   * The brand color is "Trylo Gold" #DBC97F
+   * (RGB 219, 201, 127), taken from the project's theme
+   * definition. The Trilo logo is its own thing (the
+   * cream-bone mark); the brand color is the gold that
+   * every accent in the UI lives in. Different tools use
+   * different shades — see --brand-100..500 below. */
+  --brand:          #DBC97F;   /* primary — Trylo Gold */
+  --brand-hover:    #E5D488;
+  --brand-soft:     rgba(219, 201, 127, 0.16);
+  --brand-glow:     rgba(219, 201, 127, 0.06);
+  /* Shades — the gold family at five lightnesses. */
+  --brand-100:      #ECE0A8;   /* lightest */
+  --brand-200:      #E3D493;
+  --brand-300:      #DBC97F;   /* default — Trylo Gold */
+  --brand-400:      #C2B069;
+  --brand-500:      #9F9054;   /* darkest */
+  /* Legacy aliases — keep old component CSS working. */
+  --lamp-warm:       var(--brand);
+  --lamp-warm-hover: var(--brand-hover);
+  --lamp-warm-soft:  var(--brand-soft);
+  --lamp-warm-glow:  var(--brand-glow);
+  --ice-blue:        #7AB8E0;   /* cool, files / code */
+  --ice-blue-soft:   rgba(122, 184, 224, 0.14);
+
+  /* Logo gradient stops (the Trilo mark uses its own cream
+   * gradient; the brand color is for the UI). */
+  --logo-bone-top:    #F2EDE1;
+  --logo-bone-bottom: #DDD6C6;
+
+  /* Semantic */
+  --danger:          #D96666;
+  --danger-soft:     rgba(217, 102, 102, 0.12);
+  --success:         #6EBF7B;
+
+  /* Lines */
+  --ink-divider:     rgba(236, 238, 242, 0.06);
+  --ink-divider-strong: rgba(236, 238, 242, 0.10);
+
+  /* ── The signature: lamp glow ─────────────────────────────── */
+  /* Set to 1 to enable the radial warm-gold behind the chat. */
+  /* 0 keeps the page flat. The glow is subtle (6% opacity) —  */
+  /* visible but not loud. See redesign §6.                       */
+  --lamp-glow-on: 0;
+
+  /* ── Typography ────────────────────────────────────────────── */
+
+  --font-display: 'Fraunces', 'Iowan Old Style', 'Apple Garamond',
+    Georgia, 'Times New Roman', serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular,
+    Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --text-xs:    12px;
+  --text-sm:    13px;
+  --text-base:  15px;
+  --text-md:    17px;
+  --text-lg:    24px;
+  --text-xl:    32px;
+  --text-display: 48px;
+
+  --leading-tight: 1.2;
+  --leading-snug:  1.4;
+  --leading-base:  1.55;
+
+  /* ── Spacing (4px base, with intent) ───────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ── Radius ────────────────────────────────────────────────── */
+  --radius-xs:    3px;
+  --radius-sm:    6px;
+  --radius-md:    10px;
+  --radius-lg:    14px;
+  --radius-pill:  999px;
+
+  /* ── Layout dimensions ─────────────────────────────────────── */
+  --top-bar-h:        56px;
+  --bottom-strip-h:   28px;
+  --input-bar-h:      64px;
+  --rail-left-w:      240px;
+  --rail-left-w-collapsed: 64px;
+  --rail-right-w:     min(34%, 320px);
+
+  /* ── Motion ────────────────────────────────────────────────── */
+  --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out:  cubic-bezier(0.65, 0, 0.35, 1);
+  --duration-fast:    120ms;
+  --duration-base:    200ms;
+  --duration-slow:    360ms;
+
+  /* ── Elevation (background tone, not shadows) ──────────────── */
+  /* The design uses background tone for elevation, not drop    */
+  /* shadows. These aliases keep component CSS short.            */
+  --bg:             var(--ink-deep);
+  --bg-panel:       var(--ink-surface);
+  --bg-elevated:    var(--ink-elevated);
+  --fg:             var(--ink-paper);
+  --fg-muted:       var(--ink-fog);
+  --accent:         var(--brand);
+  --border:         var(--ink-divider);
+  --border-strong:  var(--ink-divider-strong);
+  /* Even fainter line — used for the rail dividers so the
+     navigation rails read as background layers, not panels. */
+  --border-faint:   rgba(236, 238, 242, 0.035);
+
+  /* ── M4-D: mode-scoped tokens (consumed via [data-mode=…])
+   *
+   * Trylo Gold is the only brand hue. Code and Work both
+   * live on it. The differences are made by *how* the gold
+   * is used: Code prefers a thin edge and a low fill (a
+   * wire / instrument look); Work prefers a warmer fill and
+   * a paper-like surface (a workshop / canvas look).
+   *
+   * Components read these via `var(--mode-accent, …)` so
+   * legacy call-sites that haven't been ported still
+   * resolve to a sensible value when data-mode is missing
+   * (defensive default = the global --brand).
+   *
+   * Do NOT use these for semantic states (success /
+   * danger / warning). Status colors stay neutral. */
+  --mode-accent:           var(--brand-300);
+  --mode-accent-soft:      var(--brand-soft);
+  --mode-accent-edge:      var(--brand-400);
+  --mode-accent-strong:    var(--brand-100);
+  --mode-accent-ink:       var(--ink-deep);
+  --mode-surface-detail:   rgba(219, 201, 127, 0.04);
+  --mode-icon-color:       var(--brand-300);
+  --mode-label-font:       var(--font-mono);
+  --mode-radius-control:   6px;        /* Code: sharper */
+  --mode-radius-card:      10px;       /* Work: rounder */
+  --mode-edge-width:       1px;        /* Code: solid 1px */
+  --mode-fill-alpha:       0.10;       /* Code: thin fill */
+}
+
+/* ── M4-D: data-mode scopes (set on .app-shell root)
+ *
+ * Re-declares the mode tokens only. Everything else
+ * (typography, motion, layout, semantic colors) is shared
+ * and inherited. */
+[data-mode='code'] {
+  --mode-accent:           var(--brand-300);
+  --mode-accent-soft:      rgba(219, 201, 127, 0.10);
+  --mode-accent-edge:      var(--brand-400);
+  --mode-accent-strong:    var(--brand-100);
+  --mode-accent-ink:       var(--ink-deep);
+  --mode-surface-detail:   rgba(219, 201, 127, 0.03);
+  --mode-icon-color:       var(--brand-300);
+  --mode-label-font:       var(--font-mono);
+  --mode-radius-control:   4px;
+  --mode-radius-card:      8px;
+  --mode-edge-width:       1px;
+  --mode-fill-alpha:       0.08;
+}
+
+[data-mode='work'] {
+  --mode-accent:           var(--brand-200);
+  --mode-accent-soft:      rgba(219, 201, 127, 0.18);
+  --mode-accent-edge:      var(--brand-300);
+  --mode-accent-strong:    var(--brand-100);
+  --mode-accent-ink:       var(--ink-deep);
+  --mode-surface-detail:   rgba(219, 201, 127, 0.06);
+  --mode-icon-color:       var(--brand-200);
+  --mode-label-font:       var(--font-display);
+  --mode-radius-control:   8px;
+  --mode-radius-card:      12px;
+  --mode-edge-width:       1px;
+  --mode-fill-alpha:       0.16;
+}
+
+/* prefers-reduced-motion: turn off all transitions / animations. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+  }
+
+  /* Spec §7.5: hardcoded loop animations do NOT stop just
+   * because the duration tokens are 0ms — they must be
+   * disabled by selector. This is the unified motion layer
+   * that covers every infinite animation in the app; a
+   * phase then keeps only its static color / icon / text.
+   * The listed selectors mirror the §7.5 coverage list:
+   * TurnProgress, StreamingIndicator, ProcessHeader dot,
+   * Tool loader, EmptyState decorative loops, plus the
+   * remaining loops (ContextRing, attachment
+   * chip, TaskHeader) for completeness. */
+  .turn-progress__logo--spin,
+  .streaming-indicator__dot,
+  .process-header__dot--pulse,
+  .tool__status-icon--spin,
+  .empty-state__logo,
+  .empty-state__logo > *,
+  .context-ring--danger .context-ring__fill,
+  .attachment-chip__spinner,
+  .task-header--thinking .task-header__status-pill,
+  .task-header--tool .task-header__status-pill,
+  .task-header__icon--spin,
+  .task-header--thinking .task-header__status {
+    animation: none;
+  }
+}

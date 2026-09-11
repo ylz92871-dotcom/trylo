@@ -1,0 +1,15 @@
+/* Trylo Desktop — Logo (Trilo mark).
+ *
+ * The mark's cream gradient is set on the SVG via inline
+ * stopColor in the React component (so the gradient can be
+ * themed by tokens). The wrapper around the SVG is just
+ * for sizing — see Logo.tsx.
+ */
+
+.logo-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  line-height: 0;
+}

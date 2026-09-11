@@ -1,0 +1,50 @@
+/* Trylo Desktop — ModelSelector.
+ *
+ * A chip in the InputBar action row that opens a listbox of
+ * configurable models (user + built-in free compute pool).
+ * The popover reuses .mode-popover styling; only the chip and
+ * its anchoring are defined here.
+ */
+
+.model-selector {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.model-selector__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--ink-subtle);
+  color: var(--fg-muted-2);
+  font-size: var(--text-xs);
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.model-selector__chip:hover {
+  background: var(--ink-hover);
+  color: var(--fg);
+}
+
+.model-selector__chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brand);
+  flex-shrink: 0;
+}
+
+.model-selector__popover {
+  /* Anchor the list above the chip like the mode popover. */
+  left: 50%;
+  transform: translateX(-50%);
+}

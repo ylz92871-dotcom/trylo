@@ -1,0 +1,52 @@
+/* Trylo Desktop — ModePopover.
+ *
+ * Anchored to the + button in the InputBar. Small list of
+ * code sub-modes. Keyboard nav (arrow + Enter), click
+ * outside to dismiss, Escape to cancel.
+ */
+
+.mode-popover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  background: var(--ink-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  min-width: 180px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.mode-popover__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--fg);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.mode-popover__item--focus {
+  background: var(--ink-hover);
+}
+
+.mode-popover__item--current .mode-popover__label {
+  color: var(--brand);
+}
+
+.mode-popover__label {
+  font-weight: 500;
+  min-width: 56px;
+}
+
+.mode-popover__hint {
+  font-size: var(--text-xs);
+  color: var(--ink-mute);
+  margin-left: auto;
+}

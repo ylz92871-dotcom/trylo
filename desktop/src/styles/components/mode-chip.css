@@ -1,0 +1,104 @@
+/* v1.16.1: ModeChip styles. Sits between ProcessHeader
+   and the InputBar. Three color tiers — Plan (blue,
+   read-only vibe), Agent (brand gold, the default),
+   Chat (muted gray). All tier colors stay in the
+   design token palette; the only brand color is gold
+   (--brand-300) and we use the existing accent for
+   the blue. */
+
+.mode-chip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 0 12px;
+  min-height: 24px;
+  position: relative; /* anchor for ModePopover (uses fixed via popover) */
+}
+
+.mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 6px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  font-size: var(--text-xs, 12px);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--duration-fast, 120ms) var(--ease-out, ease-out),
+              border-color var(--duration-fast, 120ms) var(--ease-out, ease-out);
+}
+
+.mode-chip:hover {
+  background: var(--brand-soft, rgba(219, 201, 127, 0.08));
+}
+
+.mode-chip__icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.mode-chip__label {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.mode-chip__hint {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
+  font-weight: 400;
+}
+
+.mode-chip__caret {
+  font-size: 10px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
+  margin-left: 2px;
+}
+
+/* Color tiers — brand-gold for agent, blue for plan,
+   muted for chat. The icon + label pick up the color
+   so the chip is glanceable. */
+.mode-chip--agent .mode-chip__label,
+.mode-chip--agent .mode-chip__icon {
+  color: var(--brand-300, #DBC97F);
+}
+.mode-chip--plan .mode-chip__label,
+.mode-chip--plan .mode-chip__icon {
+  color: var(--accent, #8AB4F8);
+}
+.mode-chip--chat .mode-chip__label,
+.mode-chip--chat .mode-chip__icon {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+}
+.mode-chip--cognition .mode-chip__label,
+.mode-chip--cognition .mode-chip__icon {
+  color: var(--brand-100, #ECE0A8);
+}
+
+/* v1.16.1: apply-plan button (plan mode only). Sits
+   to the right of the chip; clicking it switches
+   codeMode to 'agent'. Sized to match the chip so the
+   row stays one line. */
+.mode-chip__apply {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px solid var(--brand-500, #9F9054);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--brand-soft, rgba(219, 201, 127, 0.12));
+  color: var(--brand-200, #E3D493);
+  font-size: var(--text-xs, 12px);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--duration-fast, 120ms) var(--ease-out, ease-out);
+}
+
+.mode-chip__apply:hover {
+  background: var(--brand-soft-strong, rgba(219, 201, 127, 0.22));
+}
+
+.mode-chip__apply-icon {
+  font-size: 12px;
+  line-height: 1;
+}

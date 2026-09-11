@@ -1,0 +1,164 @@
+/* Trylo Desktop — PermissionLevelPicker (P2, spec §3.2 / §7).
+   The chip lives in the InputBar action row; the menu is positioned
+   above the chip so it never gets clipped by the composer bottom. */
+
+.permission-picker {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  font: inherit;
+}
+
+.permission-picker__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  /* 2026-08-29 alignment pass: lighter border + bg so the mode
+   * chip reads as a quiet secondary control bound to the composer
+   * (left-aligned, low weight) rather than an independent CTA. */
+  border: 1px solid var(--chip-border, rgba(255, 255, 255, 0.08));
+  background: var(--chip-bg, rgba(255, 255, 255, 0.03));
+  color: var(--chip-fg, rgba(255, 255, 255, 0.92));
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.permission-picker__trigger:hover:not(:disabled) {
+  background: var(--chip-bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+.permission-picker__trigger:focus-visible {
+  outline: 2px solid var(--focus-ring, #6aa7ff);
+  outline-offset: 2px;
+}
+
+.permission-picker__trigger--disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.permission-picker__trigger--pending {
+  border-color: rgba(255, 196, 70, 0.45);
+}
+
+.permission-picker__trigger--safe {
+  border-color: rgba(120, 180, 255, 0.3);
+}
+.permission-picker__trigger--balanced {
+  border-color: rgba(180, 180, 180, 0.3);
+}
+.permission-picker__trigger--recommended {
+  border-color: rgba(110, 200, 130, 0.4);
+}
+.permission-picker__trigger--high {
+  border-color: rgba(255, 140, 100, 0.5);
+  background: rgba(255, 100, 80, 0.08);
+}
+
+.permission-picker__trigger-label {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.permission-picker__pending {
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffc446;
+  background: rgba(255, 196, 70, 0.12);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.permission-picker__caret {
+  margin-left: 2px;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.permission-picker__menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  min-width: 320px;
+  max-width: 360px;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  background: var(--menu-bg, #1e1e24);
+  border: 1px solid var(--menu-border, rgba(255, 255, 255, 0.1));
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  z-index: 20;
+}
+
+.permission-picker__item {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.permission-picker__item--focus {
+  background: rgba(255, 255, 255, 0.06);
+}
+.permission-picker__item--current {
+  background: rgba(110, 200, 130, 0.12);
+}
+
+.permission-picker__item-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.permission-picker__item-label {
+  flex: 1;
+  color: var(--menu-fg, rgba(255, 255, 255, 0.95));
+}
+
+.permission-picker__item-mark {
+  color: #6ec882;
+  font-weight: 700;
+}
+
+.permission-picker__item-desc {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--menu-fg-muted, rgba(255, 255, 255, 0.65));
+  line-height: 1.4;
+}
+
+.permission-picker__item-warn {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #ffb088;
+  line-height: 1.4;
+}
+
+.permission-picker__item--high.permission-picker__item--current {
+  background: rgba(255, 140, 100, 0.18);
+}
+
+.permission-picker__footer {
+  margin-top: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: right;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}

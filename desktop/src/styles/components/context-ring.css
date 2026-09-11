@@ -1,0 +1,195 @@
+/* Trylo Desktop — context-window ring styles. See
+   components/app-shell/ContextRing.tsx (v1.16.0).
+
+   v1.16.0.1: brand-color palette. Trylo Gold (--brand-300)
+   is the ring's color from "safe" through "hot" — only
+   the >= 95% danger tier flips to red (--danger). No green
+   (--success) — the brand is the brand; mixing in a second
+   hue for a status the percentage already communicates
+   is noise. Mature-IDE convention: VSCode Copilot and
+   Cursor both use a single accent for the gauge. */
+
+/* v1.17.3: restored SVG ring gauge. The ring shows context
+   usage as a circular arc (0–100%) next to the token label.
+   Replaces the v1.17.2 text-only badge which had no visual
+   gauge. No border / no pill — just the ring + label. */
+.context-ring {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs, 12px);
+  font-weight: 500;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+  cursor: default;
+  user-select: none;
+}
+
+/* SVG gauge container — 20x20 circle */
+.context-ring__gauge {
+  flex-shrink: 0;
+}
+
+/* Ring arc colors per tier. CurrentColor inherits from
+   the tier-colored .context-ring parent. */
+.context-ring__arc {
+  transition: stroke-dasharray 300ms ease-out;
+}
+
+.context-ring__arc--safe,
+.context-ring__arc--warm,
+.context-ring__arc--hot {
+  color: var(--brand-300, #DBC97F);
+}
+
+.context-ring__arc--danger {
+  color: var(--danger, #D96666);
+}
+
+.context-ring--safe .context-ring__label,
+.context-ring--warm .context-ring__label,
+.context-ring--hot .context-ring__label {
+  color: var(--brand-300, #DBC97F);
+}
+
+/* Subtle darkening for "hot" only — the brand gold
+   stays the same hue but the label gets heavier to
+   telegraph "almost full" without leaving the palette. */
+.context-ring--hot .context-ring__label {
+  font-weight: 600;
+}
+
+.context-ring--danger .context-ring__label {
+  color: var(--danger, #D96666);
+  font-weight: 600;
+}
+
+/* v1.16.2.1: ring is now clickable. Hover + cursor cues
+   invite the click; the popover below provides the
+   actual interaction. */
+.context-ring--clickable {
+  cursor: pointer;
+}
+.context-ring--clickable:hover {
+  filter: brightness(1.1);
+}
+
+/* v1.16.2.1: popover anchored to the ring. Shows the
+   full context usage (47k / 200k tokens 24%) and a
+   "Compact now" action. Positioned absolute under the
+   ring wrapper, right-aligned so it doesn't push the
+   layout. */
+.context-ring-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  min-width: 240px;
+  padding: 12px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-elevated, rgba(20, 20, 20, 0.96));
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  color: var(--text-primary, rgba(255, 255, 255, 0.92));
+  font-size: var(--text-xs, 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.context-ring-popover__head {
+  font-weight: 600;
+  font-size: var(--text-sm, 13px);
+  color: var(--brand-200, #E3D493);
+  /* v1.16.2.3: lay the head + the (optional) No-CLI
+     badge out side-by-side. */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* v1.16.2.3: small "No live CLI" pill next to the
+   popover head. Always-on when there's no live CLI
+   process so the user knows upfront why their click
+   didn't do anything visible. */
+.context-ring-popover__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border: 1px solid var(--danger, #D96666);
+  border-radius: 999px;
+  color: var(--danger, #D96666);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: var(--danger-soft, rgba(217, 102, 102, 0.10));
+  cursor: help;
+}
+
+.context-ring-popover__usage {
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.context-ring-popover__pct {
+  font-weight: 600;
+  color: var(--brand-300, #DBC97F);
+  font-size: var(--text-sm, 13px);
+}
+
+.context-ring-popover__model {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
+  font-size: var(--text-xs, 12px);
+  /* Truncate long model names */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.context-ring-popover__action {
+  margin-top: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--brand-500, #9F9054);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--brand-soft, rgba(219, 201, 127, 0.12));
+  color: var(--brand-200, #E3D493);
+  font-size: var(--text-xs, 12px);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease-out;
+}
+.context-ring-popover__action:hover:not(:disabled) {
+  background: var(--brand-soft-strong, rgba(219, 201, 127, 0.22));
+}
+.context-ring-popover__action:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+/* v1.16.2.2: small "no live CLI" hint that shows under
+   the Compact button when the user clicks in a dev
+   session (no Tauri spawn → no activeProcessId). Tells
+   the user exactly why their click didn't appear to do
+   anything, instead of silently failing. */
+.context-ring-popover__hint {
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px dashed var(--border, rgba(255, 255, 255, 0.18));
+  border-radius: var(--radius-sm, 4px);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary, rgba(255, 255, 255, 0.6));
+  font-size: 11px;
+  line-height: 1.4;
+}
+.context-ring-popover__hint code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}

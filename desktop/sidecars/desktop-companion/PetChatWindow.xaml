@@ -1,0 +1,286 @@
+<Window x:Class="TryloDesktopPet.PetChatWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Trylo Chat"
+        Width="480" Height="680" MinWidth="410" MinHeight="540"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="CanResizeWithGrip" ShowInTaskbar="True"
+        FontFamily="Segoe UI" TextOptions.TextFormattingMode="Display">
+    <Window.Resources>
+        <SolidColorBrush x:Key="TextBrush" Color="#FFF4F7FA" />
+        <SolidColorBrush x:Key="MutedBrush" Color="#FF94A0B2" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#FF72E5B5" />
+        <Style TargetType="{x:Type ScrollBar}">
+            <Setter Property="Width" Value="9" />
+            <Setter Property="MinWidth" Value="9" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ScrollBar}">
+                        <Grid x:Name="ScrollRoot" Width="{TemplateBinding Width}" Background="Transparent">
+                            <Border Margin="2" CornerRadius="5" Background="#101820" Opacity="0.72" />
+                            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static ScrollBar.PageUpCommand}" Opacity="0" Focusable="False" />
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb>
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="{x:Type Thumb}">
+                                                <Border Margin="2" CornerRadius="5" Background="#5E6B77" />
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static ScrollBar.PageDownCommand}" Opacity="0" Focusable="False" />
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ScrollRoot" Property="Opacity" Value="1" />
+                            </Trigger>
+                            <Trigger Property="Orientation" Value="Horizontal">
+                                <Setter Property="Height" Value="9" />
+                                <Setter Property="MinHeight" Value="9" />
+                                <Setter Property="Width" Value="Auto" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ChromeButton" TargetType="Button">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Margin" Value="4,0,0,0" />
+            <Setter Property="Foreground" Value="#FFBAC4D0" />
+            <Setter Property="Background" Value="#0FFFFFFF" />
+            <Setter Property="BorderBrush" Value="#24FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder" CornerRadius="10"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#24FFFFFF" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.66" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ComposerButton" TargetType="Button">
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="46" />
+            <Setter Property="Foreground" Value="#FF07130F" />
+            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontSize" Value="19" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder" CornerRadius="15" Background="{TemplateBinding Background}">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#8072E5B5" BlurRadius="12" ShadowDepth="0" Opacity="0.55" />
+                            </Border.Effect>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#FF93F1CC" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.72" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.38" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="14">
+        <Border CornerRadius="26" BorderBrush="#38FFFFFF" BorderThickness="1">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#FA171B24" Offset="0" />
+                    <GradientStop Color="#FB11161D" Offset="0.55" />
+                    <GradientStop Color="#FA101C1C" Offset="1" />
+                </LinearGradientBrush>
+            </Border.Background>
+            <Border.Effect>
+                <DropShadowEffect Color="#D8000000" BlurRadius="34" ShadowDepth="9" Opacity="0.66" />
+            </Border.Effect>
+            <Grid ClipToBounds="True">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="78" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Border x:Name="TitleBar" Grid.Row="0" Margin="1" CornerRadius="25,25,0,0"
+                        Background="#01000000"
+                        PreviewMouseLeftButtonDown="OnTitleBarMouseLeftButtonDown">
+                    <Grid Margin="18,13,14,11">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="50" Height="50" CornerRadius="17"
+                                Background="#2472E5B5" BorderBrush="#5272E5B5" BorderThickness="1">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#7072E5B5" BlurRadius="16" ShadowDepth="0" Opacity="0.55" />
+                            </Border.Effect>
+                            <Image Source="assets/actions/analyzing/00.png" Stretch="Uniform" Margin="4" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="12,2,8,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Trylo Chat" Foreground="{StaticResource TextBrush}"
+                                           FontSize="17" FontWeight="SemiBold" />
+                                <Border Margin="9,1,0,0" Padding="7,2" CornerRadius="8"
+                                        Background="#1D72E5B5" BorderBrush="#3972E5B5" BorderThickness="1">
+                                    <TextBlock Text="CHAT ONLY" Foreground="{StaticResource AccentBrush}"
+                                               FontSize="8" FontWeight="Bold" />
+                                </Border>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                <Ellipse x:Name="ConnectionDot" Width="7" Height="7" Margin="0,0,6,0"
+                                         VerticalAlignment="Center" Fill="#FF6A7483" />
+                                <TextBlock x:Name="WorkspaceText" Foreground="{StaticResource MutedBrush}"
+                                           FontSize="11" Text="等待 Trylo 连接" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
+                            <Button Style="{StaticResource ChromeButton}" Content="⌫" ToolTip="清空独立对话" Click="OnClearClick" />
+                            <Button Style="{StaticResource ChromeButton}" Content="—" ToolTip="最小化" Click="OnMinimizeClick" />
+                            <Button Style="{StaticResource ChromeButton}" Content="×" FontSize="17" ToolTip="关闭" Click="OnCloseClick" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="1" Margin="18,0,18,10" Padding="11,8" CornerRadius="12"
+                        Background="#0E8CB6FF" BorderBrush="#238CB6FF" BorderThickness="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="◇" Foreground="#FF8CB6FF" FontSize="15" Margin="0,0,8,0" />
+                        <TextBlock Grid.Column="1" Foreground="#FFADB8C8" FontSize="10.5" TextWrapping="Wrap"
+                                   Text="独立聊天记录 · 不读取编辑器 · Agent / Plan 请回到主页面" />
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="2" Margin="10,0" CornerRadius="18" Background="#2710141B"
+                        BorderBrush="#12FFFFFF" BorderThickness="1">
+                    <Grid>
+                        <ScrollViewer x:Name="MessagesScroll" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled" Padding="14,12,14,12">
+                            <StackPanel x:Name="MessagesHost" />
+                        </ScrollViewer>
+                        <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    MaxWidth="290" IsHitTestVisible="False">
+                            <Border Width="78" Height="78" CornerRadius="26" HorizontalAlignment="Center"
+                                    Background="#1672E5B5" BorderBrush="#3F72E5B5" BorderThickness="1">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#4D72E5B5" BlurRadius="20" ShadowDepth="0" Opacity="0.48" />
+                                </Border.Effect>
+                                <Image Source="assets/actions/analyzing/00.png" Stretch="Uniform" Margin="6" />
+                            </Border>
+                            <TextBlock Text="桌面上的轻量对话" Foreground="{StaticResource TextBrush}"
+                                       FontSize="17" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,17,0,0" />
+                            <TextBlock Text="问概念、理思路、润色答辩表达。需要改代码或操作项目时，请使用主页面。"
+                                       Foreground="{StaticResource MutedBrush}" FontSize="11.5" TextAlignment="Center"
+                                       TextWrapping="Wrap" LineHeight="18" Margin="0,8,0,0" />
+                            <Border Margin="0,15,0,0" Padding="11,6" CornerRadius="10" HorizontalAlignment="Center"
+                                    Background="#0FFFFFFF" BorderBrush="#1FFFFFFF" BorderThickness="1">
+                                <TextBlock Text="Enter 发送  ·  Shift + Enter 换行" Foreground="#FF7E8999" FontSize="9.5" />
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border x:Name="ActivityBar" Grid.Row="3" Margin="18,10,18,0" Padding="11,8" CornerRadius="12"
+                        Background="#1472E5B5" BorderBrush="#3472E5B5" BorderThickness="1"
+                        Visibility="Collapsed">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="22" Height="22" CornerRadius="8" Background="#2272E5B5" Margin="0,0,9,0">
+                            <Ellipse x:Name="ActivityDot" Width="7" Height="7" Fill="{StaticResource AccentBrush}"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock x:Name="BusyText" Grid.Column="1" VerticalAlignment="Center"
+                                   Foreground="#FFD8FFF0" FontSize="10.5" Text="Trylo 正在思考" />
+                        <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="#FF738174"
+                                   FontSize="9" Text="窗口仍可拖动" />
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="4" Margin="14,10,14,14" Padding="12" CornerRadius="19"
+                        Background="#F21B2029" BorderBrush="#34FFFFFF" BorderThickness="1">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid>
+                                <TextBox x:Name="ChatInput" MinHeight="46" MaxHeight="116"
+                                         Padding="3" AcceptsReturn="True" TextWrapping="Wrap"
+                                         VerticalScrollBarVisibility="Auto" BorderThickness="0"
+                                         Background="Transparent" Foreground="{StaticResource TextBrush}"
+                                         CaretBrush="{StaticResource AccentBrush}" FontSize="13"
+                                         TextChanged="OnChatInputTextChanged"
+                                         PreviewKeyDown="OnChatInputPreviewKeyDown" />
+                                <TextBlock x:Name="InputPlaceholder" Margin="4,4,0,0" IsHitTestVisible="False"
+                                           Foreground="#FF667180" FontSize="12.5"
+                                           Text="和 Trylo 聊点什么…" />
+                            </Grid>
+                            <Button x:Name="SendButton" Grid.Column="2" Style="{StaticResource ComposerButton}"
+                                    Content="↑" ToolTip="发送" Click="OnSendClick" />
+                            <Button x:Name="StopButton" Grid.Column="2" Style="{StaticResource ComposerButton}"
+                                    Content="■" FontSize="13" ToolTip="停止生成" Visibility="Collapsed"
+                                    Foreground="#FF281A05" Background="#FFFFC45C" Click="OnStopClick" />
+                        </Grid>
+                        <Grid Grid.Row="1" Margin="3,7,3,0">
+                            <TextBlock x:Name="ComposerHint" Foreground="#FF707B8B" FontSize="9.5"
+                                       Text="Chat 模式 · 记录与主页面分开保存" />
+                            <TextBlock HorizontalAlignment="Right" Foreground="#FF667180" FontSize="9.5"
+                                       Text="Enter 发送" />
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

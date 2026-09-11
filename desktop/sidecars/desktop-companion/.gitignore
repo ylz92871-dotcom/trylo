@@ -1,0 +1,7 @@
+bin/
+obj/
+qa-*.png
+qa-animation/
+qa/
+publish/*.pdb
+pet-assets/*-run/

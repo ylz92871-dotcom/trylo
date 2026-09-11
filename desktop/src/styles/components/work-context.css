@@ -1,0 +1,85 @@
+/* Trylo Desktop — Work context indicator & compaction card.
+   M4-C (architecture doc §6.5). The Work ContextRing reuses the
+   shared .context-ring geometry (context-ring.css) but adds:
+     - a state line ("Compacting…" / "Auto compact · 142k→86k · 3×");
+     - an "est" suffix when `used` is an estimate;
+     - a running pulse on the fill while compaction is in progress.
+   The CompactionCard is a neutral timeline card for a completed /
+   failed auto-compaction. Work never offers a manual "Compact now". */
+
+.work-context-ring {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+}
+
+.work-context-ring__state {
+  font-size: var(--text-xs, 12px);
+  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Low-intensity pulse while cowork is auto-compacting. Intentional
+   contrast with the danger-tier pulse (which only fires at >=95%).
+   Driven by a CSS class the component adds on compaction.state===
+   'running'. */
+.context-ring__fill--pulse {
+  animation: work-context-compacting 2.4s ease-in-out infinite;
+}
+
+@keyframes work-context-compacting {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Reduced motion: no infinite pulse, but the running state stays visible
+   via the static --pulse fill colour set by the component. */
+@media (prefers-reduced-motion: reduce) {
+  .context-ring__fill--pulse {
+    animation: none;
+  }
+}
+
+/* "est" suffix — subtle, stays brand-neutral. */
+.context-ring__label[data-est="1"]::after {
+  content: " est";
+  font-size: 10px;
+  opacity: 0.75;
+}
+
+.compaction-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-elevated, rgba(255, 255, 255, 0.03));
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+  font-size: var(--text-xs, 12px);
+  line-height: 1.4;
+}
+
+.compaction-card[data-state="running"] {
+  border-color: var(--brand-500, rgba(219, 201, 127, 0.5));
+}
+.compaction-card[data-state="failed"] {
+  border-color: var(--danger, #D96666);
+  color: var(--danger, #D96666);
+}
+
+.compaction-card__glyph {
+  color: var(--brand-300, #DBC97F);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.compaction-card__tokens,
+.compaction-card__count {
+  font-variant-numeric: tabular-nums;
+}
+.compaction-card__error {
+  opacity: 0.8;
+}

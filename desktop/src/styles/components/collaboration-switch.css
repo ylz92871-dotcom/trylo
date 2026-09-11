@@ -1,0 +1,60 @@
+/* Trylo Desktop — CollaborationSwitch (Person | Team) in the TopBar.
+ *
+ * Spec §1.2: a SECOND tablist, separated from Code/Work, on the right
+ * side of the TopBar. Visual weight is intentionally lower than the
+ * Code/Work tablist: no icons, smaller text, more muted.
+ *
+ * Two text options, no labels, no badges.
+ */
+
+.collaboration-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  background: transparent;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-pill);
+  height: 28px;
+}
+
+.collaboration-switch__option {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--ink-mute);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  padding: 0 10px;
+  height: 22px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.collaboration-switch__option:hover:not(:disabled):not(.collaboration-switch__option--active) {
+  color: var(--ink-fog);
+  background: var(--ink-hover);
+}
+
+.collaboration-switch__option--active {
+  background: var(--brand-soft);
+  color: var(--brand);
+  border-color: var(--brand-soft);
+  font-weight: 600;
+}
+
+.collaboration-switch__option:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.collaboration-switch__option:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

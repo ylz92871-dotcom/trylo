@@ -1,0 +1,35 @@
+/* Trylo Desktop — Fun placeholder.
+ *
+ * Replaces the chat panel when the user toggles the Fun tab.
+ * Real Fun UI (TTS, characters, the companion surface) is
+ * future work. The placeholder communicates intent without
+ * pretending to ship a feature that doesn't exist yet.
+ */
+
+.fun-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: var(--space-8);
+  gap: var(--space-3);
+}
+
+.fun-placeholder h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+  font-variation-settings: 'opsz' 96;
+}
+
+.fun-placeholder p {
+  margin: 0;
+  color: var(--fg-muted);
+  max-width: 36ch;
+  line-height: var(--leading-base);
+}

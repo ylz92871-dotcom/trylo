@@ -1,0 +1,104 @@
+/* Trylo Desktop — Message list (v1.15.7).
+ *
+ * Borrowed the bones from cline's MessagesArea +
+ * useScrollBehavior (Cline uses react-virtuoso; we use
+ * a plain scrollable div because our message counts
+ * don't justify the dep yet, but the behavior is the
+ * same):
+ *
+ *   - auto-scroll to the bottom when a new message lands
+ *     AND the user is already near the bottom
+ *   - when the user scrolls up, auto-scroll stops
+ *   - a "scroll to bottom" button appears when the
+ *     user is not at the bottom and there are new
+ *     messages
+ *
+ * The user's complaint earlier was that the chat had no
+ * scrollbar at all. That was a flexbox `min-height: 0`
+ * issue on the parent (now fixed on .chat-panel). This
+ * file just sets the scroll behavior + the floating
+ * scroll-to-bottom button.
+ */
+
+.message-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-6) var(--space-5);
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-hover) transparent;
+  position: relative;
+}
+
+.message-list__inner {
+  max-width: 880px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.message-list__footer-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 4px 0 0 0;
+}
+
+.message-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.message-list::-webkit-scrollbar-thumb {
+  background: var(--ink-hover);
+  border-radius: 4px;
+}
+
+/* Floating "follow tail" button — Cursor / VS Code style.
+ *
+ * Hidden by default; the component flips a class when the user has
+ * scrolled up and there are new messages below. 2026-09-06 redesign:
+ * icon-only round button. The "Jump to latest" pill was too much text
+ * for an affordance that's only there until the user clicks it. */
+.message-list__scroll-btn {
+  position: absolute;
+  /* Sit just above the streaming footer so it never overlaps the
+     composer / waiting indicator. */
+  bottom: 84px;
+  left: 50%;
+  transform: translate(-50%, 6px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--fg-muted);
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 5;
+  opacity: 0;
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.message-list__scroll-btn:hover {
+  background: var(--brand-soft);
+  color: var(--brand);
+  border-color: var(--brand);
+  transform: translate(-50%, 0);
+}
+
+.message-list__scroll-btn--show {
+  display: inline-flex;
+  opacity: 1;
+  transform: translate(-50%, 0);
+}

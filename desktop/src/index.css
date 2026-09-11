@@ -1,0 +1,84 @@
+/* Trylo Desktop — entry stylesheet.
+ *
+ * Loads tokens + base + component CSS. Components do not import
+ * their CSS from a CSS-modules-style import; everything is
+ * declared in one place so a global find-and-replace can rename
+ * a class without missing a module.
+ *
+ * This file is the only place new component CSS needs to be
+ * registered. See styles/components/*.css.
+ */
+
+@import './styles/tokens.css';
+@import './styles/base.css';
+
+@import './styles/components/app-shell.css';
+@import './styles/components/top-bar.css';
+@import './styles/components/mode-chip.css';
+@import './styles/components/chat-panel.css';
+@import './styles/components/cognition-badge.css';
+@import './styles/components/browser-preview.css';
+@import './styles/components/input-bar.css';
+@import './styles/components/logo.css';
+@import './styles/components/fun-placeholder.css';
+@import './styles/components/message-list.css';
+@import './styles/components/message.css';
+@import './styles/components/landing-surface.css';
+@import './styles/components/left-rail.css';
+@import './styles/components/right-rail.css';
+@import './styles/components/file-peek.css';
+@import './styles/components/preview.css';
+@import './styles/components/disclosure.css';
+@import './styles/components/tool-card.css';
+@import './styles/components/file-change-card.css';
+@import './styles/components/tool-summary.css';
+@import './styles/components/mode-popover.css';
+@import './styles/components/model-selector.css';
+@import './styles/components/thinking-card.css';
+@import './styles/components/code-reasoning-transcript.css';
+@import './styles/components/compaction-card.css';
+@import './styles/components/turn-divider.css';
+@import './styles/components/context-ring.css';
+@import './styles/components/attachment-list.css';
+@import './styles/components/process-header.css';
+@import './styles/components/task-header.css';
+@import './styles/components/streaming-indicator.css';
+@import './styles/components/spinner.css';
+@import './styles/components/turn-progress.css';
+@import './styles/components/workspace-tree.css';
+@import './styles/components/settings-modal.css';
+@import './styles/components/remote-pairing-modal.css';
+@import './styles/components/error-card.css';
+@import './styles/components/result-dock.css';
+@import './styles/components/work-task-menu.css';
+@import './styles/components/activity-center.css';
+@import './styles/components/approval-card.css';
+@import './styles/components/input-request-card.css';
+@import './styles/components/work-workflow-card.css';
+@import './styles/components/work-linear-ui.css';
+@import './styles/components/work-task-board.css';
+@import './styles/components/permission-level-picker.css';
+@import './styles/components/tool-profile-chip.css';
+@import './styles/components/user-learning.css';
+@import './styles/components/cognition-surface.css';
+
+/* Person | Team surfaces (spec §3 — new folder, new CSS). */
+@import './styles/components/surface-host.css';
+@import './styles/components/collaboration-switch.css';
+@import './styles/components/person-team-status-bar.css';
+@import './styles/components/surface-team.css';
+@import './styles/components/team-idle.css';
+@import './styles/components/team-composer.css';
+@import './styles/components/team-run.css';
+@import './styles/components/seat-detail.css';
+
+/* v1.16.5: Work sub-app CSS. Lives in
+ * ../../work/src/renderer/ (sibling package, see
+ * ../../../work/README.md). Imported via relative path
+ * rather than the @trylo/work alias because Vite's prefix
+ * alias for `@trylo/work/` doesn't resolve CSS files the
+ * way the TypeScript `paths` mapping does — the package's
+ * index.ts gets picked up as a "module" target instead.
+ */
+@import '../../work/src/renderer/artifact-card.css';
+@import '../../work/src/renderer/work-capability.css';

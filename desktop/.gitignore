@@ -1,0 +1,35 @@
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# JS / TS
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+*.log
+.env
+.env.local
+.cache/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+src-tauri/icons/
+# Commit Cargo.lock for an app (deterministic builds).
+# src-tauri/Cargo.lock
+*.exe
+*.dmg
+*.AppImage
+*.deb
+
+# Build artifacts
+public/build/
+out/
+build/
+
+# Local data
+.trylo/
+*.tmp

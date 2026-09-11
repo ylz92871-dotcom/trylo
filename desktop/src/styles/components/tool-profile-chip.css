@@ -1,0 +1,112 @@
+/* Trylo Desktop — ToolProfileChip. Lives in the Work composer action row
+   next to the permission chip; visual weight matches the quiet secondary
+   controls (same chip tokens). The panel opens ABOVE the chip so the
+   composer bottom never clips it. */
+
+.tool-profile-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  font: inherit;
+}
+
+.tool-profile-chip__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--chip-border, rgba(255, 255, 255, 0.08));
+  background: var(--chip-bg, rgba(255, 255, 255, 0.03));
+  color: var(--chip-fg, rgba(255, 255, 255, 0.92));
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.tool-profile-chip__trigger:hover {
+  background: var(--chip-bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+.tool-profile-chip__trigger:focus-visible {
+  outline: 2px solid var(--focus-ring, #6aa7ff);
+  outline-offset: 2px;
+}
+
+.tool-profile-chip__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand-300, #dbc97f);
+}
+
+.tool-profile-chip__count {
+  min-width: 1.1em;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tool-profile-chip__panel {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  min-width: 240px;
+  max-width: 300px;
+  padding: 10px 12px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+  color: var(--fg);
+}
+
+.tool-profile-chip__profile {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--brand-300);
+}
+
+.tool-profile-chip__servers {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tool-profile-chip__servers li {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tool-profile-chip__foot {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fg-muted);
+}
+
+.tool-profile-chip__settings {
+  margin-top: 8px;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--fg);
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}

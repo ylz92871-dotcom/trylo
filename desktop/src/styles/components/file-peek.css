@@ -1,0 +1,164 @@
+/* Trylo Desktop — FilePeek.
+ *
+ * The right rail. 480px when open. The chat shrinks to the
+ * remaining space via the AppShell grid. Default closed.
+ */
+
+.file-peek {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  height: 100%;
+  /* v1.17: the body is now a flex row (not a 3-col grid), so
+     this panel needs an explicit width of its own. */
+  flex: 0 0 auto;
+  width: clamp(360px, 40vw, 560px);
+  border-left: 1px solid var(--border);
+  background: var(--ink-surface);
+  border-left: 1px solid var(--border);
+  min-height: 0;
+  overflow: hidden;
+  animation: file-peek-in var(--duration-base) var(--ease-out);
+}
+
+@keyframes file-peek-in {
+  from { transform: translateX(40px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+
+.file-peek__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  min-height: 40px;
+}
+
+.file-peek__path {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.file-peek__icon {
+  color: var(--brand-300);
+  font-size: 14px;
+  flex: 0 0 auto;
+}
+
+.file-peek__path-text {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.file-peek__close {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.file-peek__close:hover {
+  background: var(--ink-hover);
+  color: var(--fg);
+}
+
+.file-peek__expand {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.file-peek__expand:hover {
+  background: var(--ink-hover);
+  color: var(--fg);
+}
+
+/* Fullscreen preview: the rail leaves the flex row and covers the
+ * whole webview (above content + browser drawer, below modals).
+ * Renderers refit via their own ResizeObservers, so slides / tables
+ * / pages use the full width on the next frame. */
+.file-peek--expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  width: auto;
+  border-left: none;
+}
+
+.file-peek__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-2) var(--space-4);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+}
+
+.file-peek__sep {
+  color: var(--ink-mute);
+}
+
+.file-peek__body {
+  overflow: auto;
+  padding: var(--space-2) 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-hover) transparent;
+}
+
+.file-peek__code {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--fg);
+}
+
+.file-peek__line {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  padding: 0 var(--space-4);
+}
+
+.file-peek__line:hover {
+  background: var(--ink-hover);
+}
+
+.file-peek__lineno {
+  text-align: right;
+  padding-right: var(--space-3);
+  color: var(--ink-mute);
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.file-peek__linetext {
+  white-space: pre;
+  overflow-x: auto;
+}

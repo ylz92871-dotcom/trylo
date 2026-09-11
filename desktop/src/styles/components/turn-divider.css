@@ -1,0 +1,34 @@
+/* Trylo Desktop — TurnDivider.
+ *
+ * Small "Turn 1 / 6" marker between turns. Renders as a
+ * thin line + label, like a chapter break in a long
+ * document.
+ */
+
+.turn-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+  color: var(--ink-mute);
+  font-size: var(--text-xs);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.turn-divider::before,
+.turn-divider::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--border);
+}
+
+.turn-divider__label {
+  flex: 0 0 auto;
+  padding: 0 8px;
+}
+
+.turn-divider__status {
+  color: var(--accent);
+  margin-left: 6px;
+}

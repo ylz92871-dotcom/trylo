@@ -1,0 +1,53 @@
+/*
+  Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'none'; upgrade-insecure-requests
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  X-XSS-Protection: 0
+  Referrer-Policy: no-referrer
+  Permissions-Policy: accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), fullscreen=(), gamepad=(), geolocation=(), gyroscope=(), hid=(), idle-detection=(), local-fonts=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), serial=(), speaker-selection=(), storage-access=(), usb=(), web-share=(), xr-spatial-tracking=(), interest-cohort=(), browsing-topics=()
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+  Origin-Agent-Cluster: ?1
+  X-Permitted-Cross-Domain-Policies: none
+  X-DNS-Prefetch-Control: off
+
+/
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/app/
+  Cache-Control: no-cache
+
+/app/index.html
+  Cache-Control: no-cache
+
+/remote/
+  Cache-Control: no-cache
+
+/remote/index.html
+  Cache-Control: no-cache
+
+/chat/
+  Cache-Control: no-cache
+
+/chat/index.html
+  Cache-Control: no-cache
+
+/assets/*
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/app/app.js
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/chat/app.js
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/app/releases/*
+  Cache-Control: public, max-age=31536000, immutable
+  Content-Disposition: attachment
+  Content-Type: application/octet-stream
+  X-Content-Type-Options: nosniff
+  Cross-Origin-Resource-Policy: same-origin

@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Trylo Code — 手机 App 下载与更新日志</title>
+<meta name="description" content="Trylo Code Android 版：手机上直连 24 家模型服务商聊天；扫码连接电脑上的 Trylo，看任务、继续对话、审批敏感操作。下载 APK、查看更新日志。" />
+<link rel="icon" type="image/svg+xml" href="../assets/trylo-icon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700;900&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0d10; --bg-2: #0c1015;
+    --panel: #14171c; --panel-2: #191d24; --panel-3: #20252d;
+    --line: #333947; --line-soft: #262b33;
+    --text: #edf0f4; --text-soft: #b6bdc9; --muted: #7f8898;
+    --accent: #dcc97e; --accent-strong: #f3e3a6; --accent-soft: rgba(220,201,126,.12);
+    --bone: #f2ede1;
+    --green: #9fe26f; --yellow: #f1d27a; --red: #ea796d;
+    --shadow: 0 18px 30px rgba(0,0,0,.24);
+    --font-display: "Space Grotesk","Noto Sans SC","Segoe UI Variable Display",system-ui,sans-serif;
+    --font-body: "Inter","Noto Sans SC","Segoe UI",system-ui,sans-serif;
+    --font-mono: "IBM Plex Mono","Cascadia Code","Consolas",monospace;
+    --maxw: 1180px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:var(--font-body);background:linear-gradient(180deg,#090b0e 0%,#0c1015 100%);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden;min-height:100vh}
+  a{color:inherit;text-decoration:none}
+  svg,img{display:block}
+  ::selection{background:var(--accent);color:#0b0d10}
+  :focus-visible{outline:2px solid var(--accent-strong);outline-offset:3px;border-radius:2px}
+  .wrap{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 28px}
+  .eyebrow{font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);display:inline-flex;align-items:center;gap:10px}
+  .eyebrow::before{content:"";width:26px;height:1px;background:linear-gradient(90deg,transparent,var(--accent))}
+
+  .ambient{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(620px circle at 18% 6%,rgba(220,201,126,.07),transparent 60%),radial-gradient(540px circle at 88% 30%,rgba(220,201,126,.04),transparent 60%)}
+
+  /* nav */
+  .nav{position:sticky;top:0;z-index:50;background:rgba(11,13,16,.72);backdrop-filter:blur(16px);border-bottom:1px solid var(--line-soft)}
+  .nav-inner{display:flex;align-items:center;justify-content:space-between;height:66px}
+  .brand{display:flex;align-items:center;gap:11px;font-family:var(--font-display);font-weight:700;font-size:18px;letter-spacing:.02em;color:var(--bone)}
+  .brand .brand-mark{width:28px;height:28px;color:var(--accent);transition:transform .4s cubic-bezier(.2,.8,.2,1)}
+  .brand .brand-mark path{stroke:currentColor;stroke-width:76;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .brand:hover .brand-mark{transform:rotate(120deg);filter:drop-shadow(0 0 6px rgba(220,201,126,.45))}
+  .brand .sub{font-family:var(--font-mono);font-size:11px;font-weight:500;color:var(--muted);padding:2px 8px;border:1px solid var(--line);border-radius:6px;margin-left:4px;letter-spacing:.08em}
+  .nav-links{display:flex;gap:30px;font-size:14px;color:var(--text-soft)}
+  .nav-links a{transition:color .2s}
+  .nav-links a:hover{color:var(--accent-strong)}
+  .nav-cta{font-family:var(--font-mono);font-size:13px;font-weight:500;padding:9px 16px;border:1px solid var(--line);border-radius:999px;color:var(--text);transition:all .2s}
+  .nav-cta:hover{border-color:var(--accent);color:var(--accent-strong);box-shadow:0 0 18px rgba(220,201,126,.15)}
+  @media(max-width:760px){.nav-links{display:none}}
+
+  /* hero */
+  .hero{position:relative;z-index:1;padding:84px 0 70px}
+  .hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
+  .hero h1{font-family:var(--font-display);font-weight:700;font-size:clamp(38px,5.6vw,64px);line-height:1.05;letter-spacing:-.025em;color:var(--bone);margin:22px 0 22px}
+  .hero h1 em{font-style:normal;color:var(--accent-strong);text-shadow:0 0 40px rgba(220,201,126,.22)}
+  .hero p.lead{font-size:18px;color:var(--text-soft);max-width:470px;margin-bottom:30px}
+  .hero-stats{display:flex;gap:30px;flex-wrap:wrap;margin-bottom:34px}
+  .stat .n{font-family:var(--font-display);font-weight:700;font-size:26px;color:var(--bone);line-height:1}
+  .stat .n .u{font-size:14px;color:var(--muted);margin-left:2px;font-weight:500}
+  .stat .l{font-family:var(--font-mono);font-size:11px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-top:8px}
+  .dl{display:inline-flex;align-items:center;gap:11px;font-family:var(--font-mono);font-size:14px;font-weight:600;padding:14px 26px;border-radius:999px;background:var(--accent);color:#0b0d10;border:1px solid var(--accent);transition:transform .18s,background .2s,box-shadow .2s}
+  .dl:hover{background:var(--accent-strong);border-color:var(--accent-strong);transform:translateY(-1px);box-shadow:0 12px 34px rgba(220,201,126,.24)}
+  .dl-meta{display:block;margin-top:12px;font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+  .dl-meta a{color:var(--text-soft);border-bottom:1px solid var(--line)}
+  .dl-meta a:hover{color:var(--accent-strong);border-color:var(--accent)}
+
+  /* phone mock */
+  .phone-wrap{position:relative;display:grid;place-items:center;perspective:1400px}
+  .phone-aura{position:absolute;width:70%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(220,201,126,.14),transparent 64%);filter:blur(10px)}
+  .phone{position:relative;width:280px;height:572px;border-radius:42px;background:linear-gradient(160deg,#20252d,#0d1014);border:1px solid #3a4150;padding:11px;box-shadow:0 50px 90px -30px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.03),0 0 60px rgba(220,201,126,.1);transform:rotateY(-9deg) rotateX(4deg);transition:transform .6s cubic-bezier(.2,.8,.2,1)}
+  .phone-wrap:hover .phone{transform:rotateY(0) rotateX(0)}
+  .screen{position:relative;width:100%;height:100%;border-radius:32px;overflow:hidden;background:linear-gradient(180deg,#0e1116,#0a0c10);display:flex;flex-direction:column}
+  .notch{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:84px;height:22px;background:#000;border-radius:0 0 16px 16px;z-index:5}
+  .statusbar{display:flex;justify-content:space-between;align-items:center;padding:13px 22px 6px;font-family:var(--font-mono);font-size:11px;color:var(--text-soft)}
+  .statusbar .sig{display:flex;gap:4px;align-items:center;color:var(--green)}
+  .statusbar .sig i{width:4px;height:4px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)}
+  .scr-body{flex:1;padding:10px 16px 0;display:flex;flex-direction:column;gap:10px;overflow:hidden;position:relative}
+  .pane{display:none;flex-direction:column;gap:10px;flex:1;min-height:0;overflow-y:auto;scrollbar-width:none}
+  .pane::-webkit-scrollbar{display:none}
+  .pane.is-active{display:flex;animation:paneIn .34s cubic-bezier(.2,.8,.2,1)}
+  @keyframes paneIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .app-top{display:flex;align-items:center;gap:9px;padding:4px 2px 8px}
+  .app-top .m{width:22px;height:22px;color:var(--accent);flex-shrink:0}
+  .app-top .m path{stroke:currentColor;stroke-width:76;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .app-top .t{font-family:var(--font-display);font-weight:700;font-size:15px;color:var(--bone);letter-spacing:.02em}
+  .app-top .badge{margin-left:auto;font-family:var(--font-mono);font-size:9px;letter-spacing:.08em;color:var(--green);border:1px solid rgba(159,226,111,.3);padding:2px 6px;border-radius:5px}
+  .conn-card{border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,rgba(220,201,126,.06),rgba(255,255,255,.01)),var(--panel);padding:12px 13px}
+  .conn-card .row{display:flex;align-items:center;gap:8px;font-size:11.5px}
+  .conn-card .row b{color:var(--bone);font-weight:600}
+  .conn-card .row span{color:var(--muted)}
+  .conn-card .pulse{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 1.8s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.45}}
+  .conn-bar{margin-top:9px;height:3px;border-radius:2px;background:var(--panel-3);overflow:hidden}
+  .conn-bar i{display:block;height:100%;width:62%;background:linear-gradient(90deg,var(--accent),var(--accent-strong));border-radius:2px}
+  .mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .mini{border:1px solid var(--line-soft);border-radius:11px;background:var(--panel);padding:9px 10px}
+  .mini .k{font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .mini .v{font-family:var(--font-display);font-weight:700;font-size:16px;color:var(--bone);margin-top:3px}
+  .mini .v.accent{color:var(--accent-strong)}
+  .think{border-left:2px solid var(--accent);padding:2px 0 2px 9px;font-size:10px;color:var(--text-soft);font-style:italic;line-height:1.5}
+  .tabbar{margin-top:auto;display:flex;justify-content:space-around;padding:9px 6px 14px;border-top:1px solid var(--line-soft);background:rgba(13,16,20,.92);backdrop-filter:blur(8px);flex-shrink:0}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:3px;font-family:var(--font-mono);font-size:8.5px;color:var(--muted);background:none;border:none;padding:4px 6px;border-radius:9px;cursor:pointer;transition:color .2s,background .2s;line-height:1}
+  .tab i{width:17px;height:17px;display:block}
+  .tab svg{width:17px;height:17px}
+  .tab.is-active{color:var(--accent);background:var(--accent-soft)}
+  .tab.is-active svg{filter:drop-shadow(0 0 5px rgba(220,201,126,.5))}
+  .tab:active{transform:scale(.92)}
+
+  /* task pane */
+  .task{border:1px solid var(--line-soft);border-radius:13px;background:var(--panel);padding:11px 12px}
+  .task-h{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:8px}
+  .task-h b{color:var(--bone);font-weight:600}
+  .task-h .pct{font-family:var(--font-mono);font-size:11px;color:var(--accent-strong)}
+  .task-bar{height:4px;border-radius:2px;background:var(--panel-3);overflow:hidden}
+  .task-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-strong));border-radius:2px;transition:width .4s}
+  .task-steps{margin-top:9px;display:flex;flex-direction:column;gap:4px;font-family:var(--font-mono);font-size:9.5px}
+  .task-steps .done{color:var(--green)}
+  .task-steps .cur{color:var(--accent)}
+  .stop-btn{align-self:center;margin-top:2px;font-family:var(--font-mono);font-size:11px;color:var(--red);background:rgba(234,121,109,.1);border:1px solid rgba(234,121,109,.3);padding:7px 14px;border-radius:9px;cursor:pointer;transition:background .2s}
+  .stop-btn:hover{background:rgba(234,121,109,.18)}
+
+  /* chat pane */
+  .chat-note{align-self:center;font-family:var(--font-mono);font-size:9px;color:var(--muted);letter-spacing:.06em;padding:3px 9px;border:1px solid var(--line-soft);border-radius:20px}
+  .bub{max-width:84%;padding:8px 11px;border-radius:13px;font-size:11px;line-height:1.45}
+  .bub-me{align-self:flex-end;background:var(--accent);color:#0b0d10;border-bottom-right-radius:4px}
+  .bub-ai{align-self:flex-start;background:var(--panel-2);color:var(--text-soft);border:1px solid var(--line-soft);border-bottom-left-radius:4px;display:flex;gap:7px;align-items:flex-start}
+  .ai-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:5px;flex-shrink:0;box-shadow:0 0 5px rgba(220,201,126,.6)}
+  .typing{display:inline-flex;gap:3px;padding:3px 0}
+  .typing i{width:5px;height:5px;border-radius:50%;background:var(--muted);animation:typing 1.2s ease-in-out infinite}
+  .typing i:nth-child(2){animation-delay:.2s}
+  .typing i:nth-child(3){animation-delay:.4s}
+  @keyframes typing{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+
+  /* approval pane */
+  .ap-card{border:1px solid rgba(241,210,122,.28);border-radius:14px;background:linear-gradient(180deg,rgba(241,210,122,.06),rgba(255,255,255,.01)),var(--panel);padding:13px 14px;display:flex;flex-direction:column;gap:9px}
+  .ap-k{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--yellow)}
+  .ap-cmd{font-family:var(--font-mono);font-size:12px;color:var(--accent-strong);background:#0d1014;border:1px solid var(--line-soft);border-radius:7px;padding:7px 9px;word-break:break-all}
+  .ap-desc{font-size:11px;color:var(--text-soft);line-height:1.5}
+  .ap-result{text-align:center;padding:18px 6px;display:flex;flex-direction:column;gap:10px;align-items:center}
+  .ap-result-icon{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-size:18px}
+  .ap-result-icon.is-allowed{background:rgba(159,226,111,.14);color:var(--green)}
+  .ap-result-icon.is-denied{background:rgba(234,121,109,.14);color:var(--red)}
+  .ap-result-label{font-size:12px;color:var(--text)}
+  .ap-result-note{font-family:var(--font-mono);font-size:9px;color:var(--muted)}
+  .ap-actions{display:flex;gap:8px}
+  .ap{flex:1;font-family:var(--font-mono);font-size:11px;padding:8px 6px;border-radius:9px;border:1px solid;cursor:pointer;transition:all .2s}
+  .ap.deny{color:var(--red);border-color:rgba(234,121,109,.35);background:rgba(234,121,109,.08)}
+  .ap.deny:hover{background:rgba(234,121,109,.18)}
+  .ap.allow{color:#0b0d10;background:var(--accent);border-color:var(--accent);font-weight:600}
+  .ap.allow:hover{background:var(--accent-strong);border-color:var(--accent-strong)}
+  .ap-foot{font-family:var(--font-mono);font-size:9px;color:var(--muted);text-align:center;padding-top:2px}
+  @media(max-width:900px){.hero-grid{grid-template-columns:1fr;gap:50px;text-align:center}.hero p.lead{margin-left:auto;margin-right:auto}.eyebrow{justify-content:center}.eyebrow::before{display:none}.hero-stats{justify-content:center}.phone-wrap{order:-1}.phone{width:250px;height:510px;transform:none}}
+  @media(prefers-reduced-motion:reduce){.phone,.pulse,.typing i{animation:none!important;transition:none!important}.pane.is-active{animation:none!important}html{scroll-behavior:auto}}
+
+  /* install note */
+  .install{position:relative;z-index:1;padding:24px 0 70px}
+  .install-box{border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,0)),var(--panel);padding:26px 28px;display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:center}
+  .install-box .ic{width:46px;height:46px;border-radius:12px;background:var(--accent-soft);border:1px solid rgba(220,201,126,.25);display:grid;place-items:center;color:var(--accent)}
+  .install-box h3{font-family:var(--font-display);font-size:18px;color:var(--bone);margin-bottom:5px}
+  .install-box p{font-size:13.5px;color:var(--text-soft)}
+  .install-box p code{font-family:var(--font-mono);font-size:12px;color:var(--accent-strong);background:var(--accent-soft);padding:1px 6px;border-radius:4px}
+  @media(max-width:620px){.install-box{grid-template-columns:1fr;gap:14px}}
+
+  /* releases / changelog */
+  .releases{position:relative;z-index:1;padding:30px 0 100px}
+  .section-head{max-width:640px;margin-bottom:48px}
+  .section-head h2{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,3.6vw,40px);line-height:1.1;letter-spacing:-.02em;color:var(--bone);margin:14px 0 12px}
+  .section-head p{color:var(--text-soft);font-size:16px}
+
+  .timeline{position:relative;padding-left:34px}
+  .timeline::before{content:"";position:absolute;left:9px;top:8px;bottom:8px;width:1px;background:linear-gradient(180deg,var(--accent),var(--line) 30%)}
+  .rel{position:relative;margin-bottom:18px}
+  .rel::before{content:"";position:absolute;left:-30px;top:24px;width:11px;height:11px;border-radius:50%;background:var(--panel);border:2px solid var(--line)}
+  .rel.latest::before{background:var(--accent);border-color:var(--accent);box-shadow:0 0 10px rgba(220,201,126,.6)}
+  .rel-card{border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,0)),var(--panel);padding:24px 26px;transition:border-color .2s,box-shadow .2s}
+  .rel.latest .rel-card{border-color:rgba(220,201,126,.4);box-shadow:0 0 0 1px rgba(220,201,126,.08),0 18px 40px rgba(0,0,0,.3)}
+  .rel-head{display:flex;align-items:center;flex-wrap:wrap;gap:12px 16px;margin-bottom:16px}
+  .ver{font-family:var(--font-mono);font-weight:600;font-size:18px;color:var(--bone)}
+  .tag-latest{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#0b0d10;background:var(--accent);padding:3px 9px;border-radius:6px}
+  .tag-debug{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;color:var(--yellow);border:1px solid rgba(241,210,122,.3);padding:2px 8px;border-radius:5px}
+  .rel-meta{margin-left:auto;display:flex;gap:16px;align-items:center;font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+  .rel-meta .sz{color:var(--text-soft)}
+  .changes{list-style:none;display:flex;flex-direction:column;gap:9px;margin-bottom:18px}
+  .changes li{position:relative;padding-left:22px;font-size:14px;color:var(--text-soft);line-height:1.55}
+  .changes li::before{content:"";position:absolute;left:2px;top:9px;width:5px;height:5px;border-radius:50%;background:var(--accent)}
+  .rel-foot{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding-top:16px;border-top:1px dashed var(--line)}
+  .apk{display:inline-flex;align-items:center;gap:9px;font-family:var(--font-mono);font-size:13px;font-weight:500;padding:9px 17px;border-radius:999px;border:1px solid var(--line);color:var(--text);transition:all .2s}
+  .apk:hover{border-color:var(--accent);color:var(--accent-strong);background:rgba(220,201,126,.05)}
+  .apk svg{width:15px;height:15px}
+  .rel.latest .apk{background:var(--accent);color:#0b0d10;border-color:var(--accent);font-weight:600}
+  .rel.latest .apk:hover{background:var(--accent-strong);border-color:var(--accent-strong)}
+  .hash{font-family:var(--font-mono);font-size:11px;color:var(--muted);word-break:break-all}
+  @media(max-width:560px){.rel-meta{margin-left:0;width:100%}.timeline{padding-left:26px}.rel::before{left:-22px}}
+
+  /* footer */
+  footer{position:relative;z-index:1;border-top:1px solid var(--line-soft);padding:38px 0}
+  .foot-inner{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;color:var(--muted);font-size:13px}
+  .foot-inner .brand{color:var(--bone);font-size:15px}
+  .foot-meta{font-family:var(--font-mono);font-size:12px}
+  .foot-meta a{color:var(--text-soft);margin-left:16px}
+  .foot-meta a:hover{color:var(--accent-strong)}
+</style>
+</head>
+<body>
+<div class="ambient" aria-hidden="true"></div>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="https://trylocode.me">
+      <svg class="brand-mark" viewBox="0 0 1024 1024" aria-hidden="true"><path d="M462 236 L462 420 L624 420"/><path d="M276 732 L424 644 L356 512"/><path d="M540 676 L622 546 L786 640"/></svg>
+      Trylo&nbsp;Code<span class="sub">APP</span>
+    </a>
+    <nav class="nav-links" aria-label="页面导航">
+      <a href="#install">安装说明</a>
+      <a href="#versions">所有版本</a>
+      <a href="https://chat.trylocode.me" target="_blank" rel="noopener noreferrer">在线体验 ↗</a>
+      <a href="https://trylocode.me">官网 ↗</a>
+    </nav>
+    <a class="nav-cta" href="#latest">下载最新版 ↓</a>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">Android · com.trylo.remote</span>
+      <h1>把 Trylo 搭档，<br><em>装进口袋。</em></h1>
+      <p class="lead">Trylo Code 把聊天和远程装进同一个 App：直连 24 家模型服务商随时对话，扫码连上电脑上的 Trylo，看任务进度、继续对话、审批敏感操作。离开工位，不离开你的搭档。</p>
+      <div class="hero-stats">
+        <div class="stat"><div class="n">1.1.6</div><div class="l">Latest build</div></div>
+        <div class="stat"><div class="n">24.2<span class="u">MB</span></div><div class="l">APK size</div></div>
+        <div class="stat"><div class="n">24<span class="u">家</span></div><div class="l">模型服务商</div></div>
+        <div class="stat"><div class="n">8.0<span class="u">+</span></div><div class="l">Android</div></div>
+      </div>
+      <a class="dl" id="latest" href="releases/Trylo-Code-v1.1.6.apk" download>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-5-5m5 5l5-5M5 21h14"/></svg>
+        下载 v1.1.6 APK
+      </a>
+      <span class="dl-meta">扫码或传文件到手机安装 · 需开启 <a href="#install">「未知来源」</a></span>
+    </div>
+
+    <div class="phone-wrap">
+      <div class="phone-aura" aria-hidden="true"></div>
+      <div class="phone">
+        <div class="screen">
+          <div class="notch"></div>
+          <div class="statusbar"><span>2:17</span><span class="sig"><i></i>已连接</span></div>
+          <div class="scr-body">
+
+            <!-- 概览 -->
+            <div class="pane is-active" data-pane="home">
+              <div class="app-top">
+                <svg class="m" viewBox="0 0 1024 1024"><path d="M462 236 L462 420 L624 420"/><path d="M276 732 L424 644 L356 512"/><path d="M540 676 L622 546 L786 640"/></svg>
+                <span class="t">概览</span>
+                <span class="badge">ONLINE</span>
+              </div>
+              <div class="conn-card">
+                <div class="row"><span class="pulse"></span><b>远程会话已连接</b></div>
+                <div class="row" style="margin-top:5px"><span>YLZ-WORKSTATION · trylo-code</span></div>
+                <div class="conn-bar"><i></i></div>
+              </div>
+              <div class="mini-grid">
+                <div class="mini"><div class="k">进行中</div><div class="v accent">2</div></div>
+                <div class="mini"><div class="k">待审批</div><div class="v">1</div></div>
+              </div>
+              <div class="think">正在读取项目结构…<br>建议采用事件驱动模式，需修改 3 个核心文件。</div>
+            </div>
+
+            <!-- 任务 -->
+            <div class="pane" data-pane="runs">
+              <div class="app-top"><span class="t">任务</span><span class="badge">2 RUNNING</span></div>
+              <div class="task">
+                <div class="task-h"><b>重构事件总线</b><span class="pct">62%</span></div>
+                <div class="task-bar"><i style="width:62%"></i></div>
+                <div class="task-steps"><span class="done">✓ 读取 17 个文件</span><span class="cur">→ 修改 core/events.ts</span></div>
+              </div>
+              <div class="task">
+                <div class="task-h"><b>补充单测</b><span class="pct">28%</span></div>
+                <div class="task-bar"><i style="width:28%"></i></div>
+                <div class="task-steps"><span class="cur">→ 扫描 bus.test.ts</span></div>
+              </div>
+              <button class="stop-btn" type="button">■ 停止当前任务</button>
+            </div>
+
+            <!-- 对话 -->
+            <div class="pane" data-pane="chat">
+              <div class="app-top"><span class="t">当前会话镜像</span></div>
+              <div class="chat-note">与电脑端双向同步</div>
+              <div class="bub bub-me">第 87 行的缓存逻辑解释一下？</div>
+              <div class="bub bub-ai"><span class="ai-dot"></span>这里用了写时失效策略：写入后删除对应 key，下次读取重建，避免脏数据。</div>
+              <div class="bub bub-me">帮我加个 TTL，5 分钟过期</div>
+              <div class="bub bub-ai thinking"><span class="typing"><i></i><i></i><i></i></span></div>
+            </div>
+
+            <!-- 直连聊天 -->
+            <div class="pane" data-pane="chatdir">
+              <div class="app-top"><span class="t">聊天</span><span class="badge">豆包 · Seed</span></div>
+              <div class="chat-note">手机直连服务商 · 会话仅存本机</div>
+              <div class="bub bub-me">帮我对比 debounce 和 throttle，用表格</div>
+              <div class="bub bub-ai"><span class="ai-dot"></span>执行时机不同：debounce 在停止触发后只执行一次；throttle 固定间隔执行。输入校验用前者，滚动监听用后者。</div>
+            </div>
+
+            <!-- 审批 -->
+            <div class="pane" data-pane="approvals">
+              <div class="app-top"><span class="t">权限审批</span><span class="badge" style="color:var(--yellow);border-color:rgba(241,210,122,.35)">1 PENDING</span></div>
+              <div class="ap-card">
+                <div class="ap-k">单次授权 · 文件写入</div>
+                <div class="ap-cmd">src/core/event-bus.ts</div>
+                <p class="ap-desc">Agent 要覆盖此文件。允许后仅执行本次操作，不会改变后续权限设置。</p>
+                <div class="ap-actions">
+                  <button class="ap deny" type="button">拒绝</button>
+                  <button class="ap allow" type="button">只允许这一次</button>
+                </div>
+                <div class="ap-foot">审批记录保存在电脑端</div>
+              </div>
+            </div>
+
+          </div>
+          <div class="tabbar" role="tablist">
+            <button class="tab is-active" type="button" data-tab="home" role="tab" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8M5 10v10h14V10"/></svg>概览</button>
+            <button class="tab" type="button" data-tab="chatdir" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10h8M8 14h5M21 12a8 8 0 01-12 7l-5 1 1-4a8 8 0 1116-4z"/></svg>聊天</button>
+            <button class="tab" type="button" data-tab="runs" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg>任务</button>
+            <button class="tab" type="button" data-tab="chat" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 01-12 7l-5 1 1-4a8 8 0 1116-4z"/></svg>对话</button>
+            <button class="tab" type="button" data-tab="approvals" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></svg>审批</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- INSTALL -->
+<section class="install" id="install">
+  <div class="wrap">
+    <div class="install-box">
+      <div class="ic">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-5-5m5 5l5-5M5 21h14"/></svg>
+      </div>
+      <div>
+        <h3>安装说明</h3>
+        <p>下载 APK 传到手机后点击安装；首次安装需在系统设置中允许「未知来源」。配对时在电脑端运行 Trylo（桌面版即将发布，当前由 VS Code 插件承担），使用命令 <code>Trylo Code: Copy Remote Pairing Data</code> 复制配对数据，粘贴进 App 即可。配对令牌由 Android Keystore 保护，App 不会保存工作区文件或 API Key。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- RELEASES -->
+<section class="releases" id="versions">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">All versions</span>
+      <h2>更新日志</h2>
+      <p>从第一个测试包到现在的每一步。版本按时间倒序排列，点击即可下载对应 APK。</p>
+    </div>
+
+    <div class="timeline">
+
+      <article class="rel latest">
+        <div class="rel-card">
+          <div class="rel-head">
+            <span class="ver">v1.1.6</span>
+            <span class="tag-latest">最新</span>
+            <div class="rel-meta"><span>2026-08-31</span><span class="sz">24.2 MB</span></div>
+          </div>
+          <ul class="changes">
+            <li>基于 1.1.4 的持续迭代：稳定性修复与安全加固，正式发布构建（非 debug）。</li>
+          </ul>
+          <div class="rel-foot">
+            <a class="apk" href="releases/Trylo-Code-v1.1.6.apk" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-5-5m5 5l5-5M5 21h14"/></svg>下载 APK</a>
+            <span class="hash">com.trylo.remote · API 26+</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="rel">
+        <div class="rel-card">
+          <div class="rel-head">
+            <span class="ver">v1.1.5</span>
+            <div class="rel-meta"><span>2026-08-31</span><span class="sz">24.2 MB</span></div>
+          </div>
+          <ul class="changes">
+            <li>1.1.4 之后的维护版本：修复与打磨。</li>
+          </ul>
+          <div class="rel-foot">
+            <a class="apk" href="releases/Trylo-Code-v1.1.5.apk" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-5-5m5 5l5-5M5 21h14"/></svg>下载 APK</a>
+          </div>
+        </div>
+      </article>
+
+      <article class="rel">
+        <div class="rel-card">
+          <div class="rel-head">
+            <span class="ver">v1.1.4</span>
+            <div class="rel-meta"><span>2026-08-16</span><span class="sz">24.2 MB</span></div>
+          </div>
+          <ul class="changes">
+            <li>用无头 Chrome + 真实触摸事件完成 42 项全流程验证：API 设置弹层、输入框、服务商选择均可正常点按。</li>
+            <li>失败的回复不再凭空消失：保留真实错误原因并提供「重试」，可连同图片附件一起重发。</li>
+            <li>复制按钮增加 execCommand 兼容回退，部分 WebView 里剪贴板被拒不再静默失败。</li>
+            <li>过小的点按区域统一补足到 44px 标准；服务商列表 24 项，文字对比度实测 16.28:1。</li>
+          </ul>
+          <div class="rel-foot">
+            <a class="apk" href="releases/Trylo-Code-v1.1.4.apk" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-5-5m5 5l5-5M5 21h14"/></svg>下载 APK</a>
+          </div>
+        </div>
+      </article>
+
+      <article class="rel">
+        <div class="rel-card">
+          <div class="rel-head">
+            <span class="ver">v1.1.3</span>
+            <span class="tag-debug" style="color:var(--muted);border-color:var(--line)">无 APK 留存</span>
+            <div class="rel-meta"><span>2026-08-15</span></div>
+          </div>
+          <ul class="changes">
+            <li>服务商选择弹层提亮重做，按国内 / 海外 / 自定义分区，当前服务商金色高亮。</li>
+            <li>内置各家「常用模型」一键填入；支持上传图片和文本附件，图片自动缩放后按各协议封装。</li>
+            <li>表格渲染增强：一键复制为 Markdown 源码，横滑渐隐提示。</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="rel">
+        <div class="rel-card">
+          <div class="rel-head">
+            <span class="ver">v1.1.2</span>
+            <span class="tag-debug" style="color:var(--muted);border-color:var(--line)">无 APK 留存</span>
+            <div class="rel-meta"><span>2026-08-15</span></div>
+          </div>
+          <ul class="changes">
+            <li>API 地址真正可编辑：不再被内置地址覆盖，可填自建代理；新增「恢复默认」。</li>
+            <li>服务商从 8 个扩充到 23 个（智谱、混元、文心、Gemini、Grok、OpenRouter 等）。</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="rel">
+        <div class="rel-card">
+          <div class="rel-head">
+            <span class="ver">v1.1.1</span>
+            <span class="tag-debug" style="color:var(--muted);border-color:var(--line)">无 APK 留存</span>
+            <div class="rel-meta"><span>2026-08-15</span></div>
+          </div>
+          <ul class="changes">
+            <li>彻底修复「API 设置点不动」：弹窗容器改为铺满视口，输入法弹出不再遮挡输入框。</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="rel">
+        <div class="rel-card">
+          <div class="rel-head">
+            <span class="ver">v1.1.0</span>
+            <span class="tag-debug" style="color:var(--muted);border-color:var(--line)">无 APK 留存</span>
+            <div class="rel-meta"><span>2026-08-14</span></div>
+          </div>
+          <ul class="changes">
+            <li>流式回复修复为真正逐字输出；「停止生成」可真正取消，已生成内容保留。</li>
+            <li>顶栏新增齿轮设置入口；可点击元素统一放大到 ≥44px；错误提示按类型区分。</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="rel">
+        <div class="rel-card">
+          <div class="rel-head">
+            <span class="ver">v1.0.0</span>
+            <span class="tag-debug" style="color:var(--muted);border-color:var(--line)">无 APK 留存</span>
+            <div class="rel-meta"><span>2026-08-13</span></div>
+          </div>
+          <ul class="changes">
+            <li>App 更名为 <b>Trylo Code</b>：合并「聊天 + 远程」双段，独立 Remote 客户端退役。</li>
+            <li>新增直连聊天：手机直接请求豆包、DeepSeek、通义、Kimi、OpenAI、Anthropic 等服务商。</li>
+            <li>API Key 进 Android Keystore，每服务商独立密钥槽；禁用云备份与明文流量；首个公开正式版本。</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="rel">
+        <div class="rel-card">
+          <div class="rel-head">
+            <span class="ver">v0.1 – v0.10</span>
+            <span class="tag-debug" style="color:var(--muted);border-color:var(--line)">已退役</span>
+            <div class="rel-meta"><span>2026-08-11 ~ 08-13</span></div>
+          </div>
+          <ul class="changes">
+            <li>Trylo Remote 独立控制端时期：扫码连接电脑、任务状态、远程对话与权限审批。</li>
+            <li>v1.0.0 起全部能力并入 Trylo Code，Remote 包不再单独提供下载。</li>
+          </ul>
+        </div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-inner">
+    <a class="brand" href="https://trylocode.me">
+      <svg class="brand-mark" viewBox="0 0 1024 1024" aria-hidden="true"><path d="M462 236 L462 420 L624 420"/><path d="M276 732 L424 644 L356 512"/><path d="M540 676 L622 546 L786 640"/></svg>
+      Trylo&nbsp;Code
+    </a>
+    <div class="foot-meta">© 2026 YL Z ·<a href="https://trylocode.me">官网</a><a href="https://remote.trylocode.me">远程控制</a><a href="https://chat.trylocode.me" target="_blank" rel="noopener noreferrer">在线体验</a><a href="mailto:ylz92871@gmail.com">ylz92871@gmail.com</a></div>
+  </div>
+</footer>
+
+<script src="app.js" defer></script>
+</body>
+</html>

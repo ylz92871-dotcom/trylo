@@ -1,0 +1,63 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "moduleDetection": "force",
+    "useDefineForClassFields": true,
+    "allowImportingTsExtensions": false,
+    "verbatimModuleSyntax": false,
+
+    "outDir": "./dist",
+    // No `rootDir`: the @trylo/work alias pulls in files from
+    // ../work/src which live outside `./src`. Vite handles the
+    // build path; tsc just needs to compile-check the union.
+
+    "types": ["vite/client", "node", "react", "react-dom"],
+
+    // Work sub-app: sibling package at ../work/src. Components
+    // are imported via the `@trylo/work` alias from App.tsx and
+    // mounted when `topMode === 'work'`. The path alias lets us
+    // import without a separate build step; the same React/lucide
+    // types are reused from desktop/node_modules.
+    "baseUrl": ".",
+    "paths": {
+      "@trylo/work": ["../work/src/renderer/index.ts"],
+      "@trylo/work/*": ["../work/src/*"],
+      // The work sub-app's React/lucide imports resolve to
+      // the desktop's node_modules. We don't run `pnpm install`
+      // in work/ (kept light), so TypeScript would otherwise
+      // fail to resolve these. Vite handles the runtime
+      // resolution the same way (alias in vite.config.ts).
+      "react": ["./node_modules/@types/react"],
+      "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime"],
+      "react-dom": ["./node_modules/@types/react-dom"],
+      "lucide-react": ["./node_modules/lucide-react"]
+    }
+  },
+  "include": ["src/**/*", "tests/**/*", "../work/src/**/*"],
+  "exclude": ["node_modules", "dist", "src-tauri/target", "src-tauri/gen"]
+}

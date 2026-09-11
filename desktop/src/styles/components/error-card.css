@@ -1,0 +1,51 @@
+/* Trylo Desktop — ErrorCard (M3, W-OBS-001).
+ *
+ * The unified presentation of an authoritative task
+ * failure. Deliberately quiet: a danger-tinted left
+ * border + icon, the normalized user message as the body,
+ * and the diagnostics correlation id muted at the bottom.
+ */
+
+.error-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 720px;
+  margin: var(--space-2) auto 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-md);
+}
+
+.error-card__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--danger);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.error-card__title {
+  letter-spacing: 0.01em;
+}
+
+.error-card__body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  line-height: var(--leading-base);
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.error-card__diag {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+  opacity: 0.8;
+}

@@ -1,0 +1,412 @@
+/* Trylo Desktop — ResultDock (P2-1, spec §9.5).
+ *
+ * Shared result summary shell between timeline and composer. Code/Work
+ * differences come through `[data-mode]` tokens and the mode-specific
+ * content components, never a second container stylesheet. No infinite
+ * animations — reduced motion is covered by the shared duration tokens.
+ *
+ * 2026-09-04 (极简化): the accent-tinted background, the colored left
+ * stripe and the accent count are gone — the dock is now a quiet,
+ * hairline-outlined disclosure with neutral text. Semantic colour is
+ * kept ONLY for real failure states (§3.4: colour is never the sole
+ * signal — the badge text carries the kind).
+ */
+
+.result-dock {
+  max-width: 720px;
+  margin: var(--space-2) auto 0;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+}
+
+.result-dock__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--fg-muted);
+  text-align: left;
+  transition: color var(--duration-fast, 120ms) ease;
+}
+
+.result-dock__head:hover {
+  color: var(--fg);
+}
+
+.result-dock__title {
+  letter-spacing: 0.01em;
+}
+
+.result-dock__count {
+  margin-left: auto;
+  min-width: 20px;
+  text-align: center;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.result-dock__fail-badge {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--danger, #e57373);
+}
+
+.result-dock__summary {
+  margin: 0 0 var(--space-1);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+
+.result-dock__warning {
+  margin: var(--space-1) 0;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--danger, #e57373);
+}
+
+.result-dock__truncated {
+  margin: var(--space-1) 0;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+
+.result-dock__retry {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.result-dock__content {
+  padding: var(--space-1) var(--space-3) var(--space-2);
+}
+
+/* ── Code result content (spec §7.6 / §9.4) ───────────────────────────── */
+
+.result-dock__content .code-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.code-result__notice,
+.code-result__empty {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+
+.code-result__section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.code-result__section-title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.code-result__changes,
+.code-result__checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.code-result__change {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap; /* WP-5: at 200%/300% the stat/actions wrap, the path stays ellipsized */
+  gap: 8px;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+}
+
+.code-result__badge {
+  flex: none;
+  min-width: 64px;
+  text-align: center;
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+  font-size: var(--text-xs);
+  color: var(--fg);
+  background: var(--bg-muted, var(--bg-elevated));
+}
+.code-result__badge[data-kind='added'] { color: #4caf50; }
+.code-result__badge[data-kind='deleted'] { color: #e57373; }
+.code-result__badge[data-kind='renamed'] { color: #90caf9; }
+
+/* WP-4 diff stats. Colour is decorative — the +/−/Binary text is the real
+ * signal (spec §3.4: colour alone must never be the only expression). */
+.code-result__stat {
+  flex: none;
+  display: inline-flex;
+  gap: 6px;
+  font-family: var(--font-mono, var(--font-body));
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--fg-muted);
+}
+.code-result__plus { color: #4caf50; }
+.code-result__minus { color: #e57373; }
+
+.code-result__path {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 5px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.code-result__path:hover { background: color-mix(in srgb, var(--mode-accent) 10%, transparent); }
+
+.code-result__actions {
+  flex: none;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.code-result__action {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  background: transparent;
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.code-result__action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.code-result__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+}
+.code-result__check[data-status='passed'] .code-result__check-status { color: #4caf50; }
+.code-result__check[data-status='failed'] .code-result__check-status { color: #e57373; }
+
+.code-result__check-kind {
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+}
+
+.code-result__check-status {
+  margin-left: auto;
+  font-size: var(--text-xs);
+}
+
+/* ── Git diff view (spec §9.6 / §7.7) ─────────────────────────────────── */
+
+.git-diff-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 320px;
+  /* v1.17: the body is now a flex row, so pin the width. */
+  flex: 0 0 auto;
+  width: clamp(360px, 40vw, 560px);
+  border-left: 1px solid var(--border);
+  background: var(--bg, var(--bg-elevated));
+}
+
+.git-diff-view__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.git-diff-view__path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, var(--font-body));
+  font-size: var(--text-sm);
+}
+
+.git-diff-view__close {
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.git-diff-view__body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.git-diff-view__monaco {
+  position: absolute;
+  inset: 0;
+}
+
+.git-diff-view__degraded {
+  margin: var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+
+/* ── Work result content (spec §8.6 / §9.4) ───────────────────────────── */
+
+.result-dock__content .work-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.work-result__notice,
+.work-result__empty {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+
+.work-result__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.work-result__item {
+  position: relative;
+}
+
+/* Personal-issue #2: a per-artifact "Diff" that opens the shared Git-diff
+ * pane for the artifact's file, complementing the card's in-app "Open". */
+.work-result__diff {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated, #fff);
+  color: var(--fg, inherit);
+  font-family: var(--font-body);
+  font-size: var(--text-2xs, 10px);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.work-result__diff:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.work-result__badge {
+  position: absolute;
+  top: -7px;
+  right: 6px;
+  z-index: 1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0 6px;
+  font-size: var(--text-2xs, 10px);
+  font-family: var(--font-body);
+  letter-spacing: 0.02em;
+  line-height: 1.6;
+  color: var(--fg-muted);
+  background: var(--bg, #fff);
+}
+/* 极简: no per-kind solid fills — the badge text (新建/更新/发现) is the
+ * signal (spec §3.4: colour alone must never be the only expression). */
+
+/* PR-5 (spec §11): delivery-verification badges. The verdict is delivery
+ * metadata — three honest states (已验证 / 部分验证 / 验证失败) plus a muted
+ * 未验证 for skipped files; never an implied pass (§4.4). Failure keeps the
+ * danger colour; everything else is neutral. */
+.work-result__verify {
+  position: absolute;
+  top: -7px;
+  right: 62px;
+  z-index: 1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0 6px;
+  font-size: var(--text-2xs, 10px);
+  font-family: var(--font-body);
+  letter-spacing: 0.02em;
+  line-height: 1.6;
+  color: var(--fg-muted);
+  background: var(--bg, #fff);
+}
+.work-result__verify--failed { color: var(--danger, #c62828); border-color: color-mix(in srgb, var(--danger, #c62828) 35%, var(--border)); }
+
+/* PR-5: one aggregate verification line above the artifact list. */
+.work-result__verify-line {
+  margin: 0 0 4px;
+  font-size: var(--text-2xs, 11px);
+  color: var(--text-muted, #888);
+}
+.work-result__verify-line--failed { color: var(--danger, #c62828); }
+
+.work-result__unsafe {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+.work-result__unsafe-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

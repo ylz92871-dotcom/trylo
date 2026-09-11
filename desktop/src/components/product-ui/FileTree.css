@@ -1,0 +1,84 @@
+/* Trylo Desktop — FileTree styles. See the architecture doc §3 Phase 1
+   Week 1. */
+
+.file-tree {
+  width: 240px;
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.15);
+  overflow-y: auto;
+  font-size: 0.85rem;
+}
+
+.file-tree-header {
+  padding: 0.4rem 0.6rem;
+  color: var(--fg-muted);
+  font-size: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+}
+
+.file-tree-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 0.3rem;
+  padding: 0.15rem 0.5rem;
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.file-tree-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.file-tree-row--selected {
+  /* Light selection — a 2px gold inset + a faint wash, never a
+     brand fill. Keeps gold as a status accent, not a block. */
+  background: rgba(236, 238, 242, 0.04);
+  box-shadow: inset 2px 0 0 var(--brand);
+}
+
+.file-tree-row--dir {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.file-tree-icon {
+  width: 0.9rem;
+  color: var(--fg-muted);
+  font-size: 0.7rem;
+}
+
+.file-tree-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+}
+
+.file-tree-loading,
+.file-tree-empty,
+.file-tree-error {
+  padding: 0.25rem 0.5rem;
+  color: var(--fg-muted);
+  font-size: 0.8rem;
+}
+
+.file-tree-error {
+  color: #d96666;
+}

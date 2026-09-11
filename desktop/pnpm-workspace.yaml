@@ -1,0 +1,9 @@
+# pnpm 9+ reads these settings (vs. the legacy `pnpm` field
+# in package.json). We need these postinstall scripts to run:
+#   - esbuild: Vite's dev-mode bundler
+#   - @swc/core: native binary used by @vitejs/plugin-react-swc
+#
+# See https://pnpm.io/settings for the full list of moved settings.
+allowBuilds:
+  '@swc/core': true
+  esbuild: true

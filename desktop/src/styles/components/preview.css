@@ -1,0 +1,321 @@
+/* Trylo Desktop — rich preview bodies (base capability).
+ *
+ * Rendered INSIDE FilePeek's right rail, below its header/meta.
+ * Reuses the shell's CSS vars; no new theme tokens.
+ */
+
+.preview__markdown {
+  overflow: auto;
+  min-height: 0;
+  padding: var(--space-2) var(--space-4) var(--space-4) var(--space-4);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  color: var(--fg);
+  word-wrap: break-word;
+}
+
+.preview__markdown h1,
+.preview__markdown h2,
+.preview__markdown h3 {
+  margin: var(--space-3) 0 var(--space-2) 0;
+  line-height: 1.3;
+}
+
+.preview__markdown pre {
+  overflow-x: auto;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--ink-hover);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.preview__markdown code {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.preview__markdown table {
+  border-collapse: collapse;
+  margin: var(--space-2) 0;
+}
+
+.preview__markdown th,
+.preview__markdown td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+}
+
+.preview__html {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  border: none;
+  background: #fff;
+  flex: 1 1 auto;
+}
+
+.preview__table-wrap {
+  overflow: auto;
+  min-height: 0;
+  padding: var(--space-2) var(--space-4);
+}
+
+.preview__table {
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  min-width: 100%;
+}
+
+.preview__table th,
+.preview__table td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview__table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--ink-surface);
+  font-weight: 600;
+}
+
+.preview__fold-note {
+  margin-top: var(--space-2);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+}
+
+.preview__image-wrap {
+  overflow: auto;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--space-3) var(--space-4);
+}
+
+.preview__image {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.preview__empty {
+  padding: var(--space-4);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+/* Paged / canvas viewers (PDF, slides): toolbar + scroll area. */
+.preview__paged {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.preview__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-4) var(--space-2) var(--space-4);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  flex: 0 0 auto;
+}
+
+.preview__toolbar--scroll {
+  overflow-x: auto;
+}
+
+.preview__toolbar button {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.preview__toolbar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.preview__toolbar button:not(:disabled):hover {
+  background: var(--ink-hover);
+}
+
+.preview__tab--active {
+  border-color: var(--brand-300);
+  color: var(--brand-300);
+}
+
+.preview__sep {
+  color: var(--ink-mute);
+}
+
+.preview__page-label {
+  min-width: 48px;
+  text-align: center;
+}
+
+.preview__canvas-wrap {
+  overflow: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0 var(--space-4) var(--space-4) var(--space-4);
+}
+
+.preview__canvas {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  max-width: 100%;
+}
+
+/* Slide fit-width: the component renders at rail device pixels, so
+ * the canvas stretches exactly edge to edge (no upscale blur). */
+.preview__canvas-wrap--fit {
+  display: block;
+  padding: 0 var(--space-4) var(--space-4) var(--space-4);
+}
+
+.preview__canvas--fit {
+  width: 100%;
+  height: auto;
+}
+
+/* Continuous slide column: every slide fit-width, captioned, click
+ * to dive into paged view. The column itself scrolls. */
+.preview__slides {
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 0 var(--space-4) var(--space-4) var(--space-4);
+}
+
+.preview__slide {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.preview__slide:hover {
+  border-color: var(--brand-300);
+}
+
+.preview__slide .preview__canvas--fit {
+  border-radius: var(--radius-sm);
+}
+
+.preview__slide-label {
+  display: block;
+  text-align: right;
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  padding-top: 2px;
+}
+
+/* Word: fluid single column for the narrow rail. */
+.preview__docx {
+  overflow: auto;
+  min-height: 0;
+  padding: var(--space-2) var(--space-4) var(--space-4) var(--space-4);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  color: var(--fg);
+  background: #fff;
+}
+
+.preview__docx .trylo-docx-wrapper {
+  max-width: 100%;
+  padding: 0;
+}
+
+/* 2D CAD: dark blueprint surface, copper-green traces. */
+.preview__cad {
+  overflow: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+  color: #7dd3a8;
+  background: #101418;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.preview__cad svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 240px;
+}
+
+.preview__cad text {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* Gerber: solder-mask backdrop, copper in currentColor. */
+.preview__gerber {
+  overflow: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e0a83c;
+  background: #0d2818;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-3);
+}
+
+.preview__gerber svg {
+  /* Gerber SVGs carry real-world mm dimensions (often tiny on
+     screen). Presentation attributes lose to CSS, so width:100%
+     scales the layer to the rail; viewBox keeps the aspect. */
+  width: 100%;
+  height: auto;
+}
+
+/* 3D viewport fills the rail; canvas is sized by the component. */
+.preview__viewport {
+  min-height: 320px;
+  flex: 1 1 auto;
+  background:
+    radial-gradient(circle at 50% 40%, #1c2530 0%, #101418 70%);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.preview__viewport canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

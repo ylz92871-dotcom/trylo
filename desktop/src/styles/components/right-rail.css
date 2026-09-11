@@ -1,0 +1,80 @@
+/* Trylo Desktop — RightRail. v1.17.
+ *
+ * Toggleable file-tree panel. Sits to the right of the chat.
+ * Fixed width, full height, its own scroll area for the tree.
+ *
+ * 260px when open. Hidden entirely when closed (rendered null).
+ */
+
+.right-rail {
+  display: flex;
+  flex-direction: column;
+  width: var(--rail-right-w, 260px);
+  flex: 0 0 auto;
+  /* Match the page so the tree reads as a quiet side panel,
+     not a second surface competing with the work area. The
+     divider is faint — the rail is a background layer. */
+  background: var(--bg);
+  border-left: 1px solid var(--border-faint);
+  height: 100%;
+  overflow: hidden;
+}
+
+.right-rail__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  min-height: 32px;
+  flex: 0 0 auto;
+}
+
+.right-rail__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--fg-muted);
+  font-weight: 600;
+}
+
+.right-rail__close {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.right-rail__close:hover {
+  background: var(--ink-hover);
+  color: var(--fg);
+}
+
+.right-rail__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-hover) transparent;
+}
+
+.right-rail__empty {
+  padding: var(--space-3);
+  color: var(--ink-mute);
+  font-size: var(--text-xs);
+  font-style: italic;
+}

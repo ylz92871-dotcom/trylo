@@ -1,0 +1,486 @@
+/* Trylo Desktop — ToolCard (v1.15.8.c).
+ *
+ * Re-style. Cline-inspired:
+ *   - one substantial header row, taller than before
+ *   - status pill on the right (icon + label, in a
+ *     status-colored container)
+ *   - running tools get a brand-color animated border
+ *   - expanded body has generous padding so code /
+ *     output don't touch the card edge
+ *   - tone-based icon (Bash → Terminal, Read → FileText,
+ *     Edit → FileEdit, etc.) so the user can identify
+ *     the tool kind at a glance
+ */
+
+.tool {
+  width: 100%;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  margin: 10px 0;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: var(--bg);
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.tool:hover {
+  border-color: var(--border-strong);
+}
+
+.tool--running {
+  /* v1.16.5+ (spec §7.2): the running card keeps a STATIC
+   * brand border — no loop pulse. The only loop animation
+   * on a running tool is the status Loader spinner below.
+   * Per-phase single-primary: one card, one loader. */
+  border-color: color-mix(in srgb, var(--brand) 34%, var(--border));
+}
+
+.tool--error {
+  border-color: #D96666;
+}
+
+.tool__head {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr auto auto;
+  align-items: center;
+  /* v1.15.9.i: slim down the tool head. The user said
+   * the running tool felt bulky. Reduce padding and
+   * gap; the running border + pulse remain as
+   * "this is currently running" indicators. */
+  gap: 8px;
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--ink-paper);
+  cursor: pointer;
+  width: 100%;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.tool__head:hover {
+  background: var(--ink-hover);
+}
+
+/* v1.15.9.c: when the tool is folded (open === false,
+ * i.e. status === 'done' and the user hasn't clicked
+ * to re-expand), the head row becomes a slim, muted
+ * line. Same 6-column layout, but smaller padding +
+ * muted colors so the "collapsed" state is visually
+ * distinct from the "running" state. The user said
+ * the previous head was "太胖" (too bulky) when
+ * folded — this fix addresses that. */
+.tool__head--collapsed {
+  padding: 4px 16px;
+  gap: 8px;
+  color: var(--ink-fog);
+  font-size: 12.5px;
+}
+
+.tool__head--collapsed .tool__name {
+  color: var(--ink-fog);
+  font-weight: 500;
+}
+
+.tool__head--collapsed .tool__summary {
+  color: var(--ink-mute);
+}
+
+.tool__head--collapsed .tool__time,
+.tool__head--collapsed .tool__status {
+  font-size: 10.5px;
+  padding: 1px 6px;
+}
+
+.tool__head--collapsed:hover {
+  color: var(--ink-paper);
+  background: var(--ink-hover);
+}
+
+.tool__head--collapsed:hover .tool__name,
+.tool__head--collapsed:hover .tool__summary {
+  color: var(--ink-paper);
+}
+
+.tool__chevron {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-mute);
+}
+
+.tool__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* v1.15.9.i: shrink the icon container. The user said
+   * the tool head felt bulky. */
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  flex: 0 0 auto;
+}
+
+/* v1.16.5+ (spec §7.2): the tool icon is STATIC while the
+ * tool runs — the icon rotation was the second of three
+ * loop animations on one card. The status Loader is the
+ * single primary; the brand-colored icon container already
+ * marks "this tool is active". */
+.tool--running .tool__icon {
+  color: var(--brand);
+}
+
+.tool-tone-bash .tool__icon {
+  background: rgba(255, 199, 95, 0.18);
+  color: #ffc75f;
+}
+.tool-tone-fs .tool__icon {
+  background: rgba(110, 191, 235, 0.18);
+  color: #6ebfeb;
+}
+.tool-tone-web .tool__icon {
+  background: rgba(201, 169, 97, 0.18);
+  color: var(--brand);
+}
+.tool-tone-other .tool__icon {
+  background: var(--bg-elevated);
+  color: var(--ink-fog);
+}
+
+.tool__name {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.tool__summary {
+  font-size: 13px;
+  color: var(--ink-fog);
+  font-family: var(--font-body);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.tool__time {
+  font-size: 11px;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tool__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-fog);
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.tool--running .tool__status {
+  background: color-mix(in srgb, var(--brand-soft) 38%, var(--bg-elevated));
+  color: color-mix(in srgb, var(--brand) 64%, var(--ink-fog));
+  border-color: color-mix(in srgb, var(--brand) 38%, var(--border));
+}
+
+.tool--error .tool__status {
+  background: var(--danger-soft, rgba(217, 102, 102, 0.18));
+  color: #D96666;
+  border-color: #D96666;
+}
+
+.tool__status-icon--spin {
+  animation: tool-status-spin 1.2s linear infinite;
+}
+
+@keyframes tool-status-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.tool__body {
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+  padding: 12px 16px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tool__row-block {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 13px;
+}
+
+.tool__row-key {
+  flex: 0 0 64px;
+  color: var(--ink-mute);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding-top: 3px;
+}
+
+.tool__row-value {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tool__row-extra {
+  color: var(--ink-mute);
+  font-size: 11px;
+  margin-left: 6px;
+}
+
+.tool__code {
+  margin: 0;
+  padding: 10px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ink-paper);
+  background: var(--bg);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.tool__code--err {
+  color: #D96666;
+  border-color: #D96666;
+}
+
+.tool__code--bash {
+  white-space: pre-wrap;
+}
+
+.tool__code--json {
+  font-size: 12px;
+}
+
+.tool__inline {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  color: var(--brand);
+}
+
+.tool__muted {
+  color: var(--ink-mute);
+}
+
+.tool__diff {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 0;
+  overflow-x: auto;
+}
+
+.tool__diff-old,
+.tool__diff-new {
+  margin: 0;
+  padding: 0 14px;
+}
+
+.tool__diff-line {
+  white-space: pre;
+}
+
+.tool__diff-line--del {
+  color: #D96666;
+  background: var(--danger-soft, rgba(217, 102, 102, 0.12));
+}
+
+.tool__diff-line--add {
+  color: var(--success, #6ebf7b);
+  background: rgba(110, 191, 123, 0.12);
+}
+
+/* ── PR-4 (spec §7.2): structured tool-result blocks ────────────────── */
+
+.tool__result-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tool__result-image {
+  margin: 0;
+  max-width: 420px;
+}
+
+.tool__result-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 260px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.tool__result-audio audio {
+  width: 100%;
+  max-width: 420px;
+}
+
+.tool__result-ref {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink-mute);
+}
+
+.tool__result-ref-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.tool__result-ref-body .tool__code {
+  width: 100%;
+}
+
+.tool__result-ref-name {
+  color: var(--ink-paper);
+  font-size: 12.5px;
+  word-break: break-all;
+}
+
+.tool__result-ref-meta {
+  color: var(--ink-mute);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.tool__result-expired {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--ink-mute);
+  font-size: 12px;
+}
+
+.tool__result-structured {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.tool__result-structured-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-mute);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.tool__result-structured-head:hover {
+  color: var(--ink-paper);
+}
+
+.tool__result-structured pre {
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+}
+
+/* ── PR-3/PR-4 收口: runtime-artifact promote + resource 「打开」 ────── */
+
+.tool__promote-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tool__promote-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tool__promote {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-mute);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tool__promote:hover:not(:disabled) {
+  color: var(--ink-paper);
+  border-color: var(--ink-mute);
+}
+
+.tool__promote:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.tool__promote-name {
+  color: var(--ink-mute);
+  font-size: 11px;
+  word-break: break-all;
+  min-width: 0;
+}
+
+.tool__promote-error {
+  color: var(--danger, #D96666);
+  font-size: 11px;
+}
+
+.tool__result-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}

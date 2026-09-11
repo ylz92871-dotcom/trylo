@@ -1,0 +1,69 @@
+/* Trylo Desktop — AppShell layout.
+ *
+ * A flex row: left rail (collapsible) | main (chat) | right
+ * rail (toggleable file tree) | file peek / git diff. The
+ * left and right rails are fixed-width; the main column
+ * flexes to fill. v1.17 adds the right rail for the file tree
+ * (moved out of the left rail), so the body is now a flex row
+ * rather than a 3-column grid — easier to toggle the right
+ * rail without recalculating grid tracks.
+ */
+
+.app-shell {
+  display: grid;
+  grid-template-rows: var(--top-bar-h) 1fr;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.app-shell__body {
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: row;
+}
+
+.app-shell__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── Rail resizers (draggable splitters) ───────────── */
+.rail-resizer {
+  flex: 0 0 auto;
+  width: 5px;
+  align-self: stretch;
+  cursor: col-resize;
+  position: relative;
+  z-index: 6;
+  background: transparent;
+  touch-action: none;
+}
+
+.rail-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  background: transparent;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.rail-resizer:hover::after,
+.rail-resizer--dragging::after {
+  background: var(--brand);
+}
+
+.rail-resizer--right {
+  /* sits to the left of the right rail; nudge the line to its right edge */
+  margin-right: -1px;
+}

@@ -1,0 +1,44 @@
+/* Trylo Desktop — Monaco editor styles.
+
+.monaco-editor-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+}
+
+.monaco-editor-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* Status overlay rendered while init is running or after a failure.
+ * The container underneath is sized but empty; once Monaco's
+ * `editor.create` resolves, we hide the overlay so the editor
+ * has the full area. */
+.monaco-editor-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--fg-muted);
+  font-size: 0.9rem;
+  background: var(--bg);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.monaco-editor-status pre {
+  max-width: 80%;
+  white-space: pre-wrap;
+  text-align: left;
+  font-size: 0.8rem;
+  color: #d96666;
+  background: rgba(217, 102, 102, 0.08);
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  pointer-events: auto;
+}

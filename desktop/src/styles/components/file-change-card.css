@@ -1,0 +1,258 @@
+/* Trylo Desktop — FileChangeCard.
+ *
+ * IDE source-control-style card for file-mutating tools (Edit / MultiEdit /
+ * Write / NotebookEdit): project name + workspace-relative path in the
+ * header, green "+N" / red "-N" badges, expandable line diff. Mirrors the
+ * ToolCard geometry so it reads as the same surface family.
+ */
+
+.fchange {
+  width: 100%;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  margin: 10px 0;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: var(--bg);
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.fchange:hover {
+  border-color: var(--border-strong);
+}
+
+.fchange--running {
+  border-color: color-mix(in srgb, var(--brand) 34%, var(--border));
+}
+
+.fchange--error {
+  border-color: var(--danger, #e57373);
+}
+
+.fchange__head {
+  display: grid;
+  grid-template-columns: auto auto auto minmax(60px, 1fr) auto auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--ink-paper);
+  cursor: pointer;
+  width: 100%;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.fchange__head:hover {
+  background: var(--ink-hover);
+}
+
+.fchange__head--collapsed {
+  padding: 4px 16px;
+  gap: 8px;
+  color: var(--ink-fog);
+  font-size: 12.5px;
+}
+
+.fchange__head--collapsed:hover {
+  color: var(--ink-paper);
+  background: var(--ink-hover);
+}
+
+.fchange__chevron {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-mute);
+}
+
+.fchange__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: rgba(110, 191, 235, 0.18);
+  color: #6ebfeb;
+  flex: 0 0 auto;
+}
+
+.fchange--running .fchange__icon {
+  color: var(--brand);
+}
+
+/* Project chip — the "edited project name", IDE SCM style. */
+.fchange__project {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border-radius: 4px;
+  padding: 1px 7px;
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fchange__head--collapsed .fchange__project {
+  color: var(--ink-fog);
+  background: var(--bg-elevated);
+}
+
+.fchange__path {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fchange__dir {
+  color: var(--ink-mute);
+  font-size: 12px;
+}
+
+.fchange__file {
+  color: var(--ink-paper);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.fchange__head--collapsed .fchange__file,
+.fchange__head--collapsed .fchange__dir {
+  color: var(--ink-fog);
+  font-weight: 500;
+}
+
+.fchange__newtag {
+  font-family: var(--font-body);
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--success, #6ebf7b);
+  border: 1px solid color-mix(in srgb, var(--success, #6ebf7b) 45%, transparent);
+  border-radius: 4px;
+  padding: 0 4px;
+  line-height: 1.5;
+  flex: 0 0 auto;
+}
+
+/* +N / -N badges. */
+.fchange__stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.fchange__add {
+  color: var(--success, #56d6a0);
+}
+
+.fchange__del {
+  color: var(--danger, #ff6f78);
+}
+
+.fchange__time {
+  font-size: 11px;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fchange__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-family: var(--font-body);
+  color: var(--ink-fog);
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.fchange__status-icon--spin {
+  animation: fchange-spin 0.9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fchange__status-icon--spin { animation: none; }
+}
+
+@keyframes fchange-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Expanded diff body ─────────────────────────────────────────────── */
+
+.fchange__body {
+  padding: 0 14px 12px;
+}
+
+.fchange__diff {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 0;
+  overflow-x: auto;
+}
+
+.fchange__diff-line {
+  display: flex;
+  white-space: pre;
+  padding: 0 10px;
+}
+
+.fchange__diff-gutter {
+  flex: 0 0 auto;
+  width: 16px;
+  text-align: center;
+  user-select: none;
+  opacity: 0.7;
+}
+
+.fchange__diff-text {
+  min-width: 0;
+}
+
+.fchange__diff-line--add {
+  color: var(--success, #6ebf7b);
+  background: rgba(110, 191, 123, 0.12);
+}
+
+.fchange__diff-line--del {
+  color: var(--danger, #e57373);
+  background: var(--danger-soft, rgba(229, 115, 115, 0.12));
+}
+
+.fchange__diff-line--context {
+  color: var(--ink-mute);
+}
+
+.fchange__diff-more {
+  padding: 4px 10px;
+  color: var(--ink-mute);
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  font-style: italic;
+}

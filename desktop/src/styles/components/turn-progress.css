@@ -1,0 +1,61 @@
+/* Trylo Desktop — TurnProgress (v1.15.9 → v1.16.4.1).
+ *
+ * v1.15.9: new. Single-row indicator above the first
+ * thinking card of the active turn. Trilo logo +
+ * elapsed time. Replaces the rotating Sparkles icon
+ * that used to live inside ThinkingCard.
+ *
+ * v1.16.4.1: moved from ThinkingCard to the user
+ * message row. Now appears the MOMENT the user sends
+ * (not just when thinking arrives). The --spin
+ * modifier is on only when the turn is still active
+ * AND no finalElapsedMs yet — see TurnProgress.tsx
+ * for the logic. */
+
+.turn-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0 6px 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-fog);
+  font-variant-numeric: tabular-nums;
+}
+
+.turn-progress__logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+/* v1.16.4.1: the spin animation is a modifier class.
+   Default state (no modifier) is a static logo —
+   used when the row is frozen (after the first model
+   output) or when the turn is no longer the active
+   one. Only the active + unfrozen turn spins. */
+.turn-progress__logo--spin {
+  animation: turn-progress-rotate 3.6s linear infinite;
+}
+
+@keyframes turn-progress-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.turn-progress__timer {
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn-progress__logo--spin {
+    animation: none;
+  }
+}

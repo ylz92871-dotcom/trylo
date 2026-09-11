@@ -1,0 +1,352 @@
+/* Trylo Desktop — User Cognition standalone surface.
+ *
+ * Renders the Person surface's main column while a cognition session is
+ * open (not a third Code/Work tab, not agent-run cards). Only tokens.css
+ * variables are used. Visual family stays close to the existing
+ * cognition-card (soft brand accents, mono kicker) but as an independent
+ * thread container instead of inline timeline cards.
+ */
+
+.cognition-surface {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+}
+
+.cognition-surface__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.cognition-surface__title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.cognition-surface__kicker {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--brand);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cognition-surface__state {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.cognition-surface__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+}
+
+.cognition-surface__primary,
+.cognition-surface__ghost {
+  appearance: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.cognition-surface__primary {
+  background: var(--brand);
+  border: 1px solid var(--brand);
+  color: var(--brand-inverse, #fff);
+  font-weight: 600;
+}
+
+.cognition-surface__primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cognition-surface__primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.cognition-surface__ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+}
+
+.cognition-surface__ghost:hover {
+  background: var(--ink-hover);
+  color: var(--fg);
+}
+
+/* Thread */
+.cognition-surface__thread {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.cognition-turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Answered turns recede so the current question stays in focus. */
+.cognition-turn--answered .cognition-bubble {
+  opacity: 0.62;
+}
+
+.cognition-bubble {
+  position: relative;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  max-width: 88%;
+}
+
+.cognition-bubble--question {
+  margin-right: auto;
+}
+
+.cognition-bubble--answer {
+  margin-left: auto;
+  /* Match the established message user-bubble background
+     (message.css .message--user .message__bubble uses --bg-elevated)
+     so the right-aligned "speaker" surface reads consistently
+     across Code / Work / Cognition. */
+  background: var(--bg-elevated);
+}
+
+.cognition-bubble__tag {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: var(--space-1);
+}
+
+.cognition-bubble p {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Active question + composer */
+.cognition-ask {
+  flex: 0 0 auto;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 var(--space-5) var(--space-4);
+}
+
+.cognition-ask__prompt {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  color: var(--fg);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--brand);
+  background-image: linear-gradient(
+    90deg,
+    var(--brand-soft) 0%,
+    transparent 42%
+  );
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+  white-space: pre-wrap;
+}
+
+.cognition-ask__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.cognition-ask__option {
+  appearance: none;
+  background: var(--ink-elevated);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  border-radius: var(--radius-pill);
+  padding: 5px 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cognition-ask__option:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.cognition-ask__input,
+.cognition-confirm {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--fg);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  resize: vertical;
+}
+
+.cognition-ask__input:focus {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.cognition-ask__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+/* Scope confirmation */
+.cognition-confirm {
+  flex: 0 0 auto;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.cognition-confirm__prompt {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  color: var(--fg);
+  white-space: pre-wrap;
+}
+
+.cognition-confirm__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* End state */
+.cognition-surface__end {
+  flex: 1 1 auto;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.cognition-surface__end p {
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+/* History panel */
+.cognition-history {
+  flex: 0 0 auto;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 var(--space-5);
+}
+
+.cognition-history__hint {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin: 0 0 var(--space-2);
+}
+
+.cognition-history__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cognition-history__item {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  color: var(--fg);
+  font-family: var(--font-body);
+}
+
+.cognition-history__item:hover {
+  border-color: var(--brand);
+  background: var(--ink-hover);
+}
+
+.cognition-history__item.is-active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.cognition-history__dim {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.cognition-history__meta {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}

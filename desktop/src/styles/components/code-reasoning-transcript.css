@@ -1,0 +1,200 @@
+/* Trylo Code — one readable reasoning document, not a pile of event cards. */
+
+.code-reasoning {
+  width: 100%;
+  margin: 3px 0 7px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.code-reasoning--active {
+  padding-left: 9px;
+  border-left: 1px solid color-mix(in srgb, var(--brand) 17%, var(--border));
+}
+
+.code-reasoning__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 6px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-paper);
+  text-align: left;
+  cursor: pointer;
+}
+
+.code-reasoning__head:hover {
+  color: var(--ink-paper);
+}
+
+/* A finished tool block collapsed to a quiet history row. It must sit a
+ * tier below the thinking summary so it stops competing for attention —
+ * the active row stays bright so the user can still follow the live run. */
+.code-reasoning--tools:not(.code-reasoning--active) .code-reasoning__summary {
+  color: var(--ink-fog);
+}
+
+.code-reasoning--tools:not(.code-reasoning--active) .code-reasoning__head:hover .code-reasoning__summary {
+  color: var(--ink-paper);
+}
+
+.code-reasoning__head:focus-visible {
+  outline: 0;
+  box-shadow: inset 2px 0 color-mix(in srgb, var(--brand) 45%, var(--border));
+}
+
+.code-reasoning__state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 0;
+  color: var(--ink-fog);
+  background: transparent;
+}
+
+.code-reasoning--active .code-reasoning__state {
+  color: color-mix(in srgb, var(--brand) 58%, var(--ink-fog));
+  background: transparent;
+}
+
+.code-reasoning--active .code-reasoning__state svg {
+  animation: code-reasoning-spin 1.4s linear infinite;
+}
+
+@keyframes code-reasoning-spin {
+  to { transform: rotate(360deg); }
+}
+
+.code-reasoning__summary {
+  overflow: hidden;
+  color: var(--ink-paper);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 520;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code-reasoning__meta {
+  color: var(--ink-mute);
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.code-reasoning__transcript {
+  padding: 1px 4px 10px 27px;
+  border-top: 0;
+}
+
+.code-reasoning__tool-group {
+  max-width: 76ch;
+  padding: 5px 0 4px 18px;
+  border-left: 1px solid var(--border-strong);
+}
+
+.code-reasoning__tool-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-mute);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.code-reasoning__tool-summary:hover {
+  color: var(--ink-paper);
+  background: var(--ink-hover);
+}
+
+.code-reasoning__tool-list {
+  padding-top: 4px;
+}
+
+.code-reasoning__passage {
+  position: relative;
+  max-width: 72ch;
+  padding: 14px 0 13px 18px;
+  border-left: 1px solid var(--border-strong);
+}
+
+.code-reasoning__passage::before {
+  position: absolute;
+  top: 20px;
+  left: -3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink-mute);
+  content: '';
+}
+
+.code-reasoning__passage-label {
+  margin-bottom: 6px;
+  color: var(--ink-mute);
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  letter-spacing: 0.035em;
+}
+
+.code-reasoning__passage-text {
+  color: color-mix(in srgb, var(--ink-paper) 88%, var(--ink-fog));
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.68;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.code-reasoning__tool {
+  max-width: 76ch;
+  padding: 2px 0 3px 18px;
+  border-left: 1px solid var(--border-strong);
+}
+
+.code-reasoning__tool .tool {
+  margin: 2px 0;
+}
+
+/* Finished tools read as quiet transcript rows. Their details remain one
+ * click away, but a completed run no longer looks like nested card stacks. */
+.code-reasoning__tool .tool:not(.tool--running):not(.tool--error) {
+  border-color: transparent;
+  background: transparent;
+}
+
+.code-reasoning__tool .tool:not(.tool--running):not(.tool--error):hover {
+  border-color: color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.code-reasoning__tool .tool:not(.tool--running):not(.tool--error) .tool__head--collapsed {
+  padding-inline: 6px;
+}
+
+.code-reasoning__tool .tool:not(.tool--running):not(.tool--error) .tool__body {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+@media (max-width: 720px) {
+  .code-reasoning__meta { display: none; }
+  .code-reasoning__transcript { padding-left: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .code-reasoning--active .code-reasoning__state svg { animation: none; }
+}

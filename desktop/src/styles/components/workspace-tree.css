@@ -1,0 +1,177 @@
+/* Trylo Desktop — WorkspaceTree.
+ *
+ * v1.15.6: added a root-level toggle (Files ▾/▸) that
+ * collapses the whole tree, and a refresh button. Brighter
+ * name color so files are visible against the dark rail.
+ */
+
+.workspace-tree {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-paper);
+  padding: 4px 0 8px 0;
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+}
+
+.workspace-tree__root {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 4px 4px;
+}
+
+.workspace-tree__root-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  font-family: inherit;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+}
+
+.workspace-tree__root-toggle:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.workspace-tree__root-chev {
+  width: 12px;
+  text-align: center;
+  /* Neutral — gold is reserved for active / modified state. */
+  color: var(--fg-muted);
+}
+
+.workspace-tree__refresh {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  width: 22px;
+  height: 22px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+}
+
+.workspace-tree__refresh:hover {
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.workspace-tree__error {
+  margin: 4px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+}
+
+.workspace-tree__error-msg {
+  font-family: var(--font-mono);
+  word-break: break-word;
+}
+
+.workspace-tree__error-path {
+  color: var(--ink-fog);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+
+.workspace-tree__list,
+.tree-node__children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tree-node {
+  list-style: none;
+}
+
+.tree-node__row {
+  display: grid;
+  grid-template-columns: 16px 16px 1fr;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 12px;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-node__row:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink-paper);
+}
+
+.tree-node__chevron {
+  width: 12px;
+  text-align: center;
+  color: var(--ink-mute);
+  font-size: 10px;
+}
+
+.tree-node__icon {
+  width: 14px;
+  text-align: center;
+  color: var(--ink-fog);
+}
+
+.tree-node__icon--dir {
+  color: var(--fg-muted);
+}
+
+.tree-node__name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink-paper);
+  font-weight: 400;
+}
+
+.tree-node__children {
+  margin-left: 12px;
+  border-left: 1px dashed var(--border);
+}
+
+.tree-node__loading,
+.tree-node__error,
+.workspace-tree__error,
+.workspace-tree__empty {
+  padding: 2px 8px 2px 28px;
+  color: var(--ink-mute);
+  font-style: italic;
+  font-size: 11px;
+}
+
+.tree-node__error,
+.workspace-tree__error {
+  color: var(--danger);
+}

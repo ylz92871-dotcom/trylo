@@ -1,0 +1,14 @@
+Trylo
+Copyright 2026 the Trylo authors
+
+This product includes software developed as part of the Trylo project.
+
+Third-party components bundled or referenced by this repository:
+
+* ripgrep (runtime tooling) — MIT License — Copyright (c) 2015 Andrew Gallant
+  (referenced components are distributed with the separately installed agent
+  runtime; see docs/ for details)
+
+The Trylo desktop client is designed to drive a locally installed agent
+runtime (Claude Code). That runtime is not part of this repository and is
+governed by its own license and terms of use.

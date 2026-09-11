@@ -1,0 +1,187 @@
+/* Trylo Desktop — TaskHeader (v1.15.8.b).
+ *
+ * v1.15.8.b: replaced the static dot with a brand-color
+ * status pill. While running/thinking, the pill pulses
+ * (the user can see the agent is actively doing work);
+ * when done, the pill settles to a steady brand tint.
+ */
+
+.task-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 var(--space-4);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-paper);
+  flex: 0 0 auto;
+}
+
+.task-header__status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.task-header--thinking .task-header__status-pill,
+.task-header--tool .task-header__status-pill {
+  /* v1.15.8.b: while running, the pill pulses in the
+   * brand color so the user can see the agent is
+   * actively doing work — not a spinner, a soft glow. */
+  animation: task-header-pulse 1.6s ease-in-out infinite;
+}
+
+.task-header--done .task-header__status-pill {
+  /* Steady tint when finished. */
+  background: var(--brand-soft);
+  color: var(--brand);
+  animation: none;
+}
+
+.task-header--error .task-header__status-pill {
+  background: var(--danger-soft, rgba(229, 115, 115, 0.18));
+  color: var(--danger, #e57373);
+  animation: none;
+}
+
+@keyframes task-header-pulse {
+  0%, 100% { opacity: 0.65; box-shadow: 0 0 0 0 var(--brand); }
+  50%      { opacity: 1;    box-shadow: 0 0 0 4px transparent; }
+}
+
+.task-header__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--ink-paper);
+}
+
+.task-header__icon--dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brand);
+}
+
+.task-header__icon--spin {
+  animation: task-header-spin 1s linear infinite;
+}
+
+@keyframes task-header-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.task-header--thinking .task-header__icon {
+  color: var(--brand);
+}
+
+.task-header--thinking .task-header__icon--dot {
+  background: var(--brand-100);
+}
+
+.task-header--tool .task-header__icon {
+  color: var(--brand);
+}
+
+.task-header--done .task-header__icon {
+  color: var(--success, #6ebf7b);
+}
+
+.task-header--error .task-header__icon {
+  color: var(--danger, #e57373);
+}
+
+.task-header__status {
+  color: var(--ink-paper);
+  font-weight: 500;
+}
+
+.task-header--thinking .task-header__status {
+  /* shimmer effect on the status text while thinking */
+  background: linear-gradient(
+    90deg,
+    var(--ink-paper) 0%,
+    var(--brand) 50%,
+    var(--ink-paper) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: task-header-shimmer 2s linear infinite;
+}
+
+@keyframes task-header-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+.task-header__sep {
+  color: var(--ink-mute);
+  font-size: 11px;
+}
+
+.task-header__tool {
+  color: var(--brand);
+  font-weight: 500;
+  font-family: var(--font-body);
+}
+
+.task-header__timer {
+  color: var(--ink-fog);
+  font-variant-numeric: tabular-nums;
+}
+
+.task-header__workspace {
+  color: var(--ink-fog);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+  margin-left: auto;
+  /* The stop button is positioned after this; we use
+   * margin-left: auto above to push everything before
+   * the workspace left, then the workspace + stop are
+   * right-aligned naturally. */
+}
+
+.task-header__stop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+  margin-left: 4px;
+}
+
+.task-header__stop:hover {
+  background: var(--danger-soft, rgba(229, 115, 115, 0.18));
+  color: var(--danger, #e57373);
+  border-color: var(--danger, #e57373);
+}

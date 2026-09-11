@@ -1,0 +1,6 @@
+{"type":"system","subtype":"init","session_id":"fixture-pr4","model":"fixture","tools":["mcp__trylo-browser__browser_take_screenshot"]}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_img","name":"mcp__trylo-browser__browser_take_screenshot","input":{"url":"https://example.com/"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_img","content":[{"type":"text","text":"Screenshot taken."},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="}}]}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_link","content":[{"type":"resource_link","uri":"file:///tmp/page.html","name":"page.html","mimeType":"text/html","description":"saved page"}]}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_struct","content":[{"type":"text","text":"rows: 7"}]}],"mcpMeta":{"structuredContent":{"rows":7,"source":"fixture"},"_meta":{"server":"trylo-browser"}}}}
+{"type":"result","subtype":"success","stop_reason":"end_turn","num_turns":2,"total_cost_usd":0,"duration_ms":1000,"result":"done"}

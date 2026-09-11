@@ -1,0 +1,640 @@
+/* Trylo Desktop — LeftRail.
+ *
+ * v1.17 — CodeBuddy-style single navigation column.
+ * 240px expanded / 64px collapsed.
+ *
+ * 2026-08-29 refinement pass — "Sidebar as a navigation
+ * background layer, not a control panel":
+ *   * panel background dropped to the page color so the rail
+ *     disappears into the canvas; only the 1px divider and
+ *     its contents give it edge.
+ *   * workspace rows: transparent → faint grey on hover →
+ *     faint warm-grey when active. Gold survives only as the
+ *     small status dot.
+ *   * the big "New session" block is gone; its + now lives
+ *     inline at the right of the active workspace row.
+ *   * session selection is a 2px gold inset + a 4%-white
+ *     wash, never a brand fill.
+ *   * less rounding, lighter dividers, neutral kind badges.
+ */
+
+.left-rail {
+  display: flex;
+  flex-direction: column;
+  width: var(--rail-left-w);
+  /* Keep the rail quiet, but give it a clear (still light) divider
+     so the workspace tree reads as a distinct navigation column
+     next to the work area — present, not shouting. */
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  height: 100%;
+  overflow: hidden;
+  transition: width var(--duration-base) var(--ease-out);
+}
+
+.left-rail--collapsed {
+  width: var(--rail-left-w-collapsed);
+}
+
+/* ── Collapsed: just the toggle ─────────────────────── */
+.left-rail--collapsed .left-rail__collapse {
+  margin: var(--space-3) auto;
+}
+
+/* ── Header (toggle only in expanded) ──────────────── */
+.left-rail__header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: none;
+  min-height: 32px;
+}
+
+.left-rail__collapse {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.left-rail__collapse:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--fg);
+}
+
+/* ── Section: Workspaces (the only section) ────────── */
+.left-rail__section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.left-rail__section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-2) var(--space-3) var(--space-1) var(--space-4);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-mute);
+  font-weight: 500;
+  flex: 0 0 auto;
+}
+
+.left-rail__workspaces {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-hover) transparent;
+}
+
+/* ── Workspace node (project) ──────────────────────── */
+.workspace-node {
+  position: relative;
+}
+
+.workspace-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px var(--space-2) 2px var(--space-3);
+  border-radius: 3px;
+  margin: 0 var(--space-1);
+}
+
+.workspace-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Active project: a faint neutral wash (no yellow block) — just
+   enough to land the eye on the current project. Gold survives
+   solely as the small status dot. */
+.workspace-node--active > .workspace-item {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.workspace-item__chev {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: var(--fg-muted);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.workspace-item__row:hover .workspace-item__chev {
+  color: var(--fg);
+}
+
+.workspace-item__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  text-align: left;
+  overflow: hidden;
+}
+
+/* Typography hierarchy: idle workspaces read fainter; the
+   active project is brighter + heavier, so the eye lands on
+   the current project without a heavy background block. */
+.workspace-item__name {
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Active project reads a touch brighter + heavier — gold
+   now lives only in the small status dot, not the label. */
+.workspace-node--active .workspace-item__name {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.workspace-item__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-mute);
+  flex: 0 0 auto;
+}
+
+.workspace-item__dot--active {
+  background: var(--brand);
+}
+
+/* Inline + — the only new-session affordance now. Faint
+   at rest, brightens on row hover. Replaces the old
+   full-width "New session" block. */
+.workspace-item__new {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.45;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out);
+}
+
+.workspace-item:hover .workspace-item__new,
+.workspace-item__new:focus-visible {
+  opacity: 1;
+}
+
+.workspace-item__new:hover {
+  color: var(--brand);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.workspace-item__close {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  flex: 0 0 auto;
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.workspace-item:hover .workspace-item__close {
+  opacity: 1;
+}
+
+.workspace-item__close:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* ── Nested sessions under the active project ──────── */
+.workspace-node__children {
+  display: flex;
+  flex-direction: column;
+  padding-left: calc(var(--space-4) + 4px);
+  position: relative;
+}
+
+/* subtle indent guide line */
+.workspace-node__children::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--space-4) + 3px);
+  top: 0;
+  bottom: 6px;
+  width: 1px;
+  background: var(--border);
+}
+
+/* ── Add workspace (bottom) ─────────────────────────── */
+.left-rail__add-workspace {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: var(--space-2) var(--space-2) var(--space-3) var(--space-3);
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.left-rail__add-workspace:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--fg);
+}
+
+.left-rail__sessions {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+  max-height: 52vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-hover) transparent;
+}
+
+/* 2026-09-06: archived sessions live under a separate disclosure so the
+ * scroll-bounded active list stays tall instead of being squeezed by
+ * rows the user explicitly hid. */
+.left-rail__sessions--archived {
+  max-height: none;
+  margin: 0 0 4px 0;
+  padding: 2px 0 0 0;
+}
+
+/* Visible scrollbar so the history list is obviously scrollable. */
+.left-rail__sessions::-webkit-scrollbar,
+.left-rail__workspaces::-webkit-scrollbar {
+  width: 8px;
+}
+
+.left-rail__sessions::-webkit-scrollbar-thumb,
+.left-rail__workspaces::-webkit-scrollbar-thumb {
+  background: var(--ink-hover);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  border-block: 6px solid transparent;
+  background-clip: padding-box;
+}
+
+.left-rail__sessions::-webkit-scrollbar-thumb:hover,
+.left-rail__workspaces::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-mute);
+  background-clip: padding-box;
+}
+
+.left-rail__sessions::-webkit-scrollbar-track,
+.left-rail__workspaces::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.left-rail__empty {
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+  color: var(--ink-mute);
+  font-size: var(--text-xs);
+  font-style: italic;
+}
+
+/* ── Session row (single-line, minimal) ───────────────── */
+.session-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px var(--space-2);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+  user-select: none;
+  min-width: 0;
+}
+
+.session-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Light selection: a 2px gold indicator + a 4% white wash.
+   No brand fill, so the sidebar never out-shouts the hero. */
+.session-row--active {
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 2px 0 0 var(--mode-accent, var(--brand));
+}
+
+.session-row--active:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Tiny kind badge — 2026-09-06 redesign: a real SVG icon (Code2 /
+   Briefcase) instead of the rounded "C" / "W" tile. The tile read as
+   half-typed letter spacing; the icon reads as a clear product mark.
+   No gold fill — the kind mark is structural, not a brand surface. */
+.session-row__kind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  flex: 0 0 auto;
+  color: var(--fg-muted);
+  background: transparent;
+}
+
+/* Per-kind accent — kept as the only colour difference between Code /
+   Work, so the row still reads at a glance without shouting. The hue
+   is muted (40% mix with the ink token) so the row stays neutral at
+   rest and only blooms when active. */
+.session-row__kind--code {
+  color: color-mix(in srgb, var(--fg) 65%, var(--accent-code, #7aa2f7));
+}
+.session-row__kind--work {
+  color: color-mix(in srgb, var(--fg) 65%, var(--accent-work, #d7a86e));
+}
+.session-row--active .session-row__kind {
+  background: rgba(255, 255, 255, 0.04);
+}
+.session-row--active .session-row__kind--code {
+  color: var(--accent-code, #7aa2f7);
+}
+.session-row--active .session-row__kind--work {
+  color: var(--accent-work, #d7a86e);
+}
+/* Archived rows mute the kind icon so the disclosure reads as a
+   separate, lighter region. */
+.session-row__kind--archived {
+  opacity: 0.45;
+}
+
+.session-row__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-row--active .session-row__title {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+/* Running spinner and delete button sit in the trailing slot. */
+.session-row .spinner {
+  flex: 0 0 auto;
+}
+
+/* Foundation spec §10.6: muted `Team` mark at the row end. 11px text,
+ * --ink-mute; --brand when the conversation has a live run. No pill,
+ * no border, no new conversation kind. */
+.session-row__team-mark {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+
+.session-row__team-mark--active {
+  color: var(--brand);
+}
+
+.session-row__delete {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  font-size: 13px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.session-row:hover .session-row__delete,
+.session-row:focus-within .session-row__delete {
+  opacity: 1;
+}
+
+.session-row__delete:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* 2026-09-06: shared action cluster for rename / archive / delete.
+   Each action is its own 18×18 button so the hit-area stays
+   unambiguous (the whole row is clickable for select). The
+   archive-restore action reuses these geometry rules but with a
+   positive accent colour. */
+.session-row__action {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.session-row:hover .session-row__action,
+.session-row:focus-within .session-row__action {
+  opacity: 1;
+}
+
+.session-row__action:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--fg);
+}
+
+/* Danger actions get the danger palette only on hover so a
+   glance at the rail still feels neutral. */
+.session-row__action--delete:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.session-row__action--archive:hover {
+  background: rgba(215, 168, 110, 0.15);
+  color: var(--accent-work, #d7a86e);
+}
+.session-row__action--unarchive:hover {
+  background: rgba(122, 162, 247, 0.15);
+  color: var(--accent-code, #7aa2f7);
+}
+
+/* 2026-09-06: inline rename input. A flat, no-border text field
+   that fills the title slot and adopts the same font / colour so
+   the row's silhouette doesn't shift while editing. */
+.session-row__rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 20px;
+  padding: 0 4px;
+  margin: 0;
+  border: 1px solid var(--accent-code, #7aa2f7);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  outline: none;
+}
+.session-row__rename-input:focus-visible {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.06);
+}
+
+/* 2026-09-06: archived-row style — slightly muted title / kind
+   so the archived disclosure reads as a clearly separate, "held
+   aside" region without losing legibility. */
+.session-row--archived {
+  opacity: 0.82;
+}
+.session-row--archived .session-row__title {
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-mute);
+  text-decoration-thickness: 1px;
+}
+
+/* 2026-09-06: Archived disclosure. Sits below the active list,
+   collapsed by default. The chevron + archive-icon + count layout
+   matches the workspace-item row, so it doesn't read as foreign. */
+.archived-section {
+  margin: 0;
+  padding: 4px 0 6px 0;
+  border-top: 1px dashed var(--border);
+}
+
+.archived-section__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px var(--space-2) 4px var(--space-3);
+  margin: 4px var(--space-1) 2px var(--space-1);
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: var(--ink-mute);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.archived-section__toggle:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--fg);
+}
+
+.archived-section__toggle:focus-visible {
+  outline: none;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.archived-section__chev {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+}
+
+.archived-section__count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-mute);
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.archived-section__toggle:hover .archived-section__count {
+  background: rgba(255, 255, 255, 0.07);
+}

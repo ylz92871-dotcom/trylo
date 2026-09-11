@@ -1,0 +1,54 @@
+/* Trylo Desktop — Person/Team surface host.
+ *
+ * The Team surface takes the main column when
+ * `collaborationSurface === 'team'`. It is sized exactly like the
+ * ChatPanel it replaces so the TopBar / left rail / right rail do
+ * not have to know whether the column is showing Person or Team.
+ *
+ * Foundation spec §10.5: there is no bottom chrome — the body is the
+ * whole column.
+ */
+
+.team-surface {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+  /* Reuse the lamp-glow signature from chat-panel. */
+  isolation: isolate;
+}
+
+.team-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: var(--lamp-glow-on, 0);
+  background: radial-gradient(
+    ellipse 70% 55% at 50% 30%,
+    var(--lamp-warm-glow) 0%,
+    rgba(232, 225, 208, 0.02) 45%,
+    transparent 75%
+  );
+}
+
+.team-surface__body {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-5) var(--space-6);
+}
+
+/* Reduce body padding when a seat is selected so the detail page can
+ * breathe — but keep it >= space-4 so the cards never touch the rail. */
+@media (min-width: 1200px) {
+  .team-surface__body {
+    padding: var(--space-6) var(--space-8);
+  }
+}

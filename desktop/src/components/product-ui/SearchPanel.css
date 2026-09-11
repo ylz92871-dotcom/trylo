@@ -1,0 +1,133 @@
+/* Trylo Desktop — SearchPanel styles. See the architecture doc §3 Phase 1
+   Week 2 Day 2. */
+
+.search-panel {
+  width: 360px;
+  flex: 0 0 360px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.search-panel-input {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.search-panel-input input {
+  flex: 1 1 auto;
+  font: inherit;
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  color: var(--fg);
+  padding: 0.25rem 0.5rem;
+}
+
+.search-panel-input input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.search-panel-input button {
+  font: inherit;
+  font-size: 0.8rem;
+  background: var(--accent);
+  color: #1a1a1a;
+  border: none;
+  border-radius: 3px;
+  padding: 0.25rem 0.75rem;
+  cursor: pointer;
+}
+
+.search-panel-input button:disabled {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--fg-muted);
+  cursor: not-allowed;
+}
+
+.search-panel-toggles {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+}
+
+.search-panel-toggles label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+}
+
+.search-panel-toggles input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.search-panel-error {
+  padding: 0.5rem 0.75rem;
+  color: #d96666;
+  font-size: 0.8rem;
+}
+
+.search-panel-meta {
+  padding: 0.4rem 0.75rem;
+  color: var(--fg-muted);
+  font-size: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.search-panel-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+
+.search-panel-result {
+  display: grid;
+  grid-template-columns: 4ch 1fr;
+  gap: 0.25rem 0.5rem;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+
+.search-panel-result:hover,
+.search-panel-result:focus-visible {
+  background: rgba(255, 255, 255, 0.05);
+  outline: none;
+}
+
+.search-panel-line {
+  color: var(--fg-muted);
+  text-align: right;
+}
+
+.search-panel-path {
+  grid-column: 1 / span 2;
+  color: var(--accent);
+  font-size: 0.7rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-panel-content {
+  grid-column: 2;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

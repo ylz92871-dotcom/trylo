@@ -1,0 +1,34 @@
+/* Trylo Desktop — StatusBar styles.
+   Week 1 Day 3. */
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  height: 1.5rem;
+  padding: 0 0.5rem;
+  background: rgba(0, 0, 0, 0.35);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--fg-muted);
+  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  flex: 0 0 auto;
+}
+
+.status-bar-item {
+  white-space: nowrap;
+}
+
+.status-bar-pos {
+  min-width: 8rem;
+}
+
+.status-bar-lang {
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+}
+
+.status-bar-fill {
+  flex: 1 1 auto;
+}

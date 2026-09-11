@@ -1,0 +1,315 @@
+/* Trylo Desktop — Remote pairing modal (2026-08-29).
+ *
+ * Mirrors the Settings modal's visual language (overlay +
+ * centered panel, Trylo Gold primary action, ghost
+ * secondary) so the two feel like siblings. This is where
+ * the pairing QR now lives — one click from the TopBar
+ * "远程" button, instead of buried inside Settings. */
+
+.remote-pairing-modal__overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 120;
+  backdrop-filter: blur(2px);
+  animation: rpm-fade 140ms ease-out;
+}
+
+.remote-pairing-modal {
+  width: min(420px, 92vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  font-family: var(--font-body);
+  animation: rpm-rise 160ms ease-out;
+}
+
+.remote-pairing-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+.remote-pairing-modal__title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--brand);
+}
+
+.remote-pairing-modal__title {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--fg);
+  margin: 0;
+}
+
+.remote-pairing-modal__close {
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.remote-pairing-modal__close:hover {
+  background: var(--bg-elevated);
+  color: var(--fg);
+}
+
+/* Status banner — tone follows gateway state. */
+.remote-pairing-modal__status {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: var(--space-4) var(--space-5) 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.remote-pairing-modal__status-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.remote-pairing-modal__status {
+  position: relative;
+  padding-left: calc(var(--space-4) + 16px);
+}
+
+.remote-pairing-modal__status::before {
+  content: '';
+  position: absolute;
+  left: var(--space-4);
+  top: calc(var(--space-3) + 6px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.remote-pairing-modal__status--ok::before {
+  background: var(--ok, #3fb950);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok, #3fb950) 22%, transparent);
+}
+
+.remote-pairing-modal__status--pending::before {
+  background: var(--warn, #d29922);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn, #d29922) 22%, transparent);
+}
+
+.remote-pairing-modal__status--off::before {
+  background: var(--fg-muted);
+}
+
+.remote-pairing-modal__status-headline {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.remote-pairing-modal__hint {
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+  line-height: var(--leading-snug);
+}
+
+.remote-pairing-modal__hint code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--fg);
+  background: var(--bg-elevated);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.remote-pairing-modal__hint--center {
+  text-align: center;
+  margin: var(--space-3) 0 0;
+}
+
+.remote-pairing-modal__hint--error {
+  color: var(--danger, #f85149);
+}
+
+/* Enable / disable switch row. */
+.remote-pairing-modal__switch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-4) var(--space-5) 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.remote-pairing-modal__switch input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+
+.remote-pairing-modal__switch-label {
+  font-size: var(--text-sm);
+  color: var(--fg);
+}
+
+.remote-pairing-modal__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-5);
+}
+
+.remote-pairing-modal__empty {
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  text-align: center;
+  line-height: var(--leading-relaxed);
+  margin: var(--space-2) 0;
+  max-width: 34ch;
+}
+
+.remote-pairing-modal__qr-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 176px;
+  height: 176px;
+  border-radius: var(--radius-sm);
+  background: #fff;
+  padding: 4px;
+  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+}
+
+.remote-pairing-modal__qr {
+  width: 168px;
+  height: 168px;
+  border-radius: 4px;
+  image-rendering: pixelated;
+}
+
+.remote-pairing-modal__qr-skeleton {
+  width: 168px;
+  height: 168px;
+  border-radius: 4px;
+  background: linear-gradient(
+    100deg,
+    var(--bg-elevated) 30%,
+    color-mix(in srgb, var(--brand) 14%, var(--bg-elevated)) 50%,
+    var(--bg-elevated) 70%
+  );
+  background-size: 200% 100%;
+  animation: rpm-shimmer 1.2s ease-in-out infinite;
+}
+
+.remote-pairing-modal__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--space-2);
+  padding: 7px 18px;
+  border: 1px solid var(--brand);
+  border-radius: var(--radius-sm);
+  background: var(--brand);
+  color: var(--bg);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
+}
+
+.remote-pairing-modal__btn:hover:not(:disabled) {
+  background: var(--brand-600, #b8961f);
+  border-color: var(--brand-600, #b8961f);
+}
+
+.remote-pairing-modal__btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.remote-pairing-modal__btn--ghost {
+  padding: 7px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+
+.remote-pairing-modal__btn--ghost:hover {
+  background: var(--bg-elevated);
+  color: var(--fg);
+}
+
+.remote-pairing-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.remote-pairing-modal__spin {
+  animation: rpm-spin 0.9s linear infinite;
+}
+
+@keyframes rpm-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes rpm-rise {
+  from { opacity: 0; transform: translateY(8px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes rpm-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes rpm-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remote-pairing-modal__overlay,
+  .remote-pairing-modal,
+  .remote-pairing-modal__qr-skeleton,
+  .remote-pairing-modal__spin {
+    animation: none;
+  }
+}

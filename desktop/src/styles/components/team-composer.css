@@ -1,0 +1,374 @@
+/* Trylo Desktop — Team composer (Foundation spec §10.4).
+ *
+ * Quieter than Code/Work chat. 220px member list + inspector; on
+ * narrow main columns the layout stacks. No accent bars, no second
+ * list header, no uppercase kickers.
+ */
+
+.team-composer {
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.team-composer__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--ink-divider);
+}
+
+.team-composer__back {
+  border: none;
+  background: transparent;
+  color: var(--ink-fog);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-md);
+}
+
+.team-composer__back:hover {
+  background: var(--ink-hover);
+  color: var(--ink-paper);
+}
+
+.team-composer__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-paper);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.team-composer__head-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.team-composer__ghost {
+  height: 26px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--ink-fog);
+  cursor: pointer;
+}
+
+.team-composer__ghost:hover:not(:disabled) {
+  background: var(--ink-hover);
+  color: var(--ink-paper);
+}
+
+.team-composer__ghost:disabled {
+  color: var(--ink-mute);
+  cursor: default;
+}
+
+.team-composer__start {
+  height: 28px;
+  padding: 0 16px;
+  border: 1px solid var(--ink-divider);
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--ink-paper);
+  cursor: pointer;
+}
+
+.team-composer__start:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.team-composer__start:disabled {
+  color: var(--ink-mute);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.team-composer__reason {
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+.team-composer__goal {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.team-composer__goal-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--ink-divider);
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--ink-paper);
+}
+
+.team-composer__goal-input:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
+.team-composer__field-label {
+  flex: 0 0 auto;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--ink-mute);
+}
+
+.team-composer__save-as {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.team-composer__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  min-height: 0;
+}
+
+.team-composer__members {
+  flex: 0 0 auto;
+}
+
+.team-composer__member-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.team-composer__member-row {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  border-radius: var(--radius-md);
+  padding: 0 4px 0 0;
+}
+
+.team-composer__member-row--selected {
+  background: var(--brand-soft);
+}
+
+.team-composer__member-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-family: var(--font-body);
+  cursor: pointer;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.team-composer__member-title {
+  font-size: var(--text-sm);
+  color: var(--ink-paper);
+}
+
+.team-composer__member-duty {
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+.team-composer__member-remove {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink-mute);
+  font-size: var(--text-xs);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.team-composer__member-remove:hover:not(:disabled) {
+  background: var(--ink-hover);
+  color: var(--danger);
+}
+
+.team-composer__member-remove:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.team-composer__add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.team-composer__add-role {
+  border: none;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--ink-fog);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-md);
+}
+
+.team-composer__add-role:hover {
+  background: var(--ink-hover);
+  color: var(--ink-paper);
+}
+
+.team-composer__selected {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.team-composer__inspector {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.team-composer__inspector-empty {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--ink-mute);
+}
+
+.team-composer__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.team-composer__field-value {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--ink-paper);
+}
+
+.team-composer__text-input,
+.team-composer__select {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--ink-divider);
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--ink-paper);
+}
+
+.team-composer__text-input:focus,
+.team-composer__select:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
+.team-composer__textarea {
+  resize: vertical;
+  padding: 6px 8px;
+  border: 1px solid var(--ink-divider);
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--ink-paper);
+}
+
+.team-composer__textarea:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
+.team-composer__char-count {
+  align-self: flex-end;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+
+.team-composer__group {
+  border-left: 1px solid var(--ink-divider);
+  padding-left: var(--space-3);
+}
+
+.team-composer__group summary {
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--ink-fog);
+}
+
+.team-composer__group-hint {
+  margin: 4px 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+.team-composer__tool-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-2) 0;
+}
+
+.team-composer__tool-group-title {
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--ink-mute);
+}
+
+.team-composer__tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--ink-paper);
+}
+
+.team-composer__tool input[type='checkbox'] {
+  accent-color: var(--brand);
+}
+
+.team-composer__locked-tag {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--ink-mute);
+}

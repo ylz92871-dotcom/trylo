@@ -1,0 +1,87 @@
+/* Trylo Desktop — SettingsPanel styles. */
+
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  width: 360px;
+  flex: 0 0 360px;
+  background: var(--bg-panel);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  overflow-y: auto;
+}
+
+.settings-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.85rem;
+}
+
+.settings-title {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.settings-path {
+  color: var(--fg-muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.7rem;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-loading {
+  color: var(--fg-muted);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.settings-row select,
+.settings-row input[type="number"] {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  color: var(--fg);
+  padding: 0.2rem 0.4rem;
+  font: inherit;
+  min-width: 4rem;
+}
+
+.settings-row input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.settings-reset {
+  margin-top: 0.5rem;
+  padding: 0.3rem 0.6rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.settings-reset:hover {
+  background: rgba(255, 255, 255, 0.1);
+}

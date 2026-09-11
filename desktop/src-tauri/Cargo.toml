@@ -1,0 +1,56 @@
+[package]
+name = "trylo-desktop"
+version = "1.0.0"
+description = "Trylo Desktop — Tauri 2 shell for the Trylo agent system"
+authors = ["Trylo <dev@trylocode.me>"]
+edition = "2021"
+rust-version = "1.75"
+
+[lib]
+name = "trylo_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-shell = "2"
+tauri-plugin-clipboard-manager = "2"
+# tauri-plugin-dialog = "2"  # Phase 3 housekeeping — install
+                              # once the network can fetch the crate.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+anyhow = "1"
+tokio = { version = "1", features = ["full"] }
+portable-pty = "0.8"
+notify = "6"
+tauri-plugin-dialog = "2.0.0-rc.8"
+# rfd = "0.14"  # Phase 3 housekeeping — install once the
+                  # network can fetch the crate. v1.10 falls
+                  # back to window.prompt which works in
+                  # both the browser dev and the Tauri webview
+                  # (Tauri 2 has dialogs: true by default).
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[lints.rust]
+# Reject the build on warnings. Per the architecture doc §10.2 this is CI-required.
+# Must live under [lints.rust] — putting it under [lints.clippy] maps to the
+# non-existent `clippy::warnings` lint and is silently ignored, so
+# `cargo clippy -- -D warnings` exits 0 even when there ARE real warnings.
+warnings = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }

@@ -1,0 +1,106 @@
+/* v1.16.2: attachment list + chip + 📎 button styles.
+   Mirrors Cline's thumbnail row (webview-ui/src/components/
+   chat/ChatTextArea.tsx) but in desktop's brand palette
+   (gold accent, no red/green). The chip strip sits
+   between the input row and the action row; the 📎
+   button sits to the left of the input. */
+
+.attachment-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 0 12px;
+  /* Horizontal scroll if the user attaches many files
+     on a narrow window. Single-row, never wraps. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Hide the scrollbar (Cline does the same) — chips
+     are small enough that overflow is rare, and a
+     visible bar would feel noisy. */
+  scrollbar-width: none;
+}
+.attachment-list::-webkit-scrollbar {
+  display: none;
+}
+
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px 3px 8px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+  border-radius: var(--radius-pill, 999px);
+  background: var(--bg-elevated, rgba(0, 0, 0, 0.18));
+  font-size: var(--text-xs, 12px);
+  color: var(--text-primary, rgba(255, 255, 255, 0.92));
+  white-space: nowrap;
+  flex-shrink: 0;
+  /* Subtle brand tint per kind. All kinds use the same
+     brand gold for the icon so the row reads as
+     "attachments" not "office vs image vs text" */
+}
+
+.attachment-chip__icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.attachment-chip__name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.attachment-chip__size {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
+  font-weight: 400;
+}
+
+.attachment-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.attachment-chip__remove:hover {
+  background: var(--danger-soft, rgba(217, 102, 102, 0.18));
+  color: var(--danger, #D96666);
+}
+
+/* v1.16.2: 📎 attach button in the input row. Sits
+   between the + mode button and the text input. Same
+   shape as the mode button but icon-only. */
+.input-bar__attach {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+  border-radius: var(--radius-sm, 4px);
+  background: transparent;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.65));
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 120ms ease-out, color 120ms ease-out,
+              border-color 120ms ease-out;
+}
+
+.input-bar__attach:hover {
+  background: var(--brand-soft, rgba(219, 201, 127, 0.10));
+  color: var(--brand-200, #E3D493);
+  border-color: var(--brand-500, #9F9054);
+}

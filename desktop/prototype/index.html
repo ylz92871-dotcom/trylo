@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Trylo Desktop — interactive prototype v1.7</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink-deep: #0E0E0E; --ink-surface: #161616; --ink-elevated: #1F1F1F; --ink-hover: #2A2A2A;
+        --ink-paper: #ECEEF2; --ink-fog: #8B92A1; --ink-mute: #5C6270;
+        /* Brand: Trylo Gold #DBC97F (RGB 219, 201, 127) */
+        --brand: #DBC97F; --brand-hover: #E5D488; --brand-soft: rgba(219,201,127,0.16); --brand-glow: rgba(219,201,127,0.06);
+        --brand-100: #ECE0A8; --brand-200: #E3D493; --brand-300: #DBC97F; --brand-400: #C2B069; --brand-500: #9F9054;
+        --ice-blue: #7AB8E0; --ice-blue-soft: rgba(122,184,224,0.14);
+        --danger: #D96666; --success: #6EBF7B;
+        --ink-divider: rgba(236,238,242,0.06); --ink-divider-strong: rgba(236,238,242,0.10);
+        --top-bar-h: 56px; --rail-left-w: 240px;
+      }
+      *,*::before,*::after { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; height: 100%; background: var(--ink-deep); color: var(--ink-paper); }
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+
+      .app-shell { display: grid; grid-template-rows: var(--top-bar-h) 1fr; height: 100vh; }
+      .app-shell__body { display: grid; grid-template-columns: var(--rail-left-w) 1fr; min-height: 0; transition: grid-template-columns 200ms; }
+      .app-shell__body.with-peek { grid-template-columns: var(--rail-left-w) 1fr 480px; }
+
+      /* Top bar */
+      .top-bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 20px; border-bottom: 1px solid var(--ink-divider); background: var(--ink-surface); height: var(--top-bar-h); user-select: none; }
+      .top-bar__brand { display: flex; align-items: center; gap: 8px; font-family: 'Iowan Old Style', Georgia, serif; font-size: 17px; font-weight: 500; }
+      .top-bar__brand-mark { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; opacity: 0.7; }
+      .top-bar__modes { display: flex; gap: 0; }
+      .top-mode { font-size: 13px; font-weight: 500; color: var(--ink-fog); padding: 6px 14px; border-radius: 6px; background: transparent; border: none; cursor: pointer; transition: color 150ms; }
+      .top-mode:hover { color: var(--ink-paper); }
+      .top-mode--active { color: var(--brand); }
+      .top-bar__right { display: flex; justify-content: flex-end; align-items: center; gap: 12px; color: var(--ink-fog); font-size: 12px; }
+      .status-dot { display: inline-flex; align-items: center; gap: 8px; }
+      .status-dot__indicator { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-mute); }
+
+      /* Left rail */
+      .left-rail { display: grid; grid-template-rows: auto 1fr auto; background: var(--ink-surface); border-right: 1px solid var(--ink-divider); overflow: hidden; }
+      .left-rail.collapsed { display: none; }
+      .left-rail__header { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 8px 16px; border-bottom: 1px solid var(--ink-divider); }
+      .left-rail__title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-fog); font-weight: 500; }
+      .left-rail__collapse { width: 22px; height: 22px; border-radius: 6px; color: var(--ink-fog); background: transparent; border: none; cursor: pointer; }
+      .left-rail__list { padding: 8px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+      .session-row { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 8px; padding: 8px; border-radius: 10px; cursor: pointer; transition: background 120ms; }
+      .session-row:hover { background: var(--ink-hover); }
+      .session-row--active { background: var(--brand-soft); }
+      .session-row__icon { width: 28px; height: 28px; border-radius: 6px; background: var(--ink-elevated); color: var(--ink-fog); display: flex; align-items: center; justify-content: center; font-family: 'Iowan Old Style', Georgia, serif; font-size: 13px; font-weight: 500; }
+      .session-row--active .session-row__icon { background: var(--brand); color: var(--ink-deep); }
+      .session-row__title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .session-row__meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-fog); margin-top: 1px; }
+      .session-row__mode { color: var(--brand); }
+      .session-row__sep { color: var(--ink-mute); }
+      .session-row__delete { width: 20px; height: 20px; border-radius: 6px; color: var(--ink-fog); background: transparent; border: none; cursor: pointer; font-size: 14px; opacity: 0; }
+      .session-row:hover .session-row__delete { opacity: 1; }
+      .left-rail__footer { border-top: 1px solid var(--ink-divider); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+      .left-rail__open { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: transparent; color: var(--brand); font-size: 13px; font-weight: 500; border: 1px solid var(--ink-divider); cursor: pointer; width: 100%; }
+      .left-rail__open:hover { background: var(--brand-soft); }
+      .left-rail__new { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: var(--ink-elevated); color: var(--ink-paper); font-size: 13px; font-weight: 500; border: none; cursor: pointer; width: 100%; }
+      .left-rail__new:hover { background: var(--brand); color: var(--ink-deep); }
+      .left-rail__workspace { padding: 0 8px; color: var(--ink-mute); font-family: ui-monospace, monospace; font-size: 11px; }
+
+      /* Chat panel */
+      .chat-panel { position: relative; display: flex; flex-direction: column; background: var(--ink-deep); min-height: 0; transition: opacity 200ms; }
+      .message-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 32px 20px 100px; }
+      .message-list__inner { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+      .message { display: flex; align-items: flex-end; gap: 20px; max-width: 100%; }
+      .message--user { justify-content: flex-end; }
+      .message--assistant { justify-content: flex-start; }
+      .message--notice { justify-content: center; }
+      .message__bubble { padding: 4px 0; max-width: min(72ch, 90%); line-height: 1.4; font-size: 15px; color: var(--ink-paper); }
+      .message__text { margin: 0; white-space: pre-wrap; }
+      .message__notice-text { color: var(--ink-mute); font-size: 12px; font-family: ui-monospace, monospace; padding: 2px 10px; }
+
+      /* Tool — brand-color text (different shades per tool). */
+      .tool { max-width: min(72ch, 100%); font-size: 14px; line-height: 1.4; font-family: ui-monospace, monospace; }
+      .tool__head { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: baseline; padding: 2px 0; background: transparent; border: none; text-align: left; font-family: inherit; font-size: inherit; cursor: pointer; width: 100%; }
+      .tool__head:hover { opacity: 0.75; }
+      .tool__name { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.85; }
+      .tool__summary { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .tool__body { padding: 4px 0 4px 12px; font-size: 12px; display: flex; flex-direction: column; gap: 2px; opacity: 0.85; }
+      .tool__row { display: grid; grid-template-columns: 60px 1fr; gap: 8px; font-family: ui-monospace, monospace; }
+      .tool__row-key { opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; }
+
+      /* Mode popover */
+      .mode-popover { position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 50; list-style: none; margin: 0; padding: 4px; background: var(--ink-elevated); border: 1px solid var(--ink-divider-strong); border-radius: 10px; min-width: 200px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+      .mode-popover__item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--ink-paper); }
+      .mode-popover__item--focus { background: var(--ink-hover); }
+      .mode-popover__item--current .mode-popover__label { color: var(--brand); }
+      .mode-popover__label { font-weight: 500; min-width: 56px; }
+      .mode-popover__hint { font-size: 12px; color: var(--ink-mute); margin-left: auto; }
+
+      /* Dev mock */
+      .dev-mock { position: absolute; right: 16px; bottom: 88px; background: var(--ink-elevated); border: 1px solid var(--ink-divider-strong); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; max-width: 360px; z-index: 5; }
+      .dev-mock__label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-mute); padding: 0 4px; }
+      .dev-mock__buttons { display: flex; flex-wrap: wrap; gap: 4px; }
+      .dev-mock button { font-family: ui-monospace, monospace; font-size: 11px; color: var(--ink-fog); background: var(--ink-deep); border: 1px solid var(--ink-divider); border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+      .dev-mock button:hover { color: var(--ink-paper); border-color: var(--brand); }
+      .dev-mock__demo { color: var(--brand) !important; border-color: var(--brand-soft) !important; }
+
+      /* Input bar */
+      .input-bar { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 6px; background: var(--ink-elevated); border: 1px solid var(--ink-divider); border-radius: 999px; margin: 0 20px 16px; position: relative; }
+      .input-bar__mode { display: flex; align-items: center; gap: 4px; padding: 4px 10px 4px 6px; border-radius: 999px; background: transparent; color: var(--brand); font-size: 13px; font-weight: 500; cursor: pointer; border: none; }
+      .input-bar__mode:hover { background: var(--ink-hover); }
+      .input-bar__mode-plus { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--ink-divider-strong); color: var(--brand); font-size: 12px; line-height: 1; font-weight: 400; }
+      .input-bar__input { background: transparent; border: none; outline: none; font-size: 15px; color: var(--ink-paper); padding: 0 8px; min-width: 0; width: 100%; }
+      .input-bar__input::placeholder { color: var(--ink-mute); }
+      .input-bar__send { width: 32px; height: 32px; border-radius: 50%; background: transparent; color: var(--brand); border: 1px solid var(--ink-divider-strong); font-size: 15px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+      .input-bar__send:hover:not(:disabled) { background: var(--brand); color: var(--ink-deep); }
+      .input-bar__send:disabled { color: var(--ink-mute); cursor: not-allowed; }
+
+      /* v1.9: thinking card — short summary as title, preview on expand */
+      .thinking { max-width: min(72ch, 100%); font-size: 14px; line-height: 1.4; color: var(--ink-fog); margin-left: 14px; }
+      .thinking__head { display: flex; align-items: baseline; gap: 8px; padding: 2px 0; background: transparent; border: none; text-align: left; font: inherit; color: inherit; cursor: pointer; width: 100%; }
+      .thinking__head:hover { color: var(--ink-paper); }
+      .thinking__label { font-family: ui-monospace, monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.65; flex: 0 0 auto; }
+      .thinking__summary { font-style: italic; opacity: 0.85; }
+      .thinking__head:hover .thinking__summary { opacity: 1; }
+      .thinking__preview { margin: 4px 0; padding: 8px 12px; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.55; white-space: pre-wrap; color: var(--ink-mute); background: var(--bg-elevated); border-radius: 6px; border: 1px solid var(--ink-divider); }
+
+      /* v1.9: turn divider — "Turn 1 / 6" between turns */
+      .turn-divider { display: flex; align-items: center; gap: 12px; margin: 8px 0; color: var(--ink-mute); font-size: 12px; font-family: ui-monospace, monospace; }
+      .turn-divider::before, .turn-divider::after { content: ''; flex: 1 1 auto; height: 1px; background: var(--ink-divider); }
+      .turn-divider__label { flex: 0 0 auto; padding: 0 8px; }
+      .turn-divider__status { color: var(--brand); margin-left: 6px; }
+
+      /* v1.9: compaction pill — "180k → 40k" */
+      .compaction { display: flex; align-items: center; gap: 8px; padding: 4px 12px; background: var(--bg-elevated); border: 1px solid var(--ink-divider); border-radius: 999px; color: var(--ink-mute); font-size: 12px; font-family: ui-monospace, monospace; align-self: center; }
+      .compaction__icon { color: var(--brand); }
+
+      /* Empty state */
+      .empty-state { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px; text-align: center; gap: 20px; }
+      .empty-state__logo { opacity: 0.7; }
+      .empty-state__prompt { margin: 0; font-family: 'Iowan Old Style', Georgia, serif; font-size: 24px; font-weight: 500; letter-spacing: -0.01em; color: var(--ink-fog); }
+
+      /* File peek */
+      .file-peek { display: grid; grid-template-rows: auto auto 1fr; height: 100%; background: var(--ink-surface); border-left: 1px solid var(--ink-divider); min-height: 0; overflow: hidden; animation: slidein 200ms cubic-bezier(0.16,1,0.3,1); }
+      @keyframes slidein { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+      .file-peek__header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--ink-divider); }
+      .file-peek__path { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; }
+      .file-peek__icon { color: var(--ice-blue); font-size: 14px; }
+      .file-peek__path-text { font-family: ui-monospace, monospace; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .file-peek__close { width: 24px; height: 24px; border-radius: 6px; color: var(--ink-fog); background: transparent; border: none; cursor: pointer; font-size: 16px; }
+      .file-peek__meta { display: flex; align-items: center; gap: 8px; padding: 0 16px 8px; color: var(--ink-fog); font-size: 12px; font-family: ui-monospace, monospace; }
+      .file-peek__body { overflow: auto; padding: 8px 0; }
+      .file-peek__code { margin: 0; font-family: ui-monospace, monospace; font-size: 13px; line-height: 1.6; }
+      .file-peek__line { display: grid; grid-template-columns: 48px 1fr; padding: 0 16px; }
+      .file-peek__line:hover { background: var(--ink-hover); }
+      .file-peek__lineno { text-align: right; padding-right: 12px; color: var(--ink-mute); font-variant-numeric: tabular-nums; }
+      .file-peek__linetext { white-space: pre; overflow-x: auto; }
+
+      /* Office */
+      .office-panel { flex: 1 1 auto; display: grid; grid-template-columns: 1fr min(40%, 480px); gap: 20px; padding: 32px; min-height: 0; overflow: auto; }
+      .office-panel__left { display: flex; flex-direction: column; gap: 12px; max-width: 56ch; }
+      .office-panel__title { margin: 0; font-family: 'Iowan Old Style', Georgia, serif; font-size: 32px; font-weight: 500; letter-spacing: -0.01em; }
+      .office-panel__subtitle { margin: 0 0 12px 0; color: var(--ink-fog); font-size: 13px; }
+      .office-panel__types { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .office-type { display: flex; align-items: center; gap: 8px; padding: 12px; background: var(--ink-elevated); border: 1px solid var(--ink-divider); border-radius: 10px; cursor: pointer; text-align: left; color: var(--ink-paper); }
+      .office-type:hover { border-color: var(--ink-divider-strong); }
+      .office-type--active { border-color: var(--brand); background: var(--brand-soft); }
+      .office-type__icon { width: 32px; height: 32px; flex: 0 0 auto; border-radius: 6px; background: var(--ink-deep); color: var(--brand); display: flex; align-items: center; justify-content: center; font-family: 'Iowan Old Style', Georgia, serif; font-size: 16px; font-weight: 500; }
+      .office-type--active .office-type__icon { background: var(--brand); color: var(--ink-deep); }
+      .office-type__label { font-size: 13px; font-weight: 500; }
+      .office-type__sub { font-size: 12px; color: var(--ink-fog); font-family: ui-monospace, monospace; }
+      .office-panel__input { background: var(--ink-elevated); border: 1px solid var(--ink-divider); border-radius: 10px; padding: 12px; color: var(--ink-paper); font-size: 15px; line-height: 1.55; resize: vertical; min-height: 120px; outline: none; }
+      .office-panel__input:focus { border-color: var(--brand); }
+      .office-panel__input::placeholder { color: var(--ink-mute); }
+      .office-panel__actions { display: flex; gap: 8px; margin-top: 8px; }
+      .office-panel__generate { background: var(--brand); color: var(--ink-deep); border: none; border-radius: 10px; padding: 10px 20px; font-size: 13px; font-weight: 500; cursor: pointer; }
+      .office-panel__generate:disabled { background: var(--ink-hover); color: var(--ink-mute); cursor: not-allowed; }
+      .office-panel__right { background: var(--ink-elevated); border: 1px solid var(--ink-divider); border-radius: 10px; min-height: 240px; display: flex; align-items: center; justify-content: center; }
+      .office-preview__placeholder { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--ink-fog); text-align: center; font-size: 13px; }
+      .office-preview__icon { font-size: 32px; color: var(--ice-blue); }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="top-bar">
+        <div class="top-bar__brand">
+          <span class="top-bar__brand-mark">
+            <svg width="48" height="48" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Trilo">
+              <defs><linearGradient id="b" x1="232" y1="220" x2="812" y2="804" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#E3D493"/><stop offset="1" stop-color="#9F9054"/></linearGradient></defs>
+              <g stroke="url(#b)" stroke-width="76" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M462 236 L462 420 L624 420"/><path d="M276 732 L424 644 L356 512"/><path d="M540 676 L622 546 L786 640"/></g>
+            </svg>
+          </span>
+          <span>Trylo</span>
+        </div>
+        <div class="top-bar__modes">
+          <button class="top-mode top-mode--active" data-top="code">Code</button>
+          <button class="top-mode" data-top="work">Work</button>
+        </div>
+        <div class="top-bar__right">
+          <span class="status-dot"><span class="status-dot__indicator"></span><span>Personal Agent</span></span>
+        </div>
+      </header>
+      <div class="app-shell__body" id="body">
+        <aside class="left-rail" id="leftRail">
+          <div class="left-rail__header">
+            <span class="left-rail__title">Sessions</span>
+            <button class="left-rail__collapse" id="collapseBtn">‹</button>
+          </div>
+          <div class="left-rail__list" id="sessionList"></div>
+          <div class="left-rail__footer">
+            <button class="left-rail__open" id="openFolder">⌬ Open folder</button>
+            <button class="left-rail__new" id="newSession">+ New session</button>
+            <div class="left-rail__workspace" id="workspaceLabel">C:/work/demo-ws</div>
+          </div>
+        </aside>
+        <div class="chat-panel" id="chatPanel">
+          <div class="message-list" id="messageList" style="display:none"><div class="message-list__inner" id="messageInner"></div></div>
+          <div class="empty-state" id="emptyState">
+            <div class="empty-state__logo">
+              <svg width="280" height="280" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <defs><linearGradient id="b2" x1="232" y1="220" x2="812" y2="804" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#E3D493"/><stop offset="1" stop-color="#9F9054"/></linearGradient></defs>
+                <g stroke="url(#b2)" stroke-width="76" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M462 236 L462 420 L624 420"/><path d="M276 732 L424 644 L356 512"/><path d="M540 676 L622 546 L786 640"/></g>
+              </svg>
+            </div>
+            <h1 class="empty-state__prompt" id="emptyPrompt">Tell the agent what to do.</h1>
+          </div>
+          <div class="office-panel" id="officePanel" style="display:none">
+            <div class="office-panel__left">
+              <h1 class="office-panel__title">Work</h1>
+              <p class="office-panel__subtitle">Draft a document. Pick the type, describe what you need.</p>
+              <div class="office-panel__types">
+                <button class="office-type office-type--active" data-doctype="docx"><span class="office-type__icon">D</span><div><div class="office-type__label">Document</div><div class="office-type__sub">.docx</div></div></button>
+                <button class="office-type" data-doctype="xlsx"><span class="office-type__icon">X</span><div><div class="office-type__label">Spreadsheet</div><div class="office-type__sub">.xlsx</div></div></button>
+                <button class="office-type" data-doctype="pptx"><span class="office-type__icon">P</span><div><div class="office-type__label">Presentation</div><div class="office-type__sub">.pptx</div></div></button>
+              </div>
+              <textarea class="office-panel__input" id="officeInput" placeholder="Describe the document…" rows="6"></textarea>
+              <div class="office-panel__actions"><button class="office-panel__generate" id="generateBtn">Generate docx</button></div>
+            </div>
+            <div class="office-panel__right"><div class="office-preview"><div class="office-preview__placeholder"><span class="office-preview__icon">◇</span><p>Preview will appear here once generated.</p></div></div></div>
+          </div>
+          <div class="dev-mock" id="devMock">
+            <div class="dev-mock__label">dev mock</div>
+            <div class="dev-mock__buttons">
+              <button data-mock="bash">+ Bash</button>
+              <button data-mock="read">+ Read</button>
+              <button data-mock="edit">+ Edit</button>
+              <button data-mock="grep">+ Grep</button>
+              <button class="dev-mock__demo" id="loadDemo">load demo</button>
+            </div>
+          </div>
+          <form class="input-bar" id="inputForm" style="position:relative">
+            <button type="button" class="input-bar__mode" id="modeBtn" title="Code sub-mode">
+              <span class="input-bar__mode-plus">+</span>
+              <span class="input-bar__mode-label" id="modeLabel">Agent</span>
+            </button>
+            <ul class="mode-popover" id="modePopover" style="display:none" role="listbox" aria-label="Code sub-mode">
+              <li class="mode-popover__item mode-popover__item--current" role="option" data-mode="chat">
+                <span class="mode-popover__label">Chat</span><span class="mode-popover__hint">Ask anything</span>
+              </li>
+              <li class="mode-popover__item" role="option" data-mode="plan">
+                <span class="mode-popover__label">Plan</span><span class="mode-popover__hint">Design first</span>
+              </li>
+              <li class="mode-popover__item" role="option" data-mode="agent">
+                <span class="mode-popover__label">Agent</span><span class="mode-popover__hint">Build + test</span>
+              </li>
+            </ul>
+            <input type="text" class="input-bar__input" id="promptInput" placeholder="Tell the agent what to do…  ·  Build + test" />
+            <button type="submit" class="input-bar__send">⏎</button>
+          </form>
+        </div>
+        <aside class="file-peek" id="filePeek" style="display:none">
+          <header class="file-peek__header">
+            <div class="file-peek__path"><span class="file-peek__icon">◇</span><span class="file-peek__path-text" id="peekPath"></span></div>
+            <button class="file-peek__close" id="closePeek">×</button>
+          </header>
+          <div class="file-peek__meta" id="peekMeta"></div>
+          <div class="file-peek__body"><pre class="file-peek__code" id="peekCode"></pre></div>
+        </aside>
+      </div>
+    </div>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+      const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      // ── Persistence (localStorage, per-workspace) ──
+      const STORAGE_KEY = 'trylo:workspace-sessions:v1';
+      const loadState = () => {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return { workspaces: {}, active: {} };
+          return JSON.parse(raw);
+        } catch { return { workspaces: {}, active: {} }; }
+      };
+      const saveState = (s) => {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch {}
+      };
+      let persisted = loadState();
+      const snapshot = (ws) => ({
+        sessions: persisted.workspaces[ws] || [],
+        activeId: persisted.active[ws] || null,
+      });
+      const persist = (ws, sessions, activeId) => {
+        persisted = {
+          workspaces: { ...persisted.workspaces, [ws]: sessions },
+          active: { ...persisted.active, [ws]: activeId || '' },
+        };
+        saveState(persisted);
+      };
+
+      const codeLabels = { chat: 'Chat', plan: 'Plan', agent: 'Agent' };
+      const codePlaceholders = {
+        chat:  'What are you building?',
+        plan:  'What do you want to design first?',
+        agent: 'Tell the agent what to do…',
+      };
+      const codeHint = { chat: 'Ask anything', plan: 'Design first', agent: 'Build + test' };
+      const codeIcons = { chat: 'C', plan: 'P', agent: 'A' };
+
+      const state = {
+        top: 'code',
+        code: 'agent',
+        messages: [],
+        workspace: 'C:/work/demo-ws',
+        sessions: [],
+      };
+
+      function renderSessions() {
+        const list = $('sessionList'); list.innerHTML = '';
+        for (const s of state.sessions) {
+          const row = el('div', 'session-row' + (s.active ? ' session-row--active' : ''));
+          row.innerHTML = `
+            <div class="session-row__icon">${s.mode === 'work' ? 'W' : codeIcons[s.mode]}</div>
+            <div>
+              <div class="session-row__title">${esc(s.title)}</div>
+              <div class="session-row__meta">
+                <span class="session-row__mode">${s.mode === 'work' ? 'Work' : codeLabels[s.mode]}</span>
+                <span class="session-row__sep">·</span>
+                <span>${s.turns} ${s.turns === 1 ? 'turn' : 'turns'}</span>
+              </div>
+            </div>
+            <button class="session-row__delete" data-del="${s.id}">×</button>`;
+          row.addEventListener('click', (e) => {
+            if (e.target.closest('[data-del]')) {
+              e.stopPropagation();
+              state.sessions = state.sessions.filter((x) => x.id !== s.id);
+              if (s.active && state.sessions[0]) state.sessions[0].active = true;
+              persist(state.workspace, state.sessions, state.sessions[0]?.id ?? null);
+              renderSessions();
+              return;
+            }
+            for (const x of state.sessions) x.active = x.id === s.id;
+            state.top = s.mode === 'work' ? 'work' : 'code';
+            if (s.mode !== 'work') state.code = s.mode;
+            state.messages = [];
+            persist(state.workspace, state.sessions, s.id);
+            syncTop(); renderAll(); renderSessions();
+          });
+          list.appendChild(row);
+        }
+      }
+
+      function syncTop() {
+        document.querySelectorAll('.top-mode').forEach((b) =>
+          b.classList.toggle('top-mode--active', b.dataset.top === state.top));
+        $('modeLabel').textContent = state.top === 'work' ? 'Work' : codeLabels[state.code];
+        $('promptInput').placeholder = state.top === 'work'
+          ? 'Work mode — switch to Code to chat with the agent'
+          : `${codePlaceholders[state.code]}  ·  ${codeHint[state.code]}`;
+      }
+
+      function renderAll() {
+        if (state.top === 'work') {
+          $('messageList').style.display = 'none';
+          $('emptyState').style.display = 'none';
+          $('officePanel').style.display = '';
+          $('inputForm').style.display = 'none';
+          return;
+        }
+        $('officePanel').style.display = 'none';
+        $('inputForm').style.display = '';
+        const inner = $('messageInner'); inner.innerHTML = '';
+        if (state.messages.length === 0) {
+          $('messageList').style.display = 'none';
+          $('emptyState').style.display = '';
+          $('emptyPrompt').textContent = codePlaceholders[state.code];
+          return;
+        }
+        $('emptyState').style.display = 'none';
+        $('messageList').style.display = '';
+        for (const m of state.messages) inner.appendChild(renderMessage(m));
+        $('messageList').scrollTop = $('messageList').scrollHeight;
+      }
+
+      // Tool shades — different lightnesses of the brand gold
+      const TOOL_SHADE = {
+        bash: 'var(--brand-500)',  // darkest — terminal-y
+        read: 'var(--brand-300)',  // default
+        edit: 'var(--brand-200)',  // lighter — authoring
+        write:'var(--brand-300)',
+        grep: 'var(--brand-400)',  // darker — search
+        glob: 'var(--brand-400)',
+      };
+      const STATUS_TINT = {
+        pending: 'var(--ink-mute)',
+        running: 'var(--ice-blue)',
+        done:    'var(--brand-300)',
+        error:   'var(--danger)',
+      };
+      const TOOL_LABEL = { bash:'Bash', read:'Read', edit:'Edit', write:'Write', grep:'Grep', glob:'Glob' };
+
+      function renderMessage(m) {
+        if (m.kind === 'tool') {
+          const card = el('div', 'tool tool--' + m.status);
+          const base = TOOL_SHADE[m.tool] || 'var(--brand-300)';
+          const color = m.status === 'running' ? STATUS_TINT.running
+                       : m.status === 'error'  ? STATUS_TINT.error
+                       : m.status === 'pending' ? STATUS_TINT.pending
+                       : base;
+          const head = el('button', 'tool__head');
+          head.style.color = color;
+          head.innerHTML = `<span class="tool__name">${TOOL_LABEL[m.tool] || m.tool}</span><span class="tool__summary">${esc(m.summary)}</span>`;
+          card.appendChild(head);
+          if (m.expanded) {
+            const body = el('div', 'tool__body');
+            body.style.color = color;
+            const inputStr = m.input ? JSON.stringify(m.input, null, 2) : '';
+            const outputStr = m.output || m.outputError || '';
+            const statusLine = `<div class="tool__row"><span class="tool__row-key">status</span><span>${m.status}${m.durationMs ? ' · ' + m.durationMs + 'ms' : ''}</span></div>`;
+            const inputLine = inputStr ? `<div class="tool__row"><span class="tool__row-key">input</span><span class="tool__row-mono">${esc(inputStr)}</span></div>` : '';
+            const outputLine = outputStr ? `<div class="tool__row"><span class="tool__row-key">${m.outputError ? 'error' : 'output'}</span><span class="tool__row-mono">${esc(outputStr)}</span></div>` : '';
+            body.innerHTML = statusLine + inputLine + outputLine;
+            card.appendChild(body);
+          }
+          head.addEventListener('click', () => {
+            m.expanded = !m.expanded;
+            if (m.expanded && /\.(cs|tsx|ts|js|rs|py)$/.test(m.summary)) {
+              showPeek(m.summary, '// (mock preview — real content when CC ships tool-stream)\n' + m.summary);
+            }
+            renderAll();
+          });
+          return card;
+        }
+        if (m.kind === 'thinking') {
+          const card = el('div', 'thinking');
+          const head = el('button', 'thinking__head');
+          head.innerHTML = `<span class="thinking__label">think</span><span class="thinking__summary">${esc(m.summary)}</span>`;
+          card.appendChild(head);
+          if (m.expanded) {
+            const prev = el('pre', 'thinking__preview');
+            prev.textContent = m.preview;
+            card.appendChild(prev);
+          }
+          head.addEventListener('click', () => { m.expanded = !m.expanded; renderAll(); });
+          return card;
+        }
+        if (m.kind === 'turn') {
+          const div = el('div', 'turn-divider');
+          div.setAttribute('role', 'separator');
+          div.innerHTML = `<span class="turn-divider__label">Turn ${m.turn}${m.depth > 0 ? ' (sub ' + m.depth + ')' : ''}<span class="turn-divider__status">${m.status}</span></span>`;
+          return div;
+        }
+        if (m.kind === 'compaction') {
+          const div = el('div', 'compaction');
+          const fmt = (n) => n >= 1000 ? (n/1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : String(n);
+          div.innerHTML = `<span class="compaction__icon">↻</span><span class="compaction__text">context compacted · ${fmt(m.tokensBefore)} → ${fmt(m.tokensAfter)}</span>`;
+          return div;
+        }
+        if (m.kind === 'text') {
+          const row = el('div', 'message message--' + m.role);
+          const bubble = el('div', 'message__bubble');
+          const p = el('p', 'message__text'); p.textContent = m.text; bubble.appendChild(p);
+          row.appendChild(bubble);
+          return row;
+        }
+        if (m.kind === 'notice') {
+          const row = el('div', 'message message--notice');
+          const span = el('span', 'message__notice-text'); span.textContent = m.text; row.appendChild(span);
+          return row;
+        }
+      }
+
+      // ── Top mode tabs (with 200ms transition via the chat-panel class)
+      document.querySelectorAll('.top-mode').forEach((b) => {
+        b.addEventListener('click', () => {
+          if (b.dataset.top === state.top) return;
+          const panel = $('chatPanel');
+          panel.style.opacity = '0';
+          setTimeout(() => {
+            state.top = b.dataset.top;
+            syncTop(); renderAll();
+            panel.style.opacity = '1';
+          }, 150);
+        });
+      });
+
+      // ── Mode popover
+      const popover = $('modePopover');
+      $('modeBtn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const open = popover.style.display !== 'none';
+        popover.style.display = open ? 'none' : '';
+      });
+      popover.addEventListener('click', (e) => {
+        const item = e.target.closest('[data-mode]');
+        if (!item) return;
+        state.code = item.dataset.mode;
+        syncTop(); renderAll(); popover.style.display = 'none';
+        // Update popover item current
+        popover.querySelectorAll('li').forEach((li) =>
+          li.classList.toggle('mode-popover__item--current', li.dataset.mode === state.code));
+      });
+      document.addEventListener('mousedown', (e) => {
+        if (!popover.contains(e.target) && e.target !== $('modeBtn') && !$('modeBtn').contains(e.target)) {
+          popover.style.display = 'none';
+        }
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') popover.style.display = 'none';
+      });
+
+      // Office types
+      document.querySelectorAll('button[data-doctype]').forEach((b) => {
+        b.addEventListener('click', () => {
+          document.querySelectorAll('button[data-doctype]').forEach((x) =>
+            x.classList.toggle('office-type--active', x === b));
+          $('generateBtn').textContent = `Generate ${b.dataset.doctype}`;
+        });
+      });
+      $('generateBtn').addEventListener('click', () => {
+        const ta = $('officeInput');
+        if (!ta || ta.value.trim() === '') return;
+        const t = document.querySelector('.office-type--active').dataset.doctype;
+        $('generateBtn').textContent = 'Generating…';
+        $('generateBtn').disabled = true;
+        setTimeout(() => {
+          $('generateBtn').textContent = `Generate ${t}`;
+          $('generateBtn').disabled = false;
+          addMessage({ kind: 'notice', role: 'system', text: 'Document generation is a Phase 3 feature.' });
+        }, 600);
+      });
+
+      // New session — also persists
+      $('newSession').addEventListener('click', () => {
+        const n = state.sessions.length + 1;
+        const modes = ['plan', 'agent', 'chat', 'work'];
+        const mode = modes[(n - 1) % 4];
+        const newS = { id: Date.now(), title: `New session ${n}`, mode, turns: 0, active: true };
+        for (const s of state.sessions) s.active = false;
+        state.sessions.unshift(newS);
+        state.top = mode === 'work' ? 'work' : 'code';
+        if (mode !== 'work') state.code = mode;
+        state.messages = [];
+        persist(state.workspace, state.sessions, newS.id);
+        syncTop(); renderAll(); renderSessions();
+      });
+
+      // Open folder — switch workspace, sessions reset (or restore from snapshot)
+      $('openFolder').addEventListener('click', () => {
+        const picked = window.prompt('Open folder — enter an absolute path:', state.workspace);
+        if (picked && picked.trim() !== '' && picked !== state.workspace) {
+          // Save the outgoing workspace's sessions first
+          persist(state.workspace, state.sessions, state.sessions.find((s) => s.active)?.id ?? null);
+          state.workspace = picked.trim();
+          const snap = snapshot(state.workspace);
+          if (snap.sessions.length === 0) {
+            // First visit — create a starter
+            const starter = { id: Date.now(), title: 'New conversation', mode: 'chat', turns: 0, active: true };
+            state.sessions = [starter];
+            persist(state.workspace, state.sessions, starter.id);
+            state.code = 'agent';
+            state.top = 'code';
+          } else {
+            state.sessions = snap.sessions;
+            const active = state.sessions.find((s) => s.active) || state.sessions[0];
+            for (const s of state.sessions) s.active = s.id === active.id;
+            state.code = active.mode === 'work' ? 'agent' : active.mode;
+            state.top = active.mode === 'work' ? 'work' : 'code';
+          }
+          state.messages = [];
+          $('workspaceLabel').textContent = state.workspace;
+          renderSessions(); syncTop(); renderAll();
+        }
+      });
+
+      // Collapse rail
+      $('collapseBtn').addEventListener('click', () => {
+        const lr = $('leftRail');
+        lr.classList.toggle('collapsed');
+        $('collapseBtn').textContent = lr.classList.contains('collapsed') ? '›' : '‹';
+      });
+
+      // File peek
+      function showPeek(path, content) {
+        $('peekPath').textContent = path;
+        const lines = content.split('\n');
+        $('peekMeta').innerHTML = `<span>${lines.length} ${lines.length === 1 ? 'line' : 'lines'}</span><span style="color:var(--ink-mute)">·</span><span>just now</span>`;
+        $('peekCode').innerHTML = lines.map((line, i) =>
+          `<div class="file-peek__line"><span class="file-peek__lineno">${i + 1}</span><span class="file-peek__linetext">${line === '' ? ' ' : esc(line)}</span></div>`
+        ).join('');
+        $('filePeek').style.display = '';
+        $('body').classList.add('with-peek');
+      }
+      $('closePeek').addEventListener('click', () => {
+        $('filePeek').style.display = 'none';
+        $('body').classList.remove('with-peek');
+      });
+
+      // Messages
+      function addMessage(m) {
+        state.messages.push({ ...m, id: 'm-' + Date.now() + '-' + state.messages.length, createdAt: Date.now() });
+        renderAll();
+      }
+      const toolSummary = { bash: 'cargo test --workspace', read: 'src/main.rs', edit: 'src/main.rs:42-58', grep: 'TODO' };
+      document.querySelectorAll('button[data-mock]').forEach((b) => {
+        b.addEventListener('click', () => {
+          if (state.top === 'work') return;
+          addMessage({ kind: 'tool', role: 'assistant', tool: b.dataset.mock, status: 'done', summary: toolSummary[b.dataset.mock] });
+        });
+      });
+
+      $('loadDemo').addEventListener('click', () => {
+        const now = Date.now();
+        state.messages = [
+          { id: 'd1', kind: 'text', role: 'user',      createdAt: now,     text: 'Add a /login route to the desktop companion.' },
+          { id: 'd2', kind: 'text', role: 'assistant', createdAt: now + 1, text: "I'll plan the change, then add the route and tests." },
+          { id: 'd3', kind: 'tool', role: 'assistant', createdAt: now + 2, tool: 'read',  status: 'done',    summary: 'desktop-companion/Program.cs' },
+          { id: 'd4', kind: 'tool', role: 'assistant', createdAt: now + 3, tool: 'bash',  status: 'done',    summary: 'dotnet build desktop-companion' },
+          { id: 'd5', kind: 'tool', role: 'assistant', createdAt: now + 4, tool: 'edit',  status: 'running', summary: 'PetChatWindow.xaml.cs:142-186' },
+          { id: 'd6', kind: 'text', role: 'assistant', createdAt: now + 5, text: 'Route added and tests pass.' },
+        ];
+        renderAll();
+        showPeek('desktop-companion/PetChatWindow.xaml.cs',
+          '// PetChatWindow.xaml.cs\nusing System.Windows;\nnamespace desktop_companion;\n\npublic partial class PetChatWindow : Window\n{\n    public PetChatWindow()\n    {\n        InitializeComponent();\n    }\n\n    // NEW: login route handler\n    private void OnLoginClick(object sender, RoutedEventArgs e)\n    {\n        var api = new LoginApi();\n        api.Authenticate(Username.Text, Password.Password)\n            .ContinueWith(t => Dispatcher.Invoke(() =>\n            {\n                if (t.Result.Ok) DialogResult = true;\n                else Status.Text = t.Result.Error;\n            }));\n    }\n}');
+      });
+
+      $('inputForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const text = $('promptInput').value.trim();
+        if (!text || state.top === 'work') return;
+        addMessage({ kind: 'text', role: 'user', text });
+        $('promptInput').value = '';
+      });
+
+      // ── Init from localStorage
+      (function init() {
+        const snap = snapshot(state.workspace);
+        if (snap.sessions.length > 0) {
+          state.sessions = snap.sessions;
+          const active = state.sessions.find((s) => s.active) || state.sessions[0];
+          for (const s of state.sessions) s.active = s.id === active.id;
+          state.code = active.mode === 'work' ? 'agent' : active.mode;
+          state.top = active.mode === 'work' ? 'work' : 'code';
+        } else {
+          state.sessions = [
+            { id: 1, title: 'Add /login route', mode: 'agent', turns: 5, active: true },
+            { id: 2, title: 'Plan the auth refactor', mode: 'plan', turns: 12 },
+            { id: 3, title: 'Q: how do I structure a CLI?', mode: 'chat', turns: 3 },
+            { id: 4, title: 'Draft the Work RFC', mode: 'work', turns: 0 },
+          ];
+          persist(state.workspace, state.sessions, 1);
+        }
+        renderSessions(); syncTop(); renderAll();
+      })();
+    </script>
+  </body>
+</html>

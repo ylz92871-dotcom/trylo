@@ -1,0 +1,50 @@
+/* Trylo Desktop — shared Disclosure motion (spec §7.3 / §7.4).
+ *
+ * ThinkingCard, ToolCard, ToolSummary and ResultDock all
+ * animate expand/collapse the same way:
+ *
+ *   - the body stays MOUNTED and a CSS grid row transitions
+ *     `0fr -> 1fr` — no JS measuring, content is never
+ *     dropped while collapsing (spec §7.4);
+ *   - height and opacity enter together (spec §7.3: 180–200ms,
+ *     `--ease-out`);
+ *   - the chevron is ONE right-pointing icon rotated 90°
+ *     (spec §7.3: 120ms, `--ease-out`), shared by
+ *     Thinking / Tool / Dock.
+ *
+ * Durations come from the token layer so
+ * `prefers-reduced-motion` (which zeroes --duration-*) makes
+ * every disclosure instant without a separate override.
+ */
+
+/* Body reveal — height + opacity animate together. */
+.disclosure {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--duration-base) var(--ease-out),
+    opacity var(--duration-base) var(--ease-out);
+}
+
+.disclosure--open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.disclosure__inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Chevron rotation — one right chevron, rotated 90° when
+ * open. Thinking / Tool / Dock share the same 120ms motion. */
+.disclosure-chevron {
+  display: inline-flex;
+  align-items: center;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.disclosure-chevron--open {
+  transform: rotate(90deg);
+}

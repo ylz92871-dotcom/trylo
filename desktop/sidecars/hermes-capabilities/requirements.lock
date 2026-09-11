@@ -1,0 +1,4 @@
+# Pinned upstream runtime for trylo-hermes-capabilities.
+# Install into the Hermes Python environment, e.g.:
+#   uv pip install --python <hermes-python> -r hermes-capabilities/requirements.lock
+hermes-agent[mcp]==0.19.0

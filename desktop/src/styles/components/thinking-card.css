@@ -1,0 +1,148 @@
+/* Trylo Desktop — ThinkingCard (v1.15.9).
+ *
+ * v1.15.9: minimal disclosure. The rotating "think"
+ * indicator and label that used to live here are now in
+ * <TurnProgress /> above the first thinking card of the
+ * active turn. The card itself is just "chevron +
+ * summary" + a scrollable preview. The summary color is
+ * brand-200 (soft gold, #E3D493) — the previous brand-500
+ * was too loud. Italic kept for the "精辟 thought" register;
+ * weight 400 (normal).
+ */
+
+.thinking {
+  max-width: min(72ch, 100%);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  font-family: var(--font-body);
+  color: var(--ink-fog);
+  margin: 2px 0 2px 14px;
+}
+
+.thinking__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 2px 0;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  cursor: pointer;
+  width: 100%;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.thinking__head:hover {
+  color: var(--ink-paper);
+}
+
+.thinking__head:focus-visible {
+  outline: 1px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.thinking__chevron {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-mute);
+  flex: 0 0 auto;
+}
+
+.thinking__summary {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-weight: 400;
+  font-size: var(--text-xs);
+  color: var(--brand-200);
+  opacity: 1;
+  /* v1.15.9.h: NO truncation. The full summary is shown
+   * as-is, wrapping to multiple lines if needed. The
+   * user wants the complete text, not a shortened "..."
+   * version. */
+  min-width: 0;
+  white-space: normal;
+  flex: 1 1 auto;
+}
+
+/* Empty (or whitespace-only) summary: no soft gold,
+ * no italic — just a quiet placeholder. */
+.thinking__summary--placeholder {
+  color: var(--ink-mute);
+  font-style: normal;
+  opacity: 0.7;
+}
+
+.thinking__head:hover .thinking__summary {
+  opacity: 0.85;
+}
+
+.thinking__preview {
+  margin: 6px 0 6px 24px;
+  padding: 8px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  color: var(--ink-fog);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  /* Stable: as new text deltas stream in, the
+   * pre element expands. With memo + stable key, the
+   * element is reused, so the scroll position is
+   * preserved (the user can scroll up to read while the
+   * new content streams in below). */
+  word-break: break-word;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+/* v1.15.9.h: when the "show full" button is clicked,
+ * the preview removes its max-height cap so the user
+ * sees the complete thinking text in one pass without
+ * having to scroll inside a 280px box. */
+.thinking__preview--full {
+  max-height: none;
+  overflow-y: visible;
+}
+
+.thinking__show-full {
+  display: inline-block;
+  margin: 6px 0 6px 24px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--ink-fog);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+}
+
+.thinking__show-full:hover {
+  color: var(--ink-paper);
+  background: var(--ink-hover);
+  border-color: var(--border-strong);
+}
+
+/* M3 (Work): live activity line — the latest run-progress
+ * step, shown only while the turn is streaming. It is the
+ * "what is the agent doing right now" signal; when the
+ * turn finishes the card freezes and this line disappears,
+ * which doubles as the post-completion visual demotion. */
+.thinking__activity {
+  margin: 2px 0 2px 24px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--ink-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

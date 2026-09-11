@@ -1,0 +1,322 @@
+/* Trylo Desktop — Message bubble (v1.15.7).
+ *
+ * Closer to cline: no branded assistant bubble, no
+ * role pill. Assistant text is plain. User gets a soft
+ * surface so the speaker is visually distinct.
+ *
+ *   .message            — outer row (flex)
+ *   .message__col       — column for icon + bubble
+ *   .message__bubble    — the speech bubble
+ *   .message__text      — the actual text
+ *
+ * The .message--assistant row is full-width with the
+ * column left-aligned and the bubble transparent. The
+ * .message--user row right-aligns with a subtle elevated
+ * surface. Tool / thinking / compaction are rendered
+ * by their own components and don't use these classes.
+ */
+
+.message {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  max-width: 100%;
+  margin: 5px 0;
+  animation: message-in 160ms var(--ease-out);
+}
+
+@keyframes message-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.message--user {
+  justify-content: flex-end;
+}
+
+.message--assistant {
+  justify-content: flex-start;
+}
+
+.message--notice {
+  justify-content: center;
+}
+
+.message__col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: min(82ch, 96%);
+  min-width: 0;
+}
+
+.message--user .message__col {
+  align-items: flex-end;
+}
+
+.message--assistant .message__col {
+  align-items: flex-start;
+}
+
+/* Bubble: subtle surface for user, fully transparent for
+ * assistant. Cline uses no surface at all on assistant
+ * text; we keep a tiny padding for visual rhythm. */
+.message__bubble {
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  line-height: var(--leading-snug);
+  font-size: var(--text-base);
+  color: var(--fg);
+  max-width: 100%;
+  min-width: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.message--assistant .message__bubble {
+  padding: 0;
+  background: transparent;
+}
+
+.message--user .message__bubble {
+  background: var(--bg-elevated);
+}
+
+/* v1.16.8: sent-user-bubble attachments (Work + Code). Images show a
+   session-scoped blob thumbnail; other files collapse to a name+size chip.
+   Degrades to the chip on reload (blob is ephemeral). */
+.message__user-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.message__attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.message__attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 180px;
+  overflow: hidden;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+  border-radius: 6px;
+  padding: 2px 7px;
+  background: color-mix(in srgb, var(--bg-base) 55%, transparent);
+}
+
+.message__attachment--image {
+  padding: 2px;
+}
+
+.message__attachment-img {
+  display: block;
+  max-width: 180px;
+  max-height: 180px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.message__attachment-name {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.74));
+  font-size: 0.85em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message__attachment-size {
+  color: var(--fg-muted, rgba(255, 255, 255, 0.42));
+  font-size: 0.78em;
+  white-space: nowrap;
+}
+
+.message__text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: inherit;
+  color: var(--text-primary);
+  line-height: 1.5;
+  font-size: var(--text-base);
+}
+
+/* Final answers are the turn's visual conclusion, so they use the normal body
+   size rather than the compact process-text size. */
+.message--assistant .message__text {
+  font-size: var(--text-base);
+  line-height: 1.52;
+}
+
+.message__text--markdown > :first-child { margin-top: 0; }
+.message__text--markdown > :last-child { margin-bottom: 0; }
+.message__text--markdown p { margin: 0.34em 0; }
+.message__text--markdown ul,
+.message__text--markdown ol { margin: 0.34em 0; padding-left: 1.4em; }
+
+.message__artifact-link {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  margin: 0 2px;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--brand) 16%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--brand-soft) 13%, transparent);
+  color: color-mix(in srgb, var(--brand) 42%, var(--ink-paper));
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: baseline;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.message__artifact-link:hover {
+  border-color: color-mix(in srgb, var(--brand) 30%, var(--border));
+  background: color-mix(in srgb, var(--brand-soft) 21%, transparent);
+}
+
+.message__text h1,
+.message__text h2,
+.message__text h3 {
+  font-weight: 600;
+  margin: 0.48em 0 0.22em;
+}
+
+.message__text h1 { font-size: var(--text-xl); }
+.message__text h2 { font-size: var(--text-lg); }
+.message__text h3 { font-size: var(--text-base); }
+
+/* v1.16.3: inline-edit UI. When a user message is
+   being edited, the <p> swaps for a <textarea> +
+   Save / Cancel buttons. Kept visually consistent with
+   the regular message bubble (same padding, same
+   border-radius, same surface). */
+.message__bubble--editing {
+  width: 100%;
+  padding: 6px;
+  cursor: text;
+}
+
+.message__edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.message__edit-area {
+  width: 100%;
+  min-height: 60px;
+  padding: 6px 8px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+  border-radius: 4px;
+  background: var(--bg-elevated, rgba(20, 20, 20, 0.6));
+  color: var(--text-primary, rgba(255, 255, 255, 0.92));
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+}
+.message__edit-area:focus {
+  border-color: var(--brand-300, #DBC97F);
+}
+
+.message__edit-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.message__edit-save,
+.message__edit-cancel {
+  padding: 4px 10px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+  border-radius: 4px;
+  font-size: var(--text-xs, 12px);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease-out, color 120ms ease-out;
+}
+.message__edit-save {
+  background: var(--brand-soft, rgba(219, 201, 127, 0.12));
+  color: var(--brand-200, #E3D493);
+  border-color: var(--brand-500, #9F9054);
+}
+.message__edit-save:hover {
+  background: rgba(219, 201, 127, 0.22);
+}
+.message__edit-cancel {
+  background: transparent;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+}
+.message__edit-cancel:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary, rgba(255, 255, 255, 0.92));
+}
+
+.message__role {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  padding: 0 2px;
+}
+
+.message--user .message__role {
+  color: var(--brand);
+}
+
+.message__notice {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--ink-fog);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* M3 (Work): inline artifact row. The shared ArtifactCard
+ * carries its own chrome; the row only provides width
+ * rhythm and the provenance meta line beneath it. */
+.message--artifact {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+
+.message__artifact-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 2px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  min-width: 0;
+}
+
+.message__artifact-path {
+  color: var(--ink-mute);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.message__artifact-state {
+  color: var(--ink-mute);
+  opacity: 0.75;
+  flex: 0 0 auto;
+}

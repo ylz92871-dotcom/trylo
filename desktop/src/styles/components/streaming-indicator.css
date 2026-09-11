@@ -1,0 +1,66 @@
+/* Trylo Desktop — StreamingIndicator (v1.15.9).
+ *
+ * Simplified to 3 jumping dots. The previous version
+ * had a rotating Trilo logo + label + timer; those
+ * moved to <TurnProgress /> above the first thinking
+ * card. The footer indicator is now just a minimal
+ * "still working" hint — three dots bouncing in a wave.
+ */
+
+.streaming-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 8px 12px;
+  margin: 10px 0 4px 14px;
+  font-family: var(--font-body);
+  width: max-content;
+  max-width: 100%;
+}
+
+.streaming-indicator__label {
+  color: var(--ink-mute);
+  font-size: 11.5px;
+}
+
+.streaming-indicator__dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.streaming-indicator__dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink-fog);
+  animation: streaming-indicator-bounce 1.4s ease-in-out infinite;
+}
+
+.streaming-indicator__dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.streaming-indicator__dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes streaming-indicator-bounce {
+  0%, 80%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streaming-indicator__dot {
+    animation: none;
+    opacity: 0.7;
+  }
+}

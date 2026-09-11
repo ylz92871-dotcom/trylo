@@ -1,0 +1,24 @@
+/* Trylo Desktop — Surface host shared styles.
+ *
+ * Tiny file. The Team surface and the Person surface live inside
+ * SurfaceHost, but most of the layout is owned by their own files
+ * (surface-team.css, team-idle.css, team-run.css, seat-detail.css,
+ * person-team-status-bar.css). This file is reserved for layout glue
+ * that touches both surfaces.
+ */
+
+.surface-host {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* When a TeamRun is active, we tighten the body padding around the
+ * chat panel to keep the new PersonTeamStatusBar from pushing the
+ * composer offscreen on short windows. */
+.surface-host--team-active .chat-panel__body {
+  padding-bottom: 0;
+}

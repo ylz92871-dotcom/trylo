@@ -1,0 +1,121 @@
+/* Trylo Desktop — Team idle (Foundation spec §10.3).
+ *
+ * Quiet text + template rows. Max width 640px, left-aligned to the main
+ * column padding. One row per template, no cards, no gradients, no
+ * accent bars, no uppercase eyebrows. Only existing tokens.
+ */
+
+.team-idle {
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.team-idle__hint {
+  margin: 0 0 var(--space-4);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--ink-fog);
+}
+
+.team-idle__section {
+  margin: var(--space-5) 0 4px;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--ink-mute);
+}
+
+.team-idle__rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.team-idle__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  width: 100%;
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.team-idle__row:hover {
+  background: var(--ink-hover);
+}
+
+.team-idle__row:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+
+.team-idle__row-title {
+  flex: 0 0 auto;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--ink-paper);
+}
+
+.team-idle__row-roster {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--ink-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.team-idle__continue {
+  align-self: flex-start;
+  margin: 0 0 var(--space-4);
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--ink-divider);
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--ink-paper);
+  cursor: pointer;
+}
+
+.team-idle__continue:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.team-idle__row:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.team-idle__row--static {
+  padding: 0;
+}
+
+.team-idle__row-open {
+  flex: 1 1 auto;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  padding: 0 var(--space-3);
+  min-height: 38px;
+  font: inherit;
+  color: inherit;
+}
+
+.team-idle__row-delete {
+  border: none;
+  background: transparent;
+  color: var(--ink-mute);
+  cursor: pointer;
+  padding: 0 10px;
+}

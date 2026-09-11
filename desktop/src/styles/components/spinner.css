@@ -1,0 +1,50 @@
+/* Trylo Desktop — Spinner.
+ *
+ * A small rotating ring used to signal an in-flight run
+ * (e.g. the ProcessHeader status line while the agent works).
+ * Minimal "small circle" the user asked for. Honors
+ * prefers-reduced-motion by slowing rather than freezing.
+ */
+
+.spinner {
+  display: inline-block;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid var(--ink-mute);
+  border-top-color: var(--brand);
+  flex: 0 0 auto;
+  animation: spinner-rotate 0.7s linear infinite;
+}
+
+.spinner--xs {
+  width: 12px;
+  height: 12px;
+  border-width: 2px;
+}
+
+.spinner--sm {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+.spinner--md {
+  width: 22px;
+  height: 22px;
+  border-width: 2.5px;
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    /* Spec §7.5: an infinite loop must resolve to `none` under reduce —
+     * slowing it (animation-duration) is NOT a fallback and fails the
+     * reduced-motion source-level test. */
+    animation: none;
+  }
+}

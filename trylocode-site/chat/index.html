@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Trylo Code — Web Agent 体验</title>
+<meta name="description" content="在浏览器里体验 Trylo Code 搭档：Plan 先思考、Agent 自动执行、Chat 随时讨论。" />
+<link rel="icon" type="image/svg+xml" href="../assets/trylo-icon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700;900&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0d10;--bg-2:#0c1015;
+    --panel:#14171c;--panel-2:#191d24;--panel-3:#20252d;
+    --line:#333947;--line-soft:#262b33;
+    --text:#edf0f4;--text-soft:#b6bdc9;--muted:#7f8898;
+    --accent:#dcc97e;--accent-strong:#f3e3a6;--accent-soft:rgba(220,201,126,.12);
+    --bone:#f2ede1;--green:#9fe26f;--yellow:#f1d27a;--red:#ea796d;--blue:#8fb5ff;
+    --code-bg:#10141a;
+    --font-display:"Space Grotesk","Noto Sans SC",system-ui,sans-serif;
+    --font-body:"Inter","Noto Sans SC",system-ui,sans-serif;
+    --font-mono:"IBM Plex Mono","Cascadia Code","Consolas",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:var(--font-body);background:linear-gradient(180deg,#090b0e 0%,#0c1015 100%);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;overflow:hidden}
+  a{color:inherit}
+  svg{display:block}
+  ::selection{background:var(--accent);color:#0b0d10}
+  :focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px;border-radius:3px}
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:#2a3039;border-radius:9px}
+  ::-webkit-scrollbar-thumb:hover{background:#3a4150}
+
+  .app{display:grid;grid-template-columns:64px 1fr 380px;height:100vh}
+
+  /* rail */
+  .rail{background:var(--panel);border-right:1px solid var(--line-soft);display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:10px}
+  .rail .logo{width:34px;height:34px;color:var(--accent);transition:transform .5s cubic-bezier(.2,.8,.2,1)}
+  .rail .logo path{stroke:currentColor;stroke-width:76;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .rail .logo:hover{transform:rotate(120deg);filter:drop-shadow(0 0 6px rgba(220,201,126,.45))}
+  .rail .logo.spin{animation:spin 2.4s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .rail-divider{width:28px;height:1px;background:var(--line);margin:4px 0}
+  .rail-btn{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:var(--muted);transition:all .2s}
+  .rail-btn:hover{background:var(--panel-2);color:var(--text)}
+  .rail-btn svg{width:19px;height:19px}
+  .rail-spacer{flex:1}
+  .rail .tag{writing-mode:vertical-rl;transform:rotate(180deg);font-family:var(--font-mono);font-size:9.5px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin-bottom:4px}
+
+  /* main */
+  .main{display:flex;flex-direction:column;min-width:0}
+  .topbar{display:flex;align-items:center;gap:16px;padding:12px 26px;border-bottom:1px solid var(--line-soft);background:rgba(11,13,16,.6);backdrop-filter:blur(12px)}
+  .topbar .title{font-family:var(--font-display);font-weight:700;font-size:15px;color:var(--bone);letter-spacing:.01em}
+  .mode-pills{display:flex;gap:4px;margin-left:14px;background:var(--code-bg);border:1px solid var(--line-soft);border-radius:10px;padding:3px}
+  .mode-pill{font-family:var(--font-mono);font-size:12px;padding:6px 13px;border-radius:7px;color:var(--muted);transition:all .2s;display:flex;align-items:center;gap:6px}
+  .mode-pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.5}
+  .mode-pill:hover{color:var(--text-soft)}
+  .mode-pill.is-active{background:var(--accent-soft);color:var(--accent-strong);box-shadow:inset 0 0 0 1px rgba(220,201,126,.2)}
+  .mode-pill.is-active .dot{opacity:1;box-shadow:0 0 6px currentColor}
+  .conn{margin-left:auto;display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:11px;color:var(--green)}
+  .conn .lk{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.4}}
+  .topbar .demo-flag{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;color:var(--yellow);border:1px solid rgba(241,210,122,.3);padding:3px 8px;border-radius:6px;text-transform:uppercase}
+
+  .stream{flex:1;overflow-y:auto;padding:32px 0 20px;scroll-behavior:smooth}
+  .stream-inner{max-width:720px;margin:0 auto;padding:0 28px;display:flex;flex-direction:column;gap:22px}
+
+  .empty{flex:1;display:grid;place-items:center;padding:0 28px}
+  .empty-inner{max-width:600px;text-align:center}
+  .empty-mark{width:72px;height:72px;margin:0 auto 22px;color:var(--accent);filter:drop-shadow(0 6px 20px rgba(0,0,0,.5)) drop-shadow(0 0 22px rgba(220,201,126,.22))}
+  .empty-mark path{stroke:currentColor;stroke-width:76;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .empty h1{font-family:var(--font-display);font-weight:700;font-size:clamp(26px,3.4vw,34px);line-height:1.15;color:var(--bone);margin-bottom:12px;letter-spacing:-.02em}
+  .empty h1 em{font-style:normal;color:var(--accent-strong)}
+  .empty p{color:var(--text-soft);font-size:15px;margin-bottom:28px}
+  .suggestions{display:grid;grid-template-columns:1fr 1fr;gap:11px;text-align:left}
+  .sugg{border:1px solid var(--line);border-radius:13px;padding:14px 16px;background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,0)),var(--panel);transition:all .2s;display:flex;flex-direction:column;gap:5px}
+  .sugg:hover{border-color:rgba(220,201,126,.4);transform:translateY(-2px);box-shadow:0 12px 30px rgba(0,0,0,.3)}
+  .sugg .st{font-size:13.5px;font-weight:600;color:var(--bone)}
+  .sugg .sd{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+
+  /* messages */
+  .msg{display:flex;flex-direction:column;gap:4px}
+  .msg-role{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}
+  .msg-role .av{width:20px;height:20px;border-radius:6px;display:grid;place-items:center}
+  .msg-role .av svg{width:14px;height:14px}
+  .msg.user .msg-role{color:var(--text-soft)}
+  .msg.user .msg-role .av{background:var(--panel-2);color:var(--text-soft)}
+  .msg.assistant .msg-role .av{background:var(--accent-soft);color:var(--accent)}
+  .msg-bubble{padding:4px 0 4px 28px}
+  .msg.user .msg-bubble{font-size:15px;color:var(--text)}
+
+  /* thinking */
+  .think{border-left:2px solid var(--accent);padding:2px 0 2px 14px;margin:6px 0 10px}
+  .think-head{font-family:var(--font-mono);font-size:11px;color:var(--accent);letter-spacing:.08em;display:flex;align-items:center;gap:9px;margin-bottom:7px;cursor:pointer;user-select:none}
+  .think-head .tw{display:inline-flex;gap:3px}
+  .think-head .tw i{width:4px;height:4px;border-radius:50%;background:var(--accent);animation:tw 1.1s ease-in-out infinite}
+  .think-head .tw i:nth-child(2){animation-delay:.2s}
+  .think-head .tw i:nth-child(3){animation-delay:.4s}
+  @keyframes tw{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+  .think-head .chev{margin-left:auto;transition:transform .2s;color:var(--muted)}
+  .think.collapsed .think-body{display:none}
+  .think.collapsed .chev{transform:rotate(-90deg)}
+  .think-body{font-family:var(--font-mono);font-size:12px;line-height:1.75;color:var(--text-soft);white-space:pre-wrap}
+  .think-body .cursor{display:inline-block;width:7px;height:14px;background:var(--accent);vertical-align:-2px;margin-left:1px;animation:blink 1s steps(2) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  /* tool steps */
+  .tools{display:flex;flex-direction:column;gap:7px;margin:8px 0 10px 28px}
+  .tool{display:grid;grid-template-columns:20px 1fr auto;gap:11px;align-items:start;border:1px solid var(--line-soft);border-radius:11px;background:var(--panel);padding:10px 13px}
+  .tool .ic{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;margin-top:1px}
+  .tool .ic svg{width:13px;height:13px}
+  .tool.read .ic{background:rgba(143,181,255,.12);color:var(--blue)}
+  .tool.edit .ic{background:rgba(220,201,126,.12);color:var(--accent)}
+  .tool.run .ic{background:rgba(159,226,111,.12);color:var(--green)}
+  .tool .t-main{min-width:0}
+  .tool .t-cmd{font-family:var(--font-mono);font-size:12.5px;color:var(--text);word-break:break-all}
+  .tool .t-cmd b{color:var(--accent-strong);font-weight:600}
+  .tool .t-detail{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:3px;white-space:pre-wrap}
+  .tool .status{font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;padding:2px 7px;border-radius:5px;white-space:nowrap}
+  .tool .status.running{color:var(--yellow);border:1px solid rgba(241,210,122,.3);display:inline-flex;align-items:center;gap:5px}
+  .tool .status.running::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--yellow);animation:pulse 1s infinite}
+  .tool .status.done{color:var(--green);border:1px solid rgba(159,226,111,.25)}
+  .tool .status.ok{color:var(--green);border:1px solid rgba(159,226,111,.25)}
+
+  .final{font-size:15px;color:var(--text);line-height:1.7;white-space:pre-wrap}
+  .final .cursor{display:inline-block;width:8px;height:16px;background:var(--accent);vertical-align:-3px;animation:blink 1s steps(2) infinite}
+  .final code{font-family:var(--font-mono);font-size:.88em;color:var(--accent-strong);background:var(--accent-soft);padding:1px 6px;border-radius:4px}
+  .final strong{color:var(--bone);font-weight:600}
+
+  .plan-actions{margin:12px 0 0 28px;display:flex;gap:10px;flex-wrap:wrap}
+  .plan-btn{font-family:var(--font-mono);font-size:13px;font-weight:600;padding:10px 18px;border-radius:999px;display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#0b0d10;border:1px solid var(--accent);transition:all .2s}
+  .plan-btn:hover{background:var(--accent-strong);border-color:var(--accent-strong);transform:translateY(-1px);box-shadow:0 10px 26px rgba(220,201,126,.2)}
+  .plan-btn.ghost{background:none;color:var(--text-soft);border-color:var(--line)}
+  .plan-btn.ghost:hover{color:var(--accent-strong);border-color:var(--accent)}
+  .plan-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+
+  /* composer */
+  .composer-wrap{padding:0 0 22px;border-top:0}
+  .composer{max-width:720px;margin:0 auto;padding:0 28px}
+  .composer-inner{display:flex;align-items:flex-end;gap:10px;border:1px solid var(--line);border-radius:16px;background:var(--panel);padding:10px 10px 10px 16px;transition:border-color .2s,box-shadow .2s}
+  .composer-inner:focus-within{border-color:rgba(220,201,126,.45);box-shadow:0 0 0 3px rgba(220,201,126,.08)}
+  .composer textarea{flex:1;resize:none;border:none;background:none;color:var(--text);font-family:var(--font-body);font-size:14.5px;line-height:1.55;max-height:160px;padding:6px 0;outline:none}
+  .composer textarea::placeholder{color:var(--muted)}
+  .send{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:var(--accent);color:#0b0d10;flex-shrink:0;transition:all .2s}
+  .send:hover{background:var(--accent-strong);transform:translateY(-1px)}
+  .send:disabled{background:var(--panel-3);color:var(--muted);cursor:not-allowed;transform:none}
+  .send svg{width:18px;height:18px}
+  .composer-hint{max-width:720px;margin:8px auto 0;padding:0 30px;font-family:var(--font-mono);font-size:10.5px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .composer-hint kbd{font-family:var(--font-mono);background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:var(--text-soft)}
+
+  /* inspector */
+  .inspector{background:var(--panel);border-left:1px solid var(--line-soft);display:flex;flex-direction:column;min-width:0}
+  .insp-head{padding:14px 18px;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:9px}
+  .insp-head .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+  .insp-head.s9 .dot{background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite}
+  .insp-head .fname{font-family:var(--font-mono);font-size:12px;color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .insp-head .badge{margin-left:auto;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);padding:2px 7px;border-radius:5px}
+  .insp-head.s9 .badge{color:var(--green);border-color:rgba(159,226,111,.25)}
+  .code{flex:1;overflow:auto;margin:0;padding:16px 0;font-family:var(--font-mono);font-size:12px;line-height:1.75;background:var(--code-bg)}
+  .code .line{display:grid;grid-template-columns:46px 1fr;padding:0 16px 0 0}
+  .code .ln{color:var(--muted);text-align:right;padding-right:14px;user-select:none;opacity:.7}
+  .code .lc{color:var(--text-soft);white-space:pre}
+  .code .line.changed{background:rgba(220,201,126,.08)}
+  .code .line.changed .ln{color:var(--accent)}
+  .code .k{color:var(--blue)}
+  .code .s{color:var(--green)}
+  .code .c{color:var(--muted);font-style:italic}
+  .code .n{color:var(--accent-strong)}
+  .code .f{color:var(--yellow)}
+  .insp-empty{flex:1;display:grid;place-items:center;padding:30px;text-align:center}
+  .insp-empty .ei{width:46px;height:46px;margin:0 auto 14px;color:var(--line)}
+  .insp-empty p{font-family:var(--font-mono);font-size:11px;color:var(--muted);line-height:1.7}
+  .insp-foot{padding:12px 18px;border-top:1px solid var(--line-soft);font-family:var(--font-mono);font-size:10.5px;color:var(--muted);display:flex;justify-content:space-between}
+  .insp-foot .ok{color:var(--green)}
+
+  .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);background:var(--panel-3);border:1px solid var(--line);color:var(--text);font-family:var(--font-mono);font-size:12.5px;padding:10px 18px;border-radius:10px;opacity:0;pointer-events:none;transition:all .3s;z-index:90;box-shadow:0 14px 40px rgba(0,0,0,.5)}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  @media(max-width:1000px){.inspector{display:none}.app{grid-template-columns:64px 1fr}}
+  @media(max-width:600px){.suggestions{grid-template-columns:1fr}.rail{width:54px}.app{grid-template-columns:54px 1fr}.stream{padding-top:20px}.conn span,.demo-flag{display:none}}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- RAIL -->
+  <aside class="rail">
+    <a class="logo" href="https://trylocode.me" title="返回官网">
+      <svg viewBox="0 0 1024 1024"><path d="M462 236 L462 420 L624 420"/><path d="M276 732 L424 644 L356 512"/><path d="M540 676 L622 546 L786 640"/></svg>
+    </a>
+    <div class="rail-divider"></div>
+    <button class="rail-btn" id="newChat" title="新对话">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <button class="rail-btn" id="railPlanBtn" data-mode="plan" title="Plan 模式思考流">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg>
+    </button>
+    <div class="rail-spacer"></div>
+    <a class="rail-btn" href="https://app.trylocode.me" target="_blank" rel="noopener noreferrer" title="下载手机 App" style="text-decoration:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>
+    </a>
+    <a class="rail-btn" href="https://remote.trylocode.me" target="_blank" rel="noopener noreferrer" title="远程控制" style="text-decoration:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14 0M1.4 9a16 16 0 0 1 21.2 0M8.5 16.1a6 6 0 0 1 7 0M12 20h.01"/></svg>
+    </a>
+    <span class="tag">web demo</span>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <header class="topbar">
+      <span class="title">Trylo Code</span>
+      <div class="mode-pills" role="tablist">
+        <button class="mode-pill is-active" data-mode="plan" role="tab"><span class="dot"></span>Plan</button>
+        <button class="mode-pill" data-mode="agent" role="tab"><span class="dot"></span>Agent</button>
+        <button class="mode-pill" data-mode="chat" role="tab"><span class="dot"></span>Chat</button>
+      </div>
+      <span class="demo-flag">演示环境</span>
+      <span class="conn"><span class="lk"></span>已连接 · 本地回环</span>
+    </header>
+
+    <div class="stream" id="stream">
+      <div class="empty" id="empty">
+        <div class="empty-inner">
+          <svg class="empty-mark" viewBox="0 0 1024 1024"><path d="M462 236 L462 420 L624 420"/><path d="M276 732 L424 644 L356 512"/><path d="M540 676 L622 546 L786 640"/></svg>
+          <h1>先想想，再动手。<br><em>试试让我做点什么。</em></h1>
+          <p>这是浏览器里的 Trylo Code 演示搭档：Plan 会先给出方案，Agent 会一步步执行，Chat 直接回答。所有过程都是模拟的，但节奏是真的。</p>
+          <div class="suggestions">
+            <button class="sugg" data-prompt="帮我把这个项目的事件总线重构为事件驱动模式"><span class="st">重构事件总线</span><span class="sd">PLAN → 给出方案后一键实施</span></button>
+            <button class="sugg" data-prompt="第 87 行的缓存逻辑为什么要用写时失效？"><span class="st">解释缓存逻辑</span><span class="sd">CHAT · 像问同事一样</span></button>
+            <button class="sugg" data-prompt="给 utils/date.ts 补充单元测试并运行"><span class="st">补单测并运行</span><span class="sd">AGENT · 读文件→写测试→跑验证</span></button>
+            <button class="sugg" data-prompt="这个项目用的什么技术栈？"><span class="st">了解项目</span><span class="sd">自动读取关键文件后总结</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="stream-inner" id="streamInner" style="display:none"></div>
+    </div>
+
+    <div class="composer-wrap">
+      <div class="composer">
+        <div class="composer-inner">
+          <textarea id="input" rows="1" placeholder="继续当前电脑会话…（Enter 发送，Shift+Enter 换行）"></textarea>
+          <button class="send" id="send" title="发送">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="composer-hint">
+        <span><kbd>Enter</kbd> 发送</span>
+        <span><kbd>Shift</kbd>+<kbd>Enter</kbd> 换行</span>
+        <span id="modeHint">当前模式：Plan · 先思考再动手</span>
+      </div>
+    </div>
+  </main>
+
+  <!-- INSPECTOR -->
+  <aside class="inspector" id="inspector">
+    <div class="insp-head" id="inspHead">
+      <span class="dot"></span>
+      <span class="fname" id="inspFile">工作区空闲</span>
+      <span class="badge" id="inspBadge">idle</span>
+    </div>
+    <div class="insp-empty" id="inspEmpty">
+      <div>
+        <svg class="ei" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13l2 2 4-4"/></svg>
+        <p>Agent 开始工作后，正在读取或修改的文件会显示在这里。</p>
+      </div>
+    </div>
+    <pre class="code" id="code" style="display:none"></pre>
+    <div class="insp-foot" id="inspFoot" style="display:none">
+      <span id="inspStat">—</span><span class="ok" id="inspOk" style="opacity:0">● saved</span>
+    </div>
+  </aside>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="./app.js" defer></script>
+</body>
+</html>

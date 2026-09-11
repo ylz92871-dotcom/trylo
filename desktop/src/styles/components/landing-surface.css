@@ -1,0 +1,112 @@
+/* Trylo Desktop — unified Landing Surface (Code / Work empty state).
+ *
+ * 2026-08-29 refactor — "少。静。大面积留白。"
+ *   * ONE skeleton for both modes. Differences are copy only.
+ *   * The Trylo mark is an oversized, neutral (paper-white, NOT
+ *     gold), very-low-opacity WATERMARK in the background layer.
+ *     It is out of flow, ignores pointer events, and may bleed
+ *     past the hero bounds. It is an environment layer, not a
+ *     content element — "感受到 Logo，而不是看到 Logo".
+ *   * The hero group is biased toward the optical center (just
+ *     above it), leaving the lower region as pure negative
+ *     space before the (external) composer.
+ *   * Gold is an accent only: suggestions are neutral at rest and
+ *     warm up on hover. No gold borders, no gold titles, no glow.
+ */
+
+.landing-surface {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* Vertically centre the hero group inside the available work
+   * region (Topbar-bottom → Composer-top). The surface is the
+   * flex sibling of the composer, so centring here keeps the
+   * hero at the optical centre of that region at every window
+   * size — 1366×768 up to 1920×1080 — without a hard-coded px.
+   * This replaces the old top-biased `padding-top` that left
+   * the hero stuck in the upper third. */
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  padding: var(--space-6);
+  overflow: hidden; /* clip the oversized watermark, keep the calm */
+  color: var(--fg-muted);
+}
+
+/* Background-layer brand watermark. */
+.landing-surface__watermark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  /* 2026-08-29 (revert): a faint background atmosphere — ~28–34% of
+   * the content width, parked in the UPPER region so its centre stays
+   * above the headline and never crosses the reading copy. Neutral
+   * paper-white ink (tone="ink"), never gold. */
+  padding-top: clamp(32px, 11vh, 130px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.landing-surface__watermark svg {
+  width: clamp(280px, 26vw, 520px);
+  height: auto;
+  opacity: 0.05;
+}
+
+/* Content column — centred in the work region, width-constrained. */
+.landing-surface__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Tight headline → subtitle gap; the suggestions keep a
+   * larger top margin so subtitle → suggestions breathes more. */
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 640px;
+  /* Centred by the parent's justify-content:center. A small
+   * bottom margin biases the hero slightly above the optical
+   * centre so a touch more negative space opens toward the
+   * composer below. Stable from 1366×768 to 1920×1080.
+   * 2026-08-29 UI patch: nudge the hero group ~50px lower (within
+   * the 40–60px bound) so it sits closer to the visual centre of
+   * the work region. Purely a visual transform on this wrapper —
+   * no layout, sibling, DOM, or other CSS touched. */
+  margin: 0 auto var(--space-8);
+  transform: translateY(50px);
+  text-align: center;
+}
+
+.landing-surface__headline {
+  font-family: var(--font-body);
+  font-size: clamp(27px, 2vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+  margin: 0;
+  line-height: var(--leading-tight);
+}
+
+.landing-surface__subtitle {
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--ink-mute);
+  margin: 0;
+  letter-spacing: 0.015em;
+  line-height: var(--leading-snug);
+  max-width: 52ch;
+}
+
+/* 2026-08-29 (revert): the central suggestion pills were removed
+   from the Hero — they read as onboarding noise and duplicated the
+   composer. Their seed logic is preserved in EmptyState/WorkLanding;
+   a future command palette can surface them. */
+
+/* Suppressed Work landing (missing API key — banner covers it). */
+.work-landing--quiet {
+  width: 100%;
+  height: 100%;
+}

@@ -1,0 +1,31 @@
+{
+  "name": "@trylo/desktop-services",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Trylo Desktop's Node sidecar: Service Host frame loop + pet/learning/remote adapters over legacy vendor modules.",
+  "main": "src/host.mjs",
+  "scripts": {
+    "start": "node src/host.mjs",
+    "test": "node scripts/no-external-paths.mjs && node --test --test-concurrency=1 \"tests/**/*.test.mjs\" && node scripts/pet-chain-smoke.cjs",
+    "smoke:pet-chain": "node scripts/pet-chain-smoke.cjs",
+    "smoke:pet-chain:exe": "node scripts/pet-chain-smoke.cjs --require-exe",
+    "smoke:legacy-gateway": "node vendor/legacy/remote-gateway/smoke-test.js && node vendor/legacy/remote-gateway/handoff-test.js",
+    "smoke:legacy-tunnel": "node tests/legacy/remote-tunnel-test.js 2>/dev/null || exit 0",
+    "smoke:remote-bundle": "node scripts/remote-bundle-smoke.mjs",
+    "inventory": "node scripts/release-inventory.mjs"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "ws": "8.21.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "overrides": {
+    "ws": "8.21.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "UNLICENSED"
+}

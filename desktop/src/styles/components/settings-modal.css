@@ -1,0 +1,544 @@
+/* Trylo Desktop — Settings modal.
+ *
+ * v1.15: a focused dialog with four fields. Backdrop dims
+ * the page; the modal sits in the center. The primary
+ * action (Save) uses Trylo Gold; the secondary (Cancel) is
+ * a quiet ghost button.
+ */
+
+.settings-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(2px);
+}
+
+.settings-modal {
+  width: min(520px, 90vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  font-family: var(--font-body);
+}
+
+.settings-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-modal__title {
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--fg);
+  margin: 0;
+}
+
+.settings-modal__close {
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  font-size: var(--text-lg);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.settings-modal__close:hover {
+  background: var(--ink-hover);
+  color: var(--fg);
+}
+
+.settings-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  overflow-y: auto;
+}
+
+.settings-modal__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+
+.settings-modal__legend {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--brand);
+  font-weight: 500;
+  padding: 0 var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  justify-content: space-between;
+}
+
+/* 2026-08-29: legend-level pill switch. Used by the Remote
+ * group so the user can flip the on/off mirror from inside
+ * the settings panel (the TopBar owns the primary switch). */
+.settings-modal__inline-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: var(--font-body);
+  color: var(--fg-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.settings-modal__inline-toggle[aria-pressed='true'] {
+  color: var(--brand);
+  background: var(--brand-soft);
+  border-color: var(--brand-500);
+}
+
+.settings-modal__inline-toggle:hover {
+  border-color: var(--brand-500);
+  color: var(--fg);
+}
+
+.settings-modal__inline-toggle[aria-pressed='true']:hover {
+  background: rgba(219, 201, 127, 0.22);
+}
+
+.settings-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.settings-modal__label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.settings-modal__input {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--fg);
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.settings-modal__input:focus {
+  border-color: var(--brand);
+}
+
+.settings-modal__input::placeholder {
+  color: var(--ink-mute);
+}
+
+.settings-modal__row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.settings-modal__row .settings-modal__input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.settings-modal__test {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.settings-modal__test-result {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  word-break: break-all;
+}
+
+.settings-modal__test-result--ok {
+  color: var(--success);
+  background: rgba(110, 191, 123, 0.12);
+}
+
+.settings-modal__test-result--err {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.settings-modal__desc {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+  font-family: var(--font-body);
+  line-height: 1.5;
+}
+
+.settings-modal__field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings-modal__field--inline input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+
+.settings-modal__textarea {
+  resize: vertical;
+  min-height: 64px;
+  font-family: var(--font-mono);
+  line-height: 1.4;
+}
+
+.settings-modal__hint {
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+}
+
+/* Real desktop-pet state (audit §4.2 PET-P0-1). A launch failure is shown
+   here instead of failing silently. */
+.settings-modal__pet-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm, 6px);
+  border-left: 3px solid var(--fg-muted);
+  background: color-mix(in srgb, var(--fg-muted) 10%, transparent);
+}
+
+.settings-modal__pet-status-headline {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.settings-modal__pet-status--ok {
+  border-left-color: var(--success, #3fb950);
+  background: color-mix(in srgb, var(--success, #3fb950) 12%, transparent);
+}
+
+.settings-modal__pet-status--pending {
+  border-left-color: var(--warning, #d29922);
+  background: color-mix(in srgb, var(--warning, #d29922) 12%, transparent);
+}
+
+.settings-modal__pet-status--error {
+  border-left-color: var(--danger, #f85149);
+  background: color-mix(in srgb, var(--danger, #f85149) 12%, transparent);
+}
+
+/* Remote pairing QR (spec §8.1.4): square, capped size, centered. */
+.settings-modal__qr {
+  margin-top: 8px;
+  width: 168px;
+  height: 168px;
+  border-radius: var(--radius-sm, 6px);
+  image-rendering: pixelated;
+}
+
+.settings-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.settings-modal__btn {
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.settings-modal__btn--ghost {
+  background: transparent;
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+}
+
+.settings-modal__btn--ghost:hover {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+
+.settings-modal__btn--primary {
+  background: var(--brand);
+  color: var(--bg);
+  border: 1px solid var(--brand);
+}
+
+.settings-modal__btn--primary:hover {
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
+}
+
+/* ── Work 工具 (Trylo Tool Platform, audit P0-A §3.3) ─────────────── */
+
+.work-tools__row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-top: var(--space-2);
+}
+
+.work-tools__row--err {
+  border-color: var(--danger, #b3261e);
+}
+
+.work-tools__row-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.work-tools__name {
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+
+.work-tools__version,
+.work-tools__adoption {
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+
+.work-tools__state {
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.work-tools__state--ok {
+  color: var(--success, #1b7f4d);
+}
+
+.work-tools__state--err {
+  color: var(--danger, #b3261e);
+}
+
+.work-tools__state--pending {
+  color: var(--fg-muted);
+}
+
+.work-tools__action {
+  margin-left: auto;
+  padding: 2px 10px;
+  font-size: var(--text-xs);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.work-tools__action:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.work-tools__action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.work-tools__detail {
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+  white-space: pre-wrap;
+}
+
+/* ── Skills library modal (Settings → 技能 Skills) ─────────────────
+ * Reuses .settings-modal shell; one scrolling body, list rows with
+ * expandable SKILL.md content. */
+
+.settings-modal__skills-open {
+  align-self: flex-start;
+}
+
+.skills-modal {
+  width: min(640px, 92vw);
+}
+
+.skills-modal__body {
+  /* re-declared on the settings body, but keep the contract explicit:
+     one scroll container for the whole dialog (min-height:0 matters
+     inside the flex column). */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.skills-modal__intro {
+  margin: 0;
+}
+
+.skills-modal__status {
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  margin: var(--space-2) 0;
+}
+
+.skills-modal__error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--danger, #e06c6c);
+  border-radius: var(--radius-md);
+  color: var(--danger, #e06c6c);
+  font-size: var(--text-sm);
+}
+
+.skills-modal__error-text {
+  color: var(--danger, #e06c6c);
+  font-size: var(--text-sm);
+}
+
+.skills-modal__empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+.skills-modal__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.skills-modal__item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  padding: var(--space-3);
+}
+
+.skills-modal__item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.skills-modal__item-name {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.skills-modal__item-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.skills-modal__category {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--brand);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.skills-modal__chevron {
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+}
+
+.skills-modal__item-desc {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+
+.skills-modal__detail {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+}
+
+.skills-modal__content {
+  margin: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--fg);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+}

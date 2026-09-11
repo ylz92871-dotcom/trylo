@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Trylo Code</string>
+    <string name="title_activity_main">Trylo Code</string>
+    <string name="package_name">com.trylo.remote</string>
+    <string name="custom_url_scheme">com.trylo.remote</string>
+</resources>

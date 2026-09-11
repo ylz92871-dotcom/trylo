@@ -1,0 +1,184 @@
+/* Trylo Desktop — InputRequestCard (M4-E, spec §6.7 Core
+ * "approval / input").
+ *
+ * Inline structured user-input question set. Pending →
+ * one radio group per question + Submit / Dismiss;
+ * resolved → quiet state line (with the submitted answers
+ * when present). One stable identity per requestId keeps
+ * the card in one place across created → resolved/
+ * dismissed.
+ */
+
+.input-request-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 720px;
+  margin: var(--space-2) auto 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--mode-accent);
+  border-radius: var(--radius-md);
+}
+
+.input-request-card__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mode-accent);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.input-request-card__title {
+  letter-spacing: 0.01em;
+}
+
+.input-request-card__state {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--fg-muted);
+}
+
+.input-request-card__questions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.input-request-card__question-text {
+  margin: 0 0 6px;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  line-height: var(--leading-base);
+  color: var(--fg);
+}
+
+.input-request-card__options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.input-request-card__option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  align-items: start;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--fg);
+}
+
+.input-request-card__option input[type='radio'] {
+  margin-top: 2px;
+  accent-color: var(--mode-accent);
+}
+
+.input-request-card__option-label {
+  font-weight: 500;
+}
+
+.input-request-card__option-desc {
+  grid-column: 2;
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+
+.input-request-card__no-options {
+  margin: 0;
+  color: var(--fg-muted);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+}
+
+/* P2-4: per-question "Other" free-text escape hatch. */
+.input-request-card__other {
+  margin-top: var(--space-2);
+  width: 100%;
+  resize: vertical;
+  min-height: 56px;
+  padding: var(--space-2);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  line-height: var(--leading-base);
+}
+
+.input-request-card__other:disabled {
+  opacity: 0.5;
+}
+
+.input-request-card__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.input-request-card__btn {
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.input-request-card__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.input-request-card__btn--submit {
+  background: var(--mode-accent);
+  color: #101210;
+}
+
+.input-request-card__btn--dismiss {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+}
+
+.input-request-card__answers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.input-request-card__answer-q {
+  display: block;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+
+.input-request-card__answer-v {
+  display: block;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--fg);
+}
+
+.input-request-card__resolved {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  line-height: var(--leading-base);
+  color: var(--fg-muted);
+}

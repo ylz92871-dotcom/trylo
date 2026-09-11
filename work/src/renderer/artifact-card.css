@@ -1,0 +1,158 @@
+/* Trylo Work — ArtifactCard styles.
+ *
+ * v1.17.2: simplified to a single row. No big icon tile, no
+ * per-app icon boxes. Just the filename (truncated) with an
+ * Open button and a small options menu on the right. Error /
+ * denial notes still span the full row when present.
+ */
+
+.artifact-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out);
+}
+
+.artifact-card:hover {
+  border-color: var(--border-strong);
+  background: var(--ink-hover);
+}
+
+.artifact-card--active,
+.artifact-card:active {
+  border-color: var(--accent);
+}
+
+/* Filename only. */
+.artifact-card__name {
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Actions cluster (Open + menu trigger) */
+.artifact-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 0 0 auto;
+}
+
+.artifact-card__open {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.artifact-card__open:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.artifact-card__open:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.artifact-card__menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.artifact-card__menu-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Floating menu (portaled to body) */
+.artifact-card__menu {
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 4px;
+  background: var(--ink-elevated);
+  border: 1px solid var(--ink-divider-strong);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+}
+
+.artifact-card__menu button[role="menuitem"] {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.artifact-card__menu button[role="menuitem"]:hover:not(:disabled) {
+  background: var(--ink-hover);
+}
+
+.artifact-card__menu button[role="menuitem"]:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.artifact-card__menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--ink-divider-strong);
+}
+
+/* §9.3 (M3-P1-11): denied / error notes. */
+.artifact-card__denied,
+.artifact-card__error {
+  grid-column: 1 / -1;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+.artifact-card__denied {
+  color: var(--fg-muted);
+}
+
+.artifact-card__error {
+  color: var(--danger);
+}

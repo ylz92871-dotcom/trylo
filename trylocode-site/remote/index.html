@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Trylo 远程控制 — 把电脑上的 Trylo 安全地带在身边</title>
+<meta name="description" content="remote.trylocode.me 是 Trylo Code 的固定远程入口：通过 Cloudflare 隧道与单次票据，用手机安全查看任务、继续对话、审批操作。" />
+<link rel="icon" type="image/svg+xml" href="../assets/trylo-icon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700;900&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0d10;--bg-2:#0c1015;
+    --panel:#14171c;--panel-2:#191d24;--panel-3:#20252d;
+    --line:#333947;--line-soft:#262b33;
+    --text:#edf0f4;--text-soft:#b6bdc9;--muted:#7f8898;
+    --accent:#dcc97e;--accent-strong:#f3e3a6;--accent-soft:rgba(220,201,126,.12);
+    --bone:#f2ede1;--green:#9fe26f;--red:#ea796d;--blue:#8fb5ff;
+    --shadow:0 18px 30px rgba(0,0,0,.24);
+    --font-display:"Space Grotesk","Noto Sans SC","Segoe UI Variable Display",system-ui,sans-serif;
+    --font-body:"Inter","Noto Sans SC","Segoe UI",system-ui,sans-serif;
+    --font-mono:"IBM Plex Mono","Cascadia Code","Consolas",monospace;
+    --maxw:1180px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:var(--font-body);background:linear-gradient(180deg,#090b0e 0%,#0c1015 100%);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden;min-height:100vh}
+  a{color:inherit;text-decoration:none}
+  svg,img{display:block}
+  ::selection{background:var(--accent);color:#0b0d10}
+  :focus-visible{outline:2px solid var(--accent-strong);outline-offset:3px;border-radius:2px}
+  .wrap{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 28px}
+  .eyebrow{font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);display:inline-flex;align-items:center;gap:10px}
+  .eyebrow::before{content:"";width:26px;height:1px;background:linear-gradient(90deg,transparent,var(--accent))}
+  .ambient{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(640px circle at 85% 4%,rgba(220,201,126,.08),transparent 60%),radial-gradient(560px circle at 8% 32%,rgba(143,181,255,.05),transparent 60%)}
+
+  /* nav */
+  .nav{position:sticky;top:0;z-index:50;background:rgba(11,13,16,.72);backdrop-filter:blur(16px);border-bottom:1px solid var(--line-soft)}
+  .nav-inner{display:flex;align-items:center;justify-content:space-between;height:66px}
+  .brand{display:flex;align-items:center;gap:11px;font-family:var(--font-display);font-weight:700;font-size:18px;letter-spacing:.02em;color:var(--bone)}
+  .brand .brand-mark{width:28px;height:28px;color:var(--accent);transition:transform .4s cubic-bezier(.2,.8,.2,1)}
+  .brand .brand-mark path{stroke:currentColor;stroke-width:76;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .brand:hover .brand-mark{transform:rotate(120deg);filter:drop-shadow(0 0 6px rgba(220,201,126,.45))}
+  .brand .sub{font-family:var(--font-mono);font-size:11px;font-weight:500;color:var(--muted);padding:2px 8px;border:1px solid var(--line);border-radius:6px;margin-left:4px;letter-spacing:.08em}
+  .nav-links{display:flex;gap:30px;font-size:14px;color:var(--text-soft)}
+  .nav-links a{transition:color .2s}
+  .nav-links a:hover{color:var(--accent-strong)}
+  .nav-cta{font-family:var(--font-mono);font-size:13px;font-weight:500;padding:9px 16px;border:1px solid var(--line);border-radius:999px;color:var(--text);transition:all .2s}
+  .nav-cta:hover{border-color:var(--accent);color:var(--accent-strong);box-shadow:0 0 18px rgba(220,201,126,.15)}
+  @media(max-width:760px){.nav-links{display:none}}
+
+  /* hero */
+  .hero{position:relative;z-index:1;padding:80px 0 64px}
+  .hero-grid{display:grid;grid-template-columns:1.02fr .98fr;gap:50px;align-items:center}
+  .hero h1{font-family:var(--font-display);font-weight:700;font-size:clamp(38px,5.4vw,62px);line-height:1.06;letter-spacing:-.025em;color:var(--bone);margin:20px 0 22px}
+  .hero h1 em{font-style:normal;color:var(--accent-strong);text-shadow:0 0 40px rgba(220,201,126,.2)}
+  .hero p.lead{font-size:18px;color:var(--text-soft);max-width:480px;margin-bottom:28px}
+  .domain-chip{display:inline-flex;align-items:center;gap:9px;font-family:var(--font-mono);font-size:13px;color:var(--accent-strong);background:var(--accent-soft);border:1px solid rgba(220,201,126,.22);padding:8px 14px;border-radius:9px;margin-bottom:28px}
+  .domain-chip .lk{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 2s ease-in-out infinite}
+  @keyframes blink{50%{opacity:.4}}
+  .hero-actions{display:flex;gap:14px;flex-wrap:wrap}
+  .btn{font-family:var(--font-mono);font-size:14px;font-weight:500;padding:13px 22px;border-radius:999px;display:inline-flex;align-items:center;gap:9px;transition:transform .18s,background .2s,color .2s,border-color .2s,box-shadow .2s}
+  .btn-primary{background:var(--accent);color:#0b0d10;border:1px solid var(--accent);font-weight:600}
+  .btn-primary:hover{background:var(--accent-strong);border-color:var(--accent-strong);transform:translateY(-1px);box-shadow:0 12px 34px rgba(220,201,126,.24)}
+  .btn-ghost{border:1px solid var(--line);color:var(--text)}
+  .btn-ghost:hover{border-color:var(--accent);color:var(--accent-strong)}
+  @media(max-width:900px){.hero-grid{grid-template-columns:1fr;gap:44px;text-align:center}.hero p.lead{margin-left:auto;margin-right:auto}.eyebrow,.domain-chip{justify-content:center}.hero-actions{justify-content:center}}
+
+  /* tunnel diagram — signature */
+  .tunnel{position:relative;display:grid;place-items:center;padding:10px 0}
+  .tunnel svg{width:100%;max-width:480px;height:auto;overflow:visible;filter:drop-shadow(0 30px 50px rgba(0,0,0,.5))}
+  .tnode{fill:var(--panel);stroke:var(--line);stroke-width:1.5}
+  .tnode.active{stroke:rgba(220,201,126,.45)}
+  .tlabel{font-family:var(--font-mono);fill:var(--text-soft);font-size:11px}
+  .tlabel.big{fill:var(--bone);font-family:var(--font-display);font-weight:700;font-size:14px;letter-spacing:.02em}
+  .tlabel.sub{fill:var(--muted);font-size:9.5px}
+  .tlink{fill:none;stroke:var(--line);stroke-width:2}
+  .flow{fill:none;stroke:var(--accent);stroke-width:2;stroke-dasharray:4 8;stroke-linecap:round;filter:drop-shadow(0 0 3px rgba(220,201,126,.7));animation:flow 1.1s linear infinite}
+  .flow.rev{animation-direction:reverse;opacity:.85}
+  @keyframes flow{to{stroke-dashoffset:-24}}
+  .tunnel .leg{display:flex;gap:22px;justify-content:center;margin-top:18px;font-family:var(--font-mono);font-size:11px;color:var(--muted);flex-wrap:wrap}
+  .tunnel .leg span{display:inline-flex;align-items:center;gap:7px}
+  .tunnel .leg i{width:18px;height:2px;background:repeating-linear-gradient(90deg,var(--accent) 0 4px,transparent 4px 8px)}
+  @media(prefers-reduced-motion:reduce){.pulse{animation:none!important}.domain-chip .lk{animation:none}html{scroll-behavior:auto}}
+
+  /* capabilities */
+  .caps{position:relative;z-index:1;padding:70px 0 90px;border-top:1px solid var(--line-soft)}
+  .section-head{max-width:660px;margin-bottom:46px}
+  .section-head h2{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,3.6vw,42px);line-height:1.1;letter-spacing:-.02em;color:var(--bone);margin:14px 0 12px}
+  .section-head p{color:var(--text-soft);font-size:16.5px}
+  .cap-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+  .cap{border:1px solid var(--line);border-radius:16px;padding:24px 22px;background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,0)),var(--panel);transition:transform .2s,border-color .2s,box-shadow .2s;display:flex;flex-direction:column;gap:12px}
+  .cap:hover{transform:translateY(-3px);border-color:rgba(220,201,126,.35);box-shadow:0 16px 40px rgba(0,0,0,.35),0 0 0 1px rgba(220,201,126,.08)}
+  .cap .ic{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+  .cap .ic svg{width:20px;height:20px}
+  .cap h3{font-family:var(--font-display);font-weight:700;font-size:18px;color:var(--bone)}
+  .cap p{font-size:13.5px;color:var(--text-soft);flex-grow:1}
+  .cap .ep{font-family:var(--font-mono);font-size:11px;color:var(--muted);padding-top:10px;border-top:1px dashed var(--line)}
+  .cap .ep code{color:var(--accent)}
+  @media(max-width:960px){.cap-grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:520px){.cap-grid{grid-template-columns:1fr}}
+
+  /* security */
+  .sec{position:relative;z-index:1;padding:90px 0;border-top:1px solid var(--line-soft);overflow:hidden}
+  .sec::before{content:"";position:absolute;right:-10%;top:50%;transform:translateY(-50%);width:520px;height:520px;border-radius:50%;background:radial-gradient(circle,rgba(143,181,255,.06),transparent 65%);pointer-events:none}
+  .sec-grid{display:grid;grid-template-columns:1fr 1.15fr;gap:56px;align-items:start}
+  .sec-list{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .sec-item{background:var(--panel);padding:22px 24px;display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start;transition:background .2s}
+  .sec-item:hover{background:var(--panel-2)}
+  .sec-item .n{font-family:var(--font-mono);font-size:12px;color:var(--accent);border:1px solid rgba(220,201,126,.3);border-radius:7px;padding:3px 8px;margin-top:2px}
+  .sec-item h4{font-family:var(--font-display);font-weight:700;font-size:16.5px;color:var(--bone);margin-bottom:5px}
+  .sec-item p{font-size:13.5px;color:var(--text-soft)}
+  .sec-item p code{font-family:var(--font-mono);font-size:12px;color:var(--accent-strong);background:var(--accent-soft);padding:1px 6px;border-radius:4px}
+  @media(max-width:860px){.sec-grid{grid-template-columns:1fr;gap:34px}}
+
+  /* pairing steps */
+  .pair{position:relative;z-index:1;padding:90px 0;border-top:1px solid var(--line-soft)}
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;counter-reset:step}
+  .step{position:relative;border:1px solid var(--line);border-radius:16px;padding:28px 24px;background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,0)),var(--panel)}
+  .step .sn{font-family:var(--font-mono);font-size:12px;color:var(--accent);letter-spacing:.12em;margin-bottom:14px}
+  .step h4{font-family:var(--font-display);font-weight:700;font-size:18px;color:var(--bone);margin-bottom:8px}
+  .step p{font-size:14px;color:var(--text-soft)}
+  .step code{display:block;margin-top:14px;font-family:var(--font-mono);font-size:12px;color:var(--accent-strong);background:#0d1014;border:1px solid var(--line-soft);border-radius:8px;padding:9px 12px;word-break:break-all}
+  @media(max-width:820px){.steps{grid-template-columns:1fr}}
+
+  /* terminal */
+  .term{position:relative;z-index:1;padding:40px 0 90px}
+  .term-box{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#0d1014;box-shadow:var(--shadow)}
+  .term-bar{display:flex;align-items:center;gap:8px;padding:12px 16px;background:var(--panel);border-bottom:1px solid var(--line-soft)}
+  .term-bar i{width:11px;height:11px;border-radius:50%;display:block}
+  .term-bar .r{background:#FF5F57}.term-bar .y{background:#FEBC2E}.term-bar .g{background:#28C840}
+  .term-bar .title{margin-left:10px;font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+  .term-body{padding:20px 22px;font-family:var(--font-mono);font-size:12.5px;line-height:1.9;color:var(--text-soft);overflow-x:auto}
+  .term-body .cm{color:var(--muted)}
+  .term-body .m{color:var(--green)}
+  .term-body .p{color:var(--accent-strong)}
+  .term-body .h{color:var(--blue)}
+
+  /* cta */
+  .cta-band{position:relative;z-index:1;padding:90px 0;border-top:1px solid var(--line-soft);text-align:center;overflow:hidden}
+  .cta-band::before{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:680px;height:340px;border-radius:50%;background:radial-gradient(ellipse,rgba(220,201,126,.1),transparent 65%);pointer-events:none}
+  .cta-band .inner{position:relative}
+  .cta-band h2{font-family:var(--font-display);font-weight:700;font-size:clamp(30px,4vw,44px);line-height:1.1;letter-spacing:-.02em;color:var(--bone);margin-bottom:16px}
+  .cta-band p{color:var(--text-soft);font-size:17px;max-width:520px;margin:0 auto 30px}
+
+  footer{position:relative;z-index:1;border-top:1px solid var(--line-soft);padding:38px 0}
+  .foot-inner{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;color:var(--muted);font-size:13px}
+  .foot-inner .brand{color:var(--bone);font-size:15px}
+  .foot-meta{font-family:var(--font-mono);font-size:12px}
+  .foot-meta a{color:var(--text-soft);margin-left:16px}
+  .foot-meta a:hover{color:var(--accent-strong)}
+</style>
+</head>
+<body>
+<div class="ambient" aria-hidden="true"></div>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="https://trylocode.me">
+      <svg class="brand-mark" viewBox="0 0 1024 1024" aria-hidden="true"><path d="M462 236 L462 420 L624 420"/><path d="M276 732 L424 644 L356 512"/><path d="M540 676 L622 546 L786 640"/></svg>
+      Trylo&nbsp;Remote<span class="sub">GATEWAY</span>
+    </a>
+    <nav class="nav-links" aria-label="页面导航">
+      <a href="#can">能做什么</a>
+      <a href="#security">安全模型</a>
+      <a href="#pair">配对方式</a>
+      <a href="https://chat.trylocode.me" target="_blank" rel="noopener noreferrer">在线体验 ↗</a>
+    </nav>
+    <a class="nav-cta" href="https://app.trylocode.me">下载 App ↗</a>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">Fixed remote endpoint</span>
+      <h1>把电脑上的 Trylo，<br><em>安全地带在身边。</em></h1>
+      <div class="domain-chip"><span class="lk"></span>remote.trylocode.me → 127.0.0.1:49380</div>
+      <p class="lead">Trylo 远程网关运行在电脑端 Trylo 进程内（桌面版即将发布，当前由 VS Code 插件承担），只监听本机回环地址；固定域名通过 Cloudflare 隧道转发，再由 256 位配对凭据和单次连接票据把关。工位以外，也能看见它正在做什么。</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="https://app.trylocode.me">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-5-5m5 5l5-5M5 21h14"/></svg>
+          下载手机 App
+        </a>
+        <a class="btn btn-ghost" href="#security">查看安全模型</a>
+      </div>
+    </div>
+
+    <div class="tunnel">
+      <svg viewBox="0 0 480 300" role="img" aria-label="远程架构示意：手机通过 remote.trylocode.me 连接到本机 Trylo">
+        <!-- links -->
+        <path class="tlink" d="M100 150 L200 150"/>
+        <path class="tlink" d="M280 150 L380 150"/>
+        <!-- flowing data -->
+        <path class="flow" d="M104 150 L196 150"/>
+        <path class="flow rev" d="M284 150 L376 150"/>
+
+        <!-- phone -->
+        <rect class="tnode" x="66" y="104" width="68" height="92" rx="13"/>
+        <rect x="92" y="112" width="16" height="3" rx="1.5" fill="var(--muted)"/>
+        <circle cx="100" cy="180" r="3" fill="var(--accent)"/>
+        <text class="tlabel" x="100" y="222" text-anchor="middle">手机</text>
+        <text class="tlabel sub" x="100" y="237" text-anchor="middle">Trylo Code</text>
+
+        <!-- cloudflare node -->
+        <rect class="tnode active" x="192" y="96" width="96" height="108" rx="14"/>
+        <path d="M226 138 a14 14 0 0 1 13 -10 a12 12 0 0 1 11 8 a11 11 0 0 1 2 21 h-31 a11 11 0 0 1 5 -19 z" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
+        <text class="tlabel big" x="240" y="176" text-anchor="middle">trylocode</text>
+        <text class="tlabel sub" x="240" y="190" text-anchor="middle">Cloudflare edge</text>
+
+        <!-- laptop -->
+        <rect class="tnode" x="372" y="108" width="74" height="50" rx="8"/>
+        <path d="M362 162 L456 162 L462 172 L356 172 z" class="tnode"/>
+        <text class="tlabel big" x="409" y="138" text-anchor="middle" style="font-size:12px">Trylo</text>
+        <text class="tlabel" x="409" y="222" text-anchor="middle">你的电脑</text>
+        <text class="tlabel sub" x="409" y="237" text-anchor="middle">loopback only</text>
+      </svg>
+      <div class="leg">
+        <span><i></i> Bearer 鉴权 · 单次 WebSocket 票据</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CAPABILITIES -->
+<section class="caps" id="can">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">What reaches the phone</span>
+      <h2>离开工位，不离开上下文</h2>
+      <p>手机上看到的是和电脑端同一份状态：任务进行到哪一步、对话说到哪里、哪个操作在等你点头。</p>
+    </div>
+    <div class="cap-grid">
+      <div class="cap">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg></div>
+        <h3>实时任务进度</h3>
+        <p>Agent 正在读哪些文件、执行到第几步，以事件流推送到手机；不对劲可以一键停止当前任务。</p>
+        <div class="ep">WS <code>/v1/events</code></div>
+      </div>
+      <div class="cap">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 01-12 7l-5 1 1-4a8 8 0 1116-4z"/></svg></div>
+        <h3>继续当前对话</h3>
+        <p>对话页是电脑会话的镜像，双向同步提问、思考摘要与最终回复，路上想到什么直接发回去。</p>
+        <div class="ep"><code>POST</code> /v1/chat/messages</div>
+      </div>
+      <div class="cap">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 5 5 1-3.5 3.5L16 18l-4-2-4 2 .5-5.5L5 9l5-1 2-5z"/></svg></div>
+        <h3>任务与项目快照</h3>
+        <p>电脑端当前任务、项目与会话状态一览快照，出门在外也能掌握全局进展。</p>
+        <div class="ep">GET <code>/v1/snapshot</code></div>
+      </div>
+      <div class="cap">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <h3>敏感操作审批</h3>
+        <p>Agent 要改文件或跑命令时，审批请求推到手机；单次授权只放行这一次，不改变全局策略。</p>
+        <div class="ep"><code>POST</code> /v1/permissions/:id/decision</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECURITY -->
+<section class="sec" id="security">
+  <div class="wrap sec-grid">
+    <div class="section-head" style="margin-bottom:0">
+      <span class="eyebrow">Security model</span>
+      <h2>固定域名，不固定开口</h2>
+      <p>公网只看到 Cloudflare 边缘，真正的服务只听 <code style="font-family:var(--font-mono);color:var(--accent-strong);background:var(--accent-soft);padding:1px 6px;border-radius:4px;font-size:.9em">127.0.0.1</code>。每一层访问都需要独立凭据，凭据离开不了你的电脑和手机 Keystore。</p>
+    </div>
+    <div class="sec-list">
+      <div class="sec-item">
+        <span class="n">01</span>
+        <div><h4>256 位随机配对凭据</h4><p>配对时生成 256 位随机令牌，电脑端存入本机密钥库（当前为 VS Code SecretStorage），手机端由 Android Keystore 保护。</p></div>
+      </div>
+      <div class="sec-item">
+        <span class="n">02</span>
+        <div><h4>Bearer Token 鉴权</h4><p>所有 HTTP 请求必须携带 <code>Authorization: Bearer &lt;token&gt;</code>，没有令牌的请求在网关处直接拒绝。</p></div>
+      </div>
+      <div class="sec-item">
+        <span class="n">03</span>
+        <div><h4>单次使用连接票据</h4><p>WebSocket 先用 Bearer 换取一张 <code>30 秒、单次有效</code>的 ticket，再凭票连接，凭据不会在长连接上反复出现。</p></div>
+      </div>
+      <div class="sec-item">
+        <span class="n">04</span>
+        <div><h4>仅监听回环地址</h4><p>网关默认只绑定 <code>127.0.0.1:49380</code>，不向局域网或公网直接开放端口，入站流量只能经 Cloudflare 隧道到达。</p></div>
+      </div>
+      <div class="sec-item">
+        <span class="n">05</span>
+        <div><h4>最小数据下发</h4><p>手机端只收到状态与对话内容，<code>API Key</code>、模型凭据和完整工作区路径永远不会被发送到手机。</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PAIRING -->
+<section class="pair" id="pair">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Pairing</span>
+      <h2>三步连起来</h2>
+      <p>固定域名不会因重启电脑端 Trylo、切换项目或重新扫码而变化；换了电脑重新配对即可。</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="sn">STEP 01</div>
+        <h4>启用远程网关</h4>
+        <p>在电脑端 Trylo 的设置中打开远程开关（当前版本在 VS Code 插件设置中），保持隧道模式为 <code style="font-family:var(--font-mono);color:var(--accent-strong)">named</code>，网关会在后台就绪。</p>
+        <code>tryloCode.remote.enabled = true</code>
+      </div>
+      <div class="step">
+        <div class="sn">STEP 02</div>
+        <h4>复制配对数据</h4>
+        <p>运行命令面板里的配对命令，把网关地址和令牌一起复制到剪贴板。</p>
+        <code>Trylo Code: Copy Remote Pairing Data</code>
+      </div>
+      <div class="step">
+        <div class="sn">STEP 03</div>
+        <h4>在手机上粘贴连接</h4>
+        <p>打开 Trylo Code App，在连接设置中粘贴配对数据。验证通过后，手机就和这台电脑绑定。</p>
+        <code>App → 连接设置 → 粘贴并连接</code>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TERMINAL -->
+<section class="term">
+  <div class="wrap">
+    <div class="term-box">
+      <div class="term-bar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="title">gateway — remote.trylocode.me</span></div>
+      <div class="term-body">
+<span class="cm">$ # 健康检查，Cloudflare 边缘 → 本机回环</span><br>
+<span class="h">GET</span> /health &nbsp;&nbsp;<span class="m">200 OK</span> &nbsp;<span class="cm">{ "status": "ok", "tunnel": "named" }</span><br><br>
+<span class="cm">$ # 换一张单次票据，再建立事件长连接</span><br>
+<span class="h">POST</span> /v1/socket-ticket &nbsp;&nbsp;<span class="m">200</span> &nbsp;<span class="p">{ "ticket": "wt_…", "expiresIn": 30 }</span><br>
+<span class="h">WS</span> &nbsp;&nbsp;/v1/events?ticket=wt_… &nbsp;<span class="m">✓ connected</span><br><br>
+<span class="cm">← { "type": "snapshot_update", "tasksRunning": 2, "approvalsPending": 1 }</span><br>
+<span class="cm">← { "type": "thinking", "text": "正在读取项目结构…" }</span><br>
+<span class="cm">→ { "type": "permission_decision", "id": "p_842", "decision": "allow_once" }</span><br>
+<span class="cm">← { "type": "result", "ok": true }</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-band">
+  <div class="wrap inner">
+    <h2>现在就把它装进口袋</h2>
+    <p>Android 8.0 及以上。下载 APK，配对一次，以后离开工位也能继续看着你的搭档干活。</p>
+    <a class="btn btn-primary" href="https://app.trylocode.me">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-5-5m5 5l5-5M5 21h14"/></svg>
+      前往 app.trylocode.me
+    </a>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-inner">
+    <a class="brand" href="https://trylocode.me">
+      <svg class="brand-mark" viewBox="0 0 1024 1024" aria-hidden="true"><path d="M462 236 L462 420 L624 420"/><path d="M276 732 L424 644 L356 512"/><path d="M540 676 L622 546 L786 640"/></svg>
+      Trylo&nbsp;Code
+    </a>
+    <div class="foot-meta">© 2026 YL Z ·
+      <a href="https://trylocode.me">官网</a>
+      <a href="https://app.trylocode.me">App 下载</a>
+      <a href="https://chat.trylocode.me" target="_blank" rel="noopener noreferrer">在线体验</a>
+      <a href="mailto:ylz92871@gmail.com">ylz92871@gmail.com</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

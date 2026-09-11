@@ -1,0 +1,110 @@
+/* Trylo Desktop — ProcessHeader.
+ *
+ * A compact 24px status line above the input bar. Shows
+ * the agent state (ready / running / error) and, when
+ * running, the turn / tools / elapsed stats. When idle
+ * with no messages, the workspace root is shown so the
+ * user knows what the next run will operate on.
+ */
+
+.process-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  /* Aligned to the composer pill's left edge (not the window edge)
+   * so the status line reads as part of the composer, not a free
+   * floating block. Position/behaviour unchanged — alignment only. */
+  padding: 0 4px;
+  font-size: 11px;
+  font-family: var(--font-body);
+  color: var(--ink-fog);
+  background: transparent;
+  border: none;
+}
+
+.process-header__dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.process-header__dot--ready {
+  background: var(--brand);
+}
+
+.process-header__dot--running {
+  background: var(--brand-100);
+}
+
+/* MotionPolicy heartbeat: the pulse is applied by the policy, not
+ * by the running tone alone. It stays on in EVERY active phase as
+ * the low-salience always-visible heartbeat (the timeline primaries
+ * can all scroll out of view); parked and terminal states stay
+ * static. */
+.process-header__dot--pulse {
+  animation: process-header-pulse 1.4s ease-in-out infinite;
+}
+
+.process-header__dot--error {
+  background: var(--danger);
+}
+
+@keyframes process-header-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+}
+
+.process-header__label {
+  color: var(--ink-fog);
+  font-weight: 450;
+}
+
+.process-header--error .process-header__label {
+  color: var(--danger);
+}
+
+.process-header__sep {
+  color: var(--ink-mute);
+}
+
+.process-header__sep-label {
+  color: var(--ink-mute);
+  font-weight: 400;
+}
+
+.process-header__workspace {
+  color: var(--ink-paper);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 360px;
+}
+
+/* M4-B: Work Stop control (calls WorkRuntime.cancelTask).
+ * Shown in the status line only while a Work run is
+ * active. Mirrors the row-level task-header__stop affordance. */
+.process-header__stop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.process-header__stop:hover {
+  background: var(--danger-soft, rgba(229, 115, 115, 0.18));
+  color: var(--danger, #e57373);
+}
