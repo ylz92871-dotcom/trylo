@@ -1,4 +1,4 @@
-// Trylo Desktop — Project State. See the architecture doc §2.3.
+// Trylo Desktop — Project State. See ARCHITECTURE.md §2.3.
 //
 // The key correctness invariant of the whole system. Project State is
 // the source of truth. The agent does not own Monaco, Monaco does not

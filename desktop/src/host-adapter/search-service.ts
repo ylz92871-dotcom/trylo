@@ -1,4 +1,4 @@
-// Trylo Desktop — SearchService interface. See the architecture doc §2.4
+// Trylo Desktop — SearchService interface. See ARCHITECTURE.md §2.4
 // (monaco-vcode-api search service override — Ctrl+Shift+F) +
 // §3 Phase 0 Day 6 + Week 2 Day 2.
 //

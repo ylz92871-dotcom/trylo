@@ -1,4 +1,4 @@
-// Trylo Desktop — LSP wiring. See the architecture doc §2.7.
+// Trylo Desktop — LSP wiring. See ARCHITECTURE.md §2.7.
 //
 // Spike scope: detect the right language from a file path,
 // start the LSP server via the LspManager, and return a

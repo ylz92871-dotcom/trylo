@@ -78,6 +78,7 @@ export interface PrewarmSupervisorOptions {
 export interface ToolRuntimeRequestContext {
   readonly surface: ToolSurface;
   readonly requestedProfileId?: string;
+  readonly computerUse?: boolean;
   readonly projectKey: string;
   readonly projectRoot: string;
   readonly conversationId: string;
@@ -173,6 +174,9 @@ export class ConversationRunSupervisor {
         surface: request.surface ?? 'code',
         ...(request.requestedProfileId
           ? { requestedProfileId: request.requestedProfileId }
+          : {}),
+        ...(request.computerUse !== undefined
+          ? { computerUse: request.computerUse }
           : {}),
         projectKey,
         projectRoot: request.settings.cwd,

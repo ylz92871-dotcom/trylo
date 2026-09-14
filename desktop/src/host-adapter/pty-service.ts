@@ -1,4 +1,4 @@
-// Trylo Desktop — PtyService interface. See the architecture doc §3
+// Trylo Desktop — PtyService interface. See ARCHITECTURE.md §3
 // Phase 1 Week 2 (Terminal).
 //
 // The Tauri channel is the primitive for PTY output (arch doc

@@ -36,9 +36,10 @@ import { CAD_EDA_CLASSIFIERS } from './classifiers/cad-eda-classifier';
 import type { BrowserLeaseGrant } from './classifiers/playwright-classifier';
 import type { WindowsLeaseGrant } from './classifiers/windows-mcp-classifier';
 import { inputDigestOf, stableStringifyInput } from './input-digest';
+import type { TargetReceipt } from './classifiers/windows-mcp-classifier';
 
 export { inputDigestOf, stableStringifyInput };
-export type { BrowserLeaseGrant, WindowsLeaseGrant };
+export type { BrowserLeaseGrant, TargetReceipt, WindowsLeaseGrant };
 
 /**
  * A lease a user approval may grant (PR-3 browser origins, PR-6 screen

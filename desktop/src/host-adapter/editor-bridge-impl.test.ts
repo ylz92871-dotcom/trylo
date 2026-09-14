@@ -1,4 +1,4 @@
-// Trylo Desktop — EditorBridgeImpl unit tests. See the architecture doc
+// Trylo Desktop — EditorBridgeImpl unit tests. See ARCHITECTURE.md
 // §2.5 + §2.3.1.
 //
 // Lock down the state-machine behavior we depend on:

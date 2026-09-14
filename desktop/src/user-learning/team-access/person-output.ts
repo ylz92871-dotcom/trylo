@@ -5,7 +5,7 @@
 // the only reader of that output; fail closed: any missing heading →
 // null (drift is unreliable), and a null result is never treated as a
 // veto. The same algorithm is copied to
-// `the Trylo CLI's team-roster person-output.ts` — desktop
+// `trylo cli/src/tools/AgentTool/team-roster/person-output.ts` — desktop
 // must not import CLI sources; a fixture test locks both copies.
 
 export interface PersonSeatOutput {

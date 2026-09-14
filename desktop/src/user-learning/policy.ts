@@ -6,6 +6,7 @@ import {
   MAX_ACTIVE_POLICIES,
   MAX_ACTIVE_POLICY_TOKENS,
   type ActivePolicyRule,
+  type BehaviorCommitment,
   type EnforcementMode,
   type PolicyBundle,
   type PolicyDecision,
@@ -266,14 +267,76 @@ function modelEligibleForCompile(model: UserModelRecord, project: ProjectContext
   return isGlobalScope(model.scope) || model.scope.projectId === project.projectId;
 }
 
+function compileCommitment(
+  commitment: BehaviorCommitment,
+  model: UserModelRecord,
+  project: ProjectContextSnapshot | null,
+  bundleId: string,
+  now: number,
+): PolicyRule {
+  const reporting = commitment.decisionPoint === 'report.section_order';
+  return {
+    id: newId('pol', now), userId: model.userId, bundleId,
+    granularity: project ? 'project' : 'global',
+    domain: reporting ? 'reporting_information_density' : 'work_artifact_workflow',
+    kind: 'prompt_directive',
+    strength: commitment.state === 'active' ? 'strong_default' : 'soft',
+    scope: {
+      product: commitment.scope.product ?? undefined,
+      projectId: commitment.scope.projectId ?? project?.projectId,
+      taskRisk: commitment.scope.riskLevel ? [commitment.scope.riskLevel] : undefined,
+      coreRuntimePath: commitment.scope.corePath ?? undefined,
+    },
+    when: [],
+    effect: {
+      mode: 'prefer',
+      action: reporting ? 'report_section_order' : 'artifact_structure_before_draft',
+      parameters: { adaptedBehavior: commitment.behaviorDelta.adaptedBehavior },
+    },
+    exceptions: ['security_boundary', 'authorization_boundary'],
+    instruction: commitment.behaviorDelta.adaptedBehavior,
+    confidence: {
+      score: model.confidence.score, band: model.confidence.band,
+      userModelDistance: model.inference.distance, translationDistance: 'T0',
+    },
+    governanceLevel: 2,
+    sourceUserModelIds: [model.id],
+    sourceConclusionIds: [...model.derivedFrom.conclusionIds],
+    sourceEvidenceIds: [...commitment.provenanceEvidenceIds],
+    sourceCommitmentIds: [commitment.id],
+    commitmentState: commitment.state === 'active' ? 'active' : 'shadow',
+    status: 'active', version: commitment.version, createdAt: now,
+  };
+}
+
 export function compilePolicies(
   snapshot: UserLearningSnapshot,
   project: ProjectContextSnapshot | null,
   now = Date.now(),
 ): { bundle: PolicyBundle; rules: readonly PolicyRule[] } {
-  const models = activeRecords(snapshot.userModels).filter((model) => modelEligibleForCompile(model, project));
+  const allActiveModels = activeRecords(snapshot.userModels);
+  const activeModels = allActiveModels.filter((model) => (
+    !project || isGlobalScope(model.scope) || model.scope.projectId === project.projectId
+  ));
+  const models = activeModels.filter((model) => modelEligibleForCompile(model, project));
   const bundleId = newId('pb', now);
-  const rules = models.flatMap((model) => compileOne(model, project, bundleId, now, snapshot));
+  const allCommitments = snapshot.behaviorCommitments ?? [];
+  const commitments = allCommitments.filter((item) => (
+    (item.state === 'active' || item.state === 'shadow')
+    && (!project || !item.scope.projectId || item.scope.projectId === project.projectId)
+  ));
+  const commitmentRules = commitments.flatMap((commitment) => {
+    // A commitment owns its current ScopeKey. Its backing model may have been
+    // learned in a narrower project, then explicitly widened by the user.
+    const model = allActiveModels.find((item) => item.id === commitment.userModelId);
+    if (!model) return [];
+    return [compileCommitment(commitment, model, project, bundleId, now)];
+  });
+  const committedModelIds = new Set(allCommitments.map((item) => item.userModelId));
+  const legacyRules = models
+    .filter((model) => !committedModelIds.has(model.id))
+    .flatMap((model) => compileOne(model, project, bundleId, now, snapshot));
+  const rules = [...commitmentRules, ...legacyRules];
   const checksum = sourceHash(rules.map((r) => r.id + r.instruction));
   const bundle: PolicyBundle = {
     id: bundleId,
@@ -380,6 +443,36 @@ export function currentBundleFor(
   ));
 }
 
+export function commitCompiledPolicyBundle(
+  snapshot: UserLearningSnapshot,
+  compiled: { readonly bundle: PolicyBundle; readonly rules: readonly PolicyRule[] },
+): UserLearningSnapshot {
+  const projectId = compiled.bundle.projectId;
+  return {
+    ...snapshot,
+    currentProjectBundleIds: {
+      ...(snapshot.currentProjectBundleIds ?? {}),
+      [projectId]: compiled.bundle.id,
+    },
+    policyBundles: [
+      ...snapshot.policyBundles.map((item) => (
+        item.projectId === projectId ? { ...item, status: 'retired' as const } : item
+      )),
+      compiled.bundle,
+    ],
+    policyRules: [
+      ...snapshot.policyRules.map((item) => (
+        (item.scope.projectId ?? projectId) === projectId
+        && compiled.rules.some((candidate) => candidate.domain === item.domain)
+          ? { ...item, status: 'superseded' as const }
+          : item
+      )),
+      ...compiled.rules,
+    ],
+    dirtyDimensions: [],
+  };
+}
+
 function rulesForCurrentBundle(snapshot: UserLearningSnapshot, projectId: string): readonly PolicyRule[] {
   const bundle = currentBundleFor(snapshot, projectId);
   if (bundle) {
@@ -397,6 +490,10 @@ export function resolvePolicies(input: {
   readonly now?: number;
   readonly recentlyAsked?: boolean;
   readonly dimensionMode?: Readonly<Partial<Record<PolicyDimension, EnforcementMode>>>;
+  readonly applyPersonalization?: boolean;
+  /** Release rollback: only v0.2 rules linked to BehaviorCommitments are
+   * disabled; legacy policies, Team constraints and safety floors remain. */
+  readonly applyBehaviorCommitments?: boolean;
 }): PolicyDecision {
   const started = input.now ?? Date.now();
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -449,7 +546,14 @@ export function resolvePolicies(input: {
       applicationScore: rule.confidence.score,
       reason: `scope match; ${rule.kind}; ${rule.strength}`,
     };
-    const dimMode = dimensionMode[rule.domain] ?? input.mode;
+    const configuredMode = dimensionMode[rule.domain] ?? input.mode;
+    const behaviorCommitmentDisabled = input.applyBehaviorCommitments === false
+      && (rule.sourceCommitmentIds?.length ?? 0) > 0;
+    const dimMode = input.applyPersonalization === false || behaviorCommitmentDisabled
+      ? 'off'
+      : rule.commitmentState === 'shadow' && configuredMode !== 'off'
+      ? 'shadow'
+      : configuredMode;
     if (dimMode === 'off') {
       off.push(row);
       suppressedRows.push({
@@ -485,6 +589,8 @@ export function resolvePolicies(input: {
     matchedRuleIds: chosen.map((r) => r.id),
     suppressedRuleIds: suppressedRows.map((r) => r.policyId),
     resolvedActions: chosen.map((r) => `${r.effect.mode}:${r.effect.action}`),
+    appliedCommitmentIds: [],
+    opportunityKeys: [],
     active,
     enforced: [...enforced],
     shadow,
@@ -508,12 +614,31 @@ export function resolvePolicies(input: {
   const interrupt = impact.interruptUser === true;
   const enforcedRules = interrupt ? [] : gated.enforced;
   const injection = renderInjection(enforcedRules);
+  const enforcedPolicyIds = new Set(enforcedRules.map((item) => item.policyId));
+  const appliedCommitments = rules
+    .filter((rule) => enforcedPolicyIds.has(rule.id))
+    .flatMap((rule) => rule.sourceCommitmentIds ?? [])
+    .filter((id, index, ids) => ids.indexOf(id) === index);
+  const opportunityKeys = appliedCommitments.flatMap((id) => {
+    const commitment = input.snapshot.behaviorCommitments.find((item) => item.id === id);
+    if (!commitment) return [];
+    return [[
+      commitment.decisionPoint,
+      input.task.product,
+      commitment.scope.projectId ?? input.projectId,
+      commitment.scope.taskCategory ?? input.task.taskType,
+      commitment.scope.artifactAudience ?? 'unknown',
+      commitment.scope.taskStage ?? 'unknown',
+    ].join('::')];
+  });
   return {
     ...gated,
     enforced: enforcedRules,
     injectionText: injection,
     tokenCountEstimate: estimateTokens(injection),
     injected: enforcedRules.length > 0,
+    appliedCommitmentIds: appliedCommitments,
+    opportunityKeys,
     impactCheck: impact,
   };
 }

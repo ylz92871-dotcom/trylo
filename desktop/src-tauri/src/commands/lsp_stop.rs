@@ -1,4 +1,4 @@
-// Trylo Desktop — lsp_stop Tauri command. See the architecture doc
+// Trylo Desktop — lsp_stop Tauri command. See ARCHITECTURE.md
 // §2.7 + §10.2.
 
 use tauri::State;

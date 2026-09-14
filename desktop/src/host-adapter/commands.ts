@@ -1,4 +1,4 @@
-// Trylo Desktop — HostAdapter commands. See the architecture doc §2.2.
+// Trylo Desktop — HostAdapter commands. See ARCHITECTURE.md §2.2.
 //
 // Request/response surface. Each method here maps to one Tauri command on
 // the Rust side (see src-tauri/src/commands/*.rs). Components call

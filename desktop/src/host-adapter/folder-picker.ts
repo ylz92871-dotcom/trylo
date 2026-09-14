@@ -1,4 +1,5 @@
-// Trylo Desktop — Folder picker.
+// Trylo Desktop — Folder picker. See
+// spike-results/phase-2-ui-redesign.md §4.
 //
 // v1.10.1: reverts the v1.10 rfd-based Rust command. Tauri 2
 // has `dialogs: true` by default on the webview, so a

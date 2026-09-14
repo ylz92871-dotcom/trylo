@@ -112,6 +112,34 @@ export const WINDOWS_MCP_MANIFEST = Object.freeze({
     pythonPackage: 'windows-mcp',
   }),
 
+  // WCC-P2-05 (spec §19.8): the .NET WGC capture helper is a pinned native
+  // artifact in its own right. It never ships by download — it is staged
+  // from the build machine's `dotnet publish` output into the packaged
+  // resources tree (prepare-sidecars.ps1) and verified by the release
+  // inventory against the digests below. The runtime (WgcProvider /
+  // windows-mcp-fork) refuses an artifact whose digest differs; a helper
+  // that cannot be verified is simply ABSENT (the capture path degrades to
+  // the honest legacy status, never a silent native fallback).
+  //
+  // Pinned build: net8.0-windows10.0.19041.0, win-x64, single-file
+  // self-contained publish (dotnet publish -r win-x64 --self-contained
+  // -p:PublishSingleFile=true). sourceTree points at the monorepo checkout
+  // the digest was recorded from (same tree the fork overlay ships from).
+  helper: Object.freeze({
+    kind: 'dotnet-single-file',
+    protocolVersion: 1,
+    executableRelativePath: 'trylo-wgc-helper.exe',
+    // Staging layout, tried in order by the provider's lookup chain:
+    //  1. packaged — `<serviceRoot>/wgc-helper/trylo-wgc-helper.exe`
+    //     (prepare-sidecars.ps1 stages it next to the bundled host);
+    //  2. dev/CI — `<windows-mcp checkout>/native/wgc-helper/bin/Release/
+    //     net8.0-windows10.0.19041.0/win-x64/publish/`.
+    packagedDirName: 'wgc-helper',
+    sha256: '240c8132cafd4e694841a6b4847973abb9bc4ccf5d728a601e4028ae07d235cb',
+    sizeBytes: 42067483,
+    sourceTree: 'new_tool/computer-control/Windows-MCP/native/wgc-helper',
+  }),
+
   mcp: Object.freeze({
     serverName: 'trylo-windows',
     transport: 'stdio',

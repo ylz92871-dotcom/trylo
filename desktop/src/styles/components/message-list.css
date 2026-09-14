@@ -25,9 +25,30 @@
   min-height: 0;
   overflow-y: auto;
   padding: var(--space-6) var(--space-5);
+  position: relative;
+}
+
+/* The REAL scrolling element is Virtuoso's internal scroller — the outer
+ * .message-list never overflows (its child is height:100%), so scrollbar
+ * styling on it never applied. Style the scroller directly.
+ *
+ * `scrollbar-gutter: stable` reserves the gutter for the whole session: a
+ * scrollbar appearing mid-run (content starts overflowing) used to shrink
+ * the viewport width, re-wrap every row, change every height and shift the
+ * scroll — one more jitter source during streaming. */
+.message-list [data-virtuoso-scroller] {
   scrollbar-width: thin;
   scrollbar-color: var(--ink-hover) transparent;
-  position: relative;
+  scrollbar-gutter: stable;
+}
+
+.message-list [data-virtuoso-scroller]::-webkit-scrollbar {
+  width: 8px;
+}
+
+.message-list [data-virtuoso-scroller]::-webkit-scrollbar-thumb {
+  background: var(--ink-hover);
+  border-radius: 4px;
 }
 
 .message-list__inner {
@@ -46,13 +67,21 @@
   padding: 4px 0 0 0;
 }
 
-.message-list::-webkit-scrollbar {
-  width: 8px;
+/* Stable-height slot for the streaming dots. While a run is live the slot
+ * keeps the indicator's box (36px content + the 10px/4px margins it used to
+ * carry) so the thinking↔tool_running state flips toggle the CONTENT, not
+ * the list height — the dots mounting/unmounting used to flip Virtuoso's
+ * at-bottom state and flash the follow pill on every flip. */
+.message-list__footer-slot {
+  min-height: 0;
 }
 
-.message-list::-webkit-scrollbar-thumb {
-  background: var(--ink-hover);
-  border-radius: 4px;
+.message-list__footer-slot--pinned {
+  min-height: 50px;
+}
+
+.message-list__footer-slot .streaming-indicator {
+  margin: 0;
 }
 
 /* Floating "follow tail" button — Cursor / VS Code style.

@@ -1,4 +1,4 @@
-// Trylo Desktop — LSP shared state. See the architecture doc §2.7
+// Trylo Desktop — LSP shared state. See ARCHITECTURE.md §2.7
 // (LspManager) + §10.2 (one Tauri command per file).
 //
 // Holds the live LSP processes. The map is keyed by the

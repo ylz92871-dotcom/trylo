@@ -3,7 +3,7 @@
  * The main content area. Hosts the TryloFrame iframe. The
  * "lamp glow" signature element lives here: a directional
  * warm radial gradient behind the panel, gated by the
- * --lamp-glow-on token.
+ * --lamp-glow-on token. See spike-results/phase-2-ui-redesign.md §6.
  */
 
 .chat-panel {

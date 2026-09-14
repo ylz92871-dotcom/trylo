@@ -5,6 +5,7 @@ import type { EnforcementMode, UserLearningSnapshot, UserLearningSettings, Polic
 import { dimensionLabel, eventTypeLabel } from '../../user-learning/labels';
 import { inferDimension } from '../../user-learning/conclusion';
 import type { LearningPort } from '../../learning/learning-port';
+import { calculateLearningMetrics } from '../../user-learning/learning-metrics';
 import { PendingProposals } from './PendingProposals';
 import { ApprovedRecords } from './ApprovedRecords';
 import {
@@ -85,8 +86,13 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
   const map = cognitionMap(props.snapshot);
   const profile = props.snapshot.profileFacts.filter((p) => p.status === 'active');
   const conclusions = props.snapshot.conclusions.filter((c) => c.status === 'active');
+  // Some host/test fixtures predate schema v5. The persisted migration fills
+  // this field, but the inspector remains tolerant of an in-memory legacy prop.
+  const learningReceipts = props.snapshot.learningReceipts ?? [];
   const last = props.snapshot.policyDecisions.at(-1);
   const activeRules = last?.active.length ?? 0;
+  const metrics = calculateLearningMetrics(props.snapshot);
+  const metricRate = (value: number | null): string => value === null ? '样本不足' : `${Math.round(value * 100)}%`;
 
   // Dual-surface Evidence list (spec §4.2): filtered → createdAt desc → slice(100).
   // Derived from props each render (R4: "list derived from props"), not a memo —
@@ -217,9 +223,34 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
                       : 'ok'
               }</dd></div>
             </dl>
+            <div className="learning-inspector__subhead">协作效果 · 仅本地聚合</div>
+            <dl className="learning-inspector__stats">
+              <div><dt>可比较机会</dt><dd>{metrics.comparableOpportunities}</dd></div>
+              <div><dt>重复解释</dt><dd>{metrics.repeatedExplanations}</dd></div>
+              <div><dt>重复解释率</dt><dd>{metricRate(metrics.repeatedExplanationRate)}</dd></div>
+              <div><dt>实质返工率</dt><dd>{metricRate(metrics.materialReworkRate)}</dd></div>
+              <div><dt>否定/回滚率</dt><dd>{metricRate(metrics.overrideRate)}</dd></div>
+              <div><dt>无效提问率</dt><dd>{metricRate(metrics.unnecessaryAskRate)}</dd></div>
+              <div><dt>跨范围污染</dt><dd>{metrics.crossScopeContaminationCount}</dd></div>
+            </dl>
             {props.snapshot.diagnostics?.persistError ? (
               <p className="learning-inspector__hint">存储失败：{props.snapshot.diagnostics.persistError}</p>
             ) : null}
+
+            <div className="learning-inspector__subhead">学习回执</div>
+            {learningReceipts.length === 0 ? (
+              <p className="learning-inspector__empty">尚无回执。只有形成新承诺或承诺发生实质变化时才会记录。</p>
+            ) : (
+              <ul className="learning-inspector__list">
+                {[...learningReceipts].reverse().slice(0, 20).map((receipt) => (
+                  <li key={receipt.id}>
+                    <strong>{receipt.message}</strong>
+                    <p>{receipt.scopeLabel} · {receipt.state}</p>
+                    <p className="learning-inspector__raw">来源：{receipt.sourceSummary}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
 
             {/* PR-4 (§4.3): Work three-dimension coverage, grouped, dimension labels. */}
             {surfaceFilter !== 'code' ? (
@@ -307,7 +338,7 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
                     <li key={m.id}>
                       <button type="button" className="learning-inspector__tab" onClick={() => setOpenModelId(open ? null : m.id)}>
                         <strong>{dimensionLabel(m.dimension)}</strong>
-                        <span> · {m.inference.distance} · {m.confidence.band}</span>
+                        <span> · {m.inference.distance} · {m.confidence.band} · effect={m.effectivenessState ?? 'unknown'}</span>
                       </button>
                       <p>{m.statement}</p>
                       {open ? (

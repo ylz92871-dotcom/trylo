@@ -70,13 +70,14 @@ describe('Cognition product isolation', () => {
     expect(newEvidence[0]!.context.product).toBe('work');
   });
 
-  it('recordImpactResolution defaults to code when absent', () => {
+  it('recordImpactResolution records Code only when Code is explicit', () => {
     const runtime = memoryRuntime({ cognitionEnabled: true });
     const before = runtime.snapshot().evidence.length;
     runtime.recordImpactResolution({
       workspaceRoot: 'D:/proj',
       acceptPersonalization: true,
       reason: 'code impact',
+      product: 'code',
     });
     const newEvidence = runtime.snapshot().evidence.slice(before);
     expect(newEvidence[0]!.context.product).toBe('code');

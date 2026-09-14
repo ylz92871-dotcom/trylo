@@ -1,9 +1,9 @@
-// Trylo Desktop — WorkspaceWatcher interface. See the architecture doc §2.6.
+// Trylo Desktop — WorkspaceWatcher interface. See ARCHITECTURE.md §2.6.
 //
 // We do NOT hardcode chokidar or notify — the interface is the contract.
 // Today's implementation: ChokidarWorkspaceWatcher (in chokidar-watcher.ts).
 // Tomorrow's implementation: RustNotifyWorkspaceWatcher (Phase 4 swap, see
-// the architecture doc §4.5 — the swap is a one-file change because the
+// ARCHITECTURE.md §4.5 — the swap is a one-file change because the
 // business logic only depends on this interface).
 
 import type { FileChangeEvent, FilePath } from './types';

@@ -368,7 +368,7 @@ pnpm tauri:dev
 
 ## 7. 这是怎么写出来的
 
-来源 1：会话开始时提供的 quality-baseline 约定 —— hard rules、conventions、known pitfalls、end-of-session checklist。
+来源 1：`trylo/desktop/spike-results/work-mode-handoff/03-quality-baseline.md`（用户在会话开始给的）—— hard rules、conventions、known pitfalls、end-of-session checklist。
 
 来源 2：用户会话里的反馈——"你能不能靠谱一点啊"、"一定要测试的没有问题了再给我"、"你再自查一下"、"未知错误"、"反正重建失败了"、"出具报告给 codex"。
 

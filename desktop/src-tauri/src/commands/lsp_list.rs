@@ -1,4 +1,4 @@
-// Trylo Desktop — lsp_list Tauri command. See the architecture doc
+// Trylo Desktop — lsp_list Tauri command. See ARCHITECTURE.md
 // §2.7 + §10.2.
 //
 // Returns the list of registered language ids. The webview

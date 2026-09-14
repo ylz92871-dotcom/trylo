@@ -20,6 +20,8 @@ import type {
   ToolingHealthResult,
   ToolingInstallBrowserResult,
   ToolingInstallResult,
+  ToolingLocalOverrideMutationResult,
+  ToolingLocalOverridesResult,
   ToolingListProfilesResult,
   ToolingListRuntimeArtifactsResult,
   ToolingOfficeValidationCapabilitiesResult,
@@ -63,6 +65,9 @@ export function createToolingFacade(client: ServicesClient) {
           ...(request.requestedProfileId
             ? { requestedProfileId: request.requestedProfileId }
             : {}),
+          ...(request.computerUse !== undefined
+            ? { computerUse: request.computerUse }
+            : {}),
           projectKey: request.projectKey,
           projectRoot: request.projectRoot,
           conversationId: request.conversationId,
@@ -105,6 +110,25 @@ export function createToolingFacade(client: ServicesClient) {
       return client.request('tooling.uninstall', { id }, {
         timeoutMs: UNINSTALL_TIMEOUT_MS,
       });
+    },
+
+    /** Bind a package to a developer-built local entrypoint. The sidecar
+     * persists the binding and invalidates health immediately. */
+    async setLocalOverride(id: string, path: string): Promise<ToolingLocalOverrideMutationResult> {
+      return client.request('tooling.setLocalOverride', { id, path });
+    },
+
+    async clearLocalOverride(id: string): Promise<ToolingLocalOverrideMutationResult> {
+      return client.request('tooling.clearLocalOverride', { id });
+    },
+
+    async localOverrides(): Promise<ToolingLocalOverridesResult | null> {
+      try {
+        return await client.request('tooling.localOverrides');
+      } catch (error) {
+        if (error instanceof ServiceRequestError) return null;
+        throw error;
+      }
     },
 
     /** §3.3-7: install the browser body a package's browserCondition needs

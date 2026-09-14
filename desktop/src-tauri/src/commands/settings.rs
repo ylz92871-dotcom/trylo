@@ -1,4 +1,4 @@
-// Trylo Desktop — settings Tauri commands. See the architecture doc
+// Trylo Desktop — settings Tauri commands. See ARCHITECTURE.md
 // §3 Phase 1 #8 (Settings UI).
 //
 // The user's settings live in a single JSON file at

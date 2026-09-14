@@ -1,4 +1,4 @@
-// Trylo Desktop — StubWorkspaceWatcher. See the architecture doc §2.6
+// Trylo Desktop — StubWorkspaceWatcher. See ARCHITECTURE.md §2.6
 // (WorkspaceWatcher is an interface) + §3 Phase 0 Day 4 (GO f: two
 // impls).
 //

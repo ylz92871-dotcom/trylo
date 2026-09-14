@@ -803,6 +803,8 @@ export interface ToolUnavailableCapability {
 export interface ToolingResolveProfileParams {
   readonly surface: ToolSurface;
   readonly requestedProfileId?: string;
+  /** Explicitly false removes desktop-control tools from this run. */
+  readonly computerUse?: boolean;
   readonly projectKey?: string;
   readonly projectRoot?: string;
   readonly conversationId?: string;
@@ -893,6 +895,42 @@ export interface ToolingUninstallResult {
   readonly version?: string;
   readonly removed?: string;
   readonly reasonCode?: string;
+}
+
+export interface ToolingSetLocalOverrideParams {
+  readonly id: string;
+  readonly path: string;
+}
+
+export interface ToolingClearLocalOverrideParams {
+  readonly id: string;
+}
+
+export interface ToolingLocalOverrideMutationResult {
+  readonly ok: boolean;
+  readonly id?: string;
+  readonly path?: string;
+  readonly file?: string | null;
+  readonly removed?: boolean;
+  readonly reasonCode?: string;
+  readonly error?: string;
+}
+
+export interface ToolingLocalOverridesResult {
+  readonly ok: boolean;
+  readonly file: string | null;
+  readonly overrides: Readonly<Record<string, string>>;
+  readonly repository: {
+    readonly file: string | null;
+    readonly overrides: Readonly<Record<string, string>>;
+    readonly entries: Readonly<Record<string, {
+      readonly entry: string;
+      readonly path: string;
+      readonly available: boolean;
+      readonly policy: 'repository-local' | 'managed-local';
+    }>>;
+    readonly problems: readonly string[];
+  };
 }
 
 /** §3.3-7: install the browser body a package's browserCondition needs
@@ -1195,6 +1233,9 @@ export interface ServiceMethodMap {
   readonly 'tooling.listProfiles': { params: undefined; result: ToolingListProfilesResult };
   readonly 'tooling.install': { params: ToolingInstallParams; result: ToolingInstallResult };
   readonly 'tooling.uninstall': { params: ToolingUninstallParams; result: ToolingUninstallResult };
+  readonly 'tooling.setLocalOverride': { params: ToolingSetLocalOverrideParams; result: ToolingLocalOverrideMutationResult };
+  readonly 'tooling.clearLocalOverride': { params: ToolingClearLocalOverrideParams; result: ToolingLocalOverrideMutationResult };
+  readonly 'tooling.localOverrides': { params: undefined; result: ToolingLocalOverridesResult };
   readonly 'tooling.installBrowser': { params: ToolingInstallBrowserParams; result: ToolingInstallBrowserResult };
   readonly 'tooling.listRuntimeArtifacts': { params: ToolingListRuntimeArtifactsParams; result: ToolingListRuntimeArtifactsResult };
   readonly 'tooling.promoteArtifact': { params: ToolingPromoteArtifactParams; result: ToolingPromoteArtifactResult };

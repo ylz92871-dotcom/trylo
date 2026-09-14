@@ -1,4 +1,4 @@
-// Trylo Desktop — useSettings hook. See the architecture doc §3
+// Trylo Desktop — useSettings hook. See ARCHITECTURE.md §3
 // Phase 1 #8 (Settings UI).
 //
 // Mirrors useEditorBridge's pattern: a thin React hook that

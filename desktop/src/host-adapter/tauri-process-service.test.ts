@@ -1,5 +1,5 @@
 // Trylo Desktop — TauriProcessService unit tests. See
-// the architecture doc §2.2 + §3 Phase 2 task #3+#4.
+// ARCHITECTURE.md §2.2 + §3 Phase 2 task #3+#4.
 //
 // The service is a thin wrapper over four Tauri commands. We
 // test that the JS side:

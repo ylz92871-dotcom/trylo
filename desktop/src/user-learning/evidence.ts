@@ -20,7 +20,7 @@ import {
   type StructuredWorkEvent,
 } from './work-signals';
 
-const PREFERENCE_RE = /不要|别再|不要只|希望你|我更|直接干|先 plan|先规划|少审核|减少审核|重复审核|别搞复杂|生产级|收口|不要问/i;
+const PREFERENCE_RE = /不要|别再|不要只|希望你|我更|以后|今后|每次|默认|直接干|先 plan|先规划|少审核|减少审核|重复审核|别搞复杂|生产级|收口|不要问|先说结论|背景优先|依据展开|先看结构|先出一版|完整草稿/i;
 const TASK_REQUIREMENT_RE = /这次|当前任务|这个任务/;
 const CORRECTION_RE = /你理解错|不是这个意思|我说的是|改成|纠正|你搞错/i;
 const DISLIKE_PROCESS_RE = /别写那么长|少说过程|不要长篇|别解释那么多|只要结论|不要过程|别列步骤/i;
@@ -174,6 +174,15 @@ export function extractEvidenceFromTrace(
     const relevance = /吃|电影|音乐|天气/.test(text) ? 0.05 : 0.86;
     if (relevance < 0.2) continue;
     const stage = event.stage;
+    const taskStage = stage === 'abstract'
+      ? 'explore' as const
+      : stage === 'task_context'
+        ? 'plan' as const
+        : stage === 'post_plan'
+          ? 'produce' as const
+          : stage === 'post_execution'
+            ? 'review' as const
+            : 'deliver' as const;
     const signal = classifyUserSignal(text, eventType);
     out.push({
       id: newId('ev', now),
@@ -197,7 +206,7 @@ export function extractEvidenceFromTrace(
         semanticConfidence: semantic,
         engineeringRelevance: relevance,
       },
-      context: withFingerprint({ ...scope, taskStage: stage, product: scope.product ?? trace.product }),
+      context: withFingerprint({ ...scope, taskStage, product: scope.product ?? trace.product }),
       strength: {
         contextInformedness: stage,
         band: strengthBand({

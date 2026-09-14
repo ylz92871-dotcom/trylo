@@ -1,4 +1,4 @@
-// Trylo Desktop — React entry. See the architecture doc §3 Phase 0 Day 1.
+// Trylo Desktop — React entry. See ARCHITECTURE.md §3 Phase 0 Day 1.
 //
 // Day 1 scope: render a recognizable "Hello, Trylo" message to prove the
 // Tauri 2 + React 18 + Vite pipeline is alive. No IPC, no editor, no

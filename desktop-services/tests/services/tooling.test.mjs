@@ -14,7 +14,11 @@ import { execFileSync } from 'node:child_process';
 import { after, before, describe, it } from 'node:test';
 
 import { createToolingServices } from '../../src/tooling/index.mjs';
-import { TAR_COMMAND, resolveUvExecutable } from '../../src/tooling/tool-package-manager.mjs';
+import {
+  TAR_COMMAND,
+  loadRepositoryToolRegistry,
+  resolveUvExecutable,
+} from '../../src/tooling/tool-package-manager.mjs';
 import { createToolResultCache } from '../../src/tooling/tool-result-cache.mjs';
 import { createToolCatalog, validateManifest } from '../../src/tooling/tool-catalog.mjs';
 import { OFFICECLI_MANIFEST } from '../../src/tooling/manifests/officecli.mjs';
@@ -80,6 +84,7 @@ function build(overrides = {}) {
       // The fake binaries are not executables, so the version probe is
       // injected. `version` is what a healthy pinned binary would report.
       probe: overrides.probe ?? (async () => '1.0.145'),
+      ...(overrides.probePythonMetadata ? { probePythonMetadata: overrides.probePythonMetadata } : {}),
       ...(overrides.overrides ? { overrides: overrides.overrides } : {}),
       ...(overrides.manifests ? { manifests: overrides.manifests } : {}),
       ...(overrides.download ? { download: overrides.download } : {}),
@@ -144,7 +149,7 @@ describe('tool catalog', () => {
 });
 
 describe('tooling.resolveProfile', () => {
-  it('code.core.v1 keeps Hermes and adds no tool package', async () => {
+  it('code.core.v1 keeps Hermes plus browser/desktop packages (B, rev 2)', async () => {
     const tooling = build();
     const resolved = await tooling.resolveProfile({
       surface: 'code',
@@ -154,7 +159,14 @@ describe('tooling.resolveProfile', () => {
     });
     assert.equal(resolved.ok, true);
     assert.equal(resolved.profileId, 'code.core.v1');
+    assert.equal(resolved.profileRevision, '2');
+    // Nothing installed in the test root: Hermes intact, browser + desktop
+    // degrade to reported unavailable capabilities (§4.4), never a failure.
     assert.deepEqual(resolved.serverNames, ['trylo-hermes-capabilities']);
+    const ids = resolved.unavailableCapabilities.map((c) => c.id);
+    assert.ok(ids.includes('playwright'));
+    assert.ok(ids.includes('windows-mcp'));
+    assert.ok(!ids.includes('officecli'), 'officecli stays Work-only');
     // §4.3: Code keeps reading the user's own MCP servers — no strict flag.
     assert.equal(resolved.strictMcpConfig, false);
     assert.ok(!resolved.cliArgs.includes('--strict-mcp-config'));
@@ -284,14 +296,20 @@ describe('tooling.resolveProfile with an available package', () => {
     assert.notEqual(work.mcpConfigHash, code.mcpConfigHash);
   });
 
-  it('a version mismatch degrades the package instead of shipping it (§4.4)', async () => {
+  it('a version mismatch on the PINNED path degrades the package (§4.4)', async () => {
     const exePath = path.join(tmpRoot, 'fake-officecli-2.exe');
     fs.writeFileSync(exePath, 'binary');
+    const installRoot = path.join(tmpRoot, 'tool-packages-nopin-' + Date.now());
     const tooling = build({
-      overrides: { officecli: exePath },
-      // A binary that reports a version the pinned manifest does not allow.
-      probe: async () => '9.9.9-drifted',
+      installRoot,
+      // No override: the default install path keeps the strict pin — a
+      // drifted binary is refused, never shipped.
+      probe: async (exe) => (exe === path.join(installRoot, 'officecli', '1.0.145', 'officecli-win-x64.exe') ? '9.9.9-drifted' : '1.0.145'),
     });
+    // Plant a versionDir tree so resolve() takes the installed path.
+    const planted = path.join(installRoot, 'officecli', '1.0.145', 'officecli-win-x64.exe');
+    fs.mkdirSync(path.dirname(planted), { recursive: true });
+    fs.writeFileSync(planted, 'binary');
     const resolved = await tooling.resolveProfile({ surface: 'work', projectRoot: tmpRoot, conversationId: 'c1' });
     assert.equal(resolved.ok, true);
     const office = resolved.packageHealth.find((p) => p.id === 'officecli');
@@ -302,6 +320,192 @@ describe('tooling.resolveProfile with an available package', () => {
       resolved.unavailableCapabilities.some((c) => c.id === 'officecli' && c.reasonCode === 'version_mismatch'),
     );
   });
+
+  it('a LOCAL OVERRIDE ships despite version drift, reporting it truthfully', async () => {
+    const exePath = path.join(tmpRoot, 'fake-officecli-3.exe');
+    fs.writeFileSync(exePath, 'binary');
+    const tooling = build({
+      overrides: { officecli: exePath },
+      // A local build that reports its own version, not the pin.
+      probe: async () => '9.9.9-local',
+    });
+    const resolved = await tooling.resolveProfile({ surface: 'work', projectRoot: tmpRoot, conversationId: 'c1' });
+    assert.equal(resolved.ok, true);
+    const office = resolved.packageHealth.find((p) => p.id === 'officecli');
+    assert.equal(office.state, 'override');
+    assert.equal(office.available, true);
+    assert.equal(office.versionMatches, false);
+    assert.ok(office.detail.includes('local override'));
+    assert.ok(resolved.serverNames.includes('trylo-office'));
+  });
+});
+
+// WCC-P2-05 wiring (spec §19.8): the host resolves the pinned WGC helper and
+// injects the verified path into the sidecar's env, so the fork's WgcProvider
+// (which reads WINDOWS_MCP_WGC_HELPER first) never depends on a repo-relative
+// dev path. A failed resolution must inject NOTHING.
+describe('tooling.resolveProfile — WGC helper env injection', () => {
+  function buildWindowsMcpAvailable(manifest) {
+    const exePath = path.join(tmpRoot, 'fake-venv-wgc', 'Scripts', 'windows-mcp.exe');
+    fs.mkdirSync(path.dirname(exePath), { recursive: true });
+    fs.writeFileSync(exePath, 'binary');
+    return build({
+      manifests: [manifest],
+      overrides: { 'windows-mcp': exePath },
+      probePythonMetadata: async () => WINDOWS_MCP_MANIFEST.version,
+    });
+  }
+
+  it('injects the digest-verified helper path into trylo-windows env', async () => {
+    const helperPath = path.join(tmpRoot, 'fake-wgc-helper', 'trylo-wgc-helper.exe');
+    fs.mkdirSync(path.dirname(helperPath), { recursive: true });
+    fs.writeFileSync(helperPath, 'helper-bytes');
+    const digest = crypto.createHash('sha256').update(fs.readFileSync(helperPath)).digest('hex');
+    const manifest = {
+      ...WINDOWS_MCP_MANIFEST,
+      helper: { ...WINDOWS_MCP_MANIFEST.helper, sha256: digest },
+    };
+    const savedHelperEnv = process.env.WINDOWS_MCP_WGC_HELPER;
+    process.env.WINDOWS_MCP_WGC_HELPER = helperPath;
+    try {
+      const tooling = buildWindowsMcpAvailable(manifest);
+      const resolved = await tooling.resolveProfile({ surface: 'work', projectRoot: tmpRoot, conversationId: 'c1' });
+      assert.equal(resolved.ok, true);
+      assert.ok(resolved.serverNames.includes('trylo-windows'));
+      const mcp = JSON.parse(fs.readFileSync(resolved.mcpConfigPath, 'utf8'));
+      assert.equal(mcp.mcpServers['trylo-windows'].env.WINDOWS_MCP_WGC_HELPER, helperPath);
+      // The manifest's own env survives alongside the injected helper path.
+      assert.equal(mcp.mcpServers['trylo-windows'].env.ANONYMIZED_TELEMETRY, 'false');
+    } finally {
+      if (savedHelperEnv === undefined) delete process.env.WINDOWS_MCP_WGC_HELPER;
+      else process.env.WINDOWS_MCP_WGC_HELPER = savedHelperEnv;
+    }
+  });
+
+  it('a drifted helper is refused and nothing is injected (§19.8: never unverified native code)', async () => {
+    const helperPath = path.join(tmpRoot, 'drifted-wgc-helper', 'trylo-wgc-helper.exe');
+    fs.mkdirSync(path.dirname(helperPath), { recursive: true });
+    fs.writeFileSync(helperPath, 'tampered-bytes');
+    // The manifest keeps its PINNED digest: the tampered file must not pass.
+    const savedHelperEnv = process.env.WINDOWS_MCP_WGC_HELPER;
+    process.env.WINDOWS_MCP_WGC_HELPER = helperPath;
+    try {
+      const tooling = buildWindowsMcpAvailable(WINDOWS_MCP_MANIFEST);
+      const resolved = await tooling.resolveProfile({ surface: 'work', projectRoot: tmpRoot, conversationId: 'c1' });
+      assert.equal(resolved.ok, true);
+      assert.ok(resolved.serverNames.includes('trylo-windows'));
+      const mcp = JSON.parse(fs.readFileSync(resolved.mcpConfigPath, 'utf8'));
+      assert.equal(mcp.mcpServers['trylo-windows'].env.WINDOWS_MCP_WGC_HELPER, undefined);
+      assert.equal(mcp.mcpServers['trylo-windows'].env.ANONYMIZED_TELEMETRY, 'false');
+    } finally {
+      if (savedHelperEnv === undefined) delete process.env.WINDOWS_MCP_WGC_HELPER;
+      else process.env.WINDOWS_MCP_WGC_HELPER = savedHelperEnv;
+    }
+  });
+
+  it('a manifest without a helper spec composes without one', async () => {
+    const manifest = { ...WINDOWS_MCP_MANIFEST, helper: undefined };
+    const tooling = buildWindowsMcpAvailable(manifest);
+    const resolved = await tooling.resolveProfile({ surface: 'work', projectRoot: tmpRoot, conversationId: 'c1' });
+    assert.equal(resolved.ok, true);
+    const mcp = JSON.parse(fs.readFileSync(resolved.mcpConfigPath, 'utf8'));
+    assert.equal(mcp.mcpServers['trylo-windows'].env.WINDOWS_MCP_WGC_HELPER, undefined);
+    assert.equal(mcp.mcpServers['trylo-windows'].env.ANONYMIZED_TELEMETRY, 'false');
+  });
+});
+
+describe('tooling.localOverrides — file-first local wiring', () => {
+  it('loads repository-local entries and keeps a missing build authoritative', () => {
+    const root = path.join(tmpRoot, 'repo-tools-' + Date.now());
+    const entry = path.join(root, 'browser', 'cli.js');
+    fs.mkdirSync(path.dirname(entry), { recursive: true });
+    fs.writeFileSync(entry, 'entry');
+    const registryPath = path.join(root, 'tool-sources.json');
+    fs.writeFileSync(registryPath, JSON.stringify({
+      schemaVersion: 1,
+      tools: {
+        playwright: { entry: 'browser/cli.js', policy: 'repository-local' },
+        officecli: { entry: 'office/missing.exe', policy: 'repository-local' },
+      },
+    }));
+    const registry = loadRepositoryToolRegistry(registryPath);
+    assert.deepEqual(registry.problems, []);
+    assert.equal(registry.overrides.playwright, entry);
+    assert.equal(registry.entries.playwright.available, true);
+    assert.equal(registry.entries.officecli.available, false);
+    assert.equal(registry.overrides.officecli, path.join(root, 'office', 'missing.exe'));
+  });
+
+  it('rejects absolute and escaping repository entries', () => {
+    const root = path.join(tmpRoot, 'repo-tools-bad-' + Date.now());
+    fs.mkdirSync(root, { recursive: true });
+    const registryPath = path.join(root, 'tool-sources.json');
+    fs.writeFileSync(registryPath, JSON.stringify({
+      schemaVersion: 1,
+      tools: {
+        escape: { entry: '../outside.exe' },
+        absolute: { entry: path.join(tmpRoot, 'outside.exe') },
+      },
+    }));
+    const registry = loadRepositoryToolRegistry(registryPath);
+    assert.deepEqual(registry.overrides, {});
+    assert.equal(registry.problems.length, 2);
+  });
+
+  it('reads <installRoot>/local-overrides.json without any env', async () => {
+    const root = path.join(tmpRoot, 'tool-packages-fileov-' + Date.now());
+    const exePath = path.join(tmpRoot, 'fake-officecli-file.exe');
+    fs.writeFileSync(exePath, 'binary');
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(path.join(root, 'local-overrides.json'), JSON.stringify({ officecli: exePath }));
+    const tooling = build({ installRoot: root });
+    const listed = tooling.localOverrides();
+    assert.deepEqual(listed.overrides, { officecli: exePath });
+    const resolved = await tooling.resolveProfile({ surface: 'work', projectRoot: tmpRoot, conversationId: 'c1' });
+    const office = resolved.packageHealth.find((p) => p.id === 'officecli');
+    assert.equal(office.state, 'override');
+    assert.equal(office.available, true);
+    assert.ok(resolved.serverNames.includes('trylo-office'));
+  });
+
+  it('env wins per-key over the file', async () => {
+    const root = path.join(tmpRoot, 'tool-packages-fileov2-' + Date.now());
+    const fileExe = path.join(tmpRoot, 'fake-file.exe');
+    const envExe = path.join(tmpRoot, 'fake-env.exe');
+    fs.writeFileSync(fileExe, 'binary');
+    fs.writeFileSync(envExe, 'binary');
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(path.join(root, 'local-overrides.json'), JSON.stringify({ officecli: fileExe }));
+    const tooling = build({ installRoot: root, overrides: { officecli: envExe } });
+    assert.deepEqual(tooling.localOverrides().overrides, { officecli: envExe });
+  });
+
+  it('a missing or corrupt file degrades to no overrides', async () => {
+    const root = path.join(tmpRoot, 'tool-packages-fileov3-' + Date.now());
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(path.join(root, 'local-overrides.json'), '{not json');
+    const tooling = build({ installRoot: root });
+    assert.deepEqual(tooling.localOverrides().overrides, {});
+  });
+
+  it('setLocalOverride/clearLocalOverride round-trip durably', async () => {
+    const root = path.join(tmpRoot, 'tool-packages-fileov4-' + Date.now());
+    const exePath = path.join(tmpRoot, 'fake-set.exe');
+    fs.writeFileSync(exePath, 'binary');
+    const tooling = build({ installRoot: root });
+    const missing = await tooling.setLocalOverride({ id: 'officecli', path: path.join(tmpRoot, 'nope.exe') });
+    assert.equal(missing.ok, false);
+    assert.equal(missing.reasonCode, 'override_target_missing');
+    const set = await tooling.setLocalOverride({ id: 'officecli', path: exePath });
+    assert.equal(set.ok, true);
+    assert.deepEqual(tooling.localOverrides().overrides, { officecli: exePath });
+    // A fresh service object reads the same file — durable across restarts.
+    const again = build({ installRoot: root });
+    assert.deepEqual(again.localOverrides().overrides, { officecli: exePath });
+    const cleared = await tooling.clearLocalOverride({ id: 'officecli' });
+    assert.equal(cleared.ok, true);
+    assert.deepEqual(tooling.localOverrides().overrides, {});
+  });
 });
 
 describe('tooling.health / listProfiles', () => {
@@ -311,12 +515,26 @@ describe('tooling.health / listProfiles', () => {
     assert.deepEqual(profiles.map((p) => p.id).sort(), [
       'code.core.v1',
       'work.browser-debug.v1',
+      'work.cad-browser-debug.v1',
       'work.cad.v1',
       'work.core.v1',
     ]);
     // 办公基底 (rev 2): office + browser + desktop control in one default.
     const core = profiles.find((p) => p.id === 'work.core.v1');
     assert.deepEqual(core.packageIds, ['officecli', 'playwright', 'windows-mcp']);
+    // B (rev 2): code 对齐 browser + desktop control，officecli 仍是 Work-only.
+    const code = profiles.find((p) => p.id === 'code.core.v1');
+    assert.equal(code.revision, '2');
+    assert.deepEqual(code.packageIds, ['playwright', 'windows-mcp']);
+    const debug = profiles.find((p) => p.id === 'work.browser-debug.v1');
+    assert.deepEqual(debug.packageIds, ['officecli', 'chrome-devtools', 'windows-mcp']);
+    const cad = profiles.find((p) => p.id === 'work.cad.v1');
+    assert.ok(cad.packageIds.includes('playwright'));
+    assert.ok(cad.packageIds.includes('windows-mcp'));
+    const combined = profiles.find((p) => p.id === 'work.cad-browser-debug.v1');
+    assert.ok(combined.packageIds.includes('chrome-devtools'));
+    assert.ok(combined.packageIds.includes('solidworks-mcp'));
+    assert.ok(!combined.packageIds.includes('playwright'));
   });
 
   it('health reports every catalog package, never throwing', async () => {

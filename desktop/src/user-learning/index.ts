@@ -3,6 +3,13 @@ export type {
   UserLearningSnapshot,
   UserLearningSettings,
   UserDecisionTrace,
+  TraceLearningCommit,
+  ScopeKeyV2,
+  PersonalizationEligibilityDecision,
+  BehaviorCommitment,
+  LearningReceipt,
+  OutcomeObservation,
+  LearningCallLedgerEntry,
   EvidenceRecord,
   ConclusionRecord,
   UserModelRecord,
@@ -28,6 +35,9 @@ export {
 export type { UserLearningRuntime, OpenTraceInput } from './runtime';
 export { explicitInstructionFor, pendingLaunchDecision } from './decision-governor';
 export { createLearningLlm } from './llm';
+export { evaluateTraceOutcome } from './outcome-evaluator';
+export { calculateLearningMetrics } from './learning-metrics';
+export type { LearningMetrics } from './learning-metrics';
 export {
   parseEvidenceSkillOutput,
   parseConclusionSkillOutput,
@@ -43,3 +53,14 @@ export { dimensionLabel } from './labels';
 export { discoverProjectFacts, buildProjectContext } from './project-context';
 export { cognitionPromptMessage, learningImpactMessage, formatPolicyAction } from './ui-messages';
 export { renderInjection } from './policy';
+export { reserveLearningCall, finishLearningCall } from './learning-budget';
+export type { LearningCallPermit } from './learning-budget';
+export { compactTraceForLearning } from './skills';
+export { classifyPersonalizationEligibility } from './personalization-eligibility';
+export { compileBehaviorCommitments } from './behavior-commitment';
+export type { V02DecisionPoint } from './behavior-commitment';
+export { prepareLearningInteraction } from './learning-interaction-coordinator';
+export type {
+  LearningInteractionInput,
+  LearningInteractionResult,
+} from './learning-interaction-coordinator';

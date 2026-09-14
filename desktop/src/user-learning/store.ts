@@ -1,4 +1,14 @@
-import { LOCAL_USER_ID, USER_LEARNING_SCHEMA_VERSION, type PolicyDimension, type UserLearningSnapshot } from './types';
+import { conclusionStableKey, userModelStableKey, withFingerprint } from './scope';
+import {
+  LOCAL_USER_ID,
+  USER_LEARNING_SCHEMA_VERSION,
+  type ConclusionRecord,
+  type EvidenceScope,
+  type PolicyDimension,
+  type TaskStage,
+  type UserLearningSnapshot,
+  type UserModelRecord,
+} from './types';
 
 const STORAGE_KEY = 'trylo:user-learning:v1';
 const STORAGE_BACKUP_KEY = 'trylo:user-learning:v1:backup';
@@ -8,6 +18,13 @@ export function emptySnapshot(now = Date.now(), userId = LOCAL_USER_ID): UserLea
     schemaVersion: USER_LEARNING_SCHEMA_VERSION,
     userId,
     traces: [],
+    traceLearningCommits: [],
+    deletionEpoch: 0,
+    eligibilityDecisions: [],
+    behaviorCommitments: [],
+    learningReceipts: [],
+    outcomeObservations: [],
+    learningCallLedger: [],
     evidence: [],
     evidenceRelations: [],
     conclusions: [],
@@ -37,32 +54,130 @@ function asArray<T>(value: unknown): readonly T[] {
   return Array.isArray(value) ? (value as readonly T[]) : [];
 }
 
+const TASK_STAGES = new Set<TaskStage>(['explore', 'plan', 'produce', 'review', 'deliver', 'unknown']);
+
+function migrateScope(scope: EvidenceScope | undefined): EvidenceScope {
+  const safe = scope ?? { workspaceId: 'global', projectId: 'global', scopeTags: [] };
+  const taskStage = safe.taskStage && TASK_STAGES.has(safe.taskStage)
+    ? safe.taskStage
+    : safe.taskStage
+      ? 'unknown'
+      : undefined;
+  return withFingerprint({ ...safe, taskStage });
+}
+
+function supersedeDuplicateActive<
+  T extends ConclusionRecord | UserModelRecord,
+>(items: readonly T[]): readonly T[] {
+  const winners = new Map<string, T>();
+  for (const item of items) {
+    if (item.status !== 'active' || !item.stableKey) continue;
+    const prior = winners.get(item.stableKey);
+    if (
+      !prior
+      || item.version > prior.version
+      || (item.version === prior.version && item.updatedAt > prior.updatedAt)
+      || (item.version === prior.version && item.updatedAt === prior.updatedAt && item.id > prior.id)
+    ) {
+      winners.set(item.stableKey, item);
+    }
+  }
+  return items.map((item) => (
+    item.status === 'active'
+    && item.stableKey
+    && winners.get(item.stableKey)?.id !== item.id
+      ? { ...item, status: 'superseded' as const }
+      : item
+  ));
+}
+
 export function migrateSnapshot(value: unknown, now = Date.now()): UserLearningSnapshot {
   if (!isObject(value)) return emptySnapshot(now);
   const schemaVersion = typeof value.schemaVersion === 'number' ? value.schemaVersion : 0;
   const base = emptySnapshot(now, typeof value.userId === 'string' ? value.userId : LOCAL_USER_ID);
+  const traces = asArray<UserLearningSnapshot['traces'][number]>(value.traces);
+  const persistedCommits = asArray<UserLearningSnapshot['traceLearningCommits'][number]>(value.traceLearningCommits);
+  const traceLearningCommits = persistedCommits.length > 0 || schemaVersion >= 4
+    ? persistedCommits
+    : traces.flatMap((trace) => (
+      trace.closedAt !== undefined
+        ? [{
+          terminalKey: `legacy:${trace.id}`,
+          traceId: trace.id,
+          outcome: trace.outcome ?? 'exited',
+          status: 'committed' as const,
+          committedAt: trace.closedAt,
+        }]
+        : []
+    ));
+  const rawEvidence = asArray<UserLearningSnapshot['evidence'][number]>(value.evidence);
+  const rawConclusions = asArray<UserLearningSnapshot['conclusions'][number]>(value.conclusions);
+  const rawUserModels = asArray<UserLearningSnapshot['userModels'][number]>(value.userModels);
+  const migratingToV5 = schemaVersion < 5;
+  const evidence = migratingToV5
+    ? rawEvidence.map((item) => ({ ...item, context: migrateScope(item.context) }))
+    : rawEvidence;
+  const conclusions = migratingToV5
+    ? supersedeDuplicateActive(rawConclusions.map((item) => {
+      const scope = migrateScope(item.scope);
+      return {
+        ...item,
+        scope,
+        stableKey: conclusionStableKey(item.userId, item.dimension, scope),
+      };
+    }))
+    : rawConclusions;
+  const userModels = migratingToV5
+    ? supersedeDuplicateActive(rawUserModels.map((item) => {
+      const scope = migrateScope(item.scope);
+      return {
+        ...item,
+        scope,
+        stableKey: userModelStableKey(item.userId, item.dimension, scope),
+      };
+    }))
+    : rawUserModels;
+  const dirtyDimensions = asArray<PolicyDimension>(value.dirtyDimensions);
   const preserved = {
     ...base,
-    traces: asArray<UserLearningSnapshot['traces'][number]>(value.traces),
-    evidence: asArray<UserLearningSnapshot['evidence'][number]>(value.evidence),
+    traces,
+    traceLearningCommits,
+    deletionEpoch: typeof value.deletionEpoch === 'number' ? value.deletionEpoch : 0,
+    eligibilityDecisions: asArray<UserLearningSnapshot['eligibilityDecisions'][number]>(value.eligibilityDecisions),
+    behaviorCommitments: asArray<UserLearningSnapshot['behaviorCommitments'][number]>(value.behaviorCommitments),
+    learningReceipts: asArray<UserLearningSnapshot['learningReceipts'][number]>(value.learningReceipts),
+    outcomeObservations: asArray<UserLearningSnapshot['outcomeObservations'][number]>(value.outcomeObservations),
+    learningCallLedger: asArray<UserLearningSnapshot['learningCallLedger'][number]>(value.learningCallLedger),
+    evidence,
     evidenceRelations: asArray<UserLearningSnapshot['evidenceRelations'][number]>(value.evidenceRelations),
-    conclusions: asArray<UserLearningSnapshot['conclusions'][number]>(value.conclusions),
+    conclusions,
     conclusionRelations: asArray<UserLearningSnapshot['conclusionRelations'][number]>(value.conclusionRelations),
     profileFacts: asArray<UserLearningSnapshot['profileFacts'][number]>(value.profileFacts),
-    userModels: asArray<UserLearningSnapshot['userModels'][number]>(value.userModels),
+    userModels,
     userModelDerivations: asArray<UserLearningSnapshot['userModelDerivations'][number]>(value.userModelDerivations),
     projectContexts: asArray<UserLearningSnapshot['projectContexts'][number]>(value.projectContexts),
-    policyRules: asArray<UserLearningSnapshot['policyRules'][number]>(value.policyRules),
-    policyBundles: asArray<UserLearningSnapshot['policyBundles'][number]>(value.policyBundles),
+    policyRules: asArray<UserLearningSnapshot['policyRules'][number]>(value.policyRules).map((item) => (
+      migratingToV5 ? { ...item, status: 'superseded' as const } : item
+    )),
+    policyBundles: asArray<UserLearningSnapshot['policyBundles'][number]>(value.policyBundles).map((item) => (
+      migratingToV5 ? { ...item, status: 'retired' as const } : item
+    )),
     policyDecisions: asArray<UserLearningSnapshot['policyDecisions'][number]>(value.policyDecisions),
     cognitionSessions: asArray<UserLearningSnapshot['cognitionSessions'][number]>(value.cognitionSessions),
     cognitionCooldowns: asArray<UserLearningSnapshot['cognitionCooldowns'][number]>(value.cognitionCooldowns),
     cognitionAskLog: asArray<UserLearningSnapshot['cognitionAskLog'][number]>(value.cognitionAskLog),
     learningRuns: asArray<UserLearningSnapshot['learningRuns'][number]>(value.learningRuns),
-    dirtyDimensions: asArray<PolicyDimension>(value.dirtyDimensions),
+    dirtyDimensions: migratingToV5
+      ? [...new Set([
+        ...dirtyDimensions,
+        ...userModels.filter((item) => item.status === 'active').map((item) => item.dimension),
+      ])]
+      : dirtyDimensions,
     pendingRuns: asArray<NonNullable<UserLearningSnapshot['pendingRuns']>[number]>(value.pendingRuns),
-    currentBaseBundleId: typeof value.currentBaseBundleId === 'string' ? value.currentBaseBundleId : undefined,
-    currentProjectBundleIds: isObject(value.currentProjectBundleIds)
+    currentBaseBundleId: migratingToV5
+      ? undefined
+      : typeof value.currentBaseBundleId === 'string' ? value.currentBaseBundleId : undefined,
+    currentProjectBundleIds: !migratingToV5 && isObject(value.currentProjectBundleIds)
       ? value.currentProjectBundleIds as UserLearningSnapshot['currentProjectBundleIds']
       : undefined,
     createdAt: typeof value.createdAt === 'number' ? value.createdAt : now,
@@ -88,6 +203,8 @@ export interface UserLearningStore {
   update(mutator: (prev: UserLearningSnapshot) => UserLearningSnapshot): UserLearningSnapshot;
   persist(): void;
   load(): UserLearningSnapshot;
+  /** Permanently clears primary/backup persistence owned by this store. */
+  clear(): UserLearningSnapshot;
 }
 
 export interface StoreOptions {
@@ -159,6 +276,28 @@ export function createUserLearningStore(options: StoreOptions = {}): UserLearnin
     },
     persist,
     load,
+    clear() {
+      const cleared = { ...emptySnapshot(now(), current.userId), persisted: true };
+      if (memoryOnly || typeof window === 'undefined') {
+        current = cleared;
+        return current;
+      }
+      try {
+        window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.removeItem(STORAGE_BACKUP_KEY);
+        current = cleared;
+      } catch (err) {
+        current = {
+          ...cleared,
+          persisted: false,
+          diagnostics: {
+            persistFailed: true,
+            persistError: err instanceof Error ? err.message : String(err),
+          },
+        };
+      }
+      return current;
+    },
   };
 }
 
@@ -191,6 +330,9 @@ const MAX_EXECUTION_RESULT = 400;
 const MAX_DECISIONS = 200;
 const MAX_RUNS = 150;
 const MAX_SESSIONS = 40;
+const MAX_TRACE_LEARNING_COMMITS = 500;
+const LEARNING_LEDGER_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const OUTCOME_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
 export function compactSnapshot(snapshot: UserLearningSnapshot): UserLearningSnapshot {
   const openSessions = snapshot.cognitionSessions.filter((item) => item.status === 'open');
@@ -205,6 +347,17 @@ export function compactSnapshot(snapshot: UserLearningSnapshot): UserLearningSna
         ? `${trace.executionResult.slice(0, MAX_EXECUTION_RESULT)}…`
         : trace.executionResult,
     })),
+    traceLearningCommits: snapshot.traceLearningCommits.slice(-MAX_TRACE_LEARNING_COMMITS),
+    learningCallLedger: snapshot.learningCallLedger
+      .filter((item) => item.reservedAt >= snapshot.updatedAt - LEARNING_LEDGER_RETENTION_MS)
+      .slice(-500),
+    outcomeObservations: snapshot.outcomeObservations
+      .filter((item) => item.createdAt >= snapshot.updatedAt - OUTCOME_RETENTION_MS)
+      .slice(-1000),
+    learningReceipts: [
+      ...snapshot.learningReceipts.filter((item) => item.state !== 'pending').slice(-200),
+      ...snapshot.learningReceipts.filter((item) => item.state === 'pending'),
+    ],
     policyDecisions: snapshot.policyDecisions.slice(-MAX_DECISIONS),
     learningRuns: snapshot.learningRuns.slice(-MAX_RUNS),
     cognitionSessions: [...closedSessions, ...openSessions],

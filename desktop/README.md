@@ -2,7 +2,7 @@
 
 Tauri 2 shell + Trylo React app + monaco-vscode-api. Long-term home for the Trylo agent system.
 
-The root [README](../README.md) covers the product overview; this file covers the local dev loop.
+**The full technical plan lives in `C:/work/demo-ws/docs/ARCHITECTURE.md`.** Read that first. This README only covers the local dev loop.
 
 ## Stack
 
@@ -28,10 +28,10 @@ The root [README](../README.md) covers the product overview; this file covers th
 
 ```bash
 # 1. Install JS deps
-pnpm install
+yarn install
 
 # 2. Run the Tauri dev shell (opens the desktop app with hot-reload)
-pnpm tauri:dev
+yarn tauri:dev
 ```
 
 The first build is slow (Rust compiles the Tauri shell). Subsequent rebuilds are fast.
@@ -39,7 +39,7 @@ The first build is slow (Rust compiles the Tauri shell). Subsequent rebuilds are
 ## Build a production binary
 
 ```bash
-pnpm tauri:build
+yarn tauri:build
 ```
 
 Outputs:
@@ -50,17 +50,18 @@ Outputs:
 
 ## Project layout
 
-One-sentence version:
+See `docs/ARCHITECTURE.md` §9. One-sentence version:
 
 ```
 src/         — Trylo React app (UI + HostAdapter + state)
 src-tauri/   — Rust shell (commands, channels, PTY, watcher)
+spike-results/ — Phase 0 spike output
 config/      — shared lint/format/typecheck config
 ```
 
 ## Code quality
 
-Code standards, quick rules:
+See `docs/ARCHITECTURE.md` §10 for the full standards. Quick rules:
 
 - TypeScript strict mode, no `any`
 - `cargo clippy -- -D warnings` must pass
@@ -68,12 +69,10 @@ Code standards, quick rules:
 - Comments explain WHY, not WHAT
 - Tests for `host-adapter/` and Rust `commands/`
 
-## History
+## Spike
 
-The desktop client began as a 1-week architecture spike (Tauri 2 + React
-+ monaco-vscode-api) before the full build-out; the spike predates this
-public repository.
+Phase 0 is a 1-week spike (see `docs/ARCHITECTURE.md` §3 Phase 0 and `spike-results/`). Strict GO criteria; we stop if any fail.
 
 ## License
 
-Apache-2.0 — see [../LICENSE](../LICENSE).
+Apache-2.0 (TBD — see `docs/ARCHITECTURE.md` §12).

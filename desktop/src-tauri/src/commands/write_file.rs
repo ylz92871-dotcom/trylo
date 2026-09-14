@@ -1,4 +1,4 @@
-// Trylo Desktop — write_file Tauri command. See the architecture doc §2.3
+// Trylo Desktop — write_file Tauri command. See ARCHITECTURE.md §2.3
 // (Project State as source of truth) + §9 (file system as a service).
 //
 // One Tauri command per file per §10.2. This file owns `write_file`.

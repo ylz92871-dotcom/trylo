@@ -1,4 +1,4 @@
-// Trylo Desktop — Tauri commands module root. See the architecture doc §9
+// Trylo Desktop — Tauri commands module root. See ARCHITECTURE.md §9
 // (commands folder) + §10.2 (one Tauri command per file).
 //
 // Each submodule is a single Tauri command. This file just re-exports

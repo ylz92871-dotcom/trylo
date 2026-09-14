@@ -42,6 +42,7 @@ describe('Cognition mode conversation', () => {
       workspaceRoot: 'D:/proj',
       acceptPersonalization: false,
       reason: 'would drop final verification',
+      product: 'code',
     });
     const snap = runtime.snapshot();
     expect(snap.evidence.some((e) => e.signalKind === 'impact_resolution' || e.origin.eventType === 'cognition_confirmation')).toBe(true);

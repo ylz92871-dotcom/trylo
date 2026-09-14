@@ -1,4 +1,4 @@
-// Trylo Desktop — pty Tauri commands. See the architecture doc §3
+// Trylo Desktop — pty Tauri commands. See ARCHITECTURE.md §3
 // Phase 1 Week 2 (Terminal).
 //
 // Phase 1.0 day 1: spawn a child process with a PTY, stream

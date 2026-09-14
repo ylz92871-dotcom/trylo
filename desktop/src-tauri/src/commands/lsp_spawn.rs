@@ -1,4 +1,4 @@
-// Trylo Desktop — lsp_spawn Tauri command. See the architecture doc
+// Trylo Desktop — lsp_spawn Tauri command. See ARCHITECTURE.md
 // §2.7 (LspManager) + §10.2 (one Tauri command per file).
 //
 // Spawns an LSP server child process. The caller passes a Tauri

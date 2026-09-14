@@ -46,6 +46,8 @@ describe('User Learning stream messages', () => {
       matchedRuleIds: [],
       suppressedRuleIds: [],
       resolvedActions: ['prefer:direct_execution'],
+      appliedCommitmentIds: [],
+      opportunityKeys: [],
       active: [],
       enforced: [],
       shadow: [],

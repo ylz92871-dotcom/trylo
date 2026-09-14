@@ -1,4 +1,4 @@
-// Trylo Desktop — process_send Tauri command. See the architecture doc
+// Trylo Desktop — process_send Tauri command. See ARCHITECTURE.md
 // §2.2 + §3 Phase 2 task #3+#4.
 
 use std::io::Write;

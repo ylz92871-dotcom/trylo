@@ -1,4 +1,4 @@
-// Trylo Desktop — TauriChannelWorkspaceWatcher. See the architecture doc
+// Trylo Desktop — TauriChannelWorkspaceWatcher. See ARCHITECTURE.md
 // §2.6 (WorkspaceWatcher is an interface).
 //
 // Production impl for the spike / Phase 1. The actual OS-level

@@ -6,7 +6,7 @@ This module only mirrors user/assistant text into Hermes ``state.db`` so
 ``session_search`` can recall past Trylo conversations. All writes go through
 ``SessionDB`` public methods - no custom SQL, no custom schema.
 
-Safety (Hermes fusion architecture section 9.2 + repair R4):
+Safety (HERMES_FUSION_ARCHITECTURE.md section 9.2 + repair R4):
   - Every mirrored session id is prefixed ``trylo_`` with source ``trylo-vscode``.
   - Before ``replace_messages``, ``get_session`` confirms the row is either absent
     or already ``source=trylo-vscode``; a row owned by another source is refused.

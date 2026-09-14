@@ -1,4 +1,4 @@
-// Trylo Desktop — SettingsService interface. See the architecture doc
+// Trylo Desktop — SettingsService interface. See ARCHITECTURE.md
 // §3 Phase 1 #8 (Settings UI).
 //
 // Single source of truth: the workspace's

@@ -1,4 +1,4 @@
-// Trylo Desktop — Trylo message type handlers. See the architecture doc §3
+// Trylo Desktop — Trylo message type handlers. See ARCHITECTURE.md §3
 // Phase 2 task #8.
 //
 // The six "simple" message types from the arch doc, plus three closely

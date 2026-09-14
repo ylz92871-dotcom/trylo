@@ -1,4 +1,4 @@
-// Trylo Desktop — process_list Tauri command. See the architecture doc
+// Trylo Desktop — process_list Tauri command. See ARCHITECTURE.md
 // §2.2 + §3 Phase 2 task #3+#4.
 //
 // Lists live processes. Only returns rows still present in the

@@ -10,7 +10,7 @@
 //      translator emits while raw base64 is still in memory, before the
 //      BinaryRef store writes it to the ephemeral tool cache;
 //   3. parsing of the block shapes the CLI actually emits in stream-json
-//      (verified against `the Trylo CLI's mcp/client.ts`
+//      (verified against `trylo cli/src/services/mcp/client.ts`
 //      `transformResultContent` + PR-0 static evidence), defensively
 //      accepting BOTH the Anthropic wire shape (`image.source.base64`) and
 //      the flat MCP shape (`image.data`);
@@ -79,7 +79,7 @@ function looksLikeBase64(value: string): boolean {
 
 /** The Anthropic wire shape: `{type:'image', source:{type:'base64',
  *  media_type, data}}` (what the CLI emits for MCP images, see
- *  `the Trylo CLI's mcp/client.ts transformResultContent`). */
+ *  `trylo cli/src/services/mcp/client.ts transformResultContent`). */
 function parseAnthropicImage(block: Record<string, unknown>): RawToolResultContent | null {
   const source = isRecord(block['source']) ? block['source'] : null;
   if (!source || source['type'] !== 'base64') return null;

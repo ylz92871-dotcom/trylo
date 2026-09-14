@@ -1,4 +1,4 @@
-// Trylo Desktop — iframe shim unit tests. See the architecture doc §3
+// Trylo Desktop — iframe shim unit tests. See ARCHITECTURE.md §3
 // Phase 2 task #1.
 //
 // The shim is the only piece of glue that lets the legacy

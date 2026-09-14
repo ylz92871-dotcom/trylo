@@ -11,7 +11,7 @@
  *      created.
  *
  * Proves: without an explicit UI approve/discard, nothing is permanently
- * written (Hermes fusion architecture section 10 / 12 acceptance).
+ * written (HERMES_FUSION_ARCHITECTURE.md section 10 / 12 acceptance).
  *
  * Run: npm run smoke:hermes-proposals
  */

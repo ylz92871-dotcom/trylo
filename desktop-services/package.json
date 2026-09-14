@@ -12,7 +12,8 @@
     "smoke:legacy-gateway": "node vendor/legacy/remote-gateway/smoke-test.js && node vendor/legacy/remote-gateway/handoff-test.js",
     "smoke:legacy-tunnel": "node tests/legacy/remote-tunnel-test.js 2>/dev/null || exit 0",
     "smoke:remote-bundle": "node scripts/remote-bundle-smoke.mjs",
-    "inventory": "node scripts/release-inventory.mjs"
+    "inventory": "node scripts/release-inventory.mjs",
+    "validate:tool-bridge": "node scripts/validate-tool-bridge.mjs"
   },
   "dependencies": {
     "qrcode": "^1.5.4",

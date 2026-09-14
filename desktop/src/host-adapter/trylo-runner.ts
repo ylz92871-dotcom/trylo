@@ -1,13 +1,13 @@
 // Trylo Desktop — Trylo CLI runner.
 //
-// The Trylo CLI (cli.js) is the
+// The Trylo CLI (C:/trylo-cli/cli.js) is the
 // real agent backend. v1.7.2 ran with a stub. v1.8 wires
 // the real thing.
 //
 // Two output streams:
 //   - stream-json on stdout (live text deltas, model typing)
 //   - CLAUDE_CODE_LOOP_EVENTS_FILE on disk (28 typed events
-//     per the CLI event vocabulary spec, polled by a tailer)
+//     per docs/EVENT_VOCABULARY.md, polled by a tailer)
 //
 // v1.16.6 (M4-A runtime ownership): the previous module-level
 // `activeRunGeneration` / `activeHostProcessId` made the whole

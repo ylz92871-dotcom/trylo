@@ -22,12 +22,10 @@
   gap: var(--space-3);
   max-width: 100%;
   margin: 5px 0;
-  animation: message-in 160ms var(--ease-out);
-}
-
-@keyframes message-in {
-  from { opacity: 0; transform: translateY(2px); }
-  to   { opacity: 1; transform: translateY(0); }
+  /* No mount animation here on purpose: rows of the virtualized
+     conversation list mount on scroll too, and a CSS entry animation
+     replays (flicker + repaint) for history rows every time they
+     re-enter the viewport. */
 }
 
 .message--user {

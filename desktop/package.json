@@ -17,7 +17,14 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "spike:day-1": "echo 'Spike Day 1: Tauri 2 + React scaffold. See spike-results/day-1-tauri-setup.md'",
+    "spike:day-2": "echo 'Spike Day 2: monaco-vscode-api. See spike-results/day-2-monaco-vscode-api.md'",
+    "spike:day-3": "echo 'Spike Day 3: IFileSystemProvider bridge. See spike-results/day-3-fs-bridge.md'",
+    "spike:day-4": "echo 'Spike Day 4: WorkspaceWatcher. See spike-results/day-4-watcher.md'",
+    "spike:day-5": "echo 'Spike Day 5: external process write detection. See spike-results/day-5-external-process.md'",
+    "spike:day-6": "echo 'Spike Day 6: search service. See spike-results/day-6-search.md'",
+    "spike:day-7": "echo 'Spike Day 7: report. See spike-results/day-7-report.md'"
   },
   "dependencies": {
     "@codingame/monaco-vscode-api": "^13.0.0",
@@ -40,7 +47,7 @@
     "react-markdown": "^10.1.0",
     "react-virtuoso": "^4.18.12",
     "three": "^0.185.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",

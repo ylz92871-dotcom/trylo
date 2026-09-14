@@ -1,5 +1,5 @@
 // Trylo Desktop — Tauri-backed ProcessService. See
-// the architecture doc §2.2 + §3 Phase 2 task #3+#4.
+// ARCHITECTURE.md §2.2 + §3 Phase 2 task #3+#4.
 //
 // Wraps the four Tauri commands `process_spawn`, `process_send`,
 // `process_stop`, and `process_list`. Each `spawn` creates a

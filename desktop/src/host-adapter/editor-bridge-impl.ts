@@ -1,4 +1,4 @@
-// Trylo Desktop — EditorBridge concrete impl. See the architecture doc
+// Trylo Desktop — EditorBridge concrete impl. See ARCHITECTURE.md
 // §2.5 + §2.3.1.
 //
 // Phase 1.0: the state machine that used to live inline in

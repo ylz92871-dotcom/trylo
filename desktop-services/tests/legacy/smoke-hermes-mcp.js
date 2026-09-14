@@ -4,7 +4,7 @@
  * Verifies the trylo-hermes-capabilities MCP server speaks the Model Context
  * Protocol correctly: the official MCP client can initialize it, discover the
  * four read-only tools, and call one successfully. This is the "MCP handshake"
- * acceptance item from Hermes fusion architecture section 12.
+ * acceptance item from HERMES_FUSION_ARCHITECTURE.md section 12.
  *
  * Everything runs against a throwaway HERMES_HOME; user data is never touched.
  *

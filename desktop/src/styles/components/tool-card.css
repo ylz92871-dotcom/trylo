@@ -340,6 +340,12 @@
   display: block;
   max-width: 100%;
   max-height: 260px;
+  /* Reserve the box before the bytes arrive: a lazy image loading after the
+     row mounted used to grow the row and shift everything below it — the
+     documented "media resizes after mount" jitter source (virtuoso.dev
+     troubleshooting). object-fit keeps the crop letterboxed, not stretched. */
+  min-height: 96px;
+  object-fit: contain;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--bg);

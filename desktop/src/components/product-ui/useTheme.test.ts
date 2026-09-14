@@ -1,4 +1,4 @@
-// Trylo Desktop — useTheme tests. See the architecture doc §3
+// Trylo Desktop — useTheme tests. See ARCHITECTURE.md §3
 // Phase 1 #9 (Theming).
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';

@@ -1,4 +1,4 @@
-// Trylo Desktop — HostAdapter shared types. See the architecture doc §2.2.
+// Trylo Desktop — HostAdapter shared types. See ARCHITECTURE.md §2.2.
 //
 // The HostAdapter is the ONLY entry point to Tauri IPC. All request/reply
 // and stream types live here so component code never imports @tauri-apps/api

@@ -1,4 +1,4 @@
-// Trylo Desktop — useEditorBridges. See the architecture doc §2.5 + §2.3.
+// Trylo Desktop — useEditorBridges. See ARCHITECTURE.md §2.5 + §2.3.
 //
 // The bridge registry holds one EditorBridgeImpl per open file.
 // Switching tabs doesn't recreate the bridge — dirty / conflict

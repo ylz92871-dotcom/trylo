@@ -1,4 +1,5 @@
-// Trylo Desktop — Remote pairing modal.
+// Trylo Desktop — Remote pairing modal. See
+// spike-results/phase-2-ui-redesign.md.
 //
 // 2026-08-29: the pairing QR used to live *inside* the
 // Settings modal's Remote group — you had to open

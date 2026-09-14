@@ -3,10 +3,16 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  applyProfile,
+  connectionFields,
+  createProfileId,
   loadSettings,
+  removeProfile,
   remoteSettingsDefaults,
   saveSettings,
   settingsDefaults,
+  upsertProfile,
+  type ModelProfile,
   type TryloSettings,
 } from './settings-store';
 
@@ -16,6 +22,8 @@ const SAMPLE: TryloSettings = {
   apiModel: 'claude-3-5-sonnet-latest',
   // v-modelsel: no built-in pool override by default.
   poolModel: '',
+  modelProfiles: [],
+  activeModelProfileId: '',
   apiFormat: 'anthropic',
   apiKeyHeader: '',
   apiKeyPrefix: '',
@@ -58,6 +66,7 @@ const SAMPLE: TryloSettings = {
     cloudflaredPath: 'D:/cloudflared/cloudflared.exe',
   },
   workBrowserDebug: true,
+  workComputer: true,
   workCad: true,
   // TRYLO-DUAL-SURFACE-SPEC §2.4: default `true`; tests may flip it.
   hermesWorkLearning: true,
@@ -77,6 +86,11 @@ const SAMPLE: TryloSettings = {
     },
     teamAccessEnabled: false,
     teamComposerEnabled: false,
+    userLearningV2Coordinator: true,
+    userLearningBehaviorCommitments: true,
+    userLearningReceipts: true,
+    userLearningOutcomeEvaluation: true,
+    userLearningNoTraceMode: true,
   },
 };
 
@@ -102,6 +116,43 @@ describe('settings-store', () => {
     const loaded = loadSettings();
     expect(loaded.userLearning.teamAccessEnabled).toBe(true);
     expect(loaded.userLearning.teamComposerEnabled).toBe(true);
+  });
+
+  it('materializes and round-trips every User Learning v0.2 rollback switch', () => {
+    const legacy = JSON.parse(JSON.stringify(SAMPLE)) as Record<string, unknown>;
+    const legacyLearning = legacy.userLearning as Record<string, unknown>;
+    delete legacyLearning.userLearningV2Coordinator;
+    delete legacyLearning.userLearningBehaviorCommitments;
+    delete legacyLearning.userLearningReceipts;
+    delete legacyLearning.userLearningOutcomeEvaluation;
+    delete legacyLearning.userLearningNoTraceMode;
+    window.localStorage.setItem('trylo:settings:v1', JSON.stringify(legacy));
+    expect(loadSettings().userLearning).toEqual(expect.objectContaining({
+      userLearningV2Coordinator: true,
+      userLearningBehaviorCommitments: true,
+      userLearningReceipts: true,
+      userLearningOutcomeEvaluation: true,
+      userLearningNoTraceMode: true,
+    }));
+
+    saveSettings({
+      ...SAMPLE,
+      userLearning: {
+        ...SAMPLE.userLearning,
+        userLearningV2Coordinator: false,
+        userLearningBehaviorCommitments: false,
+        userLearningReceipts: false,
+        userLearningOutcomeEvaluation: false,
+        userLearningNoTraceMode: false,
+      },
+    });
+    expect(loadSettings().userLearning).toEqual(expect.objectContaining({
+      userLearningV2Coordinator: false,
+      userLearningBehaviorCommitments: false,
+      userLearningReceipts: false,
+      userLearningOutcomeEvaluation: false,
+      userLearningNoTraceMode: false,
+    }));
   });
 
   it('round-trips a saved value', () => {
@@ -309,5 +360,96 @@ describe('settings-store', () => {
     saveSettings(SAMPLE);
     const s = loadSettings();
     expect(s.remote).toEqual(SAMPLE.remote);
+  });
+
+  describe('saved connection profiles (我的配置)', () => {
+    const profile = (over: Partial<ModelProfile> = {}): ModelProfile => ({
+      id: 'cfg-test',
+      name: 'Ollama',
+      apiKey: 'local',
+      apiHost: 'http://localhost:11434',
+      apiModel: 'qwen2.5-coder',
+      apiFormat: 'openai',
+      apiKeyHeader: 'Authorization',
+      apiKeyPrefix: 'Bearer ',
+      extraHeadersText: '{}',
+      providerId: 'ollama',
+      ...over,
+    });
+
+    it('connectionFields snapshots only the primary connection', () => {
+      const s = { ...SAMPLE, apiModel: 'grok-4.5', apiKey: 'xx', poolModel: 'grok-4.5' };
+      expect(connectionFields(s)).toMatchObject({
+        apiModel: 'grok-4.5',
+        apiKey: 'xx',
+        apiHost: SAMPLE.apiHost,
+        apiFormat: SAMPLE.apiFormat,
+      });
+    });
+
+    it('applyProfile loads the full connection and marks it active', () => {
+      const p = profile();
+      const s = applyProfile({ ...settingsDefaults, poolModel: 'grok-4.5' }, p);
+      expect(s.apiModel).toBe('qwen2.5-coder');
+      expect(s.apiHost).toBe('http://localhost:11434');
+      expect(s.apiKey).toBe('local');
+      expect(s.apiFormat).toBe('openai');
+      expect(s.activeModelProfileId).toBe('cfg-test');
+      // A profile is its own source of truth — the pool override is cleared
+      // by the caller (App), not by applyProfile; assert the pool untouched here.
+      expect(s.poolModel).toBe('grok-4.5');
+    });
+
+    it('upsertProfile adds and then replaces by id (keeping its order)', () => {
+      const a = profile({ id: 'a', name: 'A' });
+      const b = profile({ id: 'b', name: 'B' });
+      const s1 = upsertProfile(settingsDefaults, a);
+      const s2 = upsertProfile(s1, b);
+      expect(s2.modelProfiles.map((p) => p.id)).toEqual(['a', 'b']);
+      const s3 = upsertProfile(s2, { ...a, name: 'A2' });
+      expect(s3.modelProfiles.map((p) => p.id)).toEqual(['a', 'b']);
+      expect(s3.modelProfiles[0]!.name).toBe('A2');
+    });
+
+    it('removeProfile deletes and clears the active pointer when targeted', () => {
+      const a = profile({ id: 'a' });
+      const s = applyProfile(upsertProfile(settingsDefaults, a), a);
+      const s2 = removeProfile(s, 'a');
+      expect(s2.modelProfiles).toHaveLength(0);
+      expect(s2.activeModelProfileId).toBe('');
+    });
+
+    it('removeProfile keeps the active pointer for other ids', () => {
+      const a = profile({ id: 'a' });
+      const b = profile({ id: 'b' });
+      const s = removeProfile(applyProfile(upsertProfile(upsertProfile(settingsDefaults, a), b), a), 'b');
+      expect(s.activeModelProfileId).toBe('a');
+      expect(s.modelProfiles.map((p) => p.id)).toEqual(['a']);
+    });
+
+    it('createProfileId yields distinct ids', () => {
+      expect(createProfileId()).not.toBe(createProfileId());
+    });
+
+    it('persists profiles through save/load and migrates malformed entries', () => {
+      const p = profile();
+      saveSettings(upsertProfile(settingsDefaults, p));
+      const s = loadSettings();
+      expect(s.modelProfiles).toHaveLength(1);
+      expect(s.modelProfiles[0]).toEqual(p);
+
+      // A malformed entry falls back per-field rather than dropping others.
+      saveSettings({
+        ...settingsDefaults,
+        modelProfiles: [
+          { id: 'x', name: 'X' },
+        ] as unknown as ModelProfile[],
+      });
+      const migrated = loadSettings();
+      expect(migrated.modelProfiles).toHaveLength(1);
+      expect(migrated.modelProfiles[0]!.id).toBe('x');
+      expect(migrated.modelProfiles[0]!.apiFormat).toBe(settingsDefaults.apiFormat);
+      expect(migrated.modelProfiles[0]!.apiModel).toBe('');
+    });
   });
 });

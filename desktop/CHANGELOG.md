@@ -80,3 +80,6 @@ Phase 1 (Desktop Alpha) was the original milestone. It shipped:
 - Windows NSIS MSI installer (`Trylo_1.0.0_x64_en-US.msi`, 10.7 MB)
 - 29 unit tests, all passing
 
+See `desktop/spike-results/MIGRATION_SUMMARY.md` for the full
+post-Phase-1 closeout, and `docs/ARCHITECTURE.md` §3 for the plan
+that produced it.

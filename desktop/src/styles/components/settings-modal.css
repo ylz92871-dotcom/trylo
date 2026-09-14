@@ -18,8 +18,8 @@
 }
 
 .settings-modal {
-  width: min(520px, 90vw);
-  max-height: 90vh;
+  width: min(860px, 94vw);
+  max-height: 85vh;
   display: flex;
   flex-direction: column;
   background: var(--bg-panel);
@@ -67,17 +67,70 @@
 
 .settings-modal__body {
   display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Sidebar navigation ────────────────────────────────── */
+
+.settings-modal__sidebar {
+  width: 160px;
+  flex-shrink: 0;
+  display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-5);
+  gap: 2px;
+  padding: var(--space-2) 0;
+  border-right: 1px solid var(--border);
   overflow-y: auto;
+  background: var(--bg);
+}
+
+.settings-modal__sidebar-item {
+  display: flex;
+  align-items: center;
+  padding: 6px var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out);
+}
+
+.settings-modal__sidebar-item:hover {
+  color: var(--fg);
+  background: var(--ink-hover);
+}
+
+.settings-modal__sidebar-item--active {
+  color: var(--fg);
+  background: var(--brand-soft);
+  font-weight: 500;
+}
+
+/* ── Content panel ──────────────────────────────────────── */
+
+.settings-modal__content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
 .settings-modal__group {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-3);
+  padding: var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
@@ -541,4 +594,82 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: var(--space-3);
+}
+
+/* ── 我的配置 (saved connection profiles) ────────────────────────── */
+
+.settings-modal__btn--danger {
+  background: transparent;
+  color: #d96666;
+  border: 1px solid var(--border);
+}
+
+.settings-modal__btn--danger:hover {
+  color: var(--bg);
+  background: #d96666;
+  border-color: #d96666;
+}
+
+.settings-modal__profiles {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.settings-modal__profiles-add {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings-modal__profiles-add .settings-modal__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-modal__profiles-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.settings-modal__profile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+
+.settings-modal__profile-name {
+  font-weight: 600;
+  padding: 4px 8px;
+}
+
+.settings-modal__profile-hint {
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+  font-family: var(--font-mono, monospace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-modal__profile-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings-modal__profile-actions .settings-modal__btn {
+  padding: 3px 10px;
+  font-size: var(--text-xs);
 }

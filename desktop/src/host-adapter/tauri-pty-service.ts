@@ -1,5 +1,5 @@
 // Trylo Desktop — PtyService impl backed by Tauri IPC. See
-// host-adapter/pty-service.ts and the architecture doc §3 Phase 1
+// host-adapter/pty-service.ts and ARCHITECTURE.md §3 Phase 1
 // Week 2 (Terminal).
 
 import { Channel, invoke } from '@tauri-apps/api/core';

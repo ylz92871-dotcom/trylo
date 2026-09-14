@@ -8,7 +8,7 @@
  *
  * This test imports and calls upstream Python directly. It contains no
  * re-implemented memory/skill/FTS/SQLite logic - it only asserts on the
- * behaviour of the official modules listed in the Hermes fusion architecture spec
+ * behaviour of the official modules listed in HERMES_FUSION_ARCHITECTURE.md
  * section 3.2.
  *
  * Run: npm run smoke:hermes-capabilities

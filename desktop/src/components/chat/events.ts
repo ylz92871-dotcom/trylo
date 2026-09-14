@@ -1,7 +1,7 @@
 // Trylo Desktop — event → message reducer.
 //
 // v1.14: the trylo CLI emits 28 typed events (per
-// the CLI event vocabulary spec). This
+// C:/work/demo-ws/trylo cli/docs/EVENT_VOCABULARY.md). This
 // reducer maps each event to a typed ChatMessage. The
 // pure function is tested in events.test.ts against the
 // 39-event hand-crafted trylo-complex fixture (6 turns,

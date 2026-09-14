@@ -4,7 +4,7 @@
 //   Trace → Evidence → Conclusion → Profile/UserModel → Policy → ActivePolicy
 // Cognition produces Evidence only. D3 never persists. Silence ≠ approval.
 
-export const USER_LEARNING_SCHEMA_VERSION = 3 as const;
+export const USER_LEARNING_SCHEMA_VERSION = 5 as const;
 export const LOCAL_USER_ID = 'local-user';
 export const ACTIVE_POLICY_TAG = 'trylo_active_engineering_policy';
 export const MAX_ACTIVE_POLICIES = 7;
@@ -43,6 +43,22 @@ export type RecordStatus = 'active' | 'disputed' | 'superseded' | 'retired';
 export type TemporalState = 'emerging' | 'stable' | 'drifting' | 'disputed';
 export type ProductSurface = 'code' | 'work';
 export type EnforcementMode = 'shadow' | 'enforced' | 'off';
+export type LearningSkillName = 'evidence' | 'conclusion' | 'user_model' | 'policy' | 'cognition';
+export type ArtifactAudience = 'internal' | 'external' | 'unknown';
+export type TaskStage = 'explore' | 'plan' | 'produce' | 'review' | 'deliver' | 'unknown';
+
+export interface LearningDirective {
+  readonly applyExistingPreferences: boolean;
+  readonly collectNewLearning: boolean;
+  readonly retention: 'normal' | 'session_only';
+  readonly reason?: 'user_requested_private' | 'borrowed_context' | 'exploration' | 'other';
+}
+
+export const DEFAULT_LEARNING_DIRECTIVE: LearningDirective = {
+  applyExistingPreferences: true,
+  collectNewLearning: true,
+  retention: 'normal',
+};
 
 export type RelationType =
   | 'supports'
@@ -159,7 +175,8 @@ export interface EvidenceScope {
   readonly projectId: string;
   readonly taskCategory?: string;
   readonly component?: string;
-  readonly taskStage?: string;
+  readonly taskStage?: TaskStage;
+  readonly artifactAudience?: ArtifactAudience;
   readonly riskLevel?: RiskLevel;
   readonly scopeTags: readonly string[];
   readonly corePath?: boolean;
@@ -190,12 +207,132 @@ export interface UserDecisionTrace {
   readonly product: ProductSurface;
   readonly codeMode?: 'chat' | 'plan' | 'agent' | 'cognition';
   readonly initialRequest: string;
+  /** Frozen at openTrace; later composer changes cannot alter this run. */
+  readonly learningDirective?: LearningDirective;
   readonly agentDecisions: readonly string[];
   readonly userEvents: readonly UserDecisionEvent[];
   readonly executionResult?: string;
   readonly outcome?: 'completed' | 'failed' | 'cancelled' | 'exited';
   readonly createdAt: number;
   readonly closedAt?: number;
+}
+
+/** Canonical, versioned identity fields for matching learned behavior.
+ * Null is distinct from false and means the field is not known. */
+export interface ScopeKeyV2 {
+  readonly product: ProductSurface | null;
+  readonly workspaceId: string | null;
+  readonly projectId: string | null;
+  readonly component: string | null;
+  readonly taskCategory: string | null;
+  readonly artifactAudience: ArtifactAudience | null;
+  readonly taskStage: TaskStage | null;
+  readonly corePath: boolean | null;
+  readonly riskLevel: RiskLevel | null;
+  readonly reversible: boolean | null;
+}
+
+export type EligibilityClass =
+  | 'personalization_candidate'
+  | 'session_instruction'
+  | 'general_quality_defect'
+  | 'safety_or_integrity_requirement'
+  | 'authorization_or_permission'
+  | 'insufficient_information';
+
+export interface PersonalizationEligibilityDecision {
+  readonly id: string;
+  readonly sourceEvidenceIds: readonly string[];
+  readonly classification: EligibilityClass;
+  readonly rationale: string;
+  readonly alternativeExplanations: readonly string[];
+  readonly createdAt: number;
+}
+
+export interface BehaviorDelta {
+  readonly decisionPoint: string;
+  readonly baselineBehavior: string;
+  readonly adaptedBehavior: string;
+  readonly expectedBenefit: string;
+  readonly rollbackBehavior: string;
+}
+
+export interface BehaviorCommitment {
+  readonly id: string;
+  readonly userModelId: string;
+  readonly scope: ScopeKeyV2;
+  readonly conditions: readonly string[];
+  readonly decisionPoint: string;
+  readonly behaviorDelta: BehaviorDelta;
+  readonly state: 'candidate' | 'trial' | 'shadow' | 'active' | 'paused' | 'retracted' | 'expired' | 'superseded';
+  readonly provenanceEvidenceIds: readonly string[];
+  readonly activation: 'explicit' | 'confirmed_inference' | 'time_bounded_trial';
+  readonly expiresAt?: number;
+  readonly stableKey: string;
+  readonly version: number;
+  readonly supersedes?: string;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+}
+
+export interface LearningReceipt {
+  readonly id: string;
+  readonly commitmentId: string;
+  readonly commitmentVersion: number;
+  readonly dedupeKey: string;
+  readonly reason: 'created' | 'behavior_changed' | 'scope_changed' | 'trial_started' | 'first_applied' | 'correction_detected' | 'paused' | 'retracted';
+  readonly product: ProductSurface;
+  readonly conversationId?: string;
+  readonly message: string;
+  readonly sourceSummary: string;
+  readonly scopeLabel: string;
+  readonly effectiveFrom: number;
+  readonly state: 'pending' | 'shown' | 'acknowledged' | 'corrected' | 'dismissed';
+  readonly actions: readonly ('this_time_only' | 'change_scope' | 'pause' | 'retract')[];
+  readonly createdAt: number;
+  readonly updatedAt: number;
+}
+
+export interface OutcomeObservation {
+  readonly id: string;
+  readonly commitmentId: string;
+  readonly policyDecisionId: string;
+  readonly traceId: string;
+  readonly eventId?: string;
+  readonly opportunityKey: string;
+  readonly signal:
+    | 'explicit_helpful'
+    | 'explicit_unhelpful'
+    | 'repeated_correction'
+    | 'material_rework'
+    | 'rollback'
+    | 'task_completed';
+  readonly attribution: 'direct' | 'partial' | 'unknown';
+  /** Normalized user correction identity; content is hashed, not retained. */
+  readonly correctionKey?: string;
+  readonly createdAt: number;
+}
+
+export interface LearningCallLedgerEntry {
+  readonly id: string;
+  readonly traceId?: string;
+  readonly skill: LearningSkillName;
+  readonly provider?: 'openai' | 'anthropic';
+  readonly model?: string;
+  readonly status: 'reserved' | 'completed' | 'failed' | 'rejected';
+  readonly reservedAt: number;
+  readonly finishedAt?: number;
+  readonly deletionEpoch: number;
+}
+
+/** Durable exactly-once marker for the deterministic terminal learning
+ * transaction. One trace id may have at most one committed marker. */
+export interface TraceLearningCommit {
+  readonly terminalKey: string;
+  readonly traceId: string;
+  readonly outcome: NonNullable<UserDecisionTrace['outcome']>;
+  readonly status: 'committed';
+  readonly committedAt: number;
 }
 
 export interface EvidenceRecord {
@@ -316,6 +453,8 @@ export interface UserModelRecord {
   readonly derivedFrom: { readonly conclusionIds: readonly string[] };
   readonly profileDependencies: readonly string[];
   readonly counterevidence: readonly string[];
+  readonly effectivenessState?: 'unknown' | 'helpful' | 'harmful' | 'mixed';
+  readonly lastRelevantOpportunityAt?: number;
   readonly status: RecordStatus;
   readonly version: number;
   readonly supersedes?: string;
@@ -420,6 +559,8 @@ export interface PolicyRule {
   readonly sourceUserModelIds: readonly string[];
   readonly sourceConclusionIds: readonly string[];
   readonly sourceEvidenceIds: readonly string[];
+  readonly sourceCommitmentIds?: readonly string[];
+  readonly commitmentState?: 'shadow' | 'active';
   readonly status: RecordStatus;
   readonly version: number;
   readonly supersedes?: string;
@@ -463,12 +604,17 @@ export interface PolicyDecision {
   readonly userId: string;
   readonly projectId: string;
   readonly taskId: string;
+  readonly conversationId?: string;
+  readonly traceId?: string;
   readonly bundleVersion: number;
   readonly contextHash: string;
   readonly currentBundleId?: string;
   readonly matchedRuleIds: readonly string[];
   readonly suppressedRuleIds: readonly string[];
   readonly resolvedActions: readonly string[];
+  /** Commitments that survived safety/impact gates and were actually injected. */
+  readonly appliedCommitmentIds: readonly string[];
+  readonly opportunityKeys: readonly string[];
   readonly active: readonly ActivePolicyRule[];
   readonly enforced: readonly ActivePolicyRule[];
   readonly shadow: readonly ActivePolicyRule[];
@@ -648,8 +794,9 @@ export interface LearningRun {
     | 'no_user_sourced_event'
     | 'no_stable_conclusion'
     | 'idempotent'
-    | 'in_flight'
-    | 'disabled';
+      | 'in_flight'
+      | 'directive_no_collect'
+      | 'disabled';
   readonly inputRefs: readonly string[];
   readonly outputRefs: readonly string[];
   readonly startedAt: number;
@@ -668,6 +815,13 @@ export interface UserLearningSettings {
   /** Foundation spec §9.4: composer gate. Effective only when
    *  `teamAccessEnabled` is also true (composerLive = A && B). */
   readonly teamComposerEnabled?: boolean;
+  /** v0.2 release/rollback switches. Optional on disk for v3/v4/v5
+   * compatibility; migration always materializes a boolean value. */
+  readonly userLearningV2Coordinator?: boolean;
+  readonly userLearningBehaviorCommitments?: boolean;
+  readonly userLearningReceipts?: boolean;
+  readonly userLearningOutcomeEvaluation?: boolean;
+  readonly userLearningNoTraceMode?: boolean;
 }
 
 export const DEFAULT_USER_LEARNING_SETTINGS: UserLearningSettings = {
@@ -678,6 +832,14 @@ export const DEFAULT_USER_LEARNING_SETTINGS: UserLearningSettings = {
   inference: DEFAULT_LEARNING_INFERENCE,
   teamAccessEnabled: false,
   teamComposerEnabled: false,
+  // The implementation branch keeps the completed v0.2 behavior live.
+  // Production rollout may flip each switch independently without changing
+  // schema or deleting already-written v5 fields.
+  userLearningV2Coordinator: true,
+  userLearningBehaviorCommitments: true,
+  userLearningReceipts: true,
+  userLearningOutcomeEvaluation: true,
+  userLearningNoTraceMode: true,
 };
 
 export interface LearningDiagnostics {
@@ -685,12 +847,37 @@ export interface LearningDiagnostics {
   readonly persistError?: string;
   readonly incompatible?: boolean;
   readonly readOnly?: boolean;
+  readonly lastTerminalConflict?: {
+    readonly traceId: string;
+    readonly committedOutcome: NonNullable<UserDecisionTrace['outcome']>;
+    readonly attemptedOutcome: NonNullable<UserDecisionTrace['outcome']>;
+    readonly at: number;
+  };
+  readonly lastRejectedLateEvent?: {
+    readonly traceId: string;
+    readonly eventType: UserDecisionEvent['type'];
+    readonly at: number;
+  };
+  readonly lastEligibilityExclusion?: {
+    readonly evidenceId: string;
+    readonly classification: Exclude<EligibilityClass, 'personalization_candidate'>;
+    readonly at: number;
+  };
 }
 
 export interface UserLearningSnapshot {
   readonly schemaVersion: number;
   readonly userId: string;
   readonly traces: readonly UserDecisionTrace[];
+  readonly traceLearningCommits: readonly TraceLearningCommit[];
+  /** Monotonic within a persisted runtime generation. Async work captures the
+   * current value and must not commit after user data is cleared. */
+  readonly deletionEpoch: number;
+  readonly eligibilityDecisions: readonly PersonalizationEligibilityDecision[];
+  readonly behaviorCommitments: readonly BehaviorCommitment[];
+  readonly learningReceipts: readonly LearningReceipt[];
+  readonly outcomeObservations: readonly OutcomeObservation[];
+  readonly learningCallLedger: readonly LearningCallLedgerEntry[];
   readonly evidence: readonly EvidenceRecord[];
   readonly evidenceRelations: readonly EvidenceRelation[];
   readonly conclusions: readonly ConclusionRecord[];

@@ -5,6 +5,7 @@ import {
   POLICY_COMPILER_PROMPT,
   USER_MODEL_SKILL_PROMPT,
 } from './prompts';
+import type { LearningSkillName } from './types';
 
 export interface LearningLlmConfig {
   readonly apiKey: string;
@@ -15,9 +16,10 @@ export interface LearningLlmConfig {
   readonly apiKeyPrefix?: string;
 }
 
-export type LearningSkillName = 'evidence' | 'conclusion' | 'user_model' | 'policy' | 'cognition';
+export type { LearningSkillName } from './types';
 
 export interface LearningLlm {
+  readonly metadata?: { readonly provider: string; readonly model: string };
   complete(skill: LearningSkillName, user: string): Promise<string | null>;
 }
 
@@ -41,13 +43,14 @@ function parseJsonObject(text: string): unknown | null {
 }
 
 export function createLearningLlm(config: LearningLlmConfig, fetchImpl: typeof fetch = fetch): LearningLlm {
+  const format = config.apiFormat === 'openai' ? 'openai' : 'anthropic';
+  const model = config.apiModel?.trim() || 'claude-3-5-haiku-latest';
   return {
+    metadata: { provider: format, model },
     async complete(skill, user) {
       if (!config.apiKey.trim()) return null;
-      const format = config.apiFormat === 'openai' ? 'openai' : 'anthropic';
       const host = (config.apiHost ?? '').trim();
       const base = host || (format === 'anthropic' ? 'https://api.anthropic.com' : 'https://api.openai.com/v1');
-      const model = config.apiModel?.trim() || 'claude-3-5-haiku-latest';
       const system = SKILL_PROMPTS[skill];
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 12_000);

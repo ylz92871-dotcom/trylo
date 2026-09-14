@@ -4,17 +4,18 @@ import '@testing-library/jest-dom/vitest';
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from './types';
 
+// Adversarial hook: lets tests assert on the raw Virtuoso props — notably
+// `computeItemKey` output, which must stay UNIQUE (React keys) even when a
+// turn contains two non-contiguous runs of the same phaseId.
+const virtuoso = vi.hoisted(() => ({ captured: [] as Record<string, unknown>[] }));
+
 vi.mock('react-virtuoso', () => ({
-  Virtuoso: forwardRef(function Virtuoso(
-    {
-      data,
-      itemContent,
-    }: {
+  Virtuoso: forwardRef(function Virtuoso(props: Record<string, unknown>, _ref) {
+    virtuoso.captured.push(props);
+    const { data, itemContent } = props as {
       data: readonly ChatMessage[];
       itemContent: (index: number, item: ChatMessage) => ReactNode;
-    },
-    _ref,
-  ) {
+    };
     return <div>{data.map((item, index) => itemContent(index, item))}</div>;
   }),
 }));
@@ -173,42 +174,25 @@ describe('MessageList turn projection', () => {
     expect(screen.getByText('已运行 1 次操作')).toBeInTheDocument();
   });
 
-  it('projects Work phase and narration messages into one task board', () => {
+  it('keeps history-revived Work narration rows visible in the turn projection', () => {
+    // 2026-09-10: the WorkTaskBoard aggregation path was removed with the
+    // work_activity_group cleanup. Persisted work_rail/work_narration rows
+    // from old sessions must stay VISIBLE as pass-through rows (rendering
+    // itself is Message's safety-net branch; this file mocks Message), never
+    // swallowed by the turn projection.
     const messages: ChatMessage[] = [
       user('u1', '制作演示文稿', 100),
-      {
-        id: 'rail:r1', kind: 'work_rail', role: 'assistant', createdAt: 110,
-        turnId: 'u1', runId: 'r1',
-        projection: {
-          identity: {
-            taskId: 't1', runId: 'r1', turnId: 'u1',
-            conversationId: 'c1', intent: 'task',
-          },
-          state: 'executing',
-          phases: [
-            { phase: 'understand', status: 'completed', label: '理解', activityCount: 1 },
-            { phase: 'execute', status: 'active', label: '制作', activityCount: 1 },
-          ],
-          narrations: [], activities: [], blockers: [],
-        },
-      },
       {
         id: 'narration:r1:understand', kind: 'work_narration', role: 'assistant',
         createdAt: 120, turnId: 'u1', runId: 'r1', phaseId: 'understand',
         text: '已确认受众和内容范围。',
       },
-      {
-        id: 'narration:r1:execute', kind: 'work_narration', role: 'assistant',
-        createdAt: 130, turnId: 'u1', runId: 'r1', phaseId: 'execute',
-        text: '正在生成页面并统一视觉样式。',
-      },
     ];
 
     render(<MessageList surface="work" messages={messages} running />);
 
-    expect(screen.getAllByLabelText(/Trylo Work/)).toHaveLength(1);
-    expect(screen.getByLabelText(/Trylo Work/)).toHaveTextContent('制作演示文稿');
-    expect(screen.getByLabelText(/Trylo Work/)).toHaveTextContent('正在生成页面并统一视觉样式');
+    expect(screen.getByTestId('message-narration:r1:understand')).toBeInTheDocument();
+    expect(screen.getByTestId('message-narration:r1:understand')).toHaveTextContent('work_narration');
   });
 
   it('places the Work tool/thinking transcript chronologically, not at the bottom (2026-09-04)', () => {
@@ -271,6 +255,87 @@ describe('MessageList turn projection', () => {
     // Once the phase's tool is done the transcript collapses — even while the
     // overall task is still `running`. No spinner left.
     render(<MessageList surface="work" messages={finished} running />);
+    expect(screen.getByLabelText('Trylo Code 思考与行动')).not.toHaveClass('code-reasoning--active');
+  });
+
+  // ── Adversarial: projection invariants the scroll-performance work relies on ──
+
+  it('keeps Virtuoso item keys unique when one phaseId reappears as two runs (Code)', () => {
+    const messages: ChatMessage[] = [
+      user('u1', 'multi-step', 100),
+      {
+        id: 'thinking-1', kind: 'thinking', role: 'assistant', createdAt: 110,
+        summary: 'step a', preview: '先做 a。', fullLength: 6, partial: false,
+        turn: 1, turnId: 'u1', phaseId: 'phase-a',
+      },
+      {
+        id: 'tool-1', kind: 'tool', role: 'assistant', createdAt: 120,
+        tool: 'Read', status: 'done', summary: 'src/a.ts', turnId: 'u1', phaseId: 'phase-a',
+      },
+      { id: 'a1', kind: 'text', role: 'assistant', createdAt: 130, text: '中间结论', turnId: 'u1' },
+      {
+        id: 'thinking-2', kind: 'thinking', role: 'assistant', createdAt: 140,
+        summary: 'step a again', preview: '继续 a。', fullLength: 6, partial: false,
+        turn: 1, turnId: 'u1', phaseId: 'phase-a',
+      },
+    ];
+
+    render(<MessageList surface="code" messages={messages} running />);
+
+    // Both runs survive the projection as separate blocks…
+    expect(screen.getAllByLabelText('Trylo Code 思考与行动')).toHaveLength(2);
+    // …and every item key stays unique — duplicate React keys would corrupt
+    // Virtuoso reconciliation the moment the list grows.
+    const props = virtuoso.captured.at(-1)!;
+    const keys = (props.data as readonly { id?: string; key?: string }[]).map(
+      (item) => item.key ?? item.id,
+    );
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('keeps Virtuoso item keys unique when narration splits a Work phase', () => {
+    const messages: ChatMessage[] = [
+      user('u1', '制作报告', 100),
+      {
+        id: 'tool-1', kind: 'tool', role: 'assistant', createdAt: 110,
+        tool: 'Write', status: 'done', summary: '草稿', turnId: 'u1', phaseId: 'draft',
+      },
+      {
+        id: 'narration:1', kind: 'work_narration', role: 'assistant',
+        createdAt: 120, turnId: 'u1', runId: 'r1', phaseId: 'draft',
+        text: '草稿完成。',
+      },
+      {
+        id: 'tool-2', kind: 'tool', role: 'assistant', createdAt: 130,
+        tool: 'Read', status: 'running', summary: '复查草稿', turnId: 'u1', phaseId: 'draft',
+      },
+    ];
+
+    render(<MessageList surface="work" messages={messages} running />);
+
+    expect(screen.getAllByLabelText('Trylo Code 思考与行动')).toHaveLength(2);
+    const props = virtuoso.captured.at(-1)!;
+    const keys = (props.data as readonly { id?: string; key?: string }[]).map(
+      (item) => item.key ?? item.id,
+    );
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('does not mark a trailing Code phase active once assistant output follows it', () => {
+    const messages: ChatMessage[] = [
+      user('u1', 'build it', 100),
+      {
+        id: 'tool-1', kind: 'tool', role: 'assistant', createdAt: 110,
+        tool: 'Read', status: 'done', summary: 'src/app.ts', turnId: 'u1', phaseId: 'phase-a',
+      },
+      { id: 'a1', kind: 'text', role: 'assistant', createdAt: 120, text: '全部完成', turnId: 'u1' },
+    ];
+
+    render(<MessageList surface="code" messages={messages} running />);
+
+    // The reverse suffix walk must agree with the old per-phase scan: an
+    // assistant answer AFTER the phase means the block is not "current",
+    // even while the turn is still running.
     expect(screen.getByLabelText('Trylo Code 思考与行动')).not.toHaveClass('code-reasoning--active');
   });
 });

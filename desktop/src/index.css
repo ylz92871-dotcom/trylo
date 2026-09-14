@@ -17,6 +17,7 @@
 @import './styles/components/mode-chip.css';
 @import './styles/components/chat-panel.css';
 @import './styles/components/cognition-badge.css';
+@import './styles/components/learning-receipt.css';
 @import './styles/components/browser-preview.css';
 @import './styles/components/input-bar.css';
 @import './styles/components/logo.css';
@@ -54,12 +55,12 @@
 @import './styles/components/activity-center.css';
 @import './styles/components/approval-card.css';
 @import './styles/components/input-request-card.css';
-@import './styles/components/work-workflow-card.css';
 @import './styles/components/work-linear-ui.css';
 @import './styles/components/work-task-board.css';
 @import './styles/components/permission-level-picker.css';
 @import './styles/components/tool-profile-chip.css';
 @import './styles/components/user-learning.css';
+@import './styles/components/learning-directive.css';
 @import './styles/components/cognition-surface.css';
 
 /* Person | Team surfaces (spec §3 — new folder, new CSS). */

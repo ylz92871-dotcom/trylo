@@ -1,4 +1,4 @@
-// Trylo Desktop — ProcessService interface. See the architecture doc
+// Trylo Desktop — ProcessService interface. See ARCHITECTURE.md
 // §2.2 + §3 Phase 2 task #3+#4 (Trylo Core subprocess + CC CLI
 // channel).
 //

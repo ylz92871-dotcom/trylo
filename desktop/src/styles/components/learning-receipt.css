@@ -1,0 +1,67 @@
+.learning-receipt {
+  position: relative;
+  width: 100%;
+  height: 0;
+  z-index: 10;
+}
+
+.learning-receipt__pill {
+  position: absolute;
+  right: var(--space-4);
+  bottom: 46px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: min(520px, calc(100% - 32px));
+  padding: 7px 11px;
+  border: 1px solid color-mix(in srgb, var(--brand) 30%, var(--border));
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--fg);
+  box-shadow: var(--shadow-sm);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.learning-receipt__pill span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.learning-receipt__pill:hover,
+.learning-receipt__pill--open { background: var(--ink-hover); }
+
+.learning-receipt-popover {
+  position: absolute;
+  right: var(--space-4);
+  bottom: 84px;
+  width: min(360px, calc(100% - 32px));
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-lg);
+}
+
+.learning-receipt-popover__message { margin: 0 0 12px; color: var(--fg); font-weight: 600; }
+.learning-receipt-popover__details { margin: 0; color: var(--fg-muted); font-size: 12px; }
+.learning-receipt-popover__details div { display: grid; grid-template-columns: 38px 1fr; gap: 8px; margin-top: 6px; }
+.learning-receipt-popover__details dt { color: var(--fg-subtle); }
+.learning-receipt-popover__details dd { margin: 0; overflow-wrap: anywhere; }
+.learning-receipt-popover__actions,
+.learning-receipt-popover__scope { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.learning-receipt-popover__actions button,
+.learning-receipt-popover__scope button {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.learning-receipt-popover__actions .learning-receipt-popover__primary { background: var(--brand); border-color: var(--brand); color: white; }
+.learning-receipt-popover__actions .learning-receipt-popover__danger { color: var(--danger); }

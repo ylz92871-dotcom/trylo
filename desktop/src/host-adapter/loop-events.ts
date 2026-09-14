@@ -1,10 +1,10 @@
 // Trylo Desktop — Loop event types.
 //
-// The Trylo CLI (cli.js) emits a
+// The Trylo CLI (C:/trylo-cli/cli.js) emits a
 // high-fidelity JSONL stream of agent-loop transitions
 // to the file pointed to by CLAUDE_CODE_LOOP_EVENTS_FILE.
 // This module defines the types and the 28 event shapes
-// per the CLI event vocabulary spec.
+// per docs/EVENT_VOCABULARY.md.
 //
 // Every event has `seq` (monotonic) and `ts` (Unix ms).
 // The host tails the file and pushes events into the

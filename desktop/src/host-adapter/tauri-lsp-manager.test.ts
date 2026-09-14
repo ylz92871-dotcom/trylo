@@ -1,4 +1,4 @@
-// Trylo Desktop — TauriLspManager unit tests. See the architecture doc
+// Trylo Desktop — TauriLspManager unit tests. See ARCHITECTURE.md
 // §2.7 + §2.3.
 //
 // We test the JS-side glue: ensureServer makes a Channel and

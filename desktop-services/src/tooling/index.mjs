@@ -38,6 +38,7 @@ export function createToolingServices(options = {}) {
   const log = options.log ?? null;
   const storageRoot = env.storageRoot;
   const seam = options.seam ?? {};
+  const enableRepositoryTools = options.seam === undefined;
 
   const catalog = createToolCatalog(seam.manifests ? { manifests: seam.manifests } : {});
 
@@ -58,6 +59,12 @@ export function createToolingServices(options = {}) {
     ...(seam.download ? { download: seam.download } : {}),
     // Test seam: replaces the browser-body install child process (§3.3-7).
     ...(seam.runCommand ? { runCommand: seam.runCommand } : {}),
+    // A real source-checkout host reads the repository tool-sources.json. Test
+    // seams and packaged installs remain hermetic unless explicitly wired.
+    enableRepositoryTools,
+    ...(options.localToolRegistryPath
+      ? { localToolRegistryPath: options.localToolRegistryPath }
+      : {}),
   });
 
   const health = createToolHealthService({
@@ -150,9 +157,16 @@ export function createToolingServices(options = {}) {
       return { available: false, executable: null, version: null, reasonCode: 'probe_failed' };
     }
     const version = `${outcome.stdout}${outcome.stderr}`.trim().split('\n')[0] || null;
-    if (version && manifest.version && !version.includes(manifest.version)) {
+    if (
+      resolved.state !== 'override'
+      && version
+      && manifest.version
+      && !version.includes(manifest.version)
+    ) {
       // A binary that answers `--version` with something the manifest did
       // not pin is NOT the pinned package: refuse it (§3 / §15.2 hash drift).
+      // A LOCAL OVERRIDE (the user's own build) is exempt — it was provided
+      // explicitly and may differ from the pinned release version.
       return { available: false, executable: null, version, reasonCode: 'version_mismatch' };
     }
     return { available: true, executable: resolved.executable, version, reasonCode: null };
@@ -206,6 +220,32 @@ export function createToolingServices(options = {}) {
       const result = await packages.uninstall(params);
       if (result.ok) health.clearCache();
       return result;
+    },
+
+    /** `tooling.setLocalOverride` — durable local-first wiring: point one
+     *  package id at an absolute local executable (no download, no GitHub).
+     *  Health cache is dropped so the next resolve reads the override. */
+    async setLocalOverride(params = {}) {
+      const result = await packages.setLocalOverride(params);
+      if (result.ok) health.clearCache();
+      return result;
+    },
+
+    /** `tooling.clearLocalOverride` — remove one durable local override. */
+    async clearLocalOverride(params = {}) {
+      const result = await packages.clearLocalOverride(params);
+      if (result.ok) health.clearCache();
+      return result;
+    },
+
+    /** `tooling.localOverrides` — effective map (file under env) + file path. */
+    localOverrides() {
+      return {
+        ok: true,
+        file: packages.localOverridesFile,
+        overrides: packages.localOverrides(),
+        repository: packages.repositoryToolRegistry(),
+      };
     },
 
     /** `tooling.installBrowser` — §3.3-7: materialise the browser body a

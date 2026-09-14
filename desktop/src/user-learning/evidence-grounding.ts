@@ -154,7 +154,7 @@ export function classifyUserSignal(text: string, eventType: EvidenceEventType): 
     return { durability: 'task_local', signalKind: 'task_override' };
   }
   const taskLocal = /这次|当前任务|这个任务|先把这|先修这/.test(text);
-  const collaboration = /不要反复|少审核|减少审核|重复审核|同目的|别写那么长|不要长篇|别搞复杂|普通\s*UI|核心\s*(路径|runtime)|直接干|先 plan|先规划|只要结论|PPT|报告|自己点|浏览器|太花|重做|先看结构/.test(text);
+  const collaboration = /不要反复|少审核|减少审核|重复审核|同目的|别写那么长|不要长篇|别搞复杂|普通\s*UI|核心\s*(路径|runtime)|直接干|先 plan|先规划|只要结论|先说结论|背景优先|依据展开|PPT|报告|汇报|周报|自己点|浏览器|太花|重做|先看结构|先出一版|完整草稿/.test(text);
   if (collaboration) {
     return { durability: 'long_term_candidate', signalKind: 'collaboration_preference' };
   }

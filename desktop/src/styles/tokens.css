@@ -5,7 +5,9 @@
  * properties. No component defines its own colors, font sizes,
  * or paddings. This is the contract for "all future UI is
  * based on this style" (per the Phase 2 redesign).
- The lamp-glow variable is OFF by default —
+ *
+ * See desktop/spike-results/phase-2-ui-redesign.md for the
+ * design intent. The lamp-glow variable is OFF by default —
  * flip it to 1 once the basic shape is signed off.
  */
 

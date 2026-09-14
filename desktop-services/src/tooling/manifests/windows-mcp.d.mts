@@ -24,6 +24,16 @@ export interface WindowsMcpManifestShape {
     readonly sourceCommit: string;
     readonly pythonPackage: string;
   };
+  /** WCC-P2-05 (spec §19.8): the pinned .NET WGC capture helper. */
+  readonly helper: {
+    readonly kind: 'dotnet-single-file';
+    readonly protocolVersion: number;
+    readonly executableRelativePath: string;
+    readonly packagedDirName: string;
+    readonly sha256: string;
+    readonly sizeBytes: number;
+    readonly sourceTree: string;
+  };
   readonly mcp: {
     readonly serverName: string;
     readonly transport: 'stdio';

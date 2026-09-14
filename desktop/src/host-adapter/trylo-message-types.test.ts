@@ -1,5 +1,5 @@
 // Trylo Desktop — Trylo message type unit tests. See
-// the architecture doc §3 Phase 2 task #8.
+// ARCHITECTURE.md §3 Phase 2 task #8.
 //
 // Tests run against `handleTryloRequest` with a stub context. The
 // point is to lock down the contract: every request shape produces

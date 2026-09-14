@@ -22,7 +22,8 @@ $ds = Join-Path $repoRoot "desktop-services"
 $sidecars = Join-Path $repoRoot "desktop\sidecars"
 $srcTauri = Join-Path $repoRoot "desktop\src-tauri"
 $resources = Join-Path $srcTauri "resources"
-$dsDist = Join-Path $resources "desktop-services"
+$dsRoot = Join-Path $resources "desktop-services"
+$dsDist = Join-Path $dsRoot "dist"
 $sidecarPub = Join-Path $resources "sidecars"
 
 Write-Host "prepare-sidecars: npm ci + build service host bundle"
@@ -48,6 +49,8 @@ try {
     $ErrorActionPreference = $previousErrorActionPreference
   }
   if ($esbuildExitCode -ne 0) { throw "esbuild failed (exit $esbuildExitCode):$("`n" + ($esbuildOut -join "`n"))" }
+  node scripts/validate-tool-bridge.mjs --require-local-builds --bundle
+  if ($LASTEXITCODE -ne 0) { throw "tool bridge validation failed (exit $LASTEXITCODE)" }
 } finally {
   Pop-Location
 }
@@ -72,19 +75,19 @@ Write-Host "prepare-sidecars: copy into src-tauri/resources/"
 $workBin = Join-Path $repoRoot "work\bin"
 $targets = @(
   @{ src = "$ds\dist";               dst = "$dsDist" },
-  @{ src = "$ds\vendor";             dst = "$dsDist\vendor" },
+  @{ src = "$ds\vendor";             dst = "$dsRoot\vendor" },
   # ws is required by the vendored remote-gateway at RUNTIME (it loads via
   # createRequire from vendor/legacy, NOT through the esbuild bundle), so it
   # must ship alongside the vendor tree. ws@8.21.0 has zero runtime deps —
   # the single package folder is sufficient (spec §9.1 / §3.3).
-  @{ src = "$ds\node_modules\ws";    dst = "$dsDist\node_modules\ws" },
+  @{ src = "$ds\node_modules\ws";    dst = "$dsRoot\node_modules\ws" },
   # Windows-MCP fork source (tool-package-manager.syncWindowsMcpFork). The
   # pinned transport installs the UPSTREAM tarball for the dependency set;
   # this tree is then overlaid onto the installed src/windows_mcp so a
   # packaged app gets the Trylo fork surface (14 tools incl. Ocr) instead
   # of the 12-tool upstream one. The bundled host resolves it as the
   # `windows-mcp-fork` sibling of dist/host.bundle.mjs.
-  @{ src = "$repoRoot\new_tool\computer-control\Windows-MCP\src\windows_mcp"; dst = "$dsDist\windows-mcp-fork" },
+  @{ src = "$repoRoot\new_tool\computer-control\Windows-MCP\src\windows_mcp"; dst = "$dsRoot\windows-mcp-fork" },
   @{ src = "$sidecars\desktop-companion\publish"; dst = "$sidecarPub\desktop-companion\publish" },
   @{ src = "$sidecars\hermes-capabilities";      dst = "$sidecarPub\hermes-capabilities" },
   @{ src = "$workBin";               dst = "$resources\work\bin" }
@@ -106,7 +109,7 @@ Get-ChildItem -LiteralPath $hermesResourceDir -File -Filter "*.pyc" -ErrorAction
   Remove-Item -Force
 # Same residue rule for the staged Windows-MCP fork (__pycache__ lives at
 # every depth under src/windows_mcp on a developed checkout).
-$forkResourceDir = Join-Path $dsDist "windows-mcp-fork"
+$forkResourceDir = Join-Path $dsRoot "windows-mcp-fork"
 Get-ChildItem -LiteralPath $forkResourceDir -Recurse -Directory -Filter "__pycache__" -ErrorAction SilentlyContinue |
   Remove-Item -Recurse -Force
 Get-ChildItem -LiteralPath $forkResourceDir -Recurse -File -Filter "*.pyc" -ErrorAction SilentlyContinue |
@@ -148,6 +151,24 @@ Write-Host "prepare-sidecars: pinned node $nodeVersion -> $nodeTargetDir\node.ex
 # missing REQUIRED artifact, so this is the release gate, not a log line.
 # TRYLO_SIDECARS_DIR is cleared: the inventory must resolve against the
 # packaged resources, never a developer's checkout.
+Write-Host "prepare-sidecars: stage the pinned WGC capture helper (spec §19.8)"
+# The .NET helper is a pinned native artifact (WCC-P2-05): built by
+# `dotnet publish` in the Windows-MCP checkout, staged NEXT TO the bundled
+# service host, and digest-verified by release-inventory.mjs below against
+# the manifest's pinned value. A missing or drifted helper is a release
+# failure — the capture path never downloads or substitutes one at runtime.
+$wgcSource = Join-Path $repoRoot "new_tool\computer-control\Windows-MCP\native\wgc-helper\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish"
+$wgcTarget = Join-Path $dsRoot "wgc-helper"
+if (-not (Test-Path (Join-Path $wgcSource "trylo-wgc-helper.exe"))) {
+  throw @"
+prepare-sidecars: trylo-wgc-helper.exe not found at $wgcSource
+  Build it first: dotnet publish native/wgc-helper/TryloWgcHelper.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
+"@
+}
+New-Item -ItemType Directory -Force -Path $wgcTarget | Out-Null
+Copy-Item -Force (Join-Path $wgcSource "trylo-wgc-helper.exe") $wgcTarget
+Write-Host "prepare-sidecars: staged WGC helper -> $wgcTarget"
+
 Write-Host "prepare-sidecars: verify resource inventory"
 $env:TRYLO_RESOURCE_DIR = $resources
 $env:TRYLO_SIDECARS_DIR = ""
@@ -165,4 +186,4 @@ try {
 
 Write-Host "prepare-sidecars: OK"
 Write-Host "  resources: $resources"
-Write-Host "  service host bundle: $dsDist\dist\host.bundle.mjs"
+Write-Host "  service host bundle: $dsDist\host.bundle.mjs"

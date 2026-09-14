@@ -1,5 +1,5 @@
 // Trylo Desktop — attachment staging Tauri commands
-// (P2-1 Work Package B). See the architecture doc §9 + §10.2.
+// (P2-1 Work Package B). See ARCHITECTURE.md §9 + §10.2.
 //
 // Work attachments are NEVER projected to the daemon as bare
 // external absolute paths. The renderer asks this command to

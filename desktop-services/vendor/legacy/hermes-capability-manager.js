@@ -31,7 +31,7 @@ const SERVER_SCRIPT = process.env.TRYLO_HERMES_SERVER_SCRIPT
 
 // config.yaml content. write_approval MUST be on for both subsystems so that
 // every memory/skill mutation stages to the pending store instead of writing
-// directly (Hermes fusion architecture section 6.3 / 10). Trylo owns this
+// directly (HERMES_FUSION_ARCHITECTURE.md section 6.3 / 10). Trylo owns this
 // file; Hermes reads it.
 const CONFIG_YAML = [
   'memory:',

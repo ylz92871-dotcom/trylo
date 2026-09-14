@@ -370,20 +370,25 @@ describe('health integration: CAD package without its host application', () => {
 });
 
 describe('work.cad.v1 profile', () => {
-  it('exists, is work-surface, strict, and carries the six adapter ids + office', () => {
+  it('exists, is work-surface, strict, and carries the base layer + six adapter ids', () => {
     const profile = TOOL_PROFILES['work.cad.v1'];
     assert.ok(profile, 'work.cad.v1 must be declared');
     assert.equal(profile.surface, 'work');
     assert.equal(profile.strictMcpConfig, true);
+    // Composition is LAYERED since the capability-layer refactor: the
+    // 办公基底 (officecli + playwright + windows-mcp) first, then the six
+    // CAD/EDA adapters (withCadEda). Order matters for MCP config assembly,
+    // so the assertion stays exact.
     assert.deepEqual([...profile.packageIds], [
+      'officecli',
+      'playwright',
+      'windows-mcp',
       'solidworks-mcp',
       'autocad-mcp',
       'kicad-mcp',
       'jlceda-mcp',
       'freecad-mcp',
       'blender-mcp',
-      'windows-mcp',
-      'officecli',
     ]);
   });
 

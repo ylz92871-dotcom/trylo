@@ -1,5 +1,5 @@
 // Trylo Desktop — SearchService impl backed by Tauri IPC. See
-// host-adapter/editor-bridge.ts and §2.4 of the architecture doc.
+// host-adapter/editor-bridge.ts and §2.4 of ARCHITECTURE.md.
 
 import { invoke } from '@tauri-apps/api/core';
 import type { SearchMatch, SearchService } from './search-service';

@@ -3,7 +3,7 @@
  *
  * Desktop must not import trylo-cli sources (different build boundaries),
  * so the five seat IDs and display names are duplicated here from
- * `the Trylo CLI's AgentTool/team-roster/types.ts`. The
+ * `trylo cli/src/tools/AgentTool/team-roster/types.ts`. The
  * `seats.test.ts` lock-in asserts both sides carry the same five IDs in
  * the same order. If the CLI roster ever grows or reorders, this file
  * is the place to update, and the test will fail loud.

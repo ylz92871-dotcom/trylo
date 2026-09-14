@@ -1,4 +1,4 @@
-// Trylo Desktop — HostAdapter channels. See the architecture doc §2.2.
+// Trylo Desktop — HostAdapter channels. See ARCHITECTURE.md §2.2.
 //
 // Streaming surface. Tauri 2 Channel<T> for sustained streams (PTY bytes,
 // LSP frames, file watcher events, agent output). One-shot events use

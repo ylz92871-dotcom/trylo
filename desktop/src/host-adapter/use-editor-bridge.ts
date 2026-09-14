@@ -1,4 +1,4 @@
-// Trylo Desktop — useEditorBridge. See the architecture doc §2.5 + §2.3.
+// Trylo Desktop — useEditorBridge. See ARCHITECTURE.md §2.5 + §2.3.
 //
 // B (corrected) refactor: the bridge owns its `buffer` (the
 // editor's in-memory content for this file). The hook subscribes

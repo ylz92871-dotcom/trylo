@@ -31,14 +31,14 @@ describe('resolveControlPlaneWorkspace', () => {
   it('creates a workspace only when the path is not registered', async () => {
     const sendMock = vi.fn()
       .mockResolvedValueOnce({ workspaces: [] })
-      .mockResolvedValueOnce({ workspace: { id: 'created', path: 'C:/work/new' } });
+      .mockResolvedValueOnce({ workspace: { id: 'created', path: 'D:/CC/new' } });
     const send = sendMock as unknown as ControlPlaneClient['send'];
 
-    await expect(resolveControlPlaneWorkspace(clientWith(send), 'C:/work/new', 'new'))
+    await expect(resolveControlPlaneWorkspace(clientWith(send), 'D:/CC/new', 'new'))
       .resolves.toBe('created');
     expect(sendMock).toHaveBeenNthCalledWith(2, 'workspace.create', {
       name: 'new',
-      path: 'C:/work/new',
+      path: 'D:/CC/new',
     });
   });
 

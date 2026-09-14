@@ -1,4 +1,4 @@
-// Trylo Desktop — search Tauri command. See the architecture doc §2.4
+// Trylo Desktop — search Tauri command. See ARCHITECTURE.md §2.4
 // (monaco-vcode-api search service override) + §3 Phase 1
 // Week 2 (Terminal + Search).
 //

@@ -105,9 +105,9 @@ describe('windows-mcp manifest (PR-6, §6.6/§10.3)', () => {
   });
 
   it('the vendored fork exists and carries the fork-added/changed surface', {
-    // The fork source tree lives outside this repository and is overlaid
-    // after install; a fresh clone legitimately has none. The guard is only
-    // meaningful in a development checkout that has the fork vendored.
+    // The fork source lives outside this repo (vendored after install);
+    // a fresh clone legitimately has none. The guard is only meaningful
+    // in a development checkout that has the fork vendored.
     skip: !fs.existsSync(WINDOWS_MCP_FORK_SRC) && 'vendored fork source not present in this checkout',
   }, () => {
     // The pinned tarball is still upstream; the fork is overlaid after
@@ -380,7 +380,7 @@ describe('tooling.install — pinned-python-env transport (§8.2, PR-6)', () => 
 });
 
 describe('tooling.health — python-metadata probe (PR-6, §8.2)', () => {
-  it('reports version mismatch when the venv metadata disagrees with the pin', async () => {
+  it('a LOCAL OVERRIDE is accepted even when the venv metadata differs from the pin (user build)', async () => {
     const exePath = path.join(tmpRoot, 'fake-venv', 'Scripts', 'windows-mcp.exe');
     fs.mkdirSync(path.dirname(exePath), { recursive: true });
     fs.writeFileSync(exePath, 'binary');
@@ -390,9 +390,9 @@ describe('tooling.health — python-metadata probe (PR-6, §8.2)', () => {
     });
     const health = await tooling.health({ id: 'windows-mcp' });
     const record = health.packages.find((p) => p.id === 'windows-mcp');
-    assert.equal(record.state, 'version-mismatch');
-    assert.equal(record.available, false);
-    assert.equal(record.versionMatches, false);
+    assert.equal(record.available, true);
+    assert.equal(record.state, 'override');
+    assert.equal(record.versionMatches, false); // truthfully reported, not refused
   });
 
   it('a matching venv metadata probe keeps the package available (override path)', async () => {

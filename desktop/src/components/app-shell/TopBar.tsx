@@ -1,4 +1,4 @@
-// Trylo Desktop — TopBar.
+// Trylo Desktop — TopBar. See spike-results/phase-2-ui-redesign.md.
 //
 // v1.5: two top-level modes — Code and Work. The brand
 // logo is bigger (28px). No Fun tab.

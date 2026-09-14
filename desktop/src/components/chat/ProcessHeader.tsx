@@ -1,4 +1,5 @@
-// Trylo Desktop — ProcessHeader.
+// Trylo Desktop — ProcessHeader. See
+// spike-results/phase-2-ui-redesign.md.
 //
 // v1.10: a compact status bar above the input bar.
 // Shows the agent state (ready / running / error) and,
@@ -48,7 +49,7 @@ export interface ProcessHeaderProps {
   readonly onStop?: () => void;
 }
 
-/** Last path segment, e.g. `C:/work/demo-ws` → `demo-ws`. */
+/** Last path segment, e.g. `C:/work/demo-ws` → `trylo`. */
 function basenameOf(p: string): string {
   const m = p.match(/[^/\\]+$/);
   return m ? m[0] : p;

@@ -1,4 +1,4 @@
-// Trylo Desktop — TryloFrame component. See the architecture doc §3
+// Trylo Desktop — TryloFrame component. See ARCHITECTURE.md §3
 // Phase 2 task #1 (iframe mount) and the Phase 2 plan §7 (file map).
 //
 // This component mounts the legacy 4-mode webview in an iframe. The

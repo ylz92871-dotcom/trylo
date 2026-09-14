@@ -64,12 +64,13 @@ function StreamingHarness(): ReactElement {
 
 describe('MessageList follow mode (real Virtuoso)', () => {
   it('mounts with the real Virtuoso without erroring', () => {
-    // NOTE: with the real Virtuoso, jsdom renders the item list
-    // `visibility: hidden` until a layout pass measures it — jsdom has
-    // no layout engine, so item TEXT never becomes visible here. The
+    // NOTE: with the real Virtuoso, jsdom has no layout engine — no item
+    // wrappers render at all until a real measurement pass runs (see the
+    // diag: the item list stays empty and `visibility: hidden`). The
     // valuable assertion is "mounts and renders the shell without
     // throwing"; content assertions belong to MessageList.test.tsx,
-    // which mocks Virtuoso for exactly that reason.
+    // which mocks Virtuoso for exactly that reason. The BFC wrapper
+    // contract is unit-tested in virtuoso-item.test.tsx.
     const { container } = render(
       <div style={{ height: 400 }}>
         <MessageList

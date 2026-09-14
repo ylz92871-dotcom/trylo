@@ -1,4 +1,4 @@
-import { synthesizeConclusionBundle, discoverConclusionRelations, discoverEvidenceRelations } from './conclusion';
+import { synthesizeConclusionBundle, discoverEvidenceRelations } from './conclusion';
 import {
   askStreak,
   chatSeedQuestion,
@@ -48,19 +48,20 @@ import { renderTeamAccessBlock, renderStaySoloProtocol } from './team-access/ren
 import type { TeamProfile } from './team-access/profiles/profile-types';
 import { createSymbolicPreferenceScorer, spawnCandidates } from './team-access/preference-stub';
 import { clarificationFromPersonOutput, resolveTeamClarificationKey, teamClarificationCooling, type TeamClarificationRequest } from './team-access/clarification';
-import { shouldRunLearningLlm } from './learning-scheduler';
-import { compilePolicies, currentBundleFor, resolvePolicies } from './policy';
-import { retrieveCandidateEvidence } from './retrieval';
+import { inferenceSettings, shouldRunLearningLlm } from './learning-scheduler';
+import { finishLearningCall, reserveLearningCall, type LearningCallPermit } from './learning-budget';
+import { compileBehaviorCommitments } from './behavior-commitment';
+import { appendReceiptsForNewCommitments, createLearningReceipt } from './learning-receipt';
+import { evaluateTraceOutcome } from './outcome-evaluator';
+import { classifyPersonalizationEligibility } from './personalization-eligibility';
+import { commitCompiledPolicyBundle, compilePolicies, currentBundleFor, resolvePolicies } from './policy';
+import { canonicalScope, fingerprintScopeV2 } from './scope';
 import {
-  compactEvidenceForSkill,
-  compactTraceForSkill,
-  parseConclusionSkillOutput,
+  compactTraceForLearning,
   parseEvidenceSkillOutput,
-  parsePolicySkillOutput,
-  parseUserModelSkillOutput,
 } from './skills';
 import { buildProjectContext, inferLanguagesFromRoot } from './project-context';
-import { clearDirty, createUserLearningStore, emptySnapshot, markDirty, type UserLearningStore } from './store';
+import { clearDirty, createUserLearningStore, markDirty, type UserLearningStore } from './store';
 import { classifyTaskContext } from './task-context';
 import type {
   CognitionAskEntry,
@@ -73,7 +74,10 @@ import type {
   ContextStage,
   EvidenceEventType,
   EvidenceRecord,
+  EnforcementMode,
   EvidenceScope,
+  LearningReceipt,
+  LearningDirective,
   LearningRun,
   PendingRunChoice,
   PendingRunIntent,
@@ -86,7 +90,7 @@ import type {
   UserLearningSettings,
   UserLearningSnapshot,
 } from './types';
-import { DEFAULT_LEARNING_INFERENCE, DEFAULT_USER_LEARNING_SETTINGS, LOCAL_USER_ID } from './types';
+import { DEFAULT_LEARNING_DIRECTIVE, DEFAULT_LEARNING_INFERENCE, DEFAULT_USER_LEARNING_SETTINGS, LOCAL_USER_ID } from './types';
 import { ingestProfileFact, reasonUserModels } from './user-model';
 import { projectIdFromRoot, workspaceIdFromRoot } from './ids';
 
@@ -98,6 +102,7 @@ export interface OpenTraceInput {
   readonly prompt: string;
   readonly codeMode?: 'chat' | 'plan' | 'agent' | 'cognition';
   readonly explicitInstruction?: string;
+  readonly learningDirective?: LearningDirective;
 }
 
 export interface UserLearningRuntime {
@@ -106,7 +111,18 @@ export interface UserLearningRuntime {
   setSettings(next: Partial<UserLearningSettings>): UserLearningSettings;
   openTrace(input: OpenTraceInput): UserDecisionTrace;
   recordEvent(traceId: string, event: Omit<UserDecisionEvent, 'id'>): void;
-  closeTrace(traceId: string, outcome: UserDecisionTrace['outcome'], executionResult?: string): readonly LearningRun[];
+  closeTrace(
+    traceId: string,
+    outcome: NonNullable<UserDecisionTrace['outcome']>,
+    executionResult?: string,
+  ): readonly LearningRun[];
+  listPendingReceipts(product: ProductSurface, conversationId?: string): readonly LearningReceipt[];
+  acknowledgeReceipt(receiptId: string): void;
+  activateCommitment(commitmentId: string): void;
+  updateCommitmentScope(commitmentId: string, scope: EvidenceScope): void;
+  pauseCommitment(commitmentId: string): void;
+  retractCommitment(commitmentId: string): void;
+  applyCommitmentThisTimeOnly(commitmentId: string, traceId: string): void;
   preparePrompt(input: {
     readonly workspaceRoot: string;
     readonly product: ProductSurface;
@@ -176,7 +192,7 @@ export interface UserLearningRuntime {
     readonly reason: string;
     /** Surface the Impact was resolved on (Code | Work) — never hardcode
      *  'code' (spec §3.5). */
-    readonly product?: ProductSurface;
+    readonly product: ProductSurface;
   }): void;
   rememberProjectFacts(input: {
     readonly workspaceRoot: string;
@@ -317,32 +333,233 @@ function runLearningChain(
   snapshot: UserLearningSnapshot,
   newEvidence: readonly EvidenceRecord[],
   t: number,
+  mode: EnforcementMode = 'shadow',
 ): UserLearningSnapshot {
-  const relations = discoverEvidenceRelations(newEvidence, snapshot.evidence, t);
-  const bundle = synthesizeConclusionBundle(snapshot, newEvidence, relations, t);
+  const existingDecisions = new Set(snapshot.eligibilityDecisions.flatMap((item) => item.sourceEvidenceIds));
+  const eligibility = newEvidence
+    .filter((item) => !existingDecisions.has(item.id))
+    .map((item) => classifyPersonalizationEligibility({
+      evidence: item,
+      trace: snapshot.traces.find((trace) => trace.id === item.source.traceId),
+      now: t,
+    }));
+  const candidateIds = new Set(eligibility
+    .filter((item) => item.classification === 'personalization_candidate')
+    .flatMap((item) => item.sourceEvidenceIds));
+  const candidates = newEvidence.filter((item) => candidateIds.has(item.id));
+  const lastExcluded = [...eligibility].reverse().find((item) => item.classification !== 'personalization_candidate');
+  const gated: UserLearningSnapshot = {
+    ...snapshot,
+    eligibilityDecisions: [...snapshot.eligibilityDecisions, ...eligibility],
+    diagnostics: lastExcluded ? {
+      ...snapshot.diagnostics,
+      lastEligibilityExclusion: {
+        evidenceId: lastExcluded.sourceEvidenceIds[0]!,
+        classification: lastExcluded.classification as Exclude<typeof lastExcluded.classification, 'personalization_candidate'>,
+        at: t,
+      },
+    } : snapshot.diagnostics,
+  };
+  if (candidates.length === 0) return gated;
+  const relations = discoverEvidenceRelations(candidates, gated.evidence, t);
+  const bundle = synthesizeConclusionBundle(gated, candidates, relations, t);
   const conclusions = bundle.conclusions;
   const { models, derivations } = reasonUserModels(
-    { ...snapshot, conclusions: mergeById(snapshot.conclusions, conclusions) },
+    { ...gated, conclusions: mergeById(gated.conclusions, conclusions) },
     conclusions,
     t,
   );
   let next: UserLearningSnapshot = {
-    ...snapshot,
-    evidenceRelations: [...snapshot.evidenceRelations, ...relations],
-    conclusions: mergeById(snapshot.conclusions, conclusions),
-    conclusionRelations: [...snapshot.conclusionRelations, ...bundle.conclusionRelations].slice(-400),
-    userModels: supersede(snapshot.userModels, models),
-    userModelDerivations: [...snapshot.userModelDerivations, ...derivations],
+    ...gated,
+    evidenceRelations: [...gated.evidenceRelations, ...relations],
+    conclusions: mergeById(gated.conclusions, conclusions),
+    conclusionRelations: [...gated.conclusionRelations, ...bundle.conclusionRelations].slice(-400),
+    userModels: supersede(gated.userModels, models),
+    userModelDerivations: [...gated.userModelDerivations, ...derivations],
   };
   if (models.length > 0) {
-    const compiled = compilePolicies(next, next.projectContexts.at(-1) ?? null, t);
+    const beforeCommitments = next.behaviorCommitments;
+    const behaviorCommitments = compileBehaviorCommitments({
+      models,
+      evidence: next.evidence,
+      eligibility: next.eligibilityDecisions,
+      existing: beforeCommitments,
+      mode,
+      now: t,
+    });
     next = {
       ...next,
-      policyBundles: [...next.policyBundles, compiled.bundle],
-      policyRules: [...next.policyRules, ...compiled.rules],
+      behaviorCommitments,
+      learningReceipts: appendReceiptsForNewCommitments({
+        before: beforeCommitments,
+        after: behaviorCommitments,
+        evidence: next.evidence,
+        existing: next.learningReceipts,
+        now: t,
+      }),
     };
+    const compiled = compilePolicies(next, next.projectContexts.at(-1) ?? null, t);
+    next = commitCompiledPolicyBundle(next, compiled);
   }
   return next;
+}
+
+interface TraceLearningReduction {
+  readonly snapshot: UserLearningSnapshot;
+  readonly runs: readonly LearningRun[];
+}
+
+/** Pure terminal reducer. The caller commits its returned snapshot together
+ * with the closed trace and exactly-once marker in one store transaction. */
+function reduceTraceLearning(
+  snapshot: UserLearningSnapshot,
+  trace: UserDecisionTrace,
+  t: number,
+  mode: EnforcementMode,
+): TraceLearningReduction {
+  const runs: LearningRun[] = [];
+  try {
+    const scope = {
+      workspaceId: trace.workspaceId,
+      projectId: trace.projectId,
+      product: trace.product,
+      scopeTags: [trace.product, trace.codeMode ?? 'agent'],
+      riskLevel: classifyTaskContext({ prompt: trace.initialRequest, product: trace.product }).risk,
+    };
+    const evidence = extractEvidenceFromTrace(trace, scope, t);
+    runs.push(run(
+      'evidence.extract',
+      evidence.length ? 'ok' : 'empty',
+      [trace.id],
+      t,
+      undefined,
+      evidence.length ? undefined : 'no_user_sourced_event',
+    ));
+    if (evidence.length === 0) {
+      return {
+        snapshot: { ...snapshot, learningRuns: [...snapshot.learningRuns, ...runs].slice(-200) },
+        runs,
+      };
+    }
+
+    const eligibility = evidence.map((item) => classifyPersonalizationEligibility({ evidence: item, trace, now: t }));
+    const candidateIds = new Set(eligibility
+      .filter((item) => item.classification === 'personalization_candidate')
+      .flatMap((item) => item.sourceEvidenceIds));
+    const candidates = evidence.filter((item) => candidateIds.has(item.id));
+    const lastExcluded = [...eligibility].reverse().find((item) => item.classification !== 'personalization_candidate');
+    const relations = discoverEvidenceRelations(candidates, snapshot.evidence, t);
+    const withEvidence: UserLearningSnapshot = {
+      ...snapshot,
+      evidence: [...snapshot.evidence, ...evidence],
+      eligibilityDecisions: [...snapshot.eligibilityDecisions, ...eligibility],
+      diagnostics: lastExcluded ? {
+        ...snapshot.diagnostics,
+        lastEligibilityExclusion: {
+          evidenceId: lastExcluded.sourceEvidenceIds[0]!,
+          classification: lastExcluded.classification as Exclude<typeof lastExcluded.classification, 'personalization_candidate'>,
+          at: t,
+        },
+      } : snapshot.diagnostics,
+      evidenceRelations: [...snapshot.evidenceRelations, ...relations],
+    };
+    const bundle = synthesizeConclusionBundle(withEvidence, candidates, relations, t);
+    const conclusions = bundle.conclusions;
+    const withConclusions: UserLearningSnapshot = {
+      ...withEvidence,
+      conclusions: mergeById(withEvidence.conclusions, conclusions),
+      conclusionRelations: [
+        ...withEvidence.conclusionRelations,
+        ...bundle.conclusionRelations,
+      ].slice(-400),
+    };
+    const { models, derivations } = reasonUserModels(withConclusions, conclusions, t);
+    let next: UserLearningSnapshot = {
+      ...withConclusions,
+      userModels: supersede(withConclusions.userModels, models),
+      userModelDerivations: [...withConclusions.userModelDerivations, ...derivations],
+    };
+
+    if (models.length > 0) {
+      const beforeCommitments = next.behaviorCommitments;
+      const behaviorCommitments = compileBehaviorCommitments({
+        models,
+        evidence: next.evidence,
+        eligibility: next.eligibilityDecisions,
+        existing: beforeCommitments,
+        mode,
+        now: t,
+      });
+      next = {
+        ...next,
+        behaviorCommitments,
+        learningReceipts: appendReceiptsForNewCommitments({
+          before: beforeCommitments,
+          after: behaviorCommitments,
+          evidence: next.evidence,
+          existing: next.learningReceipts,
+          now: t,
+        }),
+      };
+      const project = next.projectContexts.find((item) => item.projectId === trace.projectId)
+        ?? buildProjectContext({
+          workspaceId: trace.workspaceId,
+          projectId: trace.projectId,
+          product: trace.product,
+          now: t,
+        });
+      const compiled = compilePolicies(next, project, t);
+      next = commitCompiledPolicyBundle({
+        ...next,
+        projectContexts: upsert(next.projectContexts, project),
+      }, compiled);
+      runs.push(run(
+        'conclusion.synthesize',
+        conclusions.length ? 'ok' : 'empty',
+        evidence.map((item) => item.id),
+        t,
+        undefined,
+        conclusions.length ? undefined : 'no_stable_conclusion',
+      ));
+      runs.push(run('user_model.reason', models.length ? 'ok' : 'empty', conclusions.map((item) => item.id), t));
+      runs.push(run('policy.compile', compiled.rules.length ? 'ok' : 'empty', models.map((item) => item.id), t));
+    } else {
+      next = markDirty(next, conclusions.map((item) => item.dimension));
+      runs.push(run(
+        'conclusion.synthesize',
+        conclusions.length ? 'ok' : 'empty',
+        evidence.map((item) => item.id),
+        t,
+        undefined,
+        conclusions.length ? undefined : 'no_stable_conclusion',
+      ));
+      runs.push(run(
+        'user_model.reason',
+        'empty',
+        conclusions.map((item) => item.id),
+        t,
+        undefined,
+        'no_stable_conclusion',
+      ));
+    }
+
+    return {
+      snapshot: { ...next, learningRuns: [...next.learningRuns, ...runs].slice(-200) },
+      runs,
+    };
+  } catch (err) {
+    runs.push(run(
+      'evidence.extract',
+      'failed',
+      [trace.id],
+      t,
+      err instanceof Error ? err.message : String(err),
+    ));
+    return {
+      snapshot: { ...snapshot, learningRuns: [...snapshot.learningRuns, ...runs].slice(-200) },
+      runs,
+    };
+  }
 }
 
 export function createUserLearningRuntime(options: {
@@ -382,6 +599,9 @@ export function createUserLearningRuntime(options: {
   }>();
   const open = new Map<string, UserDecisionTrace>();
   const enriching = new Set<string>();
+  // Invalidates every async learning/cognition write that started before a
+  // user-data deletion. Clearing a Set cannot cancel an already awaited call.
+  let deletionEpoch = store.snapshot().deletionEpoch;
 
   const persistTrace = (trace: UserDecisionTrace): void => {
     store.update((snap) => ({
@@ -390,106 +610,33 @@ export function createUserLearningRuntime(options: {
     }));
   };
 
-  const learnFromTrace = (trace: UserDecisionTrace): LearningRun[] => {
-    const t = now();
-    const runs: LearningRun[] = [];
-    try {
-      const scope = {
-        workspaceId: trace.workspaceId,
-        projectId: trace.projectId,
-        product: trace.product,
-        scopeTags: [trace.product, trace.codeMode ?? 'agent'],
-        riskLevel: classifyTaskContext({ prompt: trace.initialRequest, product: trace.product }).risk,
-      };
-      const evidence = extractEvidenceFromTrace(trace, scope, t);
-      runs.push(run(
-        'evidence.extract',
-        evidence.length ? 'ok' : 'empty',
-        [trace.id],
-        t,
-        undefined,
-        evidence.length ? undefined : 'no_user_sourced_event',
-      ));
-      if (evidence.length === 0) {
-        store.update((snap) => ({ ...snap, learningRuns: [...snap.learningRuns, ...runs].slice(-200) }));
-        return runs;
-      }
-      store.update((snap) => {
-        const relations = discoverEvidenceRelations(evidence, snap.evidence, t);
-        const withEv = {
-          ...snap,
-          evidence: [...snap.evidence, ...evidence],
-          evidenceRelations: [...snap.evidenceRelations, ...relations],
-        };
-        const bundle = synthesizeConclusionBundle(withEv, evidence, relations, t);
-        const conclusions = bundle.conclusions;
-        const withCon = {
-          ...withEv,
-          conclusions: mergeById(withEv.conclusions, conclusions),
-          conclusionRelations: [...withEv.conclusionRelations, ...bundle.conclusionRelations].slice(-400),
-        };
-        const { models, derivations } = reasonUserModels(withCon, conclusions, t);
-        let next: UserLearningSnapshot = {
-          ...withCon,
-          userModels: supersede(withCon.userModels, models),
-          userModelDerivations: [...withCon.userModelDerivations, ...derivations],
-        };
-        if (models.length > 0) {
-          const project = next.projectContexts.find((p) => p.projectId === trace.projectId)
-            ?? buildProjectContext({
-              workspaceId: trace.workspaceId,
-              projectId: trace.projectId,
-              product: trace.product,
-              now: t,
-            });
-          const compiled = compilePolicies(next, project, t);
-          next = {
-            ...next,
-            currentProjectBundleIds: {
-              ...(next.currentProjectBundleIds ?? {}),
-              [compiled.bundle.projectId]: compiled.bundle.id,
-            },
-            projectContexts: upsert(next.projectContexts, project),
-            policyBundles: [...next.policyBundles.map((b) => b.projectId === compiled.bundle.projectId ? { ...b, status: 'retired' as const } : b), compiled.bundle],
-            policyRules: [
-              ...next.policyRules.map((r) => (
-                (r.scope.projectId ?? compiled.bundle.projectId) === compiled.bundle.projectId
-                && compiled.rules.some((n) => n.domain === r.domain)
-              ) ? { ...r, status: 'superseded' as const } : r),
-              ...compiled.rules,
-            ],
-            dirtyDimensions: [],
-          };
-          runs.push(run(
-            'conclusion.synthesize',
-            conclusions.length ? 'ok' : 'empty',
-            evidence.map((e) => e.id),
-            t,
-            undefined,
-            conclusions.length ? undefined : 'no_stable_conclusion',
-          ));
-          runs.push(run('user_model.reason', models.length ? 'ok' : 'empty', conclusions.map((c) => c.id), t));
-          runs.push(run('policy.compile', compiled.rules.length ? 'ok' : 'empty', models.map((m) => m.id), t));
-        } else {
-          next = markDirty(next, conclusions.map((c) => c.dimension));
-          runs.push(run(
-            'conclusion.synthesize',
-            conclusions.length ? 'ok' : 'empty',
-            evidence.map((e) => e.id),
-            t,
-            undefined,
-            conclusions.length ? undefined : 'no_stable_conclusion',
-          ));
-          runs.push(run('user_model.reason', 'empty', conclusions.map((c) => c.id), t, undefined, 'no_stable_conclusion'));
-        }
-        return { ...next, learningRuns: [...next.learningRuns, ...runs].slice(-200) };
-      });
-    } catch (err) {
-      runs.push(run('evidence.extract', 'failed', [trace.id], t, err instanceof Error ? err.message : String(err)));
-      store.update((snap) => ({ ...snap, learningRuns: [...snap.learningRuns, ...runs].slice(-200) }));
+  const compileAfterCommitmentChange = (
+    snapshot: UserLearningSnapshot,
+    commitment: UserLearningSnapshot['behaviorCommitments'][number],
+    t: number,
+  ): UserLearningSnapshot => {
+    const projectId = commitment.scope.projectId;
+    if (!projectId) {
+      return commitCompiledPolicyBundle(snapshot, compilePolicies(snapshot, null, t));
     }
-    return runs;
+    const project = snapshot.projectContexts.find((item) => item.projectId === projectId)
+      ?? buildProjectContext({
+        workspaceId: commitment.scope.workspaceId ?? 'global',
+        projectId,
+        product: commitment.scope.product ?? 'code',
+        now: t,
+      });
+    return commitCompiledPolicyBundle({
+      ...snapshot,
+      projectContexts: upsert(snapshot.projectContexts, project),
+    }, compilePolicies(snapshot, project, t));
   };
+
+  const correctedReceipt = (
+    receipt: LearningReceipt,
+    message: string,
+    t: number,
+  ): LearningReceipt => ({ ...receipt, message, state: 'corrected', updatedAt: t });
 
   return {
     snapshot: () => store.snapshot(),
@@ -502,6 +649,156 @@ export function createUserLearningRuntime(options: {
         inference: { ...DEFAULT_LEARNING_INFERENCE, ...settings.inference, ...next.inference },
       };
       return settings;
+    },
+    listPendingReceipts(product, conversationId) {
+      if (settings.userLearningReceipts === false) return [];
+      return store.snapshot().learningReceipts.filter((receipt) => (
+        receipt.product === product
+        && receipt.state === 'pending'
+        && (conversationId === undefined || receipt.conversationId === conversationId)
+      ));
+    },
+    acknowledgeReceipt(receiptId) {
+      const t = now();
+      store.update((snapshot) => ({
+        ...snapshot,
+        learningReceipts: snapshot.learningReceipts.map((receipt) => (
+          receipt.id === receiptId
+            ? { ...receipt, state: 'acknowledged' as const, updatedAt: t }
+            : receipt
+        )),
+      }));
+    },
+    activateCommitment(commitmentId) {
+      const t = now();
+      store.update((snapshot) => {
+        const commitment = snapshot.behaviorCommitments.find((item) => item.id === commitmentId);
+        if (!commitment || !['candidate', 'trial', 'shadow', 'paused'].includes(commitment.state)) return snapshot;
+        const active = { ...commitment, state: 'active' as const, updatedAt: t };
+        const changed: UserLearningSnapshot = {
+          ...snapshot,
+          behaviorCommitments: snapshot.behaviorCommitments.map((item) => item.id === commitmentId ? active : item),
+          learningReceipts: snapshot.learningReceipts.map((receipt) => (
+            receipt.commitmentId === commitmentId && receipt.state === 'pending'
+              ? { ...receipt, message: `以后将这样做：${active.behaviorDelta.adaptedBehavior}`, updatedAt: t }
+              : receipt
+          )),
+        };
+        return compileAfterCommitmentChange(changed, active, t);
+      });
+    },
+    updateCommitmentScope(commitmentId, scope) {
+      const t = now();
+      store.update((snapshot) => {
+        const prior = snapshot.behaviorCommitments.find((item) => item.id === commitmentId);
+        if (!prior || ['retracted', 'expired', 'superseded'].includes(prior.state)) return snapshot;
+        const nextScope = canonicalScope(scope);
+        const replacement = {
+          ...prior,
+          id: newId('bc', t),
+          scope: nextScope,
+          conditions: scope.scopeTags,
+          stableKey: `${snapshot.userId}::${prior.decisionPoint}::${fingerprintScopeV2(scope)}`,
+          version: prior.version + 1,
+          supersedes: prior.id,
+          createdAt: t,
+          updatedAt: t,
+        };
+        let receipts = snapshot.learningReceipts.map((receipt) => (
+          receipt.commitmentId === prior.id && receipt.state === 'pending'
+            ? correctedReceipt(receipt, '适用范围已修改', t)
+            : receipt
+        ));
+        const receipt = createLearningReceipt({
+          commitment: replacement,
+          evidence: snapshot.evidence,
+          existing: receipts,
+          reason: 'scope_changed',
+          now: t,
+        });
+        if (receipt) receipts = [...receipts, receipt];
+        const changed: UserLearningSnapshot = {
+          ...snapshot,
+          behaviorCommitments: snapshot.behaviorCommitments
+            .map((item) => item.id === prior.id ? { ...item, state: 'superseded' as const, updatedAt: t } : item)
+            .concat(replacement),
+          learningReceipts: receipts,
+        };
+        return compileAfterCommitmentChange(changed, replacement, t);
+      });
+    },
+    pauseCommitment(commitmentId) {
+      const t = now();
+      store.update((snapshot) => {
+        const prior = snapshot.behaviorCommitments.find((item) => item.id === commitmentId);
+        if (!prior || ['paused', 'retracted', 'expired', 'superseded'].includes(prior.state)) return snapshot;
+        const paused = { ...prior, state: 'paused' as const, updatedAt: t };
+        const changed: UserLearningSnapshot = {
+          ...snapshot,
+          behaviorCommitments: snapshot.behaviorCommitments.map((item) => item.id === prior.id ? paused : item),
+          learningReceipts: snapshot.learningReceipts.map((receipt) => (
+            receipt.commitmentId === prior.id
+              ? correctedReceipt(receipt, `已暂停：${prior.behaviorDelta.adaptedBehavior}`, t)
+              : receipt
+          )),
+        };
+        return compileAfterCommitmentChange(changed, paused, t);
+      });
+    },
+    retractCommitment(commitmentId) {
+      const t = now();
+      store.update((snapshot) => {
+        const prior = snapshot.behaviorCommitments.find((item) => item.id === commitmentId);
+        if (!prior || ['retracted', 'expired', 'superseded'].includes(prior.state)) return snapshot;
+        const retracted = { ...prior, state: 'retracted' as const, updatedAt: t };
+        const changed: UserLearningSnapshot = {
+          ...snapshot,
+          behaviorCommitments: snapshot.behaviorCommitments.map((item) => item.id === prior.id ? retracted : item),
+          userModels: snapshot.userModels.map((model) => (
+            model.id === prior.userModelId ? { ...model, status: 'disputed' as const, updatedAt: t } : model
+          )),
+          policyRules: snapshot.policyRules.map((rule) => (
+            rule.sourceCommitmentIds?.includes(prior.id)
+              ? { ...rule, status: 'superseded' as const }
+              : rule
+          )),
+          learningReceipts: snapshot.learningReceipts.map((receipt) => (
+            receipt.commitmentId === prior.id
+              ? correctedReceipt(receipt, `已撤回：${prior.behaviorDelta.adaptedBehavior}`, t)
+              : receipt
+          )),
+        };
+        return compileAfterCommitmentChange(changed, retracted, t);
+      });
+    },
+    applyCommitmentThisTimeOnly(commitmentId, traceId) {
+      const t = now();
+      store.update((snapshot) => {
+        const prior = snapshot.behaviorCommitments.find((item) => item.id === commitmentId);
+        const trace = snapshot.traces.find((item) => item.id === traceId);
+        if (!prior || !trace || !prior.provenanceEvidenceIds.some((evidenceId) => (
+          snapshot.evidence.some((evidence) => evidence.id === evidenceId && evidence.source.traceId === trace.id)
+        ))) return snapshot;
+        const retracted = { ...prior, state: 'retracted' as const, updatedAt: t };
+        const changed: UserLearningSnapshot = {
+          ...snapshot,
+          behaviorCommitments: snapshot.behaviorCommitments.map((item) => item.id === prior.id ? retracted : item),
+          userModels: snapshot.userModels.map((model) => (
+            model.id === prior.userModelId ? { ...model, status: 'disputed' as const, updatedAt: t } : model
+          )),
+          policyRules: snapshot.policyRules.map((rule) => (
+            rule.sourceCommitmentIds?.includes(prior.id)
+              ? { ...rule, status: 'superseded' as const }
+              : rule
+          )),
+          learningReceipts: snapshot.learningReceipts.map((receipt) => (
+            receipt.commitmentId === prior.id
+              ? correctedReceipt(receipt, '已设为仅本次，不再用于后续任务', t)
+              : receipt
+          )),
+        };
+        return compileAfterCommitmentChange(changed, retracted, t);
+      });
     },
     openTrace(input) {
       const t = now();
@@ -518,6 +815,7 @@ export function createUserLearningRuntime(options: {
         product: input.product,
         codeMode: input.codeMode,
         initialRequest: input.prompt,
+        learningDirective: { ...DEFAULT_LEARNING_DIRECTIVE, ...input.learningDirective },
         agentDecisions: [],
         userEvents: [{
           id: newId('ue', t),
@@ -534,8 +832,24 @@ export function createUserLearningRuntime(options: {
       return trace;
     },
     recordEvent(traceId, event) {
-      const current = open.get(traceId) ?? store.snapshot().traces.find((t) => t.id === traceId);
+      const snapshot = store.snapshot();
+      const current = open.get(traceId) ?? snapshot.traces.find((t) => t.id === traceId);
+      // A late terminal callback must never reopen a closed trace. Legitimate
+      // post-terminal learning enters through ingestLateEvent's own boundary.
       if (!current) return;
+      if (
+        current.closedAt !== undefined
+        || snapshot.traceLearningCommits.some((item) => item.traceId === traceId)
+      ) {
+        store.update((state) => ({
+          ...state,
+          diagnostics: {
+            ...state.diagnostics,
+            lastRejectedLateEvent: { traceId, eventType: event.type, at: event.at },
+          },
+        }));
+        return;
+      }
       const next: UserDecisionTrace = {
         ...current,
         userEvents: [...current.userEvents, { ...event, id: newId('ue') }],
@@ -547,21 +861,187 @@ export function createUserLearningRuntime(options: {
       persistTrace(next);
     },
     closeTrace(traceId, outcome, executionResult) {
-      const current = open.get(traceId) ?? store.snapshot().traces.find((t) => t.id === traceId);
+      const initialSnapshot = store.snapshot();
+      const current = open.get(traceId) ?? initialSnapshot.traces.find((t) => t.id === traceId);
       if (!current) return [];
+      const priorCommit = initialSnapshot.traceLearningCommits.find((item) => item.traceId === traceId);
+      if (current.closedAt !== undefined || priorCommit) {
+        const committedOutcome = priorCommit?.outcome ?? current.outcome ?? 'exited';
+        if (committedOutcome !== outcome) {
+          store.update((snapshot) => ({
+            ...snapshot,
+            diagnostics: {
+              ...snapshot.diagnostics,
+              lastTerminalConflict: {
+                traceId,
+                committedOutcome,
+                attemptedOutcome: outcome,
+                at: now(),
+              },
+            },
+          }));
+        }
+        return [run('evidence.extract', 'skipped', [current.id], now(), undefined, 'idempotent')];
+      }
+      const t = now();
       const closed: UserDecisionTrace = {
         ...current,
         outcome,
         executionResult,
-        closedAt: now(),
+        closedAt: t,
       };
+      const terminalKey = `trace:${sourceHash([
+        closed.id,
+        ...closed.userEvents.map((event) => `${event.id}:${event.type}:${event.at}`),
+      ])}`;
+      let resultRuns: readonly LearningRun[] = [];
+      store.update((snapshot) => {
+        if (snapshot.traceLearningCommits.some((item) => item.traceId === traceId)) {
+          resultRuns = [run('evidence.extract', 'skipped', [closed.id], t, undefined, 'idempotent')];
+          return snapshot;
+        }
+        const withClosed: UserLearningSnapshot = {
+          ...snapshot,
+          traces: [...snapshot.traces.filter((trace) => trace.id !== traceId), closed],
+        };
+        const collectNewLearning = closed.learningDirective?.collectNewLearning ?? true;
+        const reduced = settings.enabled && collectNewLearning
+          ? reduceTraceLearning(withClosed, closed, t, settings.defaultMode)
+          : {
+            snapshot: withClosed,
+            runs: [run(
+              'evidence.extract',
+              'skipped',
+              [closed.id],
+              t,
+              undefined,
+              settings.enabled ? 'directive_no_collect' : 'disabled',
+            )],
+          };
+        resultRuns = reduced.runs;
+        const appliedDecision = [...snapshot.policyDecisions].reverse().find((decision) => (
+          decision.traceId === closed.id
+          || decision.taskId === closed.turnId
+            && (!decision.conversationId || decision.conversationId === closed.sessionId)
+        ));
+        const evaluation = settings.enabled
+          && collectNewLearning
+          && settings.userLearningOutcomeEvaluation !== false
+          ? evaluateTraceOutcome({ snapshot: reduced.snapshot, trace: closed, decision: appliedDecision, now: t })
+          : { observations: [], pauseCommitmentIds: [], expireTrialIds: [] };
+        const pausedIds = new Set(evaluation.pauseCommitmentIds);
+        const expiredIds = new Set(evaluation.expireTrialIds);
+        let learningReceipts = [...reduced.snapshot.learningReceipts];
+        for (const commitment of settings.userLearningReceipts === false
+          ? []
+          : reduced.snapshot.behaviorCommitments) {
+          if (!pausedIds.has(commitment.id)) continue;
+          const receipt = createLearningReceipt({
+            commitment: { ...commitment, state: 'paused' },
+            evidence: reduced.snapshot.evidence,
+            existing: learningReceipts,
+            reason: 'correction_detected',
+            product: closed.product,
+            conversationId: closed.sessionId,
+            now: t,
+          });
+          if (receipt) {
+            learningReceipts.push({
+              ...receipt,
+              message: `已暂停，等待你纠正：${commitment.behaviorDelta.adaptedBehavior}`,
+            });
+          }
+        }
+        let outcomeSnapshot: UserLearningSnapshot = {
+          ...reduced.snapshot,
+          outcomeObservations: [
+            ...reduced.snapshot.outcomeObservations,
+            ...evaluation.observations,
+          ].slice(-1000),
+          behaviorCommitments: reduced.snapshot.behaviorCommitments.map((commitment) => (
+            pausedIds.has(commitment.id)
+              ? { ...commitment, state: 'paused' as const, updatedAt: t }
+              : expiredIds.has(commitment.id)
+                ? { ...commitment, state: 'candidate' as const, updatedAt: t }
+                : commitment
+          )),
+          userModels: reduced.snapshot.userModels.map((model) => {
+            const linkedIds = reduced.snapshot.behaviorCommitments
+              .filter((commitment) => commitment.userModelId === model.id)
+              .map((commitment) => commitment.id);
+            const signals = evaluation.observations
+              .filter((observation) => linkedIds.includes(observation.commitmentId))
+              .map((observation) => observation.signal);
+            if (signals.length === 0) return model;
+            const helpful = signals.includes('explicit_helpful');
+            const harmful = signals.some((signal) => (
+              signal === 'explicit_unhelpful' || signal === 'rollback' || signal === 'repeated_correction'
+            ));
+            const prior = model.effectivenessState ?? 'unknown';
+            const effectivenessState = helpful && harmful
+              || helpful && prior === 'harmful'
+              || harmful && prior === 'helpful'
+              ? 'mixed' as const
+              : helpful
+                ? 'helpful' as const
+                : harmful
+                  ? 'harmful' as const
+                  : prior;
+            return {
+              ...model,
+              effectivenessState,
+              lastRelevantOpportunityAt: signals.includes('task_completed')
+                ? t
+                : model.lastRelevantOpportunityAt,
+              updatedAt: helpful || harmful ? t : model.updatedAt,
+            };
+          }),
+          policyRules: reduced.snapshot.policyRules.map((rule) => (
+            rule.sourceCommitmentIds?.some((id) => pausedIds.has(id) || expiredIds.has(id))
+              ? { ...rule, status: 'superseded' as const }
+              : rule
+          )),
+          learningReceipts,
+        };
+        const changedCommitment = outcomeSnapshot.behaviorCommitments.find((commitment) => (
+          pausedIds.has(commitment.id) || expiredIds.has(commitment.id)
+        ));
+        if (changedCommitment) {
+          outcomeSnapshot = compileAfterCommitmentChange(outcomeSnapshot, changedCommitment, t);
+        }
+        if (closed.learningDirective?.retention === 'session_only') {
+          outcomeSnapshot = {
+            ...outcomeSnapshot,
+            traces: outcomeSnapshot.traces.map((trace) => trace.id === closed.id
+              ? {
+                ...trace,
+                initialRequest: '',
+                agentDecisions: [],
+                userEvents: [],
+                executionResult: undefined,
+              }
+              : trace),
+          };
+        }
+        return {
+          ...outcomeSnapshot,
+          learningRuns: settings.enabled && collectNewLearning
+            ? outcomeSnapshot.learningRuns
+            : [...outcomeSnapshot.learningRuns, ...reduced.runs].slice(-200),
+          traceLearningCommits: [
+            ...outcomeSnapshot.traceLearningCommits.filter((item) => item.traceId !== traceId),
+            {
+              terminalKey,
+              traceId,
+              outcome: outcome ?? 'exited',
+              status: 'committed' as const,
+              committedAt: t,
+            },
+          ].slice(-500),
+        };
+      });
       open.delete(traceId);
-      persistTrace(closed);
-      if (!settings.enabled) return [run('evidence.extract', 'skipped', [closed.id], now(), undefined, 'disabled')];
-      if (outcome !== 'completed' && outcome !== 'cancelled') {
-        return learnFromTrace(closed);
-      }
-      return learnFromTrace(closed);
+      return resultRuns;
     },
     preparePrompt(input) {
       const task = classifyTaskContext({
@@ -571,8 +1051,18 @@ export function createUserLearningRuntime(options: {
       });
       const projectId = projectIdFromRoot(input.workspaceRoot);
       const snap = store.snapshot();
+      const linkedTrace = input.turnId
+        ? [...open.values()].reverse().find((trace) => (
+          trace.turnId === input.turnId
+          && (!input.conversationId || trace.sessionId === input.conversationId)
+        ))
+        : undefined;
+      const applyPersonalization = linkedTrace?.learningDirective?.applyExistingPreferences ?? true;
+      const applyBehaviorCommitments = settings.userLearningBehaviorCommitments !== false;
       if (!settings.enabled || settings.defaultMode === 'off') {
-        const decision = resolvePolicies({ snapshot: snap, task, projectId, mode: 'off', now: now() });
+        const decision = resolvePolicies({
+          snapshot: snap, task, projectId, mode: 'off', now: now(), applyPersonalization, applyBehaviorCommitments,
+        });
         return { systemPrompt: input.baseSystemPrompt ?? '', decision, taskRisk: task.risk, start: 'ready' };
       }
       let working = snap;
@@ -591,33 +1081,17 @@ export function createUserLearningRuntime(options: {
             now: now(),
           });
         const compiled = compilePolicies(working, project, now());
-        working = store.update((s) => ({
+        working = store.update((s) => commitCompiledPolicyBundle({
           ...s,
-          currentProjectBundleIds: {
-            ...(s.currentProjectBundleIds ?? {}),
-            [compiled.bundle.projectId]: compiled.bundle.id,
-          },
           projectContexts: upsert(s.projectContexts, project),
-          policyBundles: [
-            ...s.policyBundles.map((b) => b.projectId === compiled.bundle.projectId ? { ...b, status: 'retired' as const } : b),
-            compiled.bundle,
-          ],
-          policyRules: [
-            ...s.policyRules.map((r) => (
-              (r.scope.projectId ?? compiled.bundle.projectId) === compiled.bundle.projectId
-              && compiled.rules.some((n) => n.domain === r.domain)
-            ) ? { ...r, status: 'superseded' as const } : r),
-            ...compiled.rules,
-          ],
-          dirtyDimensions: [],
-        }));
+        }, compiled));
       }
       const mode = settings.defaultMode;
       const askedSince = now() - 6 * 60 * 60 * 1000;
       const recentlyAsked = working.policyDecisions.some((item) => (
         item.impactCheck?.interruptUser === true && item.createdAt >= askedSince
       )) || working.cognitionSessions.some((item) => item.createdAt >= askedSince && item.status === 'open');
-      const decision = resolvePolicies({
+      const resolvedDecision = resolvePolicies({
         snapshot: working,
         task,
         projectId,
@@ -625,7 +1099,15 @@ export function createUserLearningRuntime(options: {
         now: now(),
         recentlyAsked,
         dimensionMode: settings.dimensionMode,
+        applyPersonalization,
+        applyBehaviorCommitments,
       });
+      const decision: PolicyDecision = {
+        ...resolvedDecision,
+        taskId: input.turnId ?? resolvedDecision.taskId,
+        conversationId: input.conversationId,
+        traceId: linkedTrace?.id,
+      };
       const start = startForDecision(decision);
       let pendingRun = start === 'pending_impact'
         ? createPendingRun({
@@ -726,6 +1208,29 @@ export function createUserLearningRuntime(options: {
       }
       store.update((s) => ({
         ...s,
+        learningReceipts: settings.userLearningReceipts !== false
+          && decision.injected && finalStart === 'ready'
+          ? s.behaviorCommitments
+            .filter((commitment) => (
+              commitment.state === 'active'
+              && s.policyRules.some((rule) => (
+                rule.sourceCommitmentIds?.includes(commitment.id)
+                && decision.enforced.some((active) => active.policyId === rule.id)
+              ))
+            ))
+            .reduce<LearningReceipt[]>((receipts, commitment) => {
+              const receipt = createLearningReceipt({
+                commitment,
+                evidence: s.evidence,
+                existing: receipts,
+                reason: 'first_applied',
+                product: input.product,
+                conversationId: input.conversationId,
+                now: now(),
+              });
+              return receipt ? [...receipts, receipt] : receipts;
+            }, [...s.learningReceipts])
+          : s.learningReceipts,
         policyDecisions: [...s.policyDecisions, decision].slice(-300),
         pendingRuns: pendingRun
           ? [...(s.pendingRuns ?? []).filter((item) => item.id !== pendingRun!.id), pendingRun]
@@ -847,8 +1352,25 @@ export function createUserLearningRuntime(options: {
         ? stripPolicyInjection(resolved.systemPrompt)
         : resolved.systemPrompt;
       const decision = choice === 'baseline'
-        ? { ...pending.baselineDecision, injected: false, injectionText: '' }
+        ? {
+          ...pending.baselineDecision,
+          taskId: pending.turnId,
+          conversationId: pending.conversationId,
+          injected: false,
+          injectionText: '',
+          appliedCommitmentIds: [],
+          opportunityKeys: [],
+        }
         : resolved.decision;
+      if (choice === 'baseline') {
+        // preparePrompt above resolves the personalized branch to preserve the
+        // existing resume path. Append the user's actual baseline choice so
+        // closeTrace attributes outcomes to what really ran.
+        store.update((snapshot) => ({
+          ...snapshot,
+          policyDecisions: [...snapshot.policyDecisions, decision].slice(-300),
+        }));
+      }
       return { started: 1, systemPrompt, reason: 'resumed', decision };
     },
     exportForUser() {
@@ -858,16 +1380,28 @@ export function createUserLearningRuntime(options: {
         exportedAt: now(),
         userId: snap.userId,
         evidence: snap.evidence,
+        eligibilityDecisions: snap.eligibilityDecisions,
         conclusions: snap.conclusions,
         userModels: snap.userModels,
+        behaviorCommitments: snap.behaviorCommitments,
+        learningReceipts: snap.learningReceipts,
+        outcomeObservations: snap.outcomeObservations,
         policyRules: snap.policyRules,
         policyDecisions: snap.policyDecisions,
         profileFacts: snap.profileFacts,
       };
     },
     deleteUserData() {
+      deletionEpoch += 1;
       pendingRuns.clear();
-      store.replace(emptySnapshot(now(), LOCAL_USER_ID));
+      open.clear();
+      enriching.clear();
+      teamContracts.clear();
+      teamClarifications.clear();
+      const cleared = store.clear();
+      if (cleared.persisted !== false) {
+        store.replace({ ...cleared, deletionEpoch });
+      }
     },
     maybeCognitionPrompt(input) {
       if (!settings.enabled || !settings.cognitionEnabled) return null;
@@ -1107,7 +1641,7 @@ export function createUserLearningRuntime(options: {
           ],
         };
 
-        const next = clearDirty(runLearningChain(withEv, evidences, t));
+        const next = clearDirty(runLearningChain(withEv, evidences, t, settings.defaultMode));
         result = { followUp, evidenceIds };
         return next;
       });
@@ -1197,7 +1731,7 @@ export function createUserLearningRuntime(options: {
             ]
             : s.cognitionCooldowns,
         };
-        const next = clearDirty(runLearningChain(withEv, [ev], t));
+        const next = clearDirty(runLearningChain(withEv, [ev], t, settings.defaultMode));
         result = {
           followUp: 'done',
           evidenceIds: [ev.id],
@@ -1207,6 +1741,7 @@ export function createUserLearningRuntime(options: {
       return result;
     },
     async handleCognitionTurn(text, workspaceRoot) {
+      const operationEpoch = deletionEpoch;
       const projectId = projectIdFromRoot(workspaceRoot);
       const workspaceId = workspaceIdFromRoot(workspaceRoot);
       const findOpenChat = (): CognitionSession | undefined => store.snapshot().cognitionSessions.find((s) => (
@@ -1342,6 +1877,9 @@ export function createUserLearningRuntime(options: {
             known: snap.userModels.filter((m) => m.status === 'active').slice(0, 5).map((m) => m.statement),
             hint: next.reply,
           }));
+          if (operationEpoch !== deletionEpoch) {
+            return { reply: '用户学习数据已清除。', stopped: true };
+          }
           if (parsed && typeof parsed === 'object' && parsed !== null && 'reply' in parsed) {
             const row = parsed as { reply?: unknown; stop?: unknown; recap?: unknown };
             if (typeof row.reply === 'string' && row.reply.trim()) {
@@ -1402,7 +1940,7 @@ export function createUserLearningRuntime(options: {
             scopeTags: ['verification_audit', 'impact_check'],
             // §3.5: never hardcode 'code' — the Impact was resolved on a
             // surface (pendingAgentRunRef.kind) and the Evidence must follow it.
-            product: input.product ?? 'code' as const,
+            product: input.product,
           },
           now: t,
         });
@@ -1472,18 +2010,44 @@ export function createUserLearningRuntime(options: {
     },
     async enrichAfterTrace(traceId) {
       if (enriching.has(traceId)) return;
+      const operationEpoch = deletionEpoch;
       const llm = resolveLlm();
       if (!llm || !settings.enabled || !shouldRunLearningLlm(settings, 'trace')) return;
-      enriching.add(traceId);
       const snap = store.snapshot();
       const trace = snap.traces.find((item) => item.id === traceId);
-      if (!trace) {
-        enriching.delete(traceId);
-        return;
-      }
+      if (!trace) return;
+      let permit: LearningCallPermit | null = null;
+      const reservedAt = now();
+      store.update((current) => {
+        const provider = llm.metadata?.provider === 'openai' || llm.metadata?.provider === 'anthropic'
+          ? llm.metadata.provider
+          : undefined;
+        const reserved = reserveLearningCall({
+          snapshot: current,
+          settings: inferenceSettings(settings),
+          skill: 'evidence',
+          traceId,
+          provider,
+          model: llm.metadata?.model,
+          now: reservedAt,
+        });
+        permit = reserved.permit;
+        return reserved.snapshot;
+      });
+      if (!permit) return;
+      enriching.add(traceId);
       const t = now();
       try {
-        const evJson = await completeJson(llm, 'evidence', compactTraceForSkill(trace));
+        const evJson = await completeJson(
+          llm,
+          'evidence',
+          compactTraceForLearning(trace, inferenceSettings(settings)),
+        );
+        if (operationEpoch !== deletionEpoch) return;
+        if (!evJson) {
+          store.update((current) => finishLearningCall(current, permit!, 'failed', now()));
+          return;
+        }
         const extraEvidence = parseEvidenceSkillOutput(evJson, trace, {
           workspaceId: trace.workspaceId,
           projectId: trace.projectId,
@@ -1491,106 +2055,34 @@ export function createUserLearningRuntime(options: {
           scopeTags: [trace.product],
           riskLevel: classifyTaskContext({ prompt: trace.initialRequest, product: trace.product }).risk,
         }, t);
-        const seed = [
-          ...snap.evidence.filter((item) => item.source.traceId === traceId),
-          ...extraEvidence,
-        ];
-        const candidates = retrieveCandidateEvidence(
-          [...snap.evidence, ...extraEvidence],
-          seed.length > 0 ? seed : extraEvidence,
-        );
-        const conJson = await completeJson(llm, 'conclusion', compactEvidenceForSkill(candidates));
-        const parsedCon = parseConclusionSkillOutput(conJson, trace.userId, candidates, t);
-        const umJson = await completeJson(
-          llm,
-          'user_model',
-          JSON.stringify({
-            conclusions: parsedCon.conclusions,
-            profile: snap.profileFacts.filter((p) => p.status === 'active'),
-          }),
-        );
-        const models = parseUserModelSkillOutput(umJson, trace.userId, parsedCon.conclusions, t);
+        if (extraEvidence.length === 0) {
+          store.update((current) => finishLearningCall(current, permit!, 'rejected', now()));
+          return;
+        }
         store.update((current) => {
-          let next: UserLearningSnapshot = {
+          const knownHashes = new Set(current.evidence.map((item) => item.source.sourceHash));
+          const fresh = extraEvidence.filter((item) => !knownHashes.has(item.source.sourceHash));
+          if (fresh.length === 0) return finishLearningCall(current, permit!, 'rejected', now());
+          const withEvidence: UserLearningSnapshot = {
             ...current,
-            evidence: [...current.evidence, ...extraEvidence],
-            evidenceRelations: [...current.evidenceRelations, ...parsedCon.relations],
-            conclusions: mergeById(current.conclusions, parsedCon.conclusions),
-            conclusionRelations: [
-              ...current.conclusionRelations,
-              ...discoverConclusionRelations(
-                mergeById(current.conclusions, parsedCon.conclusions),
-                [...current.evidenceRelations, ...parsedCon.relations],
-                t,
-              ),
-            ].slice(-400),
-            userModels: models.length > 0 ? supersede(current.userModels, models) : current.userModels,
+            evidence: [...current.evidence, ...fresh],
+          };
+          const learned = runLearningChain(withEvidence, fresh, t, settings.defaultMode);
+          return finishLearningCall({
+            ...learned,
             learningRuns: [...current.learningRuns, run(
               'evidence.extract',
-              extraEvidence.length || parsedCon.conclusions.length ? 'ok' : 'empty',
+              'ok',
               [traceId],
               t,
             )].slice(-200),
-          };
-          if (models.length > 0) {
-            const project = next.projectContexts.find((p) => p.projectId === trace.projectId)
-              ?? buildProjectContext({
-                workspaceId: trace.workspaceId,
-                projectId: trace.projectId,
-                product: trace.product,
-                now: t,
-              });
-            const compiled = compilePolicies(next, project, t);
-            const revision = sourceHash([compiled.bundle.id, ...compiled.rules.map((rule) => rule.id)]);
-            void completeJson(llm, 'policy', JSON.stringify({
-              user_models: models,
-              project_id: trace.projectId,
-            })).then((polJson) => {
-              const extraRules = parsePolicySkillOutput(
-                polJson,
-                trace.userId,
-                compiled.bundle.id,
-                trace.projectId,
-                models.map((m) => m.id),
-                t,
-              );
-              if (extraRules.length === 0) return;
-              store.update((s) => {
-                const currentRevision = s.inputRevision;
-                if (currentRevision && currentRevision !== revision) return s;
-                return {
-                  ...s,
-                  policyRules: [...s.policyRules, ...extraRules],
-                };
-              });
-            }).catch(() => undefined);
-            next = {
-              ...next,
-              inputRevision: revision,
-              currentProjectBundleIds: {
-                ...(next.currentProjectBundleIds ?? {}),
-                [compiled.bundle.projectId]: compiled.bundle.id,
-              },
-              projectContexts: upsert(next.projectContexts, project),
-              policyBundles: [
-                ...next.policyBundles.map((b) => b.projectId === compiled.bundle.projectId ? { ...b, status: 'retired' as const } : b),
-                compiled.bundle,
-              ],
-              policyRules: [
-                ...next.policyRules.map((r) => (
-                  (r.scope.projectId ?? compiled.bundle.projectId) === compiled.bundle.projectId
-                  && compiled.rules.some((n) => n.domain === r.domain)
-                ) ? { ...r, status: 'superseded' as const } : r),
-                ...compiled.rules,
-              ],
-            };
-          }
-          return next;
+          }, permit!, 'completed', now());
         });
       } catch (err) {
-        store.update((s) => ({
-          ...s,
-          learningRuns: [...s.learningRuns, run(
+        if (operationEpoch !== deletionEpoch) return;
+        store.update((current) => finishLearningCall({
+          ...current,
+          learningRuns: [...current.learningRuns, run(
             'evidence.extract',
             'failed',
             [traceId],
@@ -1598,7 +2090,7 @@ export function createUserLearningRuntime(options: {
             err instanceof Error ? err.message : String(err),
             'parse_reject',
           )].slice(-200),
-        }));
+        }, permit!, 'failed', now()));
       } finally {
         enriching.delete(traceId);
       }

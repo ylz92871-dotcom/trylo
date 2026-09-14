@@ -10,7 +10,7 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { devFileApi } from './vite-plugins/dev-file-api';
 
 // Vite config for Trylo Desktop (Tauri 2 + React + Monaco).
-// See docs/the architecture doc for the architecture.
+// See docs/ARCHITECTURE.md for the architecture.
 
 const host = process.env.TAURI_DEV_HOST;
 

@@ -56,13 +56,13 @@ export interface AgentConversationSurfaceProps {
    *  element so its 0-height box sits directly above the composer; the pill
    *  floats bottom-right. Must NOT take layout space. */
   readonly cognitionBadgeSlot?: ReactNode;
+  /** UL2-06: quiet, in-flow learning receipt rendered beside Cognition. */
+  readonly learningReceiptSlot?: ReactNode;
   // Code inline-edit pass-through (inert for Work).
   readonly editingMessageId?: string | null;
-  readonly editingDraft?: string;
   readonly onEditMessage?: (id: string) => void;
   readonly onSaveEdit?: (text: string) => void;
   readonly onCancelEdit?: () => void;
-  readonly onDraftChange?: (id: string, text: string) => void;
   // Work inline-artifact pass-through (inert for Code).
   readonly artifactHost?: import('@trylo/work').HostAdapter;
   readonly onOpenArtifact?: (path: string) => void;
@@ -111,11 +111,9 @@ export function AgentConversationSurface(
           running={props.running}
           viewState={props.viewState}
           editingMessageId={props.editingMessageId}
-          editingDraft={props.editingDraft}
           onEditMessage={props.onEditMessage}
           onSaveEdit={props.onSaveEdit}
           onCancelEdit={props.onCancelEdit}
-          onDraftChange={props.onDraftChange}
           artifactHost={props.artifactHost}
           onOpenArtifact={props.onOpenArtifact}
           workspacePath={props.workspacePath}
@@ -134,6 +132,7 @@ export function AgentConversationSurface(
       {props.resultDockSlot}
       {props.personTeamStatusBarSlot}
       {props.cognitionBadgeSlot}
+      {props.learningReceiptSlot}
       {props.composer}
     </div>
   );

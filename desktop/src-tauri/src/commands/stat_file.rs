@@ -1,4 +1,4 @@
-// Trylo Desktop — stat_file Tauri command. See the architecture doc §2.6
+// Trylo Desktop — stat_file Tauri command. See ARCHITECTURE.md §2.6
 // (WorkspaceWatcher) + §9 (file system as a service).
 //
 // One Tauri command per file per §10.2. This file owns `stat_file`.

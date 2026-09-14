@@ -1,5 +1,5 @@
 // Trylo Desktop — minimal JSON-RPC 2.0 client. See
-// the architecture doc §2.7 + §3 Phase 1 GO (c, d).
+// ARCHITECTURE.md §2.7 + §3 Phase 1 GO (c, d).
 //
 // vscode-jsonclient (the canonical implementation) is not
 // published on the public npm registry; it's a @vscode-internal

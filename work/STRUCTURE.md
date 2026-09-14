@@ -69,7 +69,7 @@ The first real-mode spawn runs `tsc -p tsconfig.daemon.json` to build `dist/daem
 - `src/electron/main.ts` — Electron main entry (we don't run Electron)
 - `src/electron/preload.ts` — Electron preload (we don't run Electron)
 - `src/electron/tray/`, `src/electron/updater/` — Electron-specific surfaces
-- `src/electron/automation/`, `src/electron/mission-control/`, `src/electron/teams/` — we said these are out 
+- `src/electron/automation/`, `src/electron/mission-control/`, `src/electron/teams/` — we said these are out (per `../desktop/spike-results/work-mode-handoff/`)
 - `src/electron/subconscious/`, `src/electron/awareness/`, `src/electron/chronicle/`, `src/electron/briefing/` — same
 - `baileys` (WhatsApp) and its dep chain — implicit via the override removal
 

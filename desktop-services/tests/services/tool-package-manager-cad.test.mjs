@@ -539,6 +539,26 @@ describe('shipped CAD/EDA manifests + work.cad.v1 composition', () => {
     assert.equal(degraded.reasonCode, 'not_installed');
     tooling.dispose();
   });
+
+  it('computerUse:false drops windows-mcp (desktop control) from the Profile', async () => {
+    const { tooling } = buildIntegration();
+    // Even if windows-mcp is healthy, an explicit opt-out removes it and its
+    // server never reaches the agent's tool surface.
+    const resolved = await tooling.resolveProfile({
+      surface: 'work',
+      requestedProfileId: 'work.cad.v1',
+      computerUse: false,
+      projectRoot: tmpRoot,
+      conversationId: 'conv-nodesktop',
+    });
+    assert.equal(resolved.ok, true, resolved.error ?? '');
+    assert.equal(resolved.serverNames.includes('trylo-windows'), false);
+    assert.equal(resolved.unavailableCapabilities.some((c) => c.id === 'windows-mcp'), false);
+    // Everything else still composes.
+    assert.ok(resolved.serverNames.includes('trylo-office'));
+    assert.ok(resolved.serverNames.includes('trylo-solidworks'));
+    tooling.dispose();
+  });
 });
 
 describe('TRYLO_ARTIFACT_MIRROR: mirror-first, upstream-fallback (§6.5)', () => {

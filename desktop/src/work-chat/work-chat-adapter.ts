@@ -44,6 +44,10 @@ export interface WorkChatSendOptions {
    * never disagree). Omit → the supervisor resolves as before.
    */
   readonly toolRuntime?: ResolvedToolRuntime | null;
+  /** 电脑控制 switch (`settings.workComputer`). `false` drops the Windows
+   *  desktop-control package from the resolved Work Profile (used when the
+   *  caller did not pre-resolve a `toolRuntime`). */
+  readonly computerUse?: boolean;
   readonly onEvents: (events: readonly LoopEvent[]) => void;
   readonly lifecycleObserver?: CodeRunLifecycleObserver;
 }
@@ -69,6 +73,7 @@ export function sendWorkChat(
     // (e.g. `work.cad.v1`).
     surface: 'work',
     requestedProfileId: options.requestedProfileId ?? 'work.core.v1',
+    ...(options.computerUse !== undefined ? { computerUse: options.computerUse } : {}),
     ...(options.toolRuntime !== undefined ? { toolRuntime: options.toolRuntime } : {}),
     onEvents: options.onEvents,
     lifecycleObserver: options.lifecycleObserver,

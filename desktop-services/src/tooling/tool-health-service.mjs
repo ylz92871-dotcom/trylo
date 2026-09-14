@@ -197,10 +197,23 @@ export function createToolHealthService({ packages, catalog, now = () => Date.no
     if (manifest.healthCheck === 'version-handshake') {
       const reported = await probe(installed.executable, VERSION_PROBE_TIMEOUT_MS, manifest.artifact?.runner ?? null);
       record.reportedVersion = reported;
+      // A LOCAL OVERRIDE is the user's own explicitly-provided build (dev
+      // build / self-compiled transport). Its version legitimately differs
+      // from the pinned release, so we verify it RUNS but do not force the
+      // pinned version string on it. Only the default install path keeps the
+      // strict pin (a drift there remains refused).
       if (reported === null) {
         record.state = 'not-installed';
         record.available = false;
         record.detail = 'version probe produced no output';
+      } else if (installed.state === 'override') {
+        // Local override: the user's own build. Report the version compare
+        // truthfully but do NOT refuse on drift — override is an explicit
+        // user-supplied path.
+        record.versionMatches = reported.includes(manifest.version);
+        record.detail = record.versionMatches
+          ? `local override active (version verified): binary reports ${reported.trim()}`
+          : `local override active (version differs from pin): binary reports ${reported.trim()}, pinned ${manifest.version}`;
       } else {
         record.versionMatches = reported.includes(manifest.version);
         if (!record.versionMatches) {
@@ -225,6 +238,13 @@ export function createToolHealthService({ packages, catalog, now = () => Date.no
         record.state = 'not-installed';
         record.available = false;
         record.detail = 'python metadata probe produced no version';
+      } else if (installed.state === 'override') {
+        // Same local-override relaxation as version-handshake above: the
+        // user's own build version may differ from the pinned release.
+        record.versionMatches = reported === manifest.version;
+        record.detail = record.versionMatches
+          ? `local override active (version verified): distribution reports '${reported}'`
+          : `local override active (version differs from pin): distribution reports '${reported}', pinned ${manifest.version}`;
       } else {
         record.versionMatches = reported === manifest.version;
         if (!record.versionMatches) {

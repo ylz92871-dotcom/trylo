@@ -7,7 +7,7 @@
 // provider's quirk. We hardcode the window per model family
 // instead, with a sensible default for unknown models.
 //
-// Read old code at: C:/work/claude-code-v-2.1.88-main/.../extension.js:2165-2233
+// Read old code at: D:/CC/claude-code-v-2.1.88-main/.../extension.js:2165-2233
 // Do NOT: try to read contextWindow from usage payloads.
 
 /** Default context window when the model is unknown. 200k

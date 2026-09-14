@@ -4,7 +4,7 @@
  * Verifies Phase 3: Trylo session turns mirror into the Hermes SessionDB
  * search index, CJK content is retrievable via session_search, and the index
  * can be fully rebuilt from the Trylo session library after state.db is
- * deleted (Hermes fusion architecture section 11 Phase 3 acceptance).
+ * deleted (HERMES_FUSION_ARCHITECTURE.md section 11 Phase 3 acceptance).
  *
  * Everything runs in a throwaway globalStorage dir; user data is never touched.
  *

@@ -1,4 +1,4 @@
-// Trylo Desktop — AppShell.
+// Trylo Desktop — AppShell. See spike-results/phase-2-ui-redesign.md.
 //
 // v1.5 layout: top bar (Code / Work) + (left rail | body
 // | right rail?).

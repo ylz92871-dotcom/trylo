@@ -1,5 +1,7 @@
 import { groundEvidenceCandidates, type EvidenceCandidate } from './evidence-grounding';
 import { newId } from './ids';
+import { sourceHash } from './ids';
+import { classifyTaskContext } from './task-context';
 import { inferDimension } from './conclusion';
 import type {
   ConclusionRecord,
@@ -14,6 +16,7 @@ import type {
   PolicyStrength,
   RelationType,
   UserDecisionTrace,
+  LearningInferenceSettings,
   UserModelRecord,
 } from './types';
 import { POLICY_DIMENSIONS } from './types';
@@ -274,6 +277,40 @@ export function compactTraceForSkill(trace: UserDecisionTrace): string {
         text: (event.text ?? '').slice(0, 400),
       })),
     outcome: trace.outcome,
+  });
+}
+
+function redactLearningText(text: string): string {
+  return text
+    .replace(/\b(?:sk|api|key|token|secret|password)[-_]?[a-z0-9]{8,}\b/gi, '[REDACTED_SECRET]')
+    .replace(/\b[A-Za-z]:\\[^\s"']+/g, '[REDACTED_PATH]')
+    .replace(/(?:^|\s)\/(?:Users|home|var|tmp)\/[^\s"']+/g, ' [REDACTED_PATH]');
+}
+
+/** The only payload builder allowed for automatic assisted trace learning. */
+export function compactTraceForLearning(
+  trace: UserDecisionTrace,
+  settings: LearningInferenceSettings,
+): string {
+  const task = classifyTaskContext({ prompt: trace.initialRequest, product: trace.product });
+  return JSON.stringify({
+    initial_request: redactLearningText(trace.initialRequest).slice(0, 800),
+    user_events: trace.userEvents
+      .filter((event) => event.actor === 'user')
+      .slice(-20)
+      .map((event) => ({
+        id: event.id,
+        type: event.type,
+        stage: event.stage,
+        text: redactLearningText(event.text ?? '').slice(0, 400),
+      })),
+    product: trace.product,
+    task_risk: task.risk,
+    scope_id: sourceHash([trace.workspaceId, trace.projectId, trace.product]),
+    outcome: trace.outcome,
+    ...(settings.allowExecutionContext
+      ? { execution_result: redactLearningText(trace.executionResult ?? '').slice(0, 800) }
+      : {}),
   });
 }
 

@@ -1,4 +1,4 @@
-// Trylo Desktop — SearchPanel. See the architecture doc §2.4 (Ctrl+Shift+F
+// Trylo Desktop — SearchPanel. See ARCHITECTURE.md §2.4 (Ctrl+Shift+F
 // → ripgrep-backed search service override) + §3 Phase 0 Day 6 +
 // Week 2 Day 2 (regex / case toggles + click-to-jump).
 //

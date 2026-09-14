@@ -1,5 +1,5 @@
 // Trylo Desktop — attachment staging service (P2-1 Work
-// Package B). See the architecture doc §2.2 (HostAdapter is the
+// Package B). See ARCHITECTURE.md §2.2 (HostAdapter is the
 // only entry point).
 //
 // Typed surface over the Rust `attachment_staging` commands.

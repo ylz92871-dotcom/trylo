@@ -1,4 +1,4 @@
-// Trylo Desktop — shared Tauri command error. See the architecture doc §10.2.
+// Trylo Desktop — shared Tauri command error. See ARCHITECTURE.md §10.2.
 //
 // "Errors carry context. `anyhow::Result` is fine; `eyre` is fine; bare
 //  `String` is not." We use thisenum + thiserror for typed errors that

@@ -1,4 +1,4 @@
-// Trylo Desktop — InputBar.
+// Trylo Desktop — InputBar. See spike-results/phase-2-ui-redesign.md.
 //
 // v1.7: the + indicator opens a ModePopover (Chat / Plan
 // / Agent). The popover is a real listbox, keyboard
@@ -21,11 +21,13 @@ import type { ChatMessage } from './types';
 import type { Attachment, FailedAttachment } from '../../host-adapter/attachment-utils';
 import { ArrowUp } from 'lucide-react';
 import { ModePopover } from './ModePopover';
-import { ModelSelector } from './ModelSelector';
+import { ModelSelector, type ModelChoice } from './ModelSelector';
 import { PermissionLevelPicker } from './PermissionLevelPicker';
 import { ToolProfileChip } from './ToolProfileChip';
 import { ProcessHeader } from './ProcessHeader';
 import { LearningStatusChip, type LearningStatusChipProps } from '../user-learning/LearningStatusChip';
+import { LearningDirectiveMenu } from '../user-learning/LearningDirectiveMenu';
+import type { LearningDirective } from '../../user-learning/types';
 import { AttachmentList } from './AttachmentList';
 import { ContextRing } from '../app-shell/ContextRing';
 import { WorkTaskMenu } from '../work/WorkTaskMenu';
@@ -137,8 +139,11 @@ export interface InputBarProps {
    */
   readonly configuredModel?: string;
   readonly poolModel?: string;
+  readonly savedProfiles?: readonly ModelChoice[];
+  readonly activeProfileId?: string;
   readonly onSelectConfigured?: () => void;
   readonly onSelectPool?: (model: string) => void;
+  readonly onSelectProfile?: (id: string) => void;
   // v1.16.0: when busy, the ring's popover shows
   // "Compacting…" and disables the action. Sourced
   // from App.tsx (last message is a pending "Compacting
@@ -192,6 +197,9 @@ export interface InputBarProps {
   readonly activeProcessId: string | null;
   /** User Learning status chip. Opens the inspector; Code and Work share it. */
   readonly learning?: LearningStatusChipProps;
+  /** One-shot behavior for the next accepted Code/Work send. */
+  readonly learningDirective?: LearningDirective;
+  readonly onLearningDirectiveChange?: (value: LearningDirective | undefined) => void;
 }
 
 export function InputBar(props: InputBarProps): ReactElement {
@@ -411,13 +419,19 @@ export function InputBar(props: InputBarProps): ReactElement {
             />
           ) : null}
           {props.learning ? <LearningStatusChip {...props.learning} /> : null}
+          {props.onLearningDirectiveChange ? (
+            <LearningDirectiveMenu value={props.learningDirective} onChange={props.onLearningDirectiveChange} />
+          ) : null}
           <div className="input-bar__actions-spare" aria-hidden="true" />
           {props.onSelectPool ? (
             <ModelSelector
               configuredModel={props.configuredModel ?? ''}
               poolModel={props.poolModel ?? ''}
+              savedProfiles={props.savedProfiles}
+              activeProfileId={props.activeProfileId ?? ''}
               onSelectConfigured={props.onSelectConfigured ?? (() => undefined)}
               onSelectPool={props.onSelectPool}
+              onSelectProfile={props.onSelectProfile}
             />
           ) : null}
           {/* 2026-09-04: Work gets the same context ring as Code.
@@ -436,13 +450,19 @@ export function InputBar(props: InputBarProps): ReactElement {
             onChange={props.onPermissionLevelChange}
           />
           {props.learning ? <LearningStatusChip {...props.learning} /> : null}
+          {props.onLearningDirectiveChange ? (
+            <LearningDirectiveMenu value={props.learningDirective} onChange={props.onLearningDirectiveChange} />
+          ) : null}
           <div className="input-bar__actions-spare" aria-hidden="true" />
           {props.onSelectPool ? (
             <ModelSelector
               configuredModel={props.configuredModel ?? ''}
               poolModel={props.poolModel ?? ''}
+              savedProfiles={props.savedProfiles}
+              activeProfileId={props.activeProfileId ?? ''}
               onSelectConfigured={props.onSelectConfigured ?? (() => undefined)}
               onSelectPool={props.onSelectPool}
+              onSelectProfile={props.onSelectProfile}
             />
           ) : null}
           <ContextRing

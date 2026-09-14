@@ -5,7 +5,7 @@ MCP server reuses. MCP handlers in ``server.py`` import upstream symbols
 through here; no business logic lives in this module and no Hermes behaviour
 is re-implemented.
 
-Reused symbols (see Hermes fusion architecture section 3.2 / 5.1):
+Reused symbols (see HERMES_FUSION_ARCHITECTURE.md section 3.2 / 5.1):
 
     MemoryStore, memory_tool, apply_memory_pending   (tools.memory_tool)
     scan_for_threats, first_threat_message            (tools.threat_patterns)

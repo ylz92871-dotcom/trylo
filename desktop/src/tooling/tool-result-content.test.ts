@@ -1,6 +1,6 @@
 // PR-4 (spec §7 / §14.3): structured tool-result content parsing matrix.
 //
-// Shapes verified against the Trylo CLI's MCP client module
+// Shapes verified against `trylo cli/src/services/mcp/client.ts`
 // `transformResultContent` (the Anthropic wire shape the CLI emits for MCP
 // images) plus the flat MCP shapes accepted defensively, and the persisted
 // whitelist that keeps base64 out of the session JSON (§15.2 breaker).

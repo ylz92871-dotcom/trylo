@@ -136,6 +136,14 @@ function extractEdits(tool: FileChangeTool, obj: Record<string, unknown>): EditP
   return [{ oldStr, newStr }];
 }
 
+// The LCS in diffLines is O(n·m) over the file's lines, and computeFileChange
+// runs on every render of every visible file-change row (Message routes with
+// it, FileChangeCard renders with it) plus once per mount while scrolling a
+// virtualized list. events.ts keeps the `input` object identity stable across
+// status updates (it spreads the old message), so memoizing on input identity
+// turns repeats into lookups without any per-message bookkeeping.
+const fileChangeCache = new WeakMap<object, { tool: FileChangeTool; change: FileChange | null }>();
+
 /** Project a tool invocation to its FileChange, or null when the input
  *  shape isn't a recognised file mutation. */
 export function computeFileChange(
@@ -146,6 +154,17 @@ export function computeFileChange(
   if (!tool) return null;
   const obj = asRecord(input);
   if (!obj) return null;
+  const cached = fileChangeCache.get(obj);
+  if (cached && cached.tool === tool) return cached.change;
+  const change = computeFileChangeUncached(tool, obj);
+  fileChangeCache.set(obj, { tool, change });
+  return change;
+}
+
+function computeFileChangeUncached(
+  tool: FileChangeTool,
+  obj: Record<string, unknown>,
+): FileChange | null {
   const path = extractPath(obj);
   if (!path) return null;
   const pairs = extractEdits(tool, obj);

@@ -67,6 +67,7 @@ describe('UL-P1-06 decision governor', () => {
       workspaceRoot: 'D:/proj-alpha',
       acceptPersonalization: false,
       reason: 'keep baseline',
+      product: 'code',
     });
     const first = runtime.resumePendingRun(id!, 'baseline');
     expect(first.started).toBe(1);

@@ -14,6 +14,7 @@ import { activeRecords } from './store';
 
 const DIMENSION_HINTS: readonly { readonly dimension: PolicyDimension; readonly re: RegExp }[] = [
   { dimension: 'verification_audit', re: /审核|review|验证|smoke|test|检查/i },
+  { dimension: 'work_artifact_workflow', re: /ppt|报告|周报|文档|文稿|草稿|提案|docx|xlsx|交付|成品|先看结构|方案.*结构/i },
   { dimension: 'planning_direct_execution', re: /直接|plan|规划|方案/i },
   { dimension: 'architecture_refactor', re: /抽象|架构|subsystem|复用|复杂/i },
   { dimension: 'reporting_information_density', re: /长篇|过程|叙述|汇报|只要结论|别列步骤/i },
@@ -21,12 +22,17 @@ const DIMENSION_HINTS: readonly { readonly dimension: PolicyDimension; readonly 
   { dimension: 'security_data_integrity', re: /安全|迁移|持久|schema|integrity|账号|支付/i },
   { dimension: 'tool_workflow', re: /电脑|桌面|屏幕|浏览器|自己点|键鼠|截屏/i },
   { dimension: 'product_ux_acceptance', re: /太花|太乱|版式|观感|咨询风|重做|不好看/i },
-  { dimension: 'work_artifact_workflow', re: /ppt|报告|周报|文档|docx|xlsx|交付|成品|先看结构/i },
   { dimension: 'agent_autonomy', re: /询问|打断|自主|先问|自己做|别每步问/i },
   { dimension: 'engineering_language_semantics', re: /收口|直接干|生产级/i },
 ];
 
 export function inferDimension(text: string): PolicyDimension {
+  if (/报告|周报|汇报|总结|交付说明/i.test(text) && /结论优先|先说结论|只要结论|背景优先|先说背景|依据展开|详细依据|少说过程|不要过程/.test(text)) {
+    return 'reporting_information_density';
+  }
+  if (/方案|文稿|文档|PPT|幻灯片|提案|草稿/i.test(text) && /先(?:看|给|出)?结构|结构优先|先(?:出|给|写)?完整(?:草稿|一版)|先出一版|先草稿/.test(text)) {
+    return 'work_artifact_workflow';
+  }
   for (const hint of DIMENSION_HINTS) {
     if (hint.re.test(text)) return hint.dimension;
   }

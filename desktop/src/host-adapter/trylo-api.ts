@@ -1,4 +1,4 @@
-// Trylo Desktop — Trylo API types. See the architecture doc §3 Phase 2.
+// Trylo Desktop — Trylo API types. See ARCHITECTURE.md §3 Phase 2.
 //
 // The Trylo API is the contract between the legacy 4-mode webview
 // (running in an iframe) and the new Tauri desktop shell. The webview

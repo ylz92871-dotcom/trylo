@@ -1,4 +1,4 @@
-// Trylo Desktop — Rust entry. See the architecture doc §3 Phase 0 Day 1.
+// Trylo Desktop — Rust entry. See ARCHITECTURE.md §3 Phase 0 Day 1.
 //
 // The actual Tauri 2 builder lives in lib.rs (the lib+main split is the
 // Tauri 2 mobile-friendly pattern). This file just calls into it.

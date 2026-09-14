@@ -1,4 +1,4 @@
-// Trylo Desktop — watch Tauri command. See the architecture doc §2.6
+// Trylo Desktop — watch Tauri command. See ARCHITECTURE.md §2.6
 // (WorkspaceWatcher is an interface) + §3 Phase 0 Day 4.
 //
 // Rust side: a `notify`-backed watcher. Events stream out via a

@@ -1,4 +1,4 @@
-// Trylo Desktop — attachLsp tests. See the architecture doc §2.7.
+// Trylo Desktop — attachLsp tests. See ARCHITECTURE.md §2.7.
 
 import { describe, expect, it, vi } from 'vitest';
 import {

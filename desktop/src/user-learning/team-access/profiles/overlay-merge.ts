@@ -1,7 +1,8 @@
 // Desktop-side member overlay merge (Foundation spec §7.4).
 //
 // This is the PREVIEW twin of the CLI attenuator
-// (`the Trylo CLI's team-roster overlay.ts`). The CLI is // authoritative at spawn time; this module powers the composer
+// (`trylo cli/src/tools/AgentTool/team-roster/overlay.ts`). The CLI is
+// authoritative at spawn time; this module powers the composer
 // inspector (toolsApplied / skillsDropped / resolvedModel) so the UI
 // never guesses what the floor will do. The attenuation ORDER must
 // stay byte-compatible with the CLI implementation — both are locked

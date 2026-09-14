@@ -169,5 +169,25 @@ export function createFileUserLearningStore(options: {
       });
       return current;
     },
+    clear() {
+      const cleared = { ...emptySnapshot(now(), current.userId), persisted: true };
+      try {
+        options.io.remove(snapshotPath);
+        options.io.remove(`${snapshotPath}.tmp`);
+        options.io.remove(`${snapshotPath}.bak`);
+        options.io.remove(LEGACY_KEY);
+        current = cleared;
+      } catch (err) {
+        current = {
+          ...cleared,
+          persisted: false,
+          diagnostics: {
+            persistFailed: true,
+            persistError: err instanceof Error ? err.message : String(err),
+          },
+        };
+      }
+      return current;
+    },
   };
 }

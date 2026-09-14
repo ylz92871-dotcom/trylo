@@ -66,6 +66,29 @@ describe('computeFileChange', () => {
     expect(computeFileChange('Edit', null)).toBeNull();
     expect(computeFileChange('Edit', { file_path: '/a.ts' })).toBeNull();
   });
+
+  // Adversarial: the input-identity cache must return the SAME object on
+  // repeat calls (that's what makes re-renders cheap) and must NOT leak a
+  // cached result across different tools feeding the same input object.
+  it('memoizes by input identity and separates cache entries per tool', () => {
+    const input = {
+      file_path: 'D:/work/trylo/src/a.ts',
+      old_string: 'line1\nline2',
+      new_string: 'line1\nline2 changed',
+    };
+    const first = computeFileChange('Edit', input);
+    const repeat = computeFileChange('Edit', input);
+    expect(repeat).toBe(first);
+
+    // A different input object with identical content computes fresh.
+    const twin = computeFileChange('Edit', { ...input });
+    expect(twin).not.toBe(first);
+    expect(twin).toEqual(first);
+
+    // Same input object, different tool — the cache must not cross-match.
+    const asWrite = computeFileChange('Write', input);
+    expect(asWrite).not.toBe(first);
+  });
 });
 
 describe('displayPathParts', () => {

@@ -1,4 +1,4 @@
-// Trylo Desktop — Legacy `vscode` global shim. See the architecture doc
+// Trylo Desktop — Legacy `vscode` global shim. See ARCHITECTURE.md
 // §3 Phase 2 task #1 (iframe mount) and the Phase 2 plan §5.1
 // (shim strategy).
 //

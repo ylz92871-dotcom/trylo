@@ -10,25 +10,22 @@
 // The projection is renderer-only. Persisted messages stay atomic so replay,
 // recovery and diagnostics do not depend on a UI component's local state.
 
-import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { ArrowDown } from 'lucide-react';
 import { Message } from './Message';
 import { StreamingIndicator } from './StreamingIndicator';
-import { WorkWorkflowCard } from './WorkWorkflowCard';
+import { createFollowController } from './follow-controller';
+import { VirtuosoItem } from './virtuoso-item';
+// 2026-09-10 (applyWorkItem deletion面): WorkWorkflowCard deleted with the
+// WorkflowMessage chain (zero production producers). The linear rail /
+// narration / deliverable panels below are different kinds and stay.
 import { DeliverableProgressPanel } from './DeliverableProgressPanel';
 import {
   CodeReasoningTranscript,
   type CodeProcessEntry,
 } from './CodeReasoningTranscript';
-import { WorkTaskBoard } from './WorkTaskBoard';
-import type {
-  ChatMessage,
-  TextMessage,
-  WorkActivityGroupMessage,
-  WorkNarrationLine,
-  WorkRailMessage,
-} from './types';
+import type { ChatMessage, TextMessage } from './types';
 import {
   type ConversationRunViewState,
   deriveConversationRunViewState,
@@ -55,11 +52,9 @@ export interface MessageListProps {
   // Cancel. The MessageList just passes these through;
   // the matching Message component reads them.
   readonly editingMessageId?: string | null;
-  readonly editingDraft?: string;
   readonly onEditMessage?: (id: string) => void;
   readonly onSaveEdit?: (text: string) => void;
   readonly onCancelEdit?: () => void;
-  readonly onDraftChange?: (id: string, text: string) => void;
   // v1.16.5+ (M3, Work): forwarded to Message for inline
   // ArtifactCard rendering. Unused by Code conversations.
   readonly artifactHost?: import('@trylo/work').HostAdapter;
@@ -97,28 +92,61 @@ type CodeProcessItem = {
   readonly active: boolean;
 };
 
-type WorkProcessItem = {
-  readonly kind: '__work_process';
-  readonly key: string;
-  readonly turnId: string;
-  readonly rail: WorkRailMessage;
-  readonly narrations: readonly WorkNarrationLine[];
-  readonly activity?: WorkActivityGroupMessage;
-  readonly taskTitle?: string;
-};
-
-type ListItem = ChatMessage | CodeProcessItem | WorkProcessItem;
+export type ListItem = ChatMessage | CodeProcessItem;
 
 function isCodeProcessItem(item: ListItem): item is CodeProcessItem {
   return item.kind === '__code_process';
 }
 
-function isWorkProcessItem(item: ListItem): item is WorkProcessItem {
-  return item.kind === '__work_process';
+// The row roots (.message, .code-reasoning, .tool, …) carry vertical
+// margins for inter-row spacing. Virtuoso measures each row through its
+// wrapper, and the default wrapper is a plain block — the child's margins
+// collapse through it, so every row measures ~10px SHORT of what the layout
+// actually renders. The error accumulates per row, and Virtuoso corrects
+// the scroll offset continuously while scrolling — the classic virtualized
+// "reverse scroll jitter" (virtuoso.dev troubleshooting: margins are the
+// most common setup error; discussion #1083 names the same cause).
+// `VirtuosoItem` (components.Item) establishes a BFC on the wrapper so the
+// margins are measured; see ./virtuoso-item.tsx.
+
+/** Values the footer needs, fed through Virtuoso's `context` prop. */
+export interface FooterContext {
+  readonly showStreamingFooter: boolean;
+  /** True while a run is live or the dots are visible — keeps the indicator
+   *  slot's height so thinking↔tool_running flips don't reshape the tail. */
+  readonly reserveFooterSlot: boolean;
+  readonly viewState: ConversationRunViewState;
 }
 
-function isSyntheticItem(item: ListItem): item is CodeProcessItem | WorkProcessItem {
-  return isCodeProcessItem(item) || isWorkProcessItem(item);
+// Module-level on purpose: an inline `components={{ Footer: () => ... }}`
+// creates a new component type on every MessageList render (every streaming
+// delta) and React remounts the footer each time. A stable identity plus the
+// `context` prop keeps the DOM while values still update.
+// Exported for its contract test (slot-height stability is the anti-jitter
+// guarantee; MessageList.test.tsx mocks Virtuoso so it can't observe this).
+export function ListFooter(props: { context?: FooterContext }): ReactElement {
+  const ctx = props.context;
+  return (
+    <div className="message-list__footer-stack">
+      {/* The dots only render in the footer-primary states (thinking /
+       * preparing); tool_running swaps them for the Tool loader. Mounting and
+       * unmounting the indicator on every state flip changed the content
+       * height at the bottom, flipped Virtuoso's at-bottom state, and flashed
+       * the follow pill on every thinking↔tool transition — so while a run
+       * is live the slot keeps its height and only the content toggles. */}
+      <div
+        className={`message-list__footer-slot${ctx?.reserveFooterSlot ? ' message-list__footer-slot--pinned' : ''}`}
+      >
+        {ctx?.showStreamingFooter === true && (
+          <StreamingIndicator visibleState={ctx.viewState} />
+        )}
+      </div>
+      {/* v1.15.9.j: bottom spacer so the last content
+       * item isn't pressed against the bottom edge
+       * of the viewport. */}
+      <div style={{ height: '120px' }} />
+    </div>
+  );
 }
 
 // v1.16.4: per-turn metadata the parent computes once
@@ -135,30 +163,34 @@ export function MessageList(props: MessageListProps): ReactElement {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   // ── Mature auto-scroll (Cursor / VS Code / Cline pattern)
   // ╭────────────────────────────────────────────────────────────────╮
-  // │ Follow-state is a *ref*, not state — it's observation, not    │
-  // │ render data. Three signals drive it:                          │
+  // │ Follow-state is observation, not render data: the controller  │
+  // │ lives in a ref and is fed the scroller's own scrollTop.       │
   // │                                                                │
-  // │ 1. atBottomStateChange from Virtuoso (truthful at-bottom     │
-  // │    detection — better than reading scrollHeight).            │
-  // │ 2. wheel / keyboard scroll-up on the list window — the user  │
-  // │    wants to read history, so we stop following immediately.  │
-  // │ 3. A new user message — clicking Send is an explicit "follow │
-  // │    along again" signal, so we re-arm following.              │
+  // │ Disarming keys off the SCROLL POSITION, not the input device. │
+  // │ The previous wheel-up/PageUp-only disarm left follow armed    │
+  // │ for scrollbar drags, touch and Home — every streaming delta   │
+  // │ then yanked the view back to the bottom, which the user       │
+  // │ experienced as violent scroll jitter during workflow runs.    │
+  // │ Any upward scrollTop movement now disarms, however it was     │
+  // │ produced. Downward movement (chasing the tail, Virtuoso's     │
+  // │ compensation when rows mount above, our own pin scrolls)      │
+  // │ never disarms.                                                 │
   // │                                                                │
-  // │ When the ref is true → we keep the list anchored to the      │
-  // │ bottom (smooth scroll on new items). When it's false → we    │
-  // │ let the user scroll freely and only surface the small       │
-  // │ "follow tail" pill.                                          │
+  // │ Re-arming stays explicit: sending a message (the new turn is  │
+  // │ the user's) and clicking the follow-tail pill.                │
   // ╰────────────────────────────────────────────────────────────────╯
-  const followRef = useRef(true);
-  // Mirror in state so the "follow tail" pill can render (purely
-  // visual). The ref is the source of truth.
+  const followRef = useRef(createFollowController());
+  // Mirror at-bottom in state so the "follow tail" pill can render (purely
+  // visual). Virtuoso's atBottomStateChange is the source of truth.
   const [atBottom, setAtBottom] = useState(true);
-  // Updated by the wheel / keydown listener; throttled to once per
-  // ~120ms so a fast scroll doesn't spam updates.
-  const lastWheelRef = useRef(0);
 
-  const showScrollBtn = !atBottom && props.messages.length > 0;
+  // The pill must not flash during the pin's catch-up gap: when content
+  // grows at the bottom, Virtuoso reports not-at-bottom for the frames
+  // before our scrollToIndex re-pins, and `!atBottom` alone would blink the
+  // pill on every delta. A pinned (following) view never shows the pill;
+  // a disarmed view always may.
+  const showScrollBtn =
+    !atBottom && !followRef.current.isFollowing() && props.messages.length > 0;
   const running = props.running === true;
 
   // v1.16.5+ (spec §5.3): the footer indicator is driven by
@@ -174,6 +206,15 @@ export function MessageList(props: MessageListProps): ReactElement {
       running,
     });
   const showStreamingFooter = viewStateShowsFooterDots(viewState);
+  // Stable identity for Virtuoso's `context`: a fresh object per render
+  // would push the footer to re-render on every streaming delta. The slot
+  // stays reserved for the whole live run so the dots can mount/unmount
+  // without reshaping the tail.
+  const reserveFooterSlot = running || showStreamingFooter;
+  const footerContext = useMemo<FooterContext>(
+    () => ({ showStreamingFooter, reserveFooterSlot, viewState }),
+    [showStreamingFooter, reserveFooterSlot, viewState],
+  );
 
   // v1.16.4: per-turn metadata. Walk messages once and
   // build a `userMessage.id → TurnMeta` map. The active
@@ -274,20 +315,29 @@ export function MessageList(props: MessageListProps): ReactElement {
           previousProcess = phase;
         }
         const lastPhase = phases.at(-1);
-        const hasAssistantOutputAfter = (phase: PhaseGroup): boolean => (
-          turnMsgs.slice(phase.lastIndex + 1).some((message) => (
-            message.kind === 'text' && message.role === 'assistant'
-          ))
-        );
+        // One reverse walk answers "is there assistant output after this
+        // phase" for every phase at once. The previous per-phase
+        // slice+scan made this projection O(n²) per streaming delta,
+        // which showed up as stutter on long workflow turns.
+        const assistantAfter = new Array<boolean>(turnMsgs.length + 1).fill(false);
+        for (let i = turnMsgs.length - 1; i >= 0; i -= 1) {
+          const m = turnMsgs[i];
+          assistantAfter[i] = assistantAfter[i + 1]! || (m?.kind === 'text' && m.role === 'assistant');
+        }
         for (let index = 0; index < turnMsgs.length; index += 1) {
           const message = turnMsgs[index];
           if (!message) continue;
           const phase = phaseAtIndex.get(index);
           if (phase) {
-            const isCurrentPhase = phase === lastPhase && !hasAssistantOutputAfter(phase);
+            const isCurrentPhase = phase === lastPhase && !assistantAfter[phase.lastIndex + 1];
             result.push({
               kind: '__code_process',
-              key: `code-process:${currentTurn.turnId}:${phase.phaseId}`,
+              // firstIndex disambiguates the SAME phaseId appearing as two
+              // non-contiguous runs within one turn (narration in between
+              // splits the grouping). Keys must be unique — Virtuoso uses
+              // them as React keys via computeItemKey — and stable: messages
+              // only ever append, so a group's first index never shifts.
+              key: `code-process:${currentTurn.turnId}:${phase.phaseId}:${phase.firstIndex}`,
               turnId: currentTurn.turnId,
               phaseId: phase.phaseId,
               entries: phase.entries,
@@ -299,20 +349,11 @@ export function MessageList(props: MessageListProps): ReactElement {
           }
         }
       } else {
-        const taskTitle = turnMsgs.find(
-          (entry): entry is TextMessage => entry.kind === 'text' && entry.role === 'user',
-        )?.text;
-        type WorkRun = {
-          firstIndex: number;
-          rail?: WorkRailMessage;
-          narrations: WorkNarrationLine[];
-          activity?: WorkActivityGroupMessage;
-        };
-        const runs = new Map<string, WorkRun>();
-        // 2026-09-04 (align to Code): Work tool/thinking are grouped PER PHASE
-        // into collapsed transcripts, each inserted at its phase's FIRST
-        // thinking/tool — exactly how Code interleaves reasoning with narrative
-        // text, so the turn reads chronologically and the final answer lands last.
+        // Work turns: tool/thinking fold per phase (below). The linear
+        // kinds (work_rail / work_narration / the retired
+        // work_activity_group) pass through to <Message>, whose
+        // safety-net branches render history-revived rows (the board
+        // aggregation path was removed with WorkTaskBoard).
         type WPhase = { phaseId: string; firstIndex: number; entries: import('./CodeReasoningTranscript').CodeProcessEntry[] };
         const wPhases: WPhase[] = [];
         const wPhaseAtIndex = new Map<number, WPhase>();
@@ -335,45 +376,6 @@ export function MessageList(props: MessageListProps): ReactElement {
         for (let index = 0; index < turnMsgs.length; index += 1) {
           const message = turnMsgs[index];
           if (!message) continue;
-          if (
-            message.kind !== 'work_rail'
-            && message.kind !== 'work_narration'
-            && message.kind !== 'work_activity_group'
-          ) continue;
-          const runId = message.runId;
-          const run = runs.get(runId) ?? { firstIndex: index, narrations: [] };
-          run.firstIndex = Math.min(run.firstIndex, index);
-          if (message.kind === 'work_rail') run.rail = message;
-          if (message.kind === 'work_narration') run.narrations.push(message);
-          if (message.kind === 'work_activity_group') run.activity = message;
-          runs.set(runId, run);
-        }
-        for (let index = 0; index < turnMsgs.length; index += 1) {
-          const message = turnMsgs[index];
-          if (!message) continue;
-          if (
-            message.kind === 'work_rail'
-            || message.kind === 'work_narration'
-            || message.kind === 'work_activity_group'
-          ) {
-            const run = runs.get(message.runId);
-            if (run?.rail && run.firstIndex === index) {
-              result.push({
-                kind: '__work_process',
-                key: `work-process:${message.runId}`,
-                turnId: currentTurn.turnId,
-                rail: run.rail,
-                narrations: run.narrations.sort((a, b) => a.createdAt - b.createdAt),
-                ...(taskTitle ? { taskTitle } : {}),
-                ...(run.activity ? { activity: run.activity } : {}),
-              });
-            } else if (!run?.rail) {
-              // Incomplete legacy projections stay visible rather than being
-              // swallowed while the rail snapshot catches up.
-              result.push(message);
-            }
-            continue;
-          }
           const wphase = wPhaseAtIndex.get(index);
           if (wphase) {
             // Fold the Work tool/thinking transcript per phase: it stays open
@@ -386,7 +388,9 @@ export function MessageList(props: MessageListProps): ReactElement {
             );
             result.push({
               kind: '__code_process',
-              key: `code-process:${currentTurn.turnId}:${wphase.phaseId}`,
+              // See the Code branch: firstIndex keeps keys unique when the
+              // same phaseId reappears as a second non-contiguous run.
+              key: `code-process:${currentTurn.turnId}:${wphase.phaseId}:${wphase.firstIndex}`,
               turnId: currentTurn.turnId,
               phaseId: wphase.phaseId,
               entries: wphase.entries,
@@ -418,15 +422,20 @@ export function MessageList(props: MessageListProps): ReactElement {
     }
     flushTurn();
     return result;
-  }, [props.messages, props.surface, turnMetaByTurnId]);
+    // props.running drives the Work branch's `active` flag on process
+    // blocks; without it here a turn ending without a message delta
+    // would leave the block expanded.
+  }, [props.messages, props.surface, props.running, turnMetaByTurnId]);
 
   // v1.15.9.j → v1.18 (2026-09-06): when the user sends a NEW message,
   // reset to follow mode. Sending is the explicit "follow along
   // again" signal — even if the user had been scrolled up reading
   // the previous turn, the new turn is theirs and they want to watch
-  // it unfold. After that, any wheel / keyboard scroll up disables
-  // follow again, until they re-arm it by sending OR by clicking the
-  // follow-tail pill (which scrolls to bottom AND re-arms follow).
+  // it unfold. After that, ANY upward movement of the scroller's
+  // scrollTop disarms follow (see the follow controller above — it is
+  // position-based, not input-device-based), until they re-arm it by
+  // sending OR by clicking the follow-tail pill (which scrolls to
+  // bottom AND re-arms follow).
 
   // Refs that survive across renders without re-triggering them.
   const lastUserMsgIdRef = useRef<string | null>(null);
@@ -443,18 +452,18 @@ export function MessageList(props: MessageListProps): ReactElement {
     // just sent something → re-arm follow mode and scroll.
     for (let i = items.length - 1; i >= 0; i -= 1) {
       const m = items[i];
-      if (!m || isSyntheticItem(m)) continue;
+      if (!m || isCodeProcessItem(m)) continue;
       if (m.kind === 'text' && m.role === 'user') {
         if (m.id !== lastUserMsgIdRef.current) {
           lastUserMsgIdRef.current = m.id;
-          followRef.current = true;
+          followRef.current.rearm();
           shouldScroll = true;
         }
         break;
       }
     }
     // Streaming / synthetic item growth: stay anchored when armed.
-    if (followRef.current) shouldScroll = true;
+    if (followRef.current.isFollowing()) shouldScroll = true;
 
     if (!shouldScroll) return;
 
@@ -472,66 +481,50 @@ export function MessageList(props: MessageListProps): ReactElement {
     });
   }, [items]);
 
-  // Wheel / keydown listener — the user explicitly scrolled up, so we
-  // disarm follow mode. Cline/VSC implement this with a window-level
-  // listener; we listen at window level too because the virtualized
-  // list may not always have a stable DOM target.
-  useEffect(() => {
-    const onWheel = (e: WheelEvent): void => {
-      if (e.deltaY >= 0) return; // only disarm on upward scroll
-      const now = performance.now();
-      // Throttle: ignore follow-up wheels within 120ms — they fire
-      // dozens per second on a trackpad and don't carry new intent.
-      if (now - lastWheelRef.current < 120) return;
-      lastWheelRef.current = now;
-      // Verify the wheel happened inside the message list (cheaper
-      // heuristic: any element has `data-message-list-root` set
-      // below, since the user only cares about disarming when the
-      // scroll WAS the message list).
-      const path = e.composedPath();
-      const insideList = path.some((node) =>
-        node instanceof Element && node.closest('[data-message-list-root]'),
-      );
-      if (!insideList) return;
-      if (followRef.current) {
-        followRef.current = false;
-        // Guarded: only re-render when the pill actually needs to
-        // appear, so a trackpad fling costs at most one update.
-        setAtBottom((prev) => (prev ? false : prev));
-      }
-    };
-    window.addEventListener('wheel', onWheel, { passive: true });
-    return () => window.removeEventListener('wheel', onWheel);
+  // The scroller's own scroll events are the ONE disarm signal — they fire
+  // for every input method (wheel, scrollbar drag, touch, Home/End,
+  // keyboard) and for none of our own pin scrolls (those only move
+  // scrollTop down). Attached through Virtuoso's `scrollerRef` below.
+  const scrollerElRef = useRef<HTMLElement | null>(null);
+  const handleScrollerScroll = useCallback((): void => {
+    const el = scrollerElRef.current;
+    if (!el) return;
+    const disarmed = followRef.current.onScroll(el.scrollTop);
+    if (disarmed) {
+      // Mirror to the pill state immediately; Virtuoso's
+      // atBottomStateChange will agree a moment later.
+      setAtBottom((prev) => (prev ? false : prev));
+    }
   }, []);
-
-  // Keyboard PageUp / ArrowUp — same disarming intent as wheel-up.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      // Only disarm for actions that scroll *up*. PageDown / End /
-      // ArrowDown re-arm follow (the user is actively chasing the
-      // bottom). We don't fight other lists' key handlers.
-      if (e.key !== 'PageUp' && e.key !== 'ArrowUp') return;
-      const target = e.target;
-      if (target instanceof Element && target.closest('input, textarea')) return;
-      if (followRef.current) {
-        followRef.current = false;
-        setAtBottom((prev) => (prev ? false : prev));
+  const attachScroller = useCallback(
+    (el: HTMLElement | Window | null): void => {
+      const prev = scrollerElRef.current;
+      const next = el instanceof HTMLElement ? el : null;
+      if (prev === next) return;
+      if (prev) {
+        prev.removeEventListener('scroll', handleScrollerScroll);
       }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+      scrollerElRef.current = next;
+      // Window-scrolled lists are not a thing here (the scroller is always
+      // an element); skip listening when Virtuoso hands us something else.
+      if (next) {
+        next.addEventListener('scroll', handleScrollerScroll, { passive: true });
+      }
+    },
+    [handleScrollerScroll],
+  );
 
-  // 2026-09-06 (v1.18): auto-scroll now lives in the items-change
-  // effect above, gated by `followRef`. The Virtuoso callback form
-  // of `followOutput` keeps the ref in sync with Virtuoso's own
-  // at-bottom view, so the two never disagree.
+  // 2026-09-06 (v1.18): auto-scroll lives in the items-change effect
+  // above, gated by the follow controller. `followOutput` is disabled
+  // (see its note) so there is exactly one scroll driver; atBottomState
+  // Change only mirrors geometry to the pill state.
 
   return (
     <div className="message-list" data-message-list-root="" role="list" aria-label="Chat">
       <Virtuoso
         ref={virtuosoRef}
         style={{ height: '100%' }}
+        scrollerRef={attachScroller}
         data={items}
         itemContent={(_index, item) => {
           if (isCodeProcessItem(item)) {
@@ -546,22 +539,10 @@ export function MessageList(props: MessageListProps): ReactElement {
               />
             );
           }
-          if (isWorkProcessItem(item)) {
-            return (
-              <WorkTaskBoard
-                key={item.key}
-                rail={item.rail}
-                narrations={item.narrations}
-                taskTitle={item.taskTitle}
-                {...(item.activity ? { activity: item.activity } : {})}
-              />
-            );
-          }
-          // Recovered legacy Work runs may still carry the older hierarchy
-          // projection. Keep its dedicated renderer for history compatibility.
-          if (item.kind === 'workflow') {
-            return <WorkWorkflowCard key={item.id} message={item} />;
-          }
+          // 2026-09-10 (applyWorkItem deletion面): the `workflow` branch
+          // (WorkWorkflowCard) is deleted with the WorkflowMessage chain —
+          // its only producers (mapper/reducer) are gone. A stale persisted
+          // `workflow` row falls through to <Message>, which renders nothing.
           // A partial legacy Work projection without a rail is deliberately
           // not hidden. Message owns the safe fallback for these rare rows.
           if (item.kind === 'deliverable') {
@@ -589,11 +570,9 @@ export function MessageList(props: MessageListProps): ReactElement {
               // component checks editingMessageId and swaps
               // a user <p> for a <textarea> when it matches.
               editingMessageId={props.editingMessageId}
-              editingDraft={props.editingDraft}
               onEditMessage={props.onEditMessage}
               onSaveEdit={props.onSaveEdit}
               onCancelEdit={props.onCancelEdit}
-              onDraftChange={props.onDraftChange}
               // v1.16.5+ (M3, Work): inline artifact
               // rendering plumbing pass-through.
               artifactHost={props.artifactHost}
@@ -637,33 +616,40 @@ export function MessageList(props: MessageListProps): ReactElement {
           setAtBottom((prev) => (prev === bottom ? prev : bottom));
         }}
         initialTopMostItemIndex={items.length - 1}
+        // Apply item measurements synchronously instead of deferring them
+        // through requestAnimationFrame: during a streaming run the tail row
+        // grows every delta, and the deferred pass kept the corrections one
+        // frame behind the layout — a flicker two react-virtuoso users
+        // traced to the 4.7.6 rAF change (discussion #1083).
+        skipAnimationFrameInResizeObserver
+        // Stable item keys: Virtuoso's default is the array index, but a
+        // projection item (a code/work process block) is replaced wholesale
+        // when its entries grow. Keying by identity lets Virtuoso reuse the
+        // mounted row instead of treating it as new content.
+        computeItemKey={(_index, item) => (isCodeProcessItem(item) ? item.key : item.id)}
+        // Render a gutter beyond the viewport so slow scrolling mounts rows
+        // ahead of time instead of synchronously inside the scroll frame.
+        // This is the main smoothing lever for scrolling up against a list
+        // that is growing at the bottom.
+        increaseViewportBy={{ top: 900, bottom: 900 }}
+        context={footerContext}
         components={{
-          // One footer owns the shared waiting indicator and scroll breathing
-          // room; workflow components render only inside the item stream.
-          Footer: () => (
-            <div className="message-list__footer-stack">
-              {showStreamingFooter && (
-                <StreamingIndicator visibleState={viewState} />
-              )}
-              {/* v1.15.9.j: bottom spacer so the last content
-               * item isn't pressed against the bottom edge
-               * of the viewport. */}
-              <div style={{ height: '120px' }} />
-            </div>
-          ),
+          Footer: ListFooter,
+          Item: VirtuosoItem,
         }}
       />
       {showScrollBtn && (
-        // 2026-09-06: the trailing pill now re-arms follow mode +
-        // smoothly scrolls to the bottom in one click — clicking it
-        // is the third re-arm signal alongside "send a new message"
-        // and wheel-down. The pill is intentionally icon-only; the
-        // design note said a small icon is enough.
+        // 2026-09-06: the trailing pill re-arms follow mode + smoothly
+        // scrolls to the bottom in one click. Re-arm signals are the pill
+        // click and sending a new message; scrolling up by any means
+        // disarms (see the follow controller above). The pill is
+        // intentionally icon-only; the design note said a small icon is
+        // enough.
         <button
           type="button"
           className="message-list__scroll-btn message-list__scroll-btn--show"
           onClick={() => {
-            followRef.current = true;
+            followRef.current.rearm();
             setAtBottom(true);
             virtuosoRef.current?.scrollToIndex({
               index: items.length - 1,

@@ -1,4 +1,4 @@
-// Trylo Desktop — MonacoEditor React wrapper.
+// Trylo Desktop — MonacoEditor React wrapper. See ARCHITECTURE.md §2.4.
 //
 // Day 3 fix: the editor is "controlled" — `props.value` is the source
 // of truth. Day 4 fix: when the editor isn't ready yet (monaco init

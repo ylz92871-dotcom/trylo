@@ -100,15 +100,6 @@ fn pong_timeout() -> Duration {
 /// always run the source directly; a release build from this repo keeps
 /// bundle-first for checkouts without a sidecar dev environment.
 fn resolve_host_script(resource_dir: Option<&std::path::Path>) -> Option<PathBuf> {
-    if let Some(dir) = resource_dir {
-        let candidate = dir
-            .join("desktop-services")
-            .join("dist")
-            .join("host.bundle.mjs");
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
     let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let repo_root = manifest.ancestors().nth(2)?;
     let unbundled = repo_root
@@ -127,6 +118,15 @@ fn resolve_host_script(resource_dir: Option<&std::path::Path>) -> Option<PathBuf
             return Some(bundled);
         }
     } else {
+        if let Some(dir) = resource_dir {
+            let candidate = dir
+                .join("desktop-services")
+                .join("dist")
+                .join("host.bundle.mjs");
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
         if bundled.is_file() {
             return Some(bundled);
         }

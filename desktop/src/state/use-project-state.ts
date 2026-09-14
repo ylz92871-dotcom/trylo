@@ -1,4 +1,4 @@
-// Trylo Desktop — ProjectState module. See the architecture doc §2.3
+// Trylo Desktop — ProjectState module. See ARCHITECTURE.md §2.3
 // + §3 Phase 2 task #2.5+#2.6.
 //
 // Project State is the source of truth. The agent does not own

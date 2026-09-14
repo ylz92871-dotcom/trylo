@@ -93,7 +93,7 @@ describe('conversation history', () => {
   });
 
   it('migrates legacy per-workspace sessions in browser mode', async () => {
-    const root = 'C:/work/project';
+    const root = 'D:/CC/project';
     window.localStorage.setItem('trylo:workspace-sessions:v1', JSON.stringify({
       workspaces: {
         [root]: [{
@@ -110,7 +110,7 @@ describe('conversation history', () => {
   });
 
   it('normalizes Windows workspace keys', () => {
-    expect(workspaceKey('c:\\work\\demo-ws\\')).toBe('c:/work/demo-ws');
+    expect(workspaceKey('C:\\work\\DEMO-WS\\')).toBe('c:/work/demo-ws');
   });
 });
 
@@ -275,7 +275,7 @@ describe('M4-C history write-behind (spec §7.4)', () => {
   });
 
   it('flush-all flushes every pending workspace on exit', async () => {
-    const otherRoot = 'C:/work/other' as FilePath;
+    const otherRoot = 'D:/CC/other' as FilePath;
     const first = createConversation(emptyWorkspaceHistory(), { kind: 'code', now: 1 });
     const second = createConversation(emptyWorkspaceHistory(), { kind: 'work', now: 2 });
     scheduleWorkspaceHistorySave(root, first.history);

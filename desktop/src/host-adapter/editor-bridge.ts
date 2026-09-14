@@ -1,4 +1,4 @@
-// Trylo Desktop — EditorBridge interface. See the architecture doc §2.5.
+// Trylo Desktop — EditorBridge interface. See ARCHITECTURE.md §2.5.
 //
 // The EditorBridge is the module that owns the dirty-buffer + external-
 // change rules. It is the only place that knows about both Monaco's

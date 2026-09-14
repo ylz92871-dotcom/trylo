@@ -1,6 +1,6 @@
 // EngineeringContract serialization tests (PR-1, vitest side).
 //
-// The CLI copy (the Trylo CLI's team-roster 
+// The CLI copy (`trylo cli/src/tools/AgentTool/team-roster/
 // engineering-contract.test.ts`) runs the same scenarios under bun:test
 // against its own module copy — desktop must not import CLI sources.
 

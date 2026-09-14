@@ -1,4 +1,4 @@
-// Trylo Desktop — Message.
+// Trylo Desktop — Message. See spike-results/phase-2-ui-redesign.md.
 //
 // v1.15.7: closer to cline. No more brand-tinted bubble
 // for the assistant — the reply is plain markdown-flavoured
@@ -41,7 +41,7 @@
 // underneath, both reading from the user message's
 // own `turnStartedAt` / `finalElapsedMs` / isActive.
 
-import { useEffect, useState, type ReactElement } from 'react';
+import { memo, useEffect, useState, type ReactElement } from 'react';
 import { Rocket } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { ChatMessage } from './types';
@@ -53,15 +53,17 @@ import { CompactionCard } from './CompactionCard';
 import { TurnProgress } from './TurnProgress';
 import { ErrorCard } from './ErrorCard';
 // 2026-08-29 (Work workflow UI refactor, spec §3.1):
-// the WorkWorkflowCard is the hierarchy container for
+// the WorkWorkflowCard was the hierarchy container for
 // one run; it never falls through to the default
 // renderer.
-import { WorkWorkflowCard } from './WorkWorkflowCard';
+// 2026-09-10 (applyWorkItem deletion面): WorkWorkflowCard deleted with the
+// WorkflowMessage chain (zero production producers) — the branch below
+// went with it. The linear rail (WorkPhaseRail, `work_rail`) is a
+// DIFFERENT message kind and stays.
 // 2026-08-29 (linear Work UI, spec §4): the four linear
 // components the safety-net branches below fall back to.
 import { WorkPhaseRail } from './WorkPhaseRail';
 import { WorkNarration } from './WorkNarration';
-import { WorkActivityGroup } from './WorkActivityGroup';
 import { DeliverableProgressPanel } from './DeliverableProgressPanel';
 // M4-E (spec §6.7 Core "approval / input"): inline
 // decision cards for daemon permission requests and
@@ -75,7 +77,7 @@ import { SubagentCard } from './SubagentCard';
 // the SAME card the Work sub-app ships — no second
 // artifact component.
 import { ArtifactCard, relativeArtifactPath, type HostAdapter } from '@trylo/work';
-import { resolveArtifactKind } from './work-item-mapper';
+import { resolveArtifactKind } from './artifact-kind';
 
 export interface MessageProps {
   readonly message: ChatMessage;
@@ -99,10 +101,11 @@ export interface MessageProps {
   // bubble, the <p> swaps for a <textarea> with Save
   // / Cancel. Click on the bubble (when not editing)
   // fires onEditMessage. The Message component owns a
-  // local textarea mirror; the parent's editingDraft
-  // is only the source of truth on initial edit entry.
+  // local textarea mirror; editing state never round-trips
+  // through the parent (the earlier write-only
+  // `editingDraft` / `onDraftChange` plumbing made every
+  // keystroke re-render the whole visible timeline).
   readonly editingMessageId?: string | null;
-  readonly editingDraft?: string;
   readonly onEditMessage?: (id: string) => void;
   // v1.16.3.2: onSaveEdit takes the new text as an
   // argument so the Message component can pass its
@@ -112,10 +115,6 @@ export interface MessageProps {
   // silently bailed with !newText.
   readonly onSaveEdit?: (text: string) => void;
   readonly onCancelEdit?: () => void;
-  // v1.16.3: callback that pipes the textarea's current
-  // value up to App's editingDraft state. Save reads
-  // this to know what the user typed.
-  readonly onDraftChange?: (id: string, text: string) => void;
   // v1.16.5+ (M3, Work): artifact rendering plumbing.
   // `artifactHost` opens files through the host adapter;
   // `onOpenArtifact` is the in-app viewer hook; 
@@ -159,7 +158,10 @@ function formatSentBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)}MB`;
 }
 
-function AssistantAnswer(props: {
+// Memoized: ReactMarkdown re-parses the full text on every render, so an
+// unchanged message must never re-run it (streaming deltas re-render the
+// timeline many times per second).
+const AssistantAnswer = memo(function AssistantAnswer(props: {
   readonly text: string;
   readonly onOpenArtifact?: (path: string) => void;
 }): ReactElement {
@@ -189,9 +191,9 @@ function AssistantAnswer(props: {
       </ReactMarkdown>
     </div>
   );
-}
+});
 
-export function Message(props: MessageProps): ReactElement {
+function MessageImpl(props: MessageProps): ReactElement {
   const m = props.message;
   // v1.16.3: hooks live at the TOP so every render
   // calls them in the same order regardless of which
@@ -220,15 +222,9 @@ export function Message(props: MessageProps): ReactElement {
   }, [props.editingMessageId]);
 
   switch (m.kind) {
-    case 'workflow': {
-      // 2026-08-29 (Work workflow UI refactor, spec §3.1).
-      // The WorkflowMessage is its own card. MessageList
-      // already routes it before reaching here; this
-      // branch is the safety net so a future caller that
-      // hands a workflow item straight to <Message> still
-      // gets a valid render.
-      return <WorkWorkflowCard key={m.id} message={m} />;
-    }
+    // 2026-09-10 (applyWorkItem deletion面): `case 'workflow'` deleted with
+    // the WorkflowMessage chain — the mapper/reducer were its only producers
+    // and both are gone, so no producer exists in production or history.
     case 'work_rail': {
       // 2026-08-29 (linear Work UI, spec §4). MessageList
       // routes the four linear kinds to their dedicated
@@ -238,9 +234,6 @@ export function Message(props: MessageProps): ReactElement {
     }
     case 'work_narration': {
       return <WorkNarration key={m.id} message={m} />;
-    }
-    case 'work_activity_group': {
-      return <WorkActivityGroup key={m.id} message={m} />;
     }
     case 'deliverable': {
       return <DeliverableProgressPanel key={m.id} message={m} />;
@@ -516,4 +509,15 @@ export function Message(props: MessageProps): ReactElement {
         </div>
       );
   }
+  // 2026-09-10 (applyWorkItem deletion面): exhaustive-switch fallback. The
+  // union above covers every producible kind; a stale persisted row of a
+  // retired kind (e.g. `workflow`) renders nothing instead of crashing.
+  return <></>;
 }
+
+// Memoized: applyEvents replaces only the message objects that actually
+// changed and App binds handlers with useCallback, so a streaming delta
+// re-renders just the growing row instead of every visible card. This is
+// the single biggest lever on scroll jank while a workflow is running.
+export const Message = memo(MessageImpl);
+Message.displayName = 'Message';

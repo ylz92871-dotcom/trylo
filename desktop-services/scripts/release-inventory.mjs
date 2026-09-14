@@ -11,6 +11,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
+import { WINDOWS_MCP_MANIFEST } from '../src/tooling/manifests/windows-mcp.mjs';
+
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(packageRoot, '..');
 const packagedResourceRoot = process.env.TRYLO_RESOURCE_DIR
@@ -68,6 +70,54 @@ async function checkItem(label, p, isRequired) {
   }
 }
 
+/// WCC-P2-05 (spec §19.8): the pinned .NET WGC capture helper. Presence AND
+/// digest are verified against the manifest — the helper is native code the
+/// capture path would execute, so a drifted artifact must fail the release
+/// gate rather than ship.
+///
+/// Resolution mirrors the runtime lookup (resolvePinnedWgcHelper):
+///   1. packaged tree — `<serviceRoot>/wgc-helper/trylo-wgc-helper.exe`
+///      (staged by prepare-sidecars.ps1); required when gating a package;
+///   2. dev/CI — the monorepo checkout's `dotnet publish` output; REQUIRED
+///      when that build exists (it is the artifact a package would stage),
+///      advisory `warn` on a clean checkout with no dotnet build.
+async function checkWgcHelper() {
+  const helper = WINDOWS_MCP_MANIFEST.helper;
+  const packaged = await checkItem(
+    'pinned WGC helper (staged)',
+    path.join(serviceRoot, helper.packagedDirName, helper.executableRelativePath),
+    verifyingPackaged,
+  );
+  if (packaged.ok || packaged.error !== 'missing') {
+    return { ...packaged, label: 'pinned WGC helper' };
+  }
+  const devPublishPath = path.join(
+    repoRoot,
+    helper.sourceTree,
+    'bin/Release/net8.0-windows10.0.19041.0/win-x64/publish',
+    helper.executableRelativePath,
+  );
+  const dev = await checkItem('pinned WGC helper (dev publish)', devPublishPath, false);
+  if (dev.ok || dev.error !== 'missing') {
+    // Digest/size still gate the dev artifact — a stale rebuild must fail.
+    if (dev.ok && dev.sha !== helper.sha256) {
+      return { ...dev, label: 'pinned WGC helper', required: true, ok: false, error: `digest drift (${dev.sha.slice(0, 12)} != pinned ${helper.sha256.slice(0, 12)})` };
+    }
+    if (dev.ok && dev.size !== helper.sizeBytes) {
+      return { ...dev, label: 'pinned WGC helper', required: true, ok: false, error: `size drift (${dev.size} != pinned ${helper.sizeBytes})` };
+    }
+    return { ...dev, label: 'pinned WGC helper' };
+  }
+  // Neither location has the artifact. Required only for a packaged tree.
+  return {
+    label: 'pinned WGC helper',
+    path: packaged.path,
+    ok: false,
+    error: 'missing (not staged and no dev publish output)',
+    required: verifyingPackaged,
+  };
+}
+
 /// Check "any one of these paths exists". Used for the Node runtime, which
 /// has a per-triple layout.
 async function checkAny(label, root, relatives, isRequired) {
@@ -80,9 +130,38 @@ async function checkAny(label, root, relatives, isRequired) {
   return { ...last, error: `missing (tried ${relatives.join(', ')})`, required: isRequired };
 }
 
+async function checkBundleParity(packagedBundle) {
+  const sourceBundle = path.join(packageRoot, 'dist', 'host.bundle.mjs');
+  try {
+    const [packagedSha, sourceSha] = await Promise.all([sha256(packagedBundle), sha256(sourceBundle)]);
+    if (packagedSha !== sourceSha) {
+      return {
+        label: 'service-host source/resource parity',
+        path: packagedBundle,
+        ok: false,
+        error: `stale resource bundle (${packagedSha.slice(0, 12)} != ${sourceSha.slice(0, 12)})`,
+        required: true,
+      };
+    }
+    const stat = await fs.stat(packagedBundle);
+    return { label: 'service-host source/resource parity', path: packagedBundle, ok: true, sha: packagedSha, size: stat.size };
+  } catch {
+    return { label: 'service-host source/resource parity', path: packagedBundle, ok: false, error: 'bundle missing', required: true };
+  }
+}
+
 async function main() {
+  const packagedBundle = path.join(serviceRoot, 'dist', 'host.bundle.mjs');
   const items = [
-    await checkItem('service-host bundle', path.join(serviceRoot, 'dist', 'host.bundle.mjs'), true),
+    await checkItem('service-host bundle', packagedBundle, true),
+    ...(verifyingPackaged ? [await checkBundleParity(packagedBundle)] : []),
+    await checkItem(
+      'Windows-MCP Trylo fork',
+      path.join(serviceRoot, 'windows-mcp-fork', 'tools', 'ocr.py'),
+      verifyingPackaged,
+    ),
+    // WCC-P2-05: the pinned .NET WGC helper, digest-gated (spec §19.8).
+    await checkWgcHelper(),
     await checkItem('vendor desktop companion bridge', path.join(serviceRoot, 'vendor', 'legacy', 'desktop-companion-bridge.js'), true),
     await checkItem('vendor Hermes capability manager', path.join(serviceRoot, 'vendor', 'legacy', 'hermes-capability-manager.js'), true),
     await checkItem('vendor Hermes session sync', path.join(serviceRoot, 'vendor', 'legacy', 'hermes-session-sync.js'), true),

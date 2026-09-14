@@ -101,6 +101,11 @@ function defaultSend(processId: string, line: string): Promise<boolean> {
  *  grow it unbounded. */
 const AUDIT_LIMIT = 64;
 
+/** Delivered request ids remembered for lease dedup (WCC-P2-01): a respond
+ *  retry after a successful send must not grant the lease twice. Bounded
+ *  like the audits. */
+const RESPONDED_REQUEST_LIMIT = 256;
+
 export class CodePermissionRegistry {
   private readonly pending = new Map<string, CodePermissionRequest>();
   private readonly onChange: () => void;
@@ -108,6 +113,7 @@ export class CodePermissionRegistry {
   private readonly riskClassifier: ToolRiskRouter | null;
   private readonly onLeaseGrant: ((grant: ToolLeaseGrant) => void) | null;
   private readonly audits: CodePermissionAuditEntry[] = [];
+  private readonly respondedRequestIds = new Set<string>();
 
   constructor(options: CodePermissionRegistryOptions) {
     this.onChange = options.onChange;
@@ -189,21 +195,32 @@ export class CodePermissionRegistry {
 
   /** Answer one pending request. Resolves false when the id is unknown
    *  or the stdin write failed (the entry is kept on write failure so a
-   *  retry is possible). An approval of a lease-carrying request (PR-3
-   *  §6.5) records the grant BEFORE the stdin write so the lease exists
-   *  even if the write races the next control frame. */
+   *  retry is possible).
+   *
+   *  Lease timing (WCC-P2-01, fixes A-14): an approval of a lease-carrying
+   *  request records the grant ONLY AFTER the control response was
+   *  successfully delivered to the CLI. Previously the lease was granted
+   *  BEFORE the write, so a failed/racing write still minted an
+   *  authorization the model's next call could consume. The registry also
+   *  dedupes by requestId: a retried respond() after a successful send
+   *  cannot double-count against the lease's action budget. */
   async respond(requestId: string, allow: boolean): Promise<boolean> {
     const request = this.pending.get(requestId);
     if (!request) return false;
-    if (allow && request.lease) {
+    const sent = await this.send(request.processId, buildControlResponse(requestId, allow, request.input));
+    if (!sent) return false;
+    if (allow && request.lease && !this.respondedRequestIds.has(requestId)) {
+      this.respondedRequestIds.add(requestId);
+      if (this.respondedRequestIds.size > RESPONDED_REQUEST_LIMIT) {
+        const oldest = this.respondedRequestIds.values().next().value;
+        if (oldest !== undefined) this.respondedRequestIds.delete(oldest);
+      }
       try {
         this.onLeaseGrant?.(request.lease);
       } catch {
-        /* a broken lease sink must never block the approval */
+        /* a broken lease sink must never fail an already-delivered approval */
       }
     }
-    const sent = await this.send(request.processId, buildControlResponse(requestId, allow, request.input));
-    if (!sent) return false;
     this.pending.delete(requestId);
     this.notify();
     return true;

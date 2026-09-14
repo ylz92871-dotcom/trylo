@@ -2,7 +2,7 @@
 //
 // Spec §8.3 is the authority. The same field names must exist in:
 //   - desktop/src/user-learning/team-access/contract-types.ts  (this side, compiler source)
-//   - the Trylo CLI's team-roster engineering-contract.ts (CLI parse/briefing copy)
+//   - trylo cli/src/tools/AgentTool/team-roster/engineering-contract.ts (CLI parse/briefing copy)
 //   - desktop/src/surfaces/shared/engineering-contract.ts      (UI read-only subset)
 // A lock test asserts the three copies stay aligned. user-learning must
 // not import surfaces; desktop must not import trylo-cli sources.

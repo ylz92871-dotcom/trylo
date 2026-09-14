@@ -1,4 +1,4 @@
-// Trylo Desktop — Process shared state. See the architecture doc §2.2
+// Trylo Desktop — Process shared state. See ARCHITECTURE.md §2.2
 // (Tauri IPC) + §3 Phase 2 task #3+#4 (Trylo Core subprocess +
 // CC CLI channel).
 //

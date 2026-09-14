@@ -371,3 +371,81 @@ describe('PR-3: lease grant on explicit approval (§6.5)', () => {
     expect(h.registry.list()).toEqual([]);
   });
 });
+
+describe('WCC-P2-01: lease granted only after the response is delivered', () => {
+  const NAVIGATE_TOOL = 'mcp__trylo-browser__browser_navigate';
+  const lease: BrowserLeaseGrant = {
+    kind: 'browser-origin',
+    origin: 'https://docs.example.com',
+    actionClass: 'navigate',
+    conversationId: 'c1',
+    ttlMs: 5 * 60 * 1000,
+  };
+  const promptWithLease: ToolRiskRouter = {
+    serverNames: () => ['trylo-browser'],
+    classify: (req) =>
+      req.toolName === NAVIGATE_TOOL
+        ? {
+            behavior: 'prompt',
+            risk: 'external',
+            reasonCode: 'navigate_new_origin',
+            preview: { kind: 'summary', title: '浏览器操作', target: 'https://docs.example.com', reason: '需审批' },
+            lease,
+            audit: {
+              at: 1,
+              profileId: 'work.core.v1',
+              packageId: 'playwright',
+              toolName: NAVIGATE_TOOL,
+              behavior: 'prompt',
+              risk: 'external',
+              reasonCode: 'navigate_new_origin',
+              inputDigest: 'feedbeef',
+              pathZones: [],
+            },
+          }
+        : { behavior: 'unmanaged' },
+  };
+
+  function navFrame(requestId: string): ControlFrame {
+    return { kind: 'permission', requestId, toolName: NAVIGATE_TOOL, input: { url: 'https://docs.example.com/guide' } };
+  }
+
+  it('a FAILED send records NO lease (A-14: the write must precede the grant)', async () => {
+    const grants: ToolLeaseGrant[] = [];
+    const h = createRegistry({ riskClassifier: promptWithLease, onLeaseGrant: (g) => grants.push(g) });
+    h.registry.handleControlFrame(navFrame('req-x'), CLASSIFIER_SCOPE);
+    h.setFailSend(true);
+    await expect(h.registry.respond('req-x', true)).resolves.toBe(false);
+    expect(grants).toEqual([]);
+    // The request is still pending; a retry after the write recovers grants
+    // exactly once.
+    h.setFailSend(false);
+    await expect(h.registry.respond('req-x', true)).resolves.toBe(true);
+    expect(grants).toEqual([lease]);
+  });
+
+  it('a retried respond after a successful send does not re-grant the lease (idempotent)', async () => {
+    const grants: ToolLeaseGrant[] = [];
+    const registry = new CodePermissionRegistry({
+      onChange: () => {},
+      send: async () => true,
+      riskClassifier: promptWithLease,
+      onLeaseGrant: (g) => grants.push(g),
+    });
+    registry.handleControlFrame(navFrame('req-y'), CLASSIFIER_SCOPE);
+    await expect(registry.respond('req-y', true)).resolves.toBe(true);
+    expect(grants).toEqual([lease]);
+    // The pending entry is gone, so a second respond resolves false and the
+    // same requestId can never mint a second grant.
+    await expect(registry.respond('req-y', true)).resolves.toBe(false);
+    expect(grants).toEqual([lease]);
+  });
+
+  it('a denial never grants the lease, even after a successful send', async () => {
+    const grants: ToolLeaseGrant[] = [];
+    const h = createRegistry({ riskClassifier: promptWithLease, onLeaseGrant: (g) => grants.push(g) });
+    h.registry.handleControlFrame(navFrame('req-n'), CLASSIFIER_SCOPE);
+    await expect(h.registry.respond('req-n', false)).resolves.toBe(true);
+    expect(grants).toEqual([]);
+  });
+});

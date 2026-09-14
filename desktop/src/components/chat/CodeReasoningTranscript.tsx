@@ -7,8 +7,9 @@
 // chronological position.
 
 import { memo, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import { Check, ChevronRight, Loader, Wrench } from 'lucide-react';
+import { Check, ChevronRight, Hand, Loader, Wrench } from 'lucide-react';
 import { ToolCard } from './ToolCard';
+import { targetResultFactsOf, type TargetResultFacts } from '../../tooling/classifiers/windows-mcp-classifier';
 import type { ThinkingMessage, ToolMessage } from './types';
 
 export type CodeProcessEntry = ThinkingMessage | ToolMessage;
@@ -24,6 +25,54 @@ const TOOL_VERBS: Readonly<Record<string, string>> = {
   read: '读取', grep: '查找', glob: '查找', edit: '修改', write: '写入',
   bash: '执行', task: '委派', webfetch: '读取网页', websearch: '搜索',
 };
+
+/** §11.3 用户接管 (WCC-P2-04): aggregate projection of the per-card takeover
+ *  facts onto THIS run segment's header. The facts stay on the ToolCard
+ *  (single source: the trylo-target block); the header only answers "did
+ *  the user grab the desktop during this segment" — which is otherwise
+ *  invisible while the transcript is collapsed. Derived per render from
+ *  the same entries; no new event, no new store. */
+const TAKEOVER_BADGE_LABELS: Readonly<Record<string, string>> = {
+  safe_release: '用户接管 · 已安全释放',
+  yielded: '控制权已交还用户',
+  cancelled: '用户接管 · 操作已取消',
+  verifying: '用户接管 · 只读验证后暂停',
+};
+
+const TAKEOVER_BADGE_ORDER: readonly string[] = ['safe_release', 'yielded', 'cancelled', 'verifying'];
+
+// The active phase block legitimately re-renders on every thinking delta,
+// and `takeoverBadgeLabel` then walks all of its entries again. Parsing the
+// trylo-target JSON is O(output size), so cache per tool message — entries
+// are immutable, so the cached fact stays valid for the object's lifetime.
+const takeoverFactCache = new WeakMap<CodeProcessEntry, TargetResultFacts | null>();
+
+function takeoverFactOf(entry: CodeProcessEntry): TargetResultFacts | null {
+  if (entry.kind !== 'tool' || !entry.tool.startsWith('mcp__trylo-windows__')) return null;
+  const cached = takeoverFactCache.get(entry);
+  if (cached !== undefined) return cached;
+  const fact = targetResultFactsOf(
+    entry.outputContent ??
+      (entry.outputText !== undefined ? [{ type: 'text', text: entry.outputText }] : undefined),
+  );
+  takeoverFactCache.set(entry, fact);
+  return fact;
+}
+
+function takeoverBadgeLabel(entries: readonly CodeProcessEntry[]): string | null {
+  let worst: string | null = null;
+  let worstRank = TAKEOVER_BADGE_ORDER.length;
+  for (const entry of entries) {
+    const takeover = takeoverFactOf(entry)?.takeover;
+    if (!takeover) continue;
+    const rank = TAKEOVER_BADGE_ORDER.indexOf(takeover);
+    if (rank >= 0 && rank < worstRank) {
+      worstRank = rank;
+      worst = takeover;
+    }
+  }
+  return worst !== null ? (TAKEOVER_BADGE_LABELS[worst] ?? worst) : null;
+}
 
 function phaseTitle(entries: readonly CodeProcessEntry[], active: boolean): string {
   const tools = entries.filter((entry): entry is ToolMessage => entry.kind === 'tool');
@@ -81,6 +130,7 @@ function CodeReasoningTranscriptImpl(
   const thinkingCount = props.entries.filter((entry) => entry.kind === 'thinking').length;
   const toolCount = props.entries.length - thinkingCount;
   const title = useMemo(() => phaseTitle(props.entries, props.active), [props.active, props.entries]);
+  const takeoverLabel = useMemo(() => takeoverBadgeLabel(props.entries), [props.entries]);
   const completedTools = props.entries.filter((entry): entry is ToolMessage => (
     entry.kind === 'tool' && (entry.status === 'done' || entry.status === 'interrupted')
   ));
@@ -109,6 +159,15 @@ function CodeReasoningTranscriptImpl(
             : <Check size={14} strokeWidth={2.2} />}
         </span>
         <span className="code-reasoning__summary">{title}</span>
+        {takeoverLabel !== null && (
+          <span
+            className="code-reasoning__takeover-badge"
+            title={`${takeoverLabel} · 后续操作已转为逐次审批`}
+          >
+            <Hand size={12} strokeWidth={2.2} aria-hidden="true" />
+            {takeoverLabel}
+          </span>
+        )}
         <span className="code-reasoning__meta">
           {thinkingCount > 0 ? `${thinkingCount} 段思考` : ''}
           {thinkingCount > 0 && toolCount > 0 ? ' · ' : ''}
@@ -177,5 +236,26 @@ function CodeReasoningTranscriptImpl(
   );
 }
 
-export const CodeReasoningTranscript = memo(CodeReasoningTranscriptImpl);
+export const CodeReasoningTranscript = memo(
+  CodeReasoningTranscriptImpl,
+  // MessageList's projection rebuilds every `__code_process` item — including
+  // a fresh `entries` array — on each streaming delta, so default shallow
+  // memoization never bails and every visible phase block re-rendered per
+  // delta. Messages themselves are immutable (events.ts replaces changed
+  // objects, never mutates), so same length + same element identities proves
+  // identical content. A reorder of the same elements would be treated as
+  // unchanged, but the projection appends in message order and messages are
+  // append-only, so reorder cannot occur.
+  function areTranscriptPropsEqual(a: CodeReasoningTranscriptProps, b: CodeReasoningTranscriptProps): boolean {
+    if (a.active !== b.active || a.turnId !== b.turnId || a.phaseId !== b.phaseId) {
+      return false;
+    }
+    if (a.entries === b.entries) return true;
+    if (a.entries.length !== b.entries.length) return false;
+    for (let i = 0; i < a.entries.length; i += 1) {
+      if (a.entries[i] !== b.entries[i]) return false;
+    }
+    return true;
+  },
+);
 CodeReasoningTranscript.displayName = 'CodeReasoningTranscript';

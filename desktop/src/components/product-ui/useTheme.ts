@@ -1,4 +1,4 @@
-// Trylo Desktop — useTheme. See the architecture doc §3 Phase 1 #9
+// Trylo Desktop — useTheme. See ARCHITECTURE.md §3 Phase 1 #9
 // (Theming).
 //
 // Three-theme state machine mapped onto <body>'s `data-theme`

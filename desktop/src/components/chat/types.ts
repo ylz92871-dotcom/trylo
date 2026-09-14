@@ -117,7 +117,7 @@ export interface ToolMessage extends MessageBase {
  * card title. The `preview` (up to 500 chars) is shown
  * only when expanded. The heuristic for the summary is
  * documented in
- * the Trylo CLI's THINKING_SUMMARIZATION.md
+ * C:/work/demo-ws/trylo cli/docs/THINKING_SUMMARIZATION.md
  * (3 strategies: pattern match → first sentence →
  * first 8 words).
  */
@@ -309,57 +309,27 @@ export interface InputRequestMessage extends MessageBase {
   readonly answers?: Readonly<Record<string, import('@trylo/work').InputRequestAnswer>>;
 }
 
-/**
- * 2026-08-29 (Work workflow UI refactor, spec §4.1):
- * the structured-workflow projection of a Work run. One
- * WorkflowMessage per run, keyed on `workflow:${runId}`.
- * Phases inside are the stable group boundaries from
- * workd (with a synthesized fallback when absent, per
- * spec §2.2). Activities reference existing ToolMessage
- * / ThinkingMessage by id; the card never duplicates
- * tool payload. Started / finished are state updates
- * to the SAME phase, not two messages.
- */
-export interface WorkflowActivity {
-  readonly id: string;
-  readonly kind: 'thinking' | 'tool' | 'notice';
-  readonly label: string;
-  readonly status: 'running' | 'completed' | 'failed';
-  /** Set when `kind === 'tool'`. Links the activity to
-   *  the upstream ToolMessage that owns the real input /
-   *  output. */
-  readonly toolMessageId?: string;
-  readonly at: number;
-}
-
-export interface WorkflowPhase {
-  readonly id: string;
-  readonly title: string;
-  readonly status: 'pending' | 'active' | 'completed' | 'failed' | 'cancelled';
-  readonly startedAt?: number;
-  readonly finishedAt?: number;
-  readonly activities: readonly WorkflowActivity[];
-}
-
-export interface WorkflowMessage extends MessageBase {
-  readonly kind: 'workflow';
-  /** Stable: `workflow:${runId}` (spec §2.2). */
-  readonly workflowId: string;
-  readonly runId: string;
-  readonly status: 'running' | 'completed' | 'failed' | 'cancelled';
-  readonly phases: readonly WorkflowPhase[];
-}
+// 2026-09-10 (applyWorkItem deletion面): WorkflowMessage / WorkflowPhase /
+// WorkflowActivity deleted — the 2026-08-29 hierarchy projection. Its only
+// producers (work-item-mapper / work-workflow-reducer) had zero production
+// callers and were deleted in the same batch. The LINEAR task UI below
+// (WorkRailMessage / WorkNarrationLine / DeliverableMessage, spec §4/§5/§6/§8)
+// is a different projection and stays.
 
 // ---------------------------------------------------------------------------
 // 2026-08-29 (Work end-to-end workflow redesign spec §4 / §5 /
 // §6 / §8): the LINEAR task UI message kinds. One task-intent run
 // projects into a WorkRailMessage (the phase rail + full
 // projection snapshot), zero-or-more WorkNarrationMessages (white
-// narration lines, one per phase), one WorkActivityGroupMessage
-// (the collapsed activity aggregate) and an optional
+// narration lines, one per phase) and an optional
 // DeliverableMessage (the deliverable-axis panel). Components
 // render ONLY these projections — never raw frames (§11.3).
 // Conversation-intent runs produce NONE of these (spec §3.1).
+// 2026-09-10: WorkActivityGroupMessage ('work_activity_group')
+// was removed — no producer since the Code-transcript unification
+// (2026-09-10 T4 audit); the collapsed-activity aggregate lives on
+// in CodeReasoningTranscript, and history-revived rows of the old
+// kind render nothing (Message switch falls through).
 // ---------------------------------------------------------------------------
 
 /** The phase rail of one task run. Stable id `rail:${runId}`
@@ -380,15 +350,6 @@ export interface WorkNarrationLine extends MessageBase {
   readonly runId: string;
   readonly phaseId: string;
   readonly text: string;
-}
-
-/** The collapsed activity aggregate of one run (spec §4.2 /
- *  §6.1). Stable id `activities:${runId}`. Collapsed by
- *  default; expanding lists the real activity facts. */
-export interface WorkActivityGroupMessage extends MessageBase {
-  readonly kind: 'work_activity_group';
-  readonly runId: string;
-  readonly activities: readonly import('@trylo/work').WorkActivity[];
 }
 
 /** The deliverable-axis panel of one run (spec §8.5). Stable
@@ -414,10 +375,8 @@ export type ChatMessage =
   | TaskSuggestionMessage
   | ApprovalMessage
   | InputRequestMessage
-  | WorkflowMessage
   | WorkRailMessage
   | WorkNarrationLine
-  | WorkActivityGroupMessage
   | DeliverableMessage
   | CognitionPromptMessage
   | LearningImpactMessage;

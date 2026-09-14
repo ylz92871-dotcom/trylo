@@ -1,5 +1,5 @@
 // Trylo Desktop — fixture: 6-turn agent run with 28 events.
-// Hand-crafted based on the CLI event vocabulary spec.
+// Hand-crafted based on trylo cli docs/EVENT_VOCABULARY.md.
 // Used by events.test.ts as the ground-truth input for the
 // reducer. NOT a real CLI run; the real run requires
 // ANTHROPIC_API_KEY which we don't have in dev.

@@ -1,4 +1,4 @@
-// Trylo Desktop — Monaco init. See the architecture doc §2.4.
+// Trylo Desktop — Monaco init. See ARCHITECTURE.md §2.4.
 //
 // Day 2 minimum viable init: bare monaco-editor + workers. We deliberately
 // do NOT call `@codingame/monaco-vscode-api`'s `initialize()` here — that
@@ -16,7 +16,7 @@
 //   - File system provider bridge — Day 3.
 //   - Keybindings / snippets overrides — Phase 1 polish.
 //
-// Per the architecture doc §2.4 the eventual pattern is:
+// Per ARCHITECTURE.md §2.4 the eventual pattern is:
 //   1. Wire monaco-editor's standalone services (this file does that).
 //   2. Layer monaco-vscode-api's per-service overrides in narrow form
 //      (Search, etc.) where it buys us a real feature. Avoid `Workbench.initialize`.

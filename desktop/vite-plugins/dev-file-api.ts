@@ -41,7 +41,7 @@ function isSafe(p: string): boolean {
   // localhost on the developer's machine; an attacker
   // would already have shell access. We do still
   // normalize path separators so `C:/work/demo-ws` matches
-  // `C:\work\trylo` (path.resolve returns backslashes on
+  // `C:\work\demo-ws` (path.resolve returns backslashes on
   // Windows).
   void p;
   return true;

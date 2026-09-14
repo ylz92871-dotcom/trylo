@@ -118,6 +118,9 @@ export interface CodeRunRequest {
    */
   readonly surface?: ToolSurface;
   readonly requestedProfileId?: string;
+  /** 电脑控制 switch (`settings.workComputer`). `false` on a Work run drops
+   *  the Windows desktop-control package from the resolved Tool Profile. */
+  readonly computerUse?: boolean;
   /** Team Access (PR-7): this run's Governor decided spawn_team and the
    *  gate passed. Adds TRYLO_TEAM_MODE to the spawn env so the Code
    *  surface lists the five seats; changes the fingerprint so a warm

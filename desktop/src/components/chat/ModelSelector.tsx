@@ -25,7 +25,8 @@ import {
 export type ModelChoice = { readonly id: string; readonly label: string; readonly hint: string };
 
 /**
- * Built-in free-compute model pool. Keep in sync with the packaged CLI's built-in pool.
+ * Built-in free-compute model pool. Keep in sync with the CLI's
+ * `trylo cli/src/utils/model/poolModels.ts` (TRILO_BUILTIN_POOL).
  */
 const BUILTIN_MODELS: readonly ModelChoice[] = [
   { id: 'grok-4.5', label: 'Grok 4.5', hint: '内置免费算力池' },
@@ -34,7 +35,10 @@ const BUILTIN_MODELS: readonly ModelChoice[] = [
 /** Sentinel indicating "use your own configured model" in the listbox. */
 const OWN_MODEL_ID = '__trylo_own__';
 
-/** Human label for a model id (built-in names resolved, own names kept). */
+/** Prefix distinguishing saved profiles (cfg- ids) from builtin pool ids. */
+const PROFILE_PREFIX = 'profile:';
+
+/** Human label for a model id (builtin names resolved, own names kept). */
 export function labelForModel(model: string): string {
   if (!model) return '默认';
   const builtin = BUILTIN_MODELS.find((b) => b.id === model);
@@ -47,46 +51,83 @@ export interface ModelSelectorProps {
   readonly configuredModel: string;
   /** Active built-in pool override (settings.poolModel; '' = not on pool). */
   readonly poolModel: string;
+  /** Saved connection profiles (settings.modelProfiles) as listbox options;
+   *  each carries the profile id in `id`. */
+  readonly savedProfiles?: readonly ModelChoice[];
+  /** The active profile id (settings.activeModelProfileId; '' = none). */
+  readonly activeProfileId?: string;
   /** Switch back to the user's own configured model (clear poolModel). */
   readonly onSelectConfigured: () => void;
   /** Activate a built-in pool model (set poolModel). */
   readonly onSelectPool: (model: string) => void;
+  /** Load a saved profile into the active connection. */
+  readonly onSelectProfile?: (id: string) => void;
 }
 
 export function ModelSelector(props: ModelSelectorProps): ReactElement {
-  const { configuredModel, poolModel, onSelectConfigured, onSelectPool } = props;
+  const {
+    configuredModel,
+    poolModel,
+    savedProfiles = [],
+    activeProfileId = '',
+    onSelectConfigured,
+    onSelectPool,
+    onSelectProfile,
+  } = props;
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
-  // Always two entries: your own model + the pool. The current selection
-  // is poolModel when set, otherwise your own model.
+  const activeProfile = savedProfiles.find((p) => p.id === activeProfileId);
+
+  // Options: your own model, then saved profiles, then the builtin pool.
+  // Profiles use `profile:<id>` ids so they can't collide with builtin ids.
   const choices = useMemo<readonly ModelChoice[]>(() => {
     const own: ModelChoice = {
       id: OWN_MODEL_ID,
       label: configuredModel ? labelForModel(configuredModel) : '默认',
-      hint: configuredModel ? '已配置模型' : '未配置，用 CLI 默认',
+      hint: activeProfile
+        ? `已配置模型 · ${activeProfile.label}`
+        : configuredModel
+          ? '已配置模型'
+          : '未配置，用 CLI 默认',
     };
-    return [own, ...BUILTIN_MODELS];
-  }, [configuredModel]);
+    const profiles: ModelChoice[] = savedProfiles.map((p) => ({
+      id: `${PROFILE_PREFIX}${p.id}`,
+      label: p.label,
+      hint: p.hint,
+    }));
+    return [own, ...profiles, ...BUILTIN_MODELS];
+  }, [configuredModel, savedProfiles, activeProfile]);
 
-  const currentId = poolModel.trim() ? poolModel : OWN_MODEL_ID;
+  const currentPoolId = poolModel.trim();
+  const currentId = currentPoolId
+    ? currentPoolId
+    : activeProfile
+      ? `${PROFILE_PREFIX}${activeProfile.id}`
+      : OWN_MODEL_ID;
   const currentIndex = Math.max(
     0,
     choices.findIndex((c) => c.id === currentId),
   );
   const [focusIndex, setFocusIndex] = useState(currentIndex);
 
-  const onSelectRef = useRef<{ own: () => void; pool: (id: string) => void }>({
+  const onSelectRef = useRef<{
+    own: () => void;
+    pool: (id: string) => void;
+    profile: ((id: string) => void) | undefined;
+  }>({ own: onSelectConfigured, pool: onSelectPool, profile: onSelectProfile });
+  const onCloseRef = useRef(() => setOpen(false));
+  onSelectRef.current = {
     own: onSelectConfigured,
     pool: onSelectPool,
-  });
-  const onCloseRef = useRef(() => setOpen(false));
-  onSelectRef.current = { own: onSelectConfigured, pool: onSelectPool };
+    profile: onSelectProfile,
+  };
   onCloseRef.current = () => setOpen(false);
 
   const pick = (id: string): void => {
     if (id === OWN_MODEL_ID) onSelectRef.current.own();
+    else if (id.startsWith(PROFILE_PREFIX)) onSelectRef.current.profile?.(id.slice(PROFILE_PREFIX.length));
     else onSelectRef.current.pool(id);
     onCloseRef.current();
   };
@@ -134,9 +175,11 @@ export function ModelSelector(props: ModelSelectorProps): ReactElement {
 
   const chipLabel = poolModel.trim()
     ? labelForModel(poolModel)
-    : configuredModel
-      ? labelForModel(configuredModel)
-      : '默认';
+    : activeProfile
+      ? activeProfile.label
+      : configuredModel
+        ? labelForModel(configuredModel)
+        : '默认';
 
   return (
     <div className="model-selector">

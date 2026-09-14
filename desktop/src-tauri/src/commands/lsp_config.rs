@@ -1,5 +1,5 @@
 // Trylo Desktop — Language server configurations. See
-// the architecture doc §2.7. One entry per supported language.
+// ARCHITECTURE.md §2.7. One entry per supported language.
 //
 // Spike scope: TypeScript only. The other 4 languages (Python,
 // C/C++, Rust, Go) are config additions — no code change needed,

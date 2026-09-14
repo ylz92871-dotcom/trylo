@@ -1,8 +1,9 @@
 /* Trylo Desktop — linear Work UI (redesign spec §4, 2026-08-29).
  *
- * Four message kinds share one visual language (borrowed from
- * WorkWorkflowCard: left 3px accent, mono xs type, transparent
- * body, shared `.disclosure` pattern):
+ * Four message kinds share one visual language (left 3px
+ * accent, mono xs type, transparent body, shared
+ * `.disclosure` pattern — 2026-09-10: the retired
+ * WorkWorkflowCard is gone, this file is now the owner):
  *   .work-rail          — the phase rail (§4.1 / §7.3)
  *   .work-narration     — the white narration line (§5.3)
  *   .work-activities    — the collapsed activity aggregate (§4.2)

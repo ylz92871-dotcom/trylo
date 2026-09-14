@@ -1,4 +1,4 @@
-// Trylo Desktop — ProjectState unit tests. See the architecture doc
+// Trylo Desktop — ProjectState unit tests. See ARCHITECTURE.md
 // §2.3 + §3 Phase 2 task #2.5+#2.6 (round-trip proof).
 //
 // The round-trip invariant: a file change on disk (caused by

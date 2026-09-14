@@ -3,7 +3,7 @@
 // v1.9: the card title is the SHORT `summary` field from
 // the CC thinking event. The longer `preview` (up to 500
 // chars) shows only on expand. Per
-// the Trylo CLI's THINKING_SUMMARIZATION.md,
+// C:/work/demo-ws/trylo cli/docs/THINKING_SUMMARIZATION.md,
 // the summary heuristic is 3-strategy: regex match
 // (action phrases), first sentence, first 8 words.
 //

@@ -1,5 +1,5 @@
 // Trylo Desktop — Production TryloHandlerContext. See
-// the architecture doc §3 Phase 2 task #1+#2 and the Phase 2 plan §5.
+// ARCHITECTURE.md §3 Phase 2 task #1+#2 and the Phase 2 plan §5.
 //
 // The 6 simple message types in `trylo-message-types.ts` are pure
 // dispatch; the side-effecting operations live behind a context
@@ -206,7 +206,7 @@ export function createTryloContext(opts: CreateContextOptions): TryloHandlerCont
       return {
         ok: true,
         message:
-          'Trylo Core not yet wired (Phase 2 stub).',
+          'Trylo Core not yet wired (Phase 2 stub). See spike-results/phase-2-plan.md §3 task 2.4.',
       };
     },
     async clearApiKey(): Promise<void> {

@@ -25,6 +25,8 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
+import { resolvePinnedWgcHelper } from './tool-package-manager.mjs';
+
 /** Placeholder expanded per-run in a manifest's argv (spec §10.2). */
 const RUNTIME_DIR_TOKEN = '{runtimeDir}';
 
@@ -33,6 +35,31 @@ const RUNTIME_DIR_TOKEN = '{runtimeDir}';
  *  source entry script (TRYLO-CAD-EDA-TOOL-ADAPTER §6.2). */
 const INSTALL_DIR_TOKEN = '{installDir}';
 
+/** Desktop-control package (windows-mcp → MCP server `trylo-windows`). Excluded
+ *  from a resolved Work Profile when `computerUse === false` (the 电脑控制
+ *  switch), so a Work agent cannot see/use desktop tools at all in that case. */
+const WINDOWS_MCP_PACKAGE_ID = 'windows-mcp';
+
+// Capability layers. Every Profile below is materialised from these layers
+// instead of hand-copying a complete package list. This makes the invariant
+// executable: specialist Work modes may replace the browser implementation
+// or add CAD/EDA adapters, but can never accidentally drop the shared base.
+const CODE_BASE_PACKAGES = Object.freeze(['playwright', WINDOWS_MCP_PACKAGE_ID]);
+const WORK_BASE_PACKAGES = Object.freeze(['officecli', 'playwright', WINDOWS_MCP_PACKAGE_ID]);
+const WORK_DEBUG_BASE_PACKAGES = Object.freeze(['officecli', 'chrome-devtools', WINDOWS_MCP_PACKAGE_ID]);
+const CAD_EDA_PACKAGES = Object.freeze([
+  'solidworks-mcp',
+  'autocad-mcp',
+  'kicad-mcp',
+  'jlceda-mcp',
+  'freecad-mcp',
+  'blender-mcp',
+]);
+
+function withCadEda(base) {
+  return Object.freeze([...base, ...CAD_EDA_PACKAGES]);
+}
+
 /**
  * The stable Profiles (§4.1). `revision` changes whenever the
  * composition changes, so a stale warm runtime can never be reused.
@@ -40,10 +67,15 @@ const INSTALL_DIR_TOKEN = '{installDir}';
 export const TOOL_PROFILES = Object.freeze({
   'code.core.v1': Object.freeze({
     id: 'code.core.v1',
-    revision: '1',
+    revision: '2',
     surface: 'code',
     hermesProfile: 'normal',
-    packageIds: Object.freeze([]),
+    // B (2026-09-07): code 与 work.core 对齐，挂浏览器 + 桌面控制。
+    // officecli 不进 code（那是 work 交付物面的）。strict 保持 false：
+    // Code 继续读用户自己的 MCP，pinned 包只是叠加（§4.3）。
+    // 按动作门控不变（§6.6 leases + bypass-immune approvals）——
+    // 合并只挂载工具，从不自动放行敏感动作。
+    packageIds: CODE_BASE_PACKAGES,
     // §4.3: Code keeps reading the user's own MCP servers today; Work does
     // not. The two surfaces therefore do not share one argv.
     strictMcpConfig: false,
@@ -61,19 +93,19 @@ export const TOOL_PROFILES = Object.freeze({
     revision: '2',
     surface: 'work',
     hermesProfile: 'normal',
-    packageIds: Object.freeze(['officecli', 'playwright', 'windows-mcp']),
+    packageIds: WORK_BASE_PACKAGES,
     strictMcpConfig: true,
   }),
 
   'work.browser-debug.v1': Object.freeze({
     id: 'work.browser-debug.v1',
-    revision: '1',
+    revision: '2',
     surface: 'work',
     hermesProfile: 'normal',
     // §4.1: Playwright is REPLACED by Chrome DevTools MCP here — never
     // both at once. Enabling this profile with chrome-devtools missing
     // (not installed) degrades to a reported unavailable capability.
-    packageIds: Object.freeze(['officecli', 'chrome-devtools']),
+    packageIds: WORK_DEBUG_BASE_PACKAGES,
     strictMcpConfig: true,
   }),
 
@@ -98,19 +130,23 @@ export const TOOL_PROFILES = Object.freeze({
   // documentation capability alongside the six adapters + desktop control.
   'work.cad.v1': Object.freeze({
     id: 'work.cad.v1',
-    revision: '3',
+    revision: '4',
     surface: 'work',
     hermesProfile: 'normal',
-    packageIds: Object.freeze([
-      'solidworks-mcp',
-      'autocad-mcp',
-      'kicad-mcp',
-      'jlceda-mcp',
-      'freecad-mcp',
-      'blender-mcp',
-      'windows-mcp',
-      'officecli',
-    ]),
+    packageIds: withCadEda(WORK_BASE_PACKAGES),
+    strictMcpConfig: true,
+  }),
+
+  // Both Work toggles can be active together. Chrome DevTools replaces
+  // Playwright while Office, desktop control, Hermes and every CAD/EDA
+  // adapter remain present. Without this explicit composition the renderer's
+  // old first-match routing silently discarded the CAD layer.
+  'work.cad-browser-debug.v1': Object.freeze({
+    id: 'work.cad-browser-debug.v1',
+    revision: '1',
+    surface: 'work',
+    hermesProfile: 'normal',
+    packageIds: withCadEda(WORK_DEBUG_BASE_PACKAGES),
     strictMcpConfig: true,
   }),
 });
@@ -240,7 +276,7 @@ export function createToolProfileService(options = {}) {
    * Compose one Profile into a ResolvedToolRuntime.
    *
    * @param {{ surface?: 'code'|'work', requestedProfileId?: string,
-   *           projectKey?: string, projectRoot?: string,
+   *           computerUse?: boolean, projectKey?: string, projectRoot?: string,
    *           conversationId?: string }} params
    */
   async function resolve(params = {}) {
@@ -248,6 +284,9 @@ export function createToolProfileService(options = {}) {
     const requested = String(params.requestedProfileId ?? '').trim();
     const profileId = requested || DEFAULT_PROFILE_BY_SURFACE[surface];
     const profile = TOOL_PROFILES[profileId];
+    // Default: computer use ON. Only a Work surface with an explicit
+    // `computerUse: false` drops Windows desktop control from the Profile.
+    const computerUse = params.computerUse !== false;
 
     if (!profile) {
       return {
@@ -281,6 +320,10 @@ export function createToolProfileService(options = {}) {
     const runtimeDirs = [];
 
     for (const id of profile.packageIds) {
+      // 电脑控制开关: when explicitly disabled, the desktop-control package is
+      // dropped from the Profile. Not an "unavailable capability" (the user
+      // turned it off, not a missing dependency) — the tools are simply absent.
+      if (!computerUse && id === WINDOWS_MCP_PACKAGE_ID) continue;
       const manifest = catalog.get(id);
       if (!manifest) {
         unavailableCapabilities.push({
@@ -325,6 +368,28 @@ export function createToolProfileService(options = {}) {
       const { expanded, dirs } = expandArgs([...manifest.mcp.args], runtimeDir, installed.installDir);
       runtimeDirs.push(...dirs);
 
+      // WCC-P2-05 wiring (spec §19.8): a manifest may pin a native helper the
+      // sidecar needs at runtime (windows-mcp's .NET WGC capture helper). The
+      // fork's WgcProvider resolves it via WINDOWS_MCP_WGC_HELPER first (wgc.py
+      // `default_helper_path`), so the host injects its digest-verified
+      // resolution here — the packaged sidecar's only other candidate is a
+      // repo-relative dev path that does not exist in an installed tree. A
+      // failed resolution (not staged / digest drift) injects NOTHING: the
+      // child's own lookup then comes up empty and the capture path degrades
+      // to the honest legacy status (§13.1); we never point the child at
+      // unverified native code.
+      let helperEnv = null;
+      if (manifest.helper) {
+        try {
+          const helper = await resolvePinnedWgcHelper(manifest);
+          if (helper.ok && helper.path) {
+            helperEnv = { WINDOWS_MCP_WGC_HELPER: helper.path };
+          }
+        } catch {
+          helperEnv = null;
+        }
+      }
+
       // Never let two manifests claim one server name — the catalog
       // guarantees uniqueness, but a late collision must not silently
       // overwrite Hermes or another package.
@@ -345,13 +410,13 @@ export function createToolProfileService(options = {}) {
         mcpServers[manifest.mcp.serverName] = {
           command: process.execPath,
           args: [installed.executable, ...expanded, ...originArgs],
-          env: { ...manifest.mcp.env },
+          env: { ...manifest.mcp.env, ...helperEnv },
         };
       } else {
         mcpServers[manifest.mcp.serverName] = {
           command: installed.executable,
           args: [...expanded, ...originArgs],
-          env: { ...manifest.mcp.env },
+          env: { ...manifest.mcp.env, ...helperEnv },
         };
       }
     }

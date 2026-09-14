@@ -1,4 +1,4 @@
-// Trylo Desktop — SettingsPanel. See the architecture doc §3
+// Trylo Desktop — SettingsPanel. See ARCHITECTURE.md §3
 // Phase 1 #8 (Settings UI).
 //
 // Form-based panel for editing AppSettings. Edits flow through

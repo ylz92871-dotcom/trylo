@@ -1,4 +1,4 @@
-// Trylo Desktop — useSettings tests. See the architecture doc §3
+// Trylo Desktop — useSettings tests. See ARCHITECTURE.md §3
 // Phase 1 #8 (Settings UI).
 
 import { describe, expect, it, vi } from 'vitest';

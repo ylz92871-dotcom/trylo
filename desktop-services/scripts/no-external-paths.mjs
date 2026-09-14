@@ -27,8 +27,8 @@ const PROJECT_ROOT = path.resolve(cwd, '..'); // C:/work/demo-ws
 const FORBIDDEN = [
   'claude-code-v-2.1.88',
   'mini-vscode-agent',
-  String.raw`C:\work\claude-code`,
-  'C:/work/claude-code',
+  String.raw`D:\CC\claude-code`,
+  'D:/CC/claude-code',
 ];
 
 // Relative paths (forward-slash, lowercase) containing the marker only in

@@ -94,6 +94,93 @@ export interface SubConnection {
   readonly extraHeadersText: string;
 }
 
+/**
+ * A named snapshot of a full connection config. Letting the user save
+ * several of these ("我的配置") solves the "保存我填过的模型配置 / 切换不同
+ * 配置 / 支持不同模型名" gap: each profile stores the whole connection
+ * (key / host / model / format / headers), and selecting a profile loads
+ * it into the active primary connection.
+ */
+export interface ModelProfile {
+  readonly id: string;
+  readonly name: string;
+  readonly apiKey: string;
+  readonly apiHost: string;
+  readonly apiModel: string;
+  readonly apiFormat: ApiFormat;
+  readonly apiKeyHeader: string;
+  readonly apiKeyPrefix: string;
+  readonly extraHeadersText: string;
+  readonly providerId: string;
+}
+
+/** Create a stable unique profile id. Works in Tauri's browser runtime. */
+export function createProfileId(): string {
+  const c = (typeof crypto !== 'undefined' ? crypto : null) as (Crypto & {
+    getRandomValues?: <T extends ArrayBufferView>(a: T) => T;
+  }) | null;
+  if (c?.getRandomValues) {
+    const u = new Uint32Array(4);
+    c.getRandomValues(u);
+    return `cfg-${u.reduce((a, n) => a + n.toString(16), '')}`;
+  }
+  return `cfg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+/** The full connection subset (all ModelProfile fields except id/name). */
+export type ModelConnectionFields = Omit<ModelProfile, 'id' | 'name'>;
+
+type ConnectionSource = Pick<
+  TryloSettings,
+  | 'apiKey'
+  | 'apiHost'
+  | 'apiModel'
+  | 'apiFormat'
+  | 'apiKeyHeader'
+  | 'apiKeyPrefix'
+  | 'extraHeadersText'
+  | 'providerId'
+>;
+
+/** Snapshot the primary connection fields from settings or a profile. */
+export function connectionFields(s: ConnectionSource): ModelConnectionFields {
+  return {
+    apiKey: s.apiKey,
+    apiHost: s.apiHost,
+    apiModel: s.apiModel,
+    apiFormat: s.apiFormat,
+    apiKeyHeader: s.apiKeyHeader,
+    apiKeyPrefix: s.apiKeyPrefix,
+    extraHeadersText: s.extraHeadersText,
+    providerId: s.providerId,
+  };
+}
+
+/** Apply a profile to the active primary connection. Never touches pool. */
+export function applyProfile(s: TryloSettings, profile: ModelProfile): TryloSettings {
+  return {
+    ...s,
+    ...connectionFields(profile),
+    activeModelProfileId: profile.id,
+  };
+}
+
+/** Add or replace (by id) a profile; returns a new settings copy. */
+export function upsertProfile(s: TryloSettings, profile: ModelProfile): TryloSettings {
+  const existing = s.modelProfiles.some((p) => p.id === profile.id);
+  const modelProfiles = existing
+    ? s.modelProfiles.map((p) => (p.id === profile.id ? profile : p))
+    : [...s.modelProfiles, profile];
+  return { ...s, modelProfiles };
+}
+
+/** Remove a profile; clears the active pointer when it pointed at it. */
+export function removeProfile(s: TryloSettings, id: string): TryloSettings {
+  const modelProfiles = s.modelProfiles.filter((p) => p.id !== id);
+  const activeModelProfileId = s.activeModelProfileId === id ? '' : s.activeModelProfileId;
+  return { ...s, modelProfiles, activeModelProfileId };
+}
+
 export interface TryloSettings {
   // ── Primary connection ──────────────────────────────────
   readonly apiKey: string;
@@ -107,6 +194,14 @@ export interface TryloSettings {
    * run = `poolModel || apiModel`.
    */
   readonly poolModel: string;
+  /**
+   * Named connection snapshots (我的配置). Each entry holds a full
+   * connection; selecting one loads it into the primary fields above.
+   */
+  readonly modelProfiles: readonly ModelProfile[];
+  /** The profile (in `modelProfiles`) currently driving the primary
+   *  connection, '' = none (the loose primary fields are the source). */
+  readonly activeModelProfileId: string;
   readonly apiFormat: ApiFormat;
   readonly apiKeyHeader: string;
   readonly apiKeyPrefix: string;
@@ -128,9 +223,13 @@ export interface TryloSettings {
   readonly companion: CompanionSettings;
   // ── Remote access (spec §8.1 / arch §7) ─────────────────
   readonly remote: RemoteSettings;
-  // 2026-09-06: `workComputer` retired — desktop control rides the 办公基底
-  // unconditionally (per-action §6.6 gates are the enforcement). Old stored
-  // values are ignored (same effective tools either way).
+  /** PR-6 / 电脑控制 (Computer Use): explicit switch for the Windows desktop
+   *  control tools (windows-mcp, MCP server `trylo-windows`). Default `true`
+   *  — desktop control is mounted with the 办公基底 (work.core.v1) and the
+   *  CAD profile. `false` excludes windows-mcp from the resolved Work Profile
+   *  entirely, so a Work agent cannot see/use desktop tools at all (the
+   *  per-action §6.6 gates remain the enforcement when it IS mounted). */
+  readonly workComputer: boolean;
   /** PR-7 (spec §4.1/§10.x): explicit 浏览器调试 capability switch. `false`
    *  (the default) keeps the default Work Profile with Playwright. `true`
    *  swaps Playwright OUT for the pinned Chrome DevTools MCP surface
@@ -168,6 +267,8 @@ const DEFAULTS: TryloSettings = {
   apiHost: '',
   apiModel: '',
   poolModel: '',
+  modelProfiles: [],
+  activeModelProfileId: '',
   apiFormat: 'anthropic',
   apiKeyHeader: '',
   apiKeyPrefix: '',
@@ -181,6 +282,7 @@ const DEFAULTS: TryloSettings = {
   companion: { enabled: true },
   remote: remoteSettingsDefaults(),
   workBrowserDebug: false,
+  workComputer: true,
   workCad: false,
   hermesWorkLearning: true,
   cliPath: 'C:/trylo-cli/cli.js',
@@ -291,6 +393,30 @@ function migrateRemoteSettings(value: unknown, fallback: RemoteSettings): Remote
   };
 }
 
+function migrateModelProfiles(value: unknown): readonly ModelProfile[] {
+  if (!Array.isArray(value)) return [];
+  const profiles: ModelProfile[] = [];
+  for (const raw of value) {
+    const rec = objectRecord(raw);
+    if (!rec) continue;
+    profiles.push({
+      id: stringValue(rec['id'], createProfileId()),
+      name: stringValue(rec['name'], '未命名配置'),
+      apiKey: stringValue(rec['apiKey'], ''),
+      apiHost: stringValue(rec['apiHost'], ''),
+      apiModel: stringValue(rec['apiModel'], ''),
+      apiFormat: VALID_API_FORMAT.has(rec['apiFormat'] as ApiFormat)
+        ? rec['apiFormat'] as ApiFormat
+        : DEFAULTS.apiFormat,
+      apiKeyHeader: stringValue(rec['apiKeyHeader'], ''),
+      apiKeyPrefix: stringValue(rec['apiKeyPrefix'], ''),
+      extraHeadersText: stringValue(rec['extraHeadersText'], '{}'),
+      providerId: stringValue(rec['providerId'], ''),
+    });
+  }
+  return profiles;
+}
+
 function migrateSettings(value: unknown): TryloSettings | null {
   const stored = objectRecord(value);
   if (!stored) return null;
@@ -326,6 +452,8 @@ function migrateSettings(value: unknown): TryloSettings | null {
     apiHost: stringValue(stored['apiHost'], DEFAULTS.apiHost),
     apiModel: stringValue(stored['apiModel'], DEFAULTS.apiModel),
     poolModel: stringValue(stored['poolModel'], DEFAULTS.poolModel),
+    modelProfiles: migrateModelProfiles(stored['modelProfiles']),
+    activeModelProfileId: stringValue(stored['activeModelProfileId'], DEFAULTS.activeModelProfileId),
     apiFormat: VALID_API_FORMAT.has(stored['apiFormat'] as ApiFormat)
       ? stored['apiFormat'] as ApiFormat
       : DEFAULTS.apiFormat,
@@ -347,7 +475,11 @@ function migrateSettings(value: unknown): TryloSettings | null {
           : DEFAULTS.companion.enabled,
     },
     remote: migrateRemoteSettings(stored['remote'], DEFAULTS.remote),
-    // Retired 2026-09-06: stored workComputer ignored (base carries it).
+    // 电脑控制 default ON (matches the 办公基底 mount). A stored `false`
+    // persists the user's opt-out; absent (never persisted / pre-2026 value)
+    // falls back to the current default `true` so desktop control stays usable
+    // unless the user explicitly turns it off.
+    workComputer: stored['workComputer'] !== false,
     workBrowserDebug: stored['workBrowserDebug'] === true,
     workCad: stored['workCad'] === true,
     // Whitelist: absent (= never persisted) ⇒ default `true`; an explicit
@@ -385,6 +517,21 @@ function migrateUserLearning(value: unknown, fallback: UserLearningSettings): Us
     teamComposerEnabled: typeof stored['teamComposerEnabled'] === 'boolean'
       ? stored['teamComposerEnabled']
       : (fallback.teamComposerEnabled ?? false),
+    userLearningV2Coordinator: typeof stored['userLearningV2Coordinator'] === 'boolean'
+      ? stored['userLearningV2Coordinator']
+      : (fallback.userLearningV2Coordinator ?? true),
+    userLearningBehaviorCommitments: typeof stored['userLearningBehaviorCommitments'] === 'boolean'
+      ? stored['userLearningBehaviorCommitments']
+      : (fallback.userLearningBehaviorCommitments ?? true),
+    userLearningReceipts: typeof stored['userLearningReceipts'] === 'boolean'
+      ? stored['userLearningReceipts']
+      : (fallback.userLearningReceipts ?? true),
+    userLearningOutcomeEvaluation: typeof stored['userLearningOutcomeEvaluation'] === 'boolean'
+      ? stored['userLearningOutcomeEvaluation']
+      : (fallback.userLearningOutcomeEvaluation ?? true),
+    userLearningNoTraceMode: typeof stored['userLearningNoTraceMode'] === 'boolean'
+      ? stored['userLearningNoTraceMode']
+      : (fallback.userLearningNoTraceMode ?? true),
   };
 }
 

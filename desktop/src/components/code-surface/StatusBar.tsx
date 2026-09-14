@@ -1,4 +1,4 @@
-// Trylo Desktop — StatusBar.
+// Trylo Desktop — StatusBar. See ARCHITECTURE.md §3 Phase 1
 // Week 1 Day 3 (Status bar).
 //
 // Bottom-of-editor strip showing cursor position and language.

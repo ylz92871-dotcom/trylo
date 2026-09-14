@@ -40,7 +40,7 @@ describe('ArtifactCard containment gate (§9.3)', () => {
   it('disables actions and explains why for a target OUTSIDE the root', () => {
     render(
       <ArtifactCard
-        filePath="C:/work/other-project/evil.docx"
+        filePath="D:/CC/other-project/evil.docx"
         kind="document"
         workspacePath={ROOT}
         host={makeHost()}

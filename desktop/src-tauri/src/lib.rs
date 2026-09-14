@@ -1,4 +1,4 @@
-// Trylo Desktop — Tauri 2 lib entry. See the architecture doc §2 (architecture)
+// Trylo Desktop — Tauri 2 lib entry. See ARCHITECTURE.md §2 (architecture)
 // and §3 Phase 0 Day 1 (this file's scope).
 //
 // Day 3: register the file system commands so the React side can read

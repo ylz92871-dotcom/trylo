@@ -1,4 +1,4 @@
-// Trylo Desktop — ChatPanel.
+// Trylo Desktop — ChatPanel. See spike-results/phase-2-ui-redesign.md §5.
 //
 // v1.5: the panel shows either the Code surface
 // (MessageList + InputBar) or the Work surface
@@ -35,7 +35,9 @@ import {
 import { AgentConversationSurface } from './AgentConversationSurface';
 import { EmptyState, WorkLanding } from './EmptyState';
 import { InputBar } from './InputBar';
+import type { ModelChoice } from './ModelSelector';
 import type { LearningStatusChipProps } from '../user-learning/LearningStatusChip';
+import type { LearningDirective } from '../../user-learning/types';
 
 // M4-D: Work's capability-neutral empty state. Replaces
 // the v1.16.5 reuse of Code's EmptyState plus the
@@ -164,7 +166,11 @@ export interface ChatPanelProps {
   /** §4.2: in-task Cognition corner badge (rendered above the composer on the
    *  active surface; host decides which conversation it belongs to). */
   readonly cognitionBadgeSlot?: ReactNode;
+  /** UL2-06: auditable learning receipt above the active composer. */
+  readonly learningReceiptSlot?: ReactNode;
   readonly learning?: LearningStatusChipProps;
+  readonly learningDirective?: LearningDirective;
+  readonly onLearningDirectiveChange?: (value: LearningDirective | undefined) => void;
   /** 2026-08-28: task-suggestion chip accept (Work only).
    *  2026-08-29 fix: id for dismiss without duplicate bubble. */
   readonly onRunTaskSuggestion?: (text: string, id: string) => void;
@@ -196,8 +202,11 @@ export interface ChatPanelProps {
   /** v-modelsel: model picker chip (Code + Work action rows). */
   readonly configuredModel?: string;
   readonly poolModel?: string;
+  readonly savedProfiles?: readonly ModelChoice[];
+  readonly activeProfileId?: string;
   readonly onSelectConfigured?: () => void;
   readonly onSelectPool?: (model: string) => void;
+  readonly onSelectProfile?: (id: string) => void;
   readonly onCompact: () => void;
   readonly compacting: boolean;
   readonly activeProcessId: string | null;
@@ -221,11 +230,9 @@ export interface ChatPanelProps {
   readonly onRetryWorkFailed?: (id: string) => void;
   readonly isDragging: boolean;
   readonly editingMessageId: string | null;
-  readonly editingDraft: string;
   readonly onEditMessage: (id: string) => void;
   readonly onSaveEdit: (text: string) => void;
   readonly onCancelEdit: () => void;
-  readonly onDraftChange: (id: string, text: string) => void;
 }
 
 export function ChatPanel(props: ChatPanelProps): ReactElement {
@@ -289,8 +296,11 @@ export function ChatPanel(props: ChatPanelProps): ReactElement {
             ? {
                 configuredModel: props.configuredModel ?? '',
                 poolModel: props.poolModel ?? '',
+                savedProfiles: props.savedProfiles,
+                activeProfileId: props.activeProfileId ?? '',
                 onSelectConfigured: props.onSelectConfigured ?? (() => undefined),
                 onSelectPool: props.onSelectPool,
+                onSelectProfile: props.onSelectProfile,
               }
             : {})}
           onAddAttachment={props.onAddAttachment}
@@ -311,19 +321,20 @@ export function ChatPanel(props: ChatPanelProps): ReactElement {
             : {})}
           onPermissionLevelChange={props.onPermissionLevelChange}
           {...(props.learning ? { learning: props.learning } : {})}
+          {...(props.learningDirective ? { learningDirective: props.learningDirective } : {})}
+          {...(props.onLearningDirectiveChange ? { onLearningDirectiveChange: props.onLearningDirectiveChange } : {})}
         />
       }
       editingMessageId={props.editingMessageId}
-      editingDraft={props.editingDraft}
       onEditMessage={props.onEditMessage}
       onSaveEdit={props.onSaveEdit}
       onCancelEdit={props.onCancelEdit}
-      onDraftChange={props.onDraftChange}
       workspacePath={props.workspaceRoot}
       onOpenArtifact={props.onOpenCodeArtifact}
       resultDockSlot={props.codeResultDock}
       personTeamStatusBarSlot={props.personTeamStatusBar}
       cognitionBadgeSlot={props.cognitionBadgeSlot}
+      learningReceiptSlot={props.learningReceiptSlot}
       onCognitionAnswer={props.onCognitionAnswer}
       onCognitionDismiss={props.onCognitionDismiss}
       onLearningImpactResolve={props.onLearningImpactResolve}
@@ -393,6 +404,7 @@ function WorkSurface(props: ChatPanelProps): ReactElement {
       resultDockSlot={props.workResultDock}
       personTeamStatusBarSlot={props.personTeamStatusBar}
       cognitionBadgeSlot={props.cognitionBadgeSlot}
+      learningReceiptSlot={props.learningReceiptSlot}
       composer={
         <InputBar
           conversationKind="work"
@@ -440,8 +452,11 @@ function WorkSurface(props: ChatPanelProps): ReactElement {
             ? {
                 configuredModel: props.configuredModel ?? '',
                 poolModel: props.poolModel ?? '',
+                savedProfiles: props.savedProfiles,
+                activeProfileId: props.activeProfileId ?? '',
                 onSelectConfigured: props.onSelectConfigured ?? (() => undefined),
                 onSelectPool: props.onSelectPool,
+                onSelectProfile: props.onSelectProfile,
               }
             : {})}
           // P2-1 Work Package B: Work's attachment strip — the same
@@ -455,6 +470,8 @@ function WorkSurface(props: ChatPanelProps): ReactElement {
           {...(props.onRetryWorkFailed ? { onRetryFailed: props.onRetryWorkFailed } : {})}
           isDragging={props.isDragging}
           {...(props.learning ? { learning: props.learning } : {})}
+          {...(props.learningDirective ? { learningDirective: props.learningDirective } : {})}
+          {...(props.onLearningDirectiveChange ? { onLearningDirectiveChange: props.onLearningDirectiveChange } : {})}
         />
       }
       artifactHost={props.artifactHost}

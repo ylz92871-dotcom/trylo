@@ -17,7 +17,7 @@
 // plan mode).
 //
 // Read old code at:
-//   - C:/work/demo-ws/the Trylo CLI's compact/compact.ts
+//   - C:/work/demo-ws/trylo cli/src/commands/compact/compact.ts
 //     (CLI plan mode is --permission-mode plan; toolsForMode
 //     in settings-store.ts disables built-in tools)
 //   - extension.js:3084-3100 (buildPlanImplementationContext:

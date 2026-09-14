@@ -45,7 +45,7 @@ strip = true
 panic = "abort"
 
 [lints.rust]
-# Reject the build on warnings. Per the architecture doc §10.2 this is CI-required.
+# Reject the build on warnings. Per ARCHITECTURE.md §10.2 this is CI-required.
 # Must live under [lints.rust] — putting it under [lints.clippy] maps to the
 # non-existent `clippy::warnings` lint and is silently ignored, so
 # `cargo clippy -- -D warnings` exits 0 even when there ARE real warnings.

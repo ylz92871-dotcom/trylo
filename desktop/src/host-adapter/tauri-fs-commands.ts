@@ -1,5 +1,5 @@
 // Trylo Desktop — concrete FsCommands impl backed by Tauri IPC. See
-// the architecture doc §2.2 (HostAdapter is the only entry point) + §2.3
+// ARCHITECTURE.md §2.2 (HostAdapter is the only entry point) + §2.3
 // (Project State as source of truth).
 //
 // This file is the ONLY place in the React tree that imports

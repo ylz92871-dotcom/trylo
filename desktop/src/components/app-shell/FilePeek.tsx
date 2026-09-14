@@ -1,4 +1,5 @@
-// Trylo Desktop — FilePeek (right rail).
+// Trylo Desktop — FilePeek (right rail). See
+// spike-results/phase-2-ui-redesign.md §4.2.
 //
 // The right rail is the "code on demand" surface. Default
 // closed. Opens when a file is referenced in the chat (or

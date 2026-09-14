@@ -285,7 +285,7 @@ fn scan_path_end(chars: &[char], start: usize) -> usize {
     end.max(start)
 }
 
-/// `C:\Users\me\a\b.txt` → `~/a/b.txt`; `C:\work\trylo\work\bin` → `…/work/bin`.
+/// `C:\Users\me\a\b.txt` → `~/a/b.txt`; `C:\work\demo-ws\work\bin` → `…/work/bin`.
 fn summarize_path(path: &str) -> String {
     let normalized = path.replace('\\', "/");
     let segments: Vec<&str> = normalized.split('/').filter(|s| !s.is_empty()).collect();
@@ -348,7 +348,7 @@ mod tests {
 
     #[test]
     fn other_absolute_paths_keep_only_the_tail() {
-        let out = sanitize_line(r"missing C:\work\trylo\work\vendor\cowork-os\bin");
+        let out = sanitize_line(r"missing C:\work\demo-ws\work\vendor\cowork-os\bin");
         assert!(out.contains("…/cowork-os/bin"), "{out}");
         assert!(!out.contains("D:/CC"), "{out}");
     }

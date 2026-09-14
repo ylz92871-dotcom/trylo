@@ -92,6 +92,109 @@ function parseOverrides(raw) {
   }
 }
 
+/**
+ * Local-first tool wiring: `<installRoot>/local-overrides.json` pins a
+ * package id straight at an absolute local executable, e.g.
+ * `{ "officecli": "C:/work/demo-ws/new_tool/office/OfficeCLI/_dist-trylo/officecli.exe" }`.
+ * The file survives restarts (Tauri does not forward ad-hoc env into the
+ * sidecar); `TRYLO_TOOL_PACKAGE_OVERRIDES` keeps working and wins per-key.
+ * Shape violations degrade to `{}` — never a throw (§4.4).
+ */
+export const LOCAL_OVERRIDES_FILENAME = 'local-overrides.json';
+export const REPOSITORY_TOOL_REGISTRY_FILENAME = 'tool-sources.json';
+
+export function localOverridesPath(installRoot) {
+  if (!installRoot) return null;
+  return path.join(installRoot, LOCAL_OVERRIDES_FILENAME);
+}
+
+export function loadFileOverrides(installRoot) {
+  const file = localOverridesPath(installRoot);
+  if (!file) return {};
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out = {};
+    for (const [id, exe] of Object.entries(parsed)) {
+      if (typeof id === 'string' && id.trim() !== '' && typeof exe === 'string' && exe.trim() !== '') {
+        out[id] = exe;
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Candidate registries for a source checkout. The first path is the
+ * explicit CI/dev seam; the remaining paths cover this module before and
+ * after esbuild bundling. Packaged applications normally have no `new_tool`
+ * tree and therefore resolve no repository registry. */
+export function repositoryToolRegistryCandidates(env = process.env) {
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const explicit = String(env.TRYLO_LOCAL_TOOL_REGISTRY ?? '').trim();
+  return [...new Set([
+    ...(explicit ? [path.resolve(explicit)] : []),
+    path.resolve(moduleDir, '../../../', REPOSITORY_TOOL_REGISTRY_FILENAME),
+    path.resolve(moduleDir, '../../', REPOSITORY_TOOL_REGISTRY_FILENAME),
+    path.resolve(process.cwd(), REPOSITORY_TOOL_REGISTRY_FILENAME),
+  ])];
+}
+
+export function discoverRepositoryToolRegistry(env = process.env) {
+  return repositoryToolRegistryCandidates(env).find(isFileSync) ?? null;
+}
+
+/**
+ * Read the checked-in developer registry. Entries are paths relative to the
+ * registry directory and may not escape it. Missing targets remain in the
+ * override map deliberately: `resolve()` reports the required local build as
+ * unavailable instead of silently falling back to a stale managed install.
+ */
+export function loadRepositoryToolRegistry(registryPath) {
+  const file = registryPath ? path.resolve(registryPath) : null;
+  if (!file) return { file: null, overrides: {}, entries: {}, problems: [] };
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (parsed?.schemaVersion !== 1 || !parsed.tools || typeof parsed.tools !== 'object' || Array.isArray(parsed.tools)) {
+      return { file, overrides: {}, entries: {}, problems: ['registry must contain schemaVersion 1 and a tools object'] };
+    }
+    const root = path.dirname(file);
+    const overrides = {};
+    const entries = {};
+    const problems = [];
+    for (const [id, value] of Object.entries(parsed.tools)) {
+      const entry = typeof value === 'string' ? value : value?.entry;
+      if (typeof entry !== 'string' || entry.trim() === '') {
+        problems.push(`${id}.entry is required`);
+        continue;
+      }
+      if (path.isAbsolute(entry)) {
+        problems.push(`${id}.entry must be relative to the registry`);
+        continue;
+      }
+      const target = path.resolve(root, entry);
+      const relative = path.relative(root, target);
+      if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+        problems.push(`${id}.entry escapes the registry root`);
+        continue;
+      }
+      overrides[id] = target;
+      entries[id] = {
+        entry,
+        path: target,
+        available: isFileSync(target),
+        policy: typeof value === 'object' && value?.policy === 'managed-local'
+          ? 'managed-local'
+          : 'repository-local',
+      };
+    }
+    return { file, overrides, entries, problems };
+  } catch (error) {
+    return { file, overrides: {}, entries: {}, problems: [`registry unreadable: ${error?.message ?? error}`] };
+  }
+}
+
 async function sha256OfFile(filePath) {
   const hash = crypto.createHash('sha256');
   const handle = await fsp.open(filePath, 'r');
@@ -196,7 +299,19 @@ export function createToolPackageManager(options = {}) {
     options.installRoot ??
     process.env.TRYLO_TOOL_PACKAGES_DIR ??
     (storageRoot ? path.join(storageRoot, 'tool-packages') : '');
-  const overrides = options.overrides ?? parseOverrides(process.env.TRYLO_TOOL_PACKAGE_OVERRIDES);
+  const envOverrides = options.overrides ?? parseOverrides(process.env.TRYLO_TOOL_PACKAGE_OVERRIDES);
+  const repositoryRegistryPath = options.enableRepositoryTools
+    ? (options.localToolRegistryPath ?? discoverRepositoryToolRegistry())
+    : null;
+  const repositoryRegistry = () => loadRepositoryToolRegistry(repositoryRegistryPath);
+  // Live merge on every read: the file is the durable local-first wiring,
+  // the env var is the ephemeral dev/CI seam and wins per-key. Re-reading
+  // the (tiny) file keeps a long-lived sidecar honest after a set/clear.
+  const currentOverrides = () => ({
+    ...repositoryRegistry().overrides,
+    ...loadFileOverrides(installRoot),
+    ...envOverrides,
+  });
   // §6.5 zero-config mirror: a `<storageRoot>/pinned-artifact-mirror`
   // directory (marker: mirror-manifest.json from the mirror script) is
   // honoured automatically when TRYLO_ARTIFACT_MIRROR is unset — dropping
@@ -280,7 +395,7 @@ export function createToolPackageManager(options = {}) {
    *   autoUpdate: boolean }>}
    */
   async function resolve(manifest) {
-    const override = overrides[manifest.id];
+    const override = currentOverrides()[manifest.id];
     if (override) {
       return {
         id: manifest.id,
@@ -1327,6 +1442,51 @@ export function createToolPackageManager(options = {}) {
     return { ok: true, id };
   }
 
+  /**
+   * Durable local-first wiring: point one package id at an absolute local
+   * executable. The target must exist and be a file — otherwise the call
+   * fails with `override_target_missing` and writes nothing. Never throws.
+   */
+  async function setLocalOverride(params = {}) {
+    const id = String(params.id ?? '').trim();
+    const target = String(params.path ?? '').trim();
+    if (!id || !target) return { ok: false, reasonCode: 'bad_request', error: 'id and path are required' };
+    if (!options.catalog?.get(id)) return { ok: false, id, reasonCode: 'unknown_package' };
+    if (!path.isAbsolute(target)) {
+      return { ok: false, id, reasonCode: 'bad_request', error: 'local override path must be absolute' };
+    }
+    if (!installRoot) return { ok: false, reasonCode: 'no_install_root' };
+    if (!isFileSync(target)) return { ok: false, id, reasonCode: 'override_target_missing', error: `override target is not a file: ${target}` };
+    const file = localOverridesPath(installRoot);
+    try {
+      await fsp.mkdir(path.dirname(file), { recursive: true });
+      const current = loadFileOverrides(installRoot);
+      current[id] = target;
+      await fsp.writeFile(file, `${JSON.stringify(current, null, 2)}\n`, 'utf8');
+      return { ok: true, id, path: target, file };
+    } catch (error) {
+      return { ok: false, id, reasonCode: 'override_write_failed', error: String(error?.message ?? error) };
+    }
+  }
+
+  /** Remove one durable local override. Missing id/file is still `ok:true`. */
+  async function clearLocalOverride(params = {}) {
+    const id = String(params.id ?? '').trim();
+    if (!id) return { ok: false, reasonCode: 'bad_request', error: 'id is required' };
+    if (!installRoot) return { ok: false, reasonCode: 'no_install_root' };
+    const file = localOverridesPath(installRoot);
+    try {
+      const current = loadFileOverrides(installRoot);
+      if (!(id in current)) return { ok: true, id, removed: false, file };
+      delete current[id];
+      await fsp.mkdir(path.dirname(file), { recursive: true });
+      await fsp.writeFile(file, `${JSON.stringify(current, null, 2)}\n`, 'utf8');
+      return { ok: true, id, removed: true, file };
+    } catch (error) {
+      return { ok: false, id, reasonCode: 'override_write_failed', error: String(error?.message ?? error) };
+    }
+  }
+
   return {
     installRoot,
     versionDir,
@@ -1335,6 +1495,12 @@ export function createToolPackageManager(options = {}) {
     install,
     uninstall,
     installBrowser,
+    setLocalOverride,
+    clearLocalOverride,
+    /** Effective override map: file merged under env (env wins per-key). */
+    localOverrides: () => currentOverrides(),
+    localOverridesFile: localOverridesPath(installRoot),
+    repositoryToolRegistry: () => repositoryRegistry(),
     sha256OfFile,
     downloadToFile,
     // Exported for tests (same rationale as TAR_COMMAND): the python-env
@@ -1434,6 +1600,83 @@ function windowsMcpForkCandidates() {
 
 /** The dev/CI candidate, exported for the manifest↔fork contract test. */
 export const WINDOWS_MCP_FORK_SRC = windowsMcpForkCandidates()[0];
+
+// ── WCC-P2-05 (spec §19.8): pinned native helper resolution ─────────────
+
+/** Dev/CI candidate for the pinned .NET WGC helper publish output, relative
+ *  to the repo root (mirrors WINDOWS_MCP_FORK_SRC's resolution: the
+ *  monorepo checkout is the build source; the packaged tree stages the
+ *  artifact NEXT TO the bundled host instead). */
+export const WGC_HELPER_DEV_SRC = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../new_tool/computer-control/Windows-MCP/native/wgc-helper/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish',
+);
+
+/**
+ * Resolve the PINNED native WGC helper (spec §19.8: helper 版本进入
+ * capability handshake；不得下载运行未固定版本的 helper).
+ *
+ * Lookup order (first existing file wins):
+ *   1. `WINDOWS_MCP_WGC_HELPER` env override — explicit, test/CI seam;
+ *   2. packaged — `<serviceRoot>/<helper.packagedDirName>/<exe>` where
+ *     serviceRoot is the directory hosting this bundle (prepare-sidecars.ps1
+ *     stages it there);
+ *   3. dev/CI — the monorepo checkout's `dotnet publish` output.
+ *
+ * The digest is checked against the manifest's pinned value BEFORE the path
+ * is returned; a present-but-drifted helper resolves as `{ ok: false,
+ * reasonCode: 'digest_mismatch' }` — the capture path then degrades to the
+ * honest legacy status rather than running unverified native code.
+ * A missing helper is `{ ok: false, reasonCode: 'not_staged' }`.
+ *
+ * `manifest` may be omitted in tests (env override only, digest check
+ * skipped); `sha256File` and `existsSync` are injectable seams.
+ */
+export async function resolvePinnedWgcHelper(
+  manifest = null,
+  { env = process.env, sha256File = sha256OfFile, existsSync = isFileSync } = {},
+) {
+  const helperSpec = manifest?.helper ?? null;
+  const exeName = helperSpec?.executableRelativePath ?? 'trylo-wgc-helper.exe';
+  const candidates = [];
+  const override = String(env.WINDOWS_MCP_WGC_HELPER ?? '').trim();
+  if (override !== '') candidates.push(path.resolve(override));
+  if (helperSpec?.packagedDirName) {
+    const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+    // Bundled layout: the esbuild bundle lives at
+    // `<serviceRoot>/dist/host.bundle.mjs`, and prepare-sidecars.ps1 stages
+    // the helper at `<serviceRoot>/wgc-helper/` — the moduleDir's PARENT.
+    // (Unbundled dev layout: `<packageRoot>/src/tooling/…`, whose parent
+    // chain has no wgc-helper; harmless dead candidate.)
+    candidates.push(path.resolve(moduleDir, '..', helperSpec.packagedDirName, exeName));
+  }
+  candidates.push(path.resolve(WGC_HELPER_DEV_SRC, exeName));
+
+  let firstFound = null;
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      firstFound = candidate;
+      break;
+    }
+  }
+  if (firstFound === null) {
+    return { ok: false, path: null, reasonCode: 'not_staged' };
+  }
+  // No manifest (test seam): presence is the only check.
+  if (!helperSpec?.sha256) {
+    return { ok: true, path: firstFound, reasonCode: null };
+  }
+  const actual = await sha256File(firstFound);
+  if (!digestsMatch(actual, helperSpec.sha256)) {
+    return {
+      ok: false,
+      path: firstFound,
+      reasonCode: 'digest_mismatch',
+      detail: `${actual.slice(0, 12)} != pinned ${helperSpec.sha256.slice(0, 12)}`,
+    };
+  }
+  return { ok: true, path: firstFound, reasonCode: null };
+}
 
 function resolveWindowsMcpForkSrc() {
   for (const candidate of windowsMcpForkCandidates()) {

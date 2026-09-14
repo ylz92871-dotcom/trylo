@@ -1,4 +1,4 @@
-// Trylo Desktop — Tabs. See the architecture doc §3 Phase 1
+// Trylo Desktop — Tabs. See ARCHITECTURE.md §3 Phase 1
 // Week 1 Day 2 (Tabs).
 //
 // Tab strip UI: a list of open file paths rendered as a row of
@@ -28,7 +28,7 @@ export interface TabsProps {
 
 function basename(path: FilePath): string {
   // Handle both forward and back slashes for the basename. On
-  // Windows paths look like "C:\work\trylo\README.md"; on
+  // Windows paths look like "C:\work\demo-ws\README.md"; on
   // posix-style it's "C:/work/demo-ws/README.md".
   const m = path.match(/[^/\\]+$/);
   return m ? m[0] : path;

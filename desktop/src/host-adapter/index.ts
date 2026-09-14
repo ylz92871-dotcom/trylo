@@ -1,5 +1,5 @@
 // Trylo Desktop — HostAdapter barrel + concrete impl. See
-// the architecture doc §2.2 (HostAdapter is the only entry point).
+// ARCHITECTURE.md §2.2 (HostAdapter is the only entry point).
 //
 // The barrel re-exports all the interface types so component code has
 // a single import path: `import { hostAdapter, type FsCommands } from
@@ -64,7 +64,8 @@ export type {
   SpawnRequest,
 } from './types';
 // Phase 2 (Trylo Alpha, arch §3) — Trylo API for the legacy 4-mode
-// webview running in an iframe. See trylo-api.ts.
+// webview running in an iframe. See trylo-api.ts and the
+// spike-results/phase-2-plan.md.
 export type {
   TryloApi,
   TryloMode,

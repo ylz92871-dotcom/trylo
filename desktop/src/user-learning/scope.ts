@@ -1,4 +1,5 @@
-import type { EvidenceScope, ProductSurface, ScopeLevel } from './types';
+import { sourceHash } from './ids';
+import type { EvidenceScope, ProductSurface, ScopeKeyV2, ScopeLevel } from './types';
 
 export interface LearningScope {
   readonly userId: string;
@@ -26,14 +27,37 @@ const LEVEL_RANK: Record<ScopeLevel, number> = {
   task: 6,
 };
 
-export function fingerprintScope(scope: Pick<EvidenceScope, 'product' | 'workspaceId' | 'projectId' | 'component' | 'taskCategory'>): string {
-  return [
-    scope.product ?? '',
-    scope.workspaceId ?? '',
-    scope.projectId ?? '',
-    scope.component ?? '',
-    scope.taskCategory ?? '',
-  ].join('|');
+function nullableString(value: string | undefined): string | null {
+  return value && value !== 'global' ? value : null;
+}
+
+export function canonicalScope(scope: EvidenceScope): ScopeKeyV2 {
+  return {
+    product: scope.product ?? null,
+    workspaceId: nullableString(scope.workspaceId),
+    projectId: nullableString(scope.projectId),
+    component: nullableString(scope.component),
+    taskCategory: nullableString(scope.taskCategory),
+    artifactAudience: scope.artifactAudience ?? null,
+    taskStage: scope.taskStage ?? null,
+    corePath: scope.corePath ?? null,
+    riskLevel: scope.riskLevel ?? null,
+    reversible: scope.reversible ?? null,
+  };
+}
+
+/** JSON property order is intentionally frozen as part of ScopeKey v2. */
+export function serializeScopeKey(scope: EvidenceScope): string {
+  return JSON.stringify(canonicalScope(scope));
+}
+
+export function fingerprintScopeV2(scope: EvidenceScope): string {
+  return `v2:${sourceHash([serializeScopeKey(scope)])}`;
+}
+
+/** Compatibility alias. All callers now receive the versioned fingerprint. */
+export function fingerprintScope(scope: EvidenceScope): string {
+  return fingerprintScopeV2(scope);
 }
 
 export function withFingerprint<T extends EvidenceScope>(scope: T): T {
@@ -49,7 +73,7 @@ export function inferLevel(scope: EvidenceScope): ScopeLevel {
 }
 
 export function isGlobalScope(scope: EvidenceScope): boolean {
-  return !scope.projectId || scope.projectId === 'global' || scope.level === 'global';
+  return (scope.level ?? inferLevel(scope)) === 'global';
 }
 
 export function sameStableScope(a: EvidenceScope, b: EvidenceScope): boolean {
@@ -63,20 +87,21 @@ export function scopeSpecificity(scope: EvidenceScope): number {
 }
 
 export function scopeCompatible(evidenceScope: EvidenceScope, targetScope: EvidenceScope): boolean {
-  if (evidenceScope.product && targetScope.product && evidenceScope.product !== targetScope.product) {
-    return false;
-  }
-  if (isGlobalScope(evidenceScope)) return true;
-  if (evidenceScope.workspaceId && targetScope.workspaceId && evidenceScope.workspaceId !== targetScope.workspaceId) {
-    if (evidenceScope.workspaceId !== 'global') return false;
-  }
-  if (evidenceScope.projectId && targetScope.projectId && evidenceScope.projectId !== targetScope.projectId) {
-    return false;
-  }
-  if (evidenceScope.component && targetScope.component && evidenceScope.component !== targetScope.component) {
-    return false;
-  }
-  return true;
+  const a = canonicalScope(evidenceScope);
+  const b = canonicalScope(targetScope);
+  const compatible = <T>(left: T | null, right: T | null): boolean => (
+    left === null || right === null || left === right
+  );
+  return compatible(a.product, b.product)
+    && compatible(a.workspaceId, b.workspaceId)
+    && compatible(a.projectId, b.projectId)
+    && compatible(a.component, b.component)
+    && compatible(a.taskCategory, b.taskCategory)
+    && compatible(a.artifactAudience, b.artifactAudience)
+    && compatible(a.taskStage, b.taskStage)
+    && compatible(a.corePath, b.corePath)
+    && compatible(a.riskLevel, b.riskLevel)
+    && compatible(a.reversible, b.reversible);
 }
 
 export function scopeSubsumes(broader: EvidenceScope, narrower: EvidenceScope): boolean {
