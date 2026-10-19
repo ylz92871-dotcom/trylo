@@ -12,6 +12,9 @@ def main():
  version=json.loads((root/'desktop/package.json').read_text(encoding='utf-8'))['version']
  resources=root/'desktop/src-tauri/resources'
  profile=json.loads((root/'desktop/distribution.json').read_text(encoding='utf-8'))
+ staged_profile=resources/'distribution.json'
+ if not staged_profile.is_file() or staged_profile.read_bytes()!=(root/'desktop/distribution.json').read_bytes():
+  raise SystemExit('Staged distribution profile differs from source; prepare sidecars again before packaging')
  if (profile['distribution']!='core' or profile['components']['coworkRuntime']['bundled'] is not False
      or profile.get('defaultCliRuntime')!='legacy-stream-json' or profile['components'].get('legacyCliRuntime',{}).get('bundled') is not True):
   raise SystemExit('This release requires a core Desktop distribution profile')
