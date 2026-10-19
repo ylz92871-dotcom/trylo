@@ -29,6 +29,9 @@ import type { JsonObject } from "../protocol/envelope.js";
 /** Why a platform can or cannot confine a process here. */
 export type IsolationBackend = "windows-srt" | "linux-bwrap" | "macos-seatbelt";
 
+/** Explicit process boundary; host preserves caller authority, never grants approval. */
+export type ShellIsolation = "sandbox" | "host";
+
 /**
  * Availability is a state machine, not a boolean: `not_installed` and
  * `broken` both mean "do not run this", but they mean different things to the

@@ -95,8 +95,8 @@ describe('permission-policy', () => {
   });
 
   describe('toolsForLevel', () => {
-    it('disables built-in tools only in read_only', () => {
-      expect(toolsForLevel('read_only')).toBe('');
+    it('keeps only read built-ins in read_only', () => {
+      expect(toolsForLevel('read_only')).toBe('Read,Glob,Grep');
       expect(toolsForLevel('ask')).toBe('default');
       expect(toolsForLevel('workspace_write')).toBe('default');
       expect(toolsForLevel('unrestricted')).toBe('default');

@@ -129,6 +129,10 @@ function optionalPositiveNumber(
 }
 
 export function buildRunOptions(state: RunParseState): ParsedCommand {
+  const shellIsolation = state.values.get("shell-isolation");
+  if (shellIsolation !== undefined && shellIsolation !== "sandbox" && shellIsolation !== "host") {
+    return usageError("invalid --shell-isolation", "use sandbox (default) or host (caller authority; approval still required)");
+  }
   const effort = state.values.get("reasoning-effort");
   if (effort !== undefined && !isReasoningEffort(effort)) return usageError("invalid --reasoning-effort", `use ${REASONING_EFFORTS.join(", ")}`);
   const toolsRaw = state.values.get("tools");
@@ -255,6 +259,7 @@ export function buildRunOptions(state: RunParseState): ParsedCommand {
   }
   const workspace = state.values.get("workspace");
   const options: RunCommandOptions = {
+    ...(shellIsolation === undefined ? {} : { shellIsolation }),
     ...(promptTransport === undefined ? {} : { permissionPromptTool: "stdio" }),
     message: state.message,
     readStdin: state.readStdin,

@@ -15,6 +15,7 @@ const RUN_FLAGS: ReadonlyArray<FlagSpec> = [
   { name: "endpoint", takesValue: true },
   { name: "format", takesValue: true },
   { name: "permission-prompt-tool", takesValue: true },
+  { name: "shell-isolation", takesValue: true },
   { name: "session", takesValue: true },
   { name: "resume", takesValue: true },
   { name: "migrate", takesValue: true },

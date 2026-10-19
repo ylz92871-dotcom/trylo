@@ -267,3 +267,49 @@ it.runIf(process.env.TRYLO_DESKTOP_LIVE === '1')('real configured model writes w
     }
   }
 }, 180_000);
+
+it.each(['ask', 'workspace_write', 'unrestricted', 'read_only'] as const)(
+  '%s applies the host decision before a real shell process can write', async level => {
+    const subdir = join(workspace, 'src'); mkdirSync(subdir);
+    const effect = join(subdir, 'shell-proof.txt');
+    const server = createServer((incoming, outgoing) => {
+      let body = '';
+      incoming.on('data', chunk => { body += chunk; });
+      incoming.on('end', () => {
+        const input = JSON.parse(body) as { messages: { role: string }[] };
+        const finished = input.messages.some(message => message.role === 'tool');
+        const command = `node -e "require('node:fs').writeFileSync('shell-proof.txt','approved')"`;
+        const delta = finished ? { content: 'DONE' } : { tool_calls: [{ index: 0, id: 'host-shell', type: 'function',
+          function: { name: 'run_shell', arguments: JSON.stringify({ command, cwd: subdir }) } }] };
+        outgoing.writeHead(200, { 'content-type': 'text/event-stream' });
+        outgoing.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`);
+        outgoing.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: finished ? 'stop' : 'tool_calls' }] })}\n\n`);
+        outgoing.end('data: [DONE]\n\n');
+      });
+    });
+    await new Promise<void>(resolveValue => server.listen(0, '127.0.0.1', resolveValue));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Local fixture did not bind');
+    const { controller, registry, pending } = setup();
+    const terminal = deferred<void>(); const events: LoopEvent[] = [];
+    try {
+      await controller.run({ ...request(events, terminal, 'openai-compatible'), permissionLevel: level,
+        settings: { cliPath: cli, cliNodeProgram: process.execPath, cwd: workspace, cliRuntimeProtocol: 'trylo-v1',
+          providerId: 'openai-compatible', apiFormat: 'openai', apiHost: `http://127.0.0.1:${address.port}/v1`,
+          apiModel: 'local-shell-contract', apiKey: 'local-contract-key' } });
+      if (level === 'ask' || level === 'workspace_write') {
+        const id = await waitForApproval(pending.promise, terminal.promise);
+        expect(registry.list()[0]?.toolName).toBe('run_shell');
+        expect(existsSync(effect)).toBe(false);
+        expect(await registry.respond(id, true)).toBe(true);
+      }
+      await terminal.promise; await Promise.all(service.exits.values());
+      expect(existsSync(effect)).toBe(level !== 'read_only');
+      if (level !== 'read_only') expect(readFileSync(effect, 'utf8')).toBe('approved');
+      expect(registry.list()).toHaveLength(0);
+      expect(service.children.size).toBe(0);
+    } finally {
+      await service.dispose(); server.closeAllConnections();
+      await new Promise<void>(resolveValue => server.close(() => resolveValue()));
+    }
+  }, 60000);

@@ -243,7 +243,8 @@ export async function prepareRun(
   const opened = await openSession(ctx, input.options, fingerprint({ ...settings, providerId: selection.providerId, model: selection.model }, workspaceId, hash), compatibleCatalogHashes(root, input.options.toolSelection));
   if (opened.kind === "failed") return opened.failure;
   const permissions = createSessionPermissions(permissionChoice(input.options));
-  const execution = createRunExecution(root, { homeDir: ctx.homeDir, env: ctx.env });
+  const execution = createRunExecution(root, { homeDir: ctx.homeDir, env: ctx.env,
+    ...(input.options.shellIsolation === undefined ? {} : { shellIsolation: input.options.shellIsolation }) });
   const questions = createAskUserTools({ surfaceAnswersOnly: true, nextRequestId: () => ctx.newId("ask"), restored: opened.kind === "resume" ? restoreQuestions(opened.transcript) : [] });
   return {
     questions,

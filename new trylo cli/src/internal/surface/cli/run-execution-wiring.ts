@@ -3,6 +3,7 @@ import { createWindowsShellBoundary } from "../../adapters/sandbox/windows-shell
 import type { ProcessSessionRegistry } from "../../adapters/process-session/session-registry.js";
 import { createSessionViewForRun } from "./session-view-wiring.js";
 import { hostProcessEnvironment } from "../../adapters/sandbox/executable.js";
+import type { ShellIsolation } from "../../ports/isolation.js";
 
 export type RunExecution = {
   readonly sessions: ProcessSessionRegistry;
@@ -15,10 +16,14 @@ export function createRunExecution(workspaceRoot: string, options: {
   homeDir?: string;
   env?: Readonly<Record<string, string | undefined>>;
   platform?: NodeJS.Platform;
+  shellIsolation?: ShellIsolation;
 } = {}): RunExecution {
   const platform = options.platform ?? process.platform;
   const sessions = createSessionViewForRun(options);
-  const boundary = platform === "win32" ? createWindowsShellBoundary(workspaceRoot, options.env ?? hostProcessEnvironment()) : undefined;
+  // Desktop supplies host explicitly: its permission service owns every command
+  // approval. Standalone callers retain strict isolation and never fall back on failure.
+  const boundary = platform === "win32" && options.shellIsolation !== "host"
+    ? createWindowsShellBoundary(workspaceRoot, options.env ?? hostProcessEnvironment()) : undefined;
   const spawner = boundary === undefined ? createNodeSpawner() : boundary.spawner(createNodeSpawner(boundary.helperEnvironment));
   return {
     sessions: boundary === undefined ? sessions : {

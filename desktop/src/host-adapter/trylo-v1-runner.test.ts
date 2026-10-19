@@ -173,16 +173,16 @@ describe('buildTryloV1Args', () => {
     ]);
     expect(permissionFlagsForV1('workspace_write')).toEqual([
       '--ask', 'always',
-      '--permission-prompt-tool', 'stdio',
+      '--permission-prompt-tool', 'stdio', '--shell-isolation', 'host',
     ]);
     expect(permissionFlagsForV1('unrestricted')).toEqual([
       '--ask', 'always',
-      '--permission-prompt-tool', 'stdio',
+      '--permission-prompt-tool', 'stdio', '--shell-isolation', 'host',
     ]);
   });
 
   it('maps ask to the explicit bidirectional stdio transport', () => {
-    expect(permissionFlagsForV1('ask')).toEqual(['--ask', 'always', '--permission-prompt-tool', 'stdio']);
+    expect(permissionFlagsForV1('ask')).toEqual(['--ask', 'always', '--permission-prompt-tool', 'stdio', '--shell-isolation', 'host']);
   });
 
   it('lets the host distinguish patch operations rather than allow-listing a whole tool', () => {

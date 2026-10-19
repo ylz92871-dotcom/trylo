@@ -148,7 +148,7 @@ export function codePermissionMode(level: PermissionLevel): CodePermissionMode {
 /** V1 keeps approval-capable tools behind the host's final mode policy.
  * Read-only also denies built-in mutations in the CLI before host review. */
 export function codePermissionFlagsForV1(level: PermissionLevel): readonly string[] {
-  const framed = ['--ask', 'always', '--permission-prompt-tool', 'stdio'];
+  const framed = ['--ask', 'always', '--permission-prompt-tool', 'stdio', '--shell-isolation', 'host'];
   return level === 'read_only'
     ? ['--ask', 'always', '--deny-tools', 'write_file,edit_file,apply_patch,notebook_edit,run_shell', '--permission-prompt-tool', 'stdio']
     : framed;
@@ -169,11 +169,9 @@ export function workPermissionMode(level: PermissionLevel): WorkPermissionMode {
   }
 }
 
-/** What to pass `--tools` as. Read-only level disables built-in tools
- *  (mirrors the legacy `plan` behavior); all other levels keep the
- *  default toolset. */
+/** Read-only still needs its readers; plan mode and the host deny effects. */
 export function toolsForLevel(level: PermissionLevel): string {
-  return level === 'read_only' ? '' : 'default';
+  return level === 'read_only' ? 'Read,Glob,Grep' : 'default';
 }
 
 /**

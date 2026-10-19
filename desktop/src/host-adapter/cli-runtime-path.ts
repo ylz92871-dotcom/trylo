@@ -164,7 +164,7 @@ export function effectiveLegacyCliPath(
 ): EffectiveCliPath {
   const trimmed = (configured ?? '').trim();
   const normalized = trimmed.replaceAll('\\', '/').toLowerCase();
-  const isOldDefault = normalized === 'd:/cc/trylo/trylo cli/cli.js'
+  const isOldDefault = normalized === 'C:/trylo-cli/cli.js'
     || normalized === 'c:/trylo-cli/cli.js';
   if (trimmed !== '' && !isOldDefault) return { path: trimmed, substituted: false };
   return resolved?.legacyCliScript

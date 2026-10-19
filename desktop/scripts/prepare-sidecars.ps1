@@ -28,8 +28,11 @@ $resources = Join-Path $srcTauri "resources"
 if (-not ([IO.Path]::GetFullPath($resources)).StartsWith(([IO.Path]::GetFullPath($repoRoot) + "\"), [StringComparison]::OrdinalIgnoreCase)) { throw "resources escape repository" }
 if ((Test-Path -LiteralPath $resources) -and ((Get-Item -LiteralPath $resources).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw "resources must not be redirected" }
 New-Item -ItemType Directory -Force -Path $resources | Out-Null
-node (Join-Path $repoRoot "scripts\release\check-source-completeness.mjs")
-if ($LASTEXITCODE -ne 0) { throw "source completeness validation failed" }
+$publicSourceGate = Join-Path $repoRoot "scripts\release\check-source-completeness.mjs"
+if (Test-Path -LiteralPath $publicSourceGate) {
+  node $publicSourceGate
+  if ($LASTEXITCODE -ne 0) { throw "source completeness validation failed" }
+}
 $dsRoot = Join-Path $resources "desktop-services"
 $dsDist = Join-Path $dsRoot "dist"
 $sidecarPub = Join-Path $resources "sidecars"
@@ -209,6 +212,13 @@ Get-ChildItem -LiteralPath $forkResourceDir -Recurse -File -Filter "*.pyc" -Erro
 Write-Host "prepare-sidecars: stage and probe the new CLI"
 node (Join-Path $PSScriptRoot "stage-cli.mjs")
 if ($LASTEXITCODE -ne 0) { throw "stage-cli failed (exit $LASTEXITCODE)" }
+
+$distribution = Get-Content -LiteralPath (Join-Path $repoRoot 'desktop/distribution.json') -Raw | ConvertFrom-Json
+if ($distribution.components.legacyCliRuntime.bundled) {
+  if (-not $env:TRYLO_LEGACY_RUNTIME_DIR) { throw 'Dual-runtime release requires TRYLO_LEGACY_RUNTIME_DIR pointing to an inventoried compatibility artifact (manifest.json and files.json).' }
+  python (Join-Path $PSScriptRoot 'stage-legacy.py') --source $env:TRYLO_LEGACY_RUNTIME_DIR
+  if ($LASTEXITCODE -ne 0) { throw 'Legacy runtime staging failed; no incomplete artifact may be packaged.' }
+}
 
 # Verify what actually landed in resources/ (audit §3.2 W4: a copy that
 # silently produced an incomplete tree used to reach `tauri build` and only

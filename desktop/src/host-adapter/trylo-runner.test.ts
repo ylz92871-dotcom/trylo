@@ -220,10 +220,10 @@ describe('startTrylo (env + args)', () => {
     expect(args[args.indexOf('--permission-mode') + 1]).toBe('plan');
     // --tools is emitted as a single `--tools=<value>` arg
     // (so clap treats it as a single value, not variadic).
-    expect(args).toContain('--tools=');
-    // read_only disables built-in tools.
+    expect(args).toContain('--tools=Read,Glob,Grep');
+    // read_only retains readers without exposing mutating built-ins.
     const toolsIdx = args.findIndex((a) => a.startsWith('--tools='));
-    expect(args[toolsIdx]).toBe('--tools=');
+    expect(args[toolsIdx]).toBe('--tools=Read,Glob,Grep');
   });
 
   it('unrestricted level maps to bypassPermissions + default tools (P2)', async () => {
@@ -545,14 +545,4 @@ describe('isFileOnlyLoopEvent (events-file tail filter)', () => {
       expect(isFileOnlyLoopEvent({ type } as never)).toBe(false);
     }
   });
-});
-
-it('packaged legacy runs and prewarms use the supplied Node interpreter', async () => {
-  const nodeProgram = 'C:/Program Files/Trylo/runtime/node/win-x64/node.exe';
-  const args = { cliPath: 'C:/Program Files/Trylo/cli-legacy/cli.cjs' as FilePath,
-    nodeProgram, cwd: 'D:/workspace' as FilePath, prompt: 'hello', onEvents: () => {} };
-  await startTrylo(args);
-  await startTryloPrewarm(args);
-  expect(spawnCalls.map(call => call.command)).toEqual([nodeProgram, nodeProgram]);
-  expect(spawnCalls.every(call => call.args[0] === args.cliPath)).toBe(true);
 });

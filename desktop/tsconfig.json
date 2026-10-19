@@ -32,6 +32,7 @@
     "verbatimModuleSyntax": false,
 
     "outDir": "./dist",
+    "noEmit": true,
     // No `rootDir`: the @trylo/work alias pulls in files from
     // ../work/src which live outside `./src`. Vite handles the
     // build path; tsc just needs to compile-check the union.

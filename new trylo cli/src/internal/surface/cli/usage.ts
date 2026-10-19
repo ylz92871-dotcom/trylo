@@ -144,6 +144,8 @@ export const USAGE = [
   "  --permission-ledger                     back this run with the durable permission ledger",
   "                                          (default: off; a ledger that cannot be read refuses the run)",
   "  --subagent                              mount the delegate_subagent tool for this run (default: off)",
+  "  --shell-isolation <sandbox|host>         process boundary; default sandbox, host keeps caller authority",
+  "                                          (neither choice grants tool permission)",
   "  --allow-web                             mount the web_fetch tool for this run (default: off; each",
   "                                          fetch still needs approval)",
   "  --compact-summary=<extractive|model>    who authors compaction summaries (default: extractive)",

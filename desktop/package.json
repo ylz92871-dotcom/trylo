@@ -1,6 +1,6 @@
 {
   "name": "trylo-desktop",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "description": "Trylo Desktop \u2014 Agent-native IDE shell (Tauri 2 + React + monaco-vscode-api)",
   "type": "module",

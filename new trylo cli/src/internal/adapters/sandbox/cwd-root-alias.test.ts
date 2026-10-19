@@ -12,7 +12,7 @@ test("an absolute workspace root cwd is the same admitted directory as dot", t =
   assert.deepEqual(planWorkingDirectory(root, root + path.sep), planWorkingDirectory(root, "."));
   const subdir = path.join(root, "src");
   mkdirSync(subdir);
-  assert.equal(planWorkingDirectory(root, subdir).ok, false, "this alias must not admit other absolute directories");
+  assert.deepEqual(planWorkingDirectory(root, subdir), planWorkingDirectory(root, "src"));
   assert.equal(planWorkingDirectory(root, "../other").ok, false);
   assert.equal(planWorkingDirectory(root, root + "-sibling").ok, false);
 });

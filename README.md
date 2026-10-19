@@ -4,11 +4,11 @@
 
 Trylo is a personal learning agent project with a native desktop application, a TypeScript CLI, a Work surface, and an Android remote workbench.
 
-**Status: alpha.** Desktop 1.0.2 and Android 1.6.0 preview downloads are built from the current product source. Engineering checks and packaged-process tests are recorded separately from native UI, real-provider and device acceptance.
+**Status: alpha.** Desktop 1.0.3 and Android 1.6.0 preview downloads are built from the current product source. Engineering checks and packaged-process tests are recorded separately from native UI, real-provider and device acceptance.
 
-Downloads: [Windows Desktop and checksums](result/desktop/) · [Android APK](result/mobile/). The new CLI is the default; the legacy protocol remains an external-runtime setting. CoWork is a separate optional dependency.
+Downloads: [Windows Desktop and checksums](result/desktop/) · [Android APK](result/mobile/). The Desktop preview defaults to its bundled legacy compatibility CLI; Settings can switch to the bundled new CLI and back. CoWork is a separate optional dependency.
 
-The October 20 update repairs runtime integrity, contained absolute file paths, input diagnostics and context handoff when switching CLI engines, and synchronizes mobile connectivity and current tool source. See the [release record](docs/release/DESKTOP_1_0_2.md) and [source checkpoint](docs/release/CURRENT_SOURCE_CHECKPOINT.md).
+The October 20 update repairs runtime integrity, contained absolute file paths, input diagnostics and context handoff when switching CLI engines, and synchronizes mobile connectivity and current tool source. See the [release record](docs/release/DESKTOP_1_0_3.md) and [source checkpoint](docs/release/CURRENT_SOURCE_CHECKPOINT.md).
 
 ## Source map
 
@@ -33,7 +33,7 @@ For a Windows x64 CLI build, first run `node scripts/setup-cli-native.mjs --inst
 
 ## Current limits
 
-- Public source builds default to the new `trylo-v1` CLI and package no legacy engine. Explicit legacy protocol adapters remain for externally configured runtimes.
+- Production Desktop builds default to `legacy-stream-json` with both CLI engines bundled. Building the compatibility component requires an explicit inventoried artifact; its old source is excluded from this repository.
 - Work's existing vendor/build closure and tests tied to historical evidence still need cleanup.
 - The directory preview is a proposal, not the active runtime layout.
 - Native desktop, installed artifacts, and Android device acceptance are recorded separately from source checks.
