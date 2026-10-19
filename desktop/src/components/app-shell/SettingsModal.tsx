@@ -26,7 +26,6 @@ import {
   type ApiFormat,
   type ModelProfile,
   type PermissionMode,
-  type RemoteSettings,
   type SubConnection,
   type TryloSettings,
   type SettingsSaveIntent,
@@ -49,6 +48,12 @@ import {
 
 export type SettingsTab = 'connection' | 'appearance' | 'behavior' | 'tools' | 'remote' | 'subconnections' | 'learning' | 'runtime';
 
+export interface RelayAccountActions {
+  relayLogin(params: import('../../services-host/methods').RelayLoginParams): Promise<import('../../services-host/methods').RelayAccountStatus>;
+  relayStatus(): Promise<import('../../services-host/methods').RelayAccountStatus>;
+  relayLogout(): Promise<import('../../services-host/methods').RelayAccountStatus>;
+}
+
 export interface SettingsModalProps {
   readonly initialTab?: SettingsTab;
   readonly open: boolean;
@@ -61,6 +66,8 @@ export interface SettingsModalProps {
   /** Real remote-gateway state (spec §8.1.4). Optional; absent means the
    *  remote domain is not wired into this host. */
   readonly remoteStatus?: RemoteStatusResult | null;
+  readonly relayAccount?: RelayAccountActions | null;
+  readonly onOpenRemote?: () => void;
   /** P0-A (audit §3.3): the Work tool packages' health + install actions.
    *  Optional so the modal renders in tests without the Service Host. */
   readonly toolPlatform?: ToolPlatformState | null;
@@ -105,13 +112,6 @@ const PERMISSION_MODES: readonly { readonly value: PermissionMode; readonly labe
   { value: 'agent', label: 'Agent', hint: 'Full tool access, no prompts' },
 ];
 void PERMISSION_MODES; // legacy list kept for back-compat; see permission-policy.legacyPermissionMigration.
-
-const TUNNEL_MODES: readonly { readonly value: RemoteSettings['tunnelMode']; readonly label: string }[] = [
-  { value: 'named',  label: 'Named (fixed subdomain)' },
-  { value: 'quick',  label: 'Quick (random subdomain)' },
-  { value: 'manual', label: 'Manual (self-hosted tunnel)' },
-  { value: 'off',    label: 'Off (LAN only)' },
-];
 
 /** The pet is a WPF (net9.0-windows) sidecar — Windows only (spec §6.5). */
 const IS_WINDOWS: boolean =
@@ -692,16 +692,21 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
                 <select
                   className="settings-modal__input"
                   value={form.cliRuntimeProtocol}
+                  aria-label="CLI runtime"
                   onChange={(e) =>
-                    set('cliRuntimeProtocol', e.target.value as CliRuntimeProtocol)
+                    setForm((previous) => ({ ...previous,
+                      cliRuntimeProtocol: e.target.value as CliRuntimeProtocol,
+                      cliRuntimeSelection: 'user',
+                      cliPath: e.target.value === 'trylo-v1' ? '' : settingsDefaults.cliPath,
+                    }))
                   }
                 >
-                  <option value="legacy-stream-json">旧 CLI（需自行配置）</option>
-                  <option value="trylo-v1">新 CLI — trylo-v1（默认）</option>
+                  <option value="legacy-stream-json">旧 CLI — legacy-stream-json</option>
+                    <option value="trylo-v1">新 CLI — trylo-v1</option>
                 </select>
                 <span className="settings-modal__hint">
-                  新 CLI 是「一轮一个进程」，支持流式输出、工具调用、会话恢复和逐项审批。
-                  真实模型可使用已有 OpenAI 格式连接，或新 CLI 已配置的 provider 与凭据；默认使用新 CLI。
+                  保存后用于下一次启动任务；已有运行中的任务沿用原 CLI。
+                  切换时会同步选择对应入口，自定义路径可在下方 CLI path 中调整。录制后可在这里切回新 CLI 调试。
                 </span>
               </label>
 
@@ -852,122 +857,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
         );
 
       case 'remote':
-        return (
-          <fieldset className="settings-modal__group">
-            <legend className="settings-modal__legend">
-              远程访问 (Remote)
-              <button
-                type="button"
-                className="settings-modal__inline-toggle"
-                onClick={() => {
-                  set('remote', { ...form.remote, enabled: !form.remote.enabled });
-                }}
-                aria-pressed={form.remote.enabled}
-                title={
-                  form.remote.enabled
-                    ? '关闭远程访问（也可以点 TopBar 上的"远程"按钮）'
-                    : '启用远程访问（也可以点 TopBar 上的"远程"按钮）'
-                }
-              >
-                {form.remote.enabled ? '已启用' : '已禁用'}
-              </button>
-            </legend>
-
-            <span className="settings-modal__hint">
-              通过手机应用或浏览器访问本机的 Code 会话。快速开关在顶栏的「远程」按钮。
-            </span>
-
-            <label className="settings-modal__field">
-              <span className="settings-modal__label">端口 (Port)</span>
-              <input
-                type="number"
-                autoComplete="off"
-                className="settings-modal__input"
-                value={form.remote.port}
-                onChange={(e) => set('remote', { ...form.remote, port: Number(e.target.value) })}
-              />
-              <span className="settings-modal__hint">网关监听端口（默认 49380）</span>
-            </label>
-
-            <label className="settings-modal__field">
-              <span className="settings-modal__label">隧道模式 (Tunnel mode)</span>
-              <select
-                className="settings-modal__input"
-                value={form.remote.tunnelMode}
-                onChange={(e) =>
-                  set('remote', { ...form.remote, tunnelMode: e.target.value as RemoteSettings['tunnelMode'] })
-                }
-              >
-                {TUNNEL_MODES.map((m) => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className="settings-modal__field settings-modal__field--inline">
-              <input
-                type="checkbox"
-                checked={form.remote.autoStartTunnel}
-                onChange={(e) => set('remote', { ...form.remote, autoStartTunnel: e.target.checked })}
-              />
-              <span className="settings-modal__label">自动启动隧道</span>
-            </label>
-
-            <label className="settings-modal__field">
-              <span className="settings-modal__label">公网地址 (Public URL)</span>
-              <input
-                type="text"
-                autoComplete="off"
-                spellCheck={false}
-                className="settings-modal__input"
-                value={form.remote.publicUrl}
-                onChange={(e) => set('remote', { ...form.remote, publicUrl: e.target.value })}
-                placeholder="https://your-name.trylo.dev"
-              />
-              <span className="settings-modal__hint">用于 manual 隧道模式的自定义公网地址</span>
-            </label>
-
-            <label className="settings-modal__field">
-              <span className="settings-modal__label">cloudflared 路径</span>
-              <input
-                type="text"
-                autoComplete="off"
-                spellCheck={false}
-                className="settings-modal__input"
-                value={form.remote.cloudflaredPath}
-                onChange={(e) => set('remote', { ...form.remote, cloudflaredPath: e.target.value })}
-                placeholder="(留空以使用内置 cloudflared)"
-              />
-            </label>
-
-            {props.remoteStatus?.enabled ? (
-              <div
-                className={`settings-modal__pet-status ${
-                  props.remoteStatus.running
-                    ? 'settings-modal__pet-status--ok'
-                    : 'settings-modal__pet-status--pending'
-                }`}
-                role="status"
-                aria-live="polite"
-              >
-                <span className="settings-modal__pet-status-headline">
-                  {props.remoteStatus.running ? '远程访问运行中' : '远程访问已启用（等待启动）'}
-                </span>
-                {props.remoteStatus.publicUrl ? (
-                  <span className="settings-modal__hint">
-                    公网地址: <code>{props.remoteStatus.publicUrl}</code>
-                  </span>
-                ) : null}
-                <span className="settings-modal__hint">
-                  端口: <code>{props.remoteStatus.port}</code>
-                </span>
-                <span className="settings-modal__hint settings-modal__hint--muted">
-                  配对二维码已移至顶部栏「远程」按钮 — 点击即可生成并扫码。
-                </span>
-              </div>
-            ) : null}
-          </fieldset>
-        );
+        return <fieldset className="settings-modal__group"><legend>远程与连接</legend><p>账号登录、服务器与独立隧道切换、手机配对已集中到同一个窗口。</p><button type="button" className="settings-modal__button" onClick={() => props.onOpenRemote?.()}>打开远程与连接</button></fieldset>;
 
       case 'subconnections':
         return (
@@ -1116,10 +1006,12 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
                 className="settings-modal__input"
                 value={form.cliPath}
                 onChange={(e) => set('cliPath', e.target.value)}
-                placeholder="C:/trylo-cli/cli.js"
+                placeholder={form.cliRuntimeProtocol === 'trylo-v1' ? '留空以自动解析新 CLI 入口' : settingsDefaults.cliPath}
               />
               <span className="settings-modal__hint">
-                Absolute path to trylo cli/cli.js
+                {form.cliRuntimeProtocol === 'trylo-v1'
+                  ? '留空使用自动解析的新 CLI；也可填写自定义新 CLI 入口的绝对路径。'
+                  : '旧 CLI 入口的绝对路径。'}
               </span>
             </label>
           </fieldset>

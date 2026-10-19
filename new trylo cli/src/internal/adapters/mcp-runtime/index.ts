@@ -63,7 +63,7 @@ export async function openMcpRuntime(input: McpRuntimeInput): Promise<McpRuntime
     clientFor: input.clientFor ?? createClientForEntry,
   });
   const mount = mountServerTools(pool.servers, input.descriptionOverlay ?? noOverlay);
-  const tools = createMcpToolPort(mount.mounted);
+  const tools = createMcpToolPort(mount.mounted, input.cwd);
   const resources = createMcpResourcePort(pool.servers);
   return {
     tools: combineMcpToolPorts(tools, resources),

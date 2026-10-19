@@ -12,6 +12,7 @@ import {
 } from "../../ports/mcp-client.js";
 import { paramsAsObject, type JsonRpcResponse } from "../../mcp/jsonrpc.js";
 import type { StdioTransport } from "./transport.js";
+import { attachMcpImages } from "../../mcp/image-content.js";
 
 /**
  * Response interpretation, split out of the client so the lifecycle module can
@@ -203,7 +204,7 @@ export function interpretToolResult(response: JsonRpcResponse, activeTransport: 
     typeof structured === "object" && structured !== null && !Array.isArray(structured)
       ? (structured as JsonObject)
       : {};
-  return { outcome: "result", value, output: text, truncated: false };
+  return attachMcpImages({ outcome: "result", value, output: text, truncated: false }, content);
 }
 
 /** The MCP draft's marker for "this call is not finished". */

@@ -13,7 +13,6 @@ import { LearningDirectiveMenu } from '../user-learning/LearningDirectiveMenu';
 import type { LearningDirective } from '../../user-learning/types';
 import { AttachmentList } from './AttachmentList';
 import { ContextRing } from '../app-shell/ContextRing';
-import { WorkTaskMenu } from '../work/WorkTaskMenu';
 import type { ConversationRunViewState } from './view-state';
 import type { PermissionLevel } from '../../permission/permission-policy';
 
@@ -42,7 +41,7 @@ export interface InputBarProps {
    */
   readonly onRunAsTask?: (text: string) => void;
   /** TRYLO-DUAL-SURFACE-SPEC §3.4: Work fifth-mode entry ("聊聊你怎么做
-   *  报告"), rendered next to WorkTaskMenu. Absent ⇒ the Work bar is a pure
+   *  报告"), rendered in the Work options disclosure. Absent ⇒ the Work bar is a pure
    *  Work sender with no Cognition entry. */
   readonly onOpenCognition?: () => void;
   /** §3.4: disables the Work Cognition entry when User Cognition is off. */
@@ -217,7 +216,6 @@ export function InputBar(props: InputBarProps): ReactElement {
         {props.onSelectPool && <ModelSelector configuredModel={props.configuredModel ?? ''} poolModel={props.poolModel ?? ''}
           savedProfiles={props.savedProfiles} activeProfileId={props.activeProfileId ?? ''} onSelectConfigured={props.onSelectConfigured ?? (() => undefined)}
           onSelectPool={props.onSelectPool} onSelectProfile={props.onSelectProfile} />}
-        {isWork && props.onRunAsTask && <WorkTaskMenu onRunTask={props.onRunAsTask} />}
         <div className="input-bar__actions-spare" />
         {props.running && (props.queuedCount ?? 0) > 0 && <span className="input-bar__queued" role="status">
           {props.queuedCount} 条已排队{props.onInterruptQueued && <button type="button" onClick={props.onInterruptQueued}>立即打断</button>}

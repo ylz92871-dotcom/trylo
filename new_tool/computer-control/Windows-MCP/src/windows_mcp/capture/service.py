@@ -52,10 +52,16 @@ class CaptureService:
         return self._legacy.backend
 
     def capture_exact_window(self, hwnd: int) -> tuple[FrameRef | None, Literal["captured", "idle", "unavailable"]]:
+        from windows_mcp.desktop import control_overlay, flash_overlay
+
         provider = self._select_provider()
-        frame, outcome = provider.capture_exact_window(hwnd, max_frames=1, interval_ms=250)
+        flash_overlay.cancel_active_flash()
+        with control_overlay.hidden_for_capture():
+            frame, outcome = provider.capture_exact_window(hwnd, max_frames=1, interval_ms=250)
         if frame is None:
             return None, outcome
+        if not control_overlay.is_active():
+            flash_overlay.show_capture_flash()
         if frame.status == "degraded":
             # §18.3 capture_degraded_count: the honest-fallback path (I-09).
             # Best-effort; a metrics failure never degrades the frame.

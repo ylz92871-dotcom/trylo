@@ -33,6 +33,8 @@ import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { applyAutocadRuntimePatches } from './autocad-runtime-patches.mjs';
+import { toolInstallDir } from './tool-runtime-identity.mjs';
 
 export const INSTALL_STATE_FILE = 'install-state.json';
 
@@ -179,14 +181,16 @@ export function loadRepositoryToolRegistry(registryPath) {
         problems.push(`${id}.entry escapes the registry root`);
         continue;
       }
-      overrides[id] = target;
+      const policy=typeof value === 'object' && value?.policy === 'managed-local'
+        ? 'managed-local' : 'repository-local';
+      // A maintained source tree need not execute its workspace venv. Native
+      // input uses the pinned managed runtime; the fork is synced separately.
+      if(policy === 'repository-local') overrides[id] = target;
       entries[id] = {
         entry,
         path: target,
         available: isFileSync(target),
-        policy: typeof value === 'object' && value?.policy === 'managed-local'
-          ? 'managed-local'
-          : 'repository-local',
+        policy,
       };
     }
     return { file, overrides, entries, problems };
@@ -400,7 +404,7 @@ export function createToolPackageManager(options = {}) {
       return {
         id: manifest.id,
         version: manifest.version,
-        installDir: path.dirname(override),
+        installDir: toolInstallDir(manifest,override),
         executable: isFileSync(override) ? override : null,
         state: isFileSync(override) ? 'override' : 'not-installed',
         detail: isFileSync(override)
@@ -454,6 +458,14 @@ export function createToolPackageManager(options = {}) {
     // Screenshot 快捷路径窗口为空（No windows found）问题
     if (manifest.id === 'windows-mcp') {
       await applyWindowsMcpPatches(versionDir(manifest)).catch(() => {});
+    }
+    if (manifest.id === 'autocad-mcp' && manifest.version === '1.5.1') {
+      try { await applyAutocadRuntimePatches(versionDir(manifest)); }
+      catch (error) {
+        return { id: manifest.id, version: manifest.version, installDir: versionDir(manifest),
+          executable: null, state: 'not-installed', autoUpdate: false,
+          detail: `AutoCAD runtime repair failed: ${error.message}` };
+      }
     }
     return {
       id: manifest.id,
@@ -1060,6 +1072,9 @@ export function createToolPackageManager(options = {}) {
         ['pip', 'install', '--python', finalVenvPython, '--no-deps', '--no-progress', '--reinstall', '-r', wheelRequirements],
         900_000,
       );
+      if (manifest.id === 'autocad-mcp' && manifest.version === '1.5.1') {
+        await applyAutocadRuntimePatches(dir);
+      }
       await sweepStaleTree(manifest);
 
       await fsp.writeFile(
@@ -1718,6 +1733,11 @@ export async function syncWindowsMcpFork(versionDirPath, forkSrc = resolveWindow
         if (entry.name === '__pycache__') continue;
         await walk(sourcePath, targetPath);
       } else if (entry.isFile()) {
+        const sourceBytes=await fsp.readFile(sourcePath);
+        let currentBytes;
+        try { currentBytes=await fsp.readFile(targetPath); }
+        catch(error) { if(error.code!=='ENOENT') throw error; }
+        if(currentBytes?.equals(sourceBytes)) continue;
         await fsp.copyFile(sourcePath, targetPath);
         copied += 1;
       }
@@ -1769,7 +1789,8 @@ async function applyWindowsMcpPatches(versionDirPath) {
   // Patch 3: uia/core.py — use SendInput instead of deprecated mouse_event for Click/MiddleClick/RightClick
   const corePy = path.join(versionDirPath, 'src', 'windows_mcp', 'uia', 'core.py');
   try {
-    let content = await fsp.readFile(corePy, 'utf8');
+    const originalContent = await fsp.readFile(corePy, 'utf8');
+    let content = originalContent;
     // Patch Click function: replace mouse_event with SendInput
     const oldClick = 'def Click(x: int, y: int, waitTime: float = OPERATION_WAIT_TIME) -> None:\n    """\n    Simulate mouse click at point x, y.\n    x: int.\n    y: int.\n    waitTime: float.\n    """\n    SetCursorPos(x, y)\n    screenWidth, screenHeight = GetScreenSize()\n    mouse_event(\n        MouseEventFlag.LeftDown | MouseEventFlag.Absolute,\n        x * 65535 // screenWidth,\n        y * 65535 // screenHeight,\n        0,\n        0,\n    )\n    time.sleep(0.05)\n    mouse_event(\n        MouseEventFlag.LeftUp | MouseEventFlag.Absolute,\n        x * 65535 // screenWidth,\n        y * 65535 // screenHeight,\n        0,\n        0,\n    )\n    time.sleep(waitTime)';
     const newClick = 'def Click(x: int, y: int, waitTime: float = OPERATION_WAIT_TIME) -> None:\n    """\n    Simulate mouse click at point x, y.\n    x: int.\n    y: int.\n    waitTime: float.\n    """\n    SetCursorPos(x, y)\n    screenWidth, screenHeight = GetScreenSize()\n    dx = x * 65535 // screenWidth\n    dy = y * 65535 // screenHeight\n    SendInput(\n        MouseInput(dx, dy, dwFlags=MouseEventFlag.LeftDown | MouseEventFlag.Absolute),\n    )\n    time.sleep(0.05)\n    SendInput(\n        MouseInput(dx, dy, dwFlags=MouseEventFlag.LeftUp | MouseEventFlag.Absolute),\n    )\n    time.sleep(waitTime)';
@@ -1788,7 +1809,7 @@ async function applyWindowsMcpPatches(versionDirPath) {
     if (content.includes(oldRightClick)) {
       content = content.replace(oldRightClick, newRightClick);
     }
-    await fsp.writeFile(corePy, content, 'utf8');
+    if(content !== originalContent) await fsp.writeFile(corePy, content, 'utf8');
   } catch {}
 }
 

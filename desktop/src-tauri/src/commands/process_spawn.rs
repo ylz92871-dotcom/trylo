@@ -31,6 +31,7 @@ use tauri::State;
 
 use crate::commands::error::{io_error, CommandError};
 use crate::commands::process_state::{ProcessEntry, ProcessMetadata, ProcessState};
+use crate::commands::process_termination::terminate_tree;
 
 #[derive(Debug, Serialize)]
 pub struct ProcessHandleDto {
@@ -81,26 +82,6 @@ fn redact_args(args: &[String]) -> String {
         }
     }
     out.join(" ")
-}
-
-/// Terminate the child process tree by OS pid. `Child::kill` is
-/// not usable from the killer closure because the reaper thread
-/// owns the `Child`; killing by pid lets `wait()` observe it and
-/// keeps grandchildren from surviving (spec §5.3 #3).
-#[cfg(windows)]
-fn terminate_tree(pid: u32) -> std::io::Result<()> {
-    Command::new("taskkill")
-        .args(["/PID", &pid.to_string(), "/T", "/F"])
-        .status()
-        .map(|_| ())
-}
-
-#[cfg(not(windows))]
-fn terminate_tree(pid: u32) -> std::io::Result<()> {
-    Command::new("kill")
-        .args(["-KILL", &pid.to_string()])
-        .status()
-        .map(|_| ())
 }
 
 /// Terminating signal of an exit status. Windows has no signal
@@ -305,9 +286,8 @@ pub async fn process_spawn(
                 writer: Some(Box::new(MutexWriter {
                     inner: Mutex::new(stdin),
                 }) as Box<dyn Write + Send>),
-                killer: Box::new(move || {
-                    let _ = terminate_tree(killer_pid);
-                }),
+                killer: Box::new(move || terminate_tree(killer_pid)),
+                stop_state: crate::commands::process_state::ProcessStopState::Running,
                 label: label.clone(),
                 pid,
                 metadata: ProcessMetadata {

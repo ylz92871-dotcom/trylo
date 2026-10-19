@@ -138,6 +138,42 @@ afterEach(() => {
 });
 
 describe('ConversationRunSupervisor (M4-A Code lifecycle)', () => {
+  it('retains a cold-started CLI until its idle TTL and refreshes that TTL after warm turns', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    try {
+      const sup = new ConversationRunSupervisor({ idleTtlMsMs: 900_000 });
+      await sup.runCode('proj', 'convA', request('first'));
+      loopEnd();
+      clock.mockReturnValue(1_800_000_060_000);
+      await sup.reapIdleRuntimes();
+      expect(stopCalls).toEqual([]);
+      expect(sup.getViewState('proj', 'convA').activeProcessId).toBe('proc-1');
+      await sup.runCode('proj', 'convA', request('second'));
+      expect(spawned).toHaveLength(1);
+      clock.mockReturnValue(1_800_000_120_000);
+      loopEnd();
+      clock.mockReturnValue(1_800_001_019_999);
+      await sup.reapIdleRuntimes();
+      expect(stopCalls).toEqual([]);
+      clock.mockReturnValue(1_800_001_020_000);
+      await sup.reapIdleRuntimes();
+      expect(stopCalls).toEqual(['proc-1']);
+    } finally { clock.mockRestore(); }
+  });
+
+  it('routes output and completion of a warm turn to the current turn callback', async () => {
+    const sup = new ConversationRunSupervisor();
+    const first = vi.fn(), second = vi.fn();
+    await sup.runCode('proj', 'convA', { ...request('first'), onEvents: first });
+    loopEnd(); first.mockClear();
+    await sup.runCode('proj', 'convA', { ...request('second'), onEvents: second });
+    spawned[0]!.onOutput(JSON.stringify({ type: 'text', preview: 'second answer', fullText: 'second answer', turn: 1 }));
+    loopEnd();
+    expect(first).not.toHaveBeenCalled();
+    expect(second.mock.calls.flatMap(([events]) => events).map(event => event.type)).toEqual(['text', 'loop_end']);
+    expect(sup.getViewState('proj', 'convA').running).toBe(false);
+  });
+
   it('spawns on the first turn, then warm-reuses the idle CLI', async () => {
     const sup = new ConversationRunSupervisor();
     await sup.runCode('proj', 'convA', request('p1'));

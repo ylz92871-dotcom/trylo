@@ -25,6 +25,7 @@ export type ConversationRunViewState =
   | 'idle'
   | 'preparing'
   | 'waiting_first_output'
+  | 'waiting_model'
   | 'thinking'
   | 'tool_running'
   | 'finalizing'
@@ -58,22 +59,28 @@ export interface DeriveRunViewStateInput {
  *  "正在准备" while the agent is actually blocked on the user —
  *  training users to distrust the heartbeat. */
 function activeRunState(messages: readonly ChatMessage[]): ConversationRunViewState {
+  let fallback: ConversationRunViewState = 'waiting_first_output';
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
     if (!m) continue;
+    if (m.kind === 'text' && m.role === 'user') break;
+    if (m.kind === 'notice' && m.runtimeState === 'reconnecting') return 'reconnecting';
     if (m.kind === 'tool') {
       if (m.status === 'running' || m.status === 'pending') return 'tool_running';
+      if (fallback === 'waiting_first_output') fallback = 'waiting_model';
     } else if (m.kind === 'thinking') {
       if (m.partial) return 'thinking';
+      if (fallback === 'waiting_first_output') fallback = 'waiting_model';
     } else if (m.kind === 'text' && m.role === 'assistant') {
       if (m.partial) return 'finalizing';
+      if (fallback === 'waiting_first_output') fallback = 'finalizing';
     } else if (m.kind === 'approval') {
       if (m.status === 'pending') return 'awaiting_input';
     } else if (m.kind === 'input_request') {
       if (m.status === 'pending') return 'awaiting_input';
     }
   }
-  return 'waiting_first_output';
+  return fallback;
 }
 
 /** Single source of the visible run state (spec §5.3). */
@@ -110,6 +117,8 @@ export function viewStateLabel(state: ConversationRunViewState): string {
     case 'preparing':
     case 'waiting_first_output':
       return '正在准备…';
+    case 'waiting_model':
+      return '等待模型响应…';
     case 'thinking':
       return '思考中…';
     case 'tool_running':

@@ -24,6 +24,7 @@ import { hostAdapter } from './index';
 import { localProcessIdentity } from './process-identity';
 import type { FilePath } from './types';
 import type { LoopEvent } from './loop-events';
+import { legacyConnectionEnv } from './legacy-connection-env';
 import { buildUserPrompt, type ControlFrame } from './control-protocol';
 import { tailTryloEvents, type TailHandle } from './loop-event-tailer';
 export { tailTryloEvents, type TailEventsArgs, type TailHandle } from './loop-event-tailer';
@@ -135,18 +136,10 @@ function buildCliSpawnArgs(input: BuildCliSpawnArgsInput): {
   env: Record<string, string>;
 } {
   const env: Record<string, string> = {
+    TRYLO_DESKTOP_FILE_DIFFS: '1',
     CLAUDE_CODE_LOOP_EVENTS_FILE: input.eventsFile,
+    ...legacyConnectionEnv(input),
   };
-  if (input.apiKey) {
-    env.ANTHROPIC_API_KEY = input.apiKey;
-    if (input.apiFormat === 'openai' && input.apiKeyHeader) {
-      const prefix = input.apiKeyPrefix ?? '';
-      env[input.apiKeyHeader] = `${prefix}${input.apiKey}`;
-    }
-  }
-  if (input.apiHost) env.ANTHROPIC_BASE_URL = input.apiHost;
-  if (input.apiModel) env.ANTHROPIC_MODEL = input.apiModel;
-  if (input.extraHeadersText) env.ANTHROPIC_CUSTOM_HEADERS = input.extraHeadersText;
   // §4.2: a Tool Profile contributes process env, but it must never rewrite
   // the connection/auth keys built above — a Profile is a leaf, not an owner.
   if (input.spawnEnv) {
@@ -156,6 +149,8 @@ function buildCliSpawnArgs(input: BuildCliSpawnArgsInput): {
     }
   }
 
+  // This transport belongs to Desktop, including when a tool profile adds env.
+  env.TRYLO_DESKTOP_TOOL_POLICY = '1';
   // P2: the permission level is the authoritative source for
   // `--permission-mode` + `--tools`. `codeMode` (chat/plan/agent) is
   // the user's interaction intent — it no longer implies permission.

@@ -178,9 +178,14 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
   registry
     .register('remote', 'status', () => remote.status())
     .register('remote', 'enable', (params) => remote.enable(params))
+    .register('remote', 'loadConfiguration', (params) => remote.loadConfiguration(params))
+    .register('remote', 'saveConfiguration', (params) => remote.saveConfiguration(params))
     .register('remote', 'disable', () => remote.disable())
     .register('remote', 'publish', (event) => remote.publish(event))
     .register('remote', 'pairingInfo', () => remote.pairingInfo())
+    .register('remote', 'relayLogin', params => remote.relayLogin(params))
+    .register('remote', 'relayStatus', () => remote.relayStatus())
+    .register('remote', 'relayLogout', () => remote.relayLogout())
     .register('remote', 'respond', (params) => remote.respond(params))
     .register('remote', 'emit', (params) => remote.emitToHandler(params))
     .register('remote', 'importIdentity', (params) => remote.importIdentity(params));

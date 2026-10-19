@@ -14,6 +14,7 @@ import { normalizeConversationResults } from '../results/conversation-result-nor
 import { normalizePersistedToolResultContent } from '../tooling/tool-result-content';
 import { isTauri } from './tauri-detect';
 import { normalizeMessageIds } from '../components/chat/message-identity';
+import { parsePermissionLevel, type PermissionLevel } from '../permission/permission-policy';
 import { dedupeCapabilityNotices } from '../components/chat/capability-notice';
 
 export type ConversationKind = TopLevelMode;
@@ -44,6 +45,8 @@ export interface PersistedWorkAttachment {
 
 export interface ConversationRecord {
   readonly session: ConversationSession;
+  /** Explicit composer choice, retained across reloads and Code/Work switches. */
+  readonly permissionLevel?: PermissionLevel;
   readonly messages: readonly ChatMessage[];
   readonly draft: string;
   /** P2-1 (spec §6.5): mode-scoped result summaries. Optional and
@@ -319,8 +322,10 @@ export function normalizeWorkspaceHistory(value: unknown): WorkspaceConversation
       const results = normalizeConversationResults(record.results);
       const attachments = normalizeWorkAttachments(record.attachments);
       const managedChildren = deserializeManagedChildBindings(record.managedChildren);
+      const permissionLevel = parsePermissionLevel(record.permissionLevel);
       conversations[session.id] = {
         session,
+        ...(permissionLevel ? { permissionLevel } : {}),
         messages: normalizeMessageIds(dedupeCapabilityNotices(dedupeCompactions(migrateToolMessages(safeMessages(record.messages))))),
         draft: typeof record.draft === 'string' ? record.draft : '',
         // P2-1: legacy top-level `history.artifacts` is ignored — it has no
@@ -415,6 +420,20 @@ export function createConversation(
   };
 }
 
+/** Also creates the draft when the picker is used before the first chat exists. */
+export function setConversationPermission(
+  history: WorkspaceConversationHistory,
+  kind: ConversationKind,
+  level: PermissionLevel,
+  codeMode: CodeMode = 'agent',
+): WorkspaceConversationHistory {
+  const ready = ensureConversation(history, kind, codeMode);
+  const id = ready.activeByKind[kind]!;
+  const record = ready.conversations[id]!;
+  if (record.permissionLevel === level) return ready;
+  return { ...ready, conversations: { ...ready.conversations, [id]: { ...record, permissionLevel: level } } };
+}
+
 export function ensureConversation(
   history: WorkspaceConversationHistory,
   kind: ConversationKind,
@@ -448,6 +467,48 @@ export function selectConversation(
   return {
     ...history,
     activeByKind: { ...history.activeByKind, [record.session.kind]: id },
+  };
+}
+
+/** The composer selects a task type; it must not navigate to an old chat.
+ * An unused conversation can keep its identity and draft. Once it owns a
+ * transcript, active run, or surface-specific data, leave it intact and start
+ * a fresh conversation of the requested kind. */
+export function switchConversationKind(
+  history: WorkspaceConversationHistory,
+  input: {
+    from: ConversationKind;
+    to: ConversationKind;
+    codeMode: CodeMode;
+    canReuse: boolean;
+    now?: number;
+  },
+): WorkspaceConversationHistory {
+  if (input.from === input.to) return history;
+  const id = history.activeByKind[input.from];
+  const record = id ? history.conversations[id] : undefined;
+  if (!id || !record || record.session.kind !== input.from || record.session.archivedAt
+    || !input.canReuse || record.messages.length > 0 || record.session.turnCount > 0
+    || record.session.taskId || record.session.turnId || record.results
+    || record.attachments?.length || Object.keys(record.managedChildren ?? {}).length > 0) {
+    return createConversation(history, { kind: input.to, codeMode: input.codeMode, now: input.now }).history;
+  }
+  const defaultTitle = input.from === 'code' ? '新任务' : '新工作任务';
+  const session: ConversationSession = {
+    ...record.session,
+    kind: input.to,
+    mode: input.to === 'work' ? 'office' : input.codeMode,
+    // Retain the Code preference while the unused task is in Work mode.
+    codeMode: input.codeMode,
+    title: record.session.title === defaultTitle
+      ? (input.to === 'work' ? '新工作任务' : '新任务')
+      : record.session.title,
+    updatedAt: input.now ?? Date.now(),
+  };
+  return {
+    ...history,
+    activeByKind: { ...history.activeByKind, [input.from]: null, [input.to]: id },
+    conversations: { ...history.conversations, [id]: { ...record, session } },
   };
 }
 

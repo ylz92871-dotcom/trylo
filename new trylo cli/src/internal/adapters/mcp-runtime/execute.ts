@@ -1,6 +1,7 @@
 import type { JsonObject } from "../../protocol/envelope.js";
 import type { McpCallFailureCode } from "../../ports/mcp-client.js";
 import type { ToolCallRequest, ToolOutcome, ToolPort } from "../../ports/tools.js";
+import { deliverMcpImages } from "./image-delivery.js";
 import {
   MAX_MCP_CALL_TIMEOUT_MS,
   MIN_MCP_CALL_TIMEOUT_MS,
@@ -45,7 +46,7 @@ const MCP_CALL_FAILURE_CODES: Readonly<Record<McpCallFailureCode, string>> = {
   stderr_overflow: "mcp_stderr_overflow",
 };
 
-export function createMcpToolPort(mounted: ReadonlyArray<McpMountedTool>): ToolPort {
+export function createMcpToolPort(mounted: ReadonlyArray<McpMountedTool>, workspaceRoot?: string): ToolPort {
   const byName = new Map<string, McpMountedTool>(mounted.map((item) => [item.binding.name, item]));
   const inFlight = new Map<string, AbortController>();
 
@@ -84,7 +85,7 @@ export function createMcpToolPort(mounted: ReadonlyArray<McpMountedTool>): ToolP
           controller.signal,
         );
         return result.ok
-          ? result.outcome
+          ? await deliverMcpImages(result.outcome, workspaceRoot, controller.signal)
           : {
               outcome: "error",
               code: mcpFailureCode(result.code),

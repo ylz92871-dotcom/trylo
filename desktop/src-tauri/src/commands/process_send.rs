@@ -84,7 +84,8 @@ mod tests {
             "p1".to_owned(),
             ProcessEntry {
                 writer,
-                killer: Box::new(|| {}),
+                killer: Box::new(|| Ok(())),
+                stop_state: crate::commands::process_state::ProcessStopState::Running,
                 label: "test".to_owned(),
                 pid: 1,
                 metadata: ProcessMetadata::default(),

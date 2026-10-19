@@ -3,15 +3,30 @@
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 
+export function nativeBrowserMcpArgs(gate, args) {
+  const expected = `${gate.replace('http:', 'ws:')}/cdp/browser`;
+  const output = [];
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (arg !== '--browserUrl' && !arg.startsWith('--browserUrl=')) { output.push(arg); continue; }
+    const value = arg === '--browserUrl' ? args[++index] : arg.slice('--browserUrl='.length);
+    if (value !== gate && value !== `${gate}/`) throw new Error('native browser endpoint does not match its session');
+    // Compatibility for profiles produced by an already-running Service Host.
+    output.push('--wsEndpoint', expected);
+  }
+  return output;
+}
+
 export async function runNativeBrowserMcp({ gate, entry, args = [], stdin = process.stdin, stdout = process.stdout, stderr = process.stderr, spawnProcess = spawn } = {}) {
   if (!/^http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]+$/.test(gate) || !entry) throw new Error('invalid native browser MCP bridge');
+  const childArgs = nativeBrowserMcpArgs(gate, args);
   const abort = new AbortController();
   const post = async (route, value, signal = abort.signal) => {
     const response = await fetch(`${gate}/${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value), signal });
     const result = await response.json(); if (!response.ok) throw new Error(result.error ?? `HTTP ${response.status}`); return result;
   };
   const { clientId } = await post('client/open', { pid: process.pid });
-  const child = spawnProcess(process.execPath, [entry, ...args], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  const child = spawnProcess(process.execPath, [entry, ...childArgs], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   const leases = new Map(), waiting = new Map();
   let disposed = false, outputTail = Promise.resolve();
   const writeError = (id, error) => stdout.write(JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32000, message: String(error.message ?? error) } }) + '\n');

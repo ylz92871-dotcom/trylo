@@ -70,6 +70,19 @@ async function connect(endpoint) {
   ws.on('message', raw => { const message = JSON.parse(String(raw)); pending.get(message.id)?.(message); pending.delete(message.id); });
   return { ws, send(method, params = {}, sessionId) { return new Promise(resolve => { const id = ++sequence; pending.set(id, resolve); ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) })); }); } };
 }
+
+test('Chrome gets a direct scoped WebSocket while unscoped discovery stays closed', async t => {
+  const f = await fixture(t);
+  const config = await f.service.configure({ packageId: 'chrome-devtools', projectRoot: 'D:/native-test', conversationId: 'one' });
+  assert.deepEqual(config.args, ['--wsEndpoint', `${f.endpoint.replace('http:', 'ws:')}/cdp/browser`]);
+  assert.equal((await fetch(`${new URL(f.endpoint).origin}/json/version`)).status, 404);
+  const socket = new WebSocket(config.args[1]);
+  t.after(() => socket.terminate());
+  await new Promise((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject); });
+  const playwright = await f.service.configure({ packageId: 'playwright', projectRoot: 'D:/native-test', conversationId: 'one' });
+  assert.deepEqual(playwright.args, ['--cdp-endpoint', `${f.endpoint}/`]);
+  assert.equal(playwright.gate, config.gate);
+});
 test('takeover blocks new entire MCP calls and waits for the active lease to finish', async t => {
   const f = await fixture(t);
   const { body: { clientId } } = await f.post('client/open', { pid: process.pid });

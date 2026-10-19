@@ -81,6 +81,13 @@ const POLICIES: Record<ConversationRunViewState, ConversationMotionPolicy> = {
     turnProgressSpin: false,
     toolLoaderSpin: false,
   },
+  waiting_model: {
+    primary: 'footer_dots',
+    headerPulse: true,
+    footerDots: true,
+    turnProgressSpin: false,
+    toolLoaderSpin: false,
+  },
 
   // Thinking → the footer three-dots is the single HIGH-salience
   // primary. The header dot keeps its low pulse beside it: the

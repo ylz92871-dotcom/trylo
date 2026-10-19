@@ -106,6 +106,7 @@ export interface TextMessage extends MessageBase {
 }
 
 export interface NoticeMessage extends MessageBase {
+  readonly runtimeState?: 'reconnecting';
   readonly contextWindow?: number;
   /** Hidden measurement, distinct from cumulative billing on a turn. */
   readonly contextTokens?: number;

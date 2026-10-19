@@ -20,7 +20,8 @@ export const CLI_RUNTIME_PROTOCOLS: readonly CliRuntimeProtocol[] = [
 ];
 
 /** Public source builds use the new CLI without a private development env file. */
-export const DEFAULT_CLI_RUNTIME_PROTOCOL: CliRuntimeProtocol = 'trylo-v1';
+export const DEFAULT_CLI_RUNTIME_PROTOCOL: CliRuntimeProtocol =
+  parseCliRuntimeProtocol(import.meta.env.VITE_TRYLO_DEFAULT_CLI_RUNTIME) ?? 'trylo-v1';
 
 export function parseCliRuntimeProtocol(value: unknown): CliRuntimeProtocol | null {
   return value === 'legacy-stream-json' || value === 'trylo-v1' ? value : null;

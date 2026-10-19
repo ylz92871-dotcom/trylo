@@ -159,7 +159,7 @@ describe('settings-store', () => {
   it('round-trips a saved value', () => {
     saveSettings(SAMPLE);
     const s = loadSettings();
-    expect(s).toEqual(SAMPLE);
+    expect(s).toEqual({ ...SAMPLE, remote: { ...remoteSettingsDefaults(), ...SAMPLE.remote } });
   });
 
   it('loads pre-Phase-2 settings (no companion field) with the default companion', () => {
@@ -301,8 +301,10 @@ describe('settings-store', () => {
     });
   });
 
-  it('remoteSettingsDefaults matches the legacy plugin defaults', () => {
+  it('keeps the existing tunnel as the default connection and exposes an optional server address', () => {
     expect(remoteSettingsDefaults()).toEqual({
+      connectionMode: 'tunnel',
+      relayUrl: 'https://relay.trylocode.me',
       enabled: false,
       port: 49380,
       publicUrl: '',
@@ -360,7 +362,12 @@ describe('settings-store', () => {
   it('round-trips a full remote group', () => {
     saveSettings(SAMPLE);
     const s = loadSettings();
-    expect(s.remote).toEqual(SAMPLE.remote);
+    expect(s.remote).toEqual({ ...remoteSettingsDefaults(), ...SAMPLE.remote });
+  });
+
+  it('persists an explicit server choice across restart', () => {
+    saveSettings({ ...settingsDefaults, remote: { ...settingsDefaults.remote, connectionMode: 'server', relayUrl: 'https://relay.example.com', enabled: true } });
+    expect(loadSettings().remote).toMatchObject({ connectionMode: 'server', relayUrl: 'https://relay.example.com', enabled: true });
   });
 
   describe('saved connection profiles (我的配置)', () => {

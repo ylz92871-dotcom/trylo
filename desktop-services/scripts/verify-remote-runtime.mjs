@@ -61,6 +61,12 @@ try {
   await Promise.race([
     (async () => {
       await ready;
+      const account = await request('remote.relayStatus', {});
+      if (account.loggedIn || account.online) throw new Error('isolated runtime unexpectedly has a relay account');
+      const preferences = await request('remote.loadConfiguration', { enabled: false, connectionMode: 'server', relayUrl: 'https://example.invalid', port });
+      if (preferences.enabled || preferences.connectionMode !== 'server') throw new Error('remote preference restore failed');
+      const saved = await request('remote.saveConfiguration', { ...preferences, connectionMode: 'tunnel' });
+      if (saved.connectionMode !== 'tunnel' || saved.enabled) throw new Error('remote preference save failed');
       const status = await request('remote.enable', live ? { port, tunnelMode: 'named' } : { port, tunnelMode: 'manual', publicUrl: 'https://example.invalid' });
       if (!status.running) throw new Error('gateway did not start');
       if (live && (status.port === port || status.tunnelMode !== 'quick')) throw new Error('conflict did not create an independent tunnel');
@@ -82,7 +88,7 @@ try {
         console.log(JSON.stringify({ authenticatedPublicSnapshot: true, desktopIdentityMatched: true }));
       }
       await request('remote.disable', {});
-      console.log(JSON.stringify({ ready: true, gatewayRunning: true, qrGenerated: true, stopped: true }));
+      console.log(JSON.stringify({ ready: true, configurationPersisted: true, gatewayRunning: true, qrGenerated: true, stopped: true }));
     })(),
     new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('runtime verification timed out')), live ? 80000 : 12000); }),
   ]);

@@ -9,8 +9,8 @@
 //
 // The contract:
 //   1. Children the shell spawned itself die first (Code/Work CLI, PTY, LSP,
-//      workd). Each is removed from its table as it is killed, so a second
-//      shutdown is a no-op rather than a double-kill.
+//      workd). CLI records remain until their reapers observe exit; accepted
+//      stop requests are deduplicated and refused requests remain retryable.
 //   2. The service host dies last among the sidecars: its graceful
 //      `pet.disable` frame is what tells the WPF pet to exit, so killing it
 //      first would orphan the pet window.
@@ -38,19 +38,20 @@ use crate::commands::workd_state::WorkdState;
 pub const COMPANION_IMAGE: &str = "TryloDesktopPet.exe";
 
 /// Kill every registered Trylo CLI / CC CLI child. Returns how many were
-/// terminated; the table is left empty.
+/// given a successful termination request; reapers release the table entries.
 pub fn kill_all_processes(state: &ProcessState) -> usize {
     let Ok(mut processes) = state.processes.lock() else {
         return 0;
     };
-    let ids: Vec<String> = processes.keys().cloned().collect();
     let mut killed = 0;
-    for id in ids {
-        // `remove` (not `values_mut`): a killed entry must not survive to be
-        // killed again by a second shutdown pass.
-        if let Some(mut entry) = processes.remove(&id) {
-            (entry.killer)();
-            killed += 1;
+    for entry in processes.values_mut() {
+        match entry.request_stop() {
+            Ok(true) => killed += 1,
+            Ok(false) => {}
+            Err(error) => eprintln!(
+                "[process] termination request failed for pid {}: {error}",
+                entry.pid
+            ),
         }
     }
     killed
@@ -191,7 +192,11 @@ mod tests {
                 "a".to_string(),
                 crate::commands::process_state::ProcessEntry {
                     writer: Some(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>),
-                    killer: spy_killer(&SPAWN_KILLS),
+                    killer: Box::new(|| {
+                        SPAWN_KILLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        Ok(())
+                    }),
+                    stop_state: crate::commands::process_state::ProcessStopState::Running,
                     label: "trylo-core".to_string(),
                     pid: 100,
                     metadata: crate::commands::process_state::ProcessMetadata::default(),
@@ -201,7 +206,11 @@ mod tests {
                 "b".to_string(),
                 crate::commands::process_state::ProcessEntry {
                     writer: Some(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>),
-                    killer: spy_killer(&SPAWN_KILLS),
+                    killer: Box::new(|| {
+                        SPAWN_KILLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        Ok(())
+                    }),
+                    stop_state: crate::commands::process_state::ProcessStopState::Running,
                     label: "cc-cli".to_string(),
                     pid: 101,
                     metadata: crate::commands::process_state::ProcessMetadata::default(),
@@ -217,7 +226,7 @@ mod tests {
         let state = seed_process_state();
         assert_eq!(kill_all_processes(&state), 2);
         assert_eq!(SPAWN_KILLS.load(std::sync::atomic::Ordering::SeqCst), 2);
-        // Idempotent: the table is empty, so a second pass kills nothing.
+        // Pending exit records stay owned; a second pass sends no new request.
         assert_eq!(kill_all_processes(&state), 0);
         assert_eq!(SPAWN_KILLS.load(std::sync::atomic::Ordering::SeqCst), 2);
     }

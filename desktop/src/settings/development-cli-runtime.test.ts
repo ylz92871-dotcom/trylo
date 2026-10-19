@@ -37,3 +37,17 @@ it('never overrides a production build', () => {
   saveSettings(settingsDefaults);
   expect(loadSettings()).toEqual(settingsDefaults);
 });
+
+it('keeps an explicit runtime selection after save and reload even with a development preview', () => {
+  const stored = { ...settingsDefaults, cliRuntimeProtocol: 'legacy-stream-json',
+    cliRuntimeSelection: 'user', cliPath: 'C:/trylo-cli/cli.js' };
+  window.localStorage.setItem('trylo:settings:v1', JSON.stringify(stored));
+  expect(loadSettings()).toMatchObject({ cliRuntimeProtocol: 'legacy-stream-json',
+    cliRuntimeSelection: 'user', cliPath: stored.cliPath });
+});
+
+it('pairs a temporary legacy preview with the legacy entry when the previous v1 path was empty', () => {
+  vi.stubEnv('VITE_TRYLO_CLI_RUNTIME_PROTOCOL', 'legacy-stream-json');
+  saveSettings({ ...settingsDefaults, cliPath: '' });
+  expect(loadSettings()).toMatchObject({ cliRuntimeProtocol: 'legacy-stream-json', cliPath: settingsDefaults.cliPath });
+});

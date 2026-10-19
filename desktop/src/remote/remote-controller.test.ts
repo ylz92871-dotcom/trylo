@@ -54,6 +54,7 @@ function waitFor(fn: () => boolean, what: string): Promise<void> {
 }
 
 function createHarness(options: { chatHandle?: boolean } = {}) {
+  let workspaceName = 'Workspace';
   const responded: RemoteRespondParams[] = [];
   const published: RemoteGatewayEvent[] = [];
 
@@ -152,7 +153,7 @@ function createHarness(options: { chatHandle?: boolean } = {}) {
     chatHandle: chatHandle as never,
     history: () => emptyWorkspaceHistory(),
     workspaceIndex: () => null,
-    currentWorkspace: () => ({ id: 'w1', root: '/w', name: 'Workspace' }),
+    currentWorkspace: () => ({ id: 'w1', root: '/w', name: workspaceName }),
     conversationKind: () => 'code',
     codePermissions: () => [],
     workApprovals: () => [],
@@ -162,6 +163,8 @@ function createHarness(options: { chatHandle?: boolean } = {}) {
   });
 
   return {
+    setWorkspaceName: (name: string) => { workspaceName = name; },
+    settings,
     controller,
     manager,
     port,
@@ -202,6 +205,25 @@ beforeEach(() => {
 });
 
 describe('RemoteController lifecycle', () => {
+  it('does not rebuild the transport when pairing after workspace metadata changes', async () => {
+    const h = createHarness();
+    await h.controller.setEnabled(true);
+    h.fireHealth('ready');
+    h.setWorkspaceName('Restored workspace');
+    await h.controller.pairing();
+    expect(h.port.enable).toHaveBeenCalledTimes(1);
+    expect(h.port.disable).not.toHaveBeenCalled();
+  });
+  it('applies a saved connection-mode change while remote access is already enabled', async () => {
+    const h = createHarness();
+    await h.controller.setEnabled(true);
+    h.settings.remote = { ...h.settings.remote, connectionMode: 'server', relayUrl: 'https://relay.example.com' };
+    await h.controller.setEnabled(true);
+    expect(h.port.disable).toHaveBeenCalledOnce();
+    expect(h.port.enable).toHaveBeenCalledTimes(2);
+    expect(h.port.enable).toHaveBeenLastCalledWith(expect.objectContaining({ connectionMode: 'server', relayUrl: 'https://relay.example.com' }));
+    await h.controller.setEnabled(false);
+  });
   it('setEnabled(true) ensures the host, enables the gateway, and publishes the full snapshot', async () => {
     const h = createHarness();
     projectionMock.buildFullSnapshot.mockReturnValue([
@@ -267,6 +289,32 @@ describe('RemoteController lifecycle', () => {
     h.fireStatus({ ...h.controller.status(), publicUrl: '', reasonCode: 'tunnel_start_failed' });
     await expect(h.controller.pairing()).resolves.toHaveProperty('qrDataUrl');
     expect(h.port.enable).toHaveBeenCalledTimes(2);
+  });
+
+  it('refreshing a server QR waits for the relay without restarting the local gateway', async () => {
+    const h = createHarness();
+    h.settings.remote = { ...h.settings.remote, connectionMode: 'server', relayUrl: 'https://relay.example.com' };
+    await h.controller.setEnabled(true);
+    h.fireHealth('ready');
+    h.fireStatus({ ...h.controller.status(), connectionMode: 'server', running: false, publicUrl: 'https://relay.example.com', reasonCode: 'relay_reconnecting' });
+    h.port.pairingInfo.mockImplementationOnce(async () => {
+      h.fireStatus({ ...h.controller.status(), running: true, reasonCode: '' });
+      return { pairing: { protocol: 1, service: 'trylo-remote', deviceId: 'd', deviceName: 'Desktop', workspaceName: 'Workspace', baseUrl: 'https://relay.example.com', token: 't' }, qrDataUrl: 'data:image/png;base64,reconnected' };
+    });
+    await expect(h.controller.pairing()).resolves.toHaveProperty('qrDataUrl', 'data:image/png;base64,reconnected');
+    expect(h.port.enable).toHaveBeenCalledTimes(1);
+    expect(h.port.disable).not.toHaveBeenCalled();
+  });
+
+  it('does not describe relay network failures as missing service files', async () => {
+    const h = createHarness();
+    h.settings.remote = { ...h.settings.remote, connectionMode: 'server', relayUrl: 'https://relay.example.com' };
+    await h.controller.setEnabled(true);
+    h.fireHealth('ready');
+    h.fireStatus({ ...h.controller.status(), connectionMode: 'server', running: false, reasonCode: 'relay_reconnecting' });
+    h.port.pairingInfo.mockRejectedValueOnce(new Error('服务器连接暂时中断，正在自动重连。请稍后重试生成二维码。'));
+    await expect(h.controller.pairing()).rejects.toThrow('服务器连接暂时中断');
+    expect(h.port.enable).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the original startup failure visible and never requests QR from a stopped host', async () => {

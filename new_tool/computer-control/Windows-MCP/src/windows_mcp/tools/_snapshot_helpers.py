@@ -25,6 +25,26 @@ logger = logging.getLogger(__name__)
 MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT = 1920, 1080
 
 
+def _cache_original_preview(root: str, data: bytes) -> dict:
+    digest = hashlib.sha256(data).hexdigest()
+    path = Path(root).resolve() / digest[:2] / f"{digest}.png"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with path.open("xb") as preview_file:
+            preview_file.write(data)
+    except (FileExistsError, PermissionError):
+        # Windows can report EACCES for CREATE_NEW on an existing read-only
+        # file. Reuse only the exact immutable bytes; never change its ACL.
+        if path.is_symlink() or not path.is_file():
+            raise
+        if path.stat().st_size != len(data) or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+            raise ValueError("Original preview cache checksum mismatch")
+    return {
+        "id": f"bin-{digest[:16]}", "storage": "ephemeral-tool-cache",
+        "path": str(path), "mimeType": "image/png", "size": len(data), "sha256": digest,
+    }
+
+
 def _screenshot_scale() -> float:
     value = os.getenv("WINDOWS_MCP_SCREENSHOT_SCALE", "1.0")
     try:
@@ -112,6 +132,7 @@ def capture_desktop_state(
 
     screenshot_bytes = None
     preview_ref = None
+    preview_warning = None
     if use_vision and desktop_state.screenshot is not None:
         buffered = io.BytesIO()
         desktop_state.screenshot.save(buffered, format="PNG")
@@ -119,22 +140,13 @@ def capture_desktop_state(
         buffered.close()
         preview_cache = os.getenv("WINDOWS_MCP_PREVIEW_CACHE") if native_preview else None
         if preview_cache:
-            digest = hashlib.sha256(screenshot_bytes).hexdigest()
-            preview_path = Path(preview_cache).resolve() / digest[:2] / f"{digest}.png"
-            preview_path.parent.mkdir(parents=True, exist_ok=True)
             try:
-                with preview_path.open("xb") as preview_file:
-                    preview_file.write(screenshot_bytes)
-            except FileExistsError:
-                # Content-addressed cache entries are immutable. Reuse a
-                # matching entry without reopening it for write on Windows.
-                if hashlib.sha256(preview_path.read_bytes()).hexdigest() != digest:
-                    raise ValueError("Original preview cache checksum mismatch")
-            preview_ref = {
-                "id": f"bin-{digest[:16]}", "storage": "ephemeral-tool-cache",
-                "path": str(preview_path), "mimeType": "image/png",
-                "size": len(screenshot_bytes), "sha256": digest,
-            }
+                preview_ref = _cache_original_preview(preview_cache, screenshot_bytes)
+            except OSError:
+                # The original-resolution workbench cache is optional. A
+                # working capture must still deliver its inline model image.
+                logger.warning("Original screenshot preview cache unavailable", exc_info=True)
+                preview_warning = "Original preview cache unavailable; the screenshot image is still attached. Do not recapture to repair the cache."
             # Keep the model image within its existing dimension limit; the
             # Desktop workbench reads the lossless original through BinaryRef.
             model_image = desktop_state.screenshot.copy()
@@ -168,6 +180,7 @@ def capture_desktop_state(
             observation_receipt = candidate
 
     return {
+        "preview_warning": preview_warning,
         "desktop_state": desktop_state,
         "interactive_elements": interactive_elements,
         "scrollable_elements": scrollable_elements,
@@ -362,6 +375,8 @@ def build_snapshot_response(
     UI Tree:
     {semantic_tree or "No elements found."}''')
 
+    if capture_result.get("preview_warning"):
+        response_text += "\nWARNING: " + capture_result["preview_warning"]
     response = [response_text]
     if screenshot_bytes:
         response.append(Image(data=screenshot_bytes, format="png"))

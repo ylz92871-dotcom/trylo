@@ -28,6 +28,7 @@
 //   - Anything else is dropped (Phase 3 will add more).
 
 import type { LoopEvent, LoopEventType } from './loop-events';
+import { FILE_MUTATION_SCHEMA, normalizeFileMutationFacts } from '../tooling/file-mutation-facts';
 import { parseControlFrame, type ControlFrame } from './control-protocol';
 import {
   parseMcpMetaStructured,
@@ -118,6 +119,27 @@ export class StreamTranslator {
     }
     const type = parsed['type'];
     if (typeof type !== 'string') return [];
+    if (type === 'api_retry' || (type === 'system' && parsed['subtype'] === 'api_retry')) {
+      const seq = this.nextSeq++;
+      const ts = Date.now();
+      const status = Number(parsed['error_status'] ?? parsed['errorStatus']) || 0;
+      const events: LoopEvent[] = [{ type: 'api_retry', seq, ts,
+        attempt: Number(parsed['attempt']) || 1,
+        maxRetries: Number(parsed['max_retries'] ?? parsed['maxRetries']) || 0,
+        retryDelayMs: Math.max(0, Number(parsed['retry_delay_ms'] ?? parsed['retryDelayMs']) || 0),
+        errorStatus: status,
+        error: typeof parsed['error'] === 'string' ? parsed['error'] : '',
+      }];
+      // Desktop launches the legacy CLI in API-key-only --bare mode. Repeating
+      // a rejected credential for minutes cannot repair it. The controller's
+      // existing abort path stops only this child and settles its busy state.
+      if (status === 401 || status === 403) {
+        events.push({ type: 'runtime_warning', seq, ts, code: 'provider_auth_failed',
+          message: `模型服务拒绝了当前连接（HTTP ${status}）。请检查此对话所选模型的 API 密钥、接口地址和认证请求头；本次已停止重试。` },
+        { type: 'aborted', seq, ts, reason: 'error' });
+      }
+      return events;
+    }
     const parentId = typeof parsed['parent_tool_use_id'] === 'string'
       && parsed['parent_tool_use_id'].length > 0
       ? parsed['parent_tool_use_id']
@@ -356,6 +378,11 @@ export class StreamTranslator {
           }
           const structured = parseMcpMetaStructured(message['mcpMeta']);
           if (structured) blocks.push(structured);
+          const nativeResult = parsed['tool_use_result'];
+          if (nativeResult && typeof nativeResult === 'object' && !Array.isArray(nativeResult)) {
+            const facts = normalizeFileMutationFacts((nativeResult as Record<string, unknown>)['tryloFileChanges']);
+            if (facts?.length) blocks.push({ type: 'structured', schema: FILE_MUTATION_SCHEMA, value: facts });
+          }
           const preview = parseMcpPreview(message['mcpMeta']);
           if (preview && !blocks.some(block => block.type === 'image' && 'ref' in block && block.ref.sha256 === (preview.type === 'image' ? preview.ref.sha256 : ''))) blocks.push(preview);
           const textSummary = summarizeToolResultContent(blocks);

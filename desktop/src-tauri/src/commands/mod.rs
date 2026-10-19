@@ -27,6 +27,7 @@ pub mod process_send;
 pub mod process_spawn;
 pub mod process_state;
 pub mod process_stop;
+pub mod process_termination;
 pub mod pty;
 pub mod read_file;
 pub mod read_file_bytes;

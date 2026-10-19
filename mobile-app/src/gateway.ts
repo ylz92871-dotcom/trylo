@@ -91,6 +91,8 @@ export interface RemoteSnapshot {
 }
 
 export interface GatewayConfig {
+  connectionMode?: 'tunnel' | 'server';
+  relayDeviceId?: string;
   baseUrl: string;
   token?: string;
   demo?: boolean;
@@ -99,6 +101,8 @@ export interface GatewayConfig {
 }
 
 export interface PairingData {
+  connectionMode?: 'tunnel' | 'server';
+  relayDeviceId?: string;
   protocol: number;
   service: string;
   deviceId: string;
@@ -202,7 +206,7 @@ const METADATA_KEY = 'trylo-remote.gateway.metadata.v1';
 const SECRET_KEY = 'gateway_token';
 const SECURE_STORAGE_PREFIX = 'trylo_remote_';
 
-type GatewayMetadata = Pick<GatewayConfig, 'baseUrl' | 'deviceId' | 'deviceName'>;
+type GatewayMetadata = Pick<GatewayConfig, 'baseUrl' | 'deviceId' | 'deviceName' | 'connectionMode' | 'relayDeviceId'>;
 
 const demoSnapshot: RemoteSnapshot = {
   device: {
@@ -350,6 +354,8 @@ export function parsePairingData(raw: string): PairingData {
   }
   const token = String(pairing.token || '');
   if (token.length < 32) throw new Error('配对密钥不完整。');
+  if (pairing.connectionMode !== undefined && !['server', 'tunnel'].includes(pairing.connectionMode)) throw new Error('不支持的连接方式。');
+  if (pairing.connectionMode === 'server' && (!/^[a-f0-9-]{36}$/.test(String(pairing.relayDeviceId || '')) || !pairing.deviceId)) throw new Error('服务器设备信息不完整。');
   return {
     protocol: 1,
     service: 'trylo-remote',
@@ -358,6 +364,8 @@ export function parsePairingData(raw: string): PairingData {
     workspaceName: String(pairing.workspaceName || 'Trylo Code'),
     baseUrl,
     token,
+    connectionMode: pairing.connectionMode,
+    relayDeviceId: pairing.relayDeviceId,
   };
 }
 
@@ -406,8 +414,17 @@ export class RemoteGatewayClient {
   }
 
   async configureFromPairing(pairing: PairingData) {
+    let token = pairing.token;
+    if (pairing.connectionMode === 'server') {
+      const anonymous = new RemoteGatewayClient({ baseUrl: validateGatewayBaseUrl(pairing.baseUrl, import.meta.env.DEV), demo: false });
+      const result = await anonymous.request<{ accessToken: string; relayDeviceId: string; desktopIdentity: string }>('/relay/pair', {
+        method: 'POST', body: JSON.stringify({ ticket: pairing.token }),
+      }, 15_000);
+      if (result.relayDeviceId !== pairing.relayDeviceId || result.desktopIdentity !== pairing.deviceId || typeof result.accessToken !== 'string' || result.accessToken.length < 32) throw new Error('服务器返回的电脑身份不一致，请重新扫码。');
+      token = result.accessToken;
+    }
     // Verify reachability and identity before replacing the saved computer.
-    const candidate = new RemoteGatewayClient({ ...pairing, demo: false });
+    const candidate = new RemoteGatewayClient({ ...pairing, token, demo: false });
     const snapshot = await candidate.getSnapshot();
     if (pairing.deviceId && snapshot.device.id !== pairing.deviceId) {
       throw new Error('电脑身份与配对数据不一致，请在 Desktop 重新生成配对码。');
@@ -416,11 +433,13 @@ export class RemoteGatewayClient {
       baseUrl: pairing.baseUrl,
       deviceId: pairing.deviceId || snapshot.device.id,
       deviceName: pairing.deviceName,
+      connectionMode: pairing.connectionMode,
+      relayDeviceId: pairing.relayDeviceId,
     };
-    await secureSet(SECURE_STORAGE_PREFIX, SECRET_KEY, pairing.token);
+    await secureSet(SECURE_STORAGE_PREFIX, SECRET_KEY, token);
     localStorage.setItem(METADATA_KEY, JSON.stringify(metadata));
     localStorage.removeItem(LEGACY_STORAGE_KEY);
-    this.config = { ...metadata, token: pairing.token, demo: false };
+    this.config = { ...metadata, token, demo: false };
     this.initialized = true;
   }
 
@@ -445,6 +464,7 @@ export class RemoteGatewayClient {
         headers: {
           ...(init.body ? { 'Content-Type': 'application/json' } : {}),
           ...(this.config.token ? { Authorization: `Bearer ${this.config.token}` } : {}),
+          ...(this.config.connectionMode === 'server' ? { 'X-Trylo-Device': this.config.relayDeviceId || '' } : {}),
           ...(init.headers || {}),
         },
       });
@@ -649,7 +669,7 @@ export class RemoteGatewayClient {
         `${normalizeBaseUrl(this.config.baseUrl)}/v1/artifacts/content?path=${encodeURIComponent(path)}`,
         {
           signal: controller.signal,
-          headers: this.config.token ? { Authorization: `Bearer ${this.config.token}` } : {},
+          headers: { ...(this.config.token ? { Authorization: `Bearer ${this.config.token}` } : {}), ...(this.config.connectionMode === 'server' ? { 'X-Trylo-Device': this.config.relayDeviceId || '' } : {}) },
         },
       );
       if (!response.ok) {

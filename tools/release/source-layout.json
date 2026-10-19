@@ -103,6 +103,16 @@
       ],
       "excludeFiles": [],
       "reason": "Trylo-maintained Windows-MCP fork and tooling documentation; downloaded environments remain excluded."
+    },
+    {
+      "id": "remote-relay",
+      "source": "remote-relay",
+      "target": "remote-relay",
+      "excludePrefixes": [
+        "releases"
+      ],
+      "excludeFiles": [],
+      "reason": "Remote collaboration relay source and deployment templates; no live environment, data or credentials."
     }
   ],
   "extraFiles": [

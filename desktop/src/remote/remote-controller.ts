@@ -17,7 +17,7 @@ import type { CodeRunLifecycleObserver, CodeRunOutcome } from '../runtime/code-r
 import type { CodePermissionRequest } from '../runtime/code-permission-registry';
 import type { ConversationRunSupervisor } from '../runtime/conversation-run-supervisor';
 import type { TryloSettings } from '../settings/settings-store';
-import type { RemoteEnableParams, RemoteGatewayEvent, RemotePairingInfoResult, RemotePermissionRequestStateEvent, RemoteProjectSummary, RemoteSessionSummary, RemoteStatusResult } from '../services-host/methods';
+import type { RelayLoginParams, RemoteEnableParams, RemoteGatewayEvent, RemotePairingInfoResult, RemotePermissionRequestStateEvent, RemoteProjectSummary, RemoteSessionSummary, RemoteStatusResult } from '../services-host/methods';
 import type { ServiceManager } from '../services-host/service-manager';
 import { EMPTY_REMOTE_STATUS } from './remote-port';
 import type { ServicesRemotePort } from './remote-port';
@@ -28,6 +28,8 @@ import type { RemoteArtifactContent, RemoteArtifactSummary, RemoteTaskSurface } 
 /** Remote knobs App injects into TryloSettings (no `remote` group in the
  *  settings store yet — read defensively). */
 interface RemoteSettingsLike {
+  readonly connectionMode?: 'tunnel' | 'server';
+  readonly relayUrl?: string;
   readonly port?: number;
   readonly tunnelMode?: 'named' | 'quick' | 'manual' | 'off';
   readonly publicUrl?: string;
@@ -98,6 +100,7 @@ export class RemoteController {
   private lifecycleGeneration = 0;
   private needsReenable = false;
   private disposed = false;
+  private configured = '';
 
   constructor(options: RemoteControllerOptions) {
     this.options = options;
@@ -158,6 +161,11 @@ export class RemoteController {
       return;
     }
     if (this.gatewayStart) await this.gatewayStart;
+    const configuration = this.configurationKey();
+    if (this.started && this.configured !== configuration) {
+      this.lifecycleGeneration += 1;
+      await this.shutdown(false);
+    }
     if (!this.enabled || this.disposed || this.started) return;
     const generation = ++this.lifecycleGeneration;
     await this.startOnce(() => this.startup(generation));
@@ -179,6 +187,39 @@ export class RemoteController {
     return this.remoteStatusValue;
   }
 
+  async loadConfiguration(fallback: import('../settings/settings-store').RemoteSettings) {
+    await this.options.manager.ensureRunning(await this.options.paths());
+    return this.options.port.loadConfiguration(fallback);
+  }
+
+  async saveConfiguration(settings: import('../settings/settings-store').RemoteSettings) {
+    await this.options.manager.ensureRunning(await this.options.paths());
+    return this.options.port.saveConfiguration(settings);
+  }
+
+  async relayLogin(params: RelayLoginParams) {
+    if (!this.options.isTauri()) throw new Error('请在 Desktop 中登录服务器。');
+    await this.options.manager.ensureRunning(await this.options.paths());
+    const result = await this.options.port.relayLogin(params);
+    // Login replaces the outbound connection; the next saved enable restores it.
+    this.configured = '';
+    return result;
+  }
+
+  async relayStatus() {
+    if (!this.options.isTauri()) throw new Error('请在 Desktop 中查看账号。');
+    await this.options.manager.ensureRunning(await this.options.paths());
+    return this.options.port.relayStatus();
+  }
+
+  async relayLogout() {
+    if (!this.options.isTauri()) throw new Error('请在 Desktop 中退出账号。');
+    await this.options.manager.ensureRunning(await this.options.paths());
+    const result = await this.options.port.relayLogout();
+    this.configured = '';
+    return result;
+  }
+
   async refreshStatus(): Promise<RemoteStatusResult> {
     if (!this.started) {
       this.setStatus(EMPTY_REMOTE_STATUS);
@@ -197,11 +238,14 @@ export class RemoteController {
     // A QR request may arrive before startup finishes, or after a failed
     // spawn. Wait for startup and let this explicit retry recover the host.
     await this.setEnabled(true);
-    if (this.started && (!this.remoteStatusValue.running || this.options.manager.currentHealth !== 'ready' || this.remoteStatusValue.reasonCode === 'tunnel_start_failed')) {
+    const relayIsRecovering = (): boolean => this.channelEnabled
+      && this.options.manager.currentHealth === 'ready'
+      && this.remoteStatusValue.reasonCode === 'relay_reconnecting';
+    if (this.started && ((!this.remoteStatusValue.running && !relayIsRecovering()) || this.options.manager.currentHealth !== 'ready' || this.remoteStatusValue.reasonCode === 'tunnel_start_failed')) {
       await this.startOnce(() => this.reenable(this.lifecycleGeneration));
     }
     if (!this.enabled || this.disposed) throw new Error('远程访问已关闭。');
-    if (!this.remoteStatusValue.running) {
+    if (!this.remoteStatusValue.running && !relayIsRecovering()) {
       throw new Error(`远程服务启动失败：${this.startupError || '请重试，或检查桌面程序的配套服务文件是否完整。'}`);
     }
     const publicUrl = this.remoteStatusValue.publicUrl;
@@ -265,7 +309,7 @@ export class RemoteController {
       this.startupError = error instanceof Error ? error.message : String(error);
       this.started = false;
       this.channelEnabled = false;
-      this.setStatus(EMPTY_REMOTE_STATUS);
+      this.setStatus({ ...EMPTY_REMOTE_STATUS, reasonCode: 'gateway_start_failed', error: this.startupError });
       // Startup is transactional; a retry must not accumulate listeners.
       for (const dispose of this.disposers.splice(0)) dispose();
     } finally {
@@ -279,6 +323,7 @@ export class RemoteController {
     await this.options.manager.ensureRunning({ sidecarsDir, appDataDir });
     if (this.disposed || generation !== this.lifecycleGeneration) return;
     const status = await this.options.port.enable(this.enableParams());
+    this.configured = this.configurationKey();
     this.channelEnabled = true;
     if (this.disposed || generation !== this.lifecycleGeneration) {
       await this.options.port.disable().catch(() => {});
@@ -341,6 +386,8 @@ export class RemoteController {
     const remote = (this.options.settings() as { remote?: RemoteSettingsLike }).remote ?? {};
     // The renderer cannot see os.hostname(); the sidecar defaults it.
     return {
+      connectionMode: remote.connectionMode,
+      relayUrl: remote.relayUrl,
       port: remote.port,
       workspaceName: this.options.currentWorkspace()?.name ?? 'Trylo Code',
       deviceName: '',
@@ -348,6 +395,14 @@ export class RemoteController {
       publicUrl: remote.publicUrl,
       cloudflaredPath: remote.cloudflaredPath,
     };
+  }
+
+  private configurationKey(): string {
+    const p = this.enableParams();
+    // Workspace/display metadata arrives after startup and changes as the
+    // user navigates. It must not tear down paired phones when QR is opened.
+    return JSON.stringify({ connectionMode: p.connectionMode, relayUrl: p.relayUrl,
+      port: p.port, tunnelMode: p.tunnelMode, publicUrl: p.publicUrl, cloudflaredPath: p.cloudflaredPath });
   }
 
   /** Full-snapshot reproject: after enable, host-ready re-enable, and after a

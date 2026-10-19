@@ -258,7 +258,13 @@ export function planWorkingDirectory(
   if (typeof candidate !== "string" || candidate.trim().length === 0) {
     return { ok: false, code: "invalid_path", message: "run_shell cwd must be a non-empty path" };
   }
-  const verdict = resolveInsideWorkspace(workspaceRoot, isWorkspaceRootCwd(workspaceRoot, candidate) ? "." : candidate);
+  const rootAlias = isWorkspaceRootCwd(workspaceRoot, candidate);
+  // File tools accept contained absolute targets; shell cwd retains its own
+  // narrower contract: only the literal workspace root aliases '.'.
+  if (path.isAbsolute(candidate) && !rootAlias) {
+    return { ok: false, code: "path_outside_workspace", message: "run_shell cwd requires a relative directory or the literal workspace root" };
+  }
+  const verdict = resolveInsideWorkspace(workspaceRoot, rootAlias ? "." : candidate);
   if (!verdict.ok) {
     return {
       ok: false,

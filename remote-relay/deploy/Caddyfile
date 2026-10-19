@@ -1,0 +1,11 @@
+{$RELAY_DOMAIN} {
+    request_body {
+        max_size 512KB
+    }
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options nosniff
+        -Server
+    }
+    reverse_proxy relay:8788
+}

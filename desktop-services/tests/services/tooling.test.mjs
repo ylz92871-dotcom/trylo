@@ -84,6 +84,7 @@ function build(overrides = {}) {
       // The fake binaries are not executables, so the version probe is
       // injected. `version` is what a healthy pinned binary would report.
       probe: overrides.probe ?? (async () => '1.0.145'),
+      probeInputAccess: overrides.probeInputAccess ?? (async () => ({available:true, integrityRid:8192, uiAccess:false})),
       ...(overrides.probePythonMetadata ? { probePythonMetadata: overrides.probePythonMetadata } : {}),
       ...(overrides.overrides ? { overrides: overrides.overrides } : {}),
       ...(overrides.manifests ? { manifests: overrides.manifests } : {}),
@@ -426,6 +427,7 @@ describe('tooling.localOverrides — file-first local wiring', () => {
       tools: {
         playwright: { entry: 'browser/cli.js', policy: 'repository-local' },
         officecli: { entry: 'office/missing.exe', policy: 'repository-local' },
+        'windows-mcp': { entry:'computer/src/windows_mcp/__main__.py', policy:'managed-local' },
       },
     }));
     const registry = loadRepositoryToolRegistry(registryPath);
@@ -434,6 +436,8 @@ describe('tooling.localOverrides — file-first local wiring', () => {
     assert.equal(registry.entries.playwright.available, true);
     assert.equal(registry.entries.officecli.available, false);
     assert.equal(registry.overrides.officecli, path.join(root, 'office', 'missing.exe'));
+    assert.equal(registry.entries['windows-mcp'].policy,'managed-local');
+    assert.equal(registry.overrides['windows-mcp'],undefined,'managed sources must not force the workspace venv');
   });
 
   it('rejects absolute and escaping repository entries', () => {

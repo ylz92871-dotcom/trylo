@@ -9,7 +9,7 @@
 //   - `ok:false` from the host resolves as `null` for the resolver — the run
 //     continues WITHOUT a Profile rather than failing.
 //   - A transport failure (Service Host down) also resolves as `null`.
-//     Tooling is an enhancement; it must never block a Code or Work send.
+//     Optional callers may degrade; required Work sends surface the error.
 //   - `health` / `listProfiles` surface their `ok:false` to the caller so
 //     Diagnostics can show the real reason instead of an empty list.
 
@@ -54,6 +54,17 @@ const INSTALL_TIMEOUT_MS = 900_000;
 const UNINSTALL_TIMEOUT_MS = 120_000;
 /** health probes each installed package's `--version` with its own bound. */
 const HEALTH_TIMEOUT_MS = 120_000;
+// Profile composition also probes packages and prepares the native browser.
+// Its cold-start work must have the same budget as package health.
+const PROFILE_TIMEOUT_MS = HEALTH_TIMEOUT_MS;
+
+function profileFailureMessage(code: string): string {
+  if (code === 'config_write_failed') {
+    return '工具配置无法保存，请检查 Trylo 数据目录的写入权限，并从正常桌面环境重新启动 Trylo 后重试。';
+  }
+  if (code === 'TIMEOUT') return '工具加载超时，请稍后重试。';
+  return '工具服务尚未就绪，请稍后重试；若持续失败，请重新启动 Trylo。';
+}
 
 export function createToolingFacade(client: ServicesClient) {
   return {
@@ -75,10 +86,11 @@ export function createToolingFacade(client: ServicesClient) {
     nativeBrowserViewport: (scope: string, label: string, viewport: import('../host-adapter/native-browser').NativeBrowserViewportRequest) => client.request('tooling.nativeBrowserViewport', { scope, label, viewport }),
     /**
      * Compose one run's tool Profile, or `null` when the tool plane cannot
-     * answer. Never rejects.
+     * answer. Required sends reject with a safe, actionable error instead.
      */
     async resolveProfile(
       request: ResolveToolRuntimeRequest,
+      options?: { readonly required?: boolean },
     ): Promise<ResolvedToolRuntime | null> {
       try {
         const result = await client.request('tooling.resolveProfile', {
@@ -92,10 +104,17 @@ export function createToolingFacade(client: ServicesClient) {
           projectKey: request.projectKey,
           projectRoot: request.projectRoot,
           conversationId: request.conversationId,
-        });
-        return result.ok ? (result as ResolvedToolRuntime) : null;
+        }, { timeoutMs: PROFILE_TIMEOUT_MS });
+        if (result.ok) return result as ResolvedToolRuntime;
+        if (options?.required) {
+          throw new ServiceRequestError(result.reasonCode, profileFailureMessage(result.reasonCode));
+        }
+        return null;
       } catch (error) {
-        if (error instanceof ServiceRequestError) return null;
+        if (error instanceof ServiceRequestError) {
+          if (options?.required) throw new ServiceRequestError(error.code, profileFailureMessage(error.code));
+          return null;
+        }
         throw error;
       }
     },

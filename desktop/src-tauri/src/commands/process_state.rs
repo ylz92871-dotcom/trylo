@@ -47,7 +47,8 @@ pub struct ProcessEntry {
     /// 树，避免仅关闭 stdin"); elsewhere a `kill -KILL`. The
     /// reaper thread owns the `Child`, so the killer acts on the
     /// OS pid and lets `child.wait()` observe the exit.
-    pub killer: Box<dyn FnMut() + Send + Sync>,
+    pub killer: Box<dyn FnMut() -> std::io::Result<()> + Send + Sync>,
+    pub stop_state: ProcessStopState,
     /// Human-readable label, e.g. "trylo-core", "cc-cli".
     pub label: String,
     /// OS pid of the spawned child (for taskkill / diagnostics).
@@ -56,7 +57,24 @@ pub struct ProcessEntry {
     pub metadata: ProcessMetadata,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProcessStopState {
+    Running,
+    Requested,
+}
+
 impl ProcessEntry {
+    /// A failed termination keeps the writer and retry authority. Only the
+    /// reaper may release either after observing the actual child exit.
+    pub fn request_stop(&mut self) -> std::io::Result<bool> {
+        if self.stop_state == ProcessStopState::Requested {
+            return Ok(false);
+        }
+        (self.killer)()?;
+        self.stop_state = ProcessStopState::Requested;
+        Ok(true)
+    }
+
     /// P08 §4.2: close stdin by taking (and dropping) the writer.
     /// Idempotent — a second call takes `None` and does nothing.
     pub fn close_input(&mut self) {

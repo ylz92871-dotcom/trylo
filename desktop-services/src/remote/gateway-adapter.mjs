@@ -383,6 +383,11 @@ export function createRemoteAdapter(options) {
   }
 
   return {
+    // Private composition boundary. Never exposed as an RPC method.
+    relayTarget() {
+      if (!gateway?.listening || !enabled) throw new Error('Remote gateway is not running.');
+      return gateway.getPairingInfo(`http://127.0.0.1:${port}`);
+    },
     enable,
     disable,
     publish,

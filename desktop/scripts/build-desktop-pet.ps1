@@ -7,6 +7,7 @@ param(
   [string]$OutputDir = ""
 )
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot 'release-file-hash.ps1')
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $projectRoot = (Resolve-Path -LiteralPath $ProjectDir).Path
 $csproj = Join-Path $projectRoot "TryloDesktopPet.csproj"
@@ -34,7 +35,7 @@ foreach ($asset in (Get-ChildItem -LiteralPath $assetsRoot -Recurse -File -Filte
   $relative = $asset.FullName.Substring($projectRoot.Length + 1)
   $copy = Join-Path $candidate $relative
   if (-not (Test-Path -LiteralPath $copy)) { throw "External pet asset missing: $relative" }
-  if ((Get-FileHash -LiteralPath $copy -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $asset.FullName -Algorithm SHA256).Hash) { throw "External pet asset changed: $relative" }
+  if ((Get-ReleaseFileHash $copy) -ne (Get-ReleaseFileHash $asset.FullName)) { throw "External pet asset changed: $relative" }
 }
 if ($SelfContained -and (Test-Path -LiteralPath (Join-Path $candidate "System.Private.CoreLib.dll"))) { throw "Expected compressed single-file publish" }
 if ($SelfContained) {

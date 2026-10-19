@@ -285,7 +285,8 @@ export function shellExecArgv(shell: DetectedShell, command: string): ReadonlyAr
     case "sh":
       return [shell.path, "-c", command];
     case "powershell":
-      return [shell.path, "-NoProfile", "-NonInteractive", "-Command", command + POWERSHELL_EXIT_TAIL];
+      return [shell.path, "-NoProfile", "-NonInteractive", "-Command",
+        "[Console]::InputEncoding = [Console]::OutputEncoding = $OutputEncoding = [System.Text.UTF8Encoding]::new($false)\n" + command + POWERSHELL_EXIT_TAIL];
     case "cmd":
       return [shell.path, "/d", "/c", command];
     default:

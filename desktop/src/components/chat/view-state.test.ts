@@ -141,6 +141,19 @@ describe('deriveConversationRunViewState (spec §5.3)', () => {
     ).toBe('failed');
   });
 
+  it('does not claim to prepare again after a tool finished in the current turn', () => {
+    const completed = { ...toolRunning(), status: 'done' } as ChatMessage;
+    expect(deriveConversationRunViewState({ messages: [user(), completed], running: true })).toBe('waiting_model');
+    expect(deriveConversationRunViewState({ messages: [user(), completed, user('next', 2000)], running: true })).toBe('waiting_first_output');
+  });
+
+  it('keeps parallel work and pending approvals visible after another tool finishes', () => {
+    const done = { ...toolRunning(), id: 'finished', status: 'done' } as ChatMessage;
+    expect(deriveConversationRunViewState({ messages: [user(), toolRunning(), done], running: true })).toBe('tool_running');
+    expect(deriveConversationRunViewState({ messages: [user(), pendingApproval(), done], running: true })).toBe('awaiting_input');
+    expect(deriveConversationRunViewState({ messages: [user(), done], running: false })).toBe('idle');
+  });
+
   it('a spawn error wins over a running state', () => {
     expect(
       deriveConversationRunViewState({ messages: [user(), toolRunning()], running: true, error: true }),
@@ -152,6 +165,7 @@ describe('view-state motion helpers (spec §7.2)', () => {
   it('footer heartbeat covers startup and thinking at the newest timeline point', () => {
     expect(viewStateShowsFooterDots('preparing')).toBe(true);
     expect(viewStateShowsFooterDots('waiting_first_output')).toBe(true);
+    expect(viewStateShowsFooterDots('waiting_model')).toBe(true);
     expect(viewStateShowsFooterDots('thinking')).toBe(true);
     for (const s of [
       'idle',
@@ -173,6 +187,7 @@ describe('view-state motion helpers (spec §7.2)', () => {
     for (const s of [
       'preparing',
       'waiting_first_output',
+      'waiting_model',
       'thinking',
       'tool_running',
       'finalizing',
@@ -199,6 +214,7 @@ describe('view-state motion helpers (spec §7.2)', () => {
     expect(viewStateLabel('idle')).toBe('已就绪');
     expect(viewStateLabel('preparing')).toBe('正在准备…');
     expect(viewStateLabel('waiting_first_output')).toBe('正在准备…');
+    expect(viewStateLabel('waiting_model')).toBe('等待模型响应…');
     expect(viewStateLabel('thinking')).toBe('思考中…');
     expect(viewStateLabel('tool_running')).toBe('正在执行…');
     expect(viewStateLabel('finalizing')).toBe('正在收尾…');

@@ -69,6 +69,7 @@ function changeVerb(change: FileChange, tool: string): string {
   if (change.operation === 'moved') return '移动';
   if (change.operation === 'overwritten') return '覆盖写入';
   if (change.isNew) return '新建';
+  if (change.basis === 'result') return '修改';
   return toolEventVerb(tool);
 }
 
@@ -95,7 +96,8 @@ export function FileChangeCard(props: FileChangeCardProps): ReactElement | null 
 
   // Collapse after the edit finishes (same UX contract as ToolCard),
   // unless the user explicitly opened the card.
-  const open = userOverride ?? (m.status === 'running' || (props.variant === 'event' && m.status === 'error'));
+  const open = userOverride ?? (m.status === 'running' || (props.variant === 'event' && m.status === 'error')
+    || (change.basis === 'result' && /^(Bash|PowerShell)$/i.test(m.tool)));
   const onToggle = (): void => {
     setUserOverride(!open);
   };

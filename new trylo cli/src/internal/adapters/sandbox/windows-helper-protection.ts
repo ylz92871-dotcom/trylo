@@ -54,8 +54,38 @@ if ($kind -eq 'executable') {
     $acl.SetAccessRuleProtection($false, $true)
     Set-Acl -LiteralPath $path -AclObject $acl
   }
-  & ($env:SystemRoot + '\System32\icacls.exe') $path /setintegritylevel M | Out-Null
-  if ($LASTEXITCODE -ne 0) { throw 'private helper integrity label could not be set' }
+  $icacls = $env:SystemRoot + '\System32\icacls.exe'
+  # Query LABEL_SECURITY_INFORMATION directly. Mandatory SIDs cannot reliably
+  # be translated through account lookup, and icacls display names are localized.
+  Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+public static class TryloIntegrityLabel {
+  [DllImport("advapi32.dll", CharSet=CharSet.Unicode)]
+  static extern uint GetNamedSecurityInfo(string name, int kind, uint info, out IntPtr owner, out IntPtr group, out IntPtr dacl, out IntPtr sacl, out IntPtr descriptor);
+  [DllImport("advapi32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+  static extern bool ConvertSecurityDescriptorToStringSecurityDescriptor(IntPtr descriptor, uint revision, uint info, out IntPtr text, out uint length);
+  [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr value);
+  public static string Read(string path) {
+    IntPtr owner, group, dacl, sacl, descriptor;
+    uint status = GetNamedSecurityInfo(path, 1, 0x10, out owner, out group, out dacl, out sacl, out descriptor);
+    if (status != 0) throw new Win32Exception((int)status);
+    try {
+      IntPtr text; uint length;
+      if (!ConvertSecurityDescriptorToStringSecurityDescriptor(descriptor, 1, 0x10, out text, out length)) throw new Win32Exception(Marshal.GetLastWin32Error());
+      try { return Marshal.PtrToStringUni(text); } finally { LocalFree(text); }
+    } finally { LocalFree(descriptor); }
+  }
+}
+'@
+  $integrity = [TryloIntegrityLabel]::Read($path)
+  # Cached helpers are often already in use. Reapplying an unchanged SACL
+  # can be refused even though its required medium/no-write-up label is valid.
+  if ($integrity -notmatch '^S:(?:AI|AR|P)*\(ML;;NW;;;ME\)$') {
+    & $icacls $path /setintegritylevel M | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'private helper integrity label could not be set' }
+  }
 }
 `;
 

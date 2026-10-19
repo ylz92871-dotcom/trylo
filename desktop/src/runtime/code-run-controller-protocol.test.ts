@@ -8,6 +8,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LoopEvent } from '../host-adapter/loop-events';
+import { StreamTranslator } from '../host-adapter/stream-translator';
 import type { FilePath } from '../host-adapter/types';
 import type { SettingsForCodeRun } from './runtime-types';
 import type { ResolvedToolRuntime } from '../tooling/types';
@@ -181,6 +182,24 @@ beforeEach(() => {
 });
 
 describe('CodeRunController — protocol routing', () => {
+  it.each([false, true])('settles a real legacy 401 frame and kills its child (prewarmed=%s)', async prewarmed => {
+    const c = controller();
+    if (prewarmed) await c.prewarm(settings('legacy-stream-json'), { permissionLevel: 'read_only' });
+    const received: LoopEvent[] = [];
+    const terminal = vi.fn();
+    await c.run({ ...request('legacy-stream-json'), onEvents: events => received.push(...events),
+      lifecycleObserver: { onRunStarted: async () => undefined, onEvents: () => undefined, onRunTerminal: terminal } });
+    expect(c.getViewState().running).toBe(true);
+    const events = new StreamTranslator().feed(JSON.stringify({ type: 'system', subtype: 'api_retry',
+      attempt: 1, max_retries: 10, retry_delay_ms: 1000, error_status: 401, error: 'authentication_failed' }));
+    (prewarmed ? m.prewarmCallbacks : m.legacyCallbacks).onEvents?.(events);
+    expect(c.getViewState()).toMatchObject({ running: false, error: true });
+    expect(m.calls.stopTryloProcess).toBe(1);
+    expect(received).toContainEqual(expect.objectContaining({ type: 'runtime_warning', code: 'provider_auth_failed' }));
+    expect(terminal).toHaveBeenCalledTimes(1);
+    expect(terminal.mock.calls[0]?.[1]).toBe('failed');
+  });
+
   it('uses the legacy runner for the legacy protocol', async () => {
     const c = controller();
     await c.run(request('legacy-stream-json'));
@@ -232,6 +251,19 @@ describe('CodeRunController — protocol routing', () => {
     await c.run(request('trylo-v1'));
     expect(m.calls.startTryloV1).toBe(2);
     expect(m.calls.sendPrompt).toBe(0);
+  });
+
+  it('starts a fresh session after a v1 to legacy to v1 round trip', async () => {
+    const c = controller();
+    await c.run(request('trylo-v1'));
+    const first = m.lastV1.binding as { state: string; sessionId?: string };
+    await c.run(request('legacy-stream-json'));
+    await c.run(request('trylo-v1'));
+    const returned = m.lastV1.binding as { state: string; sessionId?: string };
+    expect(returned.state).toBe('creating');
+    expect(returned.sessionId).not.toBe(first.sessionId);
+    expect(m.calls.stopTryloV1).toBe(1);
+    expect(m.calls.stopTryloProcess).toBe(1);
   });
 
   it('resumes the SAME CLI session on the next v1 turn', async () => {

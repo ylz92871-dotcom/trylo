@@ -79,6 +79,7 @@ export function createToolingServices(options = {}) {
     ...(seam.probe ? { probe: seam.probe } : {}),
     // Test seam: replaces the venv-metadata probe (PR-6 pinned-python-env).
     ...(seam.probePythonMetadata ? { probePythonMetadata: seam.probePythonMetadata } : {}),
+    ...(seam.probeInputAccess ? { probeInputAccess: seam.probeInputAccess } : {}),
     // Test seam: replaces the browser-body condition probe (§3.3-7).
     ...(seam.probeCondition ? { probeCondition: seam.probeCondition } : {}),
     // Test seam: replaces the host-application condition probe (CAD/EDA).

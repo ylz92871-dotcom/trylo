@@ -33,7 +33,8 @@ const requiredRepositoryTools = ['officecli', 'playwright', 'windows-mcp', 'chro
 for (const id of requiredRepositoryTools) {
   requireRule(Boolean(catalog.get(id)), `repository-local tool '${id}' is missing from the catalog`);
   requireRule(Boolean(localRegistry.entries[id]), `repository-local tool '${id}' is missing from tool-sources.json`);
-  requireRule(localRegistry.entries[id]?.policy === 'repository-local', `${id} must use repository-local policy`);
+  const expectedPolicy=id==='windows-mcp'?'managed-local':'repository-local';
+  requireRule(localRegistry.entries[id]?.policy === expectedPolicy, `${id} must use ${expectedPolicy} policy`);
   if (requireLocalBuilds) {
     requireRule(localRegistry.entries[id]?.available === true, `${id} local entry is not built: ${localRegistry.entries[id]?.path ?? '<missing entry>'}`);
   }

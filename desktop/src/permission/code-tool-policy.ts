@@ -65,12 +65,13 @@ export function resolveCodeToolPolicy(input: PolicyInput, classified: ToolRiskRo
     return deny('path_outside_workspace', 'Denied: the file target is missing, invalid or outside the workspace.');
   }
   if (input.permissionLevel === 'unrestricted') return allow('workspace-write', 'unrestricted');
+  if (input.permissionLevel === 'read_only' && classified.behavior !== 'unmanaged'
+    && !(classified.behavior === 'auto_allow' && classified.risk === 'read')) {
+    return deny('read_only', 'Denied: this conversation is read-only.');
+  }
   if (classified.behavior !== 'unmanaged') {
     if (input.permissionLevel === 'ask' && classified.behavior === 'auto_allow' && classified.risk === 'workspace-write') {
       return prompt('ask_level_write');
-    }
-    if (input.permissionLevel === 'read_only' && classified.behavior === 'auto_allow' && classified.risk === 'workspace-write') {
-      return deny('read_only', 'Denied: this conversation is read-only.');
     }
     return classified;
   }

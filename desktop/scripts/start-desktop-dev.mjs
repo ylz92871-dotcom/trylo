@@ -8,6 +8,14 @@ const desktopRoot = fileURLToPath(new URL('../', import.meta.url));
 const args = process.argv.slice(2);
 const environment = { ...process.env };
 
+// The staged runtime may inherit a Low integrity label from release staging.
+// Source services write the normal Desktop data directory, so dev must use
+// the same interpreter that launched this script. Installed builds retain
+// their bundled resolver; an explicit operator override remains authoritative.
+if (!args.some(arg => arg === '--help' || arg === '-h') && !environment.TRYLO_NODE_BINARY?.trim()) {
+  environment.TRYLO_NODE_BINARY = process.execPath;
+}
+
 // Dev uses the checkout being edited, rather than the last staged release
 // resources that the native resolver otherwise prefers. Operator overrides
 // remain authoritative; installed builds still use the bundled resolver.

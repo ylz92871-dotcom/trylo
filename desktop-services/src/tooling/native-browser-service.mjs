@@ -342,7 +342,9 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
       try { await preparing; } finally { preparations.delete(scope); }
     }
     const session = get(scope);
-    return { endpoint: session.base + '/', gate: session.base, args: packageId === 'playwright' ? ['--cdp-endpoint', session.base + '/'] : ['--browserUrl', session.base + '/'] };
+    // Puppeteer resolves /json/version at the origin, discarding our scoped
+    // token path. Its direct WebSocket option preserves the session boundary.
+    return { endpoint: session.base + '/', gate: session.base, args: packageId === 'playwright' ? ['--cdp-endpoint', session.base + '/'] : ['--wsEndpoint', `${session.wsBase}/browser`] };
   }
   async function open(params = {}) { await configure({ ...params, packageId: 'playwright' }); return snapshot({ scope: nativeBrowserScope(params) }); }
   async function select({ scope, label } = {}) { const session = get(scope); return serial(session, async () => { await nativeOperation(session, 'activate', { label }); await session.viewport.sync(label); report(session); return state(session); }); }

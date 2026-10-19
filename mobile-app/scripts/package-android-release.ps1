@@ -1,11 +1,11 @@
 [CmdletBinding()]
-param()
+param([string]$SigningDirectory = "")
 
 $ErrorActionPreference = 'Stop'
 $mobileRoot = Split-Path -Parent $PSScriptRoot
 $workspaceRoot = Split-Path -Parent $mobileRoot
 $androidRoot = Join-Path $mobileRoot 'android'
-$signingRoot = Join-Path $workspaceRoot '.trylo\android-signing'
+$signingRoot = if ($SigningDirectory) { [IO.Path]::GetFullPath($SigningDirectory) } else { Join-Path $workspaceRoot '.trylo\android-signing' }
 $keystorePath = Join-Path $signingRoot 'trylo-code-release.p12'
 $recoveryPath = Join-Path $signingRoot 'SIGNING-RECOVERY.txt'
 $keyAlias = 'trylo-code'

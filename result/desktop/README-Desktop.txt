@@ -1,21 +1,22 @@
-Trylo Desktop 1.0.1 - Windows x64 core portable preview (packaging revision 3)
+Trylo Desktop - public source build
 
-Extract the entire ZIP into a folder, then run trylo-desktop.exe.
-Open a real project folder and configure your own model connection in Settings.
-A working Microsoft WebView2 Runtime is required.
+Default engine: the new Trylo CLI, using the trylo-v1 protocol.
+CLI entry: cli/dist/cmd/trylo/main.js
+Node: bundled under runtime/node/win-x64.
 
-Code and ordinary Work use the bundled legacy Trylo CLI and Node interpreter.
-CoWork/background-work daemon is NOT bundled, NOT required and NOT started by this edition.
-The normal Work interface, document workflow, artifacts, tool profiles and pet remain.
-The new Trylo CLI remains an explicit opt-in.
+Extract the entire archive and launch Start-Trylo.cmd. It prepares the bundled
+executables to match the launcher's existing authority: normally Medium, or
+High only when you already explicitly launched it elevated. It does not
+request admin or grant a token. This prevents Low-labelled extraction folders
+from disabling tool input and ordinary file writes.
+Keep the resource
+folders beside the executable. Configure your own provider/model in Settings.
+Code and ordinary Work share the new CLI. CoWork is a separate experimental
+dependency; no old CLI engine is included in this core distribution.
 
-CoWork is a separate experimental dependency download for maintenance and evaluation.
-It has not passed daemon startup readiness, is not automatically installed or activated,
-and is not required to use ordinary Work. No in-app installer is provided in this edition.
+Tool dependencies are prepared through the pinned tool-package installer and
+health checks. Browser bodies and CAD host applications have their own setup.
+Source validation does not replace native or real-provider acceptance.
 
-This is an unsigned preview. Full native Desktop and real-provider acceptance are not claimed.
-Android/mobile artifacts are distributed separately.
-Keep all runtime license notices provided with this distribution.
-
-Downloads and validation:
-https://github.com/ylz92871-dotcom/trylo/tree/main/result/desktop
+This README describes builds made from the current source. Previously published
+Desktop R3 downloads retain their recorded bytes, legacy default and checksums.

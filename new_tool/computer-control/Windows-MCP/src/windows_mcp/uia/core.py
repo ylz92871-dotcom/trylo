@@ -52,6 +52,15 @@ from .exceptions import from_com_error  # noqa: E402
 from .comtypes_cache import safe_get_module  # noqa: E402
 
 
+# ctypes.get_last_error() reads ctypes' thread-local copy, not GetLastError
+# directly. Keep the native failure before Python/other Win32 calls replace it.
+_input_user32 = ctypes.WinDLL("user32", use_last_error=True)
+_input_user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
+_input_user32.SetCursorPos.restype = ctypes.wintypes.BOOL
+_input_user32.SendInput.argtypes = [ctypes.wintypes.UINT, ctypes.c_void_p, ctypes.c_int]
+_input_user32.SendInput.restype = ctypes.wintypes.UINT
+
+
 class _AutomationClient:
     _instance = None
 
@@ -294,7 +303,8 @@ def SetCursorPos(x: int, y: int) -> bool:
     y: int.
     Return bool, True if succeed otherwise False.
     """
-    return bool(ctypes.windll.user32.SetCursorPos(x, y))
+    ctypes.set_last_error(0)
+    return bool(_input_user32.SetCursorPos(x, y))
 
 
 def GetDoubleClickTime() -> int:
@@ -341,8 +351,8 @@ def _checked_set_cursor_pos(x: int, y: int) -> None:
 
 
 def keybd_event(bVk: int, bScan: int, dwFlags: int, dwExtraInfo: int) -> None:
-    """keybd_event from Win32."""
-    ctypes.windll.user32.keybd_event(bVk, bScan, dwFlags, dwExtraInfo)
+    """Checked keyboard injection; a blocked shortcut must not report success."""
+    _require_send_input(KeyboardInput(bVk, bScan, dwFlags))
 
 
 def PostMessage(handle: int, msg: int, wParam: int, lParam: int) -> bool:
@@ -1549,7 +1559,8 @@ def SendInput(*inputs) -> int:
     LPINPUT = INPUT * nInputs
     pInputs = LPINPUT(*inputs)
     cbSize = ctypes.c_int(ctypes.sizeof(INPUT))
-    return int(ctypes.windll.user32.SendInput(nInputs, pInputs, cbSize))
+    ctypes.set_last_error(0)
+    return int(_input_user32.SendInput(nInputs, pInputs, cbSize))
 
 
 def SendUnicodeChar(char: str, charMode: bool = True) -> int:

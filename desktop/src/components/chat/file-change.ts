@@ -137,7 +137,7 @@ export function computeFileChange(
 
 export function computeFileChanges(toolName: string, input: unknown, content?: readonly ToolResultContent[]): readonly FileChange[] {
   const tool = fileChangeTool(toolName);
-  if (!tool) return [];
+  if (!tool) return fileMutationFacts(content)?.map(fact => committedChange(fact, [])) ?? [];
   const obj = asRecord(input) ?? {};
   const cached = fileChangeCache.get(obj);
   if (cached && cached.tool === tool && cached.content === content) return cached.changes;

@@ -9,7 +9,7 @@ vi.mock("../src/secureStorage", () => ({
   secureSet: storage.set,
   secureRemove: storage.remove,
 }));
-import { RemoteGatewayClient } from "../src/gateway";
+import { RemoteGatewayClient, parsePairingData } from "../src/gateway";
 
 const baseUrl = "https://example.invalid";
 const identity = {
@@ -181,4 +181,34 @@ test("verified pairing saves metadata and credentials only after the identity re
     JSON.parse(localStorage.getItem("trylo-remote.gateway.metadata.v1")!)
       .deviceId,
   ).toBe("verified-pc");
+});
+
+const serverPairing = {
+  baseUrl, deviceId: 'verified-pc', deviceName: 'server-pc', token: 'one-time-ticket-with-at-least-32-characters', protocol: 1,
+  service: 'trylo-remote', workspaceName: 'w', connectionMode: 'server' as const, relayDeviceId: '00000000-0000-4000-8000-000000000001',
+};
+test('server QR exchanges its one-time ticket before persisting a device-scoped credential', async () => {
+  request.mockResolvedValueOnce(new Response(JSON.stringify({ accessToken: 'scoped-token-with-at-least-32-characters', relayDeviceId: serverPairing.relayDeviceId, desktopIdentity: 'verified-pc' }), { status: 201 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify(identity), { status: 200 }));
+  const gateway = client();
+  const parsed = parsePairingData(JSON.stringify(serverPairing));
+  await gateway.configureFromPairing(parsed);
+  expect(request.mock.calls[0][0]).toBe(baseUrl + '/relay/pair');
+  expect((request.mock.calls[0][1]?.headers as Record<string, string>).Authorization).toBeUndefined();
+  expect(JSON.parse(String(request.mock.calls[0][1]?.body))).toEqual({ ticket: serverPairing.token });
+  expect(request.mock.calls[1][1]?.headers).toMatchObject({ Authorization: 'Bearer scoped-token-with-at-least-32-characters', 'X-Trylo-Device': serverPairing.relayDeviceId });
+  expect(storage.set).toHaveBeenCalledWith('trylo_remote_', 'gateway_token', 'scoped-token-with-at-least-32-characters');
+  expect(gateway.currentConfig.connectionMode).toBe('server');
+  expect(JSON.parse(localStorage.getItem('trylo-remote.gateway.metadata.v1')!).relayDeviceId).toBe(serverPairing.relayDeviceId);
+  await gateway.sendChat('hello'); await gateway.getArtifactContent('a.txt');
+  for (const [, init] of request.mock.calls.slice(1)) expect(init?.headers).toMatchObject({ 'X-Trylo-Device': serverPairing.relayDeviceId });
+});
+test('server identity mismatch or expired QR leaves the saved computer untouched', async () => {
+  request.mockResolvedValueOnce(new Response(JSON.stringify({ accessToken: 'scoped-token-with-at-least-32-characters', relayDeviceId: serverPairing.relayDeviceId, desktopIdentity: 'another-pc' }), { status: 201 }));
+  const gateway = client();
+  await expect(gateway.configureFromPairing(serverPairing)).rejects.toThrow('身份');
+  expect(storage.set).not.toHaveBeenCalled(); expect(gateway.currentConfig.deviceId).toBe('old-pc');
+  request.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Pairing code expired' }), { status: 401 }));
+  await expect(gateway.configureFromPairing(serverPairing)).rejects.toThrow('expired');
+  expect(storage.set).not.toHaveBeenCalled();
 });

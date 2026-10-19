@@ -28,6 +28,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { probePlaywrightChromium } from './tool-browser-condition.mjs';
 import { probeAppCondition } from './tool-app-condition.mjs';
+import { defaultProbeWindowsInputAccess } from './windows-input-access.mjs';
+import { toolRuntimeIdentity } from './tool-runtime-identity.mjs';
 
 const VERSION_PROBE_TIMEOUT_MS = 2000;
 // Node MCP startup competes with desktop builds on Windows; a real browser
@@ -189,7 +191,7 @@ export function probeWithOneRetry(probe, retryDelayMs = PROBE_RETRY_DELAY_MS) {
     });
 }
 
-export function createToolHealthService({ packages, catalog, now = () => Date.now(), probe = probeVersion, probePythonMetadata = defaultProbePythonMetadata, probeCondition = probePlaywrightChromium, probeApp = probeAppCondition, browserBackend = 'screencast' } = {}) {
+export function createToolHealthService({ packages, catalog, now = () => Date.now(), probe = probeVersion, probePythonMetadata = defaultProbePythonMetadata, probeInputAccess = defaultProbeWindowsInputAccess, probeCondition = probePlaywrightChromium, probeApp = probeAppCondition, browserBackend = 'screencast' } = {}) {
   const cache = new Map();
 
   function cacheKey(manifest) {
@@ -202,13 +204,18 @@ export function createToolHealthService({ packages, catalog, now = () => Date.no
    */
   async function check(manifest, opts = {}) {
     const key = cacheKey(manifest);
-    if (!opts.deep) {
+    const installed = await packages.resolve(manifest);
+    const runtimeIdentity = toolRuntimeIdentity(manifest, installed);
+    // File labels and inherited tokens can change without size/mtime changes.
+    // Input capability must be measured again after a repair, never frozen by
+    // the five-minute version cache (including a previously cached Low result).
+    if (!opts.deep && manifest.id !== 'windows-mcp') {
       const hit = cache.get(key);
-      if (hit && now() - hit.checkedAt < CACHE_TTL_MS) return hit;
+      if (hit && hit.runtimeIdentity === runtimeIdentity && now() - hit.checkedAt < CACHE_TTL_MS) return hit;
     }
 
-    const installed = await packages.resolve(manifest);
     const record = {
+      runtimeIdentity,
       id: manifest.id,
       version: manifest.version,
       displayName: manifest.displayName,
@@ -300,6 +307,17 @@ export function createToolHealthService({ packages, catalog, now = () => Date.no
           record.detail = `installed distribution reports '${reported}', manifest pins ${manifest.version}`;
         } else {
           record.detail = `version verified: ${reported}`;
+        }
+      }
+      if (record.available && manifest.id === 'windows-mcp') {
+        record.inputAccess = await probeInputAccess(installed.executable);
+        if (!record.inputAccess?.available) {
+          record.available = false;
+          record.state = 'condition-missing';
+          record.reasonCode = record.inputAccess?.reason ?? 'input_permission_probe_failed';
+          record.detail = record.inputAccess?.reason === 'input_runtime_low_integrity'
+            ? '电脑控制运行环境为 Low 完整性，无法向常规应用发送输入。请修复工具运行环境；版本及连接通过不代表输入可用。'
+            : '无法验证电脑控制进程的输入权限，请修复工具运行环境。';
         }
       }
     } else if (manifest.healthCheck === 'source-entry') {

@@ -35,7 +35,9 @@ def main():
  if args.component=='desktop':
   executable=root/'desktop/src-tauri/target/release/trylo-desktop.exe'
   if not executable.is_file():raise SystemExit('Build the native Desktop application first')
-  items.extend([(executable,'trylo-desktop.exe'),(root/'desktop/distribution.json','distribution.json')])
+  items.extend([(executable,'trylo-desktop.exe'),(root/'desktop/distribution.json','distribution.json'),
+                (root/'desktop/scripts/Start-Trylo.ps1','Start-Trylo.ps1'),
+                (root/'desktop/scripts/Start-Trylo.cmd','Start-Trylo.cmd')])
   notices=['NODE-v24.14.1-LICENSE.txt','TRYLO-LICENSE.txt','README-Desktop.txt']
  else:
   workManifest=json.loads((resources/'workd/manifest.json').read_text(encoding='utf-8'))

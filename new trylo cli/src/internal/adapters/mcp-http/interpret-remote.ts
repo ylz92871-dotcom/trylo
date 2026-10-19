@@ -15,6 +15,7 @@ import {
 import { paramsAsObject, type JsonRpcResponse } from "../../mcp/jsonrpc.js";
 import type { JsonObject } from "../../protocol/envelope.js";
 import { extractText, isInputRequired, timeoutOutcome, toToolSpec } from "../mcp-stdio/client-interpret.js";
+import { attachMcpImages } from "../../mcp/image-content.js";
 import type { RemoteTransportFailure } from "./wire.js";
 
 /**
@@ -135,7 +136,7 @@ export function interpretRemoteToolResult(response: JsonRpcResponse): McpToolOut
     typeof structured === "object" && structured !== null && !Array.isArray(structured)
       ? (structured as JsonObject)
       : {};
-  return { outcome: "result", value, output: text, truncated: false };
+  return attachMcpImages({ outcome: "result", value, output: text, truncated: false }, result["content"]);
 }
 
 export const remoteTimeoutOutcome = timeoutOutcome;

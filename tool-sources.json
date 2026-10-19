@@ -10,8 +10,8 @@
       "policy": "repository-local"
     },
     "windows-mcp": {
-      "entry": "new_tool/packages/windows-mcp/0.8.5/.venv/Scripts/windows-mcp.exe",
-      "policy": "repository-local"
+      "entry": "new_tool/computer-control/Windows-MCP/src/windows_mcp/__main__.py",
+      "policy": "managed-local"
     },
     "chrome-devtools": {
       "entry": "new_tool/packages/chrome-devtools/1.8.0/node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js",

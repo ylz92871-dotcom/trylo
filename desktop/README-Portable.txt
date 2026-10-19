@@ -4,7 +4,12 @@ Default engine: the new Trylo CLI, using the trylo-v1 protocol.
 CLI entry: cli/dist/cmd/trylo/main.js
 Node: bundled under runtime/node/win-x64.
 
-Extract the entire archive before running trylo-desktop.exe. Keep the resource
+Extract the entire archive and launch Start-Trylo.cmd. It prepares the bundled
+executables to match the launcher's existing authority: normally Medium, or
+High only when you already explicitly launched it elevated. It does not
+request admin or grant a token. This prevents Low-labelled extraction folders
+from disabling tool input and ordinary file writes.
+Keep the resource
 folders beside the executable. Configure your own provider/model in Settings.
 Code and ordinary Work share the new CLI. CoWork is a separate experimental
 dependency; no old CLI engine is included in this core distribution.

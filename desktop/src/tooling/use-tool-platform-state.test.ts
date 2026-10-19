@@ -50,6 +50,11 @@ function health(overrides: Partial<ToolPackageHealth> = {}): ToolPackageHealth {
 }
 
 describe('fixedStateMessage (固定错误文案)', () => {
+  it('keeps an input permission problem distinct from a missing installation', () => {
+    const message=fixedStateMessage(health({id:'windows-mcp',state:'condition-missing',available:false,reasonCode:'input_runtime_low_integrity'}));
+    expect(message).toContain('权限不匹配');
+    expect(message).not.toContain('未安装');
+  });
   it('says 未安装 for a missing package', () => {
     expect(fixedStateMessage(health({ state: 'not-installed', available: false }))).toBe('未安装');
   });

@@ -78,6 +78,8 @@ export interface CompanionSettings {
  *  Tauri only; the controller reads this group defensively. Defaults mirror
  *  the legacy plugin (`enabled` → `config.get('enabled', false)`). */
 export interface RemoteSettings {
+  readonly connectionMode?: 'tunnel' | 'server';
+  readonly relayUrl?: string;
   readonly enabled: boolean;
   readonly port: number;
   readonly publicUrl: string;
@@ -284,6 +286,8 @@ export interface TryloSettings {
    * choices are preserved; a legacy engine must be configured externally.
    */
   readonly cliRuntimeProtocol: CliRuntimeProtocol;
+  /** The settings picker is authoritative over a checkout's preview default. */
+  readonly cliRuntimeSelection?: 'user';
 }
 
 const STORAGE_KEY = 'trylo:settings:v1';
@@ -336,6 +340,8 @@ function subConnectionDefaults(): SubConnection {
  *  share one source of truth. Mirror the legacy plugin defaults. */
 export function remoteSettingsDefaults(): RemoteSettings {
   return {
+    connectionMode: 'tunnel',
+    relayUrl: 'https://relay.trylocode.me',
     enabled: false,
     port: 49380,
     publicUrl: '',
@@ -401,6 +407,9 @@ function migrateRemoteSettings(value: unknown, fallback: RemoteSettings): Remote
   const stored = objectRecord(value);
   if (!stored) return { ...fallback };
   return {
+    connectionMode: stored['connectionMode'] === 'server' || stored['connectionMode'] === 'tunnel' ? stored['connectionMode']
+      : stored['publicUrl'] || stored['cloudflaredPath'] ? 'tunnel' : undefined,
+    relayUrl: stringValue(stored['relayUrl'], fallback.relayUrl || 'https://relay.trylocode.me'),
     enabled:
       typeof stored['enabled'] === 'boolean'
         ? stored['enabled']
@@ -517,10 +526,11 @@ function migrateSettings(value: unknown): TryloSettings | null {
     workspace: stringValue(stored['workspace'], DEFAULTS.workspace),
     userLearning: migrateUserLearning(stored['userLearning'], DEFAULTS.userLearning),
     // P08 §4.1: additive migration. An unrecognised value falls back to
-    // the legacy default rather than throwing — a bad stored value must
+    // the product default rather than throwing — a bad stored value must
     // never lock the user out of their settings.
     cliRuntimeProtocol:
       parseCliRuntimeProtocol(stored['cliRuntimeProtocol']) ?? DEFAULT_CLI_RUNTIME_PROTOCOL,
+    ...(stored['cliRuntimeSelection'] === 'user' ? { cliRuntimeSelection: 'user' as const } : {}),
   };
 }
 
@@ -589,11 +599,14 @@ export function loadSettings(): TryloSettings {
       ?? parseStoredSettings(window.localStorage.getItem(STORAGE_BACKUP_KEY)) ?? DEFAULTS;
   const preview = import.meta.env.DEV
     ? parseCliRuntimeProtocol(import.meta.env.VITE_TRYLO_CLI_RUNTIME_PROTOCOL) : null;
+  // A local preview is a fallback until the person selects a runtime in
+  // Settings. Persisted explicit choices must survive reloads in dev too.
+  if (settings.cliRuntimeSelection === 'user') return settings;
   // A local preview selects protocol and entry together. An empty v1 path
   // delegates to the native resolver (and TRYLO_CLI_SCRIPT from the launcher),
   // without rewriting the user's persisted runtime or connection settings.
   return preview ? { ...settings, cliRuntimeProtocol: preview,
-    ...(preview === 'trylo-v1' ? { cliPath: '' } : {}) } : settings;
+    cliPath: preview === 'trylo-v1' ? '' : DEFAULTS.cliPath } : settings;
 }
 
 export function saveSettings(s: TryloSettings): void {

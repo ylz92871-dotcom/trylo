@@ -2,6 +2,7 @@ import type { CommandShape } from "./executable.js";
 import {
   defaultShellKind,
   isShellKind,
+  needsVerbatimArguments,
   resolveShell,
   shellExecArgv,
   type DetectedShell,
@@ -111,7 +112,9 @@ export function shellModeShape(mode: ShellMode, command: string): CommandShape {
   if (mode.kind === "none") {
     return { kind: "direct", argv: [command] };
   }
-  return { kind: "shell", argv: [...shellExecArgv(mode.shell, command)] };
+  // Only cmd accepts a verbatim command line. PowerShell and POSIX shells
+  // need Node to preserve their command string as one quoted argv element.
+  return { kind: needsVerbatimArguments(mode.shell) ? "shell" : "direct", argv: [...shellExecArgv(mode.shell, command)] };
 }
 
 /**

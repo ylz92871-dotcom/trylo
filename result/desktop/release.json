@@ -1,113 +1,52 @@
 {
   "product": "Trylo Desktop",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "channel": "unsigned-preview",
+  "sourceRef": "desktop-v1.0.2",
   "platform": "windows",
   "arch": "x64",
-  "format": "portable-zip",
-  "entry": "trylo-desktop.exe",
-  "defaultRuntime": "legacy-stream-json",
-  "runtimes": {
-    "legacy": {
-      "version": "2.1.88-trylo",
-      "entry": "cli-legacy/cli.cjs",
-      "sha256": "48cddc726abf988ba913b91096424480db440c3e1a5a70e621172fc91e66bc59",
-      "files": 38284,
-      "redactedEmbeddedCredentials": 1
+  "defaultRuntime": "trylo-v1",
+  "legacyRuntime": "external-compatibility-only",
+  "coworkBundled": false,
+  "artifacts": {
+    "installer": {
+      "file": "Trylo_1.0.2_x64-setup.exe",
+      "bytes": 138930883,
+      "sha256": "5f68a6be0c24d8c7179e5418aa3343043833f63d1a9acfe4742cecc9248caf89",
+      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.2/Trylo_1.0.2_x64-setup.exe"
     },
-    "new": {
-      "version": "0.1.0",
-      "entry": "cli/dist/cmd/trylo/main.js",
-      "sha256": "abfb467bdd8edafe70e9cde14bfc26cacf903d1b4424a3af0aa0ec9a7f83b4d0",
-      "files": 2716
-    },
-    "node": {
-      "version": "v24.14.1",
-      "sha256": "58e74bf02fc5bbacc41dcb8bef089961cd5bddd37830b87784e4fc624d145d1f"
+    "portable": {
+      "file": "Trylo-Desktop-1.0.2-windows-x64-portable-core.zip",
+      "bytes": 156223917,
+      "sha256": "b1cc41a6b9db5cec29b19b2ade16bc56328d621e34897fceec94a9fb69f114c4",
+      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.2/Trylo-Desktop-1.0.2-windows-x64-portable-core.zip"
     }
-  },
-  "installer": {
-    "published": false,
-    "detail": "NSIS packaging interrupted; only the complete portable ZIP is distributed"
-  },
-  "packagingRevision": 3,
-  "distribution": "core",
-  "sourceRef": "desktop-v1.0.1-r3",
-  "createdAt": "2026-10-15T18:16:32.974216+00:00",
-  "nativeDesktopExecutableRebuilt": false,
-  "basedOn": "desktop-v1.0.1-r2",
-  "ordinaryWorkRuntime": "trylo-cli",
-  "artifact": {
-    "component": "desktop",
-    "file": "Trylo-Desktop-1.0.1-windows-x64-portable-core.zip",
-    "bytes": 219903437,
-    "files": 41228,
-    "sha256": "67188bf9b38c761336450ff77358c7ff3fd68ff26c6798a5ae944a6da80bc796",
-    "seconds": 138.22,
-    "compressionLevel": 6,
-    "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.1-r3/Trylo-Desktop-1.0.1-windows-x64-portable-core.zip"
   },
   "verification": {
-    "files": 41228,
-    "archiveCrc": true,
-    "componentBoundaryVerified": true,
-    "unchangedPayloadFiles": 41226,
-    "cliFilesVerified": 2716,
-    "cli-legacyFilesVerified": 38284,
-    "nativeDesktopNodePetMatchR2": true,
-    "coworkRuntimePresent": false,
-    "coreInventory": {
-      "coreInventoryPassed": true,
-      "requiredArtifacts": 16,
-      "missingOptionalDoesNotBlockCore": true,
-      "explicitOptionalMissingRejected": true,
-      "missingPinnedNodeRejected": true,
-      "runtimeRestored": true
-    },
-    "legacyCliFromExtractedCore": {
-      "passed": true,
-      "provider": "local synthetic Anthropic SSE",
-      "noSystemNode": true,
-      "protocol": "legacy-stream-json",
-      "resultFrames": 1,
-      "assistantMarker": true,
-      "requestCount": 2,
-      "exitCode": 0
-    },
-    "nativeDesktopGuiAcceptance": false,
-    "realProviderAcceptance": false,
-    "mobileAssetsChanged": false,
-    "normalWorkRoutingUnchanged": true,
-    "productionFrontendDaemonStartupMarkers": 0,
-    "petNativeRenderEvidenceSourceRef": "desktop-v1.0.1-r2",
-    "petPayloadUnchanged": true
+    "portableCrc": true,
+    "portableSourceMatch": true,
+    "portableFiles": 3019,
+    "installerCrc": true,
+    "installerResourcesCompared": 3013,
+    "coworkBundled": false,
+    "legacyBundled": false,
+    "installerGuiRun": false,
+    "deviceAcceptance": false,
+    "executableDifference": "only the exact Tauri UNK/NSS bundle marker",
+    "portableExecutableSha256": "ed337ef290184e3ae8465298f19eeb712bc71b3519b14cb4610ca829d34157ac",
+    "installerExecutableSha256": "879c69a87c6c2dbf3602df5891b916ef633776a0b45ae55f3e12c5b5e533ccc4"
   },
-  "optionalDependencies": {
-    "cowork": {
-      "bundled": false,
-      "requiredForOrdinaryWork": false,
-      "defaultEnabled": false,
-      "appInstallationUi": false,
-      "status": "experimental-startup-unverified",
-      "metadata": "dependencies/cowork-runtime.json",
-      "artifact": {
-        "component": "cowork",
-        "file": "Trylo-CoWork-Runtime-0.5.51-windows-x64-experimental.zip",
-        "bytes": 147329034,
-        "files": 28469,
-        "sha256": "a9e43250f5a32cce2656962d8b66cb61df08c52e348e06cb970188a2e252c12d",
-        "seconds": 151.73,
-        "compressionLevel": 6,
-        "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.1-r3/Trylo-CoWork-Runtime-0.5.51-windows-x64-experimental.zip"
-      }
-    }
+  "cli": {
+    "files": 2784,
+    "productionJsCompared": 962,
+    "hermeticTestNames": 4206,
+    "contractTests": 38,
+    "verifySteps": 11
   },
-  "sizeComparison": {
-    "r2Bytes": 367231006,
-    "coreBytes": 219903437,
-    "removedFromMainDownloadBytes": 147327569,
-    "smallerThanR2Percent": 40.12,
-    "initialReleaseBytes": 593012640,
-    "smallerThanInitialPercent": 62.92
-  }
+  "toolFork": {
+    "productionModules": 110,
+    "targetedTests": 141,
+    "additionalTests": 15
+  },
+  "portableLaunch": "Start-Trylo.cmd; match the existing launcher token without requesting elevation"
 }

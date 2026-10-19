@@ -473,6 +473,7 @@ describe('shipped CAD/EDA manifests + work.cad.v1 composition', () => {
           'blender-mcp': pyExe('blender', 'blender-mcp.exe'),
           'officecli': officeExe,
         },
+        probeInputAccess: async () => ({available:true, integrityRid:8192, uiAccess:false}),
         probePythonMetadata: async (_exe, pythonPackage) =>
           ({
             'autocad-mcp-pro': '1.5.1',

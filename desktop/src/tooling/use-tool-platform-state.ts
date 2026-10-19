@@ -46,6 +46,8 @@ export type ToolPackageUiState =
 /** Fixed, UI-ready text per failure shape (§3.3: 固定错误文案 — the raw
  *  `detail` may carry absolute paths and is never rendered verbatim). */
 export function fixedStateMessage(pkg: ToolPackageHealth): string {
+  if (pkg.reasonCode === 'input_runtime_low_integrity') return '电脑控制进程权限不匹配，请修复工具运行环境后重新检测。';
+  if (pkg.reasonCode === 'input_permission_probe_failed') return '无法验证电脑控制进程的输入权限，请重新检测工具运行环境。';
   switch (pkg.state) {
     case 'installed':
     case 'override':

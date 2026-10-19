@@ -324,6 +324,7 @@ import {
   deleteConversation,
   emptyWorkspaceHistory,
   ensureConversation,
+  setConversationPermission,
   forceFlushHistory,
   flushAllPendingSaves,
   listConversationSessions,
@@ -334,6 +335,7 @@ import {
   saveWorkspaceIndex,
   scheduleWorkspaceHistorySave,
   selectConversation,
+  switchConversationKind,
   unarchiveConversation,
   updateConversationAttachments,
   updateConversationCodeMode,
@@ -2008,6 +2010,34 @@ function App(): ReactElement {
     })
   }
   const remoteController = remoteControllerRef.current
+  const [remoteConfigurationReady, setRemoteConfigurationReady] = useState(!isTauriFn())
+  useEffect(() => {
+    if (!isTauriFn()) return
+    let active = true
+    void remoteController.loadConfiguration(settingsRef.current.remote).then(remote => {
+      if (!active) return
+      const next = { ...settingsRef.current, remote }
+      settingsRef.current = next
+      setSettings(next)
+      try { saveSettings(next) } catch { /* Native remote preferences remain durable. */ }
+      setRemoteConfigurationReady(true)
+    }).catch(error => {
+      if (!active) return
+      console.warn('[remote] could not restore connection preferences', error)
+      // A manual retry remains available without overwriting unreadable data.
+      setRemoteConfigurationReady(true)
+    })
+    return () => { active = false }
+  }, [remoteController])
+
+  const handleRemoteConfigure = useCallback(async (remote: TryloSettings['remote']): Promise<void> => {
+    const saved = await remoteController.saveConfiguration(remote)
+    const next = { ...settingsRef.current, remote: saved }
+    settingsRef.current = next
+    try { saveSettings(next) } catch { /* The native copy remains authoritative. */ }
+    setSettings(next)
+    await remoteController.setEnabled(saved.enabled)
+  }, [remoteController])
 
   // The Service Host belongs to Desktop, not to the optional pet domain.
   // Start it once so Hermes remains available when the pet is disabled. A
@@ -2243,8 +2273,9 @@ function App(): ReactElement {
   // controller no-ops when the platform/Tauri is unavailable or when the
   // gateway is already started.
   useEffect(() => {
+    if (!remoteConfigurationReady) return
     void remoteController.setEnabled(settings.remote?.enabled ?? false)
-  }, [remoteController, settings.remote?.enabled])
+  }, [remoteController, remoteConfigurationReady, settings.remote?.enabled, settings.remote?.connectionMode, settings.remote?.relayUrl, settings.remote?.port, settings.remote?.tunnelMode, settings.remote?.publicUrl, settings.remote?.cloudflaredPath])
 
   // Real remote status for the settings UI (spec §8.1.4). The controller
   // pushes on every gateway `remote.status` event + service-host health
@@ -2368,24 +2399,9 @@ function App(): ReactElement {
   // decision. The detailed configurator (port / tunnel /
   // pairing QR) still lives in Settings.
   const handleRemoteToggle = useCallback((): void => {
-    setSettings((prev) => {
-      const nextRemote = {
-        ...prev.remote,
-        enabled: !prev.remote.enabled,
-      }
-      void remoteController.setEnabled(nextRemote.enabled)
-      try {
-        const persisted: TryloSettings = {
-          ...prev,
-          remote: nextRemote,
-        }
-        saveSettings(persisted)
-        return persisted
-      } catch {
-        return { ...prev, remote: nextRemote }
-      }
-    })
-  }, [remoteController])
+    void handleRemoteConfigure({ ...settingsRef.current.remote, enabled: !settingsRef.current.remote.enabled })
+      .catch(error => console.warn('[remote] configuration save failed', error))
+  }, [handleRemoteConfigure])
 
   // P0 Work 单一发送: Work 会话的运行态由 Code supervisor 派生（不再创建
   // workd task），workActiveTask 仅作 legacy 展示保留。
@@ -2395,9 +2411,9 @@ function App(): ReactElement {
   // `onPermissionLevelChange` when the user confirms a new value.
   // The host (App) decides whether to apply it now (next turn
   // uses it) or queue it for the next turn (the spec calls this
-  // "下轮生效"). We track the pending value separately so the
-  // chip can render the visual hint without mutating the
-  // effective level that the in-flight run is using.
+  // "下轮生效"). Persist the choice on the conversation; the map
+  // below only tracks the pending hint for the in-flight turn.
+  // The controller keeps its own immutable permission snapshot.
   //
   // Declared here (after `settings` and `workRunning` are in
   // scope) to avoid a temporal-dead-zone ReferenceError.
@@ -2415,22 +2431,35 @@ function App(): ReactElement {
   const settingsDefault = settings.permissionLevel ?? DEFAULT_PERMISSION_LEVEL
   const effectivePermission = resolveEffectivePermission({
     settingsDefault,
-    conversationOverride: activeOverride?.level ?? null,
+    conversationOverride: (topMode === 'work' ? workRecord : codeRecord)?.permissionLevel ?? activeOverride?.level ?? null,
   })
   const permissionPendingNextTurn =
     activeOverride?.pendingForNextTurn === true && (topMode === 'work' ? workRunning : running)
   const onPermissionLevelChange = useCallback(
     (level: PermissionLevel): void => {
-      if (!pickerSessionId) return
       const isRunning = topMode === 'work' ? workRunning : running
+      updateHistoryAt(currentWorkspace.root, (history) =>
+        setConversationPermission(history, topMode, level, codeMode),
+      )
+      if (!pickerSessionId) return
       setPermissionOverrides((prev) => {
         const next = new Map(prev)
         next.set(pickerSessionId, { level, pendingForNextTurn: isRunning })
         return next
       })
     },
-    [pickerSessionId, topMode, workRunning, running],
+    [pickerSessionId, topMode, workRunning, running, updateHistoryAt, currentWorkspace.root, codeMode],
   )
+  // A queued choice has taken effect once the old turn stops. Do not show
+  // "下轮生效" again on every later turn of this conversation.
+  useEffect(() => {
+    if (!pickerSessionId || !activeOverride?.pendingForNextTurn || (topMode === 'work' ? workRunning : running)) return
+    setPermissionOverrides((previous) => {
+      const next = new Map(previous)
+      next.set(pickerSessionId, { level: activeOverride.level, pendingForNextTurn: false })
+      return next
+    })
+  }, [pickerSessionId, activeOverride, topMode, workRunning, running])
   // v1.17.2: IDs of sessions that are currently running so the left rail
   // can show a spinner on the active run. Declared here (after all three
   // inputs) to avoid a temporal-dead-zone ReferenceError.
@@ -2808,9 +2837,21 @@ function App(): ReactElement {
             projectRoot: root,
             conversationId: sessionId,
             permissionLevel: effectivePermission.level,
-          })) ?? null
-      } catch {
-        gateRuntime = null
+          }, { required: true })) ?? null
+        if (!gateRuntime) throw new Error('工具服务尚未就绪，请稍后重试。')
+      } catch (error) {
+        workSendIdempotencyRef.current = null
+        updateMessagesAt(root, sessionId, (prev) => [
+          ...prev,
+          {
+            id: `work-tools-${Date.now().toString(36)}`,
+            kind: 'notice',
+            role: 'system',
+            createdAt: Date.now(),
+            text: `未发送：${error instanceof Error ? error.message : '工具加载失败，请重试。'}`,
+          },
+        ])
+        return
       }
       if (gateRuntime) {
         const decision = decideSendCapabilityGate(text, gateRuntime.unavailableCapabilities)
@@ -3972,14 +4013,32 @@ function App(): ReactElement {
   const onTopModeChange = useCallback(
     (m: TopLevelMode): void => {
       if (m === topMode) return
-      // v1.16.6 (M4-A) — THE headline fix: switching Code/Work is
-      // pure navigation. It does NOT stop the Code run. Background
-      // Code keeps producing and writes back to its own conversation.
-      // M4-C (P1-4): flush before the mode flip loses the window.
+      // This is the composer's task-type picker, not history navigation.
+      // Keep an unused draft in place; leave established chats/runs intact
+      // and open a fresh target chat instead of restoring an old one.
       void forceFlushHistory(currentWorkspace.root)
+      const nextCodeMode = topMode === 'work' ? (workRecord?.session.codeMode ?? codeMode) : codeMode
+      updateHistoryAt(currentWorkspace.root, (history) => {
+        const id = history.activeByKind[topMode]
+        const attachments = id ? conversationAttachmentStore.snapshot({
+          surface: topMode, projectKey: currentWorkspaceKey, conversationId: id,
+        }) : null
+        const run = supervisor.getViewState(currentWorkspaceKey, id)
+        return switchConversationKind(history, {
+          from: topMode,
+          to: m,
+          codeMode: nextCodeMode,
+          // An idle prewarm has no turn/context; runtime fingerprints keep
+          // its Code/Work profiles separate when the first turn is sent.
+          canReuse: !run.running && !run.runId
+            && !attachments?.attachments.length && !attachments?.workAttachments.length
+            && !attachments?.readingCount && !attachments?.failed.length,
+        })
+      })
+      if (m === 'code') setCodeMode(nextCodeMode)
       setTopMode(m)
     },
-    [topMode, currentWorkspace.root],
+    [topMode, codeMode, workRecord?.session.codeMode, currentWorkspace.root, currentWorkspaceKey, supervisor, updateHistoryAt],
   )
 
   const onCodeModeChange = useCallback(
@@ -5514,6 +5573,7 @@ function App(): ReactElement {
       toolingFacade={toolingFacadeRef.current}
       toolMessages={topMode === 'code' ? mergedMessages : workMergedMessages}
       remoteController={remoteController}
+      onRemoteConfigure={handleRemoteConfigure}
       // 2026-08-29: TopBar "远程" button opens the pairing
       // modal (the new home of the pairing QR). The modal
       // holds enable/disable + QR; Settings keeps port /

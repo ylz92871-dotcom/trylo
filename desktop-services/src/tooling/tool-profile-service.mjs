@@ -28,6 +28,7 @@ import { fileURLToPath } from 'node:url';
 import { browserRuntimeEnv } from './browser-runtime-env.mjs';
 
 import { resolvePinnedWgcHelper } from './tool-package-manager.mjs';
+import { toolRuntimeIdentity } from './tool-runtime-identity.mjs';
 
 /** Placeholder expanded per-run in a manifest's argv (spec §10.2). */
 const RUNTIME_DIR_TOKEN = '{runtimeDir}';
@@ -368,7 +369,7 @@ export function createToolProfileService(options = {}) {
           type: 'package',
           displayName: manifest.displayName,
           version: manifest.version,
-          reasonCode: record.state === 'version-mismatch' ? 'version_mismatch' : 'not_installed',
+          reasonCode: record.reasonCode ?? (record.state === 'version-mismatch' ? 'version_mismatch' : 'not_installed'),
           detail: record.detail,
           userMessage: `${manifest.displayName}（${manifest.version}）不可用：${record.detail}`,
         });
@@ -376,6 +377,13 @@ export function createToolProfileService(options = {}) {
       }
 
       const installed = await packages.resolve(manifest);
+      const runtimeIdentity = toolRuntimeIdentity(manifest,installed);
+      if (record.runtimeIdentity && record.runtimeIdentity !== runtimeIdentity) {
+        unavailableCapabilities.push({ id, type:'package', reasonCode:'runtime_changed',
+          userMessage:`${manifest.displayName} 的运行环境在检查后发生变化，请重新发送以重新检查。` });
+        continue;
+      }
+      const identityEnv={TRYLO_TOOL_RUNTIME_ID:runtimeIdentity};
       // §8.2 outputDir contract: a manifest may rename its per-run runtime
       // dir (playwright → `browser/<conversationId>`). Default: package id.
       const dirName = manifest.runtimeDirName ?? manifest.id;
@@ -453,13 +461,13 @@ export function createToolProfileService(options = {}) {
           args: nativeConnection
             ? [hostEntrypoint, '--native-browser-mcp', nativeConnection.gate, installed.executable, ...expanded, ...originArgs]
             : [installed.executable, ...expanded, ...originArgs],
-          env: { ...manifest.mcp.env, ...helperEnv, ...browserEnv },
+          env: { ...manifest.mcp.env, ...helperEnv, ...browserEnv, ...identityEnv },
         };
       } else {
         mcpServers[manifest.mcp.serverName] = {
           command: installed.executable,
           args: [...expanded, ...originArgs],
-          env: { ...manifest.mcp.env, ...helperEnv },
+          env: { ...manifest.mcp.env, ...helperEnv, ...identityEnv },
         };
       }
     }

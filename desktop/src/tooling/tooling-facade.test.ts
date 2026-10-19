@@ -18,6 +18,24 @@ function fakeClient() {
 }
 
 describe('createToolingFacade local tool bindings', () => {
+  const profileRequest = { surface: 'work' as const, projectKey: 'p', projectRoot: 'D:/p', conversationId: 'c', permissionLevel: 'ask' as const };
+
+  it('does not silently start a required Work profile after a directory write failure', async () => {
+    const client = { request: vi.fn(async () => ({ ok: false, reasonCode: 'config_write_failed', error: 'EPERM private path' })) } as never;
+    const facade = createToolingFacade(client);
+    await expect(facade.resolveProfile(profileRequest, { required: true })).rejects.toMatchObject({
+      code: 'config_write_failed', message: expect.stringContaining('写入权限'),
+    });
+    await expect(facade.resolveProfile(profileRequest)).resolves.toBeNull();
+  });
+
+  it('reports transport failure for a required profile and grants cold probes their full budget', async () => {
+    const request = vi.fn(async () => { throw new ServiceRequestError('TIMEOUT', 'raw transport internals'); });
+    const facade = createToolingFacade({ request } as never);
+    await expect(facade.resolveProfile(profileRequest, { required: true })).rejects.toMatchObject({ code: 'TIMEOUT', message: '工具加载超时，请稍后重试。' });
+    expect(request).toHaveBeenCalledWith('tooling.resolveProfile', expect.objectContaining({ surface: 'work' }), { timeoutMs: 120_000 });
+  });
+
   it('forwards set, clear, and inspect to the registered RPC names', async () => {
     const { calls, client } = fakeClient();
     const facade = createToolingFacade(client);

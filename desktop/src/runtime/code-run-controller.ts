@@ -477,6 +477,11 @@ export class CodeRunController {
     // run must never be re-routed mid-flight by a settings change.
     const caps = capabilitiesFor(protocol);
 
+    // A different engine did not write this journal. Returning to v1 must
+    // replay visible history into a fresh session so intervening legacy turns
+    // cannot disappear behind a resume of the earlier v1 context.
+    if (protocol !== this.ownedProtocol) this.cliSession = { state: 'none' };
+
     // P08 §6.2: recover a session left `unknown` by a crash. The ONLY
     // authority on whether it exists is the CLI's own session probe —
     // never "a file might be on disk".
@@ -651,7 +656,8 @@ export class CodeRunController {
       const replacedId = this.processId;
       this.processId = null;
       this.pid = null;
-      await stopTryloProcess(replacedId).catch(() => { /* already gone */ });
+      const stop = this.ownedProtocol === 'trylo-v1' ? stopTryloV1 : stopTryloProcess;
+      await stop(replacedId).catch(() => { /* already gone */ });
     }
     // Same for an un-adopted prewarm: once this run's contract differs, OR the
     // run must replay history (which the empty idle process never saw — see the
@@ -703,6 +709,12 @@ export class CodeRunController {
           this.reportToolProtocolDrift(init.tools, spawnToolRuntime);
         }
       }
+      if (protocol === 'legacy-stream-json') {
+        // Cold and prewarmed legacy processes share the same per-turn sink
+        // and idle timestamp. This handler also serves later warm turns.
+        this.handleTurnEvents(events);
+        return;
+      }
       const scope = this.resultScope;
       if (scope && this.lifecycleObserver) {
         try {
@@ -712,9 +724,7 @@ export class CodeRunController {
         }
       }
       this.maybeEmitFirstEvents(events);
-      if (protocol === 'legacy-stream-json' && this.finishLegacyAbort(events)) {
-        // An initialization failure can leave stdin alive without a result frame.
-      } else if (events.some((e) => e.type === 'loop_end' || e.type === 'session_end')) {
+      if (events.some((e) => e.type === 'loop_end' || e.type === 'session_end')) {
         this.busy = false;
         this.bindingState = 'idle';
         this.notify();
@@ -1064,8 +1074,8 @@ export class CodeRunController {
     return { processId: this.prewarmProcessId, ready: this.prewarmReady };
   }
 
-  /** Forward turn output from an adopted prewarm process, mirroring
-   *  the cold-spawn onOutput (loop_end → idle + forward). */
+  /** Shared output path for cold, adopted and warm legacy turns. The
+   *  current sink and idle timestamp belong to the turn, not the spawn. */
   private handleTurnEvents(events: readonly LoopEvent[]): void {
     const scope = this.resultScope;
     if (scope && this.lifecycleObserver) {

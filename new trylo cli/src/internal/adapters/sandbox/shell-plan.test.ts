@@ -42,7 +42,7 @@ describe("planMutation under a shell mode", () => {
     if (!result.ok) return;
     assert.equal(result.plan.tool, "run_shell");
     if (result.plan.tool !== "run_shell") return;
-    assert.equal(result.plan.shape.kind, "shell");
+    assert.equal(result.plan.shape.kind, "direct");
     assert.equal(result.plan.steps.length, 0);
     // The command travels as ONE argv element: the interpreter parses, not us.
     assert.ok(result.plan.argv[result.plan.argv.length - 1]?.includes("echo hello | grep h"));

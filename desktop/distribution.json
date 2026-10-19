@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "product": "Trylo Desktop",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "distribution": "core",
   "ordinaryWorkRuntime": "trylo-cli",
   "components": {

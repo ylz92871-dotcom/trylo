@@ -184,7 +184,7 @@ describe('startTrylo (env + args)', () => {
       cwd: 'D:/work' as FilePath,
       extraHeadersText: '{"X-Trace":"1"}',
     });
-    expect(spawnCalls[0]!.env.ANTHROPIC_CUSTOM_HEADERS).toBe('{"X-Trace":"1"}');
+    expect(spawnCalls[0]!.env.ANTHROPIC_CUSTOM_HEADERS).toBe('X-Trace: 1');
   });
 
   it('openai format sets custom auth header (key + prefix)', async () => {
@@ -199,7 +199,9 @@ describe('startTrylo (env + args)', () => {
     });
     const env = spawnCalls[0]!.env;
     expect(env.ANTHROPIC_API_KEY).toBe('sk-openai-1');
-    expect(env.Authorization).toBe('Bearer sk-openai-1');
+    expect(env.ANTHROPIC_CUSTOM_HEADERS).toBe('Authorization: Bearer sk-openai-1');
+    expect(env.Authorization).toBeUndefined();
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('');
   });
 
   it('uses --bare + --permission-mode + --tools mapped from permissionLevel (P2)', async () => {
@@ -246,6 +248,7 @@ describe('startTrylo (env + args)', () => {
     const args = spawnCalls[0]!.args;
     expect(args[args.indexOf('--permission-mode') + 1]).toBe('default');
     expect(args).toContain('--tools=default');
+    expect(spawnCalls[0]!.env.TRYLO_DESKTOP_TOOL_POLICY).toBe('1');
   });
 
   it('workspace_write level maps to acceptEdits + default tools (P2)', async () => {
@@ -480,6 +483,7 @@ describe('startTryloPrewarm', () => {
     expect(sendCalls).toHaveLength(0);
     const call = spawnCalls[0]!;
     expect(call.label).toBe('trylo-cli-prewarm');
+    expect(call.env.TRYLO_DESKTOP_TOOL_POLICY).toBe('1');
     expect(call.args).toContain('--bare');
     expect(call.command).toBe('node');
     expect(call.env.CLAUDE_CODE_LOOP_EVENTS_FILE).toMatch(/^D:\/work\/\.trylo\/loop-prewarm-[a-z0-9]+\.jsonl$/);

@@ -384,6 +384,9 @@ export function applyEvents(
 ): ChatMessage[] {
   let next: ChatMessage[] = [...msgs];
   for (const e of events) {
+    if (e.type === 'text' || e.type === 'thinking' || e.type === 'tool_use' || e.type === 'loop_end') {
+      next = next.filter(message => message.kind !== 'notice' || message.runtimeState !== 'reconnecting');
+    }
     next = applyOne(next, e);
   }
   return next;
@@ -413,6 +416,18 @@ function applyOne(msgs: ChatMessage[], e: LoopEvent): ChatMessage[] {
     // else) and NOT rendered as assistant text — the model did not say
     // it, the runtime did.
     case 'runtime_warning': return applyRuntimeWarning(msgs, e);
+    case 'api_retry': {
+      if (e.errorStatus === 401 || e.errorStatus === 403) return msgs;
+      const user = msgs[lastUserIndex(msgs)];
+      const id = `${user?.id ?? 'run'}:api-retry`;
+      const status = e.errorStatus > 0 ? `（HTTP ${e.errorStatus}）` : '';
+      const delay = Math.max(1, Math.ceil(e.retryDelayMs / 1000));
+      const text = `模型服务暂时未响应${status}，${delay} 秒后重试（${e.attempt}/${e.maxRetries}）。`;
+      return [...msgs.filter(message => message.id !== id), {
+        id, kind: 'notice', role: 'system', text, createdAt: e.ts,
+        turnId: user?.id, runtimeState: 'reconnecting',
+      }];
+    }
     // v1.16.0: compaction is CLI-owned (LLM-based; see
     // trylo-cli/src/commands/compact/compact.ts). The
     // desktop is observer + renderer: a pending notice
@@ -439,7 +454,6 @@ function applyOne(msgs: ChatMessage[], e: LoopEvent): ChatMessage[] {
     case 'loop_start':
     case 'session_end':
     case 'turn_start':
-    case 'api_retry':
     case 'model_fallback':
     case 'permission_denied':
     case 'api_call':

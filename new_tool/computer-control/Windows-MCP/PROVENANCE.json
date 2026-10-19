@@ -8,18 +8,19 @@
     "license": "MIT",
     "licenseFile": "LICENSE.md"
   },
-  "snapshot": "2026-10-15 desktop-v1.0.1-r3 fork source",
+  "snapshot": "2026-10-20 Desktop 1.0.2 current tool fork",
   "hashEncoding": "utf8-lf",
   "uvLockSha256": "18e34869b0ca1cfaac23eee385dfa0ac78a48897297c5c4a6a4c2cfe847c55bb",
   "modifications": [
     "Trylo tool allowlist integration and OCR/display inventory surface.",
     "CAD input, focus/IME, coordinate handling, snapshot/UIA and tree budgeting fixes.",
-    "Capture broker, WGC helper protocol, takeover, watchdog and action result handling."
+    "Capture broker, WGC helper protocol, takeover, watchdog and action result handling.",
+    "Runtime temp isolation, checked native input error capture, control overlay receipts and capture exclusion."
   ],
   "files": [
     {
       "path": "src/windows_mcp/__init__.py",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      "sha256": "29824f438c5b94fb20d89f2091da7468f21717b45074274f394c565a72725427"
     },
     {
       "path": "src/windows_mcp/__main__.py",
@@ -79,7 +80,7 @@
     },
     {
       "path": "src/windows_mcp/capture/service.py",
-      "sha256": "26b693fe33e59dc43ffd0c5a9b30df8cd770140109aec1f0507979904399f1f2"
+      "sha256": "520209983b8b05e1d92e276b8b2b660d0afbd49dc6eb618ae89e2edc4739d13d"
     },
     {
       "path": "src/windows_mcp/config.py",
@@ -94,8 +95,16 @@
       "sha256": "6f55b57d26439980098007fa7489a6cc72afefccc824822402a287c504d7092c"
     },
     {
+      "path": "src/windows_mcp/desktop/control_overlay.py",
+      "sha256": "5cbd520bcf5498e0651fae033306db44a76f63a273167a24bfaee2711f3d370e"
+    },
+    {
+      "path": "src/windows_mcp/desktop/control_visuals.py",
+      "sha256": "f359257b1a9edaa709cec1188e1142d431675724578d244f5e71337d82a2a553"
+    },
+    {
       "path": "src/windows_mcp/desktop/flash_overlay.py",
-      "sha256": "087969587786659dd256dc6473acce5ae8c8aee9f86ef22b3f360a8237b051fd"
+      "sha256": "55a6b43e2a93879847c458a4f429ad9936bf886a7a0d3496ffe4da0f09ec5755"
     },
     {
       "path": "src/windows_mcp/desktop/ocr_backend.py",
@@ -107,7 +116,7 @@
     },
     {
       "path": "src/windows_mcp/desktop/service.py",
-      "sha256": "f967f9399734a51e2f7cbb8dfcd99fba5eaeec216375c024261b26c0895f72c1"
+      "sha256": "778f8b51dcc13cd283414bb7436af3cb9defe64d87fd32586465ee17c7959efa"
     },
     {
       "path": "src/windows_mcp/desktop/utils.py",
@@ -279,7 +288,7 @@
     },
     {
       "path": "src/windows_mcp/runtime/snapshot_store.py",
-      "sha256": "3e7b4de1a6a1c64207934bb247505bcb84eb818001c5a4993b7dea04087e7c58"
+      "sha256": "1aa1d27b671e40f8a5af68642a7d2a7a5a89c0399c5974b0859201ebd383335e"
     },
     {
       "path": "src/windows_mcp/runtime/takeover.py",
@@ -298,6 +307,10 @@
       "sha256": "271ad12380f5e0a6c1abd9e307dee0d1f12cea156087fce89e13e77f50940b2c"
     },
     {
+      "path": "src/windows_mcp/runtime_temp.py",
+      "sha256": "3ccaa67cb5b8c971780e713b9a817542038c0cb895fd05beb787869351031c75"
+    },
+    {
       "path": "src/windows_mcp/tools/__init__.py",
       "sha256": "ec986ad93013f528d467be2d02608a17d3709167033a0e20455fca7ad1fb7810"
     },
@@ -307,7 +320,7 @@
     },
     {
       "path": "src/windows_mcp/tools/_snapshot_helpers.py",
-      "sha256": "b8b5e319b45e9312243a9e1c2bd4a3ca02ae9d8b8ebc63597a20edb34ca38964"
+      "sha256": "d05e27ec894b39c089afce67c43dfcc263503b2606704c6d6f18036db6428238"
     },
     {
       "path": "src/windows_mcp/tools/app.py",
@@ -407,7 +420,7 @@
     },
     {
       "path": "src/windows_mcp/uia/core.py",
-      "sha256": "a18596eaaaa91fffebc519629cb51d394c4e6f759d95b26b68604cabadd2b8dd"
+      "sha256": "3a1ea18a06698436d133dd21b43eda1ef9dcfa9ba628765bfbbade4d553953e6"
     },
     {
       "path": "src/windows_mcp/uia/enums.py",

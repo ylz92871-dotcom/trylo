@@ -14,13 +14,27 @@ export function cursorOverlay(point) {
     const cursor = document.createElement('div'); cursor.className = 'cursor';
     cursor.style.cssText = 'position:absolute;left:0;top:0;will-change:transform;pointer-events:none!important';
     const ring = document.createElement('span');
-    ring.style.cssText = 'position:absolute;left:-12px;top:-12px;width:24px;height:24px;border:2px solid #946d22;border-radius:50%;opacity:0;box-sizing:border-box;pointer-events:none!important';
+    ring.style.cssText = 'position:absolute;left:-12px;top:-12px;width:24px;height:24px;border:2px solid #e8bd65;border-radius:50%;opacity:0;box-sizing:border-box;pointer-events:none!important';
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('width', '18'); svg.setAttribute('height', '24'); svg.setAttribute('viewBox', '0 0 18 24');
-    svg.style.cssText = 'display:block;overflow:visible;pointer-events:none!important';
+    svg.setAttribute('width', '22'); svg.setAttribute('height', '30'); svg.setAttribute('viewBox', '-2 -2 22 30');
+    svg.style.cssText = 'position:relative;left:-2px;top:-2px;display:block;overflow:visible;filter:drop-shadow(0 1.5px 1.5px #3b2b1364);pointer-events:none!important';
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+    gradient.setAttribute('id', 'trylo-cursor-gold');
+    gradient.setAttribute('x1', '0'); gradient.setAttribute('y1', '0'); gradient.setAttribute('x2', '0'); gradient.setAttribute('y2', '1');
+    for (const [offset, color] of [['0%', '#ffefb3'], ['50%', '#e8bd65'], ['100%', '#ce9236']]) {
+      const stop = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+      stop.setAttribute('offset', offset); stop.setAttribute('stop-color', color); gradient.append(stop);
+    }
+    defs.append(gradient);
+    const shape = 'M0 0L.6 21.5L5.8 16.4L10 25.2L13.6 23.4L9.4 14.6L17.4 14.4Z';
+    const rim = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    for (const [key, value] of Object.entries({ d: shape, fill: 'none', stroke: '#fff7dd', 'stroke-width': '2.4', 'stroke-linejoin': 'round' })) rim.setAttribute(key, value);
     const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    for (const [key, value] of Object.entries({ d: 'M1 1L1 19L5.4 14.5L9 22L12 20.5L8.5 13L15 13Z', fill: '#262725', stroke: '#ffffff', 'stroke-width': '1.5', 'stroke-linejoin': 'round' })) arrow.setAttribute(key, value);
-    svg.append(arrow);
+    for (const [key, value] of Object.entries({ d: shape, fill: 'url(#trylo-cursor-gold)', stroke: '#754e18', 'stroke-width': '.75', 'stroke-linejoin': 'round' })) arrow.setAttribute(key, value);
+    const highlight = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    for (const [key, value] of Object.entries({ d: 'M.8 2.3L1.3 18.7', fill: 'none', stroke: '#fff7dd', 'stroke-width': '.65', 'stroke-linecap': 'round', opacity: '.84' })) highlight.setAttribute(key, value);
+    svg.append(defs, rim, arrow, highlight);
     const label = document.createElement('span'); label.textContent = '智能体';
     label.style.cssText = 'position:absolute;left:18px;top:22px;background:#ffffff;color:#262725;border:1px solid #946d22;border-radius:5px;padding:3px 6px;font:11px/14px system-ui;white-space:nowrap;box-shadow:0 1px 4px #26272520;pointer-events:none!important';
     cursor.append(ring, svg, label); root.append(cursor);

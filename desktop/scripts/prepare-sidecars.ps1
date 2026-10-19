@@ -18,6 +18,7 @@
 param([switch]$IncludeWorkd)
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot 'release-file-hash.ps1')
 
 $repoRoot = Resolve-Path "$PSScriptRoot\..\.."
 $ds = Join-Path $repoRoot "desktop-services"
@@ -95,9 +96,14 @@ prepare-sidecars: no Node runtime to pin.
 }
 $nodeVersion = & $nodeExe --version
 if ($LASTEXITCODE -ne 0) { throw "prepare-sidecars: $nodeExe --version failed" }
+if ($nodeVersion -ne 'v24.14.1' -or (Get-ReleaseFileHash $nodeExe) -ne '58e74bf02fc5bbacc41dcb8bef089961cd5bddd37830b87784e4fc624d145d1f') { throw 'Stage the pinned Node v24.14.1 win-x64 runtime.' }
 $nodeTargetDir = Join-Path $resources "runtime\node\win-x64"
 New-Item -ItemType Directory -Force -Path $nodeTargetDir | Out-Null
 Copy-Item -LiteralPath $nodeExe -Destination (Join-Path $nodeTargetDir "node.exe") -Force
+$runtimeLicenses = Join-Path $resources 'runtime/licenses'
+New-Item -ItemType Directory -Force -Path $runtimeLicenses | Out-Null
+Copy-Item -LiteralPath (Join-Path $repoRoot 'desktop/licenses/NODE-v24.14.1-LICENSE.txt') -Destination (Join-Path $runtimeLicenses 'NODE-LICENSE.txt') -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot 'desktop/licenses/TRYLO-LICENSE.txt') -Destination (Join-Path $runtimeLicenses 'TRYLO-LICENSE.txt') -Force
 Write-Host "prepare-sidecars: pinned node $nodeVersion -> $nodeTargetDir\node.exe"
 
 
@@ -228,7 +234,15 @@ New-Item -ItemType Directory -Force -Path $wgcTarget | Out-Null
 Copy-Item -Force (Join-Path $wgcSource "trylo-wgc-helper.exe") $wgcTarget
 Write-Host "prepare-sidecars: staged WGC helper -> $wgcTarget"
 
+$licenseDirectory = Join-Path $dsRoot "licenses"
+New-Item -ItemType Directory -Force -Path $licenseDirectory | Out-Null
+Copy-Item -LiteralPath (Join-Path $repoRoot "new_tool/computer-control/Windows-MCP/LICENSE.md") -Destination (Join-Path $licenseDirectory "Windows-MCP-LICENSE.md") -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot "new_tool/computer-control/Windows-MCP/PROVENANCE.json") -Destination (Join-Path $licenseDirectory "Windows-MCP-PROVENANCE.json") -Force
+& (Join-Path $PSScriptRoot "stage-wgc-notices.ps1") -ProjectDirectory (Join-Path $repoRoot "new_tool/computer-control/Windows-MCP/native/wgc-helper") -Destination (Join-Path $licenseDirectory "wgc-dotnet")
+
 Write-Host "prepare-sidecars: verify resource inventory"
+& (Join-Path $PSScriptRoot "prepare-runtime-integrity.ps1") -RuntimeRoot $resources
+if ($LASTEXITCODE -ne 0) { throw "Runtime integrity preparation failed" }
 $env:TRYLO_RESOURCE_DIR = $resources
 $env:TRYLO_SIDECARS_DIR = ""
 Push-Location $ds

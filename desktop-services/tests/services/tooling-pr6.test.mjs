@@ -73,6 +73,7 @@ function build(overrides = {}) {
       installRoot: overrides.installRoot ?? path.join(tmpRoot, 'tool-packages'),
       profilesRoot: overrides.profilesRoot ?? path.join(tmpRoot, 'tool-profiles'),
       probe: overrides.probe ?? (async () => '1.0.145'),
+      probeInputAccess: overrides.probeInputAccess ?? (async () => ({available:true, integrityRid:8192, uiAccess:false})),
       ...(overrides.probePythonMetadata ? { probePythonMetadata: overrides.probePythonMetadata } : {}),
       ...(overrides.overrides ? { overrides: overrides.overrides } : {}),
       ...(overrides.manifests ? { manifests: overrides.manifests } : {}),
@@ -142,6 +143,9 @@ describe('windows-mcp manifest (PR-6, §6.6/§10.3)', () => {
     assert.equal(fs.readFileSync(path.join(targetRoot, 'tools', 'input.py'), 'utf8'), '# fork version');
     assert.ok(fs.existsSync(path.join(targetRoot, 'tools', 'ocr.py')));
     assert.ok(!fs.existsSync(path.join(targetRoot, 'tools', '__pycache__')));
+    const before=fs.statSync(path.join(targetRoot,'tools','input.py')).mtimeMs;
+    assert.equal(await syncWindowsMcpFork(versionDir,forkSrc),0,'unchanged source must not rewrite a live package');
+    assert.equal(fs.statSync(path.join(targetRoot,'tools','input.py')).mtimeMs,before);
   });
 
   it('syncWindowsMcpFork is a no-op without a materialised install', async () => {

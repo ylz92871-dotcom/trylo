@@ -87,7 +87,9 @@ class SnapshotStore:
             self._superseded_for_mutation.discard(snapshot_id)
             self._mutation_claims.discard(snapshot_id)
             raise SnapshotStoreError(
-                ErrorCode.STALE_SNAPSHOT, f"snapshot {snapshot_id!r} has expired"
+                ErrorCode.STALE_SNAPSHOT,
+                f"snapshot {snapshot_id!r} has expired; capture a fresh Snapshot "
+                "and use its target references before retrying. No input was sent.",
             )
         if (
             producer_generation is not None

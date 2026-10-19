@@ -77,7 +77,9 @@ export default defineConfig({
   build: {
     target: 'es2022',
     minify: 'esbuild',
-    sourcemap: true,
+    // Release maps duplicate large editor sources and increase peak build
+    // memory. Enable them explicitly for diagnosis; development stays mapped.
+    sourcemap: process.env.TRYLO_BUILD_SOURCEMAPS === '1',
     // P2 (§7): record the performance budget. Monaco alone is ~3.3 MB,
     // the main entry is ~800 KB — both are accepted for the v1 product
     // (no code-splitting gain from splitting the main entry further).

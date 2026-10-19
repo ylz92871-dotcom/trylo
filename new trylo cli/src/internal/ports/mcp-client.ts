@@ -139,12 +139,17 @@ export type McpCallFailure = {
  * allowed to widen it. `cancelled` keeps its own terminal state for the same
  * reason it does there: a user interrupt is not a tool failure.
  */
+/** Transient transport bytes. The runtime must materialize validated images
+ * before returning a ToolOutcome; these never enter the durable journal. */
+export type McpInlineImage = { readonly mimeType: string; readonly data: string };
+
 export type McpToolOutcome =
   | {
       readonly outcome: "result";
       readonly value: JsonObject;
       readonly output: string;
       readonly truncated: boolean;
+      readonly inlineImages?: ReadonlyArray<McpInlineImage>;
     }
   | { readonly outcome: "error"; readonly code: string; readonly message: string }
   | { readonly outcome: "cancelled" }

@@ -1,6 +1,6 @@
 """Brief on-screen visual confirmation that a screenshot was taken.
 
-Renders a soft orange-red glow halo around the captured area for ~2.5 s
+Renders a soft gold glow halo around the captured area for ~3.5 s
 using a Win32 layered window with per-pixel alpha (``UpdateLayeredWindow``
 + premultiplied BGRA DIB section). Tk was tried twice and abandoned —
 ``-transparentcolor`` rendered nothing on some Windows configs and a
@@ -20,7 +20,7 @@ from ctypes import wintypes
 
 logger = logging.getLogger(__name__)
 
-_FLASH_RGB = (0xFF, 0x45, 0x00)
+_FLASH_RGB = (0xE8, 0xBD, 0x65)
 _DURATION_MS = 3500
 _FRAME_INTERVAL_MS = 30
 _GLOW_BORDER_THICKNESS = 8
@@ -58,7 +58,7 @@ def cancel_active_flash(timeout: float = 0.25) -> None:
 
 
 def show_capture_flash(capture_rect: "object | None" = None) -> None:
-    """Show a fade-in/out orange-red glow for a screenshot capture.
+    """Show a fade-in/out gold glow for a screenshot capture.
 
     Pass the same ``capture_rect`` (``uia.Rect`` with ``left/top/right/
     bottom``) used for the screenshot — or ``None`` for a full-desktop
@@ -285,6 +285,15 @@ def _render_glow_rgba(
     """
     from PIL import Image, ImageDraw, ImageFilter
 
+    if not outward:
+        from windows_mcp.desktop.control_visuals import render_halo
+
+        image = Image.new("RGBA", (width, height))
+        for x1, y1, x2, y2 in rect_list:
+            if x2 > x1 and y2 > y1:
+                image.alpha_composite(render_halo(x2-x1, y2-y1), (x1, y1))
+        return image
+
     sharp = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(sharp)
     color = (*_FLASH_RGB, 255)
@@ -308,28 +317,14 @@ def _render_glow_rgba(
 
 def _premultiplied_bgra(rgba_image, intensity: float) -> bytes:
     """Convert PIL RGBA to BGRA premultiplied bytes scaled by ``intensity``."""
-    bgra = bytearray(rgba_image.tobytes("raw", "BGRA"))
-    if intensity >= 1.0:
-        for i in range(0, len(bgra), 4):
-            a = bgra[i + 3]
-            if a == 0:
-                continue
-            bgra[i] = (bgra[i] * a) // 255
-            bgra[i + 1] = (bgra[i + 1] * a) // 255
-            bgra[i + 2] = (bgra[i + 2] * a) // 255
-    else:
-        for i in range(0, len(bgra), 4):
-            a = (bgra[i + 3] * int(intensity * 255)) // 255
-            bgra[i + 3] = a
-            if a == 0:
-                bgra[i] = 0
-                bgra[i + 1] = 0
-                bgra[i + 2] = 0
-                continue
-            bgra[i] = (bgra[i] * a) // 255
-            bgra[i + 1] = (bgra[i + 1] * a) // 255
-            bgra[i + 2] = (bgra[i + 2] * a) // 255
-    return bytes(bgra)
+    from PIL import Image, ImageChops
+
+    r, g, b, alpha = rgba_image.split()
+    if intensity < 1.0:
+        factor = max(0, int(intensity * 255))
+        alpha = alpha.point([a * factor // 255 for a in range(256)])
+    return Image.merge("RGBA", (ImageChops.multiply(r, alpha), ImageChops.multiply(g, alpha),
+                                ImageChops.multiply(b, alpha), alpha)).tobytes("raw", "BGRA")
 
 
 # ---------------------------------------------------------------------------
@@ -388,7 +383,7 @@ def _create_layered_window(class_name: str, x: int, y: int, w: int, h: int):
     return hwnd, h_instance
 
 
-def _push_bitmap(hwnd, x: int, y: int, w: int, h: int, bgra: bytes) -> None:
+def _push_bitmap(hwnd, x: int, y: int, w: int, h: int, bgra: bytes, *, opacity=255) -> None:
     screen_dc = _user32.GetDC(None)
     if not screen_dc:
         raise OSError("GetDC failed")
@@ -423,7 +418,7 @@ def _push_bitmap(hwnd, x: int, y: int, w: int, h: int, bgra: bytes) -> None:
                     pos = _POINT(x, y)
                     size = _SIZE(w, h)
                     src_pos = _POINT(0, 0)
-                    blend = _BLENDFUNCTION(_AC_SRC_OVER, 0, 255, _AC_SRC_ALPHA)
+                    blend = _BLENDFUNCTION(_AC_SRC_OVER, 0, opacity, _AC_SRC_ALPHA)
                     ok = _user32.UpdateLayeredWindow(
                         hwnd,
                         screen_dc,

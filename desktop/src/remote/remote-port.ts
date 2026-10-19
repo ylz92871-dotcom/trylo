@@ -18,6 +18,8 @@ import type {
   RemotePairingInfoResult,
   RemoteRespondParams,
   RemoteStatusResult,
+  RelayLoginParams,
+  RelayAccountStatus,
 } from '../services-host/methods';
 
 /** A gateway handler invocation the sidecar forwarded (host.remoteRequest). */
@@ -65,6 +67,13 @@ export const EMPTY_REMOTE_STATUS: RemoteStatusResult = {
 
 export class ServicesRemotePort implements RemotePort {
   constructor(private readonly manager: ServiceManager) {}
+
+  loadConfiguration(settings: import('../settings/settings-store').RemoteSettings) { return this.manager.client.request('remote.loadConfiguration', settings); }
+  saveConfiguration(settings: import('../settings/settings-store').RemoteSettings) { return this.manager.client.request('remote.saveConfiguration', settings); }
+
+  relayLogin(params: RelayLoginParams): Promise<RelayAccountStatus> { return this.manager.client.request('remote.relayLogin', params); }
+  relayStatus(): Promise<RelayAccountStatus> { return this.manager.client.request('remote.relayStatus'); }
+  relayLogout(): Promise<RelayAccountStatus> { return this.manager.client.request('remote.relayLogout'); }
 
   async status(): Promise<RemoteStatusResult> {
     try {

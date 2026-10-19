@@ -14,7 +14,7 @@ import { RightRail } from './RightRail';
 import { RailResizer } from './RailResizer';
 import { FilePeek } from './FilePeek';
 import { GitDiffView, type GitFileDiffData } from '../code-surface/GitDiffView';
-import { SettingsModal, type SettingsTab } from './SettingsModal';
+import { SettingsModal, type SettingsTab, type RelayAccountActions } from './SettingsModal';
 import { RemotePairingModal } from './RemotePairingModal';
 import type { FilePath, TopLevelMode } from '../../host-adapter/types';
 import type { ConversationSession } from '../../host-adapter/conversation-history';
@@ -152,13 +152,14 @@ export interface AppShellProps {
   /** Opens the Learning panel on the pending-approval tab. */
   readonly onOpenLearningPending?: () => void;
   /** Surface for on-demand remote pairing (QR). */
-  readonly remoteController?: { pairing(): Promise<RemotePairingInfoResult> } | null;
+  readonly remoteController?: { pairing(): Promise<RemotePairingInfoResult> } & RelayAccountActions | null;
   /**
    * 2026-08-29: the TopBar "远程" button opens the remote
    * pairing modal (the new home of the pairing QR). The
    * modal owns enable/disable + QR; this prop only opens it.
    */
   readonly remoteEnabled?: boolean;
+  readonly onRemoteConfigure?: (settings: TryloSettings['remote']) => Promise<void>;
   readonly remoteRunning?: boolean;
   /** Open-state for the remote pairing modal (owned by App). */
   readonly remotePairingOpen: boolean;
@@ -346,6 +347,8 @@ export function AppShell(props: AppShellProps): ReactElement {
         onClose={() => props.onSettingsOpenChange(false)}
         petStatus={props.petStatus}
         remoteStatus={props.remoteStatus}
+        relayAccount={props.remoteController}
+        onOpenRemote={() => { props.onSettingsOpenChange(false); props.onRemotePairingOpenChange(true); }}
         toolPlatform={props.toolPlatform}
         learningPort={props.learningPort}
         onOpenLearningPending={props.onOpenLearningPending}
@@ -356,6 +359,8 @@ export function AppShell(props: AppShellProps): ReactElement {
         remoteStatus={props.remoteStatus}
         remoteController={props.remoteController}
         remoteEnabled={props.remoteEnabled ?? false}
+        remoteSettings={props.settings.remote}
+        onConfigure={props.onRemoteConfigure}
         onRemoteToggle={props.onRemoteToggle}
       />
       {/* The embedded browser drawer — shell-level so the same

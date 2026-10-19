@@ -502,6 +502,7 @@ export interface LegacyImportCommitResult {
 export type RemoteTunnelMode = 'named' | 'quick' | 'manual';
 
 export interface RemoteStatusResult {
+  readonly connectionMode?: 'tunnel' | 'server';
   readonly ok: boolean;
   readonly enabled: boolean;
   readonly running: boolean;
@@ -510,9 +511,12 @@ export interface RemoteStatusResult {
   readonly tunnelMode: RemoteTunnelMode | 'off';
   readonly tunnelRunning: boolean;
   readonly reasonCode: string;
+  readonly error?: string;
 }
 
 export interface RemoteEnableParams {
+  readonly connectionMode?: 'tunnel' | 'server';
+  readonly relayUrl?: string;
   readonly port?: number;
   readonly workspaceName?: string;
   readonly deviceName?: string;
@@ -706,6 +710,9 @@ export interface RemotePublishResult {
 
 /** Pairing payload the phone parses (protocol 1 — gateway.ts unchanged). */
 export interface RemotePairing {
+  readonly expiresAt?: number;
+  readonly connectionMode?: 'tunnel' | 'server';
+  readonly relayDeviceId?: string;
   readonly protocol: 1;
   readonly service: 'trylo-remote';
   readonly deviceId: string;
@@ -718,6 +725,20 @@ export interface RemotePairing {
 export interface RemotePairingInfoResult {
   readonly pairing: RemotePairing;
   readonly qrDataUrl: string;
+}
+
+export interface RelayLoginParams {
+  readonly serverUrl: string;
+  readonly username: string;
+  readonly password: string;
+  readonly inviteCode?: string;
+  readonly register?: boolean;
+}
+export interface RelayAccountStatus {
+  readonly loggedIn: boolean;
+  readonly username: string;
+  readonly serverUrl: string;
+  readonly online: boolean;
 }
 
 /** The Desktop's answer to a forwarded gateway handler invocation
@@ -767,6 +788,9 @@ export type ToolUnavailableReasonCode =
   | 'not_in_catalog'
   | 'not_installed'
   | 'version_mismatch'
+  | 'runtime_changed'
+  | 'input_runtime_low_integrity'
+  | 'input_permission_probe_failed'
   | 'server_name_collision'
   | 'hermes_unavailable';
 
@@ -788,6 +812,9 @@ export interface ToolPackageCondition {
 }
 
 export interface ToolPackageHealth {
+  readonly runtimeIdentity?: string;
+  readonly reasonCode?: string;
+  readonly inputAccess?: { readonly available: boolean; readonly integrityRid?: number; readonly uiAccess?: boolean; readonly reason?: string | null };
   readonly id: string;
   readonly version: string;
   readonly displayName: string;
@@ -1331,10 +1358,15 @@ export interface ServiceMethodMap {
   readonly 'learning.importCommit': { params: LegacyImportCommitParams; result: LegacyImportCommitResult };
   // Remote domain (Phase 4, spec §8.1).
   readonly 'remote.status': { params: undefined; result: RemoteStatusResult };
+  readonly 'remote.loadConfiguration': { params: import('../settings/settings-store').RemoteSettings; result: import('../settings/settings-store').RemoteSettings };
+  readonly 'remote.saveConfiguration': { params: import('../settings/settings-store').RemoteSettings; result: import('../settings/settings-store').RemoteSettings };
   readonly 'remote.enable': { params: RemoteEnableParams; result: RemoteEnableResult };
   readonly 'remote.disable': { params: undefined; result: RemoteDisableResult };
   readonly 'remote.publish': { params: RemoteGatewayEvent; result: RemotePublishResult };
   readonly 'remote.pairingInfo': { params: undefined; result: RemotePairingInfoResult };
+  readonly 'remote.relayLogin': { params: RelayLoginParams; result: RelayAccountStatus };
+  readonly 'remote.relayStatus': { params: undefined; result: RelayAccountStatus };
+  readonly 'remote.relayLogout': { params: undefined; result: RelayAccountStatus };
   readonly 'remote.respond': { params: RemoteRespondParams; result: RemoteRespondResult };
   readonly 'remote.emit': { params: RemoteEmitParams; result: RemoteEmitResult };
   readonly 'remote.importIdentity': { params: RemoteImportIdentityParams; result: RemoteImportIdentityResult };

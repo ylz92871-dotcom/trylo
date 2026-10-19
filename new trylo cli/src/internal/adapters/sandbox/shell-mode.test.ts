@@ -94,7 +94,7 @@ test("no-shell mode produces the existing direct shape, unchanged", () => {
 test("shell mode puts the whole command in one argv element", () => {
   const mode: ShellMode = { kind: "shell", shell: { kind: "bash", path: "/bin/bash" } };
   const shape = shellModeShape(mode, "echo a && echo b > out.txt");
-  assert.equal(shape.kind, "shell");
+  assert.equal(shape.kind, "direct");
   // One element, unquoted: the interpreter parses it, so a second quoting layer
   // would reinterpret every operator instead of preserving it.
   assert.deepEqual(shape.argv, ["/bin/bash", "-c", "echo a && echo b > out.txt"]);

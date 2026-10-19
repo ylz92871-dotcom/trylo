@@ -63,8 +63,11 @@ for (const id of ['officecli', 'playwright', 'windows-mcp', 'chrome-devtools']) 
     failures.push(`missing repository tool: ${id}`);
     continue;
   }
-  const expected = path.join(root, 'new_tool/packages', id, manifest.version, manifest.artifact.executableRelativePath);
-  if (entry.path !== expected || entry.policy !== 'repository-local') failures.push(`repository tool pin disagrees: ${id}`);
+  const expected = id === 'windows-mcp'
+    ? path.join(root, 'new_tool/computer-control/Windows-MCP/src/windows_mcp/__main__.py')
+    : path.join(root, 'new_tool/packages', id, manifest.version, manifest.artifact.executableRelativePath);
+  const policy = id === 'windows-mcp' ? 'managed-local' : 'repository-local';
+  if (entry.path !== expected || entry.policy !== policy) failures.push(`repository tool pin disagrees: ${id}`);
 }
 const forkRoot = 'new_tool/computer-control/Windows-MCP';
 const provenance = json(`${forkRoot}/PROVENANCE.json`);

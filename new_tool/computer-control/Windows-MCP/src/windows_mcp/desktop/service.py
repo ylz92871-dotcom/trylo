@@ -14,6 +14,7 @@ from PIL import ImageFont, ImageDraw, Image
 from windows_mcp.tree.service import Tree
 from windows_mcp.desktop import screenshot as screenshot_capture
 from windows_mcp.desktop import flash_overlay
+from windows_mcp.desktop import control_overlay
 from windows_mcp.desktop.ocr_backend import (
     OcrBackend,
     WindowsOcrPowerShellBackend,
@@ -233,7 +234,21 @@ class Desktop:
         guard = getattr(self, "_takeover_guard", None)
         return guard.state.value if guard is not None else TakeoverState.IDLE.value
 
-    def _mutation_takeover(self, dispatch: Callable[[], dict[str, object]]) -> dict[str, object]:
+    def _mutation_takeover(self, dispatch: Callable[[], dict[str, object]], *,
+                           feedback_click: bool = False) -> dict[str, object]:
+        # A refused operation must not light up as an agent action.
+        if getattr(self, "_takeover_terminal", None) is not None:
+            return self._mutation_takeover_inner(dispatch)
+        activity = control_overlay.begin()
+        try:
+            result = self._mutation_takeover_inner(dispatch)
+        except BaseException:
+            control_overlay.finish(activity)
+            raise
+        control_overlay.finish(activity, result, click=feedback_click)
+        return result
+
+    def _mutation_takeover_inner(self, dispatch: Callable[[], dict[str, object]]) -> dict[str, object]:
         """Run one mutation inside the §11.3 takeover window.
 
         Phase mapping:
@@ -1058,7 +1073,7 @@ class Desktop:
             case "launch":
                 response, status, pid = self.launch_app(name)
                 if status != 0:
-                    return response
+                    raise RuntimeError(response)
 
                 # Smart wait using UIA Exists (avoids manual Python loops)
                 # 228s 诊断为轮询超时叠加：用线程超时包裹 UIA 等待，防止单步阻塞
@@ -1104,13 +1119,13 @@ class Desktop:
             case "resize":
                 response, status = self.resize_app(name=name, size=size, loc=loc)
                 if status != 0:
-                    return response
+                    raise RuntimeError(response)
                 else:
                     return response
             case "switch":
                 response, status = self.switch_app(name)
                 if status != 0:
-                    return response
+                    raise RuntimeError(response)
                 else:
                     return response
 
@@ -2323,7 +2338,7 @@ class Desktop:
                 expected_postconditions=expected_postconditions,
             )
 
-        return self._mutation_takeover(_dispatch)
+        return self._mutation_takeover(_dispatch, feedback_click=action == "click")
 
     def _dispatch_click_target_locked(
         self,
@@ -3284,6 +3299,7 @@ class Desktop:
         x, y = loc
         uia.MoveTo(x, y, moveSpeed=10)
 
+    @control_overlay.operation()
     def shortcut(self, shortcut: str):
         keys = shortcut.split("+")
         sendkeys_str = ""
@@ -3671,9 +3687,11 @@ class Desktop:
 
     def get_screenshot(self, capture_rect: uia.Rect | None = None) -> Image.Image:
         flash_overlay.cancel_active_flash()
-        image, used_backend = screenshot_capture.capture(capture_rect)
+        with control_overlay.hidden_for_capture():
+            image, used_backend = screenshot_capture.capture(capture_rect)
         self._last_screenshot_backend = used_backend
-        flash_overlay.show_capture_flash(capture_rect)
+        if not control_overlay.is_active():
+            flash_overlay.show_capture_flash(None)
         return image
 
     def get_annotated_screenshot(

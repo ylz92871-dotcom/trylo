@@ -50,6 +50,7 @@ function checkWithProbe(answers) {
   };
   const health = createToolHealthService({
     packages,
+    probeInputAccess: async () => ({available:true, integrityRid:8192, uiAccess:false}),
     probePythonMetadata: async () => {
       calls.push(calls.length);
       return answers[calls.length - 1] ?? null;

@@ -72,6 +72,7 @@ describe('ProcessHeader label/tone per ViewState (§11.4)', () => {
       ['tool_running', '正在执行…', 'process-header__dot--running'],
       ['thinking', '思考中…', 'process-header__dot--running'],
       ['waiting_first_output', '正在准备…', 'process-header__dot--running'],
+      ['waiting_model', '等待模型响应…', 'process-header__dot--running'],
       ['awaiting_input', '等待你的回复', 'process-header__dot--ready'],
       ['reconnecting', '正在重新连接…', 'process-header__dot--running'],
       ['completed', '已完成', 'process-header__dot--ready'],

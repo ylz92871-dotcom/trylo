@@ -228,10 +228,10 @@ test("PowerShell gets -NoProfile -NonInteractive and the exit-code tail", () => 
   assert.equal(argv[1], "-NoProfile");
   assert.equal(argv[2], "-NonInteractive");
   assert.equal(argv[3], "-Command");
-  // The command is argv[3] with the tail appended — the author's text first,
-  // verbatim, and the tail strictly after it.
+  // Text is between the UTF-8 setup and the exit-code tail, unchanged.
   const command = argv[4] ?? "";
-  assert.equal(command.startsWith("Write-Output hi"), true);
+  assert.equal(command.includes("\nWrite-Output hi"), true);
+  assert.equal(command.startsWith("[Console]::InputEncoding = [Console]::OutputEncoding = $OutputEncoding = "), true);
   assert.equal(command.endsWith(POWERSHELL_EXIT_TAIL), true);
   // `-NoProfile` keeps a user's aliases out of a command the model wrote;
   // `-NonInteractive` stops an asking script from hanging until the timeout.

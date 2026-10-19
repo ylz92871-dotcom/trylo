@@ -77,7 +77,8 @@ mod tests {
     fn entry_with(writer: Option<Box<dyn Write + Send>>) -> ProcessEntry {
         ProcessEntry {
             writer,
-            killer: Box::new(|| {}),
+            killer: Box::new(|| Ok(())),
+            stop_state: crate::commands::process_state::ProcessStopState::Running,
             label: "test".to_owned(),
             pid: 1,
             metadata: ProcessMetadata::default(),
@@ -93,7 +94,10 @@ mod tests {
         assert!(entry.writer.is_some());
         entry.close_input();
         assert!(entry.writer.is_none());
-        assert!(*dropped.lock().unwrap(), "writer must be dropped = stdin closed");
+        assert!(
+            *dropped.lock().unwrap(),
+            "writer must be dropped = stdin closed"
+        );
 
         // Idempotent: the second close is a no-op, not a panic.
         entry.close_input();
@@ -121,14 +125,16 @@ mod tests {
                 let k = Arc::clone(&killed);
                 move || {
                     *k.lock().unwrap() = true;
+                    Ok(())
                 }
             }),
+            stop_state: crate::commands::process_state::ProcessStopState::Running,
             label: "test".to_owned(),
             pid: 1,
             metadata: ProcessMetadata::default(),
         };
         entry.close_input();
-        (entry.killer)();
+        entry.request_stop().unwrap();
         assert!(*killed.lock().unwrap(), "killer must survive close_input");
     }
 

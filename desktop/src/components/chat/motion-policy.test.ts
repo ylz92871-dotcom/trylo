@@ -20,6 +20,7 @@ const ALL_STATES: readonly ConversationRunViewState[] = [
   'idle',
   'preparing',
   'waiting_first_output',
+  'waiting_model',
   'thinking',
   'tool_running',
   'finalizing',
@@ -56,6 +57,13 @@ const EXPECTED: Record<
     toolLoaderSpin: false,
   },
   waiting_first_output: {
+    primary: 'footer_dots',
+    headerPulse: true,
+    footerDots: true,
+    turnProgressSpin: false,
+    toolLoaderSpin: false,
+  },
+  waiting_model: {
     primary: 'footer_dots',
     headerPulse: true,
     footerDots: true,
@@ -132,7 +140,7 @@ describe('ConversationMotionPolicy (spec §7.2 / §11.3)', () => {
       const p = motionPolicyFor(s);
       expect(p.footerDots).toBe(p.primary === 'footer_dots');
       expect(p.footerDots).toBe(
-        s === 'preparing' || s === 'waiting_first_output' || s === 'thinking',
+        s === 'preparing' || s === 'waiting_first_output' || s === 'waiting_model' || s === 'thinking',
       );
     }
   });
@@ -178,6 +186,7 @@ describe('ConversationMotionPolicy (spec §7.2 / §11.3)', () => {
     for (const s of [
       'preparing',
       'waiting_first_output',
+      'waiting_model',
       'thinking',
       'tool_running',
       'finalizing',

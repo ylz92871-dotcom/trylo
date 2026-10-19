@@ -16,6 +16,8 @@
 import { createRemoteAdapter } from './gateway-adapter.mjs';
 import { createIdentityStore } from './identity.mjs';
 import { createTunnelService } from './tunnel-service.mjs';
+import { createRelayClient } from './relay-client.mjs';
+import { createRemoteConfiguration } from './configuration.mjs';
 
 /**
  * @param {{ emit?: (topic: string, payload: unknown) => void,
@@ -27,13 +29,26 @@ export function createRemoteServices(options = {}) {
   const emit = options.emit ?? (() => {});
   const log = options.log ?? null;
   const seam = options.seam ?? {};
+  let mode = 'tunnel', relayState = { online: false };
+  let operations = Promise.resolve();
+  const serialize = operation => { const result = operations.then(operation); operations = result.catch(() => {}); return result; };
+  const relay = createRelayClient({ appDataDir: options.appDataDir, allowLocal: seam.allowLocalRelay === true,
+    onStatus(state) { relayState = state; if (mode === 'server') emit('remote.status', readStatus()); } });
+  const configuration = createRemoteConfiguration({ appDataDir: options.appDataDir, relay });
+  function readStatus() {
+    const local = adapter.status();
+    if (mode !== 'server') return local;
+    return { ...local, connectionMode: mode, publicUrl: relayState.serverUrl || '', running: local.running && relayState.online,
+      tunnelMode: 'off', tunnelRunning: false, reasonCode: relayState.online ? '' : relayState.loggedIn ? 'relay_reconnecting' : 'relay_login_required' };
+  }
 
-  const identity = createIdentityStore({ log });
+  const identity = createIdentityStore({ log, appDataDir: options.appDataDir });
   const tunnel = createTunnelService({ log, seam: { tunnel: seam.tunnel } });
   const adapter = createRemoteAdapter({
     identity,
     tunnel,
-    emit,
+
+    emit(topic, payload) { emit(topic, topic === 'remote.status' && mode === 'server' ? readStatus() : payload); },
     log,
     seam: { gateway: seam.gateway, qrcode: seam.qrcode },
   });
@@ -42,17 +57,28 @@ export function createRemoteServices(options = {}) {
     identity,
     tunnel,
 
+    loadConfiguration(params = {}) { return configuration.load(params); },
+    saveConfiguration(params = {}) { return configuration.save(params); },
+
     // ── remote.* methods (spec §8.1) ────────────────────────────────
     status() {
-      return adapter.status();
+      return readStatus();
     },
 
-    async enable(params = {}) {
-      return adapter.enable(params);
+    enable(params = {}) {
+      return serialize(async () => {
+        await relay.disable(); mode = params.connectionMode === 'server' ? 'server' : 'tunnel';
+        await adapter.enable(mode === 'server' ? { ...params, tunnelMode: 'off' } : params);
+        if (mode === 'server') {
+          try { relayState = await relay.enable({ ...adapter.relayTarget(), serverUrl: params.relayUrl }); }
+          catch (failure) { await adapter.disable(); throw failure; }
+        }
+        const status = readStatus(); emit('remote.status', status); return status;
+      });
     },
 
-    async disable() {
-      return adapter.disable();
+    disable() {
+      return serialize(async () => { await relay.disable(); return adapter.disable(); });
     },
 
     async publish(event) {
@@ -60,8 +86,12 @@ export function createRemoteServices(options = {}) {
     },
 
     async pairingInfo() {
-      return adapter.pairingInfo();
+      return mode === 'server' ? relay.pairing() : adapter.pairingInfo();
     },
+
+    relayLogin(params) { return serialize(() => relay.login(params)); },
+    relayStatus() { return relay.status(); },
+    relayLogout() { return serialize(async () => { const result = await relay.logout(); if (mode === 'server') await adapter.disable(); return result; }); },
 
     async respond(params = {}) {
       return adapter.respond(params);

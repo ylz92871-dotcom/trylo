@@ -27,14 +27,14 @@ test('an embedded profile launches the service host rather than its callers entr
 for (const [surface, profileId, manifest, flag] of [
   ['code', 'code.core.v1', PLAYWRIGHT_MANIFEST, '--cdp-endpoint'],
   ['work', 'work.core.v1', PLAYWRIGHT_MANIFEST, '--cdp-endpoint'],
-  ['work', 'work.browser-debug.v1', CHROME_DEVTOOLS_MANIFEST, '--browserUrl'],
+  ['work', 'work.browser-debug.v1', CHROME_DEVTOOLS_MANIFEST, '--wsEndpoint'],
 ]) test(`${profileId} connects its pinned MCP to the same native browser through the whole-call gate`, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'trylo-native-profile-'));
   const calls = [], gate = 'http://127.0.0.1:12345/test-token';
   const service = createToolProfileService({ storageRoot: root, hostEntrypoint: '/service/host.bundle.mjs',
     catalog: { get: id => id === manifest.id ? manifest : undefined, list: () => [manifest] },
     health: { check: async () => ({ available: true }) }, packages: { resolve: async () => ({ executable: '/pinned/cli.js', installDir: '/pinned' }) },
-    nativeBrowser: { configure: async params => { calls.push(params); return { gate, args: [flag, gate + '/'] }; } },
+    nativeBrowser: { configure: async params => { calls.push(params); return { gate, args: [flag, flag === '--wsEndpoint' ? gate.replace('http:', 'ws:') + '/cdp/browser' : gate + '/'] }; } },
     browserObserver: { configure: () => { throw new Error('must never open a second browser'); } },
   });
   const result = await service.resolve({ surface, requestedProfileId: profileId, projectRoot: root, conversationId: 'same-page' });
@@ -42,7 +42,7 @@ for (const [surface, profileId, manifest, flag] of [
   const server = JSON.parse(fs.readFileSync(result.mcpConfigPath, 'utf8')).mcpServers[manifest.mcp.serverName];
   assert.equal(server.command, process.execPath);
   assert.deepEqual(server.args.slice(0, 4), ['/service/host.bundle.mjs', '--native-browser-mcp', gate, '/pinned/cli.js']);
-  assert.ok(server.args.includes(flag)); assert.ok(server.args.includes(gate + '/'));
+  assert.ok(server.args.includes(flag)); assert.ok(server.args.includes(flag === '--wsEndpoint' ? gate.replace('http:', 'ws:') + '/cdp/browser' : gate + '/'));
   assert.equal(server.args.includes('--isolated'), false); assert.equal(server.args.includes('--headless'), false);
   assert.deepEqual(calls, [{ packageId: manifest.id, projectRoot: root, conversationId: 'same-page' }]);
 });

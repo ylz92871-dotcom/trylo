@@ -81,7 +81,10 @@ function failFast(candidate: string): PathDenyCode | undefined {
   if (typeof candidate !== "string" || candidate.length === 0 || candidate.includes("\0")) {
     return "invalid_path";
   }
-  if (path.isAbsolute(candidate) || rejectsDevicePath(candidate)) {
+  // Absolute paths are aliases, never authority: both resolvers below still
+  // prove lexical and real containment against the same workspace root.
+  // Reject drive-relative Windows paths whose meaning depends on ambient cwd.
+  if (rejectsDevicePath(candidate) || /^[a-z]:[^\\/]/i.test(candidate)) {
     return "path_outside_workspace";
   }
   return undefined;
