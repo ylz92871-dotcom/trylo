@@ -21,6 +21,7 @@
 // `process.exited` via `onExit`.
 
 import { hostAdapter } from './index';
+import { cliSpawnCommand } from './cli-runtime-path';
 import { localProcessIdentity } from './process-identity';
 import type { FilePath } from './types';
 import type { LoopEvent } from './loop-events';
@@ -158,9 +159,7 @@ function buildCliSpawnArgs(input: BuildCliSpawnArgsInput): {
   // to the recommended default; bare spawns should never run with an
   // unknown permission shape.
   const permissionLevel: PermissionLevel = input.permissionLevel ?? 'workspace_write';
-  const nodeScriptMatch = /\.(m?js|cjs)$/i.test(input.cliPath);
-  const command = nodeScriptMatch ? (input.nodeProgram?.trim() || 'node') : input.cliPath;
-  const scriptPrefix = nodeScriptMatch ? [input.cliPath] : [];
+  const { command, prefix: scriptPrefix } = cliSpawnCommand(input.cliPath, input.nodeProgram);
 
   const cliArgs = [
     ...scriptPrefix,

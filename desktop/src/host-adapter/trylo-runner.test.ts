@@ -120,6 +120,21 @@ afterEach(() => {
 });
 
 describe('startTrylo (env + args)', () => {
+  it.each([
+    [String.raw`\\?\D:\Trylo\cli-legacy\cli.cjs`, String.raw`D:\Trylo\cli-legacy\cli.cjs`],
+    [String.raw`\\?\UNC\server\share\cli.cjs`, String.raw`\\server\share\cli.cjs`],
+  ])('normalizes a native resource entry for runs and prewarms: %s', async (entry, expected) => {
+    const options = { prompt: 'hello', cliPath: entry as FilePath, cwd: 'D:/work' as FilePath,
+      nodeProgram: 'C:/Trylo/node.exe' };
+    await startTrylo(options);
+    await startTryloPrewarm(options);
+    expect(spawnCalls).toHaveLength(2);
+    for (const call of spawnCalls) {
+      expect(call.command).toBe(options.nodeProgram);
+      expect(call.args[0]).toBe(expected);
+    }
+  });
+
   it('passes the cli path and prompt to spawn', async () => {
     await startTrylo({
       prompt: 'hello',

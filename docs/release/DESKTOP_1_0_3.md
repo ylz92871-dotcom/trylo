@@ -20,6 +20,8 @@ is excluded from core. Android 1.6.0 remains a separate APK asset.
 - Legacy search uses a bundled, fixed ripgrep 15.2.0 with upstream notices,
   resolved relative to the actual entry instead of a build-machine path.
 - Desktop typechecking no longer emits test JavaScript into production dist.
+- Both runners use the same fixed-Node/path formatter, including Windows
+  verbatim drive and UNC prefixes returned by native resource resolution.
 
 ## Evidence boundaries
 
@@ -31,9 +33,12 @@ legacy read/write/search scenarios against local synthetic provider services.
 Native input to arbitrary user applications, installer GUI behavior, real-model
 reliability and Android device behavior are separate acceptance boundaries.
 
-Immediate EOF after a legacy result produced a native libuv shutdown assertion
-in one initial fixture; the original negative is retained. The legacy fixture
-drains terminal output before closing input, and checks process exit separately.
+Immediate EOF after a legacy result can still produce a native libuv shutdown
+assertion in the compatibility runtime. The original negative and a current
+reproduction are retained; this boundary is not claimed fixed. Desktop keeps
+legacy stdin open between turns; its engine-switching lifecycle is separately
+verified. The legacy fixture drains terminal output before closing input and
+checks process exit separately.
 
 ## Build inputs
 

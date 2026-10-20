@@ -2,7 +2,7 @@
 import { expect, it, vi } from 'vitest';
 import { createServer } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, resolve, toNamespacedPath } from 'node:path';
 import { tmpdir } from 'node:os';
 import { NodeProcessFixture } from './cli-node-process.fixture';
 import type { ProcessService } from './process-service';
@@ -51,11 +51,12 @@ it.runIf(Boolean(process.env.TRYLO_DESKTOP_LEGACY_ENTRY))(
     const controller = new CodeRunController({ projectKey: 'project', conversationId: 'conversation', onChange() {}, permissions: registry });
     try {
       for (const protocol of ['legacy-stream-json', 'trylo-v1', 'legacy-stream-json', 'trylo-v1'] as const) {
+        const entry = resolve(protocol === 'trylo-v1' ? process.env.TRYLO_DESKTOP_CLI_ENTRY ?? '../new trylo cli/dist/cmd/trylo/main.js' : process.env.TRYLO_DESKTOP_LEGACY_ENTRY!);
         let finish!: () => void; const terminal = new Promise<void>(resolveValue => { finish = resolveValue; });
         const events: LoopEvent[] = [];
         await controller.run({ prompt: 'Verify the selected engine', codeMode: 'agent', permissionLevel: 'unrestricted', priorMessages: [],
           settings: { cwd: workspace as never, cliRuntimeProtocol: protocol, cliNodeProgram: process.env.TRYLO_DESKTOP_PACKAGED_NODE ?? process.execPath,
-            cliPath: resolve(protocol === 'trylo-v1' ? process.env.TRYLO_DESKTOP_CLI_ENTRY ?? '../new trylo cli/dist/cmd/trylo/main.js' : process.env.TRYLO_DESKTOP_LEGACY_ENTRY!) as never,
+            cliPath: (process.platform === 'win32' ? toNamespacedPath(entry) : entry) as never,
             ...(protocol === 'trylo-v1' ? { providerId: 'fixture-write' } : {
               apiFormat: 'anthropic' as const, apiKey: 'local-contract-key', apiHost: `http://127.0.0.1:${address.port}`, apiModel: 'local-dual-cli',
             }) },
