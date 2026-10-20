@@ -312,7 +312,7 @@ pub async fn workd_spawn(
 
     let node = node_runtime::resolve_node(resource_dir.as_deref());
     let mut cmd = Command::new(&node.program);
-    cmd.arg(&script_path);
+    cmd.arg(node_runtime::node_script_argument(&script_path));
     // Pass port/host via env so the daemon picks them up.
     cmd.env("TRYLO_WORKD_PORT", port.to_string());
     cmd.env("TRYLO_WORKD_HOST", &host);

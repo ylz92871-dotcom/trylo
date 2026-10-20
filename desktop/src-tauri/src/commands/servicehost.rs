@@ -282,7 +282,7 @@ pub async fn servicehost_spawn(
     let node = node_runtime::resolve_node(resource_dir.as_deref());
 
     let mut cmd = Command::new(&node.program);
-    cmd.arg(&script);
+    cmd.arg(node_runtime::node_script_argument(&script));
     cmd.env(
         "TRYLO_SIDECARS_DIR",
         sidecars_dir.unwrap_or_else(|| resolve_sidecars_dir(&app)),

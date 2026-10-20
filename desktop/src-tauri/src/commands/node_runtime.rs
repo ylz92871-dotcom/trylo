@@ -50,6 +50,38 @@ pub struct RuntimeResolution {
     pub source: RuntimeSource,
 }
 
+/// Node's script loader rejects verbatim Windows entry paths (`EISDIR` on
+/// the drive root). Keep the executable path unchanged, but pass scripts in
+/// ordinary native form. Do not reinterpret other device namespaces.
+pub fn node_script_argument(script: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        use std::path::{Component, Prefix};
+        let mut components = script.components();
+        let Some(Component::Prefix(prefix)) = components.next() else {
+            return script.to_path_buf();
+        };
+        let mut ordinary = match prefix.kind() {
+            Prefix::VerbatimDisk(drive) => PathBuf::from(format!("{}:\\", char::from(drive))),
+            Prefix::VerbatimUNC(server, share) => {
+                let mut path = PathBuf::from(r"\\");
+                path.push(server);
+                path.push(share);
+                path
+            }
+            _ => return script.to_path_buf(),
+        };
+        for component in components {
+            if !matches!(component, Component::RootDir) {
+                ordinary.push(component.as_os_str());
+            }
+        }
+        return ordinary;
+    }
+    #[cfg(not(windows))]
+    script.to_path_buf()
+}
+
 /// Relative paths (inside a resource dir or the repo root) that may hold the
 /// pinned interpreter, in priority order. Only the host platform's entry is
 /// ever present in a real package; the generic `runtime/node/node` entry lets
@@ -302,6 +334,49 @@ pub fn describe(resolution: &RuntimeResolution) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ordinary_node_entry_paths_are_preserved() {
+        let script = Path::new("C:/Program Files/Trylo/desktop-services/dist/host.bundle.mjs");
+        assert_eq!(node_script_argument(script), script);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn verbatim_drive_node_entry_becomes_an_ordinary_absolute_path() {
+        let script = Path::new(r"\\?\D:\Trylo\desktop-services\dist\host.bundle.mjs");
+        assert_eq!(
+            node_script_argument(script),
+            Path::new(r"D:\Trylo\desktop-services\dist\host.bundle.mjs")
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn node_entry_keeps_unicode_spaces_and_the_full_filename() {
+        let script = Path::new(r"\\?\C:\参赛作品\Trylo Desktop\host.bundle.mjs");
+        assert_eq!(
+            node_script_argument(script),
+            Path::new(r"C:\参赛作品\Trylo Desktop\host.bundle.mjs")
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn verbatim_unc_node_entry_keeps_its_server_and_share() {
+        let script = Path::new(r"\\?\UNC\server\作品\Trylo Desktop\host.bundle.mjs");
+        assert_eq!(
+            node_script_argument(script),
+            Path::new(r"\\server\作品\Trylo Desktop\host.bundle.mjs")
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn other_device_namespaces_are_never_reinterpreted() {
+        let script = Path::new(r"\\?\GLOBALROOT\Device\HarddiskVolume1\host.bundle.mjs");
+        assert_eq!(node_script_argument(script), script);
+    }
 
     #[test]
     fn legacy_bundle_is_independent_from_the_v1_entry() {
