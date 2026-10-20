@@ -4,7 +4,7 @@
 
 Trylo 是一个个人学习智能体项目，包含原生桌面、新版 TypeScript CLI、Work 工作流和 Android 远程工作台。
 
-**当前状态：Alpha。** 本次同步当前产品代码，并重新构建 Desktop 1.0.2 与 Android 1.6.0 预览下载。工程检查、实际子进程验证与原生 UI、真实模型和真机验收分别记录。
+**当前状态：Alpha。** Desktop 1.0.4 预览下载包含本轮新版 CLI 权限修复；Android 1.6.0 沿用 desktop-v1.0.2 已构建的同一签名 APK。工程检查、实际子进程验证与原生 UI、真实模型和真机验收分别记录。
 
 下载：[Windows 桌面版与校验值](result/desktop/) · [Android 手机 APK](result/mobile/)。默认新版 CLI，设置保留旧协议外接入口；CoWork 继续作为独立可选依赖。
 
@@ -46,7 +46,7 @@ Trylo 是一个个人学习智能体项目，包含原生桌面、新版 TypeScr
 
 Tool source restoration and checks: [2026-10-15 source audit](docs/release/SOURCE_COMPLETENESS_2026_10_15.md). From the repository root: `node scripts/release/check-source-completeness.mjs`; dependency setup: `node scripts/setup-repository-tools.mjs --install`.
 
-当前主库同步与验证：[当前快照与验证](docs/release/CURRENT_SOURCE_CHECKPOINT.md)。现有 Desktop R3 下载保持不变。
+当前主库同步与验证：[当前快照与验证](docs/release/CURRENT_SOURCE_CHECKPOINT.md)。下载：[Desktop](result/desktop/) · [Android](result/mobile/)。
 
 ## 公开源码构建前置条件
 

@@ -4,7 +4,7 @@
 
 Trylo is a personal learning agent project with a native desktop application, a TypeScript CLI, a Work surface, and an Android remote workbench.
 
-**Status: alpha.** Desktop 1.0.3 and Android 1.6.0 preview downloads are built from the current product source. Engineering checks and packaged-process tests are recorded separately from native UI, real-provider and device acceptance.
+**Status: alpha.** Desktop 1.0.4 preview downloads include the current CLI permission fixes. Android 1.6.0 is the unchanged signed artifact built at desktop-v1.0.2. Engineering checks and packaged-process tests are recorded separately from native UI, real-provider and device acceptance.
 
 Downloads: [Windows Desktop and checksums](result/desktop/) · [Android APK](result/mobile/). The Desktop preview defaults to its bundled legacy compatibility CLI; Settings can switch to the bundled new CLI and back. CoWork is a separate optional dependency.
 
@@ -46,6 +46,6 @@ First-party project code follows [Apache-2.0](LICENSE); see [NOTICE](NOTICE) and
 
 Tool source restoration and checks: [2026-10-15 source audit](docs/release/SOURCE_COMPLETENESS_2026_10_15.md). From the repository root: `node scripts/release/check-source-completeness.mjs`; dependency setup: `node scripts/setup-repository-tools.mjs --install`.
 
-Current source synchronization: [current checkpoint and verification](docs/release/CURRENT_SOURCE_CHECKPOINT.md). Existing Desktop R3 downloads are unchanged.
+Current source synchronization: [current checkpoint and verification](docs/release/CURRENT_SOURCE_CHECKPOINT.md). Downloads: [Desktop](result/desktop/) and [Android](result/mobile/).
 
 October 18 source synchronization merges the public context fixes with formal memory, continuation diagnostics, Desktop pairing and mobile remote updates. See the [current source checkpoint](docs/release/CURRENT_SOURCE_CHECKPOINT.md).

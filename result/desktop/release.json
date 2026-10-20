@@ -1,9 +1,9 @@
 {
   "product": "Trylo Desktop",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "channel": "unsigned-preview",
-  "sourceRef": "desktop-v1.0.3",
-  "runtimeCodeCommit": "238c3131c1ad7d3334b5e0d9e7d61c9f095f90d1",
+  "sourceRef": "desktop-v1.0.4",
+  "runtimeCodeCommit": "d1243695796d018dcffe67e07084624df1aa1523",
   "platform": "windows",
   "arch": "x64",
   "defaultRuntime": "legacy-stream-json",
@@ -13,22 +13,22 @@
   "coworkBundled": false,
   "artifacts": {
     "installer": {
-      "file": "Trylo_1.0.3_x64-setup.exe",
-      "bytes": 148970972,
-      "sha256": "2398ab286f9e9deeeb6b01e829c548f88a1f47fe9010c60463915f036f6dee20",
-      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.3/Trylo_1.0.3_x64-setup.exe"
+      "file": "Trylo_1.0.4_x64-setup.exe",
+      "bytes": 148963853,
+      "sha256": "0cff99aa913c38fb47ce6b9c1c3c88e1c93002523ae820c26a7a0cbbfeb4cac6",
+      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.4/Trylo_1.0.4_x64-setup.exe"
     },
     "portable": {
-      "file": "Trylo-Desktop-1.0.3-windows-x64-portable-core.zip",
-      "bytes": 189401302,
-      "sha256": "0ae8bc053138bf13bc23c234c2d6feebc96334183e22a8bd636920ab3ff56c70",
-      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.3/Trylo-Desktop-1.0.3-windows-x64-portable-core.zip"
+      "file": "Trylo-Desktop-1.0.4-windows-x64-portable-core.zip",
+      "bytes": 189415508,
+      "sha256": "6d9e759a685563b4b7774592bfd5817fdd6b05a6a610b3cf88c03ba1673b0a44",
+      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.4/Trylo-Desktop-1.0.4-windows-x64-portable-core.zip"
     }
   },
   "verification": {
     "portableCrc": true,
-    "portableEntries": 21743,
-    "resourceFilesCompared": 21737,
+    "portableEntries": 21763,
+    "resourceFilesCompared": 21757,
     "byteExactToFrozenResources": true,
     "defaultRuntime": "legacy-stream-json",
     "legacyBundled": true,
@@ -37,30 +37,62 @@
     "newCliActualWrite": true,
     "legacyActualReadWriteSearch": true,
     "noSystemNode": true,
-    "portableExecutableSha256": "1ebcc1b8d01c4c2d48fbf97a3290093782ac011d68a25f6ecabfa6a35234815f",
+    "portableExecutableSha256": "28fa18a82957008e27b8d3aac8c366b9d9f1c3c5ba6ce5785f9d55230b3e73cb",
     "guiLaunched": false,
     "deviceAcceptance": false,
     "installerCrc": true,
-    "installerResourceFilesCompared": 21737,
+    "installerResourceFilesCompared": 21757,
     "executableDifference": "exact single Tauri UNK/NSS marker only",
-    "installerExecutableSha256": "df3fff0756d7b9d85e80e7e48502378a7ef3b4f9afd3e2c37c3952af4e7abe11",
+    "installerExecutableSha256": "19514c3aec6227d5c661cfe60e546aef8b5832a6c0ec8640b7ca7739c113ceaa",
     "installerGuiRun": false,
-    "desktopPermissionAssertions": 183,
-    "dualEngineSwitchRounds": 4,
-    "legacyBashApprovedDenied": true,
-    "legacyBashEnvironment": "installed Git Bash with native Windows path; not bundled",
+    "desktopRegressionAssertions": 211,
+    "approvalCardAssertions": 9,
+    "fixedPackagedNode": true,
+    "noSystemNodeOnPath": true,
+    "newCliPermissionEffects": 22,
+    "dualEngineRoundTripTurns": 4,
     "syntheticProviderOnly": true,
+    "nativeGui": false,
+    "legacyBashApprovedDenied": true,
+    "legacyBashEnvironment": "installed Git for Windows; not bundled",
+    "cliCompiledBinding": {
+      "compiledFilesCompared": 106,
+      "byteExact": true,
+      "note": "Final EOF whitespace normalized; compiled production bytes exactly match the frozen staged CLI."
+    },
+    "secretScan": {
+      "filesScanned": 22146,
+      "configuredSecretValuesChecked": 3,
+      "pinnedVendorHeuristicReviews": [
+        {
+          "path": "runtime/runtime/node/win-x64/node.exe",
+          "sha256": "58e74bf02fc5bbacc41dcb8bef089961cd5bddd37830b87784e4fc624d145d1f",
+          "reason": "unchanged pinned Node vendor bytes; configured-secret byte scan still applied"
+        },
+        {
+          "path": "runtime/cli-legacy/node_modules/jose/dist/webapi/key/import.js",
+          "sha256": "25584bb5c583442b5f5bb7f8fc17bdd0731b9ceaa2b457230a6f79e4a7f46b8a",
+          "reason": "reviewed crypto parser marker or API documentation only; no key body; configured-secret scan still applied"
+        },
+        {
+          "path": "runtime/cli-legacy/node_modules/@azure/msal-node/src/config/Configuration.ts",
+          "sha256": "6a0d99d1677a35922bce0cb97b23fc0787b454f1ef2f1562a6836e80762ea104",
+          "reason": "reviewed crypto parser marker or API documentation only; no key body; configured-secret scan still applied"
+        }
+      ],
+      "failures": []
+    },
     "legacyImmediateEofAssertionResolved": false
   },
   "cli": {
-    "hermeticTestNames": 4209,
+    "hermeticTestNames": 4227,
     "contractTests": 38,
     "verifySteps": 11
   },
   "knownLimitations": [
-    "Legacy Bash requires an installed Git for Windows; explicit Git Bash path overrides must use native Windows paths.",
+    "Standalone strict Windows shell isolation requires a configured SRT environment; it never silently falls back to host authority.",
+    "Legacy Bash requires installed Git for Windows; explicit paths must use native Windows format.",
     "Immediate EOF after a legacy result can trigger a native libuv shutdown assertion; Desktop keeps stdin open between turns.",
     "Native GUI, arbitrary application input, real-model reliability and Android device acceptance are not established by these process checks."
-  ],
-  "portableLaunch": "Start-Trylo.cmd; prepare all fixed bundled executable trees for the existing launcher token, without elevation"
+  ]
 }
