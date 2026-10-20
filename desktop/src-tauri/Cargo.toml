@@ -1,6 +1,6 @@
 [package]
 name = "trylo-desktop"
-version = "1.0.4"
+version = "1.0.5"
 description = "Trylo Desktop — Tauri 2 shell for the Trylo agent system"
 authors = ["Trylo <dev@trylocode.me>"]
 edition = "2021"

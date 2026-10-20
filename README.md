@@ -4,11 +4,11 @@
 
 Trylo is a personal learning agent project with a native desktop application, a TypeScript CLI, a Work surface, and an Android remote workbench.
 
-**Status: alpha.** Desktop 1.0.4 preview downloads include the current CLI permission fixes. Android 1.6.0 is the unchanged signed artifact built at desktop-v1.0.2. Engineering checks and packaged-process tests are recorded separately from native UI, real-provider and device acceptance.
+**Status: alpha.** Desktop 1.0.5 preview fixes native Service Host startup paths and includes the current CLI permission fixes. Android 1.6.0 is the unchanged signed artifact built at desktop-v1.0.2. Engineering checks and packaged-process tests are recorded separately from native UI, real-provider and device acceptance.
 
 Downloads: [Windows Desktop and checksums](result/desktop/) · [Android APK](result/mobile/). The Desktop preview defaults to its bundled legacy compatibility CLI; Settings can switch to the bundled new CLI and back. CoWork is a separate optional dependency.
 
-The October 20 update repairs runtime integrity, contained absolute file paths, input diagnostics and context handoff when switching CLI engines, and synchronizes mobile connectivity and current tool source. See the [release record](docs/release/DESKTOP_1_0_3.md) and [source checkpoint](docs/release/CURRENT_SOURCE_CHECKPOINT.md).
+The October 20 update repairs runtime integrity, contained absolute file paths, input diagnostics and context handoff when switching CLI engines, and synchronizes mobile connectivity and current tool source. See the [release record](docs/release/DESKTOP_1_0_5.md) and [source checkpoint](docs/release/CURRENT_SOURCE_CHECKPOINT.md).
 
 ## Source map
 

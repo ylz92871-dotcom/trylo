@@ -1,9 +1,9 @@
 {
   "product": "Trylo Desktop",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "channel": "unsigned-preview",
-  "sourceRef": "desktop-v1.0.4",
-  "runtimeCodeCommit": "d1243695796d018dcffe67e07084624df1aa1523",
+  "sourceRef": "desktop-v1.0.5",
+  "runtimeCodeCommit": "c902e6207bd7018ba911ef6b7790cd8b564b2d87",
   "platform": "windows",
   "arch": "x64",
   "defaultRuntime": "legacy-stream-json",
@@ -13,86 +13,61 @@
   "coworkBundled": false,
   "artifacts": {
     "installer": {
-      "file": "Trylo_1.0.4_x64-setup.exe",
-      "bytes": 148963853,
-      "sha256": "0cff99aa913c38fb47ce6b9c1c3c88e1c93002523ae820c26a7a0cbbfeb4cac6",
-      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.4/Trylo_1.0.4_x64-setup.exe"
+      "file": "Trylo_1.0.5_x64-setup.exe",
+      "bytes": 148974924,
+      "sha256": "b8df94cf27cce229467d6852dd455e4dc0dcb6b17fb594141014c24ab975befb",
+      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo_1.0.5_x64-setup.exe"
     },
     "portable": {
-      "file": "Trylo-Desktop-1.0.4-windows-x64-portable-core.zip",
-      "bytes": 189415508,
-      "sha256": "6d9e759a685563b4b7774592bfd5817fdd6b05a6a610b3cf88c03ba1673b0a44",
-      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.4/Trylo-Desktop-1.0.4-windows-x64-portable-core.zip"
+      "file": "Trylo-Desktop-1.0.5-windows-x64-portable-core.zip",
+      "bytes": 189416579,
+      "sha256": "37b5468da6ced965fc06fb22cee27289489c06bca4f0d58b7519b766e02e08ff",
+      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Desktop-1.0.5-windows-x64-portable-core.zip"
     }
   },
   "verification": {
+    "pathRegressionTests": 14,
+    "nativeWindowCreated": true,
+    "nativeHostAutomaticStartup": true,
+    "nativeHostAliveAfterSeconds": 35,
+    "nodeScriptArgumentNormalized": true,
+    "originalEisdirReproduced": true,
+    "installerCrc": true,
     "portableCrc": true,
     "portableEntries": 21763,
-    "resourceFilesCompared": 21757,
-    "byteExactToFrozenResources": true,
-    "defaultRuntime": "legacy-stream-json",
-    "legacyBundled": true,
-    "newCliBundled": true,
-    "coworkBundled": false,
-    "newCliActualWrite": true,
-    "legacyActualReadWriteSearch": true,
-    "noSystemNode": true,
-    "portableExecutableSha256": "28fa18a82957008e27b8d3aac8c366b9d9f1c3c5ba6ce5785f9d55230b3e73cb",
-    "guiLaunched": false,
-    "deviceAcceptance": false,
-    "installerCrc": true,
-    "installerResourceFilesCompared": 21757,
-    "executableDifference": "exact single Tauri UNK/NSS marker only",
-    "installerExecutableSha256": "19514c3aec6227d5c661cfe60e546aef8b5832a6c0ec8640b7ca7739c113ceaa",
+    "resourceFilesComparedPerPackage": 21757,
+    "unchangedResourceFilesFrom1_0_4": 21756,
+    "resourceChange": "distribution.json version only",
+    "nativeExecutableSha256": "41a3780a3e3511b422ee8441bec0d23ebb62fbe4ead7b38c1736a9993a4b5bd4",
+    "installerExecutableSha256": "34d8a7957f567d2b7b3f5f3829e56e078438cbb8a975153670c56017e40477d5",
+    "installerOnlyExactNssMarkerDifference": true,
+    "debugInstrumentationBundled": false,
     "installerGuiRun": false,
-    "desktopRegressionAssertions": 211,
-    "approvalCardAssertions": 9,
-    "fixedPackagedNode": true,
-    "noSystemNodeOnPath": true,
-    "newCliPermissionEffects": 22,
-    "dualEngineRoundTripTurns": 4,
-    "syntheticProviderOnly": true,
-    "nativeGui": false,
-    "legacyBashApprovedDenied": true,
-    "legacyBashEnvironment": "installed Git for Windows; not bundled",
-    "cliCompiledBinding": {
-      "compiledFilesCompared": 106,
-      "byteExact": true,
-      "note": "Final EOF whitespace normalized; compiled production bytes exactly match the frozen staged CLI."
-    },
-    "secretScan": {
-      "filesScanned": 22146,
-      "configuredSecretValuesChecked": 3,
-      "pinnedVendorHeuristicReviews": [
-        {
-          "path": "runtime/runtime/node/win-x64/node.exe",
-          "sha256": "58e74bf02fc5bbacc41dcb8bef089961cd5bddd37830b87784e4fc624d145d1f",
-          "reason": "unchanged pinned Node vendor bytes; configured-secret byte scan still applied"
-        },
-        {
-          "path": "runtime/cli-legacy/node_modules/jose/dist/webapi/key/import.js",
-          "sha256": "25584bb5c583442b5f5bb7f8fc17bdd0731b9ceaa2b457230a6f79e4a7f46b8a",
-          "reason": "reviewed crypto parser marker or API documentation only; no key body; configured-secret scan still applied"
-        },
-        {
-          "path": "runtime/cli-legacy/node_modules/@azure/msal-node/src/config/Configuration.ts",
-          "sha256": "6a0d99d1677a35922bce0cb97b23fc0787b454f1ef2f1562a6836e80762ea104",
-          "reason": "reviewed crypto parser marker or API documentation only; no key body; configured-secret scan still applied"
-        }
-      ],
-      "failures": []
-    },
-    "legacyImmediateEofAssertionResolved": false
+    "realProviderAcceptance": false,
+    "deviceAcceptance": false
   },
-  "cli": {
-    "hermeticTestNames": 4227,
-    "contractTests": 38,
-    "verifySteps": 11
+  "inheritedRuntimeVerification": {
+    "release": "desktop-v1.0.4",
+    "cliKernelBytesUnchanged": true,
+    "cliVerifyTestNames": 4227,
+    "cliContractChecks": 38,
+    "desktopRegressionAssertions": 211,
+    "approvalUiAssertions": 9,
+    "packagedPermissionEffects": 22,
+    "fourTurnCliSwitch": true
+  },
+  "currentRechecks": {
+    "permissionModes": 4,
+    "fourTurnCliSwitch": true,
+    "legacyReadWriteSearchCases": 5,
+    "remoteGatewayAndQr": true,
+    "realProviderUsed": false
   },
   "knownLimitations": [
-    "Standalone strict Windows shell isolation requires a configured SRT environment; it never silently falls back to host authority.",
-    "Legacy Bash requires installed Git for Windows; explicit paths must use native Windows format.",
-    "Immediate EOF after a legacy result can trigger a native libuv shutdown assertion; Desktop keeps stdin open between turns.",
-    "Native GUI, arbitrary application input, real-model reliability and Android device acceptance are not established by these process checks."
+    "Unsigned preview; installation wizard and Android device acceptance were not run.",
+    "Legacy Bash requires installed Git for Windows.",
+    "Strict Windows shell isolation requires an available SRT environment.",
+    "Legacy immediate EOF after a result can still trigger a native libuv exit assertion; Desktop keeps stdin open between turns.",
+    "Native service startup and process tests do not establish arbitrary application input or universal model reliability."
   ]
 }
