@@ -1,52 +1,66 @@
 {
   "product": "Trylo Desktop",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "channel": "unsigned-preview",
-  "sourceRef": "desktop-v1.0.2",
+  "sourceRef": "desktop-v1.0.3",
+  "runtimeCodeCommit": "238c3131c1ad7d3334b5e0d9e7d61c9f095f90d1",
   "platform": "windows",
   "arch": "x64",
-  "defaultRuntime": "trylo-v1",
-  "legacyRuntime": "external-compatibility-only",
+  "defaultRuntime": "legacy-stream-json",
+  "newRuntime": "bundled-selectable-trylo-v1",
+  "legacyRuntime": "bundled-compatibility-runtime",
+  "legacySourcePublished": false,
   "coworkBundled": false,
   "artifacts": {
     "installer": {
-      "file": "Trylo_1.0.2_x64-setup.exe",
-      "bytes": 138930883,
-      "sha256": "5f68a6be0c24d8c7179e5418aa3343043833f63d1a9acfe4742cecc9248caf89",
-      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.2/Trylo_1.0.2_x64-setup.exe"
+      "file": "Trylo_1.0.3_x64-setup.exe",
+      "bytes": 148970972,
+      "sha256": "2398ab286f9e9deeeb6b01e829c548f88a1f47fe9010c60463915f036f6dee20",
+      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.3/Trylo_1.0.3_x64-setup.exe"
     },
     "portable": {
-      "file": "Trylo-Desktop-1.0.2-windows-x64-portable-core.zip",
-      "bytes": 156223917,
-      "sha256": "b1cc41a6b9db5cec29b19b2ade16bc56328d621e34897fceec94a9fb69f114c4",
-      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.2/Trylo-Desktop-1.0.2-windows-x64-portable-core.zip"
+      "file": "Trylo-Desktop-1.0.3-windows-x64-portable-core.zip",
+      "bytes": 189401302,
+      "sha256": "0ae8bc053138bf13bc23c234c2d6feebc96334183e22a8bd636920ab3ff56c70",
+      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.3/Trylo-Desktop-1.0.3-windows-x64-portable-core.zip"
     }
   },
   "verification": {
     "portableCrc": true,
-    "portableSourceMatch": true,
-    "portableFiles": 3019,
-    "installerCrc": true,
-    "installerResourcesCompared": 3013,
+    "portableEntries": 21743,
+    "resourceFilesCompared": 21737,
+    "byteExactToFrozenResources": true,
+    "defaultRuntime": "legacy-stream-json",
+    "legacyBundled": true,
+    "newCliBundled": true,
     "coworkBundled": false,
-    "legacyBundled": false,
-    "installerGuiRun": false,
+    "newCliActualWrite": true,
+    "legacyActualReadWriteSearch": true,
+    "noSystemNode": true,
+    "portableExecutableSha256": "1ebcc1b8d01c4c2d48fbf97a3290093782ac011d68a25f6ecabfa6a35234815f",
+    "guiLaunched": false,
     "deviceAcceptance": false,
-    "executableDifference": "only the exact Tauri UNK/NSS bundle marker",
-    "portableExecutableSha256": "ed337ef290184e3ae8465298f19eeb712bc71b3519b14cb4610ca829d34157ac",
-    "installerExecutableSha256": "879c69a87c6c2dbf3602df5891b916ef633776a0b45ae55f3e12c5b5e533ccc4"
+    "installerCrc": true,
+    "installerResourceFilesCompared": 21737,
+    "executableDifference": "exact single Tauri UNK/NSS marker only",
+    "installerExecutableSha256": "df3fff0756d7b9d85e80e7e48502378a7ef3b4f9afd3e2c37c3952af4e7abe11",
+    "installerGuiRun": false,
+    "desktopPermissionAssertions": 183,
+    "dualEngineSwitchRounds": 4,
+    "legacyBashApprovedDenied": true,
+    "legacyBashEnvironment": "installed Git Bash with native Windows path; not bundled",
+    "syntheticProviderOnly": true,
+    "legacyImmediateEofAssertionResolved": false
   },
   "cli": {
-    "files": 2784,
-    "productionJsCompared": 962,
-    "hermeticTestNames": 4206,
+    "hermeticTestNames": 4209,
     "contractTests": 38,
     "verifySteps": 11
   },
-  "toolFork": {
-    "productionModules": 110,
-    "targetedTests": 141,
-    "additionalTests": 15
-  },
-  "portableLaunch": "Start-Trylo.cmd; match the existing launcher token without requesting elevation"
+  "knownLimitations": [
+    "Legacy Bash requires an installed Git for Windows; explicit Git Bash path overrides must use native Windows paths.",
+    "Immediate EOF after a legacy result can trigger a native libuv shutdown assertion; Desktop keeps stdin open between turns.",
+    "Native GUI, arbitrary application input, real-model reliability and Android device acceptance are not established by these process checks."
+  ],
+  "portableLaunch": "Start-Trylo.cmd; prepare all fixed bundled executable trees for the existing launcher token, without elevation"
 }

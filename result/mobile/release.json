@@ -8,7 +8,7 @@
     "file": "Trylo-Code-v1.6.0.apk",
     "bytes": 25137240,
     "sha256": "513d04c83a385fad02a8b65e70f4f249c2a9e16e0d3b65bfe1479c01bd2282bd",
-    "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.2/Trylo-Code-v1.6.0.apk"
+    "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.3/Trylo-Code-v1.6.0.apk"
   },
   "signingCertificateSha256": "ab9e21069ac68fe1155a03d7db1ff857b2aeda13d0e8e949782d426f5059489b",
   "verification": {
@@ -17,5 +17,8 @@
     "mobileTests": 25,
     "relayTests": 7,
     "deviceAcceptance": false
-  }
+  },
+  "publishedWith": "desktop-v1.0.3",
+  "sourceCommit": "a2902addb57aac8f2b493b2ce297ea1a7ad06008",
+  "buildNote": "Unchanged signed Android 1.6.0 artifact from desktop-v1.0.2; republished separately with Desktop 1.0.3."
 }

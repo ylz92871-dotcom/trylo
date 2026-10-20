@@ -26,7 +26,7 @@ is excluded from core. Android 1.6.0 remains a separate APK asset.
 ## Evidence boundaries
 
 CLI verify passed all 11 steps with 4,209 hermetic test names and 38 contract
-checks. Desktop mode, registry, runner, settings and protocol checks passed 181
+checks. Desktop mode, registry, runner, settings and protocol checks passed 183
 tests; tool classifiers passed 209 and runtime health checks passed 19.
 Real subprocess tests verify shell writes, MCP approval/denial effects and five
 legacy read/write/search scenarios against local synthetic provider services.
