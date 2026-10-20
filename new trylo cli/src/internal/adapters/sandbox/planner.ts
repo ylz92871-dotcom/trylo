@@ -189,7 +189,7 @@ function planWrite(policy: SandboxPolicy, call: ToolCallRequest): MutationPlanRe
   if (typeof content !== "string") {
     return deny("invalid_arguments", "write_file requires content to be a string");
   }
-  const verdict = resolveWriteTarget(policy.workspaceRoot, path.value);
+  const verdict = resolveWriteTarget(policy.workspaceRoot, path.value, policy.fileAccess, policy.workspaceAlias);
   if (!verdict.ok) {
     return deny(verdict.code, `write_file target refused: ${verdict.code}`);
   }
@@ -213,7 +213,7 @@ function planEdit(policy: SandboxPolicy, call: ToolCallRequest): MutationPlanRes
   if (edit.kind === "replace" && Buffer.byteLength(edit.newString, "utf8") > policy.maxWriteBytes) {
     return deny("write_too_large", `edit_file replacement exceeds the ${policy.maxWriteBytes} byte ceiling`);
   }
-  const verdict = resolveInsideWorkspace(policy.workspaceRoot, path.value);
+  const verdict = resolveInsideWorkspace(policy.workspaceRoot, path.value, policy.fileAccess, policy.workspaceAlias);
   if (!verdict.ok) {
     return deny(verdict.code, `edit_file target refused: ${verdict.code}`);
   }
@@ -239,7 +239,7 @@ function planNotebookEdit(policy: SandboxPolicy, call: ToolCallRequest): Mutatio
   if (typeof source !== "string") {
     return deny("invalid_arguments", "notebook_edit requires new_source to be a string");
   }
-  const verdict = resolveInsideWorkspace(policy.workspaceRoot, path.value);
+  const verdict = resolveInsideWorkspace(policy.workspaceRoot, path.value, policy.fileAccess, policy.workspaceAlias);
   if (!verdict.ok) {
     return deny(verdict.code, `notebook_edit target refused: ${verdict.code}`);
   }

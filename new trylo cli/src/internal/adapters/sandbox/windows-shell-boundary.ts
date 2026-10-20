@@ -44,7 +44,7 @@ export function createWindowsShellBoundary(workspaceRoot: string, hostEnvironmen
       // This session owns one preparation result. Repeating a command cannot
       // repair its failed broker or unresolved compensation.
       const detail = cause instanceof Error ? cause.message : String(cause);
-      throw new Error(`${detail}\nDo not retry shell commands in this session; fix the reported environment problem and start a new session.`, { cause });
+      throw new Error(`${detail}\nDo not retry shell commands in this session; fix the reported environment problem and start a new session. To explicitly use caller authority instead, start a new run with --shell-isolation host; tool approval still applies and no automatic fallback was run.`, { cause });
     }
     if (closing) throw new Error("isolation_closed: command was not run");
     for (const program of [pinned[0] ?? "", ...readablePrograms]) lease.readExecutable(program);

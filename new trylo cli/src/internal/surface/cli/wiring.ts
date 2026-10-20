@@ -1,4 +1,3 @@
-import path from "node:path";
 import type { Message } from "../../contract/execution.js";
 import { composeSandbox, composeTools } from "../../adapters/mcp-runtime/mount.js";
 import { createFixtureProvider, DEFAULT_FIXTURE_SCRIPT } from "../../adapters/provider/fixture.js";
@@ -13,8 +12,7 @@ import { mountedWebToolNames } from "./web-wiring.js";
 import { createWorkspaceSandbox } from "../../adapters/sandbox/index.js";
 import { lspToolsPatch } from "./lsp-wiring.js";
 import { createRunExecution } from "./run-execution-wiring.js";
-import { wireMethodLearning } from "../../integration/method/wiring.js";
-import { composeLearningPorts, methodSwitchFor } from "../../integration/user-learning/index.js";
+import { composeLearningPorts } from "../../integration/user-learning/index.js";
 import { createPermissionGrantCache, type PermissionGrantCache } from "../../loop/permission-grants.js";
 import type { LoopPorts } from "../../loop/runner.js";
 import type { PermissionPort } from "../../ports/permission.js";
@@ -33,8 +31,10 @@ import {
   openPermissionLedger,
   type FilePermissionStore,
 } from "./permission-ledger-wiring.js";
-import { tryloHome } from "./session-paths.js";
 import { selectToolPort } from "./tool-selection.js";
+import { methodPortOf } from "./wiring-method.js";
+import { imageReferencesFor } from "./wiring-image-references.js";
+import { restrictDeniedTools } from "./permission-tool-access.js";
 
 /**
  * The opt-in types moved to `wiring-optins.ts`; re-exported here because the
@@ -192,16 +192,16 @@ function isFailure(value: ProviderPort | WiringFailure): value is WiringFailure 
 }
 
 export function wirePorts(input: WiringInput): Wiring | WiringFailure {
-  const provider = buildProvider(input);
-  if (isFailure(provider)) {
-    return provider;
-  }
   const sandbox = createWorkspaceSandbox({
     workspaceRoot: input.workspaceRoot,
+    ...(input.fileAccess === undefined ? {} : { fileAccess: input.fileAccess }),
     // Same mode the tools will plan with: approval and execution plan twice
     // so they agree, never so they can disagree.
     ...(input.shellMode === undefined ? {} : { shellMode: input.shellMode }),
   });
+  const images = imageReferencesFor(input);
+  const provider = buildProvider({ ...input, workspaceRoot: sandbox.policy.workspaceRoot }, images?.read);
+  if (isFailure(provider)) return provider;
   const grants = input.grants ?? createPermissionGrantCache();
   const method = composeLearningPorts({ method: methodPortOf(input), user: input.userLearning });
   // Both registries are built in session-view-wiring and nowhere else, so the
@@ -219,12 +219,13 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
     input.skills === undefined || !isSubagentEnabled
       ? undefined
       : createSkillForkExecutor({ delegate: () => subagentToolPort });
-  const workspaceTools = selectToolPort(createWorkspaceTools({
+  const workspaceTools = restrictDeniedTools(selectToolPort(createWorkspaceTools({
     ...(input.workflowRecords === undefined ? {} : { workflowRecords: input.workflowRecords }),
     ...(input.turnId === undefined ? {} : { turnId: input.turnId }),
     ...(input.questions === undefined ? {} : { questions: input.questions }),
     workspaceRoot: input.workspaceRoot,
     sandbox,
+    ...(images === undefined ? {} : { onImageValidated: images.record }),
     visibility: grants,
     allowWeb: input.allowWeb === true,
     // The extractor is attached here, not by the caller, because this is the
@@ -246,7 +247,7 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
     ...(input.localRules === undefined ? {} : { localRules: input.localRules }),
     ...lsp,
     ...(input.shellMode === undefined ? {} : { shellMode: input.shellMode }),
-  }), input.toolSelection);
+  }), input.toolSelection), input.permission);
   // The composites. Both are identity-shaped when nothing was mounted, so
   // "MCP off" is the old objects rather than equal-looking new ones — the
   // difference a hash or a `===` would otherwise have to be trusted about.
@@ -255,7 +256,7 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
   // fact that it was *mounted*, never a global planner branch that would also
   // change how a flag-off run answers a hallucinated `web_fetch` call.
   const mcp = input.mcp;
-  const tools = mcp === undefined ? workspaceTools : composeTools(workspaceTools, mcp.tools);
+  const tools = restrictDeniedTools(mcp === undefined ? workspaceTools : composeTools(workspaceTools, mcp.tools), input.permission);
   const webNames = mountedWebToolNames(workspaceTools);
   const memoryNames = workspaceTools.snapshot().filter((tool) => MEMORY_WRITE_TOOL_NAMES.has(tool.name)).map((tool) => tool.name);
   const admitted =
@@ -284,6 +285,7 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
       model: input.model,
       permission: input.permission,
       callerMessages: input.callerMessages,
+      sandbox: effectiveSandbox,
       ...(input.subagent?.onEvent === undefined ? {} : { onEvent: input.subagent.onEvent }),
       ...(input.subagent?.governance === undefined
         ? {}
@@ -350,7 +352,8 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
       try {
         await lsp.languageServers?.closeAll();
       } finally {
-        if (input.execution === undefined) await execution.close();
+        try { if (input.execution === undefined) await execution.close(); }
+        finally { images?.close(); }
       }
     },
     providerId: input.providerId,
@@ -359,42 +362,3 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
     ...(permissionLedger === undefined ? {} : { permissionLedger }),
   };
 }
-
-/**
- * The board, or nothing.
- *
- * The path is built here because this is the file that owns the composition
- * root, and it borrows `tryloHome` instead of spelling out the home directory:
- * a second copy of that formula would be right until the day `TRYLO_HOME` is
- * set, and then only one of the two homes would move.
- *
- * `now` is derived from the same injected clock as the compaction stamp, so a
- * test that pins the clock pins the board's timestamps too.
- *
- * The switch is a **total** one now (`method` / `user` / `all`), and the method
- * half is asked first: `methodSwitchFor` turns "either of the two values that
- * enable me" into the single word `wireMethodLearning` accepts. That word is
- * imported from the module that owns it, not restated here — and a switch that
- * does not enable the method half returns `undefined` *before* the board is
- * built, so `--learning=user` never creates a board directory.
- */
-function methodPortOf(input: WiringInput): MethodPort | undefined {
-  const learning = input.learning;
-  if (learning === undefined) {
-    return undefined;
-  }
-  const methodSwitch = methodSwitchFor(learning.switch);
-  if (methodSwitch === undefined) {
-    return undefined;
-  }
-  const nowMs = input.nowMs ?? 0;
-  return wireMethodLearning({
-    switch: methodSwitch,
-    boardRoot: path.join(tryloHome(learning.homeDir, learning.env), "learning", "board"),
-    now: () => new Date(nowMs).toISOString(),
-    emit: learning.emit,
-  });
-}
-
-/** What `wireMethodLearning` hands back: structurally the loop's method port. */
-type MethodPort = NonNullable<LoopPorts["method"]>;

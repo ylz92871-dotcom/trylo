@@ -1,5 +1,5 @@
 import type { JsonObject, JsonValue } from "../../../protocol/envelope.js";
-import type { ToolCallRequest, ToolOutcome } from "../../../ports/tools.js";
+import type { FileAccessMode, ToolCallRequest, ToolOutcome } from "../../../ports/tools.js";
 import {
   API_PDF_MAX_PAGES,
   PDF_MAX_PAGES_PER_READ,
@@ -57,6 +57,8 @@ export const UNAVAILABLE_PDF_RUNNER: PdfRunner = {
 
 export type PdfReadConfig = {
   readonly workspaceRoot: string;
+  readonly fileAccess?: FileAccessMode;
+  readonly workspaceAlias?: string;
   readonly reader: FileSystemReader;
   readonly runner?: PdfRunner | undefined;
 };
@@ -109,7 +111,7 @@ export async function executeReadPdf(
     }
     range = parsed;
   }
-  const verdict = resolveInsideWorkspace(config.workspaceRoot, requested);
+  const verdict = resolveInsideWorkspace(config.workspaceRoot, requested, config.fileAccess, config.workspaceAlias);
   if (!verdict.ok) {
     return fail(verdict.code, verdict.code);
   }

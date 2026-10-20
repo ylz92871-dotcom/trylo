@@ -1,5 +1,6 @@
 import { existsSync, lstatSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
+import type { FileAccessMode } from "../../../ports/tools.js";
 
 /**
  * Workspace containment, shared by every tool that touches the file system.
@@ -65,7 +66,24 @@ function rejectsDevicePath(candidate: string): boolean {
 
 export function isInside(parent: string, child: string): boolean {
   const relative = path.relative(parent, child);
-  return relative.length === 0 || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  return relative.length === 0 || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
+
+/** Preserve a workspace's lexical alias when its root is a junction/symlink. */
+function resolveCandidate(root: string, rootReal: string, candidate: string, alias?: string): string {
+  const lexicalRoot = path.resolve(alias ?? root);
+  const lexical = path.resolve(lexicalRoot, candidate);
+  return path.isAbsolute(candidate) && isInside(lexicalRoot, lexical)
+    ? path.resolve(rootReal, path.relative(lexicalRoot, lexical)) : path.resolve(rootReal, candidate);
+}
+
+function withinScope(root: string, target: string, access: FileAccessMode): boolean {
+  return access !== "workspace" || isInside(root, target);
+}
+
+/** Reviewed paths inside the workspace must stay there physically too. */
+function targetScope(root: string, resolved: string, access: FileAccessMode): FileAccessMode {
+  return access === "reviewed" && isInside(root, resolved) ? "workspace" : access;
 }
 
 function canonicalRoot(root: string): string {
@@ -90,14 +108,15 @@ function failFast(candidate: string): PathDenyCode | undefined {
   return undefined;
 }
 
-export function resolveInsideWorkspace(root: string, candidate: string): PathVerdict {
+export function resolveInsideWorkspace(root: string, candidate: string, access: FileAccessMode = "workspace", alias?: string): PathVerdict {
   const early = failFast(candidate);
   if (early !== undefined) {
     return { ok: false, code: early };
   }
   const rootReal = canonicalRoot(root);
-  const resolved = path.resolve(rootReal, candidate);
-  if (!isInside(rootReal, resolved)) {
+  const resolved = resolveCandidate(root, rootReal, candidate, alias);
+  access = targetScope(rootReal, resolved, access);
+  if (!withinScope(rootReal, resolved, access)) {
     return { ok: false, code: "path_outside_workspace" };
   }
   let real: string;
@@ -115,7 +134,7 @@ export function resolveInsideWorkspace(root: string, candidate: string): PathVer
     }
     return { ok: false, code: "path_unverifiable" };
   }
-  if (!isInside(rootReal, real)) {
+  if (!withinScope(rootReal, real, access)) {
     return { ok: false, code: "path_escapes_via_link" };
   }
   return { ok: true, absolutePath: real };
@@ -144,17 +163,18 @@ function deepestExistingAncestor(target: string, root: string): string | undefin
  * link planted at any level is caught at that level rather than discovered
  * after something has been opened for writing.
  */
-export function resolveWriteTarget(root: string, candidate: string): PathVerdict {
+export function resolveWriteTarget(root: string, candidate: string, access: FileAccessMode = "workspace", alias?: string): PathVerdict {
   const early = failFast(candidate);
   if (early !== undefined) {
     return { ok: false, code: early };
   }
   const rootReal = canonicalRoot(root);
-  const resolved = path.resolve(rootReal, candidate);
-  if (!isInside(rootReal, resolved)) {
+  const resolved = resolveCandidate(root, rootReal, candidate, alias);
+  access = targetScope(rootReal, resolved, access);
+  if (!withinScope(rootReal, resolved, access)) {
     return { ok: false, code: "path_outside_workspace" };
   }
-  const ancestor = deepestExistingAncestor(resolved, rootReal);
+  const ancestor = deepestExistingAncestor(resolved, access === "workspace" ? rootReal : path.parse(resolved).root);
   if (ancestor === undefined) {
     return { ok: false, code: "parent_missing" };
   }
@@ -164,12 +184,12 @@ export function resolveWriteTarget(root: string, candidate: string): PathVerdict
   } catch {
     return { ok: false, code: "path_unverifiable" };
   }
-  if (!isInside(rootReal, ancestorReal)) {
+  if (!withinScope(rootReal, ancestorReal, access)) {
     return { ok: false, code: "path_escapes_via_link" };
   }
   const remainder = path.relative(ancestor, resolved);
   const target = remainder.length === 0 ? ancestorReal : path.join(ancestorReal, remainder);
-  if (!isInside(rootReal, target)) {
+  if (!withinScope(rootReal, target, access)) {
     return { ok: false, code: "path_outside_workspace" };
   }
   const parentProblem = requireDirectoryIfPresent(path.dirname(target));
@@ -179,7 +199,7 @@ export function resolveWriteTarget(root: string, candidate: string): PathVerdict
   try {
     if (lstatSync(target).isSymbolicLink()) {
       const real = realpathSync.native(target);
-      if (!isInside(rootReal, real)) {
+      if (!withinScope(rootReal, real, access)) {
         return { ok: false, code: "path_escapes_via_link" };
       }
     }

@@ -1,8 +1,10 @@
 import type { JsonObject, JsonValue } from "../protocol/envelope.js";
+import type { PermissionPort } from "../ports/permission.js";
 import type {
   ToolCallRequest,
   ToolOutcome,
   ToolPort,
+  ToolSandbox,
 } from "../ports/tools.js";
 
 export type ToolApprovalRequirement = {
@@ -17,10 +19,13 @@ export type ToolCancelResult =
 export function readToolApprovalRequirement(
   tools: ToolPort,
   name: string,
+  call?: ToolCallRequest,
+  sandbox?: ToolSandbox,
+  permission?: PermissionPort,
 ): ToolApprovalRequirement {
   try {
     const binding = tools.snapshot().find((item) => item.name === name);
-    return { required: binding === undefined ? true : binding.needsApproval };
+    return { required: binding === undefined || binding.needsApproval || permission?.isDenied?.(name) === true || (call !== undefined && sandbox?.requiresApproval?.(call) === true) };
   } catch (err) {
     const detail = err instanceof Error ? err.message : "tool_snapshot_error";
     return { required: true, degradedReason: `tool_snapshot_unavailable:${detail}` };

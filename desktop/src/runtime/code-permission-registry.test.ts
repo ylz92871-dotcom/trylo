@@ -246,7 +246,7 @@ describe('PR-2: host risk classifier integration (§6 / §12.2)', () => {
     return expect(h.registry.respond('req-prompt', false)).resolves.toBe(true);
   });
 
-  it('unmanaged effects prompt with a mode-policy summary at automatic editing level', () => {
+  it('unmanaged effects prompt with the actual command or a mode-policy summary at automatic editing level', () => {
     const h = createRegistry({ riskClassifier: stubRouter(autoAllow) });
     h.registry.handleControlFrame(permissionFrame('req-bash'), CLASSIFIER_SCOPE);
     h.registry.handleControlFrame(
@@ -255,7 +255,8 @@ describe('PR-2: host risk classifier integration (§6 / §12.2)', () => {
     );
     expect(h.sent).toEqual([]);
     expect(h.registry.list().map((r) => r.requestId)).toEqual(['req-bash', 'req-other']);
-    expect(h.registry.list().every((r) => r.preview?.kind === 'summary')).toBe(true);
+    expect(h.registry.list()[0]?.preview).toMatchObject({ kind: 'command', command: 'ls' });
+    expect(h.registry.list()[1]?.preview?.kind).toBe('summary');
   });
 
   it('a scope without classifier context skips classification (never a guess)', () => {

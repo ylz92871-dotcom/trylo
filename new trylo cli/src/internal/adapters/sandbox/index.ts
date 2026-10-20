@@ -3,6 +3,7 @@ import type { SandboxPolicy } from "../../ports/tools.js";
 import { planMutation } from "./planner.js";
 import type { WorkspaceSandboxConfig } from "./policy.js";
 import { createSandboxPolicy } from "./policy.js";
+import { needsPathApproval, readPathAdmission } from "./read-path-admission.js";
 
 /**
  * The execution sandbox.
@@ -12,16 +13,19 @@ import { createSandboxPolicy } from "./policy.js";
  * grants nothing, and never executes: it is the gate in front of both approval
  * and execution, not a participant in either.
  *
- * `workspace_write` is the default because it is the narrowest mode in which
- * the tools this package adds can do their job. `danger_full_access` does not
- * exist here by design.
+ * Workspace containment is the default. Explicit reviewed/host target scopes
+ * still pass through the same permission service and execution validation;
+ * neither chooses the OS process boundary or grants a call permission.
  */
 export function createWorkspaceSandbox(config: WorkspaceSandboxConfig): ToolSandbox {
   const policy: SandboxPolicy = createSandboxPolicy(config);
   const shellMode = config.shellMode;
   return {
     policy,
+    ...(config.fileAccess === undefined || config.fileAccess === "workspace" ? {} : { requiresApproval: (call: ToolCallRequest) => needsPathApproval(policy, call) }),
     evaluate(call: ToolCallRequest): SandboxVerdict {
+      const read = readPathAdmission(policy, call);
+      if (read !== undefined) return read;
       const planned = planMutation(policy, call, shellMode);
       if (planned.ok) {
         return { ok: true };

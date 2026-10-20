@@ -10,7 +10,7 @@
  */
 
 import type { CompletionShell } from "./completion.js";
-import type { ShellIsolation } from "../../ports/isolation.js";
+import type { RunExecutionOptions } from "./args-execution-types.js";
 import type { FamilyWord } from "./command-vocabulary.js";
 import type { SystemPromptDirective, ReasoningEffort } from "../../ports/provider.js";
 import type { JsonObject } from "../../protocol/envelope.js";
@@ -184,7 +184,7 @@ export type ResolvedRequestOptions = {
   readonly fallbackModel?: string;
 };
 
-export type RunCommandOptions = PermissionChoice & {
+export type RunCommandOptions = PermissionChoice & RunExecutionOptions & {
   readonly reasoningEffort?: ReasoningEffort;
   /** Opt-in JSONL user/control input; stdin stays open until this turn ends. */
   readonly permissionPromptTool?: "stdio";  /**
@@ -249,8 +249,6 @@ export type RunCommandOptions = PermissionChoice & {
    */
   readonly resolvedRequest?: ResolvedRequestOptions;
   readonly workspace?: string;
-  /** Host execution is explicit and still subject to per-call permission. */
-  readonly shellIsolation?: ShellIsolation;
   readonly maxIterations?: number;
   readonly maxTokens?: number;
   /**

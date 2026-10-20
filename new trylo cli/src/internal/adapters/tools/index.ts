@@ -13,6 +13,8 @@ import { resolvePtyHelper } from "../process-session/pty-loader.js";
 import { createReadOnlyTools } from "./read-only/index.js";
 import type { LocalRuleLookup } from "../project-instructions/appendix.js";
 import { createNodeFileSystemReader } from "./read-only/node-fs.js";
+import { describeToolExecution } from "./execution-description.js";
+import type { ValidatedImageReferenceSink } from "../../ports/image-reference-access.js";
 import { createLspTools } from "./lsp-tools.js";
 import { LSP_TOOL } from "./lsp-names.js";
 import type { LanguageServerPool } from "../language-server/registry.js";
@@ -40,6 +42,7 @@ import type { SkillCatalogPort, SkillForkExecutor } from "../../ports/skills.js"
  */
 
 export type WorkspaceToolsConfig = {
+  readonly onImageValidated?: ValidatedImageReferenceSink;
   readonly workflowRecords?: readonly SessionRecord[];
   readonly turnId?: string;
   readonly questions?: AskUserSession;
@@ -146,8 +149,13 @@ const WP21_PLAN_NAMES = new Set<string>(["enter_plan_mode", "exit_plan_mode", "u
 const SESSION_TOOL_NAMES = new Set<string>([WRITE_STDIN_TOOL, LIST_PROCESSES_TOOL, STOP_PROCESS_TOOL]);
 
 export function createWorkspaceTools(config: WorkspaceToolsConfig): ToolPort {
+  const policy = config.sandbox?.policy;
+  const executionDescription = { ...config, ...(policy?.fileAccess === undefined ? {} : { fileAccess: policy.fileAccess }) };
   const readOnly = createReadOnlyTools({
-    workspaceRoot: config.workspaceRoot,
+    ...(config.onImageValidated === undefined ? {} : { onImageValidated: config.onImageValidated }),
+    workspaceRoot: policy?.workspaceRoot ?? config.workspaceRoot,
+    ...(policy?.workspaceAlias === undefined ? {} : { workspaceAlias: policy.workspaceAlias }),
+    ...(policy?.fileAccess === undefined ? {} : { fileAccess: policy.fileAccess }),
     reader: createNodeFileSystemReader(),
     ...(config.localRules === undefined ? {} : { localRules: config.localRules }),
   });
@@ -246,9 +254,12 @@ export function createWorkspaceTools(config: WorkspaceToolsConfig): ToolPort {
       const withSessions =
         sessionTools === undefined ? mounted : [...mounted, ...sessionTools.bindings];
       const withLsp = lsp === undefined ? withSessions : [...withSessions, ...lsp.snapshot()];
-      return mutating === undefined ? withLsp : [...withLsp, ...mutating.snapshot()];
+      const catalog = mutating === undefined ? withLsp : [...withLsp, ...mutating.snapshot()];
+      return catalog.filter(binding => config.visibility?.isDenied(binding.name) !== true)
+        .map(binding => describeToolExecution(binding, executionDescription));
     },
     async execute(call: ToolCallRequest, signal: AbortSignal): Promise<ToolOutcome> {
+      if (config.visibility?.isDenied(call.name) === true) return { outcome: "error", code: "permission_denied", message: `${call.name} is disabled for this session` };
       if (WORKFLOW_TOOL_NAMES.has(call.name)) {
         return workflow.execute(call, signal);
       }

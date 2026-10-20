@@ -2,6 +2,7 @@ import { EMPTY_PROFILE, type ProfilePort } from "../contract/profile.js";
 import type { Message } from "../contract/execution.js";
 import { runTurn, type LoopPorts } from "../loop/runner.js";
 import type { PermissionPort } from "../ports/permission.js";
+import type { ToolSandbox } from "../ports/tools.js";
 import type { ProviderPort, ProviderUsage } from "../ports/provider.js";
 import { emptyUsage } from "../ports/provider.js";
 import type { Envelope } from "../protocol/envelope.js";
@@ -30,6 +31,7 @@ import type { SubagentContext, SubagentWorker } from "./types.js";
 export type InteractiveChildOptions = {
   readonly provider: ProviderPort;
   readonly permission: PermissionPort;
+  readonly sandbox?: ToolSandbox;
   readonly profile?: ProfilePort | undefined;
   readonly model?: string | undefined;
   readonly sessionId?: string | undefined;
@@ -110,6 +112,7 @@ export function createInteractiveChildWorker(
       // Already bounded by the runtime to what this subagent may touch.
       tools: context.tools,
       permission: options.permission,
+      ...(options.sandbox === undefined ? {} : { sandbox: options.sandbox }),
       profile: options.profile ?? DEFAULT_PROFILE_PORT,
     };
 

@@ -1,4 +1,5 @@
 import { statSync } from "node:fs";
+import type { FileAccessMode } from "../../ports/tools.js";
 import path from "node:path";
 import { resolveInsideWorkspace, type PathDenyCode } from "../tools/shared/workspace.js";
 import { isWorkspaceRootCwd } from "./root-cwd-alias.js";
@@ -254,6 +255,8 @@ function refusesChangeDirectory(executable: string): boolean {
 export function planWorkingDirectory(
   workspaceRoot: string,
   candidate: string,
+  access: FileAccessMode = "workspace",
+  workspaceAlias?: string,
 ): { readonly ok: true; readonly absolutePath: string } | { readonly ok: false; readonly code: ShellParseFailureCode; readonly message: string } {
   if (typeof candidate !== "string" || candidate.trim().length === 0) {
     return { ok: false, code: "invalid_path", message: "run_shell cwd must be a non-empty path" };
@@ -261,10 +264,10 @@ export function planWorkingDirectory(
   const rootAlias = isWorkspaceRootCwd(workspaceRoot, candidate);
   // Absolute workspace subdirectories are aliases, not additional authority.
   // Reject traversal spellings before the shared realpath/link containment gate.
-  if (candidate.split(/[\\/]/).includes("..")) {
+  if (access === "workspace" && candidate.split(/[\\/]/).includes("..")) {
     return { ok: false, code: "path_outside_workspace", message: "run_shell cwd refuses parent traversal" };
   }
-  const verdict = resolveInsideWorkspace(workspaceRoot, rootAlias ? "." : candidate);
+  const verdict = resolveInsideWorkspace(workspaceRoot, rootAlias ? "." : candidate, access, workspaceAlias);
   if (!verdict.ok) {
     return {
       ok: false,

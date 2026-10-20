@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { DirectoryEntry, FileSystemReader } from "../read-only/limits.js";
+import { resolve } from "node:path";
 import { FileFinder } from "./file-finder.js";
 
 /**
@@ -46,7 +47,9 @@ function readerFor(files: Readonly<Record<string, string>>): FileSystemReader {
   };
 }
 
-const ROOT = "/w";
+// Physical-path admission resolves a rooted Windows spelling to its drive.
+// Keep the virtual reader in the same canonical namespace as production.
+const ROOT = resolve("/w");
 
 function finderFor(files: Readonly<Record<string, string>>, maxIndexedFiles?: number): FileFinder {
   return new FileFinder({

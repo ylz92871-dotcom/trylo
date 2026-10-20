@@ -1,7 +1,7 @@
 import type { Message } from "../../contract/execution.js";
 import type { PermissionPort } from "../../ports/permission.js";
 import type { ProviderPort } from "../../ports/provider.js";
-import type { ToolPort } from "../../ports/tools.js";
+import type { ToolPort, ToolSandbox } from "../../ports/tools.js";
 import {
   createSubagentControlTool,
   createSubagentToolPort,
@@ -34,6 +34,7 @@ export type SubagentPortsInput = {
   readonly childProvider: ProviderPort;
   readonly model: string | undefined;
   readonly permission: PermissionPort;
+  readonly sandbox?: ToolSandbox;
   /** The parent's conversation, for `fork_context` (L29) and WP14's skill fork. */
   readonly callerMessages: ReadonlyArray<Message> | undefined;
   readonly onEvent?: SubagentRuntimeOptions["onEvent"];
@@ -65,6 +66,7 @@ export function buildSubagentPorts(input: SubagentPortsInput): SubagentPorts {
     provider: input.childProvider,
     model: input.model,
     permission: input.permission,
+    ...(input.sandbox === undefined ? {} : { sandbox: input.sandbox }),
     profile: NO_LEARNING_PROFILE,
   };
 

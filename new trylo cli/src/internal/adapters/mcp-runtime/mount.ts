@@ -181,8 +181,10 @@ export function composeSandbox(
   workspace: ToolSandbox,
   mountedNames: ReadonlySet<string>,
 ): ToolSandbox {
+  const requiresApproval = workspace.requiresApproval;
   return {
     policy: workspace.policy,
+    ...(requiresApproval === undefined ? {} : { requiresApproval }),
     evaluate: (call: ToolCallRequest): SandboxVerdict =>
       mountedNames.has(call.name) ? { ok: true } : workspace.evaluate(call),
   };

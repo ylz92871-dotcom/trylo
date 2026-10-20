@@ -54,7 +54,7 @@ function resolveAll(
   const targets: ApplyPatchTarget[] = [];
   for (const hunk of hunks) {
     if (hunk.kind === "add") {
-      const verdict = resolveWriteTarget(policy.workspaceRoot, hunk.path);
+      const verdict = resolveWriteTarget(policy.workspaceRoot, hunk.path, policy.fileAccess, policy.workspaceAlias);
       if (!verdict.ok) {
         return { ok: false, code: verdict.code, message: `apply_patch target refused for '${hunk.path}': ${verdict.code}` };
       }
@@ -62,14 +62,14 @@ function resolveAll(
       continue;
     }
     if (hunk.kind === "delete") {
-      const verdict = resolveInsideWorkspace(policy.workspaceRoot, hunk.path);
+      const verdict = resolveInsideWorkspace(policy.workspaceRoot, hunk.path, policy.fileAccess, policy.workspaceAlias);
       if (!verdict.ok) {
         return { ok: false, code: verdict.code, message: `apply_patch target refused for '${hunk.path}': ${verdict.code}` };
       }
       targets.push({ kind: "delete", hunk, absolutePath: verdict.absolutePath });
       continue;
     }
-    const source = resolveInsideWorkspace(policy.workspaceRoot, hunk.path);
+    const source = resolveInsideWorkspace(policy.workspaceRoot, hunk.path, policy.fileAccess, policy.workspaceAlias);
     if (!source.ok) {
       return { ok: false, code: source.code, message: `apply_patch target refused for '${hunk.path}': ${source.code}` };
     }
@@ -77,7 +77,7 @@ function resolveAll(
       targets.push({ kind: "update", hunk, absolutePath: source.absolutePath, moveAbsolute: undefined });
       continue;
     }
-    const destination = resolveWriteTarget(policy.workspaceRoot, hunk.moveTo);
+    const destination = resolveWriteTarget(policy.workspaceRoot, hunk.moveTo, policy.fileAccess, policy.workspaceAlias);
     if (!destination.ok) {
       return { ok: false, code: destination.code, message: `apply_patch move destination refused for '${hunk.moveTo}': ${destination.code}` };
     }

@@ -1,13 +1,15 @@
 import type { JsonObject, JsonValue } from "../../../protocol/envelope.js";
-import type { ToolCallRequest, ToolOutcome } from "../../../ports/tools.js";
+import type { FileAccessMode, ToolCallRequest, ToolOutcome } from "../../../ports/tools.js";
 import { directoryArgument, readStringArg } from "./args.js";
 import { compileGlob } from "./glob-match.js";
 import type { FileSystemReader, ReadOnlyToolLimits } from "./limits.js";
-import { createNavigationView, navigationFilters, DEFAULT_EXCLUDED_DIRECTORIES } from "./navigation-view.js";
+import { createNavigationView, navigationFilters, navigationRoot, DEFAULT_EXCLUDED_DIRECTORIES } from "./navigation-view.js";
 import { walkWorkspaceFiles } from "./walk.js";
-import { resolveInsideWorkspace } from "./workspace.js";
+import { isInside, resolveInsideWorkspace } from "./workspace.js";
 
-type Config = { readonly workspaceRoot: string; readonly reader: FileSystemReader; readonly excludeDirectories?: ReadonlyArray<string> };
+type Config = { readonly workspaceRoot: string;
+  readonly fileAccess?: FileAccessMode;
+  readonly workspaceAlias?: string; readonly reader: FileSystemReader; readonly excludeDirectories?: ReadonlyArray<string> };
 type Hit = { readonly path: string; readonly line: number; readonly text: string; readonly absolute: string };
 
 function lineMatcher(args: JsonObject): { readonly mode: string; readonly ignoreCase: boolean; matches(line: string): boolean } | { readonly error: string } {
@@ -32,7 +34,7 @@ function lineMatcher(args: JsonObject): { readonly mode: string; readonly ignore
 /** One canonical workspace path; old matches are derived compatibility views. */
 export async function executeNavigationSearch(config: Config, limits: ReadOnlyToolLimits, call: ToolCallRequest, signal: AbortSignal): Promise<ToolOutcome> {
   const rootArg = directoryArgument(call.arguments, "path");
-  const root = resolveInsideWorkspace(config.workspaceRoot, rootArg);
+  const root = resolveInsideWorkspace(config.workspaceRoot, rootArg, config.fileAccess, config.workspaceAlias);
   if (!root.ok) return { outcome: "error", code: root.code, message: root.code };
   const filters = navigationFilters(call.arguments);
   if ("error" in filters) return { outcome: "error", code: "invalid_arguments", message: filters.error };
@@ -44,7 +46,8 @@ export async function executeNavigationSearch(config: Config, limits: ReadOnlyTo
   if (matcher !== undefined && "error" in matcher) {
     return { outcome: "error", code: matcher.error.startsWith("invalid_pattern:") ? "invalid_pattern" : "invalid_arguments", message: matcher.error };
   }
-  const view = createNavigationView({ ...config, filters });
+  const view = createNavigationView({ ...config, workspaceRoot: navigationRoot(config.workspaceRoot, root.absolutePath, config.fileAccess),
+    ...(!isInside(config.workspaceRoot, root.absolutePath) ? { rulesRoot: root.absolutePath } : {}), filters });
   const hits: Hit[] = [];
   const found: { path: string; relative: string }[] = [];
   let matchLimit = false;
@@ -59,6 +62,9 @@ export async function executeNavigationSearch(config: Config, limits: ReadOnlyTo
         ? absolute.split(/[/\\]/).at(-1) ?? absolute
         : absolute.slice(root.absolutePath.length + 1).replaceAll("\\", "/"))),
       async onFile(file) {
+        // A directory approval never silently follows a child link elsewhere.
+        const scope = config.fileAccess === undefined || config.fileAccess === "workspace" ? config.workspaceRoot : root.absolutePath;
+        if (!resolveInsideWorkspace(scope, file.absolute).ok) { unreadableFiles += 1; return true; }
         if (glob !== undefined) { found.push({ path: view.relative(file.absolute), relative: file.relative }); return true; }
         let text: string;
         try {

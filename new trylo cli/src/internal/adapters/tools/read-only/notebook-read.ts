@@ -1,5 +1,5 @@
 import type { JsonObject, JsonValue } from "../../../protocol/envelope.js";
-import type { ToolCallRequest, ToolOutcome } from "../../../ports/tools.js";
+import type { FileAccessMode, ToolCallRequest, ToolOutcome } from "../../../ports/tools.js";
 import {
   cellViewsForTool,
   parseNotebookDocument,
@@ -14,6 +14,8 @@ export const READ_NOTEBOOK_TOOL = "read_notebook";
 
 export type NotebookReadConfig = {
   readonly workspaceRoot: string;
+  readonly fileAccess?: FileAccessMode;
+  readonly workspaceAlias?: string;
   readonly reader: FileSystemReader;
 };
 
@@ -74,7 +76,7 @@ export async function executeReadNotebook(
     return fail("invalid_arguments", "read_notebook only reads .ipynb files; use read_file for text");
   }
   const cellId = readStringArg(call.arguments, "cell_id");
-  const verdict = resolveInsideWorkspace(config.workspaceRoot, requested);
+  const verdict = resolveInsideWorkspace(config.workspaceRoot, requested, config.fileAccess, config.workspaceAlias);
   if (!verdict.ok) {
     return fail(verdict.code, verdict.code);
   }

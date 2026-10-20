@@ -110,6 +110,7 @@ export async function runOneTurn(
     turnId: ctx.newId("turn"),
     correlationId: ctx.newId("cor"),
     workspaceRoot: scaffold.workspaceRoot,
+    ...(scaffold.fileAccess === undefined ? {} : { fileAccess: scaffold.fileAccess }),
     workspaceId: scaffold.workspaceId,
     checkpointRoot: scaffold.checkpointRoot,
     providerId: scaffold.providerId,

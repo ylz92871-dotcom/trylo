@@ -2,6 +2,7 @@ import type { PermissionLevel } from './permission-policy';
 import type { ToolRiskDecision, ToolRiskRoute, SafeAudit } from '../tooling/tool-risk-classifier';
 import { inputDigestOf } from '../tooling/input-digest';
 import { safeRelativePath } from '../approval/approval-preview';
+import type { ApprovalPreview } from '../approval/approval-preview';
 import type { FilePath } from '../host-adapter/types';
 
 interface PolicyInput {
@@ -15,6 +16,21 @@ interface PolicyInput {
 
 const FILE_TOOLS = new Set(['write_file', 'edit_file', 'notebook_edit', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const READ_TOOLS = new Set(['read_file', 'list_files', 'search_text', 'Read', 'Glob', 'Grep', 'LS']);
+const SCOPED_READ_TOOLS = new Set(['read_file', 'list_files', 'search_text', 'glob_files', 'read_pdf', 'read_notebook', 'view_image']);
+
+/** Display-only facts: building an approval never opens the target file. */
+function promptPreview(input: PolicyInput): ApprovalPreview {
+  if (input.toolName === 'run_shell' || input.toolName === 'Bash') {
+    const command = input.input['command'];
+    const cwd = input.input['cwd'];
+    if (typeof command === 'string') return { kind: 'command', title: input.toolName, command,
+      cwd: typeof cwd === 'string' ? cwd : input.projectRoot };
+  }
+  const target = FILE_TOOLS.has(input.toolName) || SCOPED_READ_TOOLS.has(input.toolName)
+    ? input.input['path'] ?? input.input['file_path'] ?? input.input['notebook_path'] : undefined;
+  return { kind: 'summary', title: input.toolName, reason: '当前权限模式要求确认本次操作。',
+    ...(typeof target === 'string' ? { target } : {}) };
+}
 
 /** Lexical eligibility only; CLI sandbox admission still validates actual filesystem paths. */
 function workspaceTarget(raw: unknown, root: string): boolean {
@@ -58,13 +74,22 @@ export function resolveCodeToolPolicy(input: PolicyInput, classified: ToolRiskRo
   });
   const prompt = (reasonCode: string): ToolRiskDecision => ({
     behavior: 'prompt', risk: 'sensitive', reasonCode,
-    preview: { kind: 'summary', title: input.toolName, reason: '当前权限模式要求确认本次操作。' },
+    preview: promptPreview(input),
     audit: { ...audit, behavior: 'prompt', risk: 'sensitive', reasonCode },
   });
-  if (FILE_TOOLS.has(input.toolName) && !workspaceTarget(input.input['path'] ?? input.input['file_path'] ?? input.input['notebook_path'], input.projectRoot)) {
-    return deny('path_outside_workspace', 'Denied: the file target is missing, invalid or outside the workspace.');
+  if (FILE_TOOLS.has(input.toolName)) {
+    const target = input.input['path'] ?? input.input['file_path'] ?? input.input['notebook_path'];
+    if (typeof target !== 'string' || !target.trim() || /[\x00-\x1f]/.test(target)) {
+      return deny('invalid_path', 'Denied: the file target is missing or invalid.');
+    }
+    if (input.permissionLevel === 'read_only') return deny('read_only', 'Denied: this conversation is read-only.');
+    if (!workspaceTarget(target, input.projectRoot) && input.permissionLevel !== 'unrestricted') return prompt('external_file_requires_approval');
   }
   if (input.permissionLevel === 'unrestricted') return allow('workspace-write', 'unrestricted');
+  // A V1 reader reaches approval only after crossing the realpath boundary.
+  // A package's generic read classification cannot authorize that target.
+  if (SCOPED_READ_TOOLS.has(input.toolName)) return input.permissionLevel === 'read_only'
+    ? deny('read_only', 'Denied: external file access is unavailable in read-only mode.') : prompt('external_read_requires_approval');
   if (input.permissionLevel === 'read_only' && classified.behavior !== 'unmanaged'
     && !(classified.behavior === 'auto_allow' && classified.risk === 'read')) {
     return deny('read_only', 'Denied: this conversation is read-only.');

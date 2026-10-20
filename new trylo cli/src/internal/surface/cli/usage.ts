@@ -145,6 +145,8 @@ export const USAGE = [
   "                                          (default: off; a ledger that cannot be read refuses the run)",
   "  --subagent                              mount the delegate_subagent tool for this run (default: off)",
   "  --shell-isolation <sandbox|host>         process boundary; default sandbox, host keeps caller authority",
+    "  --filesystem-access <workspace|reviewed|host>  target scope; default workspace; reviewed admits explicit external targets",
+    "  --shell <auto|none|bash|zsh|sh|powershell|cmd>  interpreter override; absent uses settings/direct mode",
   "                                          (neither choice grants tool permission)",
   "  --allow-web                             mount the web_fetch tool for this run (default: off; each",
   "                                          fetch still needs approval)",

@@ -63,8 +63,11 @@ it('automatic edits distinguish non-destructive patches from deletion or movemen
   }
 });
 
-it('automatic edits never approve an out-of-workspace target', async () => {
+it('automatic edits require a human decision for an out-of-workspace target', async () => {
   const h = setup('workspace_write'); h.issue('write_file', { path: '../outside.txt', content: 'no' });
+  await vi.waitFor(() => expect(h.registry.list()).toHaveLength(1));
+  expect(h.send).not.toHaveBeenCalled();
+  expect(await h.registry.respond(h.registry.list()[0]!.requestId, false)).toBe(true);
   await vi.waitFor(() => expect(h.send).toHaveBeenCalledWith('p', expect.stringContaining('"behavior":"deny"')));
   expect(h.registry.list()).toEqual([]);
 });
@@ -74,7 +77,13 @@ it.each(['D:/work/project/result.txt', 'd:\\work\\project\\result.txt'])('automa
   await vi.waitFor(() => expect(h.send).toHaveBeenCalledWith('p', expect.stringContaining('"behavior":"allow"')));
 });
 
-it.each(['D:/work/project-other/result.txt', 'D:/work/project/../outside.txt', 'D:/work/project/a\u0000.txt'])('file target validation rejects %j', async path => {
+it.each(['D:/work/project-other/result.txt', 'D:/work/project/../outside.txt'])('unrestricted honors an explicit external target %j', async path => {
+  const h = setup('unrestricted'); h.issue('write_file', { path, content: 'proof' });
+  await vi.waitFor(() => expect(h.send).toHaveBeenCalledWith('p', expect.stringContaining('"behavior":"allow"')));
+});
+
+it('file target validation still rejects a NUL path in unrestricted', async () => {
+  const path = 'D:/work/project/a\u0000.txt';
   const h = setup('unrestricted'); h.issue('write_file', { path, content: 'no' });
   await vi.waitFor(() => expect(h.send).toHaveBeenCalledWith('p', expect.stringContaining('"behavior":"deny"')));
 });

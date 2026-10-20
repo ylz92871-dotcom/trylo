@@ -2,7 +2,7 @@ import type { Message } from "../contract/execution.js";
 import type { ProfilePort } from "../contract/profile.js";
 import type { PermissionPort } from "../ports/permission.js";
 import type { ProviderPort } from "../ports/provider.js";
-import type { ToolCallRequest, ToolOutcome, ToolPort } from "../ports/tools.js";
+import type { ToolCallRequest, ToolOutcome, ToolPort, ToolSandbox } from "../ports/tools.js";
 import type { JsonObject, JsonValue } from "../protocol/envelope.js";
 import { createSubagentInputChannel, type SubagentInputChannel } from "./input-channel.js";
 import {
@@ -48,6 +48,7 @@ export type SubagentControlOptions = {
   readonly runtime: SubagentRuntime;
   readonly provider: ProviderPort;
   readonly permission: PermissionPort;
+  readonly sandbox?: ToolSandbox;
   readonly profile?: ProfilePort | undefined;
   readonly model?: string | undefined;
   readonly sessionId?: string | undefined;
@@ -132,6 +133,7 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
     const worker = createInteractiveChildWorker({
       provider: options.provider,
       permission: options.permission,
+      ...(options.sandbox === undefined ? {} : { sandbox: options.sandbox }),
       ...(options.profile === undefined ? {} : { profile: options.profile }),
       message,
       ...(forkMessages === undefined ? {} : { forkMessages }),

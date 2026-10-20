@@ -48,6 +48,7 @@ export function turnWiringInput(
     ...(input.accountId === undefined ? {} : { accountId: input.accountId }),
     ...(input.warm === undefined ? {} : { warm: input.warm }),
     workspaceRoot: input.workspaceRoot,
+    ...(input.fileAccess === undefined ? {} : { fileAccess: input.fileAccess }),
     checkpointRoot: input.checkpointRoot,
     permission: input.permission,
     ...(input.grants === undefined ? {} : { grants: input.grants }),

@@ -15,6 +15,7 @@ import type { PermissionLedgerInput } from "./permission-ledger-wiring.js";
 import type { LspServerConfig } from "../../adapters/language-server/registry.js";
 import type { ShellModeResult } from "../../adapters/sandbox/shell-mode.js";
 import type { RunExecution } from "./run-execution-wiring.js";
+import type { FileAccessMode } from "../../ports/tools.js";
 import type { AskUserSession } from "../../adapters/tools/ask-user/index.js";
 
 /**
@@ -178,4 +179,5 @@ export type WiringOptIns = {
    * Absent is the direct path; a resolved failure fails each call by name.
    */
   readonly shellMode?: ShellModeResult;
+  readonly fileAccess?: FileAccessMode;
 };

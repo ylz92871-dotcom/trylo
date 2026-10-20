@@ -1,14 +1,13 @@
 import { realpathSync } from "node:fs";
 import path from "node:path";
-import type { SandboxMode, SandboxPolicy } from "../../ports/tools.js";
+import type { FileAccessMode, SandboxMode, SandboxPolicy } from "../../ports/tools.js";
 import type { ShellModeResult } from "./shell-mode.js";
 
 /**
  * Sandbox policy construction.
  *
- * The enums are frozen upstream (`ports/tools.ts`): there is no full-access
- * mode to reach for here because one does not exist in this package. Anything
- * that would need one is an architecture change, not a configuration value.
+ * Mutation mode, target scope and OS isolation are separate choices. A host
+ * target scope admits a call to review; it cannot authorize execution itself.
  */
 
 /** Rejection, not truncation: an oversized write never becomes a short file. */
@@ -20,6 +19,7 @@ export const DEFAULT_MAX_SHELL_OUTPUT_LINES = 2_000;
 
 export type WorkspaceSandboxConfig = {
   readonly workspaceRoot: string;
+  readonly fileAccess?: FileAccessMode;
   readonly mode?: SandboxMode;
   readonly maxWriteBytes?: number;
   /**
@@ -41,12 +41,16 @@ function canonicalRoot(root: string): string {
 }
 
 export function createSandboxPolicy(config: WorkspaceSandboxConfig): SandboxPolicy {
+  const workspaceRoot = canonicalRoot(config.workspaceRoot);
+  const workspaceAlias = path.resolve(config.workspaceRoot);
   return {
     mode: config.mode ?? "workspace_write",
     network: "restricted",
-    workspaceRoot: canonicalRoot(config.workspaceRoot),
+    workspaceRoot,
+    ...(workspaceAlias === workspaceRoot ? {} : { workspaceAlias }),
+    ...(config.fileAccess === undefined ? {} : { fileAccess: config.fileAccess }),
     maxWriteBytes: config.maxWriteBytes ?? DEFAULT_MAX_WRITE_BYTES,
-    allowAbsoluteExecutable: false,
+    allowAbsoluteExecutable: config.fileAccess !== undefined && config.fileAccess !== "workspace",
   };
 }
 
@@ -62,6 +66,7 @@ export function createSandboxPolicy(config: WorkspaceSandboxConfig): SandboxPoli
 export function describePolicy(policy: SandboxPolicy): string {
   return [
     `mode=${policy.mode}`,
+    ...(policy.fileAccess === undefined ? [] : [`filesystemTargets=${policy.fileAccess}`]),
     `network=${policy.network} (proxy variables stripped from the child; not OS-level isolation)`,
     `maxWriteBytes=${policy.maxWriteBytes}`,
     `absoluteExecutables=${policy.allowAbsoluteExecutable ? "allowed" : "forbidden"}`,

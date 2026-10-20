@@ -13,6 +13,8 @@ import { readShellSetting, resolveShellMode, type ShellModeResult } from "../../
 import type { ShellEnvironment } from "../../adapters/sandbox/shell-detect.js";
 
 export function shellModeFor(requested: unknown, surface: ShellEnvironment): ShellModeResult {
+  if (requested === "auto") return resolveShellMode(surface, undefined);
+  if (requested === "none") return { ok: true, mode: { kind: "none" } };
   const kind = readShellSetting(requested);
   if (kind === undefined) {
     return { ok: true, mode: { kind: "none" } };

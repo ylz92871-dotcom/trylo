@@ -8,6 +8,7 @@ import { MAX_IMAGE_BYTES } from "../../ports/media.js";
 import type { ProviderMessage, ProviderPort } from "../../ports/provider.js";
 import { resolveInsideWorkspace } from "../tools/shared/workspace.js";
 import { checkImageBytes } from "./image-guard.js";
+import type { ImageReferenceAccess } from "../../ports/image-reference-access.js";
 
 class ImageReferenceFailure extends Error {
   constructor(readonly code: string) { super(code); }
@@ -17,12 +18,13 @@ class ImageReferenceFailure extends Error {
  * through a bounded handle and real paths prevents a saved reference becoming
  * an arbitrary-file reader. Bytes never enter the journal or diagnostics.
  */
-async function loadImage(root: string, reference: ImageReference, signal: AbortSignal): Promise<ProviderImageAttachment> {
-  const resolved = resolveInsideWorkspace(root, reference.path);
-  if (!resolved.ok) throw new ImageReferenceFailure("image_reference_outside_workspace");
+async function loadImage(root: string, reference: ImageReference, signal: AbortSignal, access?: ImageReferenceAccess): Promise<ProviderImageAttachment> {
+  const approvedPath = access?.resolve(reference);
+  const resolved = approvedPath === undefined ? resolveInsideWorkspace(root, reference.path) : { ok: true as const, absolutePath: approvedPath };
+  if (!resolved.ok) throw new ImageReferenceFailure(access === undefined ? "image_reference_outside_workspace" : "image_reference_approval_required");
   const [realRoot, realFile] = await Promise.all([realpath(root), realpath(resolved.absolutePath)]);
   const within = relative(realRoot, realFile);
-  if (isAbsolute(within) || within === ".." || within.startsWith("../") || within.startsWith("..\\")) {
+  if (approvedPath === undefined && (isAbsolute(within) || within === ".." || within.startsWith("../") || within.startsWith("..\\"))) {
     throw new ImageReferenceFailure("image_reference_outside_workspace");
   }
   const handle = await open(realFile, "r");
@@ -53,18 +55,19 @@ async function loadImage(root: string, reference: ImageReference, signal: AbortS
 type HydratedMessage = { readonly message: ProviderMessage; readonly missing: ReadonlyArray<string> };
 
 function historicalFailure(error: unknown): string | undefined {
+  if (error instanceof ImageReferenceFailure && (error.code === "image_reference_approval_required" || error.code === "image_reference_outside_workspace")) return "image_reference_approval_required";
   if (error instanceof ImageReferenceFailure && error.code === "image_reference_changed") return error.code;
   if (error instanceof Error && "code" in error && (error.code === "ENOENT" || error.code === "EACCES")) return "image_reference_unavailable";
   return undefined;
 }
 
-async function hydrate(root: string, message: ProviderMessage, signal: AbortSignal, delivery: "current" | "historical"): Promise<HydratedMessage> {
+async function hydrate(root: string, message: ProviderMessage, signal: AbortSignal, delivery: "current" | "historical", access?: ImageReferenceAccess): Promise<HydratedMessage> {
   if (message.imageReferences === undefined) return { message, missing: [] };
   if (!isImageReferences(message.imageReferences)) throw new ImageReferenceFailure("image_reference_invalid");
   const attachments = [...message.attachments ?? []];
   const missing = new Set<string>();
   for (const reference of message.imageReferences) {
-    try { attachments.push(await loadImage(root, reference, signal)); }
+    try { attachments.push(await loadImage(root, reference, signal, access)); }
     catch (error) {
       const code = historicalFailure(error);
       if (delivery === "current" || signal.aborted || code === undefined) throw error;
@@ -80,7 +83,7 @@ async function hydrate(root: string, message: ProviderMessage, signal: AbortSign
  * attachment contract. Text-only requests and native continuation ownership
  * remain with the underlying provider.
  */
-export function withImageReferences(provider: ProviderPort, workspaceRoot: string): ProviderPort {
+export function withImageReferences(provider: ProviderPort, workspaceRoot: string, access?: ImageReferenceAccess): ProviderPort {
   let notice: { readonly scope: string; readonly codes: Set<string> } | undefined;
   return {
     ...(provider.continuation === undefined ? {} : { continuation: provider.continuation }),
@@ -94,7 +97,7 @@ export function withImageReferences(provider: ProviderPort, workspaceRoot: strin
         let newest = request.messages.length - 1;
         while (request.messages[newest]?.role === "system") newest--;
         for (const [index, message] of request.messages.entries()) {
-          const hydrated = await hydrate(workspaceRoot, message, signal, index === newest ? "current" : "historical");
+          const hydrated = await hydrate(workspaceRoot, message, signal, index === newest ? "current" : "historical", access);
           messages.push(hydrated.message);
           for (const code of hydrated.missing) if (!notices.has(code)) {
             notices.add(code);

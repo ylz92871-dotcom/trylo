@@ -1,6 +1,7 @@
 import type { JsonObject } from "../../../protocol/envelope.js";
 import { createHash } from "node:crypto";
-import type { ToolCallRequest, ToolOutcome } from "../../../ports/tools.js";
+import type { FileAccessMode, ToolCallRequest, ToolOutcome } from "../../../ports/tools.js";
+import type { ValidatedImageReferenceSink } from "../../../ports/image-reference-access.js";
 import {
   checkImageBytes,
   checkImageDetail,
@@ -13,7 +14,10 @@ import { resolveInsideWorkspace } from "./workspace.js";
 export const VIEW_IMAGE_TOOL = "view_image";
 
 export type ViewImageConfig = {
+  readonly onImageValidated?: ValidatedImageReferenceSink;
   readonly workspaceRoot: string;
+  readonly fileAccess?: FileAccessMode;
+  readonly workspaceAlias?: string;
   readonly reader: FileSystemReader;
 };
 
@@ -47,7 +51,7 @@ export async function executeViewImage(
   if (signal.aborted) {
     return { outcome: "cancelled" };
   }
-  const verdict = resolveInsideWorkspace(config.workspaceRoot, requested);
+  const verdict = resolveInsideWorkspace(config.workspaceRoot, requested, config.fileAccess, config.workspaceAlias);
   if (!verdict.ok) {
     return { outcome: "error", code: verdict.code, message: verdict.code };
   }
@@ -86,12 +90,16 @@ export async function executeViewImage(
     ...(attachment.width === undefined ? {} : { width: attachment.width }),
     ...(attachment.height === undefined ? {} : { height: attachment.height }),
   };
+  // Freeze alias-backed paths to their physical target so later rehydration
+  // does not follow a retargeted workspace junction or reject its valid alias.
+  const reference = { path: config.workspaceAlias === undefined ? requested : verdict.absolutePath,
+    sha256: createHash("sha256").update(bytes).digest("hex"), bytes: bytes.length, detail: detail.detail };
+  config.onImageValidated?.(reference, verdict.absolutePath);
   return {
     outcome: "result",
     value,
     output: `${summary} path=${JSON.stringify(requested)}`,
     truncated: false,
-    images: [{ path: requested, sha256: createHash("sha256").update(bytes).digest("hex"),
-      bytes: bytes.length, detail: detail.detail }],
+    images: [reference],
   };
 }

@@ -35,6 +35,7 @@ import { createSubagentJournalSink } from "./subagent-sink.js";
 import type { SubagentRole } from "../../subagent/role.js";
 import type { LspServerConfig } from "../../adapters/language-server/registry.js";
 import type { ShellModeResult } from "../../adapters/sandbox/shell-mode.js";
+import type { FileAccessMode } from "../../ports/filesystem.js";
 import { finishTurn, wiringFailure, type TurnOutcome } from "./turn-finish.js";
 import { turnStartRefusal } from "./turn-start-checks.js";
 import { wirePorts } from "./wiring.js";
@@ -198,6 +199,7 @@ export type TurnHostInput = {
   readonly lspServers?: ReadonlyArray<LspServerConfig>;
   /** The run's shell mode (WP05 C06/C07). Absent is the direct path. */
   readonly shellMode?: ShellModeResult;
+  readonly fileAccess?: FileAccessMode;
   /** `--allow-web`：只决定挂载网络工具；每一次调用仍由审批门把关。 */
   readonly allowWeb?: boolean;
   /**

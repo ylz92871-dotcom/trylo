@@ -101,7 +101,7 @@ function planCwd(
   if (requested === undefined) {
     return { ok: true, absolutePath: policy.workspaceRoot };
   }
-  const verdict = planWorkingDirectory(policy.workspaceRoot, requested);
+  const verdict = planWorkingDirectory(policy.workspaceRoot, requested, policy.fileAccess, policy.workspaceAlias);
   return verdict.ok
     ? { ok: true, absolutePath: verdict.absolutePath }
     : { ok: false, code: verdict.code, message: verdict.message };
@@ -159,7 +159,7 @@ export function planShell(policy: SandboxPolicy, call: ToolCallRequest, shellMod
   if (stdoutFile !== undefined) {
     if (typeof stdoutFile !== "string" || stdoutFile.length === 0) return deny("invalid_arguments", "stdoutFile requires a non-empty workspace-relative file path");
     if (call.arguments["runInBackground"] === true || call.arguments["steps"] !== undefined) return deny("invalid_arguments", "stdoutFile requires one foreground command or pipeline, without steps");
-    const destination = resolveWriteTarget(policy.workspaceRoot, stdoutFile);
+    const destination = resolveWriteTarget(policy.workspaceRoot, stdoutFile, policy.fileAccess, policy.workspaceAlias);
     if (!destination.ok) return deny(destination.code, `stdoutFile target refused: ${destination.code}`);
   }
   const stepsArgument = readSteps(call);
@@ -177,7 +177,7 @@ export function planShell(policy: SandboxPolicy, call: ToolCallRequest, shellMod
   if (!cwd.ok) {
     return deny(cwd.code, cwd.message);
   }
-  if (shellMode !== undefined) {
+  if (shellMode !== undefined && (!shellMode.ok || shellMode.mode.kind !== "none")) {
     return planShellString(
       { command, cwd: cwd.absolutePath, hasSteps: stepsArgument !== undefined, hasPipeTo: pipeArgument !== undefined, ...(stdoutFile === undefined ? {} : { stdoutFile }) },
       shellMode,

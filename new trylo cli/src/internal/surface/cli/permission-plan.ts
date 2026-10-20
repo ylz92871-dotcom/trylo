@@ -10,6 +10,7 @@ import { WORKSPACE_WRITE_TOOL_NAMES } from "../../adapters/tools/mutating/bindin
 import { WEB_FETCH_TOOL } from "../../adapters/tools/web/names.js";
 import { MEMORY_WRITE_TOOL_NAMES } from "../../adapters/tools/memory/write.js";
 import { isMcpQualifiedName } from "../../mcp/names.js";
+import { PATH_READ_TOOL_NAMES } from "../../adapters/tools/read-only/path-names.js";
 import { createInteractivePermission, type InteractivePermissionIo } from "./permission.js";
 
 /**
@@ -36,12 +37,11 @@ export function isAskPolicy(value: string): value is AskPolicy {
 }
 
 /**
- * The tools whose calls can be approved or refused at all. The read-only tools
- * declare `needsApproval: false` and are never put to a human, so there is
- * nothing to name here; anything not in this set — including a tool mounted
- * from an MCP server — is treated as `external` and fails closed.
+ * Built-ins with approval entry points. Path readers normally need no approval,
+ * but an explicitly selected external scope requires per-call approval.
  */
 export const APPROVABLE_TOOL_NAMES: ReadonlyArray<string> = [
+  ...PATH_READ_TOOL_NAMES,
   WRITE_FILE_TOOL,
   EDIT_FILE_TOOL,
   APPLY_PATCH_TOOL,
@@ -166,6 +166,7 @@ export function createPlannedPermission(plan: PermissionPlan, io: InteractivePer
   const settled = new Map<string, PlanDecision>();
   let counter = 0;
   return {
+    isDenied: name => plan.deny.has(name),
     async request(action: PermissionAction): Promise<PermissionTicket> {
       const verdict = decideForPlan(plan, action);
       if (verdict === "ask") {

@@ -7,6 +7,7 @@ import type {
   ToolCallRequest,
   ToolOutcome,
   ToolPort,
+  ToolSandbox,
 } from "../ports/tools.js";
 import type { Envelope, JsonObject } from "../protocol/envelope.js";
 import { createChildAttemptWorker, DEFAULT_PROFILE_PORT } from "./child-attempt.js";
@@ -20,6 +21,7 @@ export type SubagentToolOptions = {
   readonly runtime: SubagentRuntime;
   readonly provider: ProviderPort;
   readonly permission: PermissionPort;
+  readonly sandbox?: ToolSandbox;
   readonly profile?: ProfilePort | undefined;
   /**
    * The model the child attempt asks for. A parent running on a real endpoint
@@ -101,6 +103,7 @@ export function createSubagentToolPort(options: SubagentToolOptions): ToolPort {
       const worker = createChildAttemptWorker({
         provider: options.provider,
         permission: options.permission,
+        ...(options.sandbox === undefined ? {} : { sandbox: options.sandbox }),
         profile: options.profile ?? DEFAULT_PROFILE_PORT,
         ...(options.model !== undefined ? { model: options.model } : {}),
         sessionId: options.sessionId,

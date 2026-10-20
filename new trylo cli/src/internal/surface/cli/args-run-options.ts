@@ -15,6 +15,7 @@ import { emptyToolListMessage, isApprovableToolName, unknownToolMessage } from "
 import type { RunParseState } from "./args-run.js";
 import { parseToolSelection } from "./tool-selection.js";
 import { isReasoningEffort, REASONING_EFFORTS } from "../../ports/provider.js";
+import { isShellKind } from "../../adapters/sandbox/shell-detect.js";
 
 /**
  * `run` option assembly: from a filled parse state to `RunCommandOptions`.
@@ -129,6 +130,10 @@ function optionalPositiveNumber(
 }
 
 export function buildRunOptions(state: RunParseState): ParsedCommand {
+  const fileAccess = state.values.get("filesystem-access");
+  if (fileAccess !== undefined && fileAccess !== "workspace" && fileAccess !== "reviewed" && fileAccess !== "host") return usageError("invalid --filesystem-access", "use workspace (default), reviewed (external approvals), or host (explicit full target scope)");
+  const shell = state.values.get("shell");
+  if (shell !== undefined && shell !== "auto" && shell !== "none" && !isShellKind(shell)) return usageError("invalid --shell", "use auto, none, bash, zsh, sh, powershell or cmd");
   const shellIsolation = state.values.get("shell-isolation");
   if (shellIsolation !== undefined && shellIsolation !== "sandbox" && shellIsolation !== "host") {
     return usageError("invalid --shell-isolation", "use sandbox (default) or host (caller authority; approval still required)");
@@ -259,6 +264,8 @@ export function buildRunOptions(state: RunParseState): ParsedCommand {
   }
   const workspace = state.values.get("workspace");
   const options: RunCommandOptions = {
+    ...(fileAccess === undefined ? {} : { fileAccess }),
+    ...(shell === undefined ? {} : { shell }),
     ...(shellIsolation === undefined ? {} : { shellIsolation }),
     ...(promptTransport === undefined ? {} : { permissionPromptTool: "stdio" }),
     message: state.message,

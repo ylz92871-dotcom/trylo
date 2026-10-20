@@ -129,6 +129,7 @@ export type RunScaffold = {
   readonly lspConfigFile?: string;
   /** The `shell` setting, unresolved (WP05 C06/C07); absent means the direct path. */
   readonly shell?: string;
+  readonly fileAccess?: RunCommandOptions["fileAccess"];
   /**
    * `--permission-ledger`; absent means no durable Permission ledger is opened
    * and the run is byte-identical to one that never heard of it.
@@ -243,7 +244,9 @@ export async function prepareRun(
   const opened = await openSession(ctx, input.options, fingerprint({ ...settings, providerId: selection.providerId, model: selection.model }, workspaceId, hash), compatibleCatalogHashes(root, input.options.toolSelection));
   if (opened.kind === "failed") return opened.failure;
   const permissions = createSessionPermissions(permissionChoice(input.options));
+  const shell = input.options.shell ?? settings.shell;
   const execution = createRunExecution(root, { homeDir: ctx.homeDir, env: ctx.env,
+    ...(input.options.fileAccess === undefined ? {} : { fileAccess: input.options.fileAccess }),
     ...(input.options.shellIsolation === undefined ? {} : { shellIsolation: input.options.shellIsolation }) });
   const questions = createAskUserTools({ surfaceAnswersOnly: true, nextRequestId: () => ctx.newId("ask"), restored: opened.kind === "resume" ? restoreQuestions(opened.transcript) : [] });
   return {
@@ -282,7 +285,8 @@ export async function prepareRun(
     ...(settings.inputPricePerMTok === undefined ? {} : { inputPricePerMTok: settings.inputPricePerMTok }),
     ...(settings.outputPricePerMTok === undefined ? {} : { outputPricePerMTok: settings.outputPricePerMTok }),
     ...(settings.lspConfigFile === undefined ? {} : { lspConfigFile: settings.lspConfigFile }),
-    ...(settings.shell === undefined ? {} : { shell: settings.shell }),
+    ...(shell === undefined ? {} : { shell }),
+    ...(input.options.fileAccess === undefined ? {} : { fileAccess: input.options.fileAccess }),
     ...requested,
     // The style prompt joins the caller's own append, when both are present;
     // either alone behaves exactly as it would without the other.

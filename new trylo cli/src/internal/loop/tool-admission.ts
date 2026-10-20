@@ -137,6 +137,9 @@ export async function admitToolCall(
   ports: AdmissionPorts,
   request: ToolAdmissionRequest,
 ): Promise<ToolAdmission> {
+  // A standing operator denial cannot be overridden by a previous exact-call
+  // approval, an execution-policy allowance, a reviewer or an escalation.
+  if (ports.permission.isDenied?.(request.name) === true) return { kind: "denied", source: "policy", reason: "policy_denied" };
   const stopped = await runSandboxGuard(ports, request);
   if (stopped !== undefined) {
     return stopped;

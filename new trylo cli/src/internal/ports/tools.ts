@@ -1,5 +1,7 @@
 import type { JsonObject } from "../protocol/envelope.js";
 import type { ImageReference } from "../protocol/image-reference.js";
+import type { FileAccessMode } from "./filesystem.js";
+export type { FileAccessMode } from "./filesystem.js";
 
 /**
  * What the loop is allowed to know about a tool before calling it.
@@ -86,6 +88,7 @@ export const TOOL_RESULT_TRUNCATION_CODE = "output_truncated";
 export const SANDBOX_MODES = ["workspace_write", "read_only", "deny_all"] as const;
 export type SandboxMode = (typeof SANDBOX_MODES)[number];
 
+
 /**
  * `restricted` is the only value. Nothing in this package is allowed to open
  * the network, and no tool here declares otherwise.
@@ -96,8 +99,12 @@ export type NetworkAccess = (typeof NETWORK_ACCESS_MODES)[number];
 export type SandboxPolicy = {
   readonly mode: SandboxMode;
   readonly network: NetworkAccess;
-  /** Canonical (real-path) root every write and every cwd is confined to. */
+  /** Canonical workspace root; fileAccess selects the separate target scope. */
   readonly workspaceRoot: string;
+  /** Trusted original workspace spelling, mapped to the frozen physical root. */
+  readonly workspaceAlias?: string;
+  /** Explicit host delegation; absent keeps the workspace boundary. */
+  readonly fileAccess?: FileAccessMode;
   /** Writes above this size are rejected, never silently truncated. */
   readonly maxWriteBytes: number;
   /** Executable may only be a bare name; absolute paths and `cd` are refused. */
@@ -117,6 +124,8 @@ export type SandboxVerdict =
 export type ToolSandbox = {
   readonly policy: SandboxPolicy;
   evaluate(call: ToolCallRequest): SandboxVerdict;
+  /** Additional argument-dependent approval; never replaces binding.needsApproval. */
+  requiresApproval?(call: ToolCallRequest): boolean;
 };
 
 /**

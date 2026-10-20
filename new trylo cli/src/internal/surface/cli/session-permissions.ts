@@ -1,6 +1,7 @@
 import { createPermissionGrantCache, type PermissionGrantCache } from "../../loop/permission-grants.js";
 import { WORKSPACE_WRITE_TOOL_NAMES } from "../../adapters/tools/mutating/bindings.js";
 import { APPROVABLE_TOOL_NAMES, isApprovableToolName, type PermissionChoice } from "./permission-plan.js";
+import { PATH_READ_TOOL_NAMES } from "../../adapters/tools/read-only/path-names.js";
 
 export type PermissionMode = "read-only" | "confirm" | "auto-edit";
 
@@ -38,7 +39,7 @@ export function createSessionPermissions(initial: PermissionChoice = {}): Sessio
   const choiceFor = (explicit: PermissionChoice): PermissionChoice => {
     if (Object.keys(explicit).length > 0) return explicit;
     if (!selected) return initial;
-    if (mode === "read-only") return { ask: "never", denyTools: APPROVABLE_TOOL_NAMES };
+    if (mode === "read-only") return { ask: "never", denyTools: APPROVABLE_TOOL_NAMES.filter(name => !PATH_READ_TOOL_NAMES.includes(name)) };
     return {
       ask: "always",
       allowTools: [...(mode === "auto-edit" ? WORKSPACE_WRITE_TOOL_NAMES : []), ...allowed],

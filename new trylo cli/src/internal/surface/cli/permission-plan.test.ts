@@ -117,7 +117,7 @@ test("B4: a denial outranks an allowance, whichever order they were given", () =
   assert.equal(decisionFor(planPermissions({ ask: "always", denyTools: [RUN_SHELL_TOOL], interactive: true }), RUN_SHELL_TOOL), "denied");
 });
 
-test("B4: read-only tools never reach the entry point at all", () => {
+test("B4: workspace readers stay approval-free; external path readers are approvable by name", () => {
   // The first column of the matrix is "approved", and it is approved before any
   // of this exists: a read-only binding declares that it needs no approval, so
   // the loop never asks. The check runs against the real tool table rather than
@@ -134,7 +134,8 @@ test("B4: read-only tools never reach the entry point at all", () => {
       true,
       "the table no longer advertises a read-only tool; this check has stopped testing anything",
     );
-    assert.deepEqual([...APPROVABLE_TOOL_NAMES].sort(), APPROVABLE_VOCAB);
+    assert.deepEqual([...APPROVABLE_TOOL_NAMES].sort(), [...APPROVABLE_VOCAB,
+      "read_file", "list_files", "search_text", "glob_files", "view_image", "read_pdf", "read_notebook"].sort());
     assert.equal(new Set(APPROVABLE_TOOL_NAMES).size, APPROVABLE_TOOL_NAMES.length);
   } finally {
     rmSync(root, { recursive: true, force: true });

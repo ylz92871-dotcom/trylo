@@ -48,6 +48,8 @@ export type PermissionDecision = {
 export type PermissionReason = "user_denied" | "policy_denied" | "remembered_denial" | "input_closed" | "user_cancelled";
 
 export type PermissionPort = {
+  /** Explicit tool-wide refusals, lent as facts to catalog and dispatch. */
+  readonly isDenied?: (name: string) => boolean;
   request(action: PermissionAction): Promise<PermissionTicket>;
   awaitDecision(ticketId: string): Promise<PermissionDecision>;
 };

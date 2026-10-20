@@ -91,7 +91,7 @@ export const PERMISSION_LEVELS: readonly PermissionLevelDescriptor[] = [
     value: 'unrestricted',
     label: '完全自动',
     shortLabel: '完全',
-    description: '完全自动 — 工具操作自动批准，仍受工作区与禁用工具限制',
+    description: '完全自动 — 工具操作自动批准，仍受禁用工具与系统权限限制',
     hint: '不再逐次审批；需要你回答的问题仍会显示',
     risk: 'high',
   },
@@ -148,7 +148,8 @@ export function codePermissionMode(level: PermissionLevel): CodePermissionMode {
 /** V1 keeps approval-capable tools behind the host's final mode policy.
  * Read-only also denies built-in mutations in the CLI before host review. */
 export function codePermissionFlagsForV1(level: PermissionLevel): readonly string[] {
-  const framed = ['--ask', 'always', '--permission-prompt-tool', 'stdio', '--shell-isolation', 'host'];
+  const framed = ['--ask', 'always', '--permission-prompt-tool', 'stdio', '--shell-isolation', 'host',
+    '--filesystem-access', level === 'unrestricted' ? 'host' : 'reviewed', '--shell', 'auto'];
   return level === 'read_only'
     ? ['--ask', 'always', '--deny-tools', 'write_file,edit_file,apply_patch,notebook_edit,run_shell', '--permission-prompt-tool', 'stdio']
     : framed;

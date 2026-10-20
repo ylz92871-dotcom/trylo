@@ -53,6 +53,8 @@ export type WarmSpec = {
   readonly reasoningEffort?: ReasoningEffort;
   /** A provider carrying a workspace image reader cannot cross that boundary. */
   readonly workspaceId?: string;
+  /** Cache raw transport, never a turn's external-image authority. */
+  readonly imageReferenceScope?: "transport";
 };
 
 export type WarmStats = {
@@ -100,7 +102,8 @@ export function warmKeyOf(spec: WarmSpec): string {
   const base = [spec.kind, spec.providerId, spec.model, spec.endpoint, spec.accountId].join("|");
   const key = spec.reasoningSummary === undefined ? base : `${base}|summary:${spec.reasoningSummary}`;
   const configured = spec.reasoningEffort === undefined ? key : `${key}|effort:${spec.reasoningEffort}`;
-  return spec.workspaceId === undefined ? configured : `${configured}|workspace:${spec.workspaceId}`;
+  const scoped = spec.workspaceId === undefined ? configured : `${configured}|workspace:${spec.workspaceId}`;
+  return spec.imageReferenceScope === undefined ? scoped : `${scoped}|images:${spec.imageReferenceScope}`;
 }
 
 export function createWarmRegistry(options: WarmOptions = {}): WarmRegistry {

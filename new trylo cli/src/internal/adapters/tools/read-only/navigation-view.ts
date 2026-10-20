@@ -1,5 +1,7 @@
 import ignore, { type Ignore } from "ignore";
 import path from "node:path";
+import type { FileAccessMode } from "../../../ports/tools.js";
+import { isInside, resolveInsideWorkspace } from "./workspace.js";
 import type { JsonObject } from "../../../protocol/envelope.js";
 import { compileGlob } from "./glob-match.js";
 import type { FileSystemReader } from "./limits.js";
@@ -7,6 +9,11 @@ import type { FileSystemReader } from "./limits.js";
 export const DEFAULT_EXCLUDED_DIRECTORIES: ReadonlyArray<string> = [".git", "node_modules", "dist"];
 type GlobMatcher = { matches(value: string): boolean };
 type RuleSet = { readonly directory: string; readonly matcher: Ignore };
+
+/** External approved targets need their own relative namespace, never ../ in node-ignore. */
+export function navigationRoot(workspaceRoot: string, target: string, access?: FileAccessMode): string {
+  return access !== undefined && access !== "workspace" && !isInside(workspaceRoot, target) ? path.dirname(target) : workspaceRoot;
+}
 
 export function navigationFilters(args: JsonObject):
   | { readonly include: ReadonlyArray<GlobMatcher>; readonly exclude: ReadonlyArray<GlobMatcher> }
@@ -28,6 +35,7 @@ export function navigationFilters(args: JsonObject):
 /** Per-operation view. node-ignore owns pattern semantics; the walker only decides descent. */
 export function createNavigationView(input: {
   readonly workspaceRoot: string;
+  readonly rulesRoot?: string;
   readonly reader: FileSystemReader;
   readonly excludeDirectories?: ReadonlyArray<string>;
   readonly filters: { readonly include: ReadonlyArray<GlobMatcher>; readonly exclude: ReadonlyArray<GlobMatcher> };
@@ -39,7 +47,9 @@ export function createNavigationView(input: {
     let pending = memo.get(directory);
     if (pending === undefined) {
       pending = (async () => {
-        const text = await input.reader.readOptionalUtf8?.(path.join(directory, ".gitignore"));
+        // Auxiliary reads carry the same authority as the requested target.
+        const target = resolveInsideWorkspace(input.rulesRoot ?? input.workspaceRoot, path.join(directory, ".gitignore"));
+        const text = !target.ok ? undefined : await input.reader.readOptionalUtf8?.(target.absolutePath);
         return text === undefined ? undefined : { directory, matcher: ignore().add(text) };
       })();
       memo.set(directory, pending);

@@ -8,6 +8,7 @@ import type { ProviderCapabilities } from "../../adapters/provider/capabilities.
 import type { WiringFailure, WiringInput } from "./wiring.js";
 import { withImageReferences } from "../../adapters/media/image-reference-provider.js";
 import { workspaceIdentity } from "./wiring-catalog.js";
+import type { ImageReferenceAccess } from "../../ports/image-reference-access.js";
 
 /**
  * Which adapter a run builds, and whether it may reuse one.
@@ -113,7 +114,7 @@ function construct(input: WiringInput, kind: ProviderKind): ProviderPort {
  * construction, so what gets reused is the provider *this run resolved*, not
  * whatever happened to be lying around.
  */
-export function buildProvider(input: WiringInput): ProviderPort | WiringFailure {
+export function buildProvider(input: WiringInput, images?: ImageReferenceAccess): ProviderPort | WiringFailure {
   const kind = kindOf(input);
   if (kind === undefined) {
     return {
@@ -126,8 +127,10 @@ export function buildProvider(input: WiringInput): ProviderPort | WiringFailure 
     return refused;
   }
   const registry: WarmRegistry | undefined = input.warm;
+  const create = () => images === undefined ? construct(input, kind) : constructTransport(input, kind);
   if (registry === undefined) {
-    return construct(input, kind);
+    const provider = create();
+    return images === undefined ? provider : withImageReferences(provider, input.workspaceRoot, images);
   }
   const acquired = registry.acquire(
     {
@@ -137,10 +140,11 @@ export function buildProvider(input: WiringInput): ProviderPort | WiringFailure 
       endpoint: input.endpoint,
       accountId: input.accountId ?? "",
       workspaceId: workspaceIdentity(input.workspaceRoot),
+      ...(images === undefined ? {} : { imageReferenceScope: "transport" as const }),
       ...(input.reasoningSummary === undefined ? {} : { reasoningSummary: input.reasoningSummary }),
       ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort }),
     },
-    () => construct(input, kind),
+    create,
   );
-  return acquired.provider;
+  return images === undefined ? acquired.provider : withImageReferences(acquired.provider, input.workspaceRoot, images);
 }

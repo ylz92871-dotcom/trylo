@@ -1,4 +1,5 @@
-import type { ToolCallRequest, ToolOutcome, ToolPort } from "../../../ports/tools.js";
+import type { FileAccessMode, ToolCallRequest, ToolOutcome, ToolPort } from "../../../ports/tools.js";
+import type { ValidatedImageReferenceSink } from "../../../ports/image-reference-access.js";
 import { directoryArgument } from "./args.js";
 import { READ_ONLY_BINDINGS } from "./bindings.js";
 import type { LocalRuleLookup } from "../../project-instructions/appendix.js";
@@ -16,9 +17,9 @@ import { executeViewImage } from "./view-image.js";
 import { executeNavigationSearch } from "./search.js";
 import { executeFindFiles } from "./find-files.js";
 import { FileFinder } from "../file-finder/file-finder.js";
-import { createNavigationView, DEFAULT_EXCLUDED_DIRECTORIES } from "./navigation-view.js";
+import { createNavigationView, navigationRoot, DEFAULT_EXCLUDED_DIRECTORIES } from "./navigation-view.js";
 export { DEFAULT_EXCLUDED_DIRECTORIES };
-import { resolveInsideWorkspace } from "./workspace.js";
+import { isInside, resolveInsideWorkspace } from "./workspace.js";
 
 /**
  * The built-in read-only tools: read, list, search, glob. Strictly read-only:
@@ -42,7 +43,10 @@ export {
 };
 
 export type ReadOnlyToolsConfig = {
+  readonly onImageValidated?: ValidatedImageReferenceSink;
   readonly workspaceRoot: string;
+  readonly fileAccess?: FileAccessMode;
+  readonly workspaceAlias?: string;
   readonly reader: FileSystemReader;
   readonly limits?: ReadOnlyToolLimits;
   /** Directory names never descended into during `search_text`. */
@@ -111,8 +115,7 @@ export function createReadOnlyTools(config: ReadOnlyToolsConfig): ToolPort {
         // WP13.1 (L11): validated PDF metadata and page ranges; see pdf-read.ts.
         return executeReadPdf(
           {
-            workspaceRoot: config.workspaceRoot,
-            reader: config.reader,
+            ...config,
             ...(config.pdfRunner === undefined ? {} : { runner: config.pdfRunner }),
           },
           call,
@@ -122,7 +125,7 @@ export function createReadOnlyTools(config: ReadOnlyToolsConfig): ToolPort {
       if (call.name === READ_NOTEBOOK_TOOL) {
         // WP13.2 (L12): cell-aware notebook reads; see notebook-read.ts.
         return executeReadNotebook(
-          { workspaceRoot: config.workspaceRoot, reader: config.reader },
+          config,
           limits,
           call,
           signal,
@@ -153,7 +156,7 @@ async function executeListFiles(
   signal: AbortSignal,
 ): Promise<ToolOutcome> {
   const requested = directoryArgument(call.arguments, "path");
-  const verdict = resolveInsideWorkspace(config.workspaceRoot, requested);
+  const verdict = resolveInsideWorkspace(config.workspaceRoot, requested, config.fileAccess, config.workspaceAlias);
   if (!verdict.ok) {
     return { outcome: "error", code: verdict.code, message: verdict.code };
   }
@@ -171,7 +174,8 @@ async function executeListFiles(
     return { outcome: "cancelled" };
   }
   const excluded = new Set(config.excludeDirectories ?? DEFAULT_EXCLUDED_DIRECTORIES);
-  const view = createNavigationView({ ...config, filters: { include: [], exclude: [] } });
+  const view = createNavigationView({ ...config, workspaceRoot: navigationRoot(config.workspaceRoot, verdict.absolutePath, config.fileAccess),
+    ...(!isInside(config.workspaceRoot, verdict.absolutePath) ? { rulesRoot: verdict.absolutePath } : {}), filters: { include: [], exclude: [] } });
   const visible: DirectoryEntry[] = [];
   try {
     for (const entry of entries) {

@@ -1,5 +1,5 @@
 import type { JsonObject, JsonValue } from "../../../protocol/envelope.js";
-import type { ToolCallRequest, ToolOutcome } from "../../../ports/tools.js";
+import type { FileAccessMode, ToolCallRequest, ToolOutcome } from "../../../ports/tools.js";
 import {
   localRuleAppendix,
   MAX_LOCAL_RULE_BYTES,
@@ -63,6 +63,8 @@ function rangeFields(selection: RangeSelection): JsonObject {
 export async function executeReadFile(
   config: {
     readonly workspaceRoot: string;
+  readonly fileAccess?: FileAccessMode;
+  readonly workspaceAlias?: string;
     readonly reader: FileSystemReader;
     readonly localRules?: LocalRuleLookup | undefined;
   },
@@ -81,7 +83,7 @@ export async function executeReadFile(
   if (isRangeProblem(request)) {
     return { outcome: "error", code: "invalid_arguments", message: `read_file: ${request.message}` };
   }
-  const verdict = resolveInsideWorkspace(config.workspaceRoot, requested);
+  const verdict = resolveInsideWorkspace(config.workspaceRoot, requested, config.fileAccess, config.workspaceAlias);
   if (!verdict.ok) {
     return { outcome: "error", code: verdict.code, message: verdict.code };
   }

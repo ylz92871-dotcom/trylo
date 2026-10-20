@@ -81,7 +81,7 @@ export async function applyStreamInputs(
       continue;
     }
     if (input.type === "tool_request") {
-      const approval = readToolApprovalRequirement(ports.tools, input.name);
+      const approval = readToolApprovalRequirement(ports.tools, input.name, input, ports.sandbox, ports.permission);
       if (approval.degradedReason !== undefined) {
         emitRaw(engine, "observation", {
           degraded: true,
