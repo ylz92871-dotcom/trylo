@@ -205,6 +205,11 @@ describe('decideSendCapabilityGate (§3.3-5 pre-send gate)', () => {
 });
 
 describe('fixedInstallError', () => {
+  it('explains missing CAD prerequisites without exposing local paths', () => {
+    expect(fixedInstallError('kicad-mcp', 'kicad_python_missing', 'C:\\private\\python.exe')).toContain('KiCad 9');
+    expect(fixedInstallError('jlceda-mcp', 'npm_missing', undefined)).toContain('更新或重新安装 Trylo');
+    expect(fixedInstallError('kicad-mcp', 'kicad_python_missing', 'C:\\private\\python.exe')).not.toContain('private');
+  });
   it('says exactly what is missing for a uv-less machine', () => {
     const msg = fixedInstallError('windows-mcp', 'uv_missing', undefined);
     expect(msg).toContain('uv');

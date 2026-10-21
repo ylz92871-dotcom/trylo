@@ -111,6 +111,7 @@ pub fn run() {
             commands::lsp_stop::lsp_stop,
             commands::lsp_list::lsp_list,
             commands::settings::get_settings,
+            commands::settings::default_workspace_root,
             commands::settings::set_settings,
             // P08 §WP6: CLI/Node resolved from the resource dir, never
             // a developer absolute path.

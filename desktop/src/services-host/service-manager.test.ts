@@ -144,26 +144,26 @@ describe('ServiceManager', () => {
       const manager = new ServiceManager(h.deps, FAST);
       const down = vi.fn();
       manager.onDown(down);
+      await manager.ensureRunning(SPAWN);
 
-      // Crash three times: each failed send schedules a backoff restart.
+      // Exercise an active host through all three configured recovery delays.
       for (let i = 0; i < 3; i++) {
         h.failCommands.add('servicehost_send');
         await manager.client.request('pet.disable').catch(() => {});
         h.failCommands.delete('servicehost_send');
-        await vi.advanceTimersByTimeAsync(60);
-        // Each respawn attempt fails too (status says not running → another
-        // cycle). Drive respawn failure via a failed spawn:
-        h.failCommands.add('servicehost_spawn');
-        // respawn happens on the timer; it fails → health 'down' only after
-        // budget exhaustion, otherwise it retries via the next crash signal.
-        h.failCommands.delete('servicehost_spawn');
+        await vi.advanceTimersByTimeAsync(0);
+        expect(manager.currentHealth).toBe('restarting');
+        await vi.advanceTimersByTimeAsync(FAST.restartBackoffMs[i]!);
+        expect(h.invokes.filter((call) => call.cmd === 'servicehost_spawn')).toHaveLength(i + 2);
       }
       // After 3 recorded restarts the NEXT crash signal must go down.
       h.failCommands.add('servicehost_send');
       await manager.client.request('pet.disable').catch(() => {});
       h.failCommands.delete('servicehost_send');
+      await vi.advanceTimersByTimeAsync(0);
       expect(manager.currentHealth).toBe('down');
       expect(down).toHaveBeenCalledTimes(1);
+      await manager.stop();
     } finally {
       vi.useRealTimers();
     }

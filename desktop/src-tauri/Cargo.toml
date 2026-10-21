@@ -37,6 +37,7 @@ tauri-plugin-dialog = "2.0.0-rc.8"
 [target.'cfg(windows)'.dependencies]
 # Same WebView2 binding already used by Tauri/Wry; native zoom + Escape events.
 webview2-com = "=0.38.2"
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading"] }
 
 [features]
 default = ["custom-protocol"]

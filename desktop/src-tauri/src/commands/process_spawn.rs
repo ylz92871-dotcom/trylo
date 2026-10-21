@@ -133,6 +133,11 @@ pub async fn process_spawn(
     );
 
     let mut cmd = Command::new(&command);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // Piped CLI workers must not open a console window.
+    }
     cmd.args(&args);
     if let Some(cwd) = &cwd {
         eprintln!("[rust]   cwd={cwd}");

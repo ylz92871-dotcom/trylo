@@ -59,6 +59,11 @@ pub async fn lsp_spawn(
     }
 
     let mut command = std::process::Command::new(cfg.command);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000); // Language servers have no interactive console.
+    }
     command.args(cfg.args);
     command.current_dir(&workspace_root);
     command.stdin(std::process::Stdio::piped());

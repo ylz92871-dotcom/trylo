@@ -4,25 +4,21 @@
 // ONE owner, ONE order. Before this module existed, teardown was a partial
 // loop inlined in `lib.rs`'s window-close hook: it killed `ProcessState`
 // children and the service host, and silently leaked every PTY, LSP server
-// and the workd daemon — plus the WPF pet, which the Node sidecar spawns
-// DETACHED and therefore nobody in this process can reap by pid.
+// and the workd daemon. The singleton WPF pet can serve several clients;
+// its own idle timer, rather than one Desktop, owns its final exit.
 //
 // The contract:
 //   1. Children the shell spawned itself die first (Code/Work CLI, PTY, LSP,
 //      workd). CLI records remain until their reapers observe exit; accepted
 //      stop requests are deduplicated and refused requests remain retryable.
 //   2. The service host dies last among the sidecars: its graceful
-//      `pet.disable` frame is what tells the WPF pet to exit, so killing it
-//      first would orphan the pet window.
-//   3. Whatever is still alive after that is killed BY IMAGE NAME as a last
-//      resort. That is the only way to reach a detached grandchild. This
-//      step is the shell's, and only the shell's — "single owner" means one
-//      place is allowed to do it.
+//      `pet.disable` frame detaches only this client. Its worker cleanup
+//      preserves the shared pet process and its descendants.
+//   3. Never kill a process by image name: closing one Desktop must not
+//      close another instance's companion.
 //
 // Every step is best-effort and idempotent: a shutdown that fails halfway
 // must still be safe to run again.
-
-use std::process::Command;
 
 use tauri::{AppHandle, Manager};
 
@@ -32,10 +28,6 @@ use crate::commands::pty::PtyState;
 use crate::commands::servicehost::servicehost_shutdown_now;
 use crate::commands::servicehost_state::ServiceHostState;
 use crate::commands::workd_state::WorkdState;
-
-/// The WPF companion's image name. The pet is spawned detached by the
-/// Node sidecar, so the shell's only handle on it is its image name.
-pub const COMPANION_IMAGE: &str = "TryloDesktopPet.exe";
 
 /// Kill every registered Trylo CLI / CC CLI child. Returns how many were
 /// given a successful termination request; reapers release the table entries.
@@ -105,26 +97,6 @@ pub fn stop_workd(state: &WorkdState) -> bool {
     true
 }
 
-/// Last resort: kill the companion by image name, because it was spawned
-/// DETACHED and no pid in this process can reach it.
-///
-/// Returns true only if the kill command ran successfully. "Nothing was
-/// running" also reports success — the desired end state either way.
-#[cfg(windows)]
-pub fn kill_companion_by_image() -> bool {
-    Command::new("taskkill")
-        .args(["/IM", COMPANION_IMAGE, "/T", "/F"])
-        .status()
-        .is_ok_and(|status| status.success())
-}
-
-/// Non-Windows has no pet (the bridge refuses to launch), so there is
-/// nothing to reap. Kept as a real function so the call site is cfg-free.
-#[cfg(not(windows))]
-pub fn kill_companion_by_image() -> bool {
-    true
-}
-
 /// The full teardown, in contract order. Safe to call more than once and
 /// safe to call from a sync context (window close, `RunEvent::Exit`).
 ///
@@ -134,17 +106,14 @@ pub fn shutdown_all(app: &AppHandle) -> ShutdownReport {
     let ptys = kill_all_ptys(&app.state::<PtyState>());
     let lsps = kill_all_lsps(&app.state::<LspState>());
     let workd = stop_workd(&app.state::<WorkdState>());
-    // Deliberately AFTER the other children and BEFORE the image-name
-    // sweep: the host's graceful `pet.disable` is what asks the pet to
-    // exit, so it must get the chance before we force-kill anything.
+    // Detach this client and stop owned workers. A shared companion exits
+    // only after its last live client leaves (or expires after a crash).
     servicehost_shutdown_now(&app.state::<ServiceHostState>());
-    let companion_reaped = kill_companion_by_image();
     ShutdownReport {
         processes,
         ptys,
         lsps,
         workd,
-        companion_reaped,
     }
 }
 
@@ -156,8 +125,6 @@ pub struct ShutdownReport {
     pub lsps: usize,
     /// Whether a workd daemon was running and was stopped.
     pub workd: bool,
-    /// Whether the last-resort companion sweep ran.
-    pub companion_reaped: bool,
 }
 
 impl ShutdownReport {
@@ -301,7 +268,6 @@ mod tests {
             ptys: 0,
             lsps: 0,
             workd: false,
-            companion_reaped: true,
         };
         assert!(report.was_clean());
         let dirty = ShutdownReport {
@@ -309,11 +275,5 @@ mod tests {
             ..report
         };
         assert!(!dirty.was_clean());
-    }
-
-    #[test]
-    fn the_companion_image_name_is_stable() {
-        // The renderer and the packaging scripts both name this binary.
-        assert_eq!(COMPANION_IMAGE, "TryloDesktopPet.exe");
     }
 }

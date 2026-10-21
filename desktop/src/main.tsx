@@ -8,6 +8,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { AppErrorBoundary } from './components/app-shell/AppErrorBoundary';
+import { NativeWorkspaceBootstrap } from './runtime/NativeWorkspaceBootstrap';
 import './index.css';
 
 const rootEl = document.getElementById('root');
@@ -19,6 +20,8 @@ if (!rootEl) {
 
 createRoot(rootEl).render(
   <StrictMode>
-    <AppErrorBoundary><App /></AppErrorBoundary>
+    <AppErrorBoundary>
+      <NativeWorkspaceBootstrap>{root => <App initialWorkspaceRoot={root} />}</NativeWorkspaceBootstrap>
+    </AppErrorBoundary>
   </StrictMode>,
 );

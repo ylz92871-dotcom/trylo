@@ -57,6 +57,10 @@ export class ServiceManager {
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private downNotified = false;
   private startInFlight: Promise<void> | null = null;
+  private stopInFlight: Promise<void> | null = null;
+  private connectionCheck: Promise<void> | null = null;
+  private active = false;
+  private lifecycle = 0;
 
   constructor(
     deps: ServiceManagerDeps,
@@ -71,7 +75,7 @@ export class ServiceManager {
       void this.handleConnectionError();
     };
     this.client.onEvent('ready', () => {
-      this.setHealth('ready');
+      if (this.active) this.setHealth('ready');
     });
     this.client.onEvent('servicehost.exit', () => {
       void this.handleConnectionError();
@@ -99,10 +103,13 @@ export class ServiceManager {
 
   /** Idempotent start: reuses a running host, otherwise spawns one. */
   async ensureRunning(options: SpawnOptions): Promise<void> {
+    if (this.stopInFlight) await this.stopInFlight;
     this.spawnOptions = options;
+    this.active = true;
     this.downNotified = false;
     if (this.startInFlight) return this.startInFlight;
-    const start = this.ensureRunningOnce();
+    this.cancelRestartTimer();
+    const start = this.ensureRunningOnce(this.lifecycle);
     this.startInFlight = start;
     try {
       await start;
@@ -111,18 +118,24 @@ export class ServiceManager {
     }
   }
 
-  private async ensureRunningOnce(): Promise<void> {
+  private isCurrent(lifecycle: number): boolean {
+    return this.active && this.lifecycle === lifecycle;
+  }
+
+  private async ensureRunningOnce(lifecycle: number): Promise<void> {
     if (this.health === 'ready' || this.health === 'starting') {
       const status = await this.status();
+      if (!this.isCurrent(lifecycle)) return;
       if (status.running) return;
       this.setHealth('stopped');
     }
     await this.client.start();
+    if (!this.isCurrent(lifecycle)) return;
     this.setHealth('starting');
     try {
-      await this.spawn();
+      await this.spawn(lifecycle);
     } catch (err) {
-      this.setHealth('stopped');
+      if (this.isCurrent(lifecycle)) this.setHealth('stopped');
       throw err;
     }
   }
@@ -130,8 +143,22 @@ export class ServiceManager {
   /** Stop the sidecar (idempotent on the Rust side) and tear down the
    *  frame client. */
   async stop(): Promise<void> {
+    if (this.stopInFlight) return this.stopInFlight;
+    this.active = false;
+    this.lifecycle++;
+    this.connectionCheck = null;
     this.cancelRestartTimer();
     this.restartTimestamps = [];
+    const stop = this.stopOnce();
+    this.stopInFlight = stop;
+    try {
+      await stop;
+    } finally {
+      if (this.stopInFlight === stop) this.stopInFlight = null;
+    }
+  }
+
+  private async stopOnce(): Promise<void> {
     // Do not let a concurrent startup finish after the stop and leave an
     // unowned sidecar behind. The Rust command is readiness-bounded, so this
     // wait is finite.
@@ -140,11 +167,11 @@ export class ServiceManager {
       await this.invoke('servicehost_stop');
     } finally {
       this.setHealth('stopped');
+      await this.client.stop();
     }
-    await this.client.stop();
   }
 
-  private async spawn(): Promise<void> {
+  private async spawn(lifecycle: number): Promise<void> {
     const options = this.spawnOptions;
     if (!options) throw new Error('ServiceManager.spawn requires spawn options');
     await this.invoke('servicehost_spawn', {
@@ -154,7 +181,7 @@ export class ServiceManager {
     });
     // Rust returns only after readiness, including reuse after a webview
     // reload. The original ready event belongs to the previous renderer.
-    this.setHealth('ready');
+    if (this.isCurrent(lifecycle)) this.setHealth('ready');
   }
 
   private async status(): Promise<ServiceStatus> {
@@ -163,14 +190,26 @@ export class ServiceManager {
   }
 
   private async handleConnectionError(): Promise<void> {
+    if (!this.active) return;
+    if (this.connectionCheck) return this.connectionCheck;
     if (this.health === 'down' || this.health === 'restarting') return;
+    const check = this.checkConnection(this.lifecycle);
+    this.connectionCheck = check;
+    try {
+      await check;
+    } finally {
+      if (this.connectionCheck === check) this.connectionCheck = null;
+    }
+  }
+
+  private async checkConnection(lifecycle: number): Promise<void> {
     let running = true;
     try {
       running = (await this.status()).running;
     } catch {
       running = false;
     }
-    if (running) return; // transient send failure, host is alive
+    if (!this.isCurrent(lifecycle) || running) return;
     this.scheduleRestart();
   }
 
@@ -199,17 +238,18 @@ export class ServiceManager {
   }
 
   private async respawn(): Promise<void> {
+    if (!this.active) return;
+    const lifecycle = this.lifecycle;
     if (!this.spawnOptions) {
       this.setHealth('down');
       this.notifyDown();
       return;
     }
     try {
-      await this.client.start();
-      this.setHealth('starting');
-      await this.spawn();
+      await this.ensureRunning(this.spawnOptions);
       // Health flips to 'ready' when the sidecar re-announces.
     } catch {
+      if (!this.isCurrent(lifecycle)) return;
       this.setHealth('down');
       this.notifyDown();
     }

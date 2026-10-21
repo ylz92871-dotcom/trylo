@@ -41,6 +41,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::commands::error::{io_error, CommandError};
 use crate::commands::node_runtime;
+use crate::commands::servicehost_termination::HostProcessTree;
 use crate::commands::servicehost_state::{
     stderr_tail, Heartbeat, ServiceHostProcess, ServiceHostState, StdinHandle,
 };
@@ -201,23 +202,6 @@ pub fn servicehost_paths(app: AppHandle) -> Result<ServiceHostPathsDto, CommandE
     })
 }
 
-/// Terminate the child process tree by OS pid.
-#[cfg(windows)]
-fn terminate_tree(pid: u32) -> std::io::Result<()> {
-    Command::new("taskkill")
-        .args(["/PID", &pid.to_string(), "/T", "/F"])
-        .status()
-        .map(|_| ())
-}
-
-#[cfg(not(windows))]
-fn terminate_tree(pid: u32) -> std::io::Result<()> {
-    Command::new("kill")
-        .args(["-KILL", &pid.to_string()])
-        .status()
-        .map(|_| ())
-}
-
 /// The D→S ping frame. Matches what `host.mjs` answers with `pong`.
 fn ping_frame() -> String {
     format!("{}\n", serde_json::json!({ "version": 1, "type": "ping" }))
@@ -282,6 +266,11 @@ pub async fn servicehost_spawn(
     let node = node_runtime::resolve_node(resource_dir.as_deref());
 
     let mut cmd = Command::new(&node.program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW: startup/recovery must not steal focus.
+    }
     cmd.arg(node_runtime::node_script_argument(&script));
     cmd.env(
         "TRYLO_SIDECARS_DIR",
@@ -312,6 +301,14 @@ pub async fn servicehost_spawn(
         )
     })?;
     let pid = child.id();
+    let process_tree = match HostProcessTree::capture(&child) {
+        Ok(tree) => Arc::new(tree),
+        Err(error) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(io_error("(servicehost)", error));
+        }
+    };
     let generation = state.next_generation();
     // This generation gets a fresh, empty stderr tail.
     stderr_tail().clear();
@@ -466,15 +463,20 @@ pub async fn servicehost_spawn(
     }
     if let Some(error) = pending_error {
         heartbeat.stop();
-        let _ = terminate_tree(pid);
+        if let Err(error) = process_tree.terminate() {
+            eprintln!("[servicehost] startup cleanup failed: {error}");
+        }
         return Err(io_error("(servicehost)", std::io::Error::other(error)));
     }
 
     // Register the send side + kill closure; the Child itself is owned by the
     // read thread (which waits on it), so we only store writer/kill/pid.
     let stdin_handle = StdinHandle::new(stdin);
+    let stop_tree = Arc::clone(&process_tree);
     let killer: Box<dyn FnMut() + Send + Sync> = Box::new(move || {
-        let _ = terminate_tree(pid);
+        if let Err(error) = stop_tree.terminate() {
+            eprintln!("[servicehost] stop failed: {error}");
+        }
     });
     *state.daemon.lock().map_err(|_| {
         io_error(
@@ -525,7 +527,9 @@ pub async fn servicehost_spawn(
             }
             let timeout_ms = u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX);
             if watchdog_heartbeat.age_ms() >= timeout_ms && watchdog_heartbeat.claim_kill() {
-                let _ = terminate_tree(pid);
+                if let Err(error) = process_tree.terminate() {
+                    eprintln!("[servicehost] watchdog cleanup failed: {error}");
+                }
                 let managed = watchdog_app.state::<ServiceHostState>();
                 if managed.clear_generation(generation) {
                     emit_exit(
@@ -636,9 +640,9 @@ pub async fn servicehost_stop(state: State<'_, ServiceHostState>) -> Result<(), 
 
 /// §6.5 exit sequence, callable from sync contexts (window close):
 /// best-effort `pet.disable` request (the sidecar's bridge sends the
-/// UDP `detach`), then kill the child tree and clear the slot. The
-/// short grace window lets the sidecar's stdin-close handler run the
-/// same disable path before the force kill.
+/// UDP `detach`), then stop this host's workers and clear the slot.
+/// Preserve the shared pet branch: another Desktop/extension can still be
+/// connected. The pet's own client expiry/idle timer owns its final exit.
 pub fn servicehost_shutdown_now(state: &ServiceHostState) {
     let Ok(mut guard) = state.daemon.lock() else {
         return;

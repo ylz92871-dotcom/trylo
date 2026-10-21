@@ -278,7 +278,8 @@ function createDesktopCompanionBridge(options = {}) {
   const disable = () => {
     if (!enabled && !socket) return;
     enabled = false;
-    // The detach tells the exe to exit, so `launched` is no longer true.
+    // Detach retires this client; the shared exe may still serve other clients.
+    // `launched` describes this bridge's active launch, not global liveness.
     // `exeFound` survives (the binary is still where we found it) — that is
     // the one fact that stays useful after a shutdown.
     chatConnected = false;

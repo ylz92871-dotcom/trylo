@@ -259,6 +259,7 @@ async function main() {
     // The pinned Node runtime. The installed app must never depend on
     // `node` being on the system PATH (audit §2.3 Task W4).
     await checkAny('pinned Node runtime', resourceRoot, NODE_RUNTIME_CANDIDATES, verifyingPackaged),
+    await checkItem('managed tool npm runtime', path.join(resourceRoot, 'runtime/node/win-x64/node_modules/npm/bin/npm-cli.js'), verifyingPackaged && process.platform === 'win32'),
   ];
 
   const failures = items.filter((i) => !i.ok);

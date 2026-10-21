@@ -103,6 +103,8 @@ if ($nodeVersion -ne 'v24.14.1' -or (Get-ReleaseFileHash $nodeExe) -ne '58e74bf0
 $nodeTargetDir = Join-Path $resources "runtime\node\win-x64"
 New-Item -ItemType Directory -Force -Path $nodeTargetDir | Out-Null
 Copy-Item -LiteralPath $nodeExe -Destination (Join-Path $nodeTargetDir "node.exe") -Force
+node (Join-Path $PSScriptRoot 'stage-npm.mjs') $nodeTargetDir
+if ($LASTEXITCODE -ne 0) { throw 'Pinned npm staging failed; managed CAD/EDA installation would be unavailable.' }
 $runtimeLicenses = Join-Path $resources 'runtime/licenses'
 New-Item -ItemType Directory -Force -Path $runtimeLicenses | Out-Null
 Copy-Item -LiteralPath (Join-Path $repoRoot 'desktop/licenses/NODE-v24.14.1-LICENSE.txt') -Destination (Join-Path $runtimeLicenses 'NODE-LICENSE.txt') -Force

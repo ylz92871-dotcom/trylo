@@ -10,6 +10,7 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use tauri::Manager;
 use tauri::State;
 
 use crate::commands::error::{io_error, CommandError};
@@ -19,6 +20,20 @@ pub mod path {
     /// workspace root. Single source of truth; keep this
     /// in sync with the TS side (.trylo/settings.json).
     pub const SETTINGS_FILE: &str = ".trylo/settings.json";
+}
+
+/// Fresh installs use a real user-owned directory, never a developer path.
+/// Existing workspace indexes still win in the renderer.
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command]
+pub fn default_workspace_root(app: tauri::AppHandle) -> Result<String, CommandError> {
+    let base = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| io_error("(workspace)", std::io::Error::other(error.to_string())))?;
+    crate::commands::workspace_root::prepare_default_workspace(&base)
+        .map(|root| root.to_string_lossy().into_owned())
+        .map_err(|error| io_error("(workspace)", error))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

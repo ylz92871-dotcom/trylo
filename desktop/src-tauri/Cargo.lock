@@ -4290,6 +4290,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "webview2-com",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -38,8 +38,10 @@ pub mod search;
 /// lifecycle hooks in `lib.rs`.
 pub mod shutdown;
 pub mod servicehost;
+pub mod servicehost_termination;
 pub mod servicehost_state;
 pub mod settings;
+pub mod workspace_root;
 pub mod stat_file;
 pub mod test_connection;
 pub mod watch;

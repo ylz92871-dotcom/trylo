@@ -28,6 +28,7 @@
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import crypto from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
@@ -97,7 +98,7 @@ function parseOverrides(raw) {
 /**
  * Local-first tool wiring: `<installRoot>/local-overrides.json` pins a
  * package id straight at an absolute local executable, e.g.
- * `{ "officecli": "C:/work/demo-ws/new_tool/office/OfficeCLI/_dist-trylo/officecli.exe" }`.
+ * `{ "officecli": "D:/CC/trylo/new_tool/office/OfficeCLI/_dist-trylo/officecli.exe" }`.
  * The file survives restarts (Tauri does not forward ad-hoc env into the
  * sidecar); `TRYLO_TOOL_PACKAGE_OVERRIDES` keeps working and wins per-key.
  * Shape violations degrade to `{}` — never a throw (§4.4).
@@ -337,6 +338,31 @@ export function createToolPackageManager(options = {}) {
   // instead of downloading a real Chromium.
   const runCommand = options.runCommand ?? runBoundedCommand;
 
+  async function runInstallCommand(stageRoot, executable, args, timeoutMs, opts = {}) {
+    // Python's editable-wheel builder appends another ~120 characters to
+    // TEMP. Nesting it below .downloads/<package>/<source> exceeds MAX_PATH
+    // on normal Windows profiles. Use a short, private command scratch dir.
+    const temp = await fsp.mkdtemp(path.join(os.tmpdir(), 'trylo-it-')).catch(async error => {
+      if (error.code !== 'EACCES' && error.code !== 'EPERM') throw error;
+      const fallback = path.join(stageRoot, 'tmp');
+      await fsp.mkdir(fallback, { recursive: true });
+      return fallback;
+    });
+    const env = { ...process.env, ...opts.env, TEMP: temp, TMP: temp };
+    const cache = path.join(installRoot, '.cache');
+    env.UV_CACHE_DIR ??= path.join(cache, 'uv');
+    env.npm_config_cache ??= env.NPM_CONFIG_CACHE ?? path.join(cache, 'npm');
+    // npm run build resolves `node` through PATH even though npm itself is
+    // invoked through its JS entry. End users need no system Node installation.
+    const pathKey = Object.keys(env).find(key => key.toLowerCase() === 'path') ?? 'PATH';
+    env[pathKey] = `${path.dirname(nodeScriptPath(process.execPath))}${path.delimiter}${env[pathKey] ?? ''}`;
+    try {
+      return await runCommand(executable, args, timeoutMs, { ...opts, env });
+    } finally {
+      await fsp.rm(temp, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
   function versionDir(manifest) {
     return path.join(installRoot, manifest.id, manifest.version);
   }
@@ -528,7 +554,20 @@ export function createToolPackageManager(options = {}) {
    *
    * @param {{ id: string, archivePath?: string }} params
    */
-  async function install(params = {}) {
+  const installsInFlight = new Map();
+
+  function install(params = {}) {
+    const id = String(params.id ?? '');
+    const pending = installsInFlight.get(id);
+    if (pending) return pending;
+    const task = installOnce(params).finally(() => {
+      if (installsInFlight.get(id) === task) installsInFlight.delete(id);
+    });
+    installsInFlight.set(id, task);
+    return task;
+  }
+
+  async function installOnce(params = {}) {
     const id = String(params.id ?? '');
     if (!id) return { ok: false, reasonCode: 'missing_id', error: 'a package id is required' };
     const manifest = options.catalog?.get(id);
@@ -841,22 +880,21 @@ export function createToolPackageManager(options = {}) {
       //    the two origins apart. No mirror/pre-seed policy is implied.
       let offline = true;
       try {
-        await runBoundedCommand(
-          uv,
+        await runInstallCommand(
+          stageRoot, uv,
           ['sync', '--locked', '--no-dev', '--offline', '--project', projectDir],
           600_000,
         );
-      } catch (offlineError) {
+      } catch {
         try {
-          await runBoundedCommand(
-            uv,
+          await runInstallCommand(
+            stageRoot, uv,
             ['sync', '--locked', '--no-dev', '--project', projectDir],
             600_000,
           );
           offline = false;
         } catch (error) {
-          const reason = offlineError?.message === error?.message ? error : offlineError;
-          throw Object.assign(new Error(`uv sync --locked failed: ${reason?.message ?? error.message}`), {
+          throw Object.assign(new Error(`uv sync --locked failed: ${error?.message ?? error}`), {
             reasonCode: 'install_failed',
           });
         }
@@ -882,8 +920,8 @@ export function createToolPackageManager(options = {}) {
         await fsp.rename(path.join(projectDir, entry.name), path.join(dir, entry.name));
       }
       try {
-        await runBoundedCommand(
-          uv,
+        await runInstallCommand(
+          stageRoot, uv,
           ['sync', '--locked', '--no-dev', '--offline', '--project', dir],
           600_000,
         );
@@ -1039,12 +1077,12 @@ export function createToolPackageManager(options = {}) {
       //    requirements file (80 long wheel paths would brush the Windows
       //    ~32k argv ceiling; `-r` sidesteps it entirely).
       const venvDir = path.join(projectDir, '.venv');
-      await runCommand(uv, ['venv', venvDir, '--python', String(artifact.pythonVersion)], 300_000);
+      await runInstallCommand(stageRoot, uv, ['venv', venvDir, '--python', String(artifact.pythonVersion)], 300_000);
       const venvPython = path.join(venvDir, process.platform === 'win32' ? path.join('Scripts', 'python.exe') : path.join('bin', 'python'));
       const wheelRequirements = path.join(stageRoot, 'wheels-requirements.txt');
       await fsp.writeFile(wheelRequirements, `${wheelPaths.join('\n')}\n`, 'utf8');
-      await runCommand(
-        uv,
+      await runInstallCommand(
+        stageRoot, uv,
         ['pip', 'install', '--python', venvPython, '--no-deps', '--no-progress', '-r', wheelRequirements],
         900_000,
       );
@@ -1067,8 +1105,8 @@ export function createToolPackageManager(options = {}) {
       //    canonicalize script path`; uv sync DOES relink on re-run, pip/
       //    pip-install semantics do not).
       const finalVenvPython = path.join(dir, '.venv', process.platform === 'win32' ? path.join('Scripts', 'python.exe') : path.join('bin', 'python'));
-      await runCommand(
-        uv,
+      await runInstallCommand(
+        stageRoot, uv,
         ['pip', 'install', '--python', finalVenvPython, '--no-deps', '--no-progress', '--reinstall', '-r', wheelRequirements],
         900_000,
       );
@@ -1132,6 +1170,12 @@ export function createToolPackageManager(options = {}) {
    */
   async function installReleaseArchiveSource(manifest, archivePath) {
     const artifact = manifest.artifact;
+    const npm = resolveNpmCommand();
+    if (!npm) return { ok: false, id: manifest.id, reasonCode: 'npm_missing', error: 'npm CLI not found next to the bundled Node runtime' };
+    const kicadPython = artifact.pythonWheelsTarget === 'kicad-bundled' ? detectKicadPython() : null;
+    if (artifact.pythonWheelsTarget === 'kicad-bundled' && !kicadPython) {
+      return { ok: false, id: manifest.id, reasonCode: 'kicad_python_missing', error: 'no KiCad bundled python detected (KiCad 9+ expected under Program Files)' };
+    }
     const stageRoot = path.join(
       installRoot,
       '.downloads',
@@ -1167,25 +1211,11 @@ export function createToolPackageManager(options = {}) {
         await fsp.rename(path.join(projectDir, entry.name), path.join(dir, entry.name));
       }
 
-      const npm = resolveNpmCommand();
-      if (!npm) {
-        throw Object.assign(
-          new Error('npm CLI not found next to the Node runtime (node_modules/npm/bin/npm-cli.js)'),
-          { reasonCode: 'npm_missing' },
-        );
-      }
-      await runCommand(npm.command, [...npm.args, 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], 900_000, { cwd: dir });
-      await runCommand(npm.command, [...npm.args, 'run', 'build'], 600_000, { cwd: dir });
+      await runInstallCommand(stageRoot, npm.command, [...npm.args, 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], 900_000, { cwd: dir });
+      await runInstallCommand(stageRoot, npm.command, [...npm.args, 'run', 'build'], 600_000, { cwd: dir });
 
       if (artifact.pythonWheelsTarget === 'kicad-bundled') {
         const wheels = Array.isArray(artifact.pythonWheels) ? artifact.pythonWheels : [];
-        const kicadPython = detectKicadPython();
-        if (!kicadPython) {
-          throw Object.assign(
-            new Error('no KiCad bundled python detected (KiCad 9+ expected under Program Files)'),
-            { reasonCode: 'kicad_python_missing' },
-          );
-        }
         const wheelPaths = [];
         const wheelDigests = {};
         await fsp.mkdir(path.join(stageRoot, 'wheels'), { recursive: true });
@@ -1207,8 +1237,8 @@ export function createToolPackageManager(options = {}) {
         try {
           // KiCad's own interpreter needs the deps pcbnew/kipy imports live
           // in; --no-deps keeps the pinned closure exact.
-          await runCommand(
-            kicadPython,
+          await runInstallCommand(
+            stageRoot, kicadPython,
             ['-m', 'pip', 'install', '--no-deps', '--no-warn-script-location', '-r', kicadRequirements],
             600_000,
           );
@@ -1579,7 +1609,9 @@ function runBoundedCommand(executable, args, timeoutMs, opts = {}) {
       { timeout: timeoutMs, windowsHide: true, maxBuffer: 8 * 1024 * 1024, ...opts },
       (error, _stdout, stderr) => {
         if (error) {
-          reject(new Error(String(stderr || error.message).slice(0, 200)));
+          // uv/npm print interpreter/progress lines before the actual cause.
+          // Keep the bounded failure tail rather than truncating to that preamble.
+          reject(new Error(String(stderr || error.message).trim().slice(-200)));
           return;
         }
         resolve(true);
@@ -1827,9 +1859,17 @@ export function resolveNpmCommand(nodeExecutable = process.execPath) {
     path.resolve(binDir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
   ];
   for (const cli of candidates) {
-    if (isFileSync(cli)) return { command: nodeExecutable, args: [cli] };
+    if (isFileSync(cli)) return { command: nodeExecutable, args: [nodeScriptPath(cli)] };
   }
   return null;
+}
+
+/** CreateProcess accepts verbatim executable paths, but Node's JS entry
+ * resolution (and PATH search) does not. Preserve unknown device namespaces. */
+export function nodeScriptPath(value) {
+  if (/^\\\\\?\\UNC\\/i.test(value)) return `\\\\${value.slice(8)}`;
+  if (/^\\\\\?\\[a-z]:\\/i.test(value)) return value.slice(4);
+  return value;
 }
 
 /** CAD/EDA: locate KiCad's bundled Python (newest install first). pcbnew and

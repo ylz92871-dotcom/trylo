@@ -53,6 +53,8 @@ export class ServicesClient {
   private readonly handlers = new Map<string, Set<EventHandler>>();
   private unsubscribe: (() => void) | null = null;
   private started = false;
+  private lifecycle = 0;
+  private startInFlight: Promise<void> | null = null;
   /** Fired when a send fails at the transport layer (host likely gone) —
    *  the ServiceManager uses this as its crash signal. */
   onConnectionError: (() => void) | null = null;
@@ -64,21 +66,41 @@ export class ServicesClient {
   /** Subscribes to the frame event. Idempotent. */
   async start(): Promise<void> {
     if (this.started) return;
-    this.unsubscribe = await this.deps.listen('servicehost://frame', (event) => {
-      this.handleRawFrame(event.payload);
-    });
-    this.started = true;
+    if (this.startInFlight) return this.startInFlight;
+    const lifecycle = ++this.lifecycle;
+    const start = (async () => {
+      const unsubscribe = await this.deps.listen('servicehost://frame', (event) => {
+        if (this.lifecycle === lifecycle) this.handleRawFrame(event.payload);
+      });
+      if (this.lifecycle !== lifecycle) {
+        unsubscribe();
+        return;
+      }
+      this.unsubscribe = unsubscribe;
+      this.started = true;
+    })();
+    this.startInFlight = start;
+    try {
+      await start;
+    } finally {
+      if (this.startInFlight === start) this.startInFlight = null;
+    }
   }
 
   async stop(): Promise<void> {
-    if (this.unsubscribe) {
-      this.unsubscribe();
-      this.unsubscribe = null;
-    }
+    this.lifecycle++;
+    this.startInFlight = null;
+    const unsubscribe = this.unsubscribe;
+    this.unsubscribe = null;
     this.started = false;
+    this.rejectPending('service host client stopped');
+    unsubscribe?.();
+  }
+
+  private rejectPending(message: string): void {
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
-      pending.reject(new ServiceRequestError('NOT_CONNECTED', 'service host client stopped'));
+      pending.reject(new ServiceRequestError('NOT_CONNECTED', message));
     }
     this.pending.clear();
   }
@@ -157,6 +179,9 @@ export class ServicesClient {
       return;
     }
     if (frame.type === 'event') {
+      if (frame.topic === 'servicehost.exit') {
+        this.rejectPending('service host exited');
+      }
       const set = this.handlers.get(frame.topic);
       if (!set) return;
       for (const handler of set) handler(frame.payload);

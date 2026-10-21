@@ -984,7 +984,8 @@ public partial class CatBoxWindow : Window
         var image = new BitmapImage();
         image.BeginInit();
         image.CacheOption = BitmapCacheOption.OnLoad;
-        image.UriSource = new Uri(path, UriKind.Absolute);
+        using var stream = File.OpenRead(path);
+        image.StreamSource = stream;
         image.EndInit();
         image.Freeze();
         return image;

@@ -312,6 +312,11 @@ pub async fn workd_spawn(
 
     let node = node_runtime::resolve_node(resource_dir.as_deref());
     let mut cmd = Command::new(&node.program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // Background daemon; all communication is through pipes.
+    }
     cmd.arg(node_runtime::node_script_argument(&script_path));
     // Pass port/host via env so the daemon picks them up.
     cmd.env("TRYLO_WORKD_PORT", port.to_string());

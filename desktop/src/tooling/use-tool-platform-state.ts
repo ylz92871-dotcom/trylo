@@ -349,6 +349,12 @@ export function fixedInstallError(_id: string, reasonCode: string | undefined, r
       return '下载失败：无法取得固定版本的发布物。请检查网络（需可达 GitHub / npm registry）后重试。';
     case 'uv_missing':
       return '本机缺少 uv 运行时，无法安装此包。请先安装 uv 后重试（uv 是 Windows-MCP 的受控 Python 运行条件）。';
+    case 'npm_missing':
+      return '当前桌面安装包缺少工具构建组件。请更新或重新安装 Trylo 后重试。';
+    case 'kicad_python_missing':
+      return '未检测到 KiCad 9 或更新版本。请先安装 KiCad，再安装此工具包。';
+    case 'kicad_python_install_failed':
+      return 'KiCad 的 Python 依赖安装失败。请关闭正在运行的 KiCad，检查网络后重试。';
     case 'no_install_root':
       return '工具安装目录未配置（Service Host 存储根缺失）。';
     case 'unknown_package':

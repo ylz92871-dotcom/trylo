@@ -619,7 +619,7 @@ function kindForArtifactName(name: string): string {
   return 'file'
 }
 
-function App(): ReactElement {
+function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initialWorkspaceRoot?: FilePath }): ReactElement {
   // A small global index remembers which folders were open.
   // The actual conversations live under each project at
   // <workspace>/.trylo/conversations.v1.json.
@@ -627,8 +627,8 @@ function App(): ReactElement {
   if (initialWorkspaceIndexRef.current === null) {
     initialWorkspaceIndexRef.current = loadWorkspaceIndex({
       id: 'ws-default',
-      root: DEFAULT_WORKSPACE_ROOT,
-      name: basenameOf(DEFAULT_WORKSPACE_ROOT),
+      root: initialWorkspaceRoot,
+      name: initialWorkspaceRoot === DEFAULT_WORKSPACE_ROOT ? basenameOf(initialWorkspaceRoot) : '本地工作区',
     })
   }
   const initialWorkspaceIndex = initialWorkspaceIndexRef.current

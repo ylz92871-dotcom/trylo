@@ -877,7 +877,8 @@ public partial class PetWindow : Window
         var image = new BitmapImage();
         image.BeginInit();
         image.CacheOption = BitmapCacheOption.OnLoad;
-        image.UriSource = new Uri(atlasPath, UriKind.Absolute);
+        using var stream = File.OpenRead(atlasPath);
+        image.StreamSource = stream;
         image.EndInit();
         image.Freeze();
         return image;
@@ -904,7 +905,8 @@ public partial class PetWindow : Window
         var image = new BitmapImage();
         image.BeginInit();
         image.CacheOption = BitmapCacheOption.OnLoad;
-        image.UriSource = new Uri(path, UriKind.Absolute);
+        using var stream = File.OpenRead(path);
+        image.StreamSource = stream;
         image.EndInit();
         image.Freeze();
         return image;
