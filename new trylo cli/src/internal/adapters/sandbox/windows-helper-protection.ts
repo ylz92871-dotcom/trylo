@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { windowsHelperEnvironment } from "./windows-helper-environment.js";
+import { ShellIsolationError } from "../../ports/isolation.js";
 
 export type CacheTarget = {
   readonly kind: "directory" | "executable";
@@ -92,8 +93,17 @@ public static class TryloIntegrityLabel {
 export function protectWindowsCacheTarget(target: CacheTarget, env: Readonly<Record<string, string | undefined>>): void {
   const systemRoot = env["SystemRoot"] ?? env["SYSTEMROOT"];
   if (systemRoot === undefined) throw new Error("isolation_helper_invalid: SystemRoot is missing");
-  execFileSync(join(systemRoot, "System32/WindowsPowerShell/v1.0/powershell.exe"), ["-NoProfile", "-NonInteractive", "-Command", PROTECT_CACHE], {
-    env: { ...windowsHelperEnvironment(env), TRYLO_NATIVE_TARGET: target.path, TRYLO_NATIVE_KIND: target.kind, TRYLO_NATIVE_STATE: target.state },
-    windowsHide: true, encoding: "utf8", timeout: 30000,
-  });
+  try {
+    execFileSync(join(systemRoot, "System32/WindowsPowerShell/v1.0/powershell.exe"), ["-NoProfile", "-NonInteractive", "-Command", PROTECT_CACHE], {
+      env: { ...windowsHelperEnvironment(env), TRYLO_NATIVE_TARGET: target.path, TRYLO_NATIVE_KIND: target.kind, TRYLO_NATIVE_STATE: target.state },
+      windowsHide: true, encoding: "utf8", timeout: 30000,
+    });
+  } catch (cause) {
+    // execFile's message embeds the entire trusted PowerShell/C# program.
+    // Preserve the OS diagnostic and causal error, not a script-sized prompt.
+    const stderr: unknown = cause !== null && typeof cause === "object" ? Reflect.get(cause, "stderr") : undefined;
+    const diagnostic = typeof stderr === "string" ? stderr : Buffer.isBuffer(stderr) ? stderr.toString("utf8") : "helper protection process failed";
+    throw new ShellIsolationError("isolation_helper_protection_failed",
+      `private helper protection failed; no command was run. ${diagnostic.trim().slice(-1_500)}`, { cause });
+  }
 }

@@ -29,7 +29,9 @@ export const SESSION_RECORD_TYPES = [
    * A provider block that was opened and never closed: the durable form of an
    * in-flight chunk. Added in format v1 without renumbering it — readers of
    * older journals simply never meet one, and `recover` treats an absent
-   * partial list as empty rather than as a different format.
+   * partial list as empty rather than as a different format. The payload codec
+   * also supports V2 suffixes: old readers fail closed on that payload rather
+   * than treating its suffix as a full snapshot. Existing V1 journals stay readable.
    */
   "stream_partial",
 ] as const;

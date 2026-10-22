@@ -78,6 +78,8 @@ export type Engine = {
    */
   promptReport?: ReportedRequestBasis;
   transcript: Transcript;
+  /** Only acknowledged immutable envelopes can be omitted from later flushes. */
+  progressEnvelopeCount: number;
   compaction: CompactionLedger;
   seedMessages: ReadonlyArray<ProviderMessage>;
   grants: PermissionGrantCache;
@@ -167,6 +169,7 @@ export async function assembleEngine(
     costUsd: 0,
     ...(request.pricing === undefined ? {} : { pricing: request.pricing }),
     transcript: [...transcript],
+    progressEnvelopeCount: 0,
     compaction: createCompactionLedger(),
     seedMessages: seedMessagesOf(assembled.messages),
     grants: ports.grants ?? createPermissionGrantCache(),

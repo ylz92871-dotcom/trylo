@@ -3,7 +3,7 @@ import type { Message } from "../contract/execution.js";
 import type { VerificationStatus } from "../contract/execution.js";
 import type { ReduceInput } from "../domain/input.js";
 import { decideIterationEnd, streamCostUsd, type IterationBudget, type UsagePricing } from "../domain/iteration.js";
-import { budgetCeiling, outputBudgetSpent, requestFitsContext } from "./budget-gate.js";
+import { budgetCeiling, outputBudgetSpent, fitRequestToContext } from "./budget-gate.js";
 import type { ExecutionState } from "../domain/state.js";
 import type { CompactRecordDraft, CompactWindow } from "../ports/compaction.js";
 import type { PermissionPort } from "../ports/permission.js";
@@ -389,7 +389,7 @@ async function runOneIteration(
     engine.iterations,
     ports.tools,
   );
-  const request = buildRequest({
+  const assembledRequest = buildRequest({
     attemptId: engine.state.currentAttemptId,
     model: engine.model,
     continuationScope: providerContinuationScope(engine.state.sessionId, engine.state.turnId),
@@ -409,7 +409,8 @@ async function runOneIteration(
     ...(engine.systemPromptAppend === undefined ? {} : { systemPromptAppend: engine.systemPromptAppend }),
     ...(engine.responseSchema === undefined ? {} : { responseSchema: engine.responseSchema }),
   });
-  if (!await requestFitsContext(engine, ports, request)) return { finished: false, method: undefined, toolGap: undefined };
+  const request = await fitRequestToContext(engine, ports, assembledRequest);
+  if (request === undefined) return { finished: false, method: undefined, toolGap: undefined };
   const streamedInputs = new Set<string>();
   const observation = await consumeProviderStream({
     port: ports.provider, request,

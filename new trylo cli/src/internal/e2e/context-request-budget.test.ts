@@ -4,6 +4,7 @@ import { runTurn } from "../loop/runner.js";
 import { createFakePermission, createFakeTools, emptyProfileLoader } from "../loop/fakes.js";
 import { compactionWiring } from "../surface/cli/compaction-wiring.js";
 import type { ProviderEvent, ProviderRequest } from "../ports/provider.js";
+import { estimateMessagesTokens, estimateToolSpecsTokens } from "../compaction/token-estimate.js";
 
 function fixture() {
   const requests: ProviderRequest[] = [];
@@ -53,4 +54,16 @@ test("a reserved final report is also budgeted after its extra instructions are 
     budget: { maxIterations: 1, finalRequest: "report_only", contextTokenLimit: 100 } });
   assert.equal(f.requests.length, 0, "late request decoration cannot bypass the context ceiling");
   assert.equal(result.state.terminalReason, "failed");
+});
+
+test("an explicit output allowance cannot overbook the declared context window", async () => {
+  const f = fixture();
+  const result = await runTurn(f.ports, { sessionId: "s", turnId: "t", correlationId: "c", text: "Hi",
+    systemPromptAppend: "recent instructions ".repeat(25),
+    budget: { maxOutputTokens: 65_536, contextTokenLimit: 2_000 } });
+  assert.equal(result.state.terminalReason, "completed");
+  const request = f.requests[0]!;
+  const prompt = estimateMessagesTokens(request.messages) + estimateToolSpecsTokens(request.tools);
+  assert.ok(request.maxOutputTokens! > 0);
+  assert.ok(prompt + request.maxOutputTokens! <= 2_000, "input and reserved output must fit together");
 });

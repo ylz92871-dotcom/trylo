@@ -32,6 +32,17 @@ export type IsolationBackend = "windows-srt" | "linux-bwrap" | "macos-seatbelt";
 /** Explicit process boundary; host preserves caller authority, never grants approval. */
 export type ShellIsolation = "sandbox" | "host";
 
+/** Preparation failures are not command execution or permission decisions. */
+export type ShellIsolationFailureCode = "isolation_preparation_failed" | "isolation_not_installed"
+  | "isolation_broken" | "isolation_unavailable" | "isolation_closed" | "isolation_helper_protection_failed";
+
+export class ShellIsolationError extends Error {
+  constructor(readonly code: ShellIsolationFailureCode, message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "ShellIsolationError";
+  }
+}
+
 /**
  * Availability is a state machine, not a boolean: `not_installed` and
  * `broken` both mean "do not run this", but they mean different things to the

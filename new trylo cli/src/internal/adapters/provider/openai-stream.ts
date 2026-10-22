@@ -28,10 +28,13 @@ async function* decodeBody(
   let buffer = "";
   let sawAny = false;
   let heldFinish: ProviderEvent | undefined;
+  let finishDeadline: AbortSignal | undefined;
+  let finishTailTimedOut = false;
   let bodyClosed = false;
   try {
     stream: for (;;) {
-      const step = await reader.read();
+      const step = await readBeforeFinishDeadline(reader, finishDeadline);
+      if (step === undefined) { finishTailTimedOut = true; break; }
       if (step.done === true) {
         bodyClosed = true;
         break;
@@ -46,6 +49,10 @@ async function* decodeBody(
         for (const event of translateFrame(translator, frame)) {
           if (event.type === "finish" && heldFinish === undefined) {
             heldFinish = event;
+            // Usage may trail finish, but an endpoint that keeps HTTP alive
+            // must not leave the completed model turn looking like thinking.
+            // This deadline never applies while the model is still generating.
+            finishDeadline = AbortSignal.timeout(1_000);
             sawAny = true;
             continue;
           }
@@ -89,6 +96,8 @@ async function* decodeBody(
       reader.releaseLock();
     }
   }
+  if (finishTailTimedOut) yield { type: "warning", code: "stream_finish_tail_timeout",
+    message: "Provider finished but did not close its stream; usage includes only received frames." };
   if (heldFinish === undefined) {
     for (const event of translator.complete()) {
       sawAny = true;
@@ -108,6 +117,24 @@ async function* decodeBody(
       phase: "after_stream_started",
       message: "empty_stream",
     };
+  }
+}
+
+async function readBeforeFinishDeadline(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  deadline: AbortSignal | undefined,
+): Promise<Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>> | undefined> {
+  if (deadline === undefined) return reader.read();
+  if (deadline.aborted) return undefined;
+  let expire = () => {};
+  const expired = new Promise<undefined>(resolve => { expire = () => resolve(undefined); });
+  deadline.addEventListener("abort", expire, { once: true });
+  try {
+    return await Promise.race([reader.read(), expired]);
+  } finally {
+    deadline.removeEventListener("abort", expire);
+    // On expiry the caller cancels the sole outstanding read before releasing
+    // its lock. No second pull and no replay of a completed request.
   }
 }
 

@@ -9,6 +9,7 @@ import { resolveExecutablePath } from "./resolve-executable-path.js";
 import type { WindowsAclLease } from "./windows-acl-lease.js";
 import { windowsHelperEnvironment } from "./windows-helper-environment.js";
 import { hostNodeExecutable, type CommandShape } from "./executable.js";
+import { ShellIsolationError } from "../../ports/isolation.js";
 
 function pinExecutable(argv: readonly string[]): readonly string[] {
   const program = argv[0];
@@ -27,13 +28,13 @@ export function createWindowsShellBoundary(workspaceRoot: string, hostEnvironmen
     const ready = await prepareWindowsIsolation([workspaceRoot], { helperPath }, () => closing);
     const availability = ready.availability;
     if (availability.state !== "ready") {
-      throw new Error(`isolation_${availability.state}: command was not run; ${availability.state === "not_installed" ? availability.installHint : "reason" in availability ? availability.reason : "sandbox not ready"}`);
+      throw new ShellIsolationError(`isolation_${availability.state}`, `command was not run; ${availability.state === "not_installed" ? availability.installHint : "reason" in availability ? availability.reason : "sandbox not ready"}`);
     }
     if (ready.lease === undefined) throw new Error("isolation_broken: readiness returned no ACL owner");
     return ready.lease;
   };
   const wrap = async (argv: readonly string[], readablePrograms: readonly string[] = []): Promise<readonly string[]> => {
-    if (closing) throw new Error("isolation_closed: command was not run");
+    if (closing) throw new ShellIsolationError("isolation_closed", "command was not run");
     windowsHelperEnvironment(hostEnvironment);
     // Reuse the PTY resolver: the restricted logon cannot search the host PATH.
     // Admission still sees the original command; lookup only pins what it runs.
@@ -44,9 +45,10 @@ export function createWindowsShellBoundary(workspaceRoot: string, hostEnvironmen
       // This session owns one preparation result. Repeating a command cannot
       // repair its failed broker or unresolved compensation.
       const detail = cause instanceof Error ? cause.message : String(cause);
-      throw new Error(`${detail}\nDo not retry shell commands in this session; fix the reported environment problem and start a new session. To explicitly use caller authority instead, start a new run with --shell-isolation host; tool approval still applies and no automatic fallback was run.`, { cause });
+      throw new ShellIsolationError(cause instanceof ShellIsolationError ? cause.code : "isolation_preparation_failed",
+        `${detail}\nDo not retry shell commands in this session; fix the reported environment problem and start a new session. To explicitly use caller authority instead, start a new run with --shell-isolation host; tool approval still applies and no automatic fallback was run.`, { cause });
     }
-    if (closing) throw new Error("isolation_closed: command was not run");
+    if (closing) throw new ShellIsolationError("isolation_closed", "command was not run");
     for (const program of [pinned[0] ?? "", ...readablePrograms]) lease.readExecutable(program);
     const command: string[] = [lease.helperPath, DISPATCH_ARG, "exec", "--quiet"];
     // Protect executable/configuration surfaces even inside the write grant.

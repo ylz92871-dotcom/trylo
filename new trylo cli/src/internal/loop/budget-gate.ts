@@ -45,13 +45,19 @@ const MAX_GAP_RESCUES_PER_TURN = 2;
 /** Check the assembled request too: transient learning/report instructions are
  * added after the gap's history projection. They cannot bypass the hard cap.
  */
-export async function requestFitsContext(engine: Engine, ports: LoopPorts, request: ProviderRequest): Promise<boolean> {
+export async function fitRequestToContext(engine: Engine, ports: LoopPorts, request: ProviderRequest): Promise<ProviderRequest | undefined> {
   const wiring = ports.compaction, limit = engine.budget.contextTokenLimit;
-  if (wiring === undefined || limit === undefined) return true;
+  if (wiring === undefined || limit === undefined) return request;
   const tokens = wiring.estimatePromptTokens(request.messages) + (wiring.estimateOverheadTokens?.(ports.tools) ?? 0);
-  if (tokens < limit) return true;
+  if (tokens < limit) {
+    // --max-tokens is a cumulative allowance, not space already available in
+    // this request's context window. Never send an impossible reservation.
+    // An absent output allowance remains absent: do not invent a thinking cap.
+    return request.maxOutputTokens === undefined ? request
+      : { ...request, maxOutputTokens: Math.min(request.maxOutputTokens, Math.floor(limit - tokens)) };
+  }
   await dispatch(engine, ports, { type: "budget_exhausted", eventId: nextId(engine), reason: "context_limit", used: tokens, limit });
-  return false;
+  return undefined;
 }
 
 function mayRescue(engine: Engine, ports: LoopPorts): boolean {

@@ -1,5 +1,6 @@
 import { isTranscriptItem, type TranscriptItem } from "../../protocol/transcript.js";
-import { isStreamPartial, latestPartials, type StreamPartial } from "../../protocol/stream-partial.js";
+import { isStreamPartial, latestPartials, partialKey, type StreamPartial } from "../../protocol/stream-partial.js";
+import { readPartialRecord } from "../../protocol/stream-partial-record.js";
 import {
   isRuntimeFingerprint,
   type PendingEffect,
@@ -29,7 +30,7 @@ import {
  */
 export function recover(records: readonly SessionRecord[], tornTail: boolean): RecoveryOutcome {
   const transcript: TranscriptItem[] = [];
-  const partials: StreamPartial[] = [];
+  const partials = new Map<string, StreamPartial>();
   let fingerprint: RuntimeFingerprint | undefined;
   let sessionId = "";
   // Keyed by identity, valued by the journal sequence of the *issue*: the only
@@ -63,14 +64,20 @@ export function recover(records: readonly SessionRecord[], tornTail: boolean): R
         break;
       }
       case "stream_partial": {
-        if (!isStreamPartial(record.payload)) {
+        const identity = { ...record.payload, text: "" };
+        if (!isStreamPartial(identity)) {
+          return { ok: false, code: "mid_file_corruption", detail: `invalid stream_partial identity at sequence ${record.sequence}` };
+        }
+        const key = partialKey(identity, record.turnId);
+        const partial = readPartialRecord(record.payload, partials.get(key));
+        if (partial === undefined) {
           return {
             ok: false,
             code: "mid_file_corruption",
             detail: `stream_partial payload at sequence ${record.sequence} is not a stream partial`,
           };
         }
-        partials.push(record.payload);
+        partials.set(partialKey(partial, record.turnId), partial);
         break;
       }
       case "effect_issued":
@@ -118,7 +125,7 @@ export function recover(records: readonly SessionRecord[], tornTail: boolean): R
       lastSequence: last?.sequence ?? 0,
       reconcileRequired: pendingEffects.map(effect => effect.key),
       pendingEffects,
-      partials: latestPartials(partials),
+      partials: latestPartials([...partials.values()]),
       repairedTornTail: tornTail,
     },
   };

@@ -12,7 +12,7 @@ export type JournalSnapshot = {
 export type ExecutionJournal = {
   append(event: UnsequencedEvent): Envelope;
   recordInput(input: ReduceInput): ReduceInput;
-  events(): readonly Envelope[];
+  events(from?: number): readonly Envelope[];
   inputs(): readonly ReduceInput[];
   snapshot(): JournalSnapshot;
   bindAttempt(attemptId: string): void;
@@ -47,8 +47,8 @@ export function createExecutionJournal(): ExecutionJournal {
       events.push(envelope);
       return envelope;
     },
-    events() {
-      return [...events];
+    events(from = 0) {
+      return events.slice(from);
     },
     inputs() {
       return [...inputs];

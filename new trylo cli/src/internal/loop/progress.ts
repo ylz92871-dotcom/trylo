@@ -12,10 +12,12 @@ async function acknowledged(stage: string, operation: Promise<ProgressWriteOutco
 /** A snapshot is borrowed, never reconstructed from a UI event. */
 export async function flushProgress(engine: Engine, ports: LoopPorts): Promise<void> {
   if (ports.progress === undefined) return;
+  const envelopes = engine.journal.events(engine.progressEnvelopeCount);
   await acknowledged("flush", ports.progress.flush({
     transcript: engine.transcript,
-    envelopes: engine.journal.events(),
+    envelopes,
   }));
+  engine.progressEnvelopeCount += envelopes.length;
 }
 
 /** The provider accumulator owns these closed items until the stream returns. */

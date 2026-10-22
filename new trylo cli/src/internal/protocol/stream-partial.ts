@@ -20,8 +20,9 @@ import { redactJsonValue } from "./redact.js";
  *  - **It never reaches the prompt.** `recover` keeps partials beside the
  *    transcript, not inside it, so a resume can *show* them without ever
  *    sending them to a model.
- *  - **It is append-only.** Each new chunk appends a record; recovery keeps the
- *    newest per `(kind, blockId)`. Nothing rewrites what was already durable.
+ *  - **It is append-only.** The record codec retains a V1 redacted snapshot
+ *    followed by checked V2 suffixes, scoped by turn and block identity.
+ *    Recovery reconstructs a snapshot; nothing rewrites durable history.
  */
 
 export const STREAM_PARTIAL_FORMAT_VERSION = "1";
@@ -108,8 +109,8 @@ export function isStreamPartial(value: unknown): value is StreamPartial {
 }
 
 /** One block's fold key: a compound value, so no separator can be forged. */
-function partialKey(partial: StreamPartialId): string {
-  return JSON.stringify([partial.kind, partial.blockId]);
+export function partialKey(partial: StreamPartialId, turnId?: string): string {
+  return JSON.stringify([turnId ?? null, partial.kind, partial.blockId]);
 }
 
 /** True when both name the same block, so a newer record supersedes the older. */
@@ -120,9 +121,8 @@ export function samePartial(a: StreamPartialId, b: StreamPartialId): boolean {
 /**
  * Keeps the newest record per block, in the order the blocks were first seen.
  *
- * A stream appends one record per chunk, so the journal holds the whole
- * growth history of every open block; only the last one is what the block
- * actually contained when the stream stopped.
+ * Folded records describe snapshots; only the newest is the block's current
+ * content. Record-level V2 suffix validation happens before this projection.
  */
 export function latestPartials(records: StreamPartials): StreamPartials {
   const latest = new Map<string, StreamPartial>();

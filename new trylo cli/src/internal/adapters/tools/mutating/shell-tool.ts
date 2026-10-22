@@ -1,4 +1,5 @@
 import type { ToolCallRequest, ToolOutcome } from "../../../ports/tools.js";
+import { ShellIsolationError } from "../../../ports/isolation.js";
 import { errorCodeOf } from "../../../contract/index.js";
 import { DEFAULT_MAX_SHELL_OUTPUT_BYTES, DEFAULT_MAX_SHELL_OUTPUT_LINES, DEFAULT_SHELL_TIMEOUT_MS } from "../../sandbox/policy.js";
 import type { MutationPlan, ShellPlan, ShellStep } from "../../sandbox/planner.js";
@@ -181,10 +182,11 @@ async function runSteps(
         return { outcome: "cancelled" };
       }
       const detail = err instanceof Error ? err.message : "spawn_error";
+      const code = err instanceof ShellIsolationError ? err.code : "shell_spawn_failed";
       return {
         outcome: "error",
-        code: "shell_spawn_failed",
-        message: `shell_spawn_failed:command ${JSON.stringify(step.argv[0] ?? "")}: ${detail}${spawnFailureHelp(err, platform)}`,
+        code,
+        message: `${code}:command ${JSON.stringify(step.argv[0] ?? "")}: ${detail}${spawnFailureHelp(err, platform)}`,
       };
     }
     if (result.aborted || signal.aborted) {

@@ -2,7 +2,7 @@ import { ExecutionProgressError, type ExecutionProgress, type ExecutionProgressP
 import type { SessionPort } from "../../ports/session.js";
 import type { BootstrapContext } from "./bootstrap-context.js";
 import type { CliRunStatus, CliUsage } from "../../protocol/cli-stream.js";
-import { streamPartialPayload, type StreamPartials } from "../../protocol/stream-partial.js";
+import { createPartialRecorder } from "./partial-recorder.js";
 import type { Transcript } from "../../protocol/transcript.js";
 import type { ProjectInstructionSource } from "./session-record.js";
 import { sessionPayload } from "./session-payload.js";
@@ -86,12 +86,12 @@ function progressPort(append: AppendFact, cursor: RecorderCursor): ExecutionProg
     /**
      * Open blocks, appended as they grow.
      *
-     * One record per partial, each superseding the last for the same block.
+     * Snapshots and validated suffixes share the existing journal owner.
      * They are never folded into `transcript` — a half-received answer is not
      * an answer — so the record carries the block identity a resume needs to
      * show it without ever replaying it.
      */
-    preserve: partials => appendPartials(append, partials),
+    preserve: createPartialRecorder(payload => append("stream_partial", payload)),
     issue: key => cursor.effectState === "reconciliation_required"
       ? Promise.resolve({ ok: false, code: "effect_reconciliation_required" })
       : append("effect_issued", { key }),
@@ -196,21 +196,6 @@ async function appendNewFacts(append: AppendFact, cursor: RecorderCursor, facts:
     }
     cursor.envelopes.set(envelope.sequence, digest);
     if (envelope.sequence > cursor.highEnvelope) cursor.highEnvelope = envelope.sequence;
-  }
-  return { ok: true };
-}
-
-/**
- * Open blocks, one record each.
- *
- * Deliberately outside the sequence contract above: a partial is not an
- * ordinal-bearing fact but a running picture of one block, so the newest record
- * for a block simply supersedes the previous one and no ordinal is consumed.
- */
-async function appendPartials(append: AppendFact, partials: StreamPartials): Promise<ProgressWriteOutcome> {
-  for (const partial of partials) {
-    const result = await append("stream_partial", streamPartialPayload(partial));
-    if (!result.ok) return result;
   }
   return { ok: true };
 }
