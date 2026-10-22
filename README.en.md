@@ -22,7 +22,7 @@ A 4-minute, 34-second look at task execution, computer interaction, and personal
 
 https://github.com/user-attachments/assets/3dadb313-565c-49b6-8e07-6038dbb2fcfd
 
-[Download Trylo宣传视频 · original 1080p video](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo%E5%AE%A3%E4%BC%A0%E8%A7%86%E9%A2%91.mp4)
+[Download Trylo宣传视频 · original 1080p video](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo.mp4)
 
 ## A workspace to keep work moving
 

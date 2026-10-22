@@ -22,7 +22,7 @@
 
 https://github.com/user-attachments/assets/3dadb313-565c-49b6-8e07-6038dbb2fcfd
 
-[下载 Trylo宣传视频 · 1080p 原片](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo%E5%AE%A3%E4%BC%A0%E8%A7%86%E9%A2%91.mp4)
+[下载 Trylo宣传视频 · 1080p 原片](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo.mp4)
 
 ## 一个工作台，接着把事情做完
 
