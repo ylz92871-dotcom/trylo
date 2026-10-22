@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/images/app-icon.png" alt="Trylo" width="88" />
+<img src="desktop/src-tauri/icons/128x128@2x.png" alt="Trylo 正式 Logo" width="88" height="88" />
 
 # Trylo：面向长期协作的个人学习智能体
 

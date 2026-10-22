@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/images/app-icon.png" alt="Trylo" width="88" />
+<img src="desktop/src-tauri/icons/128x128@2x.png" alt="Trylo logo" width="88" height="88" />
 
 # Trylo
 
