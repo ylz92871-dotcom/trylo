@@ -34,7 +34,7 @@ export type WritePlan = {
 export type EditPlan = {
   readonly tool: "edit_file";
   readonly absolutePath: string;
-  /** Exact replacements also bound the resulting whole-file write. */
+  /** Both exact replacements and patches bound the resulting whole-file write. */
   readonly maxWriteBytes?: number;
 };
 
@@ -47,6 +47,7 @@ export type EditPlan = {
 export type NotebookEditPlan = {
   readonly tool: "notebook_edit";
   readonly absolutePath: string;
+  readonly maxWriteBytes?: number;
 };
 
 /**
@@ -224,7 +225,7 @@ function planEdit(policy: SandboxPolicy, call: ToolCallRequest): MutationPlanRes
   } catch {
     return deny("file_missing", "edit_file requires an existing regular file");
   }
-  return { ok: true, plan: { tool: "edit_file", absolutePath: verdict.absolutePath, ...(edit.kind === "replace" ? { maxWriteBytes: policy.maxWriteBytes } : {}) } };
+  return { ok: true, plan: { tool: "edit_file", absolutePath: verdict.absolutePath, maxWriteBytes: policy.maxWriteBytes } };
 }
 
 function planNotebookEdit(policy: SandboxPolicy, call: ToolCallRequest): MutationPlanResult {
@@ -250,7 +251,7 @@ function planNotebookEdit(policy: SandboxPolicy, call: ToolCallRequest): Mutatio
   } catch {
     return deny("file_missing", "notebook_edit requires an existing regular file");
   }
-  return { ok: true, plan: { tool: "notebook_edit", absolutePath: verdict.absolutePath } };
+  return { ok: true, plan: { tool: "notebook_edit", absolutePath: verdict.absolutePath, maxWriteBytes: policy.maxWriteBytes } };
 }
 
 function planApplyPatch(call: ToolCallRequest): MutationPlanResult {

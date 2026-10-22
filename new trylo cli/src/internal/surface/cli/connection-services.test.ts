@@ -95,7 +95,8 @@ test("auto-edit asks for shell, explicit tool allowance is revocable, and read-o
   const interactive = { ...ctx, approval: { requestApproval: async () => { asked += 1; return { resolution: "approved" as const, scope: "once" as const }; } } };
   const decide = async (name: string) => {
     const port = permissionFor("interactive", interactive, session.choice({}));
-    const ticket = await port.request(buildPermissionAction("c", name, { command: "node --version" }));
+    const ticket = await port.request(buildPermissionAction("c", name, name === "run_shell"
+      ? { command: "node --version" } : { path: "result.txt", content: "data" }));
     return await port.awaitDecision(ticket.ticketId);
   };
   assert.equal((await decide("write_file")).resolution, "approved");

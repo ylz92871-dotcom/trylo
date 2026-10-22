@@ -44,6 +44,7 @@ test("model cannot skip approval when snapshot requires it", async () => {
       provider: createFakeProvider([
         [
           { type: "tool_call", toolCallId: "call-bypass", name: "echo", arguments: {} },
+          { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
       ]),
     },
@@ -63,6 +64,7 @@ test("unknown tool always requires approval", async () => {
       provider: createFakeProvider([
         [
           { type: "tool_call", toolCallId: "call-unk", name: "mystery", arguments: {} },
+          { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
       ]),
     },
@@ -127,6 +129,7 @@ test("permission expire is not cancel", async () => {
       provider: createFakeProvider([
         [
           { type: "tool_call", toolCallId: "call-e", name: "echo", arguments: {} },
+          { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
       ]),
     },
@@ -175,6 +178,7 @@ test("learning text cannot grant permission", async () => {
       provider: createFakeProvider([
         [
           { type: "tool_call", toolCallId: "call-l", name: "echo", arguments: {} },
+          { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
       ]),
     },
@@ -268,6 +272,7 @@ test("tool output overflow is truncated with metadata not disguised as failure",
       provider: createFakeProvider([
         [
           { type: "tool_call", toolCallId: "call-big", name: "echo", arguments: {} },
+          { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
         [{ type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false }],
       ]),
@@ -294,6 +299,7 @@ test("permission cancel is cancelled not denied", async () => {
       provider: createFakeProvider([
         [
           { type: "tool_call", toolCallId: "call-c", name: "echo", arguments: {} },
+          { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
       ]),
     },
@@ -371,6 +377,7 @@ test("execution core cannot supply a desired permission decision", async () => {
       provider: createFakeProvider([
         [
           { type: "tool_call", toolCallId: "call-authority", name: "echo", arguments: {} },
+          { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
       ]),
     },
@@ -396,6 +403,7 @@ test("permission adapter failure is not reported as provider transport failure",
       provider: createFakeProvider([
         [
           { type: "tool_call", toolCallId: "call-permission-fail", name: "echo", arguments: {} },
+          { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
       ]),
     },
@@ -443,6 +451,7 @@ test("permission request failure fails closed before tool execution", async () =
       provider: createFakeProvider([
         [
           { type: "tool_call", toolCallId: "call-request-fail", name: "echo", arguments: {} },
+          { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
       ]),
     },
@@ -506,6 +515,7 @@ test("tool snapshot failure fails closed to approval and remains observable", as
       provider: createFakeProvider([
         [
           { type: "tool_call", toolCallId: "call-snapshot-fail", name: "echo", arguments: {} },
+          { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
       ]),
     },

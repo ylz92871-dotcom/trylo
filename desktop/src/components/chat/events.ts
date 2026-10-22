@@ -311,7 +311,7 @@ function turnDeliveredNothing(
  *  Rendering them here would duplicate the card in Person chat. */
 function applySubagent(msgs: ChatMessage[], e: SubagentEvent): ChatMessage[] {
   if (e.agentType === 'managed-work') return msgs;
-  if (e.agentType && isTeamSeatId(e.agentType)) return msgs;
+  if (e.source !== 'trylo-v1' && e.agentType && isTeamSeatId(e.agentType)) return msgs;
   const boundary = lastUserIndex(msgs);
   const existingIndex = msgs.findIndex((message, index) => index > boundary
     && message.kind === 'subagent' && (message.subagentId ?? message.id) === e.id);
@@ -327,19 +327,35 @@ function applySubagent(msgs: ChatMessage[], e: SubagentEvent): ChatMessage[] {
       createdAt: e.ts,
       status: 'running',
       agentType: e.agentType ?? 'general-purpose',
+      ...(e.displayName ? { displayName: e.displayName } : e.source === 'trylo-v1'
+        && ['default', 'subagent', 'general-purpose'].includes(e.agentType ?? 'general-purpose')
+        ? { displayName: `协作 ${msgs.slice(boundary + 1).filter(message => message.kind === 'subagent').length + 1}` } : {}),
       prompt: e.prompt,
+      ...(e.source ? { source: e.source } : {}),
+      ...(e.canReceiveInput === undefined ? {} : { canReceiveInput: e.canReceiveInput }),
     };
     return [...msgs, msg];
   }
   const idx = existingIndex;
   if (idx < 0) return msgs;
   const existing = msgs[idx] as SubagentMessage;
-  if (existing.status !== 'running') return msgs;
+  if (existing.status !== 'running' && existing.status !== 'waiting') return msgs;
+  const round = e.round ?? existing.round ?? 1;
+  const conversation = [...(existing.conversation ?? (existing.prompt ? [{ round: 1, prompt: existing.prompt }] : []))];
+  const roundIndex = conversation.findIndex(entry => entry.round === round);
+  const entry = { ...(roundIndex < 0 ? {} : conversation[roundIndex]), round,
+    ...(e.kind === 'update' && e.prompt !== undefined ? { prompt: e.prompt } : {}),
+    ...(e.result !== undefined ? { result: e.result } : {}) };
+  if (roundIndex < 0) conversation.push(entry); else conversation[roundIndex] = entry;
   const updated: SubagentMessage = {
     ...existing,
-    status: 'done',
-    result: e.result,
-    durationMs: e.durationMs,
+    status: e.status ?? (e.kind === 'end' ? 'done' : existing.status),
+    ...(e.result === undefined ? {} : { result: e.result }),
+    ...(e.error === undefined ? {} : { error: e.error }),
+    ...(e.displayName === undefined || e.displayName === e.id ? {} : { displayName: e.displayName }),
+    ...(e.durationMs === undefined ? {} : { durationMs: e.durationMs }),
+    ...(e.kind === 'end' ? { canReceiveInput: false } : {}),
+    round, conversation,
   };
   return msgs.map((m, i) => (i === idx ? updated : m));
 }

@@ -69,7 +69,7 @@ export async function startBackgroundShell(
     };
   }
 
-  if (plan.steps.length > 1) {
+  if (plan.steps.length > 1 || plan.steps.some(step => step.pipeTo !== undefined)) {
     // A chain of commands has no single exit code and no single output stream, so
     // there is nothing to hand back as "the" session. Saying so is better than
     // starting the first one and reporting it as the whole.
@@ -77,8 +77,8 @@ export async function startBackgroundShell(
       outcome: "error",
       code: "background_single_command_only",
       message:
-        `runInBackground accepts one command; this call composes ${plan.steps.length}. ` +
-        "Run them as separate calls, each with its own session id.",
+        "runInBackground accepts one command without a pipeline or steps. " +
+        "Use the foreground pipeline, or start a script that owns the full workflow as one background command. No process was started.",
     };
   }
 

@@ -4,6 +4,7 @@ import { decision } from "../../ports/permission.js";
 import type { AskUserRequest } from "../../domain/ask-user.js";
 import type { AddressedUserInput } from "../../domain/input-queue.js";
 import { stdioAnswer, stdioPrompt, stdioResponse } from "./stdio-control.js";
+import type { ToolPort } from "../../ports/tools.js";
 
 type Io = Pick<CliContext, "readLine" | "stdout" | "newId" | "now">;
 const TTL_MS = 10 * 60 * 1000;
@@ -15,6 +16,8 @@ export function createStdioSession(io: Io) {
   const queued: string[] = [];
   const cancel = new AbortController();
   let closed = false;
+  let agentTools: ToolPort | undefined;
+  let agentInputs = 0;
 
   const write = (frame: object): void => io.stdout(`${JSON.stringify(frame)}\n`);
   const warn = (code: string, message: string): void => write({ type: "warning", code, message });
@@ -25,6 +28,7 @@ export function createStdioSession(io: Io) {
   const close = (): void => {
     if (closed) return;
     closed = true;
+    agentTools = undefined;
     for (const settle of [...pending.values()]) settle(undefined);
   };
   const request = (requestId: string, body: object, valid: (reply: Reply) => boolean, signal?: AbortSignal): Promise<Reply | undefined> => {
@@ -70,6 +74,29 @@ export function createStdioSession(io: Io) {
         // turn signal, never by killing a process that may be writing a file.
         let frame: unknown;
         try { frame = JSON.parse(line) as unknown; } catch { /* rejected below */ }
+        if (typeof frame === "object" && frame !== null && "type" in frame && frame.type === "subagent_input") {
+          const input = frame as Record<string, unknown>;
+          const requestId = typeof input.requestId === "string" ? input.requestId : "";
+          const target = typeof input.target === "string" ? input.target : "";
+          const message = typeof input.message === "string" ? input.message.trim() : "";
+          const respond = (accepted: boolean, error?: string): void => write({ type: "subagent_input_result", requestId, accepted,
+            ...(error === undefined ? {} : { error }) });
+          if (!requestId || !target || !message || message.length > 16000 || agentInputs >= 32) {
+            respond(false, "补充要求无效或发送队列已满。"); continue;
+          }
+          const tools = agentTools;
+          if (tools === undefined || !tools.snapshot().some(tool => tool.name === "send_input")) {
+            respond(false, "当前运行不接收智能体补充要求。"); continue;
+          }
+          agentInputs += 1;
+          void tools.execute({ name: "send_input", toolCallId: `host-${requestId}`, arguments: { target, message } }, cancel.signal)
+            .then(result => {
+              if (result.outcome === "result") respond(true);
+              else respond(false, "message" in result ? result.message : "本轮已停止，要求未送达。");
+            }, () => respond(false, "发送失败，要求未送达。"))
+            .finally(() => { agentInputs -= 1; });
+          continue;
+        }
         if (typeof frame === "object" && frame !== null && "type" in frame && frame.type === "control_request"
           && "request" in frame && typeof frame.request === "object" && frame.request !== null
           && "subtype" in frame.request && frame.request.subtype === "interrupt") {
@@ -86,6 +113,7 @@ export function createStdioSession(io: Io) {
     signal: cancel.signal,
     start: () => { void pump(); },
     close,
+    bindAgentTools: (tools: ToolPort | undefined): void => { agentTools = tools; },
     enqueue,
     pendingInput: (turnId: string): ReadonlyArray<AddressedUserInput> => queued.splice(0).map(text => ({ text, mode: "steer", turnId })),
     async approval(action: PermissionAction): Promise<PermissionDecision> {

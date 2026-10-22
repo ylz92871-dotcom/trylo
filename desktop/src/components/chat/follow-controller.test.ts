@@ -122,4 +122,45 @@ describe('follow controller', () => {
     expect(follow.observe(at(3200, 4180))).toBe(true);
     expect(follow.isFollowing()).toBe(false);
   });
+
+  it('resumes when the reader scrolls back to the tail, but not before', () => {
+    const follow = createFollowController();
+    follow.sync(at(3400));
+    follow.observe(at(2200));
+    follow.observe(at(3100));
+    expect(follow.isFollowing()).toBe(false);
+    follow.observe(at(3390));
+    expect(follow.isFollowing()).toBe(true);
+  });
+
+  it('does not resume just because a collapsing row brings the tail closer', () => {
+    const follow = createFollowController();
+    follow.sync(at(3400));
+    follow.observe(at(2400));
+    follow.observe(at(2400, 3000));
+    expect(follow.isFollowing()).toBe(false);
+  });
+
+  it('honors upward intent before a queued streaming pin can execute', () => {
+    const follow = createFollowController();
+    follow.sync(at(3400));
+    follow.pause();
+    expect(follow.isFollowing()).toBe(false);
+    follow.observe(at(3300, 4200));
+    expect(follow.isFollowing()).toBe(false);
+  });
+
+  it('preserves follow when a larger viewport clamps the scroll position upward', () => {
+    const follow = createFollowController();
+    follow.sync(at(3400, 4000, 600));
+    follow.observe(at(3200, 4000, 800));
+    expect(follow.isFollowing()).toBe(true);
+  });
+
+  it('ignores virtualizer compensation even when the total height stays unchanged', () => {
+    const follow = createFollowController();
+    follow.sync(at(2739, 3471, 732));
+    follow.observe(at(2719, 3471, 732), false);
+    expect(follow.isFollowing()).toBe(true);
+  });
 });

@@ -8,6 +8,7 @@ import type { ShellSpawner } from "./shell-spawn.js";
 import type { ProcessSessionRegistry } from "../../process-session/session-registry.js";
 import { publishShellStdout, type StdoutFileWriter } from "./shell-stdout-file.js";
 import { MAX_TIMEOUT_MS, MIN_TIMEOUT_MS, timeoutRecoveryHelp } from "./shell-timeout-policy.js";
+import { truncateOutput } from "./output-limits.js";
 
 /**
  * `run_shell`.
@@ -164,6 +165,11 @@ async function runSteps(
   signal: AbortSignal,
 ): Promise<ToolOutcome> {
   const platform = config.platform ?? process.platform;
+  const limits = { maxBytes: config.maxOutputBytes ?? DEFAULT_MAX_SHELL_OUTPUT_BYTES, maxLines: config.maxOutputLines ?? DEFAULT_MAX_SHELL_OUTPUT_LINES };
+  let stdout = "";
+  let stderr = "";
+  let truncated = false;
+  let completedSteps = 0;
   let result;
   for (const step of steps) {
     try {
@@ -186,18 +192,27 @@ async function runSteps(
       return {
         outcome: "error",
         code,
-        message: `${code}:command ${JSON.stringify(step.argv[0] ?? "")}: ${detail}${spawnFailureHelp(err, platform)}`,
+        message: `${code}:command ${JSON.stringify(step.argv[0] ?? "")}: ${detail}\n` +
+          `${completedSteps} prior steps completed; later steps were not run. Check earlier effects before retrying the whole workflow.\n` +
+          buildOutput({ stdout, stderr, truncated }) + spawnFailureHelp(err, platform),
       };
     }
     if (result.aborted || signal.aborted) {
       return { outcome: "cancelled" };
     }
+    // A sequence is one tool call. Earlier diagnostics and loss flags belong
+    // to its result even when a later step succeeds or fails.
+    const capturedStdout = truncateOutput(stdout + result.stdout, limits);
+    const capturedStderr = truncateOutput(stderr + result.stderr, limits);
+    stdout = capturedStdout.text;
+    stderr = capturedStderr.text;
+    truncated ||= result.truncated || capturedStdout.truncated || capturedStderr.truncated;
     if (result.timedOut) {
       // The clock killed it, not a person: a typed failure the model can act
       // on, carrying what the command managed to say
       // before it died. Reporting this as `cancelled` ended the whole turn as
       // "the user stopped it" — the hard-eval D7-① guise.
-      const partial = buildOutput({ stdout: result.stdout, stderr: result.stderr, truncated: result.truncated });
+      const partial = buildOutput({ stdout, stderr, truncated });
       return {
         outcome: "error",
         code: "shell_timeout",
@@ -207,6 +222,7 @@ async function runSteps(
     if (result.exitCode !== 0) {
       break;
     }
+    completedSteps += 1;
   }
   if (result === undefined) {
     return { outcome: "error", code: "invalid_arguments", message: "run_shell requires a non-empty command" };
@@ -214,9 +230,9 @@ async function runSteps(
   const value = {
     command: describePlan(plan),
     exitCode: result.exitCode,
-    stdout: result.stdout,
-    stderr: result.stderr,
-    truncated: result.truncated,
+    stdout,
+    stderr,
+    truncated,
   };
   const output = buildOutput(value);
   if (result.exitCode !== 0) {
@@ -226,5 +242,5 @@ async function runSteps(
       message: `shell_nonzero_exit:${result.exitCode}\n${output}\nThe command exited ${result.exitCode}: it failed, and its output above is the evidence. A command that failed is not the task being finished, so read the output before deciding what to do next.`,
     };
   }
-  return { outcome: "result", value, output, truncated: result.truncated };
+  return { outcome: "result", value, output, truncated };
 }

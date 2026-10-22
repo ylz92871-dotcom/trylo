@@ -1,5 +1,6 @@
 ﻿import type { ProviderEvent } from "../../ports/provider.js";
 import { createResponsesTranslator } from "./responses-translate.js";
+import { coalesceDeltas, type CoalesceEvent } from "./coalesce-deltas.js";
 import { isDoneFrame, parseSseFrames, type SseFrame } from "./sse.js";
 
 /**
@@ -12,19 +13,25 @@ import { isDoneFrame, parseSseFrames, type SseFrame } from "./sse.js";
  * `after_stream_started` unknown-state, an empty stream is a protocol error —
  * is the same contract, stated once per wire so a drift is a visible diff.
  */
-export function translateResponsesBody(
+export async function* translateResponsesBody(
   body: ReadableStream<Uint8Array>,
   signal: AbortSignal,
 ): AsyncGenerator<ProviderEvent> {
-  return decodeResponsesBody(body, signal);
+  const reader = body.getReader();
+  yield* coalesceDeltas(decodeResponsesBody(reader, signal), async () => {
+    try {
+      await reader.cancel();
+    } catch {
+      /* A just-completed read may already have released the lock. */
+    }
+  });
 }
 
 async function* decodeResponsesBody(
-  body: ReadableStream<Uint8Array>,
+  reader: ReadableStreamDefaultReader<Uint8Array>,
   signal: AbortSignal,
-): AsyncGenerator<ProviderEvent> {
+): AsyncGenerator<CoalesceEvent> {
   const translator = createResponsesTranslator();
-  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let sawAny = false;
@@ -46,6 +53,7 @@ async function* decodeResponsesBody(
         for (const event of translateResponsesFrame(translator, frame)) {
           sawAny = true;
           yield event;
+          if (event.type === "finish" || event.type === "error" || event.type === "cancel_ack") return;
         }
       }
     }
@@ -62,14 +70,17 @@ async function* decodeResponsesBody(
     return;
   } finally {
     try {
-      if (!bodyClosed) await reader.cancel();
+      if (!bodyClosed) {
+        try {
+          await reader.cancel();
+        } catch (error) {
+          const abortedRead = signal.aborted && (error === signal.reason || (error instanceof Error && error.name === "AbortError"));
+          if (!abortedRead) throw error;
+        }
+      }
     } finally {
       reader.releaseLock();
     }
-  }
-  for (const event of translator.complete()) {
-    sawAny = true;
-    yield event;
   }
   if (!sawAny) {
     yield {
@@ -79,7 +90,9 @@ async function* decodeResponsesBody(
       phase: "after_stream_started",
       message: "empty_stream",
     };
+    return;
   }
+  yield* translator.complete();
 }
 
 function translateResponsesFrame(

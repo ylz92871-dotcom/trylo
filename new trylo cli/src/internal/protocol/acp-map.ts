@@ -242,6 +242,11 @@ export const ACP_ROWS: Readonly<Record<EventKind, AcpRow>> = {
     omitted: SUBAGENT_LINEAGE_OMITTED,
     note: "同 subagent_spawn：没有 parent 字段可填，宁可显式 omitted 也不伪造父子关系。",
   },
+  subagent_update: {
+    disposition: "custom", primitive: "custom", variant: null, agentState: "running",
+    body: CUSTOM_BODY, omitted: SUBAGENT_LINEAGE_OMITTED,
+    note: "Child round progress retains its own identity and remains non-terminal.",
+  },
   compact: {
     disposition: "aggregated",
     primitive: "session_update",

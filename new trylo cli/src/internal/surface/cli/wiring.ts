@@ -10,6 +10,7 @@ import { createWorkspaceTools } from "../../adapters/tools/index.js";
 import { MEMORY_WRITE_TOOL_NAMES } from "../../adapters/tools/memory/write.js";
 import { mountedWebToolNames } from "./web-wiring.js";
 import { createWorkspaceSandbox } from "../../adapters/sandbox/index.js";
+import type { ExecPolicyGuard } from "../../loop/tool-admission.js";
 import { lspToolsPatch } from "./lsp-wiring.js";
 import { createRunExecution } from "./run-execution-wiring.js";
 import { composeLearningPorts } from "../../integration/user-learning/index.js";
@@ -74,6 +75,7 @@ export type {
  */
 
 export type WiringInput = {
+  readonly execPolicy?: ExecPolicyGuard;
   readonly toolSelection?: readonly string[];
   readonly workflowRecords?: readonly SessionRecord[];
   readonly turnId?: string;
@@ -310,6 +312,7 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
       tools: finalTools,
       permission: input.permission,
       profile: NO_LEARNING_PROFILE,
+      ...(input.execPolicy === undefined ? {} : { execPolicy: input.execPolicy }),
       sandbox: effectiveSandbox,
       grants,
       // Opted in only when the host lends a clock. The loop estimates the next
@@ -350,10 +353,14 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
     toolCatalogHash: toolCatalogHash(finalTools, input.toolSelection),
     close: async () => {
       try {
-        await lsp.languageServers?.closeAll();
+        await subagentRuntime?.cancelAll();
       } finally {
-        try { if (input.execution === undefined) await execution.close(); }
-        finally { images?.close(); }
+        try {
+          await lsp.languageServers?.closeAll();
+        } finally {
+          try { if (input.execution === undefined) await execution.close(); }
+          finally { images?.close(); }
+        }
       }
     },
     providerId: input.providerId,

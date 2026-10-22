@@ -91,13 +91,13 @@
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   margin-left: auto;
   border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--fg-muted);
+  border-radius: 50%;
+  background: var(--fg);
+  color: var(--bg);
   cursor: pointer;
   transition:
     background var(--duration-fast) var(--ease-out),
@@ -105,6 +105,6 @@
 }
 
 .process-header__stop:hover {
-  background: var(--danger-soft, rgba(229, 115, 115, 0.18));
-  color: var(--danger, #e57373);
+  opacity: .85;
 }
+.process-header__stop:focus-visible { outline: 2px solid var(--fg-muted); outline-offset: 3px; }

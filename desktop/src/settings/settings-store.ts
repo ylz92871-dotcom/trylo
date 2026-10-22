@@ -44,6 +44,7 @@
 // store (keyring / stronghold).
 
 export type ApiFormat = 'anthropic' | 'openai';
+import { parseReasoningEffort, type ReasoningEffort } from './reasoning-effort';
 export type SettingsSaveIntent = 'connection' | 'preferences';
 /** Legacy permission mode kept only for one-way migration (P2, spec §4.4).
  *  New code must consume `PermissionLevel` from
@@ -115,6 +116,7 @@ export interface ModelProfile {
   readonly apiKey: string;
   readonly apiHost: string;
   readonly apiModel: string;
+  readonly reasoningEffort?: ReasoningEffort;
   readonly apiFormat: ApiFormat;
   readonly apiKeyHeader: string;
   readonly apiKeyPrefix: string;
@@ -143,6 +145,7 @@ type ConnectionSource = Pick<
   | 'apiKey'
   | 'apiHost'
   | 'apiModel'
+  | 'reasoningEffort'
   | 'apiFormat'
   | 'apiKeyHeader'
   | 'apiKeyPrefix'
@@ -156,6 +159,7 @@ export function connectionFields(s: ConnectionSource): ModelConnectionFields {
     apiKey: s.apiKey,
     apiHost: s.apiHost,
     apiModel: s.apiModel,
+    reasoningEffort: s.reasoningEffort,
     apiFormat: s.apiFormat,
     apiKeyHeader: s.apiKeyHeader,
     apiKeyPrefix: s.apiKeyPrefix,
@@ -208,6 +212,8 @@ export interface TryloSettings {
   readonly apiKey: string;
   readonly apiHost: string;
   readonly apiModel: string;
+  /** Absent means the provider default, never an implicit low effort. */
+  readonly reasoningEffort?: ReasoningEffort;
   /**
    * v-modelsel: active built-in free-compute pool model override
    * ('' = none). Distinct from `apiModel` — the pool override never
@@ -442,6 +448,7 @@ function migrateModelProfiles(value: unknown): readonly ModelProfile[] {
       apiKey: stringValue(rec['apiKey'], ''),
       apiHost: stringValue(rec['apiHost'], ''),
       apiModel: stringValue(rec['apiModel'], ''),
+      reasoningEffort: parseReasoningEffort(rec['reasoningEffort']),
       apiFormat: VALID_API_FORMAT.has(rec['apiFormat'] as ApiFormat)
         ? rec['apiFormat'] as ApiFormat
         : DEFAULTS.apiFormat,
@@ -488,6 +495,7 @@ function migrateSettings(value: unknown): TryloSettings | null {
     apiKey: stringValue(stored['apiKey'], DEFAULTS.apiKey),
     apiHost: stringValue(stored['apiHost'], DEFAULTS.apiHost),
     apiModel: stringValue(stored['apiModel'], DEFAULTS.apiModel),
+    reasoningEffort: parseReasoningEffort(stored['reasoningEffort']),
     poolModel: stringValue(stored['poolModel'], DEFAULTS.poolModel),
     modelProfiles: migrateModelProfiles(stored['modelProfiles']),
     activeModelProfileId: stringValue(stored['activeModelProfileId'], DEFAULTS.activeModelProfileId),

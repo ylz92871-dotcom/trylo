@@ -100,12 +100,13 @@ test("failed and incomplete responses end explicitly, never silently", () => {
   assert.ok(finish !== undefined && finish.type === "finish" && finish.reason === "length");
 });
 
-test("lifecycle frames carry no fact and an empty stream still finishes", () => {
+test("lifecycle frames carry no fact and EOF without a terminal frame is a protocol failure", () => {
   const translator = createResponsesTranslator();
   assert.deepEqual(translator.push("response.created", { response: { id: "r-1" } }), []);
   assert.deepEqual(translator.push("response.in_progress", {}), []);
   assert.deepEqual(translator.push("response.output_item.added", { output_index: 0 }), []);
   const done = translator.complete();
-  const finish = done.find((event) => event.type === "finish");
-  assert.ok(finish !== undefined);
+  assert.equal(done.some(event => event.type === "finish"), false);
+  assert.ok(done.some(event => event.type === "error" && event.class === "protocol"));
+  assert.deepEqual(translator.complete(), []);
 });

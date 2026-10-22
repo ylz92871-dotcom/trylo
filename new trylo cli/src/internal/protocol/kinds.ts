@@ -17,6 +17,7 @@ export const EVENT_KINDS = [
   "permission_denied",
   "subagent_spawn",
   "subagent_end",
+  "subagent_update",
   "compact",
   "user_cancel",
   "user_reject",

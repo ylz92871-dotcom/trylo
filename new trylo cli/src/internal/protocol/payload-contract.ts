@@ -134,13 +134,17 @@ export const PAYLOAD_CONTRACTS: Readonly<Record<EventKind, PayloadContract>> = {
   },
   subagent_spawn: {
     required: [],
-    optional: ["subagentId", "toolCallId", "name"],
-    types: { subagentId: "string", toolCallId: "string", name: "string" },
+    optional: ["subagentId", "toolCallId", "name", "prompt", "agentType", "canReceiveInput"],
+    types: { subagentId: "string", toolCallId: "string", name: "string", prompt: "string", agentType: "string", canReceiveInput: "boolean" },
   },
   subagent_end: {
     required: [],
-    optional: ["subagentId", "toolCallId", "status"],
-    types: { subagentId: "string", toolCallId: "string", status: "string" },
+    optional: ["subagentId", "toolCallId", "status", "result", "error"],
+    types: { subagentId: "string", toolCallId: "string", status: "string", result: "string", error: "string" },
+  },
+  subagent_update: {
+    required: ["subagentId", "status", "round"], optional: ["prompt", "result", "displayName"],
+    types: { subagentId: "string", status: "string", round: "number", prompt: "string", result: "string", displayName: "string" },
   },
   compact: {
     required: [],

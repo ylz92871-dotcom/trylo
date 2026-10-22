@@ -259,6 +259,7 @@ export function createWorkspaceTools(config: WorkspaceToolsConfig): ToolPort {
         .map(binding => describeToolExecution(binding, executionDescription));
     },
     async execute(call: ToolCallRequest, signal: AbortSignal): Promise<ToolOutcome> {
+      if (policy?.mode === "deny_all") return { outcome: "error", code: "sandbox_deny_all", message: `${call.name} is refused by sandbox mode deny_all` };
       if (config.visibility?.isDenied(call.name) === true) return { outcome: "error", code: "permission_denied", message: `${call.name} is disabled for this session` };
       if (WORKFLOW_TOOL_NAMES.has(call.name)) {
         return workflow.execute(call, signal);

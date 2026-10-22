@@ -1,5 +1,6 @@
 import { EMPTY_PROFILE, type ProfilePort } from "../contract/profile.js";
 import type { Message } from "../contract/execution.js";
+import type { IterationBudget } from "../domain/iteration.js";
 import { runTurn, type LoopPorts } from "../loop/runner.js";
 import type { PermissionPort } from "../ports/permission.js";
 import type { ToolSandbox } from "../ports/tools.js";
@@ -7,7 +8,7 @@ import type { ProviderPort, ProviderUsage } from "../ports/provider.js";
 import { emptyUsage } from "../ports/provider.js";
 import type { Envelope } from "../protocol/envelope.js";
 import type { Transcript, TranscriptItem } from "../protocol/transcript.js";
-import { DEFAULT_PROFILE_PORT, extractAssistantText } from "./child-attempt.js";
+import { DEFAULT_PROFILE_PORT, extractLatestAssistantText, requireCompletedChild } from "./child-attempt.js";
 import type { SubagentContext, SubagentWorker } from "./types.js";
 
 /**
@@ -49,6 +50,10 @@ export type InteractiveChildOptions = {
    */
   readonly forkTranscript?: Transcript | undefined;
   readonly onEnvelope?: ((envelope: Envelope) => void) | undefined;
+  readonly budget?: IterationBudget | undefined;
+  readonly onRoundStarted?: ((round: number, prompt: string) => void) | undefined;
+  readonly onCheckpoint?: ((transcript: Transcript) => void) | undefined;
+  readonly onRoundReady?: ((result: InteractiveChildResult) => void) | undefined;
 };
 
 export type InteractiveChildResult = {
@@ -125,12 +130,14 @@ export function createInteractiveChildWorker(
     let rounds = 0;
 
     for (;;) {
+      options.onRoundStarted?.(rounds + 1, prompt);
       const result = await runTurn(childPorts, {
         sessionId: options.sessionId ?? "subagent-session",
         turnId: `trn-sub-${context.subagentId}-r${rounds + 1}`,
         correlationId: context.lineage.rootAttemptId,
         text: prompt,
         cancelSignal: context.signal,
+        ...(options.budget === undefined ? {} : { budget: options.budget }),
         ...(carried.length === 0 ? {} : { resumedTranscript: carried }),
         ...(options.model === undefined ? {} : { model: options.model }),
         onEnvelope: (envelope) => {
@@ -142,9 +149,13 @@ export function createInteractiveChildWorker(
       transcript = result.transcript;
       envelopes = [...envelopes, ...result.envelopes];
       usage = addUsage(usage, result.usage);
+      options.onCheckpoint?.(transcript);
       // Governance accumulates across rounds: the subagent's token ceiling is
       // for the agent, not for each of its turns.
       context.recordUsage(result.usage.inputTokens, result.usage.outputTokens);
+      requireCompletedChild(result.state.terminalReason);
+      options.onRoundReady?.({ status: "completed", output: extractLatestAssistantText(transcript),
+        rounds, usage, transcript, envelopes });
 
       // No channel means the historical shape: run once, finish.
       if (context.input === undefined) {
@@ -162,7 +173,7 @@ export function createInteractiveChildWorker(
       );
     }
 
-    const output = extractAssistantText(transcript);
+    const output = extractLatestAssistantText(transcript);
     context.reportProgress(`Subagent finished after ${rounds} round(s)`, 100);
     return {
       status: "completed",

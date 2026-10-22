@@ -100,6 +100,7 @@ export async function runOneTurn(
   const fallbackStream = scaffold.format === "stream-json" && scaffold.fallbackModel !== undefined && permissionMode === "non_interactive"
     ? createFallbackStream(sink) : undefined;
   const base: TurnHostInput = {
+    ...(scaffold.bindAgentTools === undefined ? {} : { bindAgentTools: scaffold.bindAgentTools }),
     ...(ctx.bootstrapContext === undefined ? {} : { bootstrap: { state: "import_pending" as const, context: ctx.bootstrapContext } }),
     ...(ctx.userSourceAvailable === undefined ? {} : { userSourceAvailable: ctx.userSourceAvailable }),
     ...(scaffold.toolSelection === undefined ? {} : { toolSelection: scaffold.toolSelection }),
@@ -123,7 +124,7 @@ export async function runOneTurn(
     ...(scaffold.tokenManager !== undefined ? { tokenManager: scaffold.tokenManager } : {}),
     ...(scaffold.accountId !== undefined ? { accountId: scaffold.accountId } : {}),
     ...(scaffold.warm === undefined ? {} : { warm: scaffold.warm }),
-    permission: permissionFor(permissionMode, ctx, scaffold.permissions?.choice(choice) ?? choice),
+    permission: permissionFor(permissionMode, ctx, scaffold.permissions?.choice(choice) ?? choice, scaffold.workspaceRoot),
     ...(scaffold.permissions === undefined ? {} : { grants: scaffold.permissions.grants }),
     format: scaffold.format,
     sink: fallbackStream?.sink ?? sink,

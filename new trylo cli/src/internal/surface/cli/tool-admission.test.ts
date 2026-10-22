@@ -16,6 +16,7 @@ import { createDoomLoopTracker, DOOM_LOOP_THRESHOLD } from "../../loop/doom-loop
 import { awaitPermissionDecision } from "../../loop/permission-boundary.js";
 import { createPermissionGrantCache } from "../../loop/permission-grants.js";
 import { admitToolCall, type AdmissionPorts } from "../../loop/tool-admission.js";
+import { permissionPattern } from "../../ports/permission.js";
 
 /**
  * H5: the guards, in the order they run.
@@ -253,7 +254,7 @@ test("a ticket belonging to another call is a failure, not a decision", async ()
     toolCallId: "c",
     name: "write_file",
     arguments: { ...WRITE },
-    pattern: "write_file#x",
+    pattern: permissionPattern("write_file", WRITE),
   });
   assert.equal(result.outcome, "failed");
   if (result.outcome === "failed") {

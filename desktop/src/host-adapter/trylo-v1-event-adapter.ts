@@ -76,6 +76,7 @@ export class TryloV1EventAdapter {
   /** toolCallId → emit time, so `durationMs` is measured, not invented. */
   private toolStartMs = new Map<string, number>();
   private toolNames = new Map<string, string>();
+  private activeSubagents = new Set<string>();
   /** Rejected lines, newest last. Surfaced by the runner; never swallowed. */
   private rejections: CliV1Rejected[] = [];
 
@@ -202,6 +203,14 @@ export class TryloV1EventAdapter {
   private project(event: CliV1Event): LoopEvent[] {
     const { seq, ts } = this.next();
     switch (event.type) {
+      case 'subagent': {
+        if (event.kind === 'spawn') {
+          if (this.activeSubagents.has(event.id)) return [];
+          this.activeSubagents.add(event.id);
+        } else if (!this.activeSubagents.has(event.id)) return [];
+        if (event.kind === 'end') this.activeSubagents.delete(event.id);
+        return [{ ...event, seq, ts, source: 'trylo-v1' }];
+      }
       case 'run_start':
         return this.onRunStart(event, seq, ts);
       case 'message_start':
@@ -414,10 +423,12 @@ export class TryloV1EventAdapter {
     this.turnId = event.turnId;
     this.latestUsage = event.usage;
     if (this.contextTokens === undefined && event.iterations === 1 && event.usage.inputTokens > 0) this.contextTokens = event.usage.inputTokens;
-    const incomplete = event.status === 'completed' && (this.rejections.length > 0 || this.toolNames.size > 0);
+    const incomplete = event.status === 'completed' && (this.rejections.length > 0 || this.toolNames.size > 0 || this.activeSubagents.size > 0);
     const warnings = this.rejections.length > 0
       ? [this.warn('protocol_rejected', this.describeRejections())]
-      : incomplete ? [this.warn('incomplete_tool_stream', 'CLI reported completion without a result for every tool call.')] : [];
+      : incomplete ? [this.activeSubagents.size > 0
+        ? this.warn('incomplete_subagent_stream', 'CLI reported completion before every child lifecycle was settled.')
+        : this.warn('incomplete_tool_stream', 'CLI reported completion without a result for every tool call.')] : [];
     return [...warnings, ...this.emitTerminal(
       incomplete ? 'unknown' : event.status,
       event.lastMessage,
@@ -458,9 +469,16 @@ export class TryloV1EventAdapter {
     }));
     this.toolNames.clear();
     this.toolStartMs.clear();
+    const pendingAgents: LoopEvent[] = [...this.activeSubagents].map(id => ({
+      type: 'subagent', kind: 'end', id, seq: this.seq++, ts, source: 'trylo-v1',
+      status: outcome === 'cancelled' ? 'cancelled' : 'failed',
+      error: '运行结束前未收到该智能体的完成结果。',
+    }));
+    this.activeSubagents.clear();
     return [
       ...pendingMessages,
       ...pendingTools,
+      ...pendingAgents,
       ...unfinishedCompaction,
       ...(!this.maintenance ? [{
         type: 'turn_end',

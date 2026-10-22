@@ -27,6 +27,7 @@
 // `unavailable`; the card still renders the safe summary.
 
 import type { FilePath } from '../host-adapter/types';
+import { shellApprovalPreview } from './shell-approval-preview';
 import {
   OFFICECLI_TOOL_NAME,
   buildOfficecliApprovalPreview,
@@ -352,19 +353,8 @@ const parseMultiEdit: Parser = async (args) => {
 };
 
 const parseBash: Parser = async (args) => {
-  const record = asRecord(args.input) ?? {};
-  const cmd = asString(record['command']);
-  if (!cmd) return { ok: false, reason: 'missing command' };
-  const cwd = asString(record['cwd']);
-  return {
-    ok: true,
-    preview: {
-      kind: 'command',
-      title: '运行命令',
-      command: cmd,
-      ...(cwd ? { cwd } : {}),
-    },
-  };
+  const preview = shellApprovalPreview(asRecord(args.input) ?? {}, '运行命令');
+  return preview === undefined ? { ok: false, reason: 'missing command' } : { ok: true, preview };
 };
 
 const parseNetwork: Parser = async (args) => {
@@ -436,6 +426,7 @@ const PARSERS: Readonly<Record<string, Parser>> = (() => {
     edit_file: parseEdit,
     multi_edit: parseMultiEdit,
     run_command: parseBash,
+    run_shell: parseBash,
     web_search: parseNetwork,
     http_request: parseNetwork,
     WebFetch: parseNetwork,

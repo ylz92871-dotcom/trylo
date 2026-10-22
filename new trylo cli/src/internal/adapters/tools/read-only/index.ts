@@ -1,4 +1,5 @@
 import type { FileAccessMode, ToolCallRequest, ToolOutcome, ToolPort } from "../../../ports/tools.js";
+import path from "node:path";
 import type { ValidatedImageReferenceSink } from "../../../ports/image-reference-access.js";
 import { directoryArgument } from "./args.js";
 import { READ_ONLY_BINDINGS } from "./bindings.js";
@@ -70,7 +71,12 @@ export type ReadOnlyToolsConfig = {
  * Excluded by default so a repository-wide search spends its file budget on
  * source rather than on vendored trees. Callers may override, not append.
  */
-export function createReadOnlyTools(config: ReadOnlyToolsConfig): ToolPort {
+export function createReadOnlyTools(input: ReadOnlyToolsConfig): ToolPort {
+  // One physical namespace for traversal, ignore rules and relative results.
+  // Keep the lexical alias so callers may still name an absolute path through it.
+  const root = resolveInsideWorkspace(input.workspaceRoot, ".");
+  const alias = input.workspaceAlias ?? (root.ok && path.relative(input.workspaceRoot, root.absolutePath) !== "" ? input.workspaceRoot : undefined);
+  const config = root.ok ? { ...input, workspaceRoot: root.absolutePath, ...(alias === undefined ? {} : { workspaceAlias: alias }) } : input;
   const limits = config.limits ?? DEFAULT_READ_ONLY_LIMITS;
   // One finder per tool set, so the index is built once and reused across
   // queries. Built lazily inside `FileFinder` — an unused finder costs nothing,

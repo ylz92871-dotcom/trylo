@@ -33,6 +33,7 @@ export const CLI_V1_EVENT_TYPES = [
   'warning',
   'usage',
   'compact',
+  'subagent',
   'run_result',
 ] as const;
 
@@ -52,6 +53,10 @@ export interface CliV1Usage {
 export type CliV1RunStatus = 'completed' | 'failed' | 'cancelled' | 'unknown';
 
 export type CliV1Event =
+  | { readonly type: 'subagent'; readonly kind: 'spawn' | 'update' | 'end'; readonly id: string;
+      readonly status: 'running' | 'waiting' | 'done' | 'failed' | 'cancelled';
+      readonly agentType?: string; readonly prompt?: string; readonly result?: string;
+      readonly error?: string; readonly round?: number; readonly canReceiveInput?: boolean; readonly displayName?: string }
   | {
       readonly type: 'run_start';
       readonly sessionId: string;
@@ -204,6 +209,15 @@ function isRunStatus(value: unknown): value is CliV1RunStatus {
 /** Field-level guard for one known event type. */
 function fieldsAreValid(type: CliV1EventType, raw: Record<string, unknown>): boolean {
   switch (type) {
+    case 'subagent':
+      return isNonEmptyString(raw.id) && ['spawn', 'update', 'end'].includes(String(raw.kind))
+        && ['running', 'waiting', 'done', 'failed', 'cancelled'].includes(String(raw.status))
+        && (raw.kind !== 'spawn' || raw.status === 'running')
+        && (raw.kind !== 'update' || raw.status === 'running' || raw.status === 'waiting')
+        && (raw.kind !== 'end' || ['done', 'failed', 'cancelled'].includes(String(raw.status)))
+        && ['agentType', 'prompt', 'result', 'error', 'displayName'].every(key => raw[key] === undefined || typeof raw[key] === 'string')
+        && (raw.round === undefined || (isCount(raw.round) && raw.round > 0))
+        && (raw.canReceiveInput === undefined || typeof raw.canReceiveInput === 'boolean');
     case 'run_start':
       return (
         isNonEmptyString(raw.sessionId) &&

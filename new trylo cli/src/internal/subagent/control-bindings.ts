@@ -67,7 +67,7 @@ export const SEND_INPUT_BINDING: ToolBinding = {
 
 export const WAIT_AGENT_BINDING: ToolBinding = {
   name: WAIT_AGENT_TOOL,
-  description: "Wait for subagents to finish and report what each one ended as. A wait that times out does not stop them.",
+  description: "Collect a round answer or terminal result when a target becomes ready. Results include output, phase and status: awaiting_input means the child answered and stays running for send_input. Close it when finished. A timeout or cancelled wait does not stop children.",
   sideEffect: "read_only",
   needsApproval: false,
   timeoutMs: 120_000,
@@ -76,7 +76,7 @@ export const WAIT_AGENT_BINDING: ToolBinding = {
     type: "object",
     properties: {
       targets: { type: "array", items: { type: "string" }, description: "Agent ids to wait for." },
-      timeout_ms: { type: "number", description: "How long to wait before reporting." },
+      timeout_ms: { type: "number", minimum: 0, maximum: 60_000, description: "One deadline for all targets, in milliseconds. Default 10000, maximum 60000; 0 returns a snapshot immediately." },
     },
     required: ["targets"],
   },
@@ -84,14 +84,17 @@ export const WAIT_AGENT_BINDING: ToolBinding = {
 
 export const CLOSE_AGENT_BINDING: ToolBinding = {
   name: CLOSE_AGENT_TOOL,
-  description: "Stop a subagent. It cannot be continued afterwards unless you resume it.",
+  description: "Close a subagent after its current and queued rounds finish. Set force to cancel immediately. Use resume_agent to continue a terminal agent with its role and conversation.",
   sideEffect: "read_only",
   needsApproval: false,
   timeoutMs: 10_000,
   outputLimits: LIMITS,
   parameters: {
     type: "object",
-    properties: { target: { type: "string", description: "The agent id." } },
+    properties: {
+      target: { type: "string", description: "The agent id." },
+      force: { type: "boolean", description: "Cancel the active round and discard queued work instead of finishing it." },
+    },
     required: ["target"],
   },
 };

@@ -58,6 +58,26 @@ export function extractAssistantText(transcript: Transcript): string {
   return chunks.join("");
 }
 
+/** A round report excludes replies inherited from earlier turns or a fork. */
+export function extractLatestAssistantText(transcript: Transcript): string {
+  let start = 0;
+  for (let index = transcript.length - 1; index >= 0; index -= 1) {
+    if (transcript[index]?.kind === "user") {
+      start = index + 1;
+      break;
+    }
+  }
+  return extractAssistantText(transcript.slice(start));
+}
+
+/** Both child executor shapes must reject a failed engine terminal. */
+export function requireCompletedChild(terminalReason: string | undefined): void {
+  if (terminalReason === "completed") return;
+  const error = new Error(`Child attempt failed with terminal reason: ${terminalReason ?? "unknown"}`);
+  (error as { code?: string }).code = terminalReason ?? "child_attempt_failed";
+  throw error;
+}
+
 export function createChildAttemptWorker(
   options: ChildAttemptFactoryOptions,
 ): SubagentWorker<ChildAttemptResult> {
@@ -108,11 +128,7 @@ export function createChildAttemptWorker(
       100,
     );
 
-    if (!isCompleted) {
-      const error = new Error(`Child attempt failed with terminal reason: ${terminalReason ?? "unknown"}`);
-      (error as { code?: string }).code = terminalReason ?? "child_attempt_failed";
-      throw error;
-    }
+    requireCompletedChild(terminalReason);
 
     return {
       status: "completed",

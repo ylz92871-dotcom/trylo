@@ -1,5 +1,7 @@
 import {
   isPermissionAction,
+  isPermissionDecision,
+  permissionPattern,
   type PermissionAction,
   type PermissionPort,
   type PermissionScope,
@@ -7,6 +9,7 @@ import {
   type PermissionReason,
   type PermissionTicket,
 } from "../ports/permission.js";
+import { buildPermissionAction } from "./permission-grants.js";
 
 export type PermissionBoundaryResult =
   | {
@@ -40,17 +43,22 @@ export async function awaitPermissionDecision(
       message: "request_failed:permission_action_missing_arguments",
     };
   }
+  if (action.pattern !== permissionPattern(action.name, action.arguments)) {
+    return boundaryFailure("request", new Error("permission_action_fingerprint_mismatch"));
+  }
+  const snapshot = buildPermissionAction(action.toolCallId, action.name, action.arguments);
   let ticket: PermissionTicket;
   try {
-    ticket = await permission.request(action);
+    ticket = await permission.request(snapshot);
   } catch (err) {
     return boundaryFailure("request", err);
   }
-  if (ticket.toolCallId !== action.toolCallId) {
+  if (ticket === null || typeof ticket !== "object" || typeof ticket.ticketId !== "string" || ticket.ticketId.length === 0 || ticket.toolCallId !== snapshot.toolCallId) {
     return boundaryFailure("request", new Error("permission_ticket_tool_mismatch"));
   }
   try {
     const answered = await permission.awaitDecision(ticket.ticketId);
+    if (!isPermissionDecision(answered)) return boundaryFailure("decision", new Error("invalid_permission_decision"));
     return {
       outcome: "decided",
       resolution: answered.resolution,

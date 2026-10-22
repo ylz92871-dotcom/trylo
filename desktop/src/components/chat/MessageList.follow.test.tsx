@@ -13,11 +13,12 @@
 // real component with a fixed-height container.
 
 import { Profiler, StrictMode, useState, type ReactElement } from 'react';
-import { act, render } from '@testing-library/react';
+import { act, cleanup, render } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { ChatMessage } from './types';
 import { MessageList } from './MessageList';
+afterEach(cleanup);
 
 function user(id: string, text: string, createdAt: number): ChatMessage {
   return {
@@ -138,8 +139,9 @@ function fakeLayout(scroller: HTMLElement, scrollHeight: number, clientHeight: n
 
 /** Move the view and fire the scroll event the component listens to. */
 function userScroll(scroller: HTMLElement, scrollTop: number): void {
-  scroller.scrollTop = scrollTop;
   act(() => {
+    scroller.dispatchEvent(new KeyboardEvent('keydown', { key: scrollTop < scroller.scrollTop ? 'PageUp' : 'PageDown', bubbles: true }));
+    scroller.scrollTop = scrollTop;
     scroller.dispatchEvent(new Event('scroll'));
   });
 }
@@ -158,8 +160,19 @@ function LiveHarness(): ReactElement {
   );
 }
 
-describe('MessageList run-end pin (Round-3 P1-6, P0)', () => {
-  it('forces the view to the bottom on the running → finished edge', () => {
+describe('MessageList respects history reading at completion', () => {
+  it('lets End explicitly resume follow from history', () => {
+    const { container } = render(<LiveHarness />);
+    const scroller = container.querySelector('[data-virtuoso-scroller]') as HTMLElement;
+    fakeLayout(scroller, 3000, 600);
+    userScroll(scroller, 2400);
+    userScroll(scroller, 400);
+    act(() => { scroller.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true })); });
+    expect(scroller.scrollTop).toBe(3000);
+    expect(container.querySelector('.message-list__scroll-btn--show')).toBeNull();
+  });
+
+  it('preserves the reading position and return button on completion', () => {
     const { container } = render(<LiveHarness />);
     const scroller = container.querySelector('[data-virtuoso-scroller]') as HTMLElement;
     fakeLayout(scroller, 3000, 600);
@@ -173,23 +186,20 @@ describe('MessageList run-end pin (Round-3 P1-6, P0)', () => {
     const stop = (globalThis as unknown as { __stop: () => void }).__stop;
     act(() => stop());
 
-    // The turn ended. Whatever the reader did, the ending is now on screen.
-    expect(scroller.scrollTop).toBe(3000);
-    // And a finished conversation never shows the pill: if it did, the state
-    // itself would be wrong.
-    expect(container.querySelector('.message-list__scroll-btn--show')).toBeNull();
+    // Completion preserves the reader's position and return action.
+    expect(scroller.scrollTop).toBe(400);
+    expect(container.querySelector('.message-list__scroll-btn--show')).not.toBeNull();
   });
 
-  it('keeps the pill away in a finished conversation even after scrolling up', () => {
+  it('offers a return button when scrolling up after completion', () => {
     const { container } = render(<LiveHarness />);
     const scroller = container.querySelector('[data-virtuoso-scroller]') as HTMLElement;
     fakeLayout(scroller, 3000, 600);
     const stop2 = (globalThis as unknown as { __stop: () => void }).__stop;
     act(() => stop2());
-    // Reader scrolls up AFTER the run ended — no live tail to catch up to, so
-    // the pill is not an affordance here; a visible one would be a bug report
-    // about our own state.
+    // History reading still offers an explicit path back to the final answer.
+    userScroll(scroller, 2400);
     userScroll(scroller, 200);
-    expect(container.querySelector('.message-list__scroll-btn--show')).toBeNull();
+    expect(container.querySelector('.message-list__scroll-btn--show')).not.toBeNull();
   });
 });

@@ -15,6 +15,7 @@ import {
   isTerminalProcessStatus,
 } from "../../ports/process-session.js";
 import { type BoundedBuffer, createBoundedBuffer } from "./output-buffer.js";
+import { attachSessionOutput } from "./session-output.js";
 import { type TreeTermination, terminateProcessTree } from "./process-tree.js";
 import { isProcessSessionIdShape, newProcessSessionId } from "./session-id.js";
 
@@ -155,7 +156,7 @@ export function createProcessSessionRegistry(
 ): ProcessSessionRegistry {
   const maxSessions = options.maxSessions ?? 64;
   const maxBufferBytes = clampBufferBytes(options.maxBufferBytes ?? DEFAULT_MAX_BUFFER_BYTES);
-  const maxReadBytes = Math.max(1, options.maxReadBytes ?? DEFAULT_MAX_READ_BYTES);
+  const maxReadBytes = Math.max(4, options.maxReadBytes ?? DEFAULT_MAX_READ_BYTES);
   const now = options.now ?? ((): number => Date.now());
   const publish = publishSessionsTo(options.jobs);
   const terminate = options.terminate ?? killTree;
@@ -185,20 +186,6 @@ export function createProcessSessionRegistry(
       finalize(record, end, now);
       publish.ended(record.id, end);
     });
-  };
-
-  const attachStreams = (record: SessionRecord, child: ChildProcess): void => {
-    // One path for both channels: two near-copies is how one of them stops waking
-    // waiters, or stops publishing.
-    const emit = (chunk: Buffer): void => {
-      record.buffer.write(chunk);
-      publish.output(record.id, chunk);
-      for (const wake of [...record.waiters]) {
-        wake();
-      }
-    };
-    child.stdout?.on("data", emit);
-    child.stderr?.on("data", emit);
   };
 
   /**
@@ -267,7 +254,7 @@ export function createProcessSessionRegistry(
         waiters: new Set(),
       };
       sessions.set(id, record);
-      attachStreams(record, child);
+      attachSessionOutput(record, chunk => publish.output(record.id, chunk));
       publish.started({
         id,
         pid: child.pid,

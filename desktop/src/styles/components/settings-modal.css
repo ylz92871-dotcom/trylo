@@ -1,379 +1,444 @@
-/* Trylo Desktop — Settings modal.
- *
- * v1.15: a focused dialog with four fields. Backdrop dims
- * the page; the modal sits in the center. The primary
- * action (Save) uses Trylo Gold; the secondary (Cancel) is
- * a quiet ghost button.
- */
-
+/* Settings share the app palette; hierarchy comes from spacing and type. */
 .settings-modal__backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
-  backdrop-filter: blur(2px);
+  background: rgb(0 0 0 / 40%);
 }
-
 .settings-modal {
-  width: min(860px, 94vw);
-  height: min(740px, 85dvh);
+  width: min(1000px, 96vw);
+  height: min(820px, 92dvh);
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   overflow: hidden;
+  background: var(--bg);
+  border-radius: 14px;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 28%);
   font-family: var(--font-body);
+  color: var(--fg);
 }
-
 .settings-modal__header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
+  gap: 12px;
+  padding: 20px 24px;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
-
 .settings-modal__title {
-  font-size: var(--text-md);
-  font-weight: 500;
-  color: var(--fg);
   margin: 0;
+  font-size: 18px;
+  font-weight: 600;
 }
-
-.settings-modal__close {
-  background: transparent;
-  border: none;
+.settings-modal__product {
+  font-size: 13px;
   color: var(--fg-muted);
-  font-size: var(--text-lg);
-  cursor: pointer;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  transition: background var(--duration-fast) var(--ease-out);
 }
-
+.settings-modal__close {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
 .settings-modal__close:hover {
   background: var(--ink-hover);
   color: var(--fg);
 }
-
 .settings-modal__body {
   display: flex;
-  flex-direction: row;
   flex: 1;
   min-height: 0;
   overflow: hidden;
 }
-
-/* ── Sidebar navigation ────────────────────────────────── */
-
 .settings-modal__sidebar {
-  width: 160px;
+  width: 184px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: var(--space-2) 0;
+  gap: 4px;
+  padding: 20px 12px;
   border-right: 1px solid var(--border);
-  overflow-y: auto;
-  background: var(--bg);
+  background: var(--bg-panel);
+  overflow: auto;
 }
-
 .settings-modal__sidebar-item {
   display: flex;
   align-items: center;
-  padding: 6px var(--space-4);
-  font-size: var(--text-sm);
-  color: var(--fg-muted);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
+  gap: 10px;
   width: 100%;
-  transition:
-    color var(--duration-fast) var(--ease-out),
-    background var(--duration-fast) var(--ease-out);
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 7px;
+  text-align: left;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
 }
-
 .settings-modal__sidebar-item:hover {
-  color: var(--fg);
   background: var(--ink-hover);
-}
-
-.settings-modal__sidebar-item--active {
   color: var(--fg);
-  background: var(--brand-soft);
-  font-weight: 500;
 }
-
-/* ── Content panel ──────────────────────────────────────── */
-
+.settings-modal__sidebar-item--active {
+  background: var(--bg-elevated);
+  color: var(--fg);
+  font-weight: 600;
+}
 .settings-modal__content {
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  padding: var(--space-4);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 28px 36px 40px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 24px;
 }
-
-.settings-modal__group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-elevated);
-}
-
-.settings-modal__legend {
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--brand);
-  font-weight: 500;
-  padding: 0 var(--space-2);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  justify-content: space-between;
-}
-
-/* 2026-08-29: legend-level pill switch. Used by the Remote
- * group so the user can flip the on/off mirror from inside
- * the settings panel (the TopBar owns the primary switch). */
-.settings-modal__inline-toggle {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 10px;
-  font-size: 10px;
+.settings-modal__page-heading h3 {
+  font-size: 22px;
+  line-height: 1.4;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-family: var(--font-body);
+  margin: 0 0 6px;
+}
+.settings-modal__page-heading p {
+  font-size: 13px;
+  line-height: 1.6;
   color: var(--fg-muted);
+  margin: 0;
+}
+.settings-modal__group,
+.settings-modal__section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  margin: 0;
+  padding: 20px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border);
   background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  transition:
-    color var(--duration-fast) var(--ease-out),
-    background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
 }
-
-.settings-modal__inline-toggle[aria-pressed='true'] {
-  color: var(--brand);
-  background: var(--brand-soft);
-  border-color: var(--brand-500);
-}
-
-.settings-modal__inline-toggle:hover {
-  border-color: var(--brand-500);
+.settings-modal__legend,
+.settings-modal__section > legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  float: left;
+  padding: 0;
   color: var(--fg);
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 600;
 }
-
-.settings-modal__inline-toggle[aria-pressed='true']:hover {
-  background: rgba(219, 201, 127, 0.22);
+.settings-modal__columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
 }
-
 .settings-modal__field {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-}
-
-.settings-modal__label {
-  font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--fg);
-}
-
-.settings-modal__input {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  color: var(--fg);
-  outline: none;
-  transition: border-color var(--duration-fast) var(--ease-out);
-}
-
-.settings-modal__input:focus {
-  border-color: var(--brand);
-}
-
-.settings-modal__input::placeholder {
-  color: var(--ink-mute);
-}
-
-.settings-modal__row {
-  display: flex;
-  gap: var(--space-2);
-  align-items: stretch;
-}
-
-.settings-modal__row .settings-modal__input {
-  flex: 1 1 auto;
+  gap: 8px;
   min-width: 0;
 }
-
-.settings-modal__test {
-  flex: 0 0 auto;
-  white-space: nowrap;
+.settings-modal__label {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg);
+  font-weight: 500;
 }
-
-.settings-modal__test-result {
+.settings-modal__input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg);
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--fg);
+  caret-color: var(--fg);
+  transition: border-color 150ms ease;
+}
+.settings-modal__input::placeholder {
+  color: var(--fg-muted);
+  opacity: 1;
+}
+.settings-modal__input:focus {
+  border-color: var(--fg-muted);
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.settings-modal button:focus-visible,
+.settings-modal summary:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+}
+.settings-modal__hint,
+.settings-modal__desc {
+  margin: 0;
+  color: var(--fg-muted);
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.settings-modal__field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.settings-modal__field--inline input[type='checkbox'] {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  accent-color: var(--fg);
+  cursor: pointer;
+}
+.settings-modal__row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.settings-modal__row .settings-modal__input {
+  flex: 1;
+  min-width: 0;
+}
+.settings-modal__secret {
+  display: flex;
+  position: relative;
+}
+.settings-modal__secret .settings-modal__input {
+  padding-right: 44px;
+}
+.settings-modal__secret-toggle {
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  bottom: 3px;
+  width: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.settings-modal__secret-toggle:hover {
+  color: var(--fg);
+  background: var(--ink-hover);
+}
+.settings-modal__probe {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.settings-modal__advanced {
+  min-width: 0;
+  border-top: 1px solid var(--border);
+}
+.settings-modal__advanced > summary {
+  padding: 18px 0;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.settings-modal__advanced > summary span {
+  display: inline-block;
+  margin-left: 12px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg-muted);
+}
+.settings-modal__advanced-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 0 8px;
+}
+.settings-modal__advanced-body > .settings-modal__group {
+  padding: 16px 0;
+}
+.settings-modal__textarea {
+  min-height: 76px;
+  resize: vertical;
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-  word-break: break-all;
+  line-height: 1.6;
 }
-
+.settings-modal__test-result {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.65;
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
 .settings-modal__test-result--ok {
   color: var(--success);
-  background: rgba(110, 191, 123, 0.12);
+  background: color-mix(in srgb, var(--success) 8%, var(--bg));
 }
-
 .settings-modal__test-result--err {
   color: var(--danger);
   background: var(--danger-soft);
 }
-
-.settings-modal__desc {
-  margin: 0;
-  font-size: var(--text-xs);
-  color: var(--fg-muted);
-  font-family: var(--font-body);
-  line-height: 1.5;
-}
-
-.settings-modal__field--inline {
-  flex-direction: row;
+.settings-modal__footer {
+  display: flex;
   align-items: center;
-  gap: var(--space-2);
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
 }
-
-.settings-modal__field--inline input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--brand);
+.settings-modal__footer-note {
+  margin-right: auto;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+.settings-modal__btn,
+.settings-modal__button {
+  min-height: 36px;
+  padding: 8px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  background: transparent;
+  color: var(--fg);
   cursor: pointer;
 }
-
-.settings-modal__textarea {
-  resize: vertical;
-  min-height: 64px;
-  font-family: var(--font-mono);
-  line-height: 1.4;
+.settings-modal__btn--ghost:hover,
+.settings-modal__button:hover {
+  background: var(--ink-hover);
 }
-
-.settings-modal__hint {
-  font-size: var(--text-xs);
+.settings-modal__btn--primary {
+  background: var(--fg);
+  border-color: var(--fg);
+  color: var(--bg);
+}
+.settings-modal__btn--primary:hover {
+  opacity: 0.86;
+}
+.settings-modal__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.settings-modal__inline-toggle {
+  margin-left: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  padding: 4px 12px;
+  background: transparent;
   color: var(--fg-muted);
-  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
 }
-
-/* Real desktop-pet state (audit §4.2 PET-P0-1). A launch failure is shown
-   here instead of failing silently. */
+.settings-modal__inline-toggle[aria-pressed='true'] {
+  color: var(--fg);
+  background: var(--bg-elevated);
+}
 .settings-modal__pet-status {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 8px;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm, 6px);
-  border-left: 3px solid var(--fg-muted);
-  background: color-mix(in srgb, var(--fg-muted) 10%, transparent);
+  gap: 6px;
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--bg-panel);
 }
-
 .settings-modal__pet-status-headline {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--fg);
+  font-size: 13px;
+  font-weight: 500;
 }
-
-.settings-modal__pet-status--ok {
-  border-left-color: var(--success, #3fb950);
-  background: color-mix(in srgb, var(--success, #3fb950) 12%, transparent);
-}
-
-.settings-modal__pet-status--pending {
-  border-left-color: var(--warning, #d29922);
-  background: color-mix(in srgb, var(--warning, #d29922) 12%, transparent);
-}
-
-.settings-modal__pet-status--error {
-  border-left-color: var(--danger, #f85149);
-  background: color-mix(in srgb, var(--danger, #f85149) 12%, transparent);
-}
-
-/* Remote pairing QR (spec §8.1.4): square, capped size, centered. */
 .settings-modal__qr {
-  margin-top: 8px;
   width: 168px;
   height: 168px;
-  border-radius: var(--radius-sm, 6px);
   image-rendering: pixelated;
 }
-
-.settings-modal__footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-5);
-  border-top: 1px solid var(--border);
-  background: var(--bg);
-}
-
-.settings-modal__btn {
-  padding: 6px 16px;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
-}
-
-.settings-modal__btn--ghost {
-  background: transparent;
-  color: var(--fg-muted);
-  border: 1px solid var(--border);
-}
-
-.settings-modal__btn--ghost:hover {
-  color: var(--fg);
-  border-color: var(--border-strong);
-}
-
-.settings-modal__btn--primary {
-  background: var(--brand);
-  color: var(--bg);
-  border: 1px solid var(--brand);
-}
-
-.settings-modal__btn--primary:hover {
-  background: var(--brand-hover);
-  border-color: var(--brand-hover);
+@media (max-width: 700px) {
+  .settings-modal {
+    width: 100vw;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+  }
+  .settings-modal__header {
+    padding: 14px 18px;
+  }
+  .settings-modal__body {
+    flex-direction: column;
+  }
+  .settings-modal__sidebar {
+    width: auto;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 8px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-modal__sidebar-item {
+    width: auto;
+    padding: 10px;
+    min-height: 44px;
+  }
+  .settings-modal__sidebar-item svg {
+    display: none;
+  }
+  .settings-modal__content {
+    padding: 24px 20px;
+  }
+  .settings-modal__columns {
+    grid-template-columns: 1fr;
+  }
+  .settings-modal__input {
+    min-height: 44px;
+    font-size: 14px;
+  }
+  .settings-modal__footer {
+    padding: 12px 20px;
+  }
+  .settings-modal__footer-note {
+    flex-basis: 100%;
+  }
+  .settings-modal__footer .settings-modal__btn {
+    flex: 1;
+    min-height: 44px;
+  }
+  .settings-modal__advanced > summary span {
+    display: block;
+    margin: 6px 0 0 18px;
+  }
+  .settings-modal__profiles-add {
+    flex-wrap: wrap;
+  }
+  .settings-modal__profiles-add .settings-modal__input {
+    flex-basis: 100%;
+  }
+  .appearance__options {
+    flex-wrap: wrap;
+  }
+  .appearance__option {
+    min-width: 100px;
+  }
 }
 
 /* ── Work 工具 (Trylo Tool Platform, audit P0-A §3.3) ─────────────── */
@@ -452,6 +517,151 @@
   font-size: var(--text-xs);
   color: var(--fg-muted);
   white-space: pre-wrap;
+}
+
+.work-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.work-tools__catalog-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.work-tools__catalog-heading h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.work-tools__catalog-heading h4 span {
+  margin-left: 10px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+.work-tools__notice {
+  margin: 0;
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--fg-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.work-tools__filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 10px;
+}
+.work-tools__result-count {
+  margin: 0;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.work-tools__package {
+  padding: 18px 0;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+.work-tools__package-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.work-tools__identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-right: auto;
+}
+.work-tools__identity h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.work-tools__selection {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.work-tools__package-head .work-tools__action {
+  margin-left: 0;
+  min-height: 30px;
+  padding: 5px 10px;
+}
+.work-tools__description {
+  margin: 8px 0 6px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--fg);
+}
+.work-tools__package-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+.work-tools__package .work-tools__detail {
+  margin: 8px 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.work-tools__definitions {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.work-tools__definitions summary {
+  cursor: pointer;
+  width: fit-content;
+  padding: 4px 0;
+}
+.work-tools__definitions p {
+  margin: 10px 0;
+  line-height: 1.7;
+}
+.work-tools__tool-names {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg-panel);
+  border-radius: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.work-tools__tool-names code {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: var(--fg);
+}
+.work-tools__empty {
+  padding: 20px 0;
+  border-top: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+@media (max-width: 700px) {
+  .work-tools__filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .work-tools__package-head {
+    gap: 8px;
+  }
+  .work-tools__identity {
+    flex-basis: 100%;
+  }
+  .work-tools__tool-names {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* ── Skills library modal (Settings → 技能 Skills) ─────────────────
@@ -675,7 +885,26 @@
   font-size: var(--text-xs);
 }
 
-.appearance__description { color: var(--fg-muted); font-size: 13px; }
-.appearance__options { display: flex; gap: 12px; margin: 24px 0; }
-.appearance__option { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 25px 20px; flex: 1; border: 1px solid var(--border); border-radius: 10px; }
-.appearance__option[aria-pressed='true'] { border-color: var(--fg); background: var(--bg-elevated); }
+.appearance__description {
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+.appearance__options {
+  display: flex;
+  gap: 12px;
+  margin: 24px 0;
+}
+.appearance__option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 25px 20px;
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.appearance__option[aria-pressed='true'] {
+  border-color: var(--fg);
+  background: var(--bg-elevated);
+}

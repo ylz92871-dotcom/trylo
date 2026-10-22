@@ -40,6 +40,8 @@ import { cliSpawnCommand } from './cli-runtime-path';
 import { buildUserPrompt, type ControlFrame } from './control-protocol';
 import { readV1Control, usesV1ApprovalTransport } from './trylo-v1-control';
 import { desktopSystemPrompt } from './trylo-system-prompt';
+import { reasoningSelectionProblem, type ReasoningEffort } from '../settings/reasoning-effort';
+import { registerSubagentInputProcess, closeSubagentInputProcess, consumeSubagentInputResult } from './trylo-v1-subagent-control';
 
 /** stderr lines kept for terminal diagnosis (spec §5.1). */
 const STDERR_HISTORY = 20;
@@ -67,6 +69,7 @@ export interface TryloV1CliArgsInput {
   readonly providerId?: string;
   readonly endpoint?: string;
   readonly model?: string;
+  readonly reasoningEffort?: ReasoningEffort;
   /** Desktop instructions appended to the CLI-owned system seeds. */
   readonly systemPrompt?: string;
   readonly permissionLevel?: PermissionLevel;
@@ -113,6 +116,8 @@ export function buildTryloV1Args(input: TryloV1CliArgsInput & {
   // P08 §WP6: one helper decides the interpreter, so no module here
   // re-tests the extension and falls back to plain `node`.
   const { command, prefix } = cliSpawnCommand(input.cliPath, input.nodeProgram);
+  const problem = reasoningSelectionProblem({ apiModel: input.model, reasoningEffort: input.reasoningEffort });
+  if (problem) throw new TryloV1UnsupportedError(problem);
   const args = [
     ...prefix,
     'run',
@@ -127,9 +132,11 @@ export function buildTryloV1Args(input: TryloV1CliArgsInput & {
   if (input.providerId) args.push('--provider', input.providerId);
   if (input.endpoint) args.push('--endpoint', input.endpoint);
   if (input.model) args.push('--model', input.model);
+  if (input.reasoningEffort !== undefined) args.push('--reasoning-effort', input.reasoningEffort);
   // WP-CL / B: the switch the person actually enabled, and nothing else.
   if (input.learning !== undefined) args.push(`--learning=${input.learning}`);
   args.push('--append-system-prompt', desktopSystemPrompt(input.systemPrompt));
+  args.push('--subagent');
   args.push(...permissionFlagsForV1(input.permissionLevel ?? 'read_only'));
   // `-` = read the prompt from stdin. Required: the prompt must never be
   // an argv value (Windows command-line limits, argv in process logs).
@@ -170,6 +177,7 @@ function advanceBinding(run: TryloV1Run, next: CliSessionBinding): void {
 const live = new Map<string, TryloV1Run>();
 
 export interface StartTryloV1Args {
+  readonly reasoningEffort?: ReasoningEffort;
   readonly spawnEnv?: Readonly<Record<string, string>>;
   /** Carries the owner id even when the child answers before start returns. */
   readonly onControlFrame?: (frame: ControlFrame, processId: string) => void;
@@ -236,6 +244,7 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
     ...(args.providerId ? { providerId: args.providerId } : {}),
     ...(args.endpoint ? { endpoint: args.endpoint } : {}),
     ...(args.model ? { model: args.model } : {}),
+    ...(args.reasoningEffort === undefined ? {} : { reasoningEffort: args.reasoningEffort }),
     ...(args.systemPrompt ? { systemPrompt: args.systemPrompt } : {}),
     permissionLevel: args.permissionLevel ?? 'read_only',
     ...(args.learning === undefined ? {} : { learning: args.learning }),
@@ -271,6 +280,7 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
     },
     onOutput: (line) => {
       if (run.guard.isSuperseded()) return;
+      if (consumeSubagentInputResult(line, ownerId)) return;
       const control = readV1Control(line);
       if (control !== null) {
         if (adapter.hasTerminal) return;
@@ -340,7 +350,7 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
           args.onTerminal?.(adapter.summary().outcome ?? 'unknown');
         }
       }
-      if (ownerId !== null) live.delete(ownerId);
+      if (ownerId !== null) { live.delete(ownerId); closeSubagentInputProcess(ownerId); }
       args.onExit?.(info);
     },
   });
@@ -349,8 +359,10 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
   ownerId = handleKey;
   if (run.state === 'exited') return { processId: handleKey, state: () => run.state };
   live.set(handleKey, run);
+  registerSubagentInputProcess(handleKey);
   if (run.guard.isSuperseded()) {
     live.delete(handleKey);
+    closeSubagentInputProcess(handleKey);
     await hostAdapter.process.stop(handleKey).catch(() => undefined);
     throw new Error('trylo-v1 runner was superseded before startup completed');
   }
@@ -369,6 +381,7 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
   } catch (error) {
     live.delete(handleKey);
     await hostAdapter.process.stop(handleKey).catch(() => undefined);
+    closeSubagentInputProcess(handleKey);
     throw new Error('Failed to write the prompt to the trylo-v1 CLI stdin', { cause: error });
   }
 

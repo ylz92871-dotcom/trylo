@@ -22,7 +22,8 @@ export function createWorkspaceSandbox(config: WorkspaceSandboxConfig): ToolSand
   const shellMode = config.shellMode;
   return {
     policy,
-    ...(config.fileAccess === undefined || config.fileAccess === "workspace" ? {} : { requiresApproval: (call: ToolCallRequest) => needsPathApproval(policy, call) }),
+    ...(policy.mode !== "deny_all" && (config.fileAccess === undefined || config.fileAccess === "workspace") ? {}
+      : { requiresApproval: (call: ToolCallRequest) => policy.mode === "deny_all" || needsPathApproval(policy, call) }),
     evaluate(call: ToolCallRequest): SandboxVerdict {
       const read = readPathAdmission(policy, call);
       if (read !== undefined) return read;

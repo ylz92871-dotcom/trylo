@@ -18,7 +18,7 @@
 // label/tone/metadata row.
 
 import { useMemo, type ReactElement } from 'react';
-import { StopCircle } from 'lucide-react';
+import { StopRunButton } from './StopRunButton';
 import type { ChatMessage } from './types';
 import { motionPolicyFor } from './motion-policy';
 import {
@@ -150,15 +150,7 @@ export function ProcessHeader(props: ProcessHeaderProps): ReactElement | null {
         )
       )}
       {showStop && (
-        <button
-          type="button"
-          className="process-header__stop"
-          onClick={props.onStop}
-          title="Stop the current task"
-          aria-label="Stop"
-        >
-          <StopCircle size={14} strokeWidth={2.2} aria-hidden="true" />
-        </button>
+        <StopRunButton className="process-header__stop" onStop={props.onStop!} />
       )}
     </div>
   );

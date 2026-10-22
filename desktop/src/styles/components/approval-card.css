@@ -52,6 +52,35 @@
   word-break: break-word;
 }
 
+.approval-card__command {
+  min-width: 0;
+  color: var(--fg);
+  font-size: var(--text-sm);
+}
+
+.approval-card__command summary {
+  cursor: pointer;
+  padding: var(--space-1) 0;
+}
+
+.approval-card__command summary:focus-visible {
+  outline: 2px solid var(--mode-accent);
+  outline-offset: 2px;
+}
+
+.approval-card__command pre {
+  max-height: 20rem;
+  overflow: auto;
+  margin: var(--space-1) 0 0;
+  padding: var(--space-2);
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-base);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .approval-card__actions {
   display: flex;
   flex-wrap: wrap; /* WP-5: at 200%/300% buttons wrap instead of overflowing */

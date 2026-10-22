@@ -182,6 +182,10 @@ export const AGUI_ROWS: Readonly<Record<EventKind, AguiRow>> = {
     omitted: ["parentSubagentRunId", "outcomeSuspended"],
     note: "SUBAGENT_FINISHED 的 outcome 有 success/suspended{interruptIds} 两态，而 Trylo 没有「挂起等待中断」这一事实；不发明 suspended，登记为 omitted。SUBAGENT_ERROR 需要终态信息，本包不从 subagent_end 单独推断。",
   },
+  subagent_update: {
+    disposition: "custom", type: "CUSTOM", body: CUSTOM_BODY, omitted: [],
+    note: "Child round progress; retained as a custom event without inventing a terminal outcome.",
+  },
   compact: {
     disposition: "aggregated",
     type: "STATE_SNAPSHOT",

@@ -22,6 +22,7 @@ export const CLI_STREAM_EVENT_TYPES = [
   "warning",
   "usage",
   "compact",
+  "subagent",
   "run_result",
 ] as const;
 
@@ -85,6 +86,10 @@ export type CliStreamEvent =
   | { readonly type: "usage"; readonly usage: CliUsage }
   | { readonly type: "compact"; readonly status: "started" | "completed" | "failed";
       readonly tokensBefore?: number; readonly tokensAfter?: number; readonly reason: string }
+  | { readonly type: "subagent"; readonly kind: "spawn" | "update" | "end"; readonly id: string;
+      readonly status: "running" | "waiting" | "done" | "failed" | "cancelled";
+      readonly agentType?: string; readonly prompt?: string; readonly result?: string;
+      readonly error?: string; readonly round?: number; readonly canReceiveInput?: boolean; readonly displayName?: string }
   | CliRunResult;
 
 export type CliUsage = {

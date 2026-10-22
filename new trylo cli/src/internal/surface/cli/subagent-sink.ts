@@ -9,6 +9,15 @@ export type SubagentJournalSink = {
   readonly flush: () => Promise<void>;
 };
 
+/** End child lifecycles and persist their events before the parent stream closes. */
+export async function finishSubagentEvents(
+  runtime: { cancelAll: () => Promise<void> } | undefined,
+  sink: SubagentJournalSink,
+): Promise<void> {
+  await runtime?.cancelAll();
+  await sink.flush();
+}
+
 export type SubagentJournalSinkOptions = {
   readonly sessionId: string;
   readonly turnId: string;

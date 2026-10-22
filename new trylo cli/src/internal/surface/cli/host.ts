@@ -16,6 +16,7 @@ import type { CompactWindow } from "../../ports/compaction.js";
 import type { McpRegistryPort, McpServerEntry } from "../../ports/mcp-registry.js";
 import type { SessionPort, SessionRecord } from "../../ports/session.js";
 import type { PermissionPort } from "../../ports/permission.js";
+import type { ExecPolicyGuard } from "../../loop/tool-admission.js";
 import type { SkillCatalogPort } from "../../ports/skills.js";
 import type { PermissionGrantCache } from "../../loop/permission-grants.js";
 import type { Transcript } from "../../protocol/transcript.js";
@@ -31,14 +32,14 @@ import { memoryForTurnInput } from "./memory-wiring.js";
 import { memoryCommandWiring } from "./memory-command-provider.js";
 import { fileCommandWiring } from "./file-command-provider.js";
 import { reportProjectNotices } from "./turn-project-notices.js";
-import { createSubagentJournalSink } from "./subagent-sink.js";
+import { createSubagentJournalSink, finishSubagentEvents } from "./subagent-sink.js";
 import type { SubagentRole } from "../../subagent/role.js";
 import type { LspServerConfig } from "../../adapters/language-server/registry.js";
 import type { ShellModeResult } from "../../adapters/sandbox/shell-mode.js";
 import type { FileAccessMode } from "../../ports/filesystem.js";
 import { finishTurn, wiringFailure, type TurnOutcome } from "./turn-finish.js";
 import { turnStartRefusal } from "./turn-start-checks.js";
-import { wirePorts } from "./wiring.js";
+import { wirePorts, type Wiring } from "./wiring.js";
 import { turnWiringInput } from "./turn-wiring-input.js";
 import { executeCompaction } from "./compact-maintenance.js";
 import type { RunFailure } from "./run-failure.js";
@@ -58,6 +59,7 @@ export type { TurnOutcome } from "./turn-finish.js";
  */
 
 export type TurnHostInput = {
+  readonly bindAgentTools?: (tools: Wiring["ports"]["tools"] | undefined) => void;
   readonly bootstrap?: BootstrapContextBinding;
   readonly userSourceAvailable?: false;
   readonly toolSelection?: readonly string[];
@@ -93,6 +95,7 @@ export type TurnHostInput = {
   readonly tokenManager?: TokenManagerLike | undefined;
   readonly accountId?: string | undefined;
   readonly permission: PermissionPort;
+  readonly execPolicy?: ExecPolicyGuard;
   readonly grants?: PermissionGrantCache;
   readonly onRunEnvelope?: (envelope: Envelope) => void;
   readonly format: OutputFormat;
@@ -270,13 +273,9 @@ export type McpRuntimeContext = {
 
 export type TurnFailure = RunFailure;
 
-export function isTurnFailure(value: TurnOutcome | TurnFailure): value is TurnFailure {
-  return !("result" in value);
-}
-
 // Re-exported: these are pure, live in `host-status.ts` now, and the host is
 // still the one public place consumers read them from.
-export { exitCodeForResult, terminalStatusOf, usageToCli } from "./host-status.js";
+export { exitCodeForResult, terminalStatusOf, usageToCli, isTurnFailure } from "./host-status.js";
 
 /**
  * One turn, with the MCP servers this run was configured to use opened for its
@@ -366,6 +365,7 @@ async function runTurnWithPorts(
       model: wiring.model,
     });
     subagentSink.setRenderer(renderer);
+    if (wiring.subagentRuntime !== undefined) input.bindAgentTools?.(wiring.ports.tools);
 
     const result = await runRecordedTurn(
       recorder === undefined ? wiring.ports : { ...wiring.ports, progress: recorder.progress },
@@ -380,7 +380,7 @@ async function runTurnWithPorts(
           },
     );
 
-    await subagentSink.flush();
+    await finishSubagentEvents(wiring.subagentRuntime, subagentSink);
     return await finishTurn({
       result,
       renderer,
@@ -392,6 +392,7 @@ async function runTurnWithPorts(
       extraWarnings: mcp?.warnings ?? [],
     });
   } finally {
+    input.bindAgentTools?.(undefined);
     await wiring.close();
   }
 }

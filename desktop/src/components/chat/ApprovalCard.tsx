@@ -153,7 +153,7 @@ export function ApprovalCard(props: ApprovalCardProps): ReactElement {
         )}
         <span className="approval-card__title">
           {m.authority === 'code' ? '需要审批' : '需要审批'} ·{' '}
-          {meta.primary || typeLabel(m.type)}
+            {m.preview?.kind === 'command' ? m.preview.title : meta.primary || typeLabel(m.type)}
         </span>
         <span className="approval-card__state">
           {m.status === 'approved'
@@ -180,6 +180,13 @@ export function ApprovalCard(props: ApprovalCardProps): ReactElement {
             <span className="approval-card__summary-detail">{meta.detail}</span>
           ) : null}
         </div>
+      ) : null}
+      {m.preview?.kind === 'command' && m.preview.command ? (
+        <details className="approval-card__command" open>
+          <summary>完整命令与执行选项</summary>
+          <pre>{m.preview.command}</pre>
+          {m.preview.reason ? <p className="approval-card__body">{m.preview.reason}</p> : null}
+        </details>
       ) : null}
       {/* Computer-use visual (2026-09-03 acceptance C02–C06 UX): a stylized
           screen + action facts instead of raw args. The typed TEXT itself is

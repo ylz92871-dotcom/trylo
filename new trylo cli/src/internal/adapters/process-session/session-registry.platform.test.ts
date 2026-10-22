@@ -252,13 +252,21 @@ describe("process sessions over pipes", () => {
     await registry.shutdown();
   });
 
-  it("marks every still-running session lost when the owner goes away", async () => {
+  it("owner teardown preserves an observed exit or explicitly reports an unobserved ending", async () => {
     const registry = createProcessSessionRegistry();
     const session = await registry.start(startOf({ argv: [process.execPath, "-e", "setInterval(()=>{},1000)"] }));
     await sleep(300);
     await registry.shutdown();
     const after = registry.get(session.id);
-    assert.notEqual(after?.status, "running", "a session cannot outlive its owner as running");
-    assert.equal(after?.end?.kind, "lost");
+    assert.ok(after);
+    assert.ok(after.end?.kind === "exited" || after.end?.kind === "lost", "shutdown must report an observed exit or a truthful observation loss");
+    assert.equal(after.status, after.end.kind);
+    if (after.end.kind === "exited") {
+      assert.equal(after.exitCode, after.end.exitCode);
+      assert.ok(Number.isInteger(after.exitCode));
+    } else {
+      assert.equal(after.exitCode, undefined, "an unobserved exit must not invent a code");
+      assert.match(after.end.reason, /owner teardown/);
+    }
   });
 });

@@ -17,6 +17,7 @@ import { createNodeSpawner, type ShellSpawner } from "./shell-spawn.js";
 import type { ProcessSessionRegistry } from "../../process-session/session-registry.js";
 import type { ShellModeResult } from "../../sandbox/shell-mode.js";
 import { executeWriteFile } from "./write-tool.js";
+import { MutationPathError, pathCheckedQueue } from "./path-checked-queue.js";
 
 /**
  * The mutating tools.
@@ -62,7 +63,7 @@ export type MutatingToolsConfig = {
 };
 
 export function createMutatingTools(config: MutatingToolsConfig): ToolPort {
-  const queue = config.writeQueue ?? createWriteQueue();
+  const queue = pathCheckedQueue(config.writeQueue ?? createWriteQueue(), config.sandbox.policy);
   const spawner = config.spawner ?? createNodeSpawner();
   const edits = { writeQueue: queue };
   const cancellations = createCallCancellationRegistry();
@@ -72,60 +73,66 @@ export function createMutatingTools(config: MutatingToolsConfig): ToolPort {
       return MUTATING_BINDINGS.filter((binding) => denied?.isDenied(binding.name) !== true);
     },
     async execute(call: ToolCallRequest, signal: AbortSignal): Promise<ToolOutcome> {
-      const verdict = config.sandbox.evaluate(call);
-      if (!verdict.ok) {
-        return { outcome: "error", code: verdict.code, message: verdict.message };
-      }
-      const planned = planMutation(config.sandbox.policy, call, config.shellMode);
-      if (!planned.ok) {
-        return { outcome: "error", code: planned.code, message: planned.message };
-      }
-      if (call.name === WRITE_FILE_TOOL) {
-        return executeWriteFile(edits, call, planned.plan, signal);
-      }
-      if (call.name === EDIT_FILE_TOOL) {
-        return executeEditFile(edits, call, planned.plan, signal);
-      }
-      if (call.name === NOTEBOOK_EDIT_TOOL) {
-        // WP13 (L13): cell edits write through the same atomic queue.
-        return executeNotebookEdit(
-          {
-            writeQueue: queue,
-            ...(config.idGenerator === undefined ? {} : { idGenerator: config.idGenerator }),
-          },
-          call,
-          planned.plan,
-          signal,
-        );
-      }
-      if (call.name === APPLY_PATCH_TOOL) {
-        return executeApplyPatch({ writeQueue: queue, policy: config.sandbox.policy }, call, planned.plan, signal);
-      }
-      if (call.name === RUN_SHELL_TOOL) {
-        // The only mutating tool that owns something stoppable: a process tree.
-        // It runs under a signal that fires on either the turn's cancel or this
-        // call's own stop, so `cancel(toolCallId)` below actually reaches the
-        // command instead of only the turn.
-        const own = cancellations.begin(call.toolCallId);
-        const link = linkedSignal(signal, own.signal);
-        try {
-          return await executeShell(
+      try {
+        const verdict = config.sandbox.evaluate(call);
+        if (!verdict.ok) {
+          return { outcome: "error", code: verdict.code, message: verdict.message };
+        }
+        const planned = planMutation(config.sandbox.policy, call, config.shellMode);
+        if (!planned.ok) {
+          return { outcome: "error", code: planned.code, message: planned.message };
+        }
+        if (call.name === WRITE_FILE_TOOL) {
+          return await executeWriteFile(edits, call, planned.plan, signal);
+        }
+        if (call.name === EDIT_FILE_TOOL) {
+          return await executeEditFile(edits, call, planned.plan, signal);
+        }
+        if (call.name === NOTEBOOK_EDIT_TOOL) {
+          // WP13 (L13): cell edits write through the same atomic queue.
+          return await executeNotebookEdit(
             {
-              spawner,
-              stdoutWriter: { policy: config.sandbox.policy, writeQueue: queue },
-              sessions: config.sessions,
-              ...(config.platform !== undefined ? { platform: config.platform } : {}),
+              writeQueue: queue,
+              ...(config.idGenerator === undefined ? {} : { idGenerator: config.idGenerator }),
             },
             call,
             planned.plan,
-            link.signal,
+            signal,
           );
-        } finally {
-          link.release();
-          cancellations.end(call.toolCallId);
         }
+        if (call.name === APPLY_PATCH_TOOL) {
+          return await executeApplyPatch({ writeQueue: queue, policy: config.sandbox.policy }, call, planned.plan, signal);
+        }
+        if (call.name === RUN_SHELL_TOOL) {
+          // The only mutating tool that owns something stoppable: a process tree.
+          // It runs under a signal that fires on either the turn's cancel or this
+          // call's own stop, so `cancel(toolCallId)` below actually reaches the
+          // command instead of only the turn.
+          const own = cancellations.begin(call.toolCallId);
+          const link = linkedSignal(signal, own.signal);
+          try {
+            return await executeShell(
+              {
+                spawner,
+                stdoutWriter: { policy: config.sandbox.policy, writeQueue: queue },
+                sessions: config.sessions,
+                ...(config.platform !== undefined ? { platform: config.platform } : {}),
+              },
+              call,
+              planned.plan,
+              link.signal,
+            );
+          } finally {
+            link.release();
+            cancellations.end(call.toolCallId);
+          }
+        }
+        return { outcome: "error", code: "unknown_tool", message: `unknown_tool:${call.name}` };
+      } catch (error) {
+        if (signal.aborted) return { outcome: "cancelled" };
+        if (error instanceof MutationPathError) return { outcome: "error", code: error.code, message: error.message };
+        throw error;
       }
-      return { outcome: "error", code: "unknown_tool", message: `unknown_tool:${call.name}` };
     },
     async cancel(toolCallId: string): Promise<void> {
       // Asks any running call to stop, and says whether one was there. A call

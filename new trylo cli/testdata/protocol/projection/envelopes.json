@@ -434,4 +434,14 @@
       "producerSequence": 26
     }
   }
+  ,{
+    "kind": "subagent_update",
+    "envelope": {
+      "protocolVersion": "0.0", "eventId": "evt-p-subagent-update", "sequence": 27,
+      "timestamp": "2026-09-14T10:06:30.000Z", "sessionId": "ses-p07", "turnId": "trn-p07",
+      "attemptId": "att-p07-2", "kind": "subagent_update",
+      "payload": { "subagentId": "sub-p07", "status": "waiting", "round": 1, "result": "Verified the input." },
+      "producerId": "subagent", "producerSequence": 27
+    }
+  }
 ]

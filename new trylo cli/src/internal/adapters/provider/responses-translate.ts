@@ -1,6 +1,9 @@
 ﻿import type { ProviderEvent, ProviderFinishReason } from "../../ports/provider.js";
-import { parseToolInput } from "./invalid-tool-input.js";
+import { isResponseRecord as isRecord, responseString as str, responseNumber as num } from "./responses-fields.js";
+import { createResponsesText } from "./responses-text.js";
+import { createResponsesTools } from "./responses-tools.js";
 import { createResponsesSummary } from "./responses-summary.js";
+import { responsesProtocolError } from "./responses-error.js";
 
 /**
  * Responses wire event -> ProviderEvent translation (WP18.2: C68).
@@ -18,57 +21,39 @@ import { createResponsesSummary } from "./responses-summary.js";
  * calls assemble by `item_id`. A consumer reading both wires sees one shape.
  */
 
-type ResponsesToolAssembly = {
-  callId: string;
-  name: string;
-  text: string;
-};
-
 type ResponsesState = {
-  readonly textBlocks: Map<string, string>;
+  readonly text: ReturnType<typeof createResponsesText>;
   readonly summary: ReturnType<typeof createResponsesSummary>;
-  readonly tools: Map<string, ResponsesToolAssembly>;
-  toolCallsEmitted: number;
-  /** A terminal frame was already emitted; `complete()` must not invent one. */
+  readonly tools: ReturnType<typeof createResponsesTools>;
   finished: boolean;
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function str(record: Record<string, unknown>, key: string): string {
-  const value = record[key];
-  return typeof value === "string" ? value : "";
-}
-
-function num(record: Record<string, unknown>, key: string): number {
-  const value = record[key];
-  return typeof value === "number" ? value : 0;
-}
-
 export function createResponsesTranslator() {
   const state: ResponsesState = {
-    textBlocks: new Map(),
+    text: createResponsesText(),
     summary: createResponsesSummary(),
-    tools: new Map(),
-    toolCallsEmitted: 0,
+    tools: createResponsesTools(),
     finished: false,
   };
   return {
     push(event: string, payload: unknown): ProviderEvent[] {
-      return pushResponsesEvent(state, event, payload);
+      const events = pushResponsesEvent(state, event, payload);
+      const failure = events.findIndex(one => one.type === "error");
+      if (failure < 0) return events;
+      state.finished = true;
+      return events.slice(0, failure + 1);
     },
     /**
      * The stream ended without a terminal frame: close what is open and
-     * finish explicitly. After a terminal frame this is silent — the blocks
-     * are already closed and a second finish would be invented output.
+     * report the missing terminal frame. After a terminal frame this is silent:
+     * the blocks are already closed and a second finish would be invented output.
      */
     complete(): ProviderEvent[] {
       if (state.finished) {
         return [];
       }
-      return completeResponsesStream(state, "other", "incomplete_stream");
+      state.finished = true;
+      return [...closeOpenResponsesBlocks(state), responsesProtocolError("responses_incomplete_stream")];
     },
   };
 }
@@ -89,7 +74,11 @@ function pushResponsesEvent(
   }
   switch (event) {
     case "response.output_text.delta":
-      return textDelta(state, payload);
+      return state.text.delta(payload);
+    case "response.output_text.done":
+      return state.text.done(payload);
+    case "response.output_item.added":
+      return state.tools.added(payload);
     case "response.reasoning_summary_text.delta":
       return state.summary.delta(payload);
     case "response.reasoning_summary_text.done":
@@ -97,7 +86,7 @@ function pushResponsesEvent(
     case "response.reasoning_summary_part.done":
       return state.summary.partDone(payload);
     case "response.function_call_arguments.delta":
-      return toolArgumentsDelta(state, payload);
+      return state.tools.delta(payload);
     case "response.output_item.done":
       return outputItemDone(state, payload);
     case "response.completed":
@@ -134,103 +123,13 @@ function pushResponsesEvent(
   }
 }
 
-/** Assistant text deltas, one block per output index. */
-function textDelta(state: ResponsesState, payload: Record<string, unknown>): ProviderEvent[] {
-  const delta = str(payload, "delta");
-  if (delta.length === 0) {
-    return [];
-  }
-  const key = `text-${num(payload, "output_index")}`;
-  const events: ProviderEvent[] = [];
-  if (!state.textBlocks.has(key)) {
-    state.textBlocks.set(key, key);
-    events.push({ type: "text_start", blockId: key });
-  }
-  events.push({ type: "text_delta", blockId: key, text: delta });
-  return events;
-}
-
-/**
- * Function argument fragments, keyed by the wire's `item_id`.
- *
- * The name may arrive late (in `output_item.done`); the fragment is kept
- * regardless, exactly like the chat translator keeps a pre-name fragment.
- */
-function toolArgumentsDelta(state: ResponsesState, payload: Record<string, unknown>): ProviderEvent[] {
-  const delta = str(payload, "delta");
-  const itemId = str(payload, "item_id");
-  if (itemId.length === 0) {
-    return [];
-  }
-  const existing = state.tools.get(itemId);
-  if (existing === undefined) {
-    state.tools.set(itemId, { callId: itemId, name: "", text: delta });
-    const events: ProviderEvent[] = [{ type: "tool_input_start", toolCallId: itemId, name: "" }];
-    if (delta.length > 0) {
-      events.push({ type: "tool_input_delta", toolCallId: itemId, argumentsText: delta });
-    }
-    return events;
-  }
-  existing.text += delta;
-  if (delta.length === 0) {
-    return [];
-  }
-  return [{ type: "tool_input_delta", toolCallId: existing.callId, argumentsText: delta }];
-}
-
-/**
- * A finished output item: function calls settle here with their full shape.
- * The wire's `call_id` (the `fc_*` id the next request references) replaces
- * the provisional `item_id`, so the settled call points at the id the loop
- * must answer — the same "open id, not fragment id" rule the chat translator
- * documents.
- */
+/** Final items also recover missing streaming fragments. Helpers settle once. */
 function outputItemDone(state: ResponsesState, payload: Record<string, unknown>): ProviderEvent[] {
   const item = payload["item"];
-  if (!isRecord(item)) {
-    return [];
-  }
+  if (!isRecord(item)) return [];
   if (item["type"] === "reasoning") return state.summary.itemDone(num(payload, "output_index"), item);
-  if (item["type"] === "message") {
-    const blockId = `text-${num(payload, "output_index")}`;
-    return state.textBlocks.delete(blockId) ? [{ type: "text_end", blockId }] : [];
-  }
-  if (item["type"] !== "function_call") {
-    return [];
-  }
-  const itemId = str(payload, "item_id").length > 0 ? str(payload, "item_id") : str(item, "id");
-  const callId = str(item, "call_id").length > 0 ? str(item, "call_id") : itemId;
-  const name = str(item, "name");
-  const argsText = str(item, "arguments");
-  const assembly = state.tools.get(itemId);
-  if (assembly !== undefined) {
-    state.tools.delete(itemId);
-    if (name.length > 0) {
-      assembly.name = name;
-    }
-    if (argsText.length > 0 && assembly.text.length === 0) {
-      assembly.text = argsText;
-    }
-    assembly.callId = callId;
-    return [settleToolCall(state, assembly)];
-  }
-  return [settleToolCall(state, { callId, name, text: argsText })];
-}
-
-/** Settle one assembled call: parsed object or a visible invalid. */
-function settleToolCall(state: ResponsesState, assembly: ResponsesToolAssembly): ProviderEvent {
-  state.toolCallsEmitted += 1;
-  const parsed = parseToolInput(assembly.text);
-  if (parsed.ok) {
-    return { type: "tool_call", toolCallId: assembly.callId, name: assembly.name, arguments: parsed.arguments };
-  }
-  return {
-    type: "tool_call_invalid",
-    toolCallId: assembly.callId,
-    name: assembly.name,
-    rawArguments: "",
-    message: parsed.message,
-  };
+  if (item["type"] === "message") return state.text.itemDone(num(payload, "output_index"), item);
+  return state.tools.done(payload);
 }
 
 /**
@@ -257,15 +156,24 @@ function completed(state: ResponsesState, payload: Record<string, unknown>): Pro
     });
     return events;
   }
+  if (status === "cancelled") return [...events, { type: "cancel_ack" }];
+  // Some compatible endpoints omit status, but an explicit nonterminal or
+  // unknown value never means completed, regardless of the event's name.
+  if (status !== "" && status !== "completed" && status !== "incomplete") {
+    return [...events, responsesProtocolError("responses_terminal_status_invalid")];
+  }
   const reason: ProviderFinishReason = status === "incomplete" ? "length" : "stop";
-  events.push(...state.summary.completed(detail["output"]));
+  const output = detail["output"];
+  if (Array.isArray(output)) output.forEach((item: unknown, output_index: number) => {
+    events.push(...outputItemDone(state, { item, output_index }));
+  });
   events.push(...closeOpenResponsesBlocks(state));
-  events.push(...settleAllTools(state));
+  events.push(...state.tools.complete());
   events.push({
     type: "finish",
     reason,
     rawReason: status.length > 0 ? status : "completed",
-    requiresFollowUp: state.toolCallsEmitted > 0,
+    requiresFollowUp: state.tools.count() > 0,
   });
   return events;
 }
@@ -287,41 +195,25 @@ function usageEvent(usage: unknown): ProviderEvent | undefined {
       mode: "snapshot",
       inputTokens: input,
       outputTokens: output,
-      cacheReadTokens: 0,
+      cacheReadTokens: isRecord(usage["input_tokens_details"]) ? num(usage["input_tokens_details"], "cached_tokens") : 0,
       cacheWriteTokens: 0,
-      reasoningTokens: 0,
+      reasoningTokens: isRecord(usage["output_tokens_details"]) ? num(usage["output_tokens_details"], "reasoning_tokens") : 0,
       totalTokens: total,
     },
   };
 }
 
 function closeOpenResponsesBlocks(state: ResponsesState): ProviderEvent[] {
-  const events: ProviderEvent[] = [];
-  for (const blockId of [...state.textBlocks.keys()].sort()) {
-    events.push({ type: "text_end", blockId });
-    state.textBlocks.delete(blockId);
-  }
-  events.push(...state.summary.closeAll());
-  return events;
+  return [...state.text.closeAll(), ...state.summary.closeAll()];
 }
 
-function settleAllTools(state: ResponsesState): ProviderEvent[] {
-  const events: ProviderEvent[] = [];
-  for (const [itemId, assembly] of [...state.tools.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
-    state.tools.delete(itemId);
-    events.push(settleToolCall(state, assembly));
-  }
-  return events;
-}
-
-/** The stream ended with no `response.completed`: close and finish. */
+/** Explicit incomplete endings preserve their budget verdict without tools. */
 function completeResponsesStream(
   state: ResponsesState,
   reason: ProviderFinishReason,
   rawReason: string,
 ): ProviderEvent[] {
   const events = closeOpenResponsesBlocks(state);
-  events.push(...settleAllTools(state));
-  events.push({ type: "finish", reason, rawReason, requiresFollowUp: state.toolCallsEmitted > 0 });
+  events.push({ type: "finish", reason, rawReason, requiresFollowUp: false });
   return events;
 }

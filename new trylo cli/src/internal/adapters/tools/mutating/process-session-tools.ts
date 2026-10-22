@@ -28,6 +28,7 @@ import {
   MIN_PROCESS_POLL_YIELD_MS,
   isTerminalProcessStatus,
   type ProcessSessionId,
+  type ProcessSessionEndReason,
   type ProcessSessionList,
   type ProcessSessionWriteResult,
   readYieldMs,
@@ -37,6 +38,7 @@ import {
   DEFAULT_MAX_SHELL_OUTPUT_BYTES,
   DEFAULT_MAX_SHELL_OUTPUT_LINES,
 } from "../../sandbox/policy.js";
+import { describeProcessEnd, processEndFields, processEndSuffix } from "./process-session-presentation.js";
 
 export const WRITE_STDIN_TOOL = "write_stdin";
 export const LIST_PROCESSES_TOOL = "list_processes";
@@ -56,7 +58,7 @@ export type ProcessSessionToolsPort = {
   }): Promise<ProcessSessionWriteResult>;
   list(): ProcessSessionList;
   stop(sessionId: ProcessSessionId): Promise<
-    | { readonly ok: true; readonly end: unknown }
+    | { readonly ok: true; readonly end: ProcessSessionEndReason }
     | { readonly ok: false; readonly code: string; readonly message: string }
   >;
   /** Terminal sessions, when this build has a helper for the running platform. */
@@ -71,7 +73,7 @@ const OUTPUT_LIMITS = {
 export const WRITE_STDIN_BINDING: ToolBinding = {
   name: WRITE_STDIN_TOOL,
   description:
-    "Send text to a command that is still running, or ask what it has produced. An empty `chars` is a poll: it returns whatever has appeared since the last read and never confuses that with input. This continues a command that already started — it does not start anything new, and it cannot revive one that has ended.",
+    "Send text to a command that is still running, or ask what it has produced. An empty `chars` is a poll: it returns whatever has appeared since the last read and never confuses that with input. Omitted yieldMs defaults to 250 ms for input or 1000 ms for polling. Every reply states process status and observed terminal details; an exited command succeeds only with exit code 0 and no terminating signal. This continues a command that already started — it does not start anything new, and it cannot revive one that has ended.",
   sideEffect: "read_only",
   parameters: {
     type: "object",
@@ -151,14 +153,18 @@ function readBoolean(call: ToolCallRequest, key: string): boolean {
   return call.arguments[key] === true;
 }
 
+function optionalArgumentProblem(call: ToolCallRequest, key: string, expected: "string" | "boolean"): ToolOutcome | undefined {
+  const value = call.arguments[key];
+  if (value === undefined || typeof value === expected) return undefined;
+  return { outcome: "error", code: "invalid_arguments", message: `${call.name} ${key} must be a ${expected} when present` };
+}
+
 /**
- * A poll must wait longer than a write, and asking for less is refused rather
- * than clamped: a caller that asked for 50ms and got 1000ms has been answered a
- * question it did not ask. The clamp exists because an empty write is nearly
- * always a poll, and a poll that returns instantly invites a spin loop.
+ * Omitted yields follow the advertised defaults. Explicit values still need
+ * the normal bounds; a valid short poll uses the existing anti-spin floor.
  */
 function resolveYieldMs(call: ToolCallRequest, input: string): number | undefined {
-  const asked = readYieldMs(call.arguments["yieldMs"], 0);
+  const asked = readYieldMs(call.arguments["yieldMs"], input.length === 0 ? MIN_PROCESS_POLL_YIELD_MS : MIN_PROCESS_YIELD_MS);
   if (asked === undefined) {
     return undefined;
   }
@@ -181,6 +187,8 @@ export function createProcessSessionTools(
 ): ProcessSessionTools {
   async function execute(call: ToolCallRequest): Promise<ToolOutcome> {
     if (call.name === LIST_PROCESSES_TOOL) {
+      const problem = optionalArgumentProblem(call, "runningOnly", "boolean");
+      if (problem !== undefined) return problem;
       const runningOnly = readBoolean(call, "runningOnly");
       const listed = sessions.list().sessions.filter(
         (session) => !runningOnly || !isTerminalProcessStatus(session.status),
@@ -194,6 +202,7 @@ export function createProcessSessionTools(
           tty: session.tty,
           ...(session.exitCode === undefined ? {} : { exitCode: session.exitCode }),
           ...(session.end === undefined ? {} : { end: session.end.kind }),
+          ...processEndFields(session.end),
           bufferedBytes: session.bufferedBytes,
           droppedOutput: session.droppedOutput,
           ...(session.endedAtMs === undefined ? {} : { endedAtMs: session.endedAtMs }),
@@ -201,7 +210,7 @@ export function createProcessSessionTools(
         supportsTty: sessions.supportsTty,
       };
       const lines = listed.map(
-        (session) => `${session.id} ${session.status} ${session.command}`,
+        (session) => `${session.id} ${session.status}${processEndSuffix(session.end)} ${session.command}`,
       );
       return {
         outcome: "result",
@@ -228,16 +237,18 @@ export function createProcessSessionTools(
       if (!stopped.ok) {
         return { outcome: "error", code: stopped.code, message: stopped.message };
       }
-      const end = stopped.end as { kind?: string };
+      const end = stopped.end;
       return {
         outcome: "result",
-        value: { sessionId, end: end?.kind ?? "unknown" },
-        output: `Session ${sessionId} stopped (${end?.kind ?? "unknown"}).`,
+        value: { sessionId, end: end.kind, ...processEndFields(end) },
+        output: `Session ${sessionId} ${end.kind === "exited" ? "stopped or already ended" : "has observed state " + end.kind} (${describeProcessEnd(end)}).`,
         truncated: false,
       };
     }
 
     if (call.name === WRITE_STDIN_TOOL) {
+      const problem = optionalArgumentProblem(call, "chars", "string") ?? optionalArgumentProblem(call, "eof", "boolean");
+      if (problem !== undefined) return problem;
       const input = readString(call, "chars") ?? "";
       const eof = readBoolean(call, "eof");
       const yieldMs = resolveYieldMs(call, input);
@@ -257,15 +268,16 @@ export function createProcessSessionTools(
           code: result.code,
           message:
             result.code === "session_finished"
-              ? `${result.message}. It ended as ${result.end?.kind ?? "unknown"}; start a new command rather than writing to this one.`
+              ? `${result.message}. It ended as ${result.end?.kind ?? "unknown"}${processEndSuffix(result.end)}; start a new command rather than writing to this one.`
               : result.message,
         };
       }
       const read = result.read;
-      const body =
+      const content =
         read.output.length === 0
-          ? `Session ${sessionId} is ${read.status} and has produced no new output.`
+          ? "No new output."
           : read.output;
+      const body = `Session ${sessionId} is ${read.status}${processEndSuffix(read.end)}.\n${content}`;
       return {
         outcome: "result",
         value: {
@@ -274,6 +286,8 @@ export function createProcessSessionTools(
           output: read.output,
           truncated: read.truncated,
           ...(read.end === undefined ? {} : { end: read.end.kind }),
+          ...processEndFields(read.end),
+          bufferedBytes: read.bufferedBytes,
         },
         output: read.truncated ? `${body}\n[output truncated]` : body,
         truncated: read.truncated,

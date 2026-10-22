@@ -66,6 +66,7 @@ export { runOneTurn } from "./run-one-turn.js";
  */
 
 export type RunScaffold = {
+  readonly bindAgentTools?: (tools: import("../../ports/tools.js").ToolPort | undefined) => void;
   readonly questions?: AskUserSession;
   readonly execution?: RunExecution;
   /** Shared across turns; UI changes policy through this application controller. */
@@ -360,8 +361,8 @@ export async function handleRun(ctx: CliContext, options: RunCommandOptions, sin
       : await answerStdioInput(scaffold.questions, control, prompt.text, cancel);
     const outcome = await runOneTurn(
       ctx,
-      control === undefined || scaffold.questions === undefined ? scaffold
-        : { ...scaffold, questions: stdioQuestions(scaffold.questions, control) },
+      control === undefined ? scaffold : { ...scaffold, bindAgentTools: control.bindAgentTools,
+        ...(scaffold.questions === undefined ? {} : { questions: stdioQuestions(scaffold.questions, control) }) },
       promptText,
       sink,
       permissionMode,

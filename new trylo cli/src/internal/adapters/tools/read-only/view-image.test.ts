@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -32,7 +32,8 @@ const PNG = Uint8Array.from([
 ]);
 
 function tempRoot(): string {
-  return mkdtempSync(join(os.tmpdir(), "trylo-view-image-"));
+  // This suite pins ordinary workspace references; alias freezing is tested separately.
+  return realpathSync.native(mkdtempSync(join(os.tmpdir(), "trylo-view-image-")));
 }
 
 function callFor(args: JsonObject): ToolCallRequest {

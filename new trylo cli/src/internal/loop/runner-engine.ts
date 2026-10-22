@@ -80,6 +80,8 @@ export type Engine = {
   transcript: Transcript;
   /** Only acknowledged immutable envelopes can be omitted from later flushes. */
   progressEnvelopeCount: number;
+  /** An immutable transcript view is reusable only after its write was acknowledged. */
+  progressTranscript?: Transcript;
   compaction: CompactionLedger;
   seedMessages: ReadonlyArray<ProviderMessage>;
   grants: PermissionGrantCache;

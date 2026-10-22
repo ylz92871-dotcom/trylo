@@ -53,6 +53,7 @@ import {
 // P08 §WP6: where the CLI lives is resolved from the packaged resources
 // at startup, never hard-coded into a run.
 import { resolveCliRuntime } from './host-adapter/cli-runtime-path'
+import { canSendSubagentInput, sendSubagentInput } from './host-adapter/trylo-v1-subagent-control'
 import { setCliRuntimeResolution } from './runtime/cli-runtime-resolution'
 // M4-C5: unified Code/Work run timing (spec §7.2). Created per send
 // in `onSend`; derived latencies let cold vs warm be measured without
@@ -5640,6 +5641,12 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
             />
           ) : (
             <ChatPanel
+              onSubagentInput={canSendSubagentInput(topMode === 'work' ? workCodeView.activeProcessId : activeProcessId)
+                ? (agentId, text) => {
+                  const processId = topMode === 'work' ? workCodeView.activeProcessId : activeProcessId
+                  if (!processId) return Promise.reject(new Error('本轮已结束，无法发送补充要求。'))
+                  return sendSubagentInput(processId, agentId, text)
+                } : undefined}
               workspaceRoot={currentWorkspace.root}
               context={context}
               activeSession={currentActiveSession}

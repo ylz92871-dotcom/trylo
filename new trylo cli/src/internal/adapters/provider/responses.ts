@@ -3,6 +3,7 @@
   ProviderEvent,
   ProviderPort,
   ProviderRequest,
+  ReasoningEffort,
 } from "../../ports/provider.js";
 import {
   classifyHttpStatus,
@@ -31,6 +32,7 @@ import { responsesContentOf, unresolvedImageReference } from "../media/image-att
  */
 
 export type ResponsesConfig = {
+  readonly reasoningEffort?: ReasoningEffort;
   readonly endpoint: string;
   readonly model: string;
   /**
@@ -312,7 +314,12 @@ export function buildResponsesBody(config: ResponsesConfig, request: ProviderReq
     model: request.model.length > 0 ? request.model : config.model,
     input,
     stream: true,
-    ...(config.reasoningSummary === undefined ? {} : { reasoning: { summary: config.reasoningSummary } }),
+    ...(config.reasoningSummary === undefined && config.reasoningEffort === undefined ? {} : {
+      reasoning: {
+        ...(config.reasoningEffort === undefined ? {} : { effort: config.reasoningEffort }),
+        ...(config.reasoningSummary === undefined ? {} : { summary: config.reasoningSummary }),
+      },
+    }),
     ...(request.tools.length > 0
       ? {
           tools: request.tools.map((tool) => ({

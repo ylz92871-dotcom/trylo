@@ -35,6 +35,18 @@ function approvalMessage(over: Partial<ApprovalMessage> = {}): ApprovalMessage {
 }
 
 describe('ApprovalCard (M4-E + P3)', () => {
+  it('shows every shell step in an expanded review surface without granting approval', () => {
+    const command = 'node report.js\n\n后续命令 1：\nnode cleanup.js\n\n成功后保存标准输出：report.json';
+    const onRespond = vi.fn();
+    render(<ApprovalCard message={approvalMessage({ preview: { kind: 'command', title: '运行命令', command, cwd: 'D:/project' } })} onRespond={onRespond} />);
+    const summary = screen.getByText('完整命令与执行选项');
+    const details = summary.closest('details');
+    expect(details?.open).toBe(true);
+    expect(details?.querySelector('pre')?.textContent).toBe(command);
+    fireEvent.click(summary);
+    expect(onRespond).not.toHaveBeenCalled();
+  });
+
   it('pending renders the request copy and 批准并继续 / 拒绝', () => {
     render(<ApprovalCard message={approvalMessage()} />);
     expect(screen.getByText('Run shell command: git push')).toBeTruthy();

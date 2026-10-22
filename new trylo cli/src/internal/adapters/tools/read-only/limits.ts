@@ -22,6 +22,10 @@ export type FileSystemReader = {
   /** Missing ignore files are normal; other read failures remain visible. */
   readOptionalUtf8?(absolutePath: string): Promise<string | undefined>;
   readFileUtf8(absolutePath: string, signal: AbortSignal): Promise<string>;
+  /** Bounded byte chunks; the consumer owns decoding and releases the iterator on cancellation. */
+  readFileChunks?(absolutePath: string, signal: AbortSignal): AsyncIterable<Uint8Array>;
+  /** Undefined means oversized. Implementations must retain at most maxBytes + 1 raw bytes. */
+  readFileUtf8Bounded?(absolutePath: string, maxBytes: number, signal: AbortSignal): Promise<string | undefined>;
   /**
    * Raw bytes for media inputs (WP19.1: C25, L10). Optional so every existing
    * text-only reader keeps compiling; a reader without it makes `view_image`
@@ -40,7 +44,10 @@ export type ReadOnlyToolLimits = {
   readonly maxSearchDepth: number;
   /** Optional so an existing caller's literal keeps compiling; defaults below. */
   readonly maxListEntries?: number;
+  readonly maxSearchFileBytes?: number;
 };
+
+export const DEFAULT_MAX_SEARCH_FILE_BYTES = 1_048_576;
 
 export const DEFAULT_READ_ONLY_LIMITS: ReadOnlyToolLimits = {
   maxBytes: 65_536,
@@ -49,6 +56,7 @@ export const DEFAULT_READ_ONLY_LIMITS: ReadOnlyToolLimits = {
   maxSearchMatches: 100,
   maxSearchDepth: 6,
   maxListEntries: 200,
+  maxSearchFileBytes: DEFAULT_MAX_SEARCH_FILE_BYTES,
 };
 
 /** Names a listing will not show, counted and reported instead of dropped. */

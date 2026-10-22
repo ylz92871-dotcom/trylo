@@ -33,7 +33,7 @@ export type SubagentInput = {
 };
 
 export type SubagentInputChannel = {
-  /** Writing end: hand one input to the worker. `false` if nobody will read it. */
+  /** Writing end: `false` if closed or the bounded queue has no room. */
   deliver(input: SubagentInput): boolean;
   /** Writing end: tell a waiting worker to finish. Idempotent. */
   close(): void;
@@ -47,6 +47,8 @@ type Pending = {
   readonly resolve: (value: SubagentInput | "closed") => void;
   readonly reject: (reason: unknown) => void;
 };
+
+export const SUBAGENT_INPUT_QUEUE_LIMIT = 32;
 
 export function createSubagentInputChannel(): SubagentInputChannel {
   const queue: SubagentInput[] = [];
@@ -75,6 +77,9 @@ export function createSubagentInputChannel(): SubagentInputChannel {
         settle(input);
         return true;
       }
+      if (queue.length >= SUBAGENT_INPUT_QUEUE_LIMIT) {
+        return false;
+      }
       queue.push(input);
       return true;
     },
@@ -90,6 +95,9 @@ export function createSubagentInputChannel(): SubagentInputChannel {
     },
 
     async next(signal: AbortSignal): Promise<SubagentInput | "closed"> {
+      if (signal.aborted) {
+        throw signal.reason;
+      }
       const queued = queue.shift();
       if (queued !== undefined) {
         return queued;

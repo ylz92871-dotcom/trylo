@@ -60,6 +60,7 @@ export async function runPermissionFor(
       permission: ports.permission,
       grants: call.grants,
       doom: call.doom,
+      ...(ports.execPolicy === undefined ? {} : { execPolicy: ports.execPolicy }),
       ...(ports.sandbox === undefined ? {} : { sandbox: ports.sandbox }),
     },
     request,

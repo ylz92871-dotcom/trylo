@@ -47,6 +47,20 @@ describe('InputBar conversation kind', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
     expect(onStop).toHaveBeenCalledOnce();
   });
+  it('puts one working stop control in the composer even when sending is blocked', () => {
+    const onStop = vi.fn();
+    const onSend = vi.fn();
+    const view = render(<InputBar {...props({ running: true, onStop, onSend, canSend: false })} />);
+    const stop = screen.getByRole('button', { name: 'Stop' });
+    expect(stop.closest('form')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: '发送（可排队或打断）' })).toBeNull();
+    fireEvent.click(stop);
+    expect(onStop).toHaveBeenCalledOnce();
+    expect(onSend).not.toHaveBeenCalled();
+    view.rerender(<InputBar {...props({ running: false, onStop })} />);
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+    expect(screen.getByRole('button', { name: '发送' })).toBeTruthy();
+  });
   it('keeps Code-specific controls in a Code conversation', () => {
     render(<InputBar {...props()} />);
 
@@ -84,8 +98,7 @@ describe('InputBar conversation kind', () => {
     expect(
       screen.getByRole('textbox', { name: 'Message' }).getAttribute('placeholder'),
     ).toBe('输入调整方向，Enter 发送后续消息…');
-    // run-controls §UI-B: during a live turn the send slot stays the arrow
-    // (messages QUEUE by default); the single Stop lives in the header.
+    // Without a stop capability the send arrow remains available.
     expect(screen.getByRole('button', { name: '发送（可排队或打断）' })).toBeTruthy();
   });
 

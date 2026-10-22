@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { afterEach, test } from "node:test";
 import type { Message } from "../contract/execution.js";
 import { emptyUsage, type ProviderEvent, type ProviderPort, type ProviderRequest } from "../ports/provider.js";
 import type { JsonObject } from "../protocol/envelope.js";
@@ -59,6 +59,11 @@ function scriptedProvider(answers: ReadonlyArray<string>): {
 
 type Harness = ReturnType<typeof harness>;
 
+const runtimes: SubagentRuntime[] = [];
+afterEach(async () => {
+  for (const runtime of runtimes.splice(0)) await runtime.cancelAll();
+});
+
 function harness(
   options: {
     readonly parentMessages?: ReadonlyArray<Message>;
@@ -72,6 +77,7 @@ function harness(
     tools: noTools(),
     idGenerator: (name) => `${name}-${++counter}`,
   });
+  runtimes.push(runtime);
   const control = createSubagentControlTool({
     runtime,
     provider: provider.port,
@@ -118,8 +124,12 @@ test("a spawned agent keeps running instead of finishing, and closing it ends th
   await settle();
 
   const before = await call(WAIT_AGENT_TOOL, { targets: [agentId], timeout_ms: 10 });
-  // A wait that gives up is not a terminal: the agent is simply still working.
-  assert.equal(before.value?.["timed_out"], true, "an unfinished agent must not look finished");
+  // A round answer is available while the lifecycle stays open for follow-up.
+  assert.equal(before.value?.["timed_out"], false);
+  const report = (before.value?.["results"] as JsonObject)[agentId] as JsonObject;
+  assert.equal(report["output"], "round one");
+  assert.equal(report["phase"], "awaiting_input");
+  assert.equal(report["status"], "running");
   assert.equal(provider.requests.length, 1, "the first round ran");
 
   await call(CLOSE_AGENT_TOOL, { target: agentId });

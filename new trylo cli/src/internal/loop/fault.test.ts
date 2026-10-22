@@ -55,6 +55,7 @@ test("unknown tool outcome is not success", async () => {
       provider: createFakeProvider([
         [
           { type: "tool_call", toolCallId: "call-u", name: "echo", arguments: {} },
+          { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
         [{ type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false }],
       ]),

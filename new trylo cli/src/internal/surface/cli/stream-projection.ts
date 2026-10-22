@@ -250,6 +250,28 @@ function translateInto(state: BlockState, envelope: Envelope, events: CliStreamE
     case "usage":
       events.push({ type: "usage", usage: usageFrom(envelope.payload) });
       break;
+    case "subagent_spawn":
+    case "subagent_update":
+    case "subagent_end": {
+      const payload = envelope.payload;
+      const id = text(payload, "subagentId");
+      if (id === "") break;
+      const kind = envelope.kind === "subagent_spawn" ? "spawn" : envelope.kind === "subagent_end" ? "end" : "update";
+      const rawStatus = text(payload, "status");
+      const status = kind === "spawn" ? "running" : rawStatus === "completed" ? "done"
+        : rawStatus === "cancelled" ? "cancelled" : rawStatus === "waiting" ? "waiting"
+        : rawStatus === "running" ? "running" : "failed";
+      events.push({ type: "subagent", kind, id, status,
+        ...(kind === "spawn" ? { agentType: text(payload, "agentType") || text(payload, "name") || "subagent" } : {}),
+        ...(typeof payload.prompt === "string" ? { prompt: payload.prompt } : {}),
+        ...(typeof payload.result === "string" ? { result: payload.result } : {}),
+        ...(typeof payload.error === "string" ? { error: payload.error } : {}),
+        ...(typeof payload.round === "number" ? { round: payload.round } : {}),
+        ...(typeof payload.canReceiveInput === "boolean" ? { canReceiveInput: payload.canReceiveInput } : {}),
+        ...(typeof payload.displayName === "string" ? { displayName: payload.displayName } : {}),
+      });
+      break;
+    }
     case "compact":
       events.push({ type: "compact", status: "completed", reason: "auto",
         ...(typeof envelope.payload.tokensBefore === "number" ? { tokensBefore: envelope.payload.tokensBefore } : {}),
@@ -289,12 +311,14 @@ function translateInto(state: BlockState, envelope: Envelope, events: CliStreamE
 
 export function createStreamTranslator(): StreamTranslator {
   let state: BlockState | undefined = { messageOpen: false, reasoningRedacted: undefined, tools: new Map() };
+  let terminalSeen = false;
   return {
     push(envelope: Envelope): ReadonlyArray<CliStreamEvent> {
       if (state === undefined) return [];
+      if (terminalSeen && !envelope.kind.startsWith("subagent_")) return [];
       const events: CliStreamEvent[] = [];
       translateInto(state, envelope, events);
-      if (envelope.kind === "terminal") state = undefined;
+      if (envelope.kind === "terminal") terminalSeen = true;
       return events;
     },
     finish(): ReadonlyArray<CliStreamEvent> {

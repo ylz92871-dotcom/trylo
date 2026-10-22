@@ -42,20 +42,20 @@ export function createDenyAllPermission(): PermissionPort {
  * composition root. `--allow-writes` supplies workspace writes; an explicit
  * `--allow-tools` may also supply an external tool such as `run_shell`.
  */
-export function createAllowToolsPermission(allowedNames: ReadonlySet<string>): PermissionPort {
-  const pending = new Map<string, string>();
+export function createAllowToolsPermission(allowedNames: ReadonlySet<string>, actionAllowed: (action: PermissionAction) => boolean = () => true): PermissionPort {
+  const pending = new Map<string, PermissionAction>();
   let counter = 0;
   return {
     async request(action: PermissionAction): Promise<PermissionTicket> {
       counter += 1;
       const ticketId = `allow-tools-${counter}`;
-      pending.set(ticketId, action.name);
+      pending.set(ticketId, action);
       return { ticketId, toolCallId: action.toolCallId };
     },
     async awaitDecision(ticketId: string): Promise<PermissionDecision> {
-      const name = pending.get(ticketId);
+      const action = pending.get(ticketId);
       pending.delete(ticketId);
-      const allowed = name !== undefined && allowedNames.has(name);
+      const allowed = action !== undefined && allowedNames.has(action.name) && actionAllowed(action);
       return decision(allowed ? "approved" : "denied", "once", allowed ? undefined : "policy_denied");
     },
   };

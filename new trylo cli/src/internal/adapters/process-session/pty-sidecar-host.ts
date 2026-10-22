@@ -100,6 +100,7 @@ export function terminalize(
   if (isTerminalProcessStatus(record.status)) {
     return;
   }
+  record.buffer.end();
   record.status = end.kind;
   record.end = end;
   for (const wake of [...record.waiters]) {

@@ -104,7 +104,7 @@ export const RUN_SHELL_BINDING: ToolBinding = {
         type: "array",
         items: { type: "string" },
         description:
-          "Extra commands run in order after `command`, each with the same refusal rules. The first non-zero exit stops the run and is the result.",
+          "Extra commands run in order after `command`, each with the same refusal rules. The first non-zero exit stops the run and is the result. Output retains stdout and stderr from all executed steps under the shared output caps, with truncation reported.",
       },
       pipeTo: {
         type: "string",

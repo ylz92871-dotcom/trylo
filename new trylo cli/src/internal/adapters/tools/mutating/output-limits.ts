@@ -1,4 +1,4 @@
-import { cutToBytes } from "../../text-cut.js";
+import { cutTailToBytes, cutToBytes } from "../../../protocol/text-cut.js";
 
 /**
  * Truncating command output without lying about it.
@@ -54,10 +54,10 @@ export type TruncationLimits = {
   readonly maxLines?: number | undefined;
 };
 
-function markerFor(omittedBytes: number, omittedLines: number): string {
-  const parts = [`…${omittedBytes} bytes omitted…`];
+function markerFor(omittedBytes: number | undefined, omittedLines: number, byteFieldWidth = 0): string {
+  const parts = omittedBytes === undefined ? [] : [`…${String(omittedBytes).padStart(byteFieldWidth, " ")} bytes omitted…`];
   if (omittedLines > 0) {
-    parts.push(`${omittedLines} lines`);
+    parts.push(`${omittedLines} lines omitted`);
   }
   return `[${parts.join(", ")}]`;
 }
@@ -83,13 +83,11 @@ function fitsMarker(budget: number, originalBytes: number): boolean {
 }
 
 /**
- * The result when the budget cannot hold a marker: the marker alone, and a loss
- * figure measured against it like every other branch. `originalBytes` rather
- * than a reserved guess, so `fitsMarker` and `truncateMiddle` judge the same
- * marker by the same number.
+ * A tiny budget still applies. The typed truncation flag carries the loss when
+ * even a short human-readable marker cannot fit.
  */
-function bareMarkerResult(originalBytes: number): TruncationResult {
-  const text = markerFor(0, 0);
+function bareMarkerResult(originalBytes: number, maxBytes: number): TruncationResult {
+  const text = cutToBytes("omitted", Math.min(maxBytes, originalBytes));
   return {
     text,
     truncated: true,
@@ -127,16 +125,16 @@ function truncateMiddle(text: string, maxBytes: number): TruncationResult {
   const head = cutToBytes(text, Math.ceil(budget / 2));
   // The tail must be measured from the real end, and `cutToBytes` only cuts a
   // prefix — so take the suffix by length and cut it to what the head left.
-  const tailSource = text.slice(-Math.min(text.length, Math.ceil(budget / 2) + 1));
-  const tailCut = cutToBytes(tailSource, budget - Buffer.byteLength(head, "utf8"));
-  const tail = tailSource.slice(tailSource.length - tailCut.length);
+  const tail = cutTailToBytes(text, budget - Buffer.byteLength(head, "utf8"));
   // What is missing from the original, measured against the finished output —
   // which includes the marker. Measuring against `head + tail` instead would
   // credit the marker as kept bytes and under-report the loss by exactly its own
   // width (26 bytes here, at every budget). The field and the marker text then
   // state the same number, because the marker is built from this figure.
   const keptBytes = Buffer.byteLength(head, "utf8") + Buffer.byteLength(tail, "utf8");
-  const marker = markerFor(originalBytes - keptBytes - markerCost(originalBytes, 0), 0);
+  // Keep the reserved numeric field width even across 9/10 or 99/100. Without
+  // padding, shortening the marker changes the very loss it claims to report.
+  const marker = markerFor(originalBytes - keptBytes - reserve, 0, String(originalBytes).length);
   const omittedBytes = originalBytes - Buffer.byteLength(`${head}${marker}${tail}`, "utf8");
   return {
     text: `${head}${marker}${tail}`,
@@ -169,23 +167,34 @@ export function truncateOutput(text: string, limits: TruncationLimits): Truncati
         : // No room for an honest marker. Say that something went without
           // inventing a size, and report the loss the same way every other
           // branch does — measured, not derived from the budget.
-          bareMarkerResult(originalBytes);
+          bareMarkerResult(originalBytes, maxBytes);
 
   const maxLines = limits.maxLines;
   if (maxLines === undefined) {
     return byBytes;
   }
+  const lineCap = Math.max(0, Math.trunc(maxLines));
   const lines = byBytes.text.split("\n");
-  if (lines.length <= maxLines) {
+  if (byBytes.text.length === 0 || lines.length <= lineCap) {
     return byBytes;
+  }
+  if (lineCap === 0) return { text: "", truncated: true, originalBytes, omittedBytes: originalBytes };
+  if (lineCap <= 2) {
+    // With no room for separate head/marker/tail lines, prefer the actual ending.
+    const last = lines.at(-1) === "" ? lines.at(-2) ?? "" : lines.at(-1) ?? "";
+    const text = cutTailToBytes(last, maxBytes);
+    return { text, truncated: true, originalBytes, omittedBytes: originalBytes - Buffer.byteLength(text, "utf8") };
   }
   // Keep the head of what survived and the original tail, so the outcome is
   // still visible; the middle is where the volume was.
-  const keptHead = lines.slice(0, Math.max(1, Math.floor(maxLines / 2)));
-  const keptTailCount = Math.max(0, maxLines - keptHead.length - 1);
+  const keptHead = lines.slice(0, Math.floor((lineCap - 1) / 2));
+  const keptTailCount = lineCap - keptHead.length - 1;
   const keptTail = keptTailCount === 0 ? [] : lines.slice(lines.length - keptTailCount);
   const droppedLines = lines.length - keptHead.length - keptTail.length;
-  const text2 = [...keptHead, markerFor(byBytes.omittedBytes, droppedLines), ...keptTail].join("\n");
+  const withMarker = [...keptHead, markerFor(undefined, droppedLines), ...keptTail].join("\n");
+  // Inserting a line-loss marker must not spend bytes outside the byte budget.
+  const text2 = Buffer.byteLength(withMarker, "utf8") <= maxBytes && Buffer.byteLength(withMarker, "utf8") <= originalBytes
+    ? withMarker : [...keptHead, ...keptTail].join("\n");
   return {
     text: text2,
     truncated: true,

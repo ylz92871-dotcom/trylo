@@ -96,12 +96,12 @@ it('saving OpenAI in the real modal survives two actual CLI sends and reopening 
   }
   const view = render(<Harness />);
   try {
-    fireEvent.change(screen.getByLabelText(/^Format/), { target: { value: 'openai' } });
-    fireEvent.change(screen.getByLabelText(/^Provider preset/), { target: { value: 'openai-compatible' } });
-    fireEvent.change(screen.getByLabelText(/^API host/), { target: { value: `http://127.0.0.1:${address.port}/v1` } });
-    fireEvent.change(screen.getByLabelText(/^Model/), { target: { value: 'saved-openai-model' } });
-    fireEvent.change(screen.getByLabelText(/^API key/), { target: { value: 'local-test-only' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.change(screen.getByLabelText("API 协议"), { target: { value: 'openai' } });
+    fireEvent.change(screen.getByLabelText("服务商标识"), { target: { value: 'openai-compatible' } });
+    fireEvent.change(screen.getByLabelText("服务地址"), { target: { value: `http://127.0.0.1:${address.port}/v1` } });
+    fireEvent.change(screen.getByLabelText("模型名称"), { target: { value: 'saved-openai-model' } });
+    fireEvent.change(screen.getByLabelText("API 密钥"), { target: { value: 'local-test-only' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存设置' }));
     const saved = loadSettings();
     for (let turn = 0; turn < 2; turn++) {
       fireEvent.click(screen.getByRole('button', { name: 'Send probe' }));
@@ -110,11 +110,11 @@ it('saving OpenAI in the real modal survives two actual CLI sends and reopening 
       expect(screen.getByTestId('display-format')).toHaveTextContent('openai');
     }
     fireEvent.click(screen.getByRole('button', { name: 'Open settings' }));
-    expect(screen.getByLabelText(/^Format/)).toHaveValue('openai');
+    expect(screen.getByLabelText("API 协议")).toHaveValue('openai');
     // A pre-fix conversation may still hold the stale choice. Re-saving the
     // already-correct form must apply it without making the user retype it.
     models = setConversationChoice(models, 'ws', 'active', { kind: 'profile', id: 'old' });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存设置' }));
     fireEvent.click(screen.getByRole('button', { name: 'Send probe' }));
     await sending;
     expect(requests).toEqual(Array.from({ length: 3 }, () => ({ path: '/v1/chat/completions', model: 'saved-openai-model', hasChatMessages: true })));

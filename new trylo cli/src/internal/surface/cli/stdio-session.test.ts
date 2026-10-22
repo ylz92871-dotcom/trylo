@@ -27,6 +27,31 @@ const response = (requestId: string, body: object) => ({ type: "control_response
   subtype: "success", request_id: requestId, response: body,
 } });
 
+test("host child input is targeted, acknowledged and never becomes parent guidance", async () => {
+  const h = harness();
+  try {
+    const calls: unknown[] = [];
+    h.channel.bindAgentTools({ snapshot: () => [{ name: "send_input" } as never], cancel: async () => {},
+      execute: async call => { calls.push(call); return call.arguments.target === "closed"
+        ? { outcome: "error", code: "agent_closed", message: "agent_closed" }
+        : { outcome: "result", value: {}, output: "queued", truncated: false }; } });
+    h.feed({ type: "subagent_input", requestId: "host-1", target: "agent-a", message: "第二轮" });
+    h.feed({ type: "subagent_input", requestId: "host-2", target: "closed", message: "继续" });
+    await tick();
+    assert.deepEqual(calls, [
+      { name: "send_input", toolCallId: "host-host-1", arguments: { target: "agent-a", message: "第二轮" } },
+      { name: "send_input", toolCallId: "host-host-2", arguments: { target: "closed", message: "继续" } },
+    ]);
+    assert.deepEqual(h.channel.pendingInput("turn"), []);
+    assert.equal(h.frames.find(frame => frame.requestId === "host-1")?.accepted, true);
+    assert.equal(h.frames.find(frame => frame.requestId === "host-2")?.accepted, false);
+    h.channel.bindAgentTools(undefined);
+    h.feed({ type: "subagent_input", requestId: "host-3", target: "agent-a", message: "结束后" });
+    await tick(); assert.equal(calls.length, 2);
+    assert.equal(h.frames.find(frame => frame.requestId === "host-3")?.accepted, false);
+  } finally { h.close(); }
+});
+
 test("one stdin reader routes a question, approval and guidance independently", async () => {
   const h = harness();
   try {

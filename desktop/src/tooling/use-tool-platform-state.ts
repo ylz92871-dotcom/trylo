@@ -100,7 +100,7 @@ export function actionFor(pkg: ToolPackageHealth, uiState: ToolPackageUiState): 
       return 'retry';
     case 'unusable':
       // condition-missing on playwright → the browser body is the fix.
-      if (pkg.state === 'condition-missing' && pkg.condition && !pkg.condition.ok) {
+      if (pkg.id === 'playwright' && pkg.state === 'condition-missing' && pkg.condition && !pkg.condition.ok) {
         return 'install-browser';
       }
       // Anything else unusable is a repair: reinstall from the pinned source.

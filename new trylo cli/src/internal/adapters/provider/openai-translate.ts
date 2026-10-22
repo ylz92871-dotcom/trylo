@@ -84,10 +84,9 @@ function pushChunk(state: TranslatorState, payload: unknown): ProviderEvent[] {
   }
   const choice = choices[0] as Record<string, unknown>;
   const delta = choice.delta;
-  if (typeof delta !== "object" || delta === null) {
-    return events;
-  }
-  const deltaRecord = delta as Record<string, unknown>;
+  // Completion metadata is independent from content. Compatible gateways may
+  // end with a null/omitted delta; dropping it loses finish and native state.
+  const deltaRecord = typeof delta === "object" && delta !== null ? delta as Record<string, unknown> : {};
   events.push(...textEvents(state, deltaRecord.content));
   // Two spellings exist in the wild: `reasoning_content` (DeepSeek/OpenRouter
   // style) and `reasoning` on the delta. The AMD MiMo endpoint sends *both* — a
@@ -241,12 +240,13 @@ function finishEvents(state: TranslatorState, finishReason: unknown): ProviderEv
     return [];
   }
   const events = closeOpenBlocks(state);
-  events.push(...closeAllTools(state));
+  const tools = closeAllTools(state);
+  events.push(...tools);
   events.push({
     type: "finish",
     reason: mapFinishReason(finishReason),
     rawReason: finishReason,
-    requiresFollowUp: finishReason === "tool_calls",
+    requiresFollowUp: finishReason === "tool_calls" || (finishReason === "stop" && tools.length > 0),
   });
   return events;
 }

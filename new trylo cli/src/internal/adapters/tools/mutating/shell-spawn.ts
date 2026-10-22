@@ -1,7 +1,7 @@
 import type { ChildProcess } from "node:child_process";
 import { terminateProcessTree } from "../../process-session/process-tree.js";
 import type { CommandShape } from "../../sandbox/executable.js";
-import { truncateOutput } from "./output-limits.js";
+import { OutputCapture } from "./output-capture.js";
 import { startShellChild, startShellPipeline } from "./shell-child-processes.js";
 
 /**
@@ -90,14 +90,6 @@ export function childEnvironment(options: { env?: Readonly<Record<string, string
  * which for a build log means dropping the error. `output-limits.ts` owns that
  * now, with the measured cases pinned in its own tests.
  */
-function clip(value: string, maxBytes: number, maxLines: number): {
-  text: string;
-  truncated: boolean;
-} {
-  const result = truncateOutput(value, { maxBytes, maxLines });
-  return { text: result.text, truncated: result.truncated };
-}
-
 type Stdio = readonly ["ignore" | "pipe", "pipe", "pipe"];
 
 /**
@@ -136,20 +128,19 @@ async function endChildTree(child: ChildProcess): Promise<void> {
   process.stderr.write(`[run_shell] ${outcome.message}\n`);
 }
 
-function collect(child: ChildProcess, into: { stdout: string[]; stderr: string[] }): void {
-  child.stdout?.setEncoding("utf8");
+function collect(child: ChildProcess, stdout: OutputCapture | undefined, stderr: OutputCapture): void {
+  if (stdout !== undefined) child.stdout?.setEncoding("utf8");
   child.stderr?.setEncoding("utf8");
-  child.stdout?.on("data", (chunk: string) => {
-    into.stdout.push(chunk);
-  });
+  if (stdout !== undefined) child.stdout?.on("data", (chunk: string) => stdout.write(chunk));
   child.stderr?.on("data", (chunk: string) => {
-    into.stderr.push(chunk);
+    stderr.write(chunk);
   });
 }
 
 function runSingle(spec: ShellSpawnSpec, shape: CommandShape, env: Readonly<Record<string, string>>): Promise<ShellSpawnResult> {
   return new Promise<ShellSpawnResult>((resolve, reject) => {
-    const chunks = { stdout: [] as string[], stderr: [] as string[] };
+    const capturedStdout = new OutputCapture(spec.maxOutputBytes);
+    const capturedStderr = new OutputCapture(spec.maxOutputBytes);
     let settled = false;
     let timedOut = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -165,8 +156,8 @@ function runSingle(spec: ShellSpawnSpec, shape: CommandShape, env: Readonly<Reco
       resolve(result);
     };
     const report = (): ShellSpawnResult => {
-      const stdout = clip(chunks.stdout.join(""), spec.maxOutputBytes, spec.maxOutputLines);
-      const stderr = clip(chunks.stderr.join(""), spec.maxOutputBytes, spec.maxOutputLines);
+      const stdout = capturedStdout.read(spec.maxOutputLines);
+      const stderr = capturedStderr.read(spec.maxOutputLines);
       return {
         stdout: stdout.text,
         stderr: stderr.text,
@@ -180,12 +171,13 @@ function runSingle(spec: ShellSpawnSpec, shape: CommandShape, env: Readonly<Reco
       void endChildTree(child);
     }
     const child = startChild(shape, spec.cwd, ["ignore", "pipe", "pipe"], env);
-    collect(child, chunks);
+    collect(child, capturedStdout, capturedStderr);
     timer = setTimeout(() => {
       timedOut = true;
       void endChildTree(child);
     }, spec.timeoutMs);
     spec.signal.addEventListener("abort", onAbort);
+    if (spec.signal.aborted) onAbort();
     child.on("error", (err) => {
       if (timer !== undefined) {
         clearTimeout(timer);
@@ -208,8 +200,6 @@ function runSingle(spec: ShellSpawnSpec, shape: CommandShape, env: Readonly<Reco
  * is what a shell reports too — while stderr of every segment is merged,
  * because a failure in any one of them is worth seeing.
  */
-type Chunks = { stdout: string[]; stderr: string[] };
-
 /**
  * The last segment decides the result, the way a shell would: its exit code,
  * its stdout. Stderr is merged across the whole pipeline because a failure in
@@ -218,17 +208,13 @@ type Chunks = { stdout: string[]; stderr: string[] };
 function pipeReport(
   spec: ShellSpawnSpec,
   children: ReadonlyArray<ChildProcess>,
-  allChunks: ReadonlyArray<Chunks>,
+  capturedStdout: OutputCapture,
+  capturedStderr: OutputCapture,
   timedOut: boolean,
 ): ShellSpawnResult {
   const last = children[children.length - 1];
-  const lastChunks = allChunks[allChunks.length - 1] ?? { stdout: [], stderr: [] };
-  const stdout = clip(lastChunks.stdout.join(""), spec.maxOutputBytes, spec.maxOutputLines);
-  const stderr = clip(
-    allChunks.map((chunks) => chunks.stderr.join("")).join(""),
-    spec.maxOutputBytes,
-    spec.maxOutputLines,
-  );
+  const stdout = capturedStdout.read(spec.maxOutputLines);
+  const stderr = capturedStderr.read(spec.maxOutputLines);
   return {
     stdout: stdout.text,
     stderr: stderr.text,
@@ -249,12 +235,11 @@ function runPipeline(
     // First segment's stdout is ignored (nothing reads it but the pipe);
     // every other segment pipes stdout into the next stdin.
     const children = startShellPipeline([source, ...receivers.map(receiver => receiver.shape)], (shape, receiver) => startChild(shape, spec.cwd, [receiver ? "pipe" : "ignore", "pipe", "pipe"], env));
-    const allChunks: Chunks[] = children.map(() => ({ stdout: [], stderr: [] }));
+    const capturedStdout = new OutputCapture(spec.maxOutputBytes);
+    const capturedStderr = new OutputCapture(spec.maxOutputBytes);
     children.forEach((child, index) => {
-      const chunks = allChunks[index];
-      if (chunks !== undefined) {
-        collect(child, chunks);
-      }
+      // Intermediate stdout flows only to the next process, never into a second log copy.
+      collect(child, index === children.length - 1 ? capturedStdout : undefined, capturedStderr);
     });
     let settled = false;
     let timedOut = false;
@@ -278,6 +263,7 @@ function runPipeline(
       killAll();
     }, spec.timeoutMs);
     spec.signal.addEventListener("abort", onAbort);
+    if (spec.signal.aborted) onAbort();
     let failure: { readonly error: unknown } | undefined;
     let closed = 0;
     const failed = (err: unknown): void => {
@@ -301,7 +287,7 @@ function runPipeline(
         if (failure !== undefined) {
           reject(failure.error);
         } else {
-          resolve(pipeReport(spec, children, allChunks, timedOut));
+          resolve(pipeReport(spec, children, capturedStdout, capturedStderr, timedOut));
         }
       });
     }
@@ -310,7 +296,10 @@ function runPipeline(
 
 /** Trusted execution adapters can supply their broker environment; tool arguments cannot. */
 export const createNodeSpawner = (environment: () => Readonly<Record<string, string>> = childEnvironment): ShellSpawner => async (spec) => {
+  const cancelled: ShellSpawnResult = { stdout: "", stderr: "", exitCode: -1, timedOut: false, aborted: true, truncated: false };
+  if (spec.signal.aborted) return cancelled;
   const env = environment();
+  if (spec.signal.aborted) return cancelled;
   const shape = spec.shape ?? { kind: "direct", argv: spec.argv };
   const receivers = spec.pipeTo ?? [];
   if (receivers.length === 0) {

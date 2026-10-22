@@ -14,6 +14,10 @@
 .input-bar__actions-spare { flex: 1; }
 .input-bar__send { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; color: var(--bg); background: var(--fg); flex-shrink: 0; }
 .input-bar__send:disabled { opacity: .22; cursor: default; }
+.input-bar__stop { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 auto; padding: 0; margin-left: 4px; border: 0; border-radius: 50%; background: var(--fg); color: var(--bg); cursor: pointer; }
+.input-bar__stop:hover { opacity: .85; }
+.input-bar__stop:focus-visible, .input-bar__send:focus-visible { outline: 2px solid var(--fg-muted); outline-offset: 3px; }
+@media (pointer: coarse) { .input-bar__stop, .input-bar__send { width: 44px; height: 44px; } }
 .input-bar__actions { padding: 9px 5px 0; gap: 14px; flex-wrap: wrap; color: var(--fg-muted); }
 .input-bar__workspace { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .input-bar__hint { font-size: 10px; color: var(--ink-mute); }

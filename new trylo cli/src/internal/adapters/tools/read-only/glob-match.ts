@@ -1,3 +1,5 @@
+import { globProgram, type GlobToken } from "./glob-program.js";
+
 /**
  * Glob compilation for `glob_files`: one pure function from a pattern string to
  * a matcher over forward-slash relative paths. No I/O, no state, no dependency.
@@ -31,10 +33,6 @@ export type GlobCompileResult =
   | { readonly ok: false; readonly code: "invalid_pattern"; readonly message: string };
 
 class GlobSyntaxError extends Error {}
-
-function escapeLiteral(char: string): string {
-  return /[a-zA-Z0-9_]/.test(char) ? char : `\\${char}`;
-}
 
 /** Finds the `}` matching the `{` at `open`, honoring nesting. -1 when absent. */
 function matchingBrace(pattern: string, open: number): number {
@@ -127,78 +125,49 @@ function compileClassBody(body: string): string {
   return `(?!/)[${negated ? "^" : ""}${escaped}]`;
 }
 
-/** Translates one pattern (or alternation branch) into regex source. */
-function toRegExpSource(pattern: string): string {
-  let source = "";
-  let i = 0;
-  while (i < pattern.length) {
-    const char = pattern[i] as string;
+const withinSegment = (char: string): boolean => char !== "/";
+const dot = (char: string): boolean => !/[\n\r\u2028\u2029]/.test(char);
+const literal = (value: string): GlobToken => ({ kind: "character", accepts: char => char === value });
+
+/** Parsing retains the existing syntax; the executor never backtracks. */
+function parseGlob(pattern: string, depth = 0): ReadonlyArray<GlobToken> {
+  if (depth > 32) throw new GlobSyntaxError("brace nesting exceeds 32 levels");
+  const tokens: GlobToken[] = [];
+  for (let i = 0; i < pattern.length; i += 1) {
+    const char = pattern.charAt(i);
     if (char === "\\") {
       const next = pattern[i + 1];
-      if (next === undefined) {
-        throw new GlobSyntaxError("pattern ends with a backslash");
-      }
-      source += escapeLiteral(next);
-      i += 2;
-      continue;
-    }
-    if (char === "{") {
+      if (next === undefined) throw new GlobSyntaxError("pattern ends with a backslash");
+      tokens.push(literal(next)); i += 1;
+    } else if (char === "{") {
       const close = matchingBrace(pattern, i);
-      if (close === -1) {
-        throw new GlobSyntaxError("unbalanced '{'");
-      }
+      if (close < 0) throw new GlobSyntaxError("unbalanced '{'");
       const alternatives = splitAlternatives(pattern.slice(i + 1, close));
-      if (alternatives.length < 2) {
-        throw new GlobSyntaxError("'{...}' needs at least one comma");
-      }
-      const branches = alternatives.map((part) => toRegExpSource(part));
-      source += `(?:${branches.join("|")})`;
-      i = close + 1;
-      continue;
-    }
-    if (char === "}") {
+      if (alternatives.length < 2) throw new GlobSyntaxError("'{...}' needs at least one comma");
+      tokens.push({ kind: "alternatives", branches: alternatives.map(part => parseGlob(part, depth + 1)) });
+      i = close;
+    } else if (char === "}") {
       throw new GlobSyntaxError("unbalanced '}'");
-    }
-    if (char === "[") {
+    } else if (char === "[") {
       const close = matchingBracket(pattern, i);
-      if (close === -1) {
-        throw new GlobSyntaxError("unterminated character class");
+      if (close < 0) throw new GlobSyntaxError("unterminated character class");
+      // A class sees exactly one code unit; there is no user repetition here.
+      const expression = new RegExp(`^${compileClassBody(pattern.slice(i + 1, close))}$`);
+      tokens.push({ kind: "character", accepts: value => expression.test(value) });
+      i = close;
+    } else if (char === "*") {
+      if (pattern[i + 1] !== "*") tokens.push({ kind: "star", accepts: withinSegment });
+      else {
+        while (pattern[i + 1] === "*") i += 1;
+        const star: GlobToken = { kind: "star", accepts: dot };
+        if (pattern[i + 1] === "/") {
+          tokens.push({ kind: "alternatives", branches: [[], [star, literal("/")]] });
+          i += 1;
+        } else tokens.push(star);
       }
-      source += compileClassBody(pattern.slice(i + 1, close));
-      i = close + 1;
-      continue;
-    }
-    if (char === "*") {
-      if (pattern[i + 1] === "*") {
-        // Consume the whole `**` run, then decide by what follows.
-        let end = i;
-        while (pattern[end] === "*") {
-          end += 1;
-        }
-        if (pattern[end] === "/") {
-          // `**/` is zero or more leading directories.
-          source += "(?:.*/)?";
-          i = end + 1;
-        } else {
-          // Trailing or mid-segment `**` spans everything.
-          source += ".*";
-          i = end;
-        }
-        continue;
-      }
-      source += "[^/]*";
-      i += 1;
-      continue;
-    }
-    if (char === "?") {
-      source += "[^/]";
-      i += 1;
-      continue;
-    }
-    source += escapeLiteral(char);
-    i += 1;
+    } else tokens.push(char === "?" ? { kind: "character", accepts: withinSegment } : literal(char));
   }
-  return source;
+  return tokens;
 }
 
 function hasUnescapedSlash(pattern: string): boolean {
@@ -215,18 +184,12 @@ function hasUnescapedSlash(pattern: string): boolean {
 }
 
 export function compileGlob(pattern: string): GlobCompileResult {
-  let source: string;
+  let matches: (text: string) => boolean;
   try {
-    source = toRegExpSource(pattern);
-  } catch (err) {
-    const reason = err instanceof GlobSyntaxError ? err.message : "invalid pattern";
-    return { ok: false, code: "invalid_pattern", message: `invalid_pattern:${reason}` };
-  }
-  let regex: RegExp;
-  try {
-    regex = new RegExp(`^(?:${source})$`);
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : "invalid pattern";
+    if (pattern.length > 4096) throw new GlobSyntaxError("pattern exceeds 4096 code units");
+    matches = globProgram(parseGlob(pattern));
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "invalid pattern";
     return { ok: false, code: "invalid_pattern", message: `invalid_pattern:${reason}` };
   }
   const basenameOnly = !hasUnescapedSlash(pattern);
@@ -238,7 +201,7 @@ export function compileGlob(pattern: string): GlobCompileResult {
         const target = basenameOnly
           ? relativePath.slice(relativePath.lastIndexOf("/") + 1)
           : relativePath;
-        return regex.test(target);
+        return matches(target);
       },
     },
   };

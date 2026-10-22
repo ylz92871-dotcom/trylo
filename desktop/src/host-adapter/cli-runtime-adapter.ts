@@ -113,7 +113,7 @@ export interface CliRuntimeAbilities {
   readonly richToolEvents: boolean;
   /** The v1 stream carries no learning events yet. */
   readonly learningEvents: boolean;
-  /** …and no subagent events yet. */
+  /** Structured child lifecycle events, independently of Team sessions. */
   readonly subagentEvents: boolean;
 }
 
@@ -138,7 +138,7 @@ const V1_ABILITIES: CliRuntimeAbilities = {
   durableSessions: true,
   richToolEvents: false,
   learningEvents: false,
-  subagentEvents: false,
+  subagentEvents: true,
 };
 
 const ABILITIES_FOR: Record<CliRuntimeKind, CliRuntimeAbilities> = {

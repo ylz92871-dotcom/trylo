@@ -53,8 +53,8 @@ export function reasoningSummaryOptions(provider: {
  * to reach the person on the turn that asked.
  */
 function preflight(input: WiringInput, kind: ProviderKind): WiringFailure | undefined {
-  if (input.reasoningEffort !== undefined && kind !== "openai-compatible") return {
-    code: "unsupported_reasoning_effort", detail: "--reasoning-effort is supported by the Chat-compatible wire only; this provider cannot apply it",
+  if (input.reasoningEffort !== undefined && kind !== "openai-compatible" && kind !== "openai-responses") return {
+    code: "unsupported_reasoning_effort", detail: "--reasoning-effort requires a Chat-compatible or Responses provider; this provider cannot apply it",
   };
   if (isKeyedProviderKind(kind) && input.endpoint.length === 0) {
     return {
@@ -84,6 +84,7 @@ function constructTransport(input: WiringInput, kind: ProviderKind): ProviderPor
       endpoint: input.endpoint,
       model: input.model,
       ...(input.reasoningSummary === undefined ? {} : { reasoningSummary: input.reasoningSummary }),
+      ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort }),
       ...(input.apiKey === undefined ? {} : { apiKey: input.apiKey }),
       ...(input.tokenManager === undefined ? {} : { tokenManager: input.tokenManager }),
     });

@@ -8,6 +8,7 @@ import { ModelSelector, type ModelChoice } from './ModelSelector';
 import { PermissionLevelPicker } from './PermissionLevelPicker';
 import { ToolProfileChip } from './ToolProfileChip';
 import { ProcessHeader } from './ProcessHeader';
+import { StopRunButton } from './StopRunButton';
 import { LearningStatusChip, type LearningStatusChipProps } from '../user-learning/LearningStatusChip';
 import { LearningDirectiveMenu } from '../user-learning/LearningDirectiveMenu';
 import type { LearningDirective } from '../../user-learning/types';
@@ -179,6 +180,7 @@ export function InputBar(props: InputBarProps): ReactElement {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isWork = props.conversationKind === 'work';
   const canSend = props.canSend !== false && props.text.trim().length > 0;
+  const showStop = props.running && props.onStop !== undefined;
   const resize = useCallback((el: HTMLTextAreaElement | null) => {
     if (!el) return;
     el.style.height = 'auto';
@@ -220,7 +222,8 @@ export function InputBar(props: InputBarProps): ReactElement {
         {props.running && (props.queuedCount ?? 0) > 0 && <span className="input-bar__queued" role="status">
           {props.queuedCount} 条已排队{props.onInterruptQueued && <button type="button" onClick={props.onInterruptQueued}>立即打断</button>}
         </span>}
-        <button type="submit" className="input-bar__send" disabled={!canSend} title={props.running ? '发送（可排队或打断）' : '发送'} aria-label={props.running ? '发送（可排队或打断）' : '发送'}><ArrowUp size={18} strokeWidth={2.2} /></button>
+        {(!showStop || props.text.trim().length > 0) && <button type="submit" className="input-bar__send" disabled={!canSend} title={props.running ? '发送（可排队或打断）' : '发送'} aria-label={props.running ? '发送（可排队或打断）' : '发送'}><ArrowUp size={18} strokeWidth={2.2} /></button>}
+        {showStop && <StopRunButton className="input-bar__stop" onStop={props.onStop!} />}
       </div>
     </form>
     <div className="input-bar__actions">
@@ -238,6 +241,6 @@ export function InputBar(props: InputBarProps): ReactElement {
       {props.onLearningDirectiveChange && <LearningDirectiveMenu value={props.learningDirective} onChange={props.onLearningDirectiveChange} />}
       {isWork && props.onOpenCognition && <button type="button" className="input-bar__cognition-entry" disabled={props.cognitionEnabled === false} onClick={props.onOpenCognition}>聊聊你怎么做报告</button>}
     </div>}
-    {(props.running || props.error || (props.viewState !== undefined && props.viewState !== 'idle')) && <ProcessHeader messages={props.messages} running={props.running} error={props.error} workspace={props.workspace} viewState={props.viewState} onStop={props.onStop} />}
+    {(props.running || props.error || (props.viewState !== undefined && props.viewState !== 'idle')) && <ProcessHeader messages={props.messages} running={props.running} error={props.error} workspace={props.workspace} viewState={props.viewState} />}
   </div>;
 }

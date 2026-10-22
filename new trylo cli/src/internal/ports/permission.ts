@@ -54,6 +54,16 @@ export type PermissionPort = {
   awaitDecision(ticketId: string): Promise<PermissionDecision>;
 };
 
+/** Adapter data is checked at runtime before it can authorize a tool call. */
+export function isPermissionDecision(value: unknown): value is PermissionDecision {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Readonly<Record<string, unknown>>;
+  if (typeof record.resolution !== "string" || !["approved", "denied", "cancelled", "expired"].includes(record.resolution)) return false;
+  if (record.scope !== "once" && record.scope !== "session") return false;
+  if ((record.resolution === "cancelled" || record.resolution === "expired") && record.scope !== "once") return false;
+  return record.reason === undefined || (typeof record.reason === "string" && ["user_denied", "policy_denied", "remembered_denial", "input_closed", "user_cancelled"].includes(record.reason));
+}
+
 /** Marker for a decision recorded against the whole tool rather than one call. */
 export const NAME_WIDE_PATTERN = "*";
 

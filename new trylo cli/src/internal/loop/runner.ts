@@ -24,6 +24,7 @@ import { emitRaw, nextId, type EnvelopeSink } from "./journal-emit.js";
 import type { PermissionGrantCache } from "./permission-grants.js";
 import { buildRequest } from "./request.js";
 import { consumeProviderStream } from "./stream.js";
+import { isSuccessfulStreamFinish } from "./stream-verdict.js";
 import { nextTranscriptSequence } from "./transcript-messages.js";
 import type { CheckpointWiring } from "./checkpoint-gate.js";
 import type { AddressedUserInput } from "../domain/input-queue.js";
@@ -40,6 +41,7 @@ import {
 import { emitCompactionFor, gapHostFor } from "./host-views.js";
 import { createToolArgumentNormalizer } from "./tool-boundary.js";
 import type { ExecutionProgressPort } from "../ports/execution-progress.js";
+import type { ExecPolicyGuard } from "./tool-admission.js";
 import { flushProgress, flushStreamItems, preserveOpenBlocks } from "./progress.js";
 import { applyTurnRepairs } from "./turn-repairs.js";
 import { budgetIteration, type BudgetIteration } from "./budget-final-report.js";
@@ -53,6 +55,8 @@ import { budgetIteration, type BudgetIteration } from "./budget-final-report.js"
 const MAX_REACTIVE_RECOVERIES_PER_TURN = 1;
 
 export type LoopPorts = {
+  /** A host-configured command policy participates in the same admission owner. */
+  readonly execPolicy?: ExecPolicyGuard;
   /** Awaited durable facts before effects; absent preserves the library path. */
   readonly progress?: ExecutionProgressPort;
   readonly provider: ProviderPort;
@@ -518,7 +522,7 @@ async function runOneIteration(
     await dispatch(engine, ports, finish);
   }
   return {
-    finished: finish !== undefined,
+    finished: finish?.type === "finish" && isSuccessfulStreamFinish(finish.reason),
     method: teaching.channel?.take(),
     toolGap: teaching.toolGapChannel?.take(),
   };

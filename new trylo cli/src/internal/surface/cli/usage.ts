@@ -100,7 +100,7 @@ export const USAGE = [
   "                                          openai-responses is the Responses wire, chosen per",
   "                                          declaration via `providers add --kind`",
   "  --model <id>                            provider model id",
-  "  --reasoning-effort <none|low|medium|high|max>  per-run Chat reasoning control;",
+  "  --reasoning-effort <none|minimal|low|medium|high|xhigh|max>  Chat/Responses reasoning control;",
   "                                          support is decided by the endpoint; no global config change",
   "  --fallback-model <model>                retry once on this model after a transient provider",
   "                                          failure (non-interactive runs only; must differ from --model)",

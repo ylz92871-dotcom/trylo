@@ -51,16 +51,27 @@ describe("bounded output buffer", () => {
   it("holds multi-byte characters whole rather than splitting the code point", () => {
     // "中文" is 中 (3 bytes) + 文 (3 bytes). Cutting at 5 bytes leaves a whole
     // 中 and two thirds of 文. The decoder must not invent a character out of
-    // those two bytes, and must not carry them into the next read as if they
-    // were a complete one — one replacement mark is the honest rendering.
+    // those two bytes. While the transport is open, the incomplete suffix waits.
+    // Only a true end without the final byte renders a replacement character.
     const bytes = Buffer.from("中文", "utf8");
     assert.equal(bytes.byteLength, 6);
     const cut = createBoundedBuffer(1024);
     cut.write(bytes.subarray(0, 5));
     const partial = cut.read(1024).text;
     assert.ok(partial.startsWith("中"), "the complete character survives intact");
-    assert.equal([...partial].length, 2, "中 plus exactly one replacement for the fragment");
-    assert.ok(partial.endsWith("�"), "the fragment is marked, not completed");
+    assert.equal(partial, "中");
+    cut.end();
+    assert.equal(cut.read(1024).text, "�", "only a genuinely incomplete final stream is marked");
+  });
+
+  it("keeps the exact text across read limits that cut Chinese and emoji", () => {
+    const buffer = createBoundedBuffer(1024);
+    buffer.write(Buffer.from("中文🙂"));
+    assert.equal(buffer.read(5).text, "中");
+    assert.equal(buffer.read(5).text, "文");
+    assert.equal(buffer.read(1).text, "", "a budget smaller than one character consumes none of it");
+    assert.equal(buffer.read(4).text, "🙂");
+    assert.equal(buffer.byteLength, 0);
   });
 
   it("resets both the content and the dropped flag", () => {

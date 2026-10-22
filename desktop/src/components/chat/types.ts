@@ -264,6 +264,12 @@ export interface SubagentMessage extends MessageBase {
   readonly kind: 'subagent';
   readonly status: 'running' | 'done' | 'waiting' | 'failed' | 'cancelled';
   readonly agentType: string;
+  readonly canReceiveInput?: boolean;
+  readonly displayName?: string;
+  readonly error?: string;
+  readonly round?: number;
+  readonly source?: 'trylo-v1';
+  readonly conversation?: readonly { readonly round: number; readonly prompt?: string; readonly result?: string }[];
   readonly prompt?: string;
   readonly result?: string;
   readonly durationMs?: number;

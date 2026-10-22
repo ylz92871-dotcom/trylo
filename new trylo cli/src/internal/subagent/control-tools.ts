@@ -4,12 +4,13 @@ import type { PermissionPort } from "../ports/permission.js";
 import type { ProviderPort } from "../ports/provider.js";
 import type { ToolCallRequest, ToolOutcome, ToolPort, ToolSandbox } from "../ports/tools.js";
 import type { JsonObject, JsonValue } from "../protocol/envelope.js";
+import type { Transcript } from "../protocol/transcript.js";
 import { createSubagentInputChannel, type SubagentInputChannel } from "./input-channel.js";
 import {
   createInteractiveChildWorker,
   type InteractiveChildResult,
 } from "./interactive-worker.js";
-import type { SubagentRuntime } from "./runtime.js";
+import { SUBAGENT_HISTORY_LIMIT, type SubagentRuntime } from "./runtime.js";
 import {
   CLOSE_AGENT_TOOL,
   RESUME_AGENT_TOOL,
@@ -26,6 +27,13 @@ import {
   type SubagentRole,
 } from "./role.js";
 import type { SubagentHandle, SubagentStatus } from "./types.js";
+import { systemTimerScheduler, type TimerScheduler } from "./scheduler.js";
+import {
+  AgentRoundObservation,
+  DEFAULT_AGENT_WAIT_MS,
+  MAX_AGENT_WAIT_MS,
+  waitForAgentReports,
+} from "./control-observation.js";
 
 /**
  * The model's side of a subagent (WP22.2 / C43, L29).
@@ -60,6 +68,7 @@ export type SubagentControlOptions = {
   /** What one turn of a child may spend, before a role narrows it. */
   readonly childMaxIterations?: number | undefined;
   readonly onEnvelope?: ((envelope: import("../protocol/envelope.js").Envelope) => void) | undefined;
+  readonly scheduler?: TimerScheduler | undefined;
 };
 
 type AgentEntry = {
@@ -68,7 +77,8 @@ type AgentEntry = {
   readonly channel: SubagentInputChannel;
   readonly handle: SubagentHandle<InteractiveChildResult>;
   /** Kept so `resume_agent` can hand the conversation to a fresh run. */
-  transcript: import("../protocol/transcript.js").Transcript;
+  readonly observation: AgentRoundObservation;
+  readonly resolved: ResolvedRole;
 };
 
 function text(args: JsonObject, key: string): string | undefined {
@@ -102,52 +112,78 @@ function refuse(code: string, message: string): ToolOutcome {
 
 export function createSubagentControlTool(options: SubagentControlOptions): ToolPort {
   const agents = new Map<string, AgentEntry>();
+  const finished: string[] = [];
+  const observers = new Map<string, AbortController>();
   let submissions = 0;
 
   /** Remembers what an agent said, so `resume_agent` has something to continue. */
   const remember = (entry: AgentEntry): void => {
     void entry.handle.wait().then((result) => {
-      if (result.status === "completed" && result.output !== undefined) {
-        entry.transcript = result.output.transcript;
+      entry.channel.close();
+      entry.observation.finish(result);
+      finished.push(entry.agentId);
+      // The runtime bounds its terminal history; this owner must also release
+      // the conversations it retains for resume. Active workers keep their slots.
+      while (finished.length > SUBAGENT_HISTORY_LIMIT) {
+        const oldest = finished.shift();
+        if (oldest !== undefined) agents.delete(oldest);
       }
     });
   };
 
-  const start = (
-    name: string,
-    message: string,
-    toolCallId: string,
-    carried: AgentEntry["transcript"] | undefined,
-    forkParent: boolean,
-    agentType: string | undefined,
-  ): { readonly entry: AgentEntry; readonly resolved: ResolvedRole } => {
-    const resolved = resolveRole(options.roles ?? [], agentType, {
+  const start = (request: {
+    readonly name: string;
+    readonly message: string;
+    readonly toolCallId: string;
+    readonly carried?: Transcript;
+    readonly forkParent?: boolean;
+    readonly agentType?: string | undefined;
+    readonly model?: string | undefined;
+    readonly resolved?: ResolvedRole;
+  }): { readonly entry: AgentEntry; readonly resolved: ResolvedRole } => {
+    const role = request.resolved ?? resolveRole(options.roles ?? [], request.agentType, {
       model: options.model,
       allowedTools: [...(options.allowedTools ?? ["read_file"])],
       maxIterations: options.childMaxIterations,
     });
+    const resolved = request.model === undefined ? role : { ...role, model: request.model };
     const model = resolved.model;
     const channel = createSubagentInputChannel();
+    const observation = new AgentRoundObservation(channel, request.carried);
     const forkMessages =
-      forkParent && options.parentMessages !== undefined ? options.parentMessages : undefined;
+      request.forkParent && options.parentMessages !== undefined ? options.parentMessages : undefined;
     const worker = createInteractiveChildWorker({
       provider: options.provider,
       permission: options.permission,
       ...(options.sandbox === undefined ? {} : { sandbox: options.sandbox }),
       ...(options.profile === undefined ? {} : { profile: options.profile }),
-      message,
+      message: resolved.role.prompt === undefined
+        ? request.message
+        : `${resolved.role.prompt}\n\nTask:\n${request.message}`,
+      ...(resolved.maxIterations === undefined ? {} : { budget: { maxIterations: resolved.maxIterations } }),
+      onRoundStarted: (round, prompt) => {
+        observation.startRound(round);
+        options.runtime.reportRound(handle.subagentId, { status: "running", round, prompt, displayName: entry.nickname });
+      },
+      onCheckpoint: (transcript) => observation.checkpoint(transcript),
+      onRoundReady: (report) => {
+        observation.publish(report);
+        options.runtime.reportRound(handle.subagentId, { status: "waiting", round: report.rounds, result: report.output });
+      },
       ...(forkMessages === undefined ? {} : { forkMessages }),
-      ...(carried === undefined ? {} : { forkTranscript: carried }),
+      ...(request.carried === undefined ? {} : { forkTranscript: request.carried }),
       ...(model === undefined ? {} : { model: model }),
       ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
       ...(options.onEnvelope === undefined ? {} : { onEnvelope: options.onEnvelope }),
     });
     const handle = options.runtime.spawn<InteractiveChildResult>({
-      name,
+      name: request.name,
+      agentType: resolved.role.name,
+      prompt: request.message,
       lineage: {
         parentAgentId: "main-agent",
-        rootAttemptId: `att-root-${toolCallId}`,
-        toolCallId,
+        rootAttemptId: `att-root-${request.toolCallId}`,
+        toolCallId: request.toolCallId,
       },
       permissions: {
         allowedTools: [...resolved.allowedTools],
@@ -161,7 +197,8 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
       nickname: uniqueNicknameFor(resolved.role, handle.subagentId, taken),
       channel,
       handle,
-      transcript: carried ?? [],
+      observation,
+      resolved,
     };
     agents.set(handle.subagentId, entry);
     remember(entry);
@@ -171,7 +208,7 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
     return { entry, resolved };
   };
 
-  const run = async (call: ToolCallRequest): Promise<ToolOutcome> => {
+  const run = async (call: ToolCallRequest, signal: AbortSignal): Promise<ToolOutcome> => {
     const args = call.arguments;
     switch (call.name) {
       case SPAWN_AGENT_TOOL: {
@@ -186,14 +223,10 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
             "This run carries no parent conversation to fork from",
           );
         }
-        const { entry, resolved } = start(
-          "subagent",
-          message,
-          call.toolCallId,
-          undefined,
-          forkParent,
-          text(args, "agent_type"),
-        );
+        const { entry, resolved } = start({
+          name: "subagent", message, toolCallId: call.toolCallId, forkParent,
+          agentType: text(args, "agent_type"), model: text(args, "model"),
+        });
         return ok(
           {
             agent_id: entry.agentId,
@@ -218,9 +251,13 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
         if (entry === undefined) {
           return refuse("unknown_agent", `No agent with id '${target}'`);
         }
-        if (!entry.channel.deliver({ message, interrupt: flag(args, "interrupt") })) {
-          return refuse("agent_closed", `Agent '${target}' is closed and takes no more input`);
+        const interrupt = flag(args, "interrupt");
+        if (!entry.channel.deliver({ message, interrupt })) {
+          return entry.channel.open
+            ? refuse("agent_input_queue_full", `Agent '${target}' has a full input queue; wait or replace queued input with interrupt`)
+            : refuse("agent_closed", `Agent '${target}' is closed and takes no more input`);
         }
+        entry.observation.requestInput(interrupt);
         submissions += 1;
         return ok({ submission_id: `sub-${submissions}` }, `queued for ${target}`);
       }
@@ -230,20 +267,30 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
         if (targets === undefined || targets.length === 0) {
           return refuse("invalid_arguments", "wait_agent requires at least one target");
         }
-        const timeoutMs = number(args, "timeout_ms");
-        const status: Record<string, SubagentStatus> = {};
-        let timedOut = false;
-        for (const target of targets) {
-          const entry = agents.get(target);
-          if (entry === undefined) {
-            status[target] = "failed";
-            continue;
-          }
-          const observed = await entry.handle.wait(timeoutMs);
-          status[target] = observed.status;
-          timedOut = timedOut || observed.observed === "timeout";
+        const requestedTimeout = number(args, "timeout_ms");
+        if (args["timeout_ms"] !== undefined && (requestedTimeout === undefined || requestedTimeout < 0)) {
+          return refuse("invalid_arguments", "timeout_ms must be a finite non-negative number");
         }
-        return ok({ status, timed_out: timedOut }, JSON.stringify({ status, timed_out: timedOut }));
+        const entries = [...new Set(targets)].map(target => agents.get(target));
+        if (entries.some(entry => entry === undefined)) {
+          return refuse("unknown_agent", "wait_agent received an unknown agent id");
+        }
+        const known = entries.filter((entry): entry is AgentEntry => entry !== undefined);
+        const observed = await waitForAgentReports({
+          agents: known.map(entry => entry.observation),
+          timeoutMs: Math.min(requestedTimeout ?? DEFAULT_AGENT_WAIT_MS, MAX_AGENT_WAIT_MS),
+          signal,
+          scheduler: options.scheduler ?? systemTimerScheduler,
+        });
+        if (observed === "cancelled") return { outcome: "cancelled" };
+        const status: Record<string, SubagentStatus> = {};
+        const results: Record<string, JsonObject> = {};
+        for (const entry of known) {
+          status[entry.agentId] = entry.handle.status();
+          results[entry.agentId] = entry.observation.snapshot(entry.handle.status());
+        }
+        const answer = { status, timed_out: observed === "timeout", results };
+        return ok(answer, JSON.stringify(answer));
       }
 
       case CLOSE_AGENT_TOOL: {
@@ -270,16 +317,16 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
           return refuse("unknown_agent", `No agent with id '${target ?? ""}'`);
         }
         const current: SubagentStatus = entry.handle.status();
-        if (current !== "completed" && current !== "failed" && current !== "cancelled") {
+        if (current === "pending" || current === "running") {
           return refuse(
             "agent_still_running",
             `Agent '${target}' is '${current}'; it does not need resuming`,
           );
         }
-        const carried =
-          (await options.runtime.wait<InteractiveChildResult>(target)).output?.transcript ??
-          entry.transcript;
-        const { entry: entry2 } = start(entry.nickname, "Continue.", call.toolCallId, carried, false, undefined);
+        const { entry: entry2 } = start({
+          name: entry.nickname, message: "Continue.", toolCallId: call.toolCallId,
+          carried: entry.observation.transcript, resolved: entry.resolved,
+        });
         return ok({ agent_id: entry2.agentId }, `resumed ${target} as ${entry2.agentId}`);
       }
 
@@ -319,12 +366,22 @@ ${catalog}`,
           : binding,
       );
     },
-    // No signal: these tools either return at once or observe a subagent the
-    // parent started. Aborting this call must not reach into an agent the
-    // parent still owns — that is what `close_agent` is for.
-    execute: (call) => run(call),
-    async cancel(): Promise<void> {
-      return;
+    async execute(call, signal): Promise<ToolOutcome> {
+      if (signal.aborted) return { outcome: "cancelled" };
+      const observer = new AbortController();
+      const cancel = (): void => { observer.abort(signal.reason); };
+      signal.addEventListener("abort", cancel, { once: true });
+      observers.set(call.toolCallId, observer);
+      try {
+        return await run(call, observer.signal);
+      } finally {
+        signal.removeEventListener("abort", cancel);
+        observers.delete(call.toolCallId);
+      }
+    },
+    async cancel(toolCallId): Promise<void> {
+      // Cancel the observation, not a child that may have other waiters.
+      observers.get(toolCallId)?.abort("tool_call_cancelled");
     },
   };
 }

@@ -13,6 +13,7 @@ import { cancelToolSafely, readToolApprovalRequirement } from "./tool-boundary.j
 import { executeToolOnly, settleToolOutcome, type ToolExecutionCall } from "./tool-execution.js";
 import { runPermission, runTool, type ToolRunnerHost } from "./tool-runner.js";
 import { flushProgress, issueEffect, settleEffect } from "./progress.js";
+import { executableStreamInputs } from "./stream-verdict.js";
 
 /**
  * What a reducer command *does*, once the turn loop has decided it exists.
@@ -66,16 +67,17 @@ export async function applyStreamInputs(
   ports: LoopPorts,
   inputs: ReadonlyArray<ReduceInput>,
 ): Promise<ReduceInput | undefined> {
+  const executable = executableStreamInputs(inputs);
   let finish: ReduceInput | undefined;
   // Counted by distinct call id, not by input: a response is "multi-tool" when
   // it asks for more than one *call*, and a repeated fact about one call is not
   // a second call.
   const calls = new Set(
-    inputs.flatMap((input) => (input.type === "tool_request" ? [input.toolCallId] : [])),
+    executable.flatMap((input) => (input.type === "tool_request" ? [input.toolCallId] : [])),
   );
   const batched = calls.size > 1;
   const deferred: EffectCommand[] = [];
-  for (const input of inputs) {
+  for (const input of executable) {
     if (input.type === "finish") {
       finish = input;
       continue;

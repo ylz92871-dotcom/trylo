@@ -114,6 +114,7 @@ export function createSubagentToolPort(options: SubagentToolOptions): ToolPort {
 
       const handle = options.runtime.spawn({
         name: taskName,
+        prompt,
         lineage: {
           parentAgentId: "main-agent",
           rootAttemptId: `att-root-${call.toolCallId}`,

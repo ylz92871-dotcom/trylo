@@ -127,7 +127,7 @@ function fail(code: ValidateFailureCode): ValidateErr {
   return { ok: false, code };
 }
 
-function deepFreeze(value: JsonValue): void {
+export function deepFreeze(value: JsonValue): void {
   if (typeof value !== "object" || value === null) {
     return;
   }

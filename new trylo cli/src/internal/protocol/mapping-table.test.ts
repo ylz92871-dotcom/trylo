@@ -28,8 +28,8 @@ function loadFixtures(): ReadonlyArray<Fixture> {
 
 const FIXTURES = loadFixtures();
 
-test("夹具恰好 27 条，与 EVENT_KINDS 一一对应", () => {
-  assert.equal(EVENT_KINDS.length, 27);
+test("夹具覆盖全部事件，包括非终态的子智能体轮次更新", () => {
+  assert.equal(EVENT_KINDS.length, 28);
   assert.equal(FIXTURES.length, EVENT_KINDS.length);
   const fixtureKinds = FIXTURES.map((item) => item.kind).sort();
   assert.deepEqual(fixtureKinds, [...EVENT_KINDS].sort());

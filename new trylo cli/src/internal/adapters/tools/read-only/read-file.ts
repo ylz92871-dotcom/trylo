@@ -7,9 +7,9 @@ import {
   type LocalRuleSource,
 } from "../../project-instructions/appendix.js";
 import { readStringArg } from "./args.js";
-import { cutToBytes } from "../../text-cut.js";
 import type { FileSystemReader, ReadOnlyToolLimits } from "./limits.js";
-import { isRangeProblem, readRangeRequest, selectRange, type RangeSelection } from "./range.js";
+import { isRangeProblem, readRangeRequest, selectRange, type RangeRequest, type RangeSelection } from "./range.js";
+import { selectStreamRange, selectTextRange } from "./range-stream.js";
 import { resolveInsideWorkspace } from "./workspace.js";
 
 export function applyLimits(text: string, limits: ReadOnlyToolLimits): {
@@ -18,24 +18,9 @@ export function applyLimits(text: string, limits: ReadOnlyToolLimits): {
   truncatedBytes: boolean;
   truncatedLines: boolean;
 } {
-  let out = text;
-  let truncatedBytes = false;
-  let truncatedLines = false;
-  if (Buffer.byteLength(out, "utf8") > limits.maxBytes) {
-    out = cutToBytes(out, limits.maxBytes);
-    truncatedBytes = true;
-  }
-  const lines = out.split("\n");
-  if (lines.length > limits.maxLines) {
-    out = lines.slice(0, limits.maxLines).join("\n");
-    truncatedLines = true;
-  }
-  return {
-    text: out,
-    truncated: truncatedBytes || truncatedLines,
-    truncatedBytes,
-    truncatedLines,
-  };
+  const selection = selectTextRange(text, { offset: 0, limit: undefined }, limits, true);
+  return { text: selection.text, truncated: selection.truncated,
+    truncatedBytes: selection.truncatedBytes, truncatedLines: selection.truncatedLines };
 }
 
 /**
@@ -63,8 +48,8 @@ function rangeFields(selection: RangeSelection): JsonObject {
 export async function executeReadFile(
   config: {
     readonly workspaceRoot: string;
-  readonly fileAccess?: FileAccessMode;
-  readonly workspaceAlias?: string;
+    readonly fileAccess?: FileAccessMode;
+    readonly workspaceAlias?: string;
     readonly reader: FileSystemReader;
     readonly localRules?: LocalRuleLookup | undefined;
   },
@@ -88,7 +73,6 @@ export async function executeReadFile(
     return { outcome: "error", code: verdict.code, message: verdict.code };
   }
   try {
-    const raw = await config.reader.readFileUtf8(verdict.absolutePath, signal);
     const rules = config.localRules?.(verdict.absolutePath) ?? [];
     const ruleBudget = Math.min(MAX_LOCAL_RULE_BYTES, Math.floor(limits.maxBytes / 2));
     const appendix = localRuleAppendix(rules, ruleBudget);
@@ -98,9 +82,11 @@ export async function executeReadFile(
     // what is left. A rule that was cut is a loss the model is told about; a source
     // line that was cut is a position it can come back to.
     const sourceLimits = { ...limits, maxBytes: limits.maxBytes - appendixBytes };
-    const selection = call.arguments.offset === undefined && call.arguments.limit === undefined
-      ? legacySelection(raw, sourceLimits)
-      : selectRange(raw, request, sourceLimits);
+    const legacy = call.arguments.offset === undefined && call.arguments.limit === undefined;
+    const selection = config.reader.readFileChunks === undefined
+      ? await selectWholeFile(config.reader, verdict.absolutePath, signal, request, sourceLimits, legacy)
+      : await selectStreamRange(config.reader.readFileChunks(verdict.absolutePath, signal), request, sourceLimits, signal, legacy);
+    if (signal.aborted) return { outcome: "cancelled" };
     const value: JsonObject = {
       path: requested,
       content: selection.text,
@@ -129,6 +115,14 @@ export async function executeReadFile(
   }
 }
 
+/** Compatibility for injected text-only readers; the production Node reader always streams. */
+async function selectWholeFile(reader: FileSystemReader, absolutePath: string, signal: AbortSignal,
+  request: RangeRequest, limits: ReadOnlyToolLimits, legacy: boolean): Promise<RangeSelection> {
+  const raw = await reader.readFileUtf8(absolutePath, signal);
+  signal.throwIfAborted();
+  return legacy ? selectTextRange(raw, request, limits, true) : selectRange(raw, request, limits);
+}
+
 /**
  * Provenance as plain JSON values, field by field.
  *
@@ -143,24 +137,4 @@ function sourceArray(sources: ReadonlyArray<LocalRuleSource>): JsonValue {
     scope: source.scope,
     contentHash: source.contentHash,
   }));
-}
-
-/** Preserve the old {path} prefix; an explicit range starts at a complete line. */
-function legacySelection(raw: string, limits: ReadOnlyToolLimits): RangeSelection {
-  const legacy = applyLimits(raw, limits);
-  const lines = raw.length === 0 ? [] : raw.split("\n");
-  if (raw.endsWith("\n")) lines.pop();
-  const totalLines = lines.length;
-  const returned = legacy.text.length === 0 ? 0 : legacy.text.split("\n").length - (legacy.text.endsWith("\n") ? 1 : 0);
-  // Line-limit slicing drops the separator after the final complete line.
-  const partial = legacy.truncatedBytes && !legacy.truncatedLines && !legacy.text.endsWith("\n");
-  const next = partial ? Math.max(0, returned - 1) : returned;
-  const stranded = lines[next];
-  const bytes = stranded === undefined ? 0 : Buffer.byteLength(stranded + (next < totalLines - 1 || raw.endsWith("\n") ? "\n" : ""), "utf8");
-  const tooLong = partial && bytes > limits.maxBytes;
-  return {
-    ...legacy, startLine: totalLines === 0 ? 0 : 1, endLine: returned, totalLines,
-    nextOffset: legacy.truncated && !tooLong && next < totalLines ? next : undefined,
-    ...(tooLong ? { lineTooLong: { line: next + 1, bytes } } : {}),
-  };
 }

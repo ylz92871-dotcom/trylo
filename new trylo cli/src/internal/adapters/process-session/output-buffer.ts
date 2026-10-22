@@ -1,3 +1,5 @@
+import { createUtf8OutputSink } from "./utf8-output.js";
+
 /**
  * A bounded, cursor-driven buffer for one session's output.
  *
@@ -12,9 +14,8 @@
  *    itself. A caller that wants the beginning keeps it, or asks again after a
  *    restart, rather than silently getting the tail forever.
  *
- * Bytes are held, not characters: a program that emits half a multi-byte
- * character must not have that half decoded into a replacement character at an
- * arbitrary place.
+ * UTF-8 packets are decoded before retention, with at most three pending bytes
+ * carried separately. Read caps and eviction boundaries never split a character.
  */
 
 export type BufferRead = {
@@ -27,7 +28,10 @@ export type BufferRead = {
 
 export type BoundedBuffer = {
   write(chunk: Buffer): void;
-  /** Everything since the previous read, capped to `maxReadBytes`. */
+  /** Transport ended: publish any genuinely incomplete final UTF-8 fragment. */
+  end(): void;
+  /** Complete characters within maxReadBytes; a smaller-than-character budget
+   * leaves it held back. Production readers have a four-byte minimum. */
   read(maxReadBytes: number): BufferRead;
   readonly byteLength: number;
   readonly dropped: boolean;
@@ -51,22 +55,27 @@ export function createBoundedBuffer(maxBytes: number): BoundedBuffer {
     cursor = 0;
   };
 
+  const continuation = (byte: number | undefined): boolean => byte !== undefined && (byte & 0xC0) === 0x80;
+  const append = (chunk: Buffer): void => {
+    if (chunk.length === 0) {
+      return;
+    }
+    held = held.length === 0 ? Buffer.from(chunk) : Buffer.concat([held, chunk]);
+    if (held.length <= cap) {
+      return;
+    }
+    // Drop from the front. The oldest bytes are the ones a late reader is
+    // least likely to want and the ones that keep the buffer bounded.
+    let excess = held.length - cap;
+    while (excess < held.length && continuation(held[excess])) excess += 1;
+    held = held.subarray(excess);
+    cursor = 0;
+    dropped = true;
+  };
+  let decoder = createUtf8OutputSink(append);
   return {
-    write(chunk: Buffer): void {
-      if (chunk.length === 0) {
-        return;
-      }
-      held = held.length === 0 ? Buffer.from(chunk) : Buffer.concat([held, chunk]);
-      if (held.length <= cap) {
-        return;
-      }
-      // Drop from the front. The oldest bytes are the ones a late reader is
-      // least likely to want and the ones that keep the buffer bounded.
-      const excess = held.length - cap;
-      held = held.subarray(excess);
-      cursor = 0;
-      dropped = true;
-    },
+    write: chunk => decoder.write(chunk),
+    end: () => decoder.end(),
     read(maxReadBytes: number): BufferRead {
       const limit = Math.max(0, Math.trunc(maxReadBytes));
       const unread = held.length - cursor;
@@ -74,7 +83,8 @@ export function createBoundedBuffer(maxBytes: number): BoundedBuffer {
         return { text: "", dropped, heldBack: 0 };
       }
       const take = Math.min(unread, limit);
-      const end = cursor + take;
+      let end = cursor + take;
+      while (end > cursor && end < held.length && continuation(held[end])) end -= 1;
       const text = held.subarray(cursor, end).toString("utf8");
       cursor = end;
       compact();
@@ -90,6 +100,7 @@ export function createBoundedBuffer(maxBytes: number): BoundedBuffer {
       held = Buffer.alloc(0);
       cursor = 0;
       dropped = false;
+      decoder = createUtf8OutputSink(append);
     },
   };
 }

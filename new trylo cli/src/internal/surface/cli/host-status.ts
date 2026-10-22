@@ -2,6 +2,7 @@ import { EXIT_CODES, type CliRunStatus, type CliUsage, type ExitCode } from "../
 import type { Envelope } from "../../protocol/envelope.js";
 import type { ProviderUsage } from "../../ports/provider.js";
 import type { RunTurnResult } from "../../loop/runner.js";
+import type { TurnOutcome, TurnFailure } from "./host.js";
 
 /**
  * Reading a finished turn: what it used, how it ended, what that costs the
@@ -25,6 +26,10 @@ export const UNREUSABLE_ERROR_CLASSES = new Set([
   "protocol",
   "timeout",
 ]);
+
+export function isTurnFailure(value: TurnOutcome | TurnFailure): value is TurnFailure {
+  return !("result" in value);
+}
 
 export function usageToCli(usage: ProviderUsage): CliUsage {
   return {

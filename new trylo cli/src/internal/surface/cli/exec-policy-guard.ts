@@ -61,6 +61,26 @@ function commandArgumentOf(call: ToolAdmissionRequest): string | undefined {
   return typeof raw === "string" && raw.trim().length > 0 ? raw : undefined;
 }
 
+/** Composition belongs to the same authorization: an allowed head cannot lend
+ * permission to steps or a pipeTo receiver that the policy never examined. */
+function decisionForCall(policy: ExecPolicy, call: ToolAdmissionRequest, config: ExecPolicyGuardConfig): ExecDecision | undefined {
+  const command = commandArgumentOf(call);
+  if (command === undefined) return undefined;
+  const steps = call.arguments["steps"];
+  const pipeTo = call.arguments["pipeTo"];
+  if (steps !== undefined && (!Array.isArray(steps) || !steps.every(step => typeof step === "string"))) return undefined;
+  if (pipeTo !== undefined && typeof pipeTo !== "string") return undefined;
+  const commands = [command, ...(Array.isArray(steps) ? steps : []), ...(typeof pipeTo === "string" ? [pipeTo] : [])];
+  let overall: ExecDecision = "allow";
+  let unverifiable = false;
+  for (const text of commands) {
+    const next = typeof text === "string" ? decisionForCommand(policy, text, config) : undefined;
+    if (next === undefined) unverifiable = true;
+    else overall = strictest(overall, next);
+  }
+  return overall === "forbidden" ? overall : unverifiable ? undefined : overall;
+}
+
 function decisionForSegment(
   policy: ExecPolicy,
   argv: ReadonlyArray<string>,
@@ -114,8 +134,12 @@ export function buildExecPolicyGuard(
     if (command === undefined) {
       return undefined;
     }
-    const decision = decisionForCommand(parsed.policy, command, config);
-    if (decision === undefined || decision === "prompt") {
+    const decision = decisionForCall(parsed.policy, call, config);
+    if (decision === undefined) {
+      return { kind: "denied", code: "exec_policy_unverifiable",
+        message: "The configured command policy cannot verify this shell syntax. Submit separately verifiable commands or revise the operator policy; a tool-wide allowance cannot override it." };
+    }
+    if (decision === "prompt") {
       return undefined;
     }
     if (decision === "allow") {

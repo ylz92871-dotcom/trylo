@@ -761,6 +761,7 @@ export class CodeRunController {
             // Connection argv excludes credentials; an explicit builtin key
             // travels only through the ephemeral child environment.
             ...providerArgs,
+            ...(request.settings.reasoningEffort === undefined ? {} : { reasoningEffort: request.settings.reasoningEffort }),
             spawnEnv: v1SpawnEnv,
             systemPrompt: request.settings.systemPrompt,
             permissionLevel: request.permissionLevel,

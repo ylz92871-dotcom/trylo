@@ -61,6 +61,15 @@ export function createGlmContinuationCache() {
 
   return {
     clear() { entries.length = 0; chars = 0; },
+    /** Rebind the just-completed occurrence without adding a duplicate or
+     * evicting history. Native payload and its bounded size must stay intact.
+     */
+    replaceLast(expected: NativeCheckpointState, replacement: NativeCheckpointState): boolean {
+      const last = entries.at(-1);
+      if (last?.state !== expected || charsOf(replacement) !== last.chars) return false;
+      entries[entries.length - 1] = { key: keyOf(replacement), state: replacement, chars: last.chars };
+      return true;
+    },
     /** Retains one state, returning the keys it had to evict to stay bounded. */
     retain(state: NativeCheckpointState): readonly string[] {
       const evicted: string[] = [];

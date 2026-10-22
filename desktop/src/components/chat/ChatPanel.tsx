@@ -57,6 +57,7 @@ import {
 import { ApiKeyMissingBanner } from '@trylo/work';
 
 export interface ChatPanelProps {
+  readonly onSubagentInput?: (agentId: string, text: string) => Promise<void>;
   /** 2026-09-03 (run controls §UI-B): number of messages queued behind the
    *  current Code run, and a way to interrupt (steer) the oldest one. */
   readonly queuedCount?: number;
@@ -265,6 +266,8 @@ export function ChatPanel(props: ChatPanelProps): ReactElement {
   }
   return (
     <AgentConversationSurface
+      key={`${props.workspaceRoot}:${props.activeSession?.id}:code`}
+      onSubagentInput={props.onSubagentInput}
       surface="code"
       artifactHost={props.artifactHost}
       messages={props.messages}
@@ -397,6 +400,8 @@ function WorkSurface(props: ChatPanelProps): ReactElement {
   );
   return (
     <AgentConversationSurface
+      key={`${props.workspaceRoot}:${props.activeSession?.id}:work`}
+      onSubagentInput={props.onSubagentInput}
       surface="work"
       messages={props.workMessages}
       running={props.workRunning}

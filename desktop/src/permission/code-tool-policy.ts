@@ -4,6 +4,7 @@ import { inputDigestOf } from '../tooling/input-digest';
 import { safeRelativePath } from '../approval/approval-preview';
 import type { ApprovalPreview } from '../approval/approval-preview';
 import type { FilePath } from '../host-adapter/types';
+import { shellApprovalPreview } from '../approval/shell-approval-preview';
 
 interface PolicyInput {
   readonly toolName: string;
@@ -18,13 +19,15 @@ const FILE_TOOLS = new Set(['write_file', 'edit_file', 'notebook_edit', 'Write',
 const READ_TOOLS = new Set(['read_file', 'list_files', 'search_text', 'Read', 'Glob', 'Grep', 'LS']);
 const SCOPED_READ_TOOLS = new Set(['read_file', 'list_files', 'search_text', 'glob_files', 'read_pdf', 'read_notebook', 'view_image']);
 
+function hasControlCharacters(value: string): boolean {
+  return Array.from(value).some(char => char.charCodeAt(0) < 32);
+}
+
 /** Display-only facts: building an approval never opens the target file. */
 function promptPreview(input: PolicyInput): ApprovalPreview {
   if (input.toolName === 'run_shell' || input.toolName === 'Bash') {
-    const command = input.input['command'];
-    const cwd = input.input['cwd'];
-    if (typeof command === 'string') return { kind: 'command', title: input.toolName, command,
-      cwd: typeof cwd === 'string' ? cwd : input.projectRoot };
+    const preview = shellApprovalPreview(input.input, '运行命令', input.projectRoot);
+    if (preview !== undefined) return preview;
   }
   const target = FILE_TOOLS.has(input.toolName) || SCOPED_READ_TOOLS.has(input.toolName)
     ? input.input['path'] ?? input.input['file_path'] ?? input.input['notebook_path'] : undefined;
@@ -43,7 +46,7 @@ function workspaceTarget(raw: unknown, root: string): boolean {
     if (!(windows ? target.toLowerCase().startsWith(prefix.toLowerCase()) : target.startsWith(prefix))) return false;
     target = target.slice(prefix.length);
   }
-  return Boolean(safeRelativePath(target, root as FilePath)) && !Array.from(target).some(char => char.charCodeAt(0) < 32);
+  return Boolean(safeRelativePath(target, root as FilePath)) && !hasControlCharacters(target);
 }
 
 /** Classify patch authority, not patch execution. Unknown syntax stays a human decision. */
@@ -79,7 +82,7 @@ export function resolveCodeToolPolicy(input: PolicyInput, classified: ToolRiskRo
   });
   if (FILE_TOOLS.has(input.toolName)) {
     const target = input.input['path'] ?? input.input['file_path'] ?? input.input['notebook_path'];
-    if (typeof target !== 'string' || !target.trim() || /[\x00-\x1f]/.test(target)) {
+    if (typeof target !== 'string' || !target.trim() || hasControlCharacters(target)) {
       return deny('invalid_path', 'Denied: the file target is missing or invalid.');
     }
     if (input.permissionLevel === 'read_only') return deny('read_only', 'Denied: this conversation is read-only.');

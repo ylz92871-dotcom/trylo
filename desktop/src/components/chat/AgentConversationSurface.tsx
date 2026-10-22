@@ -18,12 +18,15 @@
 // they provide runtime/domain data and capability
 // actions, never a second layout.
 
-import type { ReactElement, ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import type { ChatMessage } from './types';
 import { MessageList } from './MessageList';
 import type { ConversationRunViewState } from './view-state';
+import { SubagentConversation } from './SubagentConversation';
+import { AgentAvatarScope } from './AgentAvatar';
 
 export interface AgentConversationSurfaceProps {
+  readonly onSubagentInput?: (agentId: string, text: string) => Promise<void>;
   readonly surface: 'code' | 'work';
   readonly messages: readonly ChatMessage[];
   readonly running: boolean;
@@ -96,7 +99,20 @@ export function AgentConversationSurface(
   props: AgentConversationSurfaceProps,
 ): ReactElement {
   const isEmpty = props.messages.length === 0;
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const drafts = useRef(new Map<string, string>());
+  const opener = useRef<HTMLElement | null>(null);
+  const selected = props.messages.find(message => message.id === selectedId && message.kind === 'subagent');
+  let latestUserIndex = -1;
+  props.messages.forEach((message, index) => { if (message.kind === 'text' && message.role === 'user') latestUserIndex = index; });
+  const selectedIsCurrent = props.messages.findIndex(message => message.id === selectedId) > latestUserIndex;
+  useEffect(() => { if (selectedId && !selected) setSelectedId(null); }, [selectedId, selected]);
+  useEffect(() => { if (!selectedId) opener.current?.focus(); }, [selectedId]);
   return (
+    <AgentAvatarScope identities={props.messages.flatMap(message => message.kind === 'subagent' ? [message.subagentId ?? message.id] : [])}>
+    <div className="agent-conversation-layout" data-child-open={Boolean(selected)} onKeyDown={event => {
+      if (event.key === 'Escape' && selectedId) { event.stopPropagation(); setSelectedId(null); }
+    }}>
     <div className="chat-panel" data-empty={isEmpty}>
       {props.cornerSlot !== undefined && (
         <div className="chat-panel__corner">{props.cornerSlot}</div>
@@ -116,6 +132,8 @@ export function AgentConversationSurface(
           messages={props.messages}
           running={props.running}
           viewState={props.viewState}
+          selectedSubagentId={selectedId}
+          onSelectSubagent={id => { opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setSelectedId(id); }}
           editingMessageId={props.editingMessageId}
           onEditMessage={props.onEditMessage}
           onSaveEdit={props.onSaveEdit}
@@ -142,5 +160,9 @@ export function AgentConversationSurface(
       {props.learningReceiptSlot}
       {!isEmpty && props.composer}
     </div>
+    {selected?.kind === 'subagent' && <SubagentConversation key={selected.id} agent={selected}
+      drafts={drafts.current} onClose={() => setSelectedId(null)} onSend={props.running && selectedIsCurrent ? props.onSubagentInput : undefined} />}
+    </div>
+    </AgentAvatarScope>
   );
 }

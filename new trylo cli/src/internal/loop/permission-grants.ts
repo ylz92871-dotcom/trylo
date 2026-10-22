@@ -6,6 +6,7 @@ import {
   type PermissionScope,
 } from "../ports/permission.js";
 import type { JsonObject } from "../protocol/envelope.js";
+import { deepFreeze } from "../protocol/validate.js";
 
 /**
  * Remembered decisions for the lifetime selected by the composition root.
@@ -48,7 +49,9 @@ export function buildPermissionAction(
   name: string,
   args: JsonObject,
 ): PermissionAction {
-  return { toolCallId, name, arguments: args, pattern: permissionPattern(name, args) };
+  const argumentsSnapshot = structuredClone(args);
+  deepFreeze(argumentsSnapshot);
+  return Object.freeze({ toolCallId, name, arguments: argumentsSnapshot, pattern: permissionPattern(name, argumentsSnapshot) });
 }
 
 export function createPermissionGrantCache(): PermissionGrantCache {

@@ -109,6 +109,9 @@ export async function executeNotebookEdit(
       return Promise.resolve({ outcome: "cancelled" as const });
     }
     const updated = serializeNotebook(parsed.document.raw, applied.cells);
+    if (plan.maxWriteBytes !== undefined && Buffer.byteLength(updated, "utf8") > plan.maxWriteBytes) {
+      return Promise.resolve(fail("write_too_large", `notebook_edit result exceeds the ${plan.maxWriteBytes} byte ceiling; no file was changed`));
+    }
     try {
       const written = writeFileAtomicallySync(plan.absolutePath, updated);
       const value = {

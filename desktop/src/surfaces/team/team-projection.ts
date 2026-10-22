@@ -65,7 +65,8 @@ function clamp(text: string, max: number): string {
 
 function isTeamSubagentEvent(event: unknown): event is TeamSubagentEvent {
   if (!event || typeof event !== 'object') return false;
-  const e = event as { type?: unknown; kind?: unknown; id?: unknown; agentType?: unknown };
+  const e = event as { type?: unknown; kind?: unknown; id?: unknown; agentType?: unknown; source?: unknown };
+  if (e.source === 'trylo-v1') return false;
   if (e.type !== 'subagent') return false;
   if (e.kind !== 'spawn' && e.kind !== 'end') return false;
   if (typeof e.id !== 'string' || e.id.length === 0) return false;

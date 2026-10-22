@@ -1,3 +1,6 @@
+import { ModelConnectionFields } from './ModelConnectionFields';
+import { reasoningSelectionProblem } from '../../settings/reasoning-effort';
+import { X, Plug, Palette, SlidersHorizontal, Wrench, Smartphone, BookOpen, type LucideIcon } from 'lucide-react';
 import { AppearanceSettings } from './AppearanceSettings';
 // Trylo Desktop — Settings modal. See v1.15-handoff §1.2.
 //
@@ -8,12 +11,12 @@ import { AppearanceSettings } from './AppearanceSettings';
 // the per-group fields (mirrors extension.js's
 // visionUsePrimaryConnection / summaryUsePrimaryConnection).
 //
-// No validation beyond what's in settings-store.ts. No
+// Custom headers are validated before persistence. No
 // test-connection beyond the per-host TCP probe. Phase 3
 // features (encrypted secret store, full HTTP test,
 // "auto-detect best model") belong in Phase 3.
 
-import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import {
   applyProfile,
   connectionFields,
@@ -47,6 +50,15 @@ import {
 } from '../../tooling/use-tool-platform-state';
 
 export type SettingsTab = 'connection' | 'appearance' | 'behavior' | 'tools' | 'remote' | 'subconnections' | 'learning' | 'runtime';
+
+const SETTINGS_TABS: readonly { id: SettingsTab; label: string; description: string; Icon: LucideIcon }[] = [
+  { id: 'connection', label: '模型连接', description: '管理模型服务和常用连接配置。', Icon: Plug },
+  { id: 'appearance', label: '外观', description: '调整界面主题，让工作更舒适。', Icon: Palette },
+  { id: 'behavior', label: '行为与运行', description: '设置任务权限与运行方式。', Icon: SlidersHorizontal },
+  { id: 'tools', label: '工具与控制', description: '管理工具能力与依赖包。', Icon: Wrench },
+  { id: 'remote', label: '远程', description: '连接手机与远程工作环境。', Icon: Smartphone },
+  { id: 'learning', label: '学习', description: '管理学习偏好与已安装技能。', Icon: BookOpen },
+];
 
 export interface RelayAccountActions {
   relayLogin(params: import('../../services-host/methods').RelayLoginParams): Promise<import('../../services-host/methods').RelayAccountStatus>;
@@ -156,27 +168,26 @@ function WorkCapabilityHint(props: { platform: ToolPlatformState; packageId: str
 
 export function SettingsModal(props: SettingsModalProps): ReactElement | null {
   const [form, setForm] = useState<FormState>(() => toFormState(props.initial));
+  const testGeneration = useRef(0);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [profileName, setProfileName] = useState('');
+  const dialogRef = useRef<HTMLFormElement>(null);
+  const toolSelectionRef = useRef<HTMLDetailsElement>(null);
+  const onCloseRef = useRef(props.onClose);
+  onCloseRef.current = props.onClose;
   // Sidebar tab state
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('connection');
-  const TABS: readonly { id: SettingsTab; label: string }[] = [
-    { id: 'connection', label: '模型连接' },
-    { id: 'appearance', label: '外观' },
-    { id: 'behavior', label: '行为与运行' },
-    { id: 'tools', label: '工具与控制' },
-    { id: 'remote', label: '远程' },
-    { id: 'learning', label: '学习' },
-  ] as const;
   // Remote pairing QR moved to the TopBar "远程" button
   // (RemotePairingModal) — 2026-08-29. Settings keeps only
   // the gateway *configuration* (port / tunnel / URL).
 
   useEffect(() => {
+    testGeneration.current += 1;
+    setTesting(false);
     if (props.open) {
       setSettingsTab(props.initialTab ?? 'connection');
       setForm(toFormState(props.initial));
@@ -185,11 +196,38 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
       setSaveError(null);
       setProfileName('');
     }
+    return () => { testGeneration.current += 1; };
   }, [props.open, props.initial, props.initialTab]);
+
+  useEffect(() => {
+    if (!props.open || skillsOpen) return;
+    const previousFocus = document.activeElement;
+    const dialog = dialogRef.current;
+    dialog?.querySelector<HTMLElement>('button')?.focus();
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') { event.preventDefault(); onCloseRef.current(); return; }
+      if (event.key !== 'Tab' || !dialog) return;
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex="0"]'))
+        .filter(element => element.getClientRects().length > 0);
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+    };
+  }, [props.open, skillsOpen]);
 
   if (!props.open) return null;
 
   const set = <K extends keyof TryloSettings>(k: K, v: TryloSettings[K]): void => {
+    testGeneration.current += 1;
+    setTesting(false);
+    setTestResult(null);
+    setTestError(null);
+    setSaveError(null);
     setForm((f) => ({ ...f, [k]: v }));
   };
 
@@ -198,6 +236,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
     k: keyof SubConnection,
     v: SubConnection[typeof k],
   ): void => {
+    setSaveError(null);
     setForm((f) => ({
       ...f,
       [which]: { ...f[which], [k]: v },
@@ -205,26 +244,44 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
   };
 
   const onTest = async (): Promise<void> => {
+    const generation = ++testGeneration.current;
     setTesting(true);
     setTestError(null);
     setTestResult(null);
     try {
       const r = await testConnection({
-        apiHost: form.apiHost || 'https://api.anthropic.com',
+        apiHost: form.apiHost || (form.apiFormat === 'openai' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com'),
         apiKey: form.apiKey,
         apiFormat: form.apiFormat,
       });
-      setTestResult(r);
+      if (generation === testGeneration.current) setTestResult(r);
     } catch (err) {
-      setTestError(err instanceof Error ? err.message : String(err));
+      if (generation === testGeneration.current) setTestError(err instanceof Error ? err.message : String(err));
     } finally {
-      setTesting(false);
+      if (generation === testGeneration.current) setTesting(false);
     }
   };
 
   const onSave = (e: FormEvent): void => {
     e.preventDefault();
-    const intent: SettingsSaveIntent = settingsTab === 'connection' ? 'connection' : 'preferences';
+    const reasoningProblem = reasoningSelectionProblem(form);
+    if (reasoningProblem) { setSaveError(reasoningProblem); return; }
+    for (const [name, headers] of [
+      ['主模型', form.extraHeadersText],
+      ...(!form.vision.usePrimaryConnection ? [['视觉模型', form.vision.extraHeadersText]] : []),
+      ...(!form.summary.usePrimaryConnection ? [['摘要模型', form.summary.extraHeadersText]] : []),
+    ]) {
+      try {
+        const value: unknown = JSON.parse(headers || '{}');
+        if (!value || typeof value !== 'object' || Array.isArray(value) || Object.values(value).some(v => typeof v !== 'string')) throw new Error();
+      } catch {
+        setSaveError(`${name}的额外请求头需要是 JSON 对象，且每个值都是文本。请检查高级连接选项。`);
+        return;
+      }
+    }
+    const connectionChanged = JSON.stringify(connectionFields(form)) !== JSON.stringify(connectionFields(props.initial))
+      || form.activeModelProfileId !== props.initial.activeModelProfileId;
+    const intent: SettingsSaveIntent = connectionChanged || navigationTab === 'connection' ? 'connection' : 'preferences';
     const next = settingsForSave(props.initial, intent === 'connection' ? { ...form, poolModel: '' } : form);
     try { saveSettings(next); }
     catch (error) {
@@ -253,8 +310,13 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
   };
 
   const handleApplyProfile = (id: string): void => {
+    setSaveError(null);
+    if (!id) { set('activeModelProfileId', ''); return; }
     const p = form.modelProfiles.find((x) => x.id === id);
-    if (p) setForm((f) => applyProfile(f, p));
+    if (p) {
+      testGeneration.current += 1; setTesting(false); setTestResult(null); setTestError(null);
+      setForm((f) => applyProfile(f, p));
+    }
   };
 
   const handleOverwriteProfile = (id: string): void => {
@@ -295,7 +357,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
             checked={sub.usePrimaryConnection}
             onChange={(e) => setSub(which, 'usePrimaryConnection', e.target.checked)}
           />
-          <span className="settings-modal__label">Use primary connection</span>
+          <span className="settings-modal__label">沿用主模型连接</span>
         </label>
 
         {!sub.usePrimaryConnection && (
@@ -416,162 +478,17 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
       case 'connection':
         return (
           <>
-            <fieldset className="settings-modal__group">
-              <legend className="settings-modal__legend">Provider</legend>
-
-              <label className="settings-modal__field">
-                <span className="settings-modal__label">Format</span>
-                <select
-                  className="settings-modal__input"
-                  value={form.apiFormat}
-                  onChange={(e) => set('apiFormat', e.target.value as ApiFormat)}
-                >
-                  {API_FORMATS.map((f) => (
-                    <option key={f.value} value={f.value}>{f.label}</option>
-                  ))}
-                </select>
-                <span className="settings-modal__hint">
-                  Anthropic for native; OpenAI-compatible for 3P providers
-                </span>
-              </label>
-
-              <label className="settings-modal__field">
-                <span className="settings-modal__label">Provider preset</span>
-                <input
-                  type="text"
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="settings-modal__input"
-                  value={form.providerId}
-                  onChange={(e) => set('providerId', e.target.value)}
-                  placeholder="(optional, e.g. anthropic, openai, ollama)"
-                />
-              </label>
-
-              <label className="settings-modal__field">
-                <span className="settings-modal__label">API host</span>
-                <div className="settings-modal__row">
-                  <input
-                    type="text"
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="settings-modal__input"
-                    value={form.apiHost}
-                    onChange={(e) => set('apiHost', e.target.value)}
-                    placeholder="https://api.anthropic.com"
-                  />
-                  <button
-                    type="button"
-                    className="settings-modal__btn settings-modal__btn--ghost settings-modal__test"
-                    onClick={onTest}
-                    disabled={testing}
-                  >
-                    {testing ? 'Testing…' : 'Test'}
-                  </button>
-                </div>
-                <span className="settings-modal__hint">
-                  ANTHROPIC_BASE_URL · leave blank for default
-                </span>
-                {testResult && (
-                  <span
-                    className={`settings-modal__test-result ${
-                      testResult.ok ? 'settings-modal__test-result--ok' : 'settings-modal__test-result--err'
-                    }`}
-                  >
-                    {testResult.ok ? '✓' : '✗'} {testResult.message} ({testResult.keyStatus})
-                  </span>
-                )}
-                {testError && (
-                  <span className="settings-modal__test-result settings-modal__test-result--err">
-                    ✗ {testError}
-                  </span>
-                )}
-              </label>
-
-              <label className="settings-modal__field">
-                <span className="settings-modal__label">Model</span>
-                <input
-                  type="text"
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="settings-modal__input"
-                  value={form.apiModel}
-                  onChange={(e) => set('apiModel', e.target.value)}
-                  placeholder="claude-3-5-sonnet-latest"
-                />
-                <span className="settings-modal__hint">
-                  ANTHROPIC_MODEL · leave blank for default
-                </span>
-              </label>
-            </fieldset>
-
-            <fieldset className="settings-modal__group">
-              <legend className="settings-modal__legend">Auth</legend>
-
-              <label className="settings-modal__field">
-                <span className="settings-modal__label">API key</span>
-                <input
-                  type="password"
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="settings-modal__input"
-                  value={form.apiKey}
-                  onChange={(e) => set('apiKey', e.target.value)}
-                  placeholder="sk-ant-…"
-                />
-                <span className="settings-modal__hint">
-                  ANTHROPIC_API_KEY · Phase 3 will move this to an encrypted store
-                </span>
-              </label>
-
-              <label className="settings-modal__field">
-                <span className="settings-modal__label">Auth header</span>
-                <input
-                  type="text"
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="settings-modal__input"
-                  value={form.apiKeyHeader}
-                  onChange={(e) => set('apiKeyHeader', e.target.value)}
-                  placeholder="Authorization"
-                />
-                <span className="settings-modal__hint">
-                  Custom header name · only for non-Anthropic providers
-                </span>
-              </label>
-
-              <label className="settings-modal__field">
-                <span className="settings-modal__label">Auth prefix</span>
-                <input
-                  type="text"
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="settings-modal__input"
-                  value={form.apiKeyPrefix}
-                  onChange={(e) => set('apiKeyPrefix', e.target.value)}
-                  placeholder="Bearer "
-                />
-                <span className="settings-modal__hint">
-                  Prepended to the API key in the auth header
-                </span>
-              </label>
-
-              <label className="settings-modal__field">
-                <span className="settings-modal__label">Extra headers (JSON)</span>
-                <input
-                  type="text"
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="settings-modal__input"
-                  value={form.extraHeadersText}
-                  onChange={(e) => set('extraHeadersText', e.target.value)}
-                  placeholder='{"X-Custom":"value"}'
-                />
-                <span className="settings-modal__hint">
-                  Optional · raw JSON object
-                </span>
-              </label>
-            </fieldset>
+            {form.modelProfiles.length > 0 && <label className="settings-modal__field">
+              <span className="settings-modal__label">已保存的配置</span>
+              <select className="settings-modal__input" value={form.modelProfiles.some(profile => profile.id === form.activeModelProfileId && JSON.stringify(connectionFields(profile)) === JSON.stringify(connectionFields(form))) ? form.activeModelProfileId : ''}
+                onChange={event => handleApplyProfile(event.target.value)}>
+                <option value="">自定义连接</option>
+                {form.modelProfiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.apiModel || '默认模型'}</option>)}
+              </select>
+              <span className="settings-modal__hint">选择后载入表单，点击“保存设置”应用。</span>
+            </label>}
+            <ModelConnectionFields form={form} onChange={set} onTest={() => void onTest()}
+              testing={testing} result={testResult} error={testError} />
 
             {/* ── Saved connection profiles (我的配置) ─────────── */}
             <fieldset className="settings-modal__group">
@@ -590,7 +507,8 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
                       handleAddProfile();
                     }
                   }}
-                  placeholder="配置名，如 Grok、Ollama、我的 Cluade…"
+                  aria-label="新配置名称"
+                  placeholder="为这组连接起个名字"
                 />
                 <button
                   type="button"
@@ -598,12 +516,12 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
                   onClick={handleAddProfile}
                   disabled={!profileName.trim()}
                 >
-                  保存当前为新配置
+                  添加配置
                 </button>
               </div>
               {form.modelProfiles.length === 0 ? (
                 <span className="settings-modal__hint">
-                  还没保存过配置。填好上面 Provider / Auth 后，起个名字点“保存当前为新配置”。
+                  还没有配置。填写主模型连接后，命名并添加，方便下次切换。
                 </span>
               ) : (
                 <ul className="settings-modal__profiles-list">
@@ -623,7 +541,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
                         <span className="settings-modal__profile-hint">
                           {p.apiModel || '默认模型'}
                           {p.apiHost ? ` · ${p.apiHost}` : ''}
-                          {isActive ? ' · 当前生效' : ''}
+                          {isActive && JSON.stringify(connectionFields(p)) === JSON.stringify(connectionFields(form)) ? ' · 已载入表单' : ''}
                         </span>
                         <span className="settings-modal__profile-actions">
                           <button
@@ -667,7 +585,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
         return (
           <>
             <fieldset className="settings-modal__group">
-              <legend className="settings-modal__legend">Behavior</legend>
+              <legend className="settings-modal__legend">任务与权限</legend>
 
               <label className="settings-modal__field">
                 <span className="settings-modal__label">Permission level</span>
@@ -711,7 +629,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
               </label>
 
               <label className="settings-modal__field">
-                <span className="settings-modal__label">System prompt</span>
+                <span className="settings-modal__label">系统提示词</span>
                 <textarea
                   className="settings-modal__input settings-modal__textarea"
                   value={form.systemPrompt}
@@ -726,7 +644,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
             </fieldset>
 
             <fieldset className="settings-modal__group">
-              <legend className="settings-modal__legend">Desktop pet</legend>
+              <legend className="settings-modal__legend">桌面伙伴</legend>
 
               <label className="settings-modal__field settings-modal__field--inline">
                 <input
@@ -734,7 +652,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
                   checked={form.companion.enabled}
                   onChange={(e) => set('companion', { ...form.companion, enabled: e.target.checked })}
                 />
-                <span className="settings-modal__label">Enable the desktop pet</span>
+                <span className="settings-modal__label">启用桌面伙伴</span>
               </label>
               <span className="settings-modal__hint">
                 {IS_WINDOWS
@@ -768,7 +686,15 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
       case 'tools':
         return (
           <>
-            {props.toolPlatform ? <WorkToolsSettings platform={props.toolPlatform} /> : null}
+            <WorkToolsSettings platform={props.toolPlatform} selection={{ computer: form.workComputer, browserDebug: form.workBrowserDebug, cad: form.workCad }} onConfigure={() => {
+              const details = toolSelectionRef.current;
+              if (!details) return;
+              details.open = true;
+              details.scrollIntoView({ block: 'start' });
+              details.querySelector('input')?.focus({ preventScroll: true });
+            }} />
+
+            <details ref={toolSelectionRef} className="settings-modal__advanced" open><summary>能力选择<span>选择后保存，用于后续 Work 任务</span></summary><div className="settings-modal__advanced-body">
 
             {/* ── 电脑控制 (Windows Computer Use, PR-6 spec §6.6) ─── */}
             <fieldset className="settings-modal__group">
@@ -814,7 +740,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
               </label>
               <span className="settings-modal__hint">
                 {IS_WINDOWS
-                  ? '关闭（默认）时 Work 使用 Playwright。开启后改用 Chrome DevTools 调试面（替换 Playwright，两者不同时启用）；首次导航新域需审批，页内脚本执行始终审批，性能数据不出本地。与 CAD 同时开启时以 CAD 为准。'
+                  ? '关闭时使用 Playwright；开启后改用 Chrome DevTools。可以与 CAD/EDA 同时启用，办公与桌面控制能力按各自配置保留。工具操作仍遵循当前授权规则。'
                   : '不支持此平台 — 浏览器调试是 Windows-only 能力。'}
               </span>
 
@@ -832,11 +758,11 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
               </label>
               <span className="settings-modal__hint">
                 {IS_WINDOWS
-                  ? '关闭（默认）时模型看不到 CAD/EDA 工具。开启后按实际安装的软件自动启用对应适配器：查询与导出自动放行；删除/覆盖/任意代码执行逐次审批；外部资源下载需审批。未安装的软件显示为不可用能力，不影响其他工具。开启时优先于「浏览器调试」生效（CAD 面已内置桌面控制与办公工具，目检验收与报告不受影响）。'
+                  ? '开启后为后续任务选用 CAD/EDA 适配器；还需要对应的软件与连接环境就绪。可以同时启用浏览器调试。工具包安装、实际可用与本次配置是否选用是不同状态，可在上方逐项查看。'
                   : '不支持此平台 — CAD/EDA 适配器是 Windows-only 能力。'}
               </span>
 
-              {form.workCad && !form.workBrowserDebug && props.toolPlatform ? (
+              {form.workCad && props.toolPlatform ? (
                 <>
                   {(
                     [
@@ -853,6 +779,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
                 </>
               ) : null}
             </fieldset>
+            </div></details>
           </>
         );
 
@@ -864,13 +791,13 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
           <>
             {renderSubConnection(
               'vision',
-              'Vision (image input)',
-              'Used when the agent reads images. Defaults to the primary connection — flip the switch to give it a separate endpoint, key, or model.',
+              '视觉模型',
+              '用于读取图片。默认沿用主模型，也可以配置独立的模型、地址和密钥。',
             )}
             {renderSubConnection(
               'summary',
-              'Summary (compaction)',
-              'Used by the compactor. Same default-to-primary behavior. The legacy extension defaults to "shared primary".',
+              '摘要模型',
+              '用于压缩长对话。默认沿用主模型，也可以单独配置。',
             )}
           </>
         );
@@ -879,7 +806,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
         return (
           <>
             <fieldset className="settings-modal__group">
-              <legend className="settings-modal__legend">User Learning</legend>
+              <legend className="settings-modal__legend">用户学习</legend>
               <p className="settings-modal__desc">
                 协作偏好学习：Evidence → Conclusion → User Model → Policy。
                 默认 Shadow：计算并记录，不改变真实 Agent Prompt。
@@ -995,7 +922,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
       case 'runtime':
         return (
           <fieldset className="settings-modal__group">
-            <legend className="settings-modal__legend">Runtime</legend>
+            <legend className="settings-modal__legend">运行环境</legend>
 
             <label className="settings-modal__field">
               <span className="settings-modal__label">CLI path</span>
@@ -1023,7 +950,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
     : settingsTab === 'runtime' ? 'behavior' : settingsTab;
   const renderContent = (): ReactElement => {
     if (navigationTab === 'connection') {
-      return <>{renderSection('connection')}{renderSection('subconnections')}</>;
+      return <>{renderSection('connection')}<details className="settings-modal__advanced" open={settingsTab === 'subconnections'}><summary>视觉与摘要模型<span>默认沿用主模型连接</span></summary><div className="settings-modal__advanced-body">{renderSection('subconnections')}</div></details></>;
     }
     if (navigationTab === 'behavior') {
       return <>{renderSection('behavior')}{renderSection('runtime')}</>;
@@ -1036,55 +963,59 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
       className="settings-modal__backdrop"
       role="dialog"
       aria-modal="true"
-      aria-label="Settings"
+      aria-label="设置"
       onClick={(e) => {
         if (e.target === e.currentTarget) props.onClose();
       }}
     >
-      <form className="settings-modal" onSubmit={onSave}>
+      <form ref={dialogRef} className="settings-modal" onSubmit={onSave}>
         <header className="settings-modal__header">
-          <h2 className="settings-modal__title">Settings</h2>
+          <h2 className="settings-modal__title">设置</h2><span className="settings-modal__product">Trylo</span>
           <button
             type="button"
             className="settings-modal__close"
             onClick={props.onClose}
-            aria-label="Close"
+            aria-label="关闭设置"
           >
-            ×
+            <X size={18} />
           </button>
         </header>
 
         <div className="settings-modal__body">
-          <nav className="settings-modal__sidebar">
-            {TABS.map((tab) => (
+          <nav className="settings-modal__sidebar" aria-label="设置分类">
+            {SETTINGS_TABS.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 className={`settings-modal__sidebar-item${navigationTab === tab.id ? ' settings-modal__sidebar-item--active' : ''}`}
+                aria-current={navigationTab === tab.id ? 'page' : undefined}
                 onClick={() => setSettingsTab(tab.id)}
               >
+                <tab.Icon size={17} aria-hidden="true" />
                 {tab.label}
               </button>
             ))}
           </nav>
           <div className="settings-modal__content" key={navigationTab}>
+            <div className="settings-modal__page-heading"><h3>{SETTINGS_TABS.find(tab => tab.id === navigationTab)?.label}</h3><p>{SETTINGS_TABS.find(tab => tab.id === navigationTab)?.description}</p></div>
             {renderContent()}
           </div>
         </div>
         <footer className="settings-modal__footer">
+          <span className="settings-modal__footer-note">{navigationTab === 'appearance' ? '外观即时生效；其他修改需保存。' : '保存后应用修改。'}</span>
           {saveError && <p role="alert" className="settings-modal__test-result settings-modal__test-result--err">{saveError}</p>}
           <button
             type="button"
             className="settings-modal__btn settings-modal__btn--ghost"
             onClick={props.onClose}
           >
-            Cancel
+            取消
           </button>
           <button
             type="submit"
             className="settings-modal__btn settings-modal__btn--primary"
           >
-            Save
+            保存设置
           </button>
         </footer>
       </form>

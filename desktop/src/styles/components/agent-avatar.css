@@ -1,0 +1,4 @@
+.agent-avatar { display: block; flex: 0 0 auto; overflow: visible; }
+.agent-avatar__ink { fill: #353633; }
+.agent-avatar__fold { fill: #e8e3d7; }
+.agent-avatar__seam { fill: #b79b62; }

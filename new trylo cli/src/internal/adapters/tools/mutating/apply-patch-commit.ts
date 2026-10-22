@@ -190,8 +190,10 @@ async function commitText(
   absolutePath: string,
   expected: string | undefined,
   content: string,
+  signal: AbortSignal,
 ): Promise<{ readonly committed: true; readonly bytes: number; readonly created: boolean } | { readonly committed: false }> {
   return config.writeQueue.exclusive(absolutePath, async () => {
+    signal.throwIfAborted();
     const current = readOptional(absolutePath);
     if ("failed" in current) {
       throw new Error(current.failed);
@@ -199,6 +201,7 @@ async function commitText(
     if ((current.found ? current.content : undefined) !== expected) {
       return { committed: false as const };
     }
+    mkdirSync(path.dirname(absolutePath), { recursive: true });
     const written = writeFileAtomicallySync(absolutePath, content);
     return { committed: true as const, bytes: written.bytes, created: written.mode === "created" };
   });
@@ -229,10 +232,9 @@ export async function commitAdd(context: CommitContext, target: AddTarget, displ
   if (tooLarge !== undefined) {
     return tooLarge;
   }
-  mkdirSync(path.dirname(target.absolutePath), { recursive: true });
   let committed;
   try {
-    committed = await commitText(context.config, target.absolutePath, known.found ? known.content : undefined, target.hunk.contents);
+    committed = await commitText(context.config, target.absolutePath, known.found ? known.content : undefined, target.hunk.contents, context.signal);
   } catch (error) {
     if (context.signal.aborted) {
       return abortOutcome(context);
@@ -268,6 +270,7 @@ export async function commitDelete(context: CommitContext, target: DeleteTarget,
   }
   try {
     await context.config.writeQueue.exclusive(target.absolutePath, async () => {
+      context.signal.throwIfAborted();
       const current = readOptional(target.absolutePath);
       if ("failed" in current) {
         throw new Error(current.failed);
@@ -324,7 +327,7 @@ export async function commitUpdate(context: CommitContext, target: UpdateTarget,
   if (target.moveAbsolute === undefined) {
     let committed;
     try {
-      committed = await commitText(context.config, target.absolutePath, known.content, applied.content);
+      committed = await commitText(context.config, target.absolutePath, known.content, applied.content, context.signal);
     } catch (error) {
       if (context.signal.aborted) {
         return abortOutcome(context);
@@ -366,10 +369,9 @@ async function commitMove(
   if ("failed" in knownDest) {
     return partialFailure("read_failed", knownDest.failed, destination, context);
   }
-  mkdirSync(path.dirname(moveAbsolute), { recursive: true });
   let committed;
   try {
-    committed = await commitText(context.config, moveAbsolute, knownDest.found ? knownDest.content : undefined, newContent);
+    committed = await commitText(context.config, moveAbsolute, knownDest.found ? knownDest.content : undefined, newContent, context.signal);
   } catch (error) {
     if (context.signal.aborted) {
       return abortOutcome(context);
@@ -398,6 +400,7 @@ async function commitMove(
   }
   try {
     await context.config.writeQueue.exclusive(target.absolutePath, async () => {
+      context.signal.throwIfAborted();
       const current = readOptional(target.absolutePath);
       if ("failed" in current) {
         throw new Error(current.failed);

@@ -10,6 +10,7 @@
 
 import type { FilePath, ProcessId } from '../host-adapter/types';
 import type { CliRuntimeProtocol } from './cli-runtime-protocol';
+import type { ReasoningEffort } from '../settings/reasoning-effort';
 
 /**
  * The resolved settings a CodeRunController needs to spawn or to
@@ -33,6 +34,7 @@ export interface SettingsForCodeRun {
   readonly apiKey?: string;
   readonly apiHost?: string;
   readonly apiModel?: string;
+  readonly reasoningEffort?: ReasoningEffort;
   readonly apiFormat?: 'anthropic' | 'openai';
   readonly apiKeyHeader?: string;
   readonly apiKeyPrefix?: string;

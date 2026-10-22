@@ -51,6 +51,7 @@ export function turnWiringInput(
     ...(input.fileAccess === undefined ? {} : { fileAccess: input.fileAccess }),
     checkpointRoot: input.checkpointRoot,
     permission: input.permission,
+    ...(input.execPolicy === undefined ? {} : { execPolicy: input.execPolicy }),
     ...(input.grants === undefined ? {} : { grants: input.grants }),
     nowMs: input.now(),
     ...(mcp === undefined ? {} : { mcp: { tools: mcp.tools, toolNames: mcp.toolNames } }),

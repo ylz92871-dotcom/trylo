@@ -8,6 +8,7 @@ import {
   createInteractivePermission,
 } from "./permission.js";
 import { createPlannedPermission, planPermissions, type PermissionChoice } from "./permission-plan.js";
+import { workspaceWriteAllowed } from "./workspace-write-approval.js";
 
 /**
  * 一次运行用哪个 PermissionPort（D7）。
@@ -54,19 +55,21 @@ export function permissionFor(
   permissionMode: "interactive" | "non_interactive",
   ctx: CliContext,
   choice: PermissionChoice,
+  workspaceRoot: string = ctx.cwd,
 ): PermissionPort {
   if (!usesPermissionEntry(choice)) {
     if (permissionMode === "interactive") {
       return createInteractivePermission(permissionIo(ctx));
     }
     if (choice.allowWrites === true) {
-      return createAllowToolsPermission(workspaceWriteToolNames());
+      return createAllowToolsPermission(workspaceWriteToolNames(), action => workspaceWriteAllowed(workspaceRoot, action));
     }
     return createDenyAllPermission();
   }
   return createPlannedPermission(
     planPermissions({ ...choice, interactive: permissionMode === "interactive" }),
     permissionIo(ctx),
+    action => workspaceWriteAllowed(workspaceRoot, action),
   );
 }
 

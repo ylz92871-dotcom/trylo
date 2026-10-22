@@ -104,6 +104,9 @@ async function buildUnknownSession(root: string, id: string, turnId = "t1"): Pro
   const events: ProviderEvent[] = [
     { type: "stream_start", providerId: "fixture", model: "m", warnings: [] },
     { type: "tool_call", toolCallId: "c1", name: "echo", arguments: { text: "hi" } },
+    // The provider succeeded; it is the subsequent tool execution that loses
+    // its acknowledgement, which is the effect reconciliation must recover.
+    { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
   ];
   // The run stops the moment an unknown outcome is durable; that is the point.
   await runTurn({

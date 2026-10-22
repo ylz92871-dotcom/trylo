@@ -1,6 +1,5 @@
 import { createPermissionGrantCache, type PermissionGrantCache } from "../../loop/permission-grants.js";
-import { WORKSPACE_WRITE_TOOL_NAMES } from "../../adapters/tools/mutating/bindings.js";
-import { APPROVABLE_TOOL_NAMES, isApprovableToolName, type PermissionChoice } from "./permission-plan.js";
+import { APPROVABLE_TOOL_NAMES, isApprovableToolName, type PermissionChoice, type AskPolicy } from "./permission-plan.js";
 import { PATH_READ_TOOL_NAMES } from "../../adapters/tools/read-only/path-names.js";
 
 export type PermissionMode = "read-only" | "confirm" | "auto-edit";
@@ -26,10 +25,11 @@ export type SessionPermissions = {
 /** One controller and canonical grant cache per opened CLI session, never persisted. */
 export function createSessionPermissions(initial: PermissionChoice = {}): SessionPermissions {
   const grants = createPermissionGrantCache();
-  let mode: PermissionMode = "confirm";
+  let mode: PermissionMode = initial.allowWrites === true || initial.ask === "writes" ? "auto-edit" : "confirm";
+  let ask: AskPolicy | undefined = initial.ask;
   let selected = false;
-  const allowed = new Set<string>();
-  const denied = new Set<string>();
+  const allowed = new Set<string>(initial.allowTools ?? []);
+  const denied = new Set<string>(initial.denyTools ?? []);
 
   const forgetTool = (name: string): void => {
     for (const grant of grants.entries()) {
@@ -37,12 +37,14 @@ export function createSessionPermissions(initial: PermissionChoice = {}): Sessio
     }
   };
   const choiceFor = (explicit: PermissionChoice): PermissionChoice => {
-    if (Object.keys(explicit).length > 0) return explicit;
-    if (!selected) return initial;
+    // Startup flags are forwarded every turn; they must not undo a later
+    // user mode switch, disable or revoke made in this open session.
+    if (!selected) return Object.keys(explicit).length > 0 ? explicit : initial;
     if (mode === "read-only") return { ask: "never", denyTools: APPROVABLE_TOOL_NAMES.filter(name => !PATH_READ_TOOL_NAMES.includes(name)) };
     return {
-      ask: "always",
-      allowTools: [...(mode === "auto-edit" ? WORKSPACE_WRITE_TOOL_NAMES : []), ...allowed],
+      ...(ask === undefined ? {} : { ask }),
+      ...(mode === "auto-edit" ? { workspaceEdits: "auto" as const } : {}),
+      allowTools: [...allowed],
       denyTools: [...denied],
     };
   };
@@ -51,6 +53,7 @@ export function createSessionPermissions(initial: PermissionChoice = {}): Sessio
     snapshot: () => ({ mode, allowTools: [...allowed], denyTools: [...denied], grants: grants.entries(), effectiveChoice: choiceFor({}) }),
     setMode(next) {
       mode = next;
+      ask = next === "read-only" ? "never" : "always";
       selected = true;
       allowed.clear();
       denied.clear();

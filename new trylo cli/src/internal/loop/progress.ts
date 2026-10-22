@@ -12,11 +12,16 @@ async function acknowledged(stage: string, operation: Promise<ProgressWriteOutco
 /** A snapshot is borrowed, never reconstructed from a UI event. */
 export async function flushProgress(engine: Engine, ports: LoopPorts): Promise<void> {
   if (ports.progress === undefined) return;
+  const transcript = engine.transcript;
   const envelopes = engine.journal.events(engine.progressEnvelopeCount);
   await acknowledged("flush", ports.progress.flush({
-    transcript: engine.transcript,
+    // Reasoning/text deltas change envelopes without changing this immutable
+    // view. Re-submitting it makes the recorder serialize all prior history on
+    // every delta. A replaced view still receives the recorder's conflict checks.
+    transcript: engine.progressTranscript === transcript ? [] : transcript,
     envelopes,
   }));
+  engine.progressTranscript = transcript;
   engine.progressEnvelopeCount += envelopes.length;
 }
 

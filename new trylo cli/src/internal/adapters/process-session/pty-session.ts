@@ -112,7 +112,7 @@ export function createPtySessionRegistry(
 ): PtySessionRegistryPort {
   const maxSessions = options.maxSessions ?? 8;
   const maxBufferBytes = clampBufferBytes(options.maxBufferBytes ?? DEFAULT_MAX_BUFFER_BYTES);
-  const maxReadBytes = Math.max(1, options.maxReadBytes ?? DEFAULT_MAX_READ_BYTES);
+  const maxReadBytes = Math.max(4, options.maxReadBytes ?? DEFAULT_MAX_READ_BYTES);
   const now = options.now ?? ((): number => Date.now());
   const resolution = options.helper ?? resolvePtyHelper();
   // Resolved once, here, so the failure carries its explanation to whoever

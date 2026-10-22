@@ -99,6 +99,8 @@ const WORKSPACE_WRITE_TOOLS: ReadonlySet<string> = new Set(WORKSPACE_WRITE_TOOL_
  * did before.
  */
 export type PermissionChoice = {
+  /** Session auto-edit delegates bounded workspace targets, not tool-wide authority. */
+  readonly workspaceEdits?: "auto";
   readonly ask?: AskPolicy;
   readonly allowTools?: ReadonlyArray<string>;
   readonly denyTools?: ReadonlyArray<string>;
@@ -112,6 +114,7 @@ export type PermissionPlanInput = PermissionChoice & {
 };
 
 export type PermissionPlan = {
+  readonly workspaceEdits?: "auto";
   readonly ask: AskPolicy;
   readonly allow: ReadonlySet<string>;
   readonly deny: ReadonlySet<string>;
@@ -129,6 +132,7 @@ export function defaultAskPolicy(input: PermissionPlanInput): AskPolicy {
 
 export function planPermissions(input: PermissionPlanInput): PermissionPlan {
   return {
+    ...(input.workspaceEdits === undefined ? {} : { workspaceEdits: input.workspaceEdits }),
     ask: defaultAskPolicy(input),
     allow: new Set(input.allowTools ?? []),
     deny: new Set(input.denyTools ?? []),
@@ -155,20 +159,24 @@ export function decideForPlan(plan: PermissionPlan, action: PermissionAction): P
   if (plan.ask === "never") {
     return "denied";
   }
+  if (isWorkspaceWrite && plan.workspaceEdits === "auto") return "approved";
   if (plan.ask === "writes") {
     return isWorkspaceWrite ? "approved" : "denied";
   }
   return "ask";
 }
 
-export function createPlannedPermission(plan: PermissionPlan, io: InteractivePermissionIo): PermissionPort {
+export function createPlannedPermission(plan: PermissionPlan, io: InteractivePermissionIo,
+  workspaceWriteAllowed: (action: PermissionAction) => boolean = () => true): PermissionPort {
   const asking = createInteractivePermission(io);
   const settled = new Map<string, PlanDecision>();
   let counter = 0;
   return {
     isDenied: name => plan.deny.has(name),
     async request(action: PermissionAction): Promise<PermissionTicket> {
-      const verdict = decideForPlan(plan, action);
+      const planned = decideForPlan(plan, action);
+      const verdict = planned === "approved" && (plan.ask === "writes" || plan.workspaceEdits === "auto") && !plan.allow.has(action.name) && !workspaceWriteAllowed(action)
+        ? "denied" : planned;
       if (verdict === "ask") {
         return await asking.request(action);
       }

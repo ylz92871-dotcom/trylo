@@ -197,6 +197,9 @@ export class SubagentRuntime {
       subagentId,
       name: request.name,
       ...(request.lineage.toolCallId ? { toolCallId: request.lineage.toolCallId } : {}),
+      ...(request.prompt === undefined ? {} : { prompt: request.prompt }),
+      ...(request.agentType === undefined ? {} : { agentType: request.agentType }),
+      canReceiveInput: request.input !== undefined,
     };
     this.emitEvent("subagent_spawn", spawnPayload, request.lineage.rootAttemptId);
 
@@ -243,6 +246,13 @@ export class SubagentRuntime {
     });
 
     return true;
+  }
+
+  /** Parent shutdown requests cancellation; workers still own slot retirement. */
+  async cancelAll(reason = "parent_closed"): Promise<void> {
+    for (const id of this.getActiveInstances()) {
+      await this.cancel(id, reason);
+    }
   }
 
   /**
@@ -352,6 +362,13 @@ export class SubagentRuntime {
    * first is the answer. That is what stops a late success from reviving a run
    * that was already settled.
    */
+  reportRound(subagentId: string, update: { readonly status: "running" | "waiting"; readonly round: number;
+    readonly prompt?: string; readonly result?: string; readonly displayName?: string }): void {
+    const record = this.active.get(subagentId);
+    if (record === undefined || isTerminalStatus(record.status)) return;
+    this.emitEvent("subagent_update", { subagentId, ...update }, record.request.lineage.rootAttemptId);
+  }
+
   private finalize<T>(
     record: ActiveSubagentRecord<T>,
     status: SubagentStatus,
@@ -380,6 +397,9 @@ export class SubagentRuntime {
     const endPayload: Record<string, unknown> = {
       subagentId: record.subagentId,
       status,
+      ...(typeof output === "object" && output !== null && "output" in output && typeof output.output === "string"
+        ? { result: output.output } : {}),
+      ...(error === undefined ? {} : { error: error.message }),
       ...(record.request.lineage.toolCallId
         ? { toolCallId: record.request.lineage.toolCallId }
         : {}),

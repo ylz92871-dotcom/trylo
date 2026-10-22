@@ -449,6 +449,7 @@ export function settingsForCodeRun(
     apiKey?: string;
     apiHost?: string;
     apiModel?: string;
+    reasoningEffort?: SettingsForCodeRun['reasoningEffort'];
     /** v-modelsel: built-in pool override; wins over apiModel. */
     poolModel?: string;
     apiFormat?: 'anthropic' | 'openai';
@@ -488,6 +489,7 @@ export function settingsForCodeRun(
     apiKey: settings.apiKey || undefined,
     apiHost: settings.apiHost || undefined,
     apiModel: model,
+    ...(protocol === 'trylo-v1' && settings.reasoningEffort !== undefined ? { reasoningEffort: settings.reasoningEffort } : {}),
     apiFormat: settings.apiFormat,
     apiKeyHeader: settings.apiKeyHeader || undefined,
     apiKeyPrefix: settings.apiKeyPrefix || undefined,

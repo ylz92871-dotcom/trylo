@@ -69,6 +69,8 @@ export type SubagentWorker<T = unknown> = (context: SubagentContext) => Promise<
 
 export type SubagentSpawnRequest<T = unknown> = {
   readonly name: string;
+  readonly prompt?: string | undefined;
+  readonly agentType?: string | undefined;
   /**
    * The work to run. Required on purpose (WP-CLI-N3): a spawn with nothing to
    * run has no behaviour of its own, and the old default — echoing `input` back

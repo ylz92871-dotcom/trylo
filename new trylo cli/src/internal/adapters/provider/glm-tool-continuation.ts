@@ -12,6 +12,7 @@ import type { SessionRecord } from "../../ports/session.js";
 import type { JsonObject, JsonValue } from "../../protocol/envelope.js";
 import {
   glmCheckpoint,
+  assistantKey,
   glmContinuationBinding,
   MAX_REASONING_CHARS,
   readGlmCheckpoint,
@@ -73,7 +74,7 @@ function advanceCapture(capture: Capture, event: ProviderEvent): Capture {
     { toolCallId: event.toolCallId, name: event.name, arguments: event.arguments }] } };
   if (event.type !== "finish") return capture;
   const shaped = (event.reason === "tool_calls" && assistant.calls.length > 0)
-    || (event.reason === "stop" && assistant.calls.length === 0 && assistant.text.length > 0);
+    || (event.reason === "stop" && (assistant.calls.length > 0 || assistant.text.length > 0));
   if (!shaped) return { kind: "aborted" };
   // A complete answer without native fields is a *fact*, not a failure: the
   // provider path may not carry them at all, or this response omitted them.
@@ -166,7 +167,7 @@ export function createGlmToolContinuation(endpoint: string, configuredModel: str
   let activeScope: string | undefined;
   let generation = 0;
   const cache = createGlmContinuationCache();
-  let checkpoint: { readonly scope: string; readonly value: JsonObject } | undefined;
+  let checkpoint: { readonly scope: string; readonly value: JsonObject; readonly state: NativeCheckpointState; readonly binding: string } | undefined;
   let captureScope: string | undefined;
   /** Records the journal could not give us, keyed by occurrence identity. */
   const failed = new Map<string, NativeContinuationCause>();
@@ -181,6 +182,19 @@ export function createGlmToolContinuation(endpoint: string, configuredModel: str
 
   const binding = glmContinuationBinding(endpoint, configuredModel);
   const persistence: ProviderContinuationPort | undefined = binding === undefined ? undefined : {
+    bindCanonicalResponse(input) {
+      if (checkpoint === undefined || input.scope !== captureScope || input.scope !== checkpoint.scope || input.message.role !== "assistant") return;
+      const state = checkpoint.state, identity = state.kind === "native" ? state.assistant : state.identity;
+      // Rewriters may project text, never invent another response's tool identity.
+      if (assistantKey("", identity.calls) !== assistantKey("", input.message.toolCalls ?? [])) return;
+      if (identity.text === input.message.content) return;
+      const rebound: NativeCheckpointState = state.kind === "native"
+        ? { kind: "native", assistant: { ...state.assistant, text: input.message.content } }
+        : { ...state, identity: { ...state.identity, text: input.message.content } };
+      const value = glmCheckpoint(checkpoint.binding, input.scope, rebound);
+      if (value === undefined || !cache.replaceLast(state, rebound)) return;
+      checkpoint = { ...checkpoint, value, state: rebound };
+    },
     acknowledgeNotice(noticeId) { delivered.add(noticeId); },
     capture(scope) { return captureScope === scope && checkpoint?.scope === scope ? checkpoint.value : undefined; },
     estimateOverheadTokens: cache.estimateOverheadTokens,
@@ -247,7 +261,7 @@ export function createGlmToolContinuation(endpoint: string, configuredModel: str
           if (state === undefined) return;
           for (const key of cache.retain(state)) evicted.add(key);
           const value = glmCheckpoint(requestBinding, request.continuationScope!, state);
-          if (value !== undefined) { checkpoint = { scope: request.continuationScope!, value }; captureScope = request.continuationScope; }
+          if (value !== undefined) { checkpoint = { scope: request.continuationScope!, value, state, binding: requestBinding }; captureScope = request.continuationScope; }
         },
       };
     },

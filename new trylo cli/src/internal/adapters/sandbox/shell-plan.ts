@@ -155,6 +155,10 @@ export function planShell(policy: SandboxPolicy, call: ToolCallRequest, shellMod
     return deny("invalid_arguments", "run_shell requires a non-empty command");
   }
   const command = rawCommand;
+  const commandTexts = [command, call.arguments["pipeTo"], ...(Array.isArray(call.arguments["steps"]) ? call.arguments["steps"] : [])];
+  if (commandTexts.some(text => typeof text === "string" && text.includes("\0"))) {
+    return deny("invalid_arguments", "run_shell command, steps and pipeTo must not contain NUL characters");
+  }
   const stdoutFile = call.arguments["stdoutFile"];
   if (stdoutFile !== undefined) {
     if (typeof stdoutFile !== "string" || stdoutFile.length === 0) return deny("invalid_arguments", "stdoutFile requires a non-empty workspace-relative file path");

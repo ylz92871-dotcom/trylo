@@ -12,6 +12,7 @@ import { mergeUsage } from "../ports/provider.js";
 import { classifyBudgetRejection, type BudgetRejection } from "./budget-recovery.js";
 import type { MethodChannel } from "./method-channel.js";
 import { providerEventToInput } from "./provider-input.js";
+import { transcriptToMessages } from "./transcript-messages.js";
 import {
   applyReasoningBlock,
   applyTextBlock,
@@ -224,6 +225,7 @@ async function pullStream(context: StreamContext, acc: StreamAccumulator, iterat
         acc.inputs.push(mapped);
       }
     }
+    if (event.type === "finish" && !context.signal.aborted) bindCanonicalResponse(context, acc);
     if (acc.transcriptItems.length > savedItems) {
       await context.onTranscriptItems?.(acc.transcriptItems.slice(savedItems));
       savedItems = acc.transcriptItems.length;
@@ -253,6 +255,18 @@ async function pullStream(context: StreamContext, acc: StreamAccumulator, iterat
       break;
     }
   }
+}
+
+/** Only this response's trusted public projection may rebind adapter state.
+ * The adapter has already captured finish; the recorder has not persisted the
+ * corresponding stream_end yet. No work or allocation is added without a channel.
+ */
+function bindCanonicalResponse(context: StreamContext, acc: StreamAccumulator): void {
+  if (context.channel === undefined && context.toolGapChannel === undefined && context.feedbackChannel === undefined) return;
+  const scope = context.request.continuationScope;
+  if (scope === undefined || context.port.continuation?.bindCanonicalResponse === undefined) return;
+  const message = transcriptToMessages(acc.transcriptItems).find(item => item.role === "assistant");
+  if (message !== undefined) context.port.continuation.bindCanonicalResponse({ scope, message });
 }
 
 /** A write failure must release the iterator too; it cannot strand a socket. */

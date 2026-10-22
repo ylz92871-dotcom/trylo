@@ -18,6 +18,7 @@ import { StreamingIndicator } from './StreamingIndicator';
 import { TurnProgress } from './TurnProgress';
 import {
   createFollowController,
+  FOLLOW_TAIL_THRESHOLD,
   shouldForceTailPin,
   shouldShowFollowPill,
 } from './follow-controller';
@@ -31,7 +32,9 @@ import {
   CodeReasoningTranscript,
   type CodeProcessEntry,
 } from './CodeReasoningTranscript';
-import type { ChatMessage, TextMessage } from './types';
+import type { ChatMessage, TextMessage, SubagentMessage } from './types';
+import { CollaborationGroup } from './CollaborationGroup';
+import { AgentParticipation } from './AgentParticipation';
 import {
   type ConversationRunViewState,
   deriveConversationRunViewState,
@@ -39,6 +42,8 @@ import {
 } from './view-state';
 
 export interface MessageListProps {
+  readonly selectedSubagentId?: string | null;
+  readonly onSelectSubagent?: (messageId: string) => void;
   readonly messages: readonly ChatMessage[];
   /** Code and Work share one scroll/composer shell, but deliberately use
    * different workflow projections inside it. */
@@ -104,7 +109,9 @@ type TurnTimingItem = {
   readonly id: string;
   readonly user: TextMessage;
 };
-export type ListItem = ChatMessage | CodeProcessItem | TurnTimingItem;
+type CollaborationItem = { readonly kind: '__collaboration'; readonly id: string;
+  readonly turnId: string; readonly agents: readonly SubagentMessage[]; readonly active: boolean };
+export type ListItem = ChatMessage | CodeProcessItem | TurnTimingItem | CollaborationItem;
 
 function isCodeProcessItem(item: ListItem): item is CodeProcessItem {
   return item.kind === '__code_process';
@@ -178,39 +185,14 @@ interface TurnMeta {
 
 export function MessageList(props: MessageListProps): ReactElement {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
-  // ── Mature auto-scroll (Cursor / VS Code / Cline pattern)
-  // ╭────────────────────────────────────────────────────────────────╮
-  // │ Follow-state is observation, not render data: the controller  │
-  // │ lives in a ref and is fed the scroller's own scrollTop.       │
-  // │                                                                │
-  // │ Disarming keys off the SCROLL POSITION, not the input device. │
-  // │ The previous wheel-up/PageUp-only disarm left follow armed    │
-  // │ for scrollbar drags, touch and Home — every streaming delta   │
-  // │ then yanked the view back to the bottom, which the user       │
-  // │ experienced as violent scroll jitter during workflow runs.    │
-  // │ Any upward scrollTop movement now disarms, however it was     │
-  // │ produced. Downward movement (chasing the tail, Virtuoso's     │
-  // │ compensation when rows mount above, our own pin scrolls)      │
-  // │ never disarms.                                                 │
-  // │                                                                │
-  // │ Re-arming stays explicit: sending a message (the new turn is  │
-  // │ the user's) and clicking the follow-tail pill.                │
-  // ╰────────────────────────────────────────────────────────────────╯
+  // A single scroll driver follows measured layout while the reader stays at the tail.
   const followRef = useRef(createFollowController());
   // Mirror at-bottom in state so the "follow tail" pill can render (purely
   // visual). Virtuoso's atBottomStateChange is the source of truth.
   const [atBottom, setAtBottom] = useState(true);
+  const [, refreshFollowState] = useState(0);
 
-  // The pill must not flash during the pin's catch-up gap: when content
-  // grows at the bottom, Virtuoso reports not-at-bottom for the frames
-  // before our scrollToIndex re-pins, and `!atBottom` alone would blink the
-  // pill on every delta. A pinned (following) view never shows the pill;
-  // a disarmed LIVE view may.
-  //
-  // Round-3 (P1-6 → P0): the pill is gated on `running`. In a finished
-  // conversation a visible ↓ means we failed to pin the ending — a
-  // successful delivery must never read as a silent failure. See
-  // shouldShowFollowPill in ./follow-controller.
+  // Show a return action while reading history, including after completion.
   const running = props.running === true;
   const showScrollBtn = shouldShowFollowPill({
     running,
@@ -310,7 +292,20 @@ export function MessageList(props: MessageListProps): ReactElement {
 
     const flushTurn = (): void => {
       if (!currentTurn) return;
-      const turnMsgs = coalesceToolReplays(currentTurn.msgs);
+      const allTurnMsgs = coalesceToolReplays(currentTurn.msgs);
+      const agents = allTurnMsgs.filter((message): message is SubagentMessage => message.kind === 'subagent');
+      // Structured collaboration replaces successful orchestration receipts.
+      // Failed calls stay visible; persisted messages remain lossless.
+      const orchestration = new Set(['spawn_agent', 'send_input', 'wait_agent', 'close_agent', 'resume_agent', 'delegate_subagent', 'Agent', 'Task']);
+      const turnMsgs = agents.length === 0 ? allTurnMsgs : allTurnMsgs.filter(message =>
+        message.kind !== 'tool' || !orchestration.has(message.tool) || message.status === 'error' || message.status === 'interrupted');
+      const appendMessage = (message: ChatMessage): void => {
+        if (message.kind !== 'subagent') { result.push(message); return; }
+        if (message === agents[0]) result.push({ kind: '__collaboration', id: `collaboration:${currentTurn!.turnId}`,
+          turnId: currentTurn!.turnId, agents,
+          active: turnMetaByTurnId.get(currentTurn!.turnId)?.isActive === true });
+        result.push(message);
+      };
       if ((props.surface ?? 'code') === 'code') {
         type PhaseGroup = {
           firstIndex: number;
@@ -371,7 +366,7 @@ export function MessageList(props: MessageListProps): ReactElement {
             });
           }
           if (message.kind !== 'thinking' && message.kind !== 'tool') {
-            result.push(message);
+            appendMessage(message);
           }
         }
       } else {
@@ -427,7 +422,7 @@ export function MessageList(props: MessageListProps): ReactElement {
             continue;
           }
           if (message.kind === 'tool' || message.kind === 'thinking') continue;
-          result.push(message);
+          appendMessage(message);
         }
       }
       const user = turnMsgs.find((message): message is TextMessage =>
@@ -462,50 +457,50 @@ export function MessageList(props: MessageListProps): ReactElement {
     // would leave the block expanded.
   }, [props.messages, props.surface, props.running, turnMetaByTurnId]);
 
-  // v1.15.9.j → v1.18 (2026-09-06): when the user sends a NEW message,
-  // reset to follow mode. Sending is the explicit "follow along
-  // again" signal — even if the user had been scrolled up reading
-  // the previous turn, the new turn is theirs and they want to watch
-  // it unfold. After that, ANY upward movement of the scroller's
-  // scrollTop disarms follow (see the follow controller above — it is
-  // position-based, not input-device-based), until they re-arm it by
-  // sending OR by clicking the follow-tail pill (which scrolls to
-  // bottom AND re-arms follow).
+  // Sending a new turn resumes follow. Reader input can pause it again.
 
   // Refs that survive across renders without re-triggering them.
   const lastUserMsgIdRef = useRef<string | null>(null);
   // Round-3 (P1-6): the scroller element itself. Declared before the pin
   // effect so the absolute tail scroll can read real geometry.
   const scrollerElRef = useRef<HTMLElement | null>(null);
+  const userScrollUntilRef = useRef(0);
+  const touchYRef = useRef<number | null>(null);
 
-  /** THE one scroll driver. Two steps, both of them needed:
-   *  1. `scrollToIndex` asks Virtuoso to align the last item's end with the
-   *     viewport. It is an OFFSET request, computed from Virtuoso's own
-   *     measured sizes — when the last row is the single giant process block
-   *     of a long run (dozens of tool rows in one item), a stale measurement
-   *     lands it short of the real bottom and nothing ever corrects it. That
-   *     is the frozen view the owner was shown: a finished, honest summary
-   *     sitting two screenshots above the fold.
-   *  2. The absolute clamp is the part that cannot be defeated: scroll the
-   *     element to its own content height, then let the browser clamp. A
-   *     no-op whenever step 1 already landed. */
+  /** Keep Virtuoso's measured range and the browser's actual tail aligned.
+   *  Instant movement avoids accumulating smooth animations during a stream. */
   const pinToTail = useCallback(
-    (behavior: 'auto' | 'smooth' = 'auto'): void => {
-    virtuosoRef.current?.scrollToIndex({
-      index: items.length - 1,
-      align: 'end',
-      // 'auto' (instant) during a live run: dozens of smooth animations
-      // back-to-back fight the user's own scrolling and make the tail
-      // feel laggy. 'smooth' is reserved for the explicit pill click.
-      behavior,
-    });
-    const el = scrollerElRef.current;
-    if (!el) return;
-    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (distance > TAIL_TOLERANCE) el.scrollTop = el.scrollHeight;
+    (): void => {
+      if (items.length > 0) virtuosoRef.current?.scrollToIndex({ index: items.length - 1, align: 'end', behavior: 'auto' });
+      const el = scrollerElRef.current;
+      if (!el) return;
+      if (userScrollUntilRef.current !== Number.POSITIVE_INFINITY) userScrollUntilRef.current = 0;
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distance > TAIL_TOLERANCE) el.scrollTop = el.scrollHeight;
+      followRef.current.sync({ scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight });
     },
     [items.length],
   );
+
+  const pinFrameRef = useRef<number | null>(null);
+  const scheduleTailPin = useCallback((): void => {
+    if (pinFrameRef.current !== null) return;
+    pinFrameRef.current = requestAnimationFrame(() => {
+      pinFrameRef.current = null;
+      if (followRef.current.isFollowing()) pinToTail();
+    });
+  }, [pinToTail]);
+  useEffect(() => () => {
+    if (pinFrameRef.current !== null) cancelAnimationFrame(pinFrameRef.current);
+    pinFrameRef.current = null;
+  }, [scheduleTailPin]);
+  useEffect(() => {
+    const el = scrollerElRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(scheduleTailPin);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [scheduleTailPin]);
 
   // When items change (a new user turn lands, or streaming content
   // grows), auto-scroll ONLY if we're still in follow mode.
@@ -538,30 +533,23 @@ export function MessageList(props: MessageListProps): ReactElement {
     // new `items` identity) doesn't schedule a render per delta. The
     // functional form lets React bail out when the value is unchanged.
     setAtBottom(true);
-    pinToTail('auto');
-  }, [items, pinToTail]);
+    pinToTail();
+    scheduleTailPin();
+  }, [items, pinToTail, scheduleTailPin]);
 
-  // Round-3 (P1-6 → P0): the run-end pin. `running` flipping true → false is
-  // the terminal edge of a turn, and the final answer IS the payload of that
-  // edge — so it goes to the bottom unconditionally, even if follow was
-  // disarmed and even if the reader had scrolled away. Paired with the
-  // pill being hidden while `running` is false, there is no way for a
-  // completed delivery to be left off-screen with no affordance: the
-  // transcript either shows the ending, or it is still running.
+  // Finishing a run preserves a reader who deliberately left the tail.
   const wasRunningRef = useRef(running);
   useEffect(() => {
     const wasRunning = wasRunningRef.current;
     wasRunningRef.current = running;
-    if (!shouldForceTailPin(wasRunning, running)) return;
+    if (!shouldForceTailPin(wasRunning, running, followRef.current.isFollowing())) return;
     followRef.current.rearm();
     setAtBottom(true);
-    pinToTail('auto');
+    pinToTail();
   }, [running, pinToTail]);
 
-  // The scroller's own scroll events are the ONE disarm signal — they fire
-  // for every input method (wheel, scrollbar drag, touch, Home/End,
-  // keyboard) and for none of our own pin scrolls (those only move
-  // scrollTop down). Attached through Virtuoso's `scrollerRef` below.
+  // Virtualizer corrections can move scrollTop without changing total height.
+  // Only observations associated with reader input may change follow intent.
   const handleScrollerScroll = useCallback((): void => {
     const el = scrollerElRef.current;
     if (!el) return;
@@ -569,17 +557,64 @@ export function MessageList(props: MessageListProps): ReactElement {
     // scrollTop — see follow-controller.ts. A row collapsing ABOVE the tail
     // moves scrollTop up by the height it lost, and the browser does that on
     // the user's behalf; only the un-explained remainder is the user.
-    const disarmed = followRef.current.observe({
-      scrollTop: el.scrollTop,
-      scrollHeight: el.scrollHeight,
-      clientHeight: el.clientHeight,
-    });
-    if (disarmed) {
-      // Mirror to the pill state immediately; Virtuoso's
-      // atBottomStateChange will agree a moment later.
-      setAtBottom((prev) => (prev ? false : prev));
-    }
+    const wasFollowing = followRef.current.isFollowing();
+    followRef.current.observe({ scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }, performance.now() <= userScrollUntilRef.current);
+    if (!wasFollowing && followRef.current.isFollowing() && userScrollUntilRef.current !== Number.POSITIVE_INFINITY) userScrollUntilRef.current = 0;
+    const bottom = el.scrollHeight - el.clientHeight - el.scrollTop <= FOLLOW_TAIL_THRESHOLD;
+    setAtBottom(bottom);
+    if (wasFollowing !== followRef.current.isFollowing()) refreshFollowState(value => value + 1);
   }, []);
+  const pauseFollow = useCallback((): void => {
+    if (!followRef.current.isFollowing()) return;
+    followRef.current.pause();
+    refreshFollowState(value => value + 1);
+  }, []);
+  const handleWheel = useCallback((event: WheelEvent): void => {
+    // A scrollable tool output owns its wheel until it reaches its top.
+    for (const node of event.composedPath()) {
+      if (node === scrollerElRef.current) break;
+      if (node instanceof HTMLElement && node.scrollTop > 0 && /auto|scroll/.test(getComputedStyle(node).overflowY)) return;
+    }
+    userScrollUntilRef.current = performance.now() + 1000;
+    if (event.deltaY < 0 && scrollerElRef.current?.scrollTop) pauseFollow();
+  }, [pauseFollow]);
+  const handleKeyDown = useCallback((event: KeyboardEvent): void => {
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+    if (event.key === 'End') {
+      event.preventDefault();
+      followRef.current.rearm();
+      setAtBottom(true);
+      pinToTail();
+      scheduleTailPin();
+      return;
+    }
+    if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ', 'Tab'].includes(event.key)) userScrollUntilRef.current = performance.now() + 1000;
+    if (['ArrowUp', 'PageUp', 'Home'].includes(event.key) || (event.key === ' ' && event.shiftKey)) pauseFollow();
+  }, [pauseFollow, pinToTail, scheduleTailPin]);
+  const handlePointerDown = useCallback((event: PointerEvent): void => {
+    const el = scrollerElRef.current;
+    if (!el || event.target !== el) return;
+    const rect = el.getBoundingClientRect();
+    if (event.clientX < rect.right - Math.max(12, el.offsetWidth - el.clientWidth)) return;
+    // Scrollbar presses target the scroller itself, not the message children.
+    userScrollUntilRef.current = Number.POSITIVE_INFINITY;
+    pauseFollow();
+  }, [pauseFollow]);
+  const handlePointerUp = useCallback((): void => {
+    if (userScrollUntilRef.current === Number.POSITIVE_INFINITY) userScrollUntilRef.current = performance.now() + 1000;
+  }, []);
+  const handleTouchStart = useCallback((event: TouchEvent): void => {
+    touchYRef.current = event.touches[0]?.clientY ?? null;
+    userScrollUntilRef.current = performance.now() + 1500;
+  }, []);
+  const handleTouchMove = useCallback((event: TouchEvent): void => {
+    const y = event.touches[0]?.clientY;
+    if (y === undefined) return;
+    userScrollUntilRef.current = performance.now() + 1500;
+    if (touchYRef.current !== null && y > touchYRef.current + 1 && scrollerElRef.current?.scrollTop) pauseFollow();
+    touchYRef.current = y;
+  }, [pauseFollow]);
   const attachScroller = useCallback(
     (el: HTMLElement | Window | null): void => {
       const prev = scrollerElRef.current;
@@ -587,30 +622,49 @@ export function MessageList(props: MessageListProps): ReactElement {
       if (prev === next) return;
       if (prev) {
         prev.removeEventListener('scroll', handleScrollerScroll);
+        prev.removeEventListener('wheel', handleWheel);
+        prev.removeEventListener('keydown', handleKeyDown);
+        prev.removeEventListener('pointerdown', handlePointerDown);
+        prev.removeEventListener('touchstart', handleTouchStart);
+        prev.removeEventListener('touchmove', handleTouchMove);
+        document.removeEventListener('pointerup', handlePointerUp);
+        document.removeEventListener('pointercancel', handlePointerUp);
+        window.removeEventListener('blur', handlePointerUp);
       }
       scrollerElRef.current = next;
       // Window-scrolled lists are not a thing here (the scroller is always
       // an element); skip listening when Virtuoso hands us something else.
       if (next) {
+        followRef.current.sync({ scrollTop: next.scrollTop, scrollHeight: next.scrollHeight, clientHeight: next.clientHeight });
         next.addEventListener('scroll', handleScrollerScroll, { passive: true });
+        next.addEventListener('wheel', handleWheel, { passive: true });
+        next.addEventListener('keydown', handleKeyDown);
+        next.addEventListener('pointerdown', handlePointerDown);
+        next.addEventListener('touchstart', handleTouchStart, { passive: true });
+        next.addEventListener('touchmove', handleTouchMove, { passive: true });
+        document.addEventListener('pointerup', handlePointerUp, { passive: true });
+        document.addEventListener('pointercancel', handlePointerUp, { passive: true });
+        window.addEventListener('blur', handlePointerUp);
       }
     },
-    [handleScrollerScroll],
+    [handleScrollerScroll, handleWheel, handleKeyDown, handlePointerDown, handlePointerUp, handleTouchStart, handleTouchMove],
   );
 
-  // 2026-09-06 (v1.18): auto-scroll lives in the items-change effect
-  // above, gated by the follow controller. `followOutput` is disabled
-  // (see its note) so there is exactly one scroll driver; atBottomState
-  // Change only mirrors geometry to the pill state.
+  // All pins share the same intent gate, including asynchronous measurements.
 
   return (
     <div className="message-list" data-message-list-root="" role="list" aria-label="Chat">
       <Virtuoso
         ref={virtuosoRef}
+        tabIndex={0}
         style={{ height: '100%' }}
         scrollerRef={attachScroller}
         data={items}
         itemContent={(_index, item) => {
+          if (item.kind === '__collaboration') return <CollaborationGroup key={item.id} agents={item.agents}
+            active={item.active} selectedId={props.selectedSubagentId} onSelect={props.onSelectSubagent} />;
+          if (item.kind === 'subagent') return <AgentParticipation key={item.id} agent={item}
+            selected={props.selectedSubagentId === item.id} onSelect={props.onSelectSubagent} />;
           if (item.kind === '__turn_timing') {
             return <TurnProgress key={item.id} turnStartedAt={item.user.turnStartedAt ?? null}
               timing={item.user.turnTiming} isActive={false} />;
@@ -698,12 +752,9 @@ export function MessageList(props: MessageListProps): ReactElement {
         // There is now exactly ONE scroll driver: the items-change
         // effect, gated by followRef. Virtuoso only reports geometry.
         followOutput={false}
+        totalListHeightChanged={scheduleTailPin}
         atBottomStateChange={(bottom) => {
-          // Reporting-only. The value is mirrored to state purely so
-          // the follow-tail pill can render. We deliberately do NOT
-          // write followRef here — that would re-introduce the
-          // feedback loop. Re-arming happens only from the three
-          // explicit signals: send, pill click, and (re)mount.
+          // Geometry alone cannot establish reader intent.
           setAtBottom((prev) => (prev === bottom ? prev : bottom));
         }}
         initialTopMostItemIndex={items.length - 1}
@@ -730,22 +781,18 @@ export function MessageList(props: MessageListProps): ReactElement {
         }}
       />
       {showScrollBtn && (
-        // 2026-09-06: the trailing pill re-arms follow mode + smoothly
-        // scrolls to the bottom in one click. Re-arm signals are the pill
-        // click and sending a new message; scrolling up by any means
-        // disarms (see the follow controller above). The pill is
-        // intentionally icon-only; the design note said a small icon is
-        // enough.
+        // Explicit return works during streaming and after completion.
         <button
           type="button"
           className="message-list__scroll-btn message-list__scroll-btn--show"
           onClick={() => {
             followRef.current.rearm();
             setAtBottom(true);
-            pinToTail('smooth');
+            pinToTail();
+            scheduleTailPin();
           }}
-          aria-label="Follow latest"
-          title="Follow latest"
+          aria-label="回到最新消息"
+          title={running ? '回到最新消息并继续跟随' : '回到最新消息'}
         >
           <ArrowDown size={14} strokeWidth={2.4} aria-hidden="true" />
         </button>

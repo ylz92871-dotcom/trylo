@@ -42,6 +42,24 @@ function fixtures(): ReadonlyArray<Envelope> {
   ];
 }
 
+test("child round answers and cleanup stay visible before the renderer closes", () => {
+  const translator = createStreamTranslator();
+  const events = [
+    ...translator.push(envelope("subagent_spawn", { subagentId: "a", name: "worker", prompt: "完整任务", canReceiveInput: true }, 1)),
+    ...translator.push(envelope("subagent_update", { subagentId: "a", status: "waiting", round: 1, result: "完整答复" }, 2)),
+    ...translator.push(envelope("terminal", { reason: "completed" }, 3)),
+    ...translator.push(envelope("subagent_end", { subagentId: "a", status: "cancelled" }, 4)),
+  ];
+  assert.deepEqual(events, [
+    { type: "subagent", kind: "spawn", id: "a", status: "running", agentType: "worker", prompt: "完整任务", canReceiveInput: true },
+    { type: "subagent", kind: "update", id: "a", status: "waiting", round: 1, result: "完整答复" },
+    { type: "subagent", kind: "end", id: "a", status: "cancelled" },
+  ]);
+  assert.deepEqual(translator.push(envelope("text", { text: "late parent bytes" }, 5)), []);
+  translator.finish();
+  assert.deepEqual(translator.push(envelope("subagent_spawn", { subagentId: "late" }, 6)), []);
+});
+
 test("accepted plain-language namespaces survive the warning projection", () => {
   // A14: the native-continuation diagnostic is additive. A credential problem, a
   // permission refusal or a protocol rejection must still reach the person with

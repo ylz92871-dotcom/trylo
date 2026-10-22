@@ -136,8 +136,8 @@ test("durability: a cancelled turn flushes synthetic results, not bare tool_use 
       });
     },
   };
-  // Each flush is kept as the snapshot the recorder was handed, so the assertion
-  // reads the durable write rather than an accumulation of every write.
+  // The recorder accepts full views and incremental closed blocks. Accumulate
+  // acknowledged facts by ordinal rather than requiring redundant last snapshots.
   const flushes: Transcript[] = [];
   const ports = {
     ...run.ports,
@@ -164,7 +164,7 @@ test("durability: a cancelled turn flushes synthetic results, not bare tool_use 
   assert.equal(result.state.terminalReason, "cancelled");
   const idsIn = (items: Transcript): string[] =>
     items.filter((item) => item.kind === "tool_result").map((item) => item.toolCallId).sort();
-  const durable = idsIn(flushes[flushes.length - 1] ?? []);
+  const durable = idsIn([...new Map(flushes.flat().map(item => [item.sequence, item])).values()]);
   assert.deepEqual(
     durable,
     ["call-1", "call-2"],

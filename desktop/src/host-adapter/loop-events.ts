@@ -239,7 +239,14 @@ export interface ToolResultEvent extends BaseEvent {
 
 export interface SubagentEvent extends BaseEvent {
   readonly type: 'subagent';
-  readonly kind: 'spawn' | 'end';
+  readonly kind: 'spawn' | 'update' | 'end';
+  readonly status?: 'running' | 'waiting' | 'done' | 'failed' | 'cancelled';
+  readonly error?: string;
+  readonly round?: number;
+  readonly canReceiveInput?: boolean;
+  /** V1 roles overlap with legacy Team seat names, but are ordinary children. */
+  readonly source?: 'trylo-v1';
+  readonly displayName?: string;
   readonly parentId?: string;
   readonly id: string;
   readonly agentType?: string;

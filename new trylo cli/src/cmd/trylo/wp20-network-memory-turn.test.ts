@@ -53,7 +53,7 @@ type Endpoint = {
   readonly close: () => Promise<void>;
 };
 
-function startProvider(): Promise<Endpoint> {
+function startProvider(wire: "chat" | "responses" = "chat"): Promise<Endpoint> {
   const seen: ReadonlyArray<string>[] = [];
   const server: Server = createServer((req, res) => {
     let body = "";
@@ -77,7 +77,13 @@ function startProvider(): Promise<Endpoint> {
         // name rather than on a parse error hiding the real fact.
       }
       seen.push(names);
-      sse(res, answerFrames("ok"));
+      if (wire === "responses") {
+        res.writeHead(200, { "content-type": "text/event-stream" });
+        res.write('event: response.output_text.delta\ndata: {"output_index":0,"delta":"ok"}\n\n');
+        res.end('event: response.completed\ndata: {"response":{"status":"completed","usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}}\n\n');
+      } else {
+        sse(res, answerFrames("ok"));
+      }
     });
   });
   return new Promise((resolve) => {
@@ -85,7 +91,7 @@ function startProvider(): Promise<Endpoint> {
       const address = server.address();
       const port = typeof address === "object" && address !== null ? address.port : 0;
       resolve({
-        url: `http://127.0.0.1:${port}/v1/chat/completions`,
+        url: `http://127.0.0.1:${port}/v1/${wire === "responses" ? "responses" : "chat/completions"}`,
         toolNames: () => seen,
         close: () => new Promise<void>((done) => { server.close(() => done()); }),
       });
@@ -206,13 +212,15 @@ test("an openai-compatible provider mounts web_fetch but never web_search", asyn
 
 test("an openai-responses provider mounts web_search, admitted because it is in the catalog", async () => {
   const fx = fixture("trylo-wp20-resp-", false);
-  const provider = await startProvider();
+  const provider = await startProvider("responses");
   try {
     declareProvider(fx.home, "responses-fixture", "openai-responses", provider.url);
     // The declared id, so the run is built from the `openai-responses` family.
     // Naming the built-in id instead would test the wrong provider entirely.
     const result = await run(fx, provider.url, ["run", "hi", "--allow-web"], "responses-fixture");
     assert.equal(result.status, 0, result.stderr);
+    const terminal = result.stdout.trim().split("\n").map(line => JSON.parse(line)).find(event => event.type === "run_result");
+    assert.equal(terminal?.lastMessage, "ok", "catalog acceptance must still deliver the actual Responses answer");
     const catalog = provider.toolNames()[0] ?? [];
     assert.equal(catalog.includes("web_search"), true, "a Responses provider does offer hosted search");
     assert.equal(catalog.includes("web_fetch"), true);

@@ -12,7 +12,7 @@ export function openAiRequestEndpoint(apiHost: string): string {
     throw new Error(INVALID_API_HOST);
   }
   const base = url.pathname.replace(/\/+$/, '');
-  if (!base.endsWith('/chat/completions')) {
+  if (!base.endsWith('/chat/completions') && !base.endsWith('/responses')) {
     url.pathname = `${base || '/v1'}/chat/completions`;
   }
   return url.toString();

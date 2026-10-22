@@ -19,7 +19,7 @@ export type ProviderRole = "system" | "user" | "assistant" | "tool";
 /** Per-run reasoning control. Unsupported providers must refuse rather than
  * silently downgrade it; absence preserves the provider's existing default.
  */
-export const REASONING_EFFORTS = ["none", "low", "medium", "high", "max"] as const;
+export const REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 export function isReasoningEffort(value: string): value is ReasoningEffort {
   return (REASONING_EFFORTS as readonly string[]).includes(value);
@@ -324,6 +324,12 @@ export type ProviderEventType = (typeof PROVIDER_EVENT_TYPES)[number];
  * Only the adapter interprets it; it is never a display event or permission.
  */
 export type ProviderContinuationPort = {
+  /** Bind this completed response's trusted, post-rewrite assistant identity.
+   * Called before stream_end is persisted; never accepts native reasoning from
+   * the caller. An adapter must reject other scopes or different tool calls.
+   * Optional: providers without native state keep their existing behavior.
+   */
+  readonly bindCanonicalResponse?: (input: { readonly scope: string; readonly message: ProviderMessage }) => void;
   /** Called by a durable recorder only after the notice envelope was appended. */
   readonly acknowledgeNotice?: (noticeId: string) => void;
   capture(scope: string): JsonObject | undefined;

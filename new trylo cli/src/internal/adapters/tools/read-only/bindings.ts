@@ -40,7 +40,7 @@ export const READ_ONLY_BINDINGS: ReadonlyArray<ToolBinding> = [
       path: { type: "string", description: "Workspace-relative directory to list. Defaults to the workspace root." },
     }, required: [] }),
   bindingFor("search_text",
-    "Search file content line by line; path accepts a file or directory. Default literal text; set mode to regex explicitly for JavaScript RegExp syntax such as alternation or anchors. Narrow path to a module and include to relevant file types first. include/exclude are workspace-relative globs. Local .gitignore applies. Output uses workspace-relative path:line:text ready for read_file; counts and incomplete reasons are reported.",
+    "Search file content line by line; path accepts a file or directory. Default literal text; set mode to regex explicitly for JavaScript RegExp syntax such as alternation or anchors. Regex runs in a cancellable worker with a 250 ms per-file budget; regex_timeout means simplify the pattern or use literal mode. Narrow path to a module and include to relevant file types first. include/exclude are workspace-relative globs. Local .gitignore applies. By default files above 1 MiB and NUL-containing binary content are skipped with counts and incomplete reasons. Long lines show a snippet around the first match and report textStartColumn (1-based UTF-16 units) and lineTruncated. Output uses workspace-relative path:line:text ready for read_file.",
     { type: "object", properties: {
       pattern: { type: "string" },
       path: { type: "string", description: "Workspace-relative directory to search. Defaults to the workspace root." },
