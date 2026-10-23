@@ -35,3 +35,11 @@ it('switches back to the new CLI with automatic path resolution despite a record
   fireEvent.click(screen.getByRole('button', { name: '保存设置' }));
   expect(loadSettings()).toMatchObject({ cliRuntimeProtocol: 'trylo-v1', cliPath: '', cliRuntimeSelection: 'user' });
 });
+
+it('offers only the new CLI in a new-only release', () => {
+  vi.stubEnv('VITE_TRYLO_NEW_CLI_ONLY', 'true');
+  render(<SettingsModal open initialTab="behavior" initial={loadSettings()} onSave={vi.fn()} onClose={vi.fn()} />);
+  expect(screen.getByLabelText('CLI runtime')).toHaveValue('trylo-v1');
+  expect(screen.queryByRole('option', { name: '旧 CLI — legacy-stream-json' })).not.toBeInTheDocument();
+  expect(screen.getByText('此版本仅包含新版 Trylo CLI。', { exact: false })).toBeInTheDocument();
+});

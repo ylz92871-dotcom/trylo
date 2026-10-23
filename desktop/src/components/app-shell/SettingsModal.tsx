@@ -34,7 +34,7 @@ import {
   type SettingsSaveIntent,
 } from '../../settings/settings-store';
 import { PERMISSION_LEVELS, type PermissionLevel } from '../../permission/permission-policy';
-import type { CliRuntimeProtocol } from '../../runtime/cli-runtime-protocol';
+import { isNewCliOnlyDistribution, type CliRuntimeProtocol } from '../../runtime/cli-runtime-protocol';
 import { testConnection, type TestConnectionResult } from '../../host-adapter/test-connection';
 import type {
   PetStatusSnapshot,
@@ -620,12 +620,12 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
                     }))
                   }
                 >
-                  <option value="legacy-stream-json">旧 CLI — legacy-stream-json</option>
+                  {!isNewCliOnlyDistribution() && <option value="legacy-stream-json">旧 CLI — legacy-stream-json</option>}
                     <option value="trylo-v1">新 CLI — trylo-v1</option>
                 </select>
                 <span className="settings-modal__hint">
                   保存后用于下一次启动任务；已有运行中的任务沿用原 CLI。
-                  切换时会同步选择对应入口，自定义路径可在下方 CLI path 中调整。录制后可在这里切回新 CLI 调试。
+                  {isNewCliOnlyDistribution() ? '此版本仅包含新版 Trylo CLI。' : '切换时会同步选择对应入口，自定义路径可在下方 CLI path 中调整。'}
                 </span>
               </label>
 

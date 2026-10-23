@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "product": "Trylo Desktop",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "distribution": "core",
   "ordinaryWorkRuntime": "trylo-cli",
   "components": {
@@ -11,10 +11,10 @@
       "status": "separate-experimental-dependency"
     },
     "legacyCliRuntime": {
-      "bundled": true,
+      "bundled": false,
       "sourcePublished": false,
-      "mode": "bundled-compatibility-runtime"
+      "mode": "excluded"
     }
   },
-  "defaultCliRuntime": "legacy-stream-json"
+  "defaultCliRuntime": "trylo-v1"
 }

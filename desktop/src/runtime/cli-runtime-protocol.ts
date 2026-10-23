@@ -23,6 +23,11 @@ export const CLI_RUNTIME_PROTOCOLS: readonly CliRuntimeProtocol[] = [
 export const DEFAULT_CLI_RUNTIME_PROTOCOL: CliRuntimeProtocol =
   parseCliRuntimeProtocol(import.meta.env.VITE_TRYLO_DEFAULT_CLI_RUNTIME) ?? 'trylo-v1';
 
+/** Release capability, separate from the default so old stored selections migrate too. */
+export function isNewCliOnlyDistribution(): boolean {
+  return import.meta.env.VITE_TRYLO_NEW_CLI_ONLY === 'true';
+}
+
 export function parseCliRuntimeProtocol(value: unknown): CliRuntimeProtocol | null {
   return value === 'legacy-stream-json' || value === 'trylo-v1' ? value : null;
 }

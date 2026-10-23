@@ -16,7 +16,7 @@ def main():
  if not staged_profile.is_file() or staged_profile.read_bytes()!=(root/'desktop/distribution.json').read_bytes():
   raise SystemExit('Staged distribution profile differs from source; prepare sidecars again before packaging')
  if (profile['distribution']!='core' or profile['components']['coworkRuntime']['bundled'] is not False
-     or profile.get('defaultCliRuntime')!='legacy-stream-json' or profile['components'].get('legacyCliRuntime',{}).get('bundled') is not True):
+     or profile.get('defaultCliRuntime')!='trylo-v1' or profile['components'].get('legacyCliRuntime',{}).get('bundled') is not False):
   raise SystemExit('This release requires a core Desktop distribution profile')
  dependency=json.loads((root/'desktop/optional-dependencies/cowork-runtime.json').read_text(encoding='utf-8'))
  name=(f'Trylo-Desktop-{version}-windows-x64-portable-core.zip' if args.component=='desktop'
@@ -26,7 +26,7 @@ def main():
  if output.exists():raise SystemExit('Refusing to overwrite an existing portable archive: '+str(output))
  items=[]
  # Explicit component roots: an old staged Work tree can never leak into core.
- trees=(['desktop-services','sidecars/desktop-companion/publish','sidecars/hermes-capabilities','cli','cli-legacy','runtime']
+ trees=(['desktop-services','sidecars/desktop-companion/publish','sidecars/hermes-capabilities','cli','runtime']
         if args.component=='desktop' else ['work/bin','workd'])
  for tree in trees:
   source=resources/tree

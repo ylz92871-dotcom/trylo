@@ -1,6 +1,7 @@
 // Materialise the repository-local tools with the existing pinned transports.
 // No global tool directory, provider configuration or browser download is changed.
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createToolCatalog } from '../desktop-services/src/tooling/tool-catalog.mjs';
 import {
@@ -32,6 +33,18 @@ let failures = 0;
 for (const [id, entry] of Object.entries(registry.entries)) {
   const manifest = catalog.get(id);
   if (!manifest) throw new Error(`Unknown repository tool: ${id}`);
+  // The Trylo Windows-MCP fork is source-managed; its Python environment is
+  // installed by Desktop's tool manager, rather than a repository-local binary.
+  if (id === 'windows-mcp') {
+    const expected = path.join(root, 'new_tool/computer-control/Windows-MCP/src/windows_mcp/__main__.py');
+    if (entry.path !== expected || entry.policy !== 'managed-local') {
+      throw new Error(`Repository source disagrees with pinned manifest: ${id}`);
+    }
+    const ok = existsSync(expected);
+    console.log(JSON.stringify({ id, version: manifest.version, ok, state: 'managed-source', dependencies: 'installed-on-demand' }));
+    if (!ok) failures += 1;
+    continue;
+  }
   const expected = path.join(installRoot, id, manifest.version, manifest.artifact.executableRelativePath);
   if (entry.path !== expected || entry.policy !== 'repository-local') {
     throw new Error(`Repository entry disagrees with pinned manifest: ${id}`);

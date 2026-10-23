@@ -59,6 +59,7 @@ export type PermissionMode = 'chat' | 'plan' | 'agent';
 import type { PermissionLevel } from '../permission/permission-policy';
 import {
   DEFAULT_CLI_RUNTIME_PROTOCOL,
+  isNewCliOnlyDistribution,
   parseCliRuntimeProtocol,
   type CliRuntimeProtocol,
 } from '../runtime/cli-runtime-protocol';
@@ -605,6 +606,13 @@ export function loadSettings(): TryloSettings {
   const settings = typeof window === 'undefined' ? DEFAULTS
     : parseStoredSettings(window.localStorage.getItem(STORAGE_KEY))
       ?? parseStoredSettings(window.localStorage.getItem(STORAGE_BACKUP_KEY)) ?? DEFAULTS;
+  // A new-only update has no compatibility engine to resolve. Keep connection,
+  // authority and original storage intact, but select protocol and entry together.
+  if (isNewCliOnlyDistribution()) {
+    return { ...settings, cliRuntimeProtocol: 'trylo-v1',
+      cliPath: settings.cliRuntimeProtocol === 'legacy-stream-json'
+        || settings.cliPath === DEFAULTS.cliPath ? '' : settings.cliPath };
+  }
   const preview = import.meta.env.DEV
     ? parseCliRuntimeProtocol(import.meta.env.VITE_TRYLO_CLI_RUNTIME_PROTOCOL) : null;
   // A local preview is a fallback until the person selects a runtime in

@@ -51,9 +51,11 @@ const config = json('desktop/src-tauri/tauri.conf.json');
 for (const icon of config?.bundle?.icon ?? []) requireFile(`desktop/src-tauri/${icon}`);
 const distribution = json('desktop/distribution.json');
 requireFile('desktop/.env.production');
-if (!readFileSync(path.join(root, 'desktop/.env.production'), 'utf8').includes('VITE_TRYLO_DEFAULT_CLI_RUNTIME=legacy-stream-json')) failures.push('production CLI default must match the distribution manifest');
-if (distribution?.defaultCliRuntime !== 'legacy-stream-json' || distribution?.components?.legacyCliRuntime?.bundled !== true) failures.push('dual-runtime distribution must default to legacy and include its explicit compatibility artifact');
-if (config?.bundle?.resources?.['resources/cli-legacy/'] !== 'cli-legacy/') failures.push('dual-runtime bundle is missing its legacy resource mapping');
+const productionEnv = readFileSync(path.join(root, 'desktop/.env.production'), 'utf8');
+if (!productionEnv.split(/\r?\n/).includes('VITE_TRYLO_DEFAULT_CLI_RUNTIME=trylo-v1')
+    || !productionEnv.split(/\r?\n/).includes('VITE_TRYLO_NEW_CLI_ONLY=true')) failures.push('production must select the new-only CLI distribution');
+if (distribution?.defaultCliRuntime !== 'trylo-v1' || distribution?.components?.legacyCliRuntime?.bundled !== false) failures.push('new-only distribution must default to trylo-v1 and exclude the compatibility artifact');
+if (Object.entries(config?.bundle?.resources ?? {}).some(([source, target]) => /cli-legacy/.test(source + target))) failures.push('new-only bundle must not map the legacy CLI');
 const catalog = createToolCatalog();
 failures.push(...catalog.rejected().map(item => `invalid tool manifest: ${item.id}`));
 const registry = loadRepositoryToolRegistry(path.join(root, 'tool-sources.json'));
