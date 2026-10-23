@@ -167,7 +167,7 @@ test("D7: a timeout is a typed failure naming the budget, not a cancellation", a
     assert.equal(outcome.outcome, "error");
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "shell_timeout");
-      assert.match(outcome.message, /10000/);
+      assert.match(outcome.message, /60000/);
       assert.match(outcome.message, /timeoutMs/);
       assert.match(outcome.message, /partial/);
     }

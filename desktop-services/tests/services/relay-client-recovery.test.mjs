@@ -20,6 +20,8 @@ async function fixture(t) {
   const server = http.createServer((request, response) => {
     let value;
     if (request.url === '/relay/login') value = { username: 'fixture', accessToken: 'account-fixture-token-xxxxxxxxxxxxxxxx', expiresAt: Date.now() + 600000 };
+    else if (request.url === '/relay/account') value = { username: 'fixture' };
+    else if (request.url === '/relay/refresh') value = { accessToken: 'account-fixture-token-xxxxxxxxxxxxxxxx', expiresAt: Date.now() + 172800000 };
     else if (request.url === '/relay/devices') value = { deviceId: 'fixture-device', deviceSecret: 'device-fixture-secret-xxxxxxxxxxxxxxxx' };
     else if (request.url === '/relay/devices/fixture-device/pairing') value = { ticket: `fixture-ticket-${++pairingCount}`, expiresAt: Date.now() + 120000 };
     else { response.writeHead(404); response.end(); return; }

@@ -79,9 +79,11 @@ export function createStdioSession(io: Io) {
           const requestId = typeof input.requestId === "string" ? input.requestId : "";
           const target = typeof input.target === "string" ? input.target : "";
           const message = typeof input.message === "string" ? input.message.trim() : "";
+          const mode = input.mode;
           const respond = (accepted: boolean, error?: string): void => write({ type: "subagent_input_result", requestId, accepted,
             ...(error === undefined ? {} : { error }) });
-          if (!requestId || !target || !message || message.length > 16000 || agentInputs >= 32) {
+          if (!requestId || !target || !message || message.length > 16000 || agentInputs >= 32
+            || (mode !== undefined && mode !== "append" && mode !== "replace_queued" && mode !== "restart")) {
             respond(false, "补充要求无效或发送队列已满。"); continue;
           }
           const tools = agentTools;
@@ -89,7 +91,8 @@ export function createStdioSession(io: Io) {
             respond(false, "当前运行不接收智能体补充要求。"); continue;
           }
           agentInputs += 1;
-          void tools.execute({ name: "send_input", toolCallId: `host-${requestId}`, arguments: { target, message } }, cancel.signal)
+          void tools.execute({ name: "send_input", toolCallId: `host-${requestId}`, arguments: { target, message,
+            ...(mode === undefined ? {} : { mode }) } }, cancel.signal)
             .then(result => {
               if (result.outcome === "result") respond(true);
               else respond(false, "message" in result ? result.message : "本轮已停止，要求未送达。");

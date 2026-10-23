@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { WebSocket } from 'ws';
 import qrcode from 'qrcode';
+import { execFile } from 'node:child_process';
 
 export function relayUrl(value, allowLocal = false) {
   const url = new URL(String(value || ''));
@@ -22,7 +23,23 @@ export const allowedRelayRoute = (method, route) => typeof route === 'string' &&
 export function createRelayClient({ appDataDir = process.env.TRYLO_APP_DATA_DIR, onStatus = () => {}, allowLocal = false, seam = {} } = {}) {
   const file = appDataDir ? path.join(appDataDir, 'Trylo', 'remote', 'relay-session.json') : '';
   let session, loaded = false, socket, target, timer, generation = 0, online = false, wanted = false, delay = 1000;
+  let browserGeneration = 0;
+  async function openBrowser(url) {
+    if (typeof seam.openBrowser === 'function') return seam.openBrowser(url);
+    if (allowLocal) return;
+    const executable = process.platform === 'win32' ? 'rundll32.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+    const args = process.platform === 'win32' ? ['url.dll,FileProtocolHandler', url] : [url];
+    await new Promise((resolve, reject) => execFile(executable, args, { windowsHide: true, timeout: 10000 }, error => error ? reject(new Error('无法打开系统浏览器，请重试或复制登录链接。')) : resolve()));
+  }
   let connecting;
+  let browserLogin;
+  let accountMonitor;
+  function monitorAccount() {
+    if (accountMonitor || !session?.accessToken || session.expiresAt <= Date.now()) return;
+    accountMonitor = setInterval(() => { void serialize(() => verifySession()).catch(() => {}); }, seam.accountCheckIntervalMs ?? 300000);
+    accountMonitor.unref?.();
+  }
+  function stopAccountMonitor() { clearInterval(accountMonitor); accountMonitor = undefined; }
   const heartbeatIntervalMs = seam.heartbeatIntervalMs ?? 15000;
   const heartbeatTimeoutMs = seam.heartbeatTimeoutMs ?? 45000;
   const requests = new Map(), channels = new Map();
@@ -34,6 +51,7 @@ export function createRelayClient({ appDataDir = process.env.TRYLO_APP_DATA_DIR,
     try { session = JSON.parse(await fs.readFile(file, 'utf8')); }
     catch (failure) { if (failure.code !== 'ENOENT') throw new Error('服务器登录信息读取失败，请检查应用数据目录。'); }
     loaded = true;
+    monitorAccount();
   }
   async function save(value) {
     await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
@@ -49,11 +67,38 @@ export function createRelayClient({ appDataDir = process.env.TRYLO_APP_DATA_DIR,
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw Object.assign(new Error(data.error || `服务器请求失败 (${response.status})`), { status: response.status });
+    if (!response.ok) throw Object.assign(new Error(data.error || `服务器请求失败 (${response.status})`), { status: response.status, code: data.error, interval: data.interval });
     return data;
   }
   function status() { return { loggedIn: Boolean(session?.accessToken && session.expiresAt > Date.now()), username: session?.username || '', serverUrl: session?.serverUrl || '', online }; }
   function changed() { onStatus(status()); }
+  async function acceptLogin(serverUrl, result) {
+    if (typeof result.username !== 'string' || typeof result.accessToken !== 'string' || result.accessToken.length < 32 || !Number.isFinite(result.expiresAt)) throw new Error('服务器返回的登录信息不完整。');
+    if (session?.deviceId && (session.serverUrl !== serverUrl || session.username !== result.username)) throw new Error('请先退出当前服务器账号，再切换账号。');
+    let registration = session?.serverUrl === serverUrl && session.username === result.username ? { deviceId: session.deviceId, deviceSecret: session.deviceSecret, desktopIdentity: session.desktopIdentity } : {};
+    if (registration.deviceId) {
+      try { await api(serverUrl, '/relay/device-session', { token: result.accessToken, body: { deviceId: registration.deviceId, deviceSecret: registration.deviceSecret } }); }
+      catch (failure) { if (failure.status === 404) registration = {}; else throw failure; }
+    }
+    const resume = wanted && target?.serverUrl === serverUrl && Boolean(registration.deviceId);
+    stop(); await save({ serverUrl, username: result.username, accessToken: result.accessToken, expiresAt: result.expiresAt, ...registration });
+    if (resume) { wanted = true; await connect(generation); }
+    monitorAccount(); changed(); return status();
+  }
+  async function verifySession() {
+    if (!session?.accessToken || session.expiresAt <= Date.now()) return;
+    try {
+      const result = await api(session.serverUrl, '/relay/account', { method: 'GET', token: session.accessToken });
+      if (result.username !== session.username) throw new Error('服务器账号不一致，请重新登录。');
+      if (session.expiresAt - Date.now() < 86400000) {
+        const refreshed = await api(session.serverUrl, '/relay/refresh', { token: session.accessToken });
+        await save({ ...session, accessToken: refreshed.accessToken, expiresAt: refreshed.expiresAt });
+      }
+    } catch (failure) {
+      if (failure.status === 401) { stopAccountMonitor(); stop(); await fs.rm(file, { force: true }); session = undefined; changed(); }
+      else throw failure;
+    }
+  }
   function send(frame, active = socket) {
     if (active !== socket || active?.readyState !== WebSocket.OPEN) return;
     if (active.bufferedAmount > 20 * 1024 * 1024) { active.terminate(); return; }
@@ -148,29 +193,75 @@ export function createRelayClient({ appDataDir = process.env.TRYLO_APP_DATA_DIR,
     return attempt.promise;
   }
   return {
-    status: async () => { await load(); return status(); },
+    status: () => serialize(async () => { await load(); await verifySession(); return status(); }),
+    beginBrowserLogin: params => {
+      const browserScope = ++browserGeneration;
+      browserLogin = undefined;
+      return serialize(async () => {
+      await load();
+      if (browserScope !== browserGeneration) throw new Error('浏览器登录已取消。');
+      const serverUrl = relayUrl(params.serverUrl, allowLocal);
+      const verifier = crypto.randomBytes(32).toString('base64url');
+      const result = await api(serverUrl, '/relay/auth/start', { body: { challenge: crypto.createHash('sha256').update(verifier).digest('base64url'), name: 'Trylo Desktop' } });
+      const url = new URL(result.verificationUrl);
+      const expectedOrigin = serverUrl === 'https://relay.trylocode.me' ? 'https://trylocode.me' : serverUrl;
+      if (url.origin !== expectedOrigin || url.pathname !== '/account/' || !/^#authorize\?code=[A-F0-9]{12}$/.test(url.hash) || url.username || url.password || url.search || !Number.isFinite(result.expiresAt) || typeof result.deviceCode !== 'string') throw new Error('服务器返回的浏览器登录地址无效。');
+      if (browserScope !== browserGeneration) throw new Error('浏览器登录已取消。');
+      const id = crypto.randomUUID(); browserLogin = { ...result, verificationUrl: url.href, id, serverUrl, verifier };
+      let browserOpened = params.openBrowser !== false;
+      if (browserOpened) {
+        try { await openBrowser(url.href); } catch { browserOpened = false; }
+      }
+      return { id, verificationUrl: url.href, userCode: result.userCode, expiresAt: result.expiresAt, interval: result.interval, browserOpened };
+      });
+    },
+    openBrowserLogin: async params => {
+      const attempt = browserLogin;
+      if (!attempt || params.id !== attempt.id || attempt.expiresAt <= Date.now()) throw new Error('浏览器登录已过期，请重新发起。');
+      await openBrowser(attempt.verificationUrl);
+      return { ok: true };
+    },
+    openAccountCenter: () => serialize(async () => {
+      await load(); await verifySession();
+      if (!status().loggedIn) throw new Error('请先登录 Trylo 账号。');
+      const origin = session.serverUrl === 'https://relay.trylocode.me' ? 'https://trylocode.me' : relayUrl(session.serverUrl, allowLocal);
+      await openBrowser(new URL('/account/', origin).href);
+      return { ok: true };
+    }),
+    pollBrowserLogin: params => serialize(async () => {
+      const attempt = browserLogin;
+      if (!attempt || params.id !== attempt.id || attempt.expiresAt <= Date.now()) throw new Error('浏览器登录已过期，请重新发起。');
+      try {
+        const result = await api(attempt.serverUrl, '/relay/auth/poll', { body: { deviceCode: attempt.deviceCode, verifier: attempt.verifier } });
+        if (browserLogin !== attempt) { await api(attempt.serverUrl, '/relay/logout', { token: result.accessToken }).catch(() => {}); throw new Error('浏览器登录已取消。'); }
+        const account = await acceptLogin(attempt.serverUrl, result);
+        if (browserLogin !== attempt) { stopAccountMonitor(); stop(); await api(attempt.serverUrl, '/relay/logout', { token: result.accessToken }).catch(() => {}); await fs.rm(file, { force: true }); session = undefined; throw new Error('浏览器登录已取消。'); }
+        browserLogin = undefined; return { status: 'complete', account };
+      } catch (failure) {
+        if (['authorization_pending', 'slow_down'].includes(failure.code)) return { status: 'pending', interval: failure.interval || attempt.interval };
+        browserLogin = undefined; throw failure;
+      }
+    }),
+    cancelBrowserLogin: () => { ++browserGeneration; browserLogin = undefined; return { ok: true }; },
     login: params => serialize(async () => {
       await load(); const serverUrl = relayUrl(params.serverUrl, allowLocal);
       const result = await api(serverUrl, params.register ? '/relay/register' : '/relay/login', { body: { username: params.username, password: params.password, inviteCode: params.inviteCode } });
-      if (typeof result.username !== 'string' || typeof result.accessToken !== 'string' || result.accessToken.length < 32 || !Number.isFinite(result.expiresAt)) throw new Error('服务器返回的登录信息不完整。');
-      if (session?.deviceId && (session.serverUrl !== serverUrl || session.username !== result.username)) throw new Error('请先退出当前服务器账号，再切换账号。');
-      const registration = session?.serverUrl === serverUrl && session.username === result.username ? { deviceId: session.deviceId, deviceSecret: session.deviceSecret, desktopIdentity: session.desktopIdentity } : {};
-      const resume = wanted && target?.serverUrl === serverUrl && Boolean(registration.deviceId);
-      stop(); await save({ serverUrl, username: result.username, accessToken: result.accessToken, expiresAt: result.expiresAt, ...registration });
-      if (resume) { wanted = true; await connect(generation); }
-      changed(); return status();
+      browserLogin = undefined; return acceptLogin(serverUrl, result);
     }),
     logout: () => serialize(async () => {
-      await load(); stop();
+      await load(); browserLogin = undefined; stopAccountMonitor(); stop();
       if (session?.accessToken && session.deviceId) {
         try { await api(session.serverUrl, `/relay/devices/${session.deviceId}`, { method: 'DELETE', token: session.accessToken }); }
-        catch (failure) { if (failure.status !== 404) throw failure; }
+        catch (failure) { if (![401, 404].includes(failure.status)) throw failure; }
       }
-      if (session?.accessToken) await api(session.serverUrl, '/relay/logout', { token: session.accessToken });
+      if (session?.accessToken) {
+        try { await api(session.serverUrl, '/relay/logout', { token: session.accessToken }); }
+        catch (failure) { if (failure.status !== 401) throw failure; }
+      }
       await fs.rm(file, { force: true }); session = undefined; changed(); return status();
     }),
     enable: value => serialize(async () => {
-      await load(); stop();
+      await load(); stop(); await verifySession();
       if (!status().loggedIn) throw new Error('请先在远程设置中登录服务器账号。');
       if (relayUrl(value.serverUrl, allowLocal) !== session.serverUrl) throw new Error('服务器地址与当前登录不一致，请重新登录。');
       const localUrl = new URL(value.baseUrl);

@@ -238,6 +238,10 @@ export interface ToolResultEvent extends BaseEvent {
 }
 
 export interface SubagentEvent extends BaseEvent {
+  readonly taskId?: string;
+  readonly resumedFrom?: string;
+  readonly parked?: boolean;
+  readonly budget?: import('./subagent-contract').SubagentBudget;
   readonly type: 'subagent';
   readonly kind: 'spawn' | 'update' | 'end';
   readonly status?: 'running' | 'waiting' | 'done' | 'failed' | 'cancelled';

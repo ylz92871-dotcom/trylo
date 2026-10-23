@@ -3,10 +3,12 @@ import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { prepareDevResources } from './prepare-dev-resources.mjs';
 
 const desktopRoot = fileURLToPath(new URL('../', import.meta.url));
 const args = process.argv.slice(2);
 const environment = { ...process.env };
+let devResourceConfig;
 
 // The staged runtime may inherit a Low integrity label from release staging.
 // Source services write the normal Desktop data directory, so dev must use
@@ -25,6 +27,12 @@ if (!args.some(arg => arg === '--help' || arg === '-h') && !environment.TRYLO_CL
     throw new Error('Build the new CLI before starting Desktop dev: run npm run build in new trylo cli.');
   }
   environment.TRYLO_CLI_SCRIPT = cliScript;
+}
+
+// Debug builds validate bundle resources too. Do not require a full release
+// sidecar publish (or downloads) just to supply this checkout's manifest.
+if (!args.some(arg => arg === '--help' || arg === '-h')) {
+  devResourceConfig = prepareDevResources(desktopRoot);
 }
 
 // Windows cannot replace an executable still mapped by an old Desktop window.
@@ -94,6 +102,8 @@ foreach ($row in $running) {
 }
 
 const require = createRequire(import.meta.url);
+// Apply before operator configs, so explicit configuration remains authoritative.
+if (devResourceConfig) args.unshift('--config', JSON.stringify(devResourceConfig));
 const result = spawnSync(process.execPath, [require.resolve('@tauri-apps/cli/tauri.js'), 'dev', ...args], {
   cwd: desktopRoot,
   stdio: 'inherit',

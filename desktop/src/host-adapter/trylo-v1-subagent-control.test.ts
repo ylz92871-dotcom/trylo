@@ -4,6 +4,14 @@ vi.mock('./index', () => ({ hostAdapter: { process: { send: h.send } } }));
 import { closeSubagentInputProcess, consumeSubagentInputResult, registerSubagentInputProcess, sendSubagentInput } from './trylo-v1-subagent-control';
 afterEach(() => { closeSubagentInputProcess('p1'); closeSubagentInputProcess('p2'); h.send.mockClear(); vi.useRealTimers(); });
 describe('child input transport receipts', () => {
+  it('preserves the explicitly selected restart mode in the acknowledged frame', async () => {
+    registerSubagentInputProcess('p1');
+    const sending = sendSubagentInput('p1', 'task-a', '改为检查测试', 'restart');
+    const frame = JSON.parse(h.send.mock.calls[0]![1]) as { requestId: string; mode: string };
+    expect(frame.mode).toBe('restart');
+    consumeSubagentInputResult(JSON.stringify({ type: 'subagent_input_result', requestId: frame.requestId, accepted: true }), 'p1');
+    await sending;
+  });
   it('does not treat a pipe write or another process ack as delivery', async () => {
     registerSubagentInputProcess('p1'); registerSubagentInputProcess('p2');
     let delivered = false;

@@ -268,6 +268,7 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
   const effectiveSandbox = admitted === undefined ? sandbox : composeSandbox(sandbox, admitted);
 
   let subagentRuntime: SubagentRuntime | undefined;
+  let parentProvider = provider;
   let finalTools = tools;
 
   // 开关关闭时这里什么都不发生：不构造对象、不开文件、不建目录。构造本身是纯的
@@ -279,6 +280,7 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
   if (isSubagentEnabled) {
     const built = buildSubagentPorts({
       parentTools: finalTools,
+      parentProvider: provider,
       workspaceTools,
       childProvider:
         kindOf(input) === "fixture-subagent"
@@ -286,6 +288,8 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
           : provider,
       model: input.model,
       permission: input.permission,
+      grants,
+      ...(input.execPolicy === undefined ? {} : { execPolicy: input.execPolicy }),
       callerMessages: input.callerMessages,
       sandbox: effectiveSandbox,
       ...(input.subagent?.onEvent === undefined ? {} : { onEvent: input.subagent.onEvent }),
@@ -298,6 +302,7 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
       ...(input.subagent?.roles === undefined ? {} : { roles: input.subagent.roles }),
     });
     subagentRuntime = built.runtime;
+    parentProvider = built.provider;
     // WP14：晚绑定的 fork 委托出口在这里闭合——skill 工具执行时，子代理端口
     // 已经存在。挂在同一个端口上，血统/治理/取消只有一份实现（WP22）。
     subagentToolPort = built.toolPort;
@@ -308,7 +313,7 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
 
   return {
     ports: {
-      provider,
+      provider: parentProvider,
       tools: finalTools,
       permission: input.permission,
       profile: NO_LEARNING_PROFILE,

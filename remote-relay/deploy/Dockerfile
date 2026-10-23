@@ -3,6 +3,8 @@ ENV NODE_ENV=production RELAY_BIND=0.0.0.0 PORT=8788 RELAY_DATA_DIR=/data
 WORKDIR /app
 RUN mkdir /data && chown node:node /data
 COPY server.cjs ./server.cjs
+COPY admin-account.cjs ./admin-account.cjs
+COPY web ./web
 COPY licenses ./licenses
 USER node
 EXPOSE 8788

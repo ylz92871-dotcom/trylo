@@ -59,6 +59,10 @@ button.collaboration__member:hover,button.collaboration__member[aria-pressed=tru
 .subagent-conversation__error{color:var(--danger);font-size:13px;line-height:1.8;white-space:pre-wrap}
 .subagent-conversation__compose{padding:16px 22px 22px;font-size:12px;color:var(--ink-fog)}
 .subagent-conversation__compose>p{margin:0;line-height:1.8}
+.subagent-conversation__budget{font-size:12px;line-height:1.7;color:var(--ink-fog);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.subagent-conversation__mode{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;font-size:12px}
+.subagent-conversation__mode select{min-height:32px;max-width:100%;border:1px solid var(--ink-mute);border-radius:6px;padding:4px 8px;background:var(--collaboration-surface);color:var(--ink-paper);font:inherit}
+.subagent-conversation__mode select:focus-visible{outline:2px solid var(--ice-blue);outline-offset:2px}
 .subagent-conversation__latest{display:block;width:fit-content;margin:0 auto 12px;padding:6px 12px;border:1px solid var(--ink-mute)!important;border-radius:18px;background:var(--ink-surface)!important}
 .subagent-conversation__compose form{border:1px solid var(--ink-mute);border-radius:12px;padding:12px;background:var(--collaboration-surface)}
 .subagent-conversation__input-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}

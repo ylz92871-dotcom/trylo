@@ -90,6 +90,11 @@ export function createRemoteServices(options = {}) {
     },
 
     relayLogin(params) { return serialize(() => relay.login(params)); },
+    relayBrowserBegin(params) { return relay.beginBrowserLogin(params); },
+    relayBrowserPoll(params) { return relay.pollBrowserLogin(params); },
+    relayBrowserCancel() { return relay.cancelBrowserLogin(); },
+    relayBrowserOpen(params) { return relay.openBrowserLogin(params); },
+    relayAccountOpen() { return relay.openAccountCenter(); },
     relayStatus() { return relay.status(); },
     relayLogout() { return serialize(async () => { const result = await relay.logout(); if (mode === 'server') await adapter.disable(); return result; }); },
 

@@ -58,29 +58,36 @@ if ($kind -eq 'executable') {
   $icacls = $env:SystemRoot + '\System32\icacls.exe'
   # Query LABEL_SECURITY_INFORMATION directly. Mandatory SIDs cannot reliably
   # be translated through account lookup, and icacls display names are localized.
-  Add-Type -TypeDefinition @'
-using System;
-using System.ComponentModel;
-using System.Runtime.InteropServices;
-public static class TryloIntegrityLabel {
-  [DllImport("advapi32.dll", CharSet=CharSet.Unicode)]
-  static extern uint GetNamedSecurityInfo(string name, int kind, uint info, out IntPtr owner, out IntPtr group, out IntPtr dacl, out IntPtr sacl, out IntPtr descriptor);
-  [DllImport("advapi32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
-  static extern bool ConvertSecurityDescriptorToStringSecurityDescriptor(IntPtr descriptor, uint revision, uint info, out IntPtr text, out uint length);
-  [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr value);
-  public static string Read(string path) {
-    IntPtr owner, group, dacl, sacl, descriptor;
-    uint status = GetNamedSecurityInfo(path, 1, 0x10, out owner, out group, out dacl, out sacl, out descriptor);
-    if (status != 0) throw new Win32Exception((int)status);
-    try {
-      IntPtr text; uint length;
-      if (!ConvertSecurityDescriptorToStringSecurityDescriptor(descriptor, 1, 0x10, out text, out length)) throw new Win32Exception(Marshal.GetLastWin32Error());
-      try { return Marshal.PtrToStringUni(text); } finally { LocalFree(text); }
-    } finally { LocalFree(descriptor); }
+  # Add-Type invokes CodeDOM's temporary compiler directory creation, which can
+  # require privileges a normal Medium caller does not hold. These fixed Win32
+  # signatures need no compiler, file-backed assembly or privilege elevation.
+  $assembly = [AppDomain]::CurrentDomain.DefineDynamicAssembly(
+    [Reflection.AssemblyName]::new('TryloIntegrityLabel'), [Reflection.Emit.AssemblyBuilderAccess]::Run)
+  $module = $assembly.DefineDynamicModule('Native')
+  $builder = $module.DefineType('TryloIntegrityLabel', 'Public, Abstract, Sealed')
+  $pointer = [IntPtr].MakeByRefType()
+  $unsigned = [uint32].MakeByRefType()
+  function Add-NativeMethod($name, $library, $result, [Type[]]$parameters) {
+    $method = $builder.DefinePInvokeMethod($name, $library, 'Public, Static, PinvokeImpl',
+      'Standard', $result, $parameters, 'Winapi', 'Unicode')
+    $method.SetImplementationFlags($method.GetMethodImplementationFlags() -bor [Reflection.MethodImplAttributes]::PreserveSig)
   }
-}
-'@
-  $integrity = [TryloIntegrityLabel]::Read($path)
+  Add-NativeMethod 'GetNamedSecurityInfo' ($env:SystemRoot + '\System32\advapi32.dll') ([uint32]) @([string], [int], [uint32], $pointer, $pointer, $pointer, $pointer, $pointer)
+  Add-NativeMethod 'ConvertSecurityDescriptorToStringSecurityDescriptor' ($env:SystemRoot + '\System32\advapi32.dll') ([bool]) @([IntPtr], [uint32], [uint32], $pointer, $unsigned)
+  Add-NativeMethod 'LocalFree' ($env:SystemRoot + '\System32\kernel32.dll') ([IntPtr]) @([IntPtr])
+  $native = $builder.CreateType()
+  $owner = $group = $dacl = $sacl = $descriptor = [IntPtr]::Zero
+  $status = $native::GetNamedSecurityInfo($path, 1, 0x10, [ref]$owner, [ref]$group, [ref]$dacl, [ref]$sacl, [ref]$descriptor)
+  if ($status -ne 0) { throw [ComponentModel.Win32Exception]::new([int]$status) }
+  try {
+    $text = [IntPtr]::Zero
+    $length = [uint32]0
+    if (-not $native::ConvertSecurityDescriptorToStringSecurityDescriptor($descriptor, 1, 0x10, [ref]$text, [ref]$length)) {
+      throw 'native cache integrity label could not be read'
+    }
+    try { $integrity = [Runtime.InteropServices.Marshal]::PtrToStringUni($text) }
+    finally { $null = $native::LocalFree($text) }
+  } finally { $null = $native::LocalFree($descriptor) }
   # Cached helpers are often already in use. Reapplying an unchanged SACL
   # can be refused even though its required medium/no-write-up label is valid.
   if ($integrity -notmatch '^S:(?:AI|AR|P)*\(ML;;NW;;;ME\)$') {

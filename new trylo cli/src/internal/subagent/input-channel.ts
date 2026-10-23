@@ -41,6 +41,8 @@ export type SubagentInputChannel = {
   next(signal: AbortSignal): Promise<SubagentInput | "closed">;
   /** Whether the channel still accepts input. */
   readonly open: boolean;
+  /** Final round accepted so far, counting inputs already handed to the worker. */
+  readonly requestedRound: number;
 };
 
 type Pending = {
@@ -54,6 +56,7 @@ export function createSubagentInputChannel(): SubagentInputChannel {
   const queue: SubagentInput[] = [];
   let waiting: Pending | undefined;
   let closed = false;
+  let deliveredRound = 1;
 
   function settle(value: SubagentInput | "closed"): void {
     const pending = waiting;
@@ -66,6 +69,10 @@ export function createSubagentInputChannel(): SubagentInputChannel {
       return !closed;
     },
 
+    get requestedRound(): number {
+      return deliveredRound + queue.length;
+    },
+
     deliver(input: SubagentInput): boolean {
       if (closed) {
         return false;
@@ -74,6 +81,7 @@ export function createSubagentInputChannel(): SubagentInputChannel {
         queue.length = 0;
       }
       if (waiting !== undefined) {
+        deliveredRound += 1;
         settle(input);
         return true;
       }
@@ -100,6 +108,7 @@ export function createSubagentInputChannel(): SubagentInputChannel {
       }
       const queued = queue.shift();
       if (queued !== undefined) {
+        deliveredRound += 1;
         return queued;
       }
       if (closed) {

@@ -16,6 +16,7 @@ import { FilePeek } from './FilePeek';
 import { GitDiffView, type GitFileDiffData } from '../code-surface/GitDiffView';
 import { SettingsModal, type SettingsTab, type RelayAccountActions } from './SettingsModal';
 import { RemotePairingModal } from './RemotePairingModal';
+import { useDesktopAccount } from '../../account/use-desktop-account';
 import type { FilePath, TopLevelMode } from '../../host-adapter/types';
 import type { ConversationSession } from '../../host-adapter/conversation-history';
 import type { SettingsSaveIntent, TryloSettings } from '../../settings/settings-store';
@@ -178,6 +179,16 @@ export interface AppShellProps {
 export function AppShell(props: AppShellProps): ReactElement {
   useAppearance();
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('connection');
+  const [accountOpenRequest, setAccountOpenRequest] = useState(0);
+  const account = useDesktopAccount(props.remoteController, {
+    serverUrl: props.settings.remote.relayUrl || 'https://relay.trylocode.me',
+    onSessionChanged: async () => {
+      const remote = props.settings.remote;
+      if ((remote.connectionMode ?? 'server') === 'server' && remote.enabled && props.onRemoteConfigure) {
+        await props.onRemoteConfigure({ ...remote, enabled: false });
+      }
+    },
+  });
   // The embedded browser drawer: ONE shell-level entry, shared by
   // Code and Work. Closing the drawer keeps the browser alive.
   const [browserPreviewOpen, setBrowserPreviewOpen] = useState(false);
@@ -285,6 +296,9 @@ export function AppShell(props: AppShellProps): ReactElement {
           onOpenRemote={() => props.onRemotePairingOpenChange(true)}
           remoteRunning={props.remoteRunning}
           onOpenSettings={() => { setSettingsTab('connection'); props.onSettingsOpenChange(true); }}
+          account={account}
+          accountOpenRequest={accountOpenRequest}
+          accountRemoteActive={(props.settings.remote.connectionMode ?? 'server') === 'server' && (props.remoteEnabled ?? false)}
         />
         {!props.leftRailCollapsed && (
           <RailResizer
@@ -362,6 +376,14 @@ export function AppShell(props: AppShellProps): ReactElement {
         remoteSettings={props.settings.remote}
         onConfigure={props.onRemoteConfigure}
         onRemoteToggle={props.onRemoteToggle}
+        account={account.account}
+        accountLoading={account.phase === 'checking'}
+        onOpenAccount={() => {
+          props.onRemotePairingOpenChange(false);
+          if (props.leftRailCollapsed) props.onToggleLeftRail();
+          setAccountOpenRequest(value => value + 1);
+          void account.refresh();
+        }}
       />
       {/* The embedded browser drawer — shell-level so the same
           panel serves Code and Work; floats over the main column

@@ -7,6 +7,9 @@ import {
   validateSubagentLineage,
 } from "./lineage.js";
 import { systemTimerScheduler, type TimerScheduler } from "./scheduler.js";
+import { observeSettlement } from "./settlement.js";
+import { accumulatedBudget } from "./budget-snapshot.js";
+import { inheritedGrantView } from "./inherited-authority.js";
 import type {
   SubagentContext,
   SubagentHandle,
@@ -57,6 +60,9 @@ type ActiveSubagentRecord<T> = {
   readonly progressListeners: Set<SubagentProgressListener>;
   readonly promise: Promise<SubagentResult<T>>;
   resolve: (res: SubagentResult<T>) => void;
+  readonly retired: Promise<void>;
+  readonly resolveRetired: () => void;
+  readonly retirementListeners: Set<() => void>;
   result?: SubagentResult<T> | undefined;
 };
 
@@ -175,6 +181,8 @@ export class SubagentRuntime {
     });
 
     const progressListeners = new Set<SubagentProgressListener>();
+    let resolveRetired!: () => void;
+    const retired = new Promise<void>(resolve => { resolveRetired = resolve; });
 
     const record: ActiveSubagentRecord<T> = {
       subagentId,
@@ -185,6 +193,9 @@ export class SubagentRuntime {
       progressListeners,
       promise,
       resolve: resolvePromise,
+      retired,
+      resolveRetired,
+      retirementListeners: new Set(),
     };
 
     this.active.set(
@@ -200,6 +211,10 @@ export class SubagentRuntime {
       ...(request.prompt === undefined ? {} : { prompt: request.prompt }),
       ...(request.agentType === undefined ? {} : { agentType: request.agentType }),
       canReceiveInput: request.input !== undefined,
+      taskId: request.continuation?.taskId ?? subagentId,
+      ...(request.continuation === undefined ? {} : { resumedFrom: request.continuation.resumedFrom,
+        round: request.continuation.roundOffset + 1, displayName: request.continuation.displayName }),
+      budget: accumulatedBudget(this.governance.snapshot(subagentId), request.budgetBefore),
     };
     this.emitEvent("subagent_spawn", spawnPayload, request.lineage.rootAttemptId);
 
@@ -253,6 +268,23 @@ export class SubagentRuntime {
     for (const id of this.getActiveInstances()) {
       await this.cancel(id, reason);
     }
+  }
+
+  /** A terminal state can precede worker cleanup; continuation must wait for both. */
+  async waitForRetirement(subagentId: string, timeoutMs: number, signal: AbortSignal): Promise<"ready" | "timeout" | "cancelled"> {
+    const record = this.active.get(subagentId);
+    return record === undefined ? "ready" : observeSettlement(listener => {
+      record.retirementListeners.add(listener);
+      return () => { record.retirementListeners.delete(listener); };
+    }, timeoutMs, signal, this.scheduler);
+  }
+
+  /** Final accounting is known only after an aborted provider finishes unwinding. */
+  async settled<T>(subagentId: string): Promise<SubagentResult<T>> {
+    const record = this.active.get(subagentId);
+    if (record === undefined) return this.wait<T>(subagentId);
+    await record.retired;
+    return record.result as SubagentResult<T>;
   }
 
   /**
@@ -366,7 +398,8 @@ export class SubagentRuntime {
     readonly prompt?: string; readonly result?: string; readonly displayName?: string }): void {
     const record = this.active.get(subagentId);
     if (record === undefined || isTerminalStatus(record.status)) return;
-    this.emitEvent("subagent_update", { subagentId, ...update }, record.request.lineage.rootAttemptId);
+    this.emitEvent("subagent_update", { subagentId, taskId: record.request.continuation?.taskId ?? subagentId,
+      budget: accumulatedBudget(this.governance.snapshot(subagentId), record.request.budgetBefore), ...update }, record.request.lineage.rootAttemptId);
   }
 
   private finalize<T>(
@@ -389,6 +422,7 @@ export class SubagentRuntime {
       ...(output !== undefined ? { output } : {}),
       ...(error !== undefined ? { error } : {}),
       usage,
+      budget: this.governance.snapshot(record.subagentId),
       lineage: record.request.lineage,
     };
     record.result = result;
@@ -397,6 +431,10 @@ export class SubagentRuntime {
     const endPayload: Record<string, unknown> = {
       subagentId: record.subagentId,
       status,
+      taskId: record.request.continuation?.taskId ?? record.subagentId,
+      budget: accumulatedBudget(this.governance.snapshot(record.subagentId), record.request.budgetBefore),
+      ...(status === "completed" && typeof output === "object" && output !== null && "parked" in output && output.parked === true
+        ? { parked: true, canReceiveInput: true } : {}),
       ...(typeof output === "object" && output !== null && "output" in output && typeof output.output === "string"
         ? { result: output.output } : {}),
       ...(error === undefined ? {} : { error: error.message }),
@@ -431,10 +469,13 @@ export class SubagentRuntime {
    * for exactly as long as the worker is alive.
    */
   private retire<T>(record: ActiveSubagentRecord<T>, terminal: SubagentResult<T>): void {
+    const accounted = { ...terminal, usage: this.governance.getUsage(record.subagentId),
+      budget: this.governance.snapshot(record.subagentId) };
+    record.result = accounted;
     this.active.delete(record.subagentId);
     this.governance.release(record.subagentId);
 
-    this.history.set(record.subagentId, terminal);
+    this.history.set(record.subagentId, accounted);
     while (this.history.size > this.historyLimit) {
       const oldest = this.history.keys().next().value;
       if (oldest === undefined) {
@@ -442,6 +483,9 @@ export class SubagentRuntime {
       }
       this.history.delete(oldest);
     }
+    record.resolveRetired();
+    for (const listener of record.retirementListeners) listener();
+    record.retirementListeners.clear();
   }
 
   /**
@@ -514,6 +558,9 @@ export class SubagentRuntime {
       tools: boundedTools,
       reportProgress,
       recordUsage,
+      setActivity: activity => { this.governance.setActivity(record.subagentId, activity); },
+      inheritedGrants: inheritedGrantView(record.request.permissions.inheritedGrants),
+      remainingTokens: () => this.governance.snapshot(record.subagentId)?.tokensRemaining ?? 0,
       ...(record.request.input === undefined ? {} : { input: record.request.input }),
     };
 

@@ -6,6 +6,7 @@ import { createProcessSessionRegistry } from "../../adapters/process-session/ses
 import { EMPTY_PROFILE, type ProfilePort } from "../../contract/profile.js";
 import type { ToolPort } from "../../ports/tools.js";
 import type { ToolBinding } from "../../ports/tools.js";
+import type { JsonObject, JsonValue } from "../../protocol/envelope.js";
 import { selectToolPort } from "./tool-selection.js";
 
 /**
@@ -74,8 +75,25 @@ function catalogForHashing(workspaceRoot: string, selection?: readonly string[])
   }), selection);
 }
 
+function isParameterObject(value: JsonValue | undefined): value is JsonObject {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 export function compatibleCatalogHashes(workspaceRoot: string, selection?: readonly string[]): ReadonlyArray<string> {
-  return b1CompatibleCatalogHashes(catalogForHashing(workspaceRoot, selection), selection);
+  const tools = catalogForHashing(workspaceRoot, selection);
+  // Only documentation changed: retain the exact previous parameter shape,
+  // bounds and permission contract. No old executable schema is admitted here.
+  const previous: ToolPort = { ...tools, snapshot: () => tools.snapshot().map(binding => {
+    const properties = binding.parameters.properties;
+    if (binding.name !== "run_shell" || !isParameterObject(properties)) return binding;
+    const command = properties.command, timeout = properties.timeoutMs;
+    if (!isParameterObject(command) || !isParameterObject(timeout)) return binding;
+    return { ...binding, parameters: { ...binding.parameters, properties: { ...properties,
+      command: { ...command, description: "Command to run, without redirections. `a | b | c` pipelines are allowed." },
+      timeoutMs: { ...timeout, description: "Optional foreground timeout in milliseconds." },
+    } } };
+  }) };
+  return [hashBindings(previous.snapshot(), selection), ...b1CompatibleCatalogHashes(tools, selection), ...b1CompatibleCatalogHashes(previous, selection)];
 }
 
 /** Tools a non-interactive run may perform when writes are explicitly allowed. */

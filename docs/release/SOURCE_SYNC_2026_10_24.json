@@ -1,0 +1,1173 @@
+{
+  "sourceCommit": "12c7e6e0c95091d4518448767f735205dea7102d",
+  "files": [
+    {
+      "file": "desktop-services/src/host.mjs",
+      "action": "write",
+      "sha256": "88a55b25a13ca8fdda48683e685f44fcb94cf5d23f64c3125cc24f6cc14ec05e",
+      "bytes": 16651,
+      "publicSha256": "88a55b25a13ca8fdda48683e685f44fcb94cf5d23f64c3125cc24f6cc14ec05e",
+      "gitBlob": "b9af427ed7b029a7f0cdfba2da58c5622a7c9511",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop-services/src/remote/index.mjs",
+      "action": "write",
+      "sha256": "6322fa8fc5cebb0de942adbd4a1b25e65daaaedd7ad25697847b469b7525fa22",
+      "bytes": 5227,
+      "publicSha256": "6322fa8fc5cebb0de942adbd4a1b25e65daaaedd7ad25697847b469b7525fa22",
+      "gitBlob": "5b67061eeb52e810ea7a0d44386af7cbb7d2371a",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop-services/src/remote/relay-client.mjs",
+      "action": "write",
+      "sha256": "6ad0ddf42d9c57b017f20163be25803c04c1a025490e0c85eb9e4d5a5aa1796e",
+      "bytes": 21132,
+      "publicSha256": "6ad0ddf42d9c57b017f20163be25803c04c1a025490e0c85eb9e4d5a5aa1796e",
+      "gitBlob": "7327408410deb17171e32a80b3addd12ad3006c8",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop-services/tests/services/relay-account-browser-ui.test.mjs",
+      "action": "write",
+      "sha256": "fc9140acda462eabfb7b9fefb3d7500c8b16c0518bef851f64475dc57c644817",
+      "bytes": 5448,
+      "publicSha256": "fc9140acda462eabfb7b9fefb3d7500c8b16c0518bef851f64475dc57c644817",
+      "gitBlob": "fe37754d6ce862a8f1916be6b3fbac8dfbdb80bd",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop-services/tests/services/relay-client-recovery.test.mjs",
+      "action": "write",
+      "sha256": "72d142e02d50b05d5935cb514ba1a9bf1e1b21aee41646174a2acf4a2b8d462c",
+      "bytes": 4945,
+      "publicSha256": "72d142e02d50b05d5935cb514ba1a9bf1e1b21aee41646174a2acf4a2b8d462c",
+      "gitBlob": "27632cd06171e8233ff9a88d2744615baa2211fb",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/scripts/prepare-dev-resources.mjs",
+      "action": "write",
+      "sha256": "ccc980ebb1bf5d228c15a3ffae565e1a78a8704787a79049b027da4509684f98",
+      "bytes": 1741,
+      "publicSha256": "ccc980ebb1bf5d228c15a3ffae565e1a78a8704787a79049b027da4509684f98",
+      "gitBlob": "b9b6b7a86dd19270b14c01cda48e2fd00aa17866",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/scripts/prepare-dev-resources.test.mjs",
+      "action": "write",
+      "sha256": "cb564b95df9cf138df957fa2ebb798bec904389ad422cc20ea5269b6878c0e18",
+      "bytes": 3074,
+      "publicSha256": "cb564b95df9cf138df957fa2ebb798bec904389ad422cc20ea5269b6878c0e18",
+      "gitBlob": "50eaa3af6e7ec81bcd9537f095817c3014722ca0",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/scripts/start-desktop-dev.mjs",
+      "action": "write",
+      "sha256": "24518e589ca323401b04576e60502f018c393b5f3898cee5d53444ab680b9da8",
+      "bytes": 5711,
+      "publicSha256": "24518e589ca323401b04576e60502f018c393b5f3898cee5d53444ab680b9da8",
+      "gitBlob": "bf258803c53c8e853c89a938824741af7cbf39cb",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/App.tsx",
+      "action": "write",
+      "sha256": "01f2fede0deb519ea32349a4a6c7d4e01ea50d9a3be087288302b3583ee9e8a1",
+      "bytes": 261068,
+      "publicSha256": "4232a9aa3d1f95ad72b3991a2cbc0d96984d414ab79f420be839ae7057bb107d",
+      "gitBlob": "ae23f1c74282cb57112811249604d7cf6f5d7e24",
+      "relation": "retains existing public adaptation"
+    },
+    {
+      "file": "desktop/src/account/README.md",
+      "action": "write",
+      "sha256": "b5dd785b1e474557c0333d068b1d0b993b3254cdb0ee8090cffebfbf5fc42d99",
+      "bytes": 2208,
+      "publicSha256": "b5dd785b1e474557c0333d068b1d0b993b3254cdb0ee8090cffebfbf5fc42d99",
+      "gitBlob": "78fafbdf791ff86e8c078e393f2225f26fc08199",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/account/desktop-account.ts",
+      "action": "write",
+      "sha256": "06746708fc6040e30e8692a51e6d32c6b827dd112b3d60f4fe9c0abaa4497e71",
+      "bytes": 1283,
+      "publicSha256": "06746708fc6040e30e8692a51e6d32c6b827dd112b3d60f4fe9c0abaa4497e71",
+      "gitBlob": "959af7a31e651a847ec0706147cdbe4e243191fa",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/account/use-desktop-account.test.tsx",
+      "action": "write",
+      "sha256": "0db634a8764a14e3dea8ff6e0d2212b01df90008b2ef20366b4e941b88482081",
+      "bytes": 8042,
+      "publicSha256": "0db634a8764a14e3dea8ff6e0d2212b01df90008b2ef20366b4e941b88482081",
+      "gitBlob": "ae64b0614e6370e99be5c1358c724e1f17dbb9c4",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/account/use-desktop-account.ts",
+      "action": "write",
+      "sha256": "6a4c82d2373633efad1acbcfa919c20c391aa72b04c0ced75a86799ad09a915a",
+      "bytes": 9760,
+      "publicSha256": "6a4c82d2373633efad1acbcfa919c20c391aa72b04c0ced75a86799ad09a915a",
+      "gitBlob": "0577c1b352b202d78c10c89fe3e59b6c53633112",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/components/app-shell/AppShell.tsx",
+      "action": "write",
+      "sha256": "769e713e48cf1aed70045e572aa1a6ea60651327706b89db428b6233c750f529",
+      "bytes": 21468,
+      "publicSha256": "769e713e48cf1aed70045e572aa1a6ea60651327706b89db428b6233c750f529",
+      "gitBlob": "4c454c82893671d68cfa8913236beb7209370dcb",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/components/app-shell/LeftRail.tsx",
+      "action": "write",
+      "sha256": "699a49e3bc74d66aff4642457bad1332d07fc894b67207a75a0950a1706539bd",
+      "bytes": 17387,
+      "publicSha256": "699a49e3bc74d66aff4642457bad1332d07fc894b67207a75a0950a1706539bd",
+      "gitBlob": "debf940c43d9f5ecc57d47ce548ff75511d4ccfd",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/components/app-shell/ProfileAccountContent.tsx",
+      "action": "write",
+      "sha256": "642b18b35de42a8415fbc68ed447a535dae8008a24848b742ecea77ba7d084c1",
+      "bytes": 5864,
+      "publicSha256": "642b18b35de42a8415fbc68ed447a535dae8008a24848b742ecea77ba7d084c1",
+      "gitBlob": "c269c4e2f2c276269b4102d35e1ef371557eef37",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/components/app-shell/ProfileCard.tsx",
+      "action": "write",
+      "sha256": "2ab30bbebe7f245b25baec4b61234283fac80d6cb68a68dad51598c6fae1fb51",
+      "bytes": 15737,
+      "publicSha256": "2ab30bbebe7f245b25baec4b61234283fac80d6cb68a68dad51598c6fae1fb51",
+      "gitBlob": "5c7e24f269ba793b3a54bdd9dd9741e6b72a0637",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/components/app-shell/RemotePairingModal.test.tsx",
+      "action": "write",
+      "sha256": "44fa4e56ee264fafc3dcc039ea4e049eeccb09459a265113e8eb2968ff4c0405",
+      "bytes": 9757,
+      "publicSha256": "44fa4e56ee264fafc3dcc039ea4e049eeccb09459a265113e8eb2968ff4c0405",
+      "gitBlob": "383034da36845f0077bcadc8afd3d10010170491",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/components/app-shell/RemotePairingModal.tsx",
+      "action": "write",
+      "sha256": "ce5ab27dce8e40a7f30004e344fae50e7b06f9251c9e6461ee73cab59fc844c9",
+      "bytes": 14631,
+      "publicSha256": "ce5ab27dce8e40a7f30004e344fae50e7b06f9251c9e6461ee73cab59fc844c9",
+      "gitBlob": "6ce8ebc034a175487e66e30206438718c2873470",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/components/app-shell/SettingsModal.tsx",
+      "action": "write",
+      "sha256": "41dc447c66e5e1553ba0f4583fab57c7514e5f5a306891aeb52f2484ad9fdf76",
+      "bytes": 48270,
+      "publicSha256": "41dc447c66e5e1553ba0f4583fab57c7514e5f5a306891aeb52f2484ad9fdf76",
+      "gitBlob": "d9162caba147b135743706dcb886e324530d9965",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/components/app-shell/account-avatar.test.tsx",
+      "action": "write",
+      "sha256": "176dec11a2577607529f598bd783290e85486b209da5151fea851947fef1836a",
+      "bytes": 7814,
+      "publicSha256": "176dec11a2577607529f598bd783290e85486b209da5151fea851947fef1836a",
+      "gitBlob": "7a8a7e5e1527f2f84739a7c510d8249f2d6c53d4",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/components/chat/AgentAvatar.tsx",
+      "action": "write",
+      "sha256": "85e0abdd104c9b0283d17cf063da0d99c5c53b410233d449c49841dfc5cb6302",
+      "bytes": 6544,
+      "publicSha256": "85e0abdd104c9b0283d17cf063da0d99c5c53b410233d449c49841dfc5cb6302",
+      "gitBlob": "4014166511f5e78f71d7bdee4ada99933ef98582",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/components/chat/AgentConversationSurface.tsx",
+      "action": "write",
+      "sha256": "6bbe069506d85a775a89c5a5e8452633e22f2f092621113a483d9f6f3c946b77",
+      "bytes": 8366,
+      "publicSha256": "6bbe069506d85a775a89c5a5e8452633e22f2f092621113a483d9f6f3c946b77",
+      "gitBlob": "1a58dd84b95f2091ab408ff1e29c90675173b8a1",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/components/chat/ChatPanel.tsx",
+      "action": "write",
+      "sha256": "d54cbfe1e8bfb107e670704c84b2d8a3aa6d2e034c24e8f04357809d8ac42447",
+      "bytes": 24918,
+      "publicSha256": "d54cbfe1e8bfb107e670704c84b2d8a3aa6d2e034c24e8f04357809d8ac42447",
+      "gitBlob": "aedf1dc7a6ca81b3accc114c2ab2a5b10d0e90fe",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/components/chat/CollaborationGroup.tsx",
+      "action": "write",
+      "sha256": "578102c913a6d4aa74671e4cb00753b6b5f763390880209f1d932dc583c7b275",
+      "bytes": 3839,
+      "publicSha256": "578102c913a6d4aa74671e4cb00753b6b5f763390880209f1d932dc583c7b275",
+      "gitBlob": "2d4123ac9a29980ce3b3ca0ab3434662a197f7af",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/components/chat/SubagentConversation.tsx",
+      "action": "write",
+      "sha256": "d8eb2768989dcd8ffa229903dbaa85246df6ed5b189feec72c58b7c029451fe2",
+      "bytes": 7762,
+      "publicSha256": "d8eb2768989dcd8ffa229903dbaa85246df6ed5b189feec72c58b7c029451fe2",
+      "gitBlob": "679ebcecb20fb798d77316f42d327e6957293060",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/components/chat/collaboration-wiring.test.tsx",
+      "action": "write",
+      "sha256": "bf75219c43faa2bc3b2f482f2673a7423ff9965365555cb6c90038458e2e04f9",
+      "bytes": 13244,
+      "publicSha256": "bf75219c43faa2bc3b2f482f2673a7423ff9965365555cb6c90038458e2e04f9",
+      "gitBlob": "4aec2176ac5866c4d2dbc18eb6c9def38b0cb58f",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/components/chat/events.ts",
+      "action": "write",
+      "sha256": "0ba7e77c762901ec44a9d891572ab48cb06f780ea01a39f9e2e9ef139138e560",
+      "bytes": 23409,
+      "publicSha256": "0aa0d17b64fcc344d73de250f7c035529928e3ea49d02c365811f539d7420d1a",
+      "gitBlob": "db1db22cc7637cdf41270282caa3c2f7446cbb3a",
+      "relation": "retains existing public adaptation"
+    },
+    {
+      "file": "desktop/src/components/chat/types.ts",
+      "action": "write",
+      "sha256": "d0d6513a9ea05ab85040ba1cfd3499308b856e88c93c0252be719f3b6567cb79",
+      "bytes": 25264,
+      "publicSha256": "a5366c8166981ef6ffaa43b507e9d439d9499cb0686bd31f2ef679863d60ff4f",
+      "gitBlob": "c1b448de7b5be31e93b232d3f3bba62a3bf1b5c9",
+      "relation": "retains existing public adaptation"
+    },
+    {
+      "file": "desktop/src/host-adapter/collaboration-live.test.tsx",
+      "action": "write",
+      "sha256": "1e0dba9ecd5617e7ab4987cfd94013e08569f88bcba39e8f55a4e277f94dc633",
+      "bytes": 10023,
+      "publicSha256": "1e0dba9ecd5617e7ab4987cfd94013e08569f88bcba39e8f55a4e277f94dc633",
+      "gitBlob": "75ef5e036af5f593870634e249df3d871360d4a1",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/host-adapter/loop-events.ts",
+      "action": "write",
+      "sha256": "ec60c3544ef51371c3708e73547da0b7807bfb577c62d6115d47821770a6f4bd",
+      "bytes": 13173,
+      "publicSha256": "56c9fa90354532f646220eeef3b1473bc47629fabe1bf8a8407c0e030cbbdfab",
+      "gitBlob": "04ffbad3ac0027b3568f05891f255f1e203884e2",
+      "relation": "retains existing public adaptation"
+    },
+    {
+      "file": "desktop/src/host-adapter/subagent-contract.ts",
+      "action": "write",
+      "sha256": "71851f13ac3f831bd6986c2349b872d8b375a07630dd9d4f45a169ef541b9497",
+      "bytes": 989,
+      "publicSha256": "71851f13ac3f831bd6986c2349b872d8b375a07630dd9d4f45a169ef541b9497",
+      "gitBlob": "15fa7f353c2065e1bf5287dc9fee66bb1c8896cc",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/host-adapter/trylo-v1-protocol.ts",
+      "action": "write",
+      "sha256": "860363b1ec0446628855a347e266247e832d9175a111d50482bea85a48dfb767",
+      "bytes": 13553,
+      "publicSha256": "860363b1ec0446628855a347e266247e832d9175a111d50482bea85a48dfb767",
+      "gitBlob": "bbb61cb51cb006de1f01042844060b6cb6bab2bf",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/host-adapter/trylo-v1-subagent-control.test.ts",
+      "action": "write",
+      "sha256": "2e0fcd13284f019940bfa84137e8e3be414331283ca657436c6210eb651fc524",
+      "bytes": 3486,
+      "publicSha256": "2e0fcd13284f019940bfa84137e8e3be414331283ca657436c6210eb651fc524",
+      "gitBlob": "0d1596d8c114492cc0e8cf5610178bb58cbb0592",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/host-adapter/trylo-v1-subagent-control.ts",
+      "action": "write",
+      "sha256": "42472c3831cc5010c86000b2a800288dfd3e5db61e0ecb8c4f0e76e695deeb8d",
+      "bytes": 3314,
+      "publicSha256": "42472c3831cc5010c86000b2a800288dfd3e5db61e0ecb8c4f0e76e695deeb8d",
+      "gitBlob": "3c292841f41e0ce43fdbe048c800380bca0e7f73",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/remote/remote-controller.ts",
+      "action": "write",
+      "sha256": "70ce36a572f481a548b1f3c07b5ca3a16a19b4f26b4077921dcdd74f91beb043",
+      "bytes": 21868,
+      "publicSha256": "70ce36a572f481a548b1f3c07b5ca3a16a19b4f26b4077921dcdd74f91beb043",
+      "gitBlob": "5bae12a0ffbf6427208f544166681d3b4da551c8",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/remote/remote-port.ts",
+      "action": "write",
+      "sha256": "5f174dc10223572ec37202074918cda0c558c34bd5513bf3f5443b508e64dd5c",
+      "bytes": 5624,
+      "publicSha256": "5f174dc10223572ec37202074918cda0c558c34bd5513bf3f5443b508e64dd5c",
+      "gitBlob": "1b3363d491a64e7fd4742426e07370d64915efd4",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/services-host/methods.ts",
+      "action": "write",
+      "sha256": "82f8c91ef4d729e8dfebc89e94c029e8d459436b6ac4f16cf50ae4306c833979",
+      "bytes": 51775,
+      "publicSha256": "2ddc0619c5c79f2b8346e7b975d5186d9984387d083a5bd3d15542f2ba4e70b7",
+      "gitBlob": "dd4ecaf273c42f1029cf3ee2a9874ee71ee678f3",
+      "relation": "retains existing public adaptation"
+    },
+    {
+      "file": "desktop/src/styles/components/collaboration-group.css",
+      "action": "write",
+      "sha256": "8a64e4b086e2f60a95ec34dd1fdb5f1f64ed897c52b9779bea96cc2befe95ed4",
+      "bytes": 8747,
+      "publicSha256": "8a64e4b086e2f60a95ec34dd1fdb5f1f64ed897c52b9779bea96cc2befe95ed4",
+      "gitBlob": "aebd3d3d768835325ea9774a09da5c8709b262bc",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/styles/components/profile-card.css",
+      "action": "write",
+      "sha256": "53b6f1c1a2a7f575173a5ba26183dd201be5fd0c35bcfc23aa26b15e783a0236",
+      "bytes": 11180,
+      "publicSha256": "53b6f1c1a2a7f575173a5ba26183dd201be5fd0c35bcfc23aa26b15e783a0236",
+      "gitBlob": "3862f084d31702d4fbb667d2d1b5bf41f80ddf75",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "desktop/src/user-profile/use-user-profile.ts",
+      "action": "write",
+      "sha256": "cc237b861d51ce9a26b3813632b623bebd1b73fa351eded95aefdfe7254e931b",
+      "bytes": 5756,
+      "publicSha256": "cc237b861d51ce9a26b3813632b623bebd1b73fa351eded95aefdfe7254e931b",
+      "gitBlob": "b735643b49fb51355005dbb1b6411745e84d88e3",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-23-审计与修复-Subagent六项日用能力.md",
+      "action": "write",
+      "sha256": "c3430a121c0641cb2e265e18f1a4b524ab137a5287bbe9d0a7d7c8cdeda7e040",
+      "bytes": 12169,
+      "publicSha256": "c3430a121c0641cb2e265e18f1a4b524ab137a5287bbe9d0a7d7c8cdeda7e040",
+      "gitBlob": "7f18843b2fa4e5627be01b142c5d85810d808f20",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-23-审计与修复-Subagent对抗压力测试.md",
+      "action": "write",
+      "sha256": "66a31a3adb4e3e0575596409c2b4f0e998abd9e7eca56b5dfc92ee310850d8e3",
+      "bytes": 7513,
+      "publicSha256": "66a31a3adb4e3e0575596409c2b4f0e998abd9e7eca56b5dfc92ee310850d8e3",
+      "gitBlob": "5b3f403f446c2ba010a4a7722685a04786bb8833",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-23-审计与修复-Subagent真实火山验证.md",
+      "action": "write",
+      "sha256": "8b3772b7697ed47bece3f79e4e5af1a4e2f9b45201d6b766672bc6e2963f827f",
+      "bytes": 6968,
+      "publicSha256": "8b3772b7697ed47bece3f79e4e5af1a4e2f9b45201d6b766672bc6e2963f827f",
+      "gitBlob": "93f6c334b00d2b251e7ee3eef6116d21bd7d486e",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-23-审计与修复-Subagent长任务与预算治理.md",
+      "action": "write",
+      "sha256": "31dc6aa41011930a927ccec3f654c3d03df0b181e1e9259987aea98192e8ace9",
+      "bytes": 6830,
+      "publicSha256": "31dc6aa41011930a927ccec3f654c3d03df0b181e1e9259987aea98192e8ace9",
+      "gitBlob": "a963fa021818762b1a2e575cf61d660a55bdd761",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/docs/02-分期工程产出/P08-Desktop切换与Parity/2026-10-23-施工记录-工具易用性优化与Desktop入口复验.md",
+      "action": "write",
+      "sha256": "8171cf04fae79d63205e2554af74fc1eae6f036618874e7600bc74647041f547",
+      "bytes": 6480,
+      "publicSha256": "8171cf04fae79d63205e2554af74fc1eae6f036618874e7600bc74647041f547",
+      "gitBlob": "7507976f967c51dc656aec5fd8506266f3876f55",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/docs/02-分期工程产出/P08-Desktop切换与Parity/2026-10-23-施工记录-持续长会话与后台工具修复.md",
+      "action": "write",
+      "sha256": "4b71ddb922925fe70bb159d98c75a023854a6c06db6ad184a030590b54558b1a",
+      "bytes": 8888,
+      "publicSha256": "4b71ddb922925fe70bb159d98c75a023854a6c06db6ad184a030590b54558b1a",
+      "gitBlob": "402aa0dc39b3f0a8d71f5448785d9d5cb993ddcb",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/docs/02-分期工程产出/P08-Desktop切换与Parity/2026-10-23-施工记录-真实长任务与Windows工具修复.md",
+      "action": "write",
+      "sha256": "8c82eb35fb0326a91ee34e5d64797861250e3427e042af72b2db86048918f360",
+      "bytes": 12697,
+      "publicSha256": "8c82eb35fb0326a91ee34e5d64797861250e3427e042af72b2db86048918f360",
+      "gitBlob": "5723d4778e72716cc64678c855da6e0b0bbf5e2b",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/cmd/trylo/windows-pipeline.test.ts",
+      "action": "write",
+      "sha256": "df1be770682d0c8135e75f31de2d7e54093f95a075c5df7374aee0983b563d80",
+      "bytes": 3113,
+      "publicSha256": "df1be770682d0c8135e75f31de2d7e54093f95a075c5df7374aee0983b563d80",
+      "gitBlob": "cb663ca683aeae625f9bf392dbad93e0c639e4ac",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/cmd/trylo/windows-pipeline.ts",
+      "action": "write",
+      "sha256": "6796e932c04a84c9daebed55ddbb43d8390105aa3ecf287dd7f0a9edfb1416b5",
+      "bytes": 1766,
+      "publicSha256": "6796e932c04a84c9daebed55ddbb43d8390105aa3ecf287dd7f0a9edfb1416b5",
+      "gitBlob": "b42e85e1a5c6b116be988c5a7f3116a356a174e7",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/provider/glm-continuation-cache.ts",
+      "action": "write",
+      "sha256": "5d0be3c0e2260c08fc048cb4ac778ccdb62e28c16d2f4a4ffb4d09ce8114ea6b",
+      "bytes": 5178,
+      "publicSha256": "5d0be3c0e2260c08fc048cb4ac778ccdb62e28c16d2f4a4ffb4d09ce8114ea6b",
+      "gitBlob": "e7ac9e27a017cd9c033264698159454e0ea8f6f4",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/provider/glm-continuation-lifecycle.test.ts",
+      "action": "write",
+      "sha256": "1c2a10c5c544c0b8574b7895d6ac22bc02d851a77bc0a6f2466680bff3113814",
+      "bytes": 7916,
+      "publicSha256": "1c2a10c5c544c0b8574b7895d6ac22bc02d851a77bc0a6f2466680bff3113814",
+      "gitBlob": "f288032e1f3c23598bdc44559741843398cbf5bc",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/provider/glm-long-session.test.ts",
+      "action": "write",
+      "sha256": "e4ac667bb36be1136ef0c9f9f8b7001075076a647c82c69cc573755d4ea52a28",
+      "bytes": 5723,
+      "publicSha256": "e4ac667bb36be1136ef0c9f9f8b7001075076a647c82c69cc573755d4ea52a28",
+      "gitBlob": "af7d7db3d580beeaffc887cd995c054f2a74f66d",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/provider/glm-native-origin.test.ts",
+      "action": "write",
+      "sha256": "5812628a1479c9b1578c97368c97908fd4a6f279a76ec6ae1418d93d0d2df793",
+      "bytes": 17941,
+      "publicSha256": "5812628a1479c9b1578c97368c97908fd4a6f279a76ec6ae1418d93d0d2df793",
+      "gitBlob": "2af1e0c9199e8f98e0fe4a3450810a56f9f1633d",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/sandbox/executable.test.ts",
+      "action": "write",
+      "sha256": "cc64ff06e7056f7bfce343222bb522e71e2a2c3551d427362a6cc404059b17e2",
+      "bytes": 10516,
+      "publicSha256": "cc64ff06e7056f7bfce343222bb522e71e2a2c3551d427362a6cc404059b17e2",
+      "gitBlob": "9a4f5afa5e6ccebd6383eb14ee4b53d3f47bc6a5",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/sandbox/executable.ts",
+      "action": "write",
+      "sha256": "5dddab7d3d4b364cbd5774a744136d4f048499c1c99db96f7edbcb51d72c16fc",
+      "bytes": 9884,
+      "publicSha256": "5dddab7d3d4b364cbd5774a744136d4f048499c1c99db96f7edbcb51d72c16fc",
+      "gitBlob": "f72664196dd593eec04e1783e8f03231422aef98",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/sandbox/policy.ts",
+      "action": "write",
+      "sha256": "65bd4c8496f4beee82c0c8815392e8fa3818e19c5fe61a0b744168c493dd727d",
+      "bytes": 2921,
+      "publicSha256": "65bd4c8496f4beee82c0c8815392e8fa3818e19c5fe61a0b744168c493dd727d",
+      "gitBlob": "53cd25662536ef1b8c169e9a04addc1d7c7df388",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/sandbox/windows-batch-isolation.platform.test.ts",
+      "action": "write",
+      "sha256": "cfb2f96cd57f0a56786a3b537ea5c9870aedb0bfe8893d2a73bec74442ce882c",
+      "bytes": 2391,
+      "publicSha256": "cfb2f96cd57f0a56786a3b537ea5c9870aedb0bfe8893d2a73bec74442ce882c",
+      "gitBlob": "58cd09ef023809abdcb9ad39f9884240fcfece40",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/sandbox/windows-helper-protection.platform.test.ts",
+      "action": "write",
+      "sha256": "b0bfba00fddb7f897480bf210849595179fdad430d3a301e0515ac91b51155bf",
+      "bytes": 2176,
+      "publicSha256": "b0bfba00fddb7f897480bf210849595179fdad430d3a301e0515ac91b51155bf",
+      "gitBlob": "0f6fa484bddca7ffb297a51af4a012c44b0ab7fe",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/sandbox/windows-helper-protection.ts",
+      "action": "write",
+      "sha256": "f53a75cc35b9303bb7cc331050d5944cc542fa426600333da4033f9e3666919a",
+      "bytes": 6556,
+      "publicSha256": "f53a75cc35b9303bb7cc331050d5944cc542fa426600333da4033f9e3666919a",
+      "gitBlob": "aa33c9c414e4643ee685865262367b35bed6c18d",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/sandbox/windows-shell-boundary.ts",
+      "action": "write",
+      "sha256": "f1aad03fa1e35356d8aa9e002529c5f46d01e57ba96b289ec0c79cba29b8db32",
+      "bytes": 6778,
+      "publicSha256": "f1aad03fa1e35356d8aa9e002529c5f46d01e57ba96b289ec0c79cba29b8db32",
+      "gitBlob": "58f182fe5a61c068ab17e10f6f8b0f1612876286",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/tools/execution-description.ts",
+      "action": "write",
+      "sha256": "b851df293067e531a70978eec59d7bc38385cb587338c48f2025b025b7f6f3f7",
+      "bytes": 3200,
+      "publicSha256": "b851df293067e531a70978eec59d7bc38385cb587338c48f2025b025b7f6f3f7",
+      "gitBlob": "c3459912eef37cb817056b889cbcde853c391548",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/tools/mutating/background-shell-mode.platform.test.ts",
+      "action": "write",
+      "sha256": "c7be28214dc0ee810c2d7ee3920b8903f4b7c4c28e1fb2235ed5cda69425f8ef",
+      "bytes": 2625,
+      "publicSha256": "c7be28214dc0ee810c2d7ee3920b8903f4b7c4c28e1fb2235ed5cda69425f8ef",
+      "gitBlob": "8690ad7341d8045b619f8c819fefef284b99cce8",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/tools/mutating/background-shell.ts",
+      "action": "write",
+      "sha256": "0888d1e31f8f1b3c0b8a7af0970e534fcec487cad1ead4a4d6b6cb1aac8ed418",
+      "bytes": 5407,
+      "publicSha256": "0888d1e31f8f1b3c0b8a7af0970e534fcec487cad1ead4a4d6b6cb1aac8ed418",
+      "gitBlob": "acb22f4b6e30f678c5f4c9182ea8e57ab79a97ce",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/tools/mutating/bindings.ts",
+      "action": "write",
+      "sha256": "771740a2771ab7d3eee401077d8a07a63a87e0241940afbc9bd712c71ab5ab39",
+      "bytes": 9167,
+      "publicSha256": "771740a2771ab7d3eee401077d8a07a63a87e0241940afbc9bd712c71ab5ab39",
+      "gitBlob": "c2a8cd2e1aa378452169ed594333293dc6dc2c40",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/tools/mutating/shell-timeout-policy.ts",
+      "action": "write",
+      "sha256": "18b9b2630772a370e1c815be6a84c5353cdb641abe563aff7480fc412632cbb1",
+      "bytes": 1007,
+      "publicSha256": "18b9b2630772a370e1c815be6a84c5353cdb641abe563aff7480fc412632cbb1",
+      "gitBlob": "7b170405812a7a3b4af6ec77deea985477c49458",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/tools/mutating/shell-tool.ts",
+      "action": "write",
+      "sha256": "ededf161a15ab79d899958ce94a783a8be266f51a9aab61e7ef73e86659c9fae",
+      "bytes": 11561,
+      "publicSha256": "ededf161a15ab79d899958ce94a783a8be266f51a9aab61e7ef73e86659c9fae",
+      "gitBlob": "9129be86d2f8f4ee225887f8e2ff6c6f63274fcb",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/tools/mutating/shell-usability.test.ts",
+      "action": "write",
+      "sha256": "206edec7f8c936cc63adab3b917e1cd0ecda31c1353ed10bc37f5303cac0adab",
+      "bytes": 5437,
+      "publicSha256": "206edec7f8c936cc63adab3b917e1cd0ecda31c1353ed10bc37f5303cac0adab",
+      "gitBlob": "0d975f5d08986a62dcd5bfe71dc586405f25995f",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/adapters/tools/mutating/shell.test.ts",
+      "action": "write",
+      "sha256": "0106251749190290486cb78f65c05d058ec302a2157db2679f5f30e32d682ea7",
+      "bytes": 17450,
+      "publicSha256": "0106251749190290486cb78f65c05d058ec302a2157db2679f5f30e32d682ea7",
+      "gitBlob": "c9b890d57c2d6ac9eb125bea20768bda8ac7a005",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/loop/stream-recovery-usability.test.ts",
+      "action": "write",
+      "sha256": "60d9c7529eb9efedf827b8d6c0fac09f28464c66ee8b662890bb244fc484e259",
+      "bytes": 2867,
+      "publicSha256": "60d9c7529eb9efedf827b8d6c0fac09f28464c66ee8b662890bb244fc484e259",
+      "gitBlob": "3567fd52c215f77f9b3ba212cc988393422b7d63",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/loop/stream-recovery.ts",
+      "action": "write",
+      "sha256": "902d59cb9ab5004bcd182dbb37ada00274b6ed98cfb0e58bc5f9fe82d1a8b79e",
+      "bytes": 1159,
+      "publicSha256": "902d59cb9ab5004bcd182dbb37ada00274b6ed98cfb0e58bc5f9fe82d1a8b79e",
+      "gitBlob": "fa30f54941bf97f8d8260a0016547fb9796db58c",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/loop/stream-verdict.ts",
+      "action": "write",
+      "sha256": "77e4b2aaa32cd266f7d4e5825f6603bab35938740701e66aeeb586f5cdfa2774",
+      "bytes": 1302,
+      "publicSha256": "77e4b2aaa32cd266f7d4e5825f6603bab35938740701e66aeeb586f5cdfa2774",
+      "gitBlob": "c49c5684185acd9c9a37341c6ba4dd4bde3b5ce6",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/loop/stream.ts",
+      "action": "write",
+      "sha256": "f5e43cf9b521649999e785873bb3ccab6d77c647ba03e16fb7010714e983384f",
+      "bytes": 15812,
+      "publicSha256": "f5e43cf9b521649999e785873bb3ccab6d77c647ba03e16fb7010714e983384f",
+      "gitBlob": "b582a1154c0491a4c0d5a610064c1f05a8b990b3",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/protocol/cli-stream.ts",
+      "action": "write",
+      "sha256": "074474d1692420c0da667474e30db23b90845c3861d3769e7bf9309dcf89d4a9",
+      "bytes": 6905,
+      "publicSha256": "074474d1692420c0da667474e30db23b90845c3861d3769e7bf9309dcf89d4a9",
+      "gitBlob": "96b287e23b15846d282741e643204f2f697831d9",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/protocol/subagent-budget.ts",
+      "action": "write",
+      "sha256": "657ecefe2cc3f7754ce84f2ce7f89b8900199ecd75e8d81b63dd21652208750f",
+      "bytes": 824,
+      "publicSha256": "657ecefe2cc3f7754ce84f2ce7f89b8900199ecd75e8d81b63dd21652208750f",
+      "gitBlob": "7f0232eff4dc92b048f02f7614774b8944c3c4b2",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/adversarial-control.test.ts",
+      "action": "write",
+      "sha256": "628d342222fb21ba5a725a5dbe6e231005584dca3b0862f2a0832771e05559d9",
+      "bytes": 3486,
+      "publicSha256": "628d342222fb21ba5a725a5dbe6e231005584dca3b0862f2a0832771e05559d9",
+      "gitBlob": "baa7b5fd15b2a64695862fd00a71f6031128ac77",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/budget-snapshot.ts",
+      "action": "write",
+      "sha256": "10255107463fb280b88113a4025647314089b90876384506c157ce077f66c7b6",
+      "bytes": 583,
+      "publicSha256": "10255107463fb280b88113a4025647314089b90876384506c157ce077f66c7b6",
+      "gitBlob": "1446b260b5c31fc8b7c5772992edbef610aefc63",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/child-attempt.test.ts",
+      "action": "write",
+      "sha256": "cc030c15be9f0e6a076705a25e5212f998d9de1ab5e43d4e7efe40bbd3b69201",
+      "bytes": 5792,
+      "publicSha256": "cc030c15be9f0e6a076705a25e5212f998d9de1ab5e43d4e7efe40bbd3b69201",
+      "gitBlob": "fb4d9b1932739a100c4c7266dc3d9696217d28ca",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/child-attempt.ts",
+      "action": "write",
+      "sha256": "40fe5f6f6e5b9acb6599640497cf0e8ebac7404ebfd5cef202c2bab555d6831d",
+      "bytes": 7178,
+      "publicSha256": "40fe5f6f6e5b9acb6599640497cf0e8ebac7404ebfd5cef202c2bab555d6831d",
+      "gitBlob": "c6c8bc04127057db3bebadc9f4a41171bc57bef9",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/child-provider.ts",
+      "action": "write",
+      "sha256": "0cd72c8607cb2e1ee1ecbb03ef307cf7161891d5f3f955765f0c24b77b606bc7",
+      "bytes": 1405,
+      "publicSha256": "0cd72c8607cb2e1ee1ecbb03ef307cf7161891d5f3f955765f0c24b77b606bc7",
+      "gitBlob": "b7a0fa1f3d5a751c83493968320173a34f25bbd1",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/control-bindings.ts",
+      "action": "write",
+      "sha256": "478353dcfcf4dd7b6c9c2cd595af053ba246eb77a87cb0980816213aa4edcd37",
+      "bytes": 7058,
+      "publicSha256": "478353dcfcf4dd7b6c9c2cd595af053ba246eb77a87cb0980816213aa4edcd37",
+      "gitBlob": "6ff50dce9f426019720640a0dafe1104f8f6a9a0",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/control-input.ts",
+      "action": "write",
+      "sha256": "d987774202ad92090552dc25debd911a385895eaabe44e3ae843f6e788672e19",
+      "bytes": 2847,
+      "publicSha256": "d987774202ad92090552dc25debd911a385895eaabe44e3ae843f6e788672e19",
+      "gitBlob": "d1641c257165da03ca8daf6c55a269851b65b8a3",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/control-observation.ts",
+      "action": "write",
+      "sha256": "c1e77fcdf0ee196406e7c8f78d7ad4d3f07dd2272919c22bb0725a23ff14f3fc",
+      "bytes": 6055,
+      "publicSha256": "c1e77fcdf0ee196406e7c8f78d7ad4d3f07dd2272919c22bb0725a23ff14f3fc",
+      "gitBlob": "e5bda69e05b5c0ee793f1c275e58e8bbfeea1da1",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/control-reliability.test.ts",
+      "action": "write",
+      "sha256": "5a2c86a7bc5e3f39a716bd00d83edde24830bfd26487b24ed40f791ccbb2361c",
+      "bytes": 11864,
+      "publicSha256": "5a2c86a7bc5e3f39a716bd00d83edde24830bfd26487b24ed40f791ccbb2361c",
+      "gitBlob": "5e6d947dfa81f05716fadaa5d70484909bbf22e7",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/control-session.ts",
+      "action": "write",
+      "sha256": "dd67a2d4f50bea19061242e7df3a865456d7cad00b7abc732c8374fd790f1538",
+      "bytes": 11566,
+      "publicSha256": "dd67a2d4f50bea19061242e7df3a865456d7cad00b7abc732c8374fd790f1538",
+      "gitBlob": "b47669bce06826d79af353881f8282fcd8432aab",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/control-tools.ts",
+      "action": "write",
+      "sha256": "d3d5da877e0cb9856a4d23d665221c761cf508a0ddb420d1150a4134e74215a3",
+      "bytes": 12129,
+      "publicSha256": "d3d5da877e0cb9856a4d23d665221c761cf508a0ddb420d1150a4134e74215a3",
+      "gitBlob": "ba12ea212c44de86aea082fc07de6938f904d976",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/failure-diagnostics.test.ts",
+      "action": "write",
+      "sha256": "7713c8bb695fe569de6f6fd08b8a7f6ceebf21870f6dcf91787559e981f60d31",
+      "bytes": 1941,
+      "publicSha256": "7713c8bb695fe569de6f6fd08b8a7f6ceebf21870f6dcf91787559e981f60d31",
+      "gitBlob": "83b432ab2e9e6adc51686afc1b3482b2db1fc9b2",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/filesystem-authority.test.ts",
+      "action": "write",
+      "sha256": "4af3eeeb367353facc77405e8e105e448b71eab907f2d7519605d0f23755a6e6",
+      "bytes": 2714,
+      "publicSha256": "4af3eeeb367353facc77405e8e105e448b71eab907f2d7519605d0f23755a6e6",
+      "gitBlob": "6b0c163424dbbff9ae14ccc94b57cde6aa85bd7c",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/fork-context.ts",
+      "action": "write",
+      "sha256": "154a8fa2c79e22ecdb14f103e7c15d38d56091493fd168c15ca6576b49d085d5",
+      "bytes": 2058,
+      "publicSha256": "154a8fa2c79e22ecdb14f103e7c15d38d56091493fd168c15ca6576b49d085d5",
+      "gitBlob": "ac5841c381f788c6acc7b7bdd48df9d2ef53b462",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/governance.ts",
+      "action": "write",
+      "sha256": "7a20aae195b29257800a8ac16d9f00eea851af7ab04550a2e7b626d45051334a",
+      "bytes": 7756,
+      "publicSha256": "7a20aae195b29257800a8ac16d9f00eea851af7ab04550a2e7b626d45051334a",
+      "gitBlob": "8f69c1c5a0b6cacfae255cd2fa7b8308618f900a",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/inherited-authority.test.ts",
+      "action": "write",
+      "sha256": "de991d11a9f7e3ea6a09f1943457a7ea788376cb3d54b0587bd5f0ab5c40fa75",
+      "bytes": 3420,
+      "publicSha256": "de991d11a9f7e3ea6a09f1943457a7ea788376cb3d54b0587bd5f0ab5c40fa75",
+      "gitBlob": "36599a16f536878e5502a90ba4a99bd5e9a41fe2",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/inherited-authority.ts",
+      "action": "write",
+      "sha256": "1e3cdb09783b720173ad3e1183bf49e734c03d2acf4d6ed5700cf6aae128f9d2",
+      "bytes": 1118,
+      "publicSha256": "1e3cdb09783b720173ad3e1183bf49e734c03d2acf4d6ed5700cf6aae128f9d2",
+      "gitBlob": "52e90e8909e9c453a8575ecfb1dbab3ca553fa35",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/input-channel.ts",
+      "action": "write",
+      "sha256": "de4b7fffd105a16e07f1909cb26300d2b23db06aac190666623357571c021c35",
+      "bytes": 4232,
+      "publicSha256": "de4b7fffd105a16e07f1909cb26300d2b23db06aac190666623357571c021c35",
+      "gitBlob": "c13b1ff3f2f8f016b10bb97038606053513546e8",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/interactive-worker.ts",
+      "action": "write",
+      "sha256": "fa7153bd67d24e58c0f31d77c7ee9e6741e1929cd652a4d7396100d97edddc52",
+      "bytes": 7975,
+      "publicSha256": "fa7153bd67d24e58c0f31d77c7ee9e6741e1929cd652a4d7396100d97edddc52",
+      "gitBlob": "084f64a46c4898ae5aa7396ee4632a5fc0f497d1",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/long-task-reliability.test.ts",
+      "action": "write",
+      "sha256": "0008c11fe0d00dc7771c549b77e7a2013c098decd0a75b7caf58492ef1c36986",
+      "bytes": 4298,
+      "publicSha256": "0008c11fe0d00dc7771c549b77e7a2013c098decd0a75b7caf58492ef1c36986",
+      "gitBlob": "0e8474407d991f24f35aff96e77d8ace014a9a21",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/resume-cleanup.test.ts",
+      "action": "write",
+      "sha256": "53ab7ceb3fc95cbbd6afc32ef6529a1b053e99d18dadcae01ffb93f17c94ccf6",
+      "bytes": 4068,
+      "publicSha256": "53ab7ceb3fc95cbbd6afc32ef6529a1b053e99d18dadcae01ffb93f17c94ccf6",
+      "gitBlob": "be147aae5de1436df0f09dde13d1d29162c0a288",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/runtime.ts",
+      "action": "write",
+      "sha256": "d054d063bc6d46b38e826079dd8e61f3e0eb9426e568628fe07d008373954d06",
+      "bytes": 22885,
+      "publicSha256": "d054d063bc6d46b38e826079dd8e61f3e0eb9426e568628fe07d008373954d06",
+      "gitBlob": "5c57e8d5da763b8e328a2eff6bf780e0ed8dd22b",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/settlement.ts",
+      "action": "write",
+      "sha256": "f580c4719f93ae328b23b9bed1f20724c51d26473efcfa2601c11e1ed3612d3d",
+      "bytes": 1111,
+      "publicSha256": "f580c4719f93ae328b23b9bed1f20724c51d26473efcfa2601c11e1ed3612d3d",
+      "gitBlob": "c25a640534efee27e4b2bf37d4bfb687db328725",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/subagent-tool.ts",
+      "action": "write",
+      "sha256": "12ba88f73489679a1c2166f93e0cbb85aa1c8f1e8fc7c6cf764ccd32b40f5781",
+      "bytes": 9167,
+      "publicSha256": "12ba88f73489679a1c2166f93e0cbb85aa1c8f1e8fc7c6cf764ccd32b40f5781",
+      "gitBlob": "4c4e1f2a6951c1fb1888a3a2b5fee46d413e92d3",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/types.ts",
+      "action": "write",
+      "sha256": "45b3c7c0d6118f6bcb30e453a23f0019986d6fd7d2db05e047e7be4dd2d1155e",
+      "bytes": 5171,
+      "publicSha256": "45b3c7c0d6118f6bcb30e453a23f0019986d6fd7d2db05e047e7be4dd2d1155e",
+      "gitBlob": "5a0c70b057f09d665a17c78a6c4d279043b4a93b",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/subagent/usability.test.ts",
+      "action": "write",
+      "sha256": "18403d8a721a70c50f8d0a962d6b3ff2d87c6cf8df9422753a9ab118741b2952",
+      "bytes": 16280,
+      "publicSha256": "18403d8a721a70c50f8d0a962d6b3ff2d87c6cf8df9422753a9ab118741b2952",
+      "gitBlob": "b7b6605df9c300ae8c257c6827ebedc1773de820",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/surface/cli/recovery-guidance.test.ts",
+      "action": "write",
+      "sha256": "4a7b69d62ad8cead4f80f0872b0c0cbd55bb1a13714c6db00800506e94628da1",
+      "bytes": 953,
+      "publicSha256": "4a7b69d62ad8cead4f80f0872b0c0cbd55bb1a13714c6db00800506e94628da1",
+      "gitBlob": "4c6b07c48a788d6bb506b37c010ff68a2cd816a2",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/surface/cli/stdio-session.test.ts",
+      "action": "write",
+      "sha256": "8d84826643ce34dd2a9fd17f8949f06d26d29712d72a530bbc70decbbf90b206",
+      "bytes": 7716,
+      "publicSha256": "8d84826643ce34dd2a9fd17f8949f06d26d29712d72a530bbc70decbbf90b206",
+      "gitBlob": "84df28771bc447de9ffa329b0752060f46e7c77f",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/surface/cli/stdio-session.ts",
+      "action": "write",
+      "sha256": "b3399f65166eaafc05bd504eefc171014c8e5cc052593de64416e332e7f172ce",
+      "bytes": 7420,
+      "publicSha256": "b3399f65166eaafc05bd504eefc171014c8e5cc052593de64416e332e7f172ce",
+      "gitBlob": "07cab9fad94777bdee139296f1355167a05eda15",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/surface/cli/stream-projection.ts",
+      "action": "write",
+      "sha256": "506672be774ba88ce7d4b1172bb1c7432c8e05491d45992a614c759173dca8e0",
+      "bytes": 18068,
+      "publicSha256": "506672be774ba88ce7d4b1172bb1c7432c8e05491d45992a614c759173dca8e0",
+      "gitBlob": "b780ceac456c1945fdc1ade4dca43579fef0bd98",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/surface/cli/wiring-catalog.ts",
+      "action": "write",
+      "sha256": "ee01bc9ae7b694e65b64d16ac9eefc1e7771ade2c92b418985b1ab36665aa447",
+      "bytes": 6049,
+      "publicSha256": "ee01bc9ae7b694e65b64d16ac9eefc1e7771ade2c92b418985b1ab36665aa447",
+      "gitBlob": "42277d870802fbff5631419ad9cb68bcca2796fb",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/surface/cli/wiring-subagent-context.test.ts",
+      "action": "write",
+      "sha256": "3da6fc2cd1a61851c74e0f785a9930c2096202e152163b88236355573edd123d",
+      "bytes": 3894,
+      "publicSha256": "3da6fc2cd1a61851c74e0f785a9930c2096202e152163b88236355573edd123d",
+      "gitBlob": "fbda369658c27d1545a89f70b453049c5f75b404",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/surface/cli/wiring-subagent.ts",
+      "action": "write",
+      "sha256": "b700732299f37db14dde8135e67fc6196f246107159dada5f5690786e6b34f43",
+      "bytes": 5920,
+      "publicSha256": "b700732299f37db14dde8135e67fc6196f246107159dada5f5690786e6b34f43",
+      "gitBlob": "5bc8c5ed96afd7d0f15dfdb346566e8e2e7c70a4",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "new trylo cli/src/internal/surface/cli/wiring.ts",
+      "action": "write",
+      "sha256": "08ca8af231c8268d43531f2f0fed07125c32af41617ac040b98bc048a3d9e907",
+      "bytes": 18432,
+      "publicSha256": "08ca8af231c8268d43531f2f0fed07125c32af41617ac040b98bc048a3d9e907",
+      "gitBlob": "cf75e67bf66b8c1b26a7e2045b3e160890ffc8dd",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/ACCOUNT-SERVICE.md",
+      "action": "write",
+      "sha256": "d8e805dc4c819e6d9738a550c6f0423a374056240b16d8f5585f0d27e6de4cad",
+      "bytes": 7774,
+      "publicSha256": "d8e805dc4c819e6d9738a550c6f0423a374056240b16d8f5585f0d27e6de4cad",
+      "gitBlob": "5bbbd618304573c44072ae87691549e800f3458d",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/deploy/Dockerfile",
+      "action": "write",
+      "sha256": "05ec6a28b1518ed120290dc9649eb5b0c26fe94a2c452e63fe1d92a56c55f7dd",
+      "bytes": 490,
+      "publicSha256": "05ec6a28b1518ed120290dc9649eb5b0c26fe94a2c452e63fe1d92a56c55f7dd",
+      "gitBlob": "5f30199ba69961a806ebf566b347fd68b8987ee7",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/package-lock.json",
+      "action": "write",
+      "sha256": "9ff57413652e01666a06f0ec26099ffdf27599c17fab692729e9942bbf0e8b92",
+      "bytes": 906,
+      "publicSha256": "9ff57413652e01666a06f0ec26099ffdf27599c17fab692729e9942bbf0e8b92",
+      "gitBlob": "fa26258d4c639b96cd51ee885790e23bc4b61c5e",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/package.json",
+      "action": "write",
+      "sha256": "ad00cbf0b0f45ed3f0f8b4782a660c81969d6f939616ac0ac6e479e0c8c6aef6",
+      "bytes": 257,
+      "publicSha256": "ad00cbf0b0f45ed3f0f8b4782a660c81969d6f939616ac0ac6e479e0c8c6aef6",
+      "gitBlob": "05e6392009fd9238e2868d8755490ef3a869eb08",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/scripts/admin-account.mjs",
+      "action": "write",
+      "sha256": "75a368e61fef4473357372fd3e2718b88ab62b27f5394cc49ffb5d8ee411cbf2",
+      "bytes": 982,
+      "publicSha256": "75a368e61fef4473357372fd3e2718b88ab62b27f5394cc49ffb5d8ee411cbf2",
+      "gitBlob": "588af144a8d1f95172ef0edee9f0b9ce4ead0994",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/scripts/dev-accounts.mjs",
+      "action": "write",
+      "sha256": "8a9f18284aaee58db0743eca59baea9d6cea966e7be3294ecd865f0db8c4b872",
+      "bytes": 1196,
+      "publicSha256": "8a9f18284aaee58db0743eca59baea9d6cea966e7be3294ecd865f0db8c4b872",
+      "gitBlob": "fe7f94ddd4e96789cbc78c9975cbb85650dfde9d",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/scripts/package.mjs",
+      "action": "write",
+      "sha256": "c5524df05c404fb86180c988c05500d22a5d6c8d35f1f2ba3c7ae0ddd5e45b64",
+      "bytes": 2257,
+      "publicSha256": "c5524df05c404fb86180c988c05500d22a5d6c8d35f1f2ba3c7ae0ddd5e45b64",
+      "gitBlob": "2f37e6028c8d7b86f8c4ae9e001e15c433375196",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/src/accounts.mjs",
+      "action": "write",
+      "sha256": "9d0ff5ccc63a28f2070428edc91ed2c4f2560a576344e63d71415385f96e6896",
+      "bytes": 16810,
+      "publicSha256": "9d0ff5ccc63a28f2070428edc91ed2c4f2560a576344e63d71415385f96e6896",
+      "gitBlob": "22a7ac8bd2857004dd9b735f08b84ab8ab065972",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/src/main.mjs",
+      "action": "write",
+      "sha256": "46e5776bd36c7d4fc80e45dc98f2f39d89de6edac9bc977977554d7d32d682a0",
+      "bytes": 661,
+      "publicSha256": "46e5776bd36c7d4fc80e45dc98f2f39d89de6edac9bc977977554d7d32d682a0",
+      "gitBlob": "606a518c89146b8c89f96c2e6d1f15938c4c2e2d",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/src/model-service/README.md",
+      "action": "write",
+      "sha256": "fd32febdb7dcdc2c05d5e80c613b6cd02eacc33f13892977640ca99ef92b783b",
+      "bytes": 3804,
+      "publicSha256": "fd32febdb7dcdc2c05d5e80c613b6cd02eacc33f13892977640ca99ef92b783b",
+      "gitBlob": "9d4db10b708eb5e539faa4861b6ee1dcb17376bc",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/src/model-service/quota.mjs",
+      "action": "write",
+      "sha256": "9828b39785c3fed17e1e1d3564066f922a86c180c2624191c6c1b3d8993c4a64",
+      "bytes": 18805,
+      "publicSha256": "9828b39785c3fed17e1e1d3564066f922a86c180c2624191c6c1b3d8993c4a64",
+      "gitBlob": "4431e7b2998cd6e08aaac88d0a9ee8bbac8f5ec2",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/src/model-service/service.mjs",
+      "action": "write",
+      "sha256": "ff3cf40777a49a97912f7fb547b8ae99a6153d335569fe9e6875c0f17c6e5b46",
+      "bytes": 7617,
+      "publicSha256": "ff3cf40777a49a97912f7fb547b8ae99a6153d335569fe9e6875c0f17c6e5b46",
+      "gitBlob": "8d8d5ecb12e56d1e3a016d06886f71fa2990bcfa",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/src/server.mjs",
+      "action": "write",
+      "sha256": "4b4033127222a355a8d07f6b3f6f3cd69a1b949bac05cb1ea71633b441f6bbae",
+      "bytes": 23891,
+      "publicSha256": "4b4033127222a355a8d07f6b3f6f3cd69a1b949bac05cb1ea71633b441f6bbae",
+      "gitBlob": "6d7e1bb0cd373cbaa1b4697909c3207dadd4d37d",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/src/store.mjs",
+      "action": "write",
+      "sha256": "81757c87a265ab27be89d67f1a0ae90e748e407793203be3daa25476877576da",
+      "bytes": 2675,
+      "publicSha256": "81757c87a265ab27be89d67f1a0ae90e748e407793203be3daa25476877576da",
+      "gitBlob": "2ff9a11e4af5cebefc018c3e9a8800570294d60f",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/src/web.mjs",
+      "action": "write",
+      "sha256": "f218457160e4df783d6380ca72447aa42da68f8b3eabbafedb3f37857e74e5ac",
+      "bytes": 1397,
+      "publicSha256": "f218457160e4df783d6380ca72447aa42da68f8b3eabbafedb3f37857e74e5ac",
+      "gitBlob": "20e89ebf94842641c20cf57fb4405a95ba2c6597",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/tests/accounts.test.mjs",
+      "action": "write",
+      "sha256": "90e3e923fa2bd746828359c05e269ddf7aecf6804ac7a41668bb0f2801ec5404",
+      "bytes": 13830,
+      "publicSha256": "90e3e923fa2bd746828359c05e269ddf7aecf6804ac7a41668bb0f2801ec5404",
+      "gitBlob": "df60c69a2ea0f947d00c088c16db5f03cb8a3cae",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/tests/console.test.mjs",
+      "action": "write",
+      "sha256": "55b893d994adcf3153ee5e75cebc7aab662f112ffeca226cebab32affacb97af",
+      "bytes": 7442,
+      "publicSha256": "55b893d994adcf3153ee5e75cebc7aab662f112ffeca226cebab32affacb97af",
+      "gitBlob": "97efa0566a1a40df7ba02aafae63245b4af89105",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/tests/model-console.test.mjs",
+      "action": "write",
+      "sha256": "835f0924113ce9c1b82c3dc119fbb2676142749353a3e8a9e11fe40e125f5ada",
+      "bytes": 8086,
+      "publicSha256": "835f0924113ce9c1b82c3dc119fbb2676142749353a3e8a9e11fe40e125f5ada",
+      "gitBlob": "8dff0387c5a609a2e7ed0c6cd5cad7f9faf2331d",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/tests/model-quota.test.mjs",
+      "action": "write",
+      "sha256": "625dcb7be9561f95b73b3333ad3e1138b0c8634c83a163ca3eaabb662cc304cd",
+      "bytes": 21149,
+      "publicSha256": "625dcb7be9561f95b73b3333ad3e1138b0c8634c83a163ca3eaabb662cc304cd",
+      "gitBlob": "355f1c441e997483cee3e8f75b13711465238c64",
+      "relation": "identical to local source commit"
+    },
+    {
+      "file": "remote-relay/tests/relay.test.mjs",
+      "action": "write",
+      "sha256": "19def7ba1376560c8b2c355553820a69575cacc71d97be38e633cad26834088c",
+      "bytes": 11947,
+      "publicSha256": "19def7ba1376560c8b2c355553820a69575cacc71d97be38e633cad26834088c",
+      "gitBlob": "5d8e951dc2d1727485b6c0076ff4bd138212d150",
+      "relation": "identical to local source commit"
+    }
+  ],
+  "schemaVersion": 1,
+  "sourceFiles": 129,
+  "byteIdentical": 124,
+  "publicAdaptations": 5,
+  "websiteExcluded": true,
+  "websiteTreeBefore": "4998ad6c800fb238146175311bc92b19a12f025c",
+  "recordCommit": "3e69877e45b39e79f1e962993b3fe4e828340300"
+}

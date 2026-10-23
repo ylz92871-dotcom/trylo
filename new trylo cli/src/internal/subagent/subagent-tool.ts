@@ -10,9 +10,13 @@ import type {
   ToolSandbox,
 } from "../ports/tools.js";
 import type { Envelope, JsonObject } from "../protocol/envelope.js";
-import { createChildAttemptWorker, DEFAULT_PROFILE_PORT } from "./child-attempt.js";
+import { createChildAttemptWorker, DEFAULT_PROFILE_PORT, type ChildAttemptResult } from "./child-attempt.js";
 import { SubagentRuntime } from "./runtime.js";
 import { SUBAGENT_TOOL_NAME } from "./names.js";
+import { governanceFailureOutcome } from "./governance.js";
+import type { SubagentHandle } from "./types.js";
+import type { PermissionGrantCache } from "../loop/permission-grants.js";
+import type { LoopPorts } from "../loop/runner.js";
 
 export { SUBAGENT_TOOL_NAME };
 
@@ -31,7 +35,9 @@ export type SubagentToolOptions = {
    */
   readonly model?: string | undefined;
   readonly sessionId?: string | undefined;
-  readonly defaultAllowedTools?: ReadonlyArray<string> | undefined;
+  readonly defaultAllowedTools?: ReadonlyArray<string> | (() => ReadonlyArray<string>) | undefined;
+  readonly grants?: PermissionGrantCache | undefined;
+  readonly execPolicy?: LoopPorts["execPolicy"];
   readonly onEnvelope?: ((envelope: Envelope) => void) | undefined;
 };
 
@@ -40,7 +46,7 @@ export const DELEGATE_SUBAGENT_BINDING: ToolBinding = {
   description: "Delegate a sub-task to a bounded subagent worker. Runs to completion and returns the result.",
   sideEffect: "read_only",
   needsApproval: false,
-  timeoutMs: 60_000,
+  timeoutMs: 310_000,
   outputLimits: {
     maxBytes: 65_536,
     maxLines: 1_000,
@@ -59,7 +65,7 @@ export const DELEGATE_SUBAGENT_BINDING: ToolBinding = {
       allowedTools: {
         type: "array",
         items: { type: "string" },
-        description: "Tool names the subagent is authorized to use (defaults to read_file)",
+        description: "Optional subset of the parent's available tools; standalone embeddings default to read_file",
       },
       timeoutMs: {
         type: "number",
@@ -93,16 +99,22 @@ export function createSubagentToolPort(options: SubagentToolOptions): ToolPort {
       const prompt = typeof call.arguments["prompt"] === "string"
         ? call.arguments["prompt"]
         : "";
+      const ceiling = typeof options.defaultAllowedTools === "function" ? options.defaultAllowedTools() : options.defaultAllowedTools;
       const allowedTools: string[] = Array.isArray(call.arguments["allowedTools"])
         ? (call.arguments["allowedTools"] as string[])
-        : (options.defaultAllowedTools ? [...options.defaultAllowedTools] : ["read_file"]);
+        : [...(ceiling ?? ["read_file"])];
       const timeoutMs = typeof call.arguments["timeoutMs"] === "number"
         ? call.arguments["timeoutMs"]
         : undefined;
+      if (!allowedTools.every(name => typeof name === "string") || (ceiling !== undefined
+        && allowedTools.some(name => !ceiling.includes(name)))) {
+        return { outcome: "error", code: "subagent_permission_denied", message: "allowedTools must be a subset of the parent's available tools" };
+      }
 
       const worker = createChildAttemptWorker({
         provider: options.provider,
         permission: options.permission,
+        ...(options.execPolicy === undefined ? {} : { execPolicy: options.execPolicy }),
         ...(options.sandbox === undefined ? {} : { sandbox: options.sandbox }),
         profile: options.profile ?? DEFAULT_PROFILE_PORT,
         ...(options.model !== undefined ? { model: options.model } : {}),
@@ -112,20 +124,26 @@ export function createSubagentToolPort(options: SubagentToolOptions): ToolPort {
         onEnvelope: options.onEnvelope,
       });
 
-      const handle = options.runtime.spawn({
-        name: taskName,
-        prompt,
-        lineage: {
-          parentAgentId: "main-agent",
-          rootAttemptId: `att-root-${call.toolCallId}`,
-          toolCallId: call.toolCallId,
-        },
-        permissions: {
-          allowedTools,
-        },
-        ...(timeoutMs !== undefined ? { governance: { timeoutMs } } : {}),
-        worker,
-      });
+      let handle: SubagentHandle<ChildAttemptResult>;
+      try {
+        handle = options.runtime.spawn({
+          name: taskName,
+          prompt,
+          lineage: {
+            parentAgentId: "main-agent",
+            rootAttemptId: `att-root-${call.toolCallId}`,
+            toolCallId: call.toolCallId,
+          },
+          permissions: {
+            allowedTools,
+            inheritedGrants: options.grants,
+          },
+          ...(timeoutMs !== undefined ? { governance: { timeoutMs } } : {}),
+          worker,
+        });
+      } catch (error) {
+        return governanceFailureOutcome(error);
+      }
 
       inFlightSubagents.set(call.toolCallId, handle.subagentId);
 

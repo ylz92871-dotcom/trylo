@@ -27,6 +27,21 @@ const response = (requestId: string, body: object) => ({ type: "control_response
   subtype: "success", request_id: requestId, response: body,
 } });
 
+test("host restart mode is preserved and invalid input modes never dispatch", async () => {
+  const h = harness();
+  try {
+    const calls: unknown[] = [];
+    h.channel.bindAgentTools({ snapshot: () => [{ name: "send_input" } as never], cancel: async () => {},
+      execute: async call => { calls.push(call.arguments); return { outcome: "result", value: {}, output: "restarted", truncated: false }; } });
+    h.feed({ type: "subagent_input", requestId: "restart", target: "task-a", message: "new work", mode: "restart" });
+    h.feed({ type: "subagent_input", requestId: "invalid", target: "task-a", message: "no effect", mode: "typo" });
+    await tick();
+    assert.deepEqual(calls, [{ target: "task-a", message: "new work", mode: "restart" }]);
+    assert.equal(h.frames.find(frame => frame.requestId === "restart")?.accepted, true);
+    assert.equal(h.frames.find(frame => frame.requestId === "invalid")?.accepted, false);
+  } finally { h.close(); }
+});
+
 test("host child input is targeted, acknowledged and never becomes parent guidance", async () => {
   const h = harness();
   try {

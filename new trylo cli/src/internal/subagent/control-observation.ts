@@ -3,8 +3,9 @@ import type { Transcript } from "../protocol/transcript.js";
 import { extractLatestAssistantText } from "./child-attempt.js";
 import type { InteractiveChildResult } from "./interactive-worker.js";
 import type { SubagentInputChannel } from "./input-channel.js";
-import type { SubagentResult, SubagentStatus } from "./types.js";
+import type { SubagentBudgetSnapshot, SubagentResult, SubagentStatus } from "./types.js";
 import type { TimerHandle, TimerScheduler } from "./scheduler.js";
+import { accumulatedBudget } from "./budget-snapshot.js";
 
 export const DEFAULT_AGENT_WAIT_MS = 10_000;
 export const MAX_AGENT_WAIT_MS = 60_000;
@@ -18,16 +19,22 @@ export class AgentRoundObservation {
   private report: InteractiveChildResult | undefined;
   private terminal: SubagentResult<InteractiveChildResult> | undefined;
   private readonly listeners = new Set<() => void>();
+  cursor: number;
 
-  constructor(private readonly channel: SubagentInputChannel, transcript: Transcript = []) {
+  constructor(private readonly channel: SubagentInputChannel, transcript: Transcript = [], cursor = 0,
+    private readonly priorBudget?: SubagentBudgetSnapshot) {
     this.transcript = transcript;
+    this.cursor = cursor;
   }
 
-  requestInput(interrupt: boolean): void {
-    this.requestedRound = interrupt ? this.activeRound + 1 : this.requestedRound + 1;
+  requestInput(): void {
+    // The mailbox knows which input it has already handed to next(). The
+    // worker's startRound callback may still be waiting for its microtask.
+    this.requestedRound = this.channel.requestedRound;
   }
 
   startRound(round: number): void { this.activeRound = round; }
+  get lastRound(): number { return this.activeRound; }
 
   checkpoint(transcript: Transcript): void {
     this.transcript = transcript;
@@ -37,35 +44,60 @@ export class AgentRoundObservation {
   publish(report: InteractiveChildResult): void {
     this.checkpoint(report.transcript);
     this.report = report;
+    this.cursor += 1;
     this.notify();
   }
 
   finish(result: SubagentResult<InteractiveChildResult>): void {
     this.terminal = result;
+    this.cursor += 1;
     if (result.output !== undefined) this.transcript = result.output.transcript;
     this.notify();
   }
 
-  isReady(): boolean {
-    return this.terminal !== undefined || (this.channel.open && this.report !== undefined && this.report.rounds >= this.requestedRound);
+  accountSettled(result: SubagentResult<InteractiveChildResult>): void {
+    const changed = this.terminal?.usage.inputTokens !== result.usage.inputTokens
+      || this.terminal?.usage.outputTokens !== result.usage.outputTokens;
+    this.terminal = result;
+    if (changed) { this.cursor += 1; this.notify(); }
   }
 
-  snapshot(status: SubagentStatus): JsonObject {
+  isReady(after?: number): boolean {
+    return (after === undefined || this.cursor > after)
+      && (this.terminal !== undefined || (this.channel.open && this.report !== undefined && this.report.rounds >= this.requestedRound));
+  }
+
+  currentBudget(budget?: SubagentBudgetSnapshot): SubagentBudgetSnapshot | undefined {
+    const current = budget ?? this.terminal?.budget;
+    return accumulatedBudget(current, this.priorBudget);
+  }
+
+  budgetSnapshot(budget?: SubagentBudgetSnapshot): JsonObject {
+    const current = this.currentBudget(budget);
+    return current === undefined ? {} : { token_limit: current.tokenLimit, tokens_used: current.tokensUsed,
+      tokens_remaining: current.tokensRemaining, timeout_ms: current.timeoutMs,
+      active_ms_remaining: current.timeRemainingMs, timeout_mode: current.timeoutMode };
+  }
+
+  snapshot(status: SubagentStatus, after?: number, budget?: SubagentBudgetSnapshot): JsonObject {
     const report = this.report;
     // Cancellation can settle before runTurn returns a checkpoint. The carried
     // transcript then still belongs to an older round, not the cancelled work.
     const currentCheckpoint = this.checkpointRound === this.activeRound
       && this.checkpointRound >= this.requestedRound;
     const output = this.terminal === undefined
-      ? report?.output ?? ""
+      ? (report !== undefined && report.rounds >= this.requestedRound ? report.output : "")
       : this.terminal.output?.output ?? (currentCheckpoint ? extractLatestAssistantText(this.transcript) : "");
     return {
       phase: this.terminal !== undefined ? "terminal" : this.isReady() ? "awaiting_input" : "working",
       round: this.terminal === undefined ? report?.rounds ?? 0 : this.activeRound,
       status,
-      output,
+      output: after !== undefined && this.cursor <= after ? "" : output,
+      cursor: this.cursor,
+      changed: after === undefined || this.cursor > after,
+      budget: this.budgetSnapshot(budget),
       ...(this.terminal?.error === undefined ? {} : { error: { ...this.terminal.error } }),
-      ...(this.terminal?.usage === undefined ? {} : { usage: { ...this.terminal.usage } }),
+      usage: { ...(this.terminal?.usage ?? this.report?.usage ?? { inputTokens: 0, outputTokens: 0 }) },
     };
   }
 
@@ -81,18 +113,20 @@ export class AgentRoundObservation {
 
 /** One cancellable deadline, first ready agent wins, with no orphan observers. */
 export async function waitForAgentReports(input: {
-  readonly agents: ReadonlyArray<AgentRoundObservation>;
+  readonly ready: () => boolean;
+  readonly subscribe: (listener: () => void) => () => void;
   readonly timeoutMs: number;
   readonly signal: AbortSignal;
   readonly scheduler: TimerScheduler;
 }): Promise<"ready" | "timeout" | "cancelled"> {
   if (input.signal.aborted) return "cancelled";
-  if (input.agents.some(agent => agent.isReady())) return "ready";
+  const ready = input.ready;
+  if (ready()) return "ready";
   if (input.timeoutMs === 0) return "timeout";
   let settle!: (outcome: "ready" | "timeout" | "cancelled") => void;
   const answer = new Promise<"ready" | "timeout" | "cancelled">(resolve => { settle = resolve; });
-  const changed = (): void => { if (input.agents.some(agent => agent.isReady())) settle("ready"); };
-  const detach = input.agents.map(agent => agent.subscribe(changed));
+  const changed = (): void => { if (ready()) settle("ready"); };
+  const detach = input.subscribe(changed);
   const cancel = (): void => { settle("cancelled"); };
   input.signal.addEventListener("abort", cancel, { once: true });
   let timer: TimerHandle | undefined;
@@ -104,6 +138,6 @@ export async function waitForAgentReports(input: {
   } finally {
     timer?.cancel();
     input.signal.removeEventListener("abort", cancel);
-    for (const unsubscribe of detach) unsubscribe();
+    detach();
   }
 }

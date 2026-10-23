@@ -68,10 +68,12 @@ export function createWindowsShellBoundary(workspaceRoot: string, hostEnvironmen
         if (spec.signal.aborted) return { stdout: "", stderr: "", exitCode: -1, timedOut: false, aborted: true, truncated: false };
         const stages: readonly CommandShape[] = [spec.shape ?? { kind: "direct", argv: spec.argv }, ...(spec.pipeTo ?? []).map(segment => segment.shape)];
         let argv: readonly string[];
-        if (stages.length === 1) argv = await wrap(spec.shape?.argv ?? spec.argv);
+        if (stages.length === 1 && stages[0]?.kind !== "shell") argv = await wrap(spec.shape?.argv ?? spec.argv);
         else {
           // SRT's broker stdin carries RunnerCmd, not user pipe bytes. Run the
           // admitted stages inside one Job so their pipes never cross that IPC.
+          // A single batch script needs the same runner: SRT's ordinary argv
+          // quoting would escape the command line cmd must receive verbatim.
           const pinned = stages.map(stage => ({ ...stage, argv: pinExecutable(stage.argv) }));
           const runner = fileURLToPath(new URL("../../../cmd/trylo/windows-pipeline.js", import.meta.url));
           const packageMetadata = fileURLToPath(new URL("../../../../package.json", import.meta.url));

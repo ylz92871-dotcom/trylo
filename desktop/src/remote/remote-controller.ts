@@ -211,6 +211,23 @@ export class RemoteController {
     await this.options.manager.ensureRunning(await this.options.paths());
     return this.options.port.relayStatus();
   }
+  async relayBrowserBegin(params: { serverUrl: string }) {
+    if (!this.options.isTauri()) throw new Error('请在 Desktop 中发起浏览器登录。');
+    await this.options.manager.ensureRunning(await this.options.paths());
+    return this.options.port.relayBrowserBegin(params);
+  }
+  async relayBrowserPoll(params: { id: string }) {
+    const result = await this.options.port.relayBrowserPoll(params);
+    if (result.status === 'complete') this.configured = '';
+    return result;
+  }
+  relayBrowserCancel() { return this.options.port.relayBrowserCancel(); }
+  relayBrowserOpen(params: { id: string }) { return this.options.port.relayBrowserOpen(params); }
+  async relayAccountOpen() {
+    if (!this.options.isTauri()) throw new Error('请在 Desktop 中打开账号中心。');
+    await this.options.manager.ensureRunning(await this.options.paths());
+    return this.options.port.relayAccountOpen();
+  }
 
   async relayLogout() {
     if (!this.options.isTauri()) throw new Error('请在 Desktop 中退出账号。');

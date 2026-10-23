@@ -9,6 +9,8 @@ import type { ToolSandbox } from "../ports/tools.js";
 import type { Envelope } from "../protocol/envelope.js";
 import type { Transcript } from "../protocol/transcript.js";
 import type { SubagentContext, SubagentWorker } from "./types.js";
+import { createGovernedChildProvider } from "./child-provider.js";
+import { inheritedGrantView, SUBAGENT_PERMISSION } from "./inherited-authority.js";
 
 /**
  * ChildAttemptWorker — Subagent Real Executor backed by re-entering the existing loop.
@@ -23,6 +25,7 @@ export type ChildAttemptFactoryOptions = {
   readonly callerMessages?: ReadonlyArray<Message>;
   readonly provider: ProviderPort;
   readonly permission: PermissionPort;
+  readonly execPolicy?: LoopPorts["execPolicy"];
   readonly profile?: ProfilePort | undefined;
   readonly sandbox?: ToolSandbox | undefined;
   readonly grants?: PermissionGrantCache | undefined;
@@ -71,10 +74,33 @@ export function extractLatestAssistantText(transcript: Transcript): string {
 }
 
 /** Both child executor shapes must reject a failed engine terminal. */
-export function requireCompletedChild(terminalReason: string | undefined): void {
+export function requireCompletedChild(result: Pick<RunTurnResult, "state" | "inputs">): void {
+  const terminalReason = result.state.terminalReason;
   if (terminalReason === "completed") return;
-  const error = new Error(`Child attempt failed with terminal reason: ${terminalReason ?? "unknown"}`);
-  (error as { code?: string }).code = terminalReason ?? "child_attempt_failed";
+  const failure = [...result.inputs].reverse().find(input =>
+    input.type === "transport_fail" || input.type === "transport_unknown" || input.type === "budget_exhausted"
+    || input.type === "tool_failed" || input.type === "tool_unknown" || input.type === "tool_rejected"
+    || input.type === "permission_denied" || input.type === "permission_failed" || input.type === "permission_expired");
+  let code: string = terminalReason ?? "child_attempt_failed";
+  let message = `Child attempt failed with terminal reason: ${terminalReason ?? "unknown"}`;
+  if (failure?.type === "transport_fail" || failure?.type === "transport_unknown") {
+    code = failure.errorClass ?? failure.type;
+    message = failure.message;
+  } else if (failure?.type === "budget_exhausted") {
+    code = failure.reason;
+    message = `Child attempt exhausted ${failure.reason}`;
+  } else if (failure?.type === "tool_failed" || failure?.type === "tool_unknown") {
+    code = failure.type;
+    message = failure.message;
+  } else if (failure?.type === "tool_rejected") {
+    code = failure.code;
+    message = failure.message;
+  } else if (failure?.type === "permission_denied" || failure?.type === "permission_expired" || failure?.type === "permission_failed") {
+    code = "subagent_permission_denied";
+    message = "The child has no usable parent approval for this call; grant the exact action in the parent before delegating it";
+  }
+  const error = new Error(message);
+  (error as { code?: string }).code = code;
   throw error;
 }
 
@@ -82,14 +108,16 @@ export function createChildAttemptWorker(
   options: ChildAttemptFactoryOptions,
 ): SubagentWorker<ChildAttemptResult> {
   return async (context: SubagentContext): Promise<ChildAttemptResult> => {
+    const grants = inheritedGrantView(context.inheritedGrants ?? options.grants);
     // 1. Build child ports using existing parent ports + context.tools (already bounded)
     const childPorts: LoopPorts = {
-      provider: options.provider,
+      provider: createGovernedChildProvider(options.provider, context),
       tools: context.tools, // already wrapped by createSubagentToolBoundary!
-      permission: options.permission,
+      permission: SUBAGENT_PERMISSION,
       profile: options.profile ?? DEFAULT_PROFILE_PORT,
       ...(options.sandbox !== undefined ? { sandbox: options.sandbox } : {}),
-      ...(options.grants !== undefined ? { grants: options.grants } : {}),
+      ...(grants === undefined ? {} : { grants }),
+      ...(options.execPolicy === undefined ? {} : { execPolicy: options.execPolicy }),
     };
 
     // 2. Build child run request attributing to rootAttemptId
@@ -115,10 +143,8 @@ export function createChildAttemptWorker(
     // 3. Re-enter the existing turn loop (D1: NO second loop)
     const result: RunTurnResult = await runTurn(childPorts, childRequest);
 
-    // 4. Record usage in subagent governance (triggers budget ceiling if exceeded)
-    context.recordUsage(result.usage.inputTokens, result.usage.outputTokens);
-
-    // 5. Extract output and report progress
+    // Usage has already been charged once per provider response, not per turn.
+    // Extract output and report progress.
     const output = extractAssistantText(result.transcript);
     const terminalReason = result.state.terminalReason;
     const isCompleted = terminalReason === "completed";
@@ -128,7 +154,7 @@ export function createChildAttemptWorker(
       100,
     );
 
-    requireCompletedChild(terminalReason);
+    requireCompletedChild(result);
 
     return {
       status: "completed",

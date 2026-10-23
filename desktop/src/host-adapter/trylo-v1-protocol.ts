@@ -18,6 +18,7 @@
 // a silent drop is how a real protocol drift becomes an invisible bug.
 
 import { isFileMutationFacts, normalizeFileMutationFacts, type FileMutationFact } from '../tooling/file-mutation-facts';
+import { isSubagentBudget, type SubagentBudget } from './subagent-contract';
 
 /** Additive V1 vocabulary; compact carries real maintenance/gap outcomes. */
 export const CLI_V1_EVENT_TYPES = [
@@ -56,7 +57,8 @@ export type CliV1Event =
   | { readonly type: 'subagent'; readonly kind: 'spawn' | 'update' | 'end'; readonly id: string;
       readonly status: 'running' | 'waiting' | 'done' | 'failed' | 'cancelled';
       readonly agentType?: string; readonly prompt?: string; readonly result?: string;
-      readonly error?: string; readonly round?: number; readonly canReceiveInput?: boolean; readonly displayName?: string }
+      readonly error?: string; readonly round?: number; readonly canReceiveInput?: boolean; readonly displayName?: string;
+      readonly taskId?: string; readonly resumedFrom?: string; readonly parked?: boolean; readonly budget?: SubagentBudget }
   | {
       readonly type: 'run_start';
       readonly sessionId: string;
@@ -217,7 +219,11 @@ function fieldsAreValid(type: CliV1EventType, raw: Record<string, unknown>): boo
         && (raw.kind !== 'end' || ['done', 'failed', 'cancelled'].includes(String(raw.status)))
         && ['agentType', 'prompt', 'result', 'error', 'displayName'].every(key => raw[key] === undefined || typeof raw[key] === 'string')
         && (raw.round === undefined || (isCount(raw.round) && raw.round > 0))
-        && (raw.canReceiveInput === undefined || typeof raw.canReceiveInput === 'boolean');
+        && (raw.canReceiveInput === undefined || typeof raw.canReceiveInput === 'boolean')
+        && (raw.taskId === undefined || isNonEmptyString(raw.taskId))
+        && (raw.resumedFrom === undefined || isNonEmptyString(raw.resumedFrom))
+        && (raw.parked === undefined || typeof raw.parked === 'boolean')
+        && (raw.budget === undefined || isSubagentBudget(raw.budget));
     case 'run_start':
       return (
         isNonEmptyString(raw.sessionId) &&

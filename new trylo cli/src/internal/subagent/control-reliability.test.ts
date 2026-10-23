@@ -157,9 +157,25 @@ test("a follow-up collects only its own answer rather than concatenating previou
   await h.call("send_input", { target: child, message: "second" });
   const pending = value(await h.call("wait_agent", { targets: [child], timeout_ms: 0 }));
   assert.equal(pending["timed_out"], true, "the previous answer cannot satisfy a new request");
+  const pendingReports = pending["results"] as JsonObject;
+  assert.equal((pendingReports[child] as JsonObject)["output"], "", "a pending follow-up must not expose the previous answer");
   await flush();
   const reports = value(await h.call("wait_agent", { targets: [child], timeout_ms: 0 }))["results"] as JsonObject;
   assert.equal((reports[child] as JsonObject)["output"], "answer-2");
+});
+
+test("interrupting queued input cannot make an earlier delivered round satisfy the replacement", async t => {
+  const h = harness(); t.after(h.cleanup);
+  const child = await h.spawn({ message: "first" }); await flush();
+  // Both deliveries land before the waiting worker enters its next round.
+  const delivered = h.call("send_input", { target: child, message: "second" });
+  const replacement = h.call("send_input", { target: child, message: "slow", interrupt: true });
+  await Promise.all([delivered, replacement]); await flush();
+  const pending = value(await h.call("wait_agent", { targets: [child], timeout_ms: 0 }));
+  assert.equal(pending["timed_out"], true, "the replacement is still running after the delivered round answered");
+  const reports = pending["results"] as JsonObject;
+  assert.equal((reports[child] as JsonObject)["phase"], "working");
+  assert.equal((reports[child] as JsonObject)["output"], "");
 });
 
 test("a failed follow-up never presents the previous answer as its output", async t => {

@@ -14,6 +14,15 @@ const pairingDetails: RemotePairingInfoResult['pairing'] = {
 
 afterEach(cleanup);
 
+it('routes login to the existing avatar account surface without showing credentials', () => {
+  const onOpenAccount = vi.fn();
+  render(<RemotePairingModal open remoteSettings={{ ...remoteSettingsDefaults(), connectionMode: 'server' }} account={{ loggedIn: false, username: '', serverUrl: '', online: false }} onOpenAccount={onOpenAccount} onClose={vi.fn()}/>);
+  expect(screen.queryByLabelText('密码')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '在浏览器中登录' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '打开账号登录' }));
+  expect(onOpenAccount).toHaveBeenCalledTimes(1);
+});
+
 it('accepts a recovered QR when React still has the pre-startup stopped status', async () => {
   const controller = { status: () => ({ ...EMPTY_REMOTE_STATUS, running: true }),
     pairing: vi.fn(async () => ({ pairing: pairingDetails, qrDataUrl: 'data:image/png;base64,authoritative' })) };
@@ -22,16 +31,16 @@ it('accepts a recovered QR when React still has the pre-startup stopped status',
   expect(screen.queryByText('远程服务已断开，请重试启动。')).not.toBeInTheDocument();
 });
 
-it('logs in and connects from the remote dialog without persisting the password', async () => {
-  const account = { loggedIn: true, username: 'alice', serverUrl: 'https://relay.trylocode.me', online: false };
-  const controller = { pairing: vi.fn(), relayStatus: vi.fn(async () => ({ ...account, loggedIn: false })), relayLogin: vi.fn(async () => account) };
-  const onConfigure = vi.fn(async () => {});
-  render(<RemotePairingModal open remoteController={controller} remoteSettings={{ ...remoteSettingsDefaults(), connectionMode: 'server' }} onConfigure={onConfigure} onClose={vi.fn()}/>);
-  fireEvent.change(await screen.findByLabelText('账号'), { target: { value: 'alice' } });
-  fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'fixture-password-123' } });
-  fireEvent.click(screen.getByRole('button', { name: '登录并连接' }));
-  await vi.waitFor(() => expect(onConfigure).toHaveBeenCalledWith(expect.objectContaining({ enabled: true, connectionMode: 'server' })));
-  expect(JSON.stringify(onConfigure.mock.calls)).not.toContain('fixture-password-123');
+it('uses shared account changes and keeps account management at the avatar entry', () => {
+  const onOpenAccount = vi.fn();
+  const props = { open: true, remoteSettings: { ...remoteSettingsDefaults(), connectionMode: 'server' as const }, onOpenAccount, onClose: vi.fn(), account: { loggedIn: false, username: '', serverUrl: '', online: false } };
+  const { rerender } = render(<RemotePairingModal {...props}/>);
+  expect(screen.getByRole('button', { name: '打开账号登录' })).toBeVisible();
+  rerender(<RemotePairingModal {...props} account={{ ...props.account, loggedIn: true, username: 'ylz', serverUrl: 'https://relay.trylocode.me' }}/>);
+  expect(screen.queryByRole('button', { name: '打开账号登录' })).not.toBeInTheDocument();
+  expect(screen.getByText('ylz')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: '管理账号' }));
+  expect(onOpenAccount).toHaveBeenCalledTimes(1);
 });
 
 it('asks before switching a live connection and saves only the selected mode', async () => {

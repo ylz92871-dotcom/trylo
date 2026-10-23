@@ -38,6 +38,7 @@ import { InputBar } from './InputBar';
 import type { ModelChoice } from './ModelSelector';
 import type { LearningStatusChipProps } from '../user-learning/LearningStatusChip';
 import type { LearningDirective } from '../../user-learning/types';
+import type { SendSubagentInput } from '../../host-adapter/subagent-contract';
 
 // M4-D: Work's capability-neutral empty state. Replaces
 // the v1.16.5 reuse of Code's EmptyState plus the
@@ -57,7 +58,7 @@ import {
 import { ApiKeyMissingBanner } from '@trylo/work';
 
 export interface ChatPanelProps {
-  readonly onSubagentInput?: (agentId: string, text: string) => Promise<void>;
+  readonly onSubagentInput?: SendSubagentInput;
   /** 2026-09-03 (run controls §UI-B): number of messages queued behind the
    *  current Code run, and a way to interrupt (steer) the oldest one. */
   readonly queuedCount?: number;

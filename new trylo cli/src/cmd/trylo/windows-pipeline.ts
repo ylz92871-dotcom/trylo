@@ -4,7 +4,7 @@ import { startShellChild, startShellPipeline } from "../../internal/adapters/too
 /** Private process entry: executes only already-admitted argv inside the SRT Job. */
 function readStages(text: string | undefined): readonly CommandShape[] {
   const value: unknown = JSON.parse(text ?? "null");
-  if (!Array.isArray(value) || value.length < 2 || !value.every(stage => stage !== null && typeof stage === "object" && (stage.kind === "direct" || stage.kind === "shell") && Array.isArray(stage.argv) && typeof stage.argv[0] === "string" && stage.argv[0].length > 0 && stage.argv.every((word: unknown) => typeof word === "string" && !word.includes("\0")))) {
+  if (!Array.isArray(value) || value.length < 1 || !value.every(stage => stage !== null && typeof stage === "object" && (stage.kind === "direct" || stage.kind === "shell") && Array.isArray(stage.argv) && typeof stage.argv[0] === "string" && stage.argv[0].length > 0 && stage.argv.every((word: unknown) => typeof word === "string" && !word.includes("\0")))) {
     throw new Error("isolation_pipeline_invalid: expected admitted command stages");
   }
   return value;

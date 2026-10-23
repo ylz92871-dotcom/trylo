@@ -38,6 +38,7 @@ export interface UserProfileController {
    *  avatar.png landed on disk, profile.json never written). */
   readonly picking: boolean;
   readonly toggle: () => void;
+  readonly open: () => void;
   readonly close: () => void;
   readonly commitNickname: (nickname: string) => void;
   readonly commitBio: (bio: string) => void;
@@ -99,6 +100,7 @@ export function useUserProfile(store: ProfileStore = userProfileStore): UserProf
       return draftRef.current !== null ? 'avatar' : 'card';
     });
   }, []);
+  const open = useCallback(() => { setStep(current => current === 'closed' ? (draftRef.current ? 'avatar' : 'card') : current); }, []);
 
   // Closing keeps the draft: an import lost to a stray pointer
   // event must not throw away the user's photo.
@@ -178,6 +180,7 @@ export function useUserProfile(store: ProfileStore = userProfileStore): UserProf
     notice,
     picking,
     toggle,
+    open,
     close,
     commitNickname,
     commitBio,

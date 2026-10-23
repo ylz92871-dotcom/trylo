@@ -34,6 +34,6 @@ for (const kind of ["delegate", "interactive"] as const) test(`${kind} preserves
       await handle.wait();
     }
     assert.equal(executed, 0, "a denied external read must never reach the file executor");
-    assert.equal(asked, 1, "the child must preserve per-call parent authority");
+    assert.equal(asked, 0, "unapproved external reads are denied without opening a child approval channel");
   } finally { rmSync(base, { recursive: true, force: true }); }
 });

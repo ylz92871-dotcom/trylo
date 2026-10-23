@@ -82,10 +82,10 @@ export async function startBackgroundShell(
     };
   }
 
-  // A shell plan carries no steps: the whole string runs under one interpreter
-  // with one argv, which is exactly the single command a background session
-  // needs. Anything else with no steps is still a refusal.
-  const head = plan.steps[0] ?? (plan.shape.kind === "shell" ? { argv: [...plan.argv] } : undefined);
+  // The whole interpreted command is already approved as one argv. Its shape
+  // only chooses Windows quoting: PowerShell and POSIX shells use "direct"
+  // too, so that flag cannot decide whether an interpreted command exists.
+  const head = plan.steps[0] ?? (plan.argv.length > 0 ? { argv: [...plan.argv] } : undefined);
   if (head === undefined) {
     return { outcome: "error", code: "empty_command", message: "run_shell requires a non-empty command" };
   }

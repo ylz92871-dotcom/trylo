@@ -314,13 +314,27 @@ function applySubagent(msgs: ChatMessage[], e: SubagentEvent): ChatMessage[] {
   if (e.source !== 'trylo-v1' && e.agentType && isTeamSeatId(e.agentType)) return msgs;
   const boundary = lastUserIndex(msgs);
   const existingIndex = msgs.findIndex((message, index) => index > boundary
-    && message.kind === 'subagent' && (message.subagentId ?? message.id) === e.id);
+    && message.kind === 'subagent' && ((message.subagentId ?? message.id) === e.id
+      || (e.taskId !== undefined && message.taskId === e.taskId)));
   if (e.kind === 'spawn') {
-    if (existingIndex >= 0) return msgs;
+    if (existingIndex >= 0) {
+      const existing = msgs[existingIndex] as SubagentMessage;
+      if (e.resumedFrom !== existing.subagentId || e.id === existing.subagentId
+        || existing.status === 'running' || existing.status === 'waiting') return msgs;
+      const round = e.round ?? (existing.round ?? 1) + 1;
+      const previous = existing.conversation ?? [{ round: existing.round ?? 1, prompt: existing.prompt, result: existing.result }];
+      const resumed: SubagentMessage = { ...existing, subagentId: e.id, status: 'running', parked: false, error: undefined,
+        canReceiveInput: e.canReceiveInput ?? true, round,
+        ...(e.budget === undefined ? {} : { budget: e.budget }),
+        conversation: [...previous, { round, prompt: e.prompt }] };
+      return msgs.map((message, index) => index === existingIndex ? resumed : message);
+    }
     const msg: SubagentMessage = {
       id: msgs.some(message => message.id === e.id)
         ? eventMessageId(msgs, e, `subagent-${e.id}`) : e.id,
       subagentId: e.id,
+      ...(e.taskId === undefined ? {} : { taskId: e.taskId }),
+      ...(e.budget === undefined ? {} : { budget: e.budget }),
       turnId: msgs[boundary]?.id,
       kind: 'subagent',
       role: 'system',
@@ -339,6 +353,7 @@ function applySubagent(msgs: ChatMessage[], e: SubagentEvent): ChatMessage[] {
   const idx = existingIndex;
   if (idx < 0) return msgs;
   const existing = msgs[idx] as SubagentMessage;
+  if ((existing.subagentId ?? existing.id) !== e.id) return msgs;
   if (existing.status !== 'running' && existing.status !== 'waiting') return msgs;
   const round = e.round ?? existing.round ?? 1;
   const conversation = [...(existing.conversation ?? (existing.prompt ? [{ round: 1, prompt: existing.prompt }] : []))];
@@ -354,7 +369,9 @@ function applySubagent(msgs: ChatMessage[], e: SubagentEvent): ChatMessage[] {
     ...(e.error === undefined ? {} : { error: e.error }),
     ...(e.displayName === undefined || e.displayName === e.id ? {} : { displayName: e.displayName }),
     ...(e.durationMs === undefined ? {} : { durationMs: e.durationMs }),
-    ...(e.kind === 'end' ? { canReceiveInput: false } : {}),
+    ...(e.budget === undefined ? {} : { budget: e.budget }),
+    ...(e.parked === undefined ? {} : { parked: e.parked }),
+    ...(e.kind === 'end' ? { canReceiveInput: e.parked === true && e.canReceiveInput === true } : {}),
     round, conversation,
   };
   return msgs.map((m, i) => (i === idx ? updated : m));

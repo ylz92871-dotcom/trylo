@@ -23,6 +23,8 @@ import {
   type ResolvedProfile,
 } from '../../user-profile/profile-types';
 import type { AvatarDraft, ProfileStep } from '../../user-profile/use-user-profile';
+import type { DesktopAccountModel } from '../../account/desktop-account';
+import { ProfileAccountContent } from './ProfileAccountContent';
 
 /** Card width. Wider than the rail on purpose: a profile card
  *  squeezed into a 210px rail reads as cramped. */
@@ -130,6 +132,8 @@ function EditableText(props: EditableTextProps): ReactElement {
 }
 
 export interface ProfileCardProps {
+  readonly account?: DesktopAccountModel;
+  readonly remoteActive?: boolean;
   /** Which step to show. The card is only mounted while open. */
   readonly step: Exclude<ProfileStep, 'closed'>;
   readonly profile: ResolvedProfile;
@@ -183,6 +187,23 @@ export function ProfileCard(props: ProfileCardProps): ReactElement {
     onCancelAvatar,
   } = props;
   const rootRef = useRef<HTMLDivElement>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const focusWithin = useRef(false);
+  const focusMounted = useRef(false);
+  const hasAccount = props.account !== undefined;
+  // Background account refresh must not interrupt typing in local profile fields.
+  const accountPhase = editingProfile || step !== 'card' ? undefined : props.account?.phase;
+  useEffect(() => {
+    const onFocus = (event: FocusEvent): void => { focusWithin.current = rootRef.current?.contains(event.target as Node) === true; };
+    document.addEventListener('focusin', onFocus);
+    return () => document.removeEventListener('focusin', onFocus);
+  }, []);
+  useEffect(() => {
+    if (hasAccount && (!focusMounted.current || focusWithin.current)) {
+      rootRef.current?.querySelector<HTMLElement>('button:not(:disabled),input:not(:disabled)')?.focus({ preventScroll: true });
+      focusMounted.current = true;
+    }
+  }, [hasAccount, accountPhase, editingProfile, step]);
 
   // Position against the anchor's rect, clamped to the viewport —
   // same shape as ModePopover. The card is 288px wide and the rail
@@ -210,7 +231,7 @@ export function ProfileCard(props: ProfileCardProps): ReactElement {
       const maxHeight = Math.max(96, down ? below : above);
       const clamped = Math.min(height, maxHeight);
       Object.assign(card.style, {
-        left: `${Math.max(8, Math.min(rect.left, window.innerWidth - CARD_WIDTH - 8))}px`,
+        left: `${Math.max(8, Math.min(rect.left, window.innerWidth - Math.min(CARD_WIDTH, window.innerWidth - 16) - 8))}px`,
         top: `${down ? rect.bottom + gap : Math.max(8, rect.top - clamped - gap)}px`,
         maxHeight: `${maxHeight}px`,
       });
@@ -238,7 +259,10 @@ export function ProfileCard(props: ProfileCardProps): ReactElement {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        onClose();
+        anchorRef.current?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
+      }
     };
     // Clicks outside close the card — except on the rail's profile
     // row (which owns the toggle, otherwise outside-close + row
@@ -263,13 +287,18 @@ export function ProfileCard(props: ProfileCardProps): ReactElement {
   return createPortal(
     <div
       ref={rootRef}
-      className="profile-card"
+      className={`profile-card${props.account ? ' profile-card--account' : ''}`}
       role="dialog"
-      aria-label="用户资料"
-      style={{ width: CARD_WIDTH }}
+      aria-label={props.account ? '账号与个人资料' : '用户资料'}
+      style={{ width: CARD_WIDTH, maxWidth: 'calc(100vw - 16px)' }}
     >
-      {step === 'card' ? (
+      {step === 'card' && props.account && !editingProfile ? <ProfileAccountContent
+        account={props.account} remoteActive={props.remoteActive} nickname={profile.nickname}
+        avatar={<ProfileAvatarView avatar={profile.avatar} avatarUrl={profile.avatarUrl} size={36}/>}
+        onClose={onClose} onEditProfile={() => setEditingProfile(true)}
+      /> : step === 'card' ? (
         <div className="profile-card__body">
+          {props.account && <div className="profile-card__step-head"><button type="button" className="profile-card__back" aria-label="返回账号" onClick={() => setEditingProfile(false)}><ArrowLeft size={14}/></button><span className="profile-card__step-title">个人资料</span></div>}
           <div className="profile-card__head">
             <button
               type="button"

@@ -12,6 +12,23 @@ import {
   shapeCommand,
 } from "./executable.js";
 
+test("an explicit batch extension resolves a PATH target before cmd receives it", { skip: process.platform !== "win32" }, () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "trylo-explicit-batch-"));
+  const previous = process.env["PATH"];
+  try {
+    const script = path.join(root, "trylo-explicit-probe.cmd");
+    writeFileSync(script, "@echo off\r\n", "utf8");
+    process.env["PATH"] = root + path.delimiter + (previous ?? "");
+    const result = shapeCommand(["trylo-explicit-probe.cmd", "--version"]);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.ok(result.shape.argv.at(-1)?.includes(script), "a relative PATH batch gives %~dp0 the working directory");
+  } finally {
+    if (previous === undefined) delete process.env["PATH"]; else process.env["PATH"] = previous;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 /**
  * D5: the controlled cmd form.
  *

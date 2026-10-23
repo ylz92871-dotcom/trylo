@@ -25,6 +25,34 @@ function surface(messages: readonly ChatMessage[], send?: (id: string, text: str
 }
 
 describe('approved collaboration UI uses the production event chain', () => {
+  it('keeps parked tasks and resumed executions in one conversation with budget visibility', () => {
+    const adapter = new TryloV1EventAdapter();
+    let messages: ChatMessage[] = [user];
+    const feed = (frame: object) => { messages = applyEvents(messages, adapter.feed(JSON.stringify(frame))); };
+    feed({ type: 'subagent', kind: 'spawn', id: 'run-a', taskId: 'task-a', agentType: 'worker', status: 'running', canReceiveInput: true, prompt: '检查文件' });
+    feed({ type: 'subagent', kind: 'end', id: 'run-a', taskId: 'task-a', status: 'done', parked: true, canReceiveInput: true,
+      result: '第一轮证据', budget: { tokenLimit: 1200, tokensUsed: 30, tokensRemaining: 1170, timeoutMs: 10000, timeRemainingMs: 9000, timeoutMode: 'active' } });
+    const view = render(<SubagentConversation agent={messages[1] as SubagentMessage} drafts={new Map()} onClose={() => {}} onSend={vi.fn()} />);
+    expect(screen.getByRole('textbox')).toBeVisible();
+    expect(screen.getByText(/剩余 1170/)).toBeVisible();
+    feed({ type: 'subagent', kind: 'spawn', id: 'run-b', taskId: 'task-a', resumedFrom: 'run-a', status: 'running', agentType: 'worker', canReceiveInput: true, prompt: '继续检查', round: 2 });
+    expect(messages.filter(m => m.kind === 'subagent')).toHaveLength(1);
+    const resumed = messages[1] as SubagentMessage;
+    expect(resumed.subagentId).toBe('run-b');
+    expect(resumed.conversation?.[0]?.result).toBe('第一轮证据');
+    view.rerender(<SubagentConversation agent={resumed} drafts={new Map()} onClose={() => {}} onSend={vi.fn()} />);
+    expect(screen.getByText('第一轮证据')).toBeVisible();
+  });
+
+  it('lets the user explicitly stop and restart current work', async () => {
+    const send = vi.fn(async () => {});
+    render(<SubagentConversation agent={child('a', '执行')} drafts={new Map()} onClose={() => {}} onSend={send} />);
+    fireEvent.change(screen.getByRole('combobox', { name: '发送方式' }), { target: { value: 'restart' } });
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '改为检查测试' } });
+    fireEvent.click(screen.getByRole('button', { name: '发送给该智能体' }));
+    await act(async () => {});
+    expect(send).toHaveBeenCalledWith('a', '改为检查测试', 'restart');
+  });
   it('keeps identities across the event, member list, answer and stream updates without capping member count', () => {
     const members = Array.from({ length: 15 }, (_, index) => child(`member-${index}`, `成员${index}`));
     const view = render(surface([user, ...members]));

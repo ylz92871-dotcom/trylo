@@ -92,6 +92,11 @@ function describePlan(plan: ShellPlan): string {
   return steps.map((step) => describeStep(step)).join(" ; ");
 }
 
+function stepFailureProgress(completedSteps: number, step: ShellStep): string {
+  return `${completedSteps} prior steps completed; current command: ${describeStep(step)}. ` +
+    "Later steps were not run. The current command may have partial effects; inspect those and earlier effects before retrying the whole workflow.";
+}
+
 function buildOutput(value: {
   readonly stdout: string;
   readonly stderr: string;
@@ -216,11 +221,15 @@ async function runSteps(
       return {
         outcome: "error",
         code: "shell_timeout",
-        message: `shell_timeout:${timeoutMs}ms exceeded by ${describePlan(plan)}\n${partial}\n${timeoutRecoveryHelp(timeoutMs)}`,
+        message: `shell_timeout:${timeoutMs}ms exceeded by ${describeStep(step)}\n${stepFailureProgress(completedSteps, step)}\n${partial}\n${timeoutRecoveryHelp(timeoutMs)}`,
       };
     }
     if (result.exitCode !== 0) {
-      break;
+      return {
+        outcome: "error",
+        code: "shell_nonzero_exit",
+        message: `shell_nonzero_exit:${result.exitCode}\n${stepFailureProgress(completedSteps, step)}\n${buildOutput({ stdout, stderr, truncated })}\nThe command exited ${result.exitCode}: it failed. A command that failed is not the task being finished; inspect its output before deciding what to do next.`,
+      };
     }
     completedSteps += 1;
   }
@@ -235,12 +244,5 @@ async function runSteps(
     truncated,
   };
   const output = buildOutput(value);
-  if (result.exitCode !== 0) {
-    return {
-      outcome: "error",
-      code: "shell_nonzero_exit",
-      message: `shell_nonzero_exit:${result.exitCode}\n${output}\nThe command exited ${result.exitCode}: it failed, and its output above is the evidence. A command that failed is not the task being finished, so read the output before deciding what to do next.`,
-    };
-  }
   return { outcome: "result", value, output, truncated };
 }

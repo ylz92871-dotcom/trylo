@@ -24,9 +24,10 @@ import { MessageList } from './MessageList';
 import type { ConversationRunViewState } from './view-state';
 import { SubagentConversation } from './SubagentConversation';
 import { AgentAvatarScope } from './AgentAvatar';
+import type { SendSubagentInput } from '../../host-adapter/subagent-contract';
 
 export interface AgentConversationSurfaceProps {
-  readonly onSubagentInput?: (agentId: string, text: string) => Promise<void>;
+  readonly onSubagentInput?: SendSubagentInput;
   readonly surface: 'code' | 'work';
   readonly messages: readonly ChatMessage[];
   readonly running: boolean;
@@ -109,7 +110,7 @@ export function AgentConversationSurface(
   useEffect(() => { if (selectedId && !selected) setSelectedId(null); }, [selectedId, selected]);
   useEffect(() => { if (!selectedId) opener.current?.focus(); }, [selectedId]);
   return (
-    <AgentAvatarScope identities={props.messages.flatMap(message => message.kind === 'subagent' ? [message.subagentId ?? message.id] : [])}>
+    <AgentAvatarScope identities={props.messages.flatMap(message => message.kind === 'subagent' ? [message.taskId ?? message.subagentId ?? message.id] : [])}>
     <div className="agent-conversation-layout" data-child-open={Boolean(selected)} onKeyDown={event => {
       if (event.key === 'Escape' && selectedId) { event.stopPropagation(); setSelectedId(null); }
     }}>

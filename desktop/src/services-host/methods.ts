@@ -740,6 +740,19 @@ export interface RelayAccountStatus {
   readonly serverUrl: string;
   readonly online: boolean;
 }
+export interface RelayBrowserLogin {
+  readonly id: string;
+  readonly verificationUrl: string;
+  readonly userCode: string;
+  readonly expiresAt: number;
+  readonly interval: number;
+  readonly browserOpened?: boolean;
+}
+export interface RelayBrowserPoll {
+  readonly status: 'pending' | 'complete';
+  readonly interval?: number;
+  readonly account?: RelayAccountStatus;
+}
 
 /** The Desktop's answer to a forwarded gateway handler invocation
  *  (host.remoteRequest → remote.respond). */
@@ -1365,6 +1378,11 @@ export interface ServiceMethodMap {
   readonly 'remote.publish': { params: RemoteGatewayEvent; result: RemotePublishResult };
   readonly 'remote.pairingInfo': { params: undefined; result: RemotePairingInfoResult };
   readonly 'remote.relayLogin': { params: RelayLoginParams; result: RelayAccountStatus };
+  readonly 'remote.relayBrowserBegin': { params: { serverUrl: string }; result: RelayBrowserLogin };
+  readonly 'remote.relayBrowserPoll': { params: { id: string }; result: RelayBrowserPoll };
+  readonly 'remote.relayBrowserCancel': { params: undefined; result: { ok: boolean } };
+  readonly 'remote.relayBrowserOpen': { params: { id: string }; result: { ok: boolean } };
+  readonly 'remote.relayAccountOpen': { params: undefined; result: { ok: boolean } };
   readonly 'remote.relayStatus': { params: undefined; result: RelayAccountStatus };
   readonly 'remote.relayLogout': { params: undefined; result: RelayAccountStatus };
   readonly 'remote.respond': { params: RemoteRespondParams; result: RemoteRespondResult };

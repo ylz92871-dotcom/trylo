@@ -185,19 +185,19 @@ test("a version-1 checkpoint from an older journal still restores", () => {
 });
 
 test("a checkpoint the bounded cache had to evict is classified, not called unknown", () => {
-  // A08: the 33rd restored response pushes the first one out. That loss is
+  // A08: five maximum-sized native blocks exceed the character budget. That loss is
   // provable (we held it and dropped it), so it must be `cache_evicted` rather
   // than an unaccountable "unknown".
   const continuation = createGlmToolContinuation(endpoint, model);
   const scope = ["s-evict", "t1"] as const;
-  const records = Array.from({ length: 33 }, (_, index) => envelopeRecord("s-evict", "t1", {
+  const records = Array.from({ length: 5 }, (_, index) => envelopeRecord("s-evict", "t1", {
     version: 2, binding: binding!, scope: JSON.stringify([...scope]), state: "native",
-    assistant: { reasoning: `推理 ${index}`, text: `回答 ${index}`, calls: [] },
+    assistant: { reasoning: String(index).repeat(262_144), text: `回答 ${index}`, calls: [] },
   }, index + 1));
   continuation.persistence!.restore({ sessionId: "s-evict", turnId: "t1", records });
 
   const messages: ProviderMessage[] = [user("继续")];
-  for (let index = 0; index < 33; index += 1) messages.push(assistant(`回答 ${index}`));
+  for (let index = 0; index < 5; index += 1) messages.push(assistant(`回答 ${index}`));
   const begin = continuation.begin(request(scope, messages));
   assert.ok(begin);
   assert.equal(begin.diagnostic?.cause, "cache_evicted");

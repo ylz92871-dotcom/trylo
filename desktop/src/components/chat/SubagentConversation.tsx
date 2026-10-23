@@ -6,18 +6,20 @@ import { AgentStatusIcon, agentLabel, agentStatus } from './CollaborationGroup';
 import { AgentAvatar } from './AgentAvatar';
 import type { SubagentMessage } from './types';
 import { createFollowController, FOLLOW_TAIL_THRESHOLD } from './follow-controller';
+import type { SendSubagentInput, SubagentInputMode } from '../../host-adapter/subagent-contract';
 
 export interface SubagentConversationProps {
   readonly agent: SubagentMessage;
   readonly onClose: () => void;
   readonly drafts: Map<string, string>;
-  readonly onSend?: (agentId: string, text: string) => Promise<void>;
+  readonly onSend?: SendSubagentInput;
 }
 
 export function SubagentConversation({ agent, onClose, drafts, onSend }: SubagentConversationProps): ReactElement {
   const [text, setText] = useState(() => drafts.get(agent.id) ?? '');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const [mode, setMode] = useState<SubagentInputMode>('append');
   const mounted = useRef(true);
   const closeButton = useRef<HTMLButtonElement>(null);
   const body = useRef<HTMLDivElement>(null);
@@ -38,13 +40,15 @@ export function SubagentConversation({ agent, onClose, drafts, onSend }: Subagen
   }, []);
   const rounds = agent.conversation?.length ? agent.conversation
     : [{ round: 1, prompt: agent.prompt, result: agent.result ?? agent.summary }];
-  const canSend = Boolean(onSend && agent.canReceiveInput && (agent.status === 'running' || agent.status === 'waiting'));
+  const canSend = Boolean(onSend && agent.canReceiveInput && (agent.status === 'running' || agent.status === 'waiting' || (agent.status === 'done' && agent.parked)));
   const submit = async (): Promise<void> => {
     if (!canSend || pending || !text.trim()) return;
     const sent = text.trim();
     setPending(true); setError('');
     try {
-      await onSend?.(agent.subagentId ?? agent.id, sent);
+      const target = agent.taskId ?? agent.subagentId ?? agent.id;
+      if (mode === 'append') await onSend?.(target, sent);
+      else await onSend?.(target, sent, mode);
       drafts.delete(agent.id);
       if (mounted.current) { setText(''); follow.current.rearm(); setAway(false); pin(); }
     } catch (failure) {
@@ -74,6 +78,10 @@ export function SubagentConversation({ agent, onClose, drafts, onSend }: Subagen
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{round.result || '本轮未返回文字答复。'}</ReactMarkdown></div>}
       </section>)}
       <div className="subagent-conversation__status"><AgentStatusIcon agent={agent} />{agentStatus(agent)}</div>
+      {agent.budget && <p className="subagent-conversation__budget" role="status">
+        已用 {agent.budget.tokensUsed} / {agent.budget.tokenLimit} token，剩余 {agent.budget.tokensRemaining}；
+        {agent.budget.timeoutMode === 'active' ? '可执行时间' : '运行时间'}剩余 {Math.ceil(agent.budget.timeRemainingMs / 1000)} 秒（最近上报）
+      </p>}
       {agent.error && <p className="subagent-conversation__error" role="alert">{agent.error}</p>}
       {agent.artifacts && agent.artifacts.length > 0 && <details><summary>交付物 · {agent.artifacts.length}</summary>
         <ul>{agent.artifacts.map(path => <li key={path}>{path}</li>)}</ul></details>}
@@ -81,11 +89,17 @@ export function SubagentConversation({ agent, onClose, drafts, onSend }: Subagen
     <div className="subagent-conversation__compose">
       {away && <button type="button" className="subagent-conversation__latest" onClick={() => { follow.current.rearm(); setAway(false); pin(); }}>回到最新 ↓</button>}
       {canSend ? <form onSubmit={event => { event.preventDefault(); void submit(); }}>
+        <label className="subagent-conversation__mode">发送方式
+          <select aria-label="发送方式" value={mode} disabled={pending}
+            onChange={event => { const selected = event.target.value; if (selected === 'append' || selected === 'replace_queued' || selected === 'restart') setMode(selected); }}>
+            <option value="append">追加下一步</option><option value="replace_queued">替换待办要求</option><option value="restart">停止当前执行后重启</option>
+          </select>
+        </label>
         <label className="subagent-conversation__input-label" htmlFor={`subagent-input-${agent.id}`}>向{agentLabel(agent)}补充要求</label>
         <textarea id={`subagent-input-${agent.id}`} value={text} disabled={pending} maxLength={16000}
           onChange={event => { const value = event.target.value; setText(value); drafts.set(agent.id, value); }} rows={3}
           placeholder={`向${agentLabel(agent)}补充要求…`} />
-        <div><span>{pending ? '正在发送…' : '沿用当前任务的工具授权'}</span><button type="submit" disabled={pending || !text.trim()} aria-label="发送给该智能体"><ArrowUp size={17} /></button></div>
+        <div><span>{pending ? '正在发送…' : mode === 'restart' ? '停止当前执行，接着已记录进度继续' : mode === 'replace_queued' ? '替换尚未开始的要求' : '沿用当前任务的工具授权'}</span><button type="submit" disabled={pending || !text.trim()} aria-label="发送给该智能体"><ArrowUp size={17} /></button></div>
       </form> : <p>{agent.managedSessionId ? '这是后台任务，已有答复与交付物会保留。' : '此任务当前不接收补充要求，可回到主对话继续指派。'}</p>}
       {error && <p role="alert" className="subagent-conversation__error">{error}</p>}
     </div>

@@ -23,6 +23,47 @@
   text-align: left;
 }
 
+/* Approved account card: same avatar anchor, no extra navigation surface. */
+.profile-card--account { border-color: var(--border-strong); border-radius: 12px; box-shadow: none; }
+.profile-account { padding: 18px 16px 9px; }
+.profile-account__head { display: flex; gap: 10px; align-items: center; margin-bottom: 19px; }
+.profile-account__head > div { min-width: 0; flex: 1; }
+.profile-account__head > span, .profile-account__head > img { flex-shrink: 0; }
+.profile-account__head strong { display: block; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.profile-account__head small { display: flex; align-items: center; gap: 4px; margin-top: 1px; font-size: 12px; color: var(--fg-muted); overflow-wrap: anywhere; }
+.profile-account__head small svg { color: var(--success); flex-shrink: 0; }
+.profile-account h2 { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.5; }
+.profile-account__primary { width: 100%; min-height: 36px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 12px; border: 0; border-radius: 6px; background: var(--fg); color: var(--bg); font: 500 13px/1.5 var(--font-body); cursor: pointer; }
+.profile-account__primary:hover:not(:disabled) { opacity: .87; }
+.profile-account button:disabled { cursor: default; opacity: .55; }
+.profile-account__primary svg { flex-shrink: 0; }
+.profile-account__caption { margin: 8px 0 16px; text-align: center; font-size: 11px; color: var(--fg-muted); }
+.profile-account__divider { height: 1px; margin: 2px 0 6px; background: var(--border); }
+.profile-account__menu { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 36px; padding: 8px 7px; border: 0; border-radius: 6px; background: transparent; color: var(--fg); font: 13px/1.5 var(--font-body); text-align: left; cursor: pointer; }
+.profile-account__menu:hover:not(:disabled) { background: var(--bg-panel); }
+.profile-account__menu svg { color: var(--fg-muted); flex-shrink: 0; }
+.profile-account__step-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.profile-account__description { margin: 0 0 16px; font-size: 12px; color: var(--fg-muted); line-height: 1.7; }
+.profile-account__icon { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--fg-muted); cursor: pointer; }
+.profile-account__icon:hover { background: var(--bg-panel); }
+.profile-account__code-area { padding: 11px 0 15px; margin-bottom: 13px; border-block: 1px solid var(--border); }
+.profile-account__code-area > span { display: block; margin-bottom: 5px; font-size: 11px; color: var(--fg-muted); }
+.profile-account__code-area code { font: 500 17px/1.5 var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: .06em; }
+.profile-account__waiting { display: flex; align-items: center; gap: 7px; margin: 12px 0 14px; font-size: 12px; color: var(--fg-muted); }
+.profile-account__actions { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.profile-account__actions > .profile-account__primary { flex: 1; width: auto; }
+.profile-account__text { padding: 4px 0; border: 0; background: transparent; color: var(--fg-muted); font: 12px/1.5 var(--font-body); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.profile-account__text:hover { color: var(--fg); }
+.profile-account__footnote { margin: 7px 0 4px; font-size: 11px; color: var(--fg-muted); }
+.profile-account__error { margin: 0 0 13px; color: var(--danger); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.profile-account button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.profile-card--account .profile-card__divider { border-color: var(--border); }
+.profile-card--account .profile-card__menu-row, .profile-card--account .profile-card__back { color: var(--fg); }
+.profile-card--account .profile-card__menu-row svg { color: var(--fg-muted); }
+.profile-card--account .profile-card__menu-row:hover, .profile-card--account .profile-card__edit:hover, .profile-card--account .profile-card__ghost:hover { background: var(--bg-panel); }
+.profile-card--account .profile-card__ghost, .profile-card--account .profile-card__back, .profile-card--account .profile-card__input, .profile-card--account .profile-card__avatar-btn, .profile-card--account .profile-card__stage-face, .profile-card--account .profile-card__preset { border-color: var(--border-strong); }
+.left-rail__profile--open small { color: var(--fg); }
+
 .profile-card__body {
   padding: 14px 16px;
 }

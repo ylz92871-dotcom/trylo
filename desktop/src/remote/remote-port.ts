@@ -72,6 +72,11 @@ export class ServicesRemotePort implements RemotePort {
   saveConfiguration(settings: import('../settings/settings-store').RemoteSettings) { return this.manager.client.request('remote.saveConfiguration', settings); }
 
   relayLogin(params: RelayLoginParams): Promise<RelayAccountStatus> { return this.manager.client.request('remote.relayLogin', params); }
+  relayBrowserBegin(params: { serverUrl: string }) { return this.manager.client.request('remote.relayBrowserBegin', params); }
+  relayBrowserPoll(params: { id: string }) { return this.manager.client.request('remote.relayBrowserPoll', params); }
+  relayBrowserCancel() { return this.manager.client.request('remote.relayBrowserCancel'); }
+  relayBrowserOpen(params: { id: string }) { return this.manager.client.request('remote.relayBrowserOpen', params); }
+  relayAccountOpen() { return this.manager.client.request('remote.relayAccountOpen'); }
   relayStatus(): Promise<RelayAccountStatus> { return this.manager.client.request('remote.relayStatus'); }
   relayLogout(): Promise<RelayAccountStatus> { return this.manager.client.request('remote.relayLogout'); }
 

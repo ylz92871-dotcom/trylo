@@ -1,5 +1,6 @@
 import type { ToolBinding } from "../../../ports/tools.js";
 import { MAX_TIMEOUT_MS, MIN_TIMEOUT_MS } from "./shell-timeout-policy.js";
+import { shellToolDescription } from "../execution-description.js";
 import {
   DEFAULT_MAX_SHELL_OUTPUT_BYTES,
   DEFAULT_MAX_SHELL_OUTPUT_LINES,
@@ -86,14 +87,13 @@ export const APPLY_PATCH_BINDING: ToolBinding = {
 
 export const RUN_SHELL_BINDING: ToolBinding = {
   name: RUN_SHELL_TOOL,
-  description:
-    "Run one command inside the workspace with no shell: no redirections, substitutions, shell variables or cd — but `|` pipelines are allowed with any number of segments, each planned under the same refusal rules (the exit code and stdout come from the last segment). The working directory is the workspace root unless `cwd` names a directory inside it, and output is truncated, not streamed. Composition is structural: `steps` runs further commands in order and stops at the first failure, and `pipeTo` appends one more receiving command — `steps` and `pipeTo` cannot be combined. Only programs installed on this machine can run: a command built on a shell or on a POSIX utility (`cat`, `grep`, `sed`, `head`) that does not exist here will fail. Read a file with `read_file`, change one with `edit_file` or `write_file`, and run the project's own test command (for example `npm test`) to verify work. A command that will not finish soon — a dev server, a watch task — can be started with `runInBackground: true`, which returns a sessionId to continue it with instead of a result.",
+  description: shellToolDescription(),
   sideEffect: "external",
   parameters: {
     type: "object",
     properties: {
-      command: { type: "string", description: "Command to run, without redirections. `a | b | c` pipelines are allowed." },
-      timeoutMs: { type: "number", minimum: MIN_TIMEOUT_MS, maximum: MAX_TIMEOUT_MS, description: "Optional foreground timeout in milliseconds." },
+      command: { type: "string", description: "Command to run in the execution mode stated in this tool's description." },
+      timeoutMs: { type: "number", minimum: MIN_TIMEOUT_MS, maximum: MAX_TIMEOUT_MS, description: "Optional foreground timeout in milliseconds. The tool description states the default; expiration terminates the command and does not undo partial effects. Use runInBackground for longer work." },
       cwd: {
         type: "string",
         description:

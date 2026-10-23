@@ -259,6 +259,9 @@ export interface CompactionMessage extends MessageBase {
  * back the sub-agent detail drawer for managed-work.
  */
 export interface SubagentMessage extends MessageBase {
+  readonly taskId?: string;
+  readonly parked?: boolean;
+  readonly budget?: import('../../host-adapter/subagent-contract').SubagentBudget;
   /** Canonical invocation identity, distinct from the unique UI row id. */
   readonly subagentId?: string;
   readonly kind: 'subagent';

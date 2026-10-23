@@ -14,7 +14,7 @@ const password = 'test-only-password-123456';
 async function fixture(t) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'trylo-relay-test-'));
   let clock = Date.now();
-  let relay = await createRelayServer({ dataDir: path.join(directory, 'relay'), inviteCode, now: () => clock });
+  let relay = await createRelayServer({ dataDir: path.join(directory, 'relay'), inviteCode, allowLegacyRegistration: true, now: () => clock });
   const address = await relay.listen(0);
   const url = `http://127.0.0.1:${address.port}`;
   const desktops = [], sockets = [];
@@ -46,7 +46,7 @@ async function fixture(t) {
   }
   return { relay, directory, request, desktop, pair, stream, url, advance(ms) { clock += ms; }, async restart() {
     await relay.close();
-    relay = await createRelayServer({ dataDir: path.join(directory, 'relay'), inviteCode, now: () => clock });
+    relay = await createRelayServer({ dataDir: path.join(directory, 'relay'), inviteCode, allowLegacyRegistration: true, now: () => clock });
     await relay.listen(address.port);
   } };
 }
@@ -95,7 +95,7 @@ test('Desktop authority: pairing, snapshots, live events, task and approval all 
   assert.equal((await f.request('/v1/snapshot', { ...phone, method: 'GET' })).status, 200);
   assert.equal(desktop.calls.filter(item => item.name === 'task').length, 1, 'No mutation replay');
   assert.equal((await desktop.service.relayStatus()).loggedIn, true);
-  const raw = await fs.readFile(path.join(f.directory, 'relay', 'state.json'), 'utf8');
+  const raw = await fs.readFile(path.join(f.directory, 'relay', 'accounts.sqlite'), 'utf8');
   assert.ok(!raw.includes(password)); assert.ok(!raw.includes(phone.token));
 });
 

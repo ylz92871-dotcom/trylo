@@ -117,6 +117,7 @@ test("SA-S-1 真实执行器：工具边界拦截，未授权工具在子任务�
   const provider = createFixtureProvider(DEFAULT_FIXTURE_SCRIPT); // calls read_file
   const permission = createMockPermission();
   const { tools, executedCalls } = createMockWorkspaceTools();
+  const envelopes: Envelope[] = [];
 
   const runtime = new SubagentRuntime({ tools });
 
@@ -125,6 +126,7 @@ test("SA-S-1 真实执行器：工具边界拦截，未授权工具在子任务�
     permission,
     profile: DEFAULT_PROFILE_PORT,
     prompt: "attempt unauthorized tool call",
+    onEnvelope: envelope => { envelopes.push(envelope); },
   });
 
   const handle = runtime.spawn({
@@ -140,16 +142,12 @@ test("SA-S-1 真实执行器：工具边界拦截，未授权工具在子任务�
   });
 
   const res = await handle.wait();
-  assert.equal(res.status, "completed");
+  assert.equal(res.status, "failed");
+  assert.equal(res.error?.code, "subagent_permission_denied");
   // Underlying tool was never executed because boundary blocked it
   assert.equal(executedCalls.length, 0);
-  // Transcript recorded tool_result with failed outcome and subagent_permission_denied
-  const toolResultItem = res.output?.transcript.find(
-    (item) => item.kind === "tool_result",
-  );
-  assert.ok(toolResultItem);
-  assert.equal(toolResultItem.outcome, "failed");
-  assert.match(toolResultItem.output, /subagent_permission_denied/);
+  assert.ok(envelopes.some(envelope => envelope.kind === "permission_denied"),
+    "the refusal is recorded before dispatch, rather than presented as successful delegated work");
 });
 
 test("SA-S-1 真实执行器：Token 预算硬顶，超额消耗中止子 turn", async () => {

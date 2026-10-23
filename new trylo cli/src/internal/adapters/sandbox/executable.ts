@@ -94,6 +94,16 @@ export type ExecutableLookup =
   | { readonly kind: "binary" }
   | { readonly kind: "script"; readonly target: string };
 
+function executableOnPath(name: string, extensions: readonly string[]): string | undefined {
+  for (const directory of searchPath()) {
+    for (const extension of extensions) {
+      const candidate = path.join(directory, name + extension);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return undefined;
+}
+
 /**
  * What the platform would treat this program as. `.cmd`/`.bat` need cmd;
  * anything else goes to `CreateProcess` exactly as it does today. A program
@@ -106,22 +116,17 @@ export function lookupExecutable(executable: string): ExecutableLookup {
   }
   const extension = path.extname(executable).toLowerCase();
   if (SCRIPT_EXTENSIONS.includes(extension)) {
-    return { kind: "script", target: executable };
+    // A quoted bare batch can receive the caller's cwd as its %~dp0. Pin its
+    // actual PATH target, just as the extensionless lookup already does.
+    const target = path.basename(executable) === executable ? executableOnPath(executable, [""]) : undefined;
+    return { kind: "script", target: target ?? executable };
   }
   if (extension.length > 0) {
     return { kind: "binary" };
   }
-  for (const directory of searchPath()) {
-    for (const candidateExtension of pathExtensions()) {
-      const candidate = path.join(directory, `${executable}${candidateExtension}`);
-      if (!existsSync(candidate)) {
-        continue;
-      }
-      if (SCRIPT_EXTENSIONS.includes(candidateExtension.toLowerCase())) {
-        return { kind: "script", target: candidate };
-      }
-      return { kind: "binary" };
-    }
+  const candidate = executableOnPath(executable, pathExtensions());
+  if (candidate !== undefined && SCRIPT_EXTENSIONS.includes(path.extname(candidate).toLowerCase())) {
+    return { kind: "script", target: candidate };
   }
   return { kind: "binary" };
 }

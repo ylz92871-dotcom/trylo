@@ -1,9 +1,10 @@
 import { systemTimerScheduler, type TimerHandle, type TimerScheduler } from "./scheduler.js";
-import type { SubagentGovernance, SubagentUsage } from "./types.js";
+import type { SubagentBudgetSnapshot, SubagentGovernance, SubagentUsage } from "./types.js";
+import type { ToolOutcome } from "../ports/tools.js";
 
 export const DEFAULT_MAX_CONCURRENCY = 4;
-export const DEFAULT_SUBAGENT_TOKEN_BUDGET = 4000;
-export const DEFAULT_SUBAGENT_TIMEOUT_MS = 60_000;
+export const DEFAULT_SUBAGENT_TOKEN_BUDGET = 32_000;
+export const DEFAULT_SUBAGENT_TIMEOUT_MS = 300_000;
 
 export class SubagentGovernanceError extends Error {
   readonly code: string;
@@ -15,12 +16,25 @@ export class SubagentGovernanceError extends Error {
   }
 }
 
+/** Expected admission failures are tool results; unrelated defects still throw. */
+export function governanceFailureOutcome(error: unknown): ToolOutcome {
+  if (error instanceof SubagentGovernanceError) {
+    return { outcome: "error", code: error.code, message: error.message };
+  }
+  throw error;
+}
+
 type ManagedSubagentResources = {
   readonly subagentId: string;
   readonly abortController: AbortController;
-  readonly timer?: TimerHandle | undefined;
+  timer: TimerHandle | undefined;
   usage: SubagentUsage;
   readonly tokenBudget: number;
+  readonly timeoutMs: number;
+  readonly timeoutMode: "wall" | "active";
+  remainingMs: number;
+  startedAt: number | undefined;
+  readonly onTimeout: (() => void) | undefined;
   released: boolean;
 };
 
@@ -35,6 +49,7 @@ export type SubagentGovernanceOptions = SubagentGovernance & {
    * how a test proves timeout behaviour without racing real time.
    */
   readonly scheduler?: TimerScheduler | undefined;
+  readonly now?: (() => number) | undefined;
 };
 
 export class SubagentGovernanceTracker {
@@ -42,6 +57,7 @@ export class SubagentGovernanceTracker {
   private readonly defaultTokenBudget: number;
   private readonly defaultTimeoutMs: number;
   private readonly scheduler: TimerScheduler;
+  private readonly now: () => number;
   private activeCount = 0;
   private readonly managed = new Map<string, ManagedSubagentResources>();
 
@@ -50,6 +66,7 @@ export class SubagentGovernanceTracker {
     this.defaultTokenBudget = options.tokenBudget ?? DEFAULT_SUBAGENT_TOKEN_BUDGET;
     this.defaultTimeoutMs = options.timeoutMs ?? DEFAULT_SUBAGENT_TIMEOUT_MS;
     this.scheduler = options.scheduler ?? systemTimerScheduler;
+    this.now = options.now ?? Date.now;
   }
 
   getActiveCount(): number {
@@ -85,24 +102,21 @@ export class SubagentGovernanceTracker {
     const tokenBudget = overrides?.tokenBudget ?? this.defaultTokenBudget;
     const timeoutMs = overrides?.timeoutMs ?? this.defaultTimeoutMs;
 
-    let timer: TimerHandle | undefined;
-    if (timeoutMs > 0 && timeoutMs !== Number.POSITIVE_INFINITY) {
-      timer = this.scheduler(timeoutMs, () => {
-        abortController.abort("subagent_timed_out");
-        if (onTimeout) {
-          onTimeout();
-        }
-      });
-    }
-
-    this.managed.set(subagentId, {
+    const entry: ManagedSubagentResources = {
       subagentId,
       abortController,
-      timer,
+      timer: undefined,
       usage: { inputTokens: 0, outputTokens: 0 },
       tokenBudget,
+      timeoutMs,
+      timeoutMode: overrides?.timeoutMode ?? "wall",
+      remainingMs: timeoutMs,
+      startedAt: undefined,
+      onTimeout,
       released: false,
-    });
+    };
+    this.managed.set(subagentId, entry);
+    this.arm(entry);
 
     return { abortController, tokenBudget, timeoutMs };
   }
@@ -140,6 +154,41 @@ export class SubagentGovernanceTracker {
 
   getUsage(subagentId: string): SubagentUsage {
     return this.managed.get(subagentId)?.usage ?? { inputTokens: 0, outputTokens: 0 };
+  }
+
+  snapshot(subagentId: string): SubagentBudgetSnapshot | undefined {
+    const entry = this.managed.get(subagentId);
+    if (entry === undefined) return undefined;
+    const used = entry.usage.inputTokens + entry.usage.outputTokens;
+    return { tokenLimit: entry.tokenBudget, tokensUsed: used,
+      tokensRemaining: Math.max(0, entry.tokenBudget - used), timeoutMs: entry.timeoutMs,
+      timeRemainingMs: this.remaining(entry), timeoutMode: entry.timeoutMode };
+  }
+
+  setActivity(subagentId: string, activity: "working" | "idle"): void {
+    const entry = this.managed.get(subagentId);
+    if (entry === undefined || entry.timeoutMode === "wall" || entry.abortController.signal.aborted) return;
+    if (activity === "idle") {
+      entry.remainingMs = this.remaining(entry);
+      entry.startedAt = undefined;
+      entry.timer?.cancel();
+      entry.timer = undefined;
+    } else if (entry.startedAt === undefined) this.arm(entry);
+  }
+
+  private remaining(entry: ManagedSubagentResources): number {
+    return Math.max(0, entry.remainingMs - (entry.startedAt === undefined ? 0 : Math.max(0, this.now() - entry.startedAt)));
+  }
+
+  private arm(entry: ManagedSubagentResources): void {
+    if (entry.timeoutMs <= 0 || !Number.isFinite(entry.timeoutMs)) return;
+    entry.startedAt = this.now();
+    entry.timer = this.scheduler(entry.remainingMs, () => {
+      entry.remainingMs = 0;
+      entry.startedAt = undefined;
+      entry.abortController.abort("subagent_timed_out");
+      entry.onTimeout?.();
+    });
   }
 
   /**

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactElement, type FormEvent } from 'react';
-import { RadioTower, RefreshCw, X, Cloud, Link, Monitor, Smartphone, ShieldCheck, Check } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
+import { RadioTower, RefreshCw, X, Cloud, Link, Monitor, Smartphone, ShieldCheck } from 'lucide-react';
 import { remoteSettingsDefaults, type RemoteSettings } from '../../settings/settings-store';
 import type { RemotePairingInfoResult, RemoteStatusResult, RelayAccountStatus } from '../../services-host/methods';
 import type { RelayAccountActions } from './SettingsModal';
@@ -13,15 +13,14 @@ export interface RemotePairingModalProps {
   readonly onRemoteToggle?: () => void;
   readonly remoteSettings?: RemoteSettings;
   readonly onConfigure?: (settings: RemoteSettings) => Promise<void>;
+  readonly account?: RelayAccountStatus | null;
+  readonly accountLoading?: boolean;
+  readonly onOpenAccount?: () => void;
 }
 
 export function RemotePairingModal(props: RemotePairingModalProps): ReactElement | null {
   const [draft, setDraft] = useState(props.remoteSettings ?? remoteSettingsDefaults());
-  const [account, setAccount] = useState<RelayAccountStatus | null>(null);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [invite, setInvite] = useState('');
-  const [register, setRegister] = useState(false);
+  const account = props.account ?? null;
   const [busy, setBusy] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
   const [pairing, setPairing] = useState<RemotePairingInfoResult['pairing']>();
@@ -35,14 +34,10 @@ export function RemotePairingModal(props: RemotePairingModalProps): ReactElement
   const running = status?.running ?? false, reconnecting = status?.reasonCode === 'relay_reconnecting';
   const mode = draft.connectionMode ?? status?.connectionMode ?? 'server';
   const wasRunning = useRef(running);
+  const invalidatePairing = useCallback(() => { ++request.current; pending.current = false; }, []);
 
   useEffect(() => { if (props.open) setDraft(props.remoteSettings ?? remoteSettingsDefaults()); }, [props.open, props.remoteSettings]);
-  useEffect(() => {
-    if (!props.open) { setPassword(''); setInvite(''); setConfirm(null); return; }
-    let active = true;
-    void props.remoteController?.relayStatus?.().then(value => { if (active) { setAccount(value); setUsername(value.username); } }).catch(() => { if (active) setError('暂时无法读取账号，请重试。'); });
-    return () => { active = false; };
-  }, [props.open, props.remoteController]);
+  useEffect(() => { if (!props.open) setConfirm(null); }, [props.open]);
 
   const generate = useCallback((): void => {
     if (!props.open || !enabled || !props.remoteController) return;
@@ -60,8 +55,8 @@ export function RemotePairingModal(props: RemotePairingModalProps): ReactElement
   }, [props.open, enabled, props.remoteController]);
   useEffect(() => {
     setQr(null); setError(null); setLoading(false); pending.current = false; generate();
-    return () => { ++request.current; pending.current = false; };
-  }, [generate]);
+    return invalidatePairing;
+  }, [generate, invalidatePairing]);
   useEffect(() => {
     if (!running) { setQr(null); recoveryQrNeeded.current = true; }
     if (wasRunning.current && !running && !pending.current) {
@@ -97,17 +92,8 @@ export function RemotePairingModal(props: RemotePairingModalProps): ReactElement
     if (enabled) setConfirm({ title: '切换连接方式？', detail: '当前手机连接会断开。新连接就绪后，请重新扫码。', action });
     else void perform(action);
   }
-  async function login(event: FormEvent) {
-    event.preventDefault();
-    if (!props.remoteController?.relayLogin) return;
-    await perform(async () => {
-      const next = await props.remoteController!.relayLogin!({ serverUrl: draft.relayUrl || 'https://relay.trylocode.me', username, password, register, inviteCode: invite });
-      setPassword(''); setInvite(''); setAccount(next);
-      await configure({ ...draft, connectionMode: 'server', enabled: true, relayUrl: next.serverUrl });
-    });
-  }
   if (!props.open) return null;
-  const needsLogin = mode === 'server' && account?.loggedIn === false;
+  const needsLogin = mode === 'server' && (account?.loggedIn === false || (!account?.loggedIn && Boolean(props.onOpenAccount)));
   const headline = needsLogin ? '登录后即可连接这台电脑' : !enabled ? '远程访问已暂停' : running ? mode === 'server' ? '已连接到官方服务器' : '独立隧道已连接' : reconnecting ? '服务器连接中断，正在重连' : loading ? '正在连接这台电脑' : '远程连接尚未就绪';
   const retryLabel = running ? '刷新二维码' : reconnecting ? '重连并生成二维码' : '重试启动并生成二维码';
   return <div className="remote-pairing-modal__overlay" role="presentation" onClick={e => { if (e.target === e.currentTarget) props.onClose(); }}>
@@ -129,15 +115,11 @@ export function RemotePairingModal(props: RemotePairingModalProps): ReactElement
           else if (!running) generate();
           else setConfirm({ title: '暂停远程访问？', detail: '手机将暂时无法操作这台电脑，之后可在这里恢复。', action: async () => { if (props.onConfigure) await configure({ ...draft, enabled: false }); else props.onRemoteToggle?.(); } });
         }}>{!enabled ? '恢复连接' : running ? '暂停连接' : '立即重试'}</button>}</div>
-        {needsLogin ? <div className="remote-connect__grid remote-connect__login"><form onSubmit={login}><h3>{register ? '创建 Trylo 账号' : '登录 Trylo 账号'}</h3><p>登录、扫码，将手机与你的 Desktop 配对。</p>
-          <label>账号<input autoComplete="username" required value={username} onChange={e => setUsername(e.target.value)}/></label><label>密码<input type="password" autoComplete={register ? 'new-password' : 'current-password'} required minLength={register ? 12 : undefined} value={password} onChange={e => setPassword(e.target.value)}/></label>
-          {register && <label>注册邀请码<input type="password" autoComplete="off" required value={invite} onChange={e => setInvite(e.target.value)}/></label>}
-          <button type="submit" className="remote-pairing-modal__btn remote-pairing-modal__btn--primary" disabled={busy}>{busy ? '正在连接…' : register ? '注册并连接' : '登录并连接'}</button><button type="button" className="remote-connect__text" disabled={busy} onClick={() => { setRegister(!register); setError(null); }}>{register ? '已有账号？直接登录' : '还没有账号？注册账号'}</button>
-        </form><div className="remote-connect__benefits"><div className="remote-connect__route"><Smartphone/><Cloud/><Monitor/></div><h3><Check size={16}/>不用自己配置隧道</h3><p>连接官方服务器，就可以配对你的电脑。</p><h3><Check size={16}/>工作留在自己的 Desktop</h3><p>手机同步会话和审批，任务由这台电脑执行。</p></div></div>
+        {needsLogin ? <div className="remote-connect__account-entry"><h3>{props.accountLoading ? '正在读取账号…' : '登录 Trylo 账号'}</h3><p>从左下角头像登录，与网页使用同一个账号。登录后再选择是否开启远程连接。</p><button type="button" className="remote-pairing-modal__btn remote-pairing-modal__btn--primary" disabled={props.accountLoading} onClick={props.onOpenAccount}>打开账号登录</button></div>
         : <div className="remote-connect__grid"><div className="remote-connect__pairing"><h3>连接手机<small>扫码配对</small></h3><div className="remote-connect__qr">{qr && enabled ? <img src={qr} alt="配对二维码 — 用手机扫码连接"/> : <div>{loading ? <RefreshCw className="remote-pairing-modal__spin"/> : <Smartphone/>}<span>{loading ? '正在生成二维码' : !enabled ? '恢复连接后显示二维码' : reconnecting ? '正在恢复服务器连接' : '连接就绪后显示二维码'}</span></div>}</div><p>打开 Trylo 手机 App，扫一扫<small>只配对这台电脑，同步会话和审批</small></p><button type="button" className="remote-connect__text" onClick={generate} disabled={loading || !enabled || busy}><RefreshCw size={15} className={loading ? 'remote-pairing-modal__spin' : undefined}/>{loading ? '正在生成…' : retryLabel}</button></div>
         <div className="remote-connect__details">{mode === 'tunnel' && <><h3>隧道连接</h3><div className="remote-connect__tunnels" role="group" aria-label="隧道类型">{(['quick', 'named', 'manual'] as const).map(type => <button type="button" key={type} aria-pressed={draft.tunnelMode === type} onClick={() => setDraft({ ...draft, tunnelMode: type })}>{type === 'quick' ? '自动创建' : type === 'named' ? '固定隧道' : '已有地址'}</button>)}</div><p>{draft.tunnelMode === 'quick' ? '由 Desktop 自动创建临时隧道，重启后可能需要重新扫码。' : '使用已经配置好的固定隧道或 HTTPS 公网地址。'}</p>{draft.tunnelMode !== 'quick' && <label>公网地址<input type="url" value={draft.publicUrl} onChange={e => setDraft({ ...draft, publicUrl: e.target.value })}/></label>}<button type="button" className="remote-connect__text" disabled={busy} onClick={() => void perform(() => configure({ ...draft, connectionMode: 'tunnel', enabled: true }))}>应用隧道并连接</button><hr/></>}
           <h3>当前电脑</h3><div className="remote-connect__device"><Monitor size={24}/><div><strong>{pairing?.deviceName || '我的 Desktop'}</strong><p>{pairing?.workspaceName || '当前工作空间'}</p></div><small>{running && enabled ? '已就绪' : '待连接'}</small></div><hr/><h3>手机配对</h3><p>手机扫码后，即可查看会话、发送任务和处理审批。</p>
-          {mode === 'server' && <><hr/><div className="remote-connect__account"><span>{account?.username || '读取账号中…'}</span>{account?.loggedIn && <button type="button" disabled={busy} onClick={() => setConfirm({ title: '退出 Trylo 账号？', detail: '退出会撤销当前手机配对。再次登录后，需要重新扫码。', action: async () => { setAccount(await props.remoteController!.relayLogout!()); await configure({ ...draft, enabled: false }); } })}>退出账号</button>}</div><p className="remote-connect__server"><Cloud size={14}/>{account?.serverUrl || draft.relayUrl}</p></>}
+          {mode === 'server' && <><hr/><div className="remote-connect__account"><span>{account?.username || '读取账号中…'}</span>{account?.loggedIn && <button type="button" disabled={busy} onClick={() => props.onOpenAccount?.()}>管理账号</button>}</div><p className="remote-connect__server"><Cloud size={14}/>{account?.serverUrl || draft.relayUrl}</p></>}
         </div></div>}
         {(error || status?.error) && <p className="remote-connect__error" role="alert">{error || status?.error}</p>}
         <div className="remote-connect__hint"><Monitor size={16}/><span>电脑保持开机并运行 Trylo Desktop。{mode === 'server' ? '连接数据经服务器转发。' : '切换连接方式后，请让手机重新扫码。'}</span></div>

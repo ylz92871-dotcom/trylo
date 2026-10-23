@@ -19,9 +19,9 @@ const FOLDS = [
   ['M27 4C39 1 48 12 53 21C63 31 61 45 50 53C41 61 25 63 15 54C1 48 1 33 9 26C4 17 17 7 27 4Z', 'M9 20C13 10 26 1 34 5C47 8 48 20 45 28C40 32 40 22 32 22C23 19 15 20 9 20ZM5 35C6 26 20 21 25 25C21 38 20 47 32 58C20 64 1 47 5 35ZM32 44C43 43 50 34 54 23C65 34 60 49 50 53C40 56 32 54 32 44Z', 'M13 20C31 18 39 20 42 27C43 31 39 29 38 27C34 19 26 23 26 32C25 40 29 45 32 44C22 51 19 34 23 28C27 21 21 23 13 20Z'],
 ] as const;
 
-export function agentAvatarIndex(agent: Pick<SubagentMessage, 'id' | 'subagentId'>): number {
+export function agentAvatarIndex(agent: Pick<SubagentMessage, 'id' | 'subagentId' | 'taskId'>): number {
   let hash = 2166136261;
-  for (const char of agent.subagentId ?? agent.id) hash = Math.imul(hash ^ char.codePointAt(0)!, 16777619);
+  for (const char of agent.taskId ?? agent.subagentId ?? agent.id) hash = Math.imul(hash ^ char.codePointAt(0)!, 16777619);
   return (hash >>> 0) % FOLDS.length;
 }
 
@@ -47,11 +47,11 @@ export function AgentAvatarScope({ identities, children }: { readonly identities
 }
 
 export function AgentAvatar({ agent, size = 24 }: {
-  readonly agent: Pick<SubagentMessage, 'id' | 'subagentId'>;
+  readonly agent: Pick<SubagentMessage, 'id' | 'subagentId' | 'taskId'>;
   readonly size?: number;
 }): ReactElement {
   const assignments = useContext(AvatarIdentities);
-  const variant = assignments.get(agent.subagentId ?? agent.id) ?? agentAvatarIndex(agent);
+  const variant = assignments.get(agent.taskId ?? agent.subagentId ?? agent.id) ?? agentAvatarIndex(agent);
   const [base, face, seam] = FOLDS[variant]!;
   return <svg className="agent-avatar" width={size} height={size} viewBox="0 0 64 64"
     aria-hidden="true" focusable="false" data-avatar={variant}>

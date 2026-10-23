@@ -12,6 +12,7 @@ export function agentLabel(agent: SubagentMessage): string {
 }
 
 export function agentStatus(agent: SubagentMessage): string {
+  if (agent.parked && agent.status === 'done') return '已答复 · 已释放名额';
   if (agent.status === 'waiting' && agent.result !== undefined) return '已答复';
   return { running: '进行中', waiting: '等待中', done: '已完成', failed: '未完成', cancelled: '已停止' }[agent.status];
 }

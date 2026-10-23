@@ -83,13 +83,13 @@ test("completed final-answer native context is preserved without inventing a too
     .fieldsFor(final).reasoning_content, "FINAL_NATIVE");
 });
 
-test("native cache eviction keeps the 32-response bound without partially replaying duplicate groups", () => {
+test("native character-budget eviction never partially replays duplicate groups", () => {
   const c = createGlmToolContinuation(endpoint, model);
-  for (let i = 0; i < 33; i++) finish(c.begin(request), "R" + i);
-  const full = Array.from({ length: 33 }, () => ({ ...message }));
+  for (let i = 0; i < 5; i++) finish(c.begin(request), String(i).repeat(262_144));
+  const full = Array.from({ length: 5 }, () => ({ ...message }));
   assert.equal(c.persistence!.estimateOverheadTokens!(full), 0);
   const tail = full.slice(1), next = c.begin({ ...request, messages: tail })!;
-  assert.deepEqual(tail.map(item => next.fieldsFor(item).reasoning_content), Array.from({ length: 32 }, (_, i) => "R" + (i + 1)));
+  assert.deepEqual(tail.map(item => next.fieldsFor(item).reasoning_content), Array.from({ length: 4 }, (_, i) => String(i + 1).repeat(262_144)));
 });
 
 test("production model-summary compaction preserves the parent tool continuation", async () => {

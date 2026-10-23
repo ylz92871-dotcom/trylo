@@ -21,7 +21,7 @@ const LIMITS = { maxBytes: 65_536, maxLines: 1_000 } as const;
 export const SPAWN_AGENT_BINDING: ToolBinding = {
   name: SPAWN_AGENT_TOOL,
   description:
-    "Start a subagent working on a message and return immediately with its id. Use send_input to add to it, wait_agent to collect, close_agent to stop it. fork_context makes it start from this conversation.",
+    "Start a bounded subagent and return its execution agent_id, stable task_id, tools and budget. Default 32000 tokens and 300000ms active execution; idle waiting pauses the execution clock and releases the slot after 30000ms. send_input continues an automatically parked task. fork_context includes completed parent tool results and images.",
   sideEffect: "read_only",
   needsApproval: false,
   timeoutMs: 10_000,
@@ -39,6 +39,10 @@ export const SPAWN_AGENT_BINDING: ToolBinding = {
         description: "Start from this conversation instead of from nothing.",
       },
       model: { type: "string", description: "Model override for this subagent." },
+      allowed_tools: { type: "array", items: { type: "string" }, description: "Optional subset of the parent's available tools; the role may narrow it further." },
+      token_budget: { type: "integer", minimum: 1, maximum: 100_000, description: "Cumulative task input plus output tokens, including repeated context and automatic continuation. Default 32000. Enforced after each provider response." },
+      timeout_ms: { type: "integer", minimum: 1, maximum: 900_000, description: "Active execution budget in milliseconds. Default 300000; time waiting for input is excluded." },
+      idle_timeout_ms: { type: "integer", minimum: 1, maximum: 300_000, description: "Release the execution slot after this much idle time. Default 30000; later input continues the same task." },
     },
     required: ["message"],
   },
@@ -46,7 +50,7 @@ export const SPAWN_AGENT_BINDING: ToolBinding = {
 
 export const SEND_INPUT_BINDING: ToolBinding = {
   name: SEND_INPUT_TOOL,
-  description: "Give a running subagent its next instruction. It runs another round and keeps what it already did.",
+  description: "Give a task its next instruction using agent_id or stable task_id. append queues input; replace_queued replaces input not yet started; restart stops the active execution, waits for cleanup, and starts the new instruction with its checkpoint. Parked tasks continue automatically. Replies state the actual delivery mode.",
   sideEffect: "read_only",
   needsApproval: false,
   timeoutMs: 10_000,
@@ -58,8 +62,9 @@ export const SEND_INPUT_BINDING: ToolBinding = {
       message: { type: "string", description: "The next instruction." },
       interrupt: {
         type: "boolean",
-        description: "Forget instructions already queued but not yet started.",
+        description: "Legacy alias for mode=replace_queued. Does not stop the active round. Use mode=restart to stop and replace current work.",
       },
+      mode: { type: "string", enum: ["append", "replace_queued", "restart"], description: "Default append. Cannot be combined with the legacy interrupt flag." },
     },
     required: ["target", "message"],
   },
@@ -67,7 +72,7 @@ export const SEND_INPUT_BINDING: ToolBinding = {
 
 export const WAIT_AGENT_BINDING: ToolBinding = {
   name: WAIT_AGENT_TOOL,
-  description: "Collect a round answer or terminal result when a target becomes ready. Results include output, phase and status: awaiting_input means the child answered and stays running for send_input. Close it when finished. A timeout or cancelled wait does not stop children.",
+  description: "Collect round answers and terminal results, including budget, usage, cursor, task_id and phase. Pass each prior cursor in after to wait only for newer results and suppress repeated output. release_on_ready frees ready execution slots while retaining follow-up context. A timed-out or cancelled observation leaves children running.",
   sideEffect: "read_only",
   needsApproval: false,
   timeoutMs: 120_000,
@@ -77,6 +82,8 @@ export const WAIT_AGENT_BINDING: ToolBinding = {
     properties: {
       targets: { type: "array", items: { type: "string" }, description: "Agent ids to wait for." },
       timeout_ms: { type: "number", minimum: 0, maximum: 60_000, description: "One deadline for all targets, in milliseconds. Default 10000, maximum 60000; 0 returns a snapshot immediately." },
+      after: { type: "object", additionalProperties: { type: "integer", minimum: 0 }, description: "Map target ids to their previously collected result cursors. Omitted targets retain legacy snapshot behavior." },
+      release_on_ready: { type: "boolean", description: "Close ready workers and release their slots; later send_input transparently continues their task." },
     },
     required: ["targets"],
   },
@@ -101,14 +108,17 @@ export const CLOSE_AGENT_BINDING: ToolBinding = {
 
 export const RESUME_AGENT_BINDING: ToolBinding = {
   name: RESUME_AGENT_TOOL,
-  description: "Start a fresh subagent that continues a finished one's conversation, and return its new id.",
+  description: "Continue a terminal task from its latest checkpoint. Automatically wait up to 5 seconds for old worker cleanup. Returns a new agent_id with the same task_id and nickname. An optional message states what to do next; without it the original assignment and recorded progress are used.",
   sideEffect: "read_only",
   needsApproval: false,
   timeoutMs: 10_000,
   outputLimits: LIMITS,
   parameters: {
     type: "object",
-    properties: { target: { type: "string", description: "The agent id to continue from." } },
+    properties: { target: { type: "string", description: "The execution or task id to continue from." },
+      message: { type: "string", description: "Optional next instruction; verify recorded effects before repeating actions." },
+      token_budget: { type: "integer", minimum: 1, maximum: 100_000, description: "Explicit replacement for the remaining token budget. Omit to retain the task's remaining allowance." },
+      timeout_ms: { type: "integer", minimum: 1, maximum: 900_000, description: "Explicit replacement for remaining active time. Omit to retain the task's remaining allowance." } },
     required: ["target"],
   },
 };

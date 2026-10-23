@@ -29,7 +29,9 @@ vi.mock('react-virtuoso', async () => {
 const { CodeRunController } = await import('../runtime/code-run-controller');
 const { sendSubagentInput } = await import('./trylo-v1-subagent-control');
 
-it('sends a UI follow-up to the same real CLI child and renders its second answer', async () => {
+for (const parked of [false, true]) it(parked
+  ? 'continues an automatically parked real CLI task in the same UI conversation'
+  : 'sends a UI follow-up to the same real CLI child and renders its second answer', async () => {
   const root = mkdtempSync(join(tmpdir(), 'trylo-collaboration-'));
   const workspace = join(root, 'workspace') as FilePath, home = join(root, 'home');
   mkdirSync(workspace); mkdirSync(home); writeFileSync(join(workspace, 'package.json'), '{}');
@@ -65,7 +67,8 @@ it('sends a UI follow-up to the same real CLI child and renders its second answe
       }
       mainRequests += 1;
       if (mainRequests === 1) {
-        toolsReply(outgoing, [1, 2, 3].map(index => ({ id: `spawn-${index}`, name: 'spawn_agent', arguments: { message: `CHILD_TASK_${index}` } })));
+        toolsReply(outgoing, [1, 2, 3].map(index => ({ id: `spawn-${index}`, name: 'spawn_agent', arguments: { message: `CHILD_TASK_${index}`,
+          ...(parked ? { idle_timeout_ms: 200 } : {}) } })));
       } else if (mainRequests === 2) {
         await spawned;
         toolsReply(outgoing, [{ id: 'collect', name: 'wait_agent', arguments: { targets: agentIds, timeout_ms: 1000 } }]);
@@ -101,6 +104,7 @@ it('sends a UI follow-up to the same real CLI child and renders its second answe
     await act(async () => {
       await controller.run({ prompt: 'COLLAB_PARENT', codeMode: 'agent', permissionLevel: 'read_only', priorMessages: [],
         settings: { ...settingsDefaults, cliRuntimeProtocol: 'trylo-v1', cliPath: resolve('../new trylo cli/dist/cmd/trylo/main.js') as FilePath,
+          ...(process.env.TRYLO_SUBAGENT_PROOF_CLI ? { cliPath: resolve(process.env.TRYLO_SUBAGENT_PROOF_CLI) as FilePath } : {}),
           cliNodeProgram: process.execPath, cwd: workspace, apiFormat: 'openai', apiHost: `http://127.0.0.1:${address.port}/v1`, apiModel: 'local-test-model', apiKey: 'local-test-only' },
         onEvents: batch => {
           events.push(...batch);
@@ -113,6 +117,7 @@ it('sends a UI follow-up to the same real CLI child and renders its second answe
       processId = [...service.children.keys()][0] ?? null;
     });
     await waitFor(() => expect(current.filter(message => message.kind === 'subagent' && message.status === 'waiting')).toHaveLength(3), { timeout: 15000 });
+    if (parked) await waitFor(() => expect(current.filter(message => message.kind === 'subagent' && message.status === 'done')).toHaveLength(3), { timeout: 15000 });
     fireEvent.click(screen.getByRole('button', { name: '4 个智能体 1 主控 · 3 协作' }));
     fireEvent.click(screen.getAllByRole('button', { name: /的会话$/ })[0]!);
     const panel = screen.getByRole('complementary');
@@ -127,7 +132,11 @@ it('sends a UI follow-up to the same real CLI child and renders its second answe
     expect(children).toHaveLength(3);
     expect(children[0]?.conversation?.map(round => round.result)).toEqual(['CHILD_ANSWER_1:CHILD_TASK_1', 'CHILD_ANSWER_2']);
     expect(childPrompts.filter(prompt => prompt === 'CHILD_FOLLOWUP')).toHaveLength(1);
-    expect(children.every(child => child.status === 'cancelled' && child.canReceiveInput === false)).toBe(true);
+    if (parked) {
+      expect(children[0]?.status).toBe('cancelled');
+      expect(children[0]?.subagentId).not.toBe(children[0]?.taskId);
+      expect(events.filter(event => event.type === 'subagent' && event.kind === 'spawn')).toHaveLength(4);
+    } else expect(children.every(child => child.status === 'cancelled' && child.canReceiveInput === false)).toBe(true);
     expect(service.argv[0]).toContain('--subagent');
     if (process.env.TRYLO_COLLAB_PROOF_DIR) {
       mkdirSync(process.env.TRYLO_COLLAB_PROOF_DIR, { recursive: true });

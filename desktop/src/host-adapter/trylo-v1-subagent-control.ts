@@ -1,5 +1,6 @@
 import { hostAdapter } from './index';
 import type { ProcessId } from './types';
+import type { SubagentInputMode } from './subagent-contract';
 
 const live = new Set<ProcessId>();
 const pending = new Map<string, { processId: ProcessId; target: string; resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
@@ -17,7 +18,7 @@ export function closeSubagentInputProcess(processId: ProcessId): void {
 }
 
 /** A successful pipe write is not a delivery receipt. Only the matching CLI ack settles this. */
-export function sendSubagentInput(processId: ProcessId, target: string, message: string): Promise<void> {
+export function sendSubagentInput(processId: ProcessId, target: string, message: string, mode?: SubagentInputMode): Promise<void> {
   if (!live.has(processId)) return Promise.reject(new Error('当前运行不支持向智能体补充要求。'));
   if ([...pending.values()].some(request => request.processId === processId && request.target === target)) {
     return Promise.reject(new Error('该智能体的上一条要求仍在等待接收确认，草稿已保留。'));
@@ -30,7 +31,7 @@ export function sendSubagentInput(processId: ProcessId, target: string, message:
       reject(new Error('未收到接收确认，要求可能已经送达；草稿已保留。'));
     }, 20000);
     pending.set(requestId, { processId, target, resolve, reject, timer });
-    void hostAdapter.process.send(processId, `${JSON.stringify({ type: 'subagent_input', requestId, target, message: message.trim() })}\n`)
+    void hostAdapter.process.send(processId, `${JSON.stringify({ type: 'subagent_input', requestId, target, message: message.trim(), ...(mode === undefined ? {} : { mode }) })}\n`)
       .catch(() => {
         const request = pending.get(requestId);
         if (!request) return;

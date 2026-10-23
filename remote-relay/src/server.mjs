@@ -3,6 +3,9 @@ import crypto from 'node:crypto';
 import { promisify } from 'node:util';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createStore } from './store.mjs';
+import { createAccounts } from './accounts.mjs';
+import { serveConsole } from './web.mjs';
+import { createModelService } from './model-service/service.mjs';
 
 const scrypt = promisify(crypto.scrypt);
 const hash = value => crypto.createHash('sha256').update(String(value)).digest('hex');
@@ -32,8 +35,8 @@ async function body(request) {
   catch { throw error(400, 'Invalid JSON.'); }
 }
 
-export async function createRelayServer({ dataDir, inviteCode, now = Date.now } = {}) {
-  if (!dataDir || !inviteCode || inviteCode.length < 16) throw new Error('RELAY_DATA_DIR and a registration invite of at least 16 characters are required.');
+export async function createRelayServer({ dataDir, inviteCode, now = Date.now, webOrigin = 'https://trylocode.me', secureCookies = true, allowLegacyRegistration = false, webDir, modelExecutor, modelRequestTimeoutMs } = {}) {
+  if (!dataDir || (allowLegacyRegistration && (!inviteCode || inviteCode.length < 16))) throw new Error('RELAY_DATA_DIR and valid legacy invite configuration required.');
   const store = await createStore(dataDir);
   const devices = new Map(), pairings = new Map(), tickets = new Map(), requests = new Map(), channels = new Map(), rates = new Map();
   let authInFlight = 0;
@@ -56,7 +59,7 @@ export async function createRelayServer({ dataDir, inviteCode, now = Date.now } 
     const value = String(request.headers.authorization || '');
     if (!value.startsWith('Bearer ') || value.length > 512) throw error(401, 'Login required.');
     const session = store.read().sessions.find(item => same(item.hash, hash(value.slice(7))) && item.expiresAt > now());
-    if (!session) throw error(401, 'Session expired. Please sign in again.');
+    if (!session || !['account', 'phone'].includes(session.kind) || !store.read().users.some(user => user.id === session.userId && !user.disabled)) throw error(401, 'Session expired. Please sign in again.');
     return session;
   }
   function account(request) {
@@ -88,6 +91,19 @@ export async function createRelayServer({ dataDir, inviteCode, now = Date.now } 
     }
     for (const [id, channel] of channels) if (channel.deviceId === deviceId) { channels.delete(id); channel.socket.close(1012, 'Desktop disconnected'); }
   }
+  async function removeDevice(principal, id) {
+    const device = ownedDevice(principal, id);
+    await store.change(state => {
+      state.devices = state.devices.filter(item => item.id !== id);
+      state.sessions = state.sessions.filter(item => item.deviceId !== id);
+    });
+    for (const map of [pairings, tickets]) for (const [key, entry] of map) if (entry.deviceId === id) map.delete(key);
+    const socket = devices.get(id);
+    if (socket) { disconnect(id, socket); socket.terminate(); }
+    return device;
+  }
+  const modelService = await createModelService({ store, now, executor: modelExecutor, requestTimeoutMs: modelRequestTimeoutMs });
+  const accounts = await createAccounts({ store, now, origin: webOrigin, secureCookies, limited, json, body, online: id => devices.has(id), removeDevice, modelService });
   function proxy(request, response, principal, url) {
     const deviceId = String(request.headers['x-trylo-device'] || '');
     ownedDevice(principal, deviceId);
@@ -125,13 +141,47 @@ export async function createRelayServer({ dataDir, inviteCode, now = Date.now } 
     if (request.method === 'OPTIONS') { response.writeHead(204); response.end(); return; }
     void (async () => {
       const url = new URL(request.url, 'http://relay');
+      if (await serveConsole(request, response, url.pathname, webDir)) return;
       if (request.method === 'GET' && url.pathname === '/health') return json(response, 200, { ok: true, service: 'trylo-relay', version: 1 });
+      if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/relay/auth/')) { await accounts.handle(request, response, url); return; }
+      if (['/relay/model-quotas', '/relay/model-usage', '/relay/model-requests'].includes(url.pathname)) {
+        const principal = account(request); limited(`model:${principal.hash}`, 60);
+        if (await modelService.handleUser(request, response, url, principal, { body, json }, '/relay')) return;
+      }
+      if (request.method === 'GET' && url.pathname === '/relay/account') {
+        const principal = account(request), user = store.read().users.find(item => item.id === principal.userId);
+        return json(response, 200, { username: user.username, expiresAt: principal.expiresAt });
+      }
+      if (request.method === 'POST' && url.pathname === '/relay/device-session') {
+        const principal = account(request), data = await body(request);
+        const device = ownedDevice(principal, data.deviceId);
+        if (!same(device.secretHash, hash(String(data.deviceSecret || '')))) throw error(404, 'Device not found.');
+        await store.change(state => {
+          const session = state.sessions.find(item => item.hash === principal.hash && item.expiresAt > now());
+          if (!session || !state.devices.some(item => item.id === device.id)) throw error(401, 'Session or device expired.');
+          session.deviceId = device.id;
+        });
+        return json(response, 200, { ok: true });
+      }
+      if (request.method === 'POST' && url.pathname === '/relay/refresh') {
+        const principal = account(request);
+        const refreshed = await store.change(state => {
+          if (!state.sessions.some(item => item.hash === principal.hash && item.expiresAt > now())) throw error(401, 'Session expired.');
+          state.sessions = state.sessions.filter(item => item.hash !== principal.hash);
+          return sessionFor(state, principal.userId, 'account', principal.deviceId);
+        });
+        return json(response, 200, { username: store.read().users.find(item => item.id === principal.userId).username, ...refreshed });
+      }
       if (request.method === 'POST' && ['/relay/register', '/relay/login'].includes(url.pathname)) {
         limited(`auth:${request.socket.remoteAddress}`);
         if (authInFlight >= 2) throw error(429, 'Please retry shortly.');
         authInFlight++;
         try {
         const data = await body(request);
+        if (!allowLegacyRegistration) {
+          const result = await accounts.credentials(data, url.pathname === '/relay/register', 'account');
+          return json(response, url.pathname === '/relay/register' ? 201 : 200, { username: result.user.username, accessToken: result.accessToken, expiresAt: result.expiresAt });
+        }
         const username = String(data.username || '').trim().toLowerCase();
         const password = String(data.password || '');
         if (!/^[a-z0-9_.-]{3,64}$/.test(username) || password.length < 12 || password.length > 256) throw error(400, 'Use a 3–64 character username and a password of at least 12 characters.');
@@ -180,23 +230,19 @@ export async function createRelayServer({ dataDir, inviteCode, now = Date.now } 
         const principal = account(request), data = await body(request);
         const value = secret();
         const device = await store.change(state => {
-          if (state.devices.length >= 10000 || state.devices.filter(item => item.userId === principal.userId).length >= 50) throw error(429, 'Device limit reached.');
+          if (state.devices.length >= 10000 || state.devices.filter(item => item.userId === principal.userId).length >= state.limits.maxDevices) throw error(429, 'Device limit reached.');
           if (!/^[a-zA-Z0-9_-]{8,128}$/.test(String(data.desktopIdentity || ''))) throw error(400, 'Invalid Desktop identity.');
           const record = { id: crypto.randomUUID(), userId: principal.userId, name: String(data.name || 'Desktop').slice(0, 120), desktopIdentity: data.desktopIdentity, secretHash: hash(value) };
-          state.devices.push(record); return record;
+          state.devices.push(record);
+          const ownerSession = state.sessions.find(item => item.hash === principal.hash);
+          if (ownerSession) ownerSession.deviceId = record.id;
+          return record;
         });
         return json(response, 201, { deviceId: device.id, deviceSecret: value });
       }
       const removal = url.pathname.match(/^\/relay\/devices\/([a-f0-9-]+)$/);
       if (request.method === 'DELETE' && removal) {
-        const principal = account(request), device = ownedDevice(principal, removal[1]);
-        await store.change(state => {
-          state.devices = state.devices.filter(item => item.id !== device.id);
-          state.sessions = state.sessions.filter(item => item.deviceId !== device.id);
-        });
-        for (const map of [pairings, tickets]) for (const [key, entry] of map) if (entry.deviceId === device.id) map.delete(key);
-        const socket = devices.get(device.id);
-        if (socket) { disconnect(device.id, socket); socket.terminate(); }
+        await removeDevice(account(request), removal[1]);
         return json(response, 200, { ok: true });
       }
       const pair = url.pathname.match(/^\/relay\/devices\/([a-f0-9-]+)\/pairing$/);
@@ -301,6 +347,6 @@ export async function createRelayServer({ dataDir, inviteCode, now = Date.now } 
   return {
     server,
     listen(port = 8788, host = '127.0.0.1') { return new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, () => resolve(server.address())); }); },
-    close() { clearInterval(heartbeat); for (const socket of websockets.clients) socket.terminate(); server.closeAllConnections?.(); return new Promise(resolve => server.close(resolve)); },
+    async close() { clearInterval(heartbeat); for (const socket of websockets.clients) socket.terminate(); server.closeAllConnections?.(); await new Promise(resolve => server.close(resolve)); await modelService.close(); await store.close(); },
   };
 }

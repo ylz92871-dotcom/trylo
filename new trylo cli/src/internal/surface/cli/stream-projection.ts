@@ -2,6 +2,7 @@ import type { Envelope, JsonObject, JsonValue } from "../../protocol/envelope.js
 import type { CliStreamEvent, CliUsage } from "../../protocol/cli-stream.js";
 import { isNativeContinuationDiagnostic } from "../../ports/provider.js";
 import { projectFileMutations } from "./file-mutation-projection.js";
+import { isSubagentBudgetSnapshot } from "../../protocol/subagent-budget.js";
 
 /**
  * The envelope -> CLI event translator, kept as one bounded state machine.
@@ -65,6 +66,8 @@ function failureReason(payload: Record<string, unknown>): string {
  * guidance is too: the class decides what the user should actually do. Only
  * codes with a genuinely different next step appear here.
  */
+const CONTINUE_RECORDED_WORK = "Continue in the same saved session from recorded tool results. Check unfinished commands and partial effects before issuing new commands; do not repeat completed actions.";
+
 const FAILURE_ACTIONS: Readonly<Record<string, string>> = {
   auth: "no credential, or the provider rejected it: `trylo login --provider <family> --account <id>` to store one; a key from another host fails here too (`trylo auth list` shows the accounts)",
   rate_limit: "wait and retry; the provider is rate limiting",
@@ -73,15 +76,16 @@ const FAILURE_ACTIONS: Readonly<Record<string, string>> = {
   timeout: "retry later, or point at a faster endpoint",
   protocol: "the provider sent a malformed stream; check the endpoint",
   invalid_request: "check --model, the endpoint and the request options; `trylo doctor` verifies the active connection",
-  transport_fail: "the request failed before any output; retry the run",
-  sent_unacked: "the stream ended without a terminal event; retry the run",
-  provider_error: "the stream ended without a finish; retry the run",
+  transport_fail: `the provider request failed; ${CONTINUE_RECORDED_WORK}`,
+  sent_unacked: `the stream ended without a terminal event; ${CONTINUE_RECORDED_WORK}`,
+  provider_error: `the stream ended without a finish; ${CONTINUE_RECORDED_WORK}`,
+  disconnect: `the provider connection ended; ${CONTINUE_RECORDED_WORK}`,
   provider_throw: "the provider adapter threw; run `trylo doctor`",
   iterations_exhausted: "raise --max-iterations, or narrow the request",
   output_tokens_exhausted: "raise --max-tokens, or narrow the request",
   event_overflow: "this turn emitted more than 4096 events; split the task into smaller runs",
   context_limit: "shorten the conversation or start a new session",
-  unsettled_tool_input: "the stream was cut mid tool call; retry the run",
+  unsettled_tool_input: `the stream was cut mid tool call; ${CONTINUE_RECORDED_WORK}`,
   // A refused tool is the one failure the user *chose*. Without an action the
   // whole run reads as "denied" and nothing else, which does not say that
   // approving it, or allowing it up front, is what moves the turn forward.
@@ -117,6 +121,7 @@ function terminalDiagnostic(payload: Record<string, unknown>): CliStreamEvent | 
   const segments = [code];
   if (detail !== "" && detail !== code && !detail.startsWith(`${code}:`)) segments.push(detail);
   if (action !== "" && action !== code && !segments.some((part) => action.startsWith(part))) segments.push(action);
+  if (reason === "unknown" && !action.includes(CONTINUE_RECORDED_WORK)) segments.push(CONTINUE_RECORDED_WORK);
   const parts = [segments.join(" - ")];
   if (cause === "output_tokens_exhausted" || cause === "iterations_exhausted") {
     if (typeof payload.budgetUsed === "number" && typeof payload.budgetLimit === "number") {
@@ -269,6 +274,10 @@ function translateInto(state: BlockState, envelope: Envelope, events: CliStreamE
         ...(typeof payload.round === "number" ? { round: payload.round } : {}),
         ...(typeof payload.canReceiveInput === "boolean" ? { canReceiveInput: payload.canReceiveInput } : {}),
         ...(typeof payload.displayName === "string" ? { displayName: payload.displayName } : {}),
+        ...(typeof payload.taskId === "string" ? { taskId: payload.taskId } : {}),
+        ...(typeof payload.resumedFrom === "string" ? { resumedFrom: payload.resumedFrom } : {}),
+        ...(typeof payload.parked === "boolean" ? { parked: payload.parked } : {}),
+        ...(isSubagentBudgetSnapshot(payload.budget) ? { budget: payload.budget } : {}),
       });
       break;
     }

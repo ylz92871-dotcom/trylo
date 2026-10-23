@@ -89,7 +89,9 @@ export type CliStreamEvent =
   | { readonly type: "subagent"; readonly kind: "spawn" | "update" | "end"; readonly id: string;
       readonly status: "running" | "waiting" | "done" | "failed" | "cancelled";
       readonly agentType?: string; readonly prompt?: string; readonly result?: string;
-      readonly error?: string; readonly round?: number; readonly canReceiveInput?: boolean; readonly displayName?: string }
+      readonly error?: string; readonly round?: number; readonly canReceiveInput?: boolean; readonly displayName?: string;
+      readonly taskId?: string; readonly resumedFrom?: string; readonly parked?: boolean;
+      readonly budget?: import("./subagent-budget.js").SubagentBudgetSnapshot }
   | CliRunResult;
 
 export type CliUsage = {

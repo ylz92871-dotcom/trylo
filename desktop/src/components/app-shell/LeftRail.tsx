@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { ConversationSession } from '../../host-adapter/conversation-history';
 import { useUserProfile } from '../../user-profile/use-user-profile';
+import type { DesktopAccountModel } from '../../account/desktop-account';
 
 /** Shape of a workspace the rail needs. Defined here so
  *  LeftRail is self-contained; App.tsx re-exports the
@@ -67,6 +68,9 @@ export interface LeftRailProps {
   readonly onOpenRemote?: () => void;
   readonly remoteRunning?: boolean;
   readonly onOpenSettings?: () => void;
+  readonly account?: DesktopAccountModel;
+  readonly accountOpenRequest?: number;
+  readonly accountRemoteActive?: boolean;
 }
 
 export function LeftRail(props: LeftRailProps): ReactElement | null {
@@ -84,6 +88,10 @@ export function LeftRail(props: LeftRailProps): ReactElement | null {
   // The ProfileCard is portalled to <body> and anchored to this
   // row's rect (it overflows the 210px rail by design).
   const profileRowRef = useRef<HTMLDivElement>(null);
+  const openProfile = profile.open;
+  useEffect(() => {
+    if (props.accountOpenRequest) openProfile();
+  }, [props.accountOpenRequest, openProfile]);
 
   // v1.17.1: a project row itself is the dropdown — clicking it
   // expands / collapses its session list (no separate "Sessions"
@@ -303,9 +311,13 @@ export function LeftRail(props: LeftRailProps): ReactElement | null {
             <button
               type="button"
               className={`left-rail__profile${profile.step !== 'closed' ? ' left-rail__profile--open' : ''}`}
-              onClick={profile.toggle}
+              onClick={() => {
+                if (profile.step === 'closed' && props.account?.phase === 'ready') void props.account.refresh();
+                profile.toggle();
+              }}
               aria-expanded={profile.step !== 'closed'}
-              aria-label="用户资料"
+              aria-label={props.account ? '账号与个人资料' : '用户资料'}
+              aria-haspopup="dialog"
             >
               <ProfileAvatarView
                 className="left-rail__avatar"
@@ -314,8 +326,8 @@ export function LeftRail(props: LeftRailProps): ReactElement | null {
                 size={28}
               />
               <span className="left-rail__profile-text">
-                {profile.step === 'closed' ? '本地工作区' : profile.profile.nickname}
-                <small>{profile.step === 'closed' ? '设置与连接' : '用户资料'}</small>
+                {props.account ? props.account.account?.loggedIn ? profile.profile.nickname : '本地工作区' : profile.step === 'closed' ? '本地工作区' : profile.profile.nickname}
+                <small>{props.account ? props.account.account?.loggedIn ? props.account.account.username : props.account.phase === 'waiting' ? '等待登录确认' : props.account.phase === 'checking' ? '正在读取账号…' : '未登录' : profile.step === 'closed' ? '设置与连接' : '用户资料'}</small>
               </span>
             </button>
             <button
@@ -335,6 +347,8 @@ export function LeftRail(props: LeftRailProps): ReactElement | null {
       </nav>
       {profile.step !== 'closed' && props.onOpenSettings && (
         <ProfileCard
+          account={props.account}
+          remoteActive={props.accountRemoteActive}
           step={profile.step}
           profile={profile.profile}
           draft={profile.draft}

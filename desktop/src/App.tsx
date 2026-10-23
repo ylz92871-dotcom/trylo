@@ -5642,10 +5642,10 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           ) : (
             <ChatPanel
               onSubagentInput={canSendSubagentInput(topMode === 'work' ? workCodeView.activeProcessId : activeProcessId)
-                ? (agentId, text) => {
+                ? (agentId, text, mode) => {
                   const processId = topMode === 'work' ? workCodeView.activeProcessId : activeProcessId
                   if (!processId) return Promise.reject(new Error('本轮已结束，无法发送补充要求。'))
-                  return sendSubagentInput(processId, agentId, text)
+                  return sendSubagentInput(processId, agentId, text, mode)
                 } : undefined}
               workspaceRoot={currentWorkspace.root}
               context={context}

@@ -25,6 +25,7 @@ import {
   type StreamAccumulator,
 } from "./stream-blocks.js";
 import type { ToolArgumentNormalizer } from "./tool-boundary.js";
+import { rejectedStreamToolResults } from "./stream-recovery.js";
 
 /**
  * One provider stream, consumed once.
@@ -173,6 +174,12 @@ export async function consumeProviderStream(context: StreamContext): Promise<Str
       eventId: context.nextEventId(),
       message: "disconnect",
     });
+  }
+
+  const discarded = rejectedStreamToolResults(acc.inputs, acc.transcriptItems);
+  if (discarded.length > 0) {
+    acc.transcriptItems.push(...discarded);
+    await context.onTranscriptItems?.(discarded);
   }
 
   return {

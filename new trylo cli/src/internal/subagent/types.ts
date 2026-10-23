@@ -2,6 +2,8 @@ import type { ToolPort } from "../ports/tools.js";
 import type { ObservationOutcome } from "../ports/tool-runner-port.js";
 import type { PermissionGrantCache } from "../loop/permission-grants.js";
 import type { SubagentInputChannel } from "./input-channel.js";
+import type { SubagentBudgetSnapshot } from "../protocol/subagent-budget.js";
+export type { SubagentBudgetSnapshot } from "../protocol/subagent-budget.js";
 
 /**
  * Lifecycle states of a subAgent instance.
@@ -44,7 +46,10 @@ export type SubagentGovernance = {
   readonly maxConcurrency?: number | undefined;
   readonly tokenBudget?: number | undefined;
   readonly timeoutMs?: number | undefined;
+  /** Historical workers use wall time; interactive workers pause between rounds. */
+  readonly timeoutMode?: "wall" | "active" | undefined;
 };
+
 
 /**
  * Execution context exposed to the running subAgent worker.
@@ -57,6 +62,9 @@ export type SubagentContext = {
   readonly tools: ToolPort;
   readonly reportProgress: (message: string, percentage?: number | undefined) => void;
   readonly recordUsage: (inputTokens: number, outputTokens: number) => void;
+  readonly setActivity?: ((activity: "working" | "idle") => void) | undefined;
+  readonly inheritedGrants?: PermissionGrantCache | undefined;
+  readonly remainingTokens?: (() => number) | undefined;
   /**
    * The reading end of the channel the control surface writes to (C43).
    * Absent means the worker runs once and finishes — the historical shape, and
@@ -68,6 +76,9 @@ export type SubagentContext = {
 export type SubagentWorker<T = unknown> = (context: SubagentContext) => Promise<T>;
 
 export type SubagentSpawnRequest<T = unknown> = {
+  readonly continuation?: { readonly taskId: string; readonly resumedFrom: string; readonly roundOffset: number;
+    readonly displayName?: string | undefined } | undefined;
+  readonly budgetBefore?: SubagentBudgetSnapshot | undefined;
   readonly name: string;
   readonly prompt?: string | undefined;
   readonly agentType?: string | undefined;
@@ -110,6 +121,7 @@ export type SubagentResult<T = unknown> = {
     readonly message: string;
   } | undefined;
   readonly usage: SubagentUsage;
+  readonly budget?: SubagentBudgetSnapshot | undefined;
   readonly lineage: SubagentLineage;
 };
 

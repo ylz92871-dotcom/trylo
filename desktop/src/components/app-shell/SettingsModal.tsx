@@ -42,6 +42,7 @@ import type {
 } from '../../services-host/methods';
 import { petStatusDetail, petStatusHeadline, petStatusTone } from '../../companion/pet-status-text';
 import { WorkToolsSettings } from './WorkToolsSettings';
+import type { DesktopAccountPort } from '../../account/desktop-account';
 import { SkillsModal } from './SkillsModal';
 import type { LearningPort } from '../../learning/learning-port';
 import {
@@ -60,7 +61,7 @@ const SETTINGS_TABS: readonly { id: SettingsTab; label: string; description: str
   { id: 'learning', label: '学习', description: '管理学习偏好与已安装技能。', Icon: BookOpen },
 ];
 
-export interface RelayAccountActions {
+export interface RelayAccountActions extends DesktopAccountPort {
   relayLogin(params: import('../../services-host/methods').RelayLoginParams): Promise<import('../../services-host/methods').RelayAccountStatus>;
   relayStatus(): Promise<import('../../services-host/methods').RelayAccountStatus>;
   relayLogout(): Promise<import('../../services-host/methods').RelayAccountStatus>;
