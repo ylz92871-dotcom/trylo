@@ -1,5 +1,11 @@
 # 当前源码检查点
 
+2026-10-24：Desktop 1.0.6 仅新版 CLI 更新已完成构建，运行时源码为 `7fd213d61ca54eb54a9bc34fe998e8ad2d38e3e8`。安装包与便携包资源、CRC、批准/拒绝/取消已核验。
+
+[当前版本说明](DESKTOP_1_0_6.md) · [验证摘要](DESKTOP_1_0_6_VERIFICATION.json)
+
+## 先前发布与源码记录
+
 2026-10-20。发布标签 `desktop-v1.0.5`。
 
 Desktop 1.0.5 默认旧 CLI，随包新版可切换，CoWork 后台独立。本次修复原生 Node 脚本扩展路径导致 Service Host 无法启动的问题。14 项路径回归与真实原生服务启动验证通过，包内资源和 CRC 已核验。CLI/前端继承 1.0.4 的已验证资源，Android 1.6.0 沿用原签名 APK。
@@ -37,3 +43,9 @@ main 已加入 Service Host 生命周期、工具安装、原生路径、首次�
 额外 Windows 平台实测为 3/4；SRT 批处理在 ACL 回收时报 `isolation_cleanup_failed`，恢复后复跑仍失败，未宣称已修复或通过原生验收。官网新 console 资源未同步，因此完整网页打包和依赖该资源的网页测试仍需另行提供官网源码。App.tsx 既有 9 项 lint warning 与基线相同，无新增诊断。
 
 [完整记录、负例与边界](SOURCE_SYNC_2026_10_24.md) · [逐文件摘要清单](SOURCE_SYNC_2026_10_24.json)。本轮未重新构建或替换 Desktop、Android 和视频附件。
+
+## 2026-10-24 Desktop 1.0.6 仅新版 CLI 更新包
+
+本次重新构建当前产品源码，仅包含新版 Trylo CLI（trylo-v1），旧 CLI 和 CoWork 后台不随包。旧版保存的 CLI 选择迁移为新版。包内资源、CRC 与实际批准/拒绝/取消已核验；安装 GUI、原生界面和真实模型不属于本轮验收。Android 1.6.0、宣传视频及官网保持原件。
+
+[发行说明](DESKTOP_1_0_6.md) · [验证摘要](DESKTOP_1_0_6_VERIFICATION.json)。

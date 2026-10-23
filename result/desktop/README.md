@@ -1,9 +1,7 @@
-# Trylo Desktop 1.0.5
+# Trylo Desktop 1.0.6
 
-[Windows 安装包](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo_1.0.5_x64-setup.exe) · [便携 ZIP](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Desktop-1.0.5-windows-x64-portable-core.zip) · [发布页](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.5)
+[Windows 安装包](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.6/Trylo_1.0.6_x64-setup.exe) · [便携 ZIP](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.6/Trylo-Desktop-1.0.6-windows-x64-portable-core.zip) · [发布页](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.6)
 
-修复 Windows 原生工具服务因扩展脚本路径报 `EISDIR` 而无法启动的问题。默认旧 CLI，设置可切换随包新版；普通 Work 保留，CoWork 后台独立。Android 1.6.0 见相邻 mobile 目录。
+仅包含并默认使用新版 Trylo CLI（trylo-v1）；旧 CLI 和 CoWork 后台不随包分发。固定 Node 24.14.1、普通 Code/Work 与桌宠保留，旧版 CLI 设置迁移为新版。
 
-便携版完整解压后运行 `Start-Trylo.cmd`，保留随包资源目录。配置自己的模型/API 后使用。14 项路径回归、原生服务自动启动、包内完整资源和 CRC 核验通过；详情及证据边界见 [发行说明](../../docs/release/DESKTOP_1_0_5.md)。
-
-未签名预览版。旧 CLI Bash 需要 Git for Windows，严格 Windows Shell 隔离需要可用 SRT。校验值见 release.json 和 SHA256SUMS。
+21 项设置/运行时回归、解包后的批准/拒绝/取消、两种包 CRC 和各 4900 个资源摘要核对通过。本轮未做安装 GUI、原生界面全流程或真实模型验收；独立 CLI 严格 SRT 的 ACL 回收旧问题仍保留。详情见[发行说明](../../docs/release/DESKTOP_1_0_6.md)。

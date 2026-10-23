@@ -1,0 +1,63 @@
+{
+  "version": "1.0.6",
+  "portableCrc": true,
+  "portableEntries": 4906,
+  "installerCrc": true,
+  "resourceFilesComparedPerPackage": 4900,
+  "legacyCliBundled": false,
+  "coworkBundled": false,
+  "defaultRuntime": "trylo-v1",
+  "extractedPortableActualApprovedWrite": true,
+  "extractedPortableDeniedWriteBlocked": true,
+  "extractedPortableApprovalEofCancelled": true,
+  "noSystemNode": true,
+  "nativeExecutableSha256": "73182eec8d05d6bc0228885ecf7d5c7c8c7e1d917eba54a6751f768f60c9c399",
+  "installerExecutableSha256": "0e16c7f84727466e558cf32ff39770cf02b87d89834daa6fc846438e1cc8c042",
+  "executableDifference": "exact Tauri UNK/NSS marker only",
+  "installerGuiRun": false,
+  "nativeUiAcceptance": false,
+  "realProviderTest": false,
+  "artifacts": {
+    "installer": {
+      "file": "Trylo_1.0.6_x64-setup.exe",
+      "bytes": 140795469,
+      "sha256": "5e04813c648bb120f2496a6b22b7600938ab83ac65735a36f586b42909c303a8"
+    },
+    "portable": {
+      "file": "Trylo-Desktop-1.0.6-windows-x64-portable-core.zip",
+      "bytes": 160368116,
+      "sha256": "b142f765bdccbf4ca32245390d2b84a7cc4ef44357eb20527f4841c80b33f9ec"
+    }
+  },
+  "sourceCommit": "7fd213d61ca54eb54a9bc34fe998e8ad2d38e3e8",
+  "localSourceCommit": "39342796895ffd2d62df93de6b923b993fca7a00",
+  "runtimeInputManifestSha256": "4ed1e64eaab3eba04ef1b43ecdbd47d22d2b2da9e747d646e01215c8b72aa8f1",
+  "frontendInputManifestSha256": "eeba543b6026850f01b89edfb4f97d6e06681b0870f9ac50d2e318135af65798",
+  "runtimeRegressionTests": 21,
+  "desktopTypecheck": true,
+  "changedFilesLint": true,
+  "sourceCompleteness": true,
+  "credentialScan": {
+    "version": "1.0.6",
+    "newCliOnly": true,
+    "coworkBundled": false,
+    "cliFilesVerified": 2860,
+    "cliEntrySha256": "abfb467bdd8edafe70e9cde14bfc26cacf903d1b4424a3af0aa0ec9a7f83b4d0",
+    "isolatedSmoke": {
+      "passed": true,
+      "noSystemNode": true,
+      "dependencyResolution": true,
+      "approvalBeforeWrite": true,
+      "approvalRequests": 1,
+      "terminalCount": 1
+    },
+    "credentialFileFindings": [],
+    "tokenPatternFindings": [],
+    "resourceFiles": 4900
+  },
+  "knownLimitations": [
+    "Unsigned preview; installer GUI and native Desktop UI were not exercised in this build.",
+    "Real-provider model acceptance was not repeated.",
+    "The existing standalone strict-SRT batch ACL cleanup failure remains unresolved; Desktop shell runs use explicit host mode with approval and filesystem policy."
+  ]
+}

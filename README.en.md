@@ -10,9 +10,9 @@ Turn ideas into deliverables. Keep useful collaboration experience for the next 
 
 [简体中文](README.md) · [English](README.en.md)
 
-**[Download Desktop](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.5) · [Download Android](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Code-v1.6.0.apk) · [Architecture](docs/architecture/README.md)**
+**[Download Desktop](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.6) · [Download Android](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Code-v1.6.0.apk) · [Architecture](docs/architecture/README.md)**
 
-Windows Desktop 1.0.5 · Android 1.6.0 · Alpha · Apache-2.0
+Windows Desktop 1.0.6 · Android 1.6.0 · Alpha · Apache-2.0
 
 </div>
 
@@ -69,19 +69,19 @@ CoWork remains a separate optional dependency, outside the core desktop package.
 
 ## Get started
 
-1. Download the Windows installer or portable package from [Releases](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.5).
+1. Download the Windows installer or portable package from [Releases](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.6).
 2. Open a workspace, configure your model provider and credentials, and select appropriate tools and permissions.
 3. Start with a project question, a code change, or a document task. Explicitly enable learning when you want to use it.
 4. For remote access, install the Android app and follow the desktop pairing instructions.
 
 | Download | Version |
 | --- | --- |
-| [Windows x64 installer](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo_1.0.5_x64-setup.exe) | Desktop 1.0.5 |
-| [Windows x64 portable](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Desktop-1.0.5-windows-x64-portable-core.zip) | Core package; CoWork separate |
+| [Windows x64 installer](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.6/Trylo_1.0.6_x64-setup.exe) | Desktop 1.0.6 |
+| [Windows x64 portable](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.6/Trylo-Desktop-1.0.6-windows-x64-portable-core.zip) | Core package; CoWork separate |
 | [Android APK](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Code-v1.6.0.apk) | Android 1.6.0, existing signed build |
-| [SHA-256 checksums](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/SHA256SUMS) | File integrity checks |
+| [SHA-256 checksums](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.6/SHA256SUMS) | File integrity checks |
 
-**Alpha status.** Published Desktop 1.0.5 defaults to the bundled compatibility CLI; Settings can switch to the bundled new CLI and back. This repository includes only the new CLI source. The October 22 follow-up fixes on `main` have not been repackaged into that installer. See the [source checkpoint](docs/release/CURRENT_SOURCE_CHECKPOINT.md) and [release record](docs/release/DESKTOP_1_0_5.md) separately. Screenshots show actual interfaces; the demo does not establish support for every model, application, or device combination.
+**Alpha status.** Desktop 1.0.6 bundles and defaults to the new Trylo CLI only. Legacy CLI selections migrate to trylo-v1; the legacy engine and CoWork runtime are excluded. This build includes the product source synchronized on October 24. See the [checkpoint](docs/release/CURRENT_SOURCE_CHECKPOINT.md) and [release record](docs/release/DESKTOP_1_0_6.md) for verification boundaries. Screenshots and demos do not establish support for every model, application, or device combination.
 
 ## Explore the source
 

@@ -1,73 +1,92 @@
 {
   "product": "Trylo Desktop",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "channel": "unsigned-preview",
-  "sourceRef": "desktop-v1.0.5",
-  "runtimeCodeCommit": "c902e6207bd7018ba911ef6b7790cd8b564b2d87",
+  "sourceRef": "desktop-v1.0.6",
+  "runtimeCodeCommit": "7fd213d61ca54eb54a9bc34fe998e8ad2d38e3e8",
+  "localCodeCommit": "39342796895ffd2d62df93de6b923b993fca7a00",
   "platform": "windows",
   "arch": "x64",
-  "defaultRuntime": "legacy-stream-json",
-  "newRuntime": "bundled-selectable-trylo-v1",
-  "legacyRuntime": "bundled-compatibility-runtime",
+  "defaultRuntime": "trylo-v1",
+  "newRuntime": "bundled-trylo-v1",
+  "legacyRuntime": "excluded",
   "legacySourcePublished": false,
   "coworkBundled": false,
   "artifacts": {
     "installer": {
-      "file": "Trylo_1.0.5_x64-setup.exe",
-      "bytes": 148974924,
-      "sha256": "b8df94cf27cce229467d6852dd455e4dc0dcb6b17fb594141014c24ab975befb",
-      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo_1.0.5_x64-setup.exe"
+      "file": "Trylo_1.0.6_x64-setup.exe",
+      "bytes": 140795469,
+      "sha256": "5e04813c648bb120f2496a6b22b7600938ab83ac65735a36f586b42909c303a8",
+      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.6/Trylo_1.0.6_x64-setup.exe"
     },
     "portable": {
-      "file": "Trylo-Desktop-1.0.5-windows-x64-portable-core.zip",
-      "bytes": 189416579,
-      "sha256": "37b5468da6ced965fc06fb22cee27289489c06bca4f0d58b7519b766e02e08ff",
-      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Desktop-1.0.5-windows-x64-portable-core.zip"
+      "file": "Trylo-Desktop-1.0.6-windows-x64-portable-core.zip",
+      "bytes": 160368116,
+      "sha256": "b142f765bdccbf4ca32245390d2b84a7cc4ef44357eb20527f4841c80b33f9ec",
+      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.6/Trylo-Desktop-1.0.6-windows-x64-portable-core.zip"
     }
   },
   "verification": {
-    "pathRegressionTests": 14,
-    "nativeWindowCreated": true,
-    "nativeHostAutomaticStartup": true,
-    "nativeHostAliveAfterSeconds": 35,
-    "nodeScriptArgumentNormalized": true,
-    "originalEisdirReproduced": true,
-    "installerCrc": true,
+    "version": "1.0.6",
     "portableCrc": true,
-    "portableEntries": 21763,
-    "resourceFilesComparedPerPackage": 21757,
-    "unchangedResourceFilesFrom1_0_4": 21756,
-    "resourceChange": "distribution.json version only",
-    "nativeExecutableSha256": "41a3780a3e3511b422ee8441bec0d23ebb62fbe4ead7b38c1736a9993a4b5bd4",
-    "installerExecutableSha256": "34d8a7957f567d2b7b3f5f3829e56e078438cbb8a975153670c56017e40477d5",
-    "installerOnlyExactNssMarkerDifference": true,
-    "debugInstrumentationBundled": false,
+    "portableEntries": 4906,
+    "installerCrc": true,
+    "resourceFilesComparedPerPackage": 4900,
+    "legacyCliBundled": false,
+    "coworkBundled": false,
+    "defaultRuntime": "trylo-v1",
+    "extractedPortableActualApprovedWrite": true,
+    "extractedPortableDeniedWriteBlocked": true,
+    "extractedPortableApprovalEofCancelled": true,
+    "noSystemNode": true,
+    "nativeExecutableSha256": "73182eec8d05d6bc0228885ecf7d5c7c8c7e1d917eba54a6751f768f60c9c399",
+    "installerExecutableSha256": "0e16c7f84727466e558cf32ff39770cf02b87d89834daa6fc846438e1cc8c042",
+    "executableDifference": "exact Tauri UNK/NSS marker only",
     "installerGuiRun": false,
-    "realProviderAcceptance": false,
-    "deviceAcceptance": false
-  },
-  "inheritedRuntimeVerification": {
-    "release": "desktop-v1.0.4",
-    "cliKernelBytesUnchanged": true,
-    "cliVerifyTestNames": 4227,
-    "cliContractChecks": 38,
-    "desktopRegressionAssertions": 211,
-    "approvalUiAssertions": 9,
-    "packagedPermissionEffects": 22,
-    "fourTurnCliSwitch": true
-  },
-  "currentRechecks": {
-    "permissionModes": 4,
-    "fourTurnCliSwitch": true,
-    "legacyReadWriteSearchCases": 5,
-    "remoteGatewayAndQr": true,
-    "realProviderUsed": false
-  },
-  "knownLimitations": [
-    "Unsigned preview; installation wizard and Android device acceptance were not run.",
-    "Legacy Bash requires installed Git for Windows.",
-    "Strict Windows shell isolation requires an available SRT environment.",
-    "Legacy immediate EOF after a result can still trigger a native libuv exit assertion; Desktop keeps stdin open between turns.",
-    "Native service startup and process tests do not establish arbitrary application input or universal model reliability."
-  ]
+    "nativeUiAcceptance": false,
+    "realProviderTest": false,
+    "artifacts": {
+      "installer": {
+        "file": "Trylo_1.0.6_x64-setup.exe",
+        "bytes": 140795469,
+        "sha256": "5e04813c648bb120f2496a6b22b7600938ab83ac65735a36f586b42909c303a8"
+      },
+      "portable": {
+        "file": "Trylo-Desktop-1.0.6-windows-x64-portable-core.zip",
+        "bytes": 160368116,
+        "sha256": "b142f765bdccbf4ca32245390d2b84a7cc4ef44357eb20527f4841c80b33f9ec"
+      }
+    },
+    "sourceCommit": "7fd213d61ca54eb54a9bc34fe998e8ad2d38e3e8",
+    "localSourceCommit": "39342796895ffd2d62df93de6b923b993fca7a00",
+    "runtimeInputManifestSha256": "4ed1e64eaab3eba04ef1b43ecdbd47d22d2b2da9e747d646e01215c8b72aa8f1",
+    "frontendInputManifestSha256": "eeba543b6026850f01b89edfb4f97d6e06681b0870f9ac50d2e318135af65798",
+    "runtimeRegressionTests": 21,
+    "desktopTypecheck": true,
+    "changedFilesLint": true,
+    "sourceCompleteness": true,
+    "credentialScan": {
+      "version": "1.0.6",
+      "newCliOnly": true,
+      "coworkBundled": false,
+      "cliFilesVerified": 2860,
+      "cliEntrySha256": "abfb467bdd8edafe70e9cde14bfc26cacf903d1b4424a3af0aa0ec9a7f83b4d0",
+      "isolatedSmoke": {
+        "passed": true,
+        "noSystemNode": true,
+        "dependencyResolution": true,
+        "approvalBeforeWrite": true,
+        "approvalRequests": 1,
+        "terminalCount": 1
+      },
+      "credentialFileFindings": [],
+      "tokenPatternFindings": [],
+      "resourceFiles": 4900
+    },
+    "knownLimitations": [
+      "Unsigned preview; installer GUI and native Desktop UI were not exercised in this build.",
+      "Real-provider model acceptance was not repeated.",
+      "The existing standalone strict-SRT batch ACL cleanup failure remains unresolved; Desktop shell runs use explicit host mode with approval and filesystem policy."
+    ]
+  }
 }

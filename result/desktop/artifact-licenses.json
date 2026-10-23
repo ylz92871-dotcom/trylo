@@ -10,14 +10,6 @@
   "windowsMcp": "desktop-services/licenses/Windows-MCP-LICENSE.md",
   "windowsMcpProvenance": "desktop-services/licenses/Windows-MCP-PROVENANCE.json",
   "wgcDotnet": "desktop-services/licenses/wgc-dotnet/",
-  "legacyBundled": true,
-  "coworkBundled": false,
-  "legacyNotices": "cli-legacy/NOTICE.txt",
-  "legacyInventory": "cli-legacy/manifest.json",
-  "ripgrep": {
-    "version": "15.2.0",
-    "path": "cli-legacy/vendor/ripgrep/x64-win32/",
-    "dependencyNotices": "cli-legacy/vendor/ripgrep/licenses/",
-    "scope": "Conservative upstream Cargo.lock inventory, including unused target/build/test entries; not binary reachability."
-  }
+  "legacyBundled": false,
+  "coworkBundled": false
 }
