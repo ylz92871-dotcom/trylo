@@ -33,7 +33,7 @@ page=page.replace(/(<meta (?:name="description"|property="og:description") conte
 const css=rawCss.replaceAll('/assets/',assetPrefix).replaceAll(assetPrefix+'trylo-text.woff',prefix+'/trylo-text.woff');
 const files=[];function write(name,bytes){const destination=path.join(publicRoot,name);fs.mkdirSync(path.dirname(destination),{recursive:true});fs.writeFileSync(destination,bytes);files.push({path:name,bytes:Buffer.byteLength(bytes),sha256:sha(bytes)});}
 write('download/desktop/index.html',page);write(prefix.slice(1)+'/styles.css',css);write(prefix.slice(1)+'/trylo-text.woff',font);write(release.checksumPath.slice(1),`${release.installer.sha256}  ${release.installer.file}\n`);
-const caddy=desktopReleasePolicy(host.configText,release);fs.writeFileSync(path.join(bundle,'Caddyfile'),caddy);
+const caddy=desktopReleasePolicy(host.configText,release,{reuseExisting:true});fs.writeFileSync(path.join(bundle,'Caddyfile'),caddy);
 ssh(['sudo','-n','docker','exec','-i','-e','SITE_DOMAIN=:8080',host.container,'caddy','validate','--config','-','--adapter','caddyfile'],{input:caddy});
 const manifest={kind:'desktop-download-patch',release,prefix,files,caddySha256:sha(caddy),expected:{container:host.container,alias:host.alias,site:host.site,configSha256:host.configSha256,ingressSha256:host.ingressSha256,pageSha256:host.pageSha256,homepageSha256:host.homepageSha256},validatedCaddy:true};
 fs.writeFileSync(path.join(bundle,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');

@@ -11,6 +11,8 @@ test('preserves old installer headers and unrelated policy on a repeat release',
   assert.ok(next.includes('header Content-Security-Policy "default-src none"'));
   assert.equal(next.match(/@desktopPackages path/g).length, 1);
   assert.throws(() => desktopReleasePolicy(next, release), /already/);
+  assert.equal(desktopReleasePolicy(next, release, { reuseExisting: true }), next);
+  assert.throws(() => desktopReleasePolicy(next.replace('application/octet-stream', 'text/plain'), release, { reuseExisting: true }), /differs/);
 });
 test('refuses an unrelated route and an ambiguous server configuration', () => {
   assert.throws(() => desktopReleasePolicy('    file_server\n', { ...release, installer: { ...release.installer, path: '/account/' } }));

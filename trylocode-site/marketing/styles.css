@@ -156,3 +156,16 @@ html{scrollbar-gutter:stable}body:has(#film-dialog[open]){overflow:hidden}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation:none!important;transition:none!important}}
 
 .download-release-notes{width:100%;max-width:42rem;margin-top:28px;color:var(--ink,#353633);text-align:left}.download-release-notes h2{font-size:20px;line-height:1.4;margin:0 0 12px}.download-release-notes ul{padding-left:1.2em;margin:0;display:grid;gap:10px}.download-release-notes li,.download-release-notes p{font-size:14px;line-height:1.8}.download-release-notes p{margin-top:14px;opacity:.75}
+
+.desktop-download .download-release-notes{color:#c3cdb9}
+.download-history{margin-top:28px;max-width:42rem;color:#c3cdb9}
+.download-history summary{cursor:pointer;min-height:44px;align-content:center;color:#c8b17b;font-size:16px}
+.download-history summary>span{font-size:12px;margin-left:12px;color:#91a183}
+.download-history>p{font-size:12px;line-height:1.8;margin:15px 0;color:#91a183}
+.download-history>ul{padding:0;list-style:none;display:grid;gap:22px;margin:22px 0}
+.history-version{display:flex;gap:16px;align-items:baseline;flex-wrap:wrap}
+.history-version h3{font-size:16px;font-weight:530;color:#e7e0cd}.history-version time{font-size:12px;color:#91a183}
+.history-downloads{display:flex;flex-wrap:wrap;gap:0 22px;margin-top:5px}
+.history-downloads>a{font-size:13px;min-height:44px;display:inline-flex;align-items:center;gap:6px;color:#c8b17b;text-decoration:underline;text-underline-offset:4px}
+.history-downloads>a span{color:#91a183;font-size:11px}
+.download-history summary:focus-visible,.history-downloads>a:focus-visible{outline:2px solid #c8b17b;outline-offset:4px}

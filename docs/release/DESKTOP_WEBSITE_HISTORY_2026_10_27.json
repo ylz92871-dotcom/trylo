@@ -1,0 +1,116 @@
+{
+  "date": "2026-10-27",
+  "url": "https://trylocode.me/download/desktop/#desktop-history",
+  "historyVersions": 8,
+  "downloadFiles": 13,
+  "availableDownloads": [
+    {
+      "tag": "desktop-v1.0.6",
+      "file": "Trylo-Desktop-1.0.6-windows-x64-portable-core.zip",
+      "bytes": 160368116,
+      "status": 200,
+      "lengthMatches": true
+    },
+    {
+      "tag": "desktop-v1.0.6",
+      "file": "Trylo_1.0.6_x64-setup.exe",
+      "bytes": 140795469,
+      "status": 200,
+      "lengthMatches": true
+    },
+    {
+      "tag": "desktop-v1.0.5",
+      "file": "Trylo-Desktop-1.0.5-windows-x64-portable-core.zip",
+      "bytes": 189416579,
+      "status": 200,
+      "lengthMatches": true
+    },
+    {
+      "tag": "desktop-v1.0.5",
+      "file": "Trylo_1.0.5_x64-setup.exe",
+      "bytes": 148974924,
+      "status": 200,
+      "lengthMatches": true
+    },
+    {
+      "tag": "desktop-v1.0.4",
+      "file": "Trylo-Desktop-1.0.4-windows-x64-portable-core.zip",
+      "bytes": 189415508,
+      "status": 200,
+      "lengthMatches": true
+    },
+    {
+      "tag": "desktop-v1.0.4",
+      "file": "Trylo_1.0.4_x64-setup.exe",
+      "bytes": 148963853,
+      "status": 200,
+      "lengthMatches": true
+    },
+    {
+      "tag": "desktop-v1.0.3",
+      "file": "Trylo-Desktop-1.0.3-windows-x64-portable-core.zip",
+      "bytes": 189401302,
+      "status": 200,
+      "lengthMatches": true
+    },
+    {
+      "tag": "desktop-v1.0.3",
+      "file": "Trylo_1.0.3_x64-setup.exe",
+      "bytes": 148970972,
+      "status": 200,
+      "lengthMatches": true
+    },
+    {
+      "tag": "desktop-v1.0.2",
+      "file": "Trylo-Desktop-1.0.2-windows-x64-portable-core.zip",
+      "bytes": 156223917,
+      "status": 200,
+      "lengthMatches": true
+    },
+    {
+      "tag": "desktop-v1.0.2",
+      "file": "Trylo_1.0.2_x64-setup.exe",
+      "bytes": 138930883,
+      "status": 200,
+      "lengthMatches": true
+    },
+    {
+      "tag": "desktop-v1.0.1-r3",
+      "file": "Trylo-Desktop-1.0.1-windows-x64-portable-core.zip",
+      "bytes": 219903437,
+      "status": 200,
+      "lengthMatches": true
+    },
+    {
+      "tag": "desktop-v1.0.1-r2",
+      "file": "Trylo-Desktop-1.0.1-windows-x64-portable-r2.zip",
+      "bytes": 367231006,
+      "status": 200,
+      "lengthMatches": true
+    },
+    {
+      "tag": "desktop-v1.0.1",
+      "file": "Trylo-Desktop-1.0.1-windows-x64-portable.zip",
+      "bytes": 593012640,
+      "status": 200,
+      "lengthMatches": true
+    }
+  ],
+  "latestInstallerUnchanged": true,
+  "latestInstallerSha256": "01a9b88d99540ed3a9385e52db649fecd7f06b8601825c13ff4679dc02823497",
+  "publicPageAndAssetHashes": true,
+  "latestCompleteDownloadMatches": true,
+  "completeDownloadEvidence": "Previously verified complete 1.1.0 website download reused after repeat download timed out; current website HEAD/Range and server artifact hash passed.",
+  "headlessChromium": {
+    "widths": [
+      1440,
+      768,
+      390
+    ],
+    "actualSummaryClick": true,
+    "expandedVersions": 8,
+    "horizontalOverflow": false,
+    "errors": []
+  },
+  "notes": "Only the 1.0.6 installer uses website storage; other historical downloads link directly to their existing GitHub release assets. Old release assets are unchanged."
+}

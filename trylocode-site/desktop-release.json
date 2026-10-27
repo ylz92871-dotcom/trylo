@@ -17,5 +17,154 @@
     "新增团队模式：支持 Personal Agent 作为用户代表加入 Team Agent，参与任务协作。",
     "完善长任务性能：通过本轮长任务压力测试，改进上下文压缩、任务续接和后台进程状态保留。",
     "修复 Subagent 部分已知问题，改善权限审批、上下文传递、后续输入和任务状态同步。"
+  ],
+  "history": [
+    {
+      "tag": "desktop-v1.0.6",
+      "date": "2026-10-24",
+      "releaseNotes": "https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.6",
+      "artifacts": [
+        {
+          "file": "Trylo-Desktop-1.0.6-windows-x64-portable-core.zip",
+          "label": "便携包",
+          "bytes": 160368116,
+          "url": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.6/Trylo-Desktop-1.0.6-windows-x64-portable-core.zip",
+          "sha256": "b142f765bdccbf4ca32245390d2b84a7cc4ef44357eb20527f4841c80b33f9ec"
+        },
+        {
+          "file": "Trylo_1.0.6_x64-setup.exe",
+          "label": "安装包",
+          "bytes": 140795469,
+          "url": "/download/desktop/releases/1.0.6/Trylo_1.0.6_x64-setup.exe",
+          "sha256": "5e04813c648bb120f2496a6b22b7600938ab83ac65735a36f586b42909c303a8"
+        }
+      ]
+    },
+    {
+      "tag": "desktop-v1.0.5",
+      "date": "2026-10-20",
+      "releaseNotes": "https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.5",
+      "artifacts": [
+        {
+          "file": "Trylo-Desktop-1.0.5-windows-x64-portable-core.zip",
+          "label": "便携包",
+          "bytes": 189416579,
+          "url": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Desktop-1.0.5-windows-x64-portable-core.zip",
+          "sha256": "37b5468da6ced965fc06fb22cee27289489c06bca4f0d58b7519b766e02e08ff"
+        },
+        {
+          "file": "Trylo_1.0.5_x64-setup.exe",
+          "label": "安装包",
+          "bytes": 148974924,
+          "url": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo_1.0.5_x64-setup.exe",
+          "sha256": "b8df94cf27cce229467d6852dd455e4dc0dcb6b17fb594141014c24ab975befb"
+        }
+      ]
+    },
+    {
+      "tag": "desktop-v1.0.4",
+      "date": "2026-10-20",
+      "releaseNotes": "https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.4",
+      "artifacts": [
+        {
+          "file": "Trylo-Desktop-1.0.4-windows-x64-portable-core.zip",
+          "label": "便携包",
+          "bytes": 189415508,
+          "url": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.4/Trylo-Desktop-1.0.4-windows-x64-portable-core.zip",
+          "sha256": "6d9e759a685563b4b7774592bfd5817fdd6b05a6a610b3cf88c03ba1673b0a44"
+        },
+        {
+          "file": "Trylo_1.0.4_x64-setup.exe",
+          "label": "安装包",
+          "bytes": 148963853,
+          "url": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.4/Trylo_1.0.4_x64-setup.exe",
+          "sha256": "0cff99aa913c38fb47ce6b9c1c3c88e1c93002523ae820c26a7a0cbbfeb4cac6"
+        }
+      ]
+    },
+    {
+      "tag": "desktop-v1.0.3",
+      "date": "2026-10-20",
+      "releaseNotes": "https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.3",
+      "artifacts": [
+        {
+          "file": "Trylo-Desktop-1.0.3-windows-x64-portable-core.zip",
+          "label": "便携包",
+          "bytes": 189401302,
+          "url": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.3/Trylo-Desktop-1.0.3-windows-x64-portable-core.zip",
+          "sha256": "0ae8bc053138bf13bc23c234c2d6feebc96334183e22a8bd636920ab3ff56c70"
+        },
+        {
+          "file": "Trylo_1.0.3_x64-setup.exe",
+          "label": "安装包",
+          "bytes": 148970972,
+          "url": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.3/Trylo_1.0.3_x64-setup.exe",
+          "sha256": "2398ab286f9e9deeeb6b01e829c548f88a1f47fe9010c60463915f036f6dee20"
+        }
+      ]
+    },
+    {
+      "tag": "desktop-v1.0.2",
+      "date": "2026-10-20",
+      "releaseNotes": "https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.2",
+      "artifacts": [
+        {
+          "file": "Trylo-Desktop-1.0.2-windows-x64-portable-core.zip",
+          "label": "便携包",
+          "bytes": 156223917,
+          "url": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.2/Trylo-Desktop-1.0.2-windows-x64-portable-core.zip",
+          "sha256": "b1cc41a6b9db5cec29b19b2ade16bc56328d621e34897fceec94a9fb69f114c4"
+        },
+        {
+          "file": "Trylo_1.0.2_x64-setup.exe",
+          "label": "安装包",
+          "bytes": 138930883,
+          "url": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.2/Trylo_1.0.2_x64-setup.exe",
+          "sha256": "5f68a6be0c24d8c7179e5418aa3343043833f63d1a9acfe4742cecc9248caf89"
+        }
+      ]
+    },
+    {
+      "tag": "desktop-v1.0.1-r3",
+      "date": "2026-10-16",
+      "releaseNotes": "https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.1-r3",
+      "artifacts": [
+        {
+          "file": "Trylo-Desktop-1.0.1-windows-x64-portable-core.zip",
+          "label": "便携包",
+          "bytes": 219903437,
+          "url": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.1-r3/Trylo-Desktop-1.0.1-windows-x64-portable-core.zip",
+          "sha256": "67188bf9b38c761336450ff77358c7ff3fd68ff26c6798a5ae944a6da80bc796"
+        }
+      ]
+    },
+    {
+      "tag": "desktop-v1.0.1-r2",
+      "date": "2026-10-16",
+      "releaseNotes": "https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.1-r2",
+      "artifacts": [
+        {
+          "file": "Trylo-Desktop-1.0.1-windows-x64-portable-r2.zip",
+          "label": "便携包",
+          "bytes": 367231006,
+          "url": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.1-r2/Trylo-Desktop-1.0.1-windows-x64-portable-r2.zip",
+          "sha256": "2686938f08da00f4a7e36ac4eed3fd9b153ab827ff223599a30e0ca7151c3dc3"
+        }
+      ]
+    },
+    {
+      "tag": "desktop-v1.0.1",
+      "date": "2026-10-16",
+      "releaseNotes": "https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.1",
+      "artifacts": [
+        {
+          "file": "Trylo-Desktop-1.0.1-windows-x64-portable.zip",
+          "label": "便携包",
+          "bytes": 593012640,
+          "url": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.1/Trylo-Desktop-1.0.1-windows-x64-portable.zip",
+          "sha256": "ab227c35b8843662310c186b3297b843cbfb34730b9b446c66724c7cc243cb8c"
+        }
+      ]
+    }
   ]
 }
