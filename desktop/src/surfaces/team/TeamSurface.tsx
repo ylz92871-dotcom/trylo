@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import {
   dismissTeamRun,
@@ -19,6 +19,10 @@ import type { TeamProfile } from './team-profile-types';
 import type { TeamRun } from './team-types';
 
 export interface TeamSurfaceProps {
+  readonly personView?: ReactNode;
+  readonly approvals?: ReactNode;
+  readonly memberDrafts?: Map<string, string>;
+  readonly onMemberInput?: import('../../host-adapter/subagent-contract').SendSubagentInput;
   /** Null = no run yet → idle. */
   readonly run: TeamRun | null;
   /** `teamAccessEnabled` (product treats composer as live off this flag). */
@@ -71,10 +75,13 @@ export function TeamSurface(props: TeamSurfaceProps): ReactElement {
   const [launching, setLaunching] = useState(false);
 
   const isActiveRun = isTeamRunActive(run) && (run?.seats.length ?? 0) > 0;
+  const hasVisibleHistory = run !== null && run.seats.length > 0 && !isTeamRunDismissed(run.id);
   const runId = run?.id;
   useEffect(() => {
-    if (isActiveRun) setView('run');
-  }, [isActiveRun, runId]);
+    // A terminal history can arrive after this surface mounted from a saved
+    // team preference. Treat it like initialView without replacing a draft.
+    if (isActiveRun || (hasVisibleHistory && !hasComposerDraft())) setView('run');
+  }, [isActiveRun, hasVisibleHistory, runId]);
   const hasRun = run !== null;
   useEffect(() => {
     if (!hasRun) setView((v) => (v === 'run' ? 'idle' : v));
@@ -83,6 +90,7 @@ export function TeamSurface(props: TeamSurfaceProps): ReactElement {
   useEffect(() => {
     if (!run?.selectedSeatId) return undefined;
     const onKey = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented) return;
       if (event.key !== 'Escape') return;
       event.preventDefault();
       onSelectSeat(null);
@@ -92,13 +100,17 @@ export function TeamSurface(props: TeamSurfaceProps): ReactElement {
   }, [run?.selectedSeatId, onSelectSeat]);
 
   const showRun = isActiveRun
-    || (view === 'run' && run !== null && run.seats.length > 0 && !isTeamRunDismissed(run.id));
+    || (view === 'run' && hasVisibleHistory);
 
   if (showRun && run) {
     return (
-      <div className="team-surface">
-        <div className="team-surface__body">
+      <div className="team-surface team-surface--run">
+        <div className="team-surface__body team-surface__body--run">
           <TeamRunView
+            personView={props.personView}
+            approvals={props.approvals}
+            memberDrafts={props.memberDrafts}
+            onMemberInput={props.onMemberInput}
             run={run}
             onSelectSeat={props.onSelectSeat}
             {...(props.onCancelSeat ? { onCancelSeat: props.onCancelSeat } : {})}

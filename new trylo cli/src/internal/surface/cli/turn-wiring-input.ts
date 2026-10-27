@@ -42,6 +42,7 @@ export function turnWiringInput(
     ...(input.reasoningSummary === undefined ? {} : { reasoningSummary: input.reasoningSummary }),
     ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort }),
     model: input.model,
+    ...(input.contextTokenLimit === undefined ? {} : { contextTokenLimit: input.contextTokenLimit }),
     endpoint: input.endpoint,
     apiKey: input.apiKey,
     ...(input.tokenManager === undefined ? {} : { tokenManager: input.tokenManager }),
@@ -85,6 +86,7 @@ export function turnWiringInput(
             // C44/L27: absent means no agent_type is offered and the spawn
             // tool's text is exactly what it was before roles existed.
             ...(input.subagentRoles === undefined ? {} : { roles: input.subagentRoles }),
+            ...(input.subagentTeam === undefined ? {} : { team: input.subagentTeam }),
           },
         }),
     ...(input.learning === undefined

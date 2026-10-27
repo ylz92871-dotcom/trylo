@@ -34,7 +34,11 @@ export interface SettingsForCodeRun {
   readonly apiKey?: string;
   readonly apiHost?: string;
   readonly apiModel?: string;
+  /** Account-owned free pool; resolved into an ephemeral local connection at spawn. */
+  readonly platformModel?: string;
   readonly reasoningEffort?: ReasoningEffort;
+  readonly contextTokenLimit?: number;
+  readonly modelContextWindow?: number;
   readonly apiFormat?: 'anthropic' | 'openai';
   readonly apiKeyHeader?: string;
   readonly apiKeyPrefix?: string;

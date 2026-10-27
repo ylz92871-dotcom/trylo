@@ -79,7 +79,9 @@ test("production wiring inherits available parent tools and intersects role rest
   const result = value(await built.tools.execute({ name: "spawn_agent", toolCallId: "spawn", arguments: { message: "search", agent_type: "searcher" } }, new AbortController().signal));
   assert.deepEqual(result["allowed_tools"], ["search_text"]);
   await flush();
-  assert.deepEqual(seen[0]?.tools.map(b => b.name), ["search_text"]);
+  // World access stays intersected. The additional local communication port
+  // is not a permission to execute any parent tool.
+  assert.deepEqual(seen[0]?.tools.map(b => b.name), ["search_text", "report_progress"]);
 });
 
 test("fork preserves completed tool pairs and image bytes while excluding unanswered parent calls", async t => {
@@ -212,8 +214,9 @@ test("retired usage is charged before recovery even when reported after cancella
   const h = harness(undefined, provider); t.after(async () => { release(); await h.cleanup(); });
   const id = String(value(await h.call("spawn_agent", { message: "go", token_budget: 100 }))["agent_id"]);
   await flush(); await h.call("send_input", { target: id, message: "more" }); await started;
-  await h.call("close_agent", { target: id, force: true });
-  const resuming = h.call("resume_agent", { target: id }); release(); await resuming; await flush();
+  const closing = h.call("close_agent", { target: id, force: true });
+  release(); await closing;
+  await h.call("resume_agent", { target: id }); await flush();
   const budget = report(await h.call("wait_agent", { targets: [id], timeout_ms: 0 }), id)["budget"] as JsonObject;
   assert.equal(budget["tokens_used"], 100);
   assert.equal(budget["tokens_remaining"], 0);

@@ -11,7 +11,9 @@ import { chatStructuredFields } from "./structured-output.js";
 import { chatContentOf, unresolvedImageReference } from "../media/image-attachments.js";
 import { chatSystemMessages } from "./chat-system-messages.js";
 import { createGlmToolContinuation, type GlmToolContinuation } from "./glm-tool-continuation.js";
-import { httpFailureMessage } from "./http-failure-message.js";
+import { classifyHttpFailure } from "./http-failure-message.js";
+export { classifyHttpStatus } from "./http-status.js";
+import type { NativeCheckpointState } from "./glm-continuation-checkpoint.js";
 
 /**
  * OpenAI-compatible streaming adapter over Node's built-in fetch.
@@ -68,22 +70,6 @@ export function readCredential(config: OpenAiCompatibleConfig): CredentialStatus
     return { ok: false, reason: "missing_api_key" };
   }
   return { ok: true, apiKey: value ?? "" };
-}
-
-export function classifyHttpStatus(status: number): ProviderErrorClass {
-  if (status === 401 || status === 403) {
-    return "auth";
-  }
-  if (status === 429) {
-    return "rate_limit";
-  }
-  if (status === 400 || status === 404 || status === 422) {
-    return "invalid_request";
-  }
-  if (status >= 500) {
-    return "server";
-  }
-  return "unknown";
 }
 
 export function isRetryableClass(consumer: ProviderErrorClass): boolean {
@@ -216,14 +202,14 @@ async function acquireResponse(
         },
       };
     }
-    lastClass = classifyHttpStatus(outcome.response.status);
+    const failure = await classifyHttpFailure(outcome.response, signal);
+    lastClass = failure.class;
     const retryable = isRetryableClass(lastClass);
     if (retryable && attempt < policy.maxAttempts) {
-      await outcome.response.body?.cancel();
       await policy.sleep(policy.baseDelay * attempt);
       continue;
     }
-    const message = await httpFailureMessage(outcome.response, lastClass, signal);
+    const message = failure.message;
     // HTTP diagnostics are not model output; recovery remains before headers.
     return {
       kind: "failed",
@@ -263,9 +249,10 @@ export function nativeContinuationNotice(diagnostic: NativeContinuationDiagnosti
   return headline;
 }
 
-export function createOpenAiCompatibleProvider(config: OpenAiCompatibleConfig): ProviderPort {
-  const continuations = createGlmToolContinuation(config.endpoint, config.model);
+export function createOpenAiCompatibleProvider(config: OpenAiCompatibleConfig, inherited: ReadonlyArray<NativeCheckpointState> = []): ProviderPort {
+  const continuations = createGlmToolContinuation(config.endpoint, config.model, inherited);
   return {
+    fork: messages => createOpenAiCompatibleProvider(config, continuations.copyMatching(messages ?? [])),
     ...(continuations.persistence === undefined ? {} : { continuation: continuations.persistence }),
     async *stream(request: ProviderRequest, signal: AbortSignal): AsyncIterable<ProviderEvent> {
       const unresolved = unresolvedImageReference(request);

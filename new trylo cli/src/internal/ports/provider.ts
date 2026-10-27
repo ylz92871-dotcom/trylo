@@ -124,6 +124,7 @@ export type ProviderFinishReason = (typeof PROVIDER_FINISH_REASONS)[number];
 export const PROVIDER_ERROR_CLASSES = [
   "auth",
   "rate_limit",
+  "quota",
   "invalid_request",
   "server",
   "network",
@@ -343,6 +344,10 @@ export function providerContinuationScope(sessionId: string | undefined, turnId:
 }
 
 export type ProviderPort = {
+    /** Same transport configuration with independent mutable continuation state.
+     * Optional frozen history selects only matching adapter-owned native states;
+     * caller/display reasoning is never a seed. A logical child owns this instance. */
+  readonly fork?: (messages?: ReadonlyArray<ProviderMessage>) => ProviderPort;
   readonly continuation?: ProviderContinuationPort;
   stream(request: ProviderRequest, signal: AbortSignal): AsyncIterable<ProviderEvent>;
 };

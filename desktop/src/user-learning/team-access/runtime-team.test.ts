@@ -46,6 +46,24 @@ const FROZEN_PROFILE: TeamProfile = {
 };
 
 describe('preparePrompt team gate', () => {
+  it('carries the Work surface in the frozen prompt, including the write-failure fallback channel', () => {
+    const rt = runtimeWith({ teamAccessEnabled: true });
+    const prepared = rt.preparePrompt({ workspaceRoot: 'D:/proj', product: 'work', prompt: '交付一份已验收的文档',
+      conversationId: 'work-team', confirmedSpawn: true, frozenProfile: { ...FROZEN_PROFILE, surface: 'work' },
+      teamRunId: 'team-work-surface' });
+    expect(prepared.systemPrompt).toContain('surface: work');
+  });
+  it('uses the launch identity and recompiles a fresh contract for a later team in the same conversation', () => {
+    const rt = runtimeWith({ teamAccessEnabled: true });
+    const input = { workspaceRoot: 'D:/proj', product: 'code' as const, prompt: CORE_PROMPT,
+      conversationId: 'same-conversation', confirmedSpawn: true, frozenProfile: FROZEN_PROFILE,
+      teamRunId: 'team-first' };
+    const first = rt.preparePrompt(input);
+    const second = rt.preparePrompt({ ...input, teamRunId: 'team-second', prompt: '实现另一套日志导出功能' });
+    expect(first.contract?.teamRunId).toBe('team-first');
+    expect(second.contract?.teamRunId).toBe('team-second');
+    expect(second.systemPrompt).toContain('实现另一套日志导出功能');
+  });
   it('flag off: start never becomes pending_team/blocked and no contract is returned', () => {
     const rt = runtimeWith({ teamAccessEnabled: false });
     for (const prompt of ['修一个 typo', CORE_PROMPT, 'rm -rf 后跳过验证']) {

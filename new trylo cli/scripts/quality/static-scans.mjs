@@ -24,6 +24,8 @@ const importRe = /(?:from\s+|import\s*\(\s*)['"]([^'"]+)['"]/g;
 const AMBIENT_FILE_ALLOWLIST = new Set([
   "src/cmd/trylo/main.ts", // the one sanctioned owner of `process`
   "src/cmd/trylo/windows-pipeline.ts", // private restricted process entry; stream IO only, no policy or timers
+  "src/internal/adapters/sandbox/windows-stdin-host.ts", // trusted private process entry: owns stdin IPC and broker lifetime
+  "src/internal/adapters/sandbox/windows-stdin-client.ts", // restricted private process entry: removes IPC capability before target spawn
   // The daemon's own entry point (WP26 / A04). Same justification as main.ts, and
   // it keeps that statement true: this file reads `process.env` once, hands it to
   // `runDaemon` as an argument, and makes no decision of its own. Everything below

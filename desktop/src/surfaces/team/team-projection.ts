@@ -6,6 +6,8 @@
  * P0: prompt / result / status. Per-seat tool timelines stay later.
  */
 import { isTeamSeatId } from '../shared/seats';
+import { assignmentText, recordMemberProgress, recordTeamHandoff } from './team-progress-projection';
+import { recordMemberObservation } from '../../domain/member-observation';
 import type { ContractSummaryLike } from '../shared/engineering-contract';
 import {
   applySeatPatch,
@@ -20,18 +22,30 @@ import type {
 } from './team-types';
 
 export interface TeamProjectionContext {
+  readonly teamRunId?: string;
   readonly workspaceId: string;
   readonly personConversationId: string;
 }
 
 export interface TeamSubagentEvent {
+  readonly observation?: import('../../domain/member-observation').MemberObservation;
+  readonly taskId?: string;
+  readonly canReceiveInput?: boolean;
+  readonly parked?: boolean;
+  readonly round?: number;
+  readonly activity?: import('../../host-adapter/subagent-contract').SubagentToolActivity;
   readonly type: 'subagent';
-  readonly kind: 'spawn' | 'end';
+  readonly kind: 'spawn' | 'update' | 'end';
   readonly id: string;
   readonly agentType?: string;
   /** Member instance uuid forwarded from the AgentTool `member_id` field
    *  (Foundation spec §8.2). Spawn events only; end events match on id. */
   readonly memberId?: string;
+  readonly teamRunId?: string;
+  readonly source?: 'trylo-v1';
+  readonly status?: 'running' | 'waiting' | 'done' | 'failed' | 'cancelled';
+  readonly error?: string;
+  readonly resumedFrom?: string;
   readonly prompt?: string;
   readonly result?: string;
   readonly durationMs?: number;
@@ -63,13 +77,18 @@ function clamp(text: string, max: number): string {
   return `${trimmed.slice(0, Math.max(0, max - 1))}…`;
 }
 
-function isTeamSubagentEvent(event: unknown): event is TeamSubagentEvent {
+function isTeamSubagentEvent(event: unknown, run: TeamRun): event is TeamSubagentEvent {
   if (!event || typeof event !== 'object') return false;
-  const e = event as { type?: unknown; kind?: unknown; id?: unknown; agentType?: unknown; source?: unknown };
-  if (e.source === 'trylo-v1') return false;
+  const e = event as { type?: unknown; kind?: unknown; id?: unknown; agentType?: unknown;
+    source?: unknown; teamRunId?: unknown; memberId?: unknown };
   if (e.type !== 'subagent') return false;
-  if (e.kind !== 'spawn' && e.kind !== 'end') return false;
+  if (e.kind !== 'spawn' && e.kind !== 'update' && e.kind !== 'end') return false;
   if (typeof e.id !== 'string' || e.id.length === 0) return false;
+  if (e.teamRunId !== undefined && e.teamRunId !== run.id) return false;
+  if (e.kind !== 'spawn') return run.seats.some(seat => seat.id === e.id);
+  // A role name alone is also valid for ordinary V1 children. Only the
+  // frozen run/member identity may route one onto the team stage.
+  if (e.source === 'trylo-v1' && (e.teamRunId !== run.id || typeof e.memberId !== 'string')) return false;
   return isTeamSeatId(typeof e.agentType === 'string' ? e.agentType : '');
 }
 
@@ -118,9 +137,21 @@ function applySpawn(
     summary: clamp(prompt || (event.agentType ?? 'seat'), SUMMARY_MAX),
     ...(prompt ? { prompt } : {}),
     ...(event.ts !== undefined ? { startedAt: event.ts } : {}),
+    ...(event.taskId === undefined ? {} : { taskId: event.taskId }),
+    ...(event.canReceiveInput === undefined ? {} : { canReceiveInput: event.canReceiveInput }),
+    parked: false,
+    awaitingInput: false,
   };
-  if (run.seats.some(s => s.id === event.id)) {
-    return withDerivedStatus(applySeatPatch(run, event.id, patch));
+  // Stdout and the event tail can deliver the same spawn. A replay must
+  // never reset progress or revive a terminal member.
+  if (run.seats.some(s => s.id === event.id)) return run;
+  const recovered = event.source === 'trylo-v1' && event.teamRunId === run.id && event.resumedFrom !== undefined
+    ? run.seats.find(seat => seat.id === event.resumedFrom && seat.memberId === event.memberId && seat.seat === event.agentType)
+    : undefined;
+  if (recovered && run.endedAt === undefined) {
+    return withDerivedStatus(applySeatPatch(run, recovered.id, {
+      ...patch, ...roundPatch(recovered, event), id: event.id, result: undefined, error: undefined, endedAt: undefined, durationMs: undefined,
+    }));
   }
   // Foundation spec §7.6.3 — bind the spawn onto a QUEUED row from the
   // frozen profile when one exists:
@@ -130,15 +161,16 @@ function applySpawn(
   const queued = run.seats.find(
     (s) => s.status === 'queued' &&
       (event.memberId !== undefined
-        ? s.memberId === event.memberId
+        ? s.memberId === event.memberId && s.seat === event.agentType
         : false),
   )
-    ?? run.seats.find(
+    ?? (event.memberId === undefined ? run.seats.find(
       (s) => s.status === 'queued' && s.seat === event.agentType,
-    );
+    ) : undefined);
   if (queued) {
     return withDerivedStatus(applySeatPatch(run, queued.id, {
       ...patch,
+      ...roundPatch(queued, event),
       id: event.id,
       ...(event.memberId !== undefined && queued.memberId === undefined
         ? { memberId: event.memberId }
@@ -154,9 +186,12 @@ function applyEnd(run: TeamRun, event: TeamSubagentEvent, extras?: TeamEventExtr
   const existing = run.seats.find(s => s.id === event.id);
   if (!existing) return run;
   const result = event.result;
+  const facts = { ...roundPatch(existing, event), awaitingInput: false, canReceiveInput: event.canReceiveInput === true && event.parked === true,
+    parked: event.parked === true };
   if (existing.status === 'cancelled') {
     return withDerivedStatus(
       applySeatPatch(run, event.id, {
+        ...facts,
         ...(result !== undefined ? { result } : {}),
         ...(event.durationMs !== undefined ? { durationMs: event.durationMs } : {}),
         ...(event.ts !== undefined ? { endedAt: event.ts } : {}),
@@ -170,6 +205,7 @@ function applyEnd(run: TeamRun, event: TeamSubagentEvent, extras?: TeamEventExtr
     const reason = (extras.vetoReason ?? '').replace(/\s+/g, ' ').trim();
     return withDerivedStatus(
       applySeatPatch(run, event.id, {
+        ...facts,
         status: 'waiting_approval' as const,
         summary: clamp(`Person 否决 · ${reason}`.trim(), SUMMARY_MAX),
         ...(result !== undefined ? { result } : {}),
@@ -178,12 +214,15 @@ function applyEnd(run: TeamRun, event: TeamSubagentEvent, extras?: TeamEventExtr
       }),
     );
   }
-  const status: SeatRunStatus = 'completed';
+  const status: SeatRunStatus = event.status === 'failed' ? 'failed'
+    : event.status === 'cancelled' ? 'cancelled' : 'completed';
   const summary = result ? clamp(result, SUMMARY_MAX) : existing.summary;
   return withDerivedStatus(
     applySeatPatch(run, event.id, {
+      ...facts,
       status,
       summary,
+      ...(event.error !== undefined ? { error: event.error } : {}),
       ...(result !== undefined ? { result } : {}),
       ...(event.durationMs !== undefined ? { durationMs: event.durationMs } : {}),
       ...(event.ts !== undefined ? { endedAt: event.ts } : {}),
@@ -191,11 +230,48 @@ function applyEnd(run: TeamRun, event: TeamSubagentEvent, extras?: TeamEventExtr
   );
 }
 
+function applyUpdate(run: TeamRun, event: TeamSubagentEvent, extras?: TeamEventExtras): TeamRun {
+  const seat = run.seats.find(value => value.id === event.id);
+  if (!seat) return run;
+  let next = applySeatPatch(run, event.id, {
+    ...roundPatch(seat, event),
+    ...(event.observation === undefined ? {} : { observations: recordMemberObservation(seat.observations, event.observation, event.ts ?? Date.now()) }),
+    ...(event.round !== undefined && event.round > (seat.round ?? 1) ? { result: undefined, error: undefined,
+      summary: clamp(event.prompt ? assignmentText(event.prompt) : '正在执行下一步', SUMMARY_MAX) } : {}),
+    ...(event.status === 'waiting' ? { awaitingInput: true } : event.status === 'running' ? { awaitingInput: false } : {}),
+    ...(event.status === 'running' ? { status: 'running', parked: false } : {}),
+    ...(event.result !== undefined ? { result: event.result, summary: clamp(event.result, SUMMARY_MAX) } : {}),
+    ...(extras?.vetoActive && seat.seat === 'person'
+      ? { status: 'waiting_approval', summary: clamp(`Person 否决 · ${extras.vetoReason ?? ''}`, SUMMARY_MAX) } : {}),
+  });
+  const activity = event.activity;
+  if (activity) {
+    const label = seat.activity?.find(item => item.id === activity.id)?.label ?? labelSeatTool(activity.tool ?? 'tool');
+    const ok = activity.kind === 'result' ? activity.ok : undefined;
+    next = withActivity(next, seat.id, { id: activity.id, kind: activity.kind, label, round: event.round ?? seat.round ?? 1,
+      at: event.ts ?? Date.now(), ...(ok === undefined ? {} : { ok }) }, ok === false ? `${label}失败` : label);
+  }
+  return withDerivedStatus(next);
+}
+
+function roundPatch(seat: SeatInstance, event: TeamSubagentEvent): { readonly round?: number; readonly conversation?: SeatInstance['conversation'] } {
+  if (event.prompt === undefined && event.result === undefined && event.round === undefined) return {};
+  const round = event.round ?? seat.round ?? 1;
+  const conversation = [...(seat.conversation ?? [])];
+  const index = conversation.findIndex(value => value.round === round);
+  const previous = index < 0 ? undefined : conversation[index];
+  const entry = { ...previous, round,
+    ...(event.prompt !== undefined && (event.kind === 'spawn' || previous?.prompt === undefined) ? { prompt: event.prompt } : {}),
+    ...(event.result === undefined ? {} : { result: event.result }) };
+  if (index < 0) conversation.push(entry); else conversation[index] = entry;
+  return { round, conversation: conversation.slice(-64) };
+}
+
 /** Optimistic local cancel. The CLI `stop_task` follows from App. */
 export function cancelTeamSeat(run: TeamRun, seatId: string, at = Date.now()): TeamRun {
   const existing = run.seats.find(s => s.id === seatId);
   if (!existing) return run;
-  if (existing.status !== 'running' && existing.status !== 'waiting_approval') {
+  if (existing.status !== 'running' && existing.status !== 'waiting_approval' && existing.status !== 'queued') {
     return run;
   }
   const durationMs =
@@ -226,26 +302,50 @@ export function applyTeamEvents(
   let next = run;
   let touched = false;
   for (const event of events) {
-    if (!next || next.personConversationId !== ctx.personConversationId) {
+    if (!next || next.personConversationId !== ctx.personConversationId || next.workspaceId !== ctx.workspaceId) {
       continue;
     }
-    if (next.status === 'completed' || next.status === 'failed' || next.status === 'cancelled') {
-      continue;
-    }
-    if (isTeamSubagentEvent(event)) {
-      next = event.kind === 'spawn'
-        ? applySpawn(next, event, ctx, extras)
-        : applyEnd(next, event, extras);
+    const settled = settleParentEnd(next, event);
+    if (settled !== next) {
+      next = { ...settled, ...(settled.reports ? { reports: settled.reports.map(report => report.streaming ? { ...report, streaming: false } : report) } : {}) };
       touched = true;
       continue;
     }
-    const withTool = applyToolEvent(next, event);
+    if (next.endedAt !== undefined) continue;
+    const terminal = next.status === 'completed' || next.status === 'failed' || next.status === 'cancelled';
+    if (terminal && next.lifecycle !== 'open') continue;
+    if (isTeamSubagentEvent(event, next)) {
+      const before = next;
+      next = event.kind === 'spawn'
+        ? applySpawn(next, event, ctx, extras)
+        : event.kind === 'end' ? applyEnd(next, event, extras) : applyUpdate(next, event, extras);
+      next = recordMemberProgress(before, next, event);
+      touched = true;
+      continue;
+    }
+    const withTool = applyToolEvent(recordTeamHandoff(next, event), event);
     if (withTool !== next) {
       next = withTool;
       touched = true;
     }
   }
   return touched ? next : run;
+}
+
+function settleParentEnd(run: TeamRun, event: unknown): TeamRun {
+  if (run.endedAt !== undefined) return run;
+  if (!event || typeof event !== 'object') return run;
+  const e = event as { type?: unknown; reason?: unknown; isError?: unknown; error?: unknown; ts?: unknown };
+  if (e.type !== 'loop_end') return run;
+  const cancelled = e.reason === 'cancelled' || e.reason === 'aborted' || e.reason === 'user_interrupt';
+  const at = typeof e.ts === 'number' ? e.ts : Date.now();
+  const seats = run.seats.map(seat => seat.status === 'queued' || seat.status === 'running' || seat.status === 'waiting_approval'
+    ? { ...seat, status: cancelled ? 'cancelled' as const : 'failed' as const, endedAt: at,
+      error: cancelled ? seat.error : e.reason === 'startup_failed' && typeof e.error === 'string' ? e.error
+        : seat.error ?? (seat.status === 'queued' ? '父任务结束前未派发该成员。' : '父任务结束前未收到成员终态。') }
+    : seat);
+  const status = cancelled ? 'cancelled' : e.isError === true ? 'failed' : deriveTeamStatus(seats);
+  return { ...run, seats: seats.map(seat => ({ ...seat, canReceiveInput: false })), status, lifecycle: 'closed', updatedAt: at, endedAt: at };
 }
 
 function fileNameFrom(input: Readonly<Record<string, unknown>> | undefined): string {
@@ -259,14 +359,21 @@ function fileNameFrom(input: Readonly<Record<string, unknown>> | undefined): str
 export function labelSeatTool(tool: string, input?: Readonly<Record<string, unknown>>): string {
   const file = fileNameFrom(input);
   switch (tool) {
-    case 'Read': return file ? `读 ${file}` : '读文件';
+    case 'Read':
+    case 'read_file': return file ? `读 ${file}` : '读文件';
     case 'Edit':
     case 'Write':
     case 'NotebookEdit': return file ? `改 ${file}` : '改文件';
+    case 'write_file':
+    case 'edit_file':
+    case 'apply_patch': return file ? `改 ${file}` : '改文件';
     case 'Bash':
-    case 'PowerShell': return '命令';
+    case 'PowerShell':
+    case 'run_shell': return '命令';
     case 'Grep':
-    case 'Glob': return '搜索';
+    case 'Glob':
+    case 'search_text':
+    case 'find_files': return '搜索';
     case 'WebFetch':
     case 'WebSearch': return '检索';
     case 'Agent': return '派出成员';
@@ -314,10 +421,12 @@ function applyToolEvent(run: TeamRun, event: unknown): TeamRun {
     tool?: unknown;
     input?: unknown;
     parentId?: unknown;
+    source?: unknown;
     ok?: unknown;
     ts?: unknown;
   };
   if (e.type === 'tool_use' && typeof e.id === 'string' && typeof e.tool === 'string') {
+    if (e.source === 'trylo-v1' && typeof e.parentId !== 'string') return run;
     if (e.tool === 'Agent' || e.tool === 'Task') {
       // Stdout sees the Agent tool_use before the file-tail spawn event.
       // Bind the queued row now so nested tools with parentId = this id
@@ -346,11 +455,14 @@ function applyToolEvent(run: TeamRun, event: unknown): TeamRun {
     return withActivity(run, seat.id, {
       id: e.id,
       kind: 'tool',
+      round: seat.round ?? 1,
       at: typeof e.ts === 'number' ? e.ts : Date.now(),
       label,
     }, label);
   }
   if (e.type === 'tool_result' && typeof e.id === 'string') {
+    if (e.source === 'trylo-v1' && typeof e.parentId !== 'string'
+      && !run.seats.some(seat => seat.activity?.some(activity => activity.id === e.id))) return run;
     const seat = findSeatForTool(
       run,
       typeof e.parentId === 'string' ? e.parentId : undefined,
@@ -363,6 +475,7 @@ function applyToolEvent(run: TeamRun, event: unknown): TeamRun {
     return withActivity(run, seat.id, {
       id: e.id,
       kind: 'result',
+      round: prev?.round ?? seat.round ?? 1,
       at: typeof e.ts === 'number' ? e.ts : Date.now(),
       label,
       ok,

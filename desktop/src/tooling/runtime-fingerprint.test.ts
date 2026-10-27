@@ -26,6 +26,7 @@ const BASE = {
   permissionLevel: 'workspace_write' as const,
   extraCliArgs: [] as readonly string[],
   toolRuntime: null as ResolvedToolRuntime | null,
+  cliRuntimeProtocol: 'legacy-stream-json' as const,
 };
 
 function runtime(profileId: string): ResolvedToolRuntime {
@@ -48,6 +49,11 @@ function runtime(profileId: string): ResolvedToolRuntime {
 }
 
 describe('runtimeFingerprint', () => {
+  it('uses the new CLI identity when a caller omits its protocol', () => {
+    const { cliRuntimeProtocol, ...defaultRun } = BASE;
+    expect(fingerprintForRun(defaultRun)).toBe(fingerprintForRun({ ...defaultRun, cliRuntimeProtocol: 'trylo-v1' }));
+    expect(fingerprintForRun(defaultRun)).not.toBe(fingerprintForRun({ ...defaultRun, cliRuntimeProtocol }));
+  });
   it('is deterministic for identical inputs', () => {
     expect(fingerprintForRun(BASE)).toBe(fingerprintForRun(BASE));
   });

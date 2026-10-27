@@ -45,6 +45,8 @@ export type ToolBinding = {
 };
 
 export type ToolCallRequest = {
+  /** Host-assigned logical task; absent means the supervising parent. */
+  readonly ownerId?: string;
   readonly toolCallId: string;
   readonly name: string;
   readonly arguments: JsonObject;

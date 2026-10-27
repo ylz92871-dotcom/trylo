@@ -10,9 +10,7 @@ import { effectiveContextCeiling } from "./run-command.js";
  * D7 BYOK 压缩面：`providers config` 显示 `declared=not-declared effective=none`，
  * 而 add/edit 根本收不了 context——自动压缩在 BYOK 下永远休眠。
  *
- * 对照（opencode `session/overflow.ts`）：模型自带 `limit.context`，
- * `isOverflow` 默认自动压缩、未知（0）才关。镜像过来：声明的 contextWindow
- * 在没有显式上限时就是 ceiling；没声明的保持关闭（旧行为逐字不变）。
+ * 默认预算为 200K；声明的模型容量始终约束用户设置的工作窗口。
  */
 
 type Recorded = {
@@ -107,8 +105,10 @@ test("D7: edit changes the window, and absence keeps the old one", () => {
   assert.equal(budget.declared, 64000);
 });
 
-test("D7: the run ceiling prefers explicit config, falls back to declared", () => {
+test("D7: the run ceiling defaults to 200K and clamps preferences to declared capacity", () => {
   assert.equal(effectiveContextCeiling(8000, 128000), 8000);
   assert.equal(effectiveContextCeiling(undefined, 128000), 128000);
-  assert.equal(effectiveContextCeiling(undefined, undefined), undefined);
+  assert.equal(effectiveContextCeiling(undefined, undefined), 200000);
+  assert.equal(effectiveContextCeiling(400000, 128000), 128000);
+  assert.equal(effectiveContextCeiling(undefined, 1000000), 200000);
 });

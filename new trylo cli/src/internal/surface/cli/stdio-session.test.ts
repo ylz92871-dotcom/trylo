@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { createStdioSession } from "./stdio-session.js";
 import { createAskUserTools } from "../../adapters/tools/ask-user/index.js";
 import { answerStdioInput, stdioQuestions } from "./stdio-questions.js";
+import { buildPermissionAction } from "../../loop/permission-grants.js";
 
 const tick = () => new Promise<void>(resolve => setImmediate(resolve));
 const question = { id: "style", header: "样式", question: "选择方向", multiSelect: true,
@@ -26,6 +27,43 @@ function harness() {
 const response = (requestId: string, body: object) => ({ type: "control_response", response: {
   subtype: "success", request_id: requestId, response: body,
 } });
+
+test("member cancellation retracts only its owner approval and a late response cannot answer a sibling", async () => {
+  const h = harness();
+  try {
+    const cancel = new AbortController();
+    const requester = { kind: "subagent" as const, taskId: "task-a", executionId: "exec-a", teamRunId: "team-a",
+      memberId: "member-a", displayName: "写作成员", role: "worker" };
+    const first = h.channel.approval(buildPermissionAction("call-a", "write_file", { path: "a.txt" }), { signal: cancel.signal, requester });
+    const second = h.channel.approval(buildPermissionAction("call-b", "write_file", { path: "b.txt" }));
+    const requests = h.frames.filter(frame => frame.type === "control_request");
+    assert.deepEqual((requests[0]?.request as Record<string, unknown>).requester, requester);
+    const firstId = String(requests[0]?.request_id); const secondId = String(requests[1]?.request_id);
+    cancel.abort();
+    assert.equal((await first).resolution, "cancelled");
+    assert.deepEqual(h.frames.find(frame => frame.type === "control_cancel_request"), { type: "control_cancel_request", request_id: firstId });
+    h.feed(response(firstId, { behavior: "allow" })); await tick();
+    assert.ok(h.frames.some(frame => frame.code === "stale_control_response"));
+    assert.equal(h.frames.filter(frame => frame.type === "control_cancel_request").length, 1);
+    h.feed(response(secondId, { behavior: "deny" }));
+    assert.equal((await second).resolution, "denied");
+  } finally { h.close(); }
+});
+
+test("host cancellation closes exactly the addressed child and acknowledges the result", async () => {
+  const h = harness();
+  try {
+    const calls: unknown[] = [];
+    h.channel.bindAgentTools({ snapshot: () => [{ name: "close_agent" } as never], cancel: async () => {},
+      execute: async call => { calls.push(call); return { outcome: "result", value: {}, output: "closed", truncated: false }; } });
+    h.feed({ type: "subagent_input", requestId: "cancel-1", target: "agent-a", action: "cancel" });
+    await tick();
+    assert.deepEqual(calls, [{ name: "close_agent", toolCallId: "host-cancel-1", arguments: { target: "agent-a", force: true } }]);
+    assert.equal(h.frames.find(frame => frame.requestId === "cancel-1")?.accepted, true);
+    assert.equal(h.channel.signal.aborted, false);
+    assert.deepEqual(h.channel.pendingInput("turn"), []);
+  } finally { h.close(); }
+});
 
 test("host restart mode is preserved and invalid input modes never dispatch", async () => {
   const h = harness();

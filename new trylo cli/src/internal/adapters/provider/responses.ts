@@ -6,10 +6,10 @@
   ReasoningEffort,
 } from "../../ports/provider.js";
 import {
-  classifyHttpStatus,
   isRetryableClass,
   type TokenManagerLike,
 } from "./openai-compatible.js";
+import { classifyHttpFailure } from "./http-failure-message.js";
 import { responsesStructuredFields } from "./structured-output.js";
 import { translateResponsesBody } from "./responses-stream.js";
 import { responsesContentOf, unresolvedImageReference } from "../media/image-attachments.js";
@@ -148,8 +148,8 @@ async function acquireResponsesResponse(
     if (outcome.response.ok) {
       return outcome;
     }
-    await outcome.response.body?.cancel();
     if (outcome.response.status === 401 && config.tokenManager) {
+      await outcome.response.body?.cancel();
       const refreshed = await config.tokenManager.handleAuthError(401);
       if (refreshed.refreshed && refreshed.token) {
         const retryOutcome = await sendOnce(config, request, refreshed.token, policy, signal);
@@ -180,7 +180,8 @@ async function acquireResponsesResponse(
         },
       };
     }
-    lastClass = classifyHttpStatus(outcome.response.status);
+    const failure = await classifyHttpFailure(outcome.response, signal);
+    lastClass = failure.class;
     const retryable = isRetryableClass(lastClass);
     if (retryable && attempt < policy.maxAttempts) {
       await policy.sleep(policy.baseDelay * attempt);
@@ -193,7 +194,7 @@ async function acquireResponsesResponse(
         class: lastClass,
         retryable,
         phase: "before_headers",
-        message: `http_${outcome.response.status}`,
+        message: failure.message,
       },
     };
   }
@@ -211,6 +212,7 @@ async function acquireResponsesResponse(
 
 export function createResponsesProvider(config: ResponsesConfig): ProviderPort {
   return {
+    fork: () => createResponsesProvider(config),
     async *stream(request: ProviderRequest, signal: AbortSignal): AsyncIterable<ProviderEvent> {
       const unresolved = unresolvedImageReference(request);
       if (unresolved !== undefined) { yield unresolved; return; }

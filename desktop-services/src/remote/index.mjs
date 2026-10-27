@@ -33,7 +33,7 @@ export function createRemoteServices(options = {}) {
   let operations = Promise.resolve();
   const serialize = operation => { const result = operations.then(operation); operations = result.catch(() => {}); return result; };
   const relay = createRelayClient({ appDataDir: options.appDataDir, allowLocal: seam.allowLocalRelay === true,
-    onStatus(state) { relayState = state; if (mode === 'server') emit('remote.status', readStatus()); } });
+    onStatus(state) { relayState = state; emit('account.changed', state); if (mode === 'server') emit('remote.status', readStatus()); } });
   const configuration = createRemoteConfiguration({ appDataDir: options.appDataDir, relay });
   function readStatus() {
     const local = adapter.status();
@@ -96,6 +96,9 @@ export function createRemoteServices(options = {}) {
     relayBrowserOpen(params) { return relay.openBrowserLogin(params); },
     relayAccountOpen() { return relay.openAccountCenter(); },
     relayStatus() { return relay.status(); },
+    relayModels() { return relay.models(); },
+    relayModelConnection(params) { return relay.modelConnection(params); },
+    async dispose() { await relay.close(); await adapter.disable(); },
     relayLogout() { return serialize(async () => { const result = await relay.logout(); if (mode === 'server') await adapter.disable(); return result; }); },
 
     async respond(params = {}) {

@@ -8,6 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LoopEvent, RuntimeWarningEvent } from './loop-events';
 import type { LoopEndEvent, TextEvent } from './loop-events';
+import type { LiveProcessInfo, ProcessExitInfo } from './process-service';
 import {
   TRACE_PRERUN_FAILURE,
   TRACE_SUCCESS,
@@ -26,10 +27,11 @@ const h = vi.hoisted(() => {
   type Sink = {
     out: (line: string) => void;
     err: (line: string) => void;
-    exit: (info: { id: string; pid: number; code: number | null; signal: number | null }) => void;
+    exit: (info: ProcessExitInfo) => void;
   };
   let seq = 0;
   const sinks = new Map<string, Sink>();
+  const registrations = new Map<string, LiveProcessInfo>();
   const record = {
     spawns: [] as { id: string; command: string; args: string[]; hasStderr: boolean }[],
     sent: [] as { id: string; message: string }[],
@@ -46,13 +48,15 @@ const h = vi.hoisted(() => {
       env?: Readonly<Record<string, string>>;
       onOutput: (line: string) => void;
       onStderr?: (line: string) => void;
-      onExit?: (info: { id: string; pid: number; code: number | null; signal: number | null }) => void;
+      onExit?: (info: ProcessExitInfo) => void;
     }): Promise<{ id: string; pid: number; label: string; command: string }> {
       const id = `proc-${++seq}`;
+      const handle = { id, pid: 1000 + seq, label: opts.label, command: opts.command };
+      registrations.set(id, { ...handle, metadata: {} });
       sinks.set(id, {
         out: opts.onOutput,
         err: opts.onStderr ?? (() => undefined),
-        exit: opts.onExit ?? (() => undefined),
+        exit: info => { registrations.delete(id); opts.onExit?.(info); },
       });
       record.spawns.push({
         id,
@@ -60,7 +64,7 @@ const h = vi.hoisted(() => {
         args: [...opts.args],
         hasStderr: typeof opts.onStderr === 'function',
       });
-      return { id, pid: 1000 + seq, label: opts.label, command: opts.command };
+      return handle;
     },
     async send(id: string, message: string): Promise<void> {
       record.sent.push({ id, message });
@@ -72,12 +76,13 @@ const h = vi.hoisted(() => {
     async stop(id: string): Promise<void> {
       record.stopped.push(id);
     },
-    async list(): Promise<readonly never[]> {
-      return [];
+    async list(): Promise<readonly LiveProcessInfo[]> {
+      return [...registrations.values()];
     },
   };
   return {
     sinks,
+    registrations,
     record,
     service,
     setCloseInputFails: (v: boolean) => {
@@ -93,11 +98,309 @@ const {
   permissionFlagsForV1,
   startTryloV1,
   stopTryloV1,
+  isTryloV1Process,
   TryloV1UnsupportedError,
 } = await import('./trylo-v1-runner');
 
 const CLI_PATH = 'C:/work/demo-ws/new trylo cli/dist/cmd/trylo/main.js' as never;
 const CWD = 'C:/work/demo-ws/workspace' as never;
+
+describe('cancellation before native spawn response', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it.each(['confirmed', 'refused'] as const)('delivers the cancelled handle before %s cleanup', async mode => {
+    let ready!: (id: string) => void; let release!: () => void;
+    const acquired = new Promise<string>(resolve => { ready = resolve; });
+    const delayed = new Promise<void>(resolve => { release = resolve; });
+    const spawn = h.service.spawn.bind(h.service);
+    vi.spyOn(h.service, 'spawn').mockImplementationOnce(async options => {
+      const handle = await spawn(options); ready(handle.id); await delayed; return handle;
+    });
+    let cancelled = false;
+    const onSpawn = vi.fn(); const onExit = vi.fn();
+    const starting = startTryloV1({ prompt: 'must not be delivered', cliPath: CLI_PATH, cwd: CWD,
+      providerId: 'fixture', guard: { isSuperseded: () => cancelled }, onEvents: () => {}, onSpawn, onExit });
+    const settled = starting.then(() => ({ kind: 'resolved' as const }), error => ({ kind: 'rejected' as const, error }));
+    const id = await acquired; cancelled = true;
+    vi.spyOn(h.service, 'send').mockRejectedValue(new Error('cancelled control pipe'));
+    vi.spyOn(h.service, 'stop').mockImplementationOnce(async processId => {
+      if (mode === 'refused') throw new Error('cancelled startup cleanup refused');
+      emitExit(processId, 130);
+    });
+    try {
+      release(); const result = await settled;
+      expect(onSpawn).toHaveBeenCalledOnce();
+      expect(onSpawn.mock.calls[0][0].id).toBe(id);
+      expect(h.record.sent.some(row => JSON.parse(row.message).type === 'user')).toBe(false);
+      if (mode === 'refused') {
+        expect(result.kind).toBe('rejected');
+        if (result.kind === 'rejected') {
+          expect(result.error).toBeInstanceOf(AggregateError);
+          expect((result.error as AggregateError).errors.map(String).join(' ')).toContain('cleanup refused');
+        }
+        expect(isTryloV1Process(id)).toBe(true);
+        vi.spyOn(h.service, 'stop').mockImplementationOnce(async processId => { emitExit(processId, 130); });
+        await stopTryloV1(id);
+      } else {
+        expect(result.kind).toBe('rejected');
+        if (result.kind === 'rejected') expect(String(result.error)).toContain('superseded');
+      }
+      expect(isTryloV1Process(id)).toBe(false);
+      expect(onExit).toHaveBeenCalledOnce();
+    } finally { release(); emitExit(id, 130); await settled; }
+  });
+});
+
+describe('tracked stop with a lost exit callback', () => {
+  afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
+
+  it.each(['acknowledged', 'refused'] as const)('confirms native absence after %s Stop, exactly once', async mode => {
+    vi.useFakeTimers();
+    const sink = collect();
+    const exits: ProcessExitInfo[] = [];
+    const run = await startTryloV1({ prompt: 'hello', cliPath: CLI_PATH, cwd: CWD,
+      providerId: 'fixture', onEvents: events => sink.events.push(...events),
+      onTerminal: outcome => sink.outcomes.push(outcome), onExit: info => exits.push(info) });
+    const other = await startTryloV1({ prompt: 'other', cliPath: CLI_PATH, cwd: CWD,
+      providerId: 'fixture', onEvents: () => {} });
+    const handle = h.registrations.get(run.processId)!;
+    h.registrations.delete(run.processId); // Native wait observed exit; WebView callback was lost.
+    vi.spyOn(h.service, 'send').mockRejectedValueOnce(new Error('closed stdin'));
+    if (mode === 'refused') vi.spyOn(h.service, 'stop').mockRejectedValueOnce(new Error('stop IPC refused'));
+    const receipt = { error: undefined as unknown };
+    const stopping = stopTryloV1(run.processId).catch(error => { receipt.error = error; });
+    try {
+      await vi.advanceTimersByTimeAsync(2000);
+      await stopping;
+      expect(receipt.error).toBeUndefined();
+      expect(run.state()).toBe('exited');
+      expect(isTryloV1Process(run.processId)).toBe(false);
+      expect(exits).toEqual([{ id: run.processId, pid: handle.pid, code: null, signal: null, outputComplete: false }]);
+      expect(sink.outcomes).toEqual(['cancelled']);
+      expect(isTryloV1Process(other.processId)).toBe(true);
+      emitExit(run.processId, 130); // A delayed callback must not publish another terminal or exit.
+      expect(exits).toHaveLength(1);
+      expect(sink.events.filter(event => event.type === 'loop_end')).toHaveLength(1);
+      expect(h.record.stopped).not.toContain(other.processId);
+    } finally { emitExit(run.processId, 130); emitExit(other.processId, 130); await stopping; }
+  });
+
+  it.each(['rejected', 'null', 'bad-row', 'still-live'] as const)('retains ownership for a %s native snapshot', async mode => {
+    vi.useFakeTimers();
+    const exits = vi.fn();
+    const run = await startTryloV1({ prompt: 'hello', cliPath: CLI_PATH, cwd: CWD,
+      providerId: 'fixture', onEvents: () => {}, onExit: exits });
+    vi.spyOn(h.service, 'send').mockRejectedValueOnce(new Error('closed stdin'));
+    vi.spyOn(h.service, 'stop').mockRejectedValueOnce(new Error('stop IPC refused'));
+    const listing = vi.spyOn(h.service, 'list');
+    if (mode === 'rejected') listing.mockRejectedValueOnce(new Error('list IPC refused'));
+    if (mode === 'null') listing.mockResolvedValueOnce(null as never);
+    if (mode === 'bad-row') listing.mockResolvedValueOnce([{ id: '' }] as never);
+    const receipt = { error: undefined as unknown };
+    const stopping = stopTryloV1(run.processId).catch(error => { receipt.error = error; });
+    try {
+      await vi.advanceTimersByTimeAsync(2000); await stopping;
+      expect(listing).toHaveBeenCalledOnce();
+      expect(String(receipt.error)).toMatch(/stop|停止/i);
+      if (mode !== 'still-live') {
+        expect(receipt.error).toBeInstanceOf(AggregateError);
+        const aggregate = receipt.error as AggregateError;
+        expect(aggregate.errors.map(String).join(' ')).toMatch(/list|列表/i);
+      }
+      expect(isTryloV1Process(run.processId)).toBe(true);
+      expect(exits).not.toHaveBeenCalled();
+    } finally { emitExit(run.processId, 130); await stopping; }
+  });
+
+  it('bounds the list waiter, ignores its late empty result and permits an explicit retry', async () => {
+    vi.useFakeTimers();
+    const exits = vi.fn();
+    const run = await startTryloV1({ prompt: 'hello', cliPath: CLI_PATH, cwd: CWD,
+      providerId: 'fixture', onEvents: () => {}, onExit: exits });
+    let release!: (rows: readonly LiveProcessInfo[]) => void;
+    vi.spyOn(h.service, 'list').mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    vi.spyOn(h.service, 'send').mockRejectedValue(new Error('closed stdin'));
+    vi.spyOn(h.service, 'stop').mockRejectedValue(new Error('stop IPC refused'));
+    const receipt = { error: undefined as unknown };
+    const stopping = stopTryloV1(run.processId).catch(error => { receipt.error = error; });
+    try {
+      await vi.advanceTimersByTimeAsync(1100); await stopping;
+      expect(receipt.error).toBeInstanceOf(AggregateError);
+      release([]); await vi.advanceTimersByTimeAsync(1);
+      expect(isTryloV1Process(run.processId)).toBe(true);
+      expect(exits).not.toHaveBeenCalled();
+      h.registrations.delete(run.processId);
+      await stopTryloV1(run.processId);
+      expect(exits).toHaveBeenCalledOnce();
+      expect(isTryloV1Process(run.processId)).toBe(false);
+    } finally { release?.([]); emitExit(run.processId, 130); await stopping; }
+  });
+
+  it('accepts a real exit without waiting for a stalled native list', async () => {
+    vi.useFakeTimers();
+    const exits = vi.fn();
+    const run = await startTryloV1({ prompt: 'hello', cliPath: CLI_PATH, cwd: CWD,
+      providerId: 'fixture', onEvents: () => {}, onExit: exits });
+    vi.spyOn(h.service, 'send').mockRejectedValueOnce(new Error('closed stdin'));
+    vi.spyOn(h.service, 'stop').mockRejectedValueOnce(new Error('stop IPC refused'));
+    vi.spyOn(h.service, 'list').mockImplementationOnce(() => new Promise(() => {}));
+    const receipt = { state: 'pending' };
+    const stopping = stopTryloV1(run.processId).then(() => { receipt.state = 'resolved'; }, () => { receipt.state = 'rejected'; });
+    try {
+      await vi.advanceTimersByTimeAsync(1); emitExit(run.processId, 130);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(receipt.state).toBe('resolved'); expect(exits).toHaveBeenCalledOnce();
+    } finally { emitExit(run.processId, 130); await stopping; }
+  });
+});
+
+describe('bounded tracked v1 stop', () => {
+  afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
+
+  it.each(['send', 'stop'] as const)('an actual exit releases a pending %s receipt', async channel => {
+    vi.useFakeTimers();
+    const sink = collect();
+    const { processId } = await startTryloV1({ prompt: 'hello', cliPath: CLI_PATH, cwd: CWD,
+      providerId: 'fixture', onEvents: events => sink.events.push(...events) });
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    if (channel === 'stop') vi.spyOn(h.service, 'send').mockRejectedValueOnce(new Error('broken control pipe'));
+    vi.spyOn(h.service, channel).mockImplementationOnce(() => pending);
+    const receipt = { state: 'pending' };
+    const stopping = stopTryloV1(processId).then(() => { receipt.state = 'resolved'; }, () => { receipt.state = 'rejected'; });
+    try {
+      await vi.advanceTimersByTimeAsync(1);
+      emitExit(processId, 130);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(receipt.state).toBe('resolved');
+      expect(sink.events.filter(event => event.type === 'loop_end')).toHaveLength(1);
+    } finally { release(); await stopping; }
+  });
+
+  it.each(['send', 'stop'] as const)('a hung %s times out without an exit fact and permits an explicit retry', async channel => {
+    vi.useFakeTimers();
+    const sink = collect();
+    const { processId, state } = await startTryloV1({ prompt: 'hello', cliPath: CLI_PATH, cwd: CWD,
+      providerId: 'fixture', onEvents: events => sink.events.push(...events) });
+    let refuse!: (error: Error) => void;
+    const pending = new Promise<void>((_resolve, reject) => { refuse = reject; });
+    if (channel === 'stop') vi.spyOn(h.service, 'send').mockRejectedValueOnce(new Error('broken control pipe'));
+    vi.spyOn(h.service, channel).mockImplementationOnce(() => pending);
+    const receipt = { state: 'pending', message: '' };
+    const stopping = stopTryloV1(processId).then(() => { receipt.state = 'resolved'; }, error => {
+      receipt.state = 'rejected'; receipt.message = String(error);
+    });
+    try {
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(receipt.state).toBe('rejected');
+      expect(receipt.message).toMatch(/exit|退出|超时/i);
+      expect(state()).not.toBe('exited');
+      expect(sink.events.some(event => event.type === 'loop_end')).toBe(false);
+      // A late refusal is observed by the expired waiter, not a new terminal.
+      refuse(new Error('late IPC refusal'));
+      await vi.advanceTimersByTimeAsync(1);
+      const retry = stopTryloV1(processId);
+      emitExit(processId, 130);
+      await retry;
+      expect(state()).toBe('exited');
+      expect(sink.events.filter(event => event.type === 'loop_end')).toHaveLength(1);
+    } finally {
+      refuse(new Error('test cleanup'));
+      emitExit(processId, 130);
+      await stopping;
+    }
+  });
+});
+
+describe('initial prompt delivery ownership', () => {
+  it('reports incomplete tail on an actual exit without manufacturing completed', async () => {
+    const sink = collect();
+    const { processId } = await startTryloV1({ prompt: 'hello', cliPath: CLI_PATH, cwd: CWD, providerId: 'fixture',
+      onEvents: events => sink.events.push(...events), onTerminal: outcome => sink.outcomes.push(outcome) });
+    h.sinks.get(processId)!.exit({ id: processId, pid: 1001, code: 0, signal: null, outputComplete: false });
+    expect(sink.events.some(event => event.type === 'runtime_warning' && event.code === 'process_output_incomplete')).toBe(true);
+    expect(sink.outcomes).toEqual(['unknown']);
+  });
+  afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
+
+  it('does not dispatch a prompt when acquiring its handle synchronously supersedes startup', async () => {
+    let superseded = false;
+    vi.spyOn(h.service, 'stop').mockImplementationOnce(async id => { emitExit(id, 130); });
+    const args = { prompt: 'must not dispatch', cliPath: CLI_PATH, cwd: CWD, providerId: 'fixture',
+      guard: { isSuperseded: () => superseded }, onEvents() {}, onSpawn: () => { superseded = true; } };
+    try {
+      await expect(startTryloV1(args)).rejects.toThrow(/prompt/i);
+      expect(h.record.sent.some(frame => JSON.parse(frame.message).type === 'user')).toBe(false);
+    } finally { emitExit(h.record.spawns[0]!.id, 130); }
+  });
+
+  it('publishes the spawned handle before attempting prompt IO', async () => {
+    const order: string[] = [];
+    vi.spyOn(h.service, 'send').mockImplementationOnce(async () => { order.push('write'); });
+    const args = { prompt: 'hello', cliPath: CLI_PATH, cwd: CWD, providerId: 'fixture',
+      onEvents() {}, onSpawn: () => { order.push('owner'); } };
+    const { processId } = await startTryloV1(args);
+    try { expect(order).toEqual(['owner', 'write']); } finally { emitExit(processId, 0); }
+  });
+
+  it('an actual exit releases an initial write that never acknowledges', async () => {
+    vi.useFakeTimers();
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    vi.spyOn(h.service, 'send').mockImplementationOnce(() => pending);
+    const receipt = { state: 'pending' };
+    const starting = startTryloV1({ prompt: 'hello', cliPath: CLI_PATH, cwd: CWD, providerId: 'fixture', onEvents() {} });
+    const settled = starting.then(() => { receipt.state = 'resolved'; }, () => { receipt.state = 'rejected'; });
+    await vi.advanceTimersByTimeAsync(1);
+    const processId = h.record.spawns[0]!.id;
+    try {
+      emitExit(processId, 41);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(receipt.state).toBe('resolved');
+    } finally { release(); await settled; }
+  });
+
+  it('a rejected prompt with refused cleanup keeps its original live owner for Stop retry', async () => {
+    const outcomes: string[] = [];
+    vi.spyOn(h.service, 'send').mockRejectedValue(new Error('write refused'));
+    vi.spyOn(h.service, 'stop').mockRejectedValueOnce(new Error('native stop refused'));
+    await expect(startTryloV1({ prompt: 'hello', cliPath: CLI_PATH, cwd: CWD, providerId: 'fixture',
+      onEvents() {}, onTerminal: outcome => outcomes.push(outcome) }))
+      .rejects.toThrow(/prompt|stdin/i);
+    const processId = h.record.spawns[0]!.id;
+    try {
+      expect(isTryloV1Process(processId)).toBe(true);
+      expect(outcomes).toEqual([]);
+    } finally {
+      const retry = stopTryloV1(processId);
+      emitExit(processId, 130);
+      await retry;
+    }
+    expect(isTryloV1Process(processId)).toBe(false);
+    expect(outcomes).toEqual(['cancelled']);
+  });
+
+  it('a hung initial write fails within the delivery and cleanup deadlines without losing ownership', async () => {
+    vi.useFakeTimers();
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    vi.spyOn(h.service, 'send').mockImplementationOnce(() => pending);
+    const events: LoopEvent[] = [];
+    const receipt = { state: 'pending' };
+    const starting = startTryloV1({ prompt: 'hello', cliPath: CLI_PATH, cwd: CWD, providerId: 'fixture',
+      onEvents: batch => events.push(...batch) });
+    const settled = starting.then(() => { receipt.state = 'resolved'; }, () => { receipt.state = 'rejected'; });
+    await vi.advanceTimersByTimeAsync(1);
+    const processId = h.record.spawns[0]!.id;
+    try {
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(receipt.state).toBe('rejected');
+      expect(isTryloV1Process(processId)).toBe(true);
+      expect(events.some(event => event.type === 'loop_end')).toBe(false);
+      expect(events.some(event => event.type === 'runtime_warning' && event.code === 'prompt_delivery_uncertain')).toBe(true);
+    } finally { emitExit(processId, 130); release(); await settled; }
+  });
+});
 
 function emitStdout(id: string, lines: readonly string[]): void {
   const sink = h.sinks.get(id);
@@ -129,6 +432,7 @@ beforeEach(() => {
   h.record.closed.length = 0;
   h.record.stopped.length = 0;
   h.sinks.clear();
+  h.registrations.clear();
   h.setCloseInputFails(false);
 });
 
@@ -382,6 +686,8 @@ describe('TryloV1Runner lifecycle', () => {
   });
 
   it('cancellation yields cancelled, not failed', async () => {
+    vi.useFakeTimers();
+    try {
     const sink = collect();
     const { processId } = await startTryloV1({
       prompt: 'hello',
@@ -391,10 +697,30 @@ describe('TryloV1Runner lifecycle', () => {
       onEvents: (events) => sink.events.push(...events),
       onTerminal: (outcome) => sink.outcomes.push(outcome),
     });
-    await stopTryloV1(processId);
+    const stopping = stopTryloV1(processId);
+    await vi.advanceTimersByTimeAsync(3000);
     expect(h.record.stopped).toEqual([processId]);
     emitExit(processId, 1);
+    await stopping;
     expect(sink.outcomes).toEqual(['cancelled']);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('does not treat an acknowledged kill command as a confirmed process exit', async () => {
+    vi.useFakeTimers();
+    try {
+      const sink = collect();
+      const { processId } = await startTryloV1({ prompt: 'hello', cliPath: CLI_PATH, cwd: CWD,
+        providerId: 'fixture', onEvents: events => sink.events.push(...events) });
+      const stopping = stopTryloV1(processId);
+      const rejected = expect(stopping).rejects.toThrow(/exit|退出/i);
+      await vi.advanceTimersByTimeAsync(5000);
+      await rejected;
+      expect(h.record.stopped).toEqual([processId]);
+      expect(sink.events.some(event => event.type === 'loop_end')).toBe(false);
+      emitExit(processId, 1);
+      expect(sink.events.filter(event => event.type === 'loop_end')).toHaveLength(1);
+    } finally { vi.useRealTimers(); }
   });
 
   it('does not close or retry a turn on a broken EOF channel', async () => {
@@ -452,6 +778,8 @@ describe('TryloV1Runner lifecycle', () => {
 
   it('stops the child when it is superseded before startup completes', async () => {
     const sink = collect();
+    vi.spyOn(h.service, 'send').mockRejectedValueOnce(new Error('cancelled control pipe'));
+    vi.spyOn(h.service, 'stop').mockImplementationOnce(async id => { h.record.stopped.push(id); emitExit(id, 130); });
     await expect(
       startTryloV1({
         prompt: 'hello',

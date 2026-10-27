@@ -86,6 +86,7 @@ async function hydrate(root: string, message: ProviderMessage, signal: AbortSign
 export function withImageReferences(provider: ProviderPort, workspaceRoot: string, access?: ImageReferenceAccess): ProviderPort {
   let notice: { readonly scope: string; readonly codes: Set<string> } | undefined;
   return {
+    ...(provider.fork === undefined ? {} : { fork: (messages: ReadonlyArray<ProviderMessage> | undefined) => withImageReferences(provider.fork!(messages), workspaceRoot, access) }),
     ...(provider.continuation === undefined ? {} : { continuation: provider.continuation }),
     async *stream(request, signal) {
       const scope = request.continuationScope ?? request.attemptId;

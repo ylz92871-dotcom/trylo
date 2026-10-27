@@ -6,6 +6,9 @@
 import { CONTRACT_TAG } from './contract-types';
 import type { TeamProfile } from './profiles/profile-types';
 import type { EngineeringContract } from './contract-types';
+import { isPersistableTeamRun } from './team-run-shape';
+import { TEAM_ROLE_IDS } from './profiles/profile-types';
+import { isTeamRunOpen } from '../../domain/team-run-lifecycle';
 
 /** `<workspace>/.trylo/team/<teamRunId>/contract.v1.json` (forward slashes). */
 export function contractFilePath(workspaceRoot: string, teamRunId: string): string {
@@ -49,6 +52,13 @@ export type PersistedTeamRunStatus =
   | 'cancelled';
 
 export interface PersistableSeatInstance {
+  readonly observations?: readonly import('../../domain/member-observation').RecordedMemberObservation[];
+  readonly taskId?: string;
+  readonly canReceiveInput?: boolean;
+  readonly awaitingInput?: boolean;
+  readonly parked?: boolean;
+  readonly round?: number;
+  readonly conversation?: readonly { readonly round: number; readonly prompt?: string; readonly result?: string }[];
   readonly id: string;
   /** Member instance uuid from the frozen profile (Foundation spec §9.2).
    *  Undefined on v1 runs; the v1 migrator synthesizes `legacy-` ids. */
@@ -67,6 +77,11 @@ export interface PersistableSeatInstance {
 }
 
 export interface PersistableTeamRun {
+  readonly reports?: readonly import('../../domain/team-progress').TeamProgressReport[];
+  readonly handoffs?: readonly import('../../domain/team-progress').TeamHandoffRecord[];
+  readonly error?: string;
+  readonly lifecycle?: 'open' | 'closed';
+  readonly endedAt?: number;
   readonly id: string;
   readonly personConversationId: string;
   readonly status: PersistedTeamRunStatus;
@@ -111,19 +126,15 @@ function normalizeWorkspaceRoot(workspaceRoot: string): string {
   return workspaceRoot.replace(/[\\/]+$/, '').replace(/\\/g, '/');
 }
 
-function isTerminal(status: PersistedTeamRunStatus): boolean {
-  return status === 'completed' || status === 'failed' || status === 'cancelled';
-}
-
-/** Serialize with retention. Most recent non-terminal run is always kept. */
+/** Retention limits history only; every live conversation must survive reload. */
 export function serializeTeamRunsFile(
   workspaceId: string,
   runs: readonly PersistableTeamRun[],
 ): string {
   const sorted = [...runs].sort((a, b) => b.updatedAt - a.updatedAt);
-  const active = sorted.filter((r) => !isTerminal(r.status)).slice(0, 1);
+  const active = sorted.filter(isTeamRunOpen);
   const activeIds = new Set(active.map((r) => r.id));
-  const terminal = sorted.filter((r) => isTerminal(r.status) && !activeIds.has(r.id)).slice(0, MAX_TERMINAL_TEAM_RUNS);
+  const terminal = sorted.filter((r) => !isTeamRunOpen(r) && !activeIds.has(r.id)).slice(0, MAX_TERMINAL_TEAM_RUNS);
   // Foundation spec §9.2: v2 (frozenProfile + memberId) from PR-7 on.
   // The parser accepts 1 | 2 since PR-2, so older loads never break.
   const file: TeamRunsFile = {
@@ -157,7 +168,10 @@ export function parseTeamRunsFile(text: string): TeamRunsFile | null {
     return null;
   }
   if (!Array.isArray(file['runs'])) return null;
-  if (file['schemaVersion'] === 2) return value as TeamRunsFile;
+  if (!file['runs'].every(isPersistableTeamRun)) return null;
+  if (new Set(file['runs'].map(run => run.id)).size !== file['runs'].length) return null;
+  // Older v2 writers also omitted freezes. Hydrate those through the same
+  // legacy projection so every accepted run has a usable profile.
   return migrateTeamRunsV1(value as TeamRunsFile);
 }
 
@@ -195,7 +209,7 @@ function migrateTeamRunsV1(file: TeamRunsFile): TeamRunsFile {
 }
 
 function isKnownRole(seat: string): boolean {
-  return ['person', 'architect', 'worker', 'reviewer', 'verifier'].includes(seat);
+  return (TEAM_ROLE_IDS as readonly string[]).includes(seat);
 }
 
 /** Role-level fallback names for v1 seats without a frozen displayName. */

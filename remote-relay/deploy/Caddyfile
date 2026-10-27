@@ -1,5 +1,10 @@
 {$RELAY_DOMAIN} {
-    request_body {
+    @modelRequests path /relay/model-requests /api/account/model-requests
+    request_body @modelRequests {
+        max_size 8MiB
+    }
+    @otherRequests not path /relay/model-requests /api/account/model-requests
+    request_body @otherRequests {
         max_size 512KB
     }
     header {

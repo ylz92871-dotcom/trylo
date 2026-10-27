@@ -32,6 +32,8 @@ const RUN_FLAGS: ReadonlyArray<FlagSpec> = [
   { name: "workspace", takesValue: true },
   { name: "max-iterations", takesValue: true },
   { name: "max-tokens", takesValue: true },
+  { name: "context-window", takesValue: true },
+  { name: "model-context-window", takesValue: true },
   { name: "max-budget-usd", takesValue: true },
   { name: "allow-writes", takesValue: false },
   { name: "ask", takesValue: true },

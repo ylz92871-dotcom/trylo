@@ -1,0 +1,15 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Trilo YL mark transparent</title>
+  <desc id="desc">A minimal geometric logo made from three rounded L-shaped modules forming a hidden Y.</desc>
+  <defs>
+    <linearGradient id="bone" x1="232" y1="220" x2="812" y2="804" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F2EDE1"/>
+      <stop offset="1" stop-color="#DDD6C6"/>
+    </linearGradient>
+  </defs>
+  <g id="trilo-mark" stroke="url(#bone)" stroke-width="76" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M462 236 L462 420 L624 420"/>
+    <path d="M276 732 L424 644 L356 512"/>
+    <path d="M540 676 L622 546 L786 640"/>
+  </g>
+</svg>

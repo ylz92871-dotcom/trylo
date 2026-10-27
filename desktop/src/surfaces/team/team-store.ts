@@ -11,6 +11,7 @@ import {
   isTeamSeatId,
 } from '../shared/seats';
 import type { TeamProfile } from './team-profile-types';
+import { isTeamRunOpen } from '../../domain/team-run-lifecycle';
 import type {
   SeatActivityItem,
   SeatInstance,
@@ -38,6 +39,7 @@ export function emptyTeamRun(input: CreateTeamRunInput): TeamRun {
   const now = input.createdAt ?? Date.now();
   return {
     id: input.id,
+    lifecycle: input.status === 'completed' || input.status === 'failed' || input.status === 'cancelled' ? 'closed' : 'open',
     workspaceId: input.workspaceId,
     personConversationId: input.personConversationId,
     status: input.status ?? 'running',
@@ -62,6 +64,13 @@ export function selectSeat(run: TeamRun, seatId: string | null): TeamRun {
 }
 
 export interface SeatPatch {
+  readonly observations?: SeatInstance['observations'];
+  readonly taskId?: string;
+  readonly canReceiveInput?: boolean;
+  readonly awaitingInput?: boolean;
+  readonly parked?: boolean;
+  readonly round?: number;
+  readonly conversation?: SeatInstance['conversation'];
   /** Bind patch: a queued row adopts the spawn's tool_use id. */
   readonly id?: string;
   /** Bind patch: adopt the event memberId when the queued row lacks one. */
@@ -93,6 +102,7 @@ export function applySeatPatch(
   return {
     ...run,
     seats: sortSeats(nextSeats, run.frozenProfile),
+    selectedSeatId: run.selectedSeatId === seatId && patch.id !== undefined ? patch.id : run.selectedSeatId,
     updatedAt: Date.now(),
   };
 }
@@ -139,7 +149,7 @@ export function summarizeTeam(run: TeamRun): TeamSummaryStats {
 
 export function isTeamRunActive(run: TeamRun | null | undefined): boolean {
   if (!run) return false;
-  return run.status === 'running' || run.status === 'waiting';
+  return isTeamRunOpen(run);
 }
 
 export function findSeat(

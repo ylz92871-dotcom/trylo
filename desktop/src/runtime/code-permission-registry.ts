@@ -39,6 +39,7 @@ export interface CodePermissionRequest {
   readonly toolName: string;
   readonly input: Record<string, unknown>;
   readonly title?: string;
+  readonly requester?: import('../host-adapter/control-protocol').MemberApprovalRequester;
   readonly at: number;
   /** PR-2: the classifier's safe preview for prompt decisions. Rendered by
    *  the ApprovalCard; carries paths only, never raw content. */
@@ -154,6 +155,7 @@ export class CodePermissionRegistry {
         toolName: frame.toolName,
         input: frame.input,
         ...(frame.title ? { title: frame.title } : {}),
+        ...(frame.requester ? { requester: frame.requester } : {}),
         preview: route.preview,
         risk: route.risk,
         ...(route.lease ? { lease: route.lease } : {}),
@@ -171,6 +173,7 @@ export class CodePermissionRegistry {
       toolName: frame.toolName,
       input: frame.input,
       ...(frame.title ? { title: frame.title } : {}),
+      ...(frame.requester ? { requester: frame.requester } : {}),
       at: Date.now(),
     });
     this.notify();
@@ -306,6 +309,7 @@ export class CodePermissionRegistry {
       toolName: frame.toolName,
       input: frame.input,
       ...(frame.title ? { title: frame.title } : {}),
+      ...(frame.requester ? { requester: frame.requester } : {}),
       at: Date.now(),
     });
     this.notify();

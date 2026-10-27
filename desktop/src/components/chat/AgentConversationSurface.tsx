@@ -18,7 +18,9 @@
 // they provide runtime/domain data and capability
 // actions, never a second layout.
 
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { ConversationPresentation } from './ConversationPresentation';
+import { Message } from './Message';
 import type { ChatMessage } from './types';
 import { MessageList } from './MessageList';
 import type { ConversationRunViewState } from './view-state';
@@ -99,7 +101,14 @@ export interface AgentConversationSurfaceProps {
 export function AgentConversationSurface(
   props: AgentConversationSurfaceProps,
 ): ReactElement {
-  const isEmpty = props.messages.length === 0;
+  const presentation = useContext(ConversationPresentation);
+  const observeEnvironment = presentation.observeEnvironment;
+  useEffect(() => { observeEnvironment?.({ onOpenArtifact: props.onOpenArtifact, artifactHost: props.artifactHost,
+    workspacePath: props.workspacePath }); }, [observeEnvironment, props.onOpenArtifact, props.artifactHost, props.workspacePath]);
+  const embeddedTimeline = typeof presentation.timeline === 'function' ? presentation.timeline(props.messages, {
+    ...props, renderEvent: message => <Message {...props} message={message} />,
+  }) : presentation.timeline;
+  const isEmpty = props.messages.length === 0 && !presentation.embedded;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const drafts = useRef(new Map<string, string>());
   const opener = useRef<HTMLElement | null>(null);
@@ -127,7 +136,7 @@ export function AgentConversationSurface(
           {props.composer}
           {props.starterSlot}
         </div>
-      ) : (
+      ) : embeddedTimeline !== undefined ? embeddedTimeline : (
         <MessageList
           surface={props.surface}
           messages={props.messages}
@@ -156,13 +165,14 @@ export function AgentConversationSurface(
         <div className="chat-panel__mode">{props.modeSlot}</div>
       )}
       {props.resultDockSlot}
-      {props.personTeamStatusBarSlot}
+      {!presentation.embedded && props.personTeamStatusBarSlot}
       {props.cognitionBadgeSlot}
       {props.learningReceiptSlot}
       {!isEmpty && props.composer}
     </div>
     {selected?.kind === 'subagent' && <SubagentConversation key={selected.id} agent={selected}
-      drafts={drafts.current} onClose={() => setSelectedId(null)} onSend={props.running && selectedIsCurrent ? props.onSubagentInput : undefined} />}
+      drafts={drafts.current} onClose={() => setSelectedId(null)} onSend={props.running && selectedIsCurrent ? props.onSubagentInput : undefined}
+      onOpenArtifact={props.onOpenArtifact} artifactHost={props.artifactHost} workspacePath={props.workspacePath} />}
     </div>
     </AgentAvatarScope>
   );

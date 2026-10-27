@@ -90,8 +90,9 @@ describe("pty sessions over a real ConPTY", { skip: canRun ? false : `no helper:
     const registry = createPtySessionRegistry();
     try {
       const session = await registry.start(
-        startOf([interpreter as string, "/d", "/c", "echo WP06-TERMINAL-OK"]),
+        { ...startOf([interpreter as string, "/d", "/c", "echo WP06-TERMINAL-OK"]), ownerId: "member-pty-task" },
       );
+      assert.equal(session.ownerId, "member-pty-task");
       assert.equal(session.tty, true, "this path claims a terminal and must not quietly be a pipe");
       assert.equal(session.status, "running");
 
@@ -112,6 +113,8 @@ describe("pty sessions over a real ConPTY", { skip: canRun ? false : `no helper:
       assert.equal(final?.status, "exited");
       assert.equal(final?.end?.kind, "exited");
       assert.equal(final?.exitCode, 0, "the child's own exit code, reported through the terminal");
+      assert.equal(final?.ownerId, "member-pty-task");
+      assert.equal(registry.list().sessions.find(row => row.id === session.id)?.ownerId, "member-pty-task");
     } finally {
       registry.shutdown();
     }

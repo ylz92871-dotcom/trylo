@@ -2,7 +2,8 @@
 // See migration spec §5.1 / §5.5.
 //
 // The host is spawned by the Tauri shell (servicehost.rs) with
-// stdin/stdout carrying frames; it never opens a listening port. It:
+// stdin/stdout carrying frames. Account model calls can opt into a random
+// loopback port protected by an ephemeral, model-scoped capability. It:
 //   1. reads newline-delimited frames from stdin,
 //   2. dispatches to the registry (unknown method => UNKNOWN_METHOD), and
 //   3. writes responses/events to stdout.
@@ -190,6 +191,8 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
     .register('remote', 'relayBrowserOpen', params => remote.relayBrowserOpen(params))
     .register('remote', 'relayAccountOpen', () => remote.relayAccountOpen())
     .register('remote', 'relayStatus', () => remote.relayStatus())
+    .register('remote', 'relayModels', () => remote.relayModels())
+    .register('remote', 'relayModelConnection', params => remote.relayModelConnection(params))
     .register('remote', 'relayLogout', () => remote.relayLogout())
     .register('remote', 'respond', (params) => remote.respond(params))
     .register('remote', 'emit', (params) => remote.emitToHandler(params))
@@ -308,7 +311,7 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
       // Best effort — a slow adapter must not hold the process open.
       tooling.dispose();
       void Promise.allSettled([
-        remote.disable(),
+        remote.dispose(),
         learning.stopMaintenance(),
         learning.sessionFlush(),
       ]).finally(() => {

@@ -8,7 +8,7 @@ import {
   createInteractivePermission,
 } from "./permission.js";
 import { createPlannedPermission, planPermissions, type PermissionChoice } from "./permission-plan.js";
-import { workspaceWriteAllowed } from "./workspace-write-approval.js";
+import { automaticWorkspaceWriteAllowed, workspaceWriteAllowed } from "./workspace-write-approval.js";
 
 /**
  * 一次运行用哪个 PermissionPort（D7）。
@@ -30,6 +30,7 @@ import { workspaceWriteAllowed } from "./workspace-write-approval.js";
 export function permissionChoice(options: RunCommandOptions): PermissionChoice {
   return {
     ...(options.allowWrites === true ? { allowWrites: true } : {}),
+    ...(options.allowWrites === true && options.ask === "always" ? { workspaceEdits: "auto" as const } : {}),
     ...(options.ask === undefined ? {} : { ask: options.ask }),
     ...(options.allowTools === undefined ? {} : { allowTools: options.allowTools }),
     ...(options.denyTools === undefined ? {} : { denyTools: options.denyTools }),
@@ -69,7 +70,8 @@ export function permissionFor(
   return createPlannedPermission(
     planPermissions({ ...choice, interactive: permissionMode === "interactive" }),
     permissionIo(ctx),
-    action => workspaceWriteAllowed(workspaceRoot, action),
+    action => choice.workspaceEdits === "auto" ? automaticWorkspaceWriteAllowed(workspaceRoot, action) : workspaceWriteAllowed(workspaceRoot, action),
+    choice.workspaceEdits === "auto" ? action => workspaceWriteAllowed(workspaceRoot, action) : undefined,
   );
 }
 

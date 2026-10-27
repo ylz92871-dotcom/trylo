@@ -4,6 +4,7 @@ import type {
   PermissionPort,
   PermissionResolution,
   PermissionTicket,
+  PermissionRequestContext,
 } from "../../ports/permission.js";
 import { decision } from "../../ports/permission.js";
 export { decision } from "../../ports/permission.js";
@@ -46,6 +47,10 @@ export function createAllowToolsPermission(allowedNames: ReadonlySet<string>, ac
   const pending = new Map<string, PermissionAction>();
   let counter = 0;
   return {
+    inheritance: {
+      canUseTool: name => allowedNames.has(name),
+      decide: action => decision(allowedNames.has(action.name) && actionAllowed(action) ? "approved" : "denied", "once"),
+    },
     async request(action: PermissionAction): Promise<PermissionTicket> {
       counter += 1;
       const ticketId = `allow-tools-${counter}`;
@@ -62,12 +67,13 @@ export function createAllowToolsPermission(allowedNames: ReadonlySet<string>, ac
 }
 
 export type InteractivePermissionIo = {
+  readonly supportsMemberApproval?: true;
   /** Writes the prompt to stderr so stdout stays a pure protocol stream. */
   readonly prompt: (text: string) => void;
   /** Reads one line; `undefined` means the input ended. */
   readonly readLine: () => Promise<string | undefined>;
   /** UI can provide a structured approval without parsing the text prompt. */
-  readonly requestApproval?: (action: PermissionAction) => Promise<PermissionDecision>;
+  readonly requestApproval?: (action: PermissionAction, context?: PermissionRequestContext) => Promise<PermissionDecision>;
   readonly onApproval?: (event: ApprovalLifecycle) => void;
 };
 
@@ -106,29 +112,44 @@ function decide(answer: string | undefined): InteractiveAnswer {
   return { resolution: "denied", scope: "once" };
 }
 
+async function awaitCancellableApproval(answer: Promise<PermissionDecision>, signal?: AbortSignal): Promise<PermissionDecision> {
+  if (signal === undefined) return answer;
+  if (signal.aborted) return decision("cancelled");
+  let abort!: () => void;
+  const cancelled = new Promise<PermissionDecision>(resolve => {
+    abort = () => { resolve(decision("cancelled")); };
+    signal.addEventListener("abort", abort, { once: true });
+  });
+  try { return await Promise.race([answer, cancelled]); }
+  finally { signal.removeEventListener("abort", abort); }
+}
+
 export function resolveInteractiveAnswer(answer: string | undefined): InteractiveAnswer {
   return decide(answer);
 }
 
 export function createInteractivePermission(io: InteractivePermissionIo): PermissionPort {
-  const pending = new Map<string, PermissionAction>();
+  const pending = new Map<string, { readonly action: PermissionAction; readonly context?: PermissionRequestContext }>();
   let counter = 0;
   return {
-    async request(action: PermissionAction): Promise<PermissionTicket> {
+    ...(io.supportsMemberApproval === true && io.requestApproval !== undefined ? { supportsMemberApproval: true as const } : {}),
+    async request(action: PermissionAction, context?: PermissionRequestContext): Promise<PermissionTicket> {
       counter += 1;
       const ticketId = `ask-${counter}`;
-      pending.set(ticketId, action);
+      pending.set(ticketId, { action, ...(context === undefined ? {} : { context }) });
       return { ticketId, toolCallId: action.toolCallId };
     },
     async awaitDecision(ticketId: string): Promise<PermissionDecision> {
-      const action = pending.get(ticketId);
+      const waiting = pending.get(ticketId);
       pending.delete(ticketId);
-      if (action === undefined) throw new Error(`unknown approval ticket: ${ticketId}`);
+      if (waiting === undefined) throw new Error(`unknown approval ticket: ${ticketId}`);
+      const { action, context } = waiting;
+      if (context?.signal?.aborted) return decision("cancelled");
       io.onApproval?.({ kind: "waiting", action });
       try {
         const answered = io.requestApproval === undefined
           ? await readApproval(io, action)
-          : await io.requestApproval(action);
+          : await awaitCancellableApproval(io.requestApproval(action, context), context?.signal);
         io.onApproval?.({ kind: "settled", action, decision: answered });
         return answered;
       } catch (error) {

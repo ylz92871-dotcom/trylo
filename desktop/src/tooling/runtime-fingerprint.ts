@@ -8,14 +8,13 @@
 // could still be reused after any of those changed (spec §1.4). Two runs
 // share a process ONLY when this fingerprint matches exactly.
 //
-// INCREMENTAL COMPATIBILITY (mandatory — this file sits on the Code warm
-// path): when no Tool Profile was resolved, the fingerprint degrades to
-// `legacy:<json of extraCliArgs>`, which is exactly the old key. The
-// prewarm-adoption rule therefore stays byte-identical for a plain Code run.
+// Explicit legacy compatibility keeps the original argv-shaped key when no
+// Tool Profile was resolved. New/default runs append the v1 identity so the
+// controller cannot adopt a process speaking the other protocol.
 
 import type { PermissionLevel } from '../permission/permission-policy';
 import type { ResolvedToolRuntime } from './types';
-import type { CliRuntimeProtocol } from '../runtime/cli-runtime-protocol';
+import { DEFAULT_CLI_RUNTIME_PROTOCOL, type CliRuntimeProtocol } from '../runtime/cli-runtime-protocol';
 
 /**
  * Two independent 32-bit FNV-1a variants, concatenated into a 64-bit
@@ -163,10 +162,9 @@ export function fingerprintForRun(input: {
   // P08 §4.1: the protocol is part of the runtime identity, because a
   // process is fixed to one wire contract at spawn time.
   //
-  // The legacy key is left BYTE-IDENTICAL: a plain Code run must keep
-  // exactly the same warm/prewarm reuse behaviour it had before P08, so
-  // the suffix is appended only for the opt-in protocol.
-  const suffix = input.cliRuntimeProtocol === 'trylo-v1' ? ':v1' : '';
+  // Explicit legacy callers retain their key; an omitted protocol uses the
+  // same new-CLI identity as the controller's default and cannot adopt legacy.
+  const suffix = (input.cliRuntimeProtocol ?? DEFAULT_CLI_RUNTIME_PROTOCOL) === 'trylo-v1' ? ':v1' : '';
   if (!runtime) {
     if (Object.keys(spawnEnv).length === 0) return `${legacyFingerprint(input.extraCliArgs)}${suffix}`;
     return `legacy:${JSON.stringify(input.extraCliArgs)}:env:${spawnEnvHash(spawnEnv)}${suffix}`;

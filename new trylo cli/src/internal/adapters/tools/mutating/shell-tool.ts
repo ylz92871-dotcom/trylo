@@ -132,10 +132,12 @@ export async function executeShell(
     // the sandbox approved and still refuses to start on an aborted turn.
     return await startBackgroundShell(
       {
+        ...(request.ownerId === undefined ? {} : { ownerId: request.ownerId }),
         sessions: config.sessions,
         maxBufferBytes: config.maxOutputBytes ?? DEFAULT_MAX_SHELL_OUTPUT_BYTES,
       },
       plan,
+      signal,
     );
   }
   const steps = plan.steps.length > 0 ? plan.steps : [{ executable: plan.executable, argv: plan.argv, shape: plan.shape }];

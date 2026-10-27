@@ -6,13 +6,21 @@ import type { ToolSandbox } from "../ports/tools.js";
 import type { ProviderMessage, ProviderPort, ProviderUsage } from "../ports/provider.js";
 import { emptyUsage } from "../ports/provider.js";
 import type { Envelope } from "../protocol/envelope.js";
+import type { Message } from "../contract/execution.js";
+import type { CompactWindow } from "../ports/compaction.js";
 import type { Transcript } from "../protocol/transcript.js";
 import { DEFAULT_PROFILE_PORT, extractLatestAssistantText, requireCompletedChild } from "./child-attempt.js";
 import type { SubagentContext, SubagentWorker } from "./types.js";
 import { createGovernedChildProvider } from "./child-provider.js";
-import { createForkContextProvider } from "./fork-context.js";
+import { forkBackgroundMessages } from "./fork-context.js";
+import { childCompaction, DEFAULT_CHILD_CONTEXT_TOKENS } from "./context-budget.js";
+import { createChildProviderSession, type ChildProviderSession } from "./child-provider-session.js";
 import { systemTimerScheduler, type TimerScheduler } from "./scheduler.js";
-import { SUBAGENT_PERMISSION } from "./inherited-authority.js";
+import { inheritedPermission } from "./inherited-authority.js";
+import { subagentToolActivity } from "../protocol/subagent-activity.js";
+import type { SubagentApprovalScope } from "./parent-approval.js";
+import { createSubagentObserver } from "../protocol/subagent-observation.js";
+import { MEMBER_REPORTING_INSTRUCTIONS, withMemberReporting } from "./user-progress.js";
 
 /**
  * The worker behind the multi-agent control tools (WP22.2 / C43, L29).
@@ -23,16 +31,17 @@ import { SUBAGENT_PERMISSION } from "./inherited-authority.js";
  * loop, carrying the previous round forward, until the channel closes or the
  * run is cancelled.
  *
- * Both continuation and forking go through **one** mechanism —
- * `RunTurnRequest.resumedTranscript`, the field the loop already had for a
- * durable resume. A round therefore continues by handing the next turn the
- * transcript of the last one, and `fork_context` hands the first turn the
- * parent's conversation in the same shape. There is no second notion of "what
- * the agent already knows", which is the failure mode a hand-rolled message
- * list would eventually create.
+ * A round resumes the Loop's canonical transcript and compaction window.
+ * Forked parent history is a pinned background input to the same prompt view,
+ * preserving image bytes and tool pairs while participating in the hard gate.
+ * It is never appended to an already-budgeted provider request.
  */
 
 export type InteractiveChildOptions = {
+  readonly approvalScope?: SubagentApprovalScope;
+  readonly providerSession?: ChildProviderSession;
+  readonly callerMessages?: ReadonlyArray<Message>;
+  readonly forkWindow?: CompactWindow;
   readonly provider: ProviderPort;
   readonly permission: PermissionPort;
   readonly execPolicy?: LoopPorts["execPolicy"];
@@ -56,8 +65,8 @@ export type InteractiveChildOptions = {
   readonly onEnvelope?: ((envelope: Envelope) => void) | undefined;
   readonly budget?: IterationBudget | undefined;
   readonly onRoundStarted?: ((round: number, prompt: string) => void) | undefined;
-  readonly onCheckpoint?: ((transcript: Transcript) => void) | undefined;
-  readonly onRoundReady?: ((result: InteractiveChildResult) => void) | undefined;
+  readonly onCheckpoint?: ((transcript: Transcript, window?: CompactWindow) => void) | undefined;
+  readonly onRoundReady?: ((result: InteractiveChildResult) => void | Promise<void>) | undefined;
   readonly idleTimeoutMs?: number | undefined;
   readonly onIdle?: (() => void) | undefined;
   readonly isParked?: (() => boolean) | undefined;
@@ -71,6 +80,7 @@ export type InteractiveChildResult = {
   readonly rounds: number;
   readonly usage: ProviderUsage;
   readonly transcript: Transcript;
+  readonly promptView?: CompactWindow;
   readonly envelopes: ReadonlyArray<Envelope>;
   readonly parked?: boolean | undefined;
 };
@@ -90,14 +100,23 @@ function addUsage(left: ProviderUsage, right: ProviderUsage): ProviderUsage {
 export function createInteractiveChildWorker(
   options: InteractiveChildOptions,
 ): SubagentWorker<InteractiveChildResult> {
+  const background = forkBackgroundMessages(options.forkMessages ?? []);
+  const callerMessages = options.callerMessages === undefined ? undefined : structuredClone(options.callerMessages);
   return async (context: SubagentContext): Promise<InteractiveChildResult> => {
+    let observationRound = 1;
+    const publish = context.reportObservation ?? (() => {});
+    const observe = createSubagentObserver(publish);
+    const approval = options.approvalScope?.bind(context);
+    const execPolicy = approval?.execPolicy ?? options.execPolicy;
+    const session = options.providerSession ?? createChildProviderSession(options.provider, background);
     const childPorts: LoopPorts = {
-      provider: createGovernedChildProvider(createForkContextProvider(options.provider, options.forkMessages ?? []), context),
+      provider: createGovernedChildProvider(session.provider, context),
+      compaction: childCompaction(session.provider),
       // Already bounded by the runtime to what this subagent may touch.
-      tools: context.tools,
-      permission: SUBAGENT_PERMISSION,
+      tools: withMemberReporting(context.tools, publish, () => observationRound),
+      permission: approval?.permission ?? inheritedPermission(options.permission),
       ...(context.inheritedGrants === undefined ? {} : { grants: context.inheritedGrants }),
-      ...(options.execPolicy === undefined ? {} : { execPolicy: options.execPolicy }),
+      ...(execPolicy === undefined ? {} : { execPolicy }),
       ...(options.sandbox === undefined ? {} : { sandbox: options.sandbox }),
       profile: options.profile ?? DEFAULT_PROFILE_PORT,
     };
@@ -109,70 +128,82 @@ export function createInteractiveChildWorker(
     let envelopes: ReadonlyArray<Envelope> = [];
     let usage: ProviderUsage = emptyUsage("snapshot");
     let rounds = 0;
+    let window = options.forkWindow;
 
-    for (;;) {
-      context.setActivity?.("working");
-      options.onRoundStarted?.(rounds + 1, prompt);
-      const result = await runTurn(childPorts, {
-        sessionId: options.sessionId ?? "subagent-session",
-        turnId: `trn-sub-${context.subagentId}-r${rounds + 1}`,
-        correlationId: context.lineage.rootAttemptId,
-        text: prompt,
-        cancelSignal: context.signal,
-        ...(options.budget === undefined ? {} : { budget: options.budget }),
-        ...(carried.length === 0 ? {} : { resumedTranscript: carried }),
-        ...(options.model === undefined ? {} : { model: options.model }),
-        onEnvelope: (envelope) => {
-          options.onEnvelope?.({ ...envelope, attemptId: context.lineage.rootAttemptId });
-        },
-      });
-
-      rounds += 1;
-      transcript = result.transcript;
-      envelopes = [...envelopes, ...result.envelopes];
-      usage = addUsage(usage, result.usage);
-      options.onCheckpoint?.(transcript);
-      // The governed provider charges each response across all rounds, so an
-      // over-budget round cannot keep issuing requests until runTurn returns.
-      requireCompletedChild(result);
-      options.onRoundReady?.({ status: "completed", output: extractLatestAssistantText(transcript),
-        rounds, usage, transcript, envelopes });
-
-      // No channel means the historical shape: run once, finish.
-      if (context.input === undefined) {
-        break;
-      }
-      context.setActivity?.("idle");
-      const idleTimer = options.idleTimeoutMs === undefined ? undefined
-        : (options.scheduler ?? systemTimerScheduler)(options.idleTimeoutMs, () => {
-          options.onIdle?.();
-          context.input?.close();
+    try {
+      for (;;) {
+        observationRound = rounds + 1;
+        context.setActivity?.("working");
+        options.onRoundStarted?.(rounds + 1, prompt);
+        const result = await runTurn(childPorts, {
+          sessionId: options.sessionId ?? "subagent-session",
+          turnId: `trn-sub-${context.subagentId}-r${rounds + 1}`,
+          correlationId: context.lineage.rootAttemptId,
+          text: prompt,
+          cancelSignal: context.signal,
+          budget: { contextTokenLimit: DEFAULT_CHILD_CONTEXT_TOKENS, ...options.budget },
+          callerMessages: [...(callerMessages ?? []), { role: "system", content: MEMBER_REPORTING_INSTRUCTIONS }],
+          ...(background.length === 0 ? {} : { backgroundMessages: background }),
+          ...(window === undefined ? {} : { resumedWindow: window }),
+          ...(carried.length === 0 ? {} : { resumedTranscript: carried }),
+          ...(options.model === undefined ? {} : { model: options.model }),
+          onEnvelope: (envelope) => {
+            observe(envelope, observationRound);
+            const activity = subagentToolActivity(envelope);
+            if (activity !== undefined) context.reportTool?.(activity);
+            options.onEnvelope?.({ ...envelope, attemptId: context.lineage.rootAttemptId });
+          },
         });
-      let next;
-      try { next = await context.input.next(context.signal); }
-      finally { idleTimer?.cancel(); }
-      if (next === "closed") {
-        break;
-      }
-      carried = transcript;
-      prompt = next.message;
-      context.reportProgress(
-        `Round ${rounds} answered; taking the next instruction`,
-        undefined,
-      );
-    }
 
-    const output = extractLatestAssistantText(transcript);
-    context.reportProgress(`Subagent finished after ${rounds} round(s)`, 100);
-    return {
-      status: "completed",
-      output,
-      rounds,
-      usage,
-      transcript,
-      envelopes,
-      parked: options.isParked?.() ?? false,
-    };
+        rounds += 1;
+        transcript = result.transcript;
+        envelopes = [...envelopes, ...result.envelopes];
+        usage = addUsage(usage, result.usage);
+        window = result.promptView;
+        options.onCheckpoint?.(transcript, window);
+        // The governed provider charges each response across all rounds, so an
+        // over-budget round cannot keep issuing requests until runTurn returns.
+        requireCompletedChild(result);
+        await options.onRoundReady?.({ status: "completed", output: extractLatestAssistantText(transcript),
+          rounds, usage, transcript, envelopes, ...(window === undefined ? {} : { promptView: window }) });
+
+        // No channel means the historical shape: run once, finish.
+        if (context.input === undefined) {
+          break;
+        }
+        context.setActivity?.("idle");
+        const idleTimer = options.idleTimeoutMs === undefined ? undefined
+          : (options.scheduler ?? systemTimerScheduler)(options.idleTimeoutMs, () => {
+            options.onIdle?.();
+            context.input?.close();
+          });
+        let next;
+        try { next = await context.input.next(context.signal); }
+        finally { idleTimer?.cancel(); }
+        if (next === "closed") {
+          break;
+        }
+        carried = transcript;
+        prompt = next.message;
+        context.reportProgress(
+          `Round ${rounds} answered; taking the next instruction`,
+          undefined,
+        );
+      }
+
+      const output = extractLatestAssistantText(transcript);
+      context.reportProgress(`Subagent finished after ${rounds} round(s)`, 100);
+      return {
+        status: "completed",
+        output,
+        rounds,
+        usage,
+        transcript,
+        envelopes,
+        parked: options.isParked?.() ?? false,
+        ...(window === undefined ? {} : { promptView: window }),
+      };
+    } finally { options.approvalScope?.dispose(); if (options.providerSession === undefined) session.close(); }
   };
 }
 

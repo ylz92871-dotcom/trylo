@@ -14,6 +14,8 @@
 // `useSyncExternalStore`.
 
 import { useSyncExternalStore } from 'react';
+import { contextPreference, resolveContextPreference } from '../settings/context-window';
+import { modelReasoningEffort, type ModelReasoningPreferences } from '../settings/model-reasoning';
 import { CodeRunController, type CodeRunRequest } from './code-run-controller';
 import type { ActiveCodeRun, CodeRunViewState, SettingsForCodeRun } from './runtime-types';
 import { IDLE_CODE_VIEW_STATE } from './runtime-types';
@@ -35,13 +37,37 @@ import type { ResolvedToolRuntime, ToolRuntimeResolver, ToolSurface } from '../t
 import type { ToolLeaseGrant, ToolRiskRouter } from '../tooling/tool-risk-classifier';
 // Round-3 P0-5: see ./steer-delivery.ts — `steerCode` answers WHY, not whether.
 import { STEER_NOT_RUNNING, type SteerDelivery } from './steer-delivery';
+import { RecoveredConversationStop } from './recovered-conversation-stop';
+import { hostAdapter } from '../host-adapter/index';
+import type { CliSessionStore } from './cli-session-store';
+import { RecoveredTeamOutput, type TeamOutputRecovery } from './recovered-team-output';
+import { CodeInputRegistry } from './code-input-registry';
+import { cancelSubagent } from '../host-adapter/trylo-v1-subagent-control';
+import { buildUserPrompt } from '../host-adapter/control-protocol';
 
 function controllerKey(projectKey: string, conversationId: string): string {
   return `${projectKey}::${conversationId}`;
 }
 
+function ownedProcessIds(controllers: readonly CodeRunController[]): ReadonlySet<string> {
+  return new Set(controllers.flatMap(controller => [controller.getViewState().activeProcessId,
+    controller.hasPrewarm().processId]).filter((id): id is string => id !== null));
+}
+
+export interface ConversationSendPreparation {
+  readonly signal: AbortSignal;
+  isCurrent(): boolean;
+  finish(): void;
+  cancel(): void;
+}
+
+interface PendingSend extends ActiveCodeRun {
+  readonly preparation: ConversationSendPreparation;
+}
+
 /** Shared idle-TTL + clock reaper config for prewarming. */
 export interface PrewarmSupervisorOptions {
+  readonly sessionStore?: CliSessionStore | null;
   /** Idle retention for an idle Code runtime (spec §5.5: 10–20 min). */
   readonly idleTtlMsMs?: number;
   readonly now?: () => number;
@@ -94,7 +120,19 @@ export interface ToolRuntimeRequestContext {
 }
 
 export class ConversationRunSupervisor {
+  private readonly recoveredInputs = new CodeInputRegistry((id, line) => hostAdapter.process.send(id, line));
+  private readonly recoveredOutput = new RecoveredTeamOutput(() => hostAdapter.process,
+    (frame, processId, projectKey, conversationId) => {
+      if (this.recoveredInputs.handle(frame, processId, events => this.recoveredOutput.enqueue(processId, events))) return;
+      // Restored requests keep human approval: today's settings cannot grant
+      // yesterday's run new automatic authority.
+      this.permissions.handleControlFrame(frame, { processId, projectKey, conversationId });
+    }, processId => { this.permissions.clearProcess(processId); this.recoveredInputs.clearProcess(processId); }, () => this.bump());
+  private readonly recoveredStops = new RecoveredConversationStop(
+    async () => hostAdapter.process, () => this.bump());
   private readonly controllers = new Map<string, CodeRunController>();
+  private readonly pendingSends = new Map<string, PendingSend>();
+  private sendSequence = 0;
   private readonly listeners = new Set<() => void>();
   private version = 0;
   /** M4-C1: pure prewarm policy (readiness + idle TTL + LRU). */
@@ -110,6 +148,7 @@ export class ConversationRunSupervisor {
   private readonly resolveCodeCliArgs: (() => Promise<readonly string[]>) | null;
   /** Tool Profile resolver (tool-extension spec §4.2). Null ⇒ legacy only. */
   private readonly resolveToolRuntime: ToolRuntimeResolver | null;
+  private readonly sessionStore: CliSessionStore | null;
 
   constructor(options: PrewarmSupervisorOptions = {}) {
     this.now = options.now ?? (() => Date.now());
@@ -125,6 +164,7 @@ export class ConversationRunSupervisor {
     });
     this.resolveCodeCliArgs = options.resolveCodeCliArgs ?? null;
     this.resolveToolRuntime = options.resolveToolRuntime ?? null;
+    this.sessionStore = options.sessionStore ?? null;
   }
 
   /**
@@ -153,10 +193,62 @@ export class ConversationRunSupervisor {
         conversationId,
         onChange: () => this.bump(),
         permissions: this.permissions,
+        sessionStore: this.sessionStore,
       });
       this.controllers.set(key, existing);
     }
     return existing;
+  }
+
+  /** Publish send feedback before any tool/service work. Ownership also lets
+   * Stop invalidate a send that has not acquired a CLI controller yet. */
+  beginSend(projectKey: string, conversationId: string, turnId?: string): ConversationSendPreparation | null {
+    const key = controllerKey(projectKey, conversationId);
+    if (this.pendingSends.has(key) || this.recoveredStops.isHeld(projectKey, conversationId)
+      || this.recoveredOutput.view(projectKey, conversationId)) return null;
+    const abort = new AbortController();
+    const preparation: ConversationSendPreparation = {
+      signal: abort.signal,
+      isCurrent: () => this.pendingSends.get(key)?.preparation === preparation,
+      finish: () => {
+        if (!preparation.isCurrent()) return;
+        this.pendingSends.delete(key);
+        this.bump();
+      },
+      cancel: () => {
+        abort.abort();
+        preparation.finish();
+      },
+    };
+    this.pendingSends.set(key, { projectKey, conversationId, preparation,
+      runId: turnId ?? `preparing-${++this.sendSequence}`, startedAt: this.now(), bindingState: 'spawning' });
+    this.bump();
+    return preparation;
+  }
+
+  /** Read-only preflight before the composer freezes or replaces team history. */
+  inspectTeamOwner(projectKey: string, conversationId: string): Promise<void> {
+    return this.recoveredStops.assertAvailable(projectKey, conversationId, ownedProcessIds([...this.controllers.values()]));
+  }
+
+  hasLocalOwner(projectKey: string, conversationId: string): boolean {
+    const key = controllerKey(projectKey, conversationId);
+    const view = this.controllers.get(key)?.getViewState();
+    return this.pendingSends.has(key) || view?.running === true || Boolean(view?.activeProcessId);
+  }
+
+  hasRecoveredOwner(projectKey: string, conversationId: string): boolean {
+    return this.recoveredOutput.view(projectKey, conversationId) !== null;
+  }
+
+  recoverTeamOutput(projectKey: string, conversationId: string, teamRunId: string) {
+    return this.recoveredOutput.read(projectKey, conversationId, teamRunId);
+  }
+
+  async inspectRestoredOwner(projectKey: string, conversationId: string): Promise<'owned' | 'absent' | 'detached'> {
+    if (this.hasLocalOwner(projectKey, conversationId)) return 'owned';
+    const result = await this.recoveredStops.inspect(projectKey, conversationId, ownedProcessIds([...this.controllers.values()]));
+    return this.hasLocalOwner(projectKey, conversationId) ? 'owned' : result;
   }
 
   /** Drive one Code user turn on a conversation. Background-safe:
@@ -165,50 +257,71 @@ export class ConversationRunSupervisor {
   async runCode(
     projectKey: string,
     conversationId: string,
-    request: Omit<CodeRunRequest, 'projectKey' | 'conversationId'>,
+    request: Omit<CodeRunRequest, 'projectKey' | 'conversationId'> & {
+      readonly sendPreparation?: ConversationSendPreparation;
+    },
   ): Promise<void> {
-    // Tool Profile for THIS run, resolved from the run's OWN context
-    // (tool-extension spec §4.2). `undefined` means "not decided yet" —
-    // only then does the supervisor ask the Tool Platform. An explicit
-    // `null` means the caller already decided there is no Profile.
-    //
-    // The ask is gated on a resolver being wired at all: with none, this
-    // method must reach the spawn without an extra microtask, preserving the
-    // existing "runCode starts synchronously" contract the lifecycle tests
-    // (and the real send path) rely on.
-    let toolRuntime: ResolvedToolRuntime | null | undefined = request.toolRuntime;
-    if (toolRuntime === undefined && this.resolveToolRuntime) {
-      toolRuntime = await this.resolveRuntimeFor({
-        surface: request.surface ?? 'code',
-        ...(request.requestedProfileId
-          ? { requestedProfileId: request.requestedProfileId }
-          : {}),
-        ...(request.computerUse !== undefined
-          ? { computerUse: request.computerUse }
-          : {}),
-        projectKey,
-        projectRoot: request.settings.cwd,
-        conversationId,
-        permissionLevel: request.permissionLevel,
-      });
-    }
-
-    // Hermes MCP args are the LEGACY degrade path (spec §7.3): they run only
-    // when no Tool Profile was resolved. Any failure degrades to a plain
-    // run; the user's turn must never depend on tooling.
-    let extraCliArgs = request.extraCliArgs;
-    if (!toolRuntime && !extraCliArgs && this.resolveCodeCliArgs) {
-      try {
-        extraCliArgs = await this.resolveCodeCliArgs();
-      } catch {
-        extraCliArgs = [];
+    const { sendPreparation, ...runRequest } = request;
+    const preparation = sendPreparation ?? this.beginSend(projectKey, conversationId, request.turnId);
+    if (!preparation) throw new Error('This conversation is already preparing a send.');
+    if (this.pendingSends.get(controllerKey(projectKey, conversationId))?.preparation !== preparation) return;
+    try {
+      if (request.teamMode === true) {
+        try { await this.inspectTeamOwner(projectKey, conversationId); }
+        catch (error) {
+          // Stop invalidates an inspection before any prompt was delivered.
+          if (!preparation.isCurrent()) return;
+          throw error;
+        }
+        if (!preparation.isCurrent()) return;
       }
+      // Tool Profile for THIS run, resolved from the run's OWN context
+      // (tool-extension spec §4.2). `undefined` means "not decided yet" —
+      // only then does the supervisor ask the Tool Platform. An explicit
+      // `null` means the caller already decided there is no Profile.
+      //
+      // The ask is gated on a resolver being wired at all: with none, this
+      // method must reach the spawn without an extra microtask, preserving the
+      // existing "runCode starts synchronously" contract the lifecycle tests
+      // (and the real send path) rely on.
+      let toolRuntime: ResolvedToolRuntime | null | undefined = request.toolRuntime;
+      if (toolRuntime === undefined && this.resolveToolRuntime) {
+        toolRuntime = await this.resolveRuntimeFor({
+          surface: request.surface ?? 'code',
+          ...(request.requestedProfileId
+            ? { requestedProfileId: request.requestedProfileId }
+            : {}),
+          ...(request.computerUse !== undefined
+            ? { computerUse: request.computerUse }
+            : {}),
+          projectKey,
+          projectRoot: request.settings.cwd,
+          conversationId,
+          permissionLevel: request.permissionLevel,
+        });
+        if (!preparation.isCurrent()) return;
+      }
+
+      // Hermes MCP args are the LEGACY degrade path (spec §7.3): they run only
+      // when no Tool Profile was resolved. Any failure degrades to a plain
+      // run; the user's turn must never depend on tooling.
+      let extraCliArgs = request.extraCliArgs;
+      if (!toolRuntime && !extraCliArgs && this.resolveCodeCliArgs) {
+        try {
+          extraCliArgs = await this.resolveCodeCliArgs();
+        } catch {
+          extraCliArgs = [];
+        }
+      }
+      if (!preparation.isCurrent()) return;
+      await this.controller(projectKey, conversationId).run({
+        ...runRequest,
+        extraCliArgs: extraCliArgs ?? [],
+        toolRuntime: toolRuntime ?? null,
+      });
+    } finally {
+      preparation.finish();
     }
-    return this.controller(projectKey, conversationId).run({
-      ...request,
-      extraCliArgs: extraCliArgs ?? [],
-      toolRuntime: toolRuntime ?? null,
-    });
   }
 
   /** Manual compaction stays bound to the controller that owns the journal. */
@@ -226,6 +339,9 @@ export class ConversationRunSupervisor {
     conversationId: string,
     prompt: string,
   ): Promise<SteerDelivery> {
+    const recovered = this.recoveredOutput.activeProcess(projectKey, conversationId);
+    if (recovered) return hostAdapter.process.send(recovered, buildUserPrompt(prompt))
+      .then(() => ({ kind: 'delivered' as const }), () => ({ kind: 'write-failed' as const }));
     const controller = this.controllers.get(controllerKey(projectKey, conversationId));
     // Round-3 P0-5: "no controller" means no live run to inject into — which is
     // its own answer, not a generic failure the user should retry blindly.
@@ -238,6 +354,8 @@ export class ConversationRunSupervisor {
     conversationId: string,
     taskId: string,
   ): Promise<boolean> {
+    const recovered = this.recoveredOutput.activeProcess(projectKey, conversationId);
+    if (recovered) return cancelSubagent(recovered, taskId).then(() => true, () => false);
     const controller = this.controllers.get(controllerKey(projectKey, conversationId));
     return controller ? controller.stopTask(taskId) : Promise.resolve(false);
   }
@@ -263,6 +381,7 @@ export class ConversationRunSupervisor {
       readonly permissionLevel?: PermissionLevel;
     } = {},
   ): Promise<void> {
+    if (this.recoveredStops.isHeld(projectKey, conversationId) || this.recoveredOutput.view(projectKey, conversationId)) return;
     this.prewarmPolicy.ensure(projectKey, conversationId);
     const permissionLevel = options.permissionLevel ?? 'workspace_write';
     const toolRuntime = await this.resolveRuntimeFor({
@@ -329,16 +448,28 @@ export class ConversationRunSupervisor {
   }
 
   /** Stop only the current run of ONE conversation. */
-  stopConversation(projectKey: string, conversationId: string): Promise<void> {
+  async stopConversation(projectKey: string, conversationId: string,
+    onRecovered?: (receipt: TeamOutputRecovery) => void | Promise<void>): Promise<void> {
+    this.recoveredOutput.requestStop(projectKey, conversationId);
+    this.pendingSends.get(controllerKey(projectKey, conversationId))?.preparation.cancel();
     const c = this.controllers.get(controllerKey(projectKey, conversationId));
-    return c ? c.stop() : Promise.resolve();
+    const owner = c?.getViewState().activeProcessId ?? c?.hasPrewarm().processId;
+    await c?.stop();
+    if (owner === null || owner === undefined) await this.recoveredStops.stop(projectKey, conversationId);
+    const receipts = await this.recoveredOutput.confirmStopped(projectKey, conversationId);
+    for (const receipt of receipts) await onRecovered?.(receipt);
   }
 
   /** Stop every live run currently in flight (app exit path). */
   async stopAll(): Promise<void> {
+    this.recoveredOutput.requestStop();
+    for (const send of this.pendingSends.values()) send.preparation.cancel();
+    const controllers = [...this.controllers.values()];
+    const excluded = ownedProcessIds(controllers);
     await Promise.all(
-      [...this.controllers.values()].map((c) => c.stop()),
+      [...controllers.map((c) => c.stop()), this.recoveredStops.stopAll(excluded)],
     );
+    await this.recoveredOutput.confirmStopped();
   }
 
   /** Stop every run owned by one project/workspace (close-project
@@ -346,10 +477,16 @@ export class ConversationRunSupervisor {
    *  lingers (P1-1). Navigation between workspaces does NOT call
    *  this — both runs keep going in the background. */
   async stopWorkspace(projectKey: string): Promise<void> {
+    this.recoveredOutput.requestStop(projectKey);
+    for (const send of this.pendingSends.values()) {
+      if (send.projectKey === projectKey) send.preparation.cancel();
+    }
     const targets = [...this.controllers.entries()]
       .filter(([key]) => key.startsWith(`${projectKey}::`))
       .map(([, controller]) => controller);
-    await Promise.all(targets.map((c) => c.stop()));
+    const excluded = ownedProcessIds(targets);
+    await Promise.all([...targets.map((c) => c.stop()), this.recoveredStops.stopWorkspace(projectKey, excluded)]);
+    await this.recoveredOutput.confirmStopped(projectKey);
     for (const controller of targets) {
       this.controllers.delete(controller.key);
     }
@@ -359,17 +496,25 @@ export class ConversationRunSupervisor {
    *  Used on delete — a deleted conversation's run must end (P0-1)
    *  and its controller must not linger (P1-1). No-op when the
    *  conversation has no controller. */
-  removeConversation(projectKey: string, conversationId: string): void {
+  async removeConversation(projectKey: string, conversationId: string): Promise<void> {
+    this.pendingSends.get(controllerKey(projectKey, conversationId))?.preparation.cancel();
     const controller = this.controllers.get(controllerKey(projectKey, conversationId));
+    await this.stopConversation(projectKey, conversationId);
     if (!controller) return;
-    void controller.stop();
     controller.dispose();
-    this.controllers.delete(controller.key);
+    if (this.controllers.get(controller.key) === controller) this.controllers.delete(controller.key);
   }
 
   /** ViewState for ONE visible conversation (idle default). */
   getViewState(projectKey: string, conversationId: string | null): CodeRunViewState {
     if (!conversationId) return IDLE_CODE_VIEW_STATE;
+    const output = this.recoveredOutput.view(projectKey, conversationId);
+    if (output) return output;
+    const recovered = this.recoveredStops.view(projectKey, conversationId);
+    if (recovered) return recovered;
+    const pending = this.pendingSends.get(controllerKey(projectKey, conversationId));
+    if (pending) return { ...IDLE_CODE_VIEW_STATE, running: true, sendable: false,
+      bindingState: 'spawning', runId: pending.runId };
     return (
       this.controllers.get(controllerKey(projectKey, conversationId))?.getViewState()
       ?? IDLE_CODE_VIEW_STATE
@@ -381,8 +526,10 @@ export class ConversationRunSupervisor {
     const runs: ActiveCodeRun[] = [];
     for (const c of this.controllers.values()) {
       const active = c.getActiveRun();
-      if (active) runs.push(active);
+      if (active && !this.pendingSends.has(controllerKey(active.projectKey, active.conversationId))) runs.push(active);
     }
+    for (const send of this.pendingSends.values()) runs.push({ projectKey: send.projectKey,
+      conversationId: send.conversationId, runId: send.runId, startedAt: send.startedAt, bindingState: send.bindingState });
     return runs;
   }
 
@@ -398,6 +545,7 @@ export class ConversationRunSupervisor {
   }
 
   respondInputRequest(requestId: string, status: 'submitted' | 'dismissed', answers?: Record<string, import('@trylo/work').InputRequestAnswer>): Promise<boolean> {
+    if (this.recoveredInputs.has(requestId)) return this.recoveredInputs.respond(requestId, status, answers);
     for (const controller of this.controllers.values()) {
       if (controller.inputRequests.has(requestId)) return controller.inputRequests.respond(requestId, status, answers);
     }
@@ -450,6 +598,8 @@ export function settingsForCodeRun(
     apiHost?: string;
     apiModel?: string;
     reasoningEffort?: SettingsForCodeRun['reasoningEffort'];
+    modelContextPreferences?: import('../settings/context-window').ModelContextPreferences;
+    modelReasoningPreferences?: ModelReasoningPreferences;
     /** v-modelsel: built-in pool override; wins over apiModel. */
     poolModel?: string;
     apiFormat?: 'anthropic' | 'openai';
@@ -483,21 +633,28 @@ export function settingsForCodeRun(
     protocol === 'trylo-v1'
       ? effectiveV1CliPath(settings.cliPath, resolution).path
       : effectiveLegacyCliPath(settings.cliPath, resolution).path;
+  const context = resolveContextPreference(contextPreference(settings));
+  const reasoningEffort = modelReasoningEffort(settings);
   return {
     cliPath: cliPath as FilePath,
     cwd,
-    apiKey: settings.apiKey || undefined,
-    apiHost: settings.apiHost || undefined,
+    ...(protocol === 'trylo-v1' ? {
+      contextTokenLimit: context.requested,
+      modelContextWindow: context.capacity,
+    } : {}),
+    apiKey: settings.poolModel?.trim() ? undefined : settings.apiKey || undefined,
+    apiHost: settings.poolModel?.trim() ? undefined : settings.apiHost || undefined,
     apiModel: model,
-    ...(protocol === 'trylo-v1' && settings.reasoningEffort !== undefined ? { reasoningEffort: settings.reasoningEffort } : {}),
-    apiFormat: settings.apiFormat,
-    apiKeyHeader: settings.apiKeyHeader || undefined,
-    apiKeyPrefix: settings.apiKeyPrefix || undefined,
-    extraHeadersText: settings.extraHeadersText || undefined,
+    ...(settings.poolModel?.trim() ? { platformModel: settings.poolModel.trim() } : {}),
+    ...(protocol === 'trylo-v1' && reasoningEffort !== undefined ? { reasoningEffort } : {}),
+    apiFormat: settings.poolModel?.trim() ? 'openai' : settings.apiFormat,
+    apiKeyHeader: settings.poolModel?.trim() ? undefined : settings.apiKeyHeader || undefined,
+    apiKeyPrefix: settings.poolModel?.trim() ? undefined : settings.apiKeyPrefix || undefined,
+    extraHeadersText: settings.poolModel?.trim() ? undefined : settings.extraHeadersText || undefined,
     systemPrompt: settings.systemPrompt || undefined,
     // P08 §3.4: provider selection travels with the run; the credential
     // never does (the new CLI reads its own ledger).
-    providerId: settings.providerId || undefined,
+    providerId: settings.poolModel?.trim() ? 'openai-compatible' : settings.providerId || undefined,
     // P08 §4.1: snapshotted with the rest of the contract so the run
     // cannot be re-routed by a settings change after it started.
     cliRuntimeProtocol: protocol,

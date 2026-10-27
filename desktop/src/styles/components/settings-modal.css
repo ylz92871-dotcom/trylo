@@ -149,6 +149,30 @@
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
+
+.model-run-settings__summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.model-run-settings__controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.model-run-settings__controls .settings-modal__field { min-width: 0; }
+
+@media (max-width: 720px) {
+  .model-run-settings__controls { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+}
 .settings-modal__field {
   display: flex;
   flex-direction: column;

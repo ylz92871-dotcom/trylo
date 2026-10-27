@@ -163,7 +163,7 @@ function stateOf(capture: Capture): NativeCheckpointState | undefined {
  * cache alone: "the provider never sent native fields" and "we lost them" are
  * different answers, and only the second one is a degradation.
  */
-export function createGlmToolContinuation(endpoint: string, configuredModel: string) {
+export function createGlmToolContinuation(endpoint: string, configuredModel: string, inherited: ReadonlyArray<NativeCheckpointState> = []) {
   let activeScope: string | undefined;
   let generation = 0;
   const cache = createGlmContinuationCache();
@@ -174,6 +174,9 @@ export function createGlmToolContinuation(endpoint: string, configuredModel: str
   const evicted = new Set<string>();
   /** Survives scope changes: the same notice must not reappear on a new turn. */
   const delivered = new Set<string>();
+  // Forks receive adapter-owned states matched to their frozen history. Charge
+  // these bytes before the first request so the context gate includes them.
+  for (const state of inherited) for (const key of cache.retain(state)) evicted.add(key);
 
   function clear(scope: string | undefined): void {
     cache.clear(); generation += 1; activeScope = scope; checkpoint = undefined;
@@ -215,6 +218,13 @@ export function createGlmToolContinuation(endpoint: string, configuredModel: str
 
   return {
     persistence,
+    copyMatching(messages: ReadonlyArray<ProviderMessage>): ReadonlyArray<NativeCheckpointState> {
+      const lookup = cache.matching(messages);
+      return structuredClone(messages.flatMap(message => {
+        const state = lookup.matched.get(message);
+        return state === undefined ? [] : [state];
+      }));
+    },
     begin(request: ProviderRequest): GlmToolContinuation | undefined {
       const model = request.model || configuredModel;
       captureScope = request.continuationScope;
@@ -223,7 +233,10 @@ export function createGlmToolContinuation(endpoint: string, configuredModel: str
       if (scope === undefined || requestBinding === undefined) return undefined;
       // Auxiliary model-summary calls are unscoped; they must not evict the
       // paused parent's cache. They cannot read or retain native state.
-      if (scope !== undefined && scope !== activeScope) clear(scope);
+      if (scope !== activeScope) {
+        if (activeScope === undefined && model === configuredModel) activeScope = scope;
+        else clear(scope);
+      }
       checkpoint = undefined;
       generation += 1;
       const epoch = generation;

@@ -1,4 +1,5 @@
 import { MCP_TOOL_PREFIX } from "../../mcp/names.js";
+import { cancelToolPorts } from "../../ports/tool-cancellation.js";
 import {
   guardRefinedText,
   noOverlay,
@@ -157,8 +158,7 @@ export function composeTools(workspace: ToolPort, mcp: ToolPort): ToolPort {
         ? mcp.execute(call, signal)
         : workspace.execute(call, signal),
     cancel: async (toolCallId: string): Promise<void> => {
-      await workspace.cancel(toolCallId);
-      await mcp.cancel(toolCallId);
+      await cancelToolPorts([workspace, mcp], toolCallId);
     },
   };
 }

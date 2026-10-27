@@ -1,5 +1,6 @@
 import type { ProviderEvent, ProviderFinishReason } from "../../ports/provider.js";
 import { parseToolInput } from "./invalid-tool-input.js";
+import { openAiStreamError } from "./openai-stream-error.js";
 
 /**
  * OpenAI wire chunk -> ProviderEvent translation.
@@ -78,6 +79,8 @@ function pushChunk(state: TranslatorState, payload: unknown): ProviderEvent[] {
   if (usage !== undefined) {
     events.push(usage);
   }
+  const failure = openAiStreamError(record.error);
+  if (failure !== undefined) return [...events, failure];
   const choices = record.choices;
   if (!Array.isArray(choices) || choices.length === 0) {
     return events;

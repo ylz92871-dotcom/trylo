@@ -8,11 +8,18 @@ import type { CliRuntimeProbeResult } from '../host-adapter/cli-runtime-adapter'
 const LEGACY_ENTRY = 'D:/tools/cli.js';
 const V1_ENTRY = 'D:/tools/new-cli.js';
 
-function probeOk(kind: 'legacy' | 'trylo-v1'): CliRuntimeProbeResult {
+function probeOk(kind: 'legacy' | 'trylo-v1'): Extract<CliRuntimeProbeResult, { ok: true }> {
   return { ok: true, kind, version: 'x', evidence: `--help → ${kind}` };
 }
 
 describe('cli-runtime-guard (Round-3 P1-10: ask the binary, not the filename)', () => {
+  it('blocks a positively identified old v1 build missing the requested context flags', async () => {
+    resetCliRuntimeGuardForTests();
+    const oldProbe=async():Promise<CliRuntimeProbeResult>=>({...probeOk('trylo-v1'),supportedFlags:['--model']});
+    expect(await verifyCliRuntime({protocol:'trylo-v1',entryScript:V1_ENTRY,nodeProgram:'node',probe:oldProbe})).toEqual({ok:true});
+    const verdict=await verifyCliRuntime({protocol:'trylo-v1',entryScript:V1_ENTRY,nodeProgram:'node',requiredFlags:['--context-window','--model-context-window'],probe:oldProbe});
+    expect(verdict.ok).toBe(false);if(!verdict.ok)expect(verdict.message).toMatch(/npm run build/);
+  });
   it('passes when the binary announces the expected kind', async () => {
     resetCliRuntimeGuardForTests();
     const verdict = await verifyCliRuntime({

@@ -317,8 +317,8 @@ export function AppShell(props: AppShellProps): ReactElement {
               <button type="button" className={`top-bar__rail-toggle${browserPreviewOpen ? ' top-bar__rail-toggle--active' : ''}`} aria-label="浏览器侧栏" title="浏览器侧栏" aria-pressed={browserPreviewOpen} onClick={() => {
                 if (!browserPreviewOpen && props.rightRailOpen) props.onToggleRightRail();
                 setBrowserPreviewOpen(open => !open);
-              }}><Globe size={16} /><span>浏览器</span></button>
-              <button type="button" className={`top-bar__rail-toggle${runActive && computerState.hasTools ? ' top-bar__rail-toggle--active' : ''}`} aria-label="电脑悬浮窗" title={runActive && computerState.hasTools ? '电脑控制正在工作' : '电脑悬浮窗'} onClick={() => { setPreviewError(''); void workbench.openComputer(); }}><Monitor size={16} /><span>{runActive && computerState.hasTools ? '电脑工作中' : '电脑'}</span></button>
+              }}><Globe size={16} strokeWidth={1.65} aria-hidden="true" /></button>
+              <button type="button" className={`top-bar__rail-toggle${runActive && computerState.hasTools ? ' top-bar__rail-toggle--active' : ''}`} aria-label={runActive && computerState.hasTools ? '电脑悬浮窗，控制正在工作' : '电脑悬浮窗'} title={runActive && computerState.hasTools ? '电脑控制正在工作' : '电脑悬浮窗'} onClick={() => { setPreviewError(''); void workbench.openComputer(); }}><Monitor size={16} strokeWidth={1.65} aria-hidden="true" />{runActive && computerState.hasTools && <span className="top-bar__activity-dot" aria-hidden="true" />}</button>
               {props.topBarRight}
             </>}
             collaborationSwitch={props.topBarCollaborationSwitch}

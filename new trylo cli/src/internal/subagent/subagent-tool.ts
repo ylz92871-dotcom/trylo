@@ -1,4 +1,5 @@
 import type { ProfilePort } from "../contract/profile.js";
+import { cancelToolPorts } from "../ports/tool-cancellation.js";
 import type { Message } from "../contract/execution.js";
 import type { PermissionPort } from "../ports/permission.js";
 import type { ProviderPort } from "../ports/provider.js";
@@ -17,6 +18,7 @@ import { governanceFailureOutcome } from "./governance.js";
 import type { SubagentHandle } from "./types.js";
 import type { PermissionGrantCache } from "../loop/permission-grants.js";
 import type { LoopPorts } from "../loop/runner.js";
+import type { IterationBudget } from "../domain/iteration.js";
 
 export { SUBAGENT_TOOL_NAME };
 
@@ -24,6 +26,7 @@ export type SubagentToolOptions = {
   readonly callerMessages?: ReadonlyArray<Message>;
   readonly runtime: SubagentRuntime;
   readonly provider: ProviderPort;
+  readonly childBudget?: IterationBudget;
   readonly permission: PermissionPort;
   readonly sandbox?: ToolSandbox;
   readonly profile?: ProfilePort | undefined;
@@ -113,6 +116,7 @@ export function createSubagentToolPort(options: SubagentToolOptions): ToolPort {
 
       const worker = createChildAttemptWorker({
         provider: options.provider,
+        ...(options.childBudget === undefined ? {} : { budget: options.childBudget }),
         permission: options.permission,
         ...(options.execPolicy === undefined ? {} : { execPolicy: options.execPolicy }),
         ...(options.sandbox === undefined ? {} : { sandbox: options.sandbox }),
@@ -137,6 +141,9 @@ export function createSubagentToolPort(options: SubagentToolOptions): ToolPort {
           permissions: {
             allowedTools,
             inheritedGrants: options.grants,
+            ...(options.sandbox?.requiresApproval === undefined ? {} : { requiresApproval: call => options.sandbox?.requiresApproval?.(call) === true }),
+            ...(options.permission.isDenied === undefined ? {} : { inheritedDenial: name => options.permission.isDenied?.(name) === true }),
+            ...(options.permission.inheritance === undefined ? {} : { inheritedPolicy: options.permission.inheritance }),
           },
           ...(timeoutMs !== undefined ? { governance: { timeoutMs } } : {}),
           worker,
@@ -237,10 +244,7 @@ export function mountSubagentTool(parentTools: ToolPort, ...children: ReadonlyAr
     },
 
     async cancel(toolCallId: string): Promise<void> {
-      await parentTools.cancel(toolCallId);
-      for (const child of children) {
-        await child.cancel(toolCallId);
-      }
+      await cancelToolPorts([parentTools, ...children], toolCallId);
     },
   };
 }

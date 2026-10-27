@@ -58,17 +58,21 @@ export function createSubagentToolBoundary(
   permissions: SubagentPermissions,
   lineage: SubagentLineage,
   runSignal: AbortSignal,
+  localTools?: ToolPort,
 ): ToolPort {
   validateSubagentLineage(lineage);
   const allowedSet = new Set(permissions.allowedTools);
+  const activePorts = new Map<string, ToolPort>();
 
   return {
     snapshot(): ReadonlyArray<ToolBinding> {
       const parentBindings = parentTools.snapshot();
-      return parentBindings.filter((binding) => allowedSet.has(binding.name));
+      return parentBindings.filter((binding) => allowedSet.has(binding.name) && !permissions.inheritedDenial?.(binding.name));
     },
 
     async execute(call: ToolCallRequest, signal: AbortSignal): Promise<ToolOutcome> {
+      // Any dispatch attempt spends its exact-call proof, including a refusal.
+      const approvedAction = permissions.approvedAction?.consume(call) === true;
       // 1. Cancellation is checked before anything else. A tool reached under an
       //    already-aborted signal is an effect nobody can take back, and the run
       //    is over, so the call is refused rather than evaluated: `cancelled` is
@@ -86,6 +90,14 @@ export function createSubagentToolBoundary(
         };
       }
 
+      if (permissions.inheritedDenial?.(call.name)) {
+        return { outcome: "error", code: "subagent_permission_denied", message: `The parent has disabled tool '${call.name}'` };
+      }
+      const constrained = permissions.constrainTool?.(call);
+      if (constrained && !constrained.ok) {
+        return { outcome: "error", code: constrained.code, message: constrained.message };
+      }
+
       // Check parent binding
       const binding = parentTools.snapshot().find((b) => b.name === call.name);
       if (binding === undefined) {
@@ -97,27 +109,44 @@ export function createSubagentToolBoundary(
       }
 
       // 3. Approval check: Subagents NEVER have an independent approval channel!
-      if (binding.needsApproval) {
+      if (binding.needsApproval || permissions.requiresApproval?.(call) === true) {
         const action = buildPermissionAction(call.toolCallId, call.name, call.arguments);
         const hasPreApprovedGrant =
           permissions.inheritedGrants !== undefined &&
           permissions.inheritedGrants.lookup(action).kind === "approved";
-
-        if (!hasPreApprovedGrant) {
+        const denied = permissions.inheritedGrants?.isDenied(call.name) === true
+          || permissions.inheritedGrants?.lookup(action).kind === "denied";
+        const automatic = !denied && permissions.inheritedPolicy?.canUseTool(call.name) === true
+          && permissions.inheritedPolicy.decide(action).resolution === "approved";
+        if (denied || (!hasPreApprovedGrant && !automatic && !approvedAction)) {
           // RED LINE: Refuse immediately. Subagents cannot request independent user approval.
           return {
             outcome: "error",
-            code: "subagent_approval_channel_forbidden",
-            message: `Subagent approval channel forbidden: tool '${call.name}' requires user approval, but subagents cannot prompt users and no inherited grant exists for pattern '${action.pattern}'`,
+            code: permissions.approvedAction === undefined ? "subagent_approval_channel_forbidden" : "subagent_parent_approval_required",
+            message: permissions.approvedAction === undefined
+              ? `Subagent approval channel forbidden: tool '${call.name}' requires user approval, but subagents cannot prompt users and no inherited grant exists for pattern '${action.pattern}'`
+              : "Parent approval for this exact action is missing, consumed or revoked; no action was executed",
           };
         }
       }
 
-      return dispatchUnderRunCancel(parentTools, call, signal, runSignal);
+      let executionTools = parentTools;
+      const localBinding = localTools?.snapshot().find(candidate => candidate.name === call.name);
+      if (localTools !== undefined && localBinding !== undefined) {
+        if (binding.sideEffect !== "read_only" || binding.needsApproval
+          || localBinding.sideEffect !== "read_only" || localBinding.needsApproval) {
+          return { outcome: "error", code: "subagent_local_tool_invalid",
+            message: "Task-local tools may replace only existing record tools without effects or approval requirements" };
+        }
+        executionTools = localTools;
+      }
+      activePorts.set(call.toolCallId, executionTools);
+      try { return await dispatchUnderRunCancel(executionTools, call, signal, runSignal); }
+      finally { activePorts.delete(call.toolCallId); }
     },
 
     async cancel(toolCallId: string): Promise<void> {
-      return parentTools.cancel(toolCallId);
+      await activePorts.get(toolCallId)?.cancel(toolCallId);
     },
   };
 }

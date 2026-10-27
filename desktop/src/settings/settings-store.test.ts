@@ -17,6 +17,8 @@ import {
 } from './settings-store';
 
 const SAMPLE: TryloSettings = {
+  modelContextPreferences: {},
+  modelReasoningPreferences: {},
   apiKey: 'sk-ant-test-1',
   apiHost: 'https://api.example.com',
   apiModel: 'claude-3-5-sonnet-latest',

@@ -10,6 +10,7 @@ import type { WindowsAclLease } from "./windows-acl-lease.js";
 import { windowsHelperEnvironment } from "./windows-helper-environment.js";
 import { hostNodeExecutable, type CommandShape } from "./executable.js";
 import { ShellIsolationError } from "../../ports/isolation.js";
+import { captureWindowsStdinBridge } from "./windows-stdin-bridge.js";
 
 function pinExecutable(argv: readonly string[]): readonly string[] {
   const program = argv[0];
@@ -21,6 +22,8 @@ function pinExecutable(argv: readonly string[]): readonly string[] {
 
 /** One ACL lease for the prepared session, after all its children have drained. */
 export function createWindowsShellBoundary(workspaceRoot: string, hostEnvironment: Readonly<Record<string, string | undefined>>, prepareLease?: () => Promise<WindowsAclLease>) {
+  const publishStdinBridge = captureWindowsStdinBridge();
+  let stdinBridge: ReturnType<typeof publishStdinBridge> | undefined;
   let prepared: Promise<WindowsAclLease> | undefined;
   let closing = false;
   const initialise = async () => {
@@ -62,6 +65,14 @@ export function createWindowsShellBoundary(workspaceRoot: string, hostEnvironmen
   };
   return {
     wrap,
+    async wrapPipeSession(argv: readonly string[]): Promise<readonly string[]> {
+      const pinned = pinExecutable(argv);
+      // Prepare the existing broker/cache owner before publishing its sibling bundle.
+      await wrap(pinned);
+      stdinBridge ??= publishStdinBridge(hostEnvironment, [workspaceRoot]);
+      const broker = await wrap([hostNodeExecutable(), "--preserve-symlinks", "--preserve-symlinks-main", stdinBridge.client, JSON.stringify(pinned)], [stdinBridge.packageMetadata, stdinBridge.client, pinned[0] ?? ""]);
+      return [hostNodeExecutable(), stdinBridge.host, JSON.stringify(broker)];
+    },
     helperEnvironment: () => windowsHelperEnvironment(hostEnvironment),
     spawner(spawn: ShellSpawner): ShellSpawner {
       return async (spec: ShellSpawnSpec) => {

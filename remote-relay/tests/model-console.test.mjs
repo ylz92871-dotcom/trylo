@@ -15,6 +15,7 @@ async function fixture(t, options = {}) {
   window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
   window.HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new window.Event('close')); };
   const data = { upstreams: [{ id: 'source', name: 'Synthetic upstream', models: ['test-model'], type: 'free', protocol: 'chat', endpoint: 'https://example.invalid/v1', unit: 'tokens', period: 'day', defaultLimit: 100, totalLimit: 1000, used: 70, reserved: 20, concurrency: 2, enabled: true }], users: [{ id: 'user', username: 'tester' }], grants: [{ id: 'grant', userId: 'user', upstreamId: 'source', models: ['test-model'], used: 70, reserved: 20, limit: 100, expiresAt: '2030-01-01' }], policy: { executionEnabled: false } };
+  options.initialize?.(data);
   window.fetch = async (url, init = {}) => {
     calls.push({ url, ...init });
     if (init.method && init.method !== 'GET') {
@@ -45,6 +46,15 @@ test('live quota screen shows real counters and keeps credentials disabled', asy
   assert.equal(f.doc.querySelector('dialog')?.open, true);
   f.doc.querySelector('dialog [data-cancel]').click();
   assert.equal(f.doc.querySelector('#ms-name').value, 'Keep my draft');
+});
+
+test('AMD credential editor saves through CSRF without retaining or displaying the old key, catalog sync is explicit', async t => {
+  const f = await fixture(t, { initialize(data) { data.policy = { executionEnabled: true, credentialsEnabled: true }; Object.assign(data.upstreams[0], { endpoint: 'https://developer.amd.com.cn/radeon/api/v1', unit: 'requests', executionReady: true, credentialConfigured: true }); } });
+  f.doc.querySelector('[data-ms-action="credential"]').click(); const field = f.doc.querySelector('#ms-credential'); assert.equal(field.value, '');
+  const key = 'synthetic-key-for-form-test-only'; field.value = key; f.doc.querySelector('#ms-credential-form').requestSubmit();
+  await until(() => f.doc.querySelector('[data-ms-action="sync-catalog"]'));
+  assert.ok(!f.doc.body.innerHTML.includes(key)); const saved = f.calls.find(call => call.url.endsWith('/credential')); assert.equal(JSON.parse(saved.body).apiKey, key);
+  f.doc.querySelector('[data-ms-action="sync-catalog"]').click(); await until(() => f.calls.some(call => call.url.endsWith('/catalog'))); assert.ok(!f.doc.body.textContent.includes('真实模型上游尚未开放'));
 });
 
 test('quota mutation refreshes existing session and keeps draft after denied save', async t => {

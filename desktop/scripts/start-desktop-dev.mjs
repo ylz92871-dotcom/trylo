@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { prepareDevResources } from './prepare-dev-resources.mjs';
+import { ensureDevelopmentCli } from './ensure-dev-cli.mjs';
 
 const desktopRoot = fileURLToPath(new URL('../', import.meta.url));
 const args = process.argv.slice(2);
@@ -22,6 +23,7 @@ if (!args.some(arg => arg === '--help' || arg === '-h') && !environment.TRYLO_NO
 // resources that the native resolver otherwise prefers. Operator overrides
 // remain authoritative; installed builds still use the bundled resolver.
 if (!args.some(arg => arg === '--help' || arg === '-h') && !environment.TRYLO_CLI_SCRIPT?.trim()) {
+  ensureDevelopmentCli();
   const cliScript = resolve(desktopRoot, '../new trylo cli/dist/cmd/trylo/main.js');
   if (!existsSync(cliScript)) {
     throw new Error('Build the new CLI before starting Desktop dev: run npm run build in new trylo cli.');

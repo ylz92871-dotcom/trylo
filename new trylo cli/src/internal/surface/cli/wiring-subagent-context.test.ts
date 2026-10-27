@@ -44,7 +44,9 @@ test("fork_context uses the latest parent request and never a sibling child conv
   await spawn("CHILD_PRIVATE_1928");
   const firstChild = requests.at(-1);
   assert.ok(firstChild?.messages.some(message => message.content === "PARENT_FIRST_6721"), "the current user message must reach the fork");
-  assert.ok(!firstChild?.messages.some(message => message.role === "system" && message.content.startsWith("Available tools this run:")),
+  assert.deepEqual(firstChild?.tools.map(tool => tool.name), ["report_progress"], "only the local reporting port is available to this tool-free child");
+  assert.ok(!firstChild?.messages.some(message => message.role === "system" && message.content.startsWith("Available tools this run:")
+    && /spawn_agent|send_input|resume_agent|wait_agent|close_agent/.test(message.content)),
     "the parent's runtime tool list cannot become the child's tool list");
   assert.ok(firstChild?.messages.some(message => message.role === "system" && message.content.includes("You are a delegated subagent.")),
     "forked history must be distinguished from the child's assignment");

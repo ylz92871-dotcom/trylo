@@ -30,4 +30,10 @@ describe('V1 child lifecycle truth', () => {
       expect(parseCliV1Event(JSON.stringify({ ...spawn, ...change }))).toMatchObject({ ok: false, reason: 'invalid_fields' });
     }
   });
+  it('rejects malformed or incomplete team identity rather than promoting an ordinary role', () => {
+    for (const change of [{ teamRunId: 7, memberId: 'm1' }, { teamRunId: 't' },
+      { memberId: 'm1' }, { teamRunId: 't', memberId: '' }]) {
+      expect(parseCliV1Event(JSON.stringify({ ...spawn, ...change }))).toMatchObject({ ok: false, reason: 'invalid_fields' });
+    }
+  });
 });

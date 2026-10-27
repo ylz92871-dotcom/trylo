@@ -17,8 +17,17 @@
 // Tauri command's future.
 
 use std::collections::HashMap;
-use std::io::Write;
+use std::io;
 use std::sync::{Arc, Mutex};
+
+mod input_control;
+mod stop_control;
+pub use input_control::ProcessInputControl;
+#[cfg(test)]
+pub(crate) mod test_input;
+pub use stop_control::ProcessStopControl;
+#[cfg(test)]
+pub use stop_control::ProcessStopState;
 
 /// The run metadata the React supervisor attaches to a spawn
 /// (spec CODE-WORK-NEXT-STAGE-ARCHITECTURE §2.2). Not used for
@@ -33,22 +42,15 @@ pub struct ProcessMetadata {
 }
 
 pub struct ProcessEntry {
-    /// P08 §4.2: stdin is a TAKEABLE ownership slot.
-    ///
-    /// `None` means the writer has already been dropped, i.e. stdin is
-    /// closed (the child sees EOF). Closing stdin is *dropping the
-    /// writer*, never killing the process — stdout, the killer and the
-    /// exit attribution all stay owned by this entry, so a one-shot CLI
-    /// can be told "the prompt is complete" while it is still streaming
-    /// and while `stop` remains able to terminate its whole tree.
-    pub writer: Option<Box<dyn Write + Send>>,
+    /// P08 §4.2: stdin has its own owner. Closing it delivers EOF without
+    /// disarming Stop or blocking other registrations on input IO.
+    pub input: Arc<ProcessInputControl>,
     /// Terminates the child process *tree*. On Windows this is
     /// `taskkill /T /F` by pid (the audit requires "终止正确进程
     /// 树，避免仅关闭 stdin"); elsewhere a `kill -KILL`. The
     /// reaper thread owns the `Child`, so the killer acts on the
     /// OS pid and lets `child.wait()` observe the exit.
-    pub killer: Box<dyn FnMut() -> std::io::Result<()> + Send + Sync>,
-    pub stop_state: ProcessStopState,
+    pub stop: Arc<ProcessStopControl>,
     /// Human-readable label, e.g. "trylo-core", "cc-cli".
     pub label: String,
     /// OS pid of the spawned child (for taskkill / diagnostics).
@@ -57,37 +59,23 @@ pub struct ProcessEntry {
     pub metadata: ProcessMetadata,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProcessStopState {
-    Running,
-    Requested,
-}
-
-impl ProcessEntry {
-    /// A failed termination keeps the writer and retry authority. Only the
-    /// reaper may release either after observing the actual child exit.
-    pub fn request_stop(&mut self) -> std::io::Result<bool> {
-        if self.stop_state == ProcessStopState::Requested {
-            return Ok(false);
-        }
-        (self.killer)()?;
-        self.stop_state = ProcessStopState::Requested;
-        Ok(true)
-    }
-
-    /// P08 §4.2: close stdin by taking (and dropping) the writer.
-    /// Idempotent — a second call takes `None` and does nothing.
-    pub fn close_input(&mut self) {
-        if let Some(mut writer) = self.writer.take() {
-            // Flush first so a buffered prompt reaches the child; a flush
-            // failure here is not actionable (we are closing anyway).
-            let _ = writer.flush();
-            drop(writer);
-        }
-    }
-}
-
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ProcessState {
     pub processes: Arc<Mutex<HashMap<String, ProcessEntry>>>,
+    pub recovery: Arc<Mutex<super::process_recovery::RecoveryStore>>,
+}
+
+impl ProcessState {
+    pub fn input_for(&self, id: &str) -> io::Result<Arc<ProcessInputControl>> {
+        let table = self
+            .processes
+            .lock()
+            .map_err(|_| io::Error::other("process state poisoned"))?;
+        table
+            .get(id)
+            .map(|entry| Arc::clone(&entry.input))
+            .ok_or_else(|| {
+                io::Error::new(io::ErrorKind::NotFound, format!("process '{id}' not found"))
+            })
+    }
 }

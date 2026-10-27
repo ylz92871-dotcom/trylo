@@ -173,7 +173,7 @@ export async function assembleEngine(
     transcript: [...transcript],
     progressEnvelopeCount: 0,
     compaction: createCompactionLedger(),
-    seedMessages: seedMessagesOf(assembled.messages),
+    seedMessages: [...(request.backgroundMessages ?? []), ...seedMessagesOf(assembled.messages)],
     grants: ports.grants ?? createPermissionGrantCache(),
     doom: ports.doom ?? createDoomLoopTracker(),
     contextDegradationReported: false,

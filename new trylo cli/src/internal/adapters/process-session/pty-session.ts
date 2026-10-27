@@ -22,6 +22,8 @@ import {
   terminalize,
 } from "./pty-sidecar-host.js";
 import { isProcessSessionIdShape, newProcessSessionId } from "./session-id.js";
+import { assertSessionStartAllowed, type SessionLifecycle } from "./session-start-admission.js";
+import { SessionStopRequests } from "./session-stop-requests.js";
 
 /**
  * Long-running sessions attached to a real terminal.
@@ -60,6 +62,7 @@ const MAX_WRITE_BYTES = 64 * 1024 * 1024;
 const STOP_GRACE_MS = 2_000;
 
 type PtySession = PtySessionRecord & {
+  readonly ownerId?: string;
   readonly id: ProcessSessionId;
   readonly command: string;
   readonly cwd: string;
@@ -81,7 +84,7 @@ export type PtySessionRegistryOptions = {
 };
 
 export type PtySessionRegistryPort = {
-  start(start: ProcessSessionStart): Promise<ProcessSessionSnapshot>;
+  start(start: ProcessSessionStart, signal?: AbortSignal): Promise<ProcessSessionSnapshot>;
   write(request: ProcessSessionWrite): Promise<ProcessSessionWriteResult>;
   stop(sessionId: ProcessSessionId): Promise<ProcessSessionStopResult>;
   resize(sessionId: ProcessSessionId, rows: number, cols: number): boolean;
@@ -93,6 +96,7 @@ export type PtySessionRegistryPort = {
 
 function snapshotOf(record: PtySession): ProcessSessionSnapshot {
   return {
+    ...(record.ownerId === undefined ? {} : { ownerId: record.ownerId }),
     id: record.id,
     status: record.status,
     command: record.command,
@@ -110,7 +114,9 @@ function snapshotOf(record: PtySession): ProcessSessionSnapshot {
 export function createPtySessionRegistry(
   options: PtySessionRegistryOptions = {},
 ): PtySessionRegistryPort {
+  const stops = new SessionStopRequests();
   const maxSessions = options.maxSessions ?? 8;
+  let lifecycle: SessionLifecycle = "open";
   const maxBufferBytes = clampBufferBytes(options.maxBufferBytes ?? DEFAULT_MAX_BUFFER_BYTES);
   const maxReadBytes = Math.max(4, options.maxReadBytes ?? DEFAULT_MAX_READ_BYTES);
   const now = options.now ?? ((): number => Date.now());
@@ -184,7 +190,8 @@ export function createPtySessionRegistry(
   return {
     maxSessions,
 
-    async start(start: ProcessSessionStart): Promise<ProcessSessionSnapshot> {
+    async start(start: ProcessSessionStart, signal?: AbortSignal): Promise<ProcessSessionSnapshot> {
+      assertSessionStartAllowed(lifecycle, signal);
       if (start.tty !== true) {
         throw new Error("the PTY registry only starts sessions that asked for a terminal");
       }
@@ -230,8 +237,10 @@ export function createPtySessionRegistry(
 
       const id = isProcessSessionIdShape(start.id) ? start.id : newProcessSessionId();
       const current = await host.ready();
+      assertSessionStartAllowed(lifecycle, signal);
       const buffer = createBoundedBuffer(start.maxBufferBytes || maxBufferBytes);
       const record: PtySession = {
+        ...(start.ownerId === undefined ? {} : { ownerId: start.ownerId }),
         id,
         buffer,
         status: "running",
@@ -307,43 +316,45 @@ export function createPtySessionRegistry(
     },
 
     async stop(sessionId: ProcessSessionId): Promise<ProcessSessionStopResult> {
-      const record = findSession(sessionId);
-      if (record === undefined) {
-        return {
-          ok: false,
-          code: "session_not_found",
-          message: `no PTY session with id ${sessionId}; it may have exited and been reaped`,
-        };
-      }
-      if (isTerminalProcessStatus(record.status)) {
+      return stops.run(sessionId, async () => {
+        const record = findSession(sessionId);
+        if (record === undefined) {
+          return {
+            ok: false,
+            code: "session_not_found",
+            message: `no PTY session with id ${sessionId}; it may have exited and been reaped`,
+          };
+        }
+        if (isTerminalProcessStatus(record.status)) {
+          return {
+            ok: true,
+            end: record.end ?? { kind: "lost", reason: "session was already terminal" },
+          };
+        }
+        host.send(encodeJsonFrame(PTY_OP.kill, { id: sessionId }));
+        // Injected clock, as on the pipes path: "did the ending arrive?" is a
+        // question about the helper, and how long we are willing to wait for the
+        // answer should not be a property of the machine running the test.
+        const deadline = now() + STOP_GRACE_MS;
+        while (!isTerminalProcessStatus(record.status) && now() < deadline) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 25));
+        }
+        if (!isTerminalProcessStatus(record.status)) {
+          // The kill went out and nothing came back. `lost` rather than a guessed
+          // exit code: the console may still hold a program this process cannot
+          // see. Recorded and kept, not deleted — an unobserved end is precisely
+          // what a caller needs to be able to ask about afterwards.
+          terminalize(
+            record,
+            { kind: "lost", reason: "the helper accepted a kill but never reported the exit" },
+            now,
+          );
+        }
         return {
           ok: true,
-          end: record.end ?? { kind: "lost", reason: "session was already terminal" },
+          end: record.end ?? { kind: "lost", reason: "stop requested, exit unobserved" },
         };
-      }
-      host.send(encodeJsonFrame(PTY_OP.kill, { id: sessionId }));
-      // Injected clock, as on the pipes path: "did the ending arrive?" is a
-      // question about the helper, and how long we are willing to wait for the
-      // answer should not be a property of the machine running the test.
-      const deadline = now() + STOP_GRACE_MS;
-      while (!isTerminalProcessStatus(record.status) && now() < deadline) {
-        await new Promise<void>((resolve) => setTimeout(resolve, 25));
-      }
-      if (!isTerminalProcessStatus(record.status)) {
-        // The kill went out and nothing came back. `lost` rather than a guessed
-        // exit code: the console may still hold a program this process cannot
-        // see. Recorded and kept, not deleted — an unobserved end is precisely
-        // what a caller needs to be able to ask about afterwards.
-        terminalize(
-          record,
-          { kind: "lost", reason: "the helper accepted a kill but never reported the exit" },
-          now,
-        );
-      }
-      return {
-        ok: true,
-        end: record.end ?? { kind: "lost", reason: "stop requested, exit unobserved" },
-      };
+      });
     },
 
     resize(sessionId: ProcessSessionId, rows: number, cols: number): boolean {
@@ -371,6 +382,7 @@ export function createPtySessionRegistry(
     },
 
     shutdown(): void {
+      lifecycle = "closed";
       host.shutdown();
     },
   };

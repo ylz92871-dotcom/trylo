@@ -61,6 +61,9 @@ async function* decodeBody(
           }
           sawAny = true;
           yield event;
+          // Do not complete buffered tool fragments or accept later finish
+          // frames after the endpoint has explicitly failed this response.
+          if (event.type === "error") return;
         }
       }
       // The coalescer bounds later fragments by both content and time.

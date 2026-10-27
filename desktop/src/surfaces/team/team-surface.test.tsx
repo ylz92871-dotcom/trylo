@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { TeamSurface } from './TeamSurface';
 import { resetComposerDraftForTests } from './composer/composer-draft';
 import { FIXTURE_FROZEN_PROFILE, FIXTURE_TEAM_RUN } from './team-fixture';
@@ -8,6 +8,7 @@ import type { TeamProfile } from './team-profile-types';
 import type { TeamRun } from './team-types';
 
 afterEach(() => {
+  cleanup();
   resetComposerDraftForTests();
 });
 
@@ -30,6 +31,16 @@ function terminalRun(id: string): TeamRun {
 }
 
 describe('surfaces/team/TeamSurface (Foundation spec §10.3 / §10.5)', () => {
+  it.each(['completed', 'failed', 'cancelled'] as const)('displays %s history that loads after the team view has mounted', status => {
+    const { rerender } = render(<TeamSurface run={null} onSelectSeat={() => {}} />);
+    const run = { ...terminalRun(`restored-${status}`), status };
+    rerender(<TeamSurface run={run} onSelectSeat={() => {}} />);
+    expect(screen.getByRole('tab', { name: '事件流' })).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('查看所有成员及当前任务'));
+    expect(screen.getByRole('button', { name: '新团队' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '停止' })).toBeNull();
+  });
+
   it('no run → the light idle with template rows, no LandingSurface hero', () => {
     render(<TeamSurface run={null} onSelectSeat={() => {}} />);
     expect(screen.getByText(/在设置里打开 Team|选一个模板/)).toBeTruthy();
@@ -76,20 +87,21 @@ describe('surfaces/team/TeamSurface (Foundation spec §10.3 / §10.5)', () => {
     expect(screen.queryByRole('button', { name: '用刚才那句话组一组' })).toBeNull();
   });
 
-  it('a live run renders the member list — one row per seat, no bottom strip', () => {
+  it('a live run exposes each real member in the architecture', () => {
     render(<TeamSurface run={FIXTURE_TEAM_RUN} onSelectSeat={() => {}} />);
-    expect(screen.getByText(FIXTURE_TEAM_RUN.summary.oneLiner)).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: FIXTURE_TEAM_RUN.summary.oneLiner })).toBeNull();
     expect(screen.getByText('进行中')).toBeTruthy();
-    // Member rows show displayName (role fallback) + status words.
+    fireEvent.click(screen.getByRole('tab', { name: '团队架构' }));
     expect(screen.getByRole('button', { name: /代表你 已完成/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /动手 运行中/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /审查 排队/ })).toBeTruthy();
     expect(screen.getAllByRole('button', { name: /动手 运行中/ })).toHaveLength(1);
   });
 
-  it('clicking a member selects it; clicking the expanded member collapses it', () => {
+  it('clicking a member selects it and the detail return preserves the run', () => {
     const onSelect = vi.fn();
     const first = render(<TeamSurface run={FIXTURE_TEAM_RUN} onSelectSeat={onSelect} />);
+    fireEvent.click(screen.getByRole('tab', { name: '团队架构' }));
     fireEvent.click(screen.getByRole('button', { name: /动手 运行中/ }));
     expect(onSelect).toHaveBeenCalledWith('fixture-seat-worker');
     first.unmount();
@@ -100,11 +112,11 @@ describe('surfaces/team/TeamSurface (Foundation spec §10.3 / §10.5)', () => {
         onSelectSeat={onSelect}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /动手 运行中/ }));
+    fireEvent.click(screen.getByRole('button', { name: '返回团队视图' }));
     expect(onSelect).toHaveBeenCalledWith(null);
   });
 
-  it('an expanded member shows the quiet detail: 收起, 独立 — no 返回摘要 identity', () => {
+  it('an expanded independent member has a return and a responsibility disclosure', () => {
     render(
       <TeamSurface
         run={runWith({ selectedSeatId: 'fixture-seat-reviewer' })}
@@ -112,20 +124,22 @@ describe('surfaces/team/TeamSurface (Foundation spec §10.3 / §10.5)', () => {
         onCancelSeat={() => {}}
       />,
     );
-    expect(screen.getByText('收起')).toBeTruthy();
-    expect(screen.getByText('独立')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '返回团队视图' })).toBeTruthy();
+    expect(screen.getByText('职责')).toBeTruthy();
     expect(screen.queryByText('返回摘要')).toBeNull();
   });
 
-  it('a terminal run STAYS in the run view with the muted 新团队 button', () => {
+  it('a terminal run stays in the run view with 新团队 available in the member menu', () => {
     render(<TeamSurface run={terminalRun('done-1')} onSelectSeat={() => {}} />);
-    expect(screen.getByText('跑完的团队')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '新团队' }).closest('details')?.open).toBe(false);
+    fireEvent.click(screen.getByLabelText('查看所有成员及当前任务'));
     expect(screen.getByRole('button', { name: '新团队' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: '停止' })).toBeNull();
   });
 
   it('新团队 flips to idle without clearing the run', () => {
     render(<TeamSurface run={terminalRun('done-2')} onSelectSeat={() => {}} />);
+    fireEvent.click(screen.getByLabelText('查看所有成员及当前任务'));
     fireEvent.click(screen.getByRole('button', { name: '新团队' }));
     expect(screen.getByText(/在设置里打开 Team|选一个模板/)).toBeTruthy();
   });
@@ -133,6 +147,7 @@ describe('surfaces/team/TeamSurface (Foundation spec §10.3 / §10.5)', () => {
   it('新团队 stays on idle when the parent re-renders the same terminal run', () => {
     const run = terminalRun('done-stay');
     const { rerender } = render(<TeamSurface run={run} onSelectSeat={() => {}} />);
+    fireEvent.click(screen.getByLabelText('查看所有成员及当前任务'));
     fireEvent.click(screen.getByRole('button', { name: '新团队' }));
     rerender(<TeamSurface run={run} onSelectSeat={() => {}} />);
     expect(screen.getByText(/在设置里打开 Team|选一个模板/)).toBeTruthy();

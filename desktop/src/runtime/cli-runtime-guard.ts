@@ -41,6 +41,7 @@ export interface VerifyCliRuntimeInput {
   readonly entryScript: string;
   readonly nodeProgram?: string;
   readonly timeoutMs?: number;
+  readonly requiredFlags?: readonly string[];
   readonly now?: () => number;
   /** Test seam. Defaults to the real read-only probe. */
   readonly probe?: (args: {
@@ -94,7 +95,7 @@ export async function verifyCliRuntime(
   if (entry === '') {
     return { ok: false, message: 'CLI 自检不通过：没有配置 CLI 路径。先在设置里填好再发送。' };
   }
-  const key = cacheKey(kind, entry, input.nodeProgram);
+  const key = cacheKey(kind, entry, input.nodeProgram) + JSON.stringify(input.requiredFlags ?? []);
   const cached = cache.get(key);
   if (cached && now() - cached.at < GUARD_CACHE_TTL_MS) return cached.verdict;
   const running = inflight.get(key);
@@ -118,12 +119,24 @@ export async function verifyCliRuntime(
     const selectionInput: CliRuntimeSelectionInput = {
       kind,
       configuredPath: entry,
-      resourceResolution: resolution,
+      resourceResolution: input.nodeProgram ? {
+        cliScript: resolution?.cliScript ?? null,
+        cliSource: resolution?.cliSource ?? null,
+        ...resolution,
+        nodeProgram: input.nodeProgram,
+        nodeSource: resolution?.nodeSource ?? 'env',
+      } : resolution,
       probe: probed,
       requireProbe: true,
     };
     const selected = selectCliRuntime(selectionInput);
-    if (selected.ok !== false) return { ok: true };
+    if (selected.ok !== false) {
+      if (probed.ok && probed.kind === 'trylo-v1' && probed.supportedFlags) {
+        const missing = input.requiredFlags?.filter(flag => !probed.supportedFlags!.includes(flag)) ?? [];
+        if (missing.length) return { ok: false, message: `当前 CLI 构建不支持 ${missing.join('、')}。请在 new trylo cli 运行 npm run build 后重试；自定义 CLI 路径请指向支持这些选项的版本。` };
+      }
+      return { ok: true };
+    }
     // Block on proof (wrong kind, missing entry, missing interpreter).
     // Anything else (timeout / spawn failure / unrecognized banner) is
     // doubt, not proof — the spawn itself stays the arbiter, as today.

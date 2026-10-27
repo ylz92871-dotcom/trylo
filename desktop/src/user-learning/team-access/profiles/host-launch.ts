@@ -1,8 +1,7 @@
 // startTeamTurn — the ONLY legal spawn entry (Foundation spec §7.6.2).
 //
-// Composer 开始 → freeze the profile → write profile.v1.json (scratch
-// for the CLI) → preparePrompt with confirmedSpawn + frozenProfile →
-// hand the caller a ready system prompt + queued run. No card, no
+// Composer 开始 → validate and prepare the frozen profile → write
+// profile.v1.json for the CLI → queue the run and return its send payload. No card, no
 // auto-spawn: everything before this click stays solo.
 //
 // App-only import (surfaces must not import user-learning). Pure where
@@ -10,7 +9,7 @@
 // validation come from launch.ts / profile-validate.ts.
 
 import { validateProfile } from './profile-validate';
-import type { PersistableTeamRun } from '../persist';
+import { teamRunsFilePath, type PersistableTeamRun } from '../persist';
 import {
   createFrozenTeamRun,
   freezeProfile,
@@ -46,10 +45,11 @@ export function launchErrorMessage(code: LaunchErrorCode, detail?: string): stri
   return detail ? `${LAUNCH_ERROR_MESSAGE[code]}：${detail}` : LAUNCH_ERROR_MESSAGE[code];
 }
 
-/** Module-level double-click lock (§7.6.2 step 1); App adds no state. */
-let inFlight = false;
+/** One launch per conversation; independent origins can prepare concurrently. */
+const inFlight = new Set<string>();
 
 export interface StartTeamTurnInput {
+  readonly workspaceId?: string;
   readonly workspaceRoot: string;
   readonly conversationId: string;
   readonly product: 'code' | 'work';
@@ -59,6 +59,11 @@ export interface StartTeamTurnInput {
   readonly composerLive: boolean;
   readonly preparePrompt: UserLearningRuntime['preparePrompt'];
   readonly isPersonTurnRunning: boolean;
+  /** Optional native owner check; refusal precedes profile and history writes. */
+  readonly inspectOwner?: () => Promise<void>;
+  readonly signal?: AbortSignal;
+  /** One identity per launch; conversation identity alone cannot retain history. */
+  readonly newRunId?: () => string;
   readonly writeFile: (path: string, body: string) => Promise<void>;
 }
 
@@ -76,18 +81,21 @@ export type StartTeamTurnResult =
 
 export async function startTeamTurn(input: StartTeamTurnInput): Promise<StartTeamTurnResult> {
   // 1. in-flight lock — a second click never launches twice.
-  if (inFlight) {
+  const origin = JSON.stringify([teamRunsFilePath(input.workspaceRoot), input.conversationId]);
+  if (inFlight.has(origin)) {
     return { ok: false, reason: 'in_flight', message: launchErrorMessage('in_flight') };
   }
-  inFlight = true;
+  inFlight.add(origin);
   try {
     return await runLaunch(input);
   } finally {
-    inFlight = false;
+    inFlight.delete(origin);
   }
 }
 
 async function runLaunch(input: StartTeamTurnInput): Promise<StartTeamTurnResult> {
+  const cancelled = (): StartTeamTurnResult => ({ ok: false, reason: 'blocked', message: '本次团队启动已取消，未派发新任务。' });
+  if (input.signal?.aborted) return cancelled();
   // 2. flags / goal / profile validation. Failure → composer reason, no
   // fake run (§7.6.2 step 2).
   if (!input.composerLive) {
@@ -96,6 +104,10 @@ async function runLaunch(input: StartTeamTurnInput): Promise<StartTeamTurnResult
   const goal = input.goal.trim();
   if (goal.length === 0) {
     return { ok: false, reason: 'empty_goal', message: launchErrorMessage('empty_goal') };
+  }
+  if (input.profile.surface !== input.product) {
+    return { ok: false, reason: 'invalid_profile',
+      message: launchErrorMessage('invalid_profile', '团队配置的 Code/Work 类型与当前模式不一致') };
   }
   const allowNoWorker = input.profile.members.some((m) => m.baseRole === 'reviewer')
     && !input.profile.members.some((m) => m.baseRole === 'worker');
@@ -115,42 +127,28 @@ async function runLaunch(input: StartTeamTurnInput): Promise<StartTeamTurnResult
   if (input.isPersonTurnRunning) {
     return { ok: false, reason: 'turn_busy', message: launchErrorMessage('turn_busy') };
   }
+  if (input.inspectOwner) {
+    try { await input.inspectOwner(); }
+    catch (error) {
+      return { ok: false, reason: 'blocked', message: launchErrorMessage('blocked',
+        error instanceof Error ? error.message : String(error)) };
+    }
+  }
+  if (input.signal?.aborted) return cancelled();
 
-  // 4. freeze + fresh teamRunId. The id MUST match the one the runtime
-  // renders into <trylo_team_access> (team-<conversationId>) because the
-  // CLI parses that line to find this very file (§7.6.1).
-  const teamRunId = `team-${input.conversationId}`;
+  // The exact identity travels through preparation, scratch IO and events.
+  const newRunId = input.newRunId ?? (() => `team-${crypto.randomUUID()}`);
+  const teamRunId = newRunId();
   const frozenProfile = freezeProfile(input.profile);
 
-  // 5. write the scratch freeze. Failure degrades: log, continue, and the
-  // system prompt carries compact sibling overlay tags instead (§8.4).
-  let overlayWriteFailed = false;
-  try {
-    await input.writeFile(frozenProfilePath(input.workspaceRoot, teamRunId), serializeFrozenProfile(frozenProfile));
-  } catch (err) {
-    overlayWriteFailed = true;
-    // eslint-disable-next-line no-console
-    console.warn('[team-access] profile.v1.json write failed; falling back to tags:', err);
-  }
-
-  // 6. cache the queued run BEFORE the turn so spawn events can bind.
-  await loadTeamRunsForWorkspace(input.workspaceRoot, input.workspaceRoot);
-  const run = createFrozenTeamRun({
-    teamRunId,
-    personConversationId: input.conversationId,
-    goal,
-    frozenProfile,
-    now: Date.now(),
-  });
-  await upsertTeamRun(run);
-
-  // 7. the Person turn with a confirmed spawn. The scorer's roster comes
-  // from the frozen profile; no freeze ⇒ no contract (§7.2.1).
+  // Preparation may refuse this launch. Do it before any disk or cache
+  // mutation so an impact confirmation never leaves a phantom active run.
   const prepared = input.preparePrompt({
     workspaceRoot: input.workspaceRoot,
     product: input.product,
     prompt: goal,
     conversationId: input.conversationId,
+    teamRunId,
     confirmedSpawn: true,
     frozenProfile,
   });
@@ -168,17 +166,44 @@ async function runLaunch(input: StartTeamTurnInput): Promise<StartTeamTurnResult
     return { ok: false, reason: 'prepare_not_ready', message: launchErrorMessage('prepare_not_ready') };
   }
 
+  let overlayWriteFailed = false;
+  try {
+    await input.writeFile(frozenProfilePath(input.workspaceRoot, teamRunId), serializeFrozenProfile(frozenProfile));
+  } catch (err) {
+    overlayWriteFailed = true;
+    // The prompt carries the same frozen overlay when scratch IO fails.
+    // eslint-disable-next-line no-console
+    console.warn('[team-access] profile.v1.json write failed; falling back to tags:', err);
+  }
+  if (input.signal?.aborted) return cancelled();
+  await loadTeamRunsForWorkspace(input.workspaceRoot, input.workspaceId ?? input.workspaceRoot, 'background');
+  if (input.signal?.aborted) return cancelled();
+  const run = createFrozenTeamRun({
+    teamRunId,
+    personConversationId: input.conversationId,
+    goal,
+    frozenProfile,
+    now: Date.now(),
+  });
+
   // 8. hand the send payload back. `appendUserBubble` is decided by the
   // App (it owns the transcript); the system prompt NEVER carries overlay
   // JSON unless the freeze write failed (§8.4 sibling tags).
   const contractRun: PersistableTeamRun = prepared.contract.contractId
     ? { ...run, contractId: prepared.contract.contractId, contractVersion: prepared.contract.version }
     : run;
-  await upsertTeamRun(contractRun);
+  await upsertTeamRun(contractRun, input.workspaceRoot);
   let systemPrompt = prepared.systemPrompt;
   if (overlayWriteFailed) {
     const { renderMemberOverlayFallbackTags } = await import('../render-team-access');
     systemPrompt = `${systemPrompt}\n${renderMemberOverlayFallbackTags(frozenProfile)}`;
+  }
+  if (input.signal?.aborted) {
+    const at = Math.max(Date.now(), contractRun.updatedAt);
+    await upsertTeamRun({ ...contractRun, status: 'cancelled', lifecycle: 'closed', endedAt: at, updatedAt: at,
+      seats: contractRun.seats.map(seat => ({ ...seat, status: 'cancelled', canReceiveInput: false,
+        summary: '启动已取消，未开始执行', endedAt: at })) }, input.workspaceRoot);
+    return cancelled();
   }
   return {
     ok: true,

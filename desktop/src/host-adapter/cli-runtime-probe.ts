@@ -138,6 +138,7 @@ export function probeResultOfBanners(args: {
       kind: 'trylo-v1',
       version,
       evidence: `--help → ${V1_HELP_MARKER}`,
+      supportedFlags: [...new Set([...String(args.helpBanner).matchAll(/^\s{2,}(--[\w-]+)/gm)].map(match => match[1]!))],
     };
   }
   if (helpKind === 'legacy') {

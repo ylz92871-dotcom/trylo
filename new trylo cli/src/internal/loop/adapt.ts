@@ -53,7 +53,9 @@ export function classifyProviderEvent(
     return {
       type: "transport_unknown",
       eventId,
-      message: `mid_stream:${event.class}`,
+      // Quota adapters already emit bounded fixed metadata. Keep the actionable
+      // reset while preserving unknown delivery after headers were accepted.
+      message: event.class === "quota" ? detailFor(event, "quota") : `mid_stream:${event.class}`,
       errorClass: event.class,
     };
   }

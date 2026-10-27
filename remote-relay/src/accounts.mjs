@@ -98,7 +98,7 @@ export async function createAccounts({ store, now, origin, secureCookies = true,
   function quota(state, userId) {
     const user = state.users.find(item => item.id === userId);
     const used = state.usage.filter(item => item.userId === userId).reduce((sum, item) => sum + item.units, 0);
-    return { total: user.allowance || 0, used, remaining: Math.max(0, (user.allowance || 0) - used), unit: '点', modelServiceEnabled: false };
+    return { total: user.allowance || 0, used, remaining: Math.max(0, (user.allowance || 0) - used), unit: '点', modelServiceEnabled: Boolean(modelService?.snapshot().policy.executionEnabled) };
   }
   function deviceList(userId) {
     return store.read().devices.filter(item => item.userId === userId).map(item => ({ id: item.id, name: item.name, online: online(item.id), desktopIdentity: item.desktopIdentity }));
@@ -197,7 +197,7 @@ export async function createAccounts({ store, now, origin, secureCookies = true,
         return json(response, 200, { ok: true });
       }
       if (route === '/api/admin/users' && method === 'GET') { const state = store.read(); return json(response, 200, { users: state.users.map(user => ({ ...userView(user), quota: quota(state, user.id), devices: state.devices.filter(item => item.userId === user.id).length })) }); }
-      if (route === '/api/admin/limits' && method === 'GET') return json(response, 200, { ...store.read().limits, modelServiceEnabled: false });
+      if (route === '/api/admin/limits' && method === 'GET') return json(response, 200, { ...store.read().limits, modelServiceEnabled: Boolean(modelService?.snapshot().policy.executionEnabled) });
       if (route === '/api/admin/limits' && method === 'POST') {
         const data = await body(request);
         if (typeof data.registrationOpen !== 'boolean' || !Number.isInteger(data.maxAccounts) || data.maxAccounts < 1 || data.maxAccounts > 1000 || !Number.isInteger(data.maxDevices) || data.maxDevices < 1 || data.maxDevices > 50) throw fail(400, '账号上限 1–1000，单账号设备上限 1–50。');

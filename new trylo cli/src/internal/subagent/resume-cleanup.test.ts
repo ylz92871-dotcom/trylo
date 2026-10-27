@@ -7,7 +7,7 @@ import { createSubagentControlTool } from "./control-tools.js";
 import { SubagentGovernanceTracker } from "./governance.js";
 import { SubagentRuntime } from "./runtime.js";
 
-test("resume waits for cancelled worker cleanup and preserves its partial-work checkpoint", { timeout: 5000 }, async t => {
+test("force close waits for worker cleanup and recovery preserves its partial-work checkpoint", { timeout: 5000 }, async t => {
   let announceBlocked!: () => void;
   let releaseProvider!: () => void;
   const blocked = new Promise<void>(resolve => { announceBlocked = resolve; });
@@ -48,16 +48,18 @@ test("resume waits for cancelled worker cleanup and preserves its partial-work c
   if (spawned.outcome !== "result") return;
   const child = String(spawned.value["agent_id"]);
   await blocked;
-  await call("close_agent", { target: child, force: true });
-  let resumedEarly = false;
-  const resuming = call("resume_agent", { target: child }).then(result => { resumedEarly = true; return result; });
+  let closedEarly = false;
+  const closing = call("close_agent", { target: child, force: true }).then(result => { closedEarly = true; return result; });
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(resumedEarly, false, "continuation waits for the old worker instead of asking the caller to retry");
+  assert.equal(closedEarly, false, "close must wait for the worker to retire");
+  const premature = await call("resume_agent", { target: child });
+  assert.equal(premature.outcome === "error" ? premature.code : "", "agent_cleanup_pending");
   assert.equal(requests.length, 2, "waiting must not dispatch a second worker");
   releaseProvider();
+  assert.equal((await closing).outcome, "result");
   await new Promise(resolve => setImmediate(resolve));
   assert.ok(!runtime.getActiveInstances().includes(child));
-  const resumed = await resuming;
+  const resumed = await call("resume_agent", { target: child });
   assert.equal(resumed.outcome, "result");
   await new Promise(resolve => setImmediate(resolve));
   assert.ok(requests.at(-1)?.messages.some(message => message.role === "tool" && message.content === "PARTIAL_PROGRESS_8291"),

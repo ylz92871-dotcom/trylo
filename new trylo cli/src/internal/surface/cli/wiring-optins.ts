@@ -58,6 +58,7 @@ export type MethodLearningInput = {
 };
 
 export type SubagentWiringInput = {
+  readonly team?: import("../../subagent/team.js").SubagentTeam;
   readonly enabled?: boolean;
   readonly onEvent?: SubagentEventSink;
   readonly governance?: SubagentGovernanceTracker;

@@ -40,6 +40,7 @@ export type DiagEventType =
   | 'first.semantic_event'
   | 'watchdog.timeout'
   | 'process.exit'
+  | 'process.stop.failed'
   | 'terminal'
   // PR-2 (tool-extension spec §3/§4.4): tools/list drift observed at CLI
   // init vs the Profile's expectedTools. reasonCode carries package id +

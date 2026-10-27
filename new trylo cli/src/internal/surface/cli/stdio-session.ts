@@ -1,5 +1,5 @@
 import type { CliContext } from "./context.js";
-import type { PermissionAction, PermissionDecision } from "../../ports/permission.js";
+import type { PermissionAction, PermissionDecision, PermissionRequestContext } from "../../ports/permission.js";
 import { decision } from "../../ports/permission.js";
 import type { AskUserRequest } from "../../domain/ask-user.js";
 import type { AddressedUserInput } from "../../domain/input-queue.js";
@@ -80,19 +80,25 @@ export function createStdioSession(io: Io) {
           const target = typeof input.target === "string" ? input.target : "";
           const message = typeof input.message === "string" ? input.message.trim() : "";
           const mode = input.mode;
+          const action = input.action;
+          const cancelling = action === "cancel";
           const respond = (accepted: boolean, error?: string): void => write({ type: "subagent_input_result", requestId, accepted,
             ...(error === undefined ? {} : { error }) });
-          if (!requestId || !target || !message || message.length > 16000 || agentInputs >= 32
-            || (mode !== undefined && mode !== "append" && mode !== "replace_queued" && mode !== "restart")) {
+          if (!requestId || !target || (!cancelling && !message) || message.length > 16000 || agentInputs >= 32
+            || (action !== undefined && action !== "cancel")
+            || (cancelling ? mode !== undefined || input.message !== undefined
+              : mode !== undefined && mode !== "append" && mode !== "replace_queued" && mode !== "restart")) {
             respond(false, "补充要求无效或发送队列已满。"); continue;
           }
           const tools = agentTools;
-          if (tools === undefined || !tools.snapshot().some(tool => tool.name === "send_input")) {
+          const toolName = cancelling ? "close_agent" : "send_input";
+          if (tools === undefined || !tools.snapshot().some(tool => tool.name === toolName)) {
             respond(false, "当前运行不接收智能体补充要求。"); continue;
           }
           agentInputs += 1;
-          void tools.execute({ name: "send_input", toolCallId: `host-${requestId}`, arguments: { target, message,
-            ...(mode === undefined ? {} : { mode }) } }, cancel.signal)
+          void tools.execute({ name: toolName, toolCallId: `host-${requestId}`,
+            arguments: cancelling ? { target, force: true } : { target, message,
+              ...(typeof mode === "string" ? { mode } : {}) } }, cancel.signal)
             .then(result => {
               if (result.outcome === "result") respond(true);
               else respond(false, "message" in result ? result.message : "本轮已停止，要求未送达。");
@@ -119,11 +125,14 @@ export function createStdioSession(io: Io) {
     bindAgentTools: (tools: ToolPort | undefined): void => { agentTools = tools; },
     enqueue,
     pendingInput: (turnId: string): ReadonlyArray<AddressedUserInput> => queued.splice(0).map(text => ({ text, mode: "steer", turnId })),
-    async approval(action: PermissionAction): Promise<PermissionDecision> {
+    async approval(action: PermissionAction, context?: PermissionRequestContext): Promise<PermissionDecision> {
       const requestId = io.newId("approval");
       const reply = await request(requestId, { subtype: "can_use_tool", tool_name: action.name,
-        tool_use_id: action.toolCallId, input: action.arguments }, reply => reply.behavior === "allow" || reply.behavior === "deny", cancel.signal);
-      if (reply === undefined) return decision("cancelled", "once", "input_closed");
+        tool_use_id: action.toolCallId, input: action.arguments,
+        ...(context?.requester === undefined ? {} : { requester: context.requester }) },
+      reply => reply.behavior === "allow" || reply.behavior === "deny", context?.signal ?? cancel.signal);
+      if (reply === undefined) return context?.signal?.aborted ? decision("cancelled")
+        : closed ? decision("cancelled", "once", "input_closed") : decision("expired");
       return stdioAnswer(JSON.stringify({ type: "control_response", response: {
         subtype: "success", request_id: requestId, response: reply,
       } }), requestId) ?? decision("denied", "once", "policy_denied");

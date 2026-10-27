@@ -50,8 +50,24 @@ export type ToolPairing = {
 
 /** Transcript indexes of the `tool_call` items nothing has answered. */
 export function unansweredCallIndexes(transcript: Transcript): ReadonlySet<number> {
+  return indexToolCalls(transcript).unanswered;
+}
+
+/** Result index to its nearest earlier unanswered call occurrence. Consumers
+ * needing provenance use the same pairing as orphan detection, including when
+ * a provider repeats an id. Neither tool names nor outcomes change pairing.
+ */
+export function toolCallIndexByResult(transcript: Transcript): ReadonlyMap<number, number> {
+  return indexToolCalls(transcript).answered;
+}
+
+function indexToolCalls(transcript: Transcript): {
+  readonly unanswered: ReadonlySet<number>;
+  readonly answered: ReadonlyMap<number, number>;
+} {
   const pending = new Map<string, number[]>();
   const torn = new Set<number>();
+  const answered = new Map<number, number>();
   for (const [index, item] of transcript.entries()) {
     if (item.kind === "tool_call") {
       const calls = pending.get(item.toolCallId) ?? [];
@@ -60,10 +76,13 @@ export function unansweredCallIndexes(transcript: Transcript): ReadonlySet<numbe
       torn.add(index);
     } else if (item.kind === "tool_result") {
       const settled = pending.get(item.toolCallId)?.pop();
-      if (settled !== undefined) torn.delete(settled);
+      if (settled !== undefined) {
+        torn.delete(settled);
+        answered.set(index, settled);
+      }
     }
   }
-  return torn;
+  return { unanswered: torn, answered };
 }
 
 /**

@@ -258,7 +258,7 @@ export class TryloV1EventAdapter {
         this.toolNames.set(event.toolCallId, tool.name);
         return [
           {
-            type: 'tool_use', seq, ts, turn: 1,
+            type: 'tool_use', seq, ts, turn: 1, source: 'trylo-v1',
             id: event.toolCallId,
             tool: tool.name,
             input: tool.input,
@@ -334,6 +334,7 @@ export class TryloV1EventAdapter {
         tools: [],
       },
       { type: 'turn_start', seq: this.seq++, ts, turn: 1, depth: 0, agentId: null },
+      ...(event.contextWindow === undefined ? [] : [{ type: 'context_usage' as const, seq: this.seq++, ts, tokens: 0, contextWindow: event.contextWindow }]),
     ];
   }
 
@@ -394,7 +395,7 @@ export class TryloV1EventAdapter {
     this.toolNames.delete(event.toolCallId);
     return [
       {
-        type: 'tool_result', seq, ts, turn: 1,
+        type: 'tool_result', seq, ts, turn: 1, source: 'trylo-v1',
         id: event.toolCallId,
         tool: name,
         ok,
@@ -462,7 +463,7 @@ export class TryloV1EventAdapter {
     // Denial/stop can end a run without tool_result. Settle the host card
     // from terminal evidence; an empty output never claims execution.
     const pendingTools: LoopEvent[] = [...this.toolNames].map(([id, tool]) => ({
-      type: 'tool_result', seq: this.seq++, ts, turn: 1, id, tool,
+      type: 'tool_result', seq: this.seq++, ts, turn: 1, id, tool, source: 'trylo-v1',
       ok: false, output: '', truncated: false,
       error: `Tool did not report completion before the run ended (${outcome}). ${finalResult}`.trim(),
       durationMs: Math.max(0, ts - (this.toolStartMs.get(id) ?? ts)),
@@ -511,7 +512,9 @@ export class TryloV1EventAdapter {
         type: 'loop_end',
         seq: this.seq++,
         ts,
-        reason,
+        // Team closure consumes the canonical reason, not the adapter's
+        // private outcome. An app Stop must survive that projection boundary.
+        reason: outcome === 'cancelled' ? 'cancelled' : reason,
         numTurns: meta?.iterations ?? 0,
         totalCost: 0,
         durationMs: meta?.durationMs ?? 0,

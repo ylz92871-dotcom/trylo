@@ -1,0 +1,26 @@
+.model-admin .ms-summary{display:flex;gap:22px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin:-3px 0 25px;padding-bottom:22px;border-bottom:1px solid var(--border)}
+.model-admin .ms-summary span:first-child{color:var(--ink)}
+.model-admin .admin-table strong{font-weight:550}
+.model-admin .admin-table small{margin-top:4px}
+.model-admin .ms-model-id{max-width:240px;overflow-wrap:anywhere;white-space:normal}
+.model-admin .ms-model-id small{font-family:var(--font)}
+.model-admin .ms-row-actions{display:flex;gap:18px;align-items:center}
+.model-admin .ms-footnote{margin-top:26px;max-width:75ch;color:var(--muted);font-size:12px;line-height:1.8}
+.model-admin .ms-footnote strong{font-weight:500;color:var(--ink)}
+.model-admin .ms-footnote p{margin-top:5px}
+.model-admin .ms-editor{max-width:850px}
+.model-admin .ms-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px}
+.model-admin .ms-wide{grid-column:1/-1;min-width:0}
+.model-admin .ms-textarea{height:90px;resize:vertical;line-height:1.65;min-height:70px}
+.model-admin .ms-hint{color:var(--muted);font-size:12px;line-height:1.8;margin-top:7px;max-width:75ch}
+.model-admin .ms-section-description{color:var(--muted);font-size:12px;margin-top:7px;line-height:1.8}
+.model-admin .ms-form-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:4px 0 30px}
+.model-admin .ms-form-actions .ms-hint{margin:0}
+.model-admin .ms-model-options{padding:0;border:0;margin:18px 0 0;min-width:0}
+.model-admin .ms-model-options legend{padding:0;font-size:12px;font-weight:500;margin-bottom:12px}
+.model-admin .ms-model-options label{display:flex;align-items:flex-start;gap:9px;font-size:13px;margin:10px 0;overflow-wrap:anywhere}
+.model-admin input[type=checkbox]{accent-color:var(--blue);margin:3px 0 0;flex:none}
+.model-admin .ms-loading{height:220px;color:var(--muted);padding-top:12px}
+.model-admin [role=alert]:focus,.model-admin h1:focus{outline-offset:5px}
+.model-admin .field:disabled{color:var(--muted);background:var(--subtle)}
+@media(max-width:600px){.model-admin .ms-form-grid{grid-template-columns:1fr}.model-admin .ms-wide{grid-column:1}.model-admin .admin-form{padding:18px}.model-admin .field{font-size:16px}.model-admin .page-title{gap:14px;flex-wrap:wrap}.model-admin .ms-summary{gap:8px 18px;margin-bottom:20px}.model-admin .ms-row-actions{gap:16px}.model-admin .admin-table td{height:65px}.model-admin .ms-form-actions .ms-hint{flex-basis:100%}.model-admin .ms-textarea{font-size:14px}.model-admin .ms-model-id{min-width:140px}}

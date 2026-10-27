@@ -3,6 +3,7 @@ import type { CompactionWiring } from "../../loop/compact-boundary.js";
 import type { SessionPort, SessionRecord } from "../../ports/session.js";
 import type { CliContext } from "./context.js";
 import { compactionWiring } from "./compaction-wiring.js";
+import { listTranscript } from "../../compaction/projection.js";
 
 /**
  * Compacting a session on demand (`/compact`).
@@ -41,7 +42,7 @@ export async function compactSession(
     return { ok: false, problem: `${projected.code}: ${projected.detail}` };
   }
   const at = new Date(ctx.now()).toISOString();
-  const summary = await wiring.summarize(projected.view.items, projected.view.window?.summary, options?.signal);
+  const summary = await wiring.summarize(projected.view.items, projected.view.window?.summary, options?.signal, listTranscript(records));
   const compacted = wiring.port.compact({ records, sessionId, at, summary });
   if (!compacted.ok) {
     // `nothing_to_compact` is the ordinary answer for a session whose history

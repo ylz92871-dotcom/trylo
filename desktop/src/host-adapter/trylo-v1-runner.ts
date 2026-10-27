@@ -22,9 +22,10 @@
 //      could re-run a turn that already had side effects.
 
 import { hostAdapter } from './index';
+import { registeredProcessIds } from './process-snapshot';
 import type { FilePath } from './types';
 import type { LoopEvent } from './loop-events';
-import type { ProcessExitInfo } from './process-service';
+import type { ProcessExitInfo, ProcessHandle } from './process-service';
 import { TryloV1EventAdapter, type TryloV1Outcome } from './trylo-v1-event-adapter';
 import {
   markSessionEstablished,
@@ -70,9 +71,12 @@ export interface TryloV1CliArgsInput {
   readonly endpoint?: string;
   readonly model?: string;
   readonly reasoningEffort?: ReasoningEffort;
+  readonly contextTokenLimit?: number;
+  readonly modelContextWindow?: number;
   /** Desktop instructions appended to the CLI-owned system seeds. */
   readonly systemPrompt?: string;
   readonly permissionLevel?: PermissionLevel;
+  readonly teamMode?: boolean;
   /**
    * WP-CL / B: forwarded verbatim as `--learning=<value>`. Absent keeps the
    * argv unchanged — the CLI's default is "learning off", and a Desktop that
@@ -133,10 +137,13 @@ export function buildTryloV1Args(input: TryloV1CliArgsInput & {
   if (input.endpoint) args.push('--endpoint', input.endpoint);
   if (input.model) args.push('--model', input.model);
   if (input.reasoningEffort !== undefined) args.push('--reasoning-effort', input.reasoningEffort);
+  if (input.contextTokenLimit !== undefined) args.push('--context-window', String(input.contextTokenLimit));
+  if (input.modelContextWindow !== undefined) args.push('--model-context-window', String(input.modelContextWindow));
   // WP-CL / B: the switch the person actually enabled, and nothing else.
   if (input.learning !== undefined) args.push(`--learning=${input.learning}`);
   args.push('--append-system-prompt', desktopSystemPrompt(input.systemPrompt));
   args.push('--subagent');
+  if (input.teamMode && input.permissionLevel === 'workspace_write') args.push('--allow-writes');
   args.push(...permissionFlagsForV1(input.permissionLevel ?? 'read_only'));
   // `-` = read the prompt from stdin. Required: the prompt must never be
   // an argv value (Windows command-line limits, argv in process logs).
@@ -146,6 +153,7 @@ export function buildTryloV1Args(input: TryloV1CliArgsInput & {
 
 /** Per-process state the runner keeps between spawn and exit. */
 interface TryloV1Run {
+  handle: ProcessHandle | null;
   readonly exited: Promise<void>;
   readonly markExited: () => void;
   readonly adapter: TryloV1EventAdapter;
@@ -157,6 +165,8 @@ interface TryloV1Run {
   /** P08 §6.2: the session binding, advanced as the run progresses. */
   binding: CliSessionBinding;
   readonly onBindingChange?: (binding: CliSessionBinding) => void;
+  readonly onTerminal?: (outcome: TryloV1Outcome) => void;
+  readonly onExit?: (info: ProcessExitInfo) => void;
 }
 
 function sameBinding(a: CliSessionBinding, b: CliSessionBinding): boolean {
@@ -176,7 +186,46 @@ function advanceBinding(run: TryloV1Run, next: CliSessionBinding): void {
  *  exit handler "this was a cancellation", not a crash. */
 const live = new Map<string, TryloV1Run>();
 
+function hasExited(run: TryloV1Run | undefined): boolean {
+  return run?.state === 'exited';
+}
+
+/** Native delivery and independent exit confirmation share one terminal owner. */
+function observeRunExit(run: TryloV1Run, info: ProcessExitInfo): void {
+  if (hasExited(run)) return;
+  run.markExited();
+  run.state = 'exited';
+  if (run.handle && live.get(run.handle.id) === run) {
+    live.delete(run.handle.id);
+    closeSubagentInputProcess(run.handle.id);
+  }
+  if (!run.guard.isSuperseded() && info.outputComplete === false) {
+    run.onEvents([run.adapter.warn('process_output_incomplete', '进程已退出，尾部输出未完整接收；保留当前可核实结果。')]);
+  }
+  if (run.binding.state === 'creating') {
+    advanceBinding(run, markSessionUnknown(run.binding, `process exited (code ${String(info.code)})`));
+  }
+  if (!run.guard.isSuperseded() && !run.adapter.hasTerminal) {
+    if (run.adapter.rejectedLines().length > 0) {
+      run.onEvents([run.adapter.warn('protocol_rejected', run.adapter.describeRejections())]);
+    }
+    // Missing run_result never proves completion, even with a successful exit.
+    const events = run.adapter.finalizeExit({ exitCode: info.code, stderr: run.stderr, cancelled: run.cancelled });
+    if (events.length > 0) {
+      run.onEvents(events);
+      run.onTerminal?.(run.adapter.summary().outcome ?? 'unknown');
+    }
+  }
+  run.onExit?.(info);
+}
+
 export interface StartTryloV1Args {
+  readonly contextTokenLimit?: number;
+  readonly modelContextWindow?: number;
+  readonly recoveryIdentity?: import('./process-service').ProcessRecoveryIdentity;
+  /** Native ownership is available before the first, possibly blocked write. */
+  readonly onSpawn?: (handle: ProcessHandle) => void;
+  readonly teamMode?: boolean;
   readonly reasoningEffort?: ReasoningEffort;
   readonly spawnEnv?: Readonly<Record<string, string>>;
   /** Carries the owner id even when the child answers before start returns. */
@@ -245,8 +294,11 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
     ...(args.endpoint ? { endpoint: args.endpoint } : {}),
     ...(args.model ? { model: args.model } : {}),
     ...(args.reasoningEffort === undefined ? {} : { reasoningEffort: args.reasoningEffort }),
+    ...(args.contextTokenLimit === undefined ? {} : { contextTokenLimit: args.contextTokenLimit }),
+    ...(args.modelContextWindow === undefined ? {} : { modelContextWindow: args.modelContextWindow }),
     ...(args.systemPrompt ? { systemPrompt: args.systemPrompt } : {}),
     permissionLevel: args.permissionLevel ?? 'read_only',
+    ...(args.teamMode === undefined ? {} : { teamMode: args.teamMode }),
     ...(args.learning === undefined ? {} : { learning: args.learning }),
   });
 
@@ -254,6 +306,7 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
   let markExited: () => void = () => {};
   const exited = new Promise<void>(resolve => { markExited = resolve; });
   const run: TryloV1Run = {
+    handle: null,
     exited, markExited,
     adapter,
     onEvents: args.onEvents,
@@ -263,9 +316,10 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
     state: 'spawning',
     binding,
     ...(args.onBindingChange ? { onBindingChange: args.onBindingChange } : {}),
+    ...(args.onTerminal ? { onTerminal: args.onTerminal } : {}),
+    ...(args.onExit ? { onExit: args.onExit } : {}),
   };
 
-  let ownerId: string | null = null;
   const pendingControls: ControlFrame[] = [];
   const handle = await hostAdapter.process.spawn({
     command,
@@ -273,13 +327,15 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
     label: 'trylo-cli-v1',
     cwd: args.cwd,
     env: args.spawnEnv,
+    recoveryIdentity: args.recoveryIdentity,
     metadata: {
       ...(args.projectKey ? { projectKey: args.projectKey } : {}),
       ...(args.conversationId ? { conversationId: args.conversationId } : {}),
       ...(args.runId ? { runId: args.runId } : {}),
     },
     onOutput: (line) => {
-      if (run.guard.isSuperseded()) return;
+      if (hasExited(run) || run.guard.isSuperseded()) return;
+      const ownerId = run.handle?.id ?? null;
       if (consumeSubagentInputResult(line, ownerId)) return;
       const control = readV1Control(line);
       if (control !== null) {
@@ -314,78 +370,53 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
     },
     // Separate channel: a pre-run failure writes ONLY here (spec §4.2).
     onStderr: (line) => {
-      if (run.guard.isSuperseded()) return;
+      if (hasExited(run) || run.guard.isSuperseded()) return;
       run.stderr.push(line);
       if (run.stderr.length > STDERR_HISTORY) run.stderr.shift();
     },
-    onExit: (info) => {
-      run.markExited();
-      run.state = 'exited';
-      // §6.2: died mid-creation ⇒ the session's fate is genuinely unknown.
-      // Never assume the journal exists because "a file might be there".
-      if (run.binding.state === 'creating') {
-        advanceBinding(
-          run,
-          markSessionUnknown(run.binding, `process exited (code ${String(info.code)})`),
-        );
-      }
-      if (!run.guard.isSuperseded() && !adapter.hasTerminal) {
-        // Audit finding: when stdout carried bytes the wire guard
-        // refused, "the run ended without a terminal event" is not the
-        // real story — a protocol mismatch is. Say so, through the same
-        // visible channel a CLI warning uses.
-        if (adapter.rejectedLines().length > 0) {
-          const warning = adapter.warn('protocol_rejected', adapter.describeRejections());
-          run.onEvents([warning]);
-        }
-        // No authoritative terminal: synthesise one. `finalizeExit`
-        // never reports `completed` (spec §4.3).
-        const events = adapter.finalizeExit({
-          exitCode: info.code,
-          stderr: run.stderr,
-          cancelled: run.cancelled,
-        });
-        if (events.length > 0) {
-          run.onEvents(events);
-          args.onTerminal?.(adapter.summary().outcome ?? 'unknown');
-        }
-      }
-      if (ownerId !== null) { live.delete(ownerId); closeSubagentInputProcess(ownerId); }
-      args.onExit?.(info);
-    },
+    onExit: info => observeRunExit(run, info),
   });
 
   const handleKey = handle.id;
-  ownerId = handleKey;
+  run.handle = handle;
   if (run.state === 'exited') return { processId: handleKey, state: () => run.state };
   live.set(handleKey, run);
   registerSubagentInputProcess(handleKey);
-  if (run.guard.isSuperseded()) {
-    live.delete(handleKey);
-    closeSubagentInputProcess(handleKey);
-    await hostAdapter.process.stop(handleKey).catch(() => undefined);
-    throw new Error('trylo-v1 runner was superseded before startup completed');
-  }
-  for (const frame of pendingControls) args.onControlFrame?.(frame, handleKey);
-
-  // Keep stdin open for correlated answers, guidance and cancellation.
-  run.state = 'writing_prompt';
   try {
+    // A late acquired handle still needs an owner after cancellation. Cleanup
+    // uses the same bounded stop and actual-exit proof as an ordinary Stop.
+    args.onSpawn?.(handle);
+    if (run.guard.isSuperseded()) throw new Error('Startup was superseded before prompt dispatch.');
+    for (const frame of pendingControls) args.onControlFrame?.(frame, handleKey);
+    // Keep stdin open for correlated answers, guidance and cancellation.
+    run.state = 'writing_prompt';
     // §6.2: with an established session the CLI owns the context, so
     // replaying history here would duplicate every turn.
     const frame =
       sessionArgs.kind === 'resume'
         ? buildUserPrompt(args.prompt)
         : buildBootstrapUserPrompt(args.priorMessages ?? [], args.prompt);
-    await hostAdapter.process.send(handleKey, frame);
+    const delivered = await completesWithin(Promise.race([
+      run.exited, hostAdapter.process.send(handleKey, frame),
+    ]), 5000);
+    if (!delivered) throw new Error('Initial prompt write acknowledgement timed out.');
   } catch (error) {
-    live.delete(handleKey);
-    await hostAdapter.process.stop(handleKey).catch(() => undefined);
-    closeSubagentInputProcess(handleKey);
+    if (hasExited(run)) return { processId: handleKey, state: () => run.state };
+    if (!run.guard.isSuperseded()) {
+      run.onEvents([adapter.warn('prompt_delivery_uncertain', '提示写入未确认，未自动重试；正在停止原执行，停止失败时请重试停止。')]);
+    }
+    try { await stopTryloV1(handleKey); }
+    catch (cleanupError) {
+      // Keep live/subagent ownership until the actual exit callback; both the
+      // original delivery failure and the retained cleanup failure matter.
+      throw new AggregateError([error, cleanupError], run.guard.isSuperseded()
+        ? 'Superseded startup cleanup is unconfirmed.' : 'Failed to write the prompt; process cleanup is unconfirmed.');
+    }
+    if (run.guard.isSuperseded()) throw new Error('trylo-v1 runner was superseded before prompt dispatch', { cause: error });
     throw new Error('Failed to write the prompt to the trylo-v1 CLI stdin', { cause: error });
   }
 
-  if (!adapter.hasTerminal) run.state = 'streaming';
+  if (!hasExited(run) && !adapter.hasTerminal) run.state = 'streaming';
   return { processId: handleKey, state: () => run.state };
 }
 
@@ -397,17 +428,67 @@ export async function stopTryloV1(processId: string): Promise<void> {
   const run = live.get(processId);
   if (run) {
     run.cancelled = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await hostAdapter.process.send(processId, `${JSON.stringify({ type: 'control_request',
+      const interrupt = hostAdapter.process.send(processId, `${JSON.stringify({ type: 'control_request',
         request_id: `interrupt-${processId}`, request: { subtype: 'interrupt' } })}\n`);
-      const graceful = await Promise.race([run.exited.then(() => true),
-        new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), 3000); })]);
+      // The graceful window includes stdin IO. Exit is independent of the
+      // IPC receipt; a blocked writer must not hide an already reaped child.
+      const graceful = await completesWithin(Promise.race([
+        run.exited, interrupt.then(() => run.exited),
+      ]), 3000);
       if (graceful) return;
     } catch { /* Broken or older control channels fall back to process-tree termination. */ }
-    finally { clearTimeout(timer); }
   }
-  await hostAdapter.process.stop(processId);
+  if (hasExited(run)) return;
+  try {
+    const receipt = hostAdapter.process.stop(processId);
+    const acknowledged = await completesWithin(run ? Promise.race([run.exited, receipt]) : receipt, 5000);
+    if (!acknowledged) {
+      throw new Error('等待原生停止回执超时，尚未确认进程退出，请重试停止。');
+    }
+    if (run && !await completesWithin(run.exited, 1000)) {
+      throw new Error('Stop command was acknowledged without a process exit receipt; termination is unconfirmed.');
+    }
+  }
+  catch (error) {
+    if (hasExited(run)) return;
+    if (run && await confirmMissingExit(run, error)) return;
+    throw error;
+  }
+}
+
+/** Native removes this immutable id only after wait(); absent callback data stays unknown. */
+async function confirmMissingExit(run: TryloV1Run, stopError: unknown): Promise<boolean> {
+  const handle = run.handle;
+  if (!handle) return false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let confirmed: boolean;
+  try {
+    confirmed = await Promise.race([
+      run.exited.then(() => true),
+      hostAdapter.process.list().then(rows => !registeredProcessIds(rows).has(handle.id)),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('Native process list confirmation timed out.')), 1000);
+      }),
+    ]);
+  } catch (listError) {
+    if (hasExited(run)) return true;
+    throw new AggregateError([stopError, listError], 'Stop failed; native process list could not confirm exit.');
+  } finally { clearTimeout(timer); }
+  // Late list settlement has no side effects: only the winning witness acts.
+  if (confirmed && !hasExited(run)) {
+    observeRunExit(run, { id: handle.id, pid: handle.pid, code: null, signal: null, outputComplete: false });
+  }
+  return confirmed;
+}
+
+/** Releases only this waiter; late IPC settlement remains observed by the race. */
+async function completesWithin(completion: Promise<void>, timeoutMs: number): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([completion.then(() => true),
+      new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), timeoutMs); })]);
+  } finally { clearTimeout(timer); }
 }
 
 /** True while a v1 run owns this process id. */

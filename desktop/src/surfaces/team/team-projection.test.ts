@@ -42,6 +42,71 @@ function frozenRun(): NonNullable<ReturnType<typeof applyTeamEvents>> {
 }
 
 describe('surfaces/team/team-projection (Foundation spec §7.6.3)', () => {
+  it('keeps round answers and input identity while a parked team member can continue', () => {
+    const run = applyTeamEvents(frozenRun(), [
+      { type: 'subagent', source: 'trylo-v1', kind: 'spawn', id: 'w', agentType: 'worker', memberId: 'm1',
+        teamRunId: 'team-conv-1', taskId: 'task-w', canReceiveInput: true, prompt: 'first assignment' },
+      { type: 'subagent', source: 'trylo-v1', kind: 'update', id: 'w', status: 'waiting', round: 1, result: 'first answer' },
+      { type: 'subagent', source: 'trylo-v1', kind: 'end', id: 'w', status: 'done', parked: true, canReceiveInput: true },
+    ], CTX)!;
+    expect(findSeat(run, 'w')).toMatchObject({ taskId: 'task-w', canReceiveInput: true, parked: true,
+      conversation: [{ round: 1, prompt: 'first assignment', result: 'first answer' }] });
+  });
+  it('binds a recovered execution to the same member and ignores the retired execution', () => {
+    const spawn = { type: 'subagent', source: 'trylo-v1', kind: 'spawn', id: 'person-old',
+      agentType: 'person', memberId: 'm-p', teamRunId: 'team-conv-1', status: 'running' };
+    const failed = applyTeamEvents(frozenRun(), [spawn,
+      { type: 'subagent', source: 'trylo-v1', kind: 'end', id: 'person-old', status: 'failed', error: 'budget' }], CTX)!;
+    const resumed = applyTeamEvents({ ...failed, selectedSeatId: 'person-old' }, [
+      { ...spawn, id: 'person-new', resumedFrom: 'person-old', taskId: 'person-old' },
+      { type: 'subagent', source: 'trylo-v1', kind: 'end', id: 'person-old', status: 'cancelled' },
+    ], CTX)!;
+    expect(findSeat(resumed, 'person-new')).toMatchObject({ memberId: 'm-p', status: 'running' });
+    expect(findSeat(resumed, 'person-new')?.error).toBeUndefined();
+    expect(resumed.selectedSeatId).toBe('person-new');
+    expect(resumed.seats.filter(seat => seat.memberId === 'm-p')).toHaveLength(1);
+  });
+  it('binds explicitly identified V1 team members and accepts their end without a repeated role', () => {
+    const run = applyTeamEvents(frozenRun(), [
+      { type: 'subagent', source: 'trylo-v1', kind: 'spawn', id: 'v1-w', agentType: 'worker',
+        memberId: 'm1', teamRunId: 'team-conv-1', status: 'running' },
+      { type: 'subagent', source: 'trylo-v1', kind: 'end', id: 'v1-w', status: 'failed', error: 'provider refused' },
+    ], CTX)!;
+    expect(findSeat(run, 'v1-w')).toMatchObject({ memberId: 'm1', status: 'failed', error: 'provider refused' });
+  });
+
+  it('does not bind an unknown member or an id whose frozen role disagrees', () => {
+    for (const memberId of ['outsider', 'm-p']) {
+      const before = frozenRun();
+      const after = applyTeamEvents(before, [{ type: 'subagent', kind: 'spawn', id: 'bad',
+        agentType: 'worker', memberId }], CTX)!;
+      expect(after.seats).toEqual(before.seats);
+    }
+  });
+
+  it('does not revive a finished seat when its spawn notification is duplicated', () => {
+    const event = { type: 'subagent', kind: 'spawn', id: 'w', agentType: 'worker', memberId: 'm1' };
+    const done = applyTeamEvents(frozenRun(), [event,
+      { type: 'subagent', kind: 'end', id: 'w', agentType: 'worker', result: 'done' }], CTX)!;
+    const replay = applyTeamEvents(done, [event], CTX)!;
+    expect(findSeat(replay, 'w')?.status).toBe('completed');
+  });
+
+  it('isolates workspaces even when conversation ids overlap', () => {
+    const run = frozenRun();
+    expect(applyTeamEvents(run, [{ type: 'subagent', kind: 'spawn', id: 'x', agentType: 'worker' }],
+      { ...CTX, workspaceId: 'other' })).toBe(run);
+  });
+
+  it('settles undispatched seats as failed when the parent finishes', () => {
+    const run = applyTeamEvents(frozenRun(), [{ type: 'loop_end', reason: 'completed', isError: false, ts: 123 }], CTX)!;
+    expect(run.status).toBe('failed');
+    expect(run.seats.every(seat => seat.status === 'failed')).toBe(true);
+  });
+
+  it('cancels a queued member before it is dispatched', () => {
+    expect(findSeat(cancelTeamSeat(frozenRun(), 'queued:m1', 20), 'queued:m1')?.status).toBe('cancelled');
+  });
   it('is a no-op for empty batches and non-team subagents', () => {
     expect(applyTeamEvents(null, [], CTX)).toBeNull();
     const run = applyTeamEvents(null, [

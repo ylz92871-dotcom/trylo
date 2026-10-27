@@ -83,6 +83,7 @@ export function exitCodeForResult(result: RunTurnResult): ExitCode {
   }
   if (
     errorClass === "rate_limit" ||
+    errorClass === "quota" ||
     errorClass === "server" ||
     errorClass === "network" ||
     errorClass === "timeout"

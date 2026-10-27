@@ -7,8 +7,8 @@ import { applyEvents } from './events';
 import type { ChatMessage, SubagentMessage } from './types';
 
 vi.mock('react-virtuoso', () => ({ Virtuoso: forwardRef(function List(props: {
-  data: readonly { id?: string; key?: string }[]; itemContent: (index: number, item: unknown) => ReactNode;
-}, _ref) { return <div>{props.data.map((item, index) => <div key={item.id ?? item.key}>{props.itemContent(index, item)}</div>)}</div>; }) }));
+  scrollerRef?: (element: HTMLElement | null) => void; data: readonly { id?: string; key?: string }[]; itemContent: (index: number, item: unknown) => ReactNode;
+}, _ref) { return <div ref={props.scrollerRef} data-testid="conversation-scroller">{props.data.map((item, index) => <div key={item.id ?? item.key}>{props.itemContent(index, item)}</div>)}</div>; }) }));
 import { AgentConversationSurface } from './AgentConversationSurface';
 import { SubagentConversation } from './SubagentConversation';
 import { agentAvatarIndex } from './AgentAvatar';
@@ -69,7 +69,7 @@ describe('approved collaboration UI uses the production event chain', () => {
     view.rerender(surface([user, changed, ...members.slice(1)]));
     expect(screen.getByLabelText('已更名成员参与事件').querySelector('[data-avatar]')).toHaveAttribute('data-avatar', identity);
     const panel = screen.getByRole('complementary', { name: '已更名成员的会话' });
-    expect(panel.querySelectorAll('[data-avatar]')).toHaveLength(2);
+    expect(panel.querySelectorAll('[data-avatar]')).toHaveLength(1);
     panel.querySelectorAll('[data-avatar]').forEach(icon => expect(icon).toHaveAttribute('data-avatar', identity));
     expect(within(panel).getByText('完整结果')).toBeVisible();
     expect(agentAvatarIndex({ id: 'different-ui-row', subagentId: 'member-0' })).toBe(Number(identity));
@@ -90,17 +90,19 @@ describe('approved collaboration UI uses the production event chain', () => {
   it('pauses member following for manual reading and restores it only on request', () => {
     const first = { ...child('a', '连接排查'), result: '第一轮答复' };
     const view = render(<SubagentConversation agent={first} drafts={new Map()} onClose={() => {}} />);
-    const body = screen.getByLabelText('成员会话内容');
+    const body = screen.getByTestId('conversation-scroller');
     Object.defineProperties(body, { scrollHeight: { configurable: true, value: 1000 }, clientHeight: { configurable: true, value: 200 } });
     view.rerender(<SubagentConversation agent={{ ...first, result: '第一轮完整答复' }} drafts={new Map()} onClose={() => {}} />);
     // Native scrollbar dragging emits scroll without a wheel event.
+    body.scrollTop = 800; fireEvent.scroll(body);
+    fireEvent.keyDown(body, { key: 'PageUp' });
     body.scrollTop = 400; fireEvent.scroll(body);
-    expect(screen.getByRole('button', { name: '回到最新 ↓' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '回到最新消息' })).toBeVisible();
     view.rerender(<SubagentConversation agent={{ ...first, result: '第二轮答复' }} drafts={new Map()} onClose={() => {}} />);
     expect(body.scrollTop).toBe(400);
-    fireEvent.click(screen.getByRole('button', { name: '回到最新 ↓' }));
-    expect(body.scrollTop).toBe(800);
-    expect(screen.queryByRole('button', { name: '回到最新 ↓' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '回到最新消息' }));
+    expect(body.scrollTop).toBe(1000);
+    expect(screen.queryByRole('button', { name: '回到最新消息' })).toBeNull();
   });
   it('counts actual children once, stays collapsed on updates and opens the selected full answer', () => {
     const adapter = new TryloV1EventAdapter();

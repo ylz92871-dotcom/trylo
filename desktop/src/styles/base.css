@@ -16,6 +16,10 @@ body,
   margin: 0;
   padding: 0;
   height: 100%;
+  /* Only content panes scroll. Keep wheel/trackpad gestures from scrolling
+   * or elastically overscrolling the entire desktop WebView at their edges. */
+  overflow: hidden;
+  overscroll-behavior: none;
   background: var(--bg);
   color: var(--fg);
 }

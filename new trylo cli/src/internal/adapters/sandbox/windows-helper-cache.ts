@@ -18,10 +18,18 @@ function redirectedDirectory(directory: string): boolean {
 
 /** A pinned executable outside writable/low-integrity workspaces; never a new download. */
 export function cacheWindowsHelper(source: HelperSource, directory: string, protect: ProtectCache, writableRoots: readonly string[] = []): string {
-  assertOutsideWriteRoots(directory, writableRoots);
   if (!/^[a-f0-9]{64}$/.test(source.sha256)) throw new Error("isolation_helper_invalid: missing pinned digest");
   const bytes = readFileSync(source.path);
   if (digest(bytes) !== source.sha256) throw new Error("isolation_helper_invalid: shipped helper digest differs from provenance");
+  return cacheWindowsBytes(bytes, source.sha256, directory, `srt-win-${source.sha256}.exe`, protect, writableRoots);
+}
+
+/** Captured trusted code uses the same protection and integrity checks as the native helper. */
+export function cacheWindowsBytes(bytes: Uint8Array, sha256: string, directory: string, name: string, protect: ProtectCache, writableRoots: readonly string[] = []): string {
+  assertOutsideWriteRoots(directory, writableRoots);
+  if (!/^[a-f0-9]{64}$/.test(sha256) || digest(bytes) !== sha256 || basename(name) !== name || name === "." || name === "..") {
+    throw new Error("isolation_helper_invalid: invalid captured file or digest");
+  }
   const directoryExists = existsSync(directory);
   if (directoryExists && (!lstatSync(directory).isDirectory() || redirectedDirectory(directory))) {
     throw new Error("isolation_helper_invalid: private cache is redirected");
@@ -29,7 +37,7 @@ export function cacheWindowsHelper(source: HelperSource, directory: string, prot
   mkdirSync(directory, { recursive: true });
   if (redirectedDirectory(directory)) throw new Error("isolation_helper_invalid: cache became redirected");
   protect({ kind: "directory", path: directory, state: directoryExists ? "existing" : "new" });
-  const executable = join(directory, `srt-win-${source.sha256}.exe`);
+  const executable = join(directory, name);
   const executableExists = existsSync(executable);
   if (!executableExists) {
     try { writeFileSync(executable, bytes, { flag: "wx" }); }
@@ -40,7 +48,7 @@ export function cacheWindowsHelper(source: HelperSource, directory: string, prot
     }
   }
   const stat = lstatSync(executable);
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || digest(readFileSync(executable)) !== source.sha256) {
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || digest(readFileSync(executable)) !== sha256) {
     throw new Error("isolation_helper_invalid: private helper is linked, redirected, incomplete or modified");
   }
   protect({ kind: "executable", path: executable, state: executableExists ? "existing" : "new" });

@@ -11,50 +11,66 @@ import {
   serializeTeamRunsFile,
   teamRunsFilePath,
   type PersistableTeamRun,
-  type PersistedTeamRunStatus,
 } from '../persist';
+import { isTeamRunOpen } from '../../../domain/team-run-lifecycle';
+import { commitTeamRuns, sameTeamRun, type TeamRunsStorage, type TeamRunMutation } from './team-runs-persistence';
 
 export type TeamHistoryMark = 'active' | 'past';
 
 export interface TeamRunsCacheIo {
   readonly readFile: (path: string) => Promise<string>;
   readonly writeFile: (path: string, body: string) => Promise<void>;
+  readonly storage?: TeamRunsStorage;
 }
 
 interface CacheState {
   readonly workspaceRoot: string;
-  readonly workspaceId: string;
-  readonly runs: readonly PersistableTeamRun[];
+  workspaceId: string;
+  runs: readonly PersistableTeamRun[];
+  corrupted: boolean;
+  loaded: boolean;
+  loading: Promise<void> | null;
+  diskRaw: string | null;
+  mutationVersion: number;
+  readonly pending: Map<string, TeamRunMutation>;
 }
 
-let state: CacheState | null = null;
+const workspaces = new Map<string, CacheState>();
+let activeKey: string | null = null;
 let io: TeamRunsCacheIo | null = null;
-let loadSeq = 0;
+let generation = 0;
 let version = 0;
 const listeners = new Set<() => void>();
 /** True when the last load hit unreadable JSON — idle shows a hint, the
  *  bad file is NEVER deleted (Foundation spec §9.3 / §10.9). */
-let corrupted = false;
+const writes = new Map<string, Promise<void>>();
+
+/** A caller may name the workspace root or its stable UI id. */
+function cacheFor(workspace?: string): CacheState | undefined {
+  if (workspace === undefined) return activeKey === null ? undefined : workspaces.get(activeKey);
+  return workspaces.get(teamRunsFilePath(workspace))
+    ?? [...workspaces.values()].find(cache => cache.workspaceId === workspace);
+}
 
 export function configureTeamRunsCache(nextIo: TeamRunsCacheIo | null): void {
   io = nextIo;
-  state = null;
-  corrupted = false;
-  loadSeq += 1;
+  workspaces.clear();
+  activeKey = null;
+  generation += 1;
+  version += 1;
+  emit();
 }
 
 /** Persistable projection of a UI run: strips UI-only fields
  *  (`selectedSeatId`) so they never reach disk (Pitfall 17). */
 export function toPersistableTeamRun(
-  run: PersistableTeamRun & { readonly selectedSeatId?: unknown },
+  run: PersistableTeamRun & { readonly selectedSeatId?: unknown; readonly recovery?: unknown; readonly workspaceId?: unknown },
 ): PersistableTeamRun {
   const clone: Record<string, unknown> = { ...run };
   delete clone.selectedSeatId;
+  delete clone.recovery;
+  delete clone.workspaceId;
   return clone as unknown as PersistableTeamRun;
-}
-
-function isTerminal(status: PersistedTeamRunStatus): boolean {
-  return status === 'completed' || status === 'failed' || status === 'cancelled';
 }
 
 /**
@@ -64,26 +80,58 @@ function isTerminal(status: PersistedTeamRunStatus): boolean {
 export async function loadTeamRunsForWorkspace(
   workspaceRoot: string,
   workspaceId: string,
+  selection: 'active' | 'background' = 'active',
 ): Promise<void> {
-  const seq = ++loadSeq;
-  state = { workspaceRoot, workspaceId, runs: [] };
-  corrupted = false;
-  if (!io) return;
-  try {
-    const text = await io.readFile(teamRunsFilePath(workspaceRoot));
-    if (seq !== loadSeq) return;
-    const parsed = parseTeamRunsFile(text);
-    if (!parsed) {
-      corrupted = true;
-      return;
-    }
-    state = { workspaceRoot, workspaceId: parsed.workspaceId || workspaceId, runs: parsed.runs };
-    version += 1;
-    emit();
-  } catch {
-    // No file yet (fresh workspace) or unreadable — treat as empty.
-    if (seq !== loadSeq) return;
+  const key = teamRunsFilePath(workspaceRoot);
+  const activate = selection === 'active' || activeKey === null;
+  const switched = activate && activeKey !== key;
+  if (activate) activeKey = key;
+  let cache = workspaces.get(key);
+  if (!cache) {
+    cache = { workspaceRoot, workspaceId, runs: [], corrupted: false, loaded: false, loading: null,
+      diskRaw: null, mutationVersion: 0, pending: new Map() };
+    workspaces.set(key, cache);
   }
+  if (selection === 'active') cache.workspaceId = workspaceId;
+  if (switched) { version += 1; emit(); }
+  if (cache.loading) return cache.loading;
+  if (cache.loaded) return;
+  const target = cache;
+  const currentGeneration = generation;
+  version += 1;
+  emit();
+  const reader = io;
+  if (!reader) { cache.loaded = true; return; }
+  const operation = (async () => {
+    try {
+      const path = teamRunsFilePath(workspaceRoot);
+      await writes.get(path);
+      const text = reader.storage ? await reader.storage.load(workspaceRoot) : await reader.readFile(path);
+      if (currentGeneration !== generation) return;
+      if (text === null) return;
+      target.diskRaw = text;
+      const parsed = parseTeamRunsFile(text);
+      if (!parsed) {
+        target.corrupted = true;
+        return;
+      }
+      // Events may arrive while disk is being read. Local mutations win.
+      const local = target.runs;
+      const localIds = new Set(local.map(run => run.id));
+      target.runs = [...parsed.runs.filter(run => !localIds.has(run.id)), ...local];
+    } catch {
+      // Fresh workspaces have no history file; keep any local event updates.
+    } finally {
+      if (currentGeneration === generation) {
+        target.loaded = true;
+        target.loading = null;
+        version += 1;
+        emit();
+      }
+    }
+  })();
+  cache.loading = operation;
+  await operation;
 }
 
 function emit(): void {
@@ -100,12 +148,17 @@ export function teamRunsVersion(): number {
   return version;
 }
 
-export function teamRunsSnapshot(): readonly PersistableTeamRun[] {
-  return state?.runs ?? [];
+export function teamRunsSnapshot(workspace?: string): readonly PersistableTeamRun[] {
+  return cacheFor(workspace)?.runs ?? [];
 }
 
-export function isTeamRunsFileCorrupted(): boolean {
-  return corrupted;
+/** Roots and stable UI ids name the same cache partition. */
+export function teamWorkspaceIdentity(workspace: string): string | undefined {
+  return cacheFor(workspace)?.workspaceId;
+}
+
+export function isTeamRunsFileCorrupted(workspace?: string): boolean {
+  return cacheFor(workspace)?.corrupted ?? false;
 }
 
 /**
@@ -113,23 +166,70 @@ export function isTeamRunsFileCorrupted(): boolean {
  * FULL cache — never `[currentRun]`. Write failures are logged by the
  * caller boundary; the in-memory cache stays authoritative.
  */
-export async function upsertTeamRun(run: PersistableTeamRun): Promise<void> {
+export async function upsertTeamRun(run: PersistableTeamRun, workspace?: string,
+  options?: { readonly onlyIfUnchanged?: PersistableTeamRun }): Promise<void> {
+  const state = cacheFor(workspace);
   if (!state) return;
+  const currentGeneration = generation;
   const clean = toPersistableTeamRun(run);
-  const runs = [...state.runs.filter((r) => r.id !== clean.id), clean];
-  state = { ...state, runs };
-  version += 1;
-  emit();
-  if (!io) return;
-  try {
-    await io.writeFile(
-      teamRunsFilePath(state.workspaceRoot),
-      serializeTeamRunsFile(state.workspaceId, runs),
-    );
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn('[team-access] team-runs persist failed:', err);
+  const previous = state.runs.find(value => value.id === clean.id);
+  if (previous && (clean.updatedAt < previous.updatedAt || (previous.endedAt !== undefined && clean.endedAt === undefined))) return;
+  // Rehydrating the same facts must not reorder tied terminal histories or
+  // invalidate an in-flight inspection. Still retry persistence below: the
+  // previous identical snapshot may have failed to reach disk.
+  if (!previous || JSON.stringify(toPersistableTeamRun(previous)) !== JSON.stringify(clean)) {
+    state.runs = [...state.runs.filter((r) => r.id !== clean.id), clean];
+    version += 1;
+    emit();
   }
+  if (io?.storage) state.pending.set(clean.id, { version: ++state.mutationVersion, run: clean,
+    ...(options?.onlyIfUnchanged ? { onlyIfUnchanged: toPersistableTeamRun(options.onlyIfUnchanged) } : {}) });
+  // Initial reads may contain other conversations. Merge them before a full
+  // file rewrite, including when this update arrived during that read.
+  await state.loading;
+  if (currentGeneration !== generation) return;
+  if (!io) return;
+  if (state.corrupted) {
+    // Keep the damaged source available for recovery; memory remains live.
+    // eslint-disable-next-line no-console
+    console.warn('[team-access] history is corrupt; preserving the original file.');
+    return;
+  }
+  const writer = io;
+  const path = teamRunsFilePath(state.workspaceRoot);
+  // Native CAS batches dirty runs when its queued operation starts; do not
+  // allocate and retain a stale full-file JSON for every streamed update.
+  const body = writer.storage ? null : serializeTeamRunsFile(state.workspaceId, state.runs);
+  const operation = (writes.get(path) ?? Promise.resolve()).then(async () => {
+    try {
+      if (currentGeneration !== generation) return;
+      if (writer.storage) {
+        const mutations = [...state.pending.values()];
+        if (mutations.length === 0) return;
+        const saved = await commitTeamRuns(writer.storage, state.workspaceRoot, state.workspaceId, state.diskRaw,
+          mutations, () => currentGeneration === generation);
+        if (!saved || currentGeneration !== generation) return;
+        state.diskRaw = saved.raw;
+        for (const mutation of mutations) if (state.pending.get(mutation.run.id)?.version === mutation.version) state.pending.delete(mutation.run.id);
+        const previousById = new Map(state.runs.map(value => [value.id, value]));
+        const merged = new Map(saved.runs.map(value => [value.id,
+          sameTeamRun(previousById.get(value.id), value) ? previousById.get(value.id)! : value]));
+        for (const mutation of state.pending.values()) merged.set(mutation.run.id, mutation.run);
+        const runs = [...merged.values()];
+        if (JSON.stringify(runs) !== JSON.stringify(state.runs)) { state.runs = runs; version += 1; emit(); }
+        return;
+      }
+      if (body === null) throw new Error('Legacy team history snapshot missing.');
+      await writer.writeFile(path, body);
+    } catch (err) {
+      // Memory stays authoritative and later saves may retry the full snapshot.
+      // eslint-disable-next-line no-console
+      console.warn('[team-access] team-runs persist failed:', err);
+    }
+  });
+  writes.set(path, operation);
+  await operation;
+  if (writes.get(path) === operation) writes.delete(path);
 }
 
 /**
@@ -143,7 +243,7 @@ export function teamMarksFromRuns(
   const marks = new Map<string, TeamHistoryMark>();
   for (const run of runs) {
     const current = marks.get(run.personConversationId);
-    if (!isTerminal(run.status)) {
+    if (isTeamRunOpen(run)) {
       marks.set(run.personConversationId, 'active');
     } else if (!current) {
       marks.set(run.personConversationId, 'past');
@@ -160,11 +260,13 @@ export function selectRunForConversation(
   runs: readonly PersistableTeamRun[],
   personConversationId: string,
 ): PersistableTeamRun | null {
+  let active: PersistableTeamRun | null = null;
   let terminal: PersistableTeamRun | null = null;
   for (const run of runs) {
     if (run.personConversationId !== personConversationId) continue;
-    if (!isTerminal(run.status)) return run;
-    if (!terminal || run.updatedAt > terminal.updatedAt) terminal = run;
+    if (isTeamRunOpen(run)) {
+      if (!active || run.updatedAt > active.updatedAt) active = run;
+    } else if (!terminal || run.updatedAt > terminal.updatedAt) terminal = run;
   }
-  return terminal;
+  return active ?? terminal;
 }

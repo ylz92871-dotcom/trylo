@@ -29,23 +29,22 @@ pub async fn process_close_input(
     id: String,
     state: State<'_, ProcessState>,
 ) -> Result<(), CommandError> {
-    let mut processes = state.processes.lock().map_err(|_| {
-        io_error(
-            "(process)",
-            std::io::Error::other("process state poisoned".to_string()),
-        )
-    })?;
-    let proc = processes.get_mut(&id).ok_or_else(|| {
-        io_error(
-            "(process)",
-            std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("process '{id}' not found"),
-            ),
-        )
-    })?;
-    proc.close_input();
-    Ok(())
+    let owned = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || close_registered_input(&id, &owned))
+        .await
+        .map_err(|error| {
+            io_error(
+                "(process close worker)",
+                std::io::Error::other(error.to_string()),
+            )
+        })?
+}
+
+fn close_registered_input(id: &str, state: &ProcessState) -> Result<(), CommandError> {
+    let input = state
+        .input_for(id)
+        .map_err(|error| io_error("(process)", error))?;
+    input.close().map_err(|error| io_error("(process)", error))
 }
 
 #[cfg(test)]
@@ -76,9 +75,8 @@ mod tests {
 
     fn entry_with(writer: Option<Box<dyn Write + Send>>) -> ProcessEntry {
         ProcessEntry {
-            writer,
-            killer: Box::new(|| Ok(())),
-            stop_state: crate::commands::process_state::ProcessStopState::Running,
+            input: crate::commands::process_state::ProcessInputControl::new(writer),
+            stop: crate::commands::process_state::ProcessStopControl::new(|| Ok(())),
             label: "test".to_owned(),
             pid: 1,
             metadata: ProcessMetadata::default(),
@@ -86,29 +84,56 @@ mod tests {
     }
 
     #[test]
+    fn blocked_input_close_keeps_the_global_process_registry_available() {
+        use crate::commands::process_state::test_input::{blocked_input, HoldAt};
+        let fixture = blocked_input(HoldAt::Flush);
+        let state = Arc::new(ProcessState::default());
+        state
+            .processes
+            .lock()
+            .unwrap()
+            .insert("p1".into(), entry_with(Some(fixture.writer)));
+        let closing = Arc::clone(&state);
+        let worker = std::thread::spawn(move || close_registered_input("p1", &closing));
+        let entered = fixture
+            .entered
+            .recv_timeout(std::time::Duration::from_secs(2));
+        let readable = state.processes.try_lock().is_ok();
+        // Cleanup must run before a failing assertion to avoid a leaked writer.
+        let _ = fixture.release.send(());
+        let result = worker.join().unwrap();
+        assert!(entered.is_ok());
+        result.unwrap();
+        assert!(
+            readable,
+            "blocked stdin flush holds the global process registry"
+        );
+    }
+
+    #[test]
     fn close_input_takes_the_writer_and_drops_it() {
         let dropped = Arc::new(Mutex::new(false));
-        let mut entry = entry_with(Some(Box::new(DropFlag {
+        let entry = entry_with(Some(Box::new(DropFlag {
             dropped: Arc::clone(&dropped),
         })));
-        assert!(entry.writer.is_some());
-        entry.close_input();
-        assert!(entry.writer.is_none());
+        assert!(entry.input.accepts_input());
+        entry.input.close().unwrap();
+        assert!(!entry.input.accepts_input());
         assert!(
             *dropped.lock().unwrap(),
             "writer must be dropped = stdin closed"
         );
 
         // Idempotent: the second close is a no-op, not a panic.
-        entry.close_input();
-        assert!(entry.writer.is_none());
+        entry.input.close().unwrap();
+        assert!(!entry.input.accepts_input());
     }
 
     #[test]
     fn close_input_on_already_closed_is_a_noop() {
-        let mut entry = entry_with(None);
-        entry.close_input();
-        assert!(entry.writer.is_none());
+        let entry = entry_with(None);
+        entry.input.close().unwrap();
+        assert!(!entry.input.accepts_input());
     }
 
     #[test]
@@ -117,24 +142,25 @@ mod tests {
         // `killer` is untouched by close_input, so `process_stop` still
         // terminates the tree after EOF.
         let killed = Arc::new(Mutex::new(false));
-        let mut entry = ProcessEntry {
-            writer: Some(Box::new(DropFlag {
-                dropped: Arc::new(Mutex::new(false)),
-            })),
-            killer: Box::new({
+        let entry = ProcessEntry {
+            input: crate::commands::process_state::ProcessInputControl::new(Some(Box::new(
+                DropFlag {
+                    dropped: Arc::new(Mutex::new(false)),
+                },
+            ))),
+            stop: crate::commands::process_state::ProcessStopControl::new({
                 let k = Arc::clone(&killed);
                 move || {
                     *k.lock().unwrap() = true;
                     Ok(())
                 }
             }),
-            stop_state: crate::commands::process_state::ProcessStopState::Running,
             label: "test".to_owned(),
             pid: 1,
             metadata: ProcessMetadata::default(),
         };
-        entry.close_input();
-        entry.request_stop().unwrap();
+        entry.input.close().unwrap();
+        entry.stop.request_stop().unwrap();
         assert!(*killed.lock().unwrap(), "killer must survive close_input");
     }
 
@@ -145,6 +171,7 @@ mod tests {
         // (closing the wrong child, or a double-close after exit).
         let state = ProcessState {
             processes: Arc::new(Mutex::new(HashMap::new())),
+            ..ProcessState::default()
         };
         let mut table = state.processes.lock().unwrap();
         let result = table.get_mut("nope").ok_or_else(|| {

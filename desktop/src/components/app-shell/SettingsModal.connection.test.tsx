@@ -69,8 +69,8 @@ it('ignores an old service probe after editing the address and shows only the ne
   fireEvent.click(screen.getByRole('button', { name: '检查服务可达性' }));
   const result = { ok: true, provider: 'anthropic', keyStatus: 'present', endpoint: '', message: 'old endpoint result' };
   await act(async () => resolveOld(result));
-  expect(screen.queryByRole('status')).toBeNull();
+  expect(screen.queryByText('old endpoint result')).toBeNull();
   expect(screen.getByRole('button', { name: '正在检查…' })).toBeDisabled();
   await act(async () => resolveNew({ ...result, message: 'new endpoint result' }));
-  expect(screen.getByRole('status')).toHaveTextContent('new endpoint result');
+  expect(screen.getByText('new endpoint result')).toBeVisible();
 });

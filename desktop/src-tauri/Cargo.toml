@@ -1,6 +1,6 @@
 [package]
 name = "trylo-desktop"
-version = "1.0.6"
+version = "1.1.0"
 description = "Trylo Desktop — Tauri 2 shell for the Trylo agent system"
 authors = ["Trylo <dev@trylocode.me>"]
 edition = "2021"
@@ -37,7 +37,11 @@ tauri-plugin-dialog = "2.0.0-rc.8"
 [target.'cfg(windows)'.dependencies]
 # Same WebView2 binding already used by Tauri/Wry; native zoom + Escape events.
 webview2-com = "=0.38.2"
-windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading"] }
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading", "Win32_Storage_FileSystem", "Win32_System_Pipes", "Win32_System_JobObjects"] }
+
+[target.'cfg(unix)'.dependencies]
+# Existing locked leaf FFI for association locks and nonblocking helper stderr.
+libc = "=0.2.189"
 
 [features]
 default = ["custom-protocol"]

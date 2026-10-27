@@ -44,11 +44,91 @@ vi.mock('@tauri-apps/api/core', () => {
 import { tauriProcessService } from './tauri-process-service';
 
 afterEach(() => {
+  vi.useRealTimers();
   invokeMock.mockClear();
   channelInstances.length = 0;
 });
 
 describe('TauriProcessService', () => {
+  it('passes frozen team recovery identity without putting prompt or environment in it', async () => {
+    await tauriProcessService.spawn({ command: 'node', args: [], label: 'team',
+      recoveryIdentity: { teamRunId: 'team-a', turnId: 'turn-a' }, onOutput() {} });
+    expect(invokeMock).toHaveBeenCalledWith('process_spawn', expect.objectContaining({
+      recoveryIdentity: { teamRunId: 'team-a', turnId: 'turn-a' },
+    }));
+  });
+  it('does not wait when native incomplete output has no counted stderr pending', async () => {
+    const onExit = vi.fn();
+    await tauriProcessService.spawn({ command: 'node', args: [], label: 'test', onOutput() {}, onStderr() {}, onExit });
+    channelInstances[0]!.onmessage!('##TRYLO_PROC_EXIT##' + JSON.stringify({ id: 'proc-trylo-1', pid: 1234,
+      code: 41, signal: null, outputComplete: false, stderrLines: 0 }));
+    expect(onExit).toHaveBeenCalledWith(expect.objectContaining({ code: 41, outputComplete: false }));
+  });
+
+  it('still receives counted stderr when a different stream was marked incomplete', async () => {
+    const onExit = vi.fn(); const onStderr = vi.fn();
+    await tauriProcessService.spawn({ command: 'node', args: [], label: 'test', onOutput() {}, onStderr, onExit });
+    channelInstances[0]!.onmessage!('##TRYLO_PROC_EXIT##' + JSON.stringify({ id: 'proc-trylo-1', pid: 1234,
+      code: 41, signal: null, outputComplete: false, stderrLines: 1 }));
+    try { expect(onExit).not.toHaveBeenCalled(); }
+    finally { channelInstances[1]!.onmessage!('known queued root cause'); }
+    expect(onStderr).toHaveBeenCalledWith('known queued root cause');
+    expect(onExit).toHaveBeenCalledWith(expect.objectContaining({ outputComplete: false }));
+  });
+
+  it('delivers an exit immediately when its counted stderr has already arrived', async () => {
+    const onExit = vi.fn();
+    await tauriProcessService.spawn({ command: 'node', args: [], label: 'test', onOutput() {}, onStderr() {}, onExit });
+    channelInstances[1]!.onmessage!('first'); channelInstances[1]!.onmessage!('second');
+    channelInstances[0]!.onmessage!('##TRYLO_PROC_EXIT##' + JSON.stringify({ id: 'proc-trylo-1', pid: 1234,
+      code: 41, signal: null, outputComplete: true, stderrLines: 2 }));
+    expect(onExit).toHaveBeenCalledWith(expect.objectContaining({ outputComplete: true }));
+  });
+
+  it('delivers counted stderr before an exit arriving on the other native channel', async () => {
+    const order: string[] = [];
+    const onExit = vi.fn(() => { order.push('exit'); });
+    await tauriProcessService.spawn({ command: 'node', args: [], label: 'test', onOutput() {},
+      onStderr: () => { order.push('stderr'); }, onExit });
+    channelInstances[0]!.onmessage!('##TRYLO_PROC_EXIT##' + JSON.stringify({ id: 'proc-trylo-1', pid: 1234,
+      code: 41, signal: null, outputComplete: true, stderrLines: 1 }));
+    try { expect(onExit).not.toHaveBeenCalled(); }
+    finally { channelInstances[1]!.onmessage!('actual stderr cause'); }
+    expect(order).toEqual(['stderr', 'exit']);
+    expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it('bounds missing stderr delivery without losing the actual exit fact', async () => {
+    vi.useFakeTimers();
+    const onExit = vi.fn();
+    await tauriProcessService.spawn({ command: 'node', args: [], label: 'test', onOutput() {}, onStderr() {}, onExit });
+    channelInstances[0]!.onmessage!('##TRYLO_PROC_EXIT##' + JSON.stringify({ id: 'proc-trylo-1', pid: 1234,
+      code: 0, signal: null, outputComplete: true, stderrLines: 1 }));
+    try {
+      expect(onExit).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(500);
+      expect(onExit).toHaveBeenCalledWith(expect.objectContaining({ code: 0, outputComplete: false }));
+      channelInstances[1]!.onmessage!('late stderr');
+      expect(onExit).toHaveBeenCalledTimes(1);
+    } finally { await vi.runOnlyPendingTimersAsync(); }
+  });
+
+  it('emits a repeated native exit frame only once', async () => {
+    const onExit = vi.fn();
+    await tauriProcessService.spawn({ command: 'node', args: [], label: 'test', onOutput() {}, onExit });
+    const frame = '##TRYLO_PROC_EXIT##' + JSON.stringify({ id: 'proc-trylo-1', pid: 1234, code: 0, signal: null });
+    channelInstances[0]!.onmessage!(frame); channelInstances[0]!.onmessage!(frame);
+    expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([-1, 'one', null])('refuses invalid stderr delivery count %s', async stderrLines => {
+    const onExit = vi.fn();
+    await tauriProcessService.spawn({ command: 'node', args: [], label: 'test', onOutput() {}, onExit });
+    channelInstances[0]!.onmessage!('##TRYLO_PROC_EXIT##' + JSON.stringify({ id: 'proc-trylo-1', pid: 1234,
+      code: 0, signal: null, outputComplete: true, stderrLines }));
+    expect(onExit).not.toHaveBeenCalled();
+  });
+
   it('spawn forwards command/args/label/cwd and wires the channel', async () => {
     const onOutput = vi.fn();
     const handle = await tauriProcessService.spawn({

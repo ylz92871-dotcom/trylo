@@ -26,10 +26,11 @@ export type ResolvedSettings = {
   readonly maxIterations?: number;
   readonly maxTokens?: number;
   /**
-   * The context ceiling, when configured. It is the *only* compaction ceiling:
-   * an unset value means "never compact", not "use a packaged default".
+   * Optional working-window preference. Execution defaults it to 200K and
+   * clamps it to every declared provider/model capacity.
    */
   readonly contextTokenLimit?: number;
+  readonly modelContextWindow?: number;
   /**
    * The dollar ceiling (WP09.3/L07), from config or `--max-budget-usd`.
    * Pricing comes from the two keys beside it; a ceiling without pricing is
@@ -64,6 +65,8 @@ export function flagLayer(options: RunCommandOptions): Record<string, string | n
     ...(options.format === undefined ? {} : { format: options.format }),
     ...(options.maxIterations === undefined ? {} : { maxIterations: options.maxIterations }),
     ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
+    ...(options.contextTokenLimit === undefined ? {} : { contextTokenLimit: options.contextTokenLimit }),
+    ...(options.modelContextWindow === undefined ? {} : { modelContextWindow: options.modelContextWindow }),
     ...(options.maxBudgetUsd === undefined ? {} : { maxBudgetUsd: options.maxBudgetUsd }),
   };
 }
@@ -99,6 +102,7 @@ export function resolveSettings(
   const maxIterations = numberEntry(resolved, "maxIterations");
   const maxTokens = numberEntry(resolved, "maxTokens");
   const contextTokenLimit = numberEntry(resolved, "contextTokenLimit");
+  const modelContextWindow = numberEntry(resolved, "modelContextWindow");
   const maxBudgetUsd = numberEntry(resolved, "maxBudgetUsd");
   const inputPricePerMTok = numberEntry(resolved, "inputPricePerMTok");
   const outputPricePerMTok = numberEntry(resolved, "outputPricePerMTok");
@@ -112,6 +116,7 @@ export function resolveSettings(
     ...(maxIterations === undefined ? {} : { maxIterations }),
     ...(maxTokens === undefined ? {} : { maxTokens }),
     ...(contextTokenLimit === undefined ? {} : { contextTokenLimit }),
+    ...(modelContextWindow === undefined ? {} : { modelContextWindow }),
     ...(maxBudgetUsd === undefined ? {} : { maxBudgetUsd }),
     ...(inputPricePerMTok === undefined ? {} : { inputPricePerMTok }),
     ...(outputPricePerMTok === undefined ? {} : { outputPricePerMTok }),

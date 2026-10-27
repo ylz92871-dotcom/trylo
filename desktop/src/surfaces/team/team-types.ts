@@ -12,6 +12,7 @@
  */
 
 import type { TeamProfile } from './team-profile-types';
+import type { TeamHandoffRecord, TeamProgressReport } from '../../domain/team-progress';
 
 export type CollaborationSurface = 'person' | 'team';
 
@@ -69,11 +70,19 @@ export interface SeatActivityItem {
   readonly id: string;
   readonly kind: 'tool' | 'result' | 'note';
   readonly at: number;
+  readonly round?: number;
   readonly label: string;
   readonly ok?: boolean;
 }
 
 export interface SeatInstance {
+  readonly observations?: readonly import('../../domain/member-observation').RecordedMemberObservation[];
+  readonly taskId?: string;
+  readonly canReceiveInput?: boolean;
+  readonly awaitingInput?: boolean;
+  readonly parked?: boolean;
+  readonly round?: number;
+  readonly conversation?: readonly { readonly round: number; readonly prompt?: string; readonly result?: string }[];
   /** Stable id; live = the CLI tool_use id, queued = `queued:${memberId}`,
    *  fixture = a fixture id. End events match on this id only. */
   readonly id: string;
@@ -106,6 +115,15 @@ export interface SeatInstance {
 }
 
 export interface TeamRun {
+  readonly reports?: readonly TeamProgressReport[];
+  readonly handoffs?: readonly TeamHandoffRecord[];
+  /** View-only verification of a restored history; never an execution fact. */
+  readonly recovery?: { readonly kind: 'checking' | 'detached' | 'unavailable'; readonly message: string };
+  readonly error?: string;
+  /** Seat health can be terminal while the parent is still collecting/recovering. */
+  readonly lifecycle?: 'open' | 'closed';
+  /** Parent lifecycle closure; seat completion alone may still be followed by recovery. */
+  readonly endedAt?: number;
   readonly id: string;
   readonly workspaceId: string;
   /** The Code/Work conversation that started this team. */

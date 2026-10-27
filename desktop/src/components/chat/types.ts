@@ -259,6 +259,7 @@ export interface CompactionMessage extends MessageBase {
  * back the sub-agent detail drawer for managed-work.
  */
 export interface SubagentMessage extends MessageBase {
+  readonly observations?: readonly import('../../domain/member-observation').RecordedMemberObservation[];
   readonly taskId?: string;
   readonly parked?: boolean;
   readonly budget?: import('../../host-adapter/subagent-contract').SubagentBudget;
@@ -345,6 +346,7 @@ export interface TaskSuggestionMessage extends MessageBase {
  * through `onRespond` or a process exit.
  */
 export interface ApprovalMessage extends MessageBase {
+  readonly requester?: import('../../host-adapter/control-protocol').MemberApprovalRequester;
   readonly kind: 'approval';
   /** Stable identity — `${authority}:${requestId}` for Code,
    *  `approval:${runId}:${approvalId}` for Work. The mapper

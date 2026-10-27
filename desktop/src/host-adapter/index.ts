@@ -16,6 +16,8 @@ import { tauriGitService } from './tauri-git-service';
 import { TauriLspManager } from './tauri-lsp-manager';
 import { tauriSettingsService } from './tauri-settings-service';
 import { tauriProcessService } from './tauri-process-service';
+import { runtimeSessionsStorage } from './runtime-sessions-storage';
+import { teamRunsStorage } from './team-runs-storage';
 
 export type { FsCommands, FsCommandsBackend } from './commands';
 // P2-1 Work Package B: the typed attachment staging surface
@@ -91,6 +93,8 @@ export { parseLoopEvent } from './loop-events';
 export type { LoopEvent, LoopEventType, OtherLoopEvent } from './loop-events';
 
 export const hostAdapter = {
+  runtimeSessions: runtimeSessionsStorage,
+  teamRuns: teamRunsStorage,
   fs: tauriFsCommands,
   // P2-1 Work Package B: workspace-controlled attachment
   // staging for Work conversations (copy-in + cleanup).

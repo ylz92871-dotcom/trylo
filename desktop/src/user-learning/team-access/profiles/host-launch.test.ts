@@ -1,6 +1,6 @@
 // startTeamTurn tests (Foundation spec §7.6.2).
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { startTeamTurn } from './host-launch';
 import { configureTeamRunsCache, teamRunsSnapshot } from './team-runs-cache';
 import type { TeamProfile } from './profile-types';
@@ -70,12 +70,111 @@ function baseInput(overrides: Record<string, unknown> = {}) {
       teamSpawn: { decision: 'spawn_team', reason: 'confirmed' },
     }),
     isPersonTurnRunning: false,
+    newRunId: () => 'team-conv-1',
     writeFile: memoryIo().writeFile,
     ...overrides,
   };
 }
 
 describe('startTeamTurn', () => {
+  it('Stop during native ownership inspection prevents preparing or writing the new team', async () => {
+    const io = memoryIo(); configureTeamRunsCache(io);
+    const cancel = new AbortController();
+    let release!: () => void; const held = new Promise<void>(resolve => { release = resolve; });
+    let entered!: () => void; const checking = new Promise<void>(resolve => { entered = resolve; });
+    const input = baseInput({ writeFile: io.writeFile, signal: cancel.signal, inspectOwner: async () => { entered(); await held; } });
+    const preparePrompt = vi.fn(input.preparePrompt);
+    const launching = startTeamTurn({ ...input, preparePrompt }); await checking;
+    cancel.abort(); release(); const result = await launching;
+    expect(result).toMatchObject({ ok: false, reason: 'blocked', message: expect.stringContaining('取消') });
+    expect(preparePrompt).not.toHaveBeenCalled(); expect(io.files.size).toBe(0); expect(teamRunsSnapshot()).toHaveLength(0);
+  });
+
+  it('Stop during the frozen profile write leaves no queued active team', async () => {
+    const io = memoryIo(); configureTeamRunsCache(io);
+    const cancel = new AbortController();
+    const result = await startTeamTurn(baseInput({ signal: cancel.signal, writeFile: async (path: string, body: string) => {
+      await io.writeFile(path, body); cancel.abort();
+    } }));
+    expect(result).toMatchObject({ ok: false, reason: 'blocked', message: expect.stringContaining('取消') });
+    expect(teamRunsSnapshot()).toHaveLength(0);
+  });
+
+  it('Stop during history persistence closes the unstarted run instead of leaving active history', async () => {
+    const io = memoryIo(); const cancel = new AbortController();
+    configureTeamRunsCache({ readFile: io.readFile, writeFile: async (path, body) => {
+      await io.writeFile(path, body); cancel.abort();
+    } });
+    const result = await startTeamTurn(baseInput({ signal: cancel.signal, writeFile: io.writeFile }));
+    expect(result).toMatchObject({ ok: false, reason: 'blocked' });
+    expect(teamRunsSnapshot()[0]).toMatchObject({ status: 'cancelled', lifecycle: 'closed' });
+    expect(JSON.parse(io.files.get('D:/proj/.trylo/team-runs.json')!).runs[0].status).toBe('cancelled');
+  });
+  it('refuses a detached native owner before preparing or persisting a replacement team', async () => {
+    const io = memoryIo(); configureTeamRunsCache(io);
+    const input = baseInput({ writeFile: io.writeFile, inspectOwner: async () => { throw new Error('旧执行仍在运行'); } });
+    const preparePrompt = vi.fn(input.preparePrompt);
+    const result = await startTeamTurn({ ...input, preparePrompt });
+    expect(result).toMatchObject({ ok: false, reason: 'blocked', message: expect.stringContaining('旧执行仍在运行') });
+    expect(preparePrompt).not.toHaveBeenCalled(); expect(io.files.size).toBe(0); expect(teamRunsSnapshot()).toHaveLength(0);
+  });
+  it('independent conversation launches do not share the double-click lock', async () => {
+    for (const otherOrigin of [{ workspaceRoot: 'D:/other', conversationId: 'conv-1' },
+      { workspaceRoot: 'D:/proj', conversationId: 'conv-2' }]) {
+      const io = memoryIo();
+      configureTeamRunsCache(io);
+      let release!: () => void;
+      const blocked = new Promise<void>(resolve => { release = resolve; });
+      const first = startTeamTurn(baseInput({ newRunId: () => 'team-first', writeFile: async (path: string, body: string) => {
+        if (path.endsWith('profile.v1.json')) await blocked;
+        await io.writeFile(path, body);
+      } }));
+      try {
+        const second = await startTeamTurn(baseInput({ ...otherOrigin, newRunId: () => 'team-second', writeFile: io.writeFile }));
+        expect(second.ok).toBe(true);
+      } finally {
+        release();
+        expect((await first).ok).toBe(true);
+      }
+    }
+  });
+  it('rejects a Code/Work profile mismatch before preparation, freeze or queue mutation', async () => {
+    for (const [product, surface] of [['work', 'code'], ['code', 'work']] as const) {
+      const io = memoryIo();
+      configureTeamRunsCache(io);
+      const preparePrompt = vi.fn(fakePrepare({ contract: { contractId: 'ec_mismatch', version: 1 } }));
+      const result = await startTeamTurn(baseInput({ product, profile: { ...PROFILE, surface },
+        preparePrompt, writeFile: io.writeFile }));
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.reason).toBe('invalid_profile');
+      expect(preparePrompt).not.toHaveBeenCalled();
+      expect(io.files.size).toBe(0);
+      expect(teamRunsSnapshot()).toEqual([]);
+    }
+  });
+  it('a second launch in the same conversation retains both frozen histories', async () => {
+    const io = memoryIo();
+    configureTeamRunsCache(io);
+    const first = await startTeamTurn(baseInput({ writeFile: io.writeFile, newRunId: () => 'team-first' }));
+    const second = await startTeamTurn(baseInput({ writeFile: io.writeFile, newRunId: () => 'team-second' }));
+    expect(first.ok && second.ok && first.teamRunId !== second.teamRunId).toBe(true);
+    expect(teamRunsSnapshot()).toHaveLength(2);
+    expect(io.files.has('D:/proj/.trylo/team/team-first/profile.v1.json')).toBe(true);
+    expect(io.files.has('D:/proj/.trylo/team/team-second/profile.v1.json')).toBe(true);
+  });
+  it('a refused preparation leaves no queued run or frozen profile on disk', async () => {
+    for (const start of ['pending_impact', 'blocked', 'ready'] as const) {
+      const io = memoryIo();
+      configureTeamRunsCache(io);
+      const result = await startTeamTurn(baseInput({
+        writeFile: io.writeFile,
+        preparePrompt: fakePrepare({ start }),
+      }));
+      expect(result.ok).toBe(false);
+      expect(teamRunsSnapshot()).toEqual([]);
+      expect([...io.files.keys()]).toEqual([]);
+    }
+  });
   it('flag off → flag_off; no freeze, no run', async () => {
     const io = memoryIo();
     configureTeamRunsCache(io);

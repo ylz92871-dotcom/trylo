@@ -1,4 +1,5 @@
-import { summarizeTranscript, transcriptLines, validateSummary } from "../../compaction/summary.js";
+import { preserveRequestObservations, summarizeTranscript, transcriptLines, validateSummary } from "../../compaction/summary.js";
+import { estimateMessagesTokens } from "../../compaction/token-estimate.js";
 import type { ProviderPort, ProviderRequest } from "../../ports/provider.js";
 import type { TranscriptItem } from "../../protocol/transcript.js";
 
@@ -58,15 +59,22 @@ const SUMMARIZER_ATTEMPT_ID = "compact-summary";
 export type ModelSummarizerInput = {
   readonly provider: ProviderPort;
   readonly model: string;
+  /** The same resolved context ceiling as the main turn, including output reservation. */
+  readonly contextTokenLimit?: number;
 };
 
 export function createModelSummarizer(
   input: ModelSummarizerInput,
-): (items: ReadonlyArray<TranscriptItem>, previousSummary?: string, signal?: AbortSignal) => Promise<string> {
-  return async (items, previousSummary, signal) => {
+): (items: ReadonlyArray<TranscriptItem>, previousSummary?: string, signal?: AbortSignal,
+  requestTranscript?: ReadonlyArray<TranscriptItem>) => Promise<string> {
+  return async (items, previousSummary, signal, requestTranscript) => {
     const authored = await requestSummary(input, items, previousSummary, signal);
-    return validateSummary(authored).ok ? authored : summarizeTranscript(items,
-      previousSummary === undefined ? {} : { previousSummary });
+    return validateSummary(authored).ok
+      ? preserveRequestObservations(authored, requestTranscript ?? items, { hasPreviousSummary: previousSummary !== undefined })
+      : summarizeTranscript(items, {
+        ...(previousSummary === undefined ? {} : { previousSummary }),
+        ...(requestTranscript === undefined ? {} : { requestTranscript }),
+      });
   };
 }
 
@@ -97,6 +105,11 @@ async function requestSummary(
     maxOutputTokens: MAX_SUMMARY_OUTPUT_TOKENS,
   };
   if (signal?.aborted) return "";
+  // A rescue request cannot assume the overgrown history fits the model it
+  // is rescuing. Preserve the existing extractive fallback without sending an
+  // impossible auxiliary request or changing the main turn's ceiling.
+  if (input.contextTokenLimit !== undefined &&
+      estimateMessagesTokens(request.messages) + MAX_SUMMARY_OUTPUT_TOKENS > input.contextTokenLimit) return "";
   let text = "";
   for await (const event of input.provider.stream(request, signal ?? new AbortController().signal)) {
     if (signal?.aborted) return "";

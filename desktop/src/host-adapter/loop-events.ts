@@ -206,6 +206,7 @@ export interface TextEvent extends BaseEvent {
 }
 
 export interface ToolUseEvent extends BaseEvent {
+  readonly source?: 'trylo-v1';
   readonly type: 'tool_use';
   readonly turn: number;
   readonly id: string;
@@ -215,6 +216,7 @@ export interface ToolUseEvent extends BaseEvent {
 }
 
 export interface ToolResultEvent extends BaseEvent {
+  readonly source?: 'trylo-v1';
   readonly type: 'tool_result';
   readonly turn: number;
   readonly id: string;
@@ -238,6 +240,10 @@ export interface ToolResultEvent extends BaseEvent {
 }
 
 export interface SubagentEvent extends BaseEvent {
+  readonly observation?: import('../domain/member-observation').MemberObservation;
+  readonly activity?: import('./subagent-contract').SubagentToolActivity;
+  readonly teamRunId?: string;
+  readonly memberId?: string;
   readonly taskId?: string;
   readonly resumedFrom?: string;
   readonly parked?: boolean;

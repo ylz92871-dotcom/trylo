@@ -22,8 +22,10 @@ fn on_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
     commands::native_browser::close_owned_popups(window.app_handle());
     let report = commands::shutdown::shutdown_all(window.app_handle());
     if !report.was_clean() {
-        eprintln!("[trylo] window-close teardown: processes={} ptys={} lsps={} workd={}",
-            report.processes, report.ptys, report.lsps, report.workd);
+        eprintln!(
+            "[trylo] window-close teardown: processes={} ptys={} lsps={} workd={}",
+            report.processes, report.ptys, report.lsps, report.workd
+        );
     }
 }
 
@@ -62,6 +64,7 @@ pub fn run() {
             // Phase 2 (Trylo Alpha, arch §3): ProcessState for
             // Trylo Core + CC CLI sidecars.
             app.manage(commands::process_state::ProcessState::default());
+            app.manage(commands::runtime_sessions::RuntimeSessionsState::default());
             // Work sub-app (trylo-workd Node sidecar). See
             // ../../../work/README.md. The daemon is spawned
             // lazily by the renderer via workd_spawn; this
@@ -78,83 +81,92 @@ pub fn run() {
         .invoke_handler(|invoke| {
             // Remote browser contents also lack application-defined commands,
             // including after they navigate to a locally trusted URL.
-            if !commands::native_browser::allows_application_ipc(invoke.message.webview_ref().label()) {
+            if !commands::native_browser::allows_application_ipc(
+                invoke.message.webview_ref().label(),
+            ) {
                 invoke.resolver.reject("浏览器网页无权调用应用接口");
                 return true;
             }
             let handler: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
-            commands::native_browser::native_browser_command,
-            commands::computer_preview::computer_preview_open,
-            commands::computer_preview::computer_preview_publish,
-            commands::computer_preview::computer_preview_subscribe,
-            commands::read_file::read_file,
-            commands::conversation_history::conversation_history_load,
-            commands::conversation_history::conversation_history_save,
-            commands::read_file_bytes::read_file_bytes,
-            commands::write_file::write_file,
-            commands::write_file_bytes::write_file_bytes,
-            commands::stat_file::stat_file,
-            commands::list_dir::list_dir,
-            commands::watch::watch,
-            commands::watch::unwatch,
-            commands::search::search,
-            commands::pty::pty_spawn,
-            commands::pty::pty_write,
-            commands::pty::pty_resize,
-            commands::pty::pty_kill,
-            commands::git_snapshot::git_snapshot,
-            commands::git_file_diff::git_file_diff,
-            commands::git_diff_stats::git_diff_stats,
-            commands::scan_tree::scan_tree,
-            commands::lsp_spawn::lsp_spawn,
-            commands::lsp_send::lsp_send,
-            commands::lsp_stop::lsp_stop,
-            commands::lsp_list::lsp_list,
-            commands::settings::get_settings,
-            commands::settings::default_workspace_root,
-            commands::settings::set_settings,
-            // P08 §WP6: CLI/Node resolved from the resource dir, never
-            // a developer absolute path.
-            commands::cli_runtime::resolve_cli_runtime,
-            commands::process_spawn::process_spawn,
-            commands::process_send::process_send,
-            // P08 §4.2: close stdin without killing the process — the new
-            // CLI's `run` only starts after EOF.
-            commands::process_close_input::process_close_input,
-            commands::process_stop::process_stop,
-            commands::process_list::process_list,
-            commands::test_connection::test_connection,
-            commands::pick_folder::pick_folder,
-            // Work sub-app sidecar (trylo-workd). See
-            // ../../../work/README.md for the daemon's
-            // protocol and STRUCTURE.md for the fork plan.
-            commands::workd::workd_spawn,
-            commands::workd::workd_stop,
-            commands::workd::workd_status,
-            commands::workd::workd_diagnostics,
-            // Work sub-app host commands. See
-            // commands/work_host.rs and
-            // ../../../work/src/host-adapter/host-adapter.ts
-            // for the contract.
-            commands::work_host::work_host_open_file,
-            commands::work_host::work_host_open_file_with_app,
-            commands::work_host::work_host_show_in_folder,
-            commands::work_host::work_host_copy_to_clipboard,
-            // P2-1 Work Package B: Work attachment staging.
-            // External files are copied into the workspace's
-            // .trylo/attachments area; the renderer only ever
-            // projects the workspace-relative descriptor path.
-            commands::attachment_staging::stage_attachment,
-            commands::attachment_staging::remove_conversation_attachments,
-            commands::attachment_staging::remove_project_attachments,
-            // Desktop Services host (NDJSON stdio sidecar). See
-            // docs/TRYLO-MIGRATION-EXECUTION-SPEC-2026-08-28.md §5.
-            commands::servicehost::servicehost_spawn,
-            commands::servicehost::servicehost_send,
-            commands::servicehost::servicehost_stop,
-            commands::servicehost::servicehost_status,
-            commands::servicehost::servicehost_paths,
-            commands::servicehost::servicehost_diagnostics,
+                commands::native_browser::native_browser_command,
+                commands::computer_preview::computer_preview_open,
+                commands::computer_preview::computer_preview_publish,
+                commands::computer_preview::computer_preview_subscribe,
+                commands::read_file::read_file,
+                commands::conversation_history::conversation_history_load,
+                commands::conversation_history::conversation_history_save,
+                commands::runtime_sessions::runtime_sessions_load,
+                commands::runtime_sessions::runtime_sessions_save,
+                commands::read_file_bytes::read_file_bytes,
+                commands::write_file::write_file,
+                commands::write_file_bytes::write_file_bytes,
+                commands::stat_file::stat_file,
+                commands::list_dir::list_dir,
+                commands::watch::watch,
+                commands::watch::unwatch,
+                commands::search::search,
+                commands::pty::pty_spawn,
+                commands::pty::pty_write,
+                commands::pty::pty_resize,
+                commands::pty::pty_kill,
+                commands::git_snapshot::git_snapshot,
+                commands::git_file_diff::git_file_diff,
+                commands::git_diff_stats::git_diff_stats,
+                commands::scan_tree::scan_tree,
+                commands::lsp_spawn::lsp_spawn,
+                commands::lsp_send::lsp_send,
+                commands::lsp_stop::lsp_stop,
+                commands::lsp_list::lsp_list,
+                commands::settings::get_settings,
+                commands::settings::default_workspace_root,
+                commands::settings::set_settings,
+                // P08 §WP6: CLI/Node resolved from the resource dir, never
+                // a developer absolute path.
+                commands::cli_runtime::resolve_cli_runtime,
+                commands::process_spawn::process_spawn,
+                commands::process_send::process_send,
+                // P08 §4.2: close stdin without killing the process — the new
+                // CLI's `run` only starts after EOF.
+                commands::process_close_input::process_close_input,
+                commands::process_stop::process_stop,
+                commands::process_list::process_list,
+                commands::process_recovery::process_recovery_list,
+                commands::process_recovery::process_read_output,
+                commands::process_team_owner::process_team_owner_status,
+                commands::team_runs_storage::team_runs_load,
+                commands::team_runs_storage::team_runs_save,
+                commands::test_connection::test_connection,
+                commands::pick_folder::pick_folder,
+                // Work sub-app sidecar (trylo-workd). See
+                // ../../../work/README.md for the daemon's
+                // protocol and STRUCTURE.md for the fork plan.
+                commands::workd::workd_spawn,
+                commands::workd::workd_stop,
+                commands::workd::workd_status,
+                commands::workd::workd_diagnostics,
+                // Work sub-app host commands. See
+                // commands/work_host.rs and
+                // ../../../work/src/host-adapter/host-adapter.ts
+                // for the contract.
+                commands::work_host::work_host_open_file,
+                commands::work_host::work_host_open_file_with_app,
+                commands::work_host::work_host_show_in_folder,
+                commands::work_host::work_host_copy_to_clipboard,
+                // P2-1 Work Package B: Work attachment staging.
+                // External files are copied into the workspace's
+                // .trylo/attachments area; the renderer only ever
+                // projects the workspace-relative descriptor path.
+                commands::attachment_staging::stage_attachment,
+                commands::attachment_staging::remove_conversation_attachments,
+                commands::attachment_staging::remove_project_attachments,
+                // Desktop Services host (NDJSON stdio sidecar). See
+                // docs/TRYLO-MIGRATION-EXECUTION-SPEC-2026-08-28.md §5.
+                commands::servicehost::servicehost_spawn,
+                commands::servicehost::servicehost_send,
+                commands::servicehost::servicehost_stop,
+                commands::servicehost::servicehost_status,
+                commands::servicehost::servicehost_paths,
+                commands::servicehost::servicehost_diagnostics,
             ];
             handler(invoke)
         })
@@ -165,32 +177,22 @@ pub fn run() {
         // after the webview crashed, or an OS shutdown can reach the exit
         // event WITHOUT ever closing a window. Teardown therefore also runs
         // here, and `shutdown_all` is idempotent so the double call is free.
-        .run(|app_handle, event| {
-            match event {
-                // Desktop only: the last window closed and the app is about
-                // to quit. Cleanup happens here AND on window close; the
-                // teardown is idempotent, so the second call is a no-op that
-                // only guards the paths where no window was ever closed
-                // (menu quit, `app.exit()` from the renderer, OS shutdown).
-                // Desktop only: the last window closed and the app is about
-                // to quit. Cleanup happens here AND on window close; the
-                // teardown is idempotent, so the second call is a no-op that
-                // only guards the paths where no window was ever closed
-                // (menu quit, `app.exit()` from the renderer, OS shutdown).
-                //
-                // `Exit` is the final safety net — the event loop is
-                // finishing, so whatever is still registered dies here or
-                // becomes an orphan.
-                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
-                    let report = commands::shutdown::shutdown_all(app_handle);
-                    if !report.was_clean() {
-                        eprintln!(
-                            "[trylo] exit teardown: processes={} ptys={} lsps={} workd={}",
-                            report.processes, report.ptys, report.lsps, report.workd
-                        );
-                    }
-                }
-                _ => {}
-            }
-        });
+        .run(|app, event| on_run_event(app, &event));
+}
+
+fn on_run_event(app_handle: &tauri::AppHandle, event: &tauri::RunEvent) {
+    // Closing the last window and explicit/OS exit share the idempotent
+    // native owner. WebView reload never enters this shutdown path.
+    if matches!(
+        event,
+        tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+    ) {
+        let report = commands::shutdown::shutdown_all(app_handle);
+        if !report.was_clean() {
+            eprintln!(
+                "[trylo] exit teardown: processes={} ptys={} lsps={} workd={}",
+                report.processes, report.ptys, report.lsps, report.workd
+            );
+        }
+    }
 }

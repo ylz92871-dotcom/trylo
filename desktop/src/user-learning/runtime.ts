@@ -134,6 +134,7 @@ export interface UserLearningRuntime {
     readonly projectKey?: string;
     /** True ONLY when the user clicked 开始 on the Team composer. */
     readonly confirmedSpawn?: boolean;
+    readonly teamRunId?: string;
     /** The frozen profile snapshot. confirmedSpawn without this must
      *  never compile a contract (Foundation spec §7.2.1). */
     readonly frozenProfile?: TeamProfile;
@@ -931,7 +932,7 @@ export function createUserLearningRuntime(options: {
           : { observations: [], pauseCommitmentIds: [], expireTrialIds: [] };
         const pausedIds = new Set(evaluation.pauseCommitmentIds);
         const expiredIds = new Set(evaluation.expireTrialIds);
-        let learningReceipts = [...reduced.snapshot.learningReceipts];
+        const learningReceipts = [...reduced.snapshot.learningReceipts];
         for (const commitment of settings.userLearningReceipts === false
           ? []
           : reduced.snapshot.behaviorCommitments) {
@@ -1156,7 +1157,7 @@ export function createUserLearningRuntime(options: {
           finalStart = teamStart;
           pendingRun = undefined;
         } else if (teamSpawn.decision === 'spawn_team' && input.confirmedSpawn === true && input.frozenProfile) {
-          const teamRunId = `team-${input.conversationId}`;
+          const teamRunId = input.teamRunId ?? `team-${input.conversationId}`;
           const compiled = compileEngineeringContract({
             snapshot: working,
             task,
@@ -1164,8 +1165,9 @@ export function createUserLearningRuntime(options: {
             personConversationId: input.conversationId,
             now: now(),
           });
-          // Keep the deterministic id stable per run: cache wins on re-send.
-          contract = teamContracts.get(input.conversationId)?.contract ?? compiled;
+          const cachedTeam = teamContracts.get(input.conversationId);
+          const sameRun = cachedTeam?.teamRunId === teamRunId;
+          contract = sameRun ? cachedTeam.contract : compiled;
           if (!contract.teamRunId || contract.teamRunId !== teamRunId) {
             contract = { ...contract, teamRunId };
           }
@@ -1177,7 +1179,7 @@ export function createUserLearningRuntime(options: {
           });
           translationBundle = bundle;
           seatProjections = projectAllSeats(rules, settings.defaultMode);
-          const hold = teamContracts.get(input.conversationId)?.hold;
+          const hold = sameRun ? cachedTeam.hold : undefined;
           // Foundation spec §8.3/§8.4: roster from the frozen profile
           // (Person first, unique baseRoles) — never the heuristic seats.
           const uniqueBaseRoles: TeamAccessSeatId[] = [];
@@ -1499,9 +1501,10 @@ export function createUserLearningRuntime(options: {
     },
     enqueueTeamClarification(request) {
       if (!settings.enabled || !settings.cognitionEnabled || !settings.teamAccessEnabled) return null;
-      const conversationId = request.teamRunId.startsWith('team-')
+      const matched = [...teamContracts.entries()].find(([, value]) => value.teamRunId === request.teamRunId);
+      const conversationId = matched?.[0] ?? (request.teamRunId.startsWith('team-')
         ? request.teamRunId.slice(5)
-        : request.teamRunId;
+        : request.teamRunId);
       const cached = teamContracts.get(conversationId);
       const full: TeamClarificationRequest = {
         ...request,
@@ -1652,9 +1655,10 @@ export function createUserLearningRuntime(options: {
       if (teamClarification) {
         teamClarifications.delete(sessionId);
         const key = resolveTeamClarificationKey(teamClarification.request);
-        const conversationId = teamClarification.request.teamRunId.startsWith('team-')
+        const matched = [...teamContracts.entries()].find(([, value]) => value.teamRunId === teamClarification.request.teamRunId);
+        const conversationId = matched?.[0] ?? (teamClarification.request.teamRunId.startsWith('team-')
           ? teamClarification.request.teamRunId.slice(5)
-          : teamClarification.request.teamRunId;
+          : teamClarification.request.teamRunId);
         const cached = teamContracts.get(conversationId);
         if (cached) {
           const field: ContractClause['field'] = /安全|密钥|权限/.test(text) ? 'security' : 'acceptance';

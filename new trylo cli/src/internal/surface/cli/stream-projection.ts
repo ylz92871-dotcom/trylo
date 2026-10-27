@@ -3,6 +3,8 @@ import type { CliStreamEvent, CliUsage } from "../../protocol/cli-stream.js";
 import { isNativeContinuationDiagnostic } from "../../ports/provider.js";
 import { projectFileMutations } from "./file-mutation-projection.js";
 import { isSubagentBudgetSnapshot } from "../../protocol/subagent-budget.js";
+import { isSubagentToolActivity } from "../../protocol/subagent-activity.js";
+import { isSubagentObservation } from "../../protocol/subagent-observation.js";
 
 /**
  * The envelope -> CLI event translator, kept as one bounded state machine.
@@ -71,6 +73,7 @@ const CONTINUE_RECORDED_WORK = "Continue in the same saved session from recorded
 const FAILURE_ACTIONS: Readonly<Record<string, string>> = {
   auth: "no credential, or the provider rejected it: `trylo login --provider <family> --account <id>` to store one; a key from another host fails here too (`trylo auth list` shows the accounts)",
   rate_limit: "wait and retry; the provider is rate limiting",
+  quota: "usage allowance exhausted; wait until the reported reset or check the provider allowance",
   server: "retry later; the provider returned a server error",
   network: "check connectivity and the endpoint, then retry",
   timeout: "retry later, or point at a faster endpoint",
@@ -267,7 +270,12 @@ function translateInto(state: BlockState, envelope: Envelope, events: CliStreamE
         : rawStatus === "cancelled" ? "cancelled" : rawStatus === "waiting" ? "waiting"
         : rawStatus === "running" ? "running" : "failed";
       events.push({ type: "subagent", kind, id, status,
-        ...(kind === "spawn" ? { agentType: text(payload, "agentType") || text(payload, "name") || "subagent" } : {}),
+        ...(typeof payload.teamRunId === "string" ? { teamRunId: payload.teamRunId } : {}),
+        ...(typeof payload.memberId === "string" ? { memberId: payload.memberId } : {}),
+        ...(isSubagentToolActivity(payload.activity) ? { activity: payload.activity } : {}),
+        ...(isSubagentObservation(payload.observation) ? { observation: payload.observation } : {}),
+        ...(kind === "spawn" ? { agentType: text(payload, "agentType") || text(payload, "name") || "subagent" }
+          : typeof payload.agentType === "string" ? { agentType: payload.agentType } : {}),
         ...(typeof payload.prompt === "string" ? { prompt: payload.prompt } : {}),
         ...(typeof payload.result === "string" ? { result: payload.result } : {}),
         ...(typeof payload.error === "string" ? { error: payload.error } : {}),

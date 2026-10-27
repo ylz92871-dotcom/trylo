@@ -8,6 +8,7 @@ import {
   type PermissionResolution,
   type PermissionReason,
   type PermissionTicket,
+  type PermissionRequestContext,
 } from "../ports/permission.js";
 import { buildPermissionAction } from "./permission-grants.js";
 
@@ -35,6 +36,7 @@ export type PermissionBoundaryResult =
 export async function awaitPermissionDecision(
   permission: PermissionPort,
   action: PermissionAction,
+  context?: PermissionRequestContext,
 ): Promise<PermissionBoundaryResult> {
   if (!isPermissionAction(action)) {
     return {
@@ -49,7 +51,7 @@ export async function awaitPermissionDecision(
   const snapshot = buildPermissionAction(action.toolCallId, action.name, action.arguments);
   let ticket: PermissionTicket;
   try {
-    ticket = await permission.request(snapshot);
+    ticket = context === undefined ? await permission.request(snapshot) : await permission.request(snapshot, context);
   } catch (err) {
     return boundaryFailure("request", err);
   }
@@ -57,7 +59,8 @@ export async function awaitPermissionDecision(
     return boundaryFailure("request", new Error("permission_ticket_tool_mismatch"));
   }
   try {
-    const answered = await permission.awaitDecision(ticket.ticketId);
+    const answered = context === undefined ? await permission.awaitDecision(ticket.ticketId)
+      : await permission.awaitDecision(ticket.ticketId, context);
     if (!isPermissionDecision(answered)) return boundaryFailure("decision", new Error("invalid_permission_decision"));
     return {
       outcome: "decided",

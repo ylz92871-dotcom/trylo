@@ -1,4 +1,5 @@
 import type { ToolCallRequest, ToolOutcome, ToolPort, ToolSandbox } from "../../ports/tools.js";
+import { cancelToolPorts } from "../../ports/tool-cancellation.js";
 import type { ShellSpawner } from "./mutating/shell-spawn.js";
 import { createMutatingTools, type ToolVisibility } from "./mutating/index.js";
 import { APPLY_PATCH_TOOL, EDIT_FILE_TOOL, NOTEBOOK_EDIT_TOOL, RUN_SHELL_TOOL, WRITE_FILE_TOOL } from "./mutating/names.js";
@@ -309,28 +310,9 @@ export function createWorkspaceTools(config: WorkspaceToolsConfig): ToolPort {
       return readOnly.execute(call, signal);
     },
     async cancel(toolCallId: string): Promise<void> {
-      await readOnly.cancel(toolCallId);
-      await workflow.cancel(toolCallId);
-      await askUser.cancel(toolCallId);
-      await plan.cancel(toolCallId);
-      if (web !== undefined) {
-        await web.cancel(toolCallId);
-      }
-      if (memory !== undefined) {
-        await memory.cancel(toolCallId);
-      }
-      if (memoryWrite !== undefined) {
-        await memoryWrite.cancel(toolCallId);
-      }
-      if (skills !== undefined) {
-        await skills.cancel(toolCallId);
-      }
-      if (lsp !== undefined) {
-        await lsp.cancel(toolCallId);
-      }
-      if (mutating !== undefined) {
-        await mutating.cancel(toolCallId);
-      }
+      const ports: ToolPort[] = [readOnly, workflow, askUser, plan];
+      for (const port of [web, memory, memoryWrite, skills, lsp, mutating]) if (port !== undefined) ports.push(port);
+      await cancelToolPorts(ports, toolCallId);
     },
   };
 }

@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import type { ProcessService, ProcessHandle } from './process-service';
+import type { ProcessService, ProcessHandle, LiveProcessInfo } from './process-service';
 import type { ProcessId } from './types';
 
 /** Real pipes implementing the native ProcessService contract for integration tests. */
@@ -10,6 +10,8 @@ export class NodeProcessFixture implements ProcessService {
   readonly argv: string[][] = [];
   readonly wire: string[] = [];
   readonly stderr: string[] = [];
+  readonly forceStops: ProcessId[] = [];
+  private readonly records = new Map<ProcessId, LiveProcessInfo>();
   private sequence = 0;
 
   constructor(private readonly env: NodeJS.ProcessEnv) {}
@@ -31,11 +33,14 @@ export class NodeProcessFixture implements ProcessService {
     });
     this.exits.set(id, new Promise(resolve => child.once('close', code => {
       this.children.delete(id);
+      this.records.delete(id);
       opts.onExit?.({ id, pid: child.pid ?? 0, code, signal: null });
       resolve();
     })));
     await new Promise<void>((resolve, reject) => { child.once('spawn', resolve); child.once('error', reject); });
-    return { id, pid: child.pid ?? 0, label: opts.label, command: opts.command };
+    const handle = { id, pid: child.pid ?? 0, label: opts.label, command: opts.command };
+    if (this.children.has(id)) this.records.set(id, { ...handle, metadata: opts.metadata ?? {} });
+    return handle;
   }
 
   async send(id: ProcessId, message: string): Promise<void> {
@@ -46,7 +51,7 @@ export class NodeProcessFixture implements ProcessService {
   }
 
   async closeInput(id: ProcessId): Promise<void> { this.children.get(id)?.stdin.end(); }
-  async stop(id: ProcessId): Promise<void> { this.children.get(id)?.kill(); await this.exits.get(id); }
-  async list(): Promise<readonly never[]> { return []; }
+  async stop(id: ProcessId): Promise<void> { this.forceStops.push(id); this.children.get(id)?.kill(); await this.exits.get(id); }
+  async list(): Promise<readonly LiveProcessInfo[]> { return [...this.records.values()]; }
   async dispose(): Promise<void> { await Promise.all([...this.children.keys()].map(id => this.stop(id))); }
 }

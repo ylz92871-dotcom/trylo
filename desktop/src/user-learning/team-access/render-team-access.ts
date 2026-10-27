@@ -47,6 +47,7 @@ export function renderStaySoloProtocol(): string {
  *  fits; render-team-access stays free of the profiles module). */
 export interface FrozenRosterProfile {
   readonly id: string;
+  readonly surface?: 'code' | 'work';
   readonly members: readonly {
     readonly memberId: string;
     readonly baseRole: string;
@@ -81,6 +82,7 @@ export function renderTeamAccessBlock(input: {
     `contractId: ${input.contract.contractId}`,
     `teamRunId: ${input.teamRunId}`,
     ...(input.frozenProfile ? [`profileId: ${input.frozenProfile.id}`] : []),
+    ...(input.frozenProfile?.surface ? [`surface: ${input.frozenProfile.surface}`] : []),
     `TRYLO_TEAM_HOLD: ${input.hold ?? HOLD_NONE}`,
     '',
     '## Protocol',
@@ -133,6 +135,7 @@ export interface FrozenOverlayProfile extends FrozenRosterProfile {
     readonly overlay?: {
       readonly model?: string;
       readonly tools?: readonly string[];
+      readonly disallowedTools?: readonly string[];
       readonly skills?: readonly string[];
       readonly systemPromptOverlay?: string;
     };
@@ -145,6 +148,7 @@ export function renderMemberOverlayFallbackTags(profile: FrozenOverlayProfile): 
       const compact = {
         model: member.overlay?.model ?? 'inherit',
         ...(member.overlay?.tools ? { tools: member.overlay.tools } : {}),
+        ...(member.overlay?.disallowedTools ? { disallowedTools: member.overlay.disallowedTools } : {}),
         skills: member.overlay?.skills ?? [],
         systemPromptOverlay: (member.overlay?.systemPromptOverlay ?? '').slice(
           0,

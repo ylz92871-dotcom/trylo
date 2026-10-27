@@ -57,6 +57,7 @@ export function createFrozenTeamRun(input: {
     input.goal.length <= 80 ? input.goal : `${input.goal.slice(0, 79)}…`;
   return {
     id: input.teamRunId,
+    lifecycle: 'open',
     personConversationId: input.personConversationId,
     status: 'running',
     summary: { title: input.frozenProfile.title, goal: input.goal, oneLiner },

@@ -34,6 +34,22 @@ export type PermissionTicket = {
   readonly toolCallId: string;
 };
 
+export type MemberApprovalRequester = {
+  readonly kind: "subagent";
+  readonly taskId: string;
+  readonly executionId: string;
+  readonly teamRunId: string;
+  readonly memberId: string;
+  readonly displayName: string;
+  readonly role: string;
+};
+
+/** Trusted caller context; never reconstructed from model tool arguments. */
+export type PermissionRequestContext = {
+  readonly signal?: AbortSignal;
+  readonly requester?: MemberApprovalRequester;
+};
+
 /**
  * `scope` carries an exact-call approval or a tool-wide denial. Cancellation
  * and expiry are always once; no decision is persisted by this port.
@@ -48,10 +64,18 @@ export type PermissionDecision = {
 export type PermissionReason = "user_denied" | "policy_denied" | "remembered_denial" | "input_closed" | "user_cancelled";
 
 export type PermissionPort = {
+  readonly supportsMemberApproval?: true;
+  /** Read-only view of explicit automatic policy. Never prompts or records grants.
+   * A tool may be advertised to a child only when canUseTool is true; each
+   * concrete action is still checked by decide, including target boundaries. */
+  readonly inheritance?: {
+    readonly canUseTool: (name: string) => boolean;
+    readonly decide: (action: PermissionAction) => PermissionDecision;
+  };
   /** Explicit tool-wide refusals, lent as facts to catalog and dispatch. */
   readonly isDenied?: (name: string) => boolean;
-  request(action: PermissionAction): Promise<PermissionTicket>;
-  awaitDecision(ticketId: string): Promise<PermissionDecision>;
+  request(action: PermissionAction, context?: PermissionRequestContext): Promise<PermissionTicket>;
+  awaitDecision(ticketId: string, context?: PermissionRequestContext): Promise<PermissionDecision>;
 };
 
 /** Adapter data is checked at runtime before it can authorize a tool call. */

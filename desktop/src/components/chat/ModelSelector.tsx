@@ -2,9 +2,8 @@ import { Check, ChevronDown } from 'lucide-react';
 // Trylo Desktop — ModelSelector.
 //
 // A model picker chip in the InputBar's bottom action row.
-// Lists the user's configured model plus the built-in free
-// compute pool (grok via the local sub2api gateway), mirroring
-// the opencode "your models + system models in one list" model.
+// Lists saved connections and account-authorized text models. The free pool
+// is discovered by the Service Host; no provider credential lives in this UI.
 //
 // The user's OWN model (`configuredModel`, = settings.apiModel) is
 // NEVER overwritten. Selecting a pool model only sets `poolModel`
@@ -30,16 +29,9 @@ import {
   type ReactElement,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { usePlatformModels } from '../../account/use-platform-models';
 
 export type ModelChoice = { readonly id: string; readonly label: string; readonly hint: string };
-
-/**
- * Built-in free-compute model pool. Keep in sync with the CLI's
- * `trylo cli/src/utils/model/poolModels.ts` (TRILO_BUILTIN_POOL).
- */
-const BUILTIN_MODELS: readonly ModelChoice[] = [
-  { id: 'grok-4.5', label: 'Grok 4.5', hint: '内置免费算力池' },
-];
 
 /** Sentinel indicating "use your own configured model" in the listbox. */
 const OWN_MODEL_ID = '__trylo_own__';
@@ -56,12 +48,9 @@ const GROUPS: readonly { readonly key: ModelGroup; readonly title: string }[] = 
   { key: 'pool', title: '免费算力池' },
 ];
 
-/** Human label for a model id (builtin names resolved, own names kept). */
+/** Preserve the exact server model ID. */
 export function labelForModel(model: string): string {
-  if (!model) return '默认';
-  const builtin = BUILTIN_MODELS.find((b) => b.id === model);
-  if (builtin) return builtin.label;
-  return model;
+  return model || '默认';
 }
 
 export interface ModelSelectorProps {
@@ -93,8 +82,10 @@ export function ModelSelector(props: ModelSelectorProps): ReactElement {
     onSelectProfile,
   } = props;
   const [open, setOpen] = useState(false);
+  const platform = usePlatformModels(open);
   const anchorRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const navigationRef = useRef<'keyboard' | 'pointer'>('keyboard');
 
   const activeProfile = savedProfiles.find((p) => p.id === activeProfileId);
 
@@ -120,11 +111,11 @@ export function ModelSelector(props: ModelSelectorProps): ReactElement {
         group: 'mine',
       }),
     );
-    const pool = BUILTIN_MODELS.map(
+    const pool = platform.models.map(model => ({ id: model.id, label: model.id, hint: model.remaining > 0 ? 'Trylo 免费池' : '今日额度已用完' })).map(
       (b): ModelChoice & { readonly group: ModelGroup } => ({ ...b, group: 'pool' }),
     );
     return [own, ...profiles, ...pool];
-  }, [configuredModel, savedProfiles, activeProfile]);
+  }, [configuredModel, savedProfiles, activeProfile, platform.models]);
 
   const currentPoolId = poolModel.trim();
   const currentId = currentPoolId
@@ -137,6 +128,7 @@ export function ModelSelector(props: ModelSelectorProps): ReactElement {
     choices.findIndex((c) => c.id === currentId),
   );
   const [focusIndex, setFocusIndex] = useState(currentIndex);
+  useEffect(() => { setFocusIndex(index => Math.min(index, choices.length - 1)); }, [choices.length]);
 
   // Fresh-value mirrors. The document-level keydown listener is bound
   // once per open (deps [open]); without these it would close over the
@@ -170,6 +162,7 @@ export function ModelSelector(props: ModelSelectorProps): ReactElement {
 
   useEffect(() => {
     if (!open) return;
+    navigationRef.current = 'keyboard';
     setFocusIndex(currentIndex);
   }, [open, currentIndex]);
 
@@ -183,25 +176,61 @@ export function ModelSelector(props: ModelSelectorProps): ReactElement {
       const anchor = anchorRef.current;
       if (!menu || !anchor) return;
       const rect = anchor.getBoundingClientRect();
-      const above = rect.top - 16;
-      const below = window.innerHeight - rect.bottom - 16;
-      const down = below >= menu.scrollHeight || below > above;
-      const maxHeight = Math.max(96, down ? below : above);
-      const height = Math.min(menu.scrollHeight, maxHeight);
+      const margin = 12, gap = 8;
+      const viewport = window.visualViewport;
+      const viewportTop = viewport?.offsetTop ?? 0;
+      const viewportHeight = viewport?.height ?? window.innerHeight;
+      const viewportBottom = viewportTop + viewportHeight;
+      const above = Math.max(0, rect.top - gap - viewportTop - margin);
+      const below = Math.max(0, viewportBottom - rect.bottom - gap - margin);
+      const border = menu.offsetHeight - menu.clientHeight;
+      const naturalHeight = menu.scrollHeight + border;
+      const down = below >= Math.min(naturalHeight, 480) || below > above;
+      const maxHeight = Math.min(480, down ? below : above);
+      const height = Math.min(naturalHeight, maxHeight);
       Object.assign(menu.style, {
-        left: `${Math.max(8, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8))}px`,
-        top: `${down ? rect.bottom + 8 : Math.max(8, rect.top - height - 8)}px`,
+        left: `${Math.max(margin, Math.min(rect.left, window.innerWidth - menu.offsetWidth - margin))}px`,
+        top: `${Math.max(viewportTop + margin, Math.min(down ? rect.bottom + gap : rect.top - height - gap, viewportBottom - height - margin))}px`,
         maxHeight: `${maxHeight}px`,
       });
     };
-    place();
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
-    return () => {
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
+    const onScroll = (event: Event): void => {
+      // Scrolling the menu must not reposition it under the pointer.
+      if (event.target instanceof Node && listRef.current?.contains(event.target)) return;
+      place();
     };
-  }, [open]);
+    place();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : undefined;
+    if (anchorRef.current) observer?.observe(anchorRef.current);
+    if (listRef.current) {
+      observer?.observe(listRef.current);
+      for (const group of listRef.current.children) observer?.observe(group);
+    }
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', onScroll, true);
+    window.visualViewport?.addEventListener('resize', place);
+    window.visualViewport?.addEventListener('scroll', place);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', onScroll, true);
+      window.visualViewport?.removeEventListener('resize', place);
+      window.visualViewport?.removeEventListener('scroll', place);
+    };
+  }, [open, choices.length, platform.loading, platform.message]);
+
+  useLayoutEffect(() => {
+    if (!open || navigationRef.current !== 'keyboard') return;
+    const menu = listRef.current;
+    const option = menu?.querySelectorAll<HTMLElement>('[role="option"]')[focusIndex];
+    if (!menu || !option) return;
+    const bounds = menu.getBoundingClientRect(), item = option.getBoundingClientRect();
+    const top = bounds.top + menu.clientTop;
+    const bottom = top + menu.clientHeight;
+    // Move this scroll container only; scrollIntoView can also move the chat.
+    if (item.top < top) menu.scrollTop -= top - item.top;
+    else if (item.bottom > bottom) menu.scrollTop += item.bottom - bottom;
+  }, [open, focusIndex, choices.length, platform.loading]);
 
   useEffect(() => {
     if (!open) return;
@@ -218,10 +247,16 @@ export function ModelSelector(props: ModelSelectorProps): ReactElement {
         onCloseRef.current();
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
+        navigationRef.current = 'keyboard';
         setFocusIndex((i) => (i + 1) % choicesRef.current.length);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
+        navigationRef.current = 'keyboard';
         setFocusIndex((i) => (i - 1 + choicesRef.current.length) % choicesRef.current.length);
+      } else if (e.key === 'Home' || e.key === 'End') {
+        e.preventDefault();
+        navigationRef.current = 'keyboard';
+        setFocusIndex(e.key === 'Home' ? 0 : choicesRef.current.length - 1);
       } else if (e.key === 'Enter') {
         e.preventDefault();
         const c = choicesRef.current[focusIndexRef.current];
@@ -272,11 +307,12 @@ export function ModelSelector(props: ModelSelectorProps): ReactElement {
           >
             {GROUPS.map((group, groupIndex) => {
               const rows = choices.filter((c) => c.group === group.key);
-              if (rows.length === 0) return null;
               return (
                 <div key={group.key} role="group" aria-label={group.title}>
                   {groupIndex > 0 && <div className="model-selector__divider" />}
                   <span className="model-selector__group-heading">{group.title}</span>
+                  {group.key === 'pool' && (platform.loading || platform.message) && <p role="status" className="model-selector__status">{platform.loading ? '正在同步账号模型…' : platform.message}</p>}
+                  {group.key === 'pool' && !platform.loading && platform.models.length > 0 && currentPoolId && !platform.models.some(model => model.id === currentPoolId) && <p role="status" className="model-selector__status">所选模型已不可用，请重新选择</p>}
                   <ul className="model-selector__list" role="presentation">
                     {rows.map((c) => {
                       const i = choices.indexOf(c);
@@ -288,13 +324,13 @@ export function ModelSelector(props: ModelSelectorProps): ReactElement {
                           role="option"
                           aria-selected={current}
                           className={`model-selector__item${active ? ' model-selector__item--focus' : ''}${current ? ' model-selector__item--current' : ''}`}
-                          onMouseEnter={() => setFocusIndex(i)}
+                          onMouseEnter={() => { navigationRef.current = 'pointer'; setFocusIndex(i); }}
                           onClick={() => pick(c.id)}
                         >
                           <span className="model-selector__check" aria-hidden="true">
                             {current && <Check size={14} />}
                           </span>
-                          <span className="model-selector__label">{c.label}</span>
+                          <span className="model-selector__label" title={c.label}>{c.label}</span>
                           <span className="model-selector__hint">{c.hint}</span>
                         </li>
                       );

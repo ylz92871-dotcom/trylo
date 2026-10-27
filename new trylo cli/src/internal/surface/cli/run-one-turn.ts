@@ -10,6 +10,8 @@ import type { RunFailure, RunScaffold } from "./run-command.js";
 import { EXIT_CODES } from "../../protocol/cli-stream.js";
 import { projectContextFor } from "./project-rules.js";
 import { rolesFor } from "./roles-wiring.js";
+import { teamProfileFor } from "./team-profile-wiring.js";
+import { fail } from "./run-failure.js";
 import { loadLspServersFile } from "./lsp-config.js";
 import { shellModeFor } from "./shell-mode-wiring.js";
 import type { ShellEnvironment } from "../../adapters/sandbox/shell-detect.js";
@@ -57,6 +59,10 @@ export async function runOneTurn(
   // C44/L27: roles freeze at the same boundary and for the same reason —
   // deleting a role file takes it out of the next run with nothing to clear.
   const roles = rolesFor(ctx.homeDir, ctx.env, scaffold.workspaceRoot);
+  const team = teamProfileFor({ workspaceRoot: scaffold.workspaceRoot, readFile: ctx.readFile,
+    ...(skills.catalog === undefined ? {} : { skills: skills.catalog }),
+    ...(scaffold.systemPromptAppend === undefined ? {} : { systemPrompt: scaffold.systemPromptAppend }) });
+  if (!team.ok) return fail(EXIT_CODES.CONFIG, team.message, "Open the team composer and start again with a valid frozen profile.");
   for (const problem of skills.problems) {
     ctx.stderr(`warning: ${problem}\n`);
   }
@@ -139,7 +145,8 @@ export async function runOneTurn(
     ...(scaffold.maxIterations === undefined ? {} : { maxIterations: scaffold.maxIterations }),
     ...(scaffold.maxTokens === undefined ? {} : { maxTokens: scaffold.maxTokens }),
     ...(scaffold.systemPrompt === undefined ? {} : { systemPrompt: scaffold.systemPrompt }),
-    ...(scaffold.systemPromptAppend === undefined ? {} : { systemPromptAppend: scaffold.systemPromptAppend }),
+    ...(scaffold.systemPromptAppend === undefined ? {} : { systemPromptAppend: team.protocol === undefined
+      ? scaffold.systemPromptAppend : `${scaffold.systemPromptAppend}\n${team.protocol}` }),
     ...(scaffold.responseSchema === undefined ? {} : { responseSchema: scaffold.responseSchema }),
     ...(scaffold.contextTokenLimit === undefined
       ? {}
@@ -159,6 +166,7 @@ export async function runOneTurn(
       : { permissionLedger: scaffold.permissionLedger }),
     ...(scaffold.subagentEnabled === undefined ? {} : { subagentEnabled: true as const }),
     ...(roles.roles.length === 0 ? {} : { subagentRoles: roles.roles }),
+    ...(team.team === undefined ? {} : { subagentTeam: team.team }),
     ...(lspServers === undefined || !lspServers.ok || lspServers.servers.length === 0
       ? {}
       : { lspServers: lspServers.servers }),
@@ -241,6 +249,7 @@ async function maybeFallbackTurn(
     fallback === undefined ||
     permissionMode !== "non_interactive" ||
     outcome.exitCode !== EXIT_CODES.TEMPORARY ||
+    outcome.providerErrorClass === "quota" ||
     fallback === scaffold.model
   ) {
     return outcome;

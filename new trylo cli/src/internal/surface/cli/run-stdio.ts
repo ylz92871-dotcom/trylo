@@ -24,7 +24,7 @@ export async function handleStdioRun(ctx: CliContext, options: RunCommandOptions
   try {
     return await handleRun({ ...ctx, ...(prompt.bootstrapContext === undefined ? {} : { bootstrapContext: prompt.bootstrapContext }),
       ...(prompt.userSourceAvailable === undefined ? {} : { userSourceAvailable: prompt.userSourceAvailable }),
-      approval: { requestApproval: control.approval }, readStdin: async () => prompt.text }, {
+      approval: { requestApproval: control.approval, supportsMemberApproval: true }, readStdin: async () => prompt.text }, {
       ...options, ask: options.ask ?? "always", readStdin: true,
     }, sink, control);
   } finally { control.close(); }

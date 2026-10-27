@@ -46,6 +46,8 @@ export type TurnOutcome = {
    */
   readonly view: CompactWindow | undefined;
   readonly warnings: ReadonlyArray<string>;
+  /** Canonical terminal provider class, kept for host retry/fallback decisions. */
+  readonly providerErrorClass?: string;
   /**
    * Input the loop took and never promoted because the turn ended first (WP08.3)
    * — a debt, not a message. Absent means nothing was owed. See
@@ -76,6 +78,7 @@ export type TurnFinishInput = {
  */
 export async function finishTurn(finish: TurnFinishInput): Promise<TurnOutcome | TurnFailure> {
   const { result, input } = finish;
+  const errorClass = providerErrorClass(result.envelopes);
 
   // A provider that just failed is not a provider to hand to the next turn. The
   // warm entry is dropped so the next turn rebuilds instead of reusing a session
@@ -83,7 +86,7 @@ export async function finishTurn(finish: TurnFinishInput): Promise<TurnOutcome |
   // pass an old state off as a live one). Rate limiting is deliberately *not* in
   // this set: the connection is fine, the quota is not, and rebuilding would
   // spend a handshake to learn the same thing.
-  if (input.warm !== undefined && UNREUSABLE_ERROR_CLASSES.has(providerErrorClass(result.envelopes) ?? "")) {
+  if (input.warm !== undefined && UNREUSABLE_ERROR_CLASSES.has(errorClass ?? "")) {
     input.warm.invalidateAll();
   }
 
@@ -116,6 +119,7 @@ export async function finishTurn(finish: TurnFinishInput): Promise<TurnOutcome |
     // other run diagnostic, and *always* alongside a turn that still ran: a
     // server that did not come up is a smaller tool table, not a failed turn.
     warnings: [...persisted.warnings, ...finish.extraWarnings],
+    ...(errorClass === undefined ? {} : { providerErrorClass: errorClass }),
     // A debt, not a message: words the person said and the turn never got to
     // use. Empty is the common case, and absent means the surface owes nothing
     // (WP08.3).

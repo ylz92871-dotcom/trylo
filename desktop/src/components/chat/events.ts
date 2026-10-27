@@ -17,6 +17,7 @@
 
 import type { ChatMessage, NoticeMessage, ToolMessage, TurnMessage, SubagentMessage } from './types';
 import { turnCompletion } from './types';
+import { recordMemberObservation } from '../../domain/member-observation';
 import type {
   LoopEvent,
   ToolUseEvent,
@@ -311,7 +312,7 @@ function turnDeliveredNothing(
  *  Rendering them here would duplicate the card in Person chat. */
 function applySubagent(msgs: ChatMessage[], e: SubagentEvent): ChatMessage[] {
   if (e.agentType === 'managed-work') return msgs;
-  if (e.source !== 'trylo-v1' && e.agentType && isTeamSeatId(e.agentType)) return msgs;
+  if (e.teamRunId || (e.source !== 'trylo-v1' && e.agentType && isTeamSeatId(e.agentType))) return msgs;
   const boundary = lastUserIndex(msgs);
   const existingIndex = msgs.findIndex((message, index) => index > boundary
     && message.kind === 'subagent' && ((message.subagentId ?? message.id) === e.id
@@ -364,6 +365,7 @@ function applySubagent(msgs: ChatMessage[], e: SubagentEvent): ChatMessage[] {
   if (roundIndex < 0) conversation.push(entry); else conversation[roundIndex] = entry;
   const updated: SubagentMessage = {
     ...existing,
+    ...(e.observation === undefined ? {} : { observations: recordMemberObservation(existing.observations, e.observation, e.ts) }),
     status: e.status ?? (e.kind === 'end' ? 'done' : existing.status),
     ...(e.result === undefined ? {} : { result: e.result }),
     ...(e.error === undefined ? {} : { error: e.error }),

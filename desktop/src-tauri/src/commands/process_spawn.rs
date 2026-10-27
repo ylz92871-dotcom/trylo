@@ -20,18 +20,22 @@
 //   - env values / API keys are never logged (see redact_env).
 
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::BufReader;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use serde::Serialize;
 use tauri::ipc::Channel;
 use tauri::State;
 
 use crate::commands::error::{io_error, CommandError};
-use crate::commands::process_state::{ProcessEntry, ProcessMetadata, ProcessState};
-use crate::commands::process_termination::terminate_tree;
+use crate::commands::process_output::{await_output_completion, drain_observed_output};
+use crate::commands::process_recovery::{self, RecoveryIdentity, RecoveryProcess};
+use crate::commands::process_state::{
+    ProcessEntry, ProcessInputControl, ProcessMetadata, ProcessState, ProcessStopControl,
+};
+use crate::commands::process_termination::OwnedTreeTerminator;
 
 #[derive(Debug, Serialize)]
 pub struct ProcessHandleDto {
@@ -112,6 +116,7 @@ pub async fn process_spawn(
     project_key: Option<String>,
     conversation_id: Option<String>,
     run_id: Option<String>,
+    recovery_identity: Option<RecoveryIdentity>,
     on_output: Channel<String>,
     // P08 §4.2: a SECOND, always-present channel for stderr.
     //
@@ -126,6 +131,20 @@ pub async fn process_spawn(
     capture_stderr: Option<bool>,
     state: State<'_, ProcessState>,
 ) -> Result<ProcessHandleDto, CommandError> {
+    let team_owner = if recovery_identity.is_some() {
+        Some(crate::commands::process_team_owner::acquire(
+            cwd.as_deref().ok_or_else(|| CommandError::Validation {
+                reason: "team owner requires workspace cwd".into(),
+            })?,
+            conversation_id
+                .as_deref()
+                .ok_or_else(|| CommandError::Validation {
+                    reason: "team owner requires conversation identity".into(),
+                })?,
+        )?)
+    } else {
+        None
+    };
     eprintln!(
         "[rust] process_spawn: label={label} command={command} args=[{}] env=[{}]",
         redact_args(&args),
@@ -184,12 +203,49 @@ pub async fn process_spawn(
     };
 
     let pid = child.id();
+    let team_tree = if team_owner.is_some() {
+        match crate::commands::process_team_guard::TeamProcessGuard::capture(&child) {
+            Ok(guard) => Some(guard),
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(io_error("(team process ownership)", error));
+            }
+        }
+    } else {
+        None
+    };
+    let terminator = match OwnedTreeTerminator::capture(&child) {
+        Ok(terminator) => terminator,
+        Err(error) => {
+            // No registration has escaped yet. This command still owns and
+            // reaps its failed startup rather than dropping a live Child.
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(io_error("(process identity)", error));
+        }
+    };
     let seq = NEXT_PROCESS_SEQ.fetch_add(1, Ordering::Relaxed) + 1;
     let id = format!("proc-{seq}");
+    let journal = recovery_identity
+        .zip(project_key.as_ref())
+        .zip(conversation_id.as_ref())
+        .map(|((identity, project), conversation)| {
+            process_recovery::register(
+                &state.recovery,
+                RecoveryProcess {
+                    id: id.clone(),
+                    pid,
+                    project_key: project.clone(),
+                    conversation_id: conversation.clone(),
+                    identity,
+                },
+            )
+        });
 
     // Keep stdin open — the CLI reads the user prompt from stdin
     // as a stream-json user message AND uses stdin for permission
-    // prompts. Wrapped in MutexWriter so process_send can write.
+    // prompts. The per-process input control serializes complete frames.
     let Some(stdout) = child.stdout.take() else {
         return Err(io_error(
             &format!("(process) {command}"),
@@ -206,17 +262,33 @@ pub async fn process_spawn(
     // Stdout reader thread: each line is one event. Push to the
     // channel; on read error / EOF (child exit), exit.
     let channel_for_read = on_output.clone();
+    let (stdout_done, stdout_receipt) = std::sync::mpsc::channel();
+    let mut output_receipts = vec![stdout_receipt];
+    let (stdout_captured, stdout_capture_receipt) = std::sync::mpsc::channel();
+    let mut capture_receipts = vec![stdout_capture_receipt];
+    let stdout_journal = journal.clone();
+    let stderr_lines = Arc::new(AtomicU64::new(0));
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
-        for line in reader.lines() {
-            match line {
-                Ok(text) => {
-                    if channel_for_read.send(text).is_err() {
-                        break;
+        let result = drain_observed_output(
+            reader,
+            |text| channel_for_read.send(text).is_ok(),
+            |line| {
+                if let Some(journal) = &stdout_journal {
+                    if let Ok(mut journal) = journal.lock() {
+                        journal.record("stdout", line);
                     }
                 }
-                Err(_) => break,
-            }
+            },
+        );
+        let _ = stdout_captured.send(result.is_ok());
+        let _ = stdout_done.send(matches!(result, Ok(0)));
+        match result {
+            Ok(discarded) if discarded > 0 => eprintln!(
+                "[rust] stdout display disconnected; drained {discarded} undelivered lines"
+            ),
+            Ok(_) => {}
+            Err(error) => eprintln!("[rust] stdout read failed: {error}"),
         }
         eprintln!("[rust]   stdout reader thread exiting");
     });
@@ -235,46 +307,56 @@ pub async fn process_spawn(
                 std::io::Error::other("no stderr from process"),
             ));
         };
+        let (stderr_done, stderr_receipt) = std::sync::mpsc::channel();
+        output_receipts.push(stderr_receipt);
+        let (stderr_captured, stderr_capture_receipt) = std::sync::mpsc::channel();
+        capture_receipts.push(stderr_capture_receipt);
+        let stderr_journal = journal.clone();
+        let stderr_lines_for_read = Arc::clone(&stderr_lines);
         std::thread::spawn(move || {
             let reader = BufReader::new(stderr);
-            for line in reader.lines() {
-                match line {
-                    Ok(text) => {
-                        if on_stderr.send(text).is_err() {
-                            break;
+            let result = drain_observed_output(
+                reader,
+                |text| {
+                    let queued = on_stderr.send(text).is_ok();
+                    if queued {
+                        stderr_lines_for_read.fetch_add(1, Ordering::Release);
+                    }
+                    queued
+                },
+                |line| {
+                    if let Some(journal) = &stderr_journal {
+                        if let Ok(mut journal) = journal.lock() {
+                            journal.record("stderr", line);
                         }
                     }
-                    Err(_) => break,
-                }
+                },
+            );
+            let _ = stderr_captured.send(result.is_ok());
+            let _ = stderr_done.send(matches!(result, Ok(0)));
+            match result {
+                Ok(discarded) if discarded > 0 => eprintln!(
+                    "[rust] stderr display disconnected; drained {discarded} undelivered lines"
+                ),
+                Ok(_) => {}
+                Err(error) => eprintln!("[rust] stderr read failed: {error}"),
             }
         });
     }
 
-    // MutexWriter is the same pattern as lsp_spawn: the writer
-    // trait-object can't be &mut ChildStdin directly, so we wrap
-    // it in a Mutex<W> where W: Write + Send.
-    struct MutexWriter<W: Write + Send> {
-        inner: Mutex<W>,
-    }
-    impl<W: Write + Send> Write for MutexWriter<W> {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.inner
-                .lock()
-                .expect("process writer mutex poisoned")
-                .write(buf)
+    let input = ProcessInputControl::new(Some(Box::new(stdin)));
+    let input_for_exit = Arc::clone(&input);
+    // Team roots use their pinned Windows job; other roots retain the bounded
+    // identity-pinned helper. The reaper alone confirms either kind of exit.
+    #[cfg(windows)]
+    let team_stop = team_tree.clone();
+    let stop_control = ProcessStopControl::new(move || {
+        #[cfg(windows)]
+        if let Some(guard) = &team_stop {
+            return guard.terminate();
         }
-        fn flush(&mut self) -> std::io::Result<()> {
-            self.inner
-                .lock()
-                .expect("process writer mutex poisoned")
-                .flush()
-        }
-    }
-
-    // The killer terminates the child TREE by pid. It does not
-    // own the Child (the reaper thread does); it signals the OS
-    // and lets the reaper's wait() observe the exit.
-    let killer_pid = pid;
+        terminator.terminate()
+    });
     state
         .processes
         .lock()
@@ -287,12 +369,8 @@ pub async fn process_spawn(
         .insert(
             id.clone(),
             ProcessEntry {
-                // P08 §4.2: takeable ownership slot. `Some` ⇒ stdin open.
-                writer: Some(Box::new(MutexWriter {
-                    inner: Mutex::new(stdin),
-                }) as Box<dyn Write + Send>),
-                killer: Box::new(move || terminate_tree(killer_pid)),
-                stop_state: crate::commands::process_state::ProcessStopState::Running,
+                input,
+                stop: Arc::clone(&stop_control),
                 label: label.clone(),
                 pid,
                 metadata: ProcessMetadata {
@@ -311,14 +389,39 @@ pub async fn process_spawn(
     let table_for_exit = Arc::clone(&state.processes);
     let id_for_exit = id.clone();
     let label_for_exit = label.clone();
+    let recovery_for_exit = Arc::clone(&state.recovery);
     std::thread::spawn(move || {
-        let (code, signal) = match child.wait() {
-            Ok(status) => (status.code(), exit_signal(status)),
-            Err(_) => (None, None),
-        };
+        let _team_owner = team_owner;
+        // Retain crash ownership while awaiting the root; observed exit below
+        // restores the CLI's normal background-process policy.
+        let tree_owner = team_tree;
+        let mut reported_wait_failure = false;
+        let status = wait_for_observed_exit(
+            || child.wait(),
+            |error| {
+                if !reported_wait_failure {
+                    eprintln!("[rust] process {id_for_exit}: exit observation failed, retaining ownership: {error}");
+                    reported_wait_failure = true;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            },
+        );
+        stop_control.mark_exited();
+        #[cfg(windows)]
+        if let Some(guard) = &tree_owner {
+            if let Err(error) = guard.release_after_exit() {
+                eprintln!("[rust] process {id_for_exit}: observed exit, background policy release failed: {error}");
+            }
+        }
+        input_for_exit.mark_exited();
+        let (code, signal) = (status.code(), exit_signal(status));
         if let Ok(mut table) = table_for_exit.lock() {
             let _ = table.remove(&id_for_exit);
         }
+        // Real exit releases native ownership immediately, but its notification
+        // must not overtake the last terminal/stdout or diagnostic/stderr lines.
+        let output_complete =
+            await_output_completion(output_receipts, std::time::Duration::from_millis(500));
         eprintln!("[rust]   process {id_for_exit} ({label_for_exit}) exited: code={code:?}");
         // Structured `process.exited` control frame (spec §5.3 #5):
         // id/pid/code/signal. `signal` is `null` on Windows (ExitStatus
@@ -329,8 +432,18 @@ pub async fn process_spawn(
             "pid": pid,
             "code": code,
             "signal": signal,
+            "outputComplete": output_complete,
+            "stderrLines": stderr_lines.load(Ordering::Acquire),
         });
+        if let Some(journal) = journal {
+            let captured = await_output_completion(capture_receipts, std::time::Duration::ZERO);
+            if let Ok(mut journal) = journal.lock() {
+                journal.finish(frame.clone(), captured);
+            }
+            process_recovery::mark_completed(&recovery_for_exit, &id_for_exit);
+        }
         let _ = channel_for_exit.send(format!("##TRYLO_PROC_EXIT##{frame}"));
+        drop(tree_owner);
     });
 
     eprintln!("[rust]   process {id} registered, returning DTO");
@@ -342,10 +455,328 @@ pub async fn process_spawn(
     })
 }
 
+fn wait_for_observed_exit(
+    mut wait: impl FnMut() -> std::io::Result<std::process::ExitStatus>,
+    mut retry: impl FnMut(std::io::Error),
+) -> std::process::ExitStatus {
+    loop {
+        match wait() {
+            Ok(status) => return status,
+            // The reaper keeps the Child and registration while observation is
+            // unavailable. A wait failure cannot manufacture an exit receipt.
+            Err(error) => retry(error),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{redact_args, redact_env};
     use std::collections::HashMap;
+
+    #[cfg(all(windows, feature = "preview-ipc-tests"))]
+    #[test]
+    fn retained_team_output_survives_disconnected_channels_and_actual_exit() {
+        use crate::commands::process_recovery::{process_read_output, RecoveryIdentity};
+        use crate::commands::process_state::ProcessState;
+        use tauri::{ipc::Channel, Manager};
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let workspace = std::env::temp_dir().join(format!(
+            "trylo-output-recovery-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&workspace).unwrap();
+        let app = tauri::test::mock_builder()
+            .manage(ProcessState::default())
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .unwrap();
+        let disconnected = || {
+            Channel::<String>::new(|_| {
+                Err(tauri::Error::Io(std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    "isolated disconnected display",
+                )))
+            })
+        };
+        let node = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/runtime/node/win-x64/node.exe");
+        let occupied =
+            crate::commands::process_team_owner::acquire(workspace.to_str().unwrap(), "proof-chat")
+                .unwrap();
+        let blocked = tauri::async_runtime::block_on(super::process_spawn(
+            node.to_string_lossy().into_owned(),
+            vec!["-e".into(), "process.exit(0)".into()],
+            "duplicate-root-must-not-spawn".into(),
+            Some(workspace.to_string_lossy().into_owned()),
+            None,
+            Some("proof-workspace".into()),
+            Some("proof-chat".into()),
+            Some("denied-runtime-owner".into()),
+            Some(RecoveryIdentity {
+                team_run_id: "blocked-team".into(),
+                turn_id: "blocked-turn".into(),
+            }),
+            disconnected(),
+            disconnected(),
+            Some(true),
+            app.state(),
+        ));
+        drop(occupied);
+        assert!(
+            matches!(
+                blocked,
+                Err(crate::commands::error::CommandError::Validation { .. })
+            ),
+            "a duplicate root escaped its OS lease"
+        );
+        assert!(app
+            .state::<ProcessState>()
+            .processes
+            .lock()
+            .unwrap()
+            .is_empty());
+        let handle = tauri::async_runtime::block_on(super::process_spawn(
+            node.to_string_lossy().into_owned(),
+            vec!["-e".into(), "process.stdout.write('retained one\\nretained two\\n');process.stderr.write('retained diagnostic\\n');".into()],
+            "retained-output-proof".into(), Some(workspace.to_string_lossy().into_owned()), None, Some("proof-workspace".into()), Some("proof-chat".into()),
+            Some("runtime-owner".into()), Some(RecoveryIdentity { team_run_id: "proof-team".into(), turn_id: "proof-turn".into() }),
+            disconnected(), disconnected(), Some(true), app.state(),
+        )).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let snapshot = loop {
+            let output = process_read_output(&handle.id, 0, app.state()).unwrap();
+            let json = serde_json::to_value(output).unwrap();
+            if json["finished"] == true {
+                break json;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "owned fixture did not exit"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        };
+        assert_eq!(snapshot["process"]["identity"]["teamRunId"], "proof-team");
+        assert_eq!(snapshot["captureComplete"], true);
+        assert_eq!(snapshot["gap"], false);
+        assert_eq!(snapshot["exit"]["outputComplete"], false);
+        let records = snapshot["records"].as_array().unwrap();
+        assert_eq!(records.len(), 3);
+        assert!(records
+            .iter()
+            .any(|row| row["stream"] == "stderr" && row["line"] == "retained diagnostic"));
+        let stdout: Vec<_> = records
+            .iter()
+            .filter(|row| row["stream"] == "stdout")
+            .map(|row| row["line"].as_str().unwrap())
+            .collect();
+        assert_eq!(stdout, ["retained one", "retained two"]);
+        assert!(!app
+            .state::<ProcessState>()
+            .processes
+            .lock()
+            .unwrap()
+            .contains_key(&handle.id));
+        let release_deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while crate::commands::process_team_owner::process_team_owner_status(
+            workspace.to_str().unwrap(),
+            "proof-chat",
+        )
+        .unwrap()
+        {
+            assert!(
+                std::time::Instant::now() < release_deadline,
+                "exited root retained its lease"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let actual = std::fs::canonicalize(&workspace).unwrap();
+        assert!(actual.starts_with(std::fs::canonicalize(std::env::temp_dir()).unwrap()));
+        assert!(actual
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("trylo-output-recovery-"));
+        std::fs::remove_dir_all(actual).unwrap();
+    }
+
+    #[cfg(all(windows, feature = "preview-ipc-tests"))]
+    #[derive(Clone, Copy)]
+    enum TailProbe {
+        Stdout,
+        Stderr,
+        StalledStdout,
+    }
+
+    #[cfg(all(windows, feature = "preview-ipc-tests"))]
+    fn assert_exit_follows_delayed_output(probe: TailProbe) {
+        use std::sync::{mpsc, Mutex};
+        use std::time::Duration;
+        use tauri::ipc::Channel;
+        use tauri::Manager;
+        let stderr = matches!(probe, TailProbe::Stderr);
+        let deadline_expires = matches!(probe, TailProbe::StalledStdout);
+        let (entered, observed) = mpsc::channel();
+        let (release, held) = mpsc::channel();
+        let held = Mutex::new(held);
+        let (delivered, received) = mpsc::channel();
+        let delayed_delivery = delivered.clone();
+        let delayed = Channel::<String>::new(move |body| {
+            let line: String = body.deserialize().unwrap();
+            if line == "FINAL_TAIL_PROOF" {
+                entered.send(()).unwrap();
+                held.lock()
+                    .unwrap()
+                    .recv_timeout(Duration::from_secs(5))
+                    .unwrap();
+            }
+            delayed_delivery.send(line).unwrap();
+            Ok(())
+        });
+        let output = Channel::<String>::new(move |body| {
+            delivered
+                .send(body.deserialize::<String>().unwrap())
+                .unwrap();
+            Ok(())
+        });
+        let (stdout, stderr_channel) = if stderr {
+            (output, delayed)
+        } else {
+            (delayed, output)
+        };
+        let app = tauri::test::mock_builder()
+            .manage(crate::commands::process_state::ProcessState::default())
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .unwrap();
+        let node = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/runtime/node/win-x64/node.exe");
+        let script = format!(
+            "process.{}.write('FINAL_TAIL_PROOF\\n',()=>process.exit(0));",
+            if stderr { "stderr" } else { "stdout" }
+        );
+        let handle = tauri::async_runtime::block_on(super::process_spawn(
+            node.to_string_lossy().into_owned(),
+            vec!["-e".into(), script],
+            "native-tail-order-proof".into(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            stdout,
+            stderr_channel,
+            Some(stderr),
+            app.state(),
+        ))
+        .unwrap();
+        let paused = observed.recv_timeout(Duration::from_secs(3));
+        let early_exit = received
+            .recv_timeout(if deadline_expires {
+                Duration::from_secs(2)
+            } else {
+                Duration::from_millis(200)
+            })
+            .ok();
+        // Always release and collect the child's receipts before asserting.
+        let _ = release.send(());
+        let mut lines: Vec<String> = early_exit.iter().cloned().collect();
+        while lines.len() < 2 {
+            let Ok(line) = received.recv_timeout(Duration::from_secs(3)) else {
+                break;
+            };
+            lines.push(line);
+        }
+        assert!(
+            paused.is_ok(),
+            "real output did not enter the delayed native channel"
+        );
+        assert_tail_delivery(&lines, early_exit.as_deref(), probe);
+        assert!(!app
+            .state::<crate::commands::process_state::ProcessState>()
+            .processes
+            .lock()
+            .unwrap()
+            .contains_key(&handle.id));
+    }
+
+    #[cfg(all(windows, feature = "preview-ipc-tests"))]
+    fn assert_tail_delivery(lines: &[String], early_exit: Option<&str>, probe: TailProbe) {
+        let deadline_expires = matches!(probe, TailProbe::StalledStdout);
+        assert_eq!(
+            lines.len(),
+            2,
+            "expected actual tail plus a single exit receipt"
+        );
+        let receipt = if deadline_expires {
+            assert!(
+                early_exit.is_some(),
+                "actual exit waited forever for a stalled display"
+            );
+            assert_eq!(lines[1], "FINAL_TAIL_PROOF");
+            &lines[0]
+        } else {
+            assert!(
+                early_exit.is_none(),
+                "exit overtook pending tail output: {early_exit:?}"
+            );
+            assert_eq!(lines[0], "FINAL_TAIL_PROOF");
+            &lines[1]
+        };
+        let facts: serde_json::Value =
+            serde_json::from_str(receipt.strip_prefix("##TRYLO_PROC_EXIT##").unwrap()).unwrap();
+        assert_eq!(facts["outputComplete"], !deadline_expires);
+        assert_eq!(
+            facts["stderrLines"],
+            u64::from(matches!(probe, TailProbe::Stderr))
+        );
+    }
+
+    #[cfg(all(windows, feature = "preview-ipc-tests"))]
+    #[test]
+    fn exit_receipt_follows_delayed_stdout_from_a_real_child() {
+        assert_exit_follows_delayed_output(TailProbe::Stdout);
+    }
+
+    #[cfg(all(windows, feature = "preview-ipc-tests"))]
+    #[test]
+    fn exit_receipt_follows_delayed_stderr_from_a_real_child() {
+        assert_exit_follows_delayed_output(TailProbe::Stderr);
+    }
+
+    #[cfg(all(windows, feature = "preview-ipc-tests"))]
+    #[test]
+    fn a_stalled_stdout_display_cannot_hold_the_real_exit_receipt_forever() {
+        assert_exit_follows_delayed_output(TailProbe::StalledStdout);
+    }
+
+    #[test]
+    fn failed_waits_are_not_converted_into_an_exit_receipt() {
+        #[cfg(not(windows))]
+        use std::os::unix::process::ExitStatusExt;
+        #[cfg(windows)]
+        use std::os::windows::process::ExitStatusExt;
+        let attempts = std::cell::Cell::new(0);
+        let retries = std::cell::Cell::new(0);
+        let status = super::wait_for_observed_exit(
+            || {
+                attempts.set(attempts.get() + 1);
+                if attempts.get() <= 2 {
+                    Err(std::io::ErrorKind::Interrupted.into())
+                } else {
+                    Ok(std::process::ExitStatus::from_raw(0))
+                }
+            },
+            |_| {
+                retries.set(retries.get() + 1);
+            },
+        );
+        assert!(status.success());
+        assert_eq!(attempts.get(), 3);
+        assert_eq!(retries.get(), 2);
+    }
 
     #[test]
     fn redact_env_never_prints_values() {

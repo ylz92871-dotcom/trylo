@@ -1,6 +1,9 @@
 import { EMPTY_PROFILE, type ProfilePort } from "../contract/profile.js";
 import type { Message } from "../contract/execution.js";
 import type { IterationBudget } from "../domain/iteration.js";
+import { subagentToolActivity } from "../protocol/subagent-activity.js";
+import { createSubagentObserver } from "../protocol/subagent-observation.js";
+import { withMemberReporting, MEMBER_REPORTING_INSTRUCTIONS } from "./user-progress.js";
 import type { PermissionGrantCache } from "../loop/permission-grants.js";
 import { runTurn, type LoopPorts, type RunTurnRequest, type RunTurnResult } from "../loop/runner.js";
 import type { PermissionPort } from "../ports/permission.js";
@@ -10,7 +13,9 @@ import type { Envelope } from "../protocol/envelope.js";
 import type { Transcript } from "../protocol/transcript.js";
 import type { SubagentContext, SubagentWorker } from "./types.js";
 import { createGovernedChildProvider } from "./child-provider.js";
-import { inheritedGrantView, SUBAGENT_PERMISSION } from "./inherited-authority.js";
+import { inheritedGrantView, inheritedPermission } from "./inherited-authority.js";
+import { createChildProviderSession } from "./child-provider-session.js";
+import { childCompaction, DEFAULT_CHILD_CONTEXT_TOKENS } from "./context-budget.js";
 
 /**
  * ChildAttemptWorker — Subagent Real Executor backed by re-entering the existing loop.
@@ -108,12 +113,16 @@ export function createChildAttemptWorker(
   options: ChildAttemptFactoryOptions,
 ): SubagentWorker<ChildAttemptResult> {
   return async (context: SubagentContext): Promise<ChildAttemptResult> => {
+    const publish = context.reportObservation ?? (() => {});
+    const observe = createSubagentObserver(publish);
+    const session = createChildProviderSession(options.provider);
     const grants = inheritedGrantView(context.inheritedGrants ?? options.grants);
     // 1. Build child ports using existing parent ports + context.tools (already bounded)
     const childPorts: LoopPorts = {
-      provider: createGovernedChildProvider(options.provider, context),
-      tools: context.tools, // already wrapped by createSubagentToolBoundary!
-      permission: SUBAGENT_PERMISSION,
+      provider: createGovernedChildProvider(session.provider, context),
+      compaction: childCompaction(session.provider),
+      tools: withMemberReporting(context.tools, publish, () => 1),
+      permission: inheritedPermission(options.permission),
       profile: options.profile ?? DEFAULT_PROFILE_PORT,
       ...(options.sandbox !== undefined ? { sandbox: options.sandbox } : {}),
       ...(grants === undefined ? {} : { grants }),
@@ -127,11 +136,14 @@ export function createChildAttemptWorker(
       turnId: childTurnId,
       correlationId: context.lineage.rootAttemptId,
       text: options.prompt,
-      ...(options.callerMessages === undefined ? {} : { callerMessages: options.callerMessages }),
+      callerMessages: [...(options.callerMessages ?? []), { role: "system", content: MEMBER_REPORTING_INSTRUCTIONS }],
       ...(options.model !== undefined ? { model: options.model } : {}),
-      ...(options.budget !== undefined ? { budget: options.budget } : {}),
+      budget: { contextTokenLimit: DEFAULT_CHILD_CONTEXT_TOKENS, ...options.budget },
       cancelSignal: context.signal,
       onEnvelope: (env) => {
+        observe(env, 1);
+        const activity = subagentToolActivity(env);
+        if (activity !== undefined) context.reportTool?.(activity);
         const stamped: Envelope = {
           ...env,
           attemptId: context.lineage.rootAttemptId,
@@ -141,28 +153,30 @@ export function createChildAttemptWorker(
     };
 
     // 3. Re-enter the existing turn loop (D1: NO second loop)
-    const result: RunTurnResult = await runTurn(childPorts, childRequest);
+    try {
+      const result: RunTurnResult = await runTurn(childPorts, childRequest);
 
-    // Usage has already been charged once per provider response, not per turn.
-    // Extract output and report progress.
-    const output = extractAssistantText(result.transcript);
-    const terminalReason = result.state.terminalReason;
-    const isCompleted = terminalReason === "completed";
+      // Usage has already been charged once per provider response, not per turn.
+      // Extract output and report progress.
+      const output = extractAssistantText(result.transcript);
+      const terminalReason = result.state.terminalReason;
+      const isCompleted = terminalReason === "completed";
 
-    context.reportProgress(
-      isCompleted ? "Child attempt completed" : `Child attempt ended: ${terminalReason ?? "unknown"}`,
-      100,
-    );
+      context.reportProgress(
+        isCompleted ? "Child attempt completed" : `Child attempt ended: ${terminalReason ?? "unknown"}`,
+        100,
+      );
 
-    requireCompletedChild(result);
+      requireCompletedChild(result);
 
-    return {
-      status: "completed",
-      terminalReason,
-      output,
-      usage: result.usage,
-      transcript: result.transcript,
-      envelopes: result.envelopes,
-    };
+      return {
+        status: "completed",
+        terminalReason,
+        output,
+        usage: result.usage,
+        transcript: result.transcript,
+        envelopes: result.envelopes,
+      };
+    } finally { session.close(); }
   };
 }

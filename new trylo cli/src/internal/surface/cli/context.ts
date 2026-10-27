@@ -20,7 +20,7 @@ export type CliContext = {
   readonly bootstrapContext?: BootstrapContext;
   readonly userSourceAvailable?: false;
   /** Structured UI approval and ownership lifecycle; absent keeps text approval. */
-  readonly approval?: Pick<InteractivePermissionIo, "requestApproval" | "onApproval">;
+  readonly approval?: Pick<InteractivePermissionIo, "requestApproval" | "onApproval" | "supportsMemberApproval">;
   /** Actual run events and timestamps for phase timing; observer cannot grant authority. */
   readonly onRunEnvelope?: (envelope: Envelope) => void;
   readonly env: Readonly<Record<string, string | undefined>>;

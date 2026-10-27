@@ -36,6 +36,7 @@
 @import './styles/components/tool-summary.css';
 @import './styles/components/mode-popover.css';
 @import './styles/components/model-selector.css';
+@import './styles/components/context-window-fields.css';
 @import './styles/components/thinking-card.css';
 @import './styles/components/code-reasoning-transcript.css';
 @import './styles/components/compaction-card.css';

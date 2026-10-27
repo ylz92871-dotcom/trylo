@@ -10,6 +10,9 @@ import { systemTimerScheduler, type TimerScheduler } from "./scheduler.js";
 import { observeSettlement } from "./settlement.js";
 import { accumulatedBudget } from "./budget-snapshot.js";
 import { inheritedGrantView } from "./inherited-authority.js";
+import { scopeToolCalls } from "./scoped-tool-calls.js";
+import type { SubagentToolActivity } from "../protocol/subagent-activity.js";
+import type { SubagentObservation } from "../protocol/subagent-observation.js";
 import type {
   SubagentContext,
   SubagentHandle,
@@ -205,6 +208,7 @@ export class SubagentRuntime {
 
     // Emit subagent_spawn event (attributed to rootAttemptId)
     const spawnPayload: Record<string, unknown> = {
+      ...request.teamMember,
       subagentId,
       name: request.name,
       ...(request.lineage.toolCallId ? { toolCallId: request.lineage.toolCallId } : {}),
@@ -394,11 +398,31 @@ export class SubagentRuntime {
    * first is the answer. That is what stops a late success from reviving a run
    * that was already settled.
    */
+  private reportTool(subagentId: string, activity: SubagentToolActivity): void {
+    const record = this.active.get(subagentId);
+    if (record === undefined || record.request.teamMember === undefined || isTerminalStatus(record.status)) return;
+    this.emitEvent("subagent_update", { subagentId, status: "running", activity,
+      ...record.request.teamMember,
+      ...(record.request.agentType === undefined ? {} : { agentType: record.request.agentType }),
+      taskId: record.request.continuation?.taskId ?? subagentId }, record.request.lineage.rootAttemptId);
+  }
+
+  private reportObservation(subagentId: string, observation: SubagentObservation): void {
+    const record = this.active.get(subagentId);
+    if (record === undefined || isTerminalStatus(record.status)) return;
+    this.emitEvent("subagent_update", { subagentId, status: "running", observation: { ...observation, round: observation.round + (record.request.continuation?.roundOffset ?? 0) },
+      ...record.request.teamMember, round: observation.round + (record.request.continuation?.roundOffset ?? 0),
+      ...(record.request.agentType === undefined ? {} : { agentType: record.request.agentType }),
+      taskId: record.request.continuation?.taskId ?? subagentId }, record.request.lineage.rootAttemptId);
+  }
+
   reportRound(subagentId: string, update: { readonly status: "running" | "waiting"; readonly round: number;
     readonly prompt?: string; readonly result?: string; readonly displayName?: string }): void {
     const record = this.active.get(subagentId);
     if (record === undefined || isTerminalStatus(record.status)) return;
     this.emitEvent("subagent_update", { subagentId, taskId: record.request.continuation?.taskId ?? subagentId,
+      ...record.request.teamMember,
+      ...(record.request.agentType === undefined ? {} : { agentType: record.request.agentType }),
       budget: accumulatedBudget(this.governance.snapshot(subagentId), record.request.budgetBefore), ...update }, record.request.lineage.rootAttemptId);
   }
 
@@ -429,6 +453,8 @@ export class SubagentRuntime {
 
     // Emit subagent_end event
     const endPayload: Record<string, unknown> = {
+      ...record.request.teamMember,
+      ...(record.request.agentType === undefined ? {} : { agentType: record.request.agentType }),
       subagentId: record.subagentId,
       status,
       taskId: record.request.continuation?.taskId ?? record.subagentId,
@@ -526,10 +552,11 @@ export class SubagentRuntime {
     }
 
     const boundedTools = createSubagentToolBoundary(
-      this.tools,
+      scopeToolCalls(this.tools, `subagent:${record.subagentId}`, record.request.continuation?.taskId ?? record.subagentId),
       record.request.permissions,
       record.request.lineage,
       record.abortController.signal,
+      record.request.localTools,
     );
 
     const reportProgress = (message: string, percentage?: number | undefined): void => {
@@ -557,6 +584,8 @@ export class SubagentRuntime {
       signal: record.abortController.signal,
       tools: boundedTools,
       reportProgress,
+      reportTool: activity => { this.reportTool(record.subagentId, activity); },
+      reportObservation: event => { this.reportObservation(record.subagentId, event); },
       recordUsage,
       setActivity: activity => { this.governance.setActivity(record.subagentId, activity); },
       inheritedGrants: inheritedGrantView(record.request.permissions.inheritedGrants),

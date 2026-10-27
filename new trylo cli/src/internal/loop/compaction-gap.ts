@@ -90,7 +90,7 @@ export async function runCompactionFor(
   // gap, where no stream is in flight and no envelope ordering can be broken.
   ledger.attempted = true;
   options?.onStart?.(estimated);
-  const summary = await wiring.summarize(projected.view.items, projected.view.window?.summary, options?.signal);
+  const summary = await wiring.summarize(projected.view.items, projected.view.window?.summary, options?.signal, input.transcript);
   if (options?.signal?.aborted) return { events: [degradation("cancelled")], storedWindow: false, projectedPromptTokens: estimated };
   const drafted = wiring.port.compact({
     records,

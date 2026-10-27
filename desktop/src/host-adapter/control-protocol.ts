@@ -15,12 +15,37 @@
 // {"type":"control_cancel_request","request_id":"…"}. Shapes verified
 // against the CLI bundle (migration spec §6.4, Code path).
 
+/** Display provenance from the owning CLI; never an alternate permission owner. */
+export interface MemberApprovalRequester {
+  readonly kind: 'subagent';
+  readonly taskId: string;
+  readonly executionId: string;
+  readonly teamRunId: string;
+  readonly memberId: string;
+  readonly displayName: string;
+  readonly role: string;
+}
+
+function memberRequester(value: unknown): MemberApprovalRequester | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const r = value as Record<string, unknown>;
+  const text = (key: string): string | undefined => {
+    const field = r[key];
+    return typeof field === 'string' && field.trim().length > 0 && field.length <= 256 ? field : undefined;
+  };
+  const taskId = text('taskId'); const executionId = text('executionId'); const teamRunId = text('teamRunId');
+  const memberId = text('memberId'); const displayName = text('displayName'); const role = text('role');
+  if (r['kind'] !== 'subagent' || !taskId || !executionId || !teamRunId || !memberId || !displayName || !role) return undefined;
+  return { kind: 'subagent', taskId, executionId, teamRunId, memberId, displayName, role };
+}
+
 export interface ControlPermissionFrame {
   readonly kind: 'permission';
   readonly requestId: string;
   readonly toolName: string;
   readonly input: Record<string, unknown>;
   readonly title?: string;
+  readonly requester?: MemberApprovalRequester;
 }
 
 export interface ControlCancelFrame {
@@ -74,10 +99,12 @@ export function parseControlFrame(parsed: unknown): ControlFrame | null {
     if (r['subtype'] !== 'can_use_tool') return null;
     const toolName = typeof r['tool_name'] === 'string' ? r['tool_name'] : '';
     if (!toolName) return null;
+    const requester = memberRequester(r['requester']);
     return {
       kind: 'permission',
       requestId,
       toolName,
+      ...(requester ? { requester } : {}),
       input:
         r['input'] && typeof r['input'] === 'object' && !Array.isArray(r['input'])
           ? (r['input'] as Record<string, unknown>)

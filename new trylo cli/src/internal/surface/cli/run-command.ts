@@ -222,7 +222,7 @@ export async function prepareRun(
   const workspaceId = workspaceIdentity(root);
   const projectContext = projectContextFor(ctx, root);
   const sessionId = input.options.session ?? input.options.resume ?? ctx.newId("eph");
-  const contextTokenLimit = effectiveContextCeiling(settings.contextTokenLimit, selection.contextWindow);
+  const contextTokenLimit = effectiveContextCeiling(settings.contextTokenLimit, selection.contextWindow, settings.modelContextWindow);
   // WP18.2/18.3: caller prompt, schema and fallback resolve here — files are
   // read once at preparation, and anything unusable refuses the run before a
   // session opens or a request is sent.

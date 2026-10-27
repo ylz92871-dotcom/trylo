@@ -45,6 +45,9 @@
 
 export type ApiFormat = 'anthropic' | 'openai';
 import { parseReasoningEffort, type ReasoningEffort } from './reasoning-effort';
+import { parseModelContextPreferences, type ModelContextPreferences } from './context-window';
+import { parseModelReasoningPreferences, type ModelReasoningPreferences } from './model-reasoning';
+import { isLegacyRuntimeDefaultCliPath } from '../runtime/cli-runtime-path-defaults';
 export type SettingsSaveIntent = 'connection' | 'preferences';
 /** Legacy permission mode kept only for one-way migration (P2, spec §4.4).
  *  New code must consume `PermissionLevel` from
@@ -209,6 +212,9 @@ export function removeProfile(s: TryloSettings, id: string): TryloSettings {
 }
 
 export interface TryloSettings {
+  /** Working windows and declared capacities, scoped to endpoint/protocol/model. */
+  readonly modelContextPreferences?: ModelContextPreferences;
+  readonly modelReasoningPreferences?: ModelReasoningPreferences;
   // ── Primary connection ──────────────────────────────────
   readonly apiKey: string;
   readonly apiHost: string;
@@ -289,8 +295,8 @@ export interface TryloSettings {
   /**
    * P08 §4.1: which CLI runtime contract Desktop spawns.
    *
-   * Public source builds default to `trylo-v1`. Explicitly stored runtime
-   * choices are preserved; a legacy engine must be configured externally.
+   * Standard development and release builds select `trylo-v1`, including old
+   * stored choices. Compatibility builds can configure an external legacy engine.
    */
   readonly cliRuntimeProtocol: CliRuntimeProtocol;
   /** The settings picker is authoritative over a checkout's preview default. */
@@ -301,6 +307,8 @@ const STORAGE_KEY = 'trylo:settings:v1';
 const STORAGE_BACKUP_KEY = 'trylo:settings:v1:backup';
 
 const DEFAULTS: TryloSettings = {
+  modelContextPreferences: {},
+  modelReasoningPreferences: {},
   apiKey: '',
   apiHost: '',
   apiModel: '',
@@ -323,8 +331,8 @@ const DEFAULTS: TryloSettings = {
   workComputer: true,
   workCad: false,
   hermesWorkLearning: true,
-  cliPath: 'C:/trylo-cli/cli.js',
-  workspace: 'C:/work/demo-ws',
+  cliPath: '',
+  workspace: '',
   userLearning: { ...DEFAULT_USER_LEARNING_SETTINGS },
   cliRuntimeProtocol: DEFAULT_CLI_RUNTIME_PROTOCOL,
 };
@@ -493,6 +501,8 @@ function migrateSettings(value: unknown): TryloSettings | null {
     resolvedLevel = DEFAULT_PERMISSION_LEVEL;
   }
   return {
+    modelContextPreferences: parseModelContextPreferences(stored['modelContextPreferences']),
+    modelReasoningPreferences: parseModelReasoningPreferences(stored['modelReasoningPreferences']),
     apiKey: stringValue(stored['apiKey'], DEFAULTS.apiKey),
     apiHost: stringValue(stored['apiHost'], DEFAULTS.apiHost),
     apiModel: stringValue(stored['apiModel'], DEFAULTS.apiModel),
@@ -606,12 +616,12 @@ export function loadSettings(): TryloSettings {
   const settings = typeof window === 'undefined' ? DEFAULTS
     : parseStoredSettings(window.localStorage.getItem(STORAGE_KEY))
       ?? parseStoredSettings(window.localStorage.getItem(STORAGE_BACKUP_KEY)) ?? DEFAULTS;
-  // A new-only update has no compatibility engine to resolve. Keep connection,
+  // Standard development and release builds use the new CLI. Keep connection,
   // authority and original storage intact, but select protocol and entry together.
   if (isNewCliOnlyDistribution()) {
     return { ...settings, cliRuntimeProtocol: 'trylo-v1',
       cliPath: settings.cliRuntimeProtocol === 'legacy-stream-json'
-        || settings.cliPath === DEFAULTS.cliPath ? '' : settings.cliPath };
+        || isLegacyRuntimeDefaultCliPath(settings.cliPath) ? '' : settings.cliPath };
   }
   const preview = import.meta.env.DEV
     ? parseCliRuntimeProtocol(import.meta.env.VITE_TRYLO_CLI_RUNTIME_PROTOCOL) : null;

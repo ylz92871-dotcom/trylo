@@ -292,7 +292,7 @@ export function handleProvidersConfig(ctx: CliContext, options: ProvidersConfigO
     ...(value.contextWindow === undefined ? {} : { contextWindow: value.contextWindow }),
     origin: registry.entries.find(entry => entry.id === value.providerId)?.builtin === true ? "builtin" : PROVIDERS_FILE_NAME,
     credential: credentialStateOf(ctx, value.kind, value.accountId),
-    budget: resolverForBudget({ ...value, builtin: registry.entries.find(entry => entry.id === value.providerId)?.builtin === true }, settings.contextTokenLimit),
+    budget: resolverForBudget({ ...value, builtin: registry.entries.find(entry => entry.id === value.providerId)?.builtin === true }, settings.contextTokenLimit, settings.modelContextWindow),
   };
   ctx.stdout(options.json ? `${JSON.stringify(payload)}\n` : renderConfig(payload));
   return EXIT_CODES.OK;

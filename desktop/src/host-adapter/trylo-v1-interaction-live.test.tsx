@@ -81,7 +81,7 @@ it('streams before completion, displays a real question, awaits an approval clic
     const a = await screen.findByRole('checkbox', { name: /方向 A/ }, { timeout: 12000 });
     expect(requests).toHaveLength(1); expect(permissions.list()).toHaveLength(0);
     fireEvent.click(a); fireEvent.click(screen.getByRole('checkbox', { name: /方向 B/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    fireEvent.click(screen.getByRole('button', { name: '提交回答' }));
     const approve = await screen.findByRole('button', { name: '批准并继续' }, { timeout: 12000 });
     expect(existsSync(join(workspace, 'proof.txt'))).toBe(false);
     expect(requests).toHaveLength(2);

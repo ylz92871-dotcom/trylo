@@ -75,6 +75,7 @@ export type {
  */
 
 export type WiringInput = {
+  readonly contextTokenLimit?: number;
   readonly execPolicy?: ExecPolicyGuard;
   readonly toolSelection?: readonly string[];
   readonly workflowRecords?: readonly SessionRecord[];
@@ -279,6 +280,7 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
 
   if (isSubagentEnabled) {
     const built = buildSubagentPorts({
+      sessions,
       parentTools: finalTools,
       parentProvider: provider,
       workspaceTools,
@@ -288,6 +290,7 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
           : provider,
       model: input.model,
       permission: input.permission,
+      ...(input.contextTokenLimit === undefined ? {} : { childBudget: { contextTokenLimit: input.contextTokenLimit } }),
       grants,
       ...(input.execPolicy === undefined ? {} : { execPolicy: input.execPolicy }),
       callerMessages: input.callerMessages,
@@ -300,6 +303,7 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
         ? {}
         : { idGenerator: input.subagent.idGenerator }),
       ...(input.subagent?.roles === undefined ? {} : { roles: input.subagent.roles }),
+      ...(input.subagent?.team === undefined ? {} : { team: input.subagent.team }),
     });
     subagentRuntime = built.runtime;
     parentProvider = built.provider;
@@ -329,7 +333,9 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
         ...(input.nowMs === undefined ? { at: "1970-01-01T00:00:00.000Z" } : {}),
         // Absent means the shipped extractive author, byte for byte as before.
         ...(input.compactSummary === "model"
-          ? { summarize: createModelSummarizer({ provider, model: input.model }) }
+          ? { summarize: createModelSummarizer({ provider, model: input.model,
+            ...(input.contextTokenLimit === undefined ? {} : { contextTokenLimit: input.contextTokenLimit }),
+          }) }
           : {}),
       }),
       // Injected only when the switch asked for it. Absent means the loop never

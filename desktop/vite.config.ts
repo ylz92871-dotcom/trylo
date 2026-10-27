@@ -112,6 +112,8 @@ export default defineConfig({
   // Library can renderHook + act in the test env. Tauri APIs
   // are not available; tests that need them mock @tauri-apps/api.
   test: {
+    // Native node:test probes run separately against real Windows processes.
+    exclude: ['**/node_modules/**', '**/dist/**', 'scripts/**/*.platform.test.mjs'],
     environment: 'jsdom',
     globals: true,
     // Stub the heavy monaco-editor package at test time so tests

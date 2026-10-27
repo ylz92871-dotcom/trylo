@@ -45,9 +45,13 @@ export type TerminalFacts = {
   readonly finishReason: string;
 };
 
+/** Earlier replies cannot answer a newer user input, including a resumed turn
+ * that failed before producing any assistant text or a mid-turn correction.
+ */
 export function lastMessageOf(transcript: Transcript): string {
   for (let index = transcript.length - 1; index >= 0; index -= 1) {
     const item = transcript[index];
+    if (item?.kind === "user") return "";
     if (item !== undefined && item.kind === "assistant_text") {
       return item.text;
     }

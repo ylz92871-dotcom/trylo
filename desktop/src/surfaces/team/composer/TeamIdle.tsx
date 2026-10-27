@@ -66,17 +66,17 @@ export function TeamIdle(props: TeamIdleProps): ReactElement {
       <p className="team-idle__section">模板</p>
       <div className="team-idle__rows" role="list">
         {templates.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="listitem"
-            className="team-idle__row"
-            onClick={() => openComposer(t.id)}
-            disabled={!live}
-          >
-            <span className="team-idle__row-title">{t.title}</span>
-            <span className="team-idle__row-roster">{t.roster}</span>
-          </button>
+          <div key={t.id} role="listitem">
+            <button
+              type="button"
+              className="team-idle__row"
+              onClick={() => openComposer(t.id)}
+              disabled={!live}
+            >
+              <span className="team-idle__row-title">{t.title}</span>
+              <span className="team-idle__row-roster">{t.roster}</span>
+            </button>
+          </div>
         ))}
       </div>
 

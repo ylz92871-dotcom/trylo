@@ -26,6 +26,27 @@ export interface ProcessOutputEvent {
   readonly line: string;
 }
 
+export interface ProcessRecoveryIdentity { readonly teamRunId: string; readonly turnId: string }
+export interface RecoverableProcess {
+  readonly id: ProcessId;
+  readonly pid: number;
+  readonly projectKey: string;
+  readonly conversationId: string;
+  readonly identity: ProcessRecoveryIdentity;
+}
+export interface RetainedProcessOutput {
+  readonly version: 1;
+  readonly process: RecoverableProcess;
+  readonly records: readonly { readonly sequence: number; readonly stream: 'stdout' | 'stderr'; readonly line: string }[];
+  readonly nextSequence: number;
+  readonly hasMore: boolean;
+  readonly gap: boolean;
+  readonly finished: boolean;
+  readonly captureComplete: boolean;
+  readonly exit: ProcessExitInfo | null;
+  readonly answeredRequests: readonly string[];
+}
+
 /** Payload of the Rust `##TRYLO_PROC_EXIT##` control frame. */
 export interface ProcessExitInfo {
   readonly id: ProcessId;
@@ -35,6 +56,10 @@ export interface ProcessExitInfo {
   /** Terminating signal, or null on Windows / when not signalled
    *  (spec §5.3 #5 — present so the wire format is platform-stable). */
   readonly signal: number | null;
+  /** False when native draining or the separate stderr delivery timed out. */
+  readonly outputComplete?: boolean;
+  /** Successfully queued stderr lines, for ordering independent IPC channels. */
+  readonly stderrLines?: number;
 }
 
 /** A live process plus its debug attribution (from `process_list`). */
@@ -70,6 +95,8 @@ export interface ProcessService {
     env?: Readonly<Record<string, string>>;
     /** Debug attribution, surfaced by `list()` for diagnostics. */
     metadata?: Readonly<{ projectKey?: string; conversationId?: string; runId?: string }>;
+    /** Opt-in shell retention for a frozen team; no prompt or environment metadata. */
+    recoveryIdentity?: ProcessRecoveryIdentity;
     onOutput: (line: string) => void;
     /** P08 §4.2: stderr lines, on their own channel. Omit to discard. */
     onStderr?: (line: string) => void;
@@ -97,4 +124,9 @@ export interface ProcessService {
 
   /** List live processes (for debug panels). */
   list(): Promise<readonly LiveProcessInfo[]>;
+  /** Optional for browser/older hosts. Includes bounded recent exited roots. */
+  recoveryList?(): Promise<readonly RecoverableProcess[]>;
+  readOutput?(id: ProcessId, afterSequence: number): Promise<RetainedProcessOutput>;
+  /** OS lease probe; true can include a root owned by a different Native shell. */
+  hasTeamOwner?(workspaceRoot: string, conversationId: string): Promise<boolean>;
 }

@@ -1,4 +1,4 @@
-Trylo Desktop 1.0.6 - new CLI only
+Trylo Desktop 1.1.0 - new CLI only
 
 This update contains only the new Trylo CLI (trylo-v1) and a fixed Node runtime.
 No legacy CLI or CoWork runtime is bundled. No system Node is required.

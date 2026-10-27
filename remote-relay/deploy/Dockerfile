@@ -4,6 +4,7 @@ WORKDIR /app
 RUN mkdir /data && chown node:node /data
 COPY server.cjs ./server.cjs
 COPY admin-account.cjs ./admin-account.cjs
+COPY model-admin.cjs ./model-admin.cjs
 COPY web ./web
 COPY licenses ./licenses
 USER node

@@ -57,13 +57,13 @@ export function createSessionView(view: SessionView): ProcessSessionRegistry {
       return view.pipes.maxSessions + (view.pty?.maxSessions ?? 0);
     },
 
-    async start(request: Parameters<ProcessSessionRegistry["start"]>[0]) {
+    async start(request: Parameters<ProcessSessionRegistry["start"]>[0], signal?: AbortSignal) {
       // Not merged on purpose. Which transport a command needs is not knowable
       // from the call — a program decides that by whether it checks for a
       // terminal — so this forwards to the pipes registry, which is the one the
       // `runInBackground` branch starts through. A caller that needs a real
       // terminal asks for one explicitly rather than getting a guess.
-      return await view.pipes.start(request);
+      return await view.pipes.start(request, signal);
     },
 
     async write(request: ProcessSessionWrite): Promise<ProcessSessionWriteResult> {

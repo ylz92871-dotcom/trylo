@@ -31,6 +31,7 @@ const stopCalls: string[] = [];
 let holdSpawn = false;
 let releaseSpawn: () => void = () => {};
 let failSpawn = false;
+let failStop = false;
 
 vi.mock('@tauri-apps/api/core', () => {
   return {
@@ -78,6 +79,7 @@ vi.mock('../host-adapter/index', async () => {
         },
         stop: async (processId: string) => {
           stopCalls.push(processId);
+          if (failStop) throw new Error('native stop failed');
         },
         list: async () => [],
       },
@@ -99,6 +101,7 @@ import { ConversationRunSupervisor } from './conversation-run-supervisor';
 import type { SettingsForCodeRun } from './runtime-types';
 
 const baseSettings: SettingsForCodeRun = {
+  cliRuntimeProtocol: 'legacy-stream-json',
   cliPath: 'D:/cli/cli.js',
   cwd: 'D:/work',
 };
@@ -295,14 +298,24 @@ describe('ConversationRunSupervisor (M4-A Code lifecycle)', () => {
     // flight must stop THAT run and drop its controller — it must
     // not become an orphan that keeps projecting to a deleted
     // conversation, and Stop B is untouched.
-    sup.removeConversation('proj', 'convA');
-    await Promise.resolve(); // let the fire-and-forget stop settle
+    await sup.removeConversation('proj', 'convA');
     expect(stopCalls).toContain('proc-1');
     expect(stopCalls).not.toContain('proc-2');
     // Controller is gone → getViewState falls back to idle default.
     expect(sup.getViewState('proj', 'convA').running).toBe(false);
     expect(sup.getViewState('proj', 'convB').running).toBe(true);
     expect(sup.activeCodeRuns().map((r) => r.conversationId)).toEqual(['convB']);
+  });
+
+  it('retains a conversation controller when native stop fails during removal', async () => {
+    const sup = new ConversationRunSupervisor();
+    await sup.runCode('proj', 'conv-kept', request('keep the owner'));
+    failStop = true;
+    try {
+      await expect(Promise.resolve(sup.removeConversation('proj', 'conv-kept'))).rejects.toThrow('native stop failed');
+      expect(sup.getViewState('proj', 'conv-kept')).toMatchObject({ running: true, error: true });
+      expect(sup.activeCodeRuns().map(run => run.conversationId)).toContain('conv-kept');
+    } finally { failStop = false; await sup.stopAll(); }
   });
 
   it('stopWorkspace stops+disposes every run of a project, leaves others (P1-2)', async () => {

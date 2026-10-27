@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from 'react';
+import { useRef, type ReactElement, type ReactNode } from 'react';
 import { TeamSurface } from './team/TeamSurface';
 import type { CollaborationSurface } from './types';
 import type { TeamRun } from './team/team-types';
@@ -6,6 +6,8 @@ import type { TeamProfile } from './team/team-profile-types';
 import type { ModelChoice } from './team/composer/composer-store';
 
 export interface SurfaceHostProps {
+  readonly teamApprovals?: ReactNode;
+  readonly onTeamMemberInput?: import('../host-adapter/subagent-contract').SendSubagentInput;
   readonly collaborationSurface: CollaborationSurface;
   /** The current Person (Code/Work) view. Pass the existing ChatPanel
    *  as `children` so the Person surface stays byte-identical to today. */
@@ -46,9 +48,14 @@ export interface SurfaceHostProps {
  * fixture lives in tests only.
  */
 export function SurfaceHost(props: SurfaceHostProps): ReactElement {
+  const memberDrafts = useRef(new Map<string, string>());
   if (props.collaborationSurface === 'team') {
     return (
       <TeamSurface
+        personView={props.personView}
+        approvals={props.teamApprovals}
+        memberDrafts={memberDrafts.current}
+        onMemberInput={props.onTeamMemberInput}
         run={props.teamRun}
         composerLive={props.composerLive}
         composerDisabledReason={props.composerDisabledReason}

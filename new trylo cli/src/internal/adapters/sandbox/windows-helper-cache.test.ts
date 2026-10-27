@@ -4,7 +4,7 @@ import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, sym
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { cacheWindowsHelper } from "./windows-helper-cache.js";
+import { cacheWindowsBytes, cacheWindowsHelper } from "./windows-helper-cache.js";
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "trylo-native-cache-"));
@@ -73,5 +73,17 @@ test("the host helper cannot be provisioned inside a granted write root", () => 
   try {
     assert.throws(() => Reflect.apply(cacheWindowsHelper, undefined, [fx.source, fx.directory, () => undefined, [fx.root]]), /write root|workspace/);
     assert.equal(existsSync(fx.directory), false);
+  } finally { rmSync(fx.root, { recursive: true, force: true }); }
+});
+
+test("captured bridge bytes do not re-read a source changed after admission", () => {
+  const fx = fixture();
+  try {
+    const captured = readFileSync(fx.source.path);
+    writeFileSync(fx.source.path, "untrusted replacement after admission");
+    const cached = cacheWindowsBytes(captured, fx.source.sha256, fx.directory, "bridge.js", () => undefined);
+    assert.equal(readFileSync(cached, "utf8"), fx.bytes);
+    assert.throws(() => cacheWindowsBytes(Buffer.from("changed"), fx.source.sha256, fx.directory, "bridge.js", () => assert.fail("no protection on invalid input")), /invalid captured/);
+    assert.throws(() => cacheWindowsBytes(captured, fx.source.sha256, fx.directory, "../outside.js", () => assert.fail("no traversal")), /invalid captured/);
   } finally { rmSync(fx.root, { recursive: true, force: true }); }
 });

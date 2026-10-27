@@ -49,6 +49,82 @@ function memoryIo(initial?: Record<string, string>) {
 }
 
 describe('team-runs-cache', () => {
+  it('routes a background workspace save to its own history after a workspace switch', async () => {
+    const { io, files } = memoryIo();
+    configureTeamRunsCache(io);
+    await loadTeamRunsForWorkspace('D:/first', 'ws-first');
+    await upsertTeamRun(run({ id: 'first' }));
+    await loadTeamRunsForWorkspace('D:/second', 'ws-second');
+    await upsertTeamRun(run({ id: 'second' }));
+    const save = upsertTeamRun as (value: PersistableTeamRun, workspace?: string) => Promise<void>;
+    await save(run({ id: 'first', status: 'completed', updatedAt: 9 }), 'ws-first');
+    expect(teamRunsSnapshot().map(value => value.id)).toEqual(['second']);
+    expect(JSON.parse(files.get('D:/first/.trylo/team-runs.json')!).runs[0].status).toBe('completed');
+    expect(JSON.parse(files.get('D:/second/.trylo/team-runs.json')!).runs.map((value: { id: string }) => value.id)).toEqual(['second']);
+  });
+
+  it('merges events received during a slow initial history read before saving', async () => {
+    const { io, files } = memoryIo();
+    let release: ((value: string) => void) | undefined;
+    const read = new Promise<string>(resolve => { release = resolve; });
+    io.readFile = async () => read;
+    configureTeamRunsCache(io);
+    const loading = loadTeamRunsForWorkspace('D:/proj', 'ws');
+    const saving = upsertTeamRun(run({ id: 'new' }));
+    release?.(JSON.stringify({ schemaVersion: 2, workspaceId: 'ws', runs: [run({ id: 'old' })] }));
+    await Promise.all([loading, saving]);
+    expect(teamRunsSnapshot()).toHaveLength(2);
+    expect(JSON.parse(files.get('D:/proj/.trylo/team-runs.json')!).runs).toHaveLength(2);
+  });
+  it('serializes overlapping saves so an older disk write cannot erase a newer run', async () => {
+    const files = new Map<string, string>();
+    const gates: (() => void)[] = [];
+    configureTeamRunsCache({
+      readFile: async () => { throw new Error('missing'); },
+      writeFile: async (path, body) => {
+        await new Promise<void>(resolve => { gates.push(resolve); });
+        files.set(path, body);
+      },
+    });
+    await loadTeamRunsForWorkspace('D:/proj', 'ws');
+    const first = upsertTeamRun(run());
+    const second = upsertTeamRun(run({ id: 'second', personConversationId: 'conv-2' }));
+    await Promise.resolve();
+    await Promise.resolve();
+    const startedTogether = gates.length;
+    // Always release the unfixed implementation too, so red tests do not leak work.
+    gates[0]?.();
+    await first;
+    await Promise.resolve();
+    gates[1]?.();
+    await second;
+    expect(startedTogether).toBe(1);
+    expect(JSON.parse(files.get('D:/proj/.trylo/team-runs.json')!).runs).toHaveLength(2);
+  });
+
+  it('re-entering the same workspace preserves its loaded in-memory runs', async () => {
+    const { io } = memoryIo();
+    configureTeamRunsCache(io);
+    await loadTeamRunsForWorkspace('D:/proj', 'ws');
+    await upsertTeamRun(run());
+    io.readFile = async () => { throw new Error('temporarily unavailable'); };
+    await loadTeamRunsForWorkspace('D:/proj', 'ws');
+    expect(teamRunsSnapshot()).toHaveLength(1);
+  });
+
+  it('does not overwrite a corrupt history when a new run is saved', async () => {
+    const { io, files, writes } = memoryIo({ 'D:/proj/.trylo/team-runs.json': '{broken' });
+    configureTeamRunsCache(io);
+    await loadTeamRunsForWorkspace('D:/proj', 'ws');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await upsertTeamRun(run());
+      expect(teamRunsSnapshot()).toHaveLength(1);
+      expect(files.get('D:/proj/.trylo/team-runs.json')).toBe('{broken');
+      expect(writes).toHaveLength(0);
+      expect(isTeamRunsFileCorrupted()).toBe(true);
+    } finally { warn.mockRestore(); }
+  });
   it('upsert keeps runs from OTHER conversations and rewrites the full file', async () => {
     const { io, writes } = memoryIo();
     configureTeamRunsCache(io);
@@ -67,8 +143,9 @@ describe('team-runs-cache', () => {
     const { io, writes } = memoryIo();
     configureTeamRunsCache(io);
     await loadTeamRunsForWorkspace('D:/proj', 'ws');
-    await upsertTeamRun(toPersistableTeamRun({ ...run(), selectedSeatId: 'queued:m1' }));
+    await upsertTeamRun(toPersistableTeamRun({ ...run(), selectedSeatId: 'queued:m1', recovery: { kind: 'checking', message: 'checking' } }));
     expect(writes[0]!.body.includes('selectedSeatId')).toBe(false);
+    expect(writes[0]!.body.includes('recovery')).toBe(false);
   });
 
   it('marks: active beats past; conversations with only terminal runs are past', async () => {
@@ -89,6 +166,10 @@ describe('team-runs-cache', () => {
     ];
     expect(selectRunForConversation(runs, 'a')?.id).toBe('live');
     expect(selectRunForConversation(runs, 'missing')).toBeNull();
+  });
+
+  it('selects the latest live launch when older history contains an interrupted live run', () => {
+    expect(selectRunForConversation([run({ id: 'stale', updatedAt: 1 }), run({ id: 'current', updatedAt: 9 })], 'conv-1')?.id).toBe('current');
   });
 
   it('unreadable file ⇒ empty cache, corrupted flag, file NOT deleted', async () => {
@@ -113,5 +194,22 @@ describe('team-runs-cache', () => {
     configureTeamRunsCache(io);
     await loadTeamRunsForWorkspace('D:/proj', 'ws');
     expect(teamRunsSnapshot()[0]!.seats[0]!.memberId).toBe('legacy-person-p1');
+  });
+
+  it('retries an identical failed save without replacing or reordering the cached fact snapshot', async () => {
+    const files = new Map<string, string>(); let rejectWrite = true;
+    configureTeamRunsCache({ readFile: async () => { throw new Error('missing'); }, writeFile: async (path, body) => {
+      if (rejectWrite) throw new Error('disk unavailable'); files.set(path, body);
+    } });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await loadTeamRunsForWorkspace('D:/proj', 'ws'); await upsertTeamRun(run());
+      const original = teamRunsSnapshot()[0]!;
+      rejectWrite = false;
+      await upsertTeamRun(toPersistableTeamRun({ ...original, workspaceId: 'ws', recovery: { kind: 'checking' } }));
+      expect(teamRunsSnapshot()[0]).toBe(original);
+      expect(JSON.parse(files.get('D:/proj/.trylo/team-runs.json')!).runs[0].id).toBe(original.id);
+      expect(files.get('D:/proj/.trylo/team-runs.json')).not.toContain('recovery');
+    } finally { warn.mockRestore(); }
   });
 });

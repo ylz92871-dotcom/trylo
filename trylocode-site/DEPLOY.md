@@ -1,26 +1,7 @@
-# Trylo Code 官网 — 部署说明
+# 官网源码与 Desktop 更新发布
 
-## 现状（2026-09-06 起）
+生产宣传站的维护源码为 marketing/；账号和管理员界面为 console/。历史 app/chat/remote/yl 入口继续保留。构建 marketing/ 后，仅将经过清单校验的公开页面和资源进入静态候选，凭据、源文件、review/ 与本地记录不进入网页服务。
 
-- Cloudflare Pages 项目：**trylocode**（Direct Upload，**不接 Git**）
-- 域名：`trylocode.me`（主）、`app.trylocode.me → /app/`、`chat.trylocode.me → /chat/`（Pages 自动重定向）、`trylocode.pages.dev`
-- 站点源码在本仓库 `trylocode-site/`，其中 `app/releases` 是指向 `../mobile-app/releases` 的符号链接（APK 不入库）
+Desktop 更新使用 desktop-release.json 为唯一元数据，包含安装包版本、大小、SHA-256、GitHub 原包地址与更新说明。配置 TRYLO_SSH_HOST、TRYLO_SSH_KNOWN_HOSTS、TRYLO_SSH_KEY、TRYLO_SSH_HOST_FINGERPRINT 后运行 scripts/prepare-desktop-download.mjs、scripts/publish-desktop-download.mjs 和 scripts/verify-desktop-download.mjs。部署前核对当前静态上游、入口和页面哈希，在独立容器验收后才切换上游。脚本保留旧服务、旧版本文件和入口备份，不修改账号/API/relay 数据与路由。
 
-## 发布一个新版本
-
-```bash
-cd trylocode-site
-node deploy.mjs
-```
-
-脚本会把站点复制到临时 staging（`app/releases` 符号链接解引用成真实 APK，
-排除 `REDESIGN-PLAN.md`/`DEPLOY.md`/脚本自身），再 `wrangler pages deploy` 上线。
-首次或凭证过期时先 `npx wrangler login`。
-
-## 注意
-
-- **改完必须手动重新部署**——没有 Git 集成，push 到 trylo 仓库不会触发发布。
-- APK 与页面同源分发，Pages 单文件上限 25 MiB（当前 24.2 MB 的 APK 合规）。
-  如果未来 APK 超 25 MiB，要改用 GitHub Releases 或 R2 外链。
-- 旧插件仓库（`claude-code-v-2.1.88-main/.../trylocode-site`）自本日起只是存档，
-  那边不再部署。
+发生并发改动或摘要不一致时停止；回滚前同样应核对当前入口是否仍等于本次 after 摘要，避免覆盖他人更新。GitHub 源码同步、二进制发布、官网部署分别验证。完整宣传片沿用既有的正式媒体资产，不要求公开本机素材库。

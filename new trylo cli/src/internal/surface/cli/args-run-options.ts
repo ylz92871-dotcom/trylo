@@ -213,6 +213,11 @@ export function buildRunOptions(state: RunParseState): ParsedCommand {
   if (maxTokens === "invalid") {
     return usageError("--max-tokens must be a positive integer", "for example --max-tokens=4096");
   }
+  const contextTokenLimit = optionalPositiveInt(state, "context-window");
+  const modelContextWindow = optionalPositiveInt(state, "model-context-window");
+  for (const [name, value] of [["context-window", contextTokenLimit], ["model-context-window", modelContextWindow]] as const) {
+    if (value !== undefined && (value === "invalid" || !Number.isSafeInteger(value))) return usageError(`--${name} must be a positive safe integer`, `for example --${name}=200000`);
+  }
   const maxBudgetUsd = optionalPositiveNumber(state, "max-budget-usd");
   if (maxBudgetUsd === "invalid") {
     return usageError(
@@ -290,6 +295,8 @@ export function buildRunOptions(state: RunParseState): ParsedCommand {
     ...(workspace === undefined ? {} : { workspace }),
     ...(maxIterations === undefined ? {} : { maxIterations }),
     ...(maxTokens === undefined ? {} : { maxTokens }),
+    ...(typeof contextTokenLimit === "number" ? { contextTokenLimit } : {}),
+    ...(typeof modelContextWindow === "number" ? { modelContextWindow } : {}),
     ...(maxBudgetUsd === undefined ? {} : { maxBudgetUsd }),
     ...(state.allowWrites ? { allowWrites: true } : {}),
     ...(state.ask === undefined ? {} : { ask: state.ask }),

@@ -542,7 +542,7 @@ test("CLI-01B 多 waiter：各自的观察超时互不影响，也不取消任�
  * The worker hands each call a *fresh* signal, deliberately: the point is the
  * boundary's own reading of the run's cancellation, not the caller's signal.
  */
-test("CLI-01B 集成：取消后 context.tools.execute 被拒，真实工具零派发", async () => {
+test("CLI-01B 集成：取消后 context.tools.execute 被拒，真实工具零派发", async t => {
   const dispatched: string[] = [];
   const readFileBinding: ToolBinding = {
     name: "read_file",
@@ -590,15 +590,21 @@ test("CLI-01B 集成：取消后 context.tools.execute 被拒，真实工具零�
       return "done";
     },
   });
+  t.after(async () => {
+    await handle.cancel("test_cleanup");
+    finish();
+    await runtime.waitForRetirement(handle.subagentId, 1000, new AbortController().signal);
+  });
+  const dispatchedId = JSON.stringify([`subagent:${handle.subagentId}`, "call-before"]);
 
   await flushContinuations();
-  assert.deepEqual(dispatched, ["call-before"]);
+  assert.deepEqual(dispatched, [dispatchedId]);
 
   await handle.cancel("integration_stop");
   finish();
   await flushContinuations();
 
-  assert.deepEqual(dispatched, ["call-before"], "nothing reaches the real tool after the cancel");
+  assert.deepEqual(dispatched, [dispatchedId], "nothing reaches the real tool after the cancel");
   assert.equal(afterCancel?.outcome, "cancelled");
   assert.equal(handle.status(), "cancelled");
 });

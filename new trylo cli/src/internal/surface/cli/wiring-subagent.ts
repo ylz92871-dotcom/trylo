@@ -11,9 +11,16 @@ import {
   type SubagentRuntimeOptions,
 } from "../../subagent/index.js";
 import type { SubagentRole } from "../../subagent/role.js";
+import { narrowTeamTools, type SubagentTeam } from "../../subagent/team.js";
 import { NO_LEARNING_PROFILE } from "./wiring-catalog.js";
 import type { PermissionGrantCache } from "../../loop/permission-grants.js";
 import type { LoopPorts } from "../../loop/runner.js";
+import type { IterationBudget } from "../../domain/iteration.js";
+import { createTodoTools } from "../../adapters/tools/todo/index.js";
+import { scopeToolCalls } from "../../subagent/scoped-tool-calls.js";
+import type { ProcessSessionRegistry } from "../../adapters/process-session/session-registry.js";
+import { createSubagentTaskResources } from "./subagent-task-resources.js";
+import { parentActionApproval } from "./subagent-approval-wiring.js";
 
 /**
  * Everything `--subagent` turns on, in one place (WP22).
@@ -29,12 +36,15 @@ import type { LoopPorts } from "../../loop/runner.js";
  */
 
 export type SubagentPortsInput = {
+  readonly sessions?: ProcessSessionRegistry;
+  readonly team?: SubagentTeam;
   /** The parent's tool port, before subagents are added to it. */
   readonly parentTools: ToolPort;
   /** The unbounded workspace tools: what a subagent may be narrowed down from. */
   readonly workspaceTools: ToolPort;
   /** The provider subagents run on. The fixture variant is chosen by the caller. */
   readonly childProvider: ProviderPort;
+  readonly childBudget?: IterationBudget;
   /** Usually shared; the fixture-subagent parent uses a different script. */
   readonly parentProvider?: ProviderPort;
   readonly model: string | undefined;
@@ -88,6 +98,8 @@ export function buildSubagentPorts(input: SubagentPortsInput): SubagentPorts {
   const shared = {
     runtime,
     provider: input.childProvider,
+    ...(input.childBudget === undefined ? {} : { childBudget: input.childBudget }),
+    ...(input.callerMessages === undefined ? {} : { callerMessages: input.callerMessages }),
     model: input.model,
     permission: input.permission,
     grants: input.grants,
@@ -97,26 +109,40 @@ export function buildSubagentPorts(input: SubagentPortsInput): SubagentPorts {
   };
   // Parent decisions may change after wiring, before a later dispatch. Each
   // child freezes the current allowance; existing children never gain tools.
-  const allowedTools = (): ReadonlyArray<string> => {
+  const mediatedApproval = input.team !== undefined && input.permission.supportsMemberApproval === true
+    ? parentActionApproval(input.permission, input.grants) : undefined;
+  const allowedTools = (allowParentRequest = false): ReadonlyArray<string> => {
     const available = new Set(input.workspaceTools.snapshot().map(binding => binding.name));
     const approved = new Set(input.grants?.entries().filter(grant => grant.decision === "approved").map(grant => grant.name));
     return input.parentTools.snapshot().filter(binding => available.has(binding.name)
-      && !input.grants?.isDenied(binding.name) && (!binding.needsApproval || approved.has(binding.name))).map(binding => binding.name);
+      && !input.grants?.isDenied(binding.name) && !input.permission.isDenied?.(binding.name)
+      && (!binding.needsApproval || approved.has(binding.name) || input.permission.inheritance?.canUseTool(binding.name) === true
+        || allowParentRequest)).map(binding => binding.name);
   };
 
-  const delegateTool = createSubagentToolPort({
+  // Team tasks must carry a frozen member identity through controlTools. The
+  // late-bound skill-fork exit uses this same port, so it cannot bypass the roster.
+  const delegateTool: ToolPort = input.team === undefined ? createSubagentToolPort({
     ...shared,
-    defaultAllowedTools: allowedTools,
-    ...(input.callerMessages === undefined ? {} : { callerMessages: input.callerMessages }),
-  });
+    defaultAllowedTools: () => allowedTools(),
+  }) : {
+    snapshot: () => [],
+    execute: async () => ({ outcome: "error", code: "team_member_identity_required",
+      message: "Frozen teams require spawn_agent with a roster member; anonymous delegation and skill forks are unavailable" }),
+    cancel: async () => {},
+  };
 
   const controlTools = createSubagentControlTool({
     ...shared,
-    allowedTools,
+    createLocalTools: createTodoTools,
+    ...(input.sessions === undefined ? {} : { taskResources: createSubagentTaskResources(input.sessions) }),
+    allowedTools: () => allowedTools(mediatedApproval !== undefined),
+    ...(mediatedApproval === undefined ? {} : { parentApproval: mediatedApproval }),
     parentMessages: () => parentMessages,
     ...(input.roles === undefined ? {} : { roles: input.roles }),
+    ...(input.team === undefined ? {} : { team: narrowTeamTools(input.team, input.workspaceTools.snapshot()) }),
   });
-  const tools = mountSubagentTool(input.parentTools, delegateTool, controlTools);
+  const tools = mountSubagentTool(scopeToolCalls(input.parentTools, "parent"), delegateTool, controlTools);
 
   return {
     runtime,

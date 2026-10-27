@@ -1,4 +1,5 @@
 import type { ProviderCapabilities } from "./capabilities.js";
+import { resolveContextWindow } from "../../compaction/context-window.js";
 import { requireCapability, type CapabilityDenial } from "./capabilities.js";
 import type { ProviderEntry, ProviderRegistry } from "./registry.js";
 import { DEFAULT_PROVIDER_ID, requireProvider, type ProviderDenial } from "./registry.js";
@@ -146,22 +147,16 @@ export function resolveRequiring(
 /**
  * The budget half of a resolved provider (PW-4).
  *
- * Precedence, highest first: the explicit config ceiling, then the declared
- * context window, then nothing (compaction off). A declared window wakes
- * compaction the way opencode's known model limit does (`overflow.ts`:
- * auto unless `compaction.auto === false`, unknown stays off) — and a
- * declaration nobody wrote keeps the old behavior byte for byte, because
- * "never compact unless asked" still holds for the undeclared case.
+ * Diagnostics use the execution policy: the requested working window defaults
+ * to 200K, and every declared capacity is a hard upper bound.
  */
 export function resolverForBudget(
   resolved: ResolvedProvider,
   configuredCeiling: number | undefined,
+  modelContextWindow?: number,
 ): { readonly declared?: number; readonly effective?: number; readonly overridden: boolean } {
   const declared = resolved.contextWindow;
-  const effective = configuredCeiling ?? declared;
-  if (effective === undefined) {
-    return { overridden: false };
-  }
+  const effective = resolveContextWindow(configuredCeiling, declared, modelContextWindow);
   return {
     ...(declared === undefined ? {} : { declared }),
     effective,

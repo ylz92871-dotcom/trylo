@@ -36,7 +36,7 @@ button.collaboration__member:hover,button.collaboration__member[aria-pressed=tru
 .subagent-conversation__speaker{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-fog);margin-bottom:12px}
 @media(pointer:coarse){.agent-participation__open{min-height:44px}}
 .subagent-conversation{flex:0 0 clamp(340px,36%,520px);display:flex;flex-direction:column;min-width:0;min-height:0;border-left:1px solid var(--ink-hover);background:var(--ink-deep);color:var(--ink-paper)}
-.subagent-conversation button{background:none;border:0;color:inherit;font:inherit;cursor:pointer}
+.subagent-conversation__header button,.subagent-conversation__parent button,.subagent-conversation__compose button{background:none;border:0;color:inherit;font:inherit;cursor:pointer}
 .subagent-conversation__header{display:flex;align-items:center;justify-content:space-between;min-height:56px;padding:0 22px}
 .subagent-conversation__header>div{display:flex;align-items:center;gap:10px;min-width:0}
 .subagent-conversation__header span{font-size:12px;color:var(--ink-fog);white-space:nowrap}
@@ -55,7 +55,6 @@ button.collaboration__member:hover,button.collaboration__member[aria-pressed=tru
 .subagent-conversation__answer table{display:block;overflow:auto;max-width:100%}
 .subagent-conversation__answer a{color:inherit;text-underline-offset:3px}
 .subagent-conversation__status{display:flex;align-items:center;gap:7px;margin:17px 0 8px;font-size:12px;color:var(--ink-fog)}
-.subagent-conversation__body details{font-size:12px;color:var(--ink-fog);margin-top:15px}
 .subagent-conversation__error{color:var(--danger);font-size:13px;line-height:1.8;white-space:pre-wrap}
 .subagent-conversation__compose{padding:16px 22px 22px;font-size:12px;color:var(--ink-fog)}
 .subagent-conversation__compose>p{margin:0;line-height:1.8}

@@ -14,6 +14,16 @@ const start = { type: 'run_start', sessionId: 's', turnId: 't', providerId: 'fix
 const terminal = { type: 'run_result', status: 'completed', finishReason: 'completed', sessionId: 's', turnId: 't',
   iterations: 12, usage: { inputTokens: 422000, outputTokens: 1200, totalTokens: 423200 }, durationMs: 1000, lastMessage: 'done' };
 
+it('starts a new request with its actual window instead of retaining an older reading', () => {
+  const h = harness(); h.send({ ...start, contextWindow: 128000 });
+  h.send({ type: 'usage', usage: { inputTokens: 100000, outputTokens: 1, totalTokens: 100001 } });
+  h.send(terminal);
+  const next = new TryloV1EventAdapter(); // One adapter/process per turn.
+  const messages = applyEvents(h.messages, next.feed(JSON.stringify({ ...start, turnId: 'next', contextWindow: 200000 })));
+  expect(latestContextWindow(messages)).toBe(200000);
+  expect(latestContextTokens(messages)).toBe(0);
+});
+
 it('uses the latest request immediately and never substitutes cumulative billing at terminal', () => {
   const h = harness(); h.send(start);
   h.send({ type: 'usage', usage: { inputTokens: 30000, outputTokens: 100, totalTokens: 30100 } });

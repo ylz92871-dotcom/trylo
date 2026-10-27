@@ -216,6 +216,7 @@ export function ApprovalCard(props: ApprovalCardProps): ReactElement {
           </div>
         </div>
       ) : null}
+      {m.requester ? <p className="approval-card__body" aria-label="申请成员">申请成员：{m.requester.displayName}</p> : null}
       <p className="approval-card__body">{m.description}</p>
       {resolved ? null : (
         <div className="approval-card__actions">

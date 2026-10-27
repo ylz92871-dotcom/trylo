@@ -88,6 +88,7 @@ import { CodeDiagnosticsBuffer } from '../diagnostics/code-diagnostics-buffer';
 import type { SettingsForCodeRun } from './runtime-types';
 
 const baseSettings: SettingsForCodeRun = {
+  cliRuntimeProtocol: 'legacy-stream-json',
   cliPath: 'D:/cli/cli.js',
   cwd: 'D:/work',
   apiKey: 'sk-test',

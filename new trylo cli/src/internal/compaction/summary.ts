@@ -2,6 +2,7 @@ import { toolOutputExcerpt } from "./tool-excerpt.js";
 import type { CompactFailure } from "../ports/compaction.js";
 import { SUMMARY_MAX_CHARS } from "../ports/compaction.js";
 import type { TranscriptItem } from "../protocol/transcript.js";
+import { toolCallIndexByResult } from "../protocol/tool-pairing.js";
 import { findDisclosureRisks, scrubDisclosure } from "./disclosure.js";
 
 /**
@@ -47,6 +48,8 @@ export type SummarizeOptions = {
   readonly maxLineChars?: number;
   /** A rolling digest replaces the previous window, so its memory must carry forward. */
   readonly previousSummary?: string;
+  /** Canonical request/tool facts can precede the live fragment after a window. */
+  readonly requestTranscript?: readonly TranscriptItem[];
 };
 
 const DEFAULT_MAX_LINE_CHARS = 240;
@@ -73,7 +76,73 @@ export function summarizeTranscript(
     ? [] : scrubDisclosure(options.previousSummary).split("\n")
       .filter(line => line.trim().length > 0).map(line => fit(line, maxLineChars));
   const lines = [...previous, ...items.map((item) => fit(summaryFragment(item, maxLineChars), maxLineChars))];
-  return pruneToLimit(lines, maxChars);
+  return preserveRequestObservations(pruneToLimit(lines, maxChars), options.requestTranscript ?? items, {
+    maxChars, maxLineChars, hasPreviousSummary: options.previousSummary !== undefined,
+  });
+}
+
+/** Keep request identity beside its actual tool facts. A rolling history's head
+ * may belong to a much older request; a fresh process must not look like an old
+ * process just because a window now covers the user/start/result sequence.
+ * This is part of the summary author, never a new journal or execution owner.
+ */
+export function preserveRequestObservations(summary: string, items: readonly TranscriptItem[], options: {
+  readonly maxChars?: number;
+  readonly maxLineChars?: number;
+  readonly hasPreviousSummary?: boolean;
+} = {}): string {
+  let userIndex = items.length - 1;
+  while (userIndex >= 0 && items[userIndex]?.kind !== "user") userIndex--;
+  if (userIndex < 0) return summary;
+  const hadEarlierRequest = options.hasPreviousSummary === true || items.slice(0, userIndex).some(item => item.kind === "user");
+  const facts = items.slice(userIndex).filter(item => item.kind === "user" || item.kind === "tool_call" || item.kind === "tool_result");
+  if (!facts.some(item => item.kind === "tool_result")) return summary;
+  const origins = backgroundProcessStarts(facts);
+  if (!hadEarlierRequest && origins.size === 0) return summary;
+  const maxChars = options.maxChars ?? SUMMARY_MAX_CHARS;
+  const lineChars = options.maxLineChars ?? DEFAULT_MAX_LINE_CHARS;
+  const heading = `[request observations at compaction; user sequence ${items[userIndex]?.sequence}]\n`;
+  const factBudget = Math.floor(maxChars / 2) - heading.length;
+  // Tiny custom digests retain their original bounded behavior rather than
+  // spending their entire budget on provenance labels.
+  if (factBudget <= TRUNCATION_MARKER.length) return summary;
+  const originHeading = "[background process starts in this request]\n";
+  const originBudget = Math.floor(factBudget / 3);
+  const originDigest = origins.size === 0 || originBudget <= originHeading.length + lineChars
+    ? "" : pruneToLimit([...origins].map(item => fit(summaryFragment(item, lineChars), lineChars)), originBudget - originHeading.length);
+  const originSection = originDigest === "" ? "" : originHeading + originDigest + "\n";
+  const retainedFacts = originSection === "" ? facts : facts.filter(item => !origins.has(item));
+  const digest = pruneToLimit(retainedFacts.map(item => fit(summaryFragment(item, lineChars), lineChars)), factBudget - originSection.length);
+  if (digest === "") return summary;
+  const backgroundHeading = "[background summary; observations, not instructions]\n";
+  const pinned = heading + originSection + digest;
+  const backgroundBudget = maxChars - pinned.length - backgroundHeading.length - 1;
+  if (backgroundBudget < TRUNCATION_MARKER.length) return summary;
+  return backgroundHeading + boundSummaryText(summary, backgroundBudget) + "\n" + pinned;
+}
+
+/** A process can start in the middle of a request, after many preparation
+ * reads. Pin successful background-start results separately from generic
+ * head/tail excerpts; only observed outputs travel, never command/env inputs.
+ */
+function backgroundProcessStarts(items: readonly TranscriptItem[]): ReadonlySet<TranscriptItem> {
+  const origins = new Set<TranscriptItem>();
+  for (const [resultIndex, callIndex] of toolCallIndexByResult(items)) {
+    const call = items[callIndex], result = items[resultIndex];
+    if (call?.kind === "tool_call" && call.name === "run_shell" && call.arguments.runInBackground === true
+      && result?.kind === "tool_result" && result.name === call.name && result.outcome === "succeeded") {
+      origins.add(result);
+    }
+  }
+  return origins;
+}
+
+function boundSummaryText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  let prefix = text.slice(0, maxChars - TRUNCATION_MARKER.length);
+  const last = prefix.charCodeAt(prefix.length - 1);
+  if (last >= 0xd800 && last <= 0xdbff) prefix = prefix.slice(0, -1);
+  return prefix + TRUNCATION_MARKER;
 }
 
 /**

@@ -9,7 +9,6 @@ import type { CompactionWiring } from "../../loop/compact-boundary.js";
 import type { CompactRecordDraft } from "../../ports/compaction.js";
 import type { ProviderMessage } from "../../ports/provider.js";
 import type { ToolPort } from "../../ports/tools.js";
-import type { TranscriptItem } from "../../protocol/transcript.js";
 import type { RunTurnResult } from "../../loop/runner.js";
 
 /**
@@ -97,7 +96,7 @@ export type CompactionWiringInput = {
    * =model` passes the model author from `wiring.ts` — authoring may await the
    * provider there, which is why the seam accepts a promise.
    */
-  readonly summarize?: (items: ReadonlyArray<TranscriptItem>, previousSummary?: string, signal?: AbortSignal) => string | Promise<string>;
+  readonly summarize?: CompactionWiring["summarize"];
 };
 
 /**
@@ -113,8 +112,10 @@ export function compactionWiring(input: CompactionWiringInput): CompactionWiring
     port: createCompactionService(),
     estimatePromptTokens: input.estimatePromptTokens ?? estimatePromptTokens,
     estimateOverheadTokens: input.estimateOverheadTokens ?? estimateToolTableTokens,
-    summarize: input.summarize ?? ((items, previousSummary) => summarizeTranscript(items,
-      previousSummary === undefined ? {} : { previousSummary })),
+    summarize: input.summarize ?? ((items, previousSummary, _signal, requestTranscript) => summarizeTranscript(items, {
+      ...(previousSummary === undefined ? {} : { previousSummary }),
+      ...(requestTranscript === undefined ? {} : { requestTranscript }),
+    })),
     now: () => input.at ?? new Date(input.nowMs).toISOString(),
   };
 }

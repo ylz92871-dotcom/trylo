@@ -53,6 +53,9 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
         if (message === undefined) {
           return refuse("invalid_arguments", "spawn_agent requires a non-empty message");
         }
+        if (args["member_id"] !== undefined && text(args, "member_id") === undefined) {
+          return refuse("invalid_arguments", "member_id must be a non-empty string");
+        }
         const forkParent = flag(args, "fork_context");
         const forkMessages = forkParent
           ? typeof options.parentMessages === "function" ? options.parentMessages() : options.parentMessages
@@ -66,6 +69,7 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
         const entry = agents.start({
           message, toolCallId: call.toolCallId, forkMessages, ...spawnSettings(args),
           agentType: text(args, "agent_type"), model: text(args, "model"),
+          memberId: text(args, "member_id"),
         });
         return ok(
           {
@@ -75,6 +79,7 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
             idle_timeout_ms: entry.idleTimeoutMs,
             task_id: entry.taskId,
             role: entry.resolved.role.name,
+            ...(entry.teamMember === undefined ? {} : { team_run_id: entry.teamMember.teamRunId, member_id: entry.teamMember.memberId }),
             allowed_tools: [...entry.resolved.allowedTools],
             // Said out loud rather than thrown: the role asked for tools this
             // parent cannot grant, and narrowing is the safe direction.
@@ -94,11 +99,12 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
         if (entry === undefined) {
           return refuse("unknown_agent", `No agent with id '${target}'`);
         }
+        agents.assertInputAllowed(entry);
         const mode = inputMode(args);
         if (mode === "restart" || entry.parked) {
+          agents.inputQueued(entry);
           if (mode === "restart") {
-            entry.channel.close();
-            await options.runtime.cancel(entry.agentId, "restarted_by_parent");
+            await agents.stop(entry, "restarted_by_parent");
           }
           const next = await agents.resume(entry, message, call.toolCallId, signal);
           if (next === "cancelled") return { outcome: "cancelled" };
@@ -112,6 +118,7 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
             ? refuse("agent_input_queue_full", `Agent '${target}' has a full input queue; wait or replace queued input with interrupt`)
             : refuse("agent_closed", `Agent '${target}' is closed and takes no more input`);
         }
+        agents.inputQueued(entry);
         entry.observation.requestInput();
         submissions += 1;
         return ok({ submission_id: `sub-${submissions}`, agent_id: entry.agentId, task_id: entry.taskId,
@@ -154,10 +161,12 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
             if (retired === "cancelled") return { outcome: "cancelled" };
           }
           status[target] = entry.handle.status();
+          const cleanup = entry.resourceStop.snapshot();
           results[target] = { ...entry.observation.snapshot(entry.handle.status(), after.get(target),
             options.runtime.getGovernance().snapshot(entry.agentId)), agent_id: entry.agentId, task_id: entry.taskId,
             round: entry.roundOffset + entry.observation.lastRound,
-            nickname: entry.nickname, idle_timeout_ms: entry.idleTimeoutMs };
+            nickname: entry.nickname, idle_timeout_ms: entry.idleTimeoutMs,
+            ...(cleanup === undefined ? {} : { cleanup }) };
         }
         const answer = { status, timed_out: observed === "timeout", results };
         return ok(answer, JSON.stringify(answer));
@@ -171,12 +180,12 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
         }
         // Closing the channel ends the agent at the end of the round it is in,
         // which keeps the work it already did and reports `completed`. Forcing
-        // is a different request: `cancel` settles the run now, and a run that
-        // is cut short is honestly reported as `cancelled`.
+        // is a different request: the execution is cancelled, then owned
+        // resources and worker retirement must confirm before closed=true.
         entry.parked = false;
         entry.channel.close();
         if (flag(args, "force")) {
-          await options.runtime.cancel(entry.agentId, "closed_by_parent");
+          await agents.stop(entry, "closed_by_parent");
         }
         return ok({ closed: true, forced: flag(args, "force") }, `closed ${target}`);
       }
@@ -211,7 +220,9 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
     // description carries whatever roles this run has, so the model chooses from
     // the configured set. With no roles the text is the plain one, unchanged.
     snapshot: () => {
-      const catalog = roleCatalogDescription(options.roles ?? []);
+      const roles = [...new Map((options.team?.members.map(member => member.role) ?? options.roles ?? [])
+        .map(role => [role.name, role])).values()];
+      const catalog = roleCatalogDescription(roles);
       if (catalog.length === 0) {
         return SUBAGENT_CONTROL_BINDINGS;
       }
@@ -225,9 +236,11 @@ ${catalog}`,
                 type: "object",
                 properties: {
                   ...(binding.parameters as { properties: Record<string, JsonValue> }).properties,
+                  ...(options.team === undefined ? {} : { member_id: { type: "string", enum: options.team.members.map(member => member.memberId),
+                    description: "Frozen team member identity. Must match agent_type; use send_input for an already assigned member." } }),
                   agent_type: {
                     type: "string",
-                    enum: [...(options.roles ?? []).map((role) => role.name)],
+                    enum: roles.map((role) => role.name),
                     description: "A configured role; it can only narrow this child's tools.",
                   },
                 },

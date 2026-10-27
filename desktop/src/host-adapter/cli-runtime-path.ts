@@ -12,9 +12,10 @@
 //     anyone who is not the machine it was written on.
 
 import { invoke } from '@tauri-apps/api/core';
+import { isLegacyRuntimeDefaultCliPath } from '../runtime/cli-runtime-path-defaults';
 
 /**
- * The path `DEFAULTS.cliPath` shipped with: the OLD runtime's entry.
+ * A historical `DEFAULTS.cliPath`: the OLD runtime's entry.
  *
  * Read the name carefully. This is not "a stale developer path" in the
  * abstract — it is the *legacy* CLI. It is a perfectly good value for a
@@ -27,7 +28,7 @@ import { invoke } from '@tauri-apps/api/core';
  * CLI and then handed `-p --input-format …`, which the new CLI rejects
  * with `unknown command: -p`. See the P08 audit, P0.)
  */
-export const LEGACY_RUNTIME_DEFAULT_CLI_PATH = 'C:/trylo-cli/cli.js';
+export { LEGACY_RUNTIME_DEFAULT_CLI_PATH } from '../runtime/cli-runtime-path-defaults';
 
 export type CliResolutionSource = 'env' | 'bundled' | 'dev-checkout' | 'system-path';
 
@@ -92,7 +93,7 @@ export function effectiveV1CliPath(
   resolved: CliRuntimeResolution | null,
 ): EffectiveCliPath {
   const trimmed = (configured ?? '').trim();
-  const isLegacyDefault = trimmed === LEGACY_RUNTIME_DEFAULT_CLI_PATH;
+  const isLegacyDefault = isLegacyRuntimeDefaultCliPath(trimmed);
   if (trimmed !== '' && !isLegacyDefault) {
     return { path: trimmed, substituted: false };
   }
@@ -163,9 +164,7 @@ export function effectiveLegacyCliPath(
   resolved: CliRuntimeResolution | null,
 ): EffectiveCliPath {
   const trimmed = (configured ?? '').trim();
-  const normalized = trimmed.replaceAll('\\', '/').toLowerCase();
-  const isOldDefault = normalized === 'C:/trylo-cli/cli.js'
-    || normalized === 'c:/trylo-cli/cli.js';
+  const isOldDefault = isLegacyRuntimeDefaultCliPath(trimmed);
   if (trimmed !== '' && !isOldDefault) return { path: trimmed, substituted: false };
   return resolved?.legacyCliScript
     ? { path: resolved.legacyCliScript, substituted: true }

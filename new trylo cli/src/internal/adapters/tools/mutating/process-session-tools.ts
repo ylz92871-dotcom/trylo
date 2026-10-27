@@ -30,6 +30,7 @@ import {
   type ProcessSessionId,
   type ProcessSessionEndReason,
   type ProcessSessionList,
+  type ProcessSessionSnapshot,
   type ProcessSessionWriteResult,
   readYieldMs,
   yieldMsWithinBounds,
@@ -186,12 +187,13 @@ export function createProcessSessionTools(
   sessions: ProcessSessionToolsPort,
 ): ProcessSessionTools {
   async function execute(call: ToolCallRequest): Promise<ToolOutcome> {
+    const visible = (session: ProcessSessionSnapshot): boolean => call.ownerId === undefined || session.ownerId === call.ownerId;
     if (call.name === LIST_PROCESSES_TOOL) {
       const problem = optionalArgumentProblem(call, "runningOnly", "boolean");
       if (problem !== undefined) return problem;
       const runningOnly = readBoolean(call, "runningOnly");
       const listed = sessions.list().sessions.filter(
-        (session) => !runningOnly || !isTerminalProcessStatus(session.status),
+        (session) => visible(session) && (!runningOnly || !isTerminalProcessStatus(session.status)),
       );
       const value: JsonObject = {
         sessions: listed.map((session) => ({
@@ -212,12 +214,13 @@ export function createProcessSessionTools(
       const lines = listed.map(
         (session) => `${session.id} ${session.status}${processEndSuffix(session.end)} ${session.command}`,
       );
+      const empty = call.ownerId === undefined ? "No command sessions are being tracked." : "This member has no command sessions.";
       return {
         outcome: "result",
         value,
         output:
           listed.length === 0
-            ? "No command sessions are being tracked."
+            ? empty
             : lines.join("\n"),
         truncated: false,
       };
@@ -230,6 +233,13 @@ export function createProcessSessionTools(
         code: "invalid_arguments",
         message: `${call.name} requires a sessionId`,
       };
+    }
+    if (call.ownerId !== undefined) {
+      const target = sessions.list().sessions.find(session => session.id === sessionId);
+      if (target === undefined || !visible(target)) {
+        return { outcome: "error", code: "process_session_not_owned",
+          message: "This command session is not owned by the current member task; ask the parent to manage it" };
+      }
     }
 
     if (call.name === STOP_PROCESS_TOOL) {

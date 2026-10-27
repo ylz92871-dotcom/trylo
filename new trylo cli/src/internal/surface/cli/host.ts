@@ -198,6 +198,7 @@ export type TurnHostInput = {
   readonly subagentEnabled?: true;
   /** Roles discovered for this turn (C44/L27). Absent means none offered. */
   readonly subagentRoles?: ReadonlyArray<SubagentRole>;
+  readonly subagentTeam?: import("../../subagent/team.js").SubagentTeam;
   /** Validated language servers (WP12 L60). Absent means no `lsp_navigate`. */
   readonly lspServers?: ReadonlyArray<LspServerConfig>;
   /** The run's shell mode (WP05 C06/C07). Absent is the direct path. */

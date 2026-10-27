@@ -6,7 +6,7 @@
 // workd daemon's full task pipeline. No Code-side module is modified
 // (desktop/src/runtime/ and trylo-runner.ts are zero-diff).
 
-import type { ConversationRunSupervisor } from '../runtime/conversation-run-supervisor';
+import type { ConversationRunSupervisor, ConversationSendPreparation } from '../runtime/conversation-run-supervisor';
 import type { SettingsForCodeRun } from '../runtime/runtime-types';
 import type { PermissionLevel } from '../permission/permission-policy';
 import type { ResolvedToolRuntime } from '../services-host/methods';
@@ -15,6 +15,8 @@ import type { LoopEvent } from '../host-adapter/loop-events';
 import type { CodeRunLifecycleObserver } from '../runtime/code-run-lifecycle';
 
 export interface WorkChatSendOptions {
+  readonly teamMode?: boolean;
+  readonly teamRunId?: string;
   readonly projectKey: string;
   readonly conversationId: string;
   readonly text: string;
@@ -22,6 +24,7 @@ export interface WorkChatSendOptions {
   readonly permissionLevel: PermissionLevel;
   readonly priorMessages: readonly ChatMessage[];
   readonly turnId?: string;
+  readonly sendPreparation?: ConversationSendPreparation;
   /** Interaction intent for the Code CLI. The P0 Work surface sends every
    *  message as 'agent' and lets the model decide tool use from the single
    *  Work system contract (see `systemPrompt`). */
@@ -53,7 +56,7 @@ export interface WorkChatSendOptions {
 }
 
 export function sendWorkChat(
-  supervisor: ConversationRunSupervisor,
+  supervisor: Pick<ConversationRunSupervisor, 'runCode'>,
   options: WorkChatSendOptions,
 ): Promise<void> {
   const { settings, systemPrompt } = options;
@@ -63,9 +66,12 @@ export function sendWorkChat(
       ? { ...settings, systemPrompt }
       : settings,
     codeMode: options.codeMode ?? 'agent',
+    ...(options.teamMode ? { teamMode: true } : {}),
+    ...(options.teamRunId ? { teamRunId: options.teamRunId } : {}),
     permissionLevel: options.permissionLevel,
     priorMessages: options.priorMessages,
     turnId: options.turnId,
+    ...(options.sendPreparation ? { sendPreparation: options.sendPreparation } : {}),
     // §4.1/§4.3: Work asks for its own Profile instead of silently sharing
     // the Code surface's `normal` Hermes argv. `surface: 'work'` alone would
     // already pick the default, but the explicit id keeps the intent visible

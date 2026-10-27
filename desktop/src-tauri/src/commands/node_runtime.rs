@@ -76,7 +76,7 @@ pub fn node_script_argument(script: &Path) -> PathBuf {
                 ordinary.push(component.as_os_str());
             }
         }
-        return ordinary;
+        ordinary
     }
     #[cfg(not(windows))]
     script.to_path_buf()

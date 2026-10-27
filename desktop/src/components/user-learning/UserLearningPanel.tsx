@@ -83,6 +83,13 @@ const MODES: readonly EnforcementMode[] = ['shadow', 'enforced', 'off']
 
 const SURFACES: readonly SurfaceFilter[] = ['all', 'code', 'work']
 const CHANNELS: readonly string[] = ['all', 'work', 'interaction', 'cognition']
+const STRENGTHS: readonly InspectorPrefs['strengthFilter'][] = [
+  'all',
+  'weak',
+  'medium',
+  'strong',
+  'authoritative',
+]
 
 const WORK_KIND_LABEL: Readonly<Record<string, string>> = {
   artifact_promote: '提升产物',
@@ -161,7 +168,9 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
       },
   )
   const cliIds = new Set(props.cliMemory?.facts.map((fact) => fact.id) ?? [])
-  const profile = props.snapshot.profileFacts.filter((p) => p.status === 'active' && !cliIds.has(p.id))
+  const profile = props.snapshot.profileFacts.filter(
+    (p) => p.status === 'active' && !cliIds.has(p.id),
+  )
   const conclusions = props.snapshot.conclusions.filter((c) => c.status === 'active')
   // Some host/test fixtures predate schema v5. The persisted migration fills
   // this field, but the inspector remains tolerant of an in-memory legacy prop.
@@ -175,18 +184,32 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
   // Dual-surface Evidence list (spec §4.2): filtered → createdAt desc → slice(100).
   // Derived from props each render (R4: "list derived from props"), not a memo —
   // the whole panel is behind the `open` early return, so cost is negligible.
-  const filteredEvidence = filterEvidence(props.snapshot.evidence, {
+  const matchingEvidence = filterEvidence(props.snapshot.evidence, {
     surfaceFilter,
     channelFilter,
     dimensionFilter,
     strengthFilter,
-  })
-    .filter(
-      (e) =>
-        !search ||
-        (e.inference.claim + e.rawObservation.text).toLowerCase().includes(search.toLowerCase()),
-    )
-    .slice(0, 100)
+  }).filter(
+    (e) =>
+      !search ||
+      (e.inference.claim + e.rawObservation.text).toLowerCase().includes(search.toLowerCase()),
+  )
+  const filteredEvidence = matchingEvidence.slice(0, 100)
+  const hasEvidenceFilters =
+    Boolean(search) ||
+    surfaceFilter !== 'all' ||
+    channelFilter !== 'all' ||
+    dimensionFilter !== 'all' ||
+    strengthFilter !== 'all'
+  const clearEvidenceFilters = () => {
+    setSearch('')
+    set({
+      surfaceFilter: 'all',
+      channelFilter: 'all',
+      dimensionFilter: 'all',
+      strengthFilter: 'all',
+    })
+  }
 
   // Work three-dimension coverage — grouped, always the three work dimensions,
   // gated by the surface filter (spec §4.3). Uses the shared cognitionMap.
@@ -612,6 +635,7 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
                         key={s}
                         type="button"
                         className={`learning-inspector__filter-chip${surfaceFilter === s ? ' is-active' : ''}`}
+                        aria-pressed={surfaceFilter === s}
                         onClick={() => set({ surfaceFilter: s })}
                       >
                         {s === 'all' ? '全部' : s}
@@ -623,6 +647,7 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
                         key={c}
                         type="button"
                         className={`learning-inspector__filter-chip${channelFilter === c ? ' is-active' : ''}`}
+                        aria-pressed={channelFilter === c}
                         onClick={() => set({ channelFilter: c as InspectorPrefs['channelFilter'] })}
                       >
                         {c === 'all' ? '全部' : c}
@@ -650,32 +675,47 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
                       ))}
                     </select>
                     <span className="learning-inspector__filter-label">强度</span>
-                    {['weak', 'medium', 'strong', 'authoritative'].map((b) => (
+                    {STRENGTHS.map((b) => (
                       <button
                         key={b}
                         type="button"
                         className={`learning-inspector__filter-chip${strengthFilter === b ? ' is-active' : ''}`}
+                        aria-pressed={strengthFilter === b}
                         onClick={() =>
                           set({
-                            strengthFilter:
-                              strengthFilter === b
-                                ? 'all'
-                                : (b as InspectorPrefs['strengthFilter']),
+                            strengthFilter: strengthFilter === b ? 'all' : b,
                           })
                         }
                       >
-                        {b}
+                        {b === 'all' ? '全部强度' : b}
                       </button>
                     ))}
                   </div>
 
+                  <div className="learning-inspector__filters">
+                    <span className="learning-inspector__hint" role="status">
+                      匹配 {matchingEvidence.length} / {props.snapshot.evidence.length} 条依据
+                      {matchingEvidence.length > 100 ? '，显示最新 100 条' : ''}
+                    </span>
+                    {hasEvidenceFilters ? (
+                      <button
+                        type="button"
+                        className="learning-inspector__filter-chip"
+                        onClick={clearEvidenceFilters}
+                      >
+                        清除筛选
+                      </button>
+                    ) : null}
+                  </div>
                   {filteredEvidence.length === 0 ? (
                     <p className="learning-inspector__empty">
-                      {surfaceFilter === 'work'
-                        ? '还没有 Work 相关的 Evidence。提升或称赞一份产物（PPT / 周报），或"做成模板"会出现在这里。'
-                        : surfaceFilter === 'code'
-                          ? '还没有 Code 相关的 Evidence。真实任务里的纠正、选择、审批和 Cognition 回答会出现在这里。'
-                          : '还没有 Evidence。真实任务里的纠正、选择、审批和 Cognition 回答，以及 Work 的产物提升 / 称赞，会出现在这里。'}
+                      {props.snapshot.evidence.length > 0
+                        ? '没有符合当前筛选条件的学习依据，可清除筛选查看全部。'
+                        : surfaceFilter === 'work'
+                          ? '还没有 Work 相关的 Evidence。提升或称赞一份产物（PPT / 周报），或"做成模板"会出现在这里。'
+                          : surfaceFilter === 'code'
+                            ? '还没有 Code 相关的 Evidence。真实任务里的纠正、选择、审批和 Cognition 回答会出现在这里。'
+                            : '还没有 Evidence。真实任务里的纠正、选择、审批和 Cognition 回答，以及 Work 的产物提升 / 称赞，会出现在这里。'}
                     </p>
                   ) : (
                     <Virtuoso
@@ -722,7 +762,8 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
                     ))}
                   </div>
                   <p className="learning-inspector__hint">
-                    “仅观察”会记录学习结果；“应用偏好”会将符合条件的偏好用于任务；“停用偏好”只停止应用偏好。正式用户记忆与学习采集由设置中的 Enable User Learning 开关控制。
+                    “仅观察”会记录学习结果；“应用偏好”会将符合条件的偏好用于任务；“停用偏好”只停止应用偏好。正式用户记忆与学习采集由设置中的
+                    Enable User Learning 开关控制。
                     聊天里表达的习惯会先作为依据记录，再逐步形成偏好。
                   </p>
                   <ul className="learning-inspector__list">

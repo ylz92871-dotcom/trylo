@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { WebSocket } from 'ws';
 import qrcode from 'qrcode';
 import { execFile } from 'node:child_process';
+import { createModelGateway } from './model-gateway.mjs';
 
 export function relayUrl(value, allowLocal = false) {
   const url = new URL(String(value || ''));
@@ -34,6 +35,21 @@ export function createRelayClient({ appDataDir = process.env.TRYLO_APP_DATA_DIR,
   let connecting;
   let browserLogin;
   let accountMonitor;
+  async function modelAccount() {
+    return serialize(async () => {
+      await load(); await verifySession();
+      if (!status().loggedIn) throw new Error('请先登录 Trylo 账号，再使用免费模型。');
+      return { serverUrl: session.serverUrl, accessToken: session.accessToken, owner: session.serverUrl + ':' + session.username };
+    });
+  }
+  async function modelList(current) {
+    current ||= await modelAccount();
+    const data = await api(current.serverUrl, '/relay/models', { method: 'GET', token: current.accessToken });
+    if (current.owner !== session?.serverUrl + ':' + session?.username) throw new Error('账号已变化，请重新同步模型。');
+    const models = Array.isArray(data.models) ? data.models.filter(item => item.chat === true && item.pool === 'free') : [];
+    return { ...data, models, owner: current.owner };
+  }
+  const modelGateway = createModelGateway({ account: modelAccount, models: modelList });
   function monitorAccount() {
     if (accountMonitor || !session?.accessToken || session.expiresAt <= Date.now()) return;
     accountMonitor = setInterval(() => { void serialize(() => verifySession()).catch(() => {}); }, seam.accountCheckIntervalMs ?? 300000);
@@ -81,7 +97,7 @@ export function createRelayClient({ appDataDir = process.env.TRYLO_APP_DATA_DIR,
       catch (failure) { if (failure.status === 404) registration = {}; else throw failure; }
     }
     const resume = wanted && target?.serverUrl === serverUrl && Boolean(registration.deviceId);
-    stop(); await save({ serverUrl, username: result.username, accessToken: result.accessToken, expiresAt: result.expiresAt, ...registration });
+    modelGateway.invalidate(); stop(); await save({ serverUrl, username: result.username, accessToken: result.accessToken, expiresAt: result.expiresAt, ...registration });
     if (resume) { wanted = true; await connect(generation); }
     monitorAccount(); changed(); return status();
   }
@@ -95,7 +111,7 @@ export function createRelayClient({ appDataDir = process.env.TRYLO_APP_DATA_DIR,
         await save({ ...session, accessToken: refreshed.accessToken, expiresAt: refreshed.expiresAt });
       }
     } catch (failure) {
-      if (failure.status === 401) { stopAccountMonitor(); stop(); await fs.rm(file, { force: true }); session = undefined; changed(); }
+      if (failure.status === 401) { modelGateway.invalidate(); stopAccountMonitor(); stop(); await fs.rm(file, { force: true }); session = undefined; changed(); }
       else throw failure;
     }
   }
@@ -194,6 +210,9 @@ export function createRelayClient({ appDataDir = process.env.TRYLO_APP_DATA_DIR,
   }
   return {
     status: () => serialize(async () => { await load(); await verifySession(); return status(); }),
+    models: () => modelList(),
+    modelConnection: params => modelGateway.connection(params),
+    close: async () => { stopAccountMonitor(); stop(); await modelGateway.close(); },
     beginBrowserLogin: params => {
       const browserScope = ++browserGeneration;
       browserLogin = undefined;
@@ -249,7 +268,7 @@ export function createRelayClient({ appDataDir = process.env.TRYLO_APP_DATA_DIR,
       browserLogin = undefined; return acceptLogin(serverUrl, result);
     }),
     logout: () => serialize(async () => {
-      await load(); browserLogin = undefined; stopAccountMonitor(); stop();
+      await load(); browserLogin = undefined; modelGateway.invalidate(); stopAccountMonitor(); stop();
       if (session?.accessToken && session.deviceId) {
         try { await api(session.serverUrl, `/relay/devices/${session.deviceId}`, { method: 'DELETE', token: session.accessToken }); }
         catch (failure) { if (![401, 404].includes(failure.status)) throw failure; }

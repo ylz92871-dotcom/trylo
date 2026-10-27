@@ -92,6 +92,8 @@ export type ProcessSessionEndReason =
   | { readonly kind: "lost"; readonly reason: string };
 
 export type ProcessSessionSnapshot = {
+  /** Logical task that started the command; old/root sessions omit it. */
+  readonly ownerId?: string;
   readonly id: ProcessSessionId;
   readonly status: ProcessSessionStatus;
   /** The command as it was asked for, for display. Never re-parsed. */
@@ -127,6 +129,7 @@ export type ProcessSessionSnapshot = {
  * that lies about the environment it ran in.
  */
 export type ProcessSessionStart = {
+  readonly ownerId?: string;
   readonly id: ProcessSessionId;
   readonly argv: ReadonlyArray<string>;
   readonly cwd: string;

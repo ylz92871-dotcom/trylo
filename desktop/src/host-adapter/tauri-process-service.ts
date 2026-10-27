@@ -19,8 +19,12 @@ import type {
   ProcessExitInfo,
   ProcessHandle,
   ProcessService,
+  ProcessRecoveryIdentity,
+  RecoverableProcess,
+  RetainedProcessOutput,
 } from './process-service';
 import type { ProcessId } from './types';
+import { createProcessExitDelivery, readProcessExit } from './process-exit-delivery';
 
 /** Wire shape returned by `process_spawn` on the Rust side. */
 interface ProcessHandleDto {
@@ -53,6 +57,7 @@ class TauriProcessService implements ProcessService {
     cwd?: string;
     env?: Readonly<Record<string, string>>;
     metadata?: Readonly<{ projectKey?: string; conversationId?: string; runId?: string }>;
+    recoveryIdentity?: ProcessRecoveryIdentity;
     onOutput: (line: string) => void;
     onStderr?: (line: string) => void;
     onExit?: (info: ProcessExitInfo) => void;
@@ -62,16 +67,23 @@ class TauriProcessService implements ProcessService {
     // Channel<ProcessOutputEvent> doesn't match and the resulting
     // onmessage would receive an undefined `msg.line`.
     const channel = new Channel<string>();
+    const exitDelivery = createProcessExitDelivery(info => {
+      try { opts.onExit?.(info); }
+      catch (error) {
+        // eslint-disable-next-line no-console
+        console.warn('[trylo] process.exited handler failed:', error);
+      }
+    });
     channel.onmessage = (msg) => {
       if (msg.startsWith(EXIT_PREFIX)) {
         // A malformed exit frame from our own Rust side would
         // otherwise throw inside the Channel callback. Degrade to a
         // warning instead of breaking the whole stdout stream (P2-1).
-        try {
-          opts.onExit?.(JSON.parse(msg.slice(EXIT_PREFIX.length)) as ProcessExitInfo);
-        } catch (err) {
+        const info = readProcessExit(msg.slice(EXIT_PREFIX.length));
+        if (info) exitDelivery.acceptExit(info);
+        else {
           // eslint-disable-next-line no-console
-          console.warn('[trylo] malformed process.exited frame:', err);
+          console.warn('[trylo] malformed process.exited frame');
         }
         return;
       }
@@ -87,7 +99,8 @@ class TauriProcessService implements ProcessService {
     stderrChannel.onmessage = (msg) => {
       // The `##TRYLO_PROC_EXIT##` control frame is a stdout artefact;
       // stderr never carries one. Anything arriving here is a real line.
-      stderrSink?.(msg);
+      try { stderrSink?.(msg); }
+      finally { exitDelivery.receivedStderr(); }
     };
     const dto = await invoke<ProcessHandleDto>('process_spawn', {
       command: opts.command,
@@ -98,6 +111,7 @@ class TauriProcessService implements ProcessService {
       projectKey: opts.metadata?.projectKey ?? null,
       conversationId: opts.metadata?.conversationId ?? null,
       runId: opts.metadata?.runId ?? null,
+      recoveryIdentity: opts.recoveryIdentity ?? null,
       onOutput: channel,
       onStderr: stderrChannel,
       // false ⇒ the Rust side keeps Stdio::null(); the channel above is
@@ -139,6 +153,16 @@ class TauriProcessService implements ProcessService {
         runId: d.metadata?.run_id ?? undefined,
       },
     }));
+  }
+
+  recoveryList(): Promise<readonly RecoverableProcess[]> { return invoke('process_recovery_list'); }
+  readOutput(id: ProcessId, afterSequence: number): Promise<RetainedProcessOutput> {
+    return invoke('process_read_output', { id, afterSequence });
+  }
+  async hasTeamOwner(workspaceRoot: string, conversationId: string): Promise<boolean> {
+    const owned = await invoke<unknown>('process_team_owner_status', { workspaceRoot, conversationId });
+    if (typeof owned !== 'boolean') throw new Error('Native team ownership result is invalid.');
+    return owned;
   }
 }
 

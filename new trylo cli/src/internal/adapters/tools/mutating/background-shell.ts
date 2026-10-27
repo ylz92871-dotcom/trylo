@@ -26,10 +26,26 @@ import { childEnvironment } from "./shell-spawn.js";
 const MAX_BACKGROUND_TIMEOUT_MS = 30 * 24 * 60 * 60 * 1_000;
 
 export type BackgroundShellConfig = {
+  readonly ownerId?: string;
   readonly sessions: ProcessSessionRegistry | undefined;
   /** Where a session's output is capped. Matches the foreground path's cap. */
   readonly maxBufferBytes: number;
 };
+
+function unconfirmedCancellation(detail: string): ToolOutcome {
+  return { outcome: "unknown", code: "background_cancel_unconfirmed",
+    message: `The background command started before cancellation, but its exit could not be confirmed: ${detail}` };
+}
+
+async function cancelStartedCommand(registry: ProcessSessionRegistry, id: string): Promise<ToolOutcome> {
+  try {
+    const stopped = await registry.stop(id);
+    return stopped.ok && stopped.end.kind === "exited" ? { outcome: "cancelled" }
+      : unconfirmedCancellation(stopped.ok ? stopped.end.kind : stopped.message);
+  } catch (error) {
+    return unconfirmedCancellation(error instanceof Error ? error.message : "stop failed");
+  }
+}
 
 export function readRunInBackground(request: ToolCallRequest): boolean | undefined {
   const value = request.arguments["runInBackground"];
@@ -53,7 +69,9 @@ export function readRunInBackground(request: ToolCallRequest): boolean | undefin
 export async function startBackgroundShell(
   config: BackgroundShellConfig,
   plan: ShellPlan,
+  signal?: AbortSignal,
 ): Promise<ToolOutcome> {
+  if (signal?.aborted) return { outcome: "cancelled" };
   const registry = config.sessions;
   if (registry === undefined) {
     // Refused rather than run in the foreground. A caller that asked for a
@@ -93,6 +111,7 @@ export async function startBackgroundShell(
   let session;
   try {
     session = await registry.start({
+      ...(config.ownerId === undefined ? {} : { ownerId: config.ownerId }),
       id: "",
       argv: head.argv,
       cwd: plan.cwd,
@@ -105,8 +124,9 @@ export async function startBackgroundShell(
       rows: 24,
       cols: 80,
       maxBufferBytes: config.maxBufferBytes,
-    });
+    }, signal);
   } catch (err) {
+    if (signal?.aborted) return { outcome: "cancelled" };
     const detail = err instanceof Error ? err.message : "spawn_failed";
     return {
       outcome: "error",
@@ -114,6 +134,9 @@ export async function startBackgroundShell(
       message: `background_start_failed:${detail}`,
     };
   }
+  // Admission may have completed just before a cancel won the await. That
+  // command exists, so only an observed stop permits a cancelled outcome.
+  if (signal?.aborted) return cancelStartedCommand(registry, session.id);
 
   const value = {
     sessionId: session.id,

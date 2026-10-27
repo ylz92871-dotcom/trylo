@@ -7,7 +7,6 @@ import {
   TEAM_META_TOOLS,
   TEAM_RESEARCH_TOOLS,
   TEAM_ROLE_FLOOR_TOOLS,
-  SKILL_TOOL_NAME,
   type TeamMemberSpec,
 } from '../team-profile-types';
 import {
@@ -35,7 +34,7 @@ export interface MemberInspectorProps {
  */
 export function MemberInspector(props: MemberInspectorProps): ReactElement {
   const member = props.member;
-  const [skillsText, setSkillsText] = useState('');
+  const [skillsDraft, setSkillsDraft] = useState<{ memberId: string; text: string } | null>(null);
 
   if (!member) {
     return (
@@ -46,6 +45,9 @@ export function MemberInspector(props: MemberInspectorProps): ReactElement {
   }
 
   const preview = previewMemberOverlay(member);
+  const skillsText = skillsDraft?.memberId === member.memberId
+    ? skillsDraft.text
+    : member.overlay.skills.join(', ');
   const isPerson = member.baseRole === 'person';
   const isIndependent =
     member.baseRole === 'reviewer' || member.baseRole === 'verifier';
@@ -54,9 +56,7 @@ export function MemberInspector(props: MemberInspectorProps): ReactElement {
     const current = member.overlay.tools ?? undefined;
     if (current === undefined) {
       // Expand from "full floor" to an explicit list minus the tool.
-      const floor = preview.toolsApplied.includes(tool) || tool === SKILL_TOOL_NAME
-        ? explicitFloor(member)
-        : explicitFloor(member);
+      const floor = explicitFloor(member);
       props.onPatchOverlay(member.memberId, {
         tools: floor.filter((t) => t !== tool),
       });
@@ -108,8 +108,12 @@ export function MemberInspector(props: MemberInspectorProps): ReactElement {
         <summary>工具</summary>
         <p className="team-composer__group-hint">
           {preview.toolsApplied.length > 0
-            ? `生效 ${preview.toolsApplied.length} 项 · Spawn 永远关闭`
+            ? `配置预览 ${preview.toolsApplied.length} 项 · Spawn 永远关闭`
             : '该成员为只读执行者'}
+        </p>
+        <p className="team-composer__group-hint">
+          实际可用工具由运行时和父任务权限共同限制。
+          {props.draft.surface === 'work' ? 'Work 成员的交付文件仅写入 .trylo/out。' : ''}
         </p>
         <ToolGroup
           title="Write（可去掉）"
@@ -147,13 +151,14 @@ export function MemberInspector(props: MemberInspectorProps): ReactElement {
             className="team-composer__text-input"
             placeholder="逗号分隔的技能名；空 = 不加载技能"
             value={skillsText}
-            onChange={(e) => setSkillsText(e.target.value)}
+            onChange={(e) => setSkillsDraft({ memberId: member.memberId, text: e.target.value })}
             onBlur={() => {
               const skills = skillsText
                 .split(/[,，]/)
                 .map((s) => s.trim())
                 .filter((s) => s.length > 0);
               props.onPatchOverlay(member.memberId, { skills });
+              setSkillsDraft(null);
             }}
           />
         )}

@@ -1,3 +1,4 @@
+import { TeamApprovalRequests } from './surfaces/team/run/TeamApprovalRequests';
 // Trylo Desktop — App entry. See spike-results/phase-2-ui-redesign.md.
 //
 // v1.15.7: Cursor-style 3-section sidebar.
@@ -40,6 +41,7 @@ import {
 import { PanelRight } from 'lucide-react'
 import { createTryloContext, hostAdapter } from './host-adapter'
 import { isTauri } from './host-adapter/tauri-detect'
+import { CliSessionStore } from './runtime/cli-session-store'
 import type { FilePath, CodeMode, TopLevelMode } from './host-adapter/types'
 // v1.16.6 (M4-A runtime ownership): the ConversationRunSupervisor
 // owns every Code run. React only reads the ViewState of the
@@ -55,6 +57,8 @@ import {
 import { resolveCliRuntime } from './host-adapter/cli-runtime-path'
 import { canSendSubagentInput, sendSubagentInput } from './host-adapter/trylo-v1-subagent-control'
 import { setCliRuntimeResolution } from './runtime/cli-runtime-resolution'
+import { yieldForSendFeedback } from './runtime/send-feedback'
+import { failTeamStart, mergeTeamProjection, routeTeamEvents, teamRunForContext } from './runtime/team-event-routing'
 // M4-C5: unified Code/Work run timing (spec §7.2). Created per send
 // in `onSend`; derived latencies let cold vs warm be measured without
 // any real-model cost (P1-3 — this is the production call site).
@@ -63,7 +67,8 @@ import {
   type DerivedLatencies,
   type RunTelemetrySnapshot,
 } from './runtime/run-telemetry'
-import { contextWindowFor } from './host-adapter/context-windows'
+import { contextPreference, resolveContextPreference } from './settings/context-window'
+import { usePlatformModels } from './account/use-platform-models'
 import { buildAttachmentPromptContext, type Attachment } from './host-adapter/attachment-utils'
 // P2-1 Work Package B: the partitioned attachment domain. App.tsx no
 // longer holds ANY attachment state — the store owns partitions,
@@ -171,6 +176,7 @@ import { ServicesCompanionPort, createTauriCompanionPaths } from './companion/co
 import { CompanionController, composeLifecycleObservers } from './companion/companion-controller'
 import { RemoteController } from './remote/remote-controller'
 import { ServicesRemotePort } from './remote/remote-port'
+import { bindPlatformModels } from './account/platform-models'
 import { mimeTypeForArtifactName, sanitizeArtifactRelPath } from './remote/remote-routing'
 // Hermes learning (migration spec §7, Phase 3): the port is the only way the
 // UI touches Hermes; the facade implements it over the Service Host.
@@ -236,7 +242,7 @@ import {
 } from './user-learning'
 import { deleteCliUserMemory, loadCliMemoryFacts, mutateCliMemory, snapshotToLegacyDocument, withCliFacts, type CliMemoryFact } from './user-learning/cli-memory'
 import { contractFilePath, serializeContractForDisk } from './user-learning/team-access/persist'
-import { parsePersonSeatOutput } from './user-learning/team-access/person-output'
+import { teamPersonFeedback } from './runtime/team-person-feedback'
 import { contractSummaryFromContract } from './user-learning/team-access/contract-summary'
 import {
   teamEvidenceProvenance,
@@ -277,7 +283,6 @@ import {
   CollaborationSwitch,
   PersonTeamStatusBar,
   SurfaceHost,
-  applyTeamEvents,
   cancelTeamSeat,
   clearComposerDraft,
   clearDismissedTeamRun,
@@ -288,7 +293,6 @@ import {
   selectSeat,
   summarizeTeam,
   teamModelChoices,
-  type CollaborationSurface,
   type TeamRun,
 } from './surfaces'
 import {
@@ -296,11 +300,15 @@ import {
   mapSignalsToTemplate,
 } from './user-learning/team-access/profiles/templates'
 import { startTeamTurn } from './user-learning/team-access/profiles/host-launch'
+import { watchRestoredTeamHistory } from './runtime/watch-restored-team-history'
+import { applyRecoveredChatEvents } from './runtime/recovered-chat-events'
+import { useCodeApprovals } from './components/chat/code-approval-messages'
+import { bindConversationPageLifecycle } from './runtime/conversation-page-lifecycle'
+import { useCollaborationSurface } from './surfaces/use-collaboration-surface'
 import type { LoopEvent } from './host-adapter/loop-events'
 import {
   configureTeamRunsCache,
   loadTeamRunsForWorkspace,
-  selectRunForConversation,
   subscribeTeamRuns,
   teamMarksFromRuns,
   teamRunsSnapshot,
@@ -390,7 +398,7 @@ function queueConversationKey(projectKey: string, conversationId: string): strin
  *  projection itself never parses seat output. */
 function feedTeamEvents(
   setRun: (updater: (prev: TeamRun | null) => TeamRun | null) => void,
-  ctx: { workspaceId: string; personConversationId: string },
+  ctx: { workspaceId: string; personConversationId: string; teamRunId?: string },
   events: readonly unknown[],
   opts?: {
     readonly contractSummary?: ContractSummaryLike
@@ -403,42 +411,24 @@ function feedTeamEvents(
     }) => void
   },
 ): void {
+  const originRun = teamRunForContext(ctx)
+  if (!originRun) return
   if (
     !events.some((e) => {
       if (!e || typeof e !== 'object') return false
       const type = (e as { type?: unknown }).type
-      return type === 'subagent' || type === 'tool_use' || type === 'tool_result'
+      return type === 'subagent' || type === 'tool_use' || type === 'tool_result' || type === 'loop_end'
     })
   ) {
     return
   }
-  let vetoActive = false
-  let vetoReason = ''
-  let questions: readonly string[] = []
-  let unknown: readonly string[] = []
-  for (const e of events) {
-    if (!e || typeof e !== 'object') continue
-    const ev = e as { type?: unknown; kind?: unknown; agentType?: unknown; result?: unknown }
-    if (ev.type !== 'subagent' || ev.kind !== 'end' || ev.agentType !== 'person') continue
-    const parsed = parsePersonSeatOutput(typeof ev.result === 'string' ? ev.result : '')
-    if (!parsed) continue
-    if (parsed.veto.active) {
-      vetoActive = true
-      vetoReason = parsed.veto.reason
-    }
-    if (parsed.userQuestions.length > 0) {
-      questions = parsed.userQuestions
-      unknown =
-        parsed.intent.unknown && !/^none/i.test(parsed.intent.unknown)
-          ? [parsed.intent.unknown]
-          : []
-    }
-  }
+  const { vetoActive, vetoReason, questions, unknown } = teamPersonFeedback(events, originRun.id)
   const extras: TeamEventExtras = {
     ...(vetoActive ? { vetoActive: true, vetoReason } : {}),
     ...(opts?.contractSummary ? { contractSummary: opts.contractSummary } : {}),
   }
-  setRun((prev) => applyTeamEvents(prev, events, ctx, extras))
+  const projected = routeTeamEvents(ctx, events, extras)
+  setRun((prev) => mergeTeamProjection(prev, projected))
   if (vetoActive) opts?.onVeto?.(vetoReason)
   if (questions.length > 0)
     opts?.onClarify?.({ personConversationId: ctx.personConversationId, questions, unknown })
@@ -642,11 +632,6 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   const [topMode, setTopMode] = useState<TopLevelMode>(
     initialWorkspaceIndex.topModeByWorkspace[initialWorkspaceIndex.currentWorkspaceId] ?? 'code',
   )
-  // Person | Team surface (spec §1.2, §11 PR-A). `person` keeps
-  // today's ChatPanel byte-for-byte; `team` swaps the main column
-  // for the new task board. State lives at the App root so the
-  // TopBar (right side) and the main column can both see it.
-  const [collaborationSurface, setCollaborationSurface] = useState<CollaborationSurface>('person')
   // In-memory TeamRun. `null` = no team yet → TeamEmptyState.
   // Live `subagent` events for the five seats project here; the
   // DEV-only "加载示例" button still seeds FIXTURE_TEAM_RUN.
@@ -704,13 +689,13 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // PR-11 (spec §8.6): the non-terminal run survives restarts via
   // `.trylo/team-runs.json`. Load on workspace switch (active run only);
   // save on every run update. Failures are logged, never fatal.
-  const teamRunsLoadedRootRef = useRef<string | null>(null)
   useEffect(() => {
     // Foundation spec §9.3: the cache holds the FULL team-runs file;
     // App's single teamRun state is the per-conversation projection.
     configureTeamRunsCache({
       readFile: (path) => hostAdapter.fs.readFile(path),
       writeFile: (path, body) => hostAdapter.fs.writeFile(path, body),
+      ...(isTauriFn() ? { storage: hostAdapter.teamRuns } : {}),
     })
   }, [])
   useEffect(() => {
@@ -731,47 +716,12 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       cancelled = true
     }
   }, [])
-  useEffect(() => {
-    const root = currentWorkspace.root
-    if (teamRunsLoadedRootRef.current === root) return
-    teamRunsLoadedRootRef.current = root
-    void loadTeamRunsForWorkspace(root, currentWorkspace.id).then(() => {
-      const selected = selectRunForConversation(teamRunsSnapshot(), currentActiveSession?.id ?? '')
-      setTeamRun(
-        selected
-          ? ({
-              ...selected,
-              workspaceId: currentWorkspace.id,
-              selectedSeatId: null,
-            } as unknown as TeamRun)
-          : null,
-      )
-    })
-    // currentActiveSession?.id is read inside the async continuation on
-    // purpose: the load resolves after mount, when the session is known.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentWorkspace.root, currentWorkspace.id])
-  useEffect(() => {
-    // Re-select when the user switches Person conversations. Never clobbers
-    // a live projection: feedTeamEvents writes straight into teamRun state.
-    const sessionId = currentActiveSession?.id ?? null
-    const selected = selectRunForConversation(teamRunsSnapshot(), sessionId ?? '')
-    setTeamRun(
-      selected
-        ? ({
-            ...selected,
-            workspaceId: currentWorkspace.id,
-            selectedSeatId: null,
-          } as unknown as TeamRun)
-        : null,
-    )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [codeSessionId, workSessionId, currentWorkspace.root])
+  const teamConversationId = topMode === 'work' ? workSessionId : codeSessionId
   useEffect(() => {
     // Persist THROUGH the cache so other conversations' runs survive
     // (Foundation spec Pitfall 22) and UI-only fields stay off disk.
-    if (!teamRun) return
-    void upsertTeamRun(toPersistableTeamRun(teamRun))
+    if (!teamRun || teamRun.recovery) return
+    void upsertTeamRun(toPersistableTeamRun(teamRun), teamRun.workspaceId)
   }, [teamRun])
 
   // ── Team composer data (Foundation spec PR-5 wiring) ────────────
@@ -830,11 +780,16 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // one for the active conversation id (or null if it's been cleared).
   const teamRunForCurrentSession = useMemo<TeamRun | null>(() => {
     if (!teamRun) return null
+    if (teamRun.workspaceId !== currentWorkspace.id) return null
     const sessionId = currentActiveSession?.id ?? null
     if (!sessionId) return null
     if (teamRun.personConversationId !== sessionId) return null
     return teamRun
-  }, [teamRun, currentActiveSession])
+  }, [teamRun, currentActiveSession, currentWorkspace.id])
+
+  const [collaborationSurface, setCollaborationSurface] = useCollaborationSurface({
+    workspaceKey: currentWorkspaceKey, mode: topMode, conversationId: teamConversationId,
+  }, teamRunForCurrentSession !== null)
 
   // Foundation spec §10.10: the DEV "加载示例" fixture CTA is gone from
   // the UI main path. FIXTURE_TEAM_RUN stays in team-fixture.ts for unit
@@ -848,7 +803,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
 
   const handlePersonTeamStatusBarOpen = useCallback(() => {
     setCollaborationSurface('team')
-  }, [])
+  }, [setCollaborationSurface])
 
   const updateHistoryAt = useCallback(
     (
@@ -1131,6 +1086,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   const supervisorRef = useRef<ConversationRunSupervisor | null>(null)
   if (!supervisorRef.current) {
     supervisorRef.current = new ConversationRunSupervisor({
+      sessionStore: isTauriFn() ? new CliSessionStore(hostAdapter.runtimeSessions) : undefined,
       // Hermes MCP args are resolved per run, right before the CLI spawn
       // (spec §7.3). The port is read through the ref because it is created
       // further down, after the Service Manager exists. This is now the
@@ -1205,9 +1161,16 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     })
   }
   const supervisor = supervisorRef.current
+  const reportStopFailure = useCallback((root: string, conversationId: string, error: unknown): void => {
+    const reason = error instanceof Error ? error.message : String(error)
+    updateMessagesAt(root, conversationId, (prev) => [...prev, {
+      id: `stop-error-${Date.now().toString(36)}`, kind: 'notice' as const, role: 'system' as const,
+      createdAt: Date.now(), text: `尚未确认任务已停止，请重试停止：${reason}`,
+    }])
+  }, [updateMessagesAt])
   const handleCancelTeamSeat = useCallback(
     (seatId: string) => {
-      setTeamRun((run) => (run ? cancelTeamSeat(run, seatId) : run))
+      const requestedRunId = teamRunRef.current?.id
       // PR-9: the user stopping a seat is user Evidence with team provenance.
       try {
         const seat = teamRunRef.current?.seats.find((s) => s.id === seatId)
@@ -1235,7 +1198,10 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       }
       const sessionId = currentActiveSession?.id
       if (!sessionId) return
-      void supervisor.stopTask(currentWorkspaceKey, sessionId, seatId)
+      void supervisor.stopTask(currentWorkspaceKey, sessionId, seatId).then((accepted) => {
+        if (!accepted) return
+        setTeamRun((run) => run && run.id === requestedRunId ? cancelTeamSeat(run, seatId) : run)
+      })
     },
     [currentActiveSession, currentWorkspaceKey, supervisor],
   )
@@ -1245,12 +1211,24 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   const handleStopTeamRun = useCallback(() => {
     const run = teamRunRef.current
     if (!run) return
-    for (const seat of run.seats) {
-      if (seat.status === 'running' || seat.status === 'waiting_approval') {
-        handleCancelTeamSeat(seat.id)
-      }
-    }
-  }, [handleCancelTeamSeat])
+    const root = currentWorkspace.root
+    // Stop the dispatcher as well: otherwise it may launch queued members
+    // immediately after the visible children have been cancelled.
+    void supervisor.stopConversation(currentWorkspaceKey, run.personConversationId, (recovery) => {
+      const projected = routeTeamEvents({ workspaceId: root, personConversationId: recovery.process.conversationId,
+        teamRunId: recovery.process.identity.teamRunId }, recovery.events,
+      teamPersonFeedback(recovery.events, recovery.process.identity.teamRunId))
+      updateMessagesAt(root, recovery.process.conversationId,
+        (prev) => applyRecoveredChatEvents(prev, recovery.events, recovery.process.identity.turnId))
+      setTeamRun((current) => mergeTeamProjection(current, projected))
+      recovery.acknowledge()
+    }).then(() => {
+      const cancelled = routeTeamEvents({ workspaceId: root, personConversationId: run.personConversationId, teamRunId: run.id }, [
+        { type: 'loop_end', reason: 'cancelled', ts: Date.now() },
+      ])
+      setTeamRun((current) => mergeTeamProjection(current, cancelled))
+    }).catch((error: unknown) => reportStopFailure(root, run.personConversationId, error))
+  }, [currentWorkspaceKey, currentWorkspace.root, supervisor, reportStopFailure, updateMessagesAt])
 
   // Composer profile save-as / delete (Foundation spec PR-5). The draft
   // lives in the composer-draft singleton; App only persists.
@@ -1333,40 +1311,9 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // in-memory registry, never in the ConversationRecord. The
   // card routes `onRespond` through the unified ApprovalService
   // (Code path) or WorkRuntime.respondApproval (Work path).
-  const codeApprovals = useMemo<readonly ChatMessage[]>(() => {
-    if (!codeSessionId) return EMPTY_CHAT_MESSAGES
-    const pending = supervisor
-      .pendingCodePermissions()
-      .filter((r) => r.conversationId === codeSessionId)
-    return pending.map<ChatMessage>((req) => ({
-      id: `code-approval:${req.requestId}`,
-      kind: 'approval',
-      role: 'system',
-      createdAt: req.at,
-      // P3: route is `code`; the host dispatches the response
-      // through ApprovalService.decide(requestId, decision).
-      authority: 'code',
-      approvalId: req.requestId,
-      type: req.toolName,
-      description: req.title ?? `${req.toolName} 请求审批`,
-      status: 'pending',
-      // PR-2: the classifier's safe preview (paths only, no raw content)
-      // rides with the pending request so the card renders a real summary
-      // instead of a bare tool name.
-      ...(req.preview ? { preview: req.preview } : {}),
-      // Live handle to the in-memory registry entry. The
-      // card calls buildApprovalPreview on demand; this
-      // object is NOT written to ConversationRecord.
-      pendingRequest: {
-        requestId: req.requestId,
-        projectKey: req.projectKey,
-        conversationId: req.conversationId,
-        processId: req.processId,
-        toolName: req.toolName,
-        input: req.input,
-      },
-    }))
-  }, [supervisor, codeSessionId, codeView])
+  // Approval visibility has its own registry subscription; a Work request
+  // need not change the Code controller to appear or disappear.
+  const codeApprovals = useCodeApprovals(supervisor, currentWorkspaceKey, codeSessionId)
 
   // 2026-08-30 (intent-routing): a Work message routed to the Code runtime
   // raises Code permission requests whose conversationId is the WORK session,
@@ -1374,32 +1321,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // Work conversation — otherwise the user can only approve them via the pet.
   // Project the pending Code requests for the visible Work session here and
   // merge them into `workMergedMessages`.
-  const workApprovals = useMemo<readonly ChatMessage[]>(() => {
-    if (!workSessionId) return EMPTY_CHAT_MESSAGES
-    const pending = supervisor
-      .pendingCodePermissions()
-      .filter((r) => r.conversationId === workSessionId)
-    return pending.map<ChatMessage>((req) => ({
-      id: `code-approval:${req.requestId}`,
-      kind: 'approval',
-      role: 'system',
-      createdAt: req.at,
-      authority: 'code',
-      approvalId: req.requestId,
-      type: req.toolName,
-      description: req.title ?? `${req.toolName} 请求审批`,
-      status: 'pending',
-      ...(req.preview ? { preview: req.preview } : {}),
-      pendingRequest: {
-        requestId: req.requestId,
-        projectKey: req.projectKey,
-        conversationId: req.conversationId,
-        processId: req.processId,
-        toolName: req.toolName,
-        input: req.input,
-      },
-    }))
-  }, [supervisor, workSessionId, codeView])
+  const workApprovals = useCodeApprovals(supervisor, currentWorkspaceKey, workSessionId)
 
   // P3: merge the live CodePermissionRegistry projection INTO the
   // persisted message stream AT RENDER TIME only. The persisted
@@ -1563,18 +1485,16 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     return resultRepo.snapshot(currentWorkspaceKey, codeSessionId)?.code?.latestRun
   }, [currentWorkspaceKey, codeSessionId, resultRepo, resultVersion])
 
-  // v1.16.6 (P0-2): on app close, stop every owned Code run so no
-  // trylo-cli Node child is orphaned (the Rust side also kills the
-  // ProcessState table on CloseRequested — this covers the webview
-  // side / non-Tauri reload too). Fire-and-forget; the controller
-  // stop is idempotent.
-  useEffect(() => {
-    const onPageHide = (): void => {
-      void supervisor.stopAll()
-    }
-    window.addEventListener('pagehide', onPageHide)
-    return () => window.removeEventListener('pagehide', onPageHide)
-  }, [supervisor])
+  // Rust owns actual native close/exit cleanup. A WebView reload only loses
+  // its display; stopping every conversation here would cancel unrelated work.
+  useEffect(() => bindConversationPageLifecycle({
+    host: isTauriFn() ? 'native' : 'browser', page: window,
+    stopAll: () => supervisor.stopAll(),
+    onStopError: (error) => {
+      // eslint-disable-next-line no-console
+      console.warn('[runtime] pagehide cleanup remains unconfirmed:', error)
+    },
+  }), [supervisor])
   // Send anchors and settled totals belong to their user turns, never global state.
   const [peekFile, setPeekFile] = useState<{ path: string; content: string } | null>(null)
   // v1.16.5: Phase 2.5 收口 — Work sub-app can request
@@ -1715,6 +1635,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     })
   }
   const serviceManager = serviceManagerRef.current
+  useEffect(() => bindPlatformModels(serviceManager), [serviceManager])
   const serviceHostPathsRef = useRef<ReturnType<typeof createTauriCompanionPaths> | null>(null)
   if (!serviceHostPathsRef.current) serviceHostPathsRef.current = createTauriCompanionPaths()
   const companionPortRef = useRef<ServicesCompanionPort | null>(null)
@@ -2495,8 +2416,9 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   const onStopCodeConversation = useCallback(
     (projectKey: string, conversationId: string): void => {
       void supervisor.stopConversation(projectKey, conversationId)
+        .catch((error: unknown) => reportStopFailure(projectKey, conversationId, error))
     },
-    [supervisor],
+    [supervisor, reportStopFailure],
   )
 
   // M4-D: list of items rendered in the Activity Center.
@@ -2814,7 +2736,36 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         ])
         return
       }
+      const now = Date.now()
+      const turnId = `user-${now.toString(36)}`
+      const preparation = supervisor.beginSend(workspaceKey(root), sessionId, turnId)
+      if (!preparation) return
       workSendIdempotencyRef.current = { key: sendKey, at: nowAtSend }
+      const sendPermissionLevel = effectivePermission.level
+      const priorMessagesAtSend = workMessagesRef.current
+      const workAttachmentEntries = conversationAttachmentStore.snapshot({
+        surface: 'work',
+        projectKey: workspaceKey(root),
+        conversationId: sessionId,
+      }).workAttachments
+      const workAttachmentSnapshot = workAttachmentEntries.map(toWorkDescriptor)
+      const workSentAttachments: readonly SentAttachment[] = workAttachmentEntries.map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        kind: entry.kind,
+        ...(entry.size !== undefined ? { size: entry.size } : {}),
+        ...(entry.previewUrl !== undefined ? { previewUrl: entry.previewUrl } : {}),
+      }))
+      // Show the accepted input and preparing state before tool/service I/O.
+      // Keep the prompt, attachments, permission and history bound to this click.
+      if (!fromSuggestion) {
+        updateMessagesAt(root, sessionId, (prev) => [
+          ...prev,
+          beginConversationTurn({ text, now, turnId, attachments: workSentAttachments }),
+        ])
+        updateHistoryAt(root, (history) => updateConversationDraft(history, sessionId, ''))
+      }
+      setCognitionSendTick((tick) => tick + 1)
       // P0-A (audit §3.3-5): the pre-send capability gate. Resolve the SAME
       // Profile the run will use, then:
       //   - a request that explicitly needs a missing capability is BLOCKED
@@ -2826,9 +2777,15 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       // The resolved runtime is handed to sendWorkChat so the gate and the run
       // can never disagree about what this turn sees.
       const gateSettings = loadSettings()
+      setSettings(gateSettings)
+      const currentSettings = settingsForConversation(
+        gateSettings, workspaceKey(root), sessionId, conversationModelsRef.current,
+      )
       const gateProfileId = workProfileIdFor(gateSettings.workBrowserDebug, gateSettings.workCad)
       let gateRuntime: ResolvedToolRuntime | null = null
       try {
+        await yieldForSendFeedback()
+        if (!preparation.isCurrent()) return
         gateRuntime =
           (await toolingFacadeRef.current?.resolveProfile({
             surface: 'work',
@@ -2837,13 +2794,16 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
             projectKey: workspaceKey(root),
             projectRoot: root,
             conversationId: sessionId,
-            permissionLevel: effectivePermission.level,
+            permissionLevel: sendPermissionLevel,
           }, { required: true })) ?? null
+        if (!preparation.isCurrent()) return
         if (!gateRuntime) throw new Error('工具服务尚未就绪，请稍后重试。')
       } catch (error) {
+        if (!preparation.isCurrent()) return
+        preparation.finish()
         workSendIdempotencyRef.current = null
         updateMessagesAt(root, sessionId, (prev) => [
-          ...prev,
+          ...finalizeTurnTimer(prev, turnId, Date.now(), 'failed'),
           {
             id: `work-tools-${Date.now().toString(36)}`,
             kind: 'notice',
@@ -2857,8 +2817,10 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       if (gateRuntime) {
         const decision = decideSendCapabilityGate(text, gateRuntime.unavailableCapabilities)
         if (decision.behavior === 'block') {
+          preparation.finish()
+          workSendIdempotencyRef.current = null
           updateMessagesAt(root, sessionId, (prev) => [
-            ...prev,
+            ...finalizeTurnTimer(prev, turnId, Date.now(), 'failed'),
             {
               id: `work-cap-${Date.now().toString(36)}`,
               kind: 'notice',
@@ -2872,51 +2834,13 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         }
         gateNotice = decision.behavior === 'degrade' ? decision.notice : null
       }
-      const learningDirective = opts?.learningDirective ?? consumeNextLearningDirective('work')
-      const now = Date.now()
-      // The user message id doubles as the run's turnId
-      // (spec §2.2): it is KNOWN at send time, persisted
-      // with the binding, and never guessed later.
-      const turnId = `user-${now.toString(36)}`
-      // P2-1 Work Package B: snapshot the Work partition AT SEND TIME.
-      // The attachment projection belongs to THIS turn — a later turn
-      // takes its own snapshot. Sending never mutates the partition:
-      // failed and successful sends both keep the attachments.
-      const workAttachmentEntries = conversationAttachmentStore.snapshot({
-        surface: 'work',
-        projectKey: workspaceKey(root),
-        conversationId: sessionId,
-      }).workAttachments
-      const workAttachmentSnapshot = workAttachmentEntries.map(toWorkDescriptor)
-      // v1.16.8: mirror the sent Image/file on the Work bubble too (display-only).
-      const workSentAttachments: readonly SentAttachment[] = workAttachmentEntries.map((entry) => ({
-        id: entry.id,
-        name: entry.name,
-        kind: entry.kind,
-        ...(entry.size !== undefined ? { size: entry.size } : {}),
-        ...(entry.previewUrl !== undefined ? { previewUrl: entry.previewUrl } : {}),
-      }))
-      // Optimistic push: the user bubble only. "Is the agent
-      // working" is run feedback — the MessageList's
-      // StreamingIndicator (driven by workRunning) covers it;
-      // a "Working on it…" SYSTEM pill here would be the
-      // exact noise M3 removes. The shared
-      // beginConversationTurn (spec §6.1) stamps
-      // `turnStartedAt` so Work's TurnProgress appears the
-      // moment the user hits send — matching Code.
       if (fromSuggestion) {
         const sid = opts?.suggestionId
         updateMessagesAt(root, sessionId, (prev) =>
           prev.filter((m) => (sid ? m.id !== sid : m.kind !== 'task_suggestion')),
         )
-      } else {
-        updateMessagesAt(root, sessionId, (prev) => [
-          ...prev,
-          beginConversationTurn({ text, now, turnId, attachments: workSentAttachments }),
-        ])
-        updateHistoryAt(root, (history) => updateConversationDraft(history, sessionId, ''))
       }
-      setCognitionSendTick((tick) => tick + 1)
+      const learningDirective = opts?.learningDirective ?? consumeNextLearningDirective('work')
       // P0-A §3.3-5: the non-blocking capability notice lands AFTER the user
       // bubble so the run still starts (§4.4: the agent can chat) while the
       // missing capability is stated in the same turn.
@@ -2934,18 +2858,8 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       }
       const startedAt = Date.now()
       try {
-        // Always read the latest persisted settings. Code
-        // does this on every send; Work must do the same.
-        const savedSettings = loadSettings()
-        setSettings(savedSettings)
-        // 不同对话不同模型: resolve THIS Work conversation's connection so the
-        // run spawns with the conversation's chosen model (profile/pool/own).
-        const currentSettings = settingsForConversation(
-          savedSettings,
-          workspaceKey(root),
-          sessionId,
-          conversationModelsRef.current,
-        )
+        // Use the settings captured at the click, just like the attachments
+        // and permission. Changes during preparation apply to the next send.
         const effectiveLearningDirective =
           currentSettings.userLearning.userLearningNoTraceMode === false
             ? undefined
@@ -3054,7 +2968,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
                   systemPrompt,
                   codeMode: 'agent',
                   permissionLevel: effectivePermission.level,
-                  priorMessages: workMessages,
+                  priorMessages: priorMessagesAtSend,
                   turnId,
                   requestedProfileId: workProfileIdFor(
                     currentSettings.workBrowserDebug,
@@ -3106,7 +3020,10 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         } catch {
           // Fail open: Work still runs without personalization.
         }
-        if (skipWork) return
+        if (skipWork) {
+          preparation.finish()
+          return
+        }
         await workProjector.onRunStarted({
           projectKey: workspaceKey(root),
           projectRoot: root,
@@ -3115,6 +3032,11 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           turnId,
           startedAt,
         })
+        if (!preparation.isCurrent()) {
+          await workProjector.onRunTerminal({ projectKey: workspaceKey(root), projectRoot: root,
+            conversationId: sessionId, taskId: '', runId: turnId, turnId, startedAt }, 'cancelled')
+          return
+        }
         await sendWorkChat(supervisor, {
           projectKey: workspaceKey(root),
           conversationId: sessionId,
@@ -3122,9 +3044,10 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           settings: settingsForCodeRun(currentSettings, root, effectiveLearningDirective),
           systemPrompt: workSystemPrompt,
           codeMode: 'agent',
-          permissionLevel: effectivePermission.level,
-          priorMessages: workMessages,
+          permissionLevel: sendPermissionLevel,
+          priorMessages: priorMessagesAtSend,
           turnId,
+          sendPreparation: preparation,
           // PR-6 (§4.1) / PR-7: 电脑控制 and 浏览器调试 are explicit
           // capability switches. The default Work send never asks for an
           // upgraded Profile, so the model cannot see the Windows desktop
@@ -3171,9 +3094,14 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
             turnId,
             startedAt,
           },
-          'completed',
+          preparation.signal.aborted ? 'cancelled' : 'completed',
         )
       } catch (err) {
+        if (preparation.signal.aborted) {
+          await workProjector.onRunTerminal({ projectKey: workspaceKey(root), projectRoot: root,
+            conversationId: sessionId, taskId: '', runId: turnId, turnId, startedAt }, 'cancelled')
+          return
+        }
         await workProjector.onRunTerminal(
           {
             projectKey: workspaceKey(root),
@@ -3199,6 +3127,8 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
             diagnosticId: `work-send-failed:${turnId}`,
           },
         ])
+      } finally {
+        preparation.finish()
       }
     },
     [
@@ -3214,6 +3144,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       workMessages,
       workLifecycleObserver,
       openSettings,
+      supervisor,
       workRunning,
       setWorkInput,
       pendingCognitionByConversation,
@@ -3329,6 +3260,10 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // 直接停止 Code supervisor 上的 Work 会话运行。
   const handleWorkStop = useCallback(() => {
     if (!workSessionId) return
+    updateMessagesAt(currentWorkspace.root, workSessionId, (prev) =>
+      finalizeLatestTurnTimer(prev, Date.now(), 'cancelled'),
+    )
+    workSendIdempotencyRef.current = null
     try {
       const traceId = tracesByConversationRef.current.get(
         conversationTraceKey(workspaceKey(currentWorkspace.root), workSessionId),
@@ -3356,7 +3291,8 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     // interrupted run — is done; a NEW takeover re-records it).
     takeoverEscalationsRef.current?.revokeConversation(workSessionId)
     void supervisor.stopConversation(workspaceKey(currentWorkspace.root), workSessionId)
-  }, [supervisor, workSessionId, currentWorkspace.root])
+      .catch((error: unknown) => reportStopFailure(currentWorkspace.root, workSessionId, error))
+  }, [supervisor, workSessionId, currentWorkspace.root, updateMessagesAt, reportStopFailure])
 
   // 2026-08-30 (P0 Work 单一发送) + 2026-09-04 (CLI 单核): approvals run
   // solely through the supervisor's CodePermissionRegistry — the workd
@@ -3503,7 +3439,14 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     : settings.poolModel.trim()
       ? settings.poolModel
       : settings.apiModel
-  const contextWindow = useMemo(() => latestContextWindow(messages) ?? contextWindowFor(effectiveModel), [messages, effectiveModel])
+  const activeContextSettings = settingsForConversation(settings, activeConversationKey.wsKey, activeConversationKey.convId, conversationModels)
+  const contextModels = usePlatformModels(!!activeContextSettings.poolModel.trim())
+  const contextCapacity = activeContextSettings.poolModel.trim()
+    ? contextModels.models.find(item => item.id === activeContextSettings.poolModel)?.contextLength : undefined
+  const currentContextPreference = contextPreference(activeContextSettings)
+  const selectedContextWindow = resolveContextPreference(currentContextPreference, contextCapacity).effective
+  const contextWindow = (topMode === 'work' ? workRunning : running)
+    ? latestContextWindow(topMode === 'work' ? workMessages : messages) ?? selectedContextWindow : selectedContextWindow
 
   // Only actual runtime start/result events own the compaction indicator.
   const compacting = useMemo<boolean>(() => {
@@ -3793,8 +3736,9 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     }
     if (codeSessionId) {
       void supervisor.stopConversation(currentWorkspaceKey, codeSessionId)
+        .catch((error: unknown) => reportStopFailure(currentWorkspace.root, codeSessionId, error))
     }
-  }, [supervisor, currentWorkspaceKey, codeSessionId, setMessages])
+  }, [supervisor, currentWorkspaceKey, currentWorkspace.root, codeSessionId, setMessages, reportStopFailure])
 
   // The context follows the current workspace. Recreating
   // on workspace switch is cheap (it's just an object).
@@ -3912,7 +3856,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   }, [topMode, codeMode, currentWorkspace.root, updateHistoryAt])
 
   const onDeleteSession = useCallback(
-    (id: string): void => {
+    async (id: string): Promise<void> => {
       const record = currentHistory.conversations[id]
       if (!record) return
       // v1.16.6 (P0-1): a delete ends the run REGARDLESS of which
@@ -3924,7 +3868,8 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       // The explicit "continue background / stop and close / cancel"
       // confirm flow (§2.6 / §5.4) is registered as M4-D debt — see
       // CODE-WORK-M4A-AUDIT-CORRECTION P1-3.
-      supervisor.removeConversation(currentWorkspaceKey, id)
+      try { await supervisor.removeConversation(currentWorkspaceKey, id) }
+      catch (error) { reportStopFailure(currentWorkspace.root, id, error); return }
       // P2-1 Work Package B: destroy both surface partitions of the
       // deleted conversation; the Work staging directory is removed
       // through the Rust cleanup (fire-and-forget, idempotent).
@@ -3970,6 +3915,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       supervisor,
       updateHistoryAt,
       workProjector,
+      reportStopFailure,
     ],
   )
 
@@ -4345,20 +4291,20 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       readonly personConversationId: string
       readonly questions: readonly string[]
       readonly unknown: readonly string[]
+      readonly teamRunId?: string
     }) => {
       if (payload.questions.length === 0) return
       const session = userLearning.enqueueTeamClarification({
         kind: 'team_clarification',
-        teamRunId: `team-${payload.personConversationId}`,
+        teamRunId: payload.teamRunId ?? (teamRunRef.current?.personConversationId === payload.personConversationId
+          ? teamRunRef.current.id : `team-${payload.personConversationId}`),
         questions: payload.questions,
         unknownItems: payload.unknown,
         blocking: true,
         risk: 'medium',
       })
       if (!session) return
-      const source = topMode === 'work' ? workSessionId : codeSessionId
-      if (!source) return
-      updateMessagesAt(currentWorkspace.root, source, (prev) =>
+      updateMessagesAt(currentWorkspace.root, payload.personConversationId, (prev) =>
         prev.some(
           (item) =>
             item.kind === 'cognition_prompt' &&
@@ -4369,8 +4315,46 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           : [...prev, cognitionPromptMessage(session)],
       )
     },
-    [codeSessionId, currentWorkspace.root, topMode, updateMessagesAt, userLearning, workSessionId],
+    [currentWorkspace.root, updateMessagesAt, userLearning],
   )
+
+  useEffect(() => {
+    let cancelled = false
+    let stopWatching: (() => void) | undefined
+    void loadTeamRunsForWorkspace(currentWorkspace.root, currentWorkspace.id).then(() => {
+      if (cancelled) return
+      stopWatching = watchRestoredTeamHistory({
+        workspaceRoot: currentWorkspace.root, projectKey: currentWorkspaceKey, workspaceId: currentWorkspace.id,
+        conversationId: teamConversationId ?? '', runtime: supervisor, isCurrent: () => !cancelled,
+        onChecking: setTeamRun,
+        onRecoveredEvents: (recovery, projected) => {
+          updateMessagesAt(currentWorkspace.root, recovery.process.conversationId,
+            (prev) => applyRecoveredChatEvents(prev, recovery.events, recovery.process.identity.turnId))
+          const feedback = teamPersonFeedback(recovery.events, projected.id)
+          if (feedback.questions.length > 0) handlePersonClarify({ personConversationId: projected.personConversationId,
+            teamRunId: projected.id, questions: feedback.questions, unknown: feedback.unknown })
+          const person = projected.seats.find(seat => seat.seat === 'person' && seat.status === 'waiting_approval')
+          if (feedback.vetoActive && person && !vetoHandledSeatsRef.current.has(person.id)) {
+            vetoHandledSeatsRef.current.add(person.id)
+            for (const seat of projected.seats) if (seat.seat === 'worker' && ['running', 'waiting_approval'].includes(seat.status)) {
+              void supervisor.stopTask(currentWorkspaceKey, projected.personConversationId, seat.id)
+                .then(accepted => { if (!accepted) reportStopFailure(currentWorkspace.root, projected.personConversationId,
+                  new Error('Person 否决后的成员停止尚未确认')) })
+            }
+          }
+        },
+        onRestored: (restored) => setTeamRun((current) => current && restored
+          && current.id === restored.id && current.workspaceId === restored.workspaceId
+          ? mergeTeamProjection(current, restored) : restored),
+        onError: (error) => {
+          // eslint-disable-next-line no-console
+          console.warn('[team-access] history observation failed:', error)
+        },
+      })
+    })
+    return () => { cancelled = true; stopWatching?.() }
+  }, [currentWorkspace.root, currentWorkspace.id, currentWorkspaceKey, teamConversationId, supervisor, updateMessagesAt,
+    handlePersonClarify, reportStopFailure])
 
   // ── Team composer launch (Foundation spec PR-7 / §7.6.2) ────────
   const lastPersonUserPrompt = useMemo(() => {
@@ -4399,7 +4383,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   const handleComposeTeamFromPerson = useCallback(() => {
     handleSuggestTeamDraft()
     setCollaborationSurface('team')
-  }, [handleSuggestTeamDraft])
+  }, [handleSuggestTeamDraft, setCollaborationSurface])
 
   const personTeamStatusBarNode = useMemo(() => {
     if (
@@ -4429,6 +4413,13 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       const draft = getComposerDraft()
       const sessionId = currentActiveSession?.id ?? null
       const root = currentWorkspace.root
+      const announceLaunchFailure = (message: string): void => {
+        if (!sessionId) return
+        updateMessagesAt(root, sessionId, (prev) => [...prev, {
+          id: `team-launch-${Date.now().toString(36)}`, kind: 'notice' as const,
+          role: 'system' as const, createdAt: Date.now(), text: message,
+        }])
+      }
       // Round-3 P0-10: this used to `return Promise.resolve()` silently — a
       // click on 开始 that vanished with no reason line, no notice, nothing.
       // A start that cannot start must say so in the composer AND in the
@@ -4438,23 +4429,21 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           ? '没有可用的会话，无法开始这场团队。'
           : '团队草稿不见了，请重新选一个模板再开始。'
         setComposerLaunchError(message)
-        if (sessionId) {
-          updateMessagesAt(root, sessionId, (prev) => [
-            ...prev,
-            {
-              id: `team-launch-${Date.now().toString(36)}`,
-              kind: 'notice' as const,
-              role: 'system' as const,
-              createdAt: Date.now(),
-              text: message,
-            },
-          ])
-        }
+        announceLaunchFailure(message)
+        return Promise.resolve()
+      }
+      const sendTurnId = `turn-${Date.now().toString(36)}`
+      const preparation = supervisor.beginSend(currentWorkspaceKey, sessionId, sendTurnId)
+      if (!preparation) {
+        const message = '当前会话正在准备或恢复旧执行，请先停止或等待。'
+        setComposerLaunchError(message)
+        announceLaunchFailure(message)
         return Promise.resolve()
       }
       return (async () => {
         const result = await startTeamTurn({
           workspaceRoot: root,
+          workspaceId: currentWorkspace.id,
           conversationId: sessionId,
           product: topMode,
           goal,
@@ -4462,29 +4451,36 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           composerLive: teamComposerLive,
           preparePrompt: (input) => userLearning.preparePrompt(input),
           isPersonTurnRunning: topMode === 'work' ? workRunning : running,
+          inspectOwner: () => supervisor.inspectTeamOwner(currentWorkspaceKey, sessionId),
+          signal: preparation.signal,
           writeFile: (path, body) => hostAdapter.fs.writeFile(path, body),
         })
+        const live = liveIdentityRef.current
+        const stillSelected = live.workspaceKey === workspaceKey(root)
+          && live.conversationId === sessionId && live.topMode === topMode
         if (!result.ok) {
-          setComposerLaunchError(result.message)
-          updateMessagesAt(root, sessionId, (prev) => [
-            ...prev,
-            {
-              id: `team-launch-${Date.now().toString(36)}`,
-              kind: 'notice' as const,
-              role: 'system' as const,
-              createdAt: Date.now(),
-              text: result.message,
-            },
-          ])
+          if (stillSelected) setComposerLaunchError(result.message)
+          announceLaunchFailure(result.message)
           return
         }
-        clearDismissedTeamRun()
-        setTeamRun({
-          ...result.run,
-          workspaceId: currentWorkspace.id,
-          selectedSeatId: null,
-        } as unknown as TeamRun)
-        clearComposerDraft()
+        const teamContext = { workspaceId: root, personConversationId: sessionId, teamRunId: result.teamRunId }
+        const closeCancelledStart = (): void => {
+          // A cancelled preparation is not proof that an acquired native
+          // process exited. Its controller still owns any failed Stop.
+          if (supervisor.controller(currentWorkspaceKey, sessionId).ownsNativeTurn(sendTurnId)) return
+          const events = routeTeamEvents(teamContext, [{ type: 'loop_end', reason: 'cancelled', ts: Date.now() }])
+          setTeamRun((current) => mergeTeamProjection(current, events))
+        }
+        if (!preparation.isCurrent()) { closeCancelledStart(); return }
+        if (stillSelected) {
+          clearDismissedTeamRun()
+          setTeamRun({
+            ...result.run,
+            workspaceId: currentWorkspace.id,
+            selectedSeatId: null,
+          } as unknown as TeamRun)
+        }
+        if (getComposerDraft() === draft) clearComposerDraft()
         // Duplicate-bubble guard: skip the user bubble when the goal already
         // is the latest user message (§7.6.2 step 8).
         const source = topMode === 'work' ? workMessages : messages
@@ -4498,24 +4494,39 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
               role: 'user' as const,
               createdAt: Date.now(),
               text: result.goal,
-              turnId: `turn-${Date.now().toString(36)}`,
+              turnId: sendTurnId,
             },
           ])
+        } else {
+          // The existing goal bubble is also the durable boundary for output
+          // recovery; bind it to this launch without adding a duplicate bubble.
+          updateMessagesAt(root, sessionId, (prev) => prev.map(message => message.id === lastUserText.id
+            ? { ...message, turnId: sendTurnId } : message))
+        }
+        const onStartFailure = (err: unknown): void => {
+          if (preparation.signal.aborted) { closeCancelledStart(); return }
+          const reason = err instanceof Error ? err.message : String(err)
+          const failed = failTeamStart(teamContext, reason, Date.now())
+          setTeamRun((prev) => mergeTeamProjection(prev, failed))
+          updateMessagesAt(root, sessionId, (prev) => [...prev, {
+            id: `team-start-error-${Date.now().toString(36)}`, kind: 'notice' as const,
+            role: 'system' as const, createdAt: Date.now(), text: `团队未能启动：${reason}`,
+          }])
         }
         const onEvents = (events: readonly LoopEvent[]): void => {
           feedTeamEvents(
             setTeamRun,
-            { workspaceId: root, personConversationId: sessionId },
+            teamContext,
             events,
             { onClarify: handlePersonClarify },
           )
           updateMessagesAt(root, sessionId, (prev) => applyEvents(prev, events))
         }
-        const sendTurnId = `turn-${Date.now().toString(36)}`
         if (result.product === 'code') {
           // Code dispatch: teamMode flips TRYLO_TEAM_MODE (code-run-controller).
-          void supervisor
+          await supervisor
             .runCode(currentWorkspaceKey, sessionId, {
+              sendPreparation: preparation,
               prompt: result.goal,
               settings: settingsForCodeRun(
                 { ...loadSettings(), systemPrompt: result.systemPrompt },
@@ -4526,25 +4537,17 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
               priorMessages: messages,
               turnId: sendTurnId,
               teamMode: true,
+              teamRunId: result.teamRunId,
               lifecycleObserver: codeLifecycleObserver,
               onEvents,
             })
-            .catch((err) => {
-              const reason = err instanceof Error ? err.message : String(err)
-              updateMessagesAt(root, sessionId, (prev) => [
-                ...prev,
-                {
-                  id: `code-start-error-${Date.now().toString(36)}`,
-                  kind: 'notice' as const,
-                  role: 'system' as const,
-                  createdAt: Date.now(),
-                  text: `Code run could not start: ${reason}`,
-                },
-              ])
-            })
+            .catch(onStartFailure)
         } else {
-          // Work dispatch: no TRYLO_TEAM_MODE (Work profile spawnEnv covers it).
-          void sendWorkChat(supervisor, {
+          // Work uses the same frozen-team runtime flag as Code.
+          await sendWorkChat(supervisor, {
+            sendPreparation: preparation,
+            teamMode: true,
+            teamRunId: result.teamRunId,
             projectKey: currentWorkspaceKey,
             conversationId: sessionId,
             text: result.goal,
@@ -4562,13 +4565,13 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
             toolRuntime: null,
             lifecycleObserver: userLearningLifecycle,
             onEvents,
-          })
+          }).catch(onStartFailure)
         }
-        setCollaborationSurface('team')
-      })()
+        if (preparation.signal.aborted) closeCancelledStart()
+        if (stillSelected) setCollaborationSurface('team')
+      })().finally(() => preparation.finish())
     },
     [
-      builtinTeamTemplates,
       codeLifecycleObserver,
       updateMessagesAt,
       currentActiveSession,
@@ -4580,6 +4583,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       messages,
       running,
       supervisor,
+      setCollaborationSurface,
       teamComposerLive,
       topMode,
       userLearning,
@@ -4717,7 +4721,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
 
   // ── Send ──────────────────────────────────────────────────
   const onSend = useCallback(
-    (message: string, queuedLearningDirective?: LearningDirective): void => {
+    async (message: string, queuedLearningDirective?: LearningDirective): Promise<void> => {
       // Issue-1 diagnosability: if we bail before even adding the user bubble,
       // the composer looks dead — surface WHY every time.
       if (!historyReady || !codeSessionId) {
@@ -4833,6 +4837,8 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       // P2-1 (spec §7.2): the user message id is BOTH the originating turn's
       // id and the result scope's turnId — known at send time, never guessed.
       const sendTurnId = `user-${sendStartedAt.toString(36)}`
+      const preparation = supervisor.beginSend(projectKeyAtSend, sessionIdAtSend, sendTurnId)
+      if (!preparation) return
       // The CLI doesn't echo the user prompt — add the bubble
       // ourselves so the user sees it immediately.
       updateMessagesAt(workspaceRootAtSend, sessionIdAtSend, (prev) => [
@@ -4846,6 +4852,8 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       ])
       setCognitionSendTick((tick) => tick + 1)
       telemetry.mark('userMessageCommittedAt')
+      await yieldForSendFeedback()
+      if (!preparation.isCurrent()) return
       let warmRun = false
       // v1.16.6 (M4-A): the supervisor owns the run — it warm-reuses
       // this conversation's idle CLI when present, else spawns, and
@@ -5012,10 +5020,11 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         // Fail open: Code still runs without personalization.
       }
       if (skipAgent) {
+        preparation.finish()
         bumpLearning()
         return
       }
-      void supervisor
+      await supervisor
         .runCode(projectKeyAtSend, sessionIdAtSend, {
           prompt: cliPrompt,
           settings: runSettings,
@@ -5023,6 +5032,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           permissionLevel: sendPermissionLevel,
           priorMessages: priorMessagesAtSend,
           turnId: sendTurnId,
+          sendPreparation: preparation,
           teamMode: teamLaunch,
           lifecycleObserver: codeLifecycleObserver,
           // M4-C5 (P1-3): mark the warm/cold path the controller took.
@@ -5108,6 +5118,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
             },
           ])
         })
+        .finally(() => preparation.finish())
     },
     [
       historyReady,
@@ -5606,12 +5617,15 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
             aria-label="结果侧栏"
             aria-pressed={rightRailOpen}
           >
-            <PanelRight size={16} strokeWidth={1.65} aria-hidden="true" /><span>结果</span>
+            <PanelRight size={16} strokeWidth={1.65} aria-hidden="true" />
           </button>
         </>
       }
     >
       <SurfaceHost
+        teamApprovals={teamRunForCurrentSession ? <TeamApprovalRequests runId={teamRunForCurrentSession.id}
+          messages={topMode === 'code' ? codeApprovals : workApprovals}
+          onRespond={handleRespondApproval} onOpenPreview={onOpenApprovalPreview} /> : undefined}
         collaborationSurface={collaborationSurface}
         teamRun={teamRunForCurrentSession}
         composerLive={teamComposerLive}
@@ -5628,8 +5642,14 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         onSelectTeamSeat={handleSelectTeamSeat}
         onCancelTeamSeat={handleCancelTeamSeat}
         onStopTeamRun={handleStopTeamRun}
+        onTeamMemberInput={canSendSubagentInput(topMode === 'work' ? workCodeView.activeProcessId : activeProcessId)
+          ? (agentId, text, mode) => {
+            const processId = topMode === 'work' ? workCodeView.activeProcessId : activeProcessId
+            if (!processId) return Promise.reject(new Error('本轮已结束，无法发送补充要求。'))
+            return sendSubagentInput(processId, agentId, text, mode)
+          } : undefined}
         personView={
-          cognitionViewOpen && cognitionSession ? (
+          cognitionViewOpen && cognitionSession && collaborationSurface !== 'team' ? (
             <CognitionSurface
               session={cognitionSession}
               snapshot={withCliFacts(userLearning.snapshot(), cliMemoryFacts, LOCAL_USER_ID)}

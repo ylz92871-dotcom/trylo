@@ -1,0 +1,42 @@
+import fs from 'node:fs';import path from 'node:path';import {fileURLToPath} from 'node:url';import {createRequire} from 'node:module';import {spawnSync} from 'node:child_process';import {createHash} from 'node:crypto';
+import {desktopDownloadActions} from '../scripts/desktop-download.mjs';
+const root=path.dirname(fileURLToPath(import.meta.url)),require=createRequire(path.resolve(root,'../../desktop-services/package.json'));
+const desktopRelease=JSON.parse(fs.readFileSync(path.resolve(root,'../desktop-release.json'),'utf8'));
+const read=p=>fs.readFileSync(path.join(root,p),'utf8'),fragment=name=>read(`src/sections/${name}.html`),write=(p,v)=>{fs.mkdirSync(path.dirname(path.join(root,p)),{recursive:true});fs.writeFileSync(path.join(root,p),v);};
+const run=(exe,args)=>{const result=spawnSync(exe,args,{encoding:'utf8',windowsHide:true});if(result.status!==0)throw Error(result.stderr||result.stdout);};
+let shell=read('src/index.template.html');
+const activity='<div class="demo-activity"><div><img src="/assets/agent-0.svg" width="23" height="23" alt=""><span>检索智能体 · 资料已整理</span></div><div><img src="/assets/agent-6.svg" width="23" height="23" alt=""><span>检查智能体 · 反馈已回到任务</span></div></div>';
+shell=shell.replace('</div><p class="response-copy work-text">',`</div>${activity}<p class="response-copy work-text">`);
+shell=shell.replace('<a href="#workspace">工作台</a><button','<a href="#workspace">工作台</a><a href="#team">持续协作</a><button');
+const phone=fragment('phone');
+const chapters=['team','learning','connect','film','closing'].map(name=>fragment(name).replace('<!--PHONE-->',phone)).join('\n');
+shell=shell.replace(/<section class="closing"[\s\S]*?<\/section>/,chapters).replace(/<footer>[\s\S]*?<\/footer>/,fragment('footer'));
+shell=shell.replace('</noscript>','<style>.team-section{height:auto}.team-stage{position:relative;height:auto;padding-bottom:40px}.task-arena{position:relative;inset:auto;display:flex;flex-wrap:wrap;gap:25px;padding:50px 23px;transform:none}.task-sheet{position:relative;inset:auto;transform:none;width:300px;height:400px;margin:auto;opacity:1}.team-controls,.team-result,.handoff-ticket{display:none}.phone-approval{opacity:1;transform:none}.memory-slip{display:none}</style></noscript>');
+write('index.html',shell);
+const avatarSource=path.resolve(root,'../../desktop/src/components/chat/AgentAvatar.tsx');
+const folds=[...fs.readFileSync(avatarSource,'utf8').matchAll(/\['(M[^']+)', '([^']+)', '([^']+)'\]/g)];
+if(folds.length!==12)throw Error(`Expected twelve existing avatar identities, got ${folds.length}`);
+for(const i of [0,3,6]){const [,base,face,seam]=folds[i];write(`assets/agent-${i}.svg`,`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path fill="#353633" fill-rule="evenodd" d="${base}"/><path fill="#e8e3d7" d="${face}"/><path fill="#b79b62" d="${seam}"/></svg>`);}
+write('review/avatar-source.json',JSON.stringify({source:avatarSource,variants:[0,3,6],unchangedPaths:true},null,2));
+const begin=shell.indexOf('<div class="workspace-frame"'),end=shell.indexOf('<p class="chapter-caption">',begin);
+const workframe=shell.slice(begin,end).replace('role="tabpanel" aria-labelledby="mode-work"','role="img" aria-label="Trylo Desktop 工作台界面演绎"').replace('data-mode="work"','data-mode="work" data-entered="true"');
+const footer=fragment('footer').replaceAll('href="#','href="/#');
+const downloadHeader='<header class="header"><a class="brand" href="/" aria-label="Trylo 首页"><img src="/assets/trylo-mark.svg" width="42" height="42" alt=""><span>Trylo</span></a><nav aria-label="下载导航"><a href="/download/desktop/">Desktop</a><a href="/download/app/">App</a></nav><a class="account" href="https://trylocode.me/account/">个人控制台</a></header>';
+for(const kind of ['desktop','app']){
+ const desktop=kind==='desktop';
+ const title=desktop?'给想法，<br>一整个工作台。':'下一步，<br>随你一起。';
+ const description=desktop?'写代码、做作品、调动工具。<br>在 Trylo Desktop，把整个工作过程展开。':'与 Trylo 直接对话，也与电脑接着协作。<br>任务、消息与审批，放进口袋里。';
+ const actions=desktop?desktopDownloadActions(desktopRelease):'<a class="primary" href="https://trylocode.me/app/releases/Trylo-Code-v1.1.6.apk">下载 Android App<svg viewBox="0 0 20 20"><path d="M4 15 15 4M4 4h11v11"/></svg></a><p class="download-availability">Android · 当前公开版本 v1.1.6</p><a class="download-contact" href="https://trylocode.me/app/">安装说明与更新记录</a>';
+ const appPhone=phone.replace(/<div class="phone-actions">[\s\S]*?<\/div>/,'<p class="download-phone-note">在手机上确认，<br>电脑继续完成下一步。</p>').replace(/<button type="button" class="reset-demo"[^>]*>[\s\S]*?<\/button>/,'');
+ const visual=desktop?'<div class="download-brand-image"><img src="/assets/brand.webp" width="1672" height="941" alt="Trylo 的三件香槟金品牌形体"></div>':`<div class="download-phone">${appPhone}</div>`;
+ const extra=desktop?`<section class="download-product"><h2>Code 与 Work，<br>在一个地方展开。</h2><div class="download-workspace">${workframe}</div><p>Code / Work 工作台 · 界面演绎</p></section>`:'<section class="app-explanation"><div><h2>在手机上，<br>接上电脑的工作。</h2><p>在 Desktop 开启远程连接，用手机 App 扫码配对。<br>连接后查看会话、发送任务、处理审批；电脑需保持在线。</p></div><a href="https://trylocode.me/account/">打开个人控制台<svg viewBox="0 0 20 20"><path d="M4 15 15 4M4 4h11v11"/></svg></a></section>';
+ write(`download/${kind}/index.html`,`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101412"><title>Trylo ${desktop?'Desktop':'App'} — ${desktop?'展开工作':'接着协作'}</title><link rel="icon" href="/assets/trylo-icon.svg"><link rel="stylesheet" href="/styles.css"></head><body class="download-page ${desktop?'desktop-download':'app-download'}">${downloadHeader}<main id="main"><section class="download-hero"><div class="download-intro"><span class="download-platform">Trylo ${desktop?'Desktop / Windows':'App / Android'}</span><h1>${title}</h1><p>${description}</p><div class="download-actions">${actions}</div></div>${visual}</section>${extra}</main>${footer}</body></html>`);
+}
+const bundle=await require('esbuild').build({entryPoints:[path.join(root,'src/site.mjs')],outfile:path.join(root,'app.js'),bundle:true,minify:true,format:'esm',target:'es2022',metafile:true});
+write('review/bundle.json',JSON.stringify(bundle.metafile,null,2));
+const fontText=shell+read('download/desktop/index.html')+read('download/app/index.html')+read('src/site.mjs');
+write('review/font-text.txt',fontText);
+if(process.env.TRYLO_CJK_FONT)run('python',['-m','fontTools.subset',process.env.TRYLO_CJK_FONT,`--text-file=${path.join(root,'review/font-text.txt')}`,'--flavor=woff',`--output-file=${path.join(root,'assets/trylo-text.woff')}`]);
+const hash=p=>createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+write('review/build-manifest.json',JSON.stringify({at:new Date().toISOString(),v2Used:false,base:'marketing-v5',runtimeBytes:fs.statSync(path.join(root,'app.js')).size,source:hash(path.join(root,'src/site.mjs')),heroDesktop:hash(path.join(root,'assets/brand-loop-desktop.mp4')),heroMobile:hash(path.join(root,'assets/brand-loop-mobile.mp4')),shippedFiles:['index.html','styles.css','app.js','download/desktop/index.html','download/app/index.html']},null,2));
+console.log('Built complete V6 preview, two download pages, existing Trylo avatars and full Chinese font subset.');

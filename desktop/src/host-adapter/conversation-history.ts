@@ -16,6 +16,7 @@ import { isTauri } from './tauri-detect';
 import { normalizeMessageIds } from '../components/chat/message-identity';
 import { parsePermissionLevel, type PermissionLevel } from '../permission/permission-policy';
 import { dedupeCapabilityNotices } from '../components/chat/capability-notice';
+import { normalizeMemberObservations } from '../domain/member-observation';
 
 export type ConversationKind = TopLevelMode;
 
@@ -148,6 +149,7 @@ function safeMessages(value: unknown): readonly ChatMessage[] {
       && typeof message.role === 'string'
       && typeof message.createdAt === 'number';
   }).map(message => {
+    if (message.kind === 'subagent' && message.observations !== undefined) return { ...message, observations: normalizeMemberObservations(message.observations) };
     if (message.kind !== 'text' || message.turnTiming === undefined || isTurnTiming(message.turnTiming)) return message;
     return { ...message, turnTiming: undefined };
   });

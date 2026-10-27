@@ -123,7 +123,9 @@ describe('surfaces/team/team-store', () => {
   it('isTeamRunActive handles missing / terminal runs', () => {
     expect(isTeamRunActive(null)).toBe(false);
     expect(isTeamRunActive(undefined)).toBe(false);
-    expect(isTeamRunActive({ ...FIXTURE_TEAM_RUN, status: 'completed' })).toBe(false);
+    expect(isTeamRunActive({ ...FIXTURE_TEAM_RUN, status: 'completed', lifecycle: 'closed' })).toBe(false);
+    expect(isTeamRunActive({ ...FIXTURE_TEAM_RUN, status: 'completed', lifecycle: undefined })).toBe(false);
+    expect(isTeamRunActive({ ...FIXTURE_TEAM_RUN, status: 'completed', lifecycle: 'open' })).toBe(true);
     expect(isTeamRunActive(FIXTURE_TEAM_RUN)).toBe(true);
   });
 });

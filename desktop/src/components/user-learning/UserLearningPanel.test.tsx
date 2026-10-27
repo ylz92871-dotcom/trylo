@@ -3,7 +3,7 @@ import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-li
 import { UserLearningPanel, type UserLearningPanelProps } from './UserLearningPanel'
 import type { LearningPort } from '../../learning/learning-port'
 import type { UserLearningSnapshot, UserLearningSettings } from '../../user-learning/types'
-import { filterEvidence, evidenceSurface } from './inspector-prefs'
+import { filterEvidence, evidenceSurface, INSPECTOR_PREFS_KEY } from './inspector-prefs'
 import type { EvidenceRecord } from '../../user-learning/types'
 
 afterEach(() => {
@@ -233,5 +233,75 @@ describe('UserLearningPanel', () => {
     })
     expect(r.map((x) => x.id)).toEqual([b.id, c.id])
     expect(r.map((x) => evidenceSurface(x))).toEqual(['work', 'work'])
+  })
+
+  it('explains a persisted empty strength filter and restores evidence with 全部强度', () => {
+    localStorage.setItem(INSPECTOR_PREFS_KEY, JSON.stringify({ strengthFilter: 'authoritative' }))
+    const snapshot = {
+      ...EMPTY_SNAPSHOT,
+      evidence: [ev({ product: 'code' }), ev({ product: 'work' })],
+    }
+    renderPanel(undefined, { snapshot })
+    fireEvent.click(screen.getByRole('button', { name: '学习依据' }))
+
+    expect(screen.getByRole('status').textContent).toBe('匹配 0 / 2 条依据')
+    expect(screen.getByText(/没有符合当前筛选条件的学习依据/)).toBeTruthy()
+    expect(screen.queryByText(/还没有 Evidence/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '全部强度', pressed: false }))
+    expect(screen.getByRole('status').textContent).toBe('匹配 2 / 2 条依据')
+    expect(screen.getByText(snapshot.evidence[0]!.inference.claim)).toBeTruthy()
+    expect(screen.getByText(snapshot.evidence[1]!.inference.claim)).toBeTruthy()
+    expect(JSON.parse(localStorage.getItem(INSPECTOR_PREFS_KEY)!).strengthFilter).toBe('all')
+  })
+
+  it('clears search and every evidence filter together without replacing the snapshot', () => {
+    localStorage.setItem(
+      INSPECTOR_PREFS_KEY,
+      JSON.stringify({
+        surfaceFilter: 'work',
+        channelFilter: 'cognition',
+        dimensionFilter: 'verification_audit',
+        strengthFilter: 'authoritative',
+      }),
+    )
+    const snapshot = { ...EMPTY_SNAPSHOT, evidence: [ev({ product: 'code' })] }
+    renderPanel(undefined, { snapshot })
+    fireEvent.click(screen.getByRole('button', { name: '学习依据' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '搜索学习依据' }), {
+      target: { value: '找不到的内容' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '清除筛选' }))
+
+    expect((screen.getByRole('textbox', { name: '搜索学习依据' }) as HTMLInputElement).value).toBe(
+      '',
+    )
+    expect(screen.getByRole('status').textContent).toBe('匹配 1 / 1 条依据')
+    expect(screen.getByText(snapshot.evidence[0]!.inference.claim)).toBeTruthy()
+    expect(JSON.parse(localStorage.getItem(INSPECTOR_PREFS_KEY)!)).toMatchObject({
+      surfaceFilter: 'all',
+      channelFilter: 'all',
+      dimensionFilter: 'all',
+      strengthFilter: 'all',
+      cognitionTab: 'evidence',
+    })
+    expect(screen.queryByRole('button', { name: '清除筛选' })).toBeNull()
+  })
+
+  it('distinguishes an empty store from a filtered list and reports matches before the 100-row cap', () => {
+    const view = renderPanel(undefined, { openedFrom: undefined })
+    fireEvent.click(screen.getByRole('button', { name: '学习依据' }))
+    expect(screen.getByText(/还没有 Evidence/)).toBeTruthy()
+    expect(screen.queryByText(/没有符合当前筛选条件/)).toBeNull()
+    view.unmount()
+
+    renderPanel(undefined, {
+      openedFrom: undefined,
+      snapshot: {
+        ...EMPTY_SNAPSHOT,
+        evidence: Array.from({ length: 102 }, () => ev({ product: 'code' })),
+      },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '学习依据' }))
+    expect(screen.getByRole('status').textContent).toBe('匹配 102 / 102 条依据，显示最新 100 条')
   })
 })

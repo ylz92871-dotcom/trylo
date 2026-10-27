@@ -72,7 +72,10 @@ export type CompactionWiring = {
    * holds no stream mid-flight. A synchronous wiring (the shipped extractive
    * default) stays exactly as fast as it was.
    */
-  readonly summarize: (items: ReadonlyArray<TranscriptItem>, previousSummary?: string, signal?: AbortSignal) => string | Promise<string>;
+  /** The optional full transcript supplies request provenance across windows;
+   * it is not additional material to resend in an auxiliary provider request. */
+  readonly summarize: (items: ReadonlyArray<TranscriptItem>, previousSummary?: string, signal?: AbortSignal,
+    requestTranscript?: ReadonlyArray<TranscriptItem>) => string | Promise<string>;
   /**
    * The tokens the tool table adds to every request (`tools` on the wire).
    *

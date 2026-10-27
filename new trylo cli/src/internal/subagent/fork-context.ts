@@ -1,33 +1,41 @@
-import type { ProviderMessage, ProviderPort } from "../ports/provider.js";
+import type { ProviderMessage } from "../ports/provider.js";
 
 /** Only answered calls cross the fork boundary; an in-flight spawn is not history. */
 export function completedParentContext(messages: ReadonlyArray<ProviderMessage>): ReadonlyArray<ProviderMessage> {
-  const calls = new Set(messages.flatMap(message => message.toolCalls?.map(call => call.toolCallId) ?? []));
-  const answered = new Set(messages.filter(message => message.role === "tool" && message.toolCallId !== undefined)
-    .map(message => message.toolCallId));
-  return messages.flatMap(message => {
-    if (message.role === "tool") return message.toolCallId !== undefined && calls.has(message.toolCallId) ? [message] : [];
+  const pending = new Map<string, { readonly messageIndex: number; readonly callIndex: number }>();
+  const answered = new Map<number, Set<number>>(), results = new Set<number>();
+  messages.forEach((message, messageIndex) => {
+    if (message.role === "assistant") {
+      message.toolCalls?.forEach((call, callIndex) => { pending.set(call.toolCallId, { messageIndex, callIndex }); });
+    } else if (message.role === "tool" && message.toolCallId !== undefined) {
+      const call = pending.get(message.toolCallId);
+      if (call === undefined) return;
+      const group = answered.get(call.messageIndex) ?? new Set<number>();
+      group.add(call.callIndex); answered.set(call.messageIndex, group);
+      results.add(messageIndex); pending.delete(message.toolCallId);
+    }
+  });
+  return messages.flatMap((message, messageIndex) => {
+    if (message.role === "tool") return results.has(messageIndex) ? [message] : [];
     if (message.toolCalls === undefined) return [message];
-    const toolCalls = message.toolCalls.filter(call => answered.has(call.toolCallId));
+    const toolCalls = message.toolCalls.filter((_call, callIndex) => answered.get(messageIndex)?.has(callIndex));
     const { toolCalls: _calls, ...rest } = message;
     return toolCalls.length > 0 ? [{ ...rest, toolCalls }] : message.content.length > 0 ? [rest] : [];
   });
 }
 
 /**
- * Fork context is an immutable provider prefix, separate from the child's own
- * transcript. Keeping the original messages preserves tool pairs and validated
- * image payloads without inventing a second persisted transcript format.
+ * Fork context enters the Loop before its context accounting, never as a late
+ * provider decorator. The immutable background preserves completed pairs and
+ * validated images. An oversized background is refused rather than truncated.
  */
-export function createForkContextProvider(provider: ProviderPort, messages: ReadonlyArray<ProviderMessage>): ProviderPort {
-  if (messages.length === 0) return provider;
-  const prefix = completedParentContext(messages);
+export function forkBackgroundMessages(messages: ReadonlyArray<ProviderMessage>): ReadonlyArray<ProviderMessage> {
+  if (messages.length === 0) return [];
+  const prefix = completedParentContext(structuredClone(messages));
   const identity: ProviderMessage = { role: "system", content: [
     "You are a delegated subagent. The preceding conversation belongs to your parent and is background context.",
     "Carry out only the newest child instruction; do not repeat the parent's task or start new agents.",
     "Use only your currently advertised tool definitions, not tool lists quoted in the parent history.",
   ].join("\n") };
-  return { ...provider, async *stream(request, signal) {
-    yield* provider.stream({ ...request, messages: [...prefix, identity, ...request.messages] }, signal);
-  } };
+  return [...prefix, identity];
 }

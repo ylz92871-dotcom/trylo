@@ -7,7 +7,7 @@ import { budgetCeiling, outputBudgetSpent, fitRequestToContext } from "./budget-
 import type { ExecutionState } from "../domain/state.js";
 import type { CompactRecordDraft, CompactWindow } from "../ports/compaction.js";
 import type { PermissionPort } from "../ports/permission.js";
-import { accumulateUsage, providerContinuationScope, type ProviderPort, type ProviderUsage, type SystemPromptDirective } from "../ports/provider.js";
+import { accumulateUsage, providerContinuationScope, type ProviderMessage, type ProviderPort, type ProviderUsage, type SystemPromptDirective } from "../ports/provider.js";
 import type { SessionRecord } from "../ports/session.js";
 import type { ToolPort, ToolSandbox } from "../ports/tools.js";
 import type { Envelope, JsonObject } from "../protocol/envelope.js";
@@ -170,6 +170,9 @@ export type RunTurnRequest = {
    * source for the same rules.
    */
   readonly callerMessages?: ReadonlyArray<Message>;
+  /** Immutable delegated background, included in the same estimate and hard
+   * context gate as seeds/history. It cannot be silently dropped by compaction. */
+  readonly backgroundMessages?: ReadonlyArray<ProviderMessage>;
   /**
    * A caller-supplied system prompt (`--system-prompt` replace or
    * `--append-system-prompt` append). Absent — every caller that predates

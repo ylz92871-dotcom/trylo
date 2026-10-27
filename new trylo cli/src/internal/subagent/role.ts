@@ -28,10 +28,9 @@ export type SubagentRole = {
   readonly allowedTools?: ReadonlyArray<string> | undefined;
   readonly disallowedTools?: ReadonlyArray<string> | undefined;
   /**
-   * Skills this role asks for. **Not enforced**: the subagent tool boundary
-   * carries no skill catalog, so a name here is recorded and ignored. It is
-   * read as a wish, not a grant — the same reason `allowedTools` is checked
-   * against the parent rather than believed.
+   * Skills this role asks for. The generic runtime carries no catalog and
+   * treats names as wishes. Frozen team wiring resolves installed skill text
+   * before dispatch and intersects its tool restrictions with the role floor.
    */
   readonly skills?: ReadonlyArray<string> | undefined;
   /** Turn ceiling for one child. Lowering it is narrowing; raising it is not. */

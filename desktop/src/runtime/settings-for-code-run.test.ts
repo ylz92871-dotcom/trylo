@@ -24,6 +24,12 @@ import type { FilePath } from '../host-adapter/types';
 
 const CWD = 'C:/trylo-workspace/workspace' as FilePath;
 
+it('platform pool selection never forwards private API credentials or headers', () => {
+  const run = settingsForCodeRun({ cliPath: '' as FilePath, apiKey: 'private-own-key', apiHost: 'https://paid.invalid', apiModel: 'paid', poolModel: 'Qwen3.8-Flash-Next', apiFormat: 'anthropic', apiKeyHeader: 'x-private', apiKeyPrefix: 'Secret ', extraHeadersText: '{"private":"value"}', providerId: 'paid' }, CWD);
+  expect(run.platformModel).toBe('Qwen3.8-Flash-Next'); expect(run.providerId).toBe('openai-compatible'); expect(run.apiFormat).toBe('openai');
+  for (const field of ['apiKey', 'apiHost', 'apiKeyHeader', 'apiKeyPrefix', 'extraHeadersText'] as const) expect(run[field]).toBeUndefined();
+});
+
 /** What the resolver returns on a machine that HAS the new CLI bundled. */
 const BUNDLED = {
   cliScript: 'C:/Program Files/Trylo/resources/cli/dist/cmd/trylo/main.js',

@@ -27,7 +27,7 @@ test("packaged defaults omit the optional contextTokenLimit", () => {
   assert.equal(Object.hasOwn(PACKAGED_DEFAULTS, "contextTokenLimit"), false);
 });
 
-test("the closed set is exactly the twelve allowed keys", () => {
+test("the closed set includes model capacity and the allowed run settings", () => {
   assert.deepEqual(Object.keys(SETTINGS_SCHEMA).sort(), [
     "contextTokenLimit",
     "endpoint",
@@ -38,6 +38,7 @@ test("the closed set is exactly the twelve allowed keys", () => {
     "maxIterations",
     "maxTokens",
     "model",
+    "modelContextWindow",
     "outputPricePerMTok",
     "provider",
     "shell",

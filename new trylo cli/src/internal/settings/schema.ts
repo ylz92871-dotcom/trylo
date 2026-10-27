@@ -25,6 +25,7 @@ type KeySpec =
   | { readonly kind: "enum"; readonly members: ReadonlyArray<string> }
   | { readonly kind: "string" }
   | { readonly kind: "positiveInt" }
+  | { readonly kind: "positiveSafeInt" }
   | { readonly kind: "positiveNumber" };
 
 /**
@@ -60,7 +61,8 @@ export const SETTINGS_SCHEMA: Readonly<Record<string, KeySpec>> = {
   shell: { kind: "enum", members: ["bash", "zsh", "sh", "powershell", "cmd"] },
   maxIterations: { kind: "positiveInt" },
   maxTokens: { kind: "positiveInt" },
-  contextTokenLimit: { kind: "positiveInt" },
+  contextTokenLimit: { kind: "positiveSafeInt" },
+  modelContextWindow: { kind: "positiveSafeInt" },
   /**
    * The dollar budget and its pricing pair (WP09.3/L07). Dollars are a
    * quantity of money, not a token count, so the number is positive with
@@ -89,8 +91,8 @@ export const SETTINGS_SCHEMA: Readonly<Record<string, KeySpec>> = {
  * `schema.test.ts` asserts that, so a drift between the defaults and the closed
  * set turns the build red instead of producing an unrenderable config.
  *
- * `contextTokenLimit` is intentionally omitted: it is optional, and leaving it
- * unset is meaningful (the provider decides), which a packaged number would hide.
+ * Context settings stay optional here. The context-window policy resolves an
+ * absent preference to 200K and clamps it to declared model capacities.
  *
  * Request-count and cumulative output budgets are opt-in, like the reference
  * execution policy. Model/provider generation limits remain authoritative;
@@ -172,6 +174,11 @@ function validateValue(
     case "positiveInt":
       if (!isPositiveInt(value)) {
         return failure("invalid_value", `${source}: ${key} must be a positive integer`);
+      }
+      return undefined;
+    case "positiveSafeInt":
+      if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+        return failure("invalid_value", `${source}: ${key} must be a positive safe integer`);
       }
       return undefined;
     case "positiveNumber":

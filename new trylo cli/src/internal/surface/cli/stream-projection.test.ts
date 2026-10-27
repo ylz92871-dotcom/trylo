@@ -42,6 +42,17 @@ function fixtures(): ReadonlyArray<Envelope> {
   ];
 }
 
+test("team identity survives every child lifecycle projection", () => {
+  const translator = createStreamTranslator();
+  for (const [index, kind] of ["subagent_spawn", "subagent_update", "subagent_end"].entries()) {
+    const [event] = translator.push(envelope(kind, { subagentId: "a", agentType: "worker", status: "completed",
+      teamRunId: "team-1", memberId: "m1" }, index + 1));
+    assert.equal(event?.type === "subagent" && "teamRunId" in event ? event.teamRunId : undefined, "team-1");
+    assert.equal(event?.type === "subagent" && "memberId" in event ? event.memberId : undefined, "m1");
+    assert.equal(event?.type === "subagent" ? event.agentType : undefined, "worker");
+  }
+});
+
 test("child round answers and cleanup stay visible before the renderer closes", () => {
   const translator = createStreamTranslator();
   const events = [

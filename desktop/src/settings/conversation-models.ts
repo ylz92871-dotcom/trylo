@@ -132,7 +132,9 @@ export function settingsForConversation(
   settings: TryloSettings, workspaceKey: string, conversationId: string,
   conversationModels: ConversationModelMap = EMPTY,
 ): TryloSettings {
-  return { ...settings, ...resolveRunConnection(settings, workspaceKey, conversationId, conversationModels) };
+  const choice = getConversationChoice(conversationModels, workspaceKey, conversationId);
+  return { ...settings, ...resolveRunConnection(settings, workspaceKey, conversationId, conversationModels),
+    poolModel: choice?.kind === 'pool' ? choice.model : choice ? '' : settings.poolModel };
 }
 
 /** Reconcile the active conversation when the user explicitly saves a connection. */

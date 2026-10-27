@@ -99,6 +99,7 @@ export async function createModelQuota({ store, now = Date.now, globalConcurrenc
       if (hasHistory && (existing.unit !== value.unit || existing.period !== value.period)) fail(409, '该上游已有授权记录，更换计量规则请新建上游。', 'accounting_immutable');
       const item = { id: existing?.id || crypto.randomUUID(), name: value.name.trim(), type: value.type, endpoint: endpoint.href, protocol: value.protocol, models: cleanModels(value.models), unit: value.unit, period: value.period,
         defaultLimit: integer(value.defaultLimit, '每人默认配额'), totalLimit: integer(value.totalLimit, '上游总配额'), concurrency: integer(value.concurrency, '上游并发', 100), enabled: existing?.enabled || false, anchor: existing?.anchor ?? now(), updatedAt: now(), actor };
+      if (existing?.endpoint === item.endpoint && existing?.protocol === item.protocol && existing.catalog) { item.catalog = existing.catalog; item.catalogSyncedAt = existing.catalogSyncedAt; }
       if (item.defaultLimit > item.totalLimit) fail(400, '每人默认配额不能超过上游总配额。');
       if (existing) { const counts = totals(db, existing); if (item.totalLimit < counts.used + counts.reserved) fail(409, '总配额不能低于本周期已使用与预占的额度。'); }
       if (!existing && list(db, 'model_upstreams').length >= 100) fail(429, '上游数量已达上限。');
@@ -183,6 +184,8 @@ export async function createModelQuota({ store, now = Date.now, globalConcurrenc
   }
   return {
     snapshot, reserve, dispatch, release, uncertain, settle, recoverAfterRestart,
+    async setCatalog(id, catalog, actor) { await store.sqlWrite(db => { const item = lookup(db, 'model_upstreams', id); if (!item) fail(404, '上游不存在。'); item.models = cleanModels(catalog.map(model => model.id)); item.catalog = catalog; item.catalogSyncedAt = now(); item.updatedAt = now(); put(db, 'model_upstreams', item); audit(db, actor, 'model.catalog.sync', id); }); return snapshot(); },
+    async credentialAudit(id, actor) { await store.sqlWrite(db => audit(db, actor, 'model.credential.update', id)); },
     async saveUpstream(value, actor) { await saveUpstream(value, actor); return snapshot(); },
     async saveGrant(value, actor) { await saveGrant(value, actor); return snapshot(); },
     async setEnabled(id, enabled, actor) { if (typeof enabled !== 'boolean') fail(400, '启停状态无效。'); await store.sqlWrite(db => { const item = lookup(db, 'model_upstreams', id); if (!item) fail(404, '上游不存在。'); item.enabled = enabled; item.updatedAt = now(); item.actor = actor; put(db, 'model_upstreams', item); audit(db, actor, enabled ? 'model.upstream.enable' : 'model.upstream.pause', id); }); return snapshot(); },

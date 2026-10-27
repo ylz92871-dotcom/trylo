@@ -740,6 +740,28 @@ export interface RelayAccountStatus {
   readonly serverUrl: string;
   readonly online: boolean;
 }
+export interface RelayTextModel {
+  readonly id: string;
+  readonly chat: boolean;
+  readonly pool: 'free';
+  readonly remaining: number;
+  readonly contextLength?: number;
+  readonly tools?: boolean;
+  readonly streaming?: boolean;
+}
+export interface RelayModelCatalog {
+  readonly models: readonly RelayTextModel[];
+  readonly reason?: string;
+  readonly owner: string;
+}
+export interface RelayModelConnection {
+  readonly modelContextWindow?: number;
+  readonly apiHost: string;
+  readonly apiKey: string;
+  readonly apiModel: string;
+  readonly providerId: 'openai-compatible';
+  readonly apiFormat: 'openai';
+}
 export interface RelayBrowserLogin {
   readonly id: string;
   readonly verificationUrl: string;
@@ -1306,6 +1328,7 @@ export interface ServiceEventMap {
   readonly 'host.remoteRequest': RemoteRequestEvent;
   readonly 'pet.status': PetStatusEvent;
   readonly 'remote.status': RemoteStatusEvent;
+  readonly 'account.changed': RelayAccountStatus;
   readonly petChatEmit: PetChatEmitEvent;
   readonly ready: ReadyEvent;
   readonly 'servicehost.exit': ServiceHostExitEvent;
@@ -1384,6 +1407,8 @@ export interface ServiceMethodMap {
   readonly 'remote.relayBrowserOpen': { params: { id: string }; result: { ok: boolean } };
   readonly 'remote.relayAccountOpen': { params: undefined; result: { ok: boolean } };
   readonly 'remote.relayStatus': { params: undefined; result: RelayAccountStatus };
+  readonly 'remote.relayModels': { params: undefined; result: RelayModelCatalog };
+  readonly 'remote.relayModelConnection': { params: { model: string }; result: RelayModelConnection };
   readonly 'remote.relayLogout': { params: undefined; result: RelayAccountStatus };
   readonly 'remote.respond': { params: RemoteRespondParams; result: RemoteRespondResult };
   readonly 'remote.emit': { params: RemoteEmitParams; result: RemoteEmitResult };

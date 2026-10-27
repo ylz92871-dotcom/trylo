@@ -317,6 +317,8 @@ export type CliRuntimeProbeResult =
       readonly version: string;
       /** What the probe actually saw — kept so a diagnosis is not a guess. */
       readonly evidence: string;
+        /** Advertised run flags, when the runtime supplied a help banner. */
+        readonly supportedFlags?: readonly string[];
     }
   | { readonly ok: false; readonly code: CliProbeFailureCode; readonly detail: string };
 

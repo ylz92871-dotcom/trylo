@@ -1,0 +1,8 @@
+import fs from 'node:fs';import path from 'node:path';import {fileURLToPath} from 'node:url';import {spawnSync} from 'node:child_process';import {createHash} from 'node:crypto';import {ssh,upload} from './seoul-connection.mjs';
+const site=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),record=path.join(site,'.local-release/desktop-download-candidate.json'),candidate=JSON.parse(fs.readFileSync(record,'utf8')),bundle=candidate.bundle;
+const archive=path.join(bundle,'patch.tar.gz'),hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+if(!fs.existsSync(archive)){const packed=spawnSync('tar',['-czf',archive,'-C',bundle,'public','Caddyfile','manifest.json'],{encoding:'utf8',windowsHide:true});if(packed.status!==0)throw Error(packed.stderr);}
+const id=`desktop-download-${candidate.version}-${Date.now()}`,remote='/home/admin/trylo-site/releases/'+id,script=path.join(site,'scripts/deploy-desktop-download.py');
+upload(archive,remote+'.tar.gz');upload(script,remote+'.py');console.log('Patch uploaded. Fetching and hash-verifying the existing installer on Seoul before switching.');
+let result;try{result=JSON.parse(ssh(['sudo','-n','python3',remote+'.py',remote+'.tar.gz',hash(fs.readFileSync(archive))],{timeout:420000}));}catch(error){fs.writeFileSync(path.join(bundle,'deployment-failure.json'),JSON.stringify({id,error:String(error)},null,2)+'\n');throw error;}
+fs.writeFileSync(path.join(bundle,'deployment.json'),JSON.stringify(result,null,2)+'\n');fs.writeFileSync(record,JSON.stringify({...candidate,deployed:true,release:result.release},null,2)+'\n');console.log(JSON.stringify(result,null,2));

@@ -1,9 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 const h = vi.hoisted(() => ({ send: vi.fn(async (_id: string, _message: string) => {}) }));
 vi.mock('./index', () => ({ hostAdapter: { process: { send: h.send } } }));
-import { closeSubagentInputProcess, consumeSubagentInputResult, registerSubagentInputProcess, sendSubagentInput } from './trylo-v1-subagent-control';
+import { cancelSubagent, closeSubagentInputProcess, consumeSubagentInputResult, registerSubagentInputProcess, sendSubagentInput } from './trylo-v1-subagent-control';
 afterEach(() => { closeSubagentInputProcess('p1'); closeSubagentInputProcess('p2'); h.send.mockClear(); vi.useRealTimers(); });
 describe('child input transport receipts', () => {
+  it('waits for the addressed cancellation receipt and carries no guidance text', async () => {
+    registerSubagentInputProcess('p1');
+    let settled = false;
+    const cancelling = cancelSubagent('p1', 'agent-a').then(() => { settled = true; });
+    const frame = JSON.parse(h.send.mock.calls[0]![1]);
+    expect(frame).toMatchObject({ type: 'subagent_input', target: 'agent-a', action: 'cancel' });
+    expect(frame).not.toHaveProperty('message');
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    consumeSubagentInputResult(JSON.stringify({ type: 'subagent_input_result', requestId: frame.requestId, accepted: true }), 'p1');
+    await cancelling;
+    expect(settled).toBe(true);
+  });
   it('preserves the explicitly selected restart mode in the acknowledged frame', async () => {
     registerSubagentInputProcess('p1');
     const sending = sendSubagentInput('p1', 'task-a', '改为检查测试', 'restart');

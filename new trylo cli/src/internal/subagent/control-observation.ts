@@ -6,6 +6,7 @@ import type { SubagentInputChannel } from "./input-channel.js";
 import type { SubagentBudgetSnapshot, SubagentResult, SubagentStatus } from "./types.js";
 import type { TimerHandle, TimerScheduler } from "./scheduler.js";
 import { accumulatedBudget } from "./budget-snapshot.js";
+import type { CompactWindow } from "../ports/compaction.js";
 
 export const DEFAULT_AGENT_WAIT_MS = 10_000;
 export const MAX_AGENT_WAIT_MS = 60_000;
@@ -13,6 +14,7 @@ export const MAX_AGENT_WAIT_MS = 60_000;
 /** Round observations do not own or replace the runtime's terminal state. */
 export class AgentRoundObservation {
   transcript: Transcript;
+  promptView: CompactWindow | undefined;
   private activeRound = 1;
   private requestedRound = 1;
   private checkpointRound = 0;
@@ -36,13 +38,14 @@ export class AgentRoundObservation {
   startRound(round: number): void { this.activeRound = round; }
   get lastRound(): number { return this.activeRound; }
 
-  checkpoint(transcript: Transcript): void {
+  checkpoint(transcript: Transcript, window?: CompactWindow): void {
     this.transcript = transcript;
+    this.promptView = window;
     this.checkpointRound = this.activeRound;
   }
 
   publish(report: InteractiveChildResult): void {
-    this.checkpoint(report.transcript);
+    this.checkpoint(report.transcript, report.promptView);
     this.report = report;
     this.cursor += 1;
     this.notify();

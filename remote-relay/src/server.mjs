@@ -6,6 +6,8 @@ import { createStore } from './store.mjs';
 import { createAccounts } from './accounts.mjs';
 import { serveConsole } from './web.mjs';
 import { createModelService } from './model-service/service.mjs';
+import { createCredentialVault } from './model-service/credentials.mjs';
+import { createAmdExecutor } from './model-service/amd.mjs';
 
 const scrypt = promisify(crypto.scrypt);
 const hash = value => crypto.createHash('sha256').update(String(value)).digest('hex');
@@ -23,11 +25,11 @@ const routes = [
 ];
 export const allowedRemoteRoute = (method, route) => typeof route === 'string' && route.length <= 4096 && !/[\r\n#]/.test(route) && routes.some(([verb, expression]) => verb === method && expression.test(route));
 
-async function body(request) {
+async function body(request, maximum = MAX_BODY) {
   const chunks = []; let length = 0;
   for await (const chunk of request) {
     length += chunk.length;
-    if (length > MAX_BODY) throw error(413, 'Request too large.');
+    if (length > maximum) throw error(413, 'Request too large.');
     chunks.push(chunk);
   }
   if (!length) return {};
@@ -35,7 +37,7 @@ async function body(request) {
   catch { throw error(400, 'Invalid JSON.'); }
 }
 
-export async function createRelayServer({ dataDir, inviteCode, now = Date.now, webOrigin = 'https://trylocode.me', secureCookies = true, allowLegacyRegistration = false, webDir, modelExecutor, modelRequestTimeoutMs } = {}) {
+export async function createRelayServer({ dataDir, inviteCode, now = Date.now, webOrigin = 'https://trylocode.me', secureCookies = true, allowLegacyRegistration = false, webDir, modelExecutor, modelRequestTimeoutMs, enableAmd = false, amdTransport } = {}) {
   if (!dataDir || (allowLegacyRegistration && (!inviteCode || inviteCode.length < 16))) throw new Error('RELAY_DATA_DIR and valid legacy invite configuration required.');
   const store = await createStore(dataDir);
   const devices = new Map(), pairings = new Map(), tickets = new Map(), requests = new Map(), channels = new Map(), rates = new Map();
@@ -102,7 +104,9 @@ export async function createRelayServer({ dataDir, inviteCode, now = Date.now, w
     if (socket) { disconnect(id, socket); socket.terminate(); }
     return device;
   }
-  const modelService = await createModelService({ store, now, executor: modelExecutor, requestTimeoutMs: modelRequestTimeoutMs });
+  const vault = enableAmd ? await createCredentialVault({ store, directory: dataDir }) : null;
+  const executor = modelExecutor || (enableAmd ? createAmdExecutor({ vault, ...(amdTransport ? { transport: amdTransport } : {}) }) : null);
+  const modelService = await createModelService({ store, now, executor, vault, requestTimeoutMs: modelRequestTimeoutMs });
   const accounts = await createAccounts({ store, now, origin: webOrigin, secureCookies, limited, json, body, online: id => devices.has(id), removeDevice, modelService });
   function proxy(request, response, principal, url) {
     const deviceId = String(request.headers['x-trylo-device'] || '');
@@ -144,7 +148,7 @@ export async function createRelayServer({ dataDir, inviteCode, now = Date.now, w
       if (await serveConsole(request, response, url.pathname, webDir)) return;
       if (request.method === 'GET' && url.pathname === '/health') return json(response, 200, { ok: true, service: 'trylo-relay', version: 1 });
       if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/relay/auth/')) { await accounts.handle(request, response, url); return; }
-      if (['/relay/model-quotas', '/relay/model-usage', '/relay/model-requests'].includes(url.pathname)) {
+      if (['/relay/model-quotas', '/relay/model-usage', '/relay/model-requests', '/relay/models'].includes(url.pathname)) {
         const principal = account(request); limited(`model:${principal.hash}`, 60);
         if (await modelService.handleUser(request, response, url, principal, { body, json }, '/relay')) return;
       }

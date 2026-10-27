@@ -3,7 +3,7 @@ import { isResponseRecord as isRecord, responseString as str, responseNumber as 
 import { createResponsesText } from "./responses-text.js";
 import { createResponsesTools } from "./responses-tools.js";
 import { createResponsesSummary } from "./responses-summary.js";
-import { responsesProtocolError } from "./responses-error.js";
+import { responsesProtocolError, responsesProviderError } from "./responses-error.js";
 
 /**
  * Responses wire event -> ProviderEvent translation (WP18.2: C68).
@@ -93,29 +93,13 @@ function pushResponsesEvent(
       return completed(state, payload);
     case "response.failed":
       state.finished = true;
-      return [
-        {
-          type: "error",
-          class: "server",
-          retryable: false,
-          phase: "after_stream_started",
-          message: str(payload, "message").length > 0 ? str(payload, "message") : "response_failed",
-        },
-      ];
+      return [responsesProviderError(payload, str(payload, "message").length > 0 ? str(payload, "message") : "response_failed")];
     case "response.incomplete":
       state.finished = true;
       return completeResponsesStream(state, "length", "response_incomplete");
     case "error":
       state.finished = true;
-      return [
-        {
-          type: "error",
-          class: "server",
-          retryable: false,
-          phase: "after_stream_started",
-          message: str(payload, "message").length > 0 ? str(payload, "message") : "response_error",
-        },
-      ];
+      return [responsesProviderError(payload, str(payload, "message").length > 0 ? str(payload, "message") : "response_error")];
     default:
       // Created/progress and per-part frames carry no new output text. The
       // output item's done frame owns block closure across all its parts.
@@ -147,13 +131,7 @@ function completed(state: ResponsesState, payload: Record<string, unknown>): Pro
   const status = str(detail, "status");
   state.finished = true;
   if (status === "failed") {
-    events.push({
-      type: "error",
-      class: "server",
-      retryable: false,
-      phase: "after_stream_started",
-      message: "response_failed",
-    });
+    events.push(responsesProviderError(detail, "response_failed"));
     return events;
   }
   if (status === "cancelled") return [...events, { type: "cancel_ack" }];

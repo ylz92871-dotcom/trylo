@@ -144,7 +144,7 @@ fn create_tab(app: &tauri::AppHandle, session: &mut NativeSession, url: Option<&
     let popup_app = app.clone();
     let popup_data = data.clone();
     let popup_args = format!("--remote-debugging-port={} --remote-debugging-address=127.0.0.1", session.cdp_port);
-    let script = format!("Object.defineProperty(globalThis,'__tryloNativeView',{{value:{:?},configurable:false}});", label);
+    let script = format!("Object.defineProperty(globalThis,'__tryloNativeView',{{value:{label:?},configurable:false}});");
     let builder = WebviewBuilder::new(&label, WebviewUrl::External(initial))
         .data_directory(data)
         .additional_browser_args(&format!("--remote-debugging-port={} --remote-debugging-address=127.0.0.1", session.cdp_port))
@@ -166,8 +166,8 @@ fn create_tab(app: &tauri::AppHandle, session: &mut NativeSession, url: Option<&
             // preserves window.opener and the same cookies/CDP endpoint.
             let label = format!("browser-{}-popup-{}", scope_digest(&popup_scope), NEXT_POPUP.fetch_add(1, Ordering::Relaxed));
             let marker = format!("about:blank#trylo-native-{label}");
-            let initial = match marker.parse::<tauri::Url>() { Ok(url) => url, Err(_) => return tauri::webview::NewWindowResponse::Deny };
-            let popup_script = format!("Object.defineProperty(globalThis,'__tryloNativeView',{{value:{:?},configurable:false}});", label);
+            let Ok(initial) = marker.parse::<tauri::Url>() else { return tauri::webview::NewWindowResponse::Deny };
+            let popup_script = format!("Object.defineProperty(globalThis,'__tryloNativeView',{{value:{label:?},configurable:false}});");
             let load_scope = popup_scope.clone(); let document_scope = popup_scope.clone();
             let popup = tauri::WebviewWindowBuilder::new(&popup_app, &label, WebviewUrl::External(initial))
                 .window_features(features).data_directory(popup_data.clone()).additional_browser_args(&popup_args)
@@ -193,7 +193,7 @@ fn create_tab(app: &tauri::AppHandle, session: &mut NativeSession, url: Option<&
                     tauri::async_runtime::spawn_blocking(move || {
                         if let Ok(mut sessions) = app.state::<NativeBrowserState>().0.lock() {
                             if let Some(session) = sessions.get_mut(&scope) {
-                                session.active_label = tab.label.clone(); session.tabs.push(tab.clone());
+                                session.active_label.clone_from(&tab.label); session.tabs.push(tab.clone());
                                 let _ = present(&app, session, None);
                             }
                         }
@@ -266,7 +266,7 @@ pub fn close_owned_popups(app: &tauri::AppHandle) {
         for label in labels { if let Some(window) = app.get_webview_window(&label) { let _ = window.close(); } }
     });
 }
-fn execute(app: &tauri::AppHandle, command: NativeCommand) -> Result<NativeSession, String> {
+fn execute(app: &tauri::AppHandle, command: &NativeCommand) -> Result<NativeSession, String> {
     if command.scope.is_empty() || command.scope.len() > 4096 { return Err("浏览器会话无效".into()); }
     let state = app.state::<NativeBrowserState>();
     let mut sessions = state.0.lock().map_err(|e| e.to_string())?;
@@ -308,7 +308,7 @@ fn execute(app: &tauri::AppHandle, command: NativeCommand) -> Result<NativeSessi
                 else { target.window().close().map_err(|e| e.to_string())?; }
                 session.tabs.retain(|tab| &tab.label != label);
                 if &session.active_label == label { session.active_label = session.tabs[0].label.clone(); }
-            } else { session.active_label = label.clone(); }
+            } else { session.active_label.clone_from(label); }
         },
         "layout" => {
             if let Some(bounds) = command.bounds { session.bounds = bounds.validate()?; }
@@ -349,7 +349,7 @@ pub async fn native_browser_command(webview: Webview, command: NativeCommand) ->
     #[cfg(windows)]
     {
         let app = webview.app_handle().clone();
-        tauri::async_runtime::spawn_blocking(move || execute(&app, command)).await.map_err(|e| e.to_string())?
+        tauri::async_runtime::spawn_blocking(move || execute(&app, &command)).await.map_err(|e| e.to_string())?
     }
 }
 

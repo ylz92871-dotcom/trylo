@@ -262,3 +262,23 @@ test('HTTP: existing auth/CSRF protect real policy, account isolation and metere
   }
   assert.equal((await f.request('/console/admin/model-service/README.md')).status, 404);
 });
+
+test('only authenticated model routes accept a large bounded request', async t => {
+  const f = await httpFixture(t), adminPath = '/api/admin/model-service';
+  const source = { name: 'Loopback bound fixture', type: 'plan', endpoint: 'https://example.invalid/v1', protocol: 'chat', models: ['test-model'], unit: 'tokens', period: 'day', defaultLimit: 1000, totalLimit: 1000, concurrency: 2 };
+  const created = await f.request(adminPath + '/upstreams', { ...f.admin, method: 'POST', body: source }); assert.equal(created.status, 200);
+  const id = created.data.upstreams[0].id;
+  assert.equal((await f.request(`${adminPath}/upstreams/${id}/enabled`, { ...f.admin, method: 'POST', body: { enabled: true } })).status, 200);
+  assert.equal((await f.request(adminPath + '/grants', { ...f.admin, method: 'POST', body: { userId: 'one', upstreamId: id, models: ['test-model'], limit: 1000, expiresAt: '2030-01-01' } })).status, 200);
+  const body = characters => ({upstreamId: id, model:'test-model', requestKey:crypto.randomUUID(), payload:{messages:[{role:'user',content:'x'.repeat(characters)}]}});
+  assert.equal((await f.request('/api/account/model-requests', {...f.user,method:'POST',body:body(600000)})).status,200);
+  const native = await f.request('/relay/login',{method:'POST',body:{username:'tester.one',password:f.password}}); assert.equal(native.status,200);
+  assert.equal((await f.request('/relay/model-requests',{token:native.data.accessToken,method:'POST',body:body(600000)})).status,200);
+  const before = f.calls();
+  assert.equal((await f.request('/api/account/model-requests',{...f.user,method:'POST',body:body(8400000)})).status,413);
+  assert.equal((await f.request('/relay/model-requests',{token:native.data.accessToken,method:'POST',body:body(8400000)})).status,413);
+  assert.equal(f.calls(),before);
+  assert.equal((await f.request('/api/admin/limits',{...f.admin,method:'POST',body:{padding:'x'.repeat(600000)}})).status,413);
+  assert.equal((await f.request('/relay/device-session',{token:native.data.accessToken,method:'POST',body:{padding:'x'.repeat(600000)}})).status,413);
+});
+

@@ -1,4 +1,4 @@
-import type { ToolPort } from "../ports/tools.js";
+import type { ToolCallRequest, ToolPort } from "../ports/tools.js";
 import type { ObservationOutcome } from "../ports/tool-runner-port.js";
 import type { PermissionGrantCache } from "../loop/permission-grants.js";
 import type { SubagentInputChannel } from "./input-channel.js";
@@ -33,6 +33,12 @@ export type SubagentLineage = {
  * and cannot widen permissions beyond what the parent agent granted.
  */
 export type SubagentPermissions = {
+  readonly approvedAction?: { consume(call: ToolCallRequest): boolean };
+  readonly requiresApproval?: (call: ToolCallRequest) => boolean;
+  /** Live standing refusal from the parent; it can subtract, never add authority. */
+  readonly inheritedDenial?: (name: string) => boolean;
+  readonly constrainTool?: (call: ToolCallRequest) => import("../ports/tools.js").SandboxVerdict;
+  readonly inheritedPolicy?: import("../ports/permission.js").PermissionPort["inheritance"];
   readonly allowedTools: ReadonlyArray<string>;
   readonly inheritedGrants?: PermissionGrantCache | undefined;
   /** Always false: subAgents have no UI channel to request user authorization. */
@@ -55,6 +61,8 @@ export type SubagentGovernance = {
  * Execution context exposed to the running subAgent worker.
  */
 export type SubagentContext = {
+  readonly reportObservation?: (event: import("../protocol/subagent-observation.js").SubagentObservation) => void;
+  readonly reportTool?: (activity: import("../protocol/subagent-activity.js").SubagentToolActivity) => void;
   readonly subagentId: string;
   readonly name: string;
   readonly lineage: SubagentLineage;
@@ -76,6 +84,9 @@ export type SubagentContext = {
 export type SubagentWorker<T = unknown> = (context: SubagentContext) => Promise<T>;
 
 export type SubagentSpawnRequest<T = unknown> = {
+  /** Task-owned record reducers. They cannot add tools or replace mutations. */
+  readonly localTools?: ToolPort;
+  readonly teamMember?: import("./team.js").TeamMemberIdentity;
   readonly continuation?: { readonly taskId: string; readonly resumedFrom: string; readonly roundOffset: number;
     readonly displayName?: string | undefined } | undefined;
   readonly budgetBefore?: SubagentBudgetSnapshot | undefined;

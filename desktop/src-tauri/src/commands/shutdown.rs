@@ -32,18 +32,20 @@ use crate::commands::workd_state::WorkdState;
 /// Kill every registered Trylo CLI / CC CLI child. Returns how many were
 /// given a successful termination request; reapers release the table entries.
 pub fn kill_all_processes(state: &ProcessState) -> usize {
-    let Ok(mut processes) = state.processes.lock() else {
+    let Ok(processes) = state.processes.lock() else {
         return 0;
     };
+    let controls: Vec<_> = processes
+        .values()
+        .map(|entry| (entry.pid, std::sync::Arc::clone(&entry.stop)))
+        .collect();
+    drop(processes);
     let mut killed = 0;
-    for entry in processes.values_mut() {
-        match entry.request_stop() {
+    for (pid, stop) in controls {
+        match stop.request_stop() {
             Ok(true) => killed += 1,
             Ok(false) => {}
-            Err(error) => eprintln!(
-                "[process] termination request failed for pid {}: {error}",
-                entry.pid
-            ),
+            Err(error) => eprintln!("[process] termination request failed for pid {pid}: {error}"),
         }
     }
     killed
@@ -158,12 +160,13 @@ mod tests {
             map.insert(
                 "a".to_string(),
                 crate::commands::process_state::ProcessEntry {
-                    writer: Some(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>),
-                    killer: Box::new(|| {
+                    input: crate::commands::process_state::ProcessInputControl::new(Some(
+                        Box::new(Vec::new()),
+                    )),
+                    stop: crate::commands::process_state::ProcessStopControl::new(|| {
                         SPAWN_KILLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                         Ok(())
                     }),
-                    stop_state: crate::commands::process_state::ProcessStopState::Running,
                     label: "trylo-core".to_string(),
                     pid: 100,
                     metadata: crate::commands::process_state::ProcessMetadata::default(),
@@ -172,12 +175,13 @@ mod tests {
             map.insert(
                 "b".to_string(),
                 crate::commands::process_state::ProcessEntry {
-                    writer: Some(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>),
-                    killer: Box::new(|| {
+                    input: crate::commands::process_state::ProcessInputControl::new(Some(
+                        Box::new(Vec::new()),
+                    )),
+                    stop: crate::commands::process_state::ProcessStopControl::new(|| {
                         SPAWN_KILLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                         Ok(())
                     }),
-                    stop_state: crate::commands::process_state::ProcessStopState::Running,
                     label: "cc-cli".to_string(),
                     pid: 101,
                     metadata: crate::commands::process_state::ProcessMetadata::default(),

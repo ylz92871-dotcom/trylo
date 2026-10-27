@@ -25,6 +25,12 @@ function run(overrides: Partial<PersistableTeamRun> = {}): PersistableTeamRun {
 }
 
 describe('serializeTeamRunsFile / parseTeamRunsFile', () => {
+  it('preserves interrupted parent error without accepting an invalid disk error value', () => {
+    const text = serializeTeamRunsFile('ws', [run({ status: 'failed', lifecycle: 'closed', endedAt: 200, error: '执行已中断' })]);
+    expect(parseTeamRunsFile(text)?.runs[0]?.error).toBe('执行已中断');
+    const invalid = JSON.parse(text); invalid.runs[0].error = { message: 'not text' };
+    expect(parseTeamRunsFile(JSON.stringify(invalid))).toBeNull();
+  });
   it('round-trips runs and never persists selectedSeatId', () => {
     const text = serializeTeamRunsFile('ws:abc', [
       run({ seats: [{ id: 'p1', seat: 'person', status: 'running', summary: 's' }] } as never),
@@ -60,6 +66,16 @@ describe('serializeTeamRunsFile / parseTeamRunsFile', () => {
     expect(parseTeamRunsFile('nope')).toBeNull();
     expect(parseTeamRunsFile('{"schemaVersion":99,"workspaceId":"w","runs":[]}')).toBeNull();
     expect(parseTeamRunsFile('[]')).toBeNull();
+  });
+
+  it('rejects valid JSON with corrupt run, seat or lifecycle shapes before hydration', () => {
+    for (const schemaVersion of [1, 2]) {
+      for (const bad of [{}, { ...run(), seats: null }, { ...run(), summary: null },
+        { ...run(), status: 'invented' }, { ...run(), endedAt: 'yesterday' },
+        { ...run(), seats: [{ id: 'x', seat: 'worker', status: 'invented', summary: '' }] }]) {
+        expect(parseTeamRunsFile(JSON.stringify({ schemaVersion, workspaceId: 'w', runs: [bad] }))).toBeNull();
+      }
+    }
   });
 
   it('path joins forward slashes under .trylo', () => {

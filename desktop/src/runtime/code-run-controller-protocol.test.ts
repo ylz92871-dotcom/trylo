@@ -12,6 +12,12 @@ import { StreamTranslator } from '../host-adapter/stream-translator';
 import type { FilePath } from '../host-adapter/types';
 import type { SettingsForCodeRun } from './runtime-types';
 import type { ResolvedToolRuntime } from '../tooling/types';
+import { platformModelConnection } from '../account/platform-models';
+import { CliSessionStore } from './cli-session-store';
+import * as sessionBinding from '../host-adapter/cli-session-binding';
+import { startTryloV1, stopTryloV1 } from '../host-adapter/trylo-v1-runner';
+import type { ProcessExitInfo } from '../host-adapter/process-service';
+vi.mock('../account/platform-models', () => ({ platformModelConnection: vi.fn() }));
 
 const m = vi.hoisted(() => {
   const calls = {
@@ -46,7 +52,8 @@ const m = vi.hoisted(() => {
     calls,
     legacyCallbacks: { onEvents: null as ((events: readonly LoopEvent[]) => void) | null },
     prewarmCallbacks: { onEvents: null as ((events: readonly LoopEvent[]) => void) | null },
-    lastV1: { binding: null as unknown, priorMessages: null as unknown, systemPrompt: undefined as string | undefined },
+    lastV1: { binding: null as unknown, priorMessages: null as unknown, systemPrompt: undefined as string | undefined,
+      onExit: undefined as ((info: ProcessExitInfo) => void) | undefined },
     auth,
   };
 });
@@ -99,11 +106,12 @@ vi.mock('../host-adapter/trylo-runner', () => ({
 }));
 
 vi.mock('../host-adapter/trylo-v1-runner', () => ({
-  startTryloV1: vi.fn(async (a: { binding?: unknown; priorMessages?: unknown; systemPrompt?: string }) => {
+  startTryloV1: vi.fn(async (a: { binding?: unknown; priorMessages?: unknown; systemPrompt?: string; onExit?: (info: ProcessExitInfo) => void }) => {
     m.calls.startTryloV1 += 1;
     m.lastV1.binding = a.binding ?? null;
     m.lastV1.priorMessages = a.priorMessages ?? null;
     m.lastV1.systemPrompt = a.systemPrompt;
+    m.lastV1.onExit = a.onExit;
     return { processId: 'proc-v1', state: () => 'input_closed' as const };
   }),
   stopTryloV1: vi.fn(async () => {
@@ -181,7 +189,244 @@ beforeEach(() => {
   m.calls.sendPrompt = 0;
 });
 
+it.each([0, 41])('a v1 process that exits with %s before start returns cannot be rebound as busy', async code => {
+  vi.mocked(startTryloV1).mockImplementationOnce(async args => {
+    args.onExit?.({ id: 'proc-v1' as ProcessExitInfo['id'], pid: 1, code, signal: null });
+    return { processId: 'proc-v1', state: () => 'exited' };
+  });
+  const c = controller();
+  await c.run({ ...request('trylo-v1'), turnId: 'already-exited-turn' });
+  expect(c.getViewState()).toMatchObject({ running: false, sendable: true, activeProcessId: null, bindingState: 'exited' });
+  expect(c.ownsNativeTurn('already-exited-turn')).toBe(false);
+});
+
 describe('CodeRunController — protocol routing', () => {
+  it('preserves an already observed completed result when Stop reclaims its root', async () => {
+    const events: LoopEvent[] = [];
+    const c = controller();
+    await c.run({ ...request('trylo-v1'), onEvents: batch => { events.push(...batch); } });
+    const args = vi.mocked(startTryloV1).mock.calls.at(-1)![0];
+    args.onEvents([{ type: 'loop_end', seq: 7, ts: 1, reason: 'completed', durationMs: 1,
+      totalCost: 0, numTurns: 1, finalResult: 'actual result' }]);
+    vi.mocked(stopTryloV1).mockImplementationOnce(async () => {
+      args.onExit?.({ id: 'proc-v1', pid: 1, code: 0, signal: null });
+    });
+    await c.stop();
+    expect(events.filter(event => event.type === 'loop_end')).toMatchObject([{ reason: 'completed', finalResult: 'actual result' }]);
+    expect(c.getViewState()).toMatchObject({ running: false, activeProcessId: null });
+  });
+
+  it('releases an actually stopped root even if its cancellation consumer throws', async () => {
+    let cancellations = 0;
+    const c = controller();
+    await c.run({ ...request('trylo-v1'), onEvents: batch => {
+      if (batch.some(event => event.type === 'loop_end' && event.reason === 'cancelled')) {
+        cancellations += 1; throw new Error('projection consumer refused');
+      }
+    } });
+    const args = vi.mocked(startTryloV1).mock.calls.at(-1)![0];
+    vi.mocked(stopTryloV1).mockImplementationOnce(async () => {
+      args.onExit?.({ id: 'proc-v1', pid: 1, code: 130, signal: null });
+    });
+    await c.stop();
+    expect(cancellations).toBe(1);
+    expect(c.getViewState()).toMatchObject({ running: false, activeProcessId: null, sendable: true });
+  });
+
+  it('does not issue native spawn when runtime-acquired notification synchronously requests Stop', async () => {
+    const c = controller();
+    let stopping: Promise<void> | undefined;
+    await c.run({ ...request('trylo-v1'), onRuntimeAcquired: () => { stopping = c.stop(); } });
+    await stopping;
+    expect(m.calls.startTryloV1).toBe(0);
+    expect(c.getViewState()).toMatchObject({ activeProcessId: null, running: false, sendable: true });
+  });
+
+  it('does not dispatch a replacement when the original v1 stop is refused', async () => {
+    const c = controller(); await c.run(request('trylo-v1'));
+    vi.mocked(stopTryloV1).mockRejectedValueOnce(new Error('replacement stop refused'));
+    try {
+      await expect(c.run(request('trylo-v1', 'replacement'))).rejects.toThrow('replacement stop refused');
+      expect(m.calls.startTryloV1).toBe(1);
+      expect(c.getViewState()).toMatchObject({ running: true, activeProcessId: 'proc-v1', sendable: false, error: true });
+      await expect(c.run(request('trylo-v1', 'another replacement'))).rejects.toThrow(/stop|停止/i);
+    } finally { await c.stop(); }
+  });
+
+  it('accepts the original child exit after a replacement cleanup failure', async () => {
+    const c = controller(); await c.run(request('trylo-v1'));
+    const originalExit = m.lastV1.onExit;
+    vi.mocked(stopTryloV1).mockRejectedValueOnce(new Error('replacement exit unconfirmed'));
+    await c.run(request('trylo-v1', 'replacement')).catch(() => undefined);
+    originalExit?.({ id: 'proc-v1' as ProcessExitInfo['id'], pid: 1, code: 130, signal: null });
+    expect(c.getViewState()).toMatchObject({ running: false, activeProcessId: null, sendable: true, error: false });
+  });
+
+  it('cannot spawn a replacement after Stop supersedes its pending cleanup', async () => {
+    const c = controller(); await c.run(request('trylo-v1'));
+    let ready!: () => void; let release!: () => void;
+    const stopping = new Promise<void>(resolve => { ready = resolve; });
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    vi.mocked(stopTryloV1).mockImplementationOnce(async () => { ready(); await pending; });
+    const replacement = c.run(request('trylo-v1', 'replacement'));
+    try { await stopping; await c.stop(); } finally { release(); await replacement; }
+    expect(m.calls.startTryloV1).toBe(1);
+    expect(c.getViewState()).toMatchObject({ activeProcessId: null, running: false, sendable: true });
+  });
+
+  it('owns and stops the v1 handle while the initial prompt write is still pending', async () => {
+    let ready!: () => void; let release!: () => void;
+    const spawned = new Promise<void>(resolve => { ready = resolve; });
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    vi.mocked(startTryloV1).mockImplementationOnce(async args => {
+      if ('onSpawn' in args && typeof args.onSpawn === 'function') {
+        args.onSpawn({ id: 'startup-child', pid: 431, label: 'trylo-cli-v1', command: 'node' });
+      }
+      ready(); await pending;
+      return { processId: 'startup-child', state: () => 'streaming' };
+    });
+    const c = controller();
+    const starting = c.run({ ...request('trylo-v1'), turnId: 'pending-prompt-turn' });
+    try {
+      await spawned;
+      expect(c.getViewState()).toMatchObject({ running: true, activeProcessId: 'startup-child', pid: 431, sendable: false });
+      expect(c.ownsNativeTurn('pending-prompt-turn')).toBe(true);
+      await c.stop();
+      expect(m.calls.stopTryloV1).toBe(1);
+    } finally { release(); await starting; await c.stop(); }
+  });
+
+  it('retains an acquired v1 handle if initial prompt cleanup cannot confirm exit', async () => {
+    vi.mocked(startTryloV1).mockImplementationOnce(async args => {
+      if ('onSpawn' in args && typeof args.onSpawn === 'function') {
+        args.onSpawn({ id: 'unconfirmed-startup-child', pid: 432, label: 'trylo-cli-v1', command: 'node' });
+      }
+      throw new Error('prompt failed; native stop unconfirmed');
+    });
+    const c = controller();
+    await expect(c.run({ ...request('trylo-v1'), turnId: 'unconfirmed-prompt-turn' })).rejects.toThrow('unconfirmed');
+    try {
+      expect(c.getViewState()).toMatchObject({ running: true, activeProcessId: 'unconfirmed-startup-child', sendable: false, error: true });
+      expect(c.ownsNativeTurn('unconfirmed-prompt-turn')).toBe(true);
+      await expect(c.run(request('trylo-v1', 'replacement'))).rejects.toThrow(/stop|停止/i);
+    } finally { await c.stop(); }
+  });
+
+  it('retains a failed output binding write and blocks the next dispatch until saving succeeds', async () => {
+    let raw: string | null = null; let fail = false;
+    const events: LoopEvent[] = [];
+    const c = new CodeRunController({ projectKey: 'p', conversationId: 'c', onChange() {},
+      permissions: new CodePermissionRegistry({ onChange() {}, send: async () => true }),
+      sessionStore: new CliSessionStore({ load: async () => raw, save: async (_root, _expected, json) => {
+        if (fail) throw new Error('disk full'); raw = json; return { status: 'written' };
+      } }) });
+    await c.run({ ...request('trylo-v1'), onEvents: batch => events.push(...batch) });
+    const input = vi.mocked(startTryloV1).mock.calls.at(-1)![0];
+    const id = (input.binding as { sessionId: string }).sessionId;
+    fail = true; input.onBindingChange?.({ state: 'established', sessionId: id });
+    await vi.waitFor(() => expect(events.some(event => event.type === 'runtime_warning'
+      && event.code === 'session_metadata_write_failed')).toBe(true));
+    m.lastV1.onExit?.({ id: 'proc-v1' as import('../host-adapter/types').ProcessId, pid: 1, code: 0, signal: null });
+    await expect(c.run(request('trylo-v1'))).rejects.toThrow('disk full');
+    expect(m.calls.startTryloV1).toBe(1);
+    expect(JSON.parse(raw!).sessions.c.state).toBe('creating');
+    fail = false; await c.run(request('trylo-v1'));
+    expect(m.calls.startTryloV1).toBe(2);
+    expect(vi.mocked(startTryloV1).mock.calls.at(-1)![0].binding).toEqual({ state: 'established', sessionId: id });
+    expect(JSON.parse(raw!).sessions.c).toEqual({ state: 'established', sessionId: id });
+  });
+  it('cannot revive a cancelled launch after the stored association is read', async () => {
+    let release!: (raw: null) => void;
+    const disk = new Promise<null>(resolve => { release = resolve; });
+    const load = vi.fn(() => disk); const save = vi.fn();
+    const c = new CodeRunController({ projectKey: 'p', conversationId: 'c', onChange() {},
+      permissions: new CodePermissionRegistry({ onChange() {}, send: async () => true }),
+      sessionStore: new CliSessionStore({ load, save }) });
+    const running = c.run(request('trylo-v1'));
+    await vi.waitFor(() => expect(load).toHaveBeenCalledOnce());
+    await c.stop(); release(null); await running;
+    expect(save).not.toHaveBeenCalled(); expect(m.calls.startTryloV1).toBe(0);
+    expect(c.getViewState()).toMatchObject({ running: false, activeProcessId: null });
+  });
+  it.each(['creating', 'established', 'unknown'] as const)('probes a restored %s association before resuming it', async state => {
+    let raw = JSON.stringify({ schemaVersion: 1, sessions: { c: { state, sessionId: 'desktop-original',
+      ...(state === 'creating' ? { runId: 'old-native-run' } : state === 'unknown' ? { reason: 'old exit' } : {}) } } });
+    const probe = vi.spyOn(sessionBinding, 'probeCliSessions').mockResolvedValue({ ok: true,
+      sessions: [{ id: 'desktop-original', bytes: 123 }] });
+    try {
+      const c = new CodeRunController({ projectKey: 'p', conversationId: 'c', onChange() {},
+        permissions: new CodePermissionRegistry({ onChange() {}, send: async () => true }),
+        sessionStore: new CliSessionStore({ load: async () => raw, save: async (_root, _expected, json) => {
+          raw = json; return { status: 'written' }; } }) });
+      await c.run(request('trylo-v1'));
+      expect(probe).toHaveBeenCalledOnce();
+      expect(vi.mocked(startTryloV1).mock.calls.at(-1)![0].binding).toEqual({ state: 'established', sessionId: 'desktop-original' });
+    } finally { probe.mockRestore(); }
+  });
+  it('does not discard or dispatch an association when its recovery probe fails', async () => {
+    const raw = JSON.stringify({ schemaVersion: 1, sessions: { c: { state: 'established', sessionId: 'desktop-original' } } });
+    const save = vi.fn();
+    const probe = vi.spyOn(sessionBinding, 'probeCliSessions').mockResolvedValue({ ok: false, reason: 'timeout', detail: 'test' });
+    try {
+      const c = new CodeRunController({ projectKey: 'p', conversationId: 'c', onChange() {},
+        permissions: new CodePermissionRegistry({ onChange() {}, send: async () => true }),
+        sessionStore: new CliSessionStore({ load: async () => raw, save }) });
+      await expect(c.run(request('trylo-v1'))).rejects.toThrow(/recovery could not be verified/);
+      expect(save).not.toHaveBeenCalled(); expect(m.calls.startTryloV1).toBe(0);
+      expect(c.getViewState()).toMatchObject({ running: false, error: true });
+    } finally { probe.mockRestore(); }
+  });
+  it('persists the creating session before dispatching the root process', async () => {
+    let release!: () => void;
+    const disk = new Promise<void>(resolve => { release = resolve; });
+    let persisted: string | null = null;
+    const save = vi.fn(async (_root: string, _expected: string | null, json: string) => {
+      await disk; persisted = json; return { status: 'written' as const };
+    });
+    const c = new CodeRunController({ projectKey: 'p', conversationId: 'c', onChange() {},
+      permissions: new CodePermissionRegistry({ onChange() {}, send: async () => true }),
+      sessionStore: new CliSessionStore({ load: async () => null, save }) });
+    const running = c.run(request('trylo-v1'));
+    await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(m.calls.startTryloV1).toBe(0);
+    release(); await running;
+    const input = vi.mocked(startTryloV1).mock.calls.at(-1)![0];
+    expect(JSON.parse(persisted!).sessions.c).toEqual(input.binding);
+    expect(input.binding?.state).toBe('creating');
+  });
+  it('fails visibly without dispatch when durable creation fails', async () => {
+    const c = new CodeRunController({ projectKey: 'p', conversationId: 'c', onChange() {},
+      permissions: new CodePermissionRegistry({ onChange() {}, send: async () => true }),
+      sessionStore: new CliSessionStore({ load: async () => null, save: async () => { throw new Error('disk full'); } }) });
+    await expect(c.run(request('trylo-v1'))).rejects.toThrow('disk full');
+    expect(m.calls.startTryloV1).toBe(0);
+    expect(c.getViewState()).toMatchObject({ running: false, error: true });
+  });
+  it('cannot revive a cancelled launch after its metadata write finishes', async () => {
+    let release!: () => void;
+    const disk = new Promise<void>(resolve => { release = resolve; });
+    const save = vi.fn(async () => { await disk; return { status: 'written' as const }; });
+    const c = new CodeRunController({ projectKey: 'p', conversationId: 'c', onChange() {},
+      permissions: new CodePermissionRegistry({ onChange() {}, send: async () => true }),
+      sessionStore: new CliSessionStore({ load: async () => null, save }) });
+    const running = c.run(request('trylo-v1'));
+    await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
+    await c.stop(); release(); await running;
+    expect(m.calls.startTryloV1).toBe(0);
+    expect(c.getViewState().running).toBe(false);
+  });
+  it('platform selection resolves a scoped local credential and passes it only through child env', async () => {
+    vi.mocked(platformModelConnection).mockResolvedValue({ apiHost: 'http://127.0.0.1:45678/v1', apiModel: 'Qwen3.8-Flash-Next', apiKey: 'ephemeral-capability-for-test', providerId: 'openai-compatible', apiFormat: 'openai' });
+    await controller().run(request('trylo-v1', 'hi', { platformModel: 'Qwen3.8-Flash-Next', apiKey: 'own-key-must-not-be-used', apiHost: 'https://own.invalid' }));
+    const spawn = vi.mocked(startTryloV1).mock.calls.at(-1)![0];
+    expect(spawn.providerId).toBe('openai-compatible'); expect(spawn.endpoint).toBe('http://127.0.0.1:45678/v1/chat/completions');
+    expect(spawn.spawnEnv?.TRYLO_OPENAI_API_KEY).toBe('ephemeral-capability-for-test'); expect(JSON.stringify(spawn)).not.toContain('own-key-must-not-be-used');
+  });
+  it('a denied platform model cannot fall back to the configured paid provider', async () => {
+    vi.mocked(platformModelConnection).mockRejectedValue(Error('该文本模型未获授权'));
+    await expect(controller().run(request('trylo-v1', 'hi', { platformModel: 'denied', apiKey: 'own-key', providerId: 'paid' }))).rejects.toThrow(/未获授权/);
+    expect(m.calls.startTryloV1).toBe(0); expect(m.calls.startTrylo).toBe(0);
+  });
   it.each([false, true])('settles a real legacy 401 frame and kills its child (prewarmed=%s)', async prewarmed => {
     const c = controller();
     if (prewarmed) await c.prewarm(settings('legacy-stream-json'), { permissionLevel: 'read_only' });
@@ -212,6 +457,20 @@ describe('CodeRunController — protocol routing', () => {
     await c.run(request('trylo-v1'));
     expect(m.calls.startTryloV1).toBe(1);
     expect(m.calls.startTrylo).toBe(0);
+  });
+
+  it.each(['code', 'work'] as const)('defaults a %s request without a protocol to the new CLI', async surface => {
+    await controller().run({ ...request('trylo-v1'), surface, settings: { cliPath: CLI_PATH, cwd: CWD } });
+    expect(m.calls.startTryloV1).toBe(1);
+    expect(m.calls.startTrylo).toBe(0);
+    expect(m.calls.sendPrompt).toBe(0);
+  });
+
+  it('does not start a legacy prewarm when the protocol is omitted', async () => {
+    const c = controller();
+    await c.prewarm({ cliPath: CLI_PATH, cwd: CWD }, { permissionLevel: 'read_only' });
+    expect(c.hasPrewarm()).toEqual({ processId: null, ready: false });
+    expect(m.prewarmCallbacks.onEvents).toBeNull();
   });
 
   it('carries the snapshotted Desktop system prompt into the v1 runner', async () => {
@@ -316,6 +575,18 @@ describe('CodeRunController — protocol routing', () => {
     await c.stop();
     expect(m.calls.stopTryloV1).toBe(1);
     expect(m.calls.stopTryloProcess).toBe(0);
+  });
+
+  it('retains ownership after a failed stop, refuses replacement, and accepts the later exit', async () => {
+    const c = controller();
+    await c.run(request('trylo-v1', 'start'));
+    vi.mocked(stopTryloV1).mockRejectedValueOnce(new Error('native stop failed'));
+    await expect(c.stop()).rejects.toThrow('native stop failed');
+    expect(c.getViewState()).toMatchObject({ running: true, activeProcessId: 'proc-v1', error: true, sendable: false });
+    await expect(c.run(request('trylo-v1', 'replacement'))).rejects.toThrow(/stop|停止/i);
+    expect(m.calls.startTryloV1).toBe(1);
+    m.lastV1.onExit?.({ id: 'proc-v1' as import('../host-adapter/types').ProcessId, pid: 1, code: null, signal: null });
+    expect(c.getViewState()).toMatchObject({ running: false, activeProcessId: null, error: false });
   });
 
   it('creates a fresh CLI session with visible history after a forced stop', async () => {

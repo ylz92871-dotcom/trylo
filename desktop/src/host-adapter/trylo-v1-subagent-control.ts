@@ -19,11 +19,21 @@ export function closeSubagentInputProcess(processId: ProcessId): void {
 
 /** A successful pipe write is not a delivery receipt. Only the matching CLI ack settles this. */
 export function sendSubagentInput(processId: ProcessId, target: string, message: string, mode?: SubagentInputMode): Promise<void> {
+  if (!message.trim() || message.trim().length > 16000) return Promise.reject(new Error('补充要求为空或过长。'));
+  return sendSubagentCommand(processId, target, { message: message.trim(), ...(mode === undefined ? {} : { mode }) });
+}
+
+export function cancelSubagent(processId: ProcessId, target: string): Promise<void> {
+  return sendSubagentCommand(processId, target, { action: 'cancel' });
+}
+
+function sendSubagentCommand(processId: ProcessId, target: string, command:
+  { readonly message: string; readonly mode?: SubagentInputMode } | { readonly action: 'cancel' }): Promise<void> {
   if (!live.has(processId)) return Promise.reject(new Error('当前运行不支持向智能体补充要求。'));
   if ([...pending.values()].some(request => request.processId === processId && request.target === target)) {
     return Promise.reject(new Error('该智能体的上一条要求仍在等待接收确认，草稿已保留。'));
   }
-  if (!message.trim() || message.trim().length > 16000 || pending.size >= 32) return Promise.reject(new Error('补充要求为空、过长或发送队列已满。'));
+  if (!target.trim() || pending.size >= 32) return Promise.reject(new Error('目标为空或发送队列已满。'));
   const requestId = `agent-input-${Date.now()}-${++sequence}`;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -31,7 +41,7 @@ export function sendSubagentInput(processId: ProcessId, target: string, message:
       reject(new Error('未收到接收确认，要求可能已经送达；草稿已保留。'));
     }, 20000);
     pending.set(requestId, { processId, target, resolve, reject, timer });
-    void hostAdapter.process.send(processId, `${JSON.stringify({ type: 'subagent_input', requestId, target, message: message.trim(), ...(mode === undefined ? {} : { mode }) })}\n`)
+    void hostAdapter.process.send(processId, `${JSON.stringify({ type: 'subagent_input', requestId, target, ...command })}\n`)
       .catch(() => {
         const request = pending.get(requestId);
         if (!request) return;

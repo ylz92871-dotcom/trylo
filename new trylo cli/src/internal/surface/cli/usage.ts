@@ -134,6 +134,8 @@ export const USAGE = [
   "                                          never from a parent. `trylo doctor` reports which were",
   "                                          adopted",
   "  --max-iterations <n>                    optional provider request budget",
+  "  --context-window <tokens>               working context budget (default 200000)",
+  "  --model-context-window <tokens>         declared model/service capacity; clamps the working budget",
   "  --max-tokens <n>                        optional total output token budget for this turn",
   "                                          each request gets the remaining budget as max_tokens;",
   "                                          exhausted or truncated runs can continue with --resume",

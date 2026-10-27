@@ -251,6 +251,8 @@ export type RunCommandOptions = PermissionChoice & RunExecutionOptions & {
   readonly workspace?: string;
   readonly maxIterations?: number;
   readonly maxTokens?: number;
+  readonly contextTokenLimit?: number;
+  readonly modelContextWindow?: number;
   /**
    * The dollar ceiling for this run (WP09.3/L07). A positive number of US
    * dollars: the usage the run accumulates is priced by the configured pricing

@@ -1,0 +1,14 @@
+{
+  "version": "1.0.6",
+  "channel": "preview",
+  "platform": "windows-x64",
+  "installer": {
+    "file": "Trylo_1.0.6_x64-setup.exe",
+    "bytes": 140795469,
+    "sha256": "5e04813c648bb120f2496a6b22b7600938ab83ac65735a36f586b42909c303a8",
+    "path": "/download/desktop/releases/1.0.6/Trylo_1.0.6_x64-setup.exe",
+    "originUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.6/Trylo_1.0.6_x64-setup.exe"
+  },
+  "checksumPath": "/download/desktop/releases/1.0.6/SHA256SUMS.txt",
+  "releaseNotes": "https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.6"
+}

@@ -86,7 +86,7 @@ function targetScope(root: string, resolved: string, access: FileAccessMode): Fi
   return access === "reviewed" && isInside(root, resolved) ? "workspace" : access;
 }
 
-function canonicalRoot(root: string): string {
+export function canonicalRoot(root: string): string {
   try {
     return realpathSync.native(root);
   } catch {

@@ -10,6 +10,18 @@ export interface SubagentBudget {
 export type SubagentInputMode = 'append' | 'replace_queued' | 'restart';
 export type SendSubagentInput = (agentId: string, text: string, mode?: SubagentInputMode) => Promise<void>;
 
+export type SubagentToolActivity =
+  | { readonly id: string; readonly kind: 'tool'; readonly tool: string }
+  | { readonly id: string; readonly kind: 'result'; readonly tool?: string; readonly ok: boolean };
+
+export function isSubagentToolActivity(value: unknown): value is SubagentToolActivity {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  return typeof row.id === 'string' && row.id.length > 0
+    && (row.kind === 'tool' ? typeof row.tool === 'string' && row.tool.length > 0
+      : row.kind === 'result' && typeof row.ok === 'boolean' && (row.tool === undefined || typeof row.tool === 'string'));
+}
+
 export function isSubagentBudget(value: unknown): value is SubagentBudget {
   if (value === null || typeof value !== 'object') return false;
   const budget = value as Record<string, unknown>;

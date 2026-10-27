@@ -1,4 +1,5 @@
 import { ModelConnectionFields } from './ModelConnectionFields';
+import { ModelContextSettings } from './ModelContextSettings';
 import { reasoningSelectionProblem } from '../../settings/reasoning-effort';
 import { X, Plug, Palette, SlidersHorizontal, Wrench, Smartphone, BookOpen, type LucideIcon } from 'lucide-react';
 import { AppearanceSettings } from './AppearanceSettings';
@@ -265,6 +266,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
 
   const onSave = (e: FormEvent): void => {
     e.preventDefault();
+    if (dialogRef.current && !dialogRef.current.reportValidity()) return;
     const reasoningProblem = reasoningSelectionProblem(form);
     if (reasoningProblem) { setSaveError(reasoningProblem); return; }
     for (const [name, headers] of [
@@ -282,7 +284,9 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
     }
     const connectionChanged = JSON.stringify(connectionFields(form)) !== JSON.stringify(connectionFields(props.initial))
       || form.activeModelProfileId !== props.initial.activeModelProfileId;
-    const intent: SettingsSaveIntent = connectionChanged || navigationTab === 'connection' ? 'connection' : 'preferences';
+    const contextEdited = JSON.stringify([form.modelContextPreferences ?? {}, form.modelReasoningPreferences ?? {}]) !== JSON.stringify([props.initial.modelContextPreferences ?? {}, props.initial.modelReasoningPreferences ?? {}]);
+    // Context preferences belong to the selected target, not the active connection.
+    const intent: SettingsSaveIntent = connectionChanged || (navigationTab === 'connection' && !contextEdited) ? 'connection' : 'preferences';
     const next = settingsForSave(props.initial, intent === 'connection' ? { ...form, poolModel: '' } : form);
     try { saveSettings(next); }
     catch (error) {
@@ -488,6 +492,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
               </select>
               <span className="settings-modal__hint">选择后载入表单，点击“保存设置”应用。</span>
             </label>}
+            <ModelContextSettings form={form} onChange={preferences => set('modelContextPreferences', preferences)} onReasoningChange={preferences => set('modelReasoningPreferences', preferences)} />
             <ModelConnectionFields form={form} onChange={set} onTest={() => void onTest()}
               testing={testing} result={testResult} error={testError} />
 

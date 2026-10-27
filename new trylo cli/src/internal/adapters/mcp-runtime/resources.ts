@@ -1,4 +1,5 @@
 import type { JsonObject, JsonValue } from "../../protocol/envelope.js";
+import { cancelToolPorts } from "../../ports/tool-cancellation.js";
 import type { McpResource, McpResourceFailureCode, McpResourceTemplate } from "../../ports/mcp-client.js";
 import type { ToolBinding, ToolCallRequest, ToolOutcome, ToolPort } from "../../ports/tools.js";
 import { renderResourceContents } from "../../mcp/resources.js";
@@ -411,8 +412,7 @@ export function combineMcpToolPorts(tools: ToolPort, resources: ToolPort): ToolP
     execute: (call: ToolCallRequest, signal: AbortSignal): Promise<ToolOutcome> =>
       isMcpResourceToolName(call.name) ? resources.execute(call, signal) : tools.execute(call, signal),
     cancel: async (toolCallId: string): Promise<void> => {
-      await tools.cancel(toolCallId);
-      await resources.cancel(toolCallId);
+      await cancelToolPorts([tools, resources], toolCallId);
     },
   };
 }

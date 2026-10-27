@@ -7,9 +7,21 @@ import {
   resolveChoiceToConnection,
   resolveRunConnection,
   setConversationChoice,
+  settingsForConversation,
   type ConversationModelMap,
 } from './conversation-models';
 import type { TryloSettings } from './settings-store';
+
+it('an explicit own/profile conversation clears the global pool override before spawn', () => {
+  const settings = { ...SETTINGS, poolModel: 'Qwen3.8-Flash-Next' };
+  let map = setConversationChoice({}, 'ws', 'mine', { kind: 'own' });
+  map = setConversationChoice(map, 'ws', 'profile', { kind: 'profile', id: 'cfg-profile-a' });
+  map = setConversationChoice(map, 'ws', 'free', { kind: 'pool', model: 'Qwen3.8-27B' });
+  expect(settingsForConversation(settings, 'ws', 'mine', map).poolModel).toBe('');
+  expect(settingsForConversation(settings, 'ws', 'profile', map).poolModel).toBe('');
+  expect(settingsForConversation(settings, 'ws', 'free', map).poolModel).toBe('Qwen3.8-27B');
+  expect(settingsForConversation(settings, 'ws', 'new', map).poolModel).toBe('Qwen3.8-Flash-Next');
+});
 
 const SETTINGS: TryloSettings = {
   apiKey: 'sk-ant-global',

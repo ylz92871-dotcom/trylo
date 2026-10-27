@@ -9,6 +9,7 @@ mod platform {
     use super::{io, Child};
     use std::collections::HashSet;
     use std::os::windows::io::{AsHandle, AsRawHandle, FromRawHandle, OwnedHandle};
+    use std::sync::Mutex;
     use windows_sys::Win32::Foundation::{ERROR_NO_MORE_FILES, FILETIME, INVALID_HANDLE_VALUE};
     use windows_sys::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
@@ -94,6 +95,7 @@ mod platform {
 
     pub struct HostProcessTree {
         root: Process,
+        requested: Mutex<HashSet<(u32, u64)>>,
     }
 
     impl HostProcessTree {
@@ -108,10 +110,15 @@ mod platform {
                     handle,
                     created,
                 },
+                requested: Mutex::new(HashSet::new()),
             })
         }
 
         pub fn terminate(&self) -> io::Result<()> {
+            let mut requested = self
+                .requested
+                .lock()
+                .map_err(|_| io::Error::other("host stop requests poisoned"))?;
             let mut owned = vec![Process {
                 pid: self.root.pid,
                 handle: self.root.handle.as_handle().try_clone_to_owned()?,
@@ -169,13 +176,22 @@ mod platform {
                 }
                 for process in &owned {
                     // SAFETY: retained handles identify exact process objects.
-                    if unsafe { WaitForSingleObject(process.handle.as_raw_handle(), 0) } != 0
-                        && unsafe { TerminateProcess(process.handle.as_raw_handle(), 1) } == 0
+                    let identity = (process.pid, process.created);
+                    if requested.contains(&identity)
+                        || unsafe { WaitForSingleObject(process.handle.as_raw_handle(), 0) } == 0
                     {
+                        continue;
+                    }
+                    if unsafe { TerminateProcess(process.handle.as_raw_handle(), 1) } == 0 {
                         // A concurrent natural exit is success as well.
                         if unsafe { WaitForSingleObject(process.handle.as_raw_handle(), 0) } != 0 {
                             first_error.get_or_insert_with(io::Error::last_os_error);
                         }
+                    } else {
+                        // Termination is asynchronous. Reissuing an accepted
+                        // request during exit can return Access denied; retain
+                        // the receipt by object birth, never by reusable PID alone.
+                        requested.insert(identity);
                     }
                 }
             }

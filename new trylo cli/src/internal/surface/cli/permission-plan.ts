@@ -167,28 +167,39 @@ export function decideForPlan(plan: PermissionPlan, action: PermissionAction): P
 }
 
 export function createPlannedPermission(plan: PermissionPlan, io: InteractivePermissionIo,
-  workspaceWriteAllowed: (action: PermissionAction) => boolean = () => true): PermissionPort {
+  workspaceWriteAllowed: (action: PermissionAction) => boolean = () => true,
+  mayAskForRejectedWrite?: (action: PermissionAction) => boolean): PermissionPort {
   const asking = createInteractivePermission(io);
   const settled = new Map<string, PlanDecision>();
   let counter = 0;
+  const automaticDecision = (action: PermissionAction): PlanDecision => {
+    const planned = decideForPlan(plan, action);
+    if (planned !== "approved" || plan.allow.has(action.name) || (plan.ask !== "writes" && plan.workspaceEdits !== "auto")) return planned;
+    return workspaceWriteAllowed(action) ? "approved"
+      : plan.ask === "always" && mayAskForRejectedWrite?.(action) === true ? "ask" : "denied";
+  };
   return {
+    ...(plan.ask !== "always" || asking.supportsMemberApproval === undefined ? {} : { supportsMemberApproval: asking.supportsMemberApproval }),
     isDenied: name => plan.deny.has(name),
-    async request(action: PermissionAction): Promise<PermissionTicket> {
-      const planned = decideForPlan(plan, action);
-      const verdict = planned === "approved" && (plan.ask === "writes" || plan.workspaceEdits === "auto") && !plan.allow.has(action.name) && !workspaceWriteAllowed(action)
-        ? "denied" : planned;
+    inheritance: {
+      canUseTool: name => !plan.deny.has(name) && (plan.allow.has(name)
+        || ((plan.ask === "writes" || plan.workspaceEdits === "auto") && WORKSPACE_WRITE_TOOLS.has(name))),
+      decide: action => decision(automaticDecision(action) === "approved" ? "approved" : "denied", "once"),
+    },
+    async request(action: PermissionAction, context?: import("../../ports/permission.js").PermissionRequestContext): Promise<PermissionTicket> {
+      const verdict = automaticDecision(action);
       if (verdict === "ask") {
-        return await asking.request(action);
+        return await asking.request(action, context);
       }
       counter += 1;
       const ticketId = `plan-${counter}`;
       settled.set(ticketId, verdict);
       return { ticketId, toolCallId: action.toolCallId };
     },
-    async awaitDecision(ticketId: string): Promise<PermissionDecision> {
+    async awaitDecision(ticketId: string, context?: import("../../ports/permission.js").PermissionRequestContext): Promise<PermissionDecision> {
       const verdict = settled.get(ticketId);
       if (verdict === undefined) {
-        return await asking.awaitDecision(ticketId);
+        return await asking.awaitDecision(ticketId, context);
       }
       settled.delete(ticketId);
       return decision(verdict === "approved" ? "approved" : "denied", "once", verdict === "denied" ? "policy_denied" : undefined);

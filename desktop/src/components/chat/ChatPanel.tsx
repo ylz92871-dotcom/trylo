@@ -368,6 +368,8 @@ export function ChatPanel(props: ChatPanelProps): ReactElement {
  * staged partition to the same InputBar + AttachmentList.
  */
 function WorkSurface(props: ChatPanelProps): ReactElement {
+  // Account-funded models use a native account session, never a personal key.
+  const hasModelConnection = props.hasApiKey !== false || Boolean(props.poolModel?.trim());
   // P2-1 (spec §9): the ResultDock body is built entirely by the host from the
   // scoped result snapshot; the surface only places it in the shared slot.
   // v1.16.5+ (spec §5.3): derive the Work run's visible state once and feed
@@ -408,9 +410,9 @@ function WorkSurface(props: ChatPanelProps): ReactElement {
       running={props.workRunning}
       viewState={workViewState}
       emptyState={<WorkLanding />}
-      starterSlot={<WorkStarters hasApiKey={props.hasApiKey} onPickStarter={props.onPickWorkStarter ?? ((seed) => props.onWorkInputChange(seed))} />}
+      starterSlot={<WorkStarters hasApiKey={hasModelConnection} onPickStarter={props.onPickWorkStarter ?? ((seed) => props.onWorkInputChange(seed))} />}
       bannerSlot={
-        props.hasApiKey === false
+        !hasModelConnection
           ? <ApiKeyMissingBanner onOpenSettings={props.onOpenSettings} />
           : undefined
       }
@@ -454,7 +456,7 @@ function WorkSurface(props: ChatPanelProps): ReactElement {
           onPermissionLevelChange={props.onPermissionLevelChange}
           // Code-only controls stay inert in Work mode.
           contextUsed={workContextUsed}
-          contextWindow={latestContextWindow(props.workMessages) ?? props.contextWindow}
+          contextWindow={props.workRunning ? latestContextWindow(props.workMessages) ?? props.contextWindow : props.contextWindow}
           model={props.model}
           compacting={props.workMessages.some(message => message.kind === 'notice' && message.text.startsWith('Compacting context'))}
           compactAvailable={props.workCompactAvailable ?? false}
