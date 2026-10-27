@@ -1,0 +1,67 @@
+{
+  "version": "1.1.0",
+  "publishedAt": "2026-10-27T01:23:31Z",
+  "githubUrl": "https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.1.0",
+  "websiteUrl": "https://trylocode.me/download/desktop/",
+  "source": {
+    "commit": "d1bc1ccc680e07396c62cc448b9b87f81b661ba9",
+    "tree": "3eed5f8fd100a4ed1ed4857f459831bdec5a20e4",
+    "githubHeadMatches": true,
+    "githubTreeMatches": true,
+    "productManifestFilesVerified": 404
+  },
+  "githubAssets": [
+    {
+      "name": "Trylo_1.1.0_x64-setup.exe",
+      "size": 140912956,
+      "sha256": "01a9b88d99540ed3a9385e52db649fecd7f06b8601825c13ff4679dc02823497",
+      "githubDigestMatches": true
+    },
+    {
+      "name": "Trylo-Desktop-1.1.0-windows-x64-portable-core.zip",
+      "size": 160544045,
+      "sha256": "66a3b3a0666e096d16fa525b7c645431511d4dde6a0580c0a4ab58d6797f7584",
+      "githubDigestMatches": true
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "size": 210,
+      "sha256": "22f9964b32ca54fd43c1e603e7589e0732fb6bb248402c6ed48c62ee12e3ff82",
+      "githubDigestMatches": true
+    },
+    {
+      "name": "release.json",
+      "size": 5147,
+      "sha256": "63d0dd2f3335efc2791f488c5f48d450fc6f9969711a6bce48162fab6bc97538",
+      "githubDigestMatches": true
+    },
+    {
+      "name": "README-Desktop.txt",
+      "size": 1084,
+      "sha256": "cbb5b8ba23ad6f6b2c60f26707a60705f14339f9e120ed4338d79ddf7d7d3c30",
+      "githubDigestMatches": true
+    },
+    {
+      "name": "artifact-licenses.json",
+      "size": 609,
+      "sha256": "b1a1db14e50c13d704c2e65cc24db6af9062871f042a73abff94452a66e9c412",
+      "githubDigestMatches": true
+    }
+  ],
+  "historicalReleasesPreserved": 8,
+  "historicalAssetsPreserved": 91,
+  "website": {
+    "installerUrl": "https://trylocode.me/download/desktop/releases/1.1.0/Trylo_1.1.0_x64-setup.exe",
+    "bytes": 140912956,
+    "sha256": "01a9b88d99540ed3a9385e52db649fecd7f06b8601825c13ff4679dc02823497",
+    "completePublicDownload": true,
+    "matchesLocalOriginal": true,
+    "publicAssetHashes": true,
+    "rangeDownload": true,
+    "homepageAndExistingRoutesPreserved": true,
+    "oldInstallerPreserved": true,
+    "oldInstallerSha256": "5e04813c648bb120f2496a6b22b7600938ab83ac65735a36f586b42909c303a8",
+    "browserVisualAcceptance": false,
+    "browserBlock": "Computer Use stopped because it could not reliably determine the current Windows browser URL."
+  }
+}
