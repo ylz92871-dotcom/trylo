@@ -1,37 +1,42 @@
 {
   "product": "Trylo Desktop",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "channel": "unsigned-preview",
-  "sourceRef": "desktop-v1.0.6",
-  "runtimeCodeCommit": "7fd213d61ca54eb54a9bc34fe998e8ad2d38e3e8",
-  "localCodeCommit": "39342796895ffd2d62df93de6b923b993fca7a00",
+  "sourceRef": "desktop-v1.1.0",
+  "runtimeCodeCommit": "0162c842de6833db59b483ae5198d349c3d35081",
+  "localCodeCommit": "de888a60967496a044078006e3059bf17bfcedaf",
   "platform": "windows",
   "arch": "x64",
   "defaultRuntime": "trylo-v1",
-  "newRuntime": "bundled-trylo-v1",
   "legacyRuntime": "excluded",
-  "legacySourcePublished": false,
   "coworkBundled": false,
+  "changes": [
+    "优化 UI：调整 Code、Work 与团队工作区，改善消息、工具结果和协作过程的查看体验。",
+    "新增账号模式：使用 Trylo 官方免费算力池和账号远程控制，需要先登录 Trylo 账号。",
+    "新增团队模式：支持 Personal Agent 作为用户代表加入 Team Agent，参与任务协作。",
+    "完善长任务性能：通过本轮长任务压力测试，改进上下文压缩、任务续接和后台进程状态保留。",
+    "修复 Subagent 部分已知问题，改善权限审批、上下文传递、后续输入和任务状态同步。"
+  ],
   "artifacts": {
     "installer": {
-      "file": "Trylo_1.0.6_x64-setup.exe",
-      "bytes": 140795469,
-      "sha256": "5e04813c648bb120f2496a6b22b7600938ab83ac65735a36f586b42909c303a8",
-      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.6/Trylo_1.0.6_x64-setup.exe"
+      "file": "Trylo_1.1.0_x64-setup.exe",
+      "bytes": 140912956,
+      "sha256": "01a9b88d99540ed3a9385e52db649fecd7f06b8601825c13ff4679dc02823497",
+      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.1.0/Trylo_1.1.0_x64-setup.exe"
     },
     "portable": {
-      "file": "Trylo-Desktop-1.0.6-windows-x64-portable-core.zip",
-      "bytes": 160368116,
-      "sha256": "b142f765bdccbf4ca32245390d2b84a7cc4ef44357eb20527f4841c80b33f9ec",
-      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.6/Trylo-Desktop-1.0.6-windows-x64-portable-core.zip"
+      "file": "Trylo-Desktop-1.1.0-windows-x64-portable-core.zip",
+      "bytes": 160544045,
+      "sha256": "66a3b3a0666e096d16fa525b7c645431511d4dde6a0580c0a4ab58d6797f7584",
+      "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.1.0/Trylo-Desktop-1.1.0-windows-x64-portable-core.zip"
     }
   },
   "verification": {
-    "version": "1.0.6",
+    "version": "1.1.0",
     "portableCrc": true,
-    "portableEntries": 4906,
+    "portableEntries": 4960,
     "installerCrc": true,
-    "resourceFilesComparedPerPackage": 4900,
+    "resourceFilesComparedPerPackage": 4954,
     "legacyCliBundled": false,
     "coworkBundled": false,
     "defaultRuntime": "trylo-v1",
@@ -39,37 +44,68 @@
     "extractedPortableDeniedWriteBlocked": true,
     "extractedPortableApprovalEofCancelled": true,
     "noSystemNode": true,
-    "nativeExecutableSha256": "73182eec8d05d6bc0228885ecf7d5c7c8c7e1d917eba54a6751f768f60c9c399",
-    "installerExecutableSha256": "0e16c7f84727466e558cf32ff39770cf02b87d89834daa6fc846438e1cc8c042",
+    "nativeExecutableSha256": "99b916d5899892c4e0087fa8e8c1749dd5a4bd11cb8a3ced5bc549ad96a8d9c2",
+    "installerExecutableSha256": "e9e5cb40da12f3fc53497a51ad60110ca236b433883c0764d5150c11843b9753",
     "executableDifference": "exact Tauri UNK/NSS marker only",
     "installerGuiRun": false,
     "nativeUiAcceptance": false,
     "realProviderTest": false,
     "artifacts": {
       "installer": {
-        "file": "Trylo_1.0.6_x64-setup.exe",
-        "bytes": 140795469,
-        "sha256": "5e04813c648bb120f2496a6b22b7600938ab83ac65735a36f586b42909c303a8"
+        "file": "Trylo_1.1.0_x64-setup.exe",
+        "bytes": 140912956,
+        "sha256": "01a9b88d99540ed3a9385e52db649fecd7f06b8601825c13ff4679dc02823497"
       },
       "portable": {
-        "file": "Trylo-Desktop-1.0.6-windows-x64-portable-core.zip",
-        "bytes": 160368116,
-        "sha256": "b142f765bdccbf4ca32245390d2b84a7cc4ef44357eb20527f4841c80b33f9ec"
+        "file": "Trylo-Desktop-1.1.0-windows-x64-portable-core.zip",
+        "bytes": 160544045,
+        "sha256": "66a3b3a0666e096d16fa525b7c645431511d4dde6a0580c0a4ab58d6797f7584"
       }
     },
-    "sourceCommit": "7fd213d61ca54eb54a9bc34fe998e8ad2d38e3e8",
-    "localSourceCommit": "39342796895ffd2d62df93de6b923b993fca7a00",
-    "runtimeInputManifestSha256": "4ed1e64eaab3eba04ef1b43ecdbd47d22d2b2da9e747d646e01215c8b72aa8f1",
-    "frontendInputManifestSha256": "eeba543b6026850f01b89edfb4f97d6e06681b0870f9ac50d2e318135af65798",
-    "runtimeRegressionTests": 21,
-    "desktopTypecheck": true,
-    "changedFilesLint": true,
-    "sourceCompleteness": true,
+    "nativeWindowStarted": true,
+    "nativeSettingsOpened": true,
+    "nativeWindowClosed": true,
+    "cliVerify": {
+      "stepsPassed": 11,
+      "stepsTotal": 11,
+      "testNames": 4585,
+      "contracts": 38
+    },
+    "desktopTests": {
+      "initialFullSuite": {
+        "passed": 3256,
+        "failed": 45,
+        "skipped": 5
+      },
+      "failedFilesReplay": {
+        "files": 13,
+        "passed": 95,
+        "failed": 0
+      },
+      "fullSuiteRerun": false,
+      "nodeScriptsPassed": 4,
+      "runtimeIntegrityPassed": 2,
+      "teamProcessScenariosPassed": 11,
+      "structuredInteractionProcessPassed": 1
+    },
+    "servicesTests": {
+      "passed": 479,
+      "skipped": 4,
+      "failed": 0,
+      "realUvIsolated": true
+    },
+    "relayTestsPassed": 62,
+    "realProvider": {
+      "serviceHostAccountPoolReadTool": true,
+      "nativeRenderer": false,
+      "installer": false,
+      "capacityClamp": true
+    },
     "credentialScan": {
-      "version": "1.0.6",
+      "version": "1.1.0",
       "newCliOnly": true,
       "coworkBundled": false,
-      "cliFilesVerified": 2860,
+      "cliFilesVerified": 2914,
       "cliEntrySha256": "abfb467bdd8edafe70e9cde14bfc26cacf903d1b4424a3af0aa0ec9a7f83b4d0",
       "isolatedSmoke": {
         "passed": true,
@@ -81,12 +117,15 @@
       },
       "credentialFileFindings": [],
       "tokenPatternFindings": [],
-      "resourceFiles": 4900
+      "resourceFiles": 4954
     },
-    "knownLimitations": [
-      "Unsigned preview; installer GUI and native Desktop UI were not exercised in this build.",
-      "Real-provider model acceptance was not repeated.",
-      "The existing standalone strict-SRT batch ACL cleanup failure remains unresolved; Desktop shell runs use explicit host mode with approval and filesystem policy."
+    "runtimeInputManifestSha256": "59fc845b9ac15c89e09c80b8204a86867b5f5edff075d8556a864eeeee4fe194",
+    "frontendInputManifestSha256": "6946b0c29b2d4e2a71a6bf10c194b1911ca8830b8cd2797c398dcb5f59a91213",
+    "limitations": [
+      "Unsigned Windows preview; installer GUI was not run.",
+      "Native startup/settings smoke only; no full native model/team task acceptance.",
+      "Desktop full suite exposed stale tests; all failed files were repaired and replayed, not a second complete suite.",
+      "Existing long-task campaign is bounded evidence, not a guarantee for all providers or unlimited tasks."
     ]
   }
 }

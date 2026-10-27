@@ -1,14 +1,21 @@
 {
-  "version": "1.0.6",
+  "version": "1.1.0",
   "channel": "preview",
   "platform": "windows-x64",
   "installer": {
-    "file": "Trylo_1.0.6_x64-setup.exe",
-    "bytes": 140795469,
-    "sha256": "5e04813c648bb120f2496a6b22b7600938ab83ac65735a36f586b42909c303a8",
-    "path": "/download/desktop/releases/1.0.6/Trylo_1.0.6_x64-setup.exe",
-    "originUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.6/Trylo_1.0.6_x64-setup.exe"
+    "file": "Trylo_1.1.0_x64-setup.exe",
+    "bytes": 140912956,
+    "sha256": "01a9b88d99540ed3a9385e52db649fecd7f06b8601825c13ff4679dc02823497",
+    "path": "/download/desktop/releases/1.1.0/Trylo_1.1.0_x64-setup.exe",
+    "originUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.1.0/Trylo_1.1.0_x64-setup.exe"
   },
-  "checksumPath": "/download/desktop/releases/1.0.6/SHA256SUMS.txt",
-  "releaseNotes": "https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.6"
+  "checksumPath": "/download/desktop/releases/1.1.0/SHA256SUMS.txt",
+  "releaseNotes": "https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.1.0",
+  "changes": [
+    "优化 UI：调整 Code、Work 与团队工作区，改善消息、工具结果和协作过程的查看体验。",
+    "新增账号模式：使用 Trylo 官方免费算力池和账号远程控制，需要先登录 Trylo 账号。",
+    "新增团队模式：支持 Personal Agent 作为用户代表加入 Team Agent，参与任务协作。",
+    "完善长任务性能：通过本轮长任务压力测试，改进上下文压缩、任务续接和后台进程状态保留。",
+    "修复 Subagent 部分已知问题，改善权限审批、上下文传递、后续输入和任务状态同步。"
+  ]
 }

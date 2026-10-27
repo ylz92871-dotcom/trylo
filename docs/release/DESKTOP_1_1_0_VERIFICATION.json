@@ -1,0 +1,97 @@
+{
+  "version": "1.1.0",
+  "portableCrc": true,
+  "portableEntries": 4960,
+  "installerCrc": true,
+  "resourceFilesComparedPerPackage": 4954,
+  "legacyCliBundled": false,
+  "coworkBundled": false,
+  "defaultRuntime": "trylo-v1",
+  "extractedPortableActualApprovedWrite": true,
+  "extractedPortableDeniedWriteBlocked": true,
+  "extractedPortableApprovalEofCancelled": true,
+  "noSystemNode": true,
+  "nativeExecutableSha256": "99b916d5899892c4e0087fa8e8c1749dd5a4bd11cb8a3ced5bc549ad96a8d9c2",
+  "installerExecutableSha256": "e9e5cb40da12f3fc53497a51ad60110ca236b433883c0764d5150c11843b9753",
+  "executableDifference": "exact Tauri UNK/NSS marker only",
+  "installerGuiRun": false,
+  "nativeUiAcceptance": false,
+  "realProviderTest": false,
+  "artifacts": {
+    "installer": {
+      "file": "Trylo_1.1.0_x64-setup.exe",
+      "bytes": 140912956,
+      "sha256": "01a9b88d99540ed3a9385e52db649fecd7f06b8601825c13ff4679dc02823497"
+    },
+    "portable": {
+      "file": "Trylo-Desktop-1.1.0-windows-x64-portable-core.zip",
+      "bytes": 160544045,
+      "sha256": "66a3b3a0666e096d16fa525b7c645431511d4dde6a0580c0a4ab58d6797f7584"
+    }
+  },
+  "nativeWindowStarted": true,
+  "nativeSettingsOpened": true,
+  "nativeWindowClosed": true,
+  "cliVerify": {
+    "stepsPassed": 11,
+    "stepsTotal": 11,
+    "testNames": 4585,
+    "contracts": 38
+  },
+  "desktopTests": {
+    "initialFullSuite": {
+      "passed": 3256,
+      "failed": 45,
+      "skipped": 5
+    },
+    "failedFilesReplay": {
+      "files": 13,
+      "passed": 95,
+      "failed": 0
+    },
+    "fullSuiteRerun": false,
+    "nodeScriptsPassed": 4,
+    "runtimeIntegrityPassed": 2,
+    "teamProcessScenariosPassed": 11,
+    "structuredInteractionProcessPassed": 1
+  },
+  "servicesTests": {
+    "passed": 479,
+    "skipped": 4,
+    "failed": 0,
+    "realUvIsolated": true
+  },
+  "relayTestsPassed": 62,
+  "realProvider": {
+    "serviceHostAccountPoolReadTool": true,
+    "nativeRenderer": false,
+    "installer": false,
+    "capacityClamp": true
+  },
+  "credentialScan": {
+    "version": "1.1.0",
+    "newCliOnly": true,
+    "coworkBundled": false,
+    "cliFilesVerified": 2914,
+    "cliEntrySha256": "abfb467bdd8edafe70e9cde14bfc26cacf903d1b4424a3af0aa0ec9a7f83b4d0",
+    "isolatedSmoke": {
+      "passed": true,
+      "noSystemNode": true,
+      "dependencyResolution": true,
+      "approvalBeforeWrite": true,
+      "approvalRequests": 1,
+      "terminalCount": 1
+    },
+    "credentialFileFindings": [],
+    "tokenPatternFindings": [],
+    "resourceFiles": 4954
+  },
+  "runtimeInputManifestSha256": "59fc845b9ac15c89e09c80b8204a86867b5f5edff075d8556a864eeeee4fe194",
+  "frontendInputManifestSha256": "6946b0c29b2d4e2a71a6bf10c194b1911ca8830b8cd2797c398dcb5f59a91213",
+  "limitations": [
+    "Unsigned Windows preview; installer GUI was not run.",
+    "Native startup/settings smoke only; no full native model/team task acceptance.",
+    "Desktop full suite exposed stale tests; all failed files were repaired and replayed, not a second complete suite.",
+    "Existing long-task campaign is bounded evidence, not a guarantee for all providers or unlimited tasks."
+  ]
+}

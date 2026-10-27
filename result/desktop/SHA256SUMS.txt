@@ -1,0 +1,2 @@
+01a9b88d99540ed3a9385e52db649fecd7f06b8601825c13ff4679dc02823497  Trylo_1.1.0_x64-setup.exe
+66a3b3a0666e096d16fa525b7c645431511d4dde6a0580c0a4ab58d6797f7584  Trylo-Desktop-1.1.0-windows-x64-portable-core.zip

@@ -1,0 +1,191 @@
+{
+  "missingProductFiles": [],
+  "unmappedProductDrift": [],
+  "secretFindings": [],
+  "selectedFiles": 404,
+  "ignoredGeneratedSiblingJsCount": 1268,
+  "vendorNonClosureCount": 62,
+  "retainedPublicAdaptations": [
+    {
+      "path": "desktop/src/approval/approval-preview.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/host-adapter/cli-auth-status.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/host-adapter/cli-runtime-adapter.contract.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/host-adapter/cli-runtime-args-prefix.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/host-adapter/cli-runtime-brand.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/host-adapter/cli-runtime-probe-live.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/host-adapter/cli-runtime-probe.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/host-adapter/cli-runtime-resolution.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/host-adapter/cli-session-binding.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/host-adapter/context-windows.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/host-adapter/control-plane-workspace.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/host-adapter/folder-picker.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/learning/learning-diagnostics.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/settings/development-cli-runtime.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/user-learning/cognition-mode.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/user-learning/cognition-proactive-frequency.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/user-learning/conversation-cooldown.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/user-learning/late-work-evidence.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/user-learning/runtime.failure.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/user-learning/skills.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/user-learning/user-learning.depth.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/user-learning/user-learning.e2e.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/user-learning/user-learning.golden.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/user-learning/work-signals.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/components/chat/artifact-mention.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/components/chat/ArtifactCard.test.tsx",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/components/chat/ModeChip.tsx",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/components/chat/ProcessHeader.tsx",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/components/chat/ThinkingCard.tsx",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/components/chat/ToolCard.tsx",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/components/code-surface/Tabs.tsx",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/components/work/tryloHostAdapter.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src/components/chat/__fixtures__/trylo-complex.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop/src-tauri/src/commands/diagnostics.rs",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop-services/src/learning/shadow-runner.mjs",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "desktop-services/tests/services/shadow-runner.test.mjs",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "new trylo cli/src/internal/hooks/hook-config.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "new trylo cli/src/internal/protocol/protocol.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "new trylo cli/src/internal/tooling/contribution/bundle.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "new trylo cli/src/internal/surface/cli/approval-reviewer-wiring.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "new trylo cli/src/internal/surface/cli/exec-policy-guard.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "new trylo cli/src/internal/adapters/language-server/lsp-uri.test.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "new trylo cli/src/internal/adapters/voice/assistant-modes.ts",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/PATCHES.md",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    },
+    {
+      "path": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/PROVENANCE.json",
+      "reason": "existing public adaptation or maintained vendor closure; development unchanged since local baseline"
+    }
+  ],
+  "vendorClosureCheck": "scripts/release/check-source-completeness.mjs plus CLI release inventory and compile"
+}

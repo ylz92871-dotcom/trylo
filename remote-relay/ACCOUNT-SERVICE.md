@@ -76,12 +76,18 @@ Authentication concurrency, request/frame sizes and relay in-flight operations
 remain bounded for the small host. Current rate limiting is conservative per
 socket peer; behind the shared ingress that can be a shared limit.
 
-Unified model forwarding is **not enabled**. No provider secrets, paid model
-requests, fake balances or sample usage were added. Quota starts at zero and
-model/usage responses reflect no activated service. Model budget reservation,
-provider reconciliation, paid entitlements, relay traffic budgets, recovery and
-MFA are separate future work, not enforced features claimed by this release.
-Custom local Desktop API settings remain independent.
+The 2026-10-25 AMD release enables the owner-funded free pool behind the explicit
+`TRYLO_ENABLE_AMD_POOL=1` flag. It imports the full AMD catalog, stores endpoint-bound
+credentials with AES-256-GCM, and meters authorized Chat unary/SSE requests against
+the existing atomic request ledger. Accounts require administrator grants; the configured daily grant is enforced server-side. Dedicated audio/OCR/decision invocation and
+the published Desktop 1.0.6 platform-provider integration remain incomplete.
+The current Desktop source and staged Service Host now synchronize granted text
+models and bridge actual CLI Chat/SSE/tool continuation through a model-scoped
+loopback capability. Multiple configured provider credentials share the account grant;
+neither supplier key nor the native account bearer goes into renderer settings.
+Coding Plan execution, official provider balance queries, relay traffic budgets,
+account recovery and MFA remain separate work. Custom local Desktop API settings
+remain independent. See `src/model-service/README.md` for enforcement and boundaries.
 
 ## Deployment and recovery
 
