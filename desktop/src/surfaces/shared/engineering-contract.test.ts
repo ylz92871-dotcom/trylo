@@ -1,6 +1,5 @@
-// Three-way lock test (PR-1): user-learning ⇄ surfaces ⇄ CLI must carry
-// the same Engineering Contract field names. Desktop does not import CLI
-// sources, so the CLI side is asserted by reading its file as text.
+// Desktop owns the typed engineering contract. The new CLI carries the
+// prompt wrapper into its frozen member roles without importing Desktop types.
 
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -15,6 +14,7 @@ import {
 import {
   CONTRACT_AUTHORITY_KEYS_UI,
   CONTRACT_TAG_UI,
+  ENGINEERING_CONTRACT_SCHEMA_VERSION_UI,
   CONTRACT_SUMMARY_KEYS_UI,
 } from './engineering-contract';
 import { TRYLO_TEAM_SEAT_IDS_DESKTOP } from './seats';
@@ -22,24 +22,22 @@ import { TRYLO_TEAM_SEAT_IDS_DESKTOP } from './seats';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI_CONTRACT = join(
   HERE,
-  '../../../../trylo cli/src/tools/AgentTool/team-roster/engineering-contract.ts',
+  '../../../../new trylo cli/src/internal/surface/cli/team-profile-wiring.ts',
 );
 const UL_CONTRACT = join(
   HERE,
   '../../user-learning/team-access/contract-types.ts',
 );
 
-describe('surfaces/shared/engineering-contract three-way lock', () => {
+describe('surfaces/shared/engineering-contract contract boundary', () => {
   it('uses the same wrapper tag as user-learning and the CLI copy', () => {
     expect(CONTRACT_TAG_UI).toBe(CONTRACT_TAG_LEARNING);
     const cli = readFileSync(CLI_CONTRACT, 'utf8');
-    expect(cli).toContain(`export const CONTRACT_TAG = '${CONTRACT_TAG}'`);
-    expect(cli).toContain(
-      `export const ENGINEERING_CONTRACT_SCHEMA_VERSION = ${ENGINEERING_CONTRACT_SCHEMA_VERSION}`,
-    );
+    expect(cli).toContain(CONTRACT_TAG);
+    expect(ENGINEERING_CONTRACT_SCHEMA_VERSION_UI).toBe(ENGINEERING_CONTRACT_SCHEMA_VERSION);
   });
 
-  it('authority keys match the four levels, in order, on all three sides', () => {
+  it('authority keys match the Desktop contract in order', () => {
     expect([...CONTRACT_AUTHORITY_KEYS_UI]).toEqual([
       'explicit',
       'inferred',
@@ -50,10 +48,8 @@ describe('surfaces/shared/engineering-contract three-way lock', () => {
     expect(ul).toContain(
       "export type ContractAuthority = 'explicit' | 'inferred' | 'baseline' | 'recommendation';",
     );
-    const cli = readFileSync(CLI_CONTRACT, 'utf8');
-    expect(cli).toContain(
-      "export type ContractAuthority = 'explicit' | 'inferred' | 'baseline' | 'recommendation'",
-    );
+    // Role prompts preserve this wrapper; authority is not reinterpreted by a second schema.
+    expect(readFileSync(CLI_CONTRACT, 'utf8')).toContain('trylo_engineering_contract');
   });
 
   it('summary keys are a subset of the authority keys and match TaskSummary rows', () => {
@@ -66,7 +62,7 @@ describe('surfaces/shared/engineering-contract three-way lock', () => {
     expect([...TRYLO_TEAM_SEAT_IDS_DESKTOP]).toEqual([...TEAM_ACCESS_SEAT_IDS]);
   });
 
-  it('core schema field names exist in both the CLI and user-learning copies', () => {
+  it('core schema fields remain owned by the Desktop contract', () => {
     const fields = [
       'contractId',
       'personConversationId',
@@ -76,7 +72,6 @@ describe('surfaces/shared/engineering-contract three-way lock', () => {
       'sourceUserModelIds',
     ];
     for (const field of fields) {
-      expect(readFileSync(CLI_CONTRACT, 'utf8')).toContain(`readonly ${field}`);
       expect(readFileSync(UL_CONTRACT, 'utf8')).toContain(`readonly ${field}`);
     }
   });

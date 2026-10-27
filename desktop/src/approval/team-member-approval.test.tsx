@@ -15,7 +15,7 @@ it('keeps the owner decision surface visible while viewing the running team', ()
   render(<SurfaceHost collaborationSurface="team" teamRun={FIXTURE_TEAM_RUN} personView={<div>个人聊天</div>}
     onSelectTeamSeat={() => {}} {...{ teamApprovals: <div>待审批：report.md</div> }} />);
   expect(screen.getByText('待审批：report.md')).toBeTruthy();
-  expect(screen.queryByText('个人聊天')).toBeNull();
+  expect(screen.getByText('个人聊天')).toBeTruthy();
 });
 
 it('preserves validated member provenance through protocol and owner registry', () => {

@@ -16,7 +16,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run && pnpm test:node",
     "test:watch": "vitest",
     "spike:day-1": "echo 'Spike Day 1: Tauri 2 + React scaffold. See spike-results/day-1-tauri-setup.md'",
     "spike:day-2": "echo 'Spike Day 2: monaco-vscode-api. See spike-results/day-2-monaco-vscode-api.md'",
@@ -24,7 +24,9 @@
     "spike:day-4": "echo 'Spike Day 4: WorkspaceWatcher. See spike-results/day-4-watcher.md'",
     "spike:day-5": "echo 'Spike Day 5: external process write detection. See spike-results/day-5-external-process.md'",
     "spike:day-6": "echo 'Spike Day 6: search service. See spike-results/day-6-search.md'",
-    "spike:day-7": "echo 'Spike Day 7: report. See spike-results/day-7-report.md'"
+    "spike:day-7": "echo 'Spike Day 7: report. See spike-results/day-7-report.md'",
+    "test:node": "node --test scripts/ensure-dev-cli.test.mjs scripts/stage-npm.test.mjs",
+    "test:platform": "node --test scripts/runtime-integrity.platform.test.mjs"
   },
   "dependencies": {
     "@codingame/monaco-vscode-api": "^13.0.0",

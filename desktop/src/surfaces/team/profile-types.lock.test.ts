@@ -19,7 +19,7 @@ const CANONICAL = join(HERE, '../../user-learning/team-access/profiles/profile-t
 const MIRROR = join(HERE, './team-profile-types.ts');
 const CLI_TOOLS = join(
   HERE,
-  '../../../../trylo cli/src/tools/AgentTool/team-roster/tools.ts',
+  '../../../../new trylo cli/src/internal/surface/cli/team-profile-wiring.ts',
 );
 
 const OVERLAY_FIELDS = ['model', 'tools', 'disallowedTools', 'skills', 'systemPromptOverlay'];
@@ -66,10 +66,10 @@ describe('team-profile-types three-copy lock', () => {
     }
   });
 
-  it('overlay fields copy into the CLI roster tools (spawn/write/research groups)', () => {
+  it('the new CLI reads the frozen overlay without importing the legacy engine', () => {
     const cli = read(CLI_TOOLS);
-    for (const tool of ['AGENT_TOOL_NAME', 'EXIT_PLAN_MODE_TOOL_NAME', 'WEB_FETCH_TOOL_NAME', 'WEB_SEARCH_TOOL_NAME', 'SKILL_TOOL_NAME']) {
-      expect(cli).toContain(tool);
-    }
+    for (const field of OVERLAY_FIELDS) expect(cli).toContain(field);
+    expect(cli).toContain('spawn_agent');
+    expect(cli).toContain('inspectTeamRepresentation');
   });
 });

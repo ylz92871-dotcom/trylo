@@ -80,7 +80,7 @@
     backdrop-filter: blur(16px);
     border-bottom: 1px solid var(--line-soft);
   }
-  .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 66px; }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; gap: 20px; height: 66px; }
   .brand {
     display: flex; align-items: center; gap: 11px;
     font-family: var(--font-display); font-weight: 700; font-size: 18px;
@@ -92,13 +92,26 @@
   .nav-links { display: flex; gap: 30px; font-size: 14px; color: var(--text-soft); }
   .nav-links a { transition: color .2s; }
   .nav-links a:hover { color: var(--accent-strong); }
+  .nav-actions { display: flex; align-items: center; gap: 18px; flex-shrink: 0; }
+  .nav-account { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 500; color: var(--text-soft); white-space: nowrap; }
+  .nav-account:hover { color: var(--accent-strong); }
   .nav-cta {
     font-family: var(--font-mono); font-size: 13px; font-weight: 500;
     padding: 9px 16px; border: 1px solid var(--line); border-radius: 999px;
     color: var(--text); transition: all .2s;
   }
   .nav-cta:hover { border-color: var(--accent); color: var(--accent-strong); box-shadow: 0 0 18px rgba(220,201,126,.15); }
-  @media (max-width: 720px) { .nav-links { display: none; } }
+  @media (max-width: 1080px) { .nav-links { display: none; } }
+  @media (max-width: 480px) {
+    .nav-inner { gap: 12px; padding: 0 16px; }
+    .nav .brand { font-size: 16px; gap: 8px; white-space: nowrap; }
+    .nav .brand-mark { width: 24px; height: 24px; }
+    .nav-actions { gap: 10px; }
+    .nav-account { font-size: 13px; }
+    .nav-cta { padding: 9px 10px; font-size: 12px; }
+    .nav-download-long { display: none; }
+  }
+  @media (max-width: 360px) { .nav .brand-product { display: none; } }
 
   /* ---------- hero ---------- */
   .hero { position: relative; z-index: 1; padding: 90px 0 110px; }
@@ -422,7 +435,7 @@
         <path d="M276 732 L424 644 L356 512"/>
         <path d="M540 676 L622 546 L786 640"/>
       </svg>
-      Trylo&nbsp;Code
+      <span>Trylo<span class="brand-product">&nbsp;Code</span></span>
     </a>
     <nav class="nav-links" aria-label="页面导航">
       <a href="#modes">双模式</a>
@@ -431,7 +444,10 @@
       <a href="#features">技术特性</a>
       <a href="https://chat.trylocode.me">在线体验 ↗</a>
     </nav>
-    <a class="nav-cta" href="https://app.trylocode.me">手机 App 下载 ↗</a>
+    <div class="nav-actions">
+      <a class="nav-account" href="/account/">个人控制台</a>
+      <a class="nav-cta" href="https://app.trylocode.me"><span class="nav-download-long">手机 </span>App 下载 ↗</a>
+    </div>
   </div>
 </header>
 
@@ -729,6 +745,7 @@
     </a>
     <div class="foot-meta">
       <a href="https://trylocode.me">官网</a>
+      <a href="/account/">个人控制台</a>
       <a href="https://app.trylocode.me">App 下载</a>
       <a href="https://remote.trylocode.me">远程控制</a>
       <a href="https://chat.trylocode.me">在线体验</a>

@@ -10,6 +10,6 @@ it('lets the user select several options and submit one real answer', async () =
   const onRespond = vi.fn(); render(<InputRequestCard message={message} onRespond={onRespond} />);
   fireEvent.click(screen.getByRole('checkbox', { name: /A/ }));
   fireEvent.click(screen.getByRole('checkbox', { name: /B/ }));
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }));
+  fireEvent.click(screen.getByRole('button', { name: /提交回答/ }));
   await waitFor(() => expect(onRespond).toHaveBeenCalledWith('q', 'submitted', { style: { optionLabels: ['A', 'B'] } }));
 });

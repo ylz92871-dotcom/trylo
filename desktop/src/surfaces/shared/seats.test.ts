@@ -12,7 +12,7 @@ import {
 
 const CLI_ROSTER = join(
   dirname(fileURLToPath(import.meta.url)),
-  '../../../../trylo cli/src/tools/AgentTool/team-roster/types.ts',
+  '../../../../new trylo cli/src/internal/surface/cli/team-profile-wiring.ts',
 );
 
 describe('surfaces/shared/seats', () => {
@@ -31,7 +31,7 @@ describe('surfaces/shared/seats', () => {
 
     // 2) lock against the CLI roster file (string match). The test
     // fails loud if the CLI ever renames / reorders a seat.
-    const source = readFileSync(CLI_ROSTER, 'utf8');
+    const source = readFileSync(CLI_ROSTER, 'utf8').replaceAll('"', "'");
     expect(source).toContain("'person'");
     expect(source).toContain("'architect'");
     expect(source).toContain("'worker'");
@@ -41,14 +41,11 @@ describe('surfaces/shared/seats', () => {
     expect(source).toContain("'cad-verifier'");
   });
 
-  it('exposes a display name for every seat and they match the CLI', () => {
+  it('exposes distinct Desktop display names without coupling CLI policy to UI labels', () => {
     for (const id of TRYLO_TEAM_SEAT_IDS_DESKTOP) {
       expect(TRYLO_TEAM_SEAT_DISPLAY_NAME_DESKTOP[id]).toBeTruthy();
     }
-    const source = readFileSync(CLI_ROSTER, 'utf8');
-    for (const id of TRYLO_TEAM_SEAT_IDS_DESKTOP) {
-      expect(source).toContain(TRYLO_TEAM_SEAT_DISPLAY_NAME_DESKTOP[id]);
-    }
+    expect(new Set(Object.values(TRYLO_TEAM_SEAT_DISPLAY_NAME_DESKTOP)).size).toBe(TRYLO_TEAM_SEAT_IDS_DESKTOP.length);
   });
 
   it('flags unknown ids', () => {
