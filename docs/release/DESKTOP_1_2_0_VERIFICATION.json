@@ -26,7 +26,13 @@
       "guiDesktop": true,
       "consoleCmdExcluded": true,
       "legacyCliExcluded": true,
-      "coworkExcluded": true
+      "coworkExcluded": true,
+      "binaryFrontendOrdering": {
+        "frontendBuiltAt": "2026-11-02T02:29:52",
+        "nativeBuiltAt": "2026-11-02T03:18:34",
+        "bundleLabelsPresent": ["生产", "审批", "工具学习", "学习记录"],
+        "note": "Tauri embeds the frontend compressed, so a plain-text search inside the executable is not a valid check; the bundle was built before the native build and both packages ship that executable."
+      }
     },
     "installer": {
       "crc": true,
