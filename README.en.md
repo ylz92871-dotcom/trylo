@@ -99,7 +99,7 @@ CoWork remains a separate optional dependency, outside the core desktop package.
 | [`new_tool/`](new_tool/README.md) | Windows-MCP fork, provenance, and dependency setup |
 | [`work/`](work/) | Workflows, runtime adapters, and deliverables |
 | [`mobile-app/`](mobile-app/) | Android remote workbench |
-| [`trylocode-site/`](trylocode-site/) | Website source |
+| Website | Source is not distributed here; downloads: <https://trylocode.me/download/desktop/> |
 
 [Architecture](docs/architecture/README.md) · [Build from source](docs/development/build-from-source.md) · [Repository layout](docs/development/repository-layout.md) · [Recent CLI fixes and verification](docs/release/NEW_CLI_DEBUG_2026_10_22.md)
 

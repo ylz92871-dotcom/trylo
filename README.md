@@ -109,7 +109,7 @@ Trylo 将界面、执行内核、本地工具服务和学习机制分开组织�
 | [`new_tool/`](new_tool/README.md) | Windows-MCP fork、来源记录与依赖安装 |
 | [`work/`](work/) | 工作流、运行适配与交付物 |
 | [`mobile-app/`](mobile-app/) | Android 远程工作台 |
-| [`trylocode-site/`](trylocode-site/) | 网站源码 |
+| 官网 | 源码不随本仓库分发；下载页见 <https://trylocode.me/download/desktop/> |
 
 [架构说明](docs/architecture/README.md) · [源码构建](docs/development/build-from-source.md) · [目录与迁移](docs/development/repository-layout.md) · [近期 CLI 排障与验证](docs/release/NEW_CLI_DEBUG_2026_10_22.md)
 

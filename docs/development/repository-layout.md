@@ -17,7 +17,7 @@
 | desktop-services | desktop-services | 维持服务宿主与外围能力边界 |
 | work | work | 显式补齐 vendor 获取/构建闭包，保留适配隔离 |
 | mobile-app | mobile-app | 保留可构建 Android 配置，排除签名和生成包 |
-| trylocode-site | website | 保留站点内容，更新部署与下载路径 |
+| trylocode-site | （不公开） | 自 2026-11-02 起官网源码不进入公库，只保留线上下载入口 |
 | 新 CLI vendor-bin/pty | native/pty | 移动自产源码及 provenance，修正打包定位 |
 | Windows-MCP/native/wgc-helper | native/wgc | 移动 helper 源码，修正原生构建及来源记录 |
 | 精选/重写架构说明 | docs/architecture | 以现状和已定意图分别陈述，历史记录不直接变成设计规范 |

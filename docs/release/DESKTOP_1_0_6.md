@@ -13,3 +13,5 @@
 [安装包](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.6/Trylo_1.0.6_x64-setup.exe) · [便携包](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.6/Trylo-Desktop-1.0.6-windows-x64-portable-core.zip) · [校验值](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.6/SHA256SUMS) · [验证清单](DESKTOP_1_0_6_VERIFICATION.json)
 
 Android 1.6.0 沿用原签名构建，本次没有重新编译手机 APP：[下载 APK](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Code-v1.6.0.apk)。
+
+2026-10-25：现有安装包已接入[官网下载页](https://trylocode.me/download/desktop/)，也可[直接下载](https://trylocode.me/download/desktop/releases/1.0.6/Trylo_1.0.6_x64-setup.exe)或获取[官网校验值](https://trylocode.me/download/desktop/releases/1.0.6/SHA256SUMS.txt)。沿用本页同一份 140795469 字节的未签名预览包，未重建为新的源码版本；发布记录保存在维护者本地的官网分发记录中，不随本仓库分发。
