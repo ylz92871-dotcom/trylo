@@ -5,7 +5,7 @@
   "identifier": "me.trylocode.trylo",
   "build": {
     "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "",
+    "beforeBuildCommand": "pnpm build:bundle",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },

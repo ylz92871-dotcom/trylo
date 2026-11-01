@@ -1,0 +1,64 @@
+{
+  "version": "1.2.0",
+  "platform": "windows",
+  "arch": "x64",
+  "builtAt": "2026-11-02T03:18:34",
+  "packages": {
+    "installer": {
+      "file": "Trylo_1.2.0_x64-setup.exe",
+      "bytes": 140971135,
+      "sha256": "80470cb1092e4863383f99fe65daaa1a75580352ef5bd4ee3b49aef6b69b8266",
+      "layout": "NSIS x64, installs the same core tree as the portable package"
+    },
+    "portable": {
+      "file": "Trylo-Desktop-1.2.0-windows-x64-portable-core.zip",
+      "bytes": 162920968,
+      "sha256": "406dfe6a3aa2c0f3107580ab9fdbefe5bd82502dac1f576e72f38c95d17246bb",
+      "entries": 5256,
+      "compressionLevel": 6
+    }
+  },
+  "distribution": {
+    "profile": "core",
+    "ordinaryWorkRuntime": "trylo-cli",
+    "defaultCliRuntime": "trylo-v1",
+    "coworkRuntime": {
+      "bundled": false,
+      "status": "separate-experimental-dependency"
+    },
+    "legacyCliRuntime": {
+      "bundled": false,
+      "mode": "excluded"
+    }
+  },
+  "versionStamp": {
+    "packageJson": "1.2.0",
+    "tauriConf": "1.2.0",
+    "cargo": "1.2.0",
+    "distributionJson": "1.2.0",
+    "nativeFileVersion": "1.2.0"
+  },
+  "source": {
+    "repository": "https://github.com/ylz92871-dotcom/trylo",
+    "commit": "ee0f430825b533a80cbc2d074a4eeb363745c42e",
+    "note": "Built from the public source tree (desktop + new trylo cli) with beforeBuildCommand neutralised; the frontend was built with `pnpm build` and the CLI was staged from the same source."
+  },
+  "stagedResources": {
+    "cliEntrySha256": "3eef0df49cec1267b88ef3bb1af7b1f07e545b818684df6b35a34590543eaeed",
+    "cliInventoryFiles": 3210,
+    "cliStagedAt": "2026-10-31T15:09:10",
+    "distributionJsonByteEqual": true
+  },
+  "launcher": {
+    "file": "Start-Trylo.exe",
+    "bytes": 243200,
+    "subsystem": "windows-gui",
+    "compiler": "rustc 1.97.1",
+    "buildRecord": "portable-launcher.build.json"
+  },
+  "nativeExecutable": {
+    "file": "trylo-desktop.exe",
+    "bytes": 9095680,
+    "sha256": "00f7439c49c63558e6d73e7ba787d8ea2222e82629abc8c13bfa45774a35b8b3"
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "version": "1.2.0",
+  "verification": {
+    "cli": {
+      "build": true,
+      "hermeticTestNames": 4884,
+      "hermeticPassed": true,
+      "environmentNote": "3 test groups compare real temp paths and fail when TEMP uses an 8.3 short path; they pass when TEMP is the long path."
+    },
+    "desktop": {
+      "typecheck": true,
+      "affectedTestFiles": 5,
+      "affectedTestsPassed": 24,
+      "nodeScriptTests": 4,
+      "frontendProductionBuild": true,
+      "fullSuite": "not run this round",
+      "platformTests": "not run this round"
+    },
+    "portable": {
+      "crc": true,
+      "entries": 5256,
+      "runtimeFilesByteCompared": 5249,
+      "cliInventoryVerified": 3210,
+      "cliEntrySha256": "3eef0df49cec1267b88ef3bb1af7b1f07e545b818684df6b35a34590543eaeed",
+      "guiLauncher": true,
+      "guiDesktop": true,
+      "consoleCmdExcluded": true,
+      "legacyCliExcluded": true,
+      "coworkExcluded": true
+    },
+    "installer": {
+      "crc": true,
+      "comparedToPortable": 5248,
+      "executableDifferenceBytes": 3,
+      "executableDifference": "Tauri NSIS bundle marker only",
+      "guiDesktop": true,
+      "consoleCmdExcluded": true,
+      "legacyCliExcluded": true,
+      "coworkExcluded": true,
+      "installerExecuted": false
+    },
+    "credentials": {
+      "cliFilesVerified": 3210,
+      "credentialFileFindings": [],
+      "tokenPatternFindings": []
+    },
+    "distributionJson": {
+      "version": "1.2.0",
+      "profile": "core",
+      "coworkBundled": false,
+      "legacyCliBundled": false,
+      "defaultCliRuntime": "trylo-v1"
+    }
+  },
+  "limitations": [
+    "Unsigned Windows preview; the installer was unpacked and compared, not executed.",
+    "No full desktop test suite, Services/Relay tests, or real provider task acceptance this round.",
+    "No browser visual acceptance of the download page."
+  ]
+}

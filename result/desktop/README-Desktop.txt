@@ -1,11 +1,11 @@
-# Trylo Desktop 1.1.0
+# Trylo Desktop 1.2.0
 
-[Windows 安装包](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.1.0/Trylo_1.1.0_x64-setup.exe) · [便携 ZIP](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.1.0/Trylo-Desktop-1.1.0-windows-x64-portable-core.zip) · [官网下载](https://trylocode.me/download/desktop/)
+[Windows 安装包](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.2.0/Trylo_1.2.0_x64-setup.exe) · [便携 ZIP](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.2.0/Trylo-Desktop-1.2.0-windows-x64-portable-core.zip) · [官网下载](https://trylocode.me/download/desktop/)
 
-- 优化 UI：调整 Code、Work 与团队工作区，改善消息、工具结果和协作过程的查看体验。
-- 新增账号模式：使用 Trylo 官方免费算力池和账号远程控制，需要先登录 Trylo 账号。
-- 新增团队模式：支持 Personal Agent 作为用户代表加入 Team Agent，参与任务协作。
-- 完善长任务性能：通过本轮长任务压力测试，改进上下文压缩、任务续接和后台进程状态保留。
-- 修复 Subagent 部分已知问题，改善权限审批、上下文传递、后续输入和任务状态同步。
+- 新增工具生产管理：在学习中心查看工具的生产计划、审批、证据与用途，启用前必须经过明确审批。
+- 新增工具学习记录：展示真实的待审、部分检索与验证状态，未通过验证的工具不会显示为可用。
+- 改进团队协作：团队进度按成员投影，补充成员交付与交接信息，长任务中断后更容易接续。
+- 修复后台命令闪窗：Git 快照、diff、搜索、目录选择与 LSP 配置等后台命令不再弹出控制台窗口。
+- 便携包改用图形界面启动器 `Start-Trylo.exe`，不再附带 `.cmd` 脚本；新版 CLI 补齐工具获取与 npm 安装闭包、子智能体检查点与学习控制。
 
-仅新版 CLI；CoWork 分离；历史发布保留。此为未签名预览版，测试范围见 [发行说明](../../docs/release/DESKTOP_1_1_0.md)。
+仅新版 CLI；CoWork 分离；历史发布保留。此为未签名预览版，测试范围见 [发行说明](../../docs/release/DESKTOP_1_2_0.md)。
