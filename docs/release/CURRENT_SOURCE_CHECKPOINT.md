@@ -1,8 +1,12 @@
 # 当前源码检查点
 
+2026-11-02：Desktop 1.2.0 工具生产管理、工具学习记录、团队进度与后台命令闪窗修复。仅新版 CLI，官网源码不再进入公库。
+
+[当前版本说明](DESKTOP_1_2_0.md) · [验证摘要](DESKTOP_1_2_0_VERIFICATION.json) · [源码同步记录](SOURCE_SYNC_2026_11_02.md)
+
 2026-10-27：Desktop 1.1.0 账号、团队、UI 与长任务更新。仅新版 CLI，旧版保留。
 
-[当前版本说明](DESKTOP_1_1_0.md) · [验证摘要](DESKTOP_1_1_0_VERIFICATION.json) · [源码同步审计](SOURCE_SYNC_2026_10_27.json)
+[版本说明](DESKTOP_1_1_0.md) · [验证摘要](DESKTOP_1_1_0_VERIFICATION.json) · [源码同步审计](SOURCE_SYNC_2026_10_27.json)
 
 2026-10-24：Desktop 1.0.6 仅新版 CLI 更新已完成构建，运行时源码为 `7fd213d61ca54eb54a9bc34fe998e8ad2d38e3e8`。安装包与便携包资源、CRC、批准/拒绝/取消已核验。
 

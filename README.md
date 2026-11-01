@@ -10,21 +10,21 @@
 
 [简体中文](README.md) · [English](README.en.md)
 
-[![Windows Desktop](https://img.shields.io/badge/Windows-Desktop_1.1.0-242629?style=flat-square)](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.1.0) [![Android](https://img.shields.io/badge/Android-1.6.0-47765A?style=flat-square)](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Code-v1.6.0.apk) [![Status](https://img.shields.io/badge/Status-Alpha-B49A52?style=flat-square)](docs/release/CURRENT_SOURCE_CHECKPOINT.md) [![License](https://img.shields.io/badge/License-Apache--2.0-687786?style=flat-square)](LICENSE)
+[![Windows Desktop](https://img.shields.io/badge/Windows-Desktop_1.2.0-242629?style=flat-square)](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.2.0) [![Android](https://img.shields.io/badge/Android-1.6.0-47765A?style=flat-square)](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Code-v1.6.0.apk) [![Status](https://img.shields.io/badge/Status-Alpha-B49A52?style=flat-square)](docs/release/CURRENT_SOURCE_CHECKPOINT.md) [![License](https://img.shields.io/badge/License-Apache--2.0-687786?style=flat-square)](LICENSE)
 
-**[下载桌面版](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.1.0/Trylo_1.1.0_x64-setup.exe) · [下载 Android APP](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Code-v1.6.0.apk) · [了解架构](docs/architecture/README.md)**
+**[下载桌面版](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.2.0/Trylo_1.2.0_x64-setup.exe) · [下载 Android APP](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Code-v1.6.0.apk) · [了解架构](docs/architecture/README.md)**
 
 </div>
 
-## Desktop 1.1.0 更新
+## Desktop 1.2.0 更新
 
-- 优化 UI：调整 Code、Work 与团队工作区，改善消息、工具结果和协作过程的查看体验。
-- 新增账号模式：使用 Trylo 官方免费算力池和账号远程控制，需要先登录 Trylo 账号。
-- 新增团队模式：支持 Personal Agent 作为用户代表加入 Team Agent，参与任务协作。
-- 完善长任务性能：通过本轮长任务压力测试，改进上下文压缩、任务续接和后台进程状态保留。
-- 修复 Subagent 部分已知问题，改善权限审批、上下文传递、后续输入和任务状态同步。
+- 新增工具生产管理：在学习中心查看工具的生产计划、审批、证据与用途，启用前必须经过明确审批。
+- 新增工具学习记录：展示真实的待审、部分检索与验证状态，未通过验证的工具不会显示为可用。
+- 改进团队协作：团队进度按成员投影，补充成员交付与交接信息，长任务中断后更容易接续。
+- 修复后台命令闪窗：Git 快照、diff、搜索、目录选择与 LSP 配置等后台命令不再弹出控制台窗口。
+- 便携包改用图形界面启动器 `Start-Trylo.exe`，不再附带 `.cmd` 脚本；新版 CLI 补齐工具获取与 npm 安装闭包、子智能体检查点与学习控制。
 
-[完整更新说明](docs/release/DESKTOP_1_1_0.md) · [官网下载](https://trylocode.me/download/desktop/)
+[完整更新说明](docs/release/DESKTOP_1_2_0.md) · [官网下载](https://trylocode.me/download/desktop/)
 
 ## Trylo宣传视频
 
@@ -83,19 +83,19 @@ CoWork 后台保持独立，作为可选依赖，不随核心桌面包捆绑。
 
 ## 开始使用
 
-1. 从 [GitHub Releases](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.1.0) 下载 Windows 安装版或便携版。
+1. 从 [GitHub Releases](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.2.0) 下载 Windows 安装版或便携版。
 2. 打开工作区，在设置中配置模型服务与凭据，按任务需要选择工具和权限。
 3. 创建一个任务，从读懂项目、修复代码或整理资料开始；需要长期学习时，再显式开启对应选项。
 4. 需要手机接续时，安装 Android APP，按桌面端远程连接界面的指引完成配对。
 
 | 下载 | 版本与说明 |
 | --- | --- |
-| [Windows x64 安装版](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.1.0/Trylo_1.1.0_x64-setup.exe) | Desktop 1.1.0 |
-| [Windows x64 便携版](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.1.0/Trylo-Desktop-1.1.0-windows-x64-portable-core.zip) | 核心桌面包，CoWork 独立 |
+| [Windows x64 安装版](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.2.0/Trylo_1.2.0_x64-setup.exe) | Desktop 1.2.0 |
+| [Windows x64 便携版](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.2.0/Trylo-Desktop-1.2.0-windows-x64-portable-core.zip) | 核心桌面包，CoWork 独立 |
 | [Android APK](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Code-v1.6.0.apk) | Android 1.6.0；沿用已签名构建 |
-| [SHA-256 校验值](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.1.0/SHA256SUMS) | 下载后可核对文件完整性 |
+| [SHA-256 校验值](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.2.0/SHA256SUMS.txt) | 下载后可核对文件完整性 |
 
-**当前为 Alpha。** Desktop 1.1.0 仅包含并默认使用新版 Trylo CLI，旧 CLI 与 CoWork 后台不随包分发，旧版选择会迁移为新版。本次已重新编译 10 月 24 日同步的产品源码。验证范围见[当前检查点](docs/release/CURRENT_SOURCE_CHECKPOINT.md)和[发布记录](docs/release/DESKTOP_1_0_6.md)；界面截图与演示不代表所有模型、软件与设备组合均已验证。
+**当前为 Alpha。** Desktop 1.2.0 仅包含并默认使用新版 Trylo CLI，旧 CLI 与 CoWork 后台不随包分发，旧版选择会迁移为新版。官网源码自本次起不再进入公库。验证范围见[当前检查点](docs/release/CURRENT_SOURCE_CHECKPOINT.md)和[发布记录](docs/release/DESKTOP_1_2_0.md)；界面截图与演示不代表所有模型、软件与设备组合均已验证。
 
 ## 为开发者准备的入口
 

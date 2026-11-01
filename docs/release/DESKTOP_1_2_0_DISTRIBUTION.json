@@ -1,0 +1,86 @@
+{
+  "version": "1.2.0",
+  "publishedAt": "2026-11-01T19:28:13Z",
+  "githubUrl": "https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.2.0",
+  "websiteUrl": "https://trylocode.me/download/desktop/",
+  "source": {
+    "commit": "f873f497a3af2280e8a5dfa29b75dececb621568",
+    "tree": "fbcc9d410d96cb88eeed3390d1429920e0e94f42",
+    "githubHeadMatches": true,
+    "githubTreeMatches": true,
+    "syncCommit": "ee0f430825b533a80cbc2d074a4eeb363745c42e",
+    "websiteSourceReplacedBy": "1918f2a32893d5d263ce2887990cb1f58c7fc3ff (website source removed from the public repo)"
+  },
+  "githubAssets": [
+    {
+      "name": "Trylo_1.2.0_x64-setup.exe",
+      "size": 140971135,
+      "sha256": "80470cb1092e4863383f99fe65daaa1a75580352ef5bd4ee3b49aef6b69b8266",
+      "githubDigestMatches": true
+    },
+    {
+      "name": "Trylo-Desktop-1.2.0-windows-x64-portable-core.zip",
+      "size": 162920968,
+      "sha256": "406dfe6a3aa2c0f3107580ab9fdbefe5bd82502dac1f576e72f38c95d17246bb",
+      "githubDigestMatches": true
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "size": 208,
+      "sha256": "7919da212f1ac3fc008e45a49d0d495a0f6d646589a8e144319cb1ea40ee468a",
+      "githubDigestMatches": true
+    },
+    {
+      "name": "release.json",
+      "size": 3816,
+      "sha256": "fcbfe4e5a7f17923ed6e5af5e127afe0bc8cb5499b440d041178f17fe58c7327",
+      "githubDigestMatches": true
+    },
+    {
+      "name": "README-Desktop.txt",
+      "size": 1202,
+      "sha256": "a0cde225db404088ebed04088d04d22c80d9c196d66b3e9593be1e123aa0cd34",
+      "githubDigestMatches": true
+    },
+    {
+      "name": "artifact-licenses.json",
+      "size": 609,
+      "sha256": "b1a1db14e50c13d704c2e65cc24db6af9062871f042a73abff94452a66e9c412",
+      "githubDigestMatches": true
+    }
+  ],
+  "historicalReleasesPreserved": 9,
+  "website": {
+    "installerUrl": "https://trylocode.me/download/desktop/releases/1.2.0/Trylo_1.2.0_x64-setup.exe",
+    "bytes": 140971135,
+    "sha256": "80470cb1092e4863383f99fe65daaa1a75580352ef5bd4ee3b49aef6b69b8266",
+    "completePublicDownload": true,
+    "matchesLocalOriginal": true,
+    "publicAssetHashes": true,
+    "rangeDownload": true,
+    "deliveryHeader": "x-trylo-desktop: 1.2.0",
+    "pageFilesVerified": 4,
+    "homepageAndExistingRoutesPreserved": true,
+    "preservedRouteHashes": {
+      "/": "4c2ee395a2adbf7e2a56d745f07bd192e61cb275876e6871e515025396059a0c",
+      "/download/app/": "675cfc2df592949afb600ad1d56d78463944a9d0a12173ac408512d0ae4b96df",
+      "/app/": "83e0b6b7232f9fd002a0103f196a52bc035730d018e86da2971289c08cae16c9",
+      "/chat/": "d9f22b4a89c40b73c017a5d27ac313b6701f76bd4c822bfe90dcfd13fc8e5341",
+      "/remote/": "46080e5434b75d29abd2631a921574c5204763a694463dc472d2ac8a365d5f1a",
+      "/account/": "5565de92bc9cf44e9a90c3c41c466f5d84b78985de486f042969ad342135e1aa",
+      "/admin/": "b1a882607b6727abd1f1e69e25e67f64e82ac0d1413a24f690f0f93aa65ca6d7",
+      "/console/shared/base.css": "252873b430cc5bae24d21cde5c6fa1336e8e8b84811abd7c0242c7fb1a8bd828"
+    },
+    "oldInstallerPreserved": true,
+    "oldInstallerHttpStatus": 200,
+    "oldInstallers": {
+      "1.1.0": { "bytes": 140912956, "httpStatus": 200 },
+      "1.0.6": { "bytes": 140795469, "httpStatus": 200 }
+    },
+    "deploymentRecord": "/home/admin/trylo-site/releases/desktop-download-1.2.0-1793561603236",
+    "container": "trylo-desktop-1-2-0-1793561603236",
+    "previousContainer": "trylo-desktop-1-1-0-1793091157818",
+    "browserVisualAcceptance": false,
+    "browserBlock": "No interactive browser session was used; page, asset, header and download checks were done over HTTP."
+  }
+}
