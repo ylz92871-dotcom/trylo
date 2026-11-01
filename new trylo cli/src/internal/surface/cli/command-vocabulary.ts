@@ -53,7 +53,7 @@ export const ROOT_COMMAND_WORDS: ReadonlyArray<string> = [
 ];
 
 /** The verbs owned by a command family outside the root's parser. */
-export const FAMILY_COMMAND_WORDS = ["schedule", "daemon", "bg", "watch"] as const;
+export const FAMILY_COMMAND_WORDS = ["schedule", "daemon", "bg", "watch", "tools"] as const;
 
 /** One family word: the table must answer every one of them, by type. */
 export type FamilyWord = (typeof FAMILY_COMMAND_WORDS)[number];
@@ -67,6 +67,7 @@ export type FamilyWord = (typeof FAMILY_COMMAND_WORDS)[number];
  * `completion.ts` with their owners, and moving those here is a separate change.
  */
 export const FAMILY_SUBCOMMANDS: Record<FamilyWord, ReadonlyArray<string>> = {
+  tools: ["search", "evolve", "candidates", "trial", "trials", "improve", "use", "uses", "withdraw"],
   schedule: ["add", "list", "remove", "run"],
   daemon: ["status", "start", "stop"],
   bg: ["ps", "logs", "attach", "kill"],

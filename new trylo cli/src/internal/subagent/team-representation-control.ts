@@ -1,4 +1,4 @@
-import type { TeamRepresentationVerdict } from "../protocol/team-representation.js";
+import { formatTeamRepresentation, type TeamRepresentation, type TeamRepresentationVerdict } from "../protocol/team-representation.js";
 import { SubagentGovernanceError } from "./governance.js";
 import type { TaskResourceStop } from "./task-resources.js";
 
@@ -9,22 +9,29 @@ type ImplementationWorker = {
 
 /** One representation barrier; task owners retain native cleanup facts. */
 export class TeamRepresentationControl {
-  private verdict: TeamRepresentationVerdict | undefined;
+  private readonly states = new Map<string, { readonly kind: "pending" } | { readonly kind: "submitted"; readonly value: TeamRepresentation }
+    | { readonly kind: "settled"; readonly verdict: TeamRepresentationVerdict; readonly value?: TeamRepresentation }>();
 
   constructor(private readonly inspect: ((output: string) => TeamRepresentationVerdict) | undefined,
-    private readonly workers: () => ReadonlyArray<ImplementationWorker>, private readonly changed: () => void) {}
+    private readonly workers: () => ReadonlyArray<ImplementationWorker>, private readonly changed: () => void,
+    members: readonly string[] = []) {
+    for (const member of members) this.states.set(member, { kind: "pending" });
+  }
 
-  inputQueued(role: string): void {
+  inputQueued(role: string, member = "person"): void {
     if (role !== "person" || this.inspect === undefined) return;
-    this.verdict = undefined;
+    this.states.set(member, { kind: "pending" });
     void this.stopWorkers("team_representation_pending");
   }
 
   failure(role: string): SubagentGovernanceError | undefined {
     if (role !== "worker" || this.inspect === undefined) return;
-    if (this.verdict?.ready !== true) return new SubagentGovernanceError(
-      this.verdict === undefined ? "team_representation_pending" : "team_representation_held",
-      this.verdict?.reason ?? "Collect the Person member's representation before dispatching implementation");
+    for (const state of this.states.values()) if (state.kind === "settled" && !state.verdict.ready) {
+      return new SubagentGovernanceError("team_representation_held", state.verdict.reason);
+    }
+    if (this.states.size === 0 || [...this.states.values()].some(state => state.kind !== "settled")) {
+      return new SubagentGovernanceError("team_representation_pending", "Collect every frozen Person member's current representation before implementation");
+    }
     for (const worker of this.workers()) {
       const failure = worker.resourceStop.failure();
       if (failure !== undefined) return failure;
@@ -32,10 +39,24 @@ export class TeamRepresentationControl {
     return undefined;
   }
 
-  async observe(role: string, output: string): Promise<void> {
+  async submit(member: string, value: TeamRepresentation): Promise<void> {
+    this.states.set(member, { kind: "submitted", value });
+    if (value.vetoes.length > 0 || value.user_questions.length > 0) await this.stopWorkers("team_representation_held");
+  }
+
+  formatOutput(role: string, member: string, output: string): string {
+    const state = this.states.get(member);
+    const value = state?.kind === "submitted" || state?.kind === "settled" ? state.value : undefined;
+    return role !== "person" || value === undefined ? output : `${output}\n\n${formatTeamRepresentation(value)}`;
+  }
+
+  async observe(role: string, output: string, member = "person"): Promise<void> {
     if (role !== "person" || this.inspect === undefined) return;
-    this.verdict = this.inspect(output);
-    if (!this.verdict.ready) await this.stopWorkers("team_representation_held");
+    const state = this.states.get(member);
+    const value = state?.kind === "submitted" ? state.value : undefined;
+    const verdict = this.inspect(output);
+    this.states.set(member, { kind: "settled", verdict, ...(value === undefined ? {} : { value }) });
+    if (!verdict.ready) await this.stopWorkers("team_representation_held");
   }
 
   private async stopWorkers(reason: string): Promise<void> {

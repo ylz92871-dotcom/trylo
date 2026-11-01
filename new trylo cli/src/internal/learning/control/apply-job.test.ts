@@ -17,6 +17,26 @@ function enqueue(jobId: string, maxAttempts = 1) {
   });
 }
 
+test("requeue only wakes waiting evidence, preserves attempt budget and rejects stale replay payloads", () => {
+  const base = reduceAll(emptyBoardState(), [enqueue("wake", 2), command("start_job", { jobId: "wake" }),
+    command("complete_job", { jobId: "wake", next: "waiting_evidence" })]); assert.ok(base.ok);
+  const wake = { type: "requeue_job" as const, commandId: "wake-once", issuedAt: "2026-10-29T00:00:00.000Z", jobId: "wake", expectedAttempt: 1 };
+  const stale = reduce(base.state, { ...wake, commandId: "stale", expectedAttempt: 0 }); assert.equal(stale.ok, false);
+  const queued = reduce(base.state, wake); assert.ok(queued.ok);
+  assert.equal(queued.state.jobs[0]?.state, "queued"); assert.equal(queued.state.jobs[0]?.attempt, 1);
+  const replay = reduce(queued.state, wake); assert.ok(replay.ok); assert.equal(replay.idempotent, true);
+  const conflict = reduce(queued.state, { ...wake, expectedAttempt: 2 }); assert.equal(conflict.ok, false);
+  if (!conflict.ok) assert.equal(conflict.reason, "command_payload_conflict");
+  const final = reduceAll(queued.state, [command("start_job", { jobId: "wake" }), command("complete_job", { jobId: "wake", next: "waiting_evidence" })]); assert.ok(final.ok);
+  assert.equal(reduce(final.state, { ...wake, commandId: "over", expectedAttempt: 2 }).ok, false);
+});
+
+test("waiting approval cannot be requeued into an automatic approval bypass", () => {
+  const base = reduceAll(emptyBoardState(), [enqueue("approval", 3), command("start_job", { jobId: "approval" }),
+    command("complete_job", { jobId: "approval", next: "waiting_approval" })]); assert.ok(base.ok);
+  assert.equal(reduce(base.state, { type: "requeue_job", commandId: "no-bypass", issuedAt: "2026-10-29T00:00:00.000Z", jobId: "approval", expectedAttempt: 1 }).ok, false);
+});
+
 test("complete_job can enter waiting_evidence and waiting_approval", () => {
   const queued = reduce(emptyBoardState(), enqueue("j1"));
   assert.equal(queued.ok, true);

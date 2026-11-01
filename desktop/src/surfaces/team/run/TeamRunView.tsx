@@ -11,7 +11,7 @@ import type { SendSubagentInput } from '../../../host-adapter/subagent-contract'
 import { HandoffSummary, TeamEventFeed } from './TeamEventFeed';
 import { TeamMark } from './TeamMark';
 import { TeamGraph } from './TeamGraph';
-import { currentTask, findMember, handoffSender, handoffState, memberName, memberState, timeLabel } from './team-presentation';
+import { currentTask, findMember, handoffBody, handoffSender, handoffState, memberName, memberState, timeLabel } from './team-presentation';
 
 export interface TeamRunViewProps {
   readonly personView?: ReactNode;
@@ -133,7 +133,7 @@ export function TeamRunView(props: TeamRunViewProps): ReactElement {
         {handoff ? <><header className="team-detail-head"><strong>工作交接</strong><button className="team-icon-button" aria-label="返回" onClick={back}><ArrowLeft size={17} /></button></header>
           <div className="team-handoff-detail"><h3>{handoffSender(run, handoff)} → {findMember(run, handoff.toSeatId, handoff.toMemberId) ? memberName(findMember(run, handoff.toSeatId, handoff.toMemberId)!) : '历史成员'}</h3>
             <p className="team-detail-meta">{timeLabel(handoff.at)} 发出 · {handoffState(handoff)}{handoff.settledAt ? ` ${timeLabel(handoff.settledAt)}` : ''}</p>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{handoff.message}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{handoffBody(handoff)}</ReactMarkdown>
             {handoff.error && <p role="alert">{handoff.error}</p>}
             <p className="team-detail-meta">此处展示实际投递回执，执行进展在接收成员的会话中更新。</p>
             {findMember(run, handoff.toSeatId, handoff.toMemberId) && <button className="team-text-action" onClick={() => chooseMember(findMember(run, handoff.toSeatId, handoff.toMemberId)!.id)}>查看接收成员的会话 <ChevronRight size={13} /></button>}

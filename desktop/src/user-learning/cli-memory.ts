@@ -1,5 +1,5 @@
 import type { ProcessService } from '../host-adapter/process-service';
-import { cliSpawnCommand } from '../host-adapter/cli-runtime-path';
+import { runCliCommand as runMemoryCommand } from '../host-adapter/cli-command';
 import type { FilePath } from '../host-adapter/types';
 import type {
   ProfessionalProfileFact,
@@ -128,77 +128,6 @@ export function withCliFacts(
     ...snapshot,
     profileFacts: [...local.filter((fact) => !cliIds.has(fact.id)), ...fromCli],
   };
-}
-
-/**
- * 跑一次 `trylo memory list --json` 并解出结果。
- *
- * 一次性的进程：spawn → 收 stdout → 等退出 → resolve。超时会 stop 并返回失败，
- * 绝不让面板挂在一个不返回的命令上。失败一律是值，不是异常——面板读不到记忆时
- * 应该显示"读不到"，而不是白屏。
- */
-/**
- * 跑一次 `trylo memory …` 并收 stdout。
- *
- * 一次性的进程：spawn → 收 stdout → 等退出 → resolve。超时会 stop 并返回失败，
- * 绝不让面板挂在一个不返回的命令上。失败一律是值，不是异常——面板读不到记忆时
- * 应该显示"读不到"，而不是白屏。
- */
-async function runMemoryCommand(input: {
-  readonly process: Pick<ProcessService, 'spawn' | 'stop'> & Partial<Pick<ProcessService, 'send' | 'closeInput'>>;
-  readonly cliPath: FilePath;
-  readonly nodeProgram?: string;
-  readonly cwd: FilePath;
-  readonly timeoutMs?: number;
-  readonly args: ReadonlyArray<string>;
-  readonly stdin?: string;
-}): Promise<{ readonly ok: true; readonly stdout: string } | { readonly ok: false; readonly reason: string }> {
-  const { command, prefix } = cliSpawnCommand(input.cliPath, input.nodeProgram);
-  const lines: string[] = [];
-  let stderr = '';
-  const timeoutMs = input.timeoutMs ?? 8_000;
-
-  return await new Promise((resolve) => {
-    let settled = false;
-    const finish = (result: { readonly ok: true; readonly stdout: string } | { readonly ok: false; readonly reason: string }): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve(result);
-    };
-    const timer = setTimeout(() => {
-      void handle.then((child) => input.process.stop(child.id)).catch(() => undefined);
-      finish({ ok: false, reason: 'timeout' });
-    }, timeoutMs);
-
-    const handle = input.process.spawn({
-      command,
-      args: [...prefix, ...input.args],
-      label: `user-memory-${input.args[1] ?? 'command'}`,
-      cwd: input.cwd,
-      onOutput: (line) => { if (lines.join('\n').length < 1_048_576) lines.push(line); },
-      onStderr: (line) => { stderr += `${line}\n`; },
-      onExit: (info) => {
-        if (info.code !== 0) {
-          finish({ ok: false, reason: `exit_${String(info.code ?? 'signal')}${stderr.trim() === '' ? '' : `:${stderr.trim().split('\n')[0] ?? ''}`}` });
-          return;
-        }
-        finish({ ok: true, stdout: lines.join('\n') });
-      },
-    });
-
-    void handle.then(async (child) => {
-      if (settled) return;
-      if (input.stdin !== undefined) {
-        if (input.process.send === undefined || input.process.closeInput === undefined) throw new Error('stdin_transport_unavailable');
-        await input.process.send(child.id, input.stdin);
-        await input.process.closeInput(child.id);
-      }
-    }).catch((error: unknown) => {
-      finish({ ok: false, reason: `spawn_failed:${error instanceof Error ? error.message : 'unknown'}` });
-      void handle.then((child) => input.process.stop(child.id)).catch(() => undefined);
-    });
-  });
 }
 
 export async function mutateCliMemory(input: {

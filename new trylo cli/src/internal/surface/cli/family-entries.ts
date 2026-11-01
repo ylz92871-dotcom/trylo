@@ -73,6 +73,8 @@ export function runFamilyCommand(
   rest: ReadonlyArray<string>,
 ): Promise<ExitCode> {
   switch (word) {
+    case "tools":
+      return import("./commands-tools.js").then(module => module.handleTools(ctx, rest));
     case "schedule":
       return handleSchedule(ctx, parseSchedule(rest));
     case "watch":

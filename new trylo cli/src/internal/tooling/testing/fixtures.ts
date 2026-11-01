@@ -2,7 +2,7 @@ import type {
   ToolLearningObservation,
   Provenance,
   ToolCandidate,
-  ToolPackageManifest,
+  McpToolPackageManifest,
   ToolPackageVersion,
 } from "../contract/types.js";
 import type { ApprovalGrantRef, GrantIssuanceInput } from "../../ports/approval-consumption.js";
@@ -57,7 +57,7 @@ export function observation(
   };
 }
 
-export function manifest(overrides: Partial<ToolPackageManifest> = {}): ToolPackageManifest {
+export function manifest(overrides: Partial<McpToolPackageManifest> = {}): McpToolPackageManifest {
   return {
     identity: "pdf-lint",
     version: "1.0.0",

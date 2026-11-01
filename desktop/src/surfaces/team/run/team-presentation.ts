@@ -25,7 +25,16 @@ export const timeLabel = (at: number | undefined): string => at === undefined ? 
 export const findMember = (run: TeamRun, seatId: string, memberId?: string): SeatInstance | undefined =>
   run.seats.find(seat => seat.id === seatId) ?? (memberId ? run.seats.find(seat => seat.memberId === memberId) : undefined);
 export const handoffState = (handoff: TeamHandoffRecord): string => ({ sending: '发送中', sent: '已发送', queued: '已入队',
-  continued: '已续接', restarted: '已重启', failed: '投递失败' })[handoff.status];
+  continued: '已续接', restarted: '已重启', received: '已开始处理', answered: '已答复', failed: '投递失败' })[handoff.status];
+
+export function handoffBody(handoff: TeamHandoffRecord): string {
+  if (!handoff.context) return handoff.message;
+  const context = handoff.context;
+  const sections: [string, readonly string[]][] = [['产物', context.artifacts], ['已有证据（仍须独立核验）', context.evidence],
+    ['待办', context.pending], ['阻塞', context.blockers]];
+  return [handoff.message, `### 交接范围\n${context.scope}`, ...sections.filter(([, items]) => items.length)
+    .map(([label, items]) => `### ${label}\n${items.map(item => `- ${item}`).join('\n')}`)].join('\n\n');
+}
 
 export function handoffSender(run: TeamRun, handoff: TeamHandoffRecord): string {
   if (!handoff.fromSeatId) return 'Person';

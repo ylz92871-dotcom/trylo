@@ -157,6 +157,52 @@ test("Q6 自报 + 客观佐证 → 提议进账，且给用户一行", async () 
   assert.equal(runtime.proposals().length, 1);
 });
 
+test("Q6b 多工具失败时只改达到门槛的工具，不把全部失败归给第一个工具", async () => {
+  const { runtime, ledger, warnings } = runtimeOf();
+  await runtime.port.observe({
+    turnId: "t-mixed",
+    beat: 1,
+    failures: [failure("tool_A"), failure("tool_Z"), failure("tool_Z"), failure("tool_Z")],
+    toolNames: ["tool_A", "tool_Z"],
+    selfReport: JSON.stringify({ need: "改进:参数说明不清楚", tool: "tool_Z" }),
+  });
+  const proposal = ledger.records.find((record) => record.kind === "proposal");
+  assert.equal(proposal?.tool, "tool_Z");
+  assert.equal(proposal?.key, "light_upgrade:tool_Z");
+  assert.equal(runtime.proposals()[0]?.tool, "tool_Z");
+  assert.equal(warnings[0]?.includes("tool_Z"), true);
+});
+
+test("Q6c 提议详情保留选中的完整信号、自报与证据，读取快照不能改写后续判断", async () => {
+  const { runtime } = runtimeOf();
+  await runtime.port.observe({
+    turnId: "t-details",
+    beat: 1,
+    failures: [failure("tool_A"), failure("tool_Z"), failure("tool_Z"), failure("tool_Z")],
+    toolNames: ["tool_A", "tool_Z"],
+    selfReport: JSON.stringify({ need: "改进:参数说明不清楚", tool: "tool_Z" }),
+  });
+  const snapshot = runtime.proposalDetails();
+  const detail = snapshot[0];
+  assert.ok(detail);
+  assert.deepEqual(detail.record, runtime.proposals()[0]);
+  assert.deepEqual(detail.signal, {
+    kind: "failure",
+    tally: { tool: "tool_Z", failures: 3, codes: ["tool_error"], fingerprints: ["fp"] },
+  });
+  assert.deepEqual(detail.selfReport, { kind: "improve_tool", tool: "tool_Z", need: "参数说明不清楚" });
+  assert.deepEqual(detail.action, { kind: "light_upgrade", tool: "tool_Z" });
+  assert.deepEqual(detail.evidenceRefs, [
+    "obs:tool_A:tool_error:fp:0", "obs:tool_Z:tool_error:fp:1",
+    "obs:tool_Z:tool_error:fp:2", "obs:tool_Z:tool_error:fp:3",
+  ]);
+  assert.equal(Object.isFrozen(snapshot), true);
+  Object.defineProperty(detail.scope, "capability", { value: "外部修改" });
+  assert.equal(runtime.proposalDetails()[0]?.scope.capability, "参数说明不清楚");
+  await runtime.close();
+  assert.deepEqual(runtime.proposalDetails(), []);
+});
+
 test("Q7 反例：自报单独来（失败不到阈值）→ 只记 observation，不提议", async () => {
   const { runtime, ledger, warnings } = runtimeOf();
   await runtime.port.observe({
@@ -227,6 +273,27 @@ test("Q10 缺口类信号（没有工具能做）走 replace_or_add，提议里�
   assert.equal(proposal?.action, "replace_or_add");
   assert.equal(proposal?.tool, undefined);
   assert.equal(proposal?.capability, "能做PDF表格抽取");
+});
+
+test("Q10b 缺工具的客观证据不会被描述改进自报改写成轻升级", async () => {
+  const { runtime, ledger } = runtimeOf();
+  await runtime.port.observe({
+    turnId: "t-missing",
+    beat: 1,
+    failures: [failure("run_shell", "unknown_tool"), failure("run_shell", "unknown_tool"), failure("run_shell", "unknown_tool")],
+    toolNames: ["run_shell"],
+    selfReport: IMPROVE,
+  });
+  const proposal = ledger.records.find((record) => record.kind === "proposal");
+  assert.equal(proposal?.action, "replace_or_add");
+  assert.equal(proposal?.tool, undefined);
+  const signal = runtime.proposalDetails()[0]?.signal;
+  assert.equal(signal?.kind, "gap");
+  if (signal?.kind === "gap") {
+    assert.equal(signal.gap.kind, "tool_not_found");
+    assert.equal(signal.gap.repeatCount, 3);
+    assert.equal(signal.gap.observationIds.length, 3);
+  }
 });
 
 // ── 频控：第二条要留痕，而且不入账为提议 ──

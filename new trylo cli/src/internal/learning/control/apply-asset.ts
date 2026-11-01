@@ -89,8 +89,12 @@ export function applyEnterShadow(
   if (expectedTo(proposal.lifecycle, "enter_shadow") !== "shadow") {
     return fail(state, "illegal_transition", `${proposal.lifecycle}->enter_shadow`);
   }
-  if (findAsset(state, command.versionId) === undefined) {
+  const asset = findAsset(state, command.versionId);
+  if (asset === undefined) {
     return fail(state, "asset_not_found", command.versionId);
+  }
+  if (asset.createdFromProposalId !== proposal.proposalId || asset.scope !== proposal.scope || asset.kind !== proposal.assetKind) {
+    return fail(state, "illegal_transition", "shadow asset does not belong to this proposal");
   }
   if (!hasIndependentPass(state, proposal.proposalId)) {
     return fail(state, "external_pass_required", command.proposalId);
@@ -103,6 +107,7 @@ export function applyEnterShadow(
     pointer: "shadow",
     versionId: command.versionId,
     generation: (existing?.generation ?? 0) + 1,
+    ...(existing === undefined || existing.versionId === command.versionId ? {} : { previousVersionId: existing.versionId }),
   });
 }
 
@@ -117,8 +122,12 @@ export function applyActivate(
   if (expectedTo(proposal.lifecycle, "activate") !== "active") {
     return fail(state, "illegal_transition", `${proposal.lifecycle}->activate`);
   }
-  if (findAsset(state, command.versionId) === undefined) {
+  const asset = findAsset(state, command.versionId);
+  if (asset === undefined) {
     return fail(state, "asset_not_found", command.versionId);
+  }
+  if (asset.createdFromProposalId !== proposal.proposalId || asset.scope !== proposal.scope || asset.kind !== proposal.assetKind) {
+    return fail(state, "illegal_transition", "activation asset does not belong to this proposal");
   }
   const approvalGate = activationApprovalGate(state, proposal);
   if (approvalGate !== undefined) {
@@ -134,7 +143,7 @@ export function applyActivate(
   const previous =
     existing !== undefined && existing.versionId !== command.versionId
       ? { previousVersionId: existing.versionId }
-      : {};
+      : existing?.previousVersionId === undefined ? {} : { previousVersionId: existing.previousVersionId };
   return commitLifecycleAndPointer(state, command.commandId, command.issuedAt, proposal, "active", {
     activationId: existing?.activationId ?? `act:${proposal.scope}:${proposal.assetKind}`,
     scope: proposal.scope,

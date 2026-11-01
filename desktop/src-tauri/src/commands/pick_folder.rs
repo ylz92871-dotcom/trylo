@@ -31,8 +31,6 @@
 // round-trip to Rust. Win PS 5.1 default is the system
 // code page (GBK on zh-CN systems).
 
-use std::process::Command;
-
 const PS_SCRIPT: &str = r#"
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -61,7 +59,7 @@ Write-Output ([System.IO.Path]::GetFullPath($path)).TrimEnd()
 #[tauri::command]
 pub async fn pick_folder() -> Result<Option<String>, String> {
     let output = tokio::task::spawn_blocking(|| {
-        Command::new("powershell")
+        super::background_command::command("powershell")
             .args(["-NoProfile", "-NonInteractive", "-Command", PS_SCRIPT])
             .output()
     })

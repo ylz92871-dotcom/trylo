@@ -1,4 +1,6 @@
 import { request as httpsRequest } from "node:https";
+import type { IncomingMessage } from "node:http";
+import type { RequestOptions } from "node:https";
 import { err, ok, type Result } from "../../tooling/contract/result.js";
 
 /**
@@ -21,6 +23,8 @@ export type HttpTransportRequest = {
   readonly timeoutMs: number;
   /** 上限随请求下发，让实现在读的过程中就能刹车，而不是读完再丢。 */
   readonly maxBytes: number;
+  /** Cancelling metadata discovery destroys its request instead of waiting for the network timeout. */
+  readonly signal?: AbortSignal;
 };
 
 export type HttpTransportResponse = {
@@ -30,7 +34,7 @@ export type HttpTransportResponse = {
   readonly body: Uint8Array;
 };
 
-export type TransportFailure = "timeout" | "network_failure" | "too_large";
+export type TransportFailure = "cancelled" | "timeout" | "network_failure" | "too_large";
 
 export type HttpTransport = {
   readonly get: (
@@ -38,52 +42,81 @@ export type HttpTransport = {
   ) => Promise<Result<HttpTransportResponse, TransportFailure>>;
 };
 
-export function createHttpsTransport(): HttpTransport {
-  return {
-    get: (request) =>
-      new Promise<Result<HttpTransportResponse, TransportFailure>>((resolve) => {
-        const url = new URL(request.url);
-        const options = {
-          method: "GET",
-          hostname: url.hostname,
-          path: `${url.pathname}${url.search}`,
-          headers: request.headers,
-          ...(url.port === "" ? {} : { port: Number(url.port) }),
-        };
-        const call = httpsRequest(options, (response) => {
-          const chunks: Uint8Array[] = [];
-          let total = 0;
-          response.on("data", (chunk: Buffer) => {
-            total += chunk.length;
-            if (total > request.maxBytes) {
-              response.destroy();
-              resolve(err("too_large", `response exceeds ${request.maxBytes} bytes`));
-              return;
-            }
-            chunks.push(chunk);
-          });
-          response.on("end", () => {
-            const location = response.headers.location;
-            resolve(
-              ok({
-                status: response.statusCode ?? 0,
-                ...(location === undefined ? {} : { location }),
-                body: Buffer.concat(chunks),
-              }),
-            );
-          });
-          response.on("error", () => {
-            resolve(err("network_failure", "response stream failed"));
-          });
-        });
-        call.setTimeout(request.timeoutMs, () => {
-          call.destroy();
-          resolve(err("timeout", `no answer within ${request.timeoutMs}ms`));
-        });
-        call.on("error", () => {
-          resolve(err("network_failure", "request failed"));
-        });
-        call.end();
-      }),
-  };
+/** Narrow request seam makes destruction and late network events testable without external calls. */
+export type HttpsRequestHandle = {
+  readonly setTimeout: (milliseconds: number, callback: () => void) => unknown;
+  readonly on: (event: "error", callback: () => void) => unknown;
+  readonly destroy: () => unknown;
+  readonly end: () => unknown;
+};
+
+export type HttpsRequestFactory = (
+  options: RequestOptions,
+  callback: (response: IncomingMessage) => void,
+) => HttpsRequestHandle;
+
+export function createHttpsTransport(requestFactory: HttpsRequestFactory = httpsRequest): HttpTransport {
+  return { get: request => requestBytes(request, requestFactory) };
+}
+
+function requestBytes(request: HttpTransportRequest, requestFactory: HttpsRequestFactory): Promise<Result<HttpTransportResponse, TransportFailure>> {
+  if (request.signal?.aborted) return Promise.resolve(err("cancelled", "tool acquisition was cancelled"));
+  return new Promise(resolve => {
+    let settled = false;
+    let call: HttpsRequestHandle | undefined;
+    const finish = (result: Result<HttpTransportResponse, TransportFailure>): void => {
+      if (settled) return;
+      settled = true;
+      request.signal?.removeEventListener("abort", cancel);
+      resolve(result);
+    };
+    const cancel = (): void => {
+      finish(err("cancelled", "tool acquisition was cancelled"));
+      call?.destroy();
+    };
+    try {
+      const url = new URL(request.url);
+      call = requestFactory({ method: "GET", hostname: url.hostname, path: `${url.pathname}${url.search}`,
+        headers: request.headers, ...(url.port === "" ? {} : { port: Number(url.port) }) }, response => {
+        if (settled) { response.destroy(); return; }
+        collectResponse(response, request.maxBytes, finish);
+      });
+      call.setTimeout(request.timeoutMs, () => {
+        finish(err("timeout", `no answer within ${request.timeoutMs}ms`));
+        call?.destroy();
+      });
+      // Retain this listener after settlement: destroy may emit a late error and must not crash the process.
+      call.on("error", () => finish(err("network_failure", "request failed")));
+      request.signal?.addEventListener("abort", cancel, { once: true });
+      if (request.signal?.aborted) cancel();
+      else call.end();
+    } catch {
+      finish(err("network_failure", "request could not be started"));
+      call?.destroy();
+    }
+  });
+}
+
+function collectResponse(
+  response: IncomingMessage,
+  maxBytes: number,
+  finish: (result: Result<HttpTransportResponse, TransportFailure>) => void,
+): void {
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  response.on("data", (chunk: Buffer) => {
+    total += chunk.length;
+    if (total > maxBytes) {
+      finish(err("too_large", `response exceeds ${maxBytes} bytes`));
+      response.destroy();
+      return;
+    }
+    chunks.push(chunk);
+  });
+  response.on("end", () => {
+    const location = response.headers.location;
+    finish(ok({ status: response.statusCode ?? 0, ...(location === undefined ? {} : { location }), body: Buffer.concat(chunks) }));
+  });
+  response.on("aborted", () => finish(err("network_failure", "response stream was aborted")));
+  response.on("error", () => finish(err("network_failure", "response stream failed")));
 }

@@ -5,8 +5,10 @@ import type { BoardState } from "./state.js";
 
 /** Method write identity excludes observation time: a retry may carry a new clock stamp. */
 export function methodPayloadHash(command: BoardCommand): string | undefined {
+  if (command.type === "record_tool_use" || command.type === "requeue_job") { const { issuedAt: _at, ...payload } = command; return contentHashOf(payload); }
   if (command.type !== "record_method_fielding" && command.type !== "record_method_feedback" &&
-      command.type !== "set_method_retention") return undefined;
+      command.type !== "set_method_retention" && command.type !== "record_reward_exposure" &&
+      command.type !== "record_reward_feedback" && command.type !== "record_tool_trial" && command.type !== 'record_reward_v2_fact') return undefined;
   const { issuedAt: _at, ...payload } = command;
   return contentHashOf(payload);
 }

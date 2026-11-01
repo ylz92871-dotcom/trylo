@@ -3,6 +3,7 @@ import type {
   EnqueueJobCommand,
   FailJobCommand,
   StartJobCommand,
+  RequeueJobCommand,
   TombstoneCommand,
 } from "./commands.js";
 import type { JobState, LearningJob } from "./contracts.js";
@@ -80,6 +81,16 @@ export function applyCompleteJob(
   }
   const next: LearningJob = { ...job, state: command.next };
   return replaceJob(state, command.commandId, command.issuedAt, next);
+}
+
+export function applyRequeueJob(state: BoardState, command: RequeueJobCommand): ReduceResult {
+  const job = findJob(state, command.jobId);
+  if (job === undefined) return fail(state, "job_not_found", command.jobId);
+  if (job.state !== "waiting_evidence" || job.attempt !== command.expectedAttempt) {
+    return fail(state, "illegal_transition", `${job.state}:${job.attempt}->requeue_job:${command.expectedAttempt}`);
+  }
+  if (job.breakerOpen || job.attempt >= job.maxAttempts) return fail(state, "job_budget_exceeded", job.jobId);
+  return replaceJob(state, command.commandId, command.issuedAt, { ...job, state: "queued" });
 }
 
 export function applyFailJob(

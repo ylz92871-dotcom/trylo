@@ -25,6 +25,7 @@ export const REQUEST_TIMEOUT_MS = 15_000;
 export const USER_AGENT = "trylo-tool-acquisition/1.0 (+local)";
 
 export type AcquisitionFailure =
+  | "cancelled"
   | "insecure_scheme"
   | "host_not_allowed"
   | "too_many_redirects"
@@ -49,9 +50,11 @@ export async function guardedGet(
   transport: HttpTransport,
   url: string,
   limitBytes: number,
+  signal?: AbortSignal,
 ): Promise<Result<GuardedResponse, AcquisitionFailure>> {
   let current = url;
   for (let redirects = 0; ; redirects += 1) {
+    if (signal?.aborted) return err("cancelled", "tool acquisition was cancelled");
     if (redirects > MAX_REDIRECTS) {
       return err("too_many_redirects", `${url} redirected more than ${MAX_REDIRECTS} times`);
     }
@@ -64,7 +67,9 @@ export async function guardedGet(
       headers: { accept: "application/json, application/octet-stream", "user-agent": USER_AGENT },
       timeoutMs: REQUEST_TIMEOUT_MS,
       maxBytes: limitBytes,
+      ...(signal === undefined ? {} : { signal }),
     });
+    if (signal?.aborted) return err("cancelled", "tool acquisition was cancelled");
     if (!response.ok) {
       return err(response.code, response.message);
     }

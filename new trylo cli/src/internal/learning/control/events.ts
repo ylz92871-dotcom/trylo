@@ -1,5 +1,8 @@
 import type { ReasonCode } from "./reasons.js";
 import type { BoardCommand } from "./commands.js";
+import type { RewardExposure, RewardFeedback } from "../reward/contracts.js";
+import type { ToolTrialRecord } from "../domains/tool/evolution/trial.js";
+import type { ToolUseRecord } from "../domains/tool/evolution/use.js";
 import type {
   ActivationRecord,
   ApprovalRequest,
@@ -83,6 +86,11 @@ export type MethodRetentionChangedEvent = EventBase & {
 };
 
 export type BoardEvent =
+  | (EventBase & { readonly type: "tool_use_recorded"; readonly record: ToolUseRecord })
+  | (EventBase & { readonly type: 'reward_v2_fact_recorded'; readonly fact: import('../reward/v2-facts.js').RewardV2Fact })
+  | (EventBase & { readonly type: "tool_trial_recorded"; readonly record: ToolTrialRecord })
+  | (EventBase & { readonly type: "reward_exposure_recorded"; readonly exposure: RewardExposure })
+  | (EventBase & { readonly type: "reward_feedback_recorded"; readonly feedback: RewardFeedback })
   | ProposalSubmittedEvent
   | ProposalTransitionedEvent
   | EvidenceRecordedEvent

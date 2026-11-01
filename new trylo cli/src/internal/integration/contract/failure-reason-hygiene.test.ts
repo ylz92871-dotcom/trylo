@@ -90,9 +90,8 @@ const ENUMS: readonly EnumSpec[] = [
       // `adapters/learning-store/codec.ts` 的类型联合成员。它的**产生权在 learning-store**
       // ——那个适配器不属于本包写入集（WP §8），因此本包不能给它加产生点，也不改它。
       "torn_write",
-      // 明确预留给本包范围之外的调度器/采集器（WP §0「不负责学习调度器」）：
-      "collect_disabled",
-      "learning_aborted",
+      // RW1: collect_disabled / learning_aborted now have real runtime producers in
+      // integration/reward/gateway.ts and appraisal.ts; neither remains pending.
     ],
   },
 ];

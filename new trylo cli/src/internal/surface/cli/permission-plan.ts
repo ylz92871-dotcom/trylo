@@ -10,6 +10,7 @@ import { WORKSPACE_WRITE_TOOL_NAMES } from "../../adapters/tools/mutating/bindin
 import { WEB_FETCH_TOOL } from "../../adapters/tools/web/names.js";
 import { MEMORY_WRITE_TOOL_NAMES } from "../../adapters/tools/memory/write.js";
 import { isMcpQualifiedName } from "../../mcp/names.js";
+import { isCandidateToolName } from "../../learning/domains/tool/evolution/use.js";
 import { PATH_READ_TOOL_NAMES } from "../../adapters/tools/read-only/path-names.js";
 import { createInteractivePermission, type InteractivePermissionIo } from "./permission.js";
 
@@ -74,7 +75,7 @@ export const APPROVABLE_TOOL_NAMES: ReadonlyArray<string> = [
  * so the parser and the plan cannot disagree about the vocabulary.
  */
 export function isApprovableToolName(name: string): boolean {
-  return APPROVABLE_TOOL_NAMES.includes(name) || isMcpQualifiedName(name);
+  return APPROVABLE_TOOL_NAMES.includes(name) || isMcpQualifiedName(name) || isCandidateToolName(name);
 }
 
 /**

@@ -15,8 +15,9 @@ import type { HttpTransport } from "./transport.js";
 export async function fetchJson(
   transport: HttpTransport,
   url: string,
+  signal?: AbortSignal,
 ): Promise<Result<unknown, AcquisitionFailure>> {
-  const response = await guardedGet(transport, url, MAX_JSON_BYTES);
+  const response = await guardedGet(transport, url, MAX_JSON_BYTES, signal);
   if (!response.ok) {
     return response;
   }

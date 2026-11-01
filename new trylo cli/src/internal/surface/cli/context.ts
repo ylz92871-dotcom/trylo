@@ -9,6 +9,7 @@
 import type { InteractivePermissionIo } from "./permission.js";
 import type { Envelope } from "../../protocol/envelope.js";
 import type { BootstrapContext } from "./bootstrap-context.js";
+import type { ToolProductionPort } from "../../ports/tool-production.js";
 
 export type DirEntryInfo = {
   readonly name: string;
@@ -17,6 +18,8 @@ export type DirEntryInfo = {
 };
 
 export type CliContext = {
+  /** Lazy root-owned checker. Internal consumers cannot sign supplied records. */
+  readonly toolProduction?: ToolProductionPort;
   readonly bootstrapContext?: BootstrapContext;
   readonly userSourceAvailable?: false;
   /** Structured UI approval and ownership lifecycle; absent keeps text approval. */

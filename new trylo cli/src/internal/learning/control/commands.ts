@@ -7,6 +7,9 @@ import type {
   LearningProposal,
   MethodRetention,
 } from "./contracts.js";
+import type { RewardExposureDraft, RewardFeedback } from "../reward/contracts.js";
+import type { ToolTrialRecord } from "../domains/tool/evolution/trial.js";
+import type { ToolUseRecord } from "../domains/tool/evolution/use.js";
 
 type CommandBase = {
   readonly commandId: string;
@@ -114,6 +117,13 @@ export type StartJobCommand = CommandBase & {
   readonly jobId: string;
 };
 
+/** Evidence arrival only requeues work; it grants no authority and consumes no attempt. */
+export type RequeueJobCommand = CommandBase & {
+  readonly type: "requeue_job";
+  readonly jobId: string;
+  readonly expectedAttempt: number;
+};
+
 export type CompleteJobCommand = CommandBase & {
   readonly type: "complete_job";
   readonly jobId: string;
@@ -162,7 +172,26 @@ export type SetMethodRetentionCommand = CommandBase & {
   readonly record: MethodRetention;
 };
 
+export type RecordRewardExposureCommand = CommandBase & {
+  readonly type: "record_reward_exposure";
+  readonly exposure: RewardExposureDraft;
+};
+export type RecordRewardFeedbackCommand = CommandBase & {
+  readonly type: "record_reward_feedback";
+  readonly feedback: RewardFeedback;
+};
+
+export type RecordRewardV2FactCommand = CommandBase & {
+  readonly type: 'record_reward_v2_fact'; readonly expectedSequence: number;
+  readonly fact: import('../reward/v2-facts.js').RewardV2Draft;
+};
+
 export type BoardCommand =
+  | (CommandBase & { readonly type: "record_tool_use"; readonly record: ToolUseRecord })
+  | RecordRewardV2FactCommand
+  | (CommandBase & { readonly type: "record_tool_trial"; readonly record: ToolTrialRecord })
+  | RecordRewardExposureCommand
+  | RecordRewardFeedbackCommand
   | SubmitProposalCommand
   | QuarantineCommand
   | StartEvaluationCommand
@@ -180,6 +209,7 @@ export type BoardCommand =
   | RetireCommand
   | EnqueueJobCommand
   | StartJobCommand
+  | RequeueJobCommand
   | CompleteJobCommand
   | FailJobCommand
   | TombstoneCommand

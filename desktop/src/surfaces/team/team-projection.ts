@@ -29,6 +29,7 @@ export interface TeamProjectionContext {
 
 export interface TeamSubagentEvent {
   readonly observation?: import('../../domain/member-observation').MemberObservation;
+  readonly delivery?: import('../../domain/member-delivery').MemberDelivery;
   readonly taskId?: string;
   readonly canReceiveInput?: boolean;
   readonly parked?: boolean;
@@ -320,6 +321,7 @@ export function applyTeamEvents(
         ? applySpawn(next, event, ctx, extras)
         : event.kind === 'end' ? applyEnd(next, event, extras) : applyUpdate(next, event, extras);
       next = recordMemberProgress(before, next, event);
+      next = recordTeamHandoff(next, event);
       touched = true;
       continue;
     }

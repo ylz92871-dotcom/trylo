@@ -12,6 +12,12 @@ import type {
   Tombstone,
 } from "./contracts.js";
 import { activationKey, isMethodFeedback, isMethodFielding, isMethodRetention } from "./contracts.js";
+import type { RewardExposure, RewardFeedback } from "../reward/contracts.js";
+import { isRewardV2Fact,validRewardV2Prefix,type RewardV2Fact } from '../reward/v2-facts.js';
+import { isRewardExposure, isRewardFeedback } from "../reward/validate.js";
+import { indexRewardRecords } from "../reward/records.js";
+import { decodeToolTrialRecord, MAX_TOOL_TRIALS, toolTrialKey, type ToolTrialRecord } from "../domains/tool/evolution/trial.js";
+import { isToolUseRecord, MAX_TOOL_USES, type ToolUseRecord } from "../domains/tool/evolution/use.js";
 
 export type AppliedCommand = {
   readonly commandId: string;
@@ -20,6 +26,11 @@ export type AppliedCommand = {
 };
 
 export type BoardState = {
+  readonly toolUses?: readonly ToolUseRecord[];
+  readonly rewardV2Facts?: readonly RewardV2Fact[];
+  readonly toolTrials?: readonly ToolTrialRecord[];
+  readonly rewardExposures?: readonly RewardExposure[];
+  readonly rewardFeedbacks?: readonly RewardFeedback[];
   readonly sequence: number;
   readonly appliedCommands: ReadonlyArray<AppliedCommand>;
   readonly proposals: ReadonlyArray<LearningProposal>;
@@ -66,13 +77,26 @@ export function emptyBoardState(): BoardState {
  *     地把一条畸形记录断言成合法，比丢掉整张快照危险得多。
  */
 export function normalizeBoardState(state: BoardState): BoardState | undefined {
+  const toolUses = decodeArray(state.toolUses, isToolUseRecord);
+  if (state.toolUses === null || toolUses === undefined || toolUses.length > MAX_TOOL_USES
+    || new Set(toolUses.map(item => item.useId)).size !== toolUses.length) return undefined;
+  const rewardV2Facts=decodeArray(state.rewardV2Facts,isRewardV2Fact);
+  if(state.rewardV2Facts===null||rewardV2Facts===undefined||!validRewardV2Prefix(rewardV2Facts,state.sequence))return undefined;
+  const toolTrials = decodeArray(state.toolTrials, (item): item is ToolTrialRecord => decodeToolTrialRecord(item) !== undefined);
+  if (state.toolTrials === null || toolTrials === undefined || toolTrials.length > MAX_TOOL_TRIALS
+    || new Set(toolTrials.map(toolTrialKey)).size !== toolTrials.length) return undefined;
+  if (state.rewardExposures === null || state.rewardFeedbacks === null) return undefined;
   const fieldings = decodeArray((state as { fieldings?: unknown }).fieldings, isMethodFielding);
   const feedbacks = decodeArray((state as { feedbacks?: unknown }).feedbacks, isMethodFeedback);
   const methodRetentions = decodeArray(state.methodRetentions, isMethodRetention);
-  if (fieldings === undefined || feedbacks === undefined || methodRetentions === undefined) {
+  const rewardExposures = decodeArray(state.rewardExposures, isRewardExposure);
+  const rewardFeedbacks = decodeArray(state.rewardFeedbacks, isRewardFeedback);
+  if (fieldings === undefined || feedbacks === undefined || methodRetentions === undefined ||
+      rewardExposures === undefined || rewardFeedbacks === undefined) {
     return undefined;
   }
-  return { ...state, fieldings, feedbacks, methodRetentions };
+  if (indexRewardRecords({ exposures: rewardExposures, feedbacks: rewardFeedbacks }) === undefined) return undefined;
+  return { ...state, fieldings, feedbacks, methodRetentions, rewardExposures, rewardFeedbacks, toolTrials, rewardV2Facts, toolUses };
 }
 
 /**
@@ -126,6 +150,12 @@ export function findActivationByProposal(
   proposal: LearningProposal,
 ): ActivationRecord | undefined {
   return findActivation(state, proposal.scope, proposal.assetKind);
+}
+
+/** A shared activation slot is not proof that its current version belongs to a proposal. */
+export function activationOwnedBy(state: BoardState, activation: ActivationRecord, proposal: LearningProposal): boolean {
+  const asset = findAsset(state, activation.versionId);
+  return asset?.createdFromProposalId === proposal.proposalId && asset.scope === proposal.scope && asset.kind === proposal.assetKind;
 }
 
 export function findEvidenceFor(

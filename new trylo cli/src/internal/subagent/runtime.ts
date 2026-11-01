@@ -417,7 +417,8 @@ export class SubagentRuntime {
   }
 
   reportRound(subagentId: string, update: { readonly status: "running" | "waiting"; readonly round: number;
-    readonly prompt?: string; readonly result?: string; readonly displayName?: string }): void {
+    readonly prompt?: string; readonly result?: string; readonly displayName?: string;
+    readonly delivery?: import("../protocol/subagent-handoff.js").SubagentDelivery | undefined }): void {
     const record = this.active.get(subagentId);
     if (record === undefined || isTerminalStatus(record.status)) return;
     this.emitEvent("subagent_update", { subagentId, taskId: record.request.continuation?.taskId ?? subagentId,

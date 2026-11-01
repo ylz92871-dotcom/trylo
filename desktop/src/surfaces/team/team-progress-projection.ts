@@ -1,5 +1,7 @@
 import type { TeamProgressReport } from '../../domain/team-progress';
 import type { SeatInstance, TeamRun } from './team-types';
+import { isMemberDelivery } from '../../domain/member-delivery';
+import { isMemberHandoff } from '../../domain/member-handoff';
 
 export function assignmentText(prompt: string): string {
   const boundary = prompt.lastIndexOf('\nTask:\n');
@@ -76,17 +78,18 @@ function seatForTarget(run: TeamRun, target: unknown): SeatInstance | undefined 
   return typeof target === 'string' ? run.seats.find(seat => seat.id === target || seat.taskId === target) : undefined;
 }
 
-function delivery(output: unknown): 'queued' | 'continued' | 'restarted' | 'sent' {
+function delivery(output: unknown): { readonly status: 'queued' | 'continued' | 'restarted' | 'sent'; readonly submissionId?: string } {
   let value: unknown = output;
   for (let depth = 0; depth < 5; depth++) {
-    if (typeof value === 'string') { try { value = JSON.parse(value) as unknown; } catch { return 'sent'; } }
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return 'sent';
+    if (typeof value === 'string') { try { value = JSON.parse(value) as unknown; } catch { return { status: 'sent' }; } }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return { status: 'sent' };
     const row = value as Record<string, unknown>;
-    if (row.delivery === 'queued' || row.delivery === 'replaced_queued') return 'queued';
-    if (row.delivery === 'continued' || row.delivery === 'restarted') return row.delivery;
+    const id = typeof row.submission_id === 'string' && row.submission_id.length > 0 ? { submissionId: row.submission_id } : {};
+    if (row.delivery === 'queued' || row.delivery === 'replaced_queued') return { status: 'queued', ...id };
+    if (row.delivery === 'continued' || row.delivery === 'restarted') return { status: row.delivery, ...id };
     value = row.value ?? row.result ?? row.data ?? row.output;
   }
-  return 'sent';
+  return { status: 'sent' };
 }
 
 /** A real send_input exchange, not an inferred handoff from member prose. */
@@ -95,16 +98,33 @@ export function recordTeamHandoff(run: TeamRun, event: unknown): TeamRun {
   const e = event as Record<string, unknown>;
   if (typeof e.id !== 'string') return run;
   const at = typeof e.ts === 'number' && Number.isFinite(e.ts) ? e.ts : Date.now();
+  if (e.type === 'subagent' && e.kind === 'update' && isMemberDelivery(e.delivery)) {
+    const receipt = e.delivery;
+    const member = run.seats.find(seat => seat.id === e.id);
+    if (!member || (typeof e.round === 'number' && e.round !== receipt.round)) return run;
+    let changed = false;
+    const handoffs = run.handoffs?.map(item => {
+      if (item.id !== receipt.parentToolCallId || (item.submissionId && item.submissionId !== receipt.submissionId)
+        || (item.toSeatId !== member.id && (!item.toMemberId || item.toMemberId !== member.memberId))
+        || item.status === 'answered') return item;
+      changed = true;
+      return { ...item, submissionId: receipt.submissionId, settledAt: at, status: receipt.state === 'answered' ? 'answered' as const : 'received' as const,
+        ...(receipt.state === 'started' ? { receivedAt: item.receivedAt ?? at } : { answeredAt: at }) };
+    });
+    return changed ? { ...run, handoffs } : run;
+  }
   if (e.type === 'tool_use' && e.tool === 'send_input' && e.input && typeof e.input === 'object') {
     const input = e.input as Record<string, unknown>;
     const target = seatForTarget(run, input.target);
     if (!target || typeof input.message !== 'string' || run.handoffs?.some(item => item.id === e.id)) return run;
     const from = typeof e.parentId === 'string' ? run.seats.find(seat => seat.id === e.parentId) : undefined;
     return { ...run, handoffs: [...(run.handoffs ?? []), { id: e.id, fromSeatId: from?.id ?? (typeof e.parentId === 'string' ? e.parentId : undefined), fromMemberId: from?.memberId,
-      toSeatId: target.id, toMemberId: target.memberId, message: input.message, at, status: 'sending' }] };
+      toSeatId: target.id, toMemberId: target.memberId, message: input.message, at, status: 'sending',
+      ...(isMemberHandoff(input.handoff) ? { context: input.handoff } : {}) }] };
   }
   if (e.type !== 'tool_result' || !run.handoffs?.some(item => item.id === e.id && item.status === 'sending')) return run;
+  const receipt = delivery(e.output);
   return { ...run, handoffs: run.handoffs.map(item => item.id !== e.id ? item : { ...item, settledAt: at,
-    status: e.ok === false ? 'failed' : delivery(e.output),
+    ...receipt, status: e.ok === false ? 'failed' : receipt.status,
     ...(e.ok === false ? { error: typeof e.output === 'string' ? e.output : '发送失败，未获得投递确认。' } : {}) }) };
 }

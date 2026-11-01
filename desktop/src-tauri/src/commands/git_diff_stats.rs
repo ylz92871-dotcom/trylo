@@ -104,7 +104,7 @@ pub async fn git_diff_stats(
 
     let mut numstat: HashMap<String, (Option<u64>, Option<u64>, bool)> = HashMap::new();
     if !resolved.is_empty() {
-        let mut cmd = tokio::process::Command::new("git");
+        let mut cmd = tokio::process::Command::from(super::background_command::command("git"));
         cmd.arg("-C")
             .arg(&root)
             .arg("diff")

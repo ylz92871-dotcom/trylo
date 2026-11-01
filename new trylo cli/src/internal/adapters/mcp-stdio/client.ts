@@ -209,7 +209,7 @@ async function connectClient(
   }
 
   // Only reachable after a version the server and this client both accept.
-  activeTransport.notify(notificationMessage("initialized"));
+  activeTransport.notify(notificationMessage("notifications/initialized"));
   state.serverInfo = info.value;
   return { ok: true, value: info.value };
 }

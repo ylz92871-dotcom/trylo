@@ -8,6 +8,14 @@ import { FIXTURE_TEAM_RUN } from '../surfaces/team/team-fixture';
 
 const spawn = { type: 'subagent', kind: 'spawn', id: 'worker-a', agentType: 'worker', status: 'running' };
 describe('V1 child lifecycle truth', () => {
+  it('accepts bounded processing receipts only on updates and rejects malformed receipts', () => {
+    const delivery = { submissionId: 'submission', parentToolCallId: 'exchange', state: 'started', round: 2 };
+    expect(parseCliV1Event(JSON.stringify({ ...spawn, kind: 'update', round: 2, delivery }))).toMatchObject({ ok: true });
+    for (const change of [{ round: 0 }, { state: 'queued' }, { submissionId: '' }, { parentToolCallId: 9 }]) {
+      expect(parseCliV1Event(JSON.stringify({ ...spawn, kind: 'update', delivery: { ...delivery, ...change } }))).toMatchObject({ ok: false });
+    }
+    expect(parseCliV1Event(JSON.stringify({ ...spawn, delivery }))).toMatchObject({ ok: false });
+  });
   it('does not mistake an ordinary worker for a legacy Team seat', () => {
     const adapter = new TryloV1EventAdapter();
     const events = adapter.feed(JSON.stringify(spawn));

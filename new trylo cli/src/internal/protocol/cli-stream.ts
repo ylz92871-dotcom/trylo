@@ -90,6 +90,7 @@ export type CliStreamEvent =
       readonly teamRunId?: string; readonly memberId?: string;
       readonly activity?: import("./subagent-activity.js").SubagentToolActivity;
       readonly observation?: import("./subagent-observation.js").SubagentObservation;
+      readonly delivery?: import("./subagent-handoff.js").SubagentDelivery;
       readonly status: "running" | "waiting" | "done" | "failed" | "cancelled";
       readonly agentType?: string; readonly prompt?: string; readonly result?: string;
       readonly error?: string; readonly round?: number; readonly canReceiveInput?: boolean; readonly displayName?: string;

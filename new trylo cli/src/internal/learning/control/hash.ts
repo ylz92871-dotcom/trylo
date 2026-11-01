@@ -18,7 +18,9 @@ function sortValue(value: unknown): unknown {
   }
   if (value !== null && typeof value === "object") {
     const record = value as Record<string, unknown>;
-    const sorted: Record<string, unknown> = {};
+    // JSON allows __proto__ as an own data key. A normal object assignment
+    // would invoke its legacy setter and silently erase that key from hashes.
+    const sorted: Record<string, unknown> = Object.create(null);
     for (const key of Object.keys(record).sort()) {
       sorted[key] = sortValue(record[key]);
     }

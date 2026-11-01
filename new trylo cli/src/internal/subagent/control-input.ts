@@ -2,6 +2,14 @@ import type { JsonObject } from "../protocol/envelope.js";
 import type { SubagentGovernance } from "./types.js";
 import { SubagentGovernanceError } from "./governance.js";
 
+export function dependencyIds(value: unknown): readonly string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > 16 || value.some(id => typeof id !== "string" || !id.trim() || id.length > 512)) {
+    throw new SubagentGovernanceError("invalid_arguments", "depends_on must contain at most 16 task ids");
+  }
+  return [...new Set(value as string[])];
+}
+
 function boundedInteger(args: JsonObject, key: string, maximum: number): number | undefined {
   const value = args[key];
   if (value === undefined) return undefined;

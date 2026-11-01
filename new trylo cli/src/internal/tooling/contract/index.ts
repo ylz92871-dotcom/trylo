@@ -33,6 +33,8 @@ export {
   type ToolCandidate,
   type ToolGapDraft,
   type ToolPackageManifest,
+  type McpToolPackageManifest,
+  type JsonFunctionToolPackageManifest,
   type ToolingEvent,
   type ToolPackageVersion,
   type ValidationActor,

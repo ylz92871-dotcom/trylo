@@ -15,10 +15,13 @@ import {
   X,
   ShieldCheck,
   ChevronRight,
+  Wrench,
 } from 'lucide-react'
 import '../../styles/components/learning-center.css'
 import { Virtuoso } from 'react-virtuoso'
 import { CliMemoryRecords, type CliMemoryRecordsProps } from './CliMemoryRecords'
+import { ToolLearningRecords } from './ToolLearningRecords'
+import type { ToolLearningRuntime } from '../../tool-learning/cli-status'
 import { cognitionMap, isWorkDimension } from '../../user-learning/cognition'
 import type {
   EnforcementMode,
@@ -63,6 +66,7 @@ export interface UserLearningPanelProps {
   readonly onExport?: () => void
   readonly onDeleteUserData?: () => void
   readonly cliMemory?: CliMemoryRecordsProps
+  readonly toolLearning?: ToolLearningRuntime
 }
 
 const MODE_LABELS = { shadow: '仅观察', enforced: '应用偏好', off: '停用偏好' }
@@ -384,6 +388,14 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
                     <BookOpen size={16} />
                     已批准记录
                   </button>
+                  <button
+                    type="button"
+                    aria-current={agentTab === 'tools' ? 'page' : undefined}
+                    onClick={() => set({ agentTab: 'tools' })}
+                  >
+                    <Wrench size={16} />
+                    工具学习
+                  </button>
                 </>
               )}
             </div>
@@ -402,7 +414,7 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
             </div>
           </nav>
           <main className="learning-center__main">
-            <div className="learning-center__content">
+            <div className={`learning-center__content${module === 'agent' && agentTab === 'tools' && !aux ? ' learning-center__content--tools' : ''}`}>
               {module === 'cognition' ? (
                 <header className="learning-center__heading">
                   <div>
@@ -743,6 +755,9 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
                   </div>
                   {module === 'agent' && agentTab === 'approved' ? (
                     <ApprovedRecords port={props.learningPort} reloadKey={approvedReloadKey} />
+                  ) : null}
+                  {module === 'agent' && agentTab === 'tools' ? (
+                    <ToolLearningRecords {...(props.toolLearning === undefined ? {} : { runtime: props.toolLearning })} />
                   ) : null}
                 </>
               ) : null}

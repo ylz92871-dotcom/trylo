@@ -5,6 +5,7 @@
 // them so `lib.rs` can list them in `tauri::generate_handler!`.
 
 pub mod attachment_staging;
+mod background_command;
 pub mod cli_runtime;
 pub mod conversation_history;
 pub mod diagnostics;

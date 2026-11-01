@@ -3,6 +3,7 @@ import { applyTeamEvents } from './team-projection';
 import { FIXTURE_TEAM_RUN } from './team-fixture';
 import { parseTeamRunsFile, serializeTeamRunsFile } from '../../user-learning/team-access/persist';
 import type { TeamRun } from './team-types';
+import { handoffBody } from './run/team-presentation';
 
 const initial: TeamRun = { ...FIXTURE_TEAM_RUN, seats: [{ id: 'worker', memberId: 'member-worker', taskId: 'task-worker',
   seat: 'worker', displayName: '代码实现', status: 'running', summary: '正在定位', round: 1 }], reports: [] };
@@ -10,6 +11,43 @@ const ctx = { workspaceId: initial.workspaceId, personConversationId: initial.pe
 const project = (run: TeamRun, events: readonly unknown[]): TeamRun => applyTeamEvents(run, events, ctx)!;
 
 describe('durable team progress from runtime events', () => {
+  it('preserves structured handoff context for the existing detail view and disk history', () => {
+    const context = { scope: '检查中文路径', artifacts: ['src/export.ts'], evidence: ['中文用例通过'], pending: ['核对空格路径'], blockers: [] };
+    const next = project(initial, [{ type: 'tool_use', id: 'exchange', tool: 'send_input',
+      input: { target: 'task-worker', message: '继续核验', handoff: context }, ts: 10 }]);
+    expect(next.handoffs?.[0]?.context).toEqual(context);
+    expect(handoffBody(next.handoffs![0]!)).toContain('核对空格路径');
+    expect(parseTeamRunsFile(serializeTeamRunsFile(initial.workspaceId, [next]))?.runs[0]?.handoffs).toEqual(next.handoffs);
+  });
+  it('rejects receipts from another submission, round or recipient', () => {
+    const queued = project(initial, [
+      { type: 'tool_use', id: 'exchange', tool: 'send_input', input: { target: 'task-worker', message: '核对' }, ts: 10 },
+      { type: 'tool_result', id: 'exchange', ok: true, output: JSON.stringify({ submission_id: 'correct', delivery: 'queued' }), ts: 11 },
+    ]);
+    for (const change of [{ delivery: { submissionId: 'other', parentToolCallId: 'exchange', state: 'started', round: 2 } },
+      { delivery: { submissionId: 'correct', parentToolCallId: 'exchange', state: 'started', round: 1 } },
+      { id: 'unknown' }]) {
+      const next = project(queued, [{ type: 'subagent', kind: 'update', id: 'worker', status: 'running', round: 2, ts: 12,
+        delivery: { submissionId: 'correct', parentToolCallId: 'exchange', state: 'started', round: 2 }, ...change }]);
+      expect(next.handoffs?.[0]?.status).toBe('queued');
+    }
+  });
+  it('keeps actual started and answered receipts ahead of a late queue acknowledgement', () => {
+    const started = project(initial, [
+      { type: 'tool_use', id: 'exchange', tool: 'send_input', input: { target: 'task-worker', message: '核对结果' }, ts: 10 },
+      { type: 'subagent', kind: 'update', id: 'worker', status: 'running', round: 2, ts: 11,
+        delivery: { submissionId: 'submission', parentToolCallId: 'exchange', round: 2, state: 'started' } },
+      { type: 'tool_result', id: 'exchange', ok: true, output: JSON.stringify({ submission_id: 'submission', delivery: 'queued' }), ts: 12 },
+    ]);
+    expect(started.handoffs?.[0]).toMatchObject({ status: 'received', submissionId: 'submission', receivedAt: 11 });
+    const answered = project(started, [{ type: 'subagent', kind: 'update', id: 'worker', status: 'waiting', round: 2, ts: 13,
+      delivery: { submissionId: 'submission', parentToolCallId: 'exchange', round: 2, state: 'answered' } }]);
+    expect(answered.handoffs?.[0]).toMatchObject({ status: 'answered', answeredAt: 13 });
+    const replay = project(answered, [{ type: 'subagent', kind: 'update', id: 'worker', status: 'running', round: 2, ts: 14,
+      delivery: { submissionId: 'submission', parentToolCallId: 'exchange', round: 2, state: 'started' } }]);
+    expect(replay.handoffs?.[0]?.status).toBe('answered');
+    expect(parseTeamRunsFile(serializeTeamRunsFile(initial.workspaceId, [answered]))?.runs[0]?.handoffs).toEqual(answered.handoffs);
+  });
   it('records a dedicated user report separately from raw member answers and prompts', () => {
     const next = project(initial, [{ type: 'subagent', kind: 'update', id: 'worker', status: 'running', round: 1, ts: 10,
       observation: { id: 'progress-1', round: 1, kind: 'report', reportState: 'blocked', text: '文件路径不存在，需要确认导出入口。' } }]);

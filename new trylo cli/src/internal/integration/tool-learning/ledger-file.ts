@@ -1,6 +1,8 @@
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { appendFile, mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type { ProposalRecord } from "../../learning/domains/tool/awareness/index.js";
+import type { ToolLearningPlan } from "../../learning/domains/tool/evolution/pipeline.js";
+import { decodeLedgerRecord, readPendingToolPlans, readToolLedgerRows, TOOL_LEDGER_MAX_BYTES, ToolOutboxError } from "./outbox-reader.js";
 
 /**
  * 工具学习的本地追加账（P05 工具学习规格 §9「存储走本地 app-data」）。
@@ -39,7 +41,9 @@ export type ToolLedgerRecord =
       readonly action: string;
       readonly capability: string;
       readonly reason: string;
+      readonly pipelinePlan?: ToolLearningPlan;
     }
+  | { readonly kind: "pipeline_handoff"; readonly at: string; readonly jobId: string; readonly outcome: "accepted" | "rejected"; readonly reason?: string }
   | {
       readonly kind: "throttled";
       readonly at: string;
@@ -51,34 +55,30 @@ export type ToolLedgerRecord =
 export type ToolLedgerPort = {
   readonly append: (record: ToolLedgerRecord) => Promise<void>;
   readonly tail: () => Promise<readonly ToolLedgerRecord[]>;
+  /** File stores derive frequency history from the bounded complete log, not an evicting UI tail. */
+  readonly history?: () => Promise<readonly ProposalRecord[]>;
 };
 
-export function createFileToolLedger(root: string): ToolLedgerPort {
+export type ToolFileLedger = ToolLedgerPort & { readonly pendingPlans: () => Promise<readonly ToolLearningPlan[]> };
+
+export function createFileToolLedger(root: string): ToolFileLedger {
   const file = path.join(root, TOOL_LEDGER_FILE);
   return {
+    pendingPlans: () => readPendingToolPlans(file),
+    history: async () => proposalHistoryOf(await readToolLedgerRows(file)),
     append: async (record) => {
+      if (decodeLedgerRecord(record) === undefined) throw new ToolOutboxError("tool_outbox_corrupt");
+      const data = `${JSON.stringify(record)}\n`;
+      let size = 0;
+      try { size = (await stat(file)).size; }
+      catch (error) { if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw new ToolOutboxError("tool_outbox_unavailable"); }
+      if (Buffer.byteLength(data, "utf8") > 65_536 || size + Buffer.byteLength(data, "utf8") > TOOL_LEDGER_MAX_BYTES) throw new ToolOutboxError("tool_outbox_too_large");
       await mkdir(root, { recursive: true });
-      await appendFile(file, `${JSON.stringify(record)}\n`, "utf8");
+      await appendFile(file, data, "utf8");
     },
     tail: async () => {
-      let raw: string;
-      try {
-        raw = await readFile(file, "utf8");
-      } catch {
-        // 没有账 = 没有历史。这不是错误，是第一次跑。
-        return [];
-      }
-      const lines = raw.split("\n").filter((line) => line.trim().length > 0);
-      const recent = lines.slice(-LEDGER_TAIL_RECORDS);
       const out: ToolLedgerRecord[] = [];
-      for (const line of recent) {
-        try {
-          out.push(JSON.parse(line) as ToolLedgerRecord);
-        } catch {
-          // 坏行不回滚整本账：它可能只是上次进程被杀时写坏的最后一行。
-          continue;
-        }
-      }
+      for (const record of await readToolLedgerRows(file)) { out.push(record); if (out.length > LEDGER_TAIL_RECORDS) out.shift(); }
       return out;
     },
   };
@@ -90,7 +90,7 @@ export function createFileToolLedger(root: string): ToolLedgerPort {
  * 只有 `proposal` 那一种进历史：`observation` 不是提议（它没占额度），`throttled`
  * 更不是——被拦下的那一次如果也算作一次提议，冷却就永远解不开了。
  */
-export function proposalHistoryOf(records: readonly ToolLedgerRecord[]): readonly ProposalRecord[] {
+export function proposalHistoryOf(records: Iterable<ToolLedgerRecord>): readonly ProposalRecord[] {
   const out: ProposalRecord[] = [];
   for (const record of records) {
     if (record.kind !== "proposal") {

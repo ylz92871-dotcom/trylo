@@ -238,7 +238,7 @@ export type SubagentTaskExecutor = (
 
 export class SubagentToolRunner implements ToolRunnerPort {
   private readonly runtime: SubagentRuntime;
-  private readonly taskExecutor?: SubagentTaskExecutor | undefined;
+  private readonly taskExecutor: SubagentTaskExecutor;
   private readonly subagentMap = new Map<
     string,
     {
@@ -249,6 +249,9 @@ export class SubagentToolRunner implements ToolRunnerPort {
   >();
 
   constructor(runtime: SubagentRuntime, taskExecutor?: SubagentTaskExecutor | undefined) {
+    if (taskExecutor === undefined) {
+      throw new Error("SubagentToolRunner requires an executor: no work can run without one");
+    }
     this.runtime = runtime;
     this.taskExecutor = taskExecutor;
   }
@@ -268,12 +271,7 @@ export class SubagentToolRunner implements ToolRunnerPort {
       governance: {
         ...(task.timeoutMs !== undefined ? { timeoutMs: task.timeoutMs } : {}),
       },
-      worker: async (context) => {
-        if (this.taskExecutor) {
-          return this.taskExecutor(task, context);
-        }
-        return { executed: task.name, input: task.input };
-      },
+      worker: (context) => this.taskExecutor(task, context),
     });
 
     handle.onProgress((p) => {

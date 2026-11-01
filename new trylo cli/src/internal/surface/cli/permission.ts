@@ -147,9 +147,10 @@ export function createInteractivePermission(io: InteractivePermissionIo): Permis
       if (context?.signal?.aborted) return decision("cancelled");
       io.onApproval?.({ kind: "waiting", action });
       try {
-        const answered = io.requestApproval === undefined
-          ? await readApproval(io, action)
-          : await awaitCancellableApproval(io.requestApproval(action, context), context?.signal);
+        const answer = io.requestApproval === undefined
+          ? readApproval(io, action, context?.signal)
+          : io.requestApproval(action, context);
+        const answered = await awaitCancellableApproval(answer, context?.signal);
         io.onApproval?.({ kind: "settled", action, decision: answered });
         return answered;
       } catch (error) {
@@ -183,10 +184,13 @@ function summarizeValue(value: unknown): string {
   return text.replace(/\s+/g, " ");
 }
 
-async function readApproval(io: InteractivePermissionIo, action: PermissionAction): Promise<PermissionDecision> {
+async function readApproval(io: InteractivePermissionIo, action: PermissionAction, signal?: AbortSignal): Promise<PermissionDecision> {
   for (;;) {
     io.prompt(`allow ${describeAction(action)}? [y]once [s]remember exact call [n]deny [d]disable tool [c]cancel: `);
     const answer = await io.readLine();
+    // The process context closes its reader on command exit. A late line must
+    // neither approve the released ticket nor reopen its prompt.
+    if (signal?.aborted) return decision("cancelled");
     if (answer === undefined) return decision("cancelled", "once", "input_closed");
     const normalized = answer.trim().toLowerCase();
     if (!["y", "yes", "s", "session", "n", "no", "d", "c", "cancel"].includes(normalized)) {

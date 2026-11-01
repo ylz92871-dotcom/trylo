@@ -5,7 +5,9 @@ import {
   observationsFromFailures,
   objectiveSignalOf,
   parseSelfReport,
+  type AwarenessOutcome,
   type FailureFact,
+  type ObjectiveSignal,
   type ProposalAction,
   type ProposalRecord,
   type SelfReport,
@@ -13,6 +15,7 @@ import {
 } from "../../learning/domains/tool/awareness/index.js";
 import { TOOL_GAP_FENCE, type ToolGapPort } from "../../learning/domains/tool/awareness/port.js";
 import { proposalHistoryOf, type ToolLedgerPort } from "./ledger-file.js";
+import type { ToolLearningPlan } from "../../learning/domains/tool/evolution/pipeline.js";
 
 /**
  * 工具学习意识层的运行时（P05 工具学习规格 §2 + §5，TP-1 的**第一次通电**）。
@@ -36,6 +39,7 @@ import { proposalHistoryOf, type ToolLedgerPort } from "./ledger-file.js";
  */
 
 export type ToolLearningHost = {
+  readonly pipelineScope?: string;
   readonly ledger: ToolLedgerPort;
   readonly now: () => number;
   /** 提议与降级说给谁听。每次运行最多几行。 */
@@ -47,7 +51,18 @@ export type ToolGapRuntime = {
   readonly port: ToolGapPort;
   /** 这一进程里已提出的提议（读一次，给 doctor 之类用）。 */
   readonly proposals: () => readonly ProposalRecord[];
+  /** 本进程已接纳提议的只读快照；保留领域层选出的信号与证据，不拥有执行权。 */
+  readonly proposalDetails: () => readonly ToolGapProposalDetail[];
   readonly close: () => Promise<void>;
+};
+
+export type ToolGapProposalDetail = {
+  readonly record: ProposalRecord;
+  readonly signal: ObjectiveSignal;
+  readonly selfReport: SelfReport;
+  readonly evidenceRefs: readonly string[];
+  readonly scope: TaskScope;
+  readonly action: ProposalAction;
 };
 
 /**
@@ -67,24 +82,25 @@ type TurnSlot = {
   readonly failures: FailureFact[];
   /** 频控要的历史。第一次 `observe` 时从账里读一次，之后只追加。 */
   history: readonly ProposalRecord[] | undefined;
-  proposals: readonly ProposalRecord[];
+  details: readonly ToolGapProposalDetail[];
 };
 
 export function createToolGapRuntime(host: ToolLearningHost): ToolGapRuntime {
   const turns = new Map<string, TurnSlot>();
-  let closed = false;
+  let closed = false, unavailable = false;
 
   const slotOf = (turnId: string): TurnSlot => {
     const found = turns.get(turnId);
     if (found !== undefined) {
       return found;
     }
-    const fresh: TurnSlot = { failures: [], history: undefined, proposals: [] };
+    const fresh: TurnSlot = { failures: [], history: undefined, details: [] };
     turns.set(turnId, fresh);
     return fresh;
   };
 
   const intends = (turnId: string): boolean => {
+    if (closed || unavailable) return false;
     const slot = turns.get(turnId);
     if (slot === undefined || slot.failures.length === 0) {
       return false;
@@ -104,52 +120,45 @@ export function createToolGapRuntime(host: ToolLearningHost): ToolGapRuntime {
       intends(request.turnId) ? { role: "system", content: instruction() } : undefined,
 
     observe: async (report) => {
-      if (closed) {
-        return;
+      try { await observeReport(report); }
+      catch {
+        // Collection cannot invalidate the user's execution or admit against an unreadable history.
+        unavailable = true;
+        host.warn("tool learning: acceptance recording unavailable; no further proposals this turn");
       }
-      const slot = slotOf(report.turnId);
-      for (const failure of report.failures) {
-        slot.failures.push(failure);
-      }
-      const reportBody = payloadOf(report.selfReport);
-      const scope = scopeOf(capabilityOf(parseSelfReport(reportBody), report.failures));
-      const outcome = assessToolAwareness({
-        failures: slot.failures,
-        scope,
-        recordedAt: isoNow(),
-        ...(reportBody === undefined ? {} : { selfReport: reportBody }),
-      });
-      if (outcome.kind === "silent") {
-        return;
-      }
-      if (outcome.kind === "observation") {
-        await host.ledger.append({
-          kind: "observation",
-          at: isoNow(),
-          turnId: report.turnId,
-          reason: outcome.reason,
-          detail: outcome.detail,
-        });
-        return;
-      }
-      await recordProposal(report.turnId, outcome.signal.kind, scope, outcome.report);
     },
   };
 
+  async function observeReport(report: Parameters<ToolGapPort["observe"]>[0]): Promise<void> {
+    if (closed || unavailable) return;
+    const slot = slotOf(report.turnId);
+    for (const failure of report.failures) slot.failures.push(failure);
+    const reportBody = payloadOf(report.selfReport);
+    const scope = scopeOf(capabilityOf(parseSelfReport(reportBody), report.failures));
+    const outcome = assessToolAwareness({
+      failures: slot.failures, scope, recordedAt: isoNow(),
+      ...(reportBody === undefined ? {} : { selfReport: reportBody }),
+    });
+    if (outcome.kind === "silent") return;
+    if (outcome.kind === "observation") {
+      await host.ledger.append({ kind: "observation", at: isoNow(), turnId: report.turnId,
+        reason: outcome.reason, detail: outcome.detail });
+      return;
+    }
+    await recordProposal(report.turnId, scope, outcome);
+  }
+
   async function recordProposal(
     turnId: string,
-    signalKind: "gap" | "failure",
     scope: TaskScope,
-    report: SelfReport,
+    proposal: Extract<AwarenessOutcome, { readonly kind: "proposal" }>,
   ): Promise<void> {
     const slot = slotOf(turnId);
-    slot.history ??= proposalHistoryOf(await host.ledger.tail());
+    slot.history ??= host.ledger.history === undefined ? proposalHistoryOf(await host.ledger.tail()) : await host.ledger.history();
     const action = decideProposalAction({
-      signal:
-        signalKind === "gap"
-          ? { kind: "gap", gap: gapOf(scope, report) }
-          : { kind: "failure", tally: tallyOf(slot.failures[0], slot.failures.length) },
-      report,
+      // 领域层已按工具/能力选定客观信号；组合层不得拿第一条失败或自报重建它。
+      signal: proposal.signal,
+      report: proposal.report,
       refinementAttemptedFor: [],
       // TP-1 手上没有成功轨迹（B 归 TP-2），所以恒走「换 Y」那一支。
       successfulTrajectories: 0,
@@ -167,6 +176,11 @@ export function createToolGapRuntime(host: ToolLearningHost): ToolGapRuntime {
       await host.ledger.append({ kind: "throttled", at, turnId, key, reason: verdict.reason });
       return;
     }
+    const pipelinePlan: ToolLearningPlan | undefined = host.pipelineScope === undefined ? undefined : {
+      type: "tool_learning_plan", schemaVersion: 1, scope: host.pipelineScope, capability: scope.capability, createdAt: at,
+      trigger: { runId: turnId, proposalKey: key, action: action.kind, evidenceRefs: proposal.evidenceRefs,
+        ...(tool === undefined ? {} : { tool }) },
+    };
     await host.ledger.append({
       kind: "proposal",
       at,
@@ -176,16 +190,26 @@ export function createToolGapRuntime(host: ToolLearningHost): ToolGapRuntime {
       action: action.kind,
       capability: scope.capability,
       reason: `tool gap signal for ${scope.capability}`,
+      ...(pipelinePlan === undefined ? {} : { pipelinePlan }),
     });
     const record: ProposalRecord = { key, runId: turnId, proposedAt: at, ...(tool === undefined ? {} : { tool }) };
-    slot.proposals = [...slot.proposals, record];
+    slot.details = [...slot.details, {
+      record,
+      signal: proposal.signal,
+      selfReport: proposal.report,
+      evidenceRefs: proposal.evidenceRefs,
+      scope,
+      action,
+    }];
     slot.history = [...slot.history, record];
     host.warn(`tool learning: proposal ${action.kind} — ${describe(action, scope.capability)}\n`);
   }
 
   return {
     port,
-    proposals: () => [...turns.values()].flatMap((slot) => slot.proposals),
+    proposals: () => [...turns.values()].flatMap((slot) => slot.details.map((detail) => ({ ...detail.record }))),
+    // 每次深拷贝隔离调用方，冻结数组避免把一个读快照误作可追加的队列。
+    proposalDetails: () => Object.freeze(structuredClone([...turns.values()].flatMap((slot) => slot.details))),
     close: async () => {
       closed = true;
       turns.clear();
@@ -246,29 +270,6 @@ function payloadOf(raw: string | undefined): unknown {
   } catch {
     return undefined;
   }
-}
-
-function gapOf(scope: TaskScope, report: SelfReport) {
-  return {
-    gapId: `gap:${scope.taskFamily}:${scope.capability}`,
-    kind: report.kind === "new_tool" ? ("tool_not_found" as const) : ("poor_schema_or_description" as const),
-    observationIds: [],
-    capability: scope.capability,
-    taskFamily: scope.taskFamily,
-    criticality: scope.criticality,
-    repeatCount: 0,
-    fallbackAvailable: scope.fallbackAvailable,
-    explanation: `tool gap reported for ${scope.capability}`,
-  };
-}
-
-function tallyOf(first: FailureFact | undefined, count: number) {
-  return {
-    tool: first?.tool ?? "unknown",
-    failures: count,
-    codes: first === undefined ? [] : [first.code],
-    fingerprints: first === undefined ? [] : [first.fingerprint],
-  };
 }
 
 /**

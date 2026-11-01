@@ -9,6 +9,8 @@ import { overlayFor } from "../../learning/domains/tool/refine/index.js";
 import type { DescriptionOverlay } from "../../learning/domains/tool/refine/types.js";
 import { switchEnablesTool, type LearningSwitch } from "../../integration/user-learning/index.js";
 import { methodLearningRoot } from "./learning-sink.js";
+import { handoffPendingToolPlans } from "../../integration/tool-learning/outbox-handoff.js";
+import { ToolOutboxError } from "../../integration/tool-learning/outbox-reader.js";
 
 /**
  * 工具学习的宿主侧装配（P05 工具学习 TP-1 §12）。
@@ -38,6 +40,8 @@ export function toolLearningRoot(
 }
 
 export type ToolLearningHost = {
+  readonly workspaceId?: string;
+  readonly afterEnqueue?: (jobIds: readonly string[]) => Promise<void>;
   readonly homeDir: string;
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly now: () => number;
@@ -47,6 +51,8 @@ export type ToolLearningHost = {
 
 /** 宿主交给组合根的那三样事实。 */
 export type ToolLearningFacts = {
+  readonly workspaceId?: string;
+  readonly afterEnqueue?: (jobIds: readonly string[]) => Promise<void>;
   readonly homeDir: string;
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly now: () => number;
@@ -73,16 +79,39 @@ export function toolGapHostFor(
       env: facts.env,
       now: facts.now,
       warn: (message) => facts.stderr(`warning: ${message}\n`),
+      ...(facts.workspaceId === undefined ? {} : { workspaceId: facts.workspaceId }),
+      ...(facts.afterEnqueue === undefined ? {} : { afterEnqueue: facts.afterEnqueue }),
     },
   };
 }
 
 export function createToolGapRuntimeFor(host: ToolLearningHost): ToolGapRuntime {
-  return createToolGapRuntime({
-    ledger: createFileToolLedger(toolLearningRoot(host.homeDir, host.env)),
+  const ledger = createFileToolLedger(toolLearningRoot(host.homeDir, host.env));
+  const runtime = createToolGapRuntime({
+    ledger,
     now: host.now,
     warn: host.warn,
+    ...(host.workspaceId === undefined ? {} : { pipelineScope: host.workspaceId }),
   });
+  let closing: Promise<void> | undefined;
+  return { ...runtime, close: () => closing ??= flushToolGapPlans(host, runtime, ledger) };
+}
+
+async function flushToolGapPlans(host: ToolLearningHost, runtime: ToolGapRuntime, ledger: ReturnType<typeof createFileToolLedger>): Promise<void> {
+  const details = runtime.proposalDetails();
+  await runtime.close();
+  if (host.workspaceId === undefined) {
+    if (details.length > 0) host.warn("tool learning: workspace identity missing; gap was not queued");
+    return;
+  }
+  try {
+    const jobIds = await handoffPendingToolPlans({ ledger, boardRoot: path.join(methodLearningRoot(host.homeDir, host.env), "board"),
+      scope: host.workspaceId, now: host.now, warn: host.warn });
+    await host.afterEnqueue?.(jobIds);
+  } catch (error) {
+    // The user's answer is already complete; do not replace it with learning I/O failure.
+    host.warn(`tool learning: post-turn work unavailable${error instanceof ToolOutboxError ? ` (${error.code})` : ""}; inspect tools jobs before retrying`);
+  }
 }
 
 /**

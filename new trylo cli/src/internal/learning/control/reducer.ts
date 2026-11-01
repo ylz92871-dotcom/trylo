@@ -11,6 +11,7 @@ import {
   applyEnqueueJob,
   applyFailJob,
   applyStartJob,
+  applyRequeueJob,
   applyTombstone,
 } from "./apply-job.js";
 import {
@@ -30,6 +31,10 @@ import { fail } from "./result.js";
 import { wasApplied, type BoardState } from "./state.js";
 import { methodPayloadHash, replayMethodCommand } from "./method-replay.js";
 import { applySetMethodRetention } from "./apply-method-retention.js";
+import { applyRewardExposure, applyRewardFeedback } from "./apply-reward.js";
+import { applyToolTrial } from "./apply-tool-trial.js";
+import { applyToolUse } from "./apply-tool-use.js";
+import { applyRewardV2Fact } from './apply-reward-v2.js';
 
 export function reduce(state: BoardState, command: BoardCommand): ReduceResult {
   if (wasApplied(state, command.commandId)) {
@@ -44,6 +49,16 @@ export function reduce(state: BoardState, command: BoardCommand): ReduceResult {
 
 function reduceNew(state: BoardState, command: BoardCommand): ReduceResult {
   switch (command.type) {
+    case "record_tool_use":
+      return applyToolUse(state, command);
+    case 'record_reward_v2_fact':
+      return applyRewardV2Fact(state,command);
+    case "record_tool_trial":
+      return applyToolTrial(state, command);
+    case "record_reward_exposure":
+      return applyRewardExposure(state, command);
+    case "record_reward_feedback":
+      return applyRewardFeedback(state, command);
     case "submit_proposal":
       return applySubmit(state, command);
     case "quarantine":
@@ -76,6 +91,8 @@ function reduceNew(state: BoardState, command: BoardCommand): ReduceResult {
       return applyEnqueueJob(state, command);
     case "start_job":
       return applyStartJob(state, command);
+    case "requeue_job":
+      return applyRequeueJob(state, command);
     case "complete_job":
       return applyCompleteJob(state, command);
     case "fail_job":

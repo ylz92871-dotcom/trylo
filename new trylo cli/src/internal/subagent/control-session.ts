@@ -3,8 +3,8 @@ import type { PermissionPort } from "../ports/permission.js";
 import type { ProviderMessage, ProviderPort } from "../ports/provider.js";
 import type { SandboxVerdict, ToolCallRequest, ToolPort, ToolSandbox } from "../ports/tools.js";
 import { AgentRoundObservation } from "./control-observation.js";
-import { createSubagentInputChannel, type SubagentInputChannel } from "./input-channel.js";
-import { createInteractiveChildWorker, type InteractiveChildResult } from "./interactive-worker.js";
+import { createSubagentInputChannel, type SubagentInput, type SubagentInputChannel } from "./input-channel.js";
+import type { InteractiveChildResult } from "./interactive-worker.js";
 import { resolveRole, uniqueNicknameFor, type ResolvedRole, type SubagentRole } from "./role.js";
 import { SUBAGENT_HISTORY_LIMIT, type SubagentRuntime } from "./runtime.js";
 import type { SubagentGovernance, SubagentHandle } from "./types.js";
@@ -20,11 +20,17 @@ import { TaskResourceStop, type SubagentTaskResources } from "./task-resources.j
 import { TeamRepresentationControl } from "./team-representation-control.js";
 import { createSubagentApprovalScope, type ParentActionApproval } from "./parent-approval.js";
 import { constrainSubagentSandbox } from "./inherited-authority.js";
+import type { SubagentCheckpointPort } from "./checkpoint.js";
+import type { AgentContinuation } from "./control-checkpoint.js";
+
+import { createControlChildWorker } from "./control-worker.js";
+import { listRecoveredTasks, restoreAgent } from "./control-recovery.js";
 
 export const DEFAULT_AGENT_IDLE_MS = 30_000;
 export const AGENT_CLEANUP_WAIT_MS = 5_000;
 
 export type SubagentControlOptions = {
+  readonly checkpoints?: SubagentCheckpointPort;
   readonly parentApproval?: ParentActionApproval;
   readonly taskResources?: SubagentTaskResources;
   /** The task owner retains these reducers across rounds and recovery. */
@@ -50,6 +56,7 @@ export type SubagentControlOptions = {
 };
 
 export type AgentEntry = {
+  readonly dependencies: readonly string[];
   readonly resourceStop: TaskResourceStop;
   readonly localTools?: ToolPort;
   readonly teamMember?: TeamMemberIdentity;
@@ -70,7 +77,9 @@ export type AgentEntry = {
   parked: boolean;
 };
 
-type StartRequest = {
+export type StartRequest = {
+  readonly dependencies?: readonly string[] | undefined;
+  readonly receipt?: SubagentInput["receipt"];
   readonly memberId?: string | undefined;
   readonly message: string;
   readonly toolCallId: string;
@@ -80,7 +89,7 @@ type StartRequest = {
   readonly governance?: SubagentGovernance | undefined;
   readonly idleTimeoutMs?: number | undefined;
   readonly allowedTools?: ReadonlyArray<string> | undefined;
-  readonly previous?: AgentEntry | undefined;
+  readonly previous?: AgentContinuation | undefined;
 };
 
 /** Owns bounded conversations and continuation identity; Runtime owns execution. */
@@ -96,7 +105,7 @@ export class ControlAgentSessions {
     this.representation = new TeamRepresentationControl(options.team?.inspectRepresentation,
       () => [...this.latest.values()].filter(entry => entry.teamMember && entry.resolved.role.name === "worker")
         .map(entry => ({ resourceStop: entry.resourceStop, stop: (reason: string) => this.stop(entry, reason) })),
-      () => { this.notify(); });
+      () => { this.notify(); }, options.team?.members.filter(member => member.baseRole === "person").map(member => member.memberId));
   }
 
   subscribe(listener: () => void): () => void {
@@ -110,7 +119,25 @@ export class ControlAgentSessions {
     const task = this.latest.get(target);
     if (task !== undefined) return task;
     const entry = this.agents.get(target);
-    return entry === undefined ? undefined : this.latest.get(entry.taskId) ?? entry;
+    if (entry !== undefined) return this.latest.get(entry.taskId) ?? entry;
+    const saved = this.options.checkpoints?.read(target);
+    return saved?.kind === "ready" ? this.latest.get(saved.checkpoint.taskId) : undefined;
+  }
+
+  listRecoverable(): import("../protocol/envelope.js").JsonObject[] {
+    return listRecoveredTasks(this.options, this.latest);
+  }
+
+  listLive(): import("../protocol/envelope.js").JsonObject[] {
+    return [...this.latest.values()].map(entry => ({ task_id: entry.taskId, agent_id: entry.agentId,
+      nickname: entry.nickname.slice(0, 160), status: entry.handle.status(), role: entry.resolved.role.name.slice(0, 128),
+      round: entry.roundOffset + entry.observation.lastRound }));
+  }
+
+  async restore(target: string, message: string | undefined, toolCallId: string, signal: AbortSignal,
+    governance?: SubagentGovernance): Promise<AgentEntry | "cancelled"> {
+    return restoreAgent(this.options, { target, message, toolCallId, signal, governance,
+      latest: this.latest, recovering: this.recovering, start: request => this.start(request) });
   }
 
   assertInputAllowed(entry: AgentEntry): void {
@@ -119,7 +146,20 @@ export class ControlAgentSessions {
   }
 
   inputQueued(entry: AgentEntry): void {
-    this.representation.inputQueued(entry.resolved.role.name);
+    this.representation.inputQueued(entry.resolved.role.name, entry.teamMember?.memberId ?? entry.taskId);
+  }
+
+  assertDependencies(targets: readonly string[] = [], self?: string): readonly string[] {
+    return targets.map(target => {
+      const entry = this.get(target);
+      if (entry === undefined) throw new SubagentGovernanceError("agent_dependency_unknown", `Unknown dependency '${target}'`);
+      if (entry.taskId === self) throw new SubagentGovernanceError("agent_dependency_cycle", "A task cannot depend on itself");
+      if (["failed", "cancelled", "timed_out"].includes(entry.handle.status())) {
+        throw new SubagentGovernanceError("agent_dependency_failed", `Dependency '${entry.taskId}' did not finish successfully`);
+      }
+      if (!entry.observation.isReady()) throw new SubagentGovernanceError("agent_dependency_pending", `Wait for dependency '${entry.taskId}' before dispatching this work`);
+      return entry.taskId;
+    });
   }
 
   private assertImplementationAllowed(role: string): void {
@@ -137,6 +177,7 @@ export class ControlAgentSessions {
 
   start(request: StartRequest): AgentEntry {
     const previous = request.previous;
+    const dependencies = this.assertDependencies(request.dependencies ?? previous?.dependencies, previous?.taskId);
     previous?.resourceStop.assertReady();
     if (previous === undefined && [...this.latest.values()].filter(entry => entry.resourceStop.isHeld()).length >= SUBAGENT_HISTORY_LIMIT) {
       throw new SubagentGovernanceError("agent_cleanup_capacity", "Resolve retained task cleanup failures before starting another task");
@@ -164,7 +205,8 @@ export class ControlAgentSessions {
     const channel = createSubagentInputChannel();
     const priorBudget = previous?.observation.currentBudget();
     const roundOffset = previous === undefined ? 0 : previous.roundOffset + previous.observation.lastRound;
-    const observation = new AgentRoundObservation(channel, previous?.observation.transcript, previous?.observation.cursor, priorBudget);
+    const observation = new AgentRoundObservation(channel, previous?.observation.transcript, previous?.observation.cursor, priorBudget,
+      previous?.observation.reportHistory);
     const governance = priorBudget === undefined ? request.governance ?? { timeoutMode: "active" } : {
       timeoutMode: "active" as const,
       tokenBudget: request.governance?.tokenBudget ?? priorBudget.tokensRemaining,
@@ -197,43 +239,9 @@ export class ControlAgentSessions {
     });
     const sandbox = teamMember === undefined ? this.options.sandbox : constrainSubagentSandbox(this.options.sandbox,
       call => this.constrainMemberTool(resolved.role.name, teamMember.memberId, call));
-    const worker = createInteractiveChildWorker({
-      ...(approvalScope === undefined ? {} : { approvalScope }),
-      provider: this.options.provider, permission: this.options.permission,
-      providerSession,
-      ...(this.options.callerMessages === undefined ? {} : { callerMessages: this.options.callerMessages }),
-      ...(this.options.execPolicy === undefined ? {} : { execPolicy: this.options.execPolicy }),
-      ...(sandbox === undefined ? {} : { sandbox }),
-      ...(this.options.profile === undefined ? {} : { profile: this.options.profile }),
-      message: resolved.role.prompt === undefined ? request.message : `${resolved.role.prompt}\n\nTask:\n${request.message}`,
-      budget: { ...this.options.childBudget, ...(resolved.maxIterations === undefined ? {} : { maxIterations: resolved.maxIterations }) },
-      onRoundStarted: (round, prompt) => {
-        if (resolved.role.name === "person") this.inputQueued(entry);
-        observation.startRound(round);
-        this.options.runtime.reportRound(handle.subagentId, { status: "running", round: roundOffset + round, prompt,
-          ...(entry.nickname === entry.taskId ? {} : { displayName: entry.nickname }) });
-      },
-      onCheckpoint: (transcript, window) => { observation.checkpoint(transcript, window); },
-      onRoundReady: async report => {
-        // The mailbox owns which input still needs representation. A prior
-        // answer, or an execution already cancelled by restart, cannot clear it.
-        if (entry.handle.status() === "running" && report.rounds >= entry.channel.requestedRound) {
-          await this.representation.observe(resolved.role.name, report.output);
-        }
-        observation.publish(report);
-        this.notify();
-        this.options.runtime.reportRound(handle.subagentId, { status: "waiting", round: roundOffset + report.rounds, result: report.output });
-      },
-      idleTimeoutMs, onIdle: () => { entry.parked = true; },
-      isParked: () => entry.parked,
-      ...(this.options.scheduler === undefined ? {} : { scheduler: this.options.scheduler }),
-      ...(forkMessages === undefined ? {} : { forkMessages }),
-      ...(previous === undefined ? {} : { forkTranscript: previous.observation.transcript }),
-      ...(previous?.observation.promptView === undefined ? {} : { forkWindow: previous.observation.promptView }),
-      ...(resolved.model === undefined ? {} : { model: resolved.model }),
-      ...(this.options.sessionId === undefined ? {} : { sessionId: this.options.sessionId }),
-      ...(this.options.onEnvelope === undefined ? {} : { onEnvelope: this.options.onEnvelope }),
-    });
+    const worker = createControlChildWorker(this.options, { resolved, observation, teamMember, roundOffset, idleTimeoutMs,
+      forkMessages, providerSession, approvalScope, sandbox, previous, message: request.message, receipt: request.receipt },
+    () => entry, this.representation, () => this.latest.get(entry.taskId) === entry, () => this.notify());
     const handle = this.options.runtime.spawn<InteractiveChildResult>({ name: previous?.nickname ?? "subagent",
       ...(localTools === undefined ? {} : { localTools }),
       ...(teamMember === undefined ? {} : { teamMember }),
@@ -254,7 +262,7 @@ export class ControlAgentSessions {
       ...(localTools === undefined ? {} : { localTools }),
       ...(teamMember === undefined ? {} : { teamMember }),
       nickname: previous?.nickname ?? member?.displayName ?? uniqueNicknameFor(resolved.role, handle.subagentId, taken),
-      instruction: previous?.instruction ?? request.message, channel, handle, observation, resolved,
+      instruction: previous?.instruction ?? request.message, channel, handle, observation, resolved, dependencies,
       governance, idleTimeoutMs, forkMessages, providerSession, parked: false };
     this.inputQueued(entry);
     this.agents.set(entry.agentId, entry);
@@ -265,7 +273,7 @@ export class ControlAgentSessions {
   }
 
   async resume(entry: AgentEntry, message: string | undefined, toolCallId: string, signal: AbortSignal,
-    governance?: SubagentGovernance): Promise<AgentEntry | "cancelled"> {
+    options?: { readonly governance?: SubagentGovernance | undefined; readonly receipt?: SubagentInput["receipt"] }): Promise<AgentEntry | "cancelled"> {
     entry.resourceStop.assertReady();
     if (this.recovering.has(entry.taskId)) throw new SubagentGovernanceError("agent_recovery_in_progress", "This task already has a continuation pending");
     this.recovering.add(entry.taskId);
@@ -276,7 +284,7 @@ export class ControlAgentSessions {
       if (retired === "timeout") throw new SubagentGovernanceError("agent_stopping", "Worker cleanup is still pending; no replacement was started");
       entry.observation.accountSettled(await this.options.runtime.settled<InteractiveChildResult>(entry.agentId));
       if (signal.aborted) return "cancelled";
-      return this.start({ previous: entry, toolCallId, governance,
+      return this.start({ previous: entry, toolCallId, governance: options?.governance, receipt: options?.receipt,
         message: message ?? `Continue the assigned task using the recorded progress. Original assignment:\n${entry.instruction}\nCheck existing effects before repeating any action.` });
     } finally { this.recovering.delete(entry.taskId); }
   }

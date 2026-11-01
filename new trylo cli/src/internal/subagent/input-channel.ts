@@ -17,8 +17,11 @@
  *    hold its governance slot until the turn's timeout.
  */
 
+import type { SubagentDelivery } from "../protocol/subagent-handoff.js";
+
 export type SubagentInput = {
   readonly message: string;
+  readonly receipt?: Pick<SubagentDelivery, "submissionId" | "parentToolCallId">;
   /**
    * Drop whatever is still queued and take this one instead.
    *

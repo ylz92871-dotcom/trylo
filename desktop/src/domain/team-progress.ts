@@ -18,8 +18,12 @@ export interface TeamHandoffRecord {
   readonly toSeatId: string;
   readonly toMemberId?: string;
   readonly message: string;
+  readonly context?: import('./member-handoff').MemberHandoff;
   readonly at: number;
   readonly settledAt?: number;
-  readonly status: 'sending' | 'sent' | 'queued' | 'continued' | 'restarted' | 'failed';
+  readonly status: 'sending' | 'sent' | 'queued' | 'continued' | 'restarted' | 'received' | 'answered' | 'failed';
+  readonly submissionId?: string;
+  readonly receivedAt?: number;
+  readonly answeredAt?: number;
   readonly error?: string;
 }

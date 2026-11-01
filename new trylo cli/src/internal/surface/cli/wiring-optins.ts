@@ -58,6 +58,8 @@ export type MethodLearningInput = {
 };
 
 export type SubagentWiringInput = {
+  readonly checkpoints?: import("../../subagent/checkpoint.js").SubagentCheckpointPort;
+  readonly sessionId?: string;
   readonly team?: import("../../subagent/team.js").SubagentTeam;
   readonly enabled?: boolean;
   readonly onEvent?: SubagentEventSink;

@@ -13,6 +13,7 @@ import type { CliContext, DirEntryInfo } from "../../internal/surface/cli/contex
 import { readSecretLine } from "../../internal/surface/cli/secret-prompt.js";
 import { createTerminalLineReader } from "./terminal-line-reader.js";
 import { IsolationCleanupError } from "../../internal/adapters/sandbox/windows-isolation-error.js";
+import { createToolProductionService } from "./tool-production-service.js";
 
 /**
  * Process entry point.
@@ -213,6 +214,9 @@ export function createProcessContext(): ProcessContext {
     return readline;
   };
   return {
+    get toolProduction() {
+      return createToolProductionService({ homeDir: homedir(), env: process.env, now: () => Date.now(), newId: prefix => `${prefix}-${randomUUID()}` });
+    },
     env: process.env,
     homeDir: homedir(),
     cwd: process.cwd(),

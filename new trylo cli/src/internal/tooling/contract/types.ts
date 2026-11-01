@@ -142,7 +142,7 @@ export type Provenance = {
   readonly downloadMethod: "fake_fixture";
 };
 
-export type ToolPackageManifest = {
+type ToolPackageManifestBase = {
   readonly identity: string;
   readonly version: string;
   readonly origin: PackageOrigin;
@@ -150,8 +150,6 @@ export type ToolPackageManifest = {
   readonly entrypoint: string;
   readonly capabilities: readonly string[];
   readonly permissions: readonly string[];
-  readonly mcpSchemaVersion: string;
-  readonly mcpTransport: "stdio";
   readonly processIsolation: true;
   readonly cwdWhitelist: readonly string[];
   readonly envWhitelist: readonly string[];
@@ -169,6 +167,28 @@ export type ToolPackageManifest = {
   readonly postinstall: "forbidden";
   readonly thirdPartyTypes: "isolated" | "leaked";
 };
+
+/** Missing runtimeProfile preserves the original MCP stdio wire format. */
+export type McpToolPackageManifest = ToolPackageManifestBase & {
+  readonly runtimeProfile?: "mcp_stdio";
+  readonly mcpSchemaVersion: string;
+  readonly mcpTransport: "stdio";
+};
+
+/** A separate, zero-IO script ABI. It never advertises an MCP server. */
+export type JsonFunctionToolPackageManifest = ToolPackageManifestBase & {
+  readonly runtimeProfile: "confined_json_function_v1";
+  readonly moduleFormat: "commonjs";
+  readonly inputTransport: "json";
+};
+
+/** Managed third-party Node entrypoints have their own ABI and are never passed to the JSON-function evaluator. */
+export type NodePackageToolManifest = ToolPackageManifestBase & {
+  readonly runtimeProfile: "confined_npm_cli_v1" | "confined_npm_mcp_v1";
+  readonly moduleFormat: "node_package";
+  readonly inputTransport: "argv_stdin" | "mcp_stdio";
+};
+export type ToolPackageManifest = McpToolPackageManifest | JsonFunctionToolPackageManifest | NodePackageToolManifest;
 
 export type ToolPackageVersion = {
   readonly packageVersionId: string;

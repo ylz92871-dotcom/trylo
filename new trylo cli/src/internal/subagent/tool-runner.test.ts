@@ -143,7 +143,10 @@ test("SA-3 ToolRunnerPort 契约一致性与可替换性：降级与真执行器
 
   // 2. Run with SubagentToolRunner
   const runtime = new SubagentRuntime({ tools: createMockTools() });
-  const subagentRunner = new SubagentToolRunner(runtime);
+  const subagentRunner = new SubagentToolRunner(runtime, async (task) => ({
+    executed: task.name,
+    input: task.input,
+  }));
   const res2 = await runWorkflow(subagentRunner, "wf-2");
   assert.equal(res2, "completed");
 });
@@ -172,6 +175,11 @@ test("CLI-01B 降级执行器：没有执行器时必须拒绝构造，不得回
     },
     /executor/i,
   );
+});
+
+test("工具演化后台执行器：没有执行器时必须拒绝构造，不得回显假成功", () => {
+  const runtime = new SubagentRuntime({ tools: createMockTools() });
+  assert.throws(() => new SubagentToolRunner(runtime), /executor/i);
 });
 
 /**

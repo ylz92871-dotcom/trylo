@@ -25,8 +25,9 @@ export type FetchedArchive = {
 export async function fetchArchive(
   transport: HttpTransport,
   url: string,
+  signal?: AbortSignal,
 ): Promise<Result<FetchedArchive, AcquisitionFailure>> {
-  const response = await guardedGet(transport, url, MAX_ARCHIVE_BYTES);
+  const response = await guardedGet(transport, url, MAX_ARCHIVE_BYTES, signal);
   if (!response.ok) {
     return response;
   }

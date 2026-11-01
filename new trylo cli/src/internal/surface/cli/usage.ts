@@ -84,6 +84,8 @@ export const USAGE = [
   "  trylo bg attach <id>             watch a job's output (cannot type into it)",
   "  trylo bg kill <id>               stop a job and everything it started",
   "",
+  "  trylo tools search|evolve|candidates|trial|trials|improve  tool learning experiments; tools --help lists the contracts",
+  "",
   "global options:",
   "  --learning method               opt in to the method subsystem for run, doctor or the REPL",
   "",

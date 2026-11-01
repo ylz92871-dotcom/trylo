@@ -96,3 +96,22 @@ test("empty argv is refused before spawning", async () => {
   });
   await assert.rejects(runner.run([], "/work"), /empty argv/);
 });
+
+test("background git preserves output and cancellation without a Windows console", async () => {
+  const ok = fakeChild({ exit: 0, stdout: "diff content\n" });
+  const controller = new AbortController();
+  const runner = createGitRunner({
+    spawnImpl: (_file, _argv, options) => {
+      assert.equal("windowsHide" in options && options.windowsHide, true);
+      assert.equal(options.signal, controller.signal);
+      assert.deepEqual(options.env, { GIT_OPTIONAL_LOCKS: "0" });
+      ok.start();
+      return ok.child as never;
+    },
+  });
+  const result = await runner.run(["git", "diff"], "/work", {
+    signal: controller.signal,
+    env: { GIT_OPTIONAL_LOCKS: "0" },
+  });
+  assert.deepEqual(result, { exit: 0, stdout: "diff content\n", stderr: "" });
+});

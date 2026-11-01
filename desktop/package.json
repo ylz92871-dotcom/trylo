@@ -1,6 +1,6 @@
 {
   "name": "trylo-desktop",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Trylo Desktop — Agent-native IDE shell (Tauri 2 + React + monaco-vscode-api)",
   "type": "module",
@@ -12,6 +12,7 @@
     "tauri": "tauri",
     "tauri:dev": "node scripts/start-desktop-dev.mjs",
     "tauri:build": "tauri build",
+    "build:portable-launcher": "node scripts/build-portable-launcher.mjs",
     "lint": "eslint src --ext ts,tsx --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
@@ -26,7 +27,7 @@
     "spike:day-6": "echo 'Spike Day 6: search service. See spike-results/day-6-search.md'",
     "spike:day-7": "echo 'Spike Day 7: report. See spike-results/day-7-report.md'",
     "test:node": "node --test scripts/ensure-dev-cli.test.mjs scripts/stage-npm.test.mjs",
-    "test:platform": "node --test scripts/runtime-integrity.platform.test.mjs"
+    "test:platform": "node --test scripts/runtime-integrity.platform.test.mjs scripts/background-console.platform.test.mjs scripts/portable-launcher.platform.test.mjs"
   },
   "dependencies": {
     "@codingame/monaco-vscode-api": "^13.0.0",

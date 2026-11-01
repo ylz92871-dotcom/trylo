@@ -3,6 +3,7 @@ import { EXIT_CODES, type ExitCode } from "../../protocol/cli-stream.js";
 import type { TokenManagerLike } from "../../adapters/provider/openai-compatible.js";
 import type { SystemPromptDirective, ReasoningEffort } from "../../ports/provider.js";
 import type { JsonObject } from "../../protocol/envelope.js";
+import type { ToolPort } from "../../ports/tools.js";
 import { resolveRequestOptions } from "./run-request-options.js";
 import type { SessionPort } from "../../ports/session.js";
 import type { CompactWindow } from "../../ports/compaction.js";
@@ -66,6 +67,7 @@ export { runOneTurn } from "./run-one-turn.js";
  */
 
 export type RunScaffold = {
+  readonly additionalTools?: ToolPort;
   readonly bindAgentTools?: (tools: import("../../ports/tools.js").ToolPort | undefined) => void;
   readonly questions?: AskUserSession;
   readonly execution?: RunExecution;
@@ -344,7 +346,8 @@ export function writeLastMessage(
   return ok ? [] : [`output_last_message_failed:${absolute}`];
 }
 
-export async function handleRun(ctx: CliContext, options: RunCommandOptions, sink: CliSink, control?: StdioSession): Promise<ExitCode> {
+export async function handleRun(ctx: CliContext, options: RunCommandOptions, sink: CliSink, control?: StdioSession,
+  extension?: { open(scaffold: RunScaffold): Promise<ToolPort>; close(): Promise<void> }): Promise<ExitCode> {
   const permissionMode = ctx.stdinIsTty ? "interactive" : "non_interactive";
   const scaffold = await prepareRun(ctx, { options, sink, permissionMode });
   if (isRunFailure(scaffold)) {
@@ -352,6 +355,8 @@ export async function handleRun(ctx: CliContext, options: RunCommandOptions, sin
   }
   const interrupts = observeRunCancellation(ctx);
   try {
+    const additionalTools = await extension?.open(scaffold);
+    const prepared = additionalTools === undefined ? scaffold : { ...scaffold, additionalTools };
     const prompt = await resolvePrompt(ctx, options);
     if ("exitCode" in prompt) {
       return reportFailure(ctx, prompt);
@@ -361,7 +366,7 @@ export async function handleRun(ctx: CliContext, options: RunCommandOptions, sin
       : await answerStdioInput(scaffold.questions, control, prompt.text, cancel);
     const outcome = await runOneTurn(
       ctx,
-      control === undefined ? scaffold : { ...scaffold, bindAgentTools: control.bindAgentTools,
+      control === undefined ? prepared : { ...prepared, bindAgentTools: control.bindAgentTools,
         ...(scaffold.questions === undefined ? {} : { questions: stdioQuestions(scaffold.questions, control) }) },
       promptText,
       sink,
@@ -382,6 +387,6 @@ export async function handleRun(ctx: CliContext, options: RunCommandOptions, sin
     return outcome.exitCode;
   } finally {
     interrupts.close();
-    await scaffold.close();
+    try { await extension?.close(); } finally { await scaffold.close(); }
   }
 }

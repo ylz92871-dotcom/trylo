@@ -156,6 +156,13 @@ class FileBoardStore implements BoardStore {
       if (!parsed.ok) {
         return parsed;
       }
+      // A damaged compacted checkpoint has no complete history to replay.
+      // Physical log sequence restarts after compaction; the first logical
+      // event must still be 1 to prove a complete replay from an empty Board.
+      const completeReplay = parsed.records[0]?.events[0]?.sequence === 1;
+      if (snapshot === undefined && !completeReplay && (existsSync(path.join(this.rootDir, SNAP_FILE)) || parsed.records.length > 0)) {
+        return { ok: false, reason: "snapshot_corrupt", detail: "checkpoint is unavailable and the retained log cannot rebuild the complete Board" };
+      }
       // `readSnapshot` already decoded+guarded the snapshot state (P2-4), so it is a
       // valid `BoardState` here; no second normalize. A dropped/corrupt snapshot is
       // `undefined`, and we start from empty and let the log replay rebuild everything.

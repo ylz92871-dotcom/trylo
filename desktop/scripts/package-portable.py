@@ -1,5 +1,16 @@
 from pathlib import Path
-import argparse,concurrent.futures,collections,hashlib,json,os,time,zipfile
+import argparse,concurrent.futures,collections,hashlib,json,os,struct,time,zipfile
+
+
+def require_gui_executable(file):
+ with file.open('rb') as stream:
+  if stream.read(2)!=b'MZ':raise SystemExit('Not a Windows executable: '+str(file))
+  stream.seek(0x3c);offset=struct.unpack('<I',stream.read(4))[0]
+  stream.seek(offset)
+  if stream.read(4)!=b'PE\0\0':raise SystemExit('Invalid PE executable: '+str(file))
+  stream.seek(offset+24+68)
+  if struct.unpack('<H',stream.read(2))[0]!=2:
+   raise SystemExit('A portable GUI entry must not allocate a console: '+str(file))
 
 def main():
  parser=argparse.ArgumentParser(description='Package the already-built Windows Desktop as a portable ZIP (Python 3.10+).')
@@ -38,9 +49,13 @@ def main():
  if args.component=='desktop':
   executable=root/'desktop/src-tauri/target/release/trylo-desktop.exe'
   if not executable.is_file():raise SystemExit('Build the native Desktop application first')
+  launcher=root/'desktop/src-tauri/target/release/Start-Trylo.exe'
+  if not launcher.is_file():raise SystemExit('Build the GUI launcher with node desktop/scripts/build-portable-launcher.mjs first')
+  require_gui_executable(executable)
+  require_gui_executable(launcher)
   items.extend([(executable,'trylo-desktop.exe'),(root/'desktop/distribution.json','distribution.json'),
                 (root/'desktop/scripts/Start-Trylo.ps1','Start-Trylo.ps1'),
-                (root/'desktop/scripts/Start-Trylo.cmd','Start-Trylo.cmd')])
+                (launcher,'Start-Trylo.exe')])
   notices=['NODE-v24.14.1-LICENSE.txt','TRYLO-LICENSE.txt','README-Desktop.txt']
  else:
   workManifest=json.loads((resources/'workd/manifest.json').read_text(encoding='utf-8'))

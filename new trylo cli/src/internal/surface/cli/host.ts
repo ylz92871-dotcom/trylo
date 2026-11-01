@@ -26,6 +26,8 @@ import type { MethodLearningHost } from "./learning-sink.js";
 import { createUserLearningRuntimeFor, type UserLearningHost } from "./user-learning-config.js";
 import { createToolGapRuntimeFor, type ToolLearningHost } from "./tool-learning-config.js";
 import { userLearningObserver } from "../../integration/user-learning/index.js";
+import { rewardObserverFor } from "./reward-wiring.js";
+import { combineEnvelopeObservers } from "./envelope-observers.js";
 import { createTurnRenderer, type CliSink } from "./render.js";
 import { localRulesFor } from "./project-rules.js";
 import { memoryForTurnInput } from "./memory-wiring.js";
@@ -33,6 +35,7 @@ import { memoryCommandWiring } from "./memory-command-provider.js";
 import { fileCommandWiring } from "./file-command-provider.js";
 import { reportProjectNotices } from "./turn-project-notices.js";
 import { createSubagentJournalSink, finishSubagentEvents } from "./subagent-sink.js";
+import { createSubagentCheckpointJournal } from "../../adapters/subagent-checkpoints/journal.js";
 import type { SubagentRole } from "../../subagent/role.js";
 import type { LspServerConfig } from "../../adapters/language-server/registry.js";
 import type { ShellModeResult } from "../../adapters/sandbox/shell-mode.js";
@@ -59,6 +62,7 @@ export type { TurnOutcome } from "./turn-finish.js";
  */
 
 export type TurnHostInput = {
+  readonly additionalTools?: Wiring["ports"]["tools"];
   readonly bindAgentTools?: (tools: Wiring["ports"]["tools"] | undefined) => void;
   readonly bootstrap?: BootstrapContextBinding;
   readonly userSourceAvailable?: false;
@@ -271,21 +275,14 @@ export type McpRuntimeContext = {
   readonly clientFor?: (entry: McpServerEntry, cwd: string) => McpClientOpen;
 };
 
-
 export type TurnFailure = RunFailure;
 
 // Re-exported: these are pure, live in `host-status.ts` now, and the host is
 // still the one public place consumers read them from.
 export { exitCodeForResult, terminalStatusOf, usageToCli, isTurnFailure } from "./host-status.js";
 
-/**
- * One turn, with the MCP servers this run was configured to use opened for its
- * duration and closed after it.
- *
- * Opening lives here rather than in `wirePorts` for one reason: it is async and
- * may take a real handshake, and a composition root that could block on a child
- * process is a CLI that can hang before it prints anything. Closing in a
- * `finally` is what keeps a failed turn from leaving child processes behind.
+/** Async MCP startup belongs to the turn, outside synchronous wirePorts.
+ * Its finally closes the resources even when the turn fails.
  */
 export async function executeTurn(input: TurnHostInput): Promise<TurnOutcome | TurnFailure> {
   const mcp = input.mcp === undefined ? undefined : await openMcpRuntime(input.mcp);
@@ -315,6 +312,11 @@ async function runTurnWithPorts(
   const recorder = createTurnRecorder(input);
   const recordedInput = recorder === undefined ? input : { ...input, session: recorder.session };
   const subagentSink = createSubagentJournalSink(recordedInput);
+  const checkpoints = recordedInput.session !== undefined && (input.subagentEnabled === true || input.providerId === "fixture-subagent")
+    ? createSubagentCheckpointJournal(input.resumeRecords ?? [], input.sessionId, async payload => {
+      subagentSink.onEvent("observation", payload, `att-checkpoint-${input.turnId}`);
+      await subagentSink.flush();
+    }) : undefined;
   const wiring = fileCommandWiring(memoryCommandWiring(wirePorts(
     turnWiringInput(
       input,
@@ -330,11 +332,13 @@ async function runTurnWithPorts(
       // either, no memory port is constructed (WP20.3 / R1).
       memory.read,
       memory.write,
+      checkpoints,
     ),
   ), input), input);
   if ("code" in wiring) {
     return wiringFailure(wiring.detail);
   }
+  const reward = await rewardObserverFor(input, wiring.toolCatalogHash);
   try {
     const refusal = await turnStartRefusal(wiring.ports.tools, input.toolSelection, wiring.permissionLedger, input.permissionLedger);
     if (refusal !== undefined) {
@@ -372,13 +376,7 @@ async function runTurnWithPorts(
       recorder === undefined ? wiring.ports : { ...wiring.ports, progress: recorder.progress },
       input, budget,
       pricingOf(input),
-      observe === undefined && input.onRunEnvelope === undefined
-        ? renderer.onEnvelope
-        : envelope => {
-            renderer.onEnvelope(envelope);
-            observe?.(envelope);
-            input.onRunEnvelope?.(envelope);
-          },
+      combineEnvelopeObservers(renderer.onEnvelope, observe, reward?.capture, input.onRunEnvelope),
     );
 
     await finishSubagentEvents(wiring.subagentRuntime, subagentSink);
@@ -393,7 +391,9 @@ async function runTurnWithPorts(
       extraWarnings: mcp?.warnings ?? [],
     });
   } finally {
+    await reward?.flush();
     input.bindAgentTools?.(undefined);
     await wiring.close();
+    await toolGap?.close();
   }
 }

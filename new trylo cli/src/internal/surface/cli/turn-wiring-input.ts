@@ -8,6 +8,7 @@ import { createMethodLearningWiring } from "./learning-sink.js";
 import type { TurnHostInput } from "./host.js";
 import type { WiringInput } from "./wiring.js";
 import { agentMessages } from "./agent-instructions.js";
+import type { SubagentCheckpointPort } from "../../subagent/checkpoint.js";
 
 /**
  * Everything `wirePorts` is told, assembled in one place.
@@ -30,8 +31,10 @@ export function turnWiringInput(
   localRules?: LocalRuleLookup | undefined,
   memory?: MemoryReadPort | undefined,
   memoryWrite?: UserMemoryService | undefined,
+  checkpoints?: SubagentCheckpointPort,
 ): WiringInput {
   return {
+    ...(input.additionalTools === undefined ? {} : { additionalTools: input.additionalTools }),
     turnId: input.turnId,
     ...(input.toolSelection === undefined ? {} : { toolSelection: input.toolSelection }),
     ...(input.resumeRecords === undefined ? {} : { workflowRecords: input.resumeRecords }),
@@ -79,6 +82,7 @@ export function turnWiringInput(
       ? {}
       : {
           subagent: {
+            ...(checkpoints === undefined ? {} : { checkpoints, sessionId: input.sessionId }),
             // Two doors, one switch: the fixture provider is the offline test
             // path, `--subagent` is the opt-in for every real provider.
             enabled: input.providerId === "fixture-subagent" || input.subagentEnabled === true,

@@ -1,14 +1,16 @@
 import type { ToolCallRequest, ToolOutcome, ToolPort } from "../ports/tools.js";
 import type { JsonObject, JsonValue } from "../protocol/envelope.js";
-import { CLOSE_AGENT_TOOL, RESUME_AGENT_TOOL, SEND_INPUT_TOOL, SPAWN_AGENT_TOOL,
-  SUBAGENT_CONTROL_BINDINGS, WAIT_AGENT_TOOL } from "./control-bindings.js";
+import { CLOSE_AGENT_TOOL, RESUME_AGENT_TOOL, SEND_INPUT_TOOL, SPAWN_AGENT_TOOL, WAIT_AGENT_BINDING,
+  SUBAGENT_CONTROL_BINDINGS, WAIT_AGENT_TOOL, LIST_AGENTS_BINDING, LIST_AGENTS_TOOL } from "./control-bindings.js";
 import { roleCatalogDescription } from "./role.js";
+import { boundedWaitResponse, type WaitMemberReader } from "./wait-response.js";
 import type { SubagentStatus } from "./types.js";
 import { systemTimerScheduler } from "./scheduler.js";
 import { governanceFailureOutcome } from "./governance.js";
 import { DEFAULT_AGENT_WAIT_MS, MAX_AGENT_WAIT_MS, waitForAgentReports } from "./control-observation.js";
 import { ControlAgentSessions, AGENT_CLEANUP_WAIT_MS, type SubagentControlOptions } from "./control-session.js";
-import { spawnSettings, inputMode, resultCursors } from "./control-input.js";
+import { spawnSettings, inputMode, resultCursors, dependencyIds } from "./control-input.js";
+import { handoffMessage, isSubagentHandoff } from "../protocol/subagent-handoff.js";
 export type { SubagentControlOptions } from "./control-session.js";
 
 function text(args: JsonObject, key: string): string | undefined {
@@ -48,6 +50,21 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
   const run = async (call: ToolCallRequest, signal: AbortSignal): Promise<ToolOutcome> => {
     const args = call.arguments;
     switch (call.name) {
+      case LIST_AGENTS_TOOL: {
+        if (options.checkpoints === undefined) return refuse("unknown_tool", "Durable task recovery is unavailable in this run");
+        const offset = args["offset"] ?? 0;
+        if (typeof offset !== "number" || !Number.isSafeInteger(offset) || offset < 0 || offset > 128) return refuse("invalid_arguments", "offset must be an integer between 0 and 128");
+        const rows = [...agents.listLive().map(value => ({ kind: "live", value })), ...agents.listRecoverable().map(value => ({ kind: "recoverable", value }))];
+        let end = Math.min(rows.length, offset + 8);
+        for (;;) {
+          const page = rows.slice(offset, end);
+          const value = { live: page.filter(item => item.kind === "live").map(item => item.value),
+            recoverable: page.filter(item => item.kind === "recoverable").map(item => item.value), next_offset: end < rows.length ? end : null };
+          if (Buffer.byteLength(JSON.stringify(value)) <= LIST_AGENTS_BINDING.outputLimits.maxBytes) return ok(value, JSON.stringify(value));
+          if (end <= offset + 1) return refuse("agent_observation_too_large", "Task identity metadata exceeds the listing bound");
+          end -= 1;
+        }
+      }
       case SPAWN_AGENT_TOOL: {
         const message = text(args, "message");
         if (message === undefined) {
@@ -68,6 +85,7 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
         }
         const entry = agents.start({
           message, toolCallId: call.toolCallId, forkMessages, ...spawnSettings(args),
+          dependencies: dependencyIds(args["depends_on"]),
           agentType: text(args, "agent_type"), model: text(args, "model"),
           memberId: text(args, "member_id"),
         });
@@ -81,6 +99,7 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
             role: entry.resolved.role.name,
             ...(entry.teamMember === undefined ? {} : { team_run_id: entry.teamMember.teamRunId, member_id: entry.teamMember.memberId }),
             allowed_tools: [...entry.resolved.allowedTools],
+            dependencies: entry.dependencies,
             // Said out loud rather than thrown: the role asked for tools this
             // parent cannot grant, and narrowing is the safe direction.
             ...(entry.resolved.withheld.length === 0 ? {} : { withheld: [...entry.resolved.withheld] }),
@@ -91,7 +110,7 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
 
       case SEND_INPUT_TOOL: {
         const target = text(args, "target");
-        const message = text(args, "message");
+        let message = text(args, "message");
         if (target === undefined || message === undefined) {
           return refuse("invalid_arguments", "send_input requires target and message");
         }
@@ -100,28 +119,33 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
           return refuse("unknown_agent", `No agent with id '${target}'`);
         }
         agents.assertInputAllowed(entry);
+        agents.assertDependencies(dependencyIds(args["depends_on"]), entry.taskId);
+        const handoff = args["handoff"];
+        if (handoff !== undefined) {
+          if (!isSubagentHandoff(handoff)) return refuse("invalid_handoff", "Provide scope, artifacts[], evidence[], pending[] and blockers[] within the declared limits.");
+          message = handoffMessage(message, handoff);
+        }
+        const receipt = { submissionId: `sub-${entry.agentId}-${++submissions}`, parentToolCallId: call.toolCallId };
         const mode = inputMode(args);
         if (mode === "restart" || entry.parked) {
           agents.inputQueued(entry);
           if (mode === "restart") {
             await agents.stop(entry, "restarted_by_parent");
           }
-          const next = await agents.resume(entry, message, call.toolCallId, signal);
+          const next = await agents.resume(entry, message, call.toolCallId, signal, { receipt });
           if (next === "cancelled") return { outcome: "cancelled" };
-          submissions += 1;
-          return ok({ submission_id: `sub-${submissions}`, agent_id: next.agentId, task_id: next.taskId,
+          return ok({ submission_id: receipt.submissionId, agent_id: next.agentId, task_id: next.taskId,
             delivery: mode === "restart" ? "restarted" : "continued" }, `continued ${next.taskId}`);
         }
         const interrupt = mode === "replace_queued";
-        if (!entry.channel.deliver({ message, interrupt })) {
+        if (!entry.channel.deliver({ message, interrupt, receipt })) {
           return entry.channel.open
             ? refuse("agent_input_queue_full", `Agent '${target}' has a full input queue; wait or replace queued input with interrupt`)
             : refuse("agent_closed", `Agent '${target}' is closed and takes no more input`);
         }
         agents.inputQueued(entry);
         entry.observation.requestInput();
-        submissions += 1;
-        return ok({ submission_id: `sub-${submissions}`, agent_id: entry.agentId, task_id: entry.taskId,
+        return ok({ submission_id: receipt.submissionId, agent_id: entry.agentId, task_id: entry.taskId,
           delivery: interrupt ? "replaced_queued" : "queued", active_round_interrupted: false }, `queued for ${target}`);
       }
 
@@ -135,6 +159,9 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
           return refuse("invalid_arguments", "timeout_ms must be a finite non-negative number");
         }
         const after = resultCursors(args, targets);
+        if (args["wake_on_report"] !== undefined && typeof args["wake_on_report"] !== "boolean") {
+          return refuse("invalid_arguments", "wake_on_report must be a boolean");
+        }
         const known = [...new Set(targets)].flatMap(target => {
           const entry = agents.get(target);
           return entry === undefined ? [] : [{ target, entry }];
@@ -143,15 +170,18 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
           return refuse("unknown_agent", "wait_agent received an unknown agent id");
         }
         const observed = await waitForAgentReports({
-          ready: () => targets.some(target => agents.get(target)?.observation.isReady(after.get(target))),
+          ready: () => targets.some(target => {
+            const observation = agents.get(target)?.observation;
+            return observation?.isReady(after.get(target)) === true
+              || flag(args, "wake_on_report") && observation?.hasReportAfter(after.get(target)) === true;
+          }),
           subscribe: listener => agents.subscribe(listener),
           timeoutMs: Math.min(requestedTimeout ?? DEFAULT_AGENT_WAIT_MS, MAX_AGENT_WAIT_MS),
           signal,
           scheduler: options.scheduler ?? systemTimerScheduler,
         });
         if (observed === "cancelled") return { outcome: "cancelled" };
-        const status: Record<string, SubagentStatus> = {};
-        const results: Record<string, JsonObject> = {};
+        const readers: WaitMemberReader[] = [];
         for (const { target } of known) {
           const entry = agents.get(target);
           if (entry === undefined) return refuse("unknown_agent", "This task has left the bounded conversation history");
@@ -160,15 +190,18 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
             const retired = await options.runtime.waitForRetirement(entry.agentId, AGENT_CLEANUP_WAIT_MS, signal);
             if (retired === "cancelled") return { outcome: "cancelled" };
           }
-          status[target] = entry.handle.status();
+          const status = entry.handle.status();
           const cleanup = entry.resourceStop.snapshot();
-          results[target] = { ...entry.observation.snapshot(entry.handle.status(), after.get(target),
-            options.runtime.getGovernance().snapshot(entry.agentId)), agent_id: entry.agentId, task_id: entry.taskId,
+          readers.push({ target, status, read: reportLimit => ({ ...entry.observation.snapshot(status, after.get(target),
+            options.runtime.getGovernance().snapshot(entry.agentId), reportLimit), agent_id: entry.agentId, task_id: entry.taskId,
             round: entry.roundOffset + entry.observation.lastRound,
             nickname: entry.nickname, idle_timeout_ms: entry.idleTimeoutMs,
-            ...(cleanup === undefined ? {} : { cleanup }) };
+            dependencies: entry.dependencies,
+            ...(entry.teamMember === undefined ? {} : { team_run_id: entry.teamMember.teamRunId, member_id: entry.teamMember.memberId }),
+            ...(cleanup === undefined ? {} : { cleanup }) }) });
         }
-        const answer = { status, timed_out: observed === "timeout", results };
+        const answer = boundedWaitResponse(readers, observed === "timeout", WAIT_AGENT_BINDING.outputLimits.maxBytes);
+        if (answer === undefined) return refuse("agent_observation_too_large", "Member metadata exceeds the result budget; collect fewer targets without advancing their cursors.");
         return ok(answer, JSON.stringify(answer));
       }
 
@@ -193,8 +226,14 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
       case RESUME_AGENT_TOOL: {
         const target = text(args, "target");
         const entry = target === undefined ? undefined : agents.get(target);
-        if (target === undefined || entry === undefined) {
+        if (target === undefined) {
           return refuse("unknown_agent", `No agent with id '${target ?? ""}'`);
+        }
+        if (entry === undefined) {
+          const restored = await agents.restore(target, text(args, "message"), call.toolCallId, signal, spawnSettings(args).governance);
+          if (restored === "cancelled") return { outcome: "cancelled" };
+          return ok({ agent_id: restored.agentId, task_id: restored.taskId, nickname: restored.nickname,
+            recovery: "canonical_checkpoint", cursor_reset: true, resumed_from: target }, `recovered ${restored.taskId}; discard prior wait cursors`);
         }
         const current: SubagentStatus = entry.handle.status();
         if (current === "pending" || current === "running") {
@@ -204,7 +243,7 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
           );
         }
         const settings = spawnSettings(args);
-        const entry2 = await agents.resume(entry, text(args, "message"), call.toolCallId, signal, settings.governance);
+        const entry2 = await agents.resume(entry, text(args, "message"), call.toolCallId, signal, { governance: settings.governance });
         if (entry2 === "cancelled") return { outcome: "cancelled" };
         return ok({ agent_id: entry2.agentId, task_id: entry2.taskId, nickname: entry2.nickname,
           resumed_from: entry.agentId }, `resumed ${entry2.taskId}`);
@@ -220,13 +259,14 @@ export function createSubagentControlTool(options: SubagentControlOptions): Tool
     // description carries whatever roles this run has, so the model chooses from
     // the configured set. With no roles the text is the plain one, unchanged.
     snapshot: () => {
+      const bindings = options.checkpoints === undefined ? SUBAGENT_CONTROL_BINDINGS : [...SUBAGENT_CONTROL_BINDINGS, LIST_AGENTS_BINDING];
       const roles = [...new Map((options.team?.members.map(member => member.role) ?? options.roles ?? [])
         .map(role => [role.name, role])).values()];
       const catalog = roleCatalogDescription(roles);
       if (catalog.length === 0) {
-        return SUBAGENT_CONTROL_BINDINGS;
+        return bindings;
       }
-      return SUBAGENT_CONTROL_BINDINGS.map((binding) =>
+      return bindings.map((binding) =>
         binding.name === SPAWN_AGENT_TOOL
           ? {
               ...binding,

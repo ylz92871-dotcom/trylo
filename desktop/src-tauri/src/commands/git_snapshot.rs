@@ -161,7 +161,7 @@ async fn git_output(
     budget: SnapshotBudget,
 ) -> Option<std::process::Output> {
     let timeout = budget.step_timeout()?;
-    let child = tokio::process::Command::new("git")
+    let child = tokio::process::Command::from(super::background_command::command("git"))
         .arg("-C")
         .arg(root)
         .args(args)
@@ -321,7 +321,7 @@ async fn hash_paths_batch(
         payload.push(b'\n');
     }
     let work = async {
-        let mut child = tokio::process::Command::new("git")
+        let mut child = tokio::process::Command::from(super::background_command::command("git"))
             .arg("-C")
             .arg(root)
             .args(["hash-object", "--stdin-paths"])

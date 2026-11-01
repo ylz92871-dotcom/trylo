@@ -1,5 +1,6 @@
 import { switchEnablesUser } from "../../integration/user-learning/index.js";
 import { refineOverlayFor, toolGapHostFor } from "./tool-learning-config.js";
+import { afterTurnToolCycle } from "./tool-cycle-wiring.js";
 import { permissionFor } from "./permission-for-run.js";
 import type { PermissionChoice } from "./permission-plan.js";
 import { isTurnFailure, executeTurn, type TurnHostInput, type TurnOutcome } from "./host.js";
@@ -20,6 +21,7 @@ import { skillsPortFor } from "./skills-wiring.js";
 import type { AddressedUserInput } from "../../domain/input-queue.js";
 import { createFallbackStream } from "./fallback-stream.js";
 import { BootstrapContextError, bootstrapContextFailure, bootstrapForFallback } from "./bootstrap-context.js";
+import { productionToolsForTurn } from "./tool-production-wiring.js";
 
 /**
  * One turn of a prepared run.
@@ -105,7 +107,10 @@ export async function runOneTurn(
   }
   const fallbackStream = scaffold.format === "stream-json" && scaffold.fallbackModel !== undefined && permissionMode === "non_interactive"
     ? createFallbackStream(sink) : undefined;
+  const production = await productionToolsForTurn(ctx, scaffold);
+  const additionalTools = production?.tools ?? scaffold.additionalTools;
   const base: TurnHostInput = {
+    ...(additionalTools === undefined ? {} : { additionalTools }),
     ...(scaffold.bindAgentTools === undefined ? {} : { bindAgentTools: scaffold.bindAgentTools }),
     ...(ctx.bootstrapContext === undefined ? {} : { bootstrap: { state: "import_pending" as const, context: ctx.bootstrapContext } }),
     ...(ctx.userSourceAvailable === undefined ? {} : { userSourceAvailable: ctx.userSourceAvailable }),
@@ -199,6 +204,10 @@ export async function runOneTurn(
     // the closure, so "which value lights it up" has one answer in the repo.
     ...toolGapHostFor(scaffold.learning, {
       homeDir: ctx.homeDir, env: ctx.env, now: ctx.now, stderr: (text) => ctx.stderr(text),
+      workspaceId: scaffold.workspaceId,
+      afterEnqueue: afterTurnToolCycle(ctx, { workspaceId: scaffold.workspaceId,
+        run: { message: [], readStdin: false, provider: scaffold.providerId, model: scaffold.model, endpoint: scaffold.endpoint,
+          ...(scaffold.permissions?.choice(choice) ?? choice) }, ...(cancelSignal === undefined ? {} : { signal: cancelSignal }) }),
     }),
     // The registry the run opens its MCP servers from (WP §7-MR-D: `run` and
     // the REPL get external tools through the composition root, not through a
@@ -215,14 +224,14 @@ export async function runOneTurn(
       }),
     },
   };
-  const outcome = await executeTurn(base);
-  if (isTurnFailure(outcome)) {
+  try {
+    const outcome = await executeTurn(base);
+    if (isTurnFailure(outcome)) return outcome;
+    return await maybeFallbackTurn(ctx, scaffold, base, outcome, permissionMode);
+  } finally {
     fallbackStream?.finish();
-    return outcome;
+    await production?.close();
   }
-  const finished = await maybeFallbackTurn(ctx, scaffold, base, outcome, permissionMode);
-  fallbackStream?.finish();
-  return finished;
 }
 
 /**

@@ -11,7 +11,6 @@
 // `binary` marker instead (spec §7.7).
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde::Serialize;
 
@@ -46,7 +45,7 @@ fn is_binary(bytes: &[u8]) -> bool {
 /// interprets None as "no original content".
 fn read_head_blob(root: &Path, rel: &str) -> Option<Vec<u8>> {
     let spec = format!("HEAD:{rel}");
-    let output = Command::new("git")
+    let output = super::background_command::command("git")
         .arg("-C")
         .arg(root)
         .arg("show")

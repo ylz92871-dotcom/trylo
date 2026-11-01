@@ -17,6 +17,7 @@ export type GitSpawn = (
     readonly cwd: string;
     readonly env?: Record<string, string | undefined>;
     readonly signal?: AbortSignal;
+    readonly windowsHide: true;
   },
 ) => ChildProcess;
 
@@ -55,6 +56,7 @@ function runOnce(
     // the ambient environment, behind its injection seam.
     const child = spawnImpl(file, args, {
       cwd,
+      windowsHide: true,
       ...(extraEnv === undefined ? {} : { env: { ...extraEnv } }),
       ...(signal === undefined ? {} : { signal }),
     });

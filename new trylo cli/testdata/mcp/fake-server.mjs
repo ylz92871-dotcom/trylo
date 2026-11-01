@@ -118,7 +118,7 @@ reader.on("line", (line) => {
     return;
   }
 
-  if (method === "initialized") {
+  if (method === "notifications/initialized") {
     // A notification has no id and expects no reply; here is also where a
     // misbehaving server would start asking for capabilities it was not given.
     if (scenario === "elicitation") {

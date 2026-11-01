@@ -7,9 +7,15 @@ import type { SubagentBudgetSnapshot, SubagentResult, SubagentStatus } from "./t
 import type { TimerHandle, TimerScheduler } from "./scheduler.js";
 import { accumulatedBudget } from "./budget-snapshot.js";
 import type { CompactWindow } from "../ports/compaction.js";
+import type { SubagentObservation } from "../protocol/subagent-observation.js";
+import type { SubagentDelivery } from "../protocol/subagent-handoff.js";
 
 export const DEFAULT_AGENT_WAIT_MS = 10_000;
 export const MAX_AGENT_WAIT_MS = 60_000;
+export const MAX_MEMBER_REPORTS = 16;
+type MemberReport = { readonly id: string; readonly round: number; readonly state: "progress" | "blocked" | "ready";
+  readonly message: string; readonly cursor: number };
+export type MemberReportHistory = { readonly reports: readonly MemberReport[]; readonly droppedThrough: number };
 
 /** Round observations do not own or replace the runtime's terminal state. */
 export class AgentRoundObservation {
@@ -21,12 +27,43 @@ export class AgentRoundObservation {
   private report: InteractiveChildResult | undefined;
   private terminal: SubagentResult<InteractiveChildResult> | undefined;
   private readonly listeners = new Set<() => void>();
+  private readonly reports: MemberReport[];
+  private droppedReportCursor: number;
+  private answerCursor: number;
+  delivery: SubagentDelivery | undefined;
   cursor: number;
 
   constructor(private readonly channel: SubagentInputChannel, transcript: Transcript = [], cursor = 0,
-    private readonly priorBudget?: SubagentBudgetSnapshot) {
+    private readonly priorBudget?: SubagentBudgetSnapshot, history?: MemberReportHistory) {
     this.transcript = transcript;
     this.cursor = cursor;
+    this.answerCursor = cursor;
+    this.reports = [...(history?.reports ?? [])];
+    this.droppedReportCursor = history?.droppedThrough ?? 0;
+  }
+
+  get reportHistory(): MemberReportHistory { return { reports: [...this.reports], droppedThrough: this.droppedReportCursor }; }
+
+  /** Authored reports are observations, never round answers or permission decisions. */
+  publishProgress(report: SubagentObservation): boolean {
+    if (report.kind !== "report" || !report.text || report.reportState === undefined || this.terminal !== undefined) return false;
+    if (this.reports.some(previous => previous.id === report.id && previous.round === report.round
+      && previous.state === report.reportState && previous.message === report.text)) return false;
+    this.cursor += 1;
+    this.reports.push({ id: report.id, round: report.round, state: report.reportState, message: report.text, cursor: this.cursor });
+    const removed = this.reports.length > MAX_MEMBER_REPORTS ? this.reports.shift() : undefined;
+    if (removed !== undefined) this.droppedReportCursor = removed.cursor;
+    this.notify();
+    return true;
+  }
+
+  hasReportAfter(after = 0): boolean { return this.reports.some(report => report.cursor > after); }
+
+  recordDelivery(delivery: SubagentDelivery): void {
+    if (this.terminal !== undefined) return;
+    this.delivery = delivery;
+    this.cursor += 1;
+    this.notify();
   }
 
   requestInput(): void {
@@ -47,13 +84,13 @@ export class AgentRoundObservation {
   publish(report: InteractiveChildResult): void {
     this.checkpoint(report.transcript, report.promptView);
     this.report = report;
-    this.cursor += 1;
+    this.answerCursor = ++this.cursor;
     this.notify();
   }
 
   finish(result: SubagentResult<InteractiveChildResult>): void {
     this.terminal = result;
-    this.cursor += 1;
+    this.answerCursor = ++this.cursor;
     if (result.output !== undefined) this.transcript = result.output.transcript;
     this.notify();
   }
@@ -62,17 +99,17 @@ export class AgentRoundObservation {
     const changed = this.terminal?.usage.inputTokens !== result.usage.inputTokens
       || this.terminal?.usage.outputTokens !== result.usage.outputTokens;
     this.terminal = result;
-    if (changed) { this.cursor += 1; this.notify(); }
+    if (changed) { this.answerCursor = ++this.cursor; this.notify(); }
   }
 
   isReady(after?: number): boolean {
-    return (after === undefined || this.cursor > after)
+    return (after === undefined || this.answerCursor > after)
       && (this.terminal !== undefined || (this.channel.open && this.report !== undefined && this.report.rounds >= this.requestedRound));
   }
 
   currentBudget(budget?: SubagentBudgetSnapshot): SubagentBudgetSnapshot | undefined {
     const current = budget ?? this.terminal?.budget;
-    return accumulatedBudget(current, this.priorBudget);
+    return current === undefined ? this.priorBudget : accumulatedBudget(current, this.priorBudget);
   }
 
   budgetSnapshot(budget?: SubagentBudgetSnapshot): JsonObject {
@@ -82,8 +119,13 @@ export class AgentRoundObservation {
       active_ms_remaining: current.timeRemainingMs, timeout_mode: current.timeoutMode };
   }
 
-  snapshot(status: SubagentStatus, after?: number, budget?: SubagentBudgetSnapshot): JsonObject {
+  snapshot(status: SubagentStatus, after?: number, budget?: SubagentBudgetSnapshot, reportLimit = MAX_MEMBER_REPORTS): JsonObject {
     const report = this.report;
+    const unread = this.reports.filter(item => item.cursor > (after ?? 0));
+    const reports = unread.slice(0, reportLimit);
+    const nextUnread = unread[reports.length];
+    // Never acknowledge beyond the first report left for the next page.
+    const cursor = nextUnread === undefined ? this.cursor : nextUnread.cursor - 1;
     // Cancellation can settle before runTurn returns a checkpoint. The carried
     // transcript then still belongs to an older round, not the cancelled work.
     const currentCheckpoint = this.checkpointRound === this.activeRound
@@ -95,9 +137,13 @@ export class AgentRoundObservation {
       phase: this.terminal !== undefined ? "terminal" : this.isReady() ? "awaiting_input" : "working",
       round: this.terminal === undefined ? report?.rounds ?? 0 : this.activeRound,
       status,
-      output: after !== undefined && this.cursor <= after ? "" : output,
-      cursor: this.cursor,
-      changed: after === undefined || this.cursor > after,
+      output: this.answerCursor > cursor || after !== undefined && this.answerCursor <= after ? "" : output,
+      cursor,
+      changed: after === undefined || cursor > after,
+      reports: reports.map(item => ({ ...item })),
+      has_more_reports: nextUnread !== undefined,
+      ...(this.delivery === undefined ? {} : { delivery: { ...this.delivery } }),
+      reports_truncated: this.droppedReportCursor > (after ?? 0),
       budget: this.budgetSnapshot(budget),
       ...(this.terminal?.error === undefined ? {} : { error: { ...this.terminal.error } }),
       usage: { ...(this.terminal?.usage ?? this.report?.usage ?? { inputTokens: 0, outputTokens: 0 }) },

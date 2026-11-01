@@ -12,7 +12,7 @@ import type {
   ToolPackageVersion,
 } from "../contract/types.js";
 import { transitionCatalog } from "../catalog/lifecycle.js";
-import { assertNewVersion, validateManifest } from "../package-spi/manifest.js";
+import { assertNewVersion, validateManifest, type ManifestFailure } from "../package-spi/manifest.js";
 
 export type ToolDesign = {
   readonly problem: string;
@@ -47,18 +47,10 @@ export type BuildRequest = {
 
 export type BuildFailure =
   | ApprovalGateFailure
+  | ManifestFailure
   | "design_incomplete"
   | "not_authorized_to_build"
   | "task_local_not_cataloged"
-  | "overwrite_forbidden"
-  | "missing_cancel"
-  | "missing_timeout"
-  | "missing_health"
-  | "missing_idempotency"
-  | "missing_output_bounds"
-  | "postinstall_not_forbidden"
-  | "not_isolated"
-  | "third_party_type_leak"
   | "optimized_missing_upstream"
   | "illegal_catalog_transition";
 

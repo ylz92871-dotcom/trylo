@@ -80,14 +80,14 @@ pub fn is_installed(cfg: &LspServerConfig) -> bool {
     // in Git Bash. Both return 0 on success.
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("where")
+        super::background_command::command("where")
             .arg(cfg.command)
             .output()
             .is_ok_and(|o| o.status.success())
     }
     #[cfg(not(target_os = "windows"))]
     {
-        std::process::Command::new("which")
+        super::background_command::command("which")
             .arg(cfg.command)
             .output()
             .map(|o| o.status.success())

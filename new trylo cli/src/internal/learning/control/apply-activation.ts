@@ -11,6 +11,7 @@ import {
   findActivationByProposal,
   findAsset,
   findProposal,
+  activationOwnedBy,
   type BoardState,
 } from "./state.js";
 import { expectedTo } from "./transitions.js";
@@ -52,6 +53,7 @@ export function applyRollback(
   if (existing === undefined) {
     return fail(state, "activation_not_found", command.proposalId);
   }
+  if (!activationOwnedBy(state, existing, proposal)) return fail(state, "illegal_transition", "proposal no longer owns this activation");
   if (existing.previousVersionId === undefined) {
     return commitLifecycleAndPointer(
       state,
@@ -100,7 +102,8 @@ function moveActivePointer(
   if (existing === undefined) {
     return fail(state, "activation_not_found", command.proposalId);
   }
-  const breaker =
+  if (!activationOwnedBy(state, existing, proposal)) return fail(state, "illegal_transition", "proposal no longer owns this activation");
+  const breaker = command.type === "resume" ? undefined :
     breakerReason === undefined
       ? existing.breaker
       : {
@@ -109,7 +112,7 @@ function moveActivePointer(
           consecutiveFailures: (existing.breaker?.consecutiveFailures ?? 0) + 1,
         };
   const next: UnstampedActivation = {
-    ...omitBoardSequence(existing),
+    ...omitBreaker(existing),
     pointer,
     generation: existing.generation + 1,
     ...(breaker !== undefined ? { breaker } : {}),
@@ -122,6 +125,11 @@ function moveActivePointer(
     to,
     next,
   );
+}
+
+function omitBreaker(activation: ActivationRecord): Omit<ActivationRecord, "boardSequence" | "breaker"> {
+  const { breaker: _breaker, ...rest } = omitBoardSequence(activation);
+  return rest;
 }
 
 /** 去 stamp 后再交给 commitLifecycleAndPointer，避免把旧序号带进新事件。 */
@@ -137,8 +145,9 @@ function withRollback(
   reason: string,
   previousVersionId?: string,
 ): UnstampedActivation {
+  const withoutBreaker = omitBreaker(existing);
   const next: UnstampedActivation = {
-    ...omitBoardSequence(existing),
+    ...(pointer === "active" && versionId !== existing.versionId ? withoutBreaker : omitBoardSequence(existing)),
     pointer,
     versionId,
     generation: existing.generation + 1,

@@ -20,6 +20,7 @@
 import { isFileMutationFacts, normalizeFileMutationFacts, type FileMutationFact } from '../tooling/file-mutation-facts';
 import { isSubagentBudget, isSubagentToolActivity, type SubagentBudget } from './subagent-contract';
 import { isMemberObservation } from '../domain/member-observation';
+import { isMemberDelivery } from '../domain/member-delivery';
 
 /** Additive V1 vocabulary; compact carries real maintenance/gap outcomes. */
 export const CLI_V1_EVENT_TYPES = [
@@ -59,6 +60,7 @@ export type CliV1Event =
       readonly teamRunId?: string; readonly memberId?: string;
       readonly activity?: import('./subagent-contract').SubagentToolActivity;
       readonly observation?: import('../domain/member-observation').MemberObservation;
+      readonly delivery?: import('../domain/member-delivery').MemberDelivery;
       readonly status: 'running' | 'waiting' | 'done' | 'failed' | 'cancelled';
       readonly agentType?: string; readonly prompt?: string; readonly result?: string;
       readonly error?: string; readonly round?: number; readonly canReceiveInput?: boolean; readonly displayName?: string;
@@ -226,6 +228,7 @@ function fieldsAreValid(type: CliV1EventType, raw: Record<string, unknown>): boo
           || (isNonEmptyString(raw.teamRunId) && isNonEmptyString(raw.memberId)))
         && (raw.activity === undefined || (raw.kind === 'update' && isSubagentToolActivity(raw.activity)))
         && (raw.observation === undefined || (raw.kind === 'update' && isMemberObservation(raw.observation)))
+        && (raw.delivery === undefined || (raw.kind === 'update' && isMemberDelivery(raw.delivery)))
         && (raw.round === undefined || (isCount(raw.round) && raw.round > 0))
         && (raw.canReceiveInput === undefined || typeof raw.canReceiveInput === 'boolean')
         && (raw.taskId === undefined || isNonEmptyString(raw.taskId))

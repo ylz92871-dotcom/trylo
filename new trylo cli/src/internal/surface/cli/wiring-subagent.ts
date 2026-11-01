@@ -36,6 +36,8 @@ import { parentActionApproval } from "./subagent-approval-wiring.js";
  */
 
 export type SubagentPortsInput = {
+  readonly checkpoints?: import("../../subagent/checkpoint.js").SubagentCheckpointPort;
+  readonly sessionId?: string;
   readonly sessions?: ProcessSessionRegistry;
   readonly team?: SubagentTeam;
   /** The parent's tool port, before subagents are added to it. */
@@ -134,6 +136,8 @@ export function buildSubagentPorts(input: SubagentPortsInput): SubagentPorts {
 
   const controlTools = createSubagentControlTool({
     ...shared,
+    ...(input.checkpoints === undefined ? {} : { checkpoints: input.checkpoints }),
+    ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
     createLocalTools: createTodoTools,
     ...(input.sessions === undefined ? {} : { taskResources: createSubagentTaskResources(input.sessions) }),
     allowedTools: () => allowedTools(mediatedApproval !== undefined),

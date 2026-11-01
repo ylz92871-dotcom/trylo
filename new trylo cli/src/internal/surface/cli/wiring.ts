@@ -36,6 +36,7 @@ import { selectToolPort } from "./tool-selection.js";
 import { methodPortOf } from "./wiring-method.js";
 import { imageReferencesFor } from "./wiring-image-references.js";
 import { restrictDeniedTools } from "./permission-tool-access.js";
+import { composeAdditionalTools } from "./additional-tools.js";
 
 /**
  * The opt-in types moved to `wiring-optins.ts`; re-exported here because the
@@ -75,6 +76,7 @@ export type {
  */
 
 export type WiringInput = {
+  readonly additionalTools?: ToolPort;
   readonly contextTokenLimit?: number;
   readonly execPolicy?: ExecPolicyGuard;
   readonly toolSelection?: readonly string[];
@@ -155,7 +157,7 @@ export type McpToolTable = {
 };
 
 export type WiringFailure = {
-  readonly code: "missing_endpoint" | "unknown_provider" | "unsupported_reasoning_effort";
+  readonly code: "missing_endpoint" | "unknown_provider" | "unsupported_reasoning_effort" | "tool_name_conflict";
   readonly detail: string;
 };
 
@@ -259,12 +261,15 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
   // fact that it was *mounted*, never a global planner branch that would also
   // change how a flag-off run answers a hallucinated `web_fetch` call.
   const mcp = input.mcp;
-  const tools = restrictDeniedTools(mcp === undefined ? workspaceTools : composeTools(workspaceTools, mcp.tools), input.permission);
+  const withMcp = mcp === undefined ? workspaceTools : composeTools(workspaceTools, mcp.tools);
+  const extra = input.additionalTools === undefined ? undefined : restrictDeniedTools(selectToolPort(input.additionalTools, input.toolSelection), input.permission);
+  if (extra?.snapshot().some(binding => withMcp.snapshot().some(existing => existing.name === binding.name))) return { code: "tool_name_conflict", detail: "additional tool collides with an existing tool" };
+  const tools = restrictDeniedTools(extra === undefined ? withMcp : composeAdditionalTools(withMcp, extra), input.permission);
   const webNames = mountedWebToolNames(workspaceTools);
   const memoryNames = workspaceTools.snapshot().filter((tool) => MEMORY_WRITE_TOOL_NAMES.has(tool.name)).map((tool) => tool.name);
   const admitted =
-    webNames.length > 0 || memoryNames.length > 0 || mcp !== undefined
-      ? new Set([...(mcp === undefined ? [] : mcp.toolNames), ...webNames, ...memoryNames])
+    webNames.length > 0 || memoryNames.length > 0 || mcp !== undefined || extra !== undefined
+      ? new Set([...(mcp === undefined ? [] : mcp.toolNames), ...webNames, ...memoryNames, ...(extra?.snapshot().map(tool => tool.name) ?? [])])
       : undefined;
   const effectiveSandbox = admitted === undefined ? sandbox : composeSandbox(sandbox, admitted);
 
@@ -280,6 +285,8 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
 
   if (isSubagentEnabled) {
     const built = buildSubagentPorts({
+      ...(input.subagent?.checkpoints === undefined ? {} : { checkpoints: input.subagent.checkpoints }),
+      ...(input.subagent?.sessionId === undefined ? {} : { sessionId: input.subagent.sessionId }),
       sessions,
       parentTools: finalTools,
       parentProvider: provider,

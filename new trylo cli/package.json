@@ -37,6 +37,7 @@
   "dependencies": {
     "@pondwader/socks5-server": "1.0.10",
     "ignore": "7.0.5",
+    "semver": "7.8.5",
     "vscode-jsonrpc": "9.0.3",
     "vscode-languageserver-protocol": "3.18.4",
     "vscode-languageserver-types": "3.18.4",

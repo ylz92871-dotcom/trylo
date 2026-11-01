@@ -5,6 +5,7 @@ import { projectFileMutations } from "./file-mutation-projection.js";
 import { isSubagentBudgetSnapshot } from "../../protocol/subagent-budget.js";
 import { isSubagentToolActivity } from "../../protocol/subagent-activity.js";
 import { isSubagentObservation } from "../../protocol/subagent-observation.js";
+import { isSubagentDelivery } from "../../protocol/subagent-handoff.js";
 
 /**
  * The envelope -> CLI event translator, kept as one bounded state machine.
@@ -262,6 +263,7 @@ function translateInto(state: BlockState, envelope: Envelope, events: CliStreamE
     case "subagent_update":
     case "subagent_end": {
       const payload = envelope.payload;
+      if (payload.checkpointPart !== undefined) break;
       const id = text(payload, "subagentId");
       if (id === "") break;
       const kind = envelope.kind === "subagent_spawn" ? "spawn" : envelope.kind === "subagent_end" ? "end" : "update";
@@ -274,6 +276,7 @@ function translateInto(state: BlockState, envelope: Envelope, events: CliStreamE
         ...(typeof payload.memberId === "string" ? { memberId: payload.memberId } : {}),
         ...(isSubagentToolActivity(payload.activity) ? { activity: payload.activity } : {}),
         ...(isSubagentObservation(payload.observation) ? { observation: payload.observation } : {}),
+        ...(kind === "update" && isSubagentDelivery(payload.delivery) && payload.delivery.round === payload.round ? { delivery: payload.delivery } : {}),
         ...(kind === "spawn" ? { agentType: text(payload, "agentType") || text(payload, "name") || "subagent" }
           : typeof payload.agentType === "string" ? { agentType: payload.agentType } : {}),
         ...(typeof payload.prompt === "string" ? { prompt: payload.prompt } : {}),

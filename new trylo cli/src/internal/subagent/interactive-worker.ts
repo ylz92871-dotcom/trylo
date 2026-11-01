@@ -19,8 +19,11 @@ import { systemTimerScheduler, type TimerScheduler } from "./scheduler.js";
 import { inheritedPermission } from "./inherited-authority.js";
 import { subagentToolActivity } from "../protocol/subagent-activity.js";
 import type { SubagentApprovalScope } from "./parent-approval.js";
-import { createSubagentObserver } from "../protocol/subagent-observation.js";
+import { createSubagentObserver, type SubagentObservation } from "../protocol/subagent-observation.js";
 import { MEMBER_REPORTING_INSTRUCTIONS, withMemberReporting } from "./user-progress.js";
+import { REPRESENTATION_REPORTING_INSTRUCTIONS, withRepresentationReporting } from "./representation-reporting.js";
+import type { TeamRepresentation } from "../protocol/team-representation.js";
+import type { SubagentInput } from "./input-channel.js";
 
 /**
  * The worker behind the multi-agent control tools (WP22.2 / C43, L29).
@@ -64,9 +67,13 @@ export type InteractiveChildOptions = {
   readonly forkTranscript?: Transcript | undefined;
   readonly onEnvelope?: ((envelope: Envelope) => void) | undefined;
   readonly budget?: IterationBudget | undefined;
-  readonly onRoundStarted?: ((round: number, prompt: string) => void) | undefined;
-  readonly onCheckpoint?: ((transcript: Transcript, window?: CompactWindow) => void) | undefined;
+  readonly onRoundStarted?: ((round: number, prompt: string, receipt?: SubagentInput["receipt"]) => void | Promise<void>) | undefined;
+  readonly initialSubmission?: SubagentInput["receipt"];
+  readonly onCheckpoint?: ((transcript: Transcript, window: CompactWindow | undefined, phase: "round_ready" | "interrupted", round: number) => void | Promise<void>) | undefined;
   readonly onRoundReady?: ((result: InteractiveChildResult) => void | Promise<void>) | undefined;
+  readonly onProgressReport?: (report: SubagentObservation) => void;
+  readonly onRepresentation?: (value: TeamRepresentation, round: number) => Promise<boolean>;
+  readonly formatOutput?: (round: number, text: string) => string;
   readonly idleTimeoutMs?: number | undefined;
   readonly onIdle?: (() => void) | undefined;
   readonly isParked?: (() => boolean) | undefined;
@@ -104,16 +111,21 @@ export function createInteractiveChildWorker(
   const callerMessages = options.callerMessages === undefined ? undefined : structuredClone(options.callerMessages);
   return async (context: SubagentContext): Promise<InteractiveChildResult> => {
     let observationRound = 1;
-    const publish = context.reportObservation ?? (() => {});
+    const publish = (event: SubagentObservation): void => {
+      context.reportObservation?.(event);
+      if (event.kind === "report") options.onProgressReport?.(event);
+    };
     const observe = createSubagentObserver(publish);
     const approval = options.approvalScope?.bind(context);
     const execPolicy = approval?.execPolicy ?? options.execPolicy;
     const session = options.providerSession ?? createChildProviderSession(options.provider, background);
+    const reporting = withMemberReporting(context.tools, publish, () => observationRound);
     const childPorts: LoopPorts = {
       provider: createGovernedChildProvider(session.provider, context),
       compaction: childCompaction(session.provider),
       // Already bounded by the runtime to what this subagent may touch.
-      tools: withMemberReporting(context.tools, publish, () => observationRound),
+      tools: options.onRepresentation === undefined ? reporting
+        : withRepresentationReporting(reporting, value => options.onRepresentation!(value, observationRound)),
       permission: approval?.permission ?? inheritedPermission(options.permission),
       ...(context.inheritedGrants === undefined ? {} : { grants: context.inheritedGrants }),
       ...(execPolicy === undefined ? {} : { execPolicy }),
@@ -124,6 +136,7 @@ export function createInteractiveChildWorker(
     const forked = options.forkTranscript ?? [];
     let carried: Transcript = forked;
     let prompt = options.message;
+    let receipt = options.initialSubmission;
     let transcript: Transcript = [];
     let envelopes: ReadonlyArray<Envelope> = [];
     let usage: ProviderUsage = emptyUsage("snapshot");
@@ -134,7 +147,8 @@ export function createInteractiveChildWorker(
       for (;;) {
         observationRound = rounds + 1;
         context.setActivity?.("working");
-        options.onRoundStarted?.(rounds + 1, prompt);
+        await options.onRoundStarted?.(rounds + 1, prompt, receipt);
+        if (context.signal.aborted) break;
         const result = await runTurn(childPorts, {
           sessionId: options.sessionId ?? "subagent-session",
           turnId: `trn-sub-${context.subagentId}-r${rounds + 1}`,
@@ -142,7 +156,8 @@ export function createInteractiveChildWorker(
           text: prompt,
           cancelSignal: context.signal,
           budget: { contextTokenLimit: DEFAULT_CHILD_CONTEXT_TOKENS, ...options.budget },
-          callerMessages: [...(callerMessages ?? []), { role: "system", content: MEMBER_REPORTING_INSTRUCTIONS }],
+          callerMessages: [...(callerMessages ?? []), { role: "system", content: MEMBER_REPORTING_INSTRUCTIONS },
+            ...(options.onRepresentation === undefined ? [] : [{ role: "system" as const, content: REPRESENTATION_REPORTING_INSTRUCTIONS }])],
           ...(background.length === 0 ? {} : { backgroundMessages: background }),
           ...(window === undefined ? {} : { resumedWindow: window }),
           ...(carried.length === 0 ? {} : { resumedTranscript: carried }),
@@ -160,11 +175,12 @@ export function createInteractiveChildWorker(
         envelopes = [...envelopes, ...result.envelopes];
         usage = addUsage(usage, result.usage);
         window = result.promptView;
-        options.onCheckpoint?.(transcript, window);
+        await options.onCheckpoint?.(transcript, window, result.state.terminalReason === "completed" ? "round_ready" : "interrupted", rounds);
         // The governed provider charges each response across all rounds, so an
         // over-budget round cannot keep issuing requests until runTurn returns.
         requireCompletedChild(result);
-        await options.onRoundReady?.({ status: "completed", output: extractLatestAssistantText(transcript),
+        const rawOutput = extractLatestAssistantText(transcript);
+        await options.onRoundReady?.({ status: "completed", output: options.formatOutput?.(rounds, rawOutput) ?? rawOutput,
           rounds, usage, transcript, envelopes, ...(window === undefined ? {} : { promptView: window }) });
 
         // No channel means the historical shape: run once, finish.
@@ -185,13 +201,15 @@ export function createInteractiveChildWorker(
         }
         carried = transcript;
         prompt = next.message;
+        receipt = next.receipt;
         context.reportProgress(
           `Round ${rounds} answered; taking the next instruction`,
           undefined,
         );
       }
 
-      const output = extractLatestAssistantText(transcript);
+      const rawOutput = extractLatestAssistantText(transcript);
+      const output = options.formatOutput?.(rounds, rawOutput) ?? rawOutput;
       context.reportProgress(`Subagent finished after ${rounds} round(s)`, 100);
       return {
         status: "completed",

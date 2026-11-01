@@ -7,7 +7,6 @@
 // behavior is the same as the Day 6 spike.
 
 use std::path::PathBuf;
-use std::process::Command;
 
 use serde::Serialize;
 
@@ -46,7 +45,7 @@ pub async fn search(
     // When `regex` is false we use -F (fixed string) so metachars
     // are treated literally — most users want a "search" box to
     // do that, not silently fail on an unescaped `*`.
-    let mut cmd = Command::new("rg");
+    let mut cmd = super::background_command::command("rg");
     cmd.arg("--no-heading")
         .arg("--line-number")
         .arg("--no-config")

@@ -21,7 +21,7 @@ export type SurfaceFilter = 'all' | ProductSurface;
 export interface InspectorPrefs {
   readonly module: InspectorModule;
   readonly cognitionTab: 'status' | 'profile' | 'model' | 'evidence' | 'decisions';
-  readonly agentTab: 'pending' | 'approved';
+  readonly agentTab: 'pending' | 'approved' | 'tools';
   readonly surfaceFilter: SurfaceFilter;
   readonly channelFilter: 'all' | 'work' | 'interaction' | 'cognition';
   readonly dimensionFilter: 'all' | PolicyDimension;
@@ -50,7 +50,7 @@ export function loadInspectorPrefs(): InspectorPrefs {
         parsed.cognitionTab === 'profile' || parsed.cognitionTab === 'model' || parsed.cognitionTab === 'evidence' || parsed.cognitionTab === 'decisions'
           ? parsed.cognitionTab
           : 'status',
-      agentTab: parsed.agentTab === 'approved' ? 'approved' : 'pending',
+      agentTab: parsed.agentTab === 'approved' || parsed.agentTab === 'tools' ? parsed.agentTab : 'pending',
       surfaceFilter: parsed.surfaceFilter === 'code' || parsed.surfaceFilter === 'work' ? parsed.surfaceFilter : 'all',
       channelFilter:
         parsed.channelFilter === 'work' || parsed.channelFilter === 'interaction' || parsed.channelFilter === 'cognition'

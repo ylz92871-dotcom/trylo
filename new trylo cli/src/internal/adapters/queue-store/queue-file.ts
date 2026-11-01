@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { rename } from "node:fs/promises";
+import { isFilesystemBusy } from "../filesystem/busy-error.js";
 
 /**
  * The bytes of a queue file: read it whole, append one line, rewrite it whole.
@@ -123,8 +124,7 @@ export async function rewriteQueuedFile(file: string, contents: string, io: Queu
         await io.replace(temporary, file);
         return true;
       } catch (error) {
-        const code = error !== null && typeof error === "object" && "code" in error ? error.code : undefined;
-        if (!["EPERM", "EACCES", "EBUSY"].includes(String(code)) || attempt === delays.length - 1) throw error;
+        if (!isFilesystemBusy(error) || attempt === delays.length - 1) throw error;
       }
     }
     return false;

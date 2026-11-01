@@ -241,6 +241,7 @@ export interface ToolResultEvent extends BaseEvent {
 
 export interface SubagentEvent extends BaseEvent {
   readonly observation?: import('../domain/member-observation').MemberObservation;
+  readonly delivery?: import('../domain/member-delivery').MemberDelivery;
   readonly activity?: import('./subagent-contract').SubagentToolActivity;
   readonly teamRunId?: string;
   readonly memberId?: string;

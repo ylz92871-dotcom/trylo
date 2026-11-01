@@ -1574,6 +1574,11 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // untouched rather than blanking the panel.
   const [cliMemoryFacts, setCliMemoryFacts] = useState<readonly CliMemoryFact[]>([])
   const [cliMemoryError, setCliMemoryError] = useState<string>()
+  const toolLearningRuntime = useMemo(() => {
+    const resolved = settingsForCodeRun(settings, currentWorkspace.root)
+    return { process: hostAdapter.process, cliPath: resolved.cliPath, cwd: currentWorkspace.root,
+      ...(resolved.cliNodeProgram === undefined ? {} : { nodeProgram: resolved.cliNodeProgram }) }
+  }, [settings, currentWorkspace.root])
   useEffect(() => {
     if (!learningPanelOpen || settings.userLearning.enabled !== true) {
       setCliMemoryFacts([])
@@ -5921,6 +5926,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       <UserLearningPanel
         key={currentWorkspace.id}
         open={learningPanelOpen}
+        toolLearning={toolLearningRuntime}
         snapshot={withCliFacts(userLearning.snapshot(), cliMemoryFacts, LOCAL_USER_ID)}
         cliMemory={{ facts: cliMemoryFacts, ...(cliMemoryError === undefined ? {} : { error: cliMemoryError }),
           onChange: async (fact, statement) => {

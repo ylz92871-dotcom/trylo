@@ -1,6 +1,7 @@
 import { TEAM_ROLE_IDS } from './profiles/profile-types';
 import type { PersistableTeamRun } from './persist';
 import { isMemberObservation } from '../../domain/member-observation';
+import { isMemberHandoff } from '../../domain/member-handoff';
 
 const RUN_STATUSES = ['running', 'waiting', 'completed', 'failed', 'cancelled'];
 const SEAT_STATUSES = ['queued', 'running', 'waiting_approval', 'completed', 'failed', 'cancelled'];
@@ -59,7 +60,8 @@ export function isPersistableTeamRun(value: unknown): value is PersistableTeamRu
       && optional(item.streaming, flag => typeof flag === 'boolean')) && unique(items as Row[], 'id'))
     && optional(value.handoffs, items => Array.isArray(items) && items.every(item => row(item) && identity(item.id)
       && identity(item.toSeatId) && text(item.message) && count(item.at)
-      && ['sending', 'sent', 'queued', 'continued', 'restarted', 'failed'].includes(String(item.status))
+      && ['sending', 'sent', 'queued', 'continued', 'restarted', 'received', 'answered', 'failed'].includes(String(item.status))
       && optional(item.fromSeatId, identity) && optional(item.fromMemberId, identity) && optional(item.toMemberId, identity)
-      && optional(item.settledAt, count) && optional(item.error, text)) && unique(items as Row[], 'id'));
+      && optional(item.settledAt, count) && optional(item.receivedAt, count) && optional(item.answeredAt, count)
+      && optional(item.submissionId, identity) && optional(item.context, isMemberHandoff) && optional(item.error, text)) && unique(items as Row[], 'id'));
 }
