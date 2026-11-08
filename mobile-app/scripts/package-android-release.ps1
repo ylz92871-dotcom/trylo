@@ -96,7 +96,7 @@ try {
   # default TEMP 8.3 alias can fail with "Invalid argument: connect".
   # Use a real workspace path for this build, preserving an explicit override.
   if ($env:JAVA_TOOL_OPTIONS -notmatch 'jdk\.net\.unixdomain\.tmpdir=') {
-    $buildSocketDirectory = Join-Path $workspaceRoot '.trylo\android-build-sockets'
+    $buildSocketDirectory = Join-Path $workspaceRoot '_workspace\tmp\android-build-sockets'
     New-Item -ItemType Directory -Path $buildSocketDirectory -Force | Out-Null
     $socketOption = '-Djdk.net.unixdomain.tmpdir="{0}"' -f $buildSocketDirectory
     $env:JAVA_TOOL_OPTIONS = "$previousJavaToolOptions $socketOption".Trim()
@@ -115,7 +115,7 @@ try {
 $unsignedApk = Join-Path $androidRoot 'app\build\outputs\apk\release\app-release-unsigned.apk'
 $appVersion = (Get-Content -Raw -LiteralPath (Join-Path $mobileRoot 'package.json') | ConvertFrom-Json).version
 if (-not $appVersion) { throw 'The app version is missing from mobile-app/package.json.' }
-$releaseRoot = Join-Path $mobileRoot 'releases'
+$releaseRoot = Join-Path $workspaceRoot '_workspace\artifacts\mobile-app-releases'
 $apkName = "Trylo-Code-v$appVersion.apk"
 $alignedApk = Join-Path $releaseRoot "Trylo-Code-v$appVersion-aligned.apk"
 $signedApk = Join-Path $releaseRoot $apkName

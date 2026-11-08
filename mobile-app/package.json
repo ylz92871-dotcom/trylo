@@ -4,8 +4,9 @@
   "version": "1.6.0",
   "type": "module",
   "scripts": {
+    "check:layout": "node ../scripts/check-workspace-layout.mjs",
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "node ../scripts/check-workspace-layout.mjs && tsc && vite build",
     "preview": "node scripts/serve-dist.mjs",
     "preview:remote": "node scripts/preview-remote.mjs",
     "preview:remote:v2": "node scripts/preview-remote-v2.mjs",
