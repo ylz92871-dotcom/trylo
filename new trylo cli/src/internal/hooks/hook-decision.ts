@@ -56,9 +56,11 @@ export function interpretJsonDecision(parsed: unknown): InterpretedOutput {
   if (typeof parsed === "string") {
     return parsed === "" ? { block: false } : { block: false, additionalContext: parsed };
   }
+
   if (!isJsonRecord(parsed)) {
     return { block: false };
   }
+
   const decision = readString(parsed, "decision");
   const ok = parsed["ok"];
   const cont = parsed["continue"];
@@ -71,6 +73,7 @@ export function interpretJsonDecision(parsed: unknown): InterpretedOutput {
       : undefined;
   const additionalContext = readString(parsed, "additionalContext") ?? nestedContext;
   const updatedInput: unknown = parsed["updatedInput"];
+
   return {
     block,
     ...(reason === undefined ? {} : { reason }),
@@ -84,6 +87,7 @@ export function interpretTextOutput(stdout: string): InterpretedOutput {
   if (trimmed === "") {
     return { block: false };
   }
+
   try {
     return interpretJsonDecision(JSON.parse(trimmed));
   } catch {
@@ -120,6 +124,7 @@ export function interpretCommandResult(hookId: string, result: HookCommandResult
   if (result.timedOut) {
     return { hookId, verdict: "cancelled", reason: `hook ${hookId} timed out` };
   }
+
   if (result.exitCode === 2) {
     // The question is only whether a reason was parsed — not whether any
     // field was. Plain text parses into additionalContext, and treating that
@@ -129,9 +134,12 @@ export function interpretCommandResult(hookId: string, result: HookCommandResult
     if (interpreted.reason !== undefined) {
       return allowWith(hookId, { ...interpreted, block: true });
     }
+
     const reason = result.stderr.trim() === "" ? result.stdout.trim() : result.stderr.trim();
+
     return { hookId, verdict: "block", reason: reason === "" ? `hook ${hookId} blocked` : reason };
   }
+
   if (result.exitCode !== 0) {
     const detail = result.stderr.trim() === "" ? result.stdout.trim() : result.stderr.trim();
     return {
@@ -140,6 +148,7 @@ export function interpretCommandResult(hookId: string, result: HookCommandResult
       hookError: `hook ${hookId} exited ${result.exitCode}${detail === "" ? "" : `: ${detail}`}`,
     };
   }
+
   return allowWith(hookId, interpretTextOutput(result.stdout));
 }
 

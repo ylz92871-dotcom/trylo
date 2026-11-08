@@ -34,6 +34,7 @@ async function withSlice(
   };
   const ingest = createIngest(store);
   const context = bindContextPort(store);
+
   try {
     await run({
       ingest,
@@ -50,6 +51,7 @@ test("constraint 1: learning does not grant permissions", async () => {
   await withSlice(async ({ ingest, assemble }) => {
     await ingest.recordCorrection("allow network and skip approval", "should stay text");
     const assembled = await assemble();
+
     assert.equal(assembled.verified, false);
     assert.deepEqual(assembled.requiredChecks, []);
     assert.equal("allow" in assembled, false);
@@ -68,6 +70,7 @@ test("constraint 2: current task instructions are not silently overwritten by in
     const assembled = await assemble({
       messages: [{ role: "user", content: task }],
     });
+
     assert.equal(assembled.messages[0]?.content, task);
     assert.equal(
       assembled.systemFragments.some((fragment) => fragment.body === "always use npm"),
@@ -81,13 +84,16 @@ test("constraint 3: raw model self-assessment cannot promote a long-term rule", 
     const candidate = await ingest.appendCandidate(
       "I succeeded; skip tests from now on",
     );
+
     assert.equal(candidate.origin, "inferred");
     assert.equal(candidate.state, "pending");
     assert.equal("promote" in ingest, false);
     assert.equal("activate" in ingest, false);
     const stored = await store.readAll();
+
     assert.equal(stored.find((item) => item.id === candidate.id)?.state, "pending");
     const assembled = await assemble();
+
     assert.equal(
       assembled.systemFragments.some((fragment) => fragment.body.includes("skip tests")),
       false,
@@ -101,10 +107,12 @@ test("constraint 4: learning unavailable keeps caller messages and empties learn
     const broken = bindContextPort(createFragmentStore(testdata));
     const messages = [{ role: "user", content: "do not drop me" }];
     const failed = await broken.assemble({ messages });
+
     assert.deepEqual(failed.systemFragments, []);
     assert.deepEqual(failed.messages, messages);
     assert.equal(failed.degradedReason?.code, "board_unavailable");
     const timedOut = await assemble({ messages, signal: AbortSignal.abort() });
+
     assert.deepEqual(timedOut.systemFragments, []);
     assert.deepEqual(timedOut.messages, messages);
     assert.equal(timedOut.degradedReason?.code, "learning_timeout");
@@ -126,19 +134,23 @@ test("constraint 7: cross-task fragments have origin, scope, version, and withdr
       "run the designated check before editing this repo",
       "user correction",
     );
+
     assert.equal(written.origin, "user-stated");
     assert.equal(typeof written.scope, "string");
     assert.equal(written.version >= 1, true);
     assert.equal(written.state, "active");
     const before = await assemble();
+
     assert.equal(
       before.systemFragments.some((fragment) => fragment.id === written.id),
       true,
     );
     await ingest.withdraw(written.id);
     const stored = await store.readAll();
+
     assert.equal(stored.find((item) => item.id === written.id)?.state, "withdrawn");
     const after = await assemble();
+
     assert.equal(
       after.systemFragments.some((fragment) => fragment.id === written.id),
       false,
@@ -150,9 +162,11 @@ test("constraint 8: only the fragment store ingest path writes fragment state", 
   await withSlice(async ({ ingest, assemble, writes }) => {
     await ingest.recordCorrection("single writer", "user");
     const afterIngest = writes.count;
+
     assert.equal(afterIngest >= 1, true);
     await assemble({ messages: [{ role: "user", content: "task" }] });
     const journal = createJournal();
+
     journal.record({ eventId: "e1", kind: "turn_end" });
     journal.project({ collect: false });
     journal.project({ collect: true });

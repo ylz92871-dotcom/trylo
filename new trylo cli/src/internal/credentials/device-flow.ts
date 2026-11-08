@@ -89,6 +89,7 @@ export async function executeDeviceFlow(config: DeviceFlowConfig): Promise<Devic
       detail: `deviceEndpoint refused: ${deviceValidation.reason} (${config.deviceEndpoint})`,
     };
   }
+
   const tokenValidation = validateOAuthEndpoint(config.tokenEndpoint, config.extraAllowedHosts);
   if (!tokenValidation.ok) {
     return {
@@ -100,11 +101,14 @@ export async function executeDeviceFlow(config: DeviceFlowConfig): Promise<Devic
 
   // 1. Ask for the device/user codes.
   let deviceRes: Response;
+
   try {
     const body = new URLSearchParams({ client_id: config.clientId });
+
     if (config.scope !== undefined && config.scope.length > 0) {
       body.set("scope", config.scope);
     }
+
     deviceRes = await doFetch(config.deviceEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
@@ -117,6 +121,7 @@ export async function executeDeviceFlow(config: DeviceFlowConfig): Promise<Devic
       detail: `device endpoint unreachable: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
+
   if (!deviceRes.ok) {
     return {
       ok: false,
@@ -124,22 +129,27 @@ export async function executeDeviceFlow(config: DeviceFlowConfig): Promise<Devic
       detail: `device authorization refused: HTTP ${deviceRes.status}`,
     };
   }
+
   const devicePayload: unknown = await deviceRes.json();
   if (!isRecord(devicePayload)) {
     return { ok: false, code: "device_unavailable", detail: "device endpoint returned no document" };
   }
+
   const deviceCode = asString(devicePayload["device_code"]);
   const userCode = asString(devicePayload["user_code"]);
   const verificationUri = asString(devicePayload["verification_uri"]);
   if (deviceCode === undefined || userCode === undefined || verificationUri === undefined) {
     return { ok: false, code: "device_unavailable", detail: "device endpoint omitted device_code, user_code or verification_uri" };
   }
+
   const expiresIn = asNumber(devicePayload["expires_in"]) ?? 600;
   let interval = asNumber(devicePayload["interval"]) ?? 5;
   if (!(interval > 0)) {
     interval = 5;
   }
+
   const startedAt = now();
+
   await config.onUserCode?.({
     userCode,
     verificationUri,
@@ -151,12 +161,15 @@ export async function executeDeviceFlow(config: DeviceFlowConfig): Promise<Devic
 
   // 2. Poll until the grant resolves, slows down, is denied, or expires.
   const maxPolls = config.maxPolls ?? DEFAULT_MAX_POLLS;
+
   for (let poll = 0; poll < maxPolls; poll += 1) {
     if (now() - startedAt >= expiresIn * 1000) {
       return { ok: false, code: "grant_expired", detail: "device grant expired before authorization" };
     }
+
     await sleep(interval * 1000);
     let tokenRes: Response;
+
     try {
       tokenRes = await doFetch(config.tokenEndpoint, {
         method: "POST",
@@ -174,16 +187,20 @@ export async function executeDeviceFlow(config: DeviceFlowConfig): Promise<Devic
         detail: `network error polling token endpoint: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
+
     if (tokenRes.ok) {
       const payload: unknown = await tokenRes.json();
       if (!isRecord(payload)) {
         return { ok: false, code: "token_error", detail: "token endpoint returned no document" };
       }
+
       const accessToken = asString(payload["access_token"]);
       if (accessToken === undefined || accessToken.length === 0) {
         return { ok: false, code: "token_error", detail: "token response missing valid access_token" };
       }
+
       const expiresInSecs = asNumber(payload["expires_in"]);
+
       return {
         ok: true,
         tokens: {
@@ -205,23 +222,31 @@ export async function executeDeviceFlow(config: DeviceFlowConfig): Promise<Devic
         },
       };
     }
+
     let errorCode = "";
+
     try {
       const errorPayload = (await tokenRes.json()) as { error?: string; error_description?: string };
+
       errorCode = errorPayload.error ?? "";
+
       if (errorCode === "authorization_pending") {
         continue;
       }
+
       if (errorCode === "slow_down") {
         interval += 5;
         continue;
       }
+
       if (errorCode === "access_denied") {
         return { ok: false, code: "authorization_denied", detail: "authorization was denied on the device" };
       }
+
       if (errorCode === "expired_token") {
         return { ok: false, code: "grant_expired", detail: "device_code expired before authorization" };
       }
+
       return {
         ok: false,
         code: "token_error",
@@ -231,6 +256,7 @@ export async function executeDeviceFlow(config: DeviceFlowConfig): Promise<Devic
       return { ok: false, code: "token_error", detail: `token poll failed: HTTP ${tokenRes.status}` };
     }
   }
+
   return { ok: false, code: "poll_exhausted", detail: "device grant was not authorized in time" };
 }
 

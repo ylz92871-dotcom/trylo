@@ -15,17 +15,23 @@ test("confined JSON scripts have their own ABI without claiming an MCP server", 
   const mixed = { ...manifest, mcpTransport: "stdio", mcpSchemaVersion: "2024-11-05" };
   assert.ok(!validateManifest(mixed).ok);
 });
+
 test("old implicit MCP manifests and explicit MCP profiles retain the existing contract", () => {
-  const legacy = mcpManifest(); assert.ok(validateManifest(legacy).ok);
+  const legacy = mcpManifest();
+  assert.ok(validateManifest(legacy).ok);
   assert.ok(validateManifest({ ...legacy, runtimeProfile: "mcp_stdio" }).ok);
   assert.equal(Object.hasOwn(legacy, "runtimeProfile"), false);
 });
+
 test("a JSON profile cannot smuggle IO, host environment, secrets, directories or side effects", () => {
   for (const change of [{ permissions: ["network"] }, { envWhitelist: ["PATH"] }, { secretsWhitelist: ["TOKEN"] },
     { cwdWhitelist: ["."] }, { sideEffectCommitPoint: "after-write" }]) {
-    const result = validateManifest({ ...manifest, ...change }); assert.ok(!result.ok); assert.equal(result.code, "json_profile_not_pure");
+    const result = validateManifest({ ...manifest, ...change });
+    assert.ok(!result.ok);
+    assert.equal(result.code, "json_profile_not_pure");
   }
 });
+
 test("JSON profile has bounded integer budgets and a fixed confined entrypoint", () => {
   for (const timeoutMs of [NaN, Infinity, 0, -1, 1.5, 60_001]) assert.ok(!validateManifest({ ...manifest, timeoutMs }).ok);
   for (const change of [{ stdoutBytes: 65_537 }, { stderrBytes: 65_537 }, { resultChars: 32_769 }, { stdoutBytes: NaN }, { entrypoint: "../candidate.cjs" }]) assert.ok(!validateManifest({ ...manifest, ...change }).ok);

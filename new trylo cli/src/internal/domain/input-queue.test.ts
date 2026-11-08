@@ -65,9 +65,11 @@ test("a message typed for a different turn is refused, not delivered late", () =
 
 test("the queue is bounded, and the refusal says it is full", () => {
   let inbox = fill(openInbox(TURN));
+
   assert.equal(pendingCount(inbox.items), MAX_PENDING_INPUT);
 
   const verdict = admit(inbox, { text: "one too many", mode: "queue", turnId: TURN });
+
   assert.equal(verdict.kind, "rejected");
   assert.equal(verdict.kind === "rejected" ? verdict.reason : "", "full");
   inbox = verdict.inbox;
@@ -79,13 +81,16 @@ test("the queue is bounded, and the refusal says it is full", () => {
 
 test("draining hands each message over exactly once", () => {
   let inbox = offer(openInbox(TURN), "first");
+
   inbox = offer(inbox, "second");
 
   const first = drainInbox(inbox);
+
   assert.deepEqual(first.taken.map((item) => item.text), ["first", "second"]);
   assert.deepEqual(first.inbox.items, []);
 
   const second = drainInbox(first.inbox);
+
   assert.deepEqual(second.taken, []);
 });
 
@@ -98,9 +103,11 @@ test("every accepted message carries the turn it was typed for", () => {
 
 test("closing hands back what was never taken, and refuses anything after", () => {
   let inbox = offer(openInbox(TURN), "never read");
+
   inbox = offer(inbox, "also never read");
 
   const closed = closeInbox(inbox);
+
   assert.deepEqual(closed.unconsumed.map((item) => item.text), ["never read", "also never read"]);
   assert.deepEqual(closed.inbox.items, []);
   assert.equal(closed.inbox.closed, true);
@@ -108,6 +115,7 @@ test("closing hands back what was never taken, and refuses anything after", () =
   // A cancelled turn must not keep collecting: after the close, every offer is
   // refused with the one reason that explains it.
   const late = admit(closed.inbox, { text: "after the end", mode: "steer", turnId: TURN });
+
   assert.equal(late.kind, "rejected");
   assert.equal(late.kind === "rejected" ? late.reason : "", "turn_closed");
 });

@@ -2,6 +2,7 @@ import type { JsonObject } from "./envelope.js";
 
 export type SubagentHandoff = { readonly scope: string; readonly artifacts: readonly string[]; readonly evidence: readonly string[];
   readonly pending: readonly string[]; readonly blockers: readonly string[] };
+
 export type SubagentDelivery = { readonly submissionId: string; readonly parentToolCallId: string;
   readonly state: "started" | "answered"; readonly round: number };
 
@@ -15,11 +16,16 @@ export function isSubagentDelivery(value: unknown): value is SubagentDelivery {
 
 export function isSubagentHandoff(value: unknown): value is SubagentHandoff {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+
   const row = value as Record<string, unknown>;
+
   return Object.keys(row).length === 5 && typeof row.scope === "string" && row.scope.trim().length > 0 && row.scope.length <= 4000
-    && ["artifacts", "evidence", "pending", "blockers"].every(key => Array.isArray(row[key]) && row[key].length <= 16
-      && row[key].every(item => typeof item === "string" && item.trim().length > 0 && item.length <= 1000))
-    && Buffer.byteLength(JSON.stringify(row), "utf8") <= 16000;
+    && ["artifacts", "evidence", "pending", "blockers"].every(key => {
+      const items = row[key];
+      return Array.isArray(items) && items.length <= 16
+        && items.every(item => typeof item === "string" && item.trim().length > 0 && item.length <= 1000);
+    })
+    && new TextEncoder().encode(JSON.stringify(row)).length <= 16000;
 }
 
 const refs: JsonObject = { type: "array", maxItems: 16, items: { type: "string", minLength: 1, maxLength: 1000 } };

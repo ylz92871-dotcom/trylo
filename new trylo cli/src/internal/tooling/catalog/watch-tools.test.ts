@@ -64,6 +64,7 @@ function lab() {
       path: join(dir, "queue", `${sessionId}.ndjson`),
       clock: { now: () => clock, newId: (prefix) => `${prefix}_${++ids}` },
     });
+
   return {
     watches,
     queueFor,
@@ -133,11 +134,15 @@ test("sleep without a port is no_port and arms nothing", async () => {
       { message: "wake me", sessionId: "s-1", durationMs: 60000 },
       { watches: h.watches, nowMs: () => T0 },
     );
+
     assert.equal(result.ok, false);
+
     if (!result.ok) {
       assert.equal(result.code, "no_port");
     }
+
     const listed = await h.watches.list("s-1");
+
     assert.equal(listed.ok && listed.value.length, 0);
   } finally {
     h.cleanup();
@@ -152,8 +157,10 @@ test("sleep denied injects nothing; granted arms a deadline watch", async () => 
       { message: "wake me", sessionId: "s-1", durationMs: 60000 },
       { watches: h.watches, nowMs: () => T0 },
     );
+
     assert.equal(denied.ok, false);
     const listedAfterDeny = await h.watches.list("s-1");
+
     assert.equal(listedAfterDeny.ok && listedAfterDeny.value.length, 0);
 
     const granted = await executeSleepTool(
@@ -161,8 +168,10 @@ test("sleep denied injects nothing; granted arms a deadline watch", async () => 
       { message: "wake me", sessionId: "s-1", durationMs: 60000 },
       { watches: h.watches, nowMs: () => T0 },
     );
+
     assert.equal(granted.ok, true);
     const listed = await h.watches.list("s-1");
+
     assert.equal(listed.ok && listed.value.length, 1);
   } finally {
     h.cleanup();
@@ -177,11 +186,15 @@ test("monitor creates a condition watch and dry-runs without firing", async () =
       { message: "build?", sessionId: "s-1", condition: { kind: "flag_set", flag: "ready" } },
       { watches: h.watches },
     );
+
     assert.equal(result.ok, true);
+
     if (result.ok) {
       assert.equal(result.value.met, false);
     }
+
     const listed = await h.watches.list("s-1");
+
     assert.equal(listed.ok && listed.value.length, 1);
     assert.equal(listed.ok && listed.value[0]?.state.state, "armed");
   } finally {
@@ -197,6 +210,7 @@ test("brief denied queues nothing; granted delivers the old shape over the new q
       { message: "hello", sessionId: "s-1", status: "proactive" },
       { queueFor: h.queueFor },
     );
+
     assert.equal(denied.ok, false);
 
     const granted = await executeBriefTool(
@@ -204,8 +218,10 @@ test("brief denied queues nothing; granted delivers the old shape over the new q
       { message: "hello", sessionId: "s-1", attachments: ["a.png"], status: "proactive" },
       { queueFor: h.queueFor },
     );
+
     assert.equal(granted.ok, true);
     const page = await h.queueFor("s-1").list(0, 20);
+
     assert.equal(page.ok && page.value.total, 1);
     assert.match(page.ok ? page.value.items[0]?.text ?? "" : "", /\[brief:proactive\] hello/);
     await h.queueFor("s-1").release();
@@ -222,12 +238,14 @@ test("brief rejects bad status and bad attachments before touching the queue", a
       { message: "hi", sessionId: "s-1", status: "urgent" },
       { queueFor: h.queueFor },
     );
+
     assert.equal(badStatus.ok, false);
     const badAttachments = await executeBriefTool(
       { ...APPROVAL_BASE, approvalPort: grantingPort() },
       { message: "hi", sessionId: "s-1", attachments: [""] },
       { queueFor: h.queueFor },
     );
+
     assert.equal(badAttachments.ok, false);
   } finally {
     h.cleanup();
@@ -247,18 +265,23 @@ test("brief attachments are confined: absolute and dot-dot are usage refusals, q
       "a\\..\\b.png",
       "..",
     ];
+
     for (const ref of outside) {
       const result = await executeBriefTool(
         { ...APPROVAL_BASE, approvalPort: grantingPort() },
         { message: "hi", sessionId: "s-1", attachments: [ref] },
         { queueFor: h.queueFor },
       );
+
       assert.equal(result.ok, false, `expected refusal for ${ref}`);
+
       if (!result.ok) {
         assert.equal(result.code, "invalid_arguments");
       }
     }
+
     const page = await h.queueFor("s-1").list(0, 20);
+
     assert.equal(page.ok && page.value.total, 0);
     await h.queueFor("s-1").release();
   } finally {
@@ -272,26 +295,34 @@ test("brief attachments are bounded: count and total bytes are usage refusals", 
   assert.match(checkBriefAttachments(Array.from({ length: 11 }, () => "a.png")) ?? "", /maximum of 10/);
   assert.match(checkBriefAttachments(["a".repeat(210 * 1024)]) ?? "", /bytes of path text/);
   const h = lab();
+
   try {
     const tooMany = await executeBriefTool(
       { ...APPROVAL_BASE, approvalPort: grantingPort() },
       { message: "hi", sessionId: "s-1", attachments: Array.from({ length: 11 }, (_, i) => `f${i}.png`) },
       { queueFor: h.queueFor },
     );
+
     assert.equal(tooMany.ok, false);
+
     if (!tooMany.ok) {
       assert.equal(tooMany.code, "invalid_arguments");
     }
+
     const tooBig = await executeBriefTool(
       { ...APPROVAL_BASE, approvalPort: grantingPort() },
       { message: "hi", sessionId: "s-1", attachments: ["a".repeat(210 * 1024)] },
       { queueFor: h.queueFor },
     );
+
     assert.equal(tooBig.ok, false);
+
     if (!tooBig.ok) {
       assert.equal(tooBig.code, "invalid_arguments");
     }
+
     const page = await h.queueFor("s-1").list(0, 20);
+
     assert.equal(page.ok && page.value.total, 0);
     await h.queueFor("s-1").release();
   } finally {
@@ -307,8 +338,10 @@ test("brief attachments are echo-only: a missing file is still delivered, never 
       { message: "see this", sessionId: "s-1", attachments: ["does-not-exist-12345.png"] },
       { queueFor: h.queueFor },
     );
+
     assert.equal(result.ok, true);
     const page = await h.queueFor("s-1").list(0, 20);
+
     assert.equal(page.ok && page.value.total, 1);
     assert.match(page.ok ? page.value.items[0]?.text ?? "" : "", /does-not-exist-12345\.png/);
     await h.queueFor("s-1").release();
@@ -321,11 +354,15 @@ test("subscribe is remote_required even when approved — never faked", async ()
   const h = lab();
   try {
     const granted = await executeSubscribeTool({ ...APPROVAL_BASE, approvalPort: grantingPort() });
+
     assert.equal(granted.ok, false);
+
     if (!granted.ok) {
       assert.equal(granted.code, "remote_required");
     }
+
     const missing = await executeSubscribeTool({ ...APPROVAL_BASE });
+
     assert.equal(missing.ok, false);
   } finally {
     h.cleanup();

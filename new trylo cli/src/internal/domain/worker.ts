@@ -66,11 +66,13 @@ export function recoverPlanFor(
   if (probe === "received") {
     return { action: "ack", mark: "acked" };
   }
+
   if (probe === "not_received") {
     return queueHasItem
       ? { action: "retry", mark: "acked" }
       : { action: "restore", mark: "acked" };
   }
+
   return { action: "restore", mark: "unknown" };
 }
 

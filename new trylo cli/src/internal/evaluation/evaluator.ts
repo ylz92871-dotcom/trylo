@@ -6,7 +6,7 @@ import {
   qualityDeltaIgnoringLength,
 } from "./goodhart.js";
 import { wilsonInterval } from "./keep-best.js";
-import type { PromptPatchDraft } from "../learning/domains/prompt/builder.js";
+import type { PromptPatchDraft } from "../learning/agent/subsystems/method/legacy-prompt/builder.js";
 import type {
   EvaluationEvidenceDraft,
   EvaluationRequest,
@@ -14,6 +14,7 @@ import type {
 } from "./types.js";
 
 export function evaluateCandidate(raw: EvaluationRequest): EvaluationEvidenceDraft {
+  // A rubric score remains a weak signal; only independent anchors support a pass.
   const request: EvaluationRequest =
     raw.judgeRubricScore === undefined
       ? raw
@@ -32,9 +33,11 @@ export function evaluateCandidate(raw: EvaluationRequest): EvaluationEvidenceDra
       "generator and evaluator role ids must differ",
     ]);
   }
+
   if (request.sampleSize < 2 || !Number.isFinite(request.sampleSize)) {
     return bundle(request, "insufficient_sample", false, ["sample size below two"]);
   }
+
   if (multiMetricBlocked({
     costDelta: request.costDelta,
     latencyDelta: request.latencyDelta,
@@ -44,11 +47,13 @@ export function evaluateCandidate(raw: EvaluationRequest): EvaluationEvidenceDra
       "success cannot be the only optimized metric while cost and latency spike",
     ]);
   }
+
   if (request.criticalRegressionFailed) {
     return bundle(request, "critical_regression", false, [
       "candidate improved a primary metric but failed a critical regression",
     ]);
   }
+
   const candidateIndependent = independentAnchors(request.candidateAnchors);
   const baselineIndependent = independentAnchors(request.baselineAnchors);
   const onlyWeak =
@@ -59,6 +64,7 @@ export function evaluateCandidate(raw: EvaluationRequest): EvaluationEvidenceDra
       "LLM self-score, length, tokens, or self-generated tests cannot fill externalPass",
     ]);
   }
+
   const candidatePass = allPassed(candidateIndependent);
   const baselinePass = allPassed(baselineIndependent);
   const successImproved = candidatePass && baselinePass === false;
@@ -67,18 +73,21 @@ export function evaluateCandidate(raw: EvaluationRequest): EvaluationEvidenceDra
     candidatePass,
     request.outputLengthDelta,
   );
+
   if (candidatePass === false) {
     return bundle(request, "reject", false, ["candidate external anchors did not pass"], {
       successImproved,
       qualityDelta,
     });
   }
+
   if (successImproved === false && qualityDelta <= 0) {
     return bundle(request, "no_external_pass", false, ["no external improvement"], {
       successImproved,
       qualityDelta,
     });
   }
+
   return bundle(request, "recommend_shadow", true, ["external anchors support shadow, not activation"], {
     successImproved,
     qualityDelta,
@@ -97,6 +106,7 @@ function bundle(
     verdict === "recommend_shadow"
       ? []
       : notes;
+
   return {
     proposalId: request.proposalId,
     baselineRef: request.baselineRef,

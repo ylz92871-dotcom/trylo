@@ -212,9 +212,11 @@ export function readYieldMs(value: unknown, fallback: number): number | undefine
   if (value === undefined || value === null) {
     return fallback;
   }
+
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return undefined;
   }
+
   return Math.trunc(value);
 }
 

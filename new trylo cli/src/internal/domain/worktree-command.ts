@@ -159,17 +159,20 @@ const FILTER_ATTRIBUTES: ReadonlyArray<string> = ["clean", "smudge", "process", 
 /** NUL-separated `filter.<driver>.<attribute>` keys to bare driver names. */
 export function parseFilterDriverNames(output: string): ReadonlyArray<string> {
   const drivers = new Set<string>();
+
   for (const key of output.split("\0")) {
     const dot = key.lastIndexOf(".");
     if (dot <= "filter.".length - 1 || !key.startsWith("filter.")) {
       continue;
     }
+
     const driver = key.slice("filter.".length, dot);
     const attribute = key.slice(dot + 1);
     if (driver.length > 0 && FILTER_ATTRIBUTES.includes(attribute)) {
       drivers.add(driver);
     }
   }
+
   return [...drivers].sort();
 }
 
@@ -181,6 +184,7 @@ export function parseFilterDriverNames(output: string): ReadonlyArray<string> {
  */
 export function filterNeuterEnv(drivers: ReadonlyArray<string>): Readonly<Record<string, string>> {
   const env: Record<string, string> = { GIT_CONFIG_COUNT: String(drivers.length * FILTER_ATTRIBUTES.length) };
+
   drivers.forEach((driver, driverIndex) => {
     FILTER_ATTRIBUTES.forEach((attribute, attributeIndex) => {
       const index = driverIndex * FILTER_ATTRIBUTES.length + attributeIndex;
@@ -188,6 +192,7 @@ export function filterNeuterEnv(drivers: ReadonlyArray<string>): Readonly<Record
       env[`GIT_CONFIG_VALUE_${index}`] = attribute === "required" ? "false" : "";
     });
   });
+
   return env;
 }
 
@@ -216,6 +221,7 @@ export function parseWorktreeList(output: string): ReadonlyArray<WorktreeListEnt
     headSha = undefined;
     branch = undefined;
   };
+
   for (const field of fields) {
     if (field.length === 0) {
       flush();
@@ -230,6 +236,8 @@ export function parseWorktreeList(output: string): ReadonlyArray<WorktreeListEnt
       branch = name.startsWith("refs/heads/") ? name.slice("refs/heads/".length) : name;
     }
   }
+
   flush();
+
   return entries;
 }

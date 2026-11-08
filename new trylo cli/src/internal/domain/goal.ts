@@ -23,6 +23,7 @@
 export type GoalStatus =
   | "active"
   | "paused_by_user"
+  | "paused_by_system"
   | "budget_exhausted"
   | "cancelled"
   | "complete"
@@ -31,6 +32,7 @@ export type GoalStatus =
 export const GOAL_STATUSES: ReadonlyArray<GoalStatus> = [
   "active",
   "paused_by_user",
+  "paused_by_system",
   "budget_exhausted",
   "cancelled",
   "complete",
@@ -46,6 +48,9 @@ export type GoalRecord = {
   readonly updatedAtTurn: string;
   /** Why the last transition happened, in the actor's own words. */
   readonly note?: string;
+  readonly blockedReason?: string;
+  readonly blockedRounds?: number;
+  readonly usageUncertain?: true;
 };
 
 export type GoalTransition =
@@ -62,6 +67,44 @@ export type GoalReject =
 
 const MAX_OBJECTIVE_CHARS = 2000;
 
+/** User-only objective edits retain accounting and never resume execution. */
+export function editGoal(existing: GoalRecord | undefined, objective: string, atTurn: string, tokenBudget?: number): GoalTransition {
+  if (existing === undefined) return { ok: false, code: "no_goal", message: "no goal exists to edit" };
+
+  if (existing.status === "complete" || existing.status === "cancelled") {
+    return { ok: false, code: "terminal", message: "terminal goals cannot be edited" };
+  }
+
+  const validated = createGoal(undefined, objective.trim(), atTurn, tokenBudget);
+  if (!validated.ok) return validated;
+
+  if (tokenBudget !== undefined && (tokenBudget < existing.tokensUsed || (existing.tokenBudget !== undefined && tokenBudget < existing.tokenBudget))) {
+    return { ok: false, code: "invalid_budget", message: "editing cannot reduce the existing budget or erase usage" };
+  }
+
+  return { ok: true, goal: { ...existing, objective: validated.goal.objective,
+    status: existing.status === "active" ? "paused_by_user" : existing.status,
+    ...(tokenBudget === undefined ? {} : { tokenBudget }), updatedAtTurn: atTurn,
+    blockedRounds: 0, blockedReason: "", note: "edited_by_user" } };
+}
+
+/** Guard for the complete v1 snapshot at a journal boundary. */
+export function isGoalRecord(value: unknown): value is GoalRecord {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+
+  const g = value as Record<string, unknown>;
+
+  return typeof g.objective === "string" && g.objective.trim().length > 0 && g.objective.length <= MAX_OBJECTIVE_CHARS
+    && isGoalStatus(g.status) && typeof g.tokensUsed === "number" && Number.isFinite(g.tokensUsed) && g.tokensUsed >= 0
+    && typeof g.createdAtTurn === "string" && g.createdAtTurn.length > 0
+    && typeof g.updatedAtTurn === "string" && g.updatedAtTurn.length > 0
+    && (g.tokenBudget === undefined || (typeof g.tokenBudget === "number" && Number.isSafeInteger(g.tokenBudget) && g.tokenBudget > 0))
+    && (g.note === undefined || typeof g.note === "string")
+    && (g.usageUncertain === undefined || g.usageUncertain === true)
+    && (g.blockedReason === undefined || typeof g.blockedReason === "string")
+    && (g.blockedRounds === undefined || (typeof g.blockedRounds === "number" && Number.isSafeInteger(g.blockedRounds) && g.blockedRounds >= 0));
+}
+
 function isGoalStatus(value: unknown): value is GoalStatus {
   return typeof value === "string" && (GOAL_STATUSES as readonly string[]).includes(value);
 }
@@ -73,18 +116,22 @@ export function createGoal(
   createdAtTurn: string,
   tokenBudget?: number,
 ): GoalTransition {
-  if (existing !== undefined && (existing.status === "active" || existing.status === "paused_by_user" || existing.status === "budget_exhausted")) {
+  if (existing !== undefined && (existing.status === "active" || existing.status === "paused_by_user" || existing.status === "paused_by_system" || existing.status === "budget_exhausted")) {
     return { ok: false, code: "goal_exists", message: "an unfinished goal already exists; resolve it before creating another" };
   }
+
   if (objective.trim().length === 0) {
     return { ok: false, code: "empty_objective", message: "goal objective must be a non-empty string" };
   }
+
   if (objective.length > MAX_OBJECTIVE_CHARS) {
     return { ok: false, code: "empty_objective", message: `goal objective is ${objective.length} characters; the limit is ${MAX_OBJECTIVE_CHARS}` };
   }
+
   if (tokenBudget !== undefined && (Number.isInteger(tokenBudget) === false || tokenBudget <= 0)) {
     return { ok: false, code: "invalid_budget", message: "token_budget must be a positive integer when present" };
   }
+
   return {
     ok: true,
     goal: {
@@ -116,12 +163,15 @@ export function updateGoalStatus(
   if (existing === undefined) {
     return { ok: false, code: "no_goal", message: "no goal exists to update" };
   }
+
   if (existing.status === "complete" || existing.status === "cancelled") {
     return { ok: false, code: "terminal", message: `goal is already ${existing.status}; terminal goals do not move` };
   }
+
   if (isGoalStatus(status) === false) {
     return { ok: false, code: "terminal", message: "goal status must be complete or blocked" };
   }
+
   if (status === "blocked" && (options.consecutiveBlockedTurns ?? 0) < 3) {
     return {
       ok: false,
@@ -129,6 +179,7 @@ export function updateGoalStatus(
       message: "blocked needs the same blocker for at least three consecutive goal turns; hard or slow work alone is not blocked",
     };
   }
+
   return {
     ok: true,
     goal: { ...existing, status, updatedAtTurn: atTurn },
@@ -144,21 +195,25 @@ export function applyUserGoalAction(
   if (existing === undefined) {
     return { ok: false, code: "no_goal", message: "no goal exists for this user action" };
   }
+
   if (action === "pause") {
     if (existing.status !== "active") {
       return { ok: false, code: "terminal", message: `only an active goal may pause; it is ${existing.status}` };
     }
     return { ok: true, goal: { ...existing, status: "paused_by_user", updatedAtTurn: atTurn } };
   }
+
   if (action === "resume") {
-    if (existing.status !== "paused_by_user" && existing.status !== "budget_exhausted" && existing.status !== "blocked") {
+    if (existing.status !== "paused_by_user" && existing.status !== "paused_by_system" && existing.status !== "budget_exhausted" && existing.status !== "blocked") {
       return { ok: false, code: "terminal", message: `only a paused, budget-exhausted or blocked goal may resume; it is ${existing.status}` };
     }
     return { ok: true, goal: { ...existing, status: "active", updatedAtTurn: atTurn } };
   }
+
   if (existing.status === "complete" || existing.status === "cancelled") {
     return { ok: false, code: "terminal", message: `goal is already ${existing.status}` };
   }
+
   return { ok: true, goal: { ...existing, status: "cancelled", updatedAtTurn: atTurn } };
 }
 
@@ -177,14 +232,18 @@ export function accountGoalTokens(
   if (existing === undefined) {
     return { ok: false, code: "no_goal", message: "no goal exists to account tokens against" };
   }
+
   if (existing.status === "complete" || existing.status === "cancelled") {
     return { ok: false, code: "terminal", message: `goal is already ${existing.status}; accounting stops at terminal states` };
   }
+
   if (Number.isFinite(tokens) === false || tokens < 0) {
     return { ok: false, code: "invalid_budget", message: "accounted tokens must be a non-negative number" };
   }
+
   const tokensUsed = existing.tokensUsed + tokens;
   const exhausted = existing.tokenBudget !== undefined && tokensUsed >= existing.tokenBudget;
+
   return {
     ok: true,
     goal: {

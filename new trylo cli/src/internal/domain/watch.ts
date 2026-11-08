@@ -204,12 +204,15 @@ export function cancelWatch(state: WatchState | undefined, watchId: string, atMs
       message: `no watch ${watchId}; it may have fired already, or its schedule was removed`,
     };
   }
+
   if (state.state === "fired") {
     return { kind: "already_fired", state };
   }
+
   if (state.state === "cancelled") {
     return { kind: "already_cancelled", state };
   }
+
   return {
     kind: "cancelled",
     state: { state: "cancelled", watchId, cancelledAtMs: atMs, reason: "cancelled before it fired" },

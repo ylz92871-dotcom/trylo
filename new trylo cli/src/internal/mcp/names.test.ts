@@ -16,13 +16,18 @@ import {
 
 test("qualifying and parsing round-trips exactly", () => {
   const qualified = qualifyMcpToolName("fs", "read_file");
+
   assert.equal(qualified.ok, true);
+
   if (!qualified.ok) {
     return;
   }
+
   assert.equal(qualified.value, "mcp__fs__read_file");
   const parsed = parseMcpToolName(qualified.value);
+
   assert.equal(parsed.ok, true);
+
   if (parsed.ok) {
     assert.deepEqual(parsed.value, { serverId: "fs", serverToolName: "read_file" });
   }

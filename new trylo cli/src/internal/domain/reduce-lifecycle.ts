@@ -45,7 +45,9 @@ export function recordFinish(
       toolCallIds: state.openToolInputIds.join(","),
     });
   }
+
   const remembered = remember(state, input.eventId);
+
   return ok(
     {
       ...remembered,
@@ -119,12 +121,14 @@ export function applyCheck(
   if (state.phase === "idle") {
     return illegal(state, input);
   }
+
   const remembered = remember(state, input.eventId);
   const next: ExecutionState = {
     ...remembered,
     verification: { status: input.verdict, checkId: input.checkId },
   };
   const kind = state.phase === "terminal" ? "observation" : "check_result";
+
   return ok(next, [
     emit(
       kind,
@@ -142,7 +146,9 @@ export function applyTerminal(state: ExecutionState, input: ReduceInput): Reduce
   if (input.type === "retry") {
     return applyRetry(state, input.eventId);
   }
+
   const remembered = remember(state, input.eventId);
+
   return ok(remembered, [
     emit(
       "observation",
@@ -161,6 +167,7 @@ export function applyRetry(state: ExecutionState, eventId: string): ReduceResult
       event: "retry",
     });
   }
+
   const turnId = state.turnId;
   const correlationId = state.correlationId;
   const sessionId = state.sessionId;
@@ -172,6 +179,7 @@ export function applyRetry(state: ExecutionState, eventId: string): ReduceResult
       event: "retry",
     });
   }
+
   if (state.attempts.length >= MAX_ATTEMPTS) {
     return fail(state, {
       code: "overflow",
@@ -180,6 +188,7 @@ export function applyRetry(state: ExecutionState, eventId: string): ReduceResult
       event: "retry",
     });
   }
+
   const index = state.attempts.length + 1;
   const attempt: Attempt = {
     attemptId: attemptIdFor(turnId, index),
@@ -200,6 +209,7 @@ export function applyRetry(state: ExecutionState, eventId: string): ReduceResult
     streamIndex: 0,
     attempts: [...superseded, attempt],
   };
+
   return ok(next, [
     emit(
       "api_retry",

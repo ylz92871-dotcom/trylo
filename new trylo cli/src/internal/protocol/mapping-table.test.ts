@@ -66,7 +66,9 @@ test("ACP 行的形状自洽：custom ⇔ primitive=custom，且只有 session_u
       assert.equal(row.variant, null, kind);
       continue;
     }
+
     assert.notEqual(row.primitive, "custom", kind);
+
     if (row.primitive === "request_permission") {
       // 请求原语本身就是形状，没有「变体」这一层（approval_requested 走这里）。
       assert.equal(row.variant, null, kind);
@@ -96,7 +98,9 @@ test("自定义帧的规格必须能重建：custom 行带 name 与 custom 载�
     if (row.disposition !== "custom") {
       continue;
     }
+
     const names = row.body.map((spec) => spec.as);
+
     assert.equal(names.includes("name"), true, `${kind} 的 CUSTOM 没有名字`);
     assert.equal(names.includes("custom"), true, `${kind} 的 CUSTOM 没有载荷载体`);
   }
@@ -119,25 +123,31 @@ test("ag-ui 的 custom 行必须落 CUSTOM 事件且带 name/value 两段", () =
     if (row.disposition !== "custom") {
       continue;
     }
+
     assert.equal(row.type, "CUSTOM", kind);
     const names = row.body.map((spec) => spec.as);
+
     assert.deepEqual([...names].sort(), ["name", "value"], kind);
   }
 });
 
 test("需要按终态分流的行必须覆盖全部终态（不许只写一半映射）", () => {
   let users = 0;
+
   for (const kind of EVENT_KINDS) {
     const table = AGUI_ROWS[kind].typeByTerminalReason;
     if (table === undefined) {
       continue;
     }
+
     users += 1;
     assert.deepEqual(Object.keys(table).sort(), [...TERMINAL_REASONS].sort(), kind);
+
     for (const reason of TERMINAL_REASONS) {
       assert.equal(table[reason].trim().length > 0, true, `${kind}/${reason}`);
     }
   }
+
   assert.equal(users > 0, true, "typeByTerminalReason 机制必须真的被用到，不能是死代码");
 });
 
@@ -161,10 +171,12 @@ test("PAYLOAD_CONTRACTS 覆盖全部 kind，required 是 types 的子集", () =>
       ...contract.required,
       ...contract.optional,
     ]);
+
     for (const field of contract.required) {
       assert.equal(declared.has(field), true, kind);
       assert.notEqual(contract.types[field], undefined, `${kind}.${field} 没有声明类型`);
     }
+
     for (const field of Object.keys(contract.types)) {
       assert.equal(declared.has(field), true, kind);
     }

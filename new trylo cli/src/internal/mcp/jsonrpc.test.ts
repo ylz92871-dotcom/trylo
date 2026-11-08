@@ -26,9 +26,11 @@ test("scanFrames carries a partial frame forward and joins it later", () => {
   const first = `{"jsonrpc":"2.0","id":1,"me`;
   const second = `thod":"x"}\n`;
   const one = scanFrames(first);
+
   assert.equal(one.messages.length, 0);
   assert.equal(one.rest, first);
   const two = scanFrames(one.rest + second);
+
   assert.equal(two.messages.length, 1);
   assert.equal(two.rest, "");
 });
@@ -79,9 +81,12 @@ test("encodeMessage always terminates with exactly one newline", () => {
 test("a request with string params round-trips through the decode", () => {
   const request: JsonRpcRequest = requestMessage(7, "tools/call", { name: "echo" });
   const decoded = scanFrames(encodeMessage(request));
+
   assert.equal(decoded.messages.length, 1);
   const message = decoded.messages[0];
+
   assert.equal(message?.kind, "request");
+
   if (message?.kind === "request") {
     assert.equal(message.request.method, "tools/call");
     assert.equal(message.request.id, 7);

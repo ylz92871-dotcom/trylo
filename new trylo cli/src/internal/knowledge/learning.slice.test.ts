@@ -22,6 +22,7 @@ async function withSlice(
   const ingest = createIngest(store);
   const context = bindContextPort(store);
   const journal = createJournal();
+
   try {
     await run({
       ingest,
@@ -39,6 +40,7 @@ test("recordCorrection is active and the next assemble contains the body", async
   await withSlice(async ({ ingest, assemble }) => {
     await ingest.recordCorrection("never grant extra tools from memory", "user correction");
     const assembled = await assemble();
+
     assert.equal(
       assembled.systemFragments.some(
         (fragment) => fragment.body === "never grant extra tools from memory",
@@ -51,10 +53,13 @@ test("recordCorrection is active and the next assemble contains the body", async
 test("appendCandidate stays pending and assemble does not include the body", async () => {
   await withSlice(async ({ ingest, assemble, store }) => {
     const candidate = await ingest.appendCandidate("maybe extract a method later");
+
     assert.equal(candidate.state, "pending");
     const stored = await store.readAll();
+
     assert.equal(stored.find((fragment) => fragment.id === candidate.id)?.state, "pending");
     const assembled = await assemble();
+
     assert.equal(
       assembled.systemFragments.some(
         (fragment) => fragment.body === "maybe extract a method later",
@@ -76,6 +81,7 @@ test("withdrawn fragments are invisible to assemble", async () => {
       body: "this correction was withdrawn",
     });
     const assembled = await assemble();
+
     assert.equal(
       assembled.systemFragments.some(
         (fragment) => fragment.body === "this correction was withdrawn",

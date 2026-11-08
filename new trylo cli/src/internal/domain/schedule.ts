@@ -70,6 +70,7 @@ export function validateSchedule(raw: {
   if (typeof raw.cron !== "string") {
     return { ok: false, code: "invalid_expression", message: "cron must be a string" };
   }
+
   const fields = parseCronExpression(raw.cron);
   if (fields === null) {
     return {
@@ -78,6 +79,7 @@ export function validateSchedule(raw: {
       message: `invalid cron expression '${raw.cron}': expected 5 fields (M H DoM Mon DoW)`,
     };
   }
+
   // Anchor from now, so an expression that cannot match within a year is
   // refused at creation rather than silently never firing.
   if (computeNextCronRun(fields, new Date()) === null) {
@@ -89,9 +91,11 @@ export function validateSchedule(raw: {
       )} days`,
     };
   }
+
   if (typeof raw.prompt !== "string" || raw.prompt.trim().length === 0) {
     return { ok: false, code: "invalid_prompt", message: "prompt must be a non-empty string" };
   }
+
   if (raw.prompt.length > MAX_PROMPT_CHARS) {
     return {
       ok: false,
@@ -99,13 +103,16 @@ export function validateSchedule(raw: {
       message: `prompt is ${raw.prompt.length} characters; the limit is ${MAX_PROMPT_CHARS}`,
     };
   }
+
   const delivery = raw.delivery === "wait" ? "wait" : "queue";
   if (raw.delivery !== undefined && raw.delivery !== "queue" && raw.delivery !== "wait") {
     return { ok: false, code: "invalid_prompt", message: "delivery must be 'queue' or 'wait'" };
   }
+
   if (raw.sessionId !== undefined && (typeof raw.sessionId !== "string" || raw.sessionId.length === 0)) {
     return { ok: false, code: "invalid_prompt", message: "sessionId must be a non-empty string" };
   }
+
   return {
     ok: true,
     value: {
@@ -156,11 +163,14 @@ export function nextDueAtMs(schedule: Schedule): number | null {
   if (fields === null) {
     return null;
   }
+
   if (schedule.tombstonedAtMs !== undefined) {
     return null;
   }
+
   const anchor = schedule.recurring ? (schedule.lastFiredAtMs ?? schedule.createdAtMs) : schedule.createdAtMs;
   const next = computeNextCronRun(fields, new Date(anchor));
+
   return next === null ? null : next.getTime();
 }
 
@@ -182,16 +192,20 @@ export function dueOccurrences(
   nowMs: number,
 ): ReadonlyArray<Occurrence> {
   const due: Array<Occurrence> = [];
+
   for (const schedule of schedules) {
     if (schedule.tombstonedAtMs !== undefined) {
       continue;
     }
+
     const dueAtMs = nextDueAtMs(schedule);
     if (dueAtMs === null || dueAtMs > nowMs) {
       continue;
     }
+
     due.push(newOccurrence(schedule, dueAtMs));
   }
+
   // Earliest first, then by id, so two hosts racing on the same schedules claim
   // in the same order and the race is decided by the lease rather than by
   // iteration order.
@@ -281,9 +295,11 @@ export function deleteConsequence(
   if (schedule === undefined) {
     return { kind: "already_tombstoned", tombstonedAtMs: 0 };
   }
+
   if (schedule.tombstonedAtMs !== undefined) {
     return { kind: "already_tombstoned", tombstonedAtMs: schedule.tombstonedAtMs };
   }
+
   const inFlight = occurrences.find(
     (occurrence) =>
       occurrence.scheduleId === schedule.id &&
@@ -292,12 +308,14 @@ export function deleteConsequence(
   if (inFlight !== undefined) {
     return { kind: "in_flight", occurrence: inFlight };
   }
+
   const uncertain = occurrences.find(
     (occurrence) => occurrence.scheduleId === schedule.id && occurrence.state.state === "unknown",
   );
   if (uncertain !== undefined) {
     return { kind: "unknown_in_flight", occurrence: uncertain };
   }
+
   return { kind: "not_yet_due" };
 }
 
@@ -317,9 +335,11 @@ export function leaseIsValid(
   if (held === undefined) {
     return { ok: false, code: "lease_lost", message: "no lease is held; acquire one before writing" };
   }
+
   if (presented.length === 0) {
     return { ok: false, code: "lease_lost", message: "an empty lease token is never valid" };
   }
+
   if (held.token !== presented || held.ownerId !== ownerId) {
     return {
       ok: false,
@@ -327,6 +347,7 @@ export function leaseIsValid(
       message: `lease moved to ${held.ownerId}; this scheduler must stop writing`,
     };
   }
+
   return { ok: true, value: true };
 }
 
@@ -386,9 +407,11 @@ export function settledState(
       ) {
         return current;
       }
+
       if (current.state === "dispatched") {
         return { state: "unknown", attemptId, observedAtMs: nowMs, reason: outcome.reason };
       }
+
       return { state: "cancelled", cancelledAtMs: nowMs, reason: outcome.reason };
     }
   }

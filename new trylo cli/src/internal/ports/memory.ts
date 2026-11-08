@@ -24,6 +24,7 @@
  */
 
 export const MEMORY_MATCH_MODES = ["any", "all_on_same_line", "all_within_lines"] as const;
+
 export type MemoryMatchMode = (typeof MEMORY_MATCH_MODES)[number];
 
 export function isMemoryMatchMode(value: string): value is MemoryMatchMode {
@@ -118,6 +119,7 @@ export const MEMORY_FAILURE_CODES = [
   "invalid_match_window",
   "cancelled",
 ] as const;
+
 export type MemoryFailureCode = (typeof MEMORY_FAILURE_CODES)[number];
 
 export type MemoryFailure = {

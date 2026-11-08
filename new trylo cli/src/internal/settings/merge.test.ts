@@ -40,6 +40,7 @@ test("resolveSettings: five layers, highest precedence wins per key, layer recor
     { layer: "cli_flag", values: { maxTokens: 1024 } },
   ];
   const resolved = resolveSettings(contributions);
+
   assert.deepEqual(resolved["provider"], { value: "openai-compatible", layer: "system" });
   assert.deepEqual(resolved["model"], { value: "project-model", layer: "project" });
   assert.deepEqual(resolved["maxTokens"], { value: 1024, layer: "cli_flag" });
@@ -56,6 +57,7 @@ test("resolveSettings is order-independent (it sorts by precedence internally)",
     { layer: "packaged_default", values: { model: "packaged" } },
     { layer: "user", values: { model: "user" } },
   ];
+
   assert.deepEqual(resolveSettings(forward), resolveSettings(shuffled));
   assert.deepEqual(resolveSettings(shuffled)["model"], { value: "flag", layer: "cli_flag" });
 });

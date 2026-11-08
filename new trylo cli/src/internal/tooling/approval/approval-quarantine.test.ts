@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createMemoryPermissionStore, type MemoryPermissionStore } from "../../adapters/permission-store/index.js";
-import { acquireToQuarantine } from "../quarantine/acquire.js";
-import { inspectArchive } from "../quarantine/archive-guard.js";
+import { acquireToQuarantine } from "../../learning/agent/subsystems/tool/adapters/quarantine/acquire.js";
+import { inspectArchive } from "../../learning/agent/subsystems/tool/assets/quarantine/archive-guard.js";
 import { archive, issuedGrantRef, manifest, provenance } from "../testing/fixtures.js";
 import { consumeApproval } from "./gates.js";
 
@@ -29,11 +29,15 @@ test("acquire without an injected port neither consumes nor writes quarantine", 
       manifest: manifest(),
       provenance: provenance(),
     });
+
     assert.equal(result.ok, false);
+
     if (!result.ok) {
       assert.equal(result.code, "no_port");
     }
+
     const names = await readdir(root);
+
     assert.deepEqual(names, []);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -53,11 +57,15 @@ test("acquire without a token has no quarantine writes", async () => {
       manifest: manifest(),
       provenance: provenance(),
     });
+
     assert.equal(result.ok, false);
+
     if (!result.ok) {
       assert.equal(result.code, "missing_token");
     }
+
     const names = await readdir(root);
+
     assert.deepEqual(names, []);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -73,25 +81,32 @@ test("grants cannot cross action, version, scope, or be replayed; expiry lives i
     now: NOW,
   };
   const noPort = await consumeApproval(undefined, { ...base, action: "acquire" });
+
   assert.equal(noPort.ok, false);
+
   if (!noPort.ok) {
     assert.equal(noPort.code, "no_port");
   }
+
   const wrongAction = await consumeApproval(store, { ...base, action: "activate" });
+
   assert.equal(wrongAction.ok, false);
   const wrongVersion = await consumeApproval(store, {
     ...base,
     action: "acquire",
     packageVersionId: "pkg:pdf-lint:9.9.9",
   });
+
   assert.equal(wrongVersion.ok, false);
   const wrongScope = await consumeApproval(store, { ...base, action: "acquire", scope: "shell" });
+
   assert.equal(wrongScope.ok, false);
   const wrongCandidate = await consumeApproval(store, {
     ...base,
     action: "acquire",
     candidateId: "cand-other",
   });
+
   assert.equal(wrongCandidate.ok, false);
   const expiredGrant = await store.issue({
     ...GRANT_FACTS,
@@ -99,22 +114,30 @@ test("grants cannot cross action, version, scope, or be replayed; expiry lives i
     issuedAt: "2019-01-01T00:00:00Z",
     expiry: "2020-01-01T00:00:00Z",
   });
+
   assert.equal(expiredGrant.ok, true);
+
   if (expiredGrant.ok) {
     const expired = await consumeApproval(store, {
       ...base,
       action: "acquire",
       token: { grantId: expiredGrant.grant.grantId },
     });
+
     assert.equal(expired.ok, false);
+
     if (!expired.ok) {
       assert.equal(expired.code, "expired");
     }
   }
+
   const first = await consumeApproval(store, { ...base, action: "acquire" });
+
   assert.equal(first.ok, true);
   const replay = await consumeApproval(store, { ...base, action: "acquire" });
+
   assert.equal(replay.ok, false);
+
   if (!replay.ok) {
     assert.equal(replay.code, "replayed");
   }
@@ -158,12 +181,16 @@ test("approved acquire writes only inside quarantine", async () => {
       manifest: manifest(),
       provenance: provenance(),
     });
+
     assert.equal(result.ok, true);
+
     if (!result.ok) {
       return;
     }
+
     assert.equal(result.value.catalogState, "quarantined");
     const names = await readdir(root);
+
     assert.equal(names.includes("server.mjs"), true);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -184,10 +211,13 @@ test("a port that throws or rejects is normalized into a failed consumption (aud
     scope: "docs",
     now: NOW,
   });
+
   assert.equal(thrown.ok, false);
+
   if (!thrown.ok) {
     assert.equal(thrown.code, "ledger_write_failed");
   }
+
   const rejecting = {
     consume: async () => {
       throw new Error("reject");
@@ -201,7 +231,9 @@ test("a port that throws or rejects is normalized into a failed consumption (aud
     scope: "docs",
     now: NOW,
   });
+
   assert.equal(rejectedPort.ok, false);
+
   if (!rejectedPort.ok) {
     assert.equal(rejectedPort.code, "ledger_write_failed");
   }

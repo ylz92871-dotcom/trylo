@@ -47,6 +47,8 @@ export type CheckpointManifest = {
 };
 
 export type SnapshotInput = {
+  /** Preparation may stop before any user tool has been dispatched. */
+  readonly signal?: AbortSignal;
   /**
    * Must resolve to the store's own root. Accepted as an input so callers state
    * what they believe they are snapshotting, and refused when that belief is
@@ -91,6 +93,7 @@ export type CheckpointFailureCode =
   | "checksum_mismatch"
   | "size_limit_exceeded"
   | "snapshot_interrupted"
+  | "snapshot_cancelled"
   | "restore_interrupted";
 
 export type CheckpointFailure = {

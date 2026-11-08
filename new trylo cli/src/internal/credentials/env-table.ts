@@ -37,11 +37,13 @@ export const CREDENTIAL_ENV_TABLE: ReadonlyArray<EnvDeclaration> = [
 /** The environment variable that wins for a provider, or `undefined` if none. */
 export function envVarFor(providerId: CredentialProviderId): string | undefined {
   let winner: string | undefined;
+
   for (const declaration of CREDENTIAL_ENV_TABLE) {
     if (declaration.providerId === providerId) {
       winner = declaration.env;
     }
   }
+
   return winner;
 }
 
@@ -73,16 +75,19 @@ export function readDeclaredEnv(
   providerId: CredentialProviderId,
 ): { readonly env: string; readonly value: string } | undefined {
   const names = envVarsFor(providerId);
+
   for (let index = names.length - 1; index >= 0; index -= 1) {
     const name = names[index];
     if (name === undefined || !DECLARED_ENV_NAMES.has(name)) {
       continue;
     }
+
     const value = env[name];
     if (value !== undefined && value.length > 0) {
       return { env: name, value };
     }
   }
+
   return undefined;
 }
 

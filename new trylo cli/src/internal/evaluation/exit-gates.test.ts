@@ -28,9 +28,11 @@ test("C9 exit gates document cites all twelve gates and evidence paths", () => {
     "EXIT-GATES.md",
   );
   const text = readFileSync(file, "utf8");
+
   for (const gate of REQUIRED_GATES) {
     assert.equal(text.includes(gate), true, gate);
   }
+
   assert.match(text, /activationEligible/);
   assert.match(text, /boundary\.test\.ts/);
   assert.match(text, /do not call network/);
@@ -41,6 +43,7 @@ test("C9 exit gates document cites all twelve gates and evidence paths", () => {
 test("RUN.md audit scope names pipeline.ts and EXIT-GATES.md so doc gaps fail", () => {
   const wpDir = ["docs", "02-分期工程产出", "P01-协议与学习合同", "WP-C"];
   const runText = readFileSync(path.join(process.cwd(), ...wpDir, "RUN.md"), "utf8");
+
   assert.match(
     runText,
     /src\/internal\/learning\/pipeline\.ts/,

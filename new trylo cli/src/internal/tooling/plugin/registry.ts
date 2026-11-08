@@ -91,6 +91,7 @@ function mutationGate(request: PluginMutationRequest, action: "install" | "unins
     now: request.now,
     ...(request.token === undefined ? {} : { token: request.token }),
   });
+
   return { gate, packageVersionId };
 }
 
@@ -107,6 +108,7 @@ export function resolvePlugin(
   pluginId: string,
 ): PluginRecord | undefined {
   let best: PluginRecord | undefined;
+
   for (const record of state.records) {
     if (record.pluginId !== pluginId) {
       continue;
@@ -115,6 +117,7 @@ export function resolvePlugin(
       best = record;
     }
   }
+
   return best;
 }
 
@@ -144,11 +147,13 @@ export async function installPlugin(
   if (!approved.ok) {
     return approved;
   }
+
   // Gate order is who → what-operation → what-payload: approval, then scope
   // (managed can never install, whatever the payload), then the manifest.
   if (!isInstallableScope(request.scope)) {
     return err("scope_not_installable", `scope ${request.scope} cannot install; managed is update-only`);
   }
+
   // The manifest gate sits on this door, not beside it: nothing enters the
   // registry without passing id/version/traversal/bundle validation first,
   // so uninstall can never derive a traversal dataDir from a stored id.
@@ -165,12 +170,14 @@ export async function installPlugin(
   if (!manifest.ok) {
     return manifest;
   }
+
   const duplicate = state.records.some(
     (record) => record.pluginId === request.pluginId && record.scope === request.scope,
   );
   if (duplicate) {
     return err("already_installed", `${request.pluginId} is already installed at scope ${request.scope}`);
   }
+
   const record: PluginRecord = {
     pluginId: request.pluginId,
     ...(request.marketplace === undefined ? {} : { marketplace: request.marketplace }),
@@ -181,6 +188,7 @@ export async function installPlugin(
     ...(request.installPath === undefined ? {} : { installPath: request.installPath }),
     ...(request.inlineDir === undefined ? {} : { inlineDir: request.inlineDir }),
   };
+
   return ok({
     state: { records: [...state.records, record], generation: state.generation + 1 },
     record,
@@ -196,16 +204,19 @@ export async function uninstallPlugin(
   if (!approved.ok) {
     return approved;
   }
+
   const index = state.records.findIndex(
     (record) => record.pluginId === request.pluginId && record.scope === request.scope,
   );
   if (index < 0) {
     return err("not_installed", `${request.pluginId} is not installed at scope ${request.scope}`);
   }
+
   const target = state.records[index];
   if (target === undefined) {
     return err("not_installed", `${request.pluginId} is not installed at scope ${request.scope}`);
   }
+
   const remaining = state.records.filter((_, at) => at !== index);
   const lastScopeGone = !remaining.some((record) => record.pluginId === request.pluginId);
   const reclaimed: ReclaimedResources = {
@@ -218,6 +229,7 @@ export async function uninstallPlugin(
     ],
     dataDir: lastScopeGone ? `plugins/${request.pluginId}` : undefined,
   };
+
   return ok({ state: { records: remaining, generation: state.generation + 1 }, reclaimed });
 }
 
@@ -234,18 +246,22 @@ export async function setPluginEnabled(
   if (!approved.ok) {
     return approved;
   }
+
   const index = state.records.findIndex(
     (record) => record.pluginId === request.pluginId && record.scope === request.scope,
   );
   if (index < 0) {
     return err("not_installed", `${request.pluginId} is not installed at scope ${request.scope}`);
   }
+
   const target = state.records[index];
   if (target === undefined) {
     return err("not_installed", `${request.pluginId} is not installed at scope ${request.scope}`);
   }
+
   const updated: PluginRecord = { ...target, enabled: request.enabled };
   const records = state.records.map((record, at) => (at === index ? updated : record));
+
   return ok({ state: { records, generation: state.generation + 1 }, record: updated });
 }
 
@@ -258,17 +274,22 @@ function compareVersionSegment(left: string, right: string): number {
     if (leftValue < rightValue) {
       return -1;
     }
+
     if (leftValue > rightValue) {
       return 1;
     }
+
     return 0;
   }
+
   if (left < right) {
     return -1;
   }
+
   if (left > right) {
     return 1;
   }
+
   return 0;
 }
 
@@ -276,15 +297,18 @@ function compareVersions(left: string, right: string): number {
   if (left === right) {
     return 0;
   }
+
   const leftParts = left.split(".");
   const rightParts = right.split(".");
   const width = Math.max(leftParts.length, rightParts.length);
+
   for (let index = 0; index < width; index += 1) {
     const order = compareVersionSegment(leftParts[index] ?? "", rightParts[index] ?? "");
     if (order !== 0) {
       return order;
     }
   }
+
   return 0;
 }
 
@@ -301,24 +325,30 @@ export async function updatePlugin(
   if (!approved.ok) {
     return approved;
   }
+
   const index = state.records.findIndex(
     (record) => record.pluginId === request.pluginId && record.scope === request.scope,
   );
   if (index < 0) {
     return err("not_installed", `${request.pluginId} is not installed at scope ${request.scope}`);
   }
+
   const target = state.records[index];
   if (target === undefined) {
     return err("not_installed", `${request.pluginId} is not installed at scope ${request.scope}`);
   }
+
   const order = compareVersions(target.version, request.version);
   if (order === 0) {
     return err("already_up_to_date", `${request.pluginId} is already at ${request.version}`);
   }
+
   if (order > 0) {
     return err("version_downgrade", `${request.pluginId} refuses downgrade ${target.version} -> ${request.version}`);
   }
+
   const updated: PluginRecord = { ...target, version: request.version };
   const records = state.records.map((record, at) => (at === index ? updated : record));
+
   return ok({ state: { records, generation: state.generation + 1 }, record: updated });
 }

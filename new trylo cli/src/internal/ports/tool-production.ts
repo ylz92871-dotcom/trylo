@@ -1,14 +1,16 @@
-import type { ToolProductionPlan } from "../learning/domains/tool/evolution/production-plan.js";
+import type { ToolProductionPlan } from "../learning/agent/subsystems/tool/domain/evolution/index.js";
 import type { VerificationAuthorityReader, VerificationReceipt } from "../learning/verification-authority/contracts.js";
 import type { ValidationRecord } from "../tooling/contract/types.js";
 import type { JsonValue } from "../protocol/envelope.js";
-import type { CandidateExecution } from "../learning/domains/tool/evolution/execution.js";
+import type { CandidateExecution } from "../learning/agent/subsystems/tool/domain/evolution/index.js";
 import type { NpmInstallPlan } from "../tooling/contract/npm-install.js";
 import type { McpProtocolVersion } from "./mcp-client.js";
+import type { ToolProductionCheckDiagnosis } from "../learning/agent/subsystems/tool/domain/evolution/production-check.js";
 
 export type ToolProductionCheck =
   | { readonly kind: "verified"; readonly record: ValidationRecord; readonly receipt: VerificationReceipt }
-  | { readonly kind: "failed" | "cancelled"; readonly record: ValidationRecord; readonly failure?: { readonly code: string; readonly message: string } };
+  | { readonly kind: "failed" | "cancelled"; readonly record: ValidationRecord; readonly failure?: { readonly code: string; readonly message: string };
+      readonly diagnosis?: ToolProductionCheckDiagnosis };
 
 /** The process root owns checking/signing. No caller can submit a verdict or a record to sign. */
 export type ToolProductionPort = {

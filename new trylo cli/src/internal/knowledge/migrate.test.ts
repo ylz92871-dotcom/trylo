@@ -15,9 +15,11 @@ test("legacy fragments.json is imported into the board and retired", async () =>
     );
     await ensureMigrated(dir);
     const migrated = await stat(path.join(dir, "fragments.json.migrated"));
+
     assert.equal(migrated.isFile(), true);
     const store = createFragmentStore(dir);
     const all = await store.readAll();
+
     assert.equal(
       all.some((item) => item.body === "run the designated check before editing this repo"),
       true,
@@ -25,6 +27,7 @@ test("legacy fragments.json is imported into the board and retired", async () =>
     const assembled = await bindContextPort(store).assemble({
       messages: [{ role: "user", content: "task" }],
     });
+
     assert.equal(
       assembled.systemFragments.some(
         (item) => item.body === "run the designated check before editing this repo",

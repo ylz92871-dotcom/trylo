@@ -66,23 +66,28 @@ export function parsePluginId(raw: string): Result<{ name: string; marketplace?:
   if (trimmed.length === 0) {
     return err("empty_plugin_id", "plugin id is empty");
   }
+
   if (hasTraversal(trimmed)) {
     return err("path_traversal", `plugin id refuses traversal: ${trimmed}`);
   }
+
   for (const code of [...trimmed].map((ch) => ch.codePointAt(0) ?? 0)) {
     if (!isValidIdChar(code)) {
       return err("invalid_plugin_id", `plugin id carries an illegal character: ${trimmed}`);
     }
   }
+
   const at = trimmed.lastIndexOf("@");
   if (at <= 0) {
     return ok({ name: trimmed });
   }
+
   const name = trimmed.slice(0, at);
   const marketplace = trimmed.slice(at + 1);
   if (name.length === 0 || marketplace.length === 0) {
     return err("invalid_plugin_id", `plugin id is not name[@marketplace]: ${trimmed}`);
   }
+
   return ok({ name, marketplace });
 }
 
@@ -105,15 +110,19 @@ export function validatePluginManifest(input: {
   if (!id.ok) {
     return id;
   }
+
   if (input.version.trim().length === 0) {
     return err("empty_version", "plugin version is empty");
   }
+
   if (hasTraversal(input.version)) {
     return err("path_traversal", "plugin version refuses traversal");
   }
+
   if (input.marketplace !== undefined && hasTraversal(input.marketplace)) {
     return err("path_traversal", `plugin marketplace refuses traversal: ${input.marketplace}`);
   }
+
   const lists = {
     skills: input.skills ?? [],
     mcpServers: input.mcpServers ?? [],
@@ -121,18 +130,22 @@ export function validatePluginManifest(input: {
     commands: input.commands ?? [],
     outputStyles: input.outputStyles ?? [],
   };
+
   for (const entries of Object.values(lists)) {
     const seen = new Set<string>();
     for (const entry of entries) {
       if (entry.length === 0 || hasTraversal(entry)) {
         return err("path_traversal", `plugin contribution refuses empty/traversal entry: ${entry}`);
       }
+
       if (seen.has(entry)) {
         return err("duplicate_contribution", `plugin contribution is declared twice: ${entry}`);
       }
+
       seen.add(entry);
     }
   }
+
   const total =
     lists.skills.length +
     lists.mcpServers.length +
@@ -142,6 +155,7 @@ export function validatePluginManifest(input: {
   if (total === 0) {
     return err("empty_bundle", `plugin ${input.pluginId} contributes nothing; bundles are not loose registries`);
   }
+
   return ok({
     pluginId: input.pluginId,
     version: input.version,

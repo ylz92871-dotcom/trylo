@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { evaluateCandidate, evaluateInducedDraft, evaluatePromptPatchDraft } from "./evaluator.js";
-import { detectPromptPatch } from "../learning/domains/prompt/detector.js";
-import type { PromptGainEpisode } from "../learning/domains/prompt/attribution.js";
+import { detectPromptPatch } from "../learning/agent/subsystems/method/legacy-prompt/detector.js";
+import type { PromptGainEpisode } from "../learning/agent/subsystems/method/legacy-prompt/attribution.js";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { qualityDeltaIgnoringLength } from "./goodhart.js";
@@ -51,6 +51,7 @@ test("evaluator with only LLM self-score cannot set externalPass", () => {
       weakSignals: [{ kind: "llm_self_score", note: "I did better" }],
     }),
   );
+
   assert.equal(bundle.externalPass, false);
   assert.equal(bundle.verdict, "no_external_pass");
   assert.equal(bundle.commandKind, "submit_evidence");
@@ -69,12 +70,14 @@ test("self-generated tests cannot be the sole external anchor", () => {
       weakSignals: [{ kind: "self_generated_tests", note: "generator wrote passing tests" }],
     }),
   );
+
   assert.equal(bundle.externalPass, false);
   assert.equal(bundle.verdict, "no_external_pass");
 });
 
 test("independent external pass recommends shadow, never activation", () => {
   const bundle = evaluateCandidate(request({}));
+
   assert.equal(bundle.verdict, "recommend_shadow");
   assert.equal(bundle.externalPass, true);
   assert.equal("activate" in bundle, false);
@@ -91,6 +94,7 @@ test("self-generated anchors are stripped from externalAnchors", () => {
       candidateAnchors: [verdict("pass", true), verdict("pass", false)],
     }),
   );
+
   assert.equal(bundle.externalAnchors.length, 1);
   assert.equal(bundle.externalAnchors[0]?.selfGenerated, false);
 });
@@ -103,6 +107,7 @@ test("cost and latency spike without failure diversity is rejected", () => {
       failureDiversity: 0,
     }),
   );
+
   assert.equal(bundle.verdict, "reject");
   assert.equal(bundle.externalPass, false);
   assert.equal(bundle.negativeCritique.length > 0, true);
@@ -115,6 +120,7 @@ test("judge rubric cannot fill externalPass", () => {
       judgeRubricScore: 0.99,
     }),
   );
+
   assert.equal(bundle.externalPass, false);
   assert.equal(
     bundle.weakSignals.some((signal) => signal.kind === "judge_rubric"),
@@ -125,11 +131,15 @@ test("judge rubric cannot fill externalPass", () => {
 test("keep-best never activates even when candidate wins shadow", () => {
   const bundle = evaluateCandidate(request({}));
   const best = keepBest(bundle);
+
   assert.equal(best.kind, "keep_candidate");
+
   if (best.kind === "keep_candidate") {
     assert.equal(best.activationEligible, false);
   }
+
   const rejected = keepBest(evaluateCandidate(request({ criticalRegressionFailed: true })));
+
   assert.equal(rejected.kind, "keep_baseline");
 });
 
@@ -175,6 +185,7 @@ test("profile drops duplicates and global scope leaks", () => {
     assert.fail("preview should succeed");
     return;
   }
+
   assert.equal(preview.duplicates.includes("b"), true);
   assert.equal(preview.scopeLeaks.includes("global"), true);
   assert.equal(preview.applied.some((asset) => asset.id === "global"), false);
@@ -192,11 +203,15 @@ test("evaluator consumes a prompt draft and records threshold plus successRate",
   );
   const payload = JSON.parse(readFileSync(file, "utf8")) as { episodes: PromptGainEpisode[] };
   const detected = detectPromptPatch({ episodes: payload.episodes });
+
   assert.equal(detected.kind, "draft");
+
   if (detected.kind !== "draft") {
     return;
   }
+
   const bundle = evaluatePromptPatchDraft(detected.draft, request({}));
+
   assert.equal(bundle.proposalId, detected.draft.id);
   assert.equal(bundle.threshold, 2);
   assert.equal(bundle.metrics.successRate > 0, true);
@@ -205,13 +220,18 @@ test("evaluator consumes a prompt draft and records threshold plus successRate",
 
 test("induced skill/workflow drafts still need external eval and cannot activate", () => {
   const bundle = evaluateInducedDraft("sk_1", request({}));
+
   assert.equal(bundle.proposalId, "sk_1");
   const best = keepBest(bundle);
+
   assert.equal(best.kind, "keep_candidate");
+
   if (best.kind === "keep_candidate") {
     assert.equal(best.activationEligible, false);
   }
+
   const weak = evaluateInducedDraft("wf_1", request({ candidateAnchors: [] }));
+
   assert.equal(weak.externalPass, false);
 });
 
@@ -257,10 +277,13 @@ test("profile preview reports conflicts and keeps the current instruction", () =
     ],
     tokenBudget: 200,
   });
+
   assert.equal("kind" in preview && preview.kind === "failure", false);
+
   if ("kind" in preview) {
     return;
   }
+
   assert.equal(preview.currentInstruction, "this task: use pnpm only");
   assert.equal(preview.currentInstructionPreserved, true);
   assert.equal(preview.rendered[0]?.sourceMark, "current_instruction");
@@ -290,10 +313,13 @@ test("token budget trims inferred assets but never the current instruction", () 
     ],
     tokenBudget: estimateSmallBudget(),
   });
+
   assert.equal("kind" in preview && preview.kind === "failure", false);
+
   if ("kind" in preview) {
     return;
   }
+
   assert.equal(preview.currentInstruction.includes("CURRENT_INSTRUCTION_MUST_STAY"), true);
   assert.equal(preview.currentInstructionPreserved, true);
   assert.equal(
@@ -320,7 +346,9 @@ test("hidden chain-of-thought cannot enter the preview", () => {
     ],
     tokenBudget: 100,
   });
+
   assert.equal("kind" in preview, true);
+
   if ("kind" in preview) {
     assert.equal(preview.kind, "failure");
     if (preview.kind === "failure") {
@@ -352,6 +380,7 @@ test("profile render is deterministic", () => {
   };
   const first = renderProfilePreview(input);
   const second = renderProfilePreview(input);
+
   assert.deepEqual(first, second);
 });
 

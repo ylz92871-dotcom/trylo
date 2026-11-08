@@ -15,6 +15,7 @@ function setupLedger(): { readonly port: CredentialPort; readonly records: () =>
     crypto: { randomUUID: () => "test-uuid" },
     hasProject: false,
   };
+
   return {
     port: bindVerbs(deps),
     records: () => {
@@ -29,6 +30,7 @@ test("Adversarial 1: 10-way concurrent 401 stampede merges into exactly ONE netw
   const mockFetch: typeof globalThis.fetch = async () => {
     networkCalls += 1;
     await new Promise((r) => setTimeout(r, 20));
+
     return new Response(
       JSON.stringify({
         access_token: "new-access-token-456",
@@ -58,12 +60,14 @@ test("Adversarial 1: 10-way concurrent 401 stampede merges into exactly ONE netw
   );
 
   assert.equal(networkCalls, 1, "Stampede MUST merge into exactly 1 network refresh (single-flight)");
+
   for (const res of results) {
     assert.equal(res.refreshed, true);
     if (res.refreshed) {
       assert.equal(res.token, "new-access-token-456");
     }
   }
+
   assert.equal(manager.currentAccessToken, "new-access-token-456");
 });
 
@@ -97,7 +101,9 @@ test("Adversarial 2: Expired/revoked refresh token fails closed without falling 
   });
 
   const res = await manager.handleAuthError(401);
+
   assert.equal(res.refreshed, false);
+
   if (!res.refreshed) {
     assert.match(res.reason, /revoked or expired/);
     assert.match(res.hint, /trylo login/);
@@ -145,6 +151,7 @@ test("Adversarial 3: Provider 401 retry is strictly bounded to 1 attempt to prev
   );
 
   const events = [];
+
   for await (const ev of stream) {
     events.push(ev);
   }
@@ -153,7 +160,9 @@ test("Adversarial 3: Provider 401 retry is strictly bounded to 1 attempt to prev
   assert.equal(attempts, 2, "Must retry at most once upon 401");
   assert.equal(tokenManagerCalls, 1, "Token manager must be asked to refresh once");
   const errorEvent = events.find((e) => e.type === "error");
+
   assert.notEqual(errorEvent, undefined);
+
   if (errorEvent && errorEvent.type === "error") {
     assert.equal(errorEvent.class, "auth");
     assert.match(errorEvent.message, /401/);
@@ -178,22 +187,28 @@ test("Adversarial 4: Zero secret leaks across public entries, status, and ledger
 
   // 1. Status rows: never include secret, accessToken, refreshToken
   const statusRes = port.status();
+
   assert.equal(statusRes.ok, true);
   const statusStr = JSON.stringify(statusRes);
+
   assert.equal(statusStr.includes(SECRET_KEY), false);
   assert.equal(statusStr.includes(REFRESH_SECRET), false);
 
   // 2. Public entries: never include secret, accessToken, refreshToken
   const listRes = port.list();
+
   assert.equal(listRes.ok, true);
   const listStr = JSON.stringify(listRes);
+
   assert.equal(listStr.includes(SECRET_KEY), false);
   assert.equal(listStr.includes(REFRESH_SECRET), false);
 
   // 3. Export public: never include secret, accessToken, refreshToken
   const pubRes = port.exportPublic();
+
   assert.equal(pubRes.ok, true);
   const pubStr = JSON.stringify(pubRes);
+
   assert.equal(pubStr.includes(SECRET_KEY), false);
   assert.equal(pubStr.includes(REFRESH_SECRET), false);
 });
@@ -221,7 +236,9 @@ test("Adversarial 5: Multi-account isolation: account switching, deletion and pr
 
   // Account B was added second, so it became active
   const resolvedB = port.get("openai-compatible");
+
   assert.equal(resolvedB.ok, true);
+
   if (resolvedB.ok) {
     assert.equal(resolvedB.value.accountId, "account-b");
     assert.equal(resolvedB.value.secret, TOKEN_B);
@@ -229,17 +246,22 @@ test("Adversarial 5: Multi-account isolation: account switching, deletion and pr
 
   // Deleting active account must be blocked
   const delActive = port.delete({ providerId: "openai-compatible", accountId: "account-b", scope: "user" });
+
   assert.equal(delActive.ok, false);
+
   if (!delActive.ok) {
     assert.equal(delActive.code, "current_account_protected");
   }
 
   // Switch back to Account A
   const switchRes = port.switch({ providerId: "openai-compatible", accountId: "account-a", scope: "user" });
+
   assert.equal(switchRes.ok, true);
 
   const resolvedA = port.get("openai-compatible");
+
   assert.equal(resolvedA.ok, true);
+
   if (resolvedA.ok) {
     assert.equal(resolvedA.value.accountId, "account-a");
     assert.equal(resolvedA.value.secret, TOKEN_A);
@@ -247,6 +269,7 @@ test("Adversarial 5: Multi-account isolation: account switching, deletion and pr
 
   // Now account-b is inactive, deleting it succeeds
   const delInactive = port.delete({ providerId: "openai-compatible", accountId: "account-b", scope: "user" });
+
   assert.equal(delInactive.ok, true);
 
   // Verify only account-a remains

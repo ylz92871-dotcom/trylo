@@ -47,6 +47,7 @@ test("exportPublic carries no secret field anywhere", () => {
   });
   const view = mergePublic({ status: STATUS, ...collectEntries(user, undefined) });
   const rendered = JSON.stringify(view);
+
   assert.equal(rendered.includes("sk-a"), false);
   assert.equal(rendered.includes("secret"), false);
 });
@@ -58,6 +59,7 @@ test("the merged view orders providers by the port's table, then account id", ()
     records: [RECORD_B, RECORD_A],
   });
   const view = mergePublic({ status: STATUS, ...collectEntries(user, undefined) });
+
   assert.deepEqual(
     view.entries.map((entry) => entry.accountId),
     ["acct-a", "acct-b"],
@@ -71,6 +73,7 @@ test("isCurrent agrees with the scope's own pointer", () => {
     records: [RECORD_A, RECORD_B],
   });
   const entries = collectEntries(user, undefined).userEntries;
+
   assert.deepEqual(
     entries.filter((entry) => entry.isCurrent).map((entry) => entry.accountId),
     ["acct-b"],
@@ -91,6 +94,7 @@ test("a status row is derived from resolution and never carries a secret", () =>
     hasProject: false,
     user: emptyDocument(),
   });
+
   assert.equal(row.layer, "env");
   assert.equal(row.loggedIn, true);
   assert.equal(JSON.stringify(row).includes("sk-env"), false);

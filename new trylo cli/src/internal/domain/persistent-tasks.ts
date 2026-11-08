@@ -22,6 +22,7 @@
  */
 
 export const TASK_STATUSES = ["pending", "in_progress", "completed"] as const;
+
 export type PersistentTaskStatus = (typeof TASK_STATUSES)[number];
 
 export type PersistentTask = {
@@ -80,21 +81,27 @@ export function validateNewTask(raw: Record<string, unknown>): NewTaskValidation
   const subject = raw["subject"];
   const description = raw["description"];
   const activeForm = raw["activeForm"];
+
   if (typeof subject !== "string" || subject.trim().length === 0) {
     return { ok: false, message: "task subject must be a non-empty string" };
   }
+
   if (subject.length > MAX_SUBJECT_CHARS) {
     return { ok: false, message: `task subject is ${subject.length} characters; the limit is ${MAX_SUBJECT_CHARS}` };
   }
+
   if (typeof description !== "string" || description.trim().length === 0) {
     return { ok: false, message: "task description must be a non-empty string" };
   }
+
   if (description.length > MAX_DESCRIPTION_CHARS) {
     return { ok: false, message: `task description is ${description.length} characters; the limit is ${MAX_DESCRIPTION_CHARS}` };
   }
+
   if (activeForm !== undefined && (typeof activeForm !== "string" || activeForm.length > MAX_SUBJECT_CHARS)) {
     return { ok: false, message: `activeForm must be a string of at most ${MAX_SUBJECT_CHARS} characters` };
   }
+
   return {
     ok: true,
     input: {
@@ -124,17 +131,21 @@ export function claimTask(
   if (task === undefined) {
     return { ok: false, reason: "task_not_found", message: `task ${taskId} does not exist` };
   }
+
   if (task.owner !== undefined && task.owner !== claimant) {
     return { ok: false, reason: "already_claimed", message: `task ${taskId} is already claimed by ${task.owner}` };
   }
+
   if (task.status === "completed") {
     return { ok: false, reason: "already_resolved", message: `task ${taskId} is already completed` };
   }
+
   const unfinished = unfinishedIds(tasks);
   const blockers = task.blockedBy.filter((id) => unfinished.has(id));
   if (blockers.length > 0) {
     return { ok: false, reason: "blocked", message: `task ${taskId} is blocked by ${blockers.map((id) => `#${id}`).join(", ")}` };
   }
+
   if (options.checkAgentBusy === true) {
     const busyWith = tasks.filter(
       (entry) => entry.id !== taskId && entry.owner === claimant && entry.status !== "completed",
@@ -147,6 +158,7 @@ export function claimTask(
       };
     }
   }
+
   return { ok: true, task: { ...task, owner: claimant } };
 }
 
@@ -165,20 +177,24 @@ export function linkDependency(
   if (fromId === toId) {
     return { ok: false, message: "a task cannot block itself" };
   }
+
   const from = findTask(tasks, fromId);
   const to = findTask(tasks, toId);
   if (from === undefined || to === undefined) {
     return { ok: false, message: `dependency needs two existing tasks; missing ${from === undefined ? fromId : toId}` };
   }
+
   return {
     ok: true,
     tasks: tasks.map((entry) => {
       if (entry.id === fromId && entry.blocks.includes(toId) === false) {
         return { ...entry, blocks: [...entry.blocks, toId] };
       }
+
       if (entry.id === toId && entry.blockedBy.includes(fromId) === false) {
         return { ...entry, blockedBy: [...entry.blockedBy, fromId] };
       }
+
       return entry;
     }),
   };
@@ -191,14 +207,18 @@ export function linkDependency(
  */
 export function renderTask(task: PersistentTask): string {
   const lines = [`Task #${task.id}: ${task.subject}`, `Status: ${task.status}`, `Description: ${task.description}`];
+
   if (task.owner !== undefined) {
     lines.push(`Owner: ${task.owner}`);
   }
+
   if (task.blockedBy.length > 0) {
     lines.push(`Blocked by: ${task.blockedBy.map((id) => `#${id}`).join(", ")}`);
   }
+
   if (task.blocks.length > 0) {
     lines.push(`Blocks: ${task.blocks.map((id) => `#${id}`).join(", ")}`);
   }
+
   return lines.join("\n");
 }

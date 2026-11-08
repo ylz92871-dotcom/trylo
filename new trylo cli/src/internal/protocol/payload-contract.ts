@@ -129,8 +129,8 @@ export const PAYLOAD_CONTRACTS: Readonly<Record<EventKind, PayloadContract>> = {
   },
   permission_denied: {
     required: ["toolCallId", "resolution"],
-    optional: [],
-    types: { toolCallId: "string", resolution: "string" },
+    optional: ["code", "message"],
+    types: { toolCallId: "string", resolution: "string", code: "string", message: "string" },
   },
   subagent_spawn: {
     required: [],
@@ -205,6 +205,7 @@ export const PAYLOAD_CONTRACTS: Readonly<Record<EventKind, PayloadContract>> = {
  */
 export function checkPayload(kind: EventKind, payload: JsonObject): PayloadContractCheck {
   const contract = PAYLOAD_CONTRACTS[kind];
+
   for (const field of contract.required) {
     const expected = contract.types[field];
     if (expected === undefined) {
@@ -214,6 +215,7 @@ export function checkPayload(kind: EventKind, payload: JsonObject): PayloadContr
         detail: `${kind}.${field} 在契约表里没有声明类型（表自身不一致）`,
       };
     }
+
     if (!hasType(payload[field], expected)) {
       return {
         ok: false,
@@ -222,6 +224,7 @@ export function checkPayload(kind: EventKind, payload: JsonObject): PayloadContr
       };
     }
   }
+
   return { ok: true };
 }
 

@@ -40,20 +40,26 @@ test("pending then success yields tokens with the endpoint recorded", async () =
           interval: 1,
         });
       }
+
       polls += 1;
+
       if (polls === 1) {
         return jsonResponse({ error: "authorization_pending" }, 400);
       }
+
       return jsonResponse({ access_token: "at-1", refresh_token: "rt-1", expires_in: 3600, token_type: "Bearer" });
     }) as typeof globalThis.fetch,
   });
+
   assert.equal(result.ok, true);
+
   if (result.ok) {
     assert.equal(result.tokens.accessToken, "at-1");
     assert.equal(result.tokens.refreshToken, "rt-1");
     assert.equal(result.tokens.tokenEndpoint, TOKEN);
     assert.equal(result.tokens.clientId, "trylo-cli");
   }
+
   assert.deepEqual(seen, ["ABCD-1234@https://auth.openai.com/activate"]);
   assert.equal(polls, 2);
 });
@@ -70,10 +76,13 @@ test("denied and expired grants are terminal, slown_down stretches the interval"
         ? jsonResponse({ device_code: "d", user_code: "u", verification_uri: "https://auth.openai.com/activate", expires_in: 600, interval: 1 })
         : jsonResponse({ error: "access_denied" }, 400)) as typeof globalThis.fetch,
   });
+
   assert.equal(denied.ok, false);
+
   if (!denied.ok) {
     assert.equal(denied.code, "authorization_denied");
   }
+
   const expired = await executeDeviceFlow({
     deviceEndpoint: DEVICE,
     tokenEndpoint: TOKEN,
@@ -85,7 +94,9 @@ test("denied and expired grants are terminal, slown_down stretches the interval"
         ? jsonResponse({ device_code: "d", user_code: "u", verification_uri: "https://auth.openai.com/activate", expires_in: 600, interval: 1 })
         : jsonResponse({ error: "expired_token" }, 400)) as typeof globalThis.fetch,
   });
+
   assert.equal(expired.ok, false);
+
   if (!expired.ok) {
     assert.equal(expired.code, "grant_expired");
   }
@@ -102,9 +113,12 @@ test("an untrusted device endpoint is refused before any fetch", async () => {
       return jsonResponse({});
     }) as typeof globalThis.fetch,
   });
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.code, "untrusted_endpoint");
   }
+
   assert.equal(fetched, false);
 });

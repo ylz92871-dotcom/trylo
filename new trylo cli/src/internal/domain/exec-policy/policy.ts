@@ -70,19 +70,24 @@ export function withPrefixRule(policy: ExecPolicy, rule: PrefixRule): ExecPolicy
  */
 export function mergeExecPolicy(base: ExecPolicy, overlay: ExecPolicy): ExecPolicy {
   const rulesByProgram = new Map(base.rulesByProgram);
+
   for (const [program, rules] of overlay.rulesByProgram) {
     rulesByProgram.set(program, [...(rulesByProgram.get(program) ?? []), ...rules]);
   }
+
   const hostExecutables = new Map(base.hostExecutables);
+
   for (const [name, paths] of overlay.hostExecutables) {
     hostExecutables.set(name, paths);
   }
+
   return { rulesByProgram, hostExecutables };
 }
 
 /** Every `allow`-ed prefix, for operator-facing output. Sorted and deduped. */
 export function allowedPrefixes(policy: ExecPolicy): ReadonlyArray<ReadonlyArray<string>> {
   const byKey = new Map<string, ReadonlyArray<string>>();
+
   for (const rules of policy.rulesByProgram.values()) {
     for (const rule of rules) {
       if (rule.decision !== "allow") {
@@ -92,6 +97,7 @@ export function allowedPrefixes(policy: ExecPolicy): ReadonlyArray<ReadonlyArray
       byKey.set(prefix.join(" "), prefix);
     }
   }
+
   return [...byKey.entries()]
     .sort((left, right) => left[0].localeCompare(right[0]))
     .map(([, prefix]) => prefix);
@@ -109,7 +115,9 @@ function matchExactRules(
   if (head === undefined) {
     return [];
   }
+
   const rules = policy.rulesByProgram.get(head) ?? [];
+
   return rules
     .map((rule) => matchPrefixRule(rule, argv))
     .filter((match): match is RuleMatch => match !== undefined);
@@ -130,19 +138,24 @@ function matchHostExecutableRules(
   if (head === undefined) {
     return [];
   }
+
   const basename = executableBasename(head, options.platform);
   if (basename === undefined) {
     return [];
   }
+
   const rules = policy.rulesByProgram.get(basename);
   if (rules === undefined) {
     return [];
   }
+
   const declared = policy.hostExecutables.get(basename);
   if (declared !== undefined && !declared.includes(head)) {
     return [];
   }
+
   const rewritten = [basename, ...argv.slice(1)];
+
   return rules
     .map((rule) => matchPrefixRule(rule, rewritten, head))
     .filter((match): match is RuleMatch => match !== undefined);
@@ -162,12 +175,14 @@ export function matchesForCommand(
   if (exact.length > 0) {
     return exact;
   }
+
   if (options.resolveHostExecutables) {
     const viaPath = matchHostExecutableRules(policy, argv, options);
     if (viaPath.length > 0) {
       return viaPath;
     }
   }
+
   return [];
 }
 
@@ -186,5 +201,6 @@ export function evaluateExecPolicy(
       matchedRules: [{ kind: "heuristics", command: [...argv], decision }],
     };
   }
+
   return { decision: decided, matchedRules: matched };
 }

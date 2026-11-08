@@ -77,6 +77,7 @@ export function createMcpSession(options: {
       if (!resolved.ok) {
         return { ok: false, code: resolved.code, detail: resolved.detail };
       }
+
       const entry = resolved.value.entry;
       const client = options.clientFactory(entry, options.cwd);
 
@@ -85,13 +86,16 @@ export function createMcpSession(options: {
         await client.close();
         return { ok: false, code: connected.code, detail: connected.detail };
       }
+
       const listed = await client.listTools();
       if (!listed.ok) {
         await client.close();
         return { ok: false, code: listed.code, detail: listed.detail };
       }
 
+      // Publish only after initialization and tool discovery both succeed.
       live.set(name, client);
+
       return { ok: true, value: wrapSession(name, connected.value, listed.value, client) };
     },
 
@@ -117,6 +121,7 @@ function wrapSession(
       if (!qualified.ok) {
         return { ok: false, code: qualified.code, detail: qualified.detail };
       }
+
       const result = await client.callTool({
         qualifiedName: qualified.value,
         arguments: args,
@@ -126,6 +131,7 @@ function wrapSession(
       if (!result.ok) {
         return { ok: false, code: result.code, detail: result.detail };
       }
+
       return { ok: true, outcome: result.outcome };
     },
     async close() {

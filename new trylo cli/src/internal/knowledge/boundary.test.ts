@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+
 const SRC_ROOT = path.join(process.cwd(), "src", "internal");
 
 test("loop and permission must not import knowledge", async () => {
@@ -10,12 +11,14 @@ test("loop and permission must not import knowledge", async () => {
     ...(await listTsFiles(path.join(SRC_ROOT, "ports", "permission.ts"))),
   ];
   const offenders: string[] = [];
+
   for (const file of files) {
     const source = await readFile(file, "utf8");
     if (importsKnowledge(source)) {
       offenders.push(path.relative(SRC_ROOT, file));
     }
   }
+
   assert.deepEqual(offenders, []);
 });
 
@@ -25,6 +28,7 @@ function importsKnowledge(source: string): boolean {
 
 async function listTsFiles(target: string): Promise<string[]> {
   let info;
+
   try {
     info = await stat(target);
   } catch (err) {
@@ -33,11 +37,14 @@ async function listTsFiles(target: string): Promise<string[]> {
     }
     throw err;
   }
+
   if (info.isFile()) {
     return target.endsWith(".ts") && !target.endsWith(".test.ts") ? [target] : [];
   }
+
   const entries = await readdir(target, { withFileTypes: true });
   const files: string[] = [];
+
   for (const entry of entries) {
     const full = path.join(target, entry.name);
     if (entry.isDirectory()) {
@@ -46,6 +53,7 @@ async function listTsFiles(target: string): Promise<string[]> {
       files.push(full);
     }
   }
+
   return files;
 }
 

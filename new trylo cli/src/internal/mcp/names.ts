@@ -60,9 +60,11 @@ export function qualifyMcpToolName(
   if (!SERVER_ID_PATTERN.test(serverId) || serverId.includes(MCP_NAME_SEPARATOR)) {
     return { ok: false, code: "invalid_server_id", detail: `server id ${JSON.stringify(serverId)} is not usable in a tool name` };
   }
+
   if (serverToolName.length === 0) {
     return { ok: false, code: "invalid_tool_name", detail: "tool name must not be empty" };
   }
+
   if (serverToolName.includes(MCP_NAME_SEPARATOR)) {
     return {
       ok: false,
@@ -70,6 +72,7 @@ export function qualifyMcpToolName(
       detail: `tool name ${JSON.stringify(serverToolName)} contains the server separator`,
     };
   }
+
   return { ok: true, value: `${MCP_TOOL_PREFIX}${serverId}${MCP_NAME_SEPARATOR}${serverToolName}` };
 }
 
@@ -83,6 +86,7 @@ export function parseMcpToolName(qualifiedName: string): McpNameResult {
   if (!qualifiedName.startsWith(MCP_TOOL_PREFIX)) {
     return { ok: false, code: "not_mcp_name", detail: "not an mcp tool name" };
   }
+
   const rest = qualifiedName.slice(MCP_TOOL_PREFIX.length);
   const separator = rest.indexOf(MCP_NAME_SEPARATOR);
   if (separator <= 0 || separator === rest.length - MCP_NAME_SEPARATOR.length) {
@@ -90,11 +94,14 @@ export function parseMcpToolName(qualifiedName: string): McpNameResult {
     // empty half, and an empty half is never a legal server id or tool name.
     return { ok: false, code: "malformed_mcp_name", detail: `cannot split ${JSON.stringify(qualifiedName)}` };
   }
+
   const serverId = rest.slice(0, separator);
   const serverToolName = rest.slice(separator + MCP_NAME_SEPARATOR.length);
+
   if (!SERVER_ID_PATTERN.test(serverId)) {
     return { ok: false, code: "malformed_mcp_name", detail: `server half ${JSON.stringify(serverId)} is not a valid id` };
   }
+
   if (serverToolName.includes(MCP_NAME_SEPARATOR)) {
     // With the first separator consumed, a second one in the remainder means
     // the name was produced outside this module (or by a server id that
@@ -105,6 +112,7 @@ export function parseMcpToolName(qualifiedName: string): McpNameResult {
       detail: `tool half ${JSON.stringify(serverToolName)} contains a separator`,
     };
   }
+
   return { ok: true, value: { serverId, serverToolName } };
 }
 
@@ -121,7 +129,9 @@ export function isRoundTrippable(serverId: string, serverToolName: string): bool
   if (!qualified.ok) {
     return false;
   }
+
   const parsed = parseMcpToolName(qualified.value);
+
   return (
     parsed.ok &&
     parsed.value.serverId === serverId &&

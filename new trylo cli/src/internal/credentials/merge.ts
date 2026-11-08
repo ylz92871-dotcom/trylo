@@ -57,10 +57,12 @@ function orderEntries(
     if (byProvider !== 0) {
       return byProvider;
     }
+
     const byScope = scopeOrder(a.scope) - scopeOrder(b.scope);
     if (byScope !== 0) {
       return byScope;
     }
+
     return a.accountId < b.accountId ? -1 : a.accountId > b.accountId ? 1 : 0;
   });
 }

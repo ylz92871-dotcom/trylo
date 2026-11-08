@@ -35,6 +35,7 @@ export function createJournal(options: JournalOptions = {}): Journal {
   const events: ProjectedEvent[] = [];
   const facts: ExecutionFact[] = [];
   const tombstones = new Set<string>();
+
   return {
     record(event) {
       events.push(event);
@@ -51,7 +52,9 @@ export function createJournal(options: JournalOptions = {}): Journal {
       if (max === undefined || facts.length <= max) {
         return;
       }
+
       const overflow = facts.length - max;
+
       for (let index = 0; index < overflow; index += 1) {
         const old = facts[index];
         if (old !== undefined) {

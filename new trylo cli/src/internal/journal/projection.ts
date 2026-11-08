@@ -31,6 +31,7 @@ export function projectFacts(
   facts: ReadonlyArray<ExecutionFact>,
   collect: boolean,
 ): LearningProjection {
+  // Collection consent applies before any fact is converted into a learning observation.
   if (!collect) {
     return { ok: true, observations: [] };
   }
@@ -65,12 +66,14 @@ export function observationLeaksForbidden(
   fact: ExecutionFact,
 ): boolean {
   const serialized = JSON.stringify(observation);
+
   for (const field of FORBIDDEN_FACT_FIELDS) {
     const value = fact[field];
     if (typeof value === "string" && value.length > 0 && serialized.includes(value)) {
       return true;
     }
   }
+
   return false;
 }
 
@@ -79,23 +82,30 @@ function withOptional(
   fact: ExecutionFact,
 ): LearningObservation {
   let next = observation;
+
   if (fact.snapshotId !== undefined) {
     next = { ...next, snapshotRef: fact.snapshotId };
   }
+
   if (fact.verdict !== undefined) {
     next = { ...next, verdict: fact.verdict };
   }
+
   if (fact.tokenCost !== undefined) {
     next = { ...next, tokenCost: fact.tokenCost };
   }
+
   if (fact.latencyMs !== undefined) {
     next = { ...next, latencyMs: fact.latencyMs };
   }
+
   if (fact.sequence !== undefined) {
     next = { ...next, boardSequence: fact.sequence };
   }
+
   if (fact.reason !== undefined) {
     next = { ...next, reason: fact.reason };
   }
+
   return next;
 }

@@ -50,6 +50,7 @@ export function readAnnotations(raw: unknown): McpToolAnnotations {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return {};
   }
+
   const record = raw as Readonly<Record<string, unknown>>;
   const out: {
     readOnlyHint?: boolean;
@@ -57,24 +58,28 @@ export function readAnnotations(raw: unknown): McpToolAnnotations {
     idempotentHint?: boolean;
     openWorldHint?: boolean;
   } = {};
+
   for (const key of MCP_ANNOTATION_KEYS) {
     const value = record[key];
     if (typeof value === "boolean") {
       out[key] = value;
     }
   }
+
   return out;
 }
 
 /** The hints as a plain JSON object, for metadata and journals. */
 export function annotationsToJson(annotations: McpToolAnnotations): JsonObject {
   const out: Record<string, boolean> = {};
+
   for (const key of MCP_ANNOTATION_KEYS) {
     const value = annotations[key];
     if (value !== undefined) {
       out[key] = value;
     }
   }
+
   return out;
 }
 
@@ -98,14 +103,17 @@ export type McpApprovalRequirement = {
 export function approvalRequirementFor(_annotations: McpToolAnnotations): McpApprovalRequirement {
   const overridden = MCP_ANNOTATION_KEYS.filter((key) => {
     const value = _annotations[key];
+
     // `readOnlyHint: true` / `destructiveHint: false` / `idempotentHint: true`
     // are the three shapes a server uses to argue for a lighter touch.
     if (key === "readOnlyHint" || key === "idempotentHint") {
       return value === true;
     }
+
     if (key === "destructiveHint") {
       return value === false;
     }
+
     return false;
   });
   return {
@@ -121,11 +129,13 @@ export function approvalRequirementFor(_annotations: McpToolAnnotations): McpApp
  */
 export function describeAnnotations(annotations: McpToolAnnotations): string {
   const parts: string[] = [];
+
   for (const key of MCP_ANNOTATION_KEYS) {
     const value = annotations[key];
     if (value !== undefined) {
       parts.push(`${key}=${value ? "true" : "false"}`);
     }
   }
+
   return parts.length === 0 ? "no annotations published" : parts.join(", ");
 }

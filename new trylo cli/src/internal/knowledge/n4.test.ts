@@ -25,9 +25,11 @@ test("2: correction is effective; inferred candidate is invisible to assemble", 
     const store = createFragmentStore(rootDir);
     const ingest = createIngest(store);
     const assemble = bindContextPort(store).assemble;
+
     await ingest.recordCorrection("run the designated check first", "user");
     await ingest.appendCandidate("skip the check next time");
     const assembled = await assemble();
+
     assert.equal(
       assembled.systemFragments.some((item) => item.body === "run the designated check first"),
       true,
@@ -46,6 +48,7 @@ test("3: assemble failure returns empty fragments and keeps messages", async () 
     const assembled = await bindContextPort(createFragmentStore(rootDir)).assemble({
       messages,
     });
+
     assert.deepEqual(assembled.systemFragments, []);
     assert.deepEqual(assembled.messages, messages);
     assert.equal(assembled.degradedReason?.code, "board_unavailable");
@@ -64,13 +67,16 @@ test("withdraw hides an effective fragment from the next assemble", async () => 
     const ingest = createIngest(store);
     const assemble = bindContextPort(store).assemble;
     const written = await ingest.recordCorrection("always run the check", "user");
+
     await ingest.withdraw(written.id);
     const assembled = await assemble();
+
     assert.equal(
       assembled.systemFragments.some((item) => item.id === written.id),
       false,
     );
     const stored = await store.readAll();
+
     assert.equal(stored.find((item) => item.id === written.id)?.state, "withdrawn");
   });
 });
@@ -81,10 +87,13 @@ test("remove deletes a fragment so assemble cannot see it", async () => {
     const ingest = createIngest(store);
     const assemble = bindContextPort(store).assemble;
     const written = await ingest.recordCorrection("delete this rule", "user");
+
     await ingest.remove(written.id);
     const stored = await store.readAll();
+
     assert.equal(stored.some((item) => item.id === written.id), false);
     const assembled = await assemble();
+
     assert.equal(
       assembled.systemFragments.some((item) => item.body === "delete this rule"),
       false,
@@ -95,6 +104,7 @@ test("remove deletes a fragment so assemble cannot see it", async () => {
 test("5+6: verified defaults false; learning result has no permission fields", async () => {
   await withDir(async (rootDir) => {
     const assembled = await bindContextPort(createFragmentStore(rootDir)).assemble();
+
     assert.equal(assembled.verified, false);
     assert.equal(isVerified({ turn: { finish: "completed" } }), false);
     assert.deepEqual(assembled.requiredChecks, []);

@@ -41,12 +41,14 @@ const SPECIFIER_PATTERN = /(?:from\s+|import\s*\(\s*|^\s*import\s+)['"]([^'"]+)[
 
 function importedSpecifiers(source: string): ReadonlyArray<string> {
   const specifiers: string[] = [];
+
   for (const match of source.matchAll(SPECIFIER_PATTERN)) {
     const specifier = match[1];
     if (specifier !== undefined) {
       specifiers.push(specifier);
     }
   }
+
   return specifiers;
 }
 
@@ -61,6 +63,7 @@ function isBarePackage(specifier: string): boolean {
 
 function violationsIn(source: string): ReadonlyArray<string> {
   const violations: string[] = [];
+
   for (const specifier of importedSpecifiers(source)) {
     for (const segment of segmentHits(specifier)) {
       violations.push(`forbidden-layer:${segment} via ${specifier}`);
@@ -69,27 +72,33 @@ function violationsIn(source: string): ReadonlyArray<string> {
       violations.push(`bare-package-import via ${specifier}`);
     }
   }
+
   return violations;
 }
 
 function productionFiles(): ReadonlyArray<string> {
   const files: string[] = [];
+
   for (const entry of readdirSync(settingsDir)) {
     const full = join(settingsDir, entry);
     if (statSync(full).isFile() && full.endsWith(".ts") && !full.endsWith(".test.ts")) {
       files.push(full);
     }
   }
+
   files.push(portFile, adapterFile);
+
   return files;
 }
 
 test("settings package imports no forbidden layer and no bare package", () => {
   const files = productionFiles();
+
   // 6 settings modules + the port + the adapter; fewer means the directory moved.
   assert.equal(files.length >= 8, true, `too few files scanned (${files.length})`);
   let specifierCount = 0;
   const violations: string[] = [];
+
   for (const file of files) {
     const source = readFileSync(file, "utf8");
     specifierCount += importedSpecifiers(source).length;
@@ -97,6 +106,7 @@ test("settings package imports no forbidden layer and no bare package", () => {
       violations.push(`${relative(repoRoot, file).replaceAll("\\", "/")} ${violation}`);
     }
   }
+
   assert.equal(specifierCount >= 15, true, "too few specifiers scanned; detector may be broken");
   assert.deepEqual(violations, []);
 });
@@ -117,6 +127,7 @@ test("no file imports config/layers (the WP chose zero coupling to the old loade
 test("detector is discriminating: the forbidden fixture lights up on every layer", () => {
   const source = readFileSync(join(fixtureDir, "forbidden-import-settings.ts"), "utf8");
   const violations = violationsIn(source);
+
   for (const segment of FORBIDDEN_SEGMENTS) {
     assert.equal(
       violations.some((item) => item.startsWith(`forbidden-layer:${segment}`)),

@@ -9,17 +9,21 @@ export type ReplayResult = {
 
 export function replay(inputs: readonly ReduceInput[]): ReplayResult {
   let state = initialState();
+
   for (let i = 0; i < inputs.length; i += 1) {
     const input = inputs[i];
     if (input === undefined) {
       continue;
     }
+
     const result = reduce(state, input);
     if (!result.ok) {
       return { state: result.state, failedAt: i };
     }
+
     state = result.state;
   }
+
   return { state };
 }
 

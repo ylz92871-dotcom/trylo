@@ -29,12 +29,14 @@ export const REDACTED = "<redacted>";
  */
 export function redactText(text: string, secrets: Iterable<string>): string {
   let out = text;
+
   for (const secret of secrets) {
     if (secret.length < 4 || out.length === 0) {
       continue;
     }
     out = out.split(secret).join(REDACTED);
   }
+
   return out;
 }
 
@@ -54,11 +56,13 @@ export function redactValue<T>(value: T, secrets: Iterable<string>): T {
 
 function dedupeSecrets(secrets: Iterable<string>): ReadonlyArray<string> {
   const seen = new Set<string>();
+
   for (const secret of secrets) {
     if (secret.length >= 4) {
       seen.add(secret);
     }
   }
+
   return [...seen];
 }
 
@@ -66,9 +70,11 @@ function walk(value: unknown, secrets: ReadonlyArray<string>): unknown {
   if (typeof value === "string") {
     return redactText(value, secrets);
   }
+
   if (Array.isArray(value)) {
     return value.map((item) => walk(item, secrets));
   }
+
   if (value !== null && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [key, member] of Object.entries(value as Record<string, unknown>)) {
@@ -76,6 +82,7 @@ function walk(value: unknown, secrets: ReadonlyArray<string>): unknown {
     }
     return out;
   }
+
   return value;
 }
 

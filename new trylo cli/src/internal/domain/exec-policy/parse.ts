@@ -87,20 +87,26 @@ function buildRules(source: PolicyRuleSource): RuleBuild {
   if (!decision.ok) {
     return { ok: false, message: decision.message };
   }
+
   const justification = readJustification(source.justification);
   if (justification === EMPTY_JUSTIFICATION) {
     return { ok: false, message: "justification cannot be empty" };
   }
+
   const tokens = parsePatternTokens(source.pattern);
   if (!tokens.ok) {
     return { ok: false, message: tokens.message };
   }
+
   const head = tokens.tokens[0];
   const rest = tokens.tokens.slice(1);
+
   if (head === undefined) {
     return { ok: false, message: "pattern cannot be empty" };
   }
+
   const heads = head.kind === "single" ? [head.text] : head.texts;
+
   return {
     ok: true,
     rules: heads.map((first) => ({
@@ -130,21 +136,25 @@ function exampleFailures(
 ): ReadonlyArray<string> {
   const failures: string[] = [];
   const ownPolicy = new Map<string, PrefixRule[]>();
+
   for (const rule of rules) {
     ownPolicy.set(rule.pattern.first, [...(ownPolicy.get(rule.pattern.first) ?? []), rule]);
   }
+
   for (const example of source.match ?? []) {
     const rulesForKey = ownPolicy.get(example[0] ?? "");
     if (rulesForKey === undefined || !rulesMatch(example, rulesForKey)) {
       failures.push(`match example ${JSON.stringify(example)} is not matched by this rule`);
     }
   }
+
   for (const example of source.notMatch ?? []) {
     const rulesForKey = ownPolicy.get(example[0] ?? "");
     if (rulesForKey !== undefined && rulesMatch(example, rulesForKey)) {
       failures.push(`not_match example ${JSON.stringify(example)} is matched by this rule`);
     }
   }
+
   return failures;
 }
 
@@ -155,10 +165,12 @@ function hostExecutableFailure(
   if (entry.name.length === 0) {
     return `host_executable name must be a bare executable name without an extension (got "${entry.name}")`;
   }
+
   const key = executableBasename(entry.name, platform);
   if (key !== entry.name) {
     return `host_executable name must be a bare executable name without an extension (got "${entry.name}")`;
   }
+
   for (const candidate of entry.paths) {
     if (!isAbsolutePath(candidate, platform)) {
       return `host_executable paths must be absolute (got "${candidate}")`;
@@ -167,6 +179,7 @@ function hostExecutableFailure(
       return `host_executable path "${candidate}" must have basename "${entry.name}"`;
     }
   }
+
   return undefined;
 }
 
@@ -189,16 +202,19 @@ export function parseExecPolicyDocument(
       failures.push({ rule: index, message: built.message });
       return;
     }
+
     for (const rule of built.rules) {
       const existing = rulesByProgram.get(rule.pattern.first) ?? [];
       rulesByProgram.set(rule.pattern.first, [...existing, rule]);
     }
+
     for (const message of exampleFailures(built.rules, ruleSource)) {
       failures.push({ rule: index, message });
     }
   });
 
   const hostExecutables = new Map<string, string[]>();
+
   for (const entry of source.hostExecutables ?? []) {
     const failure = hostExecutableFailure(entry, platform);
     if (failure === undefined) {
@@ -211,5 +227,6 @@ export function parseExecPolicyDocument(
   if (failures.length > 0) {
     return { ok: false, failures };
   }
+
   return { ok: true, policy: { rulesByProgram, hostExecutables } };
 }

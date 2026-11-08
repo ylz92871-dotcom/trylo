@@ -11,6 +11,7 @@ export function parseEnvelope(value: unknown): ValidateResult {
   if (!isRecord(value)) {
     return fail("not_object");
   }
+
   if (!hasOwn(value, "eventId")) {
     return fail("missing_event_id");
   }
@@ -19,29 +20,36 @@ export function parseEnvelope(value: unknown): ValidateResult {
   if (protocolVersion === undefined || protocolVersion !== PROTOCOL_VERSION) {
     return fail("invalid_protocol_version");
   }
+
   const eventId = requiredString(value.eventId);
   if (eventId === undefined) {
     return fail("missing_event_id");
   }
+
   const sequence = requiredNat(value.sequence);
   if (sequence === undefined) {
     return fail(hasOwn(value, "sequence") ? "invalid_sequence" : "missing_sequence");
   }
+
   const timestamp = requiredString(value.timestamp);
   if (timestamp === undefined) {
     return fail("invalid_timestamp");
   }
+
   const kind = requiredString(value.kind);
   if (kind === undefined) {
     return fail("invalid_kind");
   }
+
   const payload = parsePayload(value.payload);
   if (payload === "too_large") {
     return fail("payload_too_large");
   }
+
   if (payload === undefined) {
     return fail("invalid_payload");
   }
+
   const producerId = requiredString(value.producerId);
   const producerSequence = requiredNat(value.producerSequence);
   if (producerId === undefined || producerSequence === undefined) {
@@ -75,6 +83,7 @@ export function parseEnvelope(value: unknown): ValidateResult {
     ...(attemptId !== undefined ? { attemptId } : {}),
     ...(correlationId !== undefined ? { correlationId } : {}),
   };
+
   return { ok: true, envelope: freezeEnvelope(envelope) };
 }
 
@@ -87,10 +96,12 @@ function parsePayload(value: unknown): JsonObject | "too_large" | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
+
   const size = Buffer.byteLength(JSON.stringify(value), "utf8");
   if (size > MAX_PAYLOAD_BYTES) {
     return "too_large";
   }
+
   return value as JsonObject;
 }
 
@@ -131,6 +142,7 @@ export function deepFreeze(value: JsonValue): void {
   if (typeof value !== "object" || value === null) {
     return;
   }
+
   if (Array.isArray(value)) {
     for (const item of value) {
       deepFreeze(item);
@@ -138,12 +150,15 @@ export function deepFreeze(value: JsonValue): void {
     Object.freeze(value);
     return;
   }
+
   const record = value as JsonObject;
+
   for (const key of Object.keys(record)) {
     const child = record[key];
     if (child !== undefined) {
       deepFreeze(child);
     }
   }
+
   Object.freeze(record);
 }

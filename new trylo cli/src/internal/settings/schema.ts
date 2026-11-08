@@ -26,6 +26,7 @@ type KeySpec =
   | { readonly kind: "string" }
   | { readonly kind: "positiveInt" }
   | { readonly kind: "positiveSafeInt" }
+  | { readonly kind: "toolSelection" }
   | { readonly kind: "positiveNumber" };
 
 /**
@@ -39,6 +40,8 @@ export const SETTINGS_SCHEMA: Readonly<Record<string, KeySpec>> = {
   // against the profile, by the provider resolver.
   provider: { kind: "string" },
   model: { kind: "string" },
+  // Selection is configuration, never permission. An explicit empty list disables every tool.
+  toolSelection: { kind: "toolSelection" },
   // `endpoint` is a URL, not a credential. It is deliberately renderable in the
   // public view; the secret that authenticates against it is not stored here.
   endpoint: { kind: "string" },
@@ -121,7 +124,8 @@ export function isMcpForbiddenKey(key: string): boolean {
 /**
  * Keys whose array values merge by concatenation instead of override.
  *
- * This package's closed set has **no** array key, so the set is empty — but the
+ * Business tool selection replaces its earlier layer, including an empty list.
+ * No current array key concatenates, so the set is empty — but the
  * concat mechanism is real and tested (`merge.ts`), because D6 §10.7 names
  * "arrays merge rather than overwrite" (opencode `mergeConfigConcatArrays`) as a
  * delivery-face common denominator. The day a key is added here, the merge path
@@ -171,6 +175,12 @@ function validateValue(
         return failure("invalid_value", `${source}: ${key} must be a string`);
       }
       return undefined;
+    case "toolSelection":
+      if (!Array.isArray(value) || value.length > 256 || value.some(name => typeof name !== "string"
+        || !/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,199}$/.test(name)) || new Set(value).size !== value.length) {
+        return failure("invalid_value", `${source}: ${key} must contain at most 256 distinct runtime tool names`);
+      }
+      return undefined;
     case "positiveInt":
       if (!isPositiveInt(value)) {
         return failure("invalid_value", `${source}: ${key} must be a positive integer`);
@@ -200,6 +210,7 @@ export function validateSettingsObject(
   source: string,
 ): { readonly ok: true; readonly values: SettingsValues } | SettingsFailure {
   const values: Record<string, JsonValue> = {};
+
   for (const key of Object.keys(obj)) {
     if (isSecretKey(key)) {
       return failure(
@@ -207,26 +218,32 @@ export function validateSettingsObject(
         `${source}: key ${JSON.stringify(key)} holds a credential and is refused by the settings schema (secrets belong to the credentials package)`,
       );
     }
+
     if (isMcpForbiddenKey(key)) {
       return failure(
         "forbidden_key",
         `${source}: key ${JSON.stringify(key)} declares an MCP server and is refused here (the MCP registry owns it)`,
       );
     }
+
     const spec = SETTINGS_SCHEMA[key];
     if (spec === undefined) {
       return failure("unknown_key", `${source}: unknown key ${JSON.stringify(key)}`);
     }
+
     const value = obj[key];
     if (value === undefined) {
       // Cannot happen for a JSON-derived object, but the index signature says so.
       continue;
     }
+
     const valueFailure = validateValue(spec, value, key, source);
     if (valueFailure !== undefined) {
       return valueFailure;
     }
+
     values[key] = value;
   }
+
   return { ok: true, values };
 }

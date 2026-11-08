@@ -5,6 +5,7 @@ import { reduce } from "./reduce.js";
 import { initialState, type ExecutionState, type PhaseName } from "./state.js";
 
 let n = 0;
+
 function eid(): string {
   n += 1;
   return `mx-${n}`;
@@ -107,6 +108,7 @@ function sample(type: InputType): ReduceInput {
 
 function drive(inputs: readonly ReduceInput[]): ExecutionState {
   let state = initialState();
+
   for (const input of inputs) {
     const result = reduce(state, input);
     assert.equal(result.ok, true, `${state.phase} <- ${input.type}`);
@@ -115,6 +117,7 @@ function drive(inputs: readonly ReduceInput[]): ExecutionState {
     }
     state = result.state;
   }
+
   return state;
 }
 
@@ -208,9 +211,12 @@ const phases: readonly PhaseName[] = [
 
 test("legal and illegal transitions are enumerated", () => {
   const rows: string[] = [];
+
   for (const phase of phases) {
     const state = stateAt(phase);
+
     assert.equal(state.phase, phase);
+
     for (const type of allTypes) {
       const result = reduce(state, sample(type));
       const allowed = legal[phase].has(type);
@@ -231,19 +237,23 @@ test("legal and illegal transitions are enumerated", () => {
       }
     }
   }
+
   assert.equal(rows.length, phases.length * allTypes.length);
 });
 
 test("retry from completed is illegal; retry from unknown is legal", () => {
   const completed = stateAt("terminal");
   const denied = reduce(completed, sample("retry"));
+
   assert.equal(denied.ok, false);
   const unknown = drive([
     sample("start_turn"),
     sample("begin_stream"),
     sample("transport_unknown"),
   ]);
+
   assert.equal(unknown.terminalReason, "unknown");
   const allowed = reduce(unknown, sample("retry"));
+
   assert.equal(allowed.ok, true);
 });

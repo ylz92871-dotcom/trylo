@@ -68,6 +68,7 @@ function indexToolCalls(transcript: Transcript): {
   const pending = new Map<string, number[]>();
   const torn = new Set<number>();
   const answered = new Map<number, number>();
+
   for (const [index, item] of transcript.entries()) {
     if (item.kind === "tool_call") {
       const calls = pending.get(item.toolCallId) ?? [];
@@ -82,6 +83,7 @@ function indexToolCalls(transcript: Transcript): {
       }
     }
   }
+
   return { unanswered: torn, answered };
 }
 
@@ -111,6 +113,7 @@ export function toolPairingOf(transcript: Transcript): ToolPairing {
   const answered = new Set<string>();
   const seen = new Set<string>();
   const orphans: string[] = [];
+
   for (const [index, item] of transcript.entries()) {
     if (item.kind === "tool_call") {
       if (!seen.has(item.toolCallId)) {
@@ -122,5 +125,6 @@ export function toolPairingOf(transcript: Transcript): ToolPairing {
       answered.add(item.toolCallId);
     }
   }
+
   return { asked, answered: [...answered], orphans };
 }

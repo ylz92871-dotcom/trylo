@@ -51,12 +51,14 @@ function checkFormatVersion(
   if (value === undefined) {
     return undefined;
   }
+
   if (typeof value !== "number" || !Number.isInteger(value) || value !== SETTINGS_FORMAT_VERSION) {
     return failure(
       "unknown_format_version",
       `${source}: formatVersion ${JSON.stringify(value)} is not supported (this build reads ${SETTINGS_FORMAT_VERSION})`,
     );
   }
+
   return undefined;
 }
 
@@ -73,11 +75,13 @@ export function parseLayerContent(content: LayerContent, source: string): Parsed
   }
 
   let parsed: JsonValue;
+
   try {
     parsed = JSON.parse(raw) as JsonValue;
   } catch {
     return failure("invalid_json", `${source}: not valid JSON`);
   }
+
   if (!isJsonObject(parsed)) {
     return failure("invalid_json", `${source}: document is not a JSON object`);
   }
@@ -89,15 +93,18 @@ export function parseLayerContent(content: LayerContent, source: string): Parsed
 
   // Strip the meta key, then validate the rest against the closed schema.
   const rest: Record<string, JsonValue> = {};
+
   for (const key of Object.keys(parsed)) {
     if (key === "formatVersion") {
       continue;
     }
+
     const value = parsed[key];
     if (value !== undefined) {
       rest[key] = value;
     }
   }
+
   return validateSettingsObject(rest, source);
 }
 

@@ -184,10 +184,11 @@ export type JsonFunctionToolPackageManifest = ToolPackageManifestBase & {
 
 /** Managed third-party Node entrypoints have their own ABI and are never passed to the JSON-function evaluator. */
 export type NodePackageToolManifest = ToolPackageManifestBase & {
-  readonly runtimeProfile: "confined_npm_cli_v1" | "confined_npm_mcp_v1";
+  readonly runtimeProfile: "confined_npm_cli_v1" | "confined_npm_mcp_v1" | "confined_npm_library_v1";
   readonly moduleFormat: "node_package";
-  readonly inputTransport: "argv_stdin" | "mcp_stdio";
+  readonly inputTransport: "argv_stdin" | "mcp_stdio" | "json";
 };
+
 export type ToolPackageManifest = McpToolPackageManifest | JsonFunctionToolPackageManifest | NodePackageToolManifest;
 
 export type ToolPackageVersion = {

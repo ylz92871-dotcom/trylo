@@ -23,20 +23,26 @@ function fact(extra: Partial<ExecutionFact> = {}): ExecutionFact {
     rawBody: extra.rawBody ?? BODY,
     secret: extra.secret ?? SECRET,
   };
+
   if (extra.verdict === undefined && !("verdict" in extra)) {
     return { ...base, verdict: "pass" };
   }
+
   if (extra.verdict === undefined) {
     return base;
   }
+
   return { ...base, verdict: extra.verdict };
 }
 
 test("collect=false never emits a learning observation", () => {
   const journal = createJournal();
+
   journal.recordFact(fact());
   const projected = journal.projectLearning({ collect: false });
+
   assert.equal(projected.ok, true);
+
   if (projected.ok) {
     assert.deepEqual(projected.observations, []);
   }
@@ -44,11 +50,15 @@ test("collect=false never emits a learning observation", () => {
 
 test("collect=true keeps whitelist fields and drops body/secret", () => {
   const projected = projectFacts([fact()], true);
+
   assert.equal(projected.ok, true);
+
   if (!projected.ok) {
     return;
   }
+
   const observation = projected.observations[0];
+
   assert.ok(observation);
   assert.equal(observation.outcome, "completed");
   assert.equal(observation.verdict, "pass");
@@ -60,10 +70,13 @@ test("collect=true keeps whitelist fields and drops body/secret", () => {
 
 test("tombstone removes the observation without replaying the body", () => {
   const journal = createJournal();
+
   journal.recordFact(fact());
   journal.tombstone("e1");
   const projected = journal.projectLearning({ collect: true });
+
   assert.equal(projected.ok, true);
+
   if (projected.ok) {
     assert.deepEqual(projected.observations, []);
   }
@@ -90,13 +103,16 @@ test("canonical adapter copies whitelist fields and drops raw body", () => {
     secret: SECRET,
     reason: "exit 1",
   });
+
   assert.equal(fact.snapshotId, "snap-9");
   assert.equal(fact.outcome, "completed");
   assert.equal(fact.reason, "exit 1");
   assert.equal("rawBody" in fact, false);
   assert.equal("secret" in fact, false);
   const projected = projectFacts([fact], true);
+
   assert.equal(projected.ok, true);
+
   if (projected.ok) {
     assert.equal(projected.observations[0]?.reason, "exit 1");
     assert.equal(projected.observations[0]?.inputRef, "e9");
@@ -107,10 +123,13 @@ test("canonical adapter copies whitelist fields and drops raw body", () => {
 
 test("retention tombstones overflow observations", () => {
   const journal = createJournal({ maxObservations: 1 });
+
   journal.recordFact(fact({ eventId: "old" }));
   journal.recordFact(fact({ eventId: "new" }));
   const projected = journal.projectLearning({ collect: true });
+
   assert.equal(projected.ok, true);
+
   if (projected.ok) {
     assert.equal(projected.observations.length, 1);
     assert.equal(projected.observations[0]?.observationId, "obs:new");
@@ -119,13 +138,16 @@ test("retention tombstones overflow observations", () => {
 
 test("projection failure is a structured degraded result", () => {
   const exploding: ExecutionFact[] = [];
+
   Object.defineProperty(exploding, "map", {
     value: () => {
       throw new Error("boom");
     },
   });
   const projected = projectFacts(exploding, true);
+
   assert.equal(projected.ok, false);
+
   if (!projected.ok) {
     assert.equal(projected.reason, "board_unavailable");
   }

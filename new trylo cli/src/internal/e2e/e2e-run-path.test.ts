@@ -34,6 +34,7 @@ function createFixture(contextTokenLimit?: number): Fixture {
   const root = mkdtempSync(join(os.tmpdir(), "trylo-e2e-"));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
+
   mkdirSync(workspace, { recursive: true });
   mkdirSync(home, { recursive: true });
   mkdirSync(join(workspace, ".trylo"), { recursive: true });
@@ -42,6 +43,7 @@ function createFixture(contextTokenLimit?: number): Fixture {
     JSON.stringify({ name: "e2e-groundwork-fixture", version: "1.0.0" }, null, 2),
     "utf8",
   );
+
   if (contextTokenLimit !== undefined) {
     writeFileSync(
       join(workspace, ".trylo", "config.json"),
@@ -49,6 +51,7 @@ function createFixture(contextTokenLimit?: number): Fixture {
       "utf8",
     );
   }
+
   return {
     workspace,
     home,
@@ -65,6 +68,7 @@ function runCli(
     ...process.env,
     TRYLO_HOME: fx.home,
   };
+
   delete env.TRYLO_API_KEY;
   delete env.OPENAI_API_KEY;
 
@@ -75,6 +79,7 @@ function runCli(
     stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
     input,
   });
+
   return {
     status: result.status,
     stdout: result.stdout ?? "",
@@ -84,6 +89,7 @@ function runCli(
 
 function parseJsonLines(text: string): Array<Record<string, unknown>> {
   const rows: Array<Record<string, unknown>> = [];
+
   for (const line of text.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (trimmed.length === 0) {
@@ -91,6 +97,7 @@ function parseJsonLines(text: string): Array<Record<string, unknown>> {
     }
     rows.push(JSON.parse(trimmed) as Record<string, unknown>);
   }
+
   return rows;
 }
 
@@ -99,12 +106,16 @@ function journalRows(homeDir: string): Array<Record<string, unknown>> {
   if (!existsSync(sessionsDir)) {
     return [];
   }
+
   const rows: Array<Record<string, unknown>> = [];
+
   for (const entry of readdirSync(sessionsDir)) {
     if (!entry.endsWith(".ndjson")) {
       continue;
     }
+
     const sessionFile = join(sessionsDir, entry);
+
     for (const line of readFileSync(sessionFile, "utf8").split(/\r?\n/)) {
       const trimmed = line.trim();
       if (trimmed.length > 0) {
@@ -112,6 +123,7 @@ function journalRows(homeDir: string): Array<Record<string, unknown>> {
       }
     }
   }
+
   return rows;
 }
 
@@ -124,9 +136,13 @@ async function compactFixture(fx: Fixture, sessionId: string): Promise<void> {
   try {
     assert.equal((await store.attach()).ok, true);
     const read = await store.readRecords();
+
     assert.equal(read.ok, true);
+
     if (!read.ok) return;
+
     const compacted = await compactSession({ now: () => Date.now() }, sessionId, read.view.records, store);
+
     assert.equal(compacted.ok, true);
     assert.ok(compacted.ok && compacted.wrote);
   } finally { await store.release(); }
@@ -154,14 +170,18 @@ test("W1 端到端整机路径：用户任务 → fixture-write → 工具写+�
 
     // 1. Tool execution wrote file and verified content
     const writtenFile = join(fx.workspace, "fixture-output.txt");
+
     assert.equal(existsSync(writtenFile), true, "fixture-output.txt was created by tool");
     const writtenContent = readFileSync(writtenFile, "utf8");
+
     assert.equal(writtenContent, "the fixture wrote this line");
 
     // 2. Checkpoint was taken BEFORE the write landed
     const checkpointsDir = join(fx.home, "checkpoints");
+
     assert.equal(existsSync(checkpointsDir), true, "checkpoints directory exists");
     const checkpoints = readdirSync(checkpointsDir).filter((f) => f.startsWith("cp-"));
+
     assert.equal(checkpoints.length >= 1, true, "at least one checkpoint snapshot was taken");
 
     // 3. Durable journal recorded session, checkpoint observation, compaction, and turn result
@@ -170,6 +190,7 @@ test("W1 端到端整机路径：用户任务 → fixture-write → 工具写+�
       const rec = r["record"] as { type?: string } | undefined;
       return rec?.type;
     });
+
     assert.equal(eventTypes.includes("session_start"), true, "journal contains session_start");
     assert.equal(eventTypes.includes("turn_start"), true, "journal contains turn_start");
     assert.equal(eventTypes.includes("compact"), true, "journal contains compact record");
@@ -191,6 +212,7 @@ test("W1 端到端整机路径：用户任务 → fixture-write → 工具写+�
     });
 
     const comp = compareTraces(sanitized, GOLDEN_RUN_TRACE);
+
     assert.equal(comp.matches, true, comp.diff);
   } finally {
     fx.cleanup();
@@ -212,16 +234,20 @@ test("W1 崩溃恢复：通过 checkpoint restore 恢复损坏的工作区", () 
       "--format",
       "text",
     ]);
+
     assert.equal(res.status, 0, res.stderr);
 
     // Verify file written
     const targetFile = join(fx.workspace, "fixture-output.txt");
+
     assert.equal(existsSync(targetFile), true);
 
     // List checkpoints
     const listRes = runCli(fx, ["checkpoint", "list", "--json"]);
+
     assert.equal(listRes.status, 0);
     const listed = JSON.parse(listRes.stdout) as ReadonlyArray<{ checkpointId: string }>;
+
     assert.equal(listed.length >= 1, true);
     const checkpointId = listed[0]!.checkpointId;
 
@@ -231,6 +257,7 @@ test("W1 崩溃恢复：通过 checkpoint restore 恢复损坏的工作区", () 
 
     // Restore from checkpoint
     const restoreRes = runCli(fx, ["checkpoint", "restore", checkpointId]);
+
     assert.equal(restoreRes.status, 0, restoreRes.stderr);
 
     // Verify recovery: before the write, fixture-output.txt did not exist!
@@ -241,6 +268,7 @@ test("W1 崩溃恢复：通过 checkpoint restore 恢复损坏的工作区", () 
     );
     // package.json remains intact
     const pkg = JSON.parse(readFileSync(join(fx.workspace, "package.json"), "utf8")) as { name: string };
+
     assert.equal(pkg.name, "e2e-groundwork-fixture");
   } finally {
     fx.cleanup();
@@ -263,6 +291,7 @@ test("W1 会话续跑（resume）：从压缩窗口继续对话并到达终态",
       "--format",
       "stream-json",
     ]);
+
     assert.equal(firstRes.status, 0, firstRes.stderr);
     await compactFixture(fx, sessionId);
 
@@ -278,10 +307,12 @@ test("W1 会话续跑（resume）：从压缩窗口继续对话并到达终态",
       "--format",
       "stream-json",
     ]);
+
     assert.equal(resumeRes.status, 0, resumeRes.stderr);
 
     const resumeEvents = parseJsonLines(resumeRes.stdout);
     const finishEvent = resumeEvents.find((e) => e["type"] === "run_result");
+
     assert.notEqual(finishEvent, undefined);
     assert.equal(finishEvent?.["status"], "completed");
     assert.equal(finishEvent?.["finishReason"], "stop");

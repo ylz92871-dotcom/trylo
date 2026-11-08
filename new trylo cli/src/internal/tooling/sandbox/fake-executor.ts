@@ -40,6 +40,7 @@ export function runFakeSandbox(
   if (request.outcome === "crash" && classified === "ok") {
     return err("classified_crash_as_success", "crash must be unknown, never success");
   }
+
   return ok({
     classified,
     permissionDenialHonored: request.permissionDenied,

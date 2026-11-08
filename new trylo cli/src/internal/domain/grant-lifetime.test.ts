@@ -70,6 +70,7 @@ test("a grant answers only the questions its kind was issued for", () => {
   for (const kind of GRANT_KINDS) {
     assert.equal(grantSatisfies(kind, kind), true, `${kind} answers itself`);
   }
+
   // The asymmetry the file exists to state: an ordinary call is a session or
   // policy question, and a durable tooling grant is not an answer to it.
   assert.equal(grantSatisfies("session", CALL_QUESTION), true);
@@ -171,8 +172,10 @@ test("an entry only authorises through the kind check, not by being present", ()
   assert.equal(entryAuthorises(entry("issued")), true, "a session entry answers an ordinary call");
   // Well-formed, present, and still unable to speak for a durable install.
   const toolingEntry: LedgerEntry = { ...entry("issued"), grantKind: "tooling_once" };
+
   assert.equal(entryAuthorises(toolingEntry), false);
   const policyEntry: LedgerEntry = { ...entry("issued"), grantKind: "policy" };
+
   assert.equal(entryAuthorises(policyEntry), true);
   // A crash does not retract the question that was already asked of the ledger.
   assert.equal(entryAuthorises(entry("unknown")), true);
@@ -180,6 +183,7 @@ test("an entry only authorises through the kind check, not by being present", ()
 
 test("a reader is shown the unknowns", () => {
   const described = describeEntry(entry("unknown"));
+
   assert.equal(described.state, "unknown");
   assert.equal(described.grantKind, "session");
   assert.equal(described.source, "prompt");
@@ -187,5 +191,6 @@ test("a reader is shown the unknowns", () => {
   // what was authorised, so a reader cannot mistake it for a clean success.
   assert.equal(described.authorises, true);
   const toolingDescribed = describeEntry({ ...entry("unknown"), grantKind: "tooling_once" });
+
   assert.equal(toolingDescribed.authorises, false);
 });

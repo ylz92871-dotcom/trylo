@@ -19,6 +19,7 @@ test("OAuthTokenManager returns current access token when unexpired", async () =
   });
 
   const token = await manager.getValidAccessToken();
+
   assert.equal(token, "at-current");
 });
 
@@ -47,6 +48,7 @@ test("OAuthTokenManager automatically refreshes when token is near expiration", 
       }).toString(),
     });
     const exchangeData = (await exchangeRes.json()) as { access_token: string; refresh_token: string };
+
     assert.ok(exchangeData.refresh_token);
 
     let tokenUpdated = false;
@@ -72,6 +74,7 @@ test("OAuthTokenManager automatically refreshes when token is near expiration", 
     });
 
     const refreshed = await manager.getValidAccessToken();
+
     assert.equal(tokenUpdated, true);
     assert.equal(refreshed, newIssuedToken);
   } finally {
@@ -85,6 +88,7 @@ test("OAuthTokenManager single-flight concurrency: 10 concurrent refreshes make 
     httpCalls += 1;
     // Simulate 50ms network delay
     await new Promise((r) => setTimeout(r, 50));
+
     return new Response(
       JSON.stringify({
         access_token: "at-single-flight-renewed",
@@ -148,7 +152,9 @@ test("OAuthTokenManager 401 resolution: handles 401 error, single-flights, and r
   });
 
   const res = await manager.handleAuthError(401);
+
   assert.equal(res.refreshed, false);
+
   if (!res.refreshed) {
     assert.match(res.reason, /Refresh token revoked by user/);
     assert.match(res.hint, /trylo login --provider openai-compatible/);
@@ -156,6 +162,7 @@ test("OAuthTokenManager 401 resolution: handles 401 error, single-flights, and r
 
   // Attempting again after failure can try again and does not hang
   const res2 = await manager.handleAuthError(401);
+
   assert.equal(res2.refreshed, false);
   assert.equal(fetchCallCount, 2);
 });
@@ -171,7 +178,9 @@ test("OAuthTokenManager ignores non-401 errors", async () => {
   });
 
   const res = await manager.handleAuthError(500);
+
   assert.equal(res.refreshed, false);
+
   if (!res.refreshed) {
     assert.equal(res.reason, "HTTP 500");
   }

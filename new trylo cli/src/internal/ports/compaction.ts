@@ -1,5 +1,6 @@
 import type { SessionRecord } from "./session.js";
 import type { TranscriptItem } from "../protocol/transcript.js";
+import type { ProviderUsage } from "./provider.js";
 
 /**
  * Context-window budget management for a durable session journal.
@@ -56,6 +57,7 @@ export type PromptView = {
 };
 
 export type CompactionHoldReason = "within_limit" | "nothing_to_compact";
+
 export type CompactionTriggerReason = "estimated_tokens_reached_limit";
 
 export type CompactionDecision =
@@ -76,6 +78,69 @@ export type CompactionProbe = {
 
 /** Upper bound on a summary. A summary that needs more room is not a summary. */
 export const SUMMARY_MAX_CHARS = 4_000;
+
+/** Stable metadata about an author choosing the existing extractive fallback.
+ * These reasons never contain provider messages, transcript text or secrets.
+ */
+export const SUMMARY_AUTHOR_FALLBACK_REASONS = [
+  "input_context_exceeded", "provider_error", "empty_output", "output_truncated", "invalid_finish",
+  "missing_finish", "summary_too_long", "summary_unsafe", "cancelled", "caller_budget_exhausted",
+] as const;
+
+export type SummaryAuthorFallbackReason = (typeof SUMMARY_AUTHOR_FALLBACK_REASONS)[number];
+
+export type SummaryAuthorReport = {
+  readonly author: "model" | "extractive";
+  readonly reason?: SummaryAuthorFallbackReason;
+};
+
+/** Observation only; author selection cannot modify execution or permissions. */
+export type SummaryAuthorReporter = (report: SummaryAuthorReport) => void;
+
+/** One attempted auxiliary provider stream. Missing usage is never a zero bill. */
+export const SUMMARY_REQUEST_OUTCOMES = ["completed", "cancelled", "failed", "truncated", "incomplete"] as const;
+
+export type SummaryRequestUsage = {
+  readonly purpose: "compaction_summary";
+  readonly outcome: (typeof SUMMARY_REQUEST_OUTCOMES)[number];
+  readonly usageStatus: "reported" | "partial" | "missing";
+  readonly usage?: ProviderUsage;
+};
+
+/** Parent-owned spending, separate from the fifth argument's author metadata.
+ * Omitted output allowance stays omitted; this context grants no permissions. */
+export type SummaryAuthoringContext = {
+  readonly maxOutputTokens?: number;
+  readonly reportRequest: (receipt: SummaryRequestUsage) => void | Promise<void>;
+};
+
+export function isSummaryRequestUsage(value: unknown): value is SummaryRequestUsage {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+
+  const record = value as Record<string, unknown>;
+  if (record.purpose !== "compaction_summary" || !SUMMARY_REQUEST_OUTCOMES.some(outcome => outcome === record.outcome)) return false;
+
+  if (record.usageStatus === "missing") return record.usage === undefined;
+
+  if (record.usageStatus !== "reported" && record.usageStatus !== "partial") return false;
+
+  if (typeof record.usage !== "object" || record.usage === null || Array.isArray(record.usage)) return false;
+
+  const usage = record.usage as Record<string, unknown>;
+
+  return (usage.mode === "snapshot" || usage.mode === "delta")
+    && ["inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens", "reasoningTokens", "totalTokens"]
+      .every(key => typeof usage[key] === "number" && Number.isFinite(usage[key]) && usage[key] >= 0);
+}
+
+/** Read only the closed author metadata from an observation; extra payload
+ * fields such as summary text never become part of the returned report. */
+export function readSummaryAuthorReport(author: unknown, reason: unknown): SummaryAuthorReport | undefined {
+  if (author !== "model" && author !== "extractive") return undefined;
+  if (reason === undefined) return { author };
+  const knownReason = SUMMARY_AUTHOR_FALLBACK_REASONS.find(candidate => candidate === reason);
+  return knownReason === undefined ? undefined : { author, reason: knownReason };
+}
 
 export type PromptProjectionFailureCode =
   | "compact_payload_malformed"
@@ -130,6 +195,11 @@ export type CompactRequest = {
   readonly at: string;
   /** Already-authored summary text; validated here, never trusted blindly. */
   readonly summary: string;
+  /** Optional end of the replaced prefix, in journal sequences. The remaining
+   * live exchanges stay verbatim. This does not limit which prior window
+   * records are visible, unlike a rollback horizon. Omitted replaces all live
+   * items, preserving existing explicit/manual compaction callers. */
+  readonly replacedToSequence?: number;
   /** Active rollback horizon, when the caller is projecting one. */
   readonly horizonSequence?: number;
 };

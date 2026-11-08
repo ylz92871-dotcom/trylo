@@ -45,14 +45,17 @@ function parseToken(input: PatternTokenInput): PatternToken | string {
     }
     return { kind: "single", text: input };
   }
+
   if (input.length === 0) {
     return EMPTY_ALTS;
   }
+
   for (const candidate of input) {
     if (typeof candidate !== "string" || candidate.length === 0) {
       return "pattern alternative must be a non-empty string";
     }
   }
+
   return input.length === 1 && typeof input[0] === "string"
     ? { kind: "single", text: input[0] }
     : { kind: "alts", texts: input };
@@ -67,7 +70,9 @@ export function parsePatternTokens(input: ReadonlyArray<PatternTokenInput>): Pat
   if (input.length === 0) {
     return { ok: false, message: "pattern cannot be empty" };
   }
+
   const tokens: PatternToken[] = [];
+
   for (const item of input) {
     const parsed = parseToken(item);
     if (typeof parsed === "string") {
@@ -75,6 +80,7 @@ export function parsePatternTokens(input: ReadonlyArray<PatternTokenInput>): Pat
     }
     tokens.push(parsed);
   }
+
   return { ok: true, tokens };
 }
 
@@ -99,10 +105,12 @@ export function matchPrefix(
   if (argv.length < length) {
     return undefined;
   }
+
   const head = argv[0];
   if (head === undefined || head !== pattern.first) {
     return undefined;
   }
+
   for (let index = 0; index < pattern.rest.length; index += 1) {
     const token = pattern.rest[index];
     const word = argv[index + 1];
@@ -110,6 +118,7 @@ export function matchPrefix(
       return undefined;
     }
   }
+
   return argv.slice(0, length);
 }
 

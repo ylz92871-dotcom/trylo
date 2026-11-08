@@ -88,6 +88,7 @@ export async function startMockOAuthServer(
       }
 
       const code = `code-${crypto.randomUUID()}`;
+
       authCodes.set(code, {
         clientId,
         codeChallenge,
@@ -96,10 +97,12 @@ export async function startMockOAuthServer(
       });
 
       const target = new URL(redirectUri);
+
       target.searchParams.set("code", code);
       target.searchParams.set("state", state);
       res.writeHead(302, { Location: target.toString() });
       res.end();
+
       return;
     }
 
@@ -161,6 +164,7 @@ export async function startMockOAuthServer(
             scope: stored.scope,
           }),
         );
+
         return;
       }
 
@@ -192,6 +196,7 @@ export async function startMockOAuthServer(
         refreshTokens.delete(refreshToken);
         const newAccessToken = `at-${crypto.randomUUID()}`;
         const newRefreshToken = `rt-${crypto.randomUUID()}`;
+
         refreshTokens.set(newRefreshToken, stored);
 
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -204,11 +209,13 @@ export async function startMockOAuthServer(
             scope: stored.scope,
           }),
         );
+
         return;
       }
 
       res.writeHead(400, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "unsupported_grant_type" }));
+
       return;
     }
 
@@ -263,11 +270,13 @@ function parseParams(body: string, contentType: string): URLSearchParams {
     try {
       const json = JSON.parse(body) as Record<string, unknown>;
       const params = new URLSearchParams();
+
       for (const [key, val] of Object.entries(json)) {
         if (typeof val === "string") {
           params.set(key, val);
         }
       }
+
       return params;
     } catch {
       return new URLSearchParams();

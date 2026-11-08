@@ -49,12 +49,14 @@ const SPECIFIER_PATTERN = /(?:from\s+|import\s*\(\s*|^\s*import\s+)['"]([^'"]+)[
 
 function importedSpecifiers(source: string): ReadonlyArray<string> {
   const specifiers: string[] = [];
+
   for (const match of source.matchAll(SPECIFIER_PATTERN)) {
     const specifier = match[1];
     if (specifier !== undefined) {
       specifiers.push(specifier);
     }
   }
+
   return specifiers;
 }
 
@@ -69,6 +71,7 @@ function isBarePackage(specifier: string): boolean {
 
 function violationsIn(source: string): ReadonlyArray<string> {
   const violations: string[] = [];
+
   for (const specifier of importedSpecifiers(source)) {
     for (const segment of segmentHits(specifier)) {
       violations.push(`forbidden-layer:${segment} via ${specifier}`);
@@ -77,25 +80,32 @@ function violationsIn(source: string): ReadonlyArray<string> {
       violations.push(`bare-package-import via ${specifier}`);
     }
   }
+
   return violations;
 }
 
 function tsFilesIn(dir: string, options: { readonly productionOnly?: boolean } = {}): ReadonlyArray<string> {
   const files: string[] = [];
+
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
+
     if (entry.isDirectory()) {
       files.push(...tsFilesIn(full, options));
       continue;
     }
+
     if (!full.endsWith(".ts")) {
       continue;
     }
+
     if (options.productionOnly === true && full.endsWith(".test.ts")) {
       continue;
     }
+
     files.push(full);
   }
+
   return files;
 }
 
@@ -105,9 +115,11 @@ function productionFiles(): ReadonlyArray<string> {
 
 test("no production file imports a forbidden layer or a bare package", () => {
   const files = productionFiles();
+
   assert.equal(files.length >= 12, true, `too few files scanned (${files.length})`);
   let specifierCount = 0;
   const violations: string[] = [];
+
   for (const file of files) {
     const source = readFileSync(file, "utf8");
     specifierCount += importedSpecifiers(source).length;
@@ -115,6 +127,7 @@ test("no production file imports a forbidden layer or a bare package", () => {
       violations.push(`${relative(repoRoot, file).replaceAll("\\", "/")} ${violation}`);
     }
   }
+
   assert.equal(specifierCount >= 20, true, "too few specifiers scanned; detector may be broken");
   assert.deepEqual(violations, []);
 });
@@ -135,28 +148,33 @@ test("no credits file imports the settings or config package", () => {
 
 test("every production file is at most 400 lines (adversarial #12 / WP §0)", () => {
   const offenders: string[] = [];
+
   for (const file of productionFiles()) {
     const lines = readFileSync(file, "utf8").split(/\r?\n/).length;
     if (lines > MAX_PRODUCTION_LINES) {
       offenders.push(`${relative(repoRoot, file)} (${lines} lines)`);
     }
   }
+
   assert.deepEqual(offenders, []);
 });
 
 test("the compose factory function is at most 60 lines (adversarial #12)", () => {
   const source = readFileSync(join(adaptersDir, "compose.ts"), "utf8");
   const start = source.indexOf("export function createCredentialPort");
+
   assert.equal(start >= 0, true, "factory not found");
   const body = source.slice(start);
   const end = body.indexOf("\n}\n");
   const lines = body.slice(0, end === -1 ? body.length : end).split(/\r?\n/).length;
+
   assert.equal(lines <= 60, true, `createCredentialPort is ${lines} lines`);
 });
 
 test("the detector is discriminating: the forbidden fixture lights up on every layer", () => {
   const source = readFileSync(join(fixturesDir, "forbidden-import-credentials.ts"), "utf8");
   const violations = violationsIn(source);
+
   for (const segment of FORBIDDEN_SEGMENTS) {
     assert.equal(
       violations.some((item) => item.startsWith(`forbidden-layer:${segment}`)),

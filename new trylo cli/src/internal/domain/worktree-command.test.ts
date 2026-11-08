@@ -27,6 +27,7 @@ import {
 
 test("every git command carries the isolation overrides", () => {
   const argv = worktreeGitArgv("posix", ["rev-parse", "HEAD"]);
+
   assert.deepEqual(argv, [
     "git",
     "-c",
@@ -49,6 +50,7 @@ test("every git command carries the isolation overrides", () => {
 test("inherited repository selectors are dropped and ours are pinned", () => {
   const inherited = { PATH: "/bin", GIT_DIR: "/elsewhere/.git", GIT_WORK_TREE: "/elsewhere", HOME: "/root" };
   const scrubbed = scrubGitEnv(inherited);
+
   assert.equal(scrubbed.PATH, "/bin", "unrelated variables survive");
   assert.equal(scrubbed.HOME, "/root");
   assert.equal("GIT_DIR" in scrubbed, false, "a wrong repository selector is the defect this prevents");
@@ -108,6 +110,7 @@ test("the create sequence peels tags and checks out detached and empty", () => {
 
 test("checkout writes the destination config, never the shared one", () => {
   const path = worktreeConfigPathArgv("posix");
+
   assert.equal(path.includes("--path-format=absolute"), true, "an absolute path must not be joined onto a cwd");
   assert.deepEqual(setCoreWorktreeArgv("posix", "/git/config.worktree", "/pool/0a1b/repo").slice(-4), [
     "--file",
@@ -139,11 +142,13 @@ test("rev-parse passes its arguments through", () => {
 
 test("filter drivers include smudge, which the read-only diff hardener omits", () => {
   const drivers = parseFilterDriverNames("filter.lfs.clean\0filter.lfs.smudge\0filter.my.drv.process\0filter.lfs.required\0");
+
   assert.deepEqual(drivers, ["lfs", "my.drv"], "dots inside a driver name are kept; only the attribute is peeled");
   assert.deepEqual(parseFilterDriverNames(""), []);
   assert.deepEqual(parseFilterDriverNames("core.pager\0"), [], "a non-filter key is not a driver");
 
   const env = filterNeuterEnv(["lfs"]);
+
   assert.equal(env.GIT_CONFIG_COUNT, "4", "clean, smudge, process, required");
   assert.equal(env.GIT_CONFIG_KEY_0, "filter.lfs.clean");
   assert.equal(env.GIT_CONFIG_KEY_1, "filter.lfs.smudge");
@@ -167,6 +172,7 @@ test("the porcelain listing separates entries on empty fields, not newlines", ()
     "",
   ].join("\0");
   const entries = parseWorktreeList(output);
+
   assert.equal(entries.length, 2, "a path containing a newline cannot end an entry");
   assert.deepEqual(entries[0], { root: "/repo", headSha: "aaa", branch: "main" });
   assert.deepEqual(entries[1], { root: "/pool/0a1b/repo", headSha: "bbb", branch: undefined });

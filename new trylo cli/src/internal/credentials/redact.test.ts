@@ -46,6 +46,7 @@ test("redactValue scrubs string leaves and keys without mutating the input", () 
   };
   const out = redactValue(input, SECRETS) as typeof input;
   const serialized = JSON.stringify(out);
+
   assert.equal(containsNoSecret(serialized, SECRETS), true);
   // Input untouched.
   assert.equal(input.detail.includes("sk-live-abcdef1234567890"), true);

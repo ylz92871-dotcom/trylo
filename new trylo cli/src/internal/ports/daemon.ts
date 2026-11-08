@@ -33,6 +33,7 @@
  * merely failed to ask about.
  */
 export const DAEMON_STATUSES = ["stopped", "running", "crashed", "unhealthy"] as const;
+
 export type DaemonStatus = (typeof DAEMON_STATUSES)[number];
 
 export type DaemonState =
@@ -77,6 +78,7 @@ export type DaemonFailureCode =
   | "discovery_unreadable";
 
 export type DaemonRefusal = { readonly ok: false; readonly code: DaemonFailureCode; readonly message: string };
+
 export type DaemonResult<T> = { readonly ok: true; readonly value: T } | DaemonRefusal;
 
 /**
@@ -125,6 +127,7 @@ export function startRefusal(
   if (current === undefined) {
     return { ok: true };
   }
+
   if (current.status === "running") {
     return {
       ok: false,
@@ -132,6 +135,7 @@ export function startRefusal(
       message: `a daemon is already running as pid ${current.pid}; starting another would race it for the schedule lease`,
     };
   }
+
   if (current.status === "unhealthy") {
     return {
       ok: false,
@@ -140,6 +144,7 @@ export function startRefusal(
         "run `trylo daemon status` before starting another",
     };
   }
+
   // `stopped` and `crashed` both permit a start. `crashed` needs no extra step
   // here because the daemon re-reads its own record and finds unsettled
   // occurrences; that is recovery, not a precondition.

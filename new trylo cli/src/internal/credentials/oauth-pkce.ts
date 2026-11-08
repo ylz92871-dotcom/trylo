@@ -22,6 +22,7 @@ export function generatePkce(byteLength = 32): PkceChallenge {
   // 32 bytes base64url encoded produces 43 characters, matching RFC 7636 recommendations.
   const verifier = crypto.randomBytes(byteLength).toString("base64url");
   const challenge = computeChallenge(verifier);
+
   return {
     verifier,
     challenge,
@@ -43,9 +44,11 @@ export function verifyPkce(verifier: string, challenge: string): boolean {
   if (typeof verifier !== "string" || typeof challenge !== "string") {
     return false;
   }
+
   if (verifier.length < 43 || verifier.length > 128) {
     return false;
   }
+
   const expectedChallenge = computeChallenge(verifier);
   // Constant-time comparison to prevent timing attacks.
   const expectedBuf = Buffer.from(expectedChallenge, "utf8");
@@ -53,5 +56,6 @@ export function verifyPkce(verifier: string, challenge: string): boolean {
   if (expectedBuf.length !== actualBuf.length) {
     return false;
   }
+
   return crypto.timingSafeEqual(expectedBuf, actualBuf);
 }

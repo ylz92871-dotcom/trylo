@@ -32,6 +32,7 @@ import type { JsonObject, JsonValue } from "../protocol/envelope.js";
 
 /** Protocol revisions this package is willing to speak. */
 export const SUPPORTED_MCP_PROTOCOL_VERSIONS = ["2025-03-26", "2024-11-05"] as const;
+
 export type McpProtocolVersion = (typeof SUPPORTED_MCP_PROTOCOL_VERSIONS)[number];
 
 export const DEFAULT_MCP_PROTOCOL_VERSION: McpProtocolVersion = "2025-03-26";
@@ -48,6 +49,7 @@ export const DEFAULT_MCP_PROTOCOL_VERSION: McpProtocolVersion = "2025-03-26";
  * table owns its own, and neither imports the other.
  */
 export const DEFAULT_MCP_LIST_TIMEOUT_MS = 30_000;
+
 export function isSupportedProtocolVersion(value: string): value is McpProtocolVersion {
   return (SUPPORTED_MCP_PROTOCOL_VERSIONS as readonly string[]).includes(value);
 }
@@ -158,8 +160,8 @@ export type McpToolOutcome =
 export type McpCallRequest = {
   readonly qualifiedName: string;
   readonly arguments: JsonObject;
-  /** Finite and positive. A call without a deadline is not schedulable. */
-  readonly timeoutMs: number;
+  /** Positive caller deadline when provided; omission waits for completion/cancellation. */
+  readonly timeoutMs?: number | undefined;
   readonly signal?: AbortSignal;
 };
 
@@ -243,8 +245,8 @@ export type McpResourceFailure = {
 export type McpReadResourceRequest = {
   /** Opaque to Trylo; passed verbatim to the server that published it. */
   readonly uri: string;
-  /** Finite and positive. A read without a deadline is not schedulable. */
-  readonly timeoutMs: number;
+  /** Optional caller deadline; cancellation remains available without one. */
+  readonly timeoutMs?: number | undefined;
   readonly signal?: AbortSignal;
 };
 

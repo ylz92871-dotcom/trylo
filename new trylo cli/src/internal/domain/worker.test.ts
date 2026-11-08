@@ -54,6 +54,7 @@ test("有 detail 的回执带上它", () => {
 test("回执保留时间戳与身份", () => {
   const source = job({ sessionId: "sess_9", messageId: "msg_9" });
   const receipt = receiptOf(source, { outcome: "cancelled" }, 5, 9, WORKER);
+
   assert.equal(receipt.sessionId, "sess_9");
   assert.equal(receipt.messageId, "msg_9");
   assert.equal(receipt.startedAtMs, 5);
@@ -72,6 +73,7 @@ test("四种结局各有各的说法，不互相含糊", () => {
     describeOutcome("cancelled"),
     describeOutcome("unknown"),
   ]);
+
   assert.equal(said.size, 4);
   assert.match(describeOutcome("unknown"), /without knowing/);
 });
@@ -99,6 +101,7 @@ test("陈旧判定看身份对，不看进程在不在", () => {
   const fresh = (_pid: number): number | undefined => 900;
   const reused = (_pid: number): number | undefined => 1_500;
   const gone = (_pid: number): number | undefined => undefined;
+
   // pid 还活着但启动时间对不上 —— 那是另一个进程顶了这个 pid，回执不可信。
   assert.equal(receiptIsStale(receipt, fresh), false);
   assert.equal(receiptIsStale(receipt, reused), true);

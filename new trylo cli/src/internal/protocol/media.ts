@@ -16,6 +16,7 @@
  */
 
 export const IMAGE_MIME_ALLOWLIST = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
+
 export type ImageMime = (typeof IMAGE_MIME_ALLOWLIST)[number];
 
 export function isImageMime(value: string): value is ImageMime {
@@ -23,6 +24,7 @@ export function isImageMime(value: string): value is ImageMime {
 }
 
 export const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp"] as const;
+
 export type ImageExtension = (typeof IMAGE_EXTENSIONS)[number];
 
 export function isImageExtension(value: string): value is ImageExtension {
@@ -53,6 +55,7 @@ export function extensionMime(extension: string): ImageMime | undefined {
  * (`view_image.rs`: only `high`/`original` parse).
  */
 export const IMAGE_DETAILS = ["high", "original"] as const;
+
 export type ImageDetail = (typeof IMAGE_DETAILS)[number];
 
 export function isImageDetail(value: string): value is ImageDetail {
@@ -107,6 +110,7 @@ export const IMAGE_REFUSAL_CODES = [
   "unsupported_detail",
   "bytes_unavailable",
 ] as const;
+
 export type ImageRefusalCode = (typeof IMAGE_REFUSAL_CODES)[number];
 
 export type ImageValidation =

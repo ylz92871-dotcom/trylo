@@ -4,7 +4,6 @@ import {
   clearOptional,
   emit,
   fail,
-  markAttemptTerminal,
   ok,
   remember,
   type ReduceResult,
@@ -25,6 +24,7 @@ export function failPermission(
       event: "permission_failed",
     });
   }
+
   const call = state.toolCalls[expectedId];
   if (call === undefined) {
     return fail(state, {
@@ -34,12 +34,12 @@ export function failPermission(
       event: "permission_failed",
     });
   }
+
   const ticketId = ticketIdFor(expectedId);
   const remembered = remember(state, eventId);
   const next: ExecutionState = {
     ...clearOptional(remembered, ["activeToolCallId"]),
-    phase: "terminal",
-    terminalReason: "failed",
+    phase: "turning",
     approvals: {
       ...remembered.approvals,
       [ticketId]: { ticketId, toolCallId: expectedId, status: "failed" },
@@ -48,18 +48,13 @@ export function failPermission(
       ...remembered.toolCalls,
       [expectedId]: { ...call, status: "permission_failed" },
     },
-    attempts: markAttemptTerminal(remembered),
   };
+
   return ok(next, [
     emit(
-      "error",
-      { code: "permission_unavailable", toolCallId: expectedId, message },
+      "tool_result",
+      { code: "permission_unavailable", toolCallId: expectedId, status: "failed", message },
       eventId,
-    ),
-    emit(
-      "terminal",
-      { reason: "failed", cause: "permission_unavailable" },
-      `${eventId}:term`,
     ),
   ]);
 }

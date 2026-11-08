@@ -37,11 +37,14 @@ export function cutToBytes(text: string, maxBytes: number): string {
   if (maxBytes <= 0) {
     return "";
   }
+
   if (Buffer.byteLength(text, "utf8") <= maxBytes) {
     return text;
   }
+
   let used = 0;
   let end = 0;
+
   for (const character of text) {
     const cost = Buffer.byteLength(character, "utf8");
     if (used + cost > maxBytes) {
@@ -50,15 +53,19 @@ export function cutToBytes(text: string, maxBytes: number): string {
     used += cost;
     end += character.length;
   }
+
   return text.slice(0, end);
 }
 
 /** The longest UTF-8 suffix that fits, without splitting a surrogate pair. */
 export function cutTailToBytes(text: string, maxBytes: number): string {
   if (maxBytes <= 0) return "";
+
   if (Buffer.byteLength(text, "utf8") <= maxBytes) return text;
+
   let used = 0;
   let start = text.length;
+
   while (start > 0) {
     let previous = start - 1;
     const low = text.charCodeAt(previous);
@@ -66,11 +73,14 @@ export function cutTailToBytes(text: string, maxBytes: number): string {
       const high = text.charCodeAt(previous - 1);
       if (high >= 0xD800 && high <= 0xDBFF) previous -= 1;
     }
+
     const cost = Buffer.byteLength(text.slice(previous, start), "utf8");
     if (used + cost > maxBytes) break;
+
     used += cost;
     start = previous;
   }
+
   return text.slice(start);
 }
 

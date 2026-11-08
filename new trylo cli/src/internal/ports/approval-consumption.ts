@@ -196,10 +196,12 @@ export function epochMs(value: unknown): number | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
+
   const match = ISO8601.exec(value);
   if (match === null) {
     return undefined;
   }
+
   const [, year, month, day, hour, minute, second, fraction, offsetSign, offsetH, offsetM] = match;
   const y = Number(year);
   const mo = Number(month);
@@ -210,7 +212,9 @@ export function epochMs(value: unknown): number | undefined {
   if (mo < 1 || mo > 12 || d < 1 || d > daysInMonth(y, mo) || h > 23 || mi > 59 || s > 59) {
     return undefined;
   }
+
   let offsetMinutes = 0;
+
   if (offsetSign !== undefined) {
     const oh = Number(offsetH);
     const om = Number(offsetM);
@@ -219,11 +223,14 @@ export function epochMs(value: unknown): number | undefined {
     }
     offsetMinutes = oh * 60 + om;
   }
+
   const millis = fraction === undefined ? 0 : Math.round(Number(`0.${fraction}`) * 1000);
   let ms = Date.UTC(y, mo - 1, d, h, mi, s, millis);
+
   if (offsetSign !== undefined) {
     ms += offsetSign === "+" ? -offsetMinutes * 60_000 : offsetMinutes * 60_000;
   }
+
   return ms;
 }
 
@@ -239,6 +246,7 @@ export function checkGrantIssuance(input: GrantIssuanceInput): GrantIssuanceChec
   if (!isAction(input.action)) {
     return { ok: false, code: "invalid_grant_facts", message: "grant action must be acquire|modify|activate|contribute" };
   }
+
   if (
     !isNonEmptyString(input.candidateId) ||
     !isNonEmptyString(input.packageVersionId) ||
@@ -246,14 +254,17 @@ export function checkGrantIssuance(input: GrantIssuanceInput): GrantIssuanceChec
   ) {
     return { ok: false, code: "invalid_grant_facts", message: "grant binding facts must be non-empty strings" };
   }
+
   const issuedMs = epochMs(input.issuedAt);
   if (issuedMs === undefined) {
     return { ok: false, code: "invalid_now", message: "grant issuedAt is not a strict ISO-8601 timestamp" };
   }
+
   const expiryMs = epochMs(input.expiry);
   if (expiryMs === undefined) {
     return { ok: false, code: "invalid_expiry", message: "grant expiry is not a strict ISO-8601 timestamp" };
   }
+
   if (expiryMs <= issuedMs) {
     return {
       ok: false,
@@ -261,6 +272,7 @@ export function checkGrantIssuance(input: GrantIssuanceInput): GrantIssuanceChec
       message: "grant expiry must be after issuedAt",
     };
   }
+
   return { ok: true };
 }
 
@@ -277,23 +289,29 @@ export function checkApprovalConsumption(
   if (!isNonEmptyString(request.candidateId) || !isNonEmptyString(request.packageVersionId) || !isNonEmptyString(request.scope)) {
     return { ok: false, code: "invalid_token", message: "consumption target is malformed" };
   }
+
   const nowMs = epochMs(request.now);
   if (nowMs === undefined) {
     return { ok: false, code: "invalid_now", message: "consumption time is not a strict ISO-8601 timestamp" };
   }
+
   if (grant.status === "revoked") {
     return { ok: false, code: "grant_revoked", message: `grant ${grant.grantId} was revoked` };
   }
+
   if (grant.status === "consumed") {
     return { ok: false, code: "replayed", message: `grant ${grant.grantId} was already consumed` };
   }
+
   const expiryMs = epochMs(grant.expiry);
   if (expiryMs === undefined) {
     return { ok: false, code: "invalid_expiry", message: "grant expiry is not a strict ISO-8601 timestamp" };
   }
+
   if (expiryMs <= nowMs) {
     return { ok: false, code: "expired", message: "approval grant expired" };
   }
+
   if (grant.action !== request.action) {
     return {
       ok: false,
@@ -301,14 +319,18 @@ export function checkApprovalConsumption(
       message: `grant action ${grant.action} cannot authorize ${request.action}`,
     };
   }
+
   if (grant.candidateId !== request.candidateId) {
     return { ok: false, code: "candidate_mismatch", message: "grant is bound to a different candidate" };
   }
+
   if (grant.packageVersionId !== request.packageVersionId) {
     return { ok: false, code: "version_mismatch", message: "grant cannot be replayed across package versions" };
   }
+
   if (grant.scope !== request.scope) {
     return { ok: false, code: "scope_mismatch", message: "grant cannot be reused across scopes" };
   }
+
   return { ok: true };
 }

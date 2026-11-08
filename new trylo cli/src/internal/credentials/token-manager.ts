@@ -89,6 +89,7 @@ export class OAuthTokenManager {
     if (isNearExpiry && this.state.refreshToken && this.state.tokenEndpoint) {
       return this.refreshToken();
     }
+
     return this.state.accessToken;
   }
 
@@ -114,6 +115,7 @@ export class OAuthTokenManager {
           grant_type: "refresh_token",
           refresh_token: refreshToken,
         });
+
         if (this.state.clientId) {
           bodyParams.set("client_id", this.state.clientId);
         }
@@ -129,12 +131,14 @@ export class OAuthTokenManager {
 
         if (!response.ok) {
           let errorDetail = `HTTP ${response.status}`;
+
           try {
             const errJson = (await response.json()) as { error?: string; error_description?: string };
             errorDetail = errJson.error_description ?? errJson.error ?? errorDetail;
           } catch {
             // ignore non-json error
           }
+
           throw new Error(`Token refresh rejected by authorization server: ${errorDetail}`);
         }
 
@@ -188,6 +192,7 @@ export class OAuthTokenManager {
 
         return newAccessToken;
       } finally {
+        // A failed refresh must not pin later callers to its rejected promise.
         this.inFlightRefresh = null;
       }
     })();

@@ -120,9 +120,11 @@ export function isAuthorised(input: {
   if (input.held === undefined || !input.matches) {
     return false;
   }
+
   if (input.revoked === true) {
     return false;
   }
+
   return grantSatisfies(input.held, input.question);
 }
 

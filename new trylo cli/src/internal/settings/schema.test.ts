@@ -54,10 +54,12 @@ test("shell names a shell and refuses anything else, and is not a packaged defau
     const result = validateSettingsObject({ shell: name }, "user");
     assert.equal(result.ok, true, `${name} was refused`);
   }
+
   for (const bad of ["powershell.exe", "BASH", "", "sh -c", true, 1]) {
     const result = validateSettingsObject({ shell: bad }, "user");
     assert.equal(result.ok, false, `${JSON.stringify(bad)} was accepted`);
   }
+
   assert.equal(
     Object.hasOwn(PACKAGED_DEFAULTS, "shell"),
     false,
@@ -97,6 +99,7 @@ test("MCP declaration keys are refused as forbidden, not as unknown", () => {
       assert.equal(result.code, "forbidden_key", `${key} -> ${result.code}`);
     }
   }
+
   assert.equal(isMcpForbiddenKey("mcpServers"), true);
   assert.equal(isMcpForbiddenKey("model"), false);
 });
@@ -106,7 +109,9 @@ test("secret refusal wins over unknown-key refusal for a secret-shaped unknown k
   // key literally named `token` does: order matters so the more specific reason
   // is reported.
   const result = validateSettingsObject({ token: "x" }, "user");
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.code, "secret_key");
   }
@@ -120,7 +125,9 @@ test("provider is an open string: declared ids exist, and the resolver judges th
   // made `--provider <declared-id>` unusable, so only the type is checked.
   assert.equal(validateSettingsObject({ provider: "myhost" }, "user").ok, true);
   const bad = validateSettingsObject({ provider: 42 }, "user");
+
   assert.equal(bad.ok, false);
+
   if (!bad.ok) {
     assert.equal(bad.code, "invalid_value");
   }
@@ -130,7 +137,9 @@ test("model and endpoint must be strings", () => {
   assert.equal(validateSettingsObject({ model: "gpt-x" }, "user").ok, true);
   assert.equal(validateSettingsObject({ endpoint: "https://e.test" }, "user").ok, true);
   const bad = validateSettingsObject({ model: 42 }, "user");
+
   assert.equal(bad.ok, false);
+
   if (!bad.ok) {
     assert.equal(bad.code, "invalid_value");
   }
@@ -150,6 +159,7 @@ test("positive-integer keys refuse zero, negatives, fractions and strings", () =
       assert.equal(result.code, "invalid_value");
     }
   }
+
   assert.equal(validateSettingsObject({ maxIterations: 1 }, "user").ok, true);
   assert.equal(validateSettingsObject({ maxTokens: 4096 }, "user").ok, true);
   assert.equal(validateSettingsObject({ contextTokenLimit: 128000 }, "user").ok, true);
@@ -180,11 +190,14 @@ test("the schema declares no concat key, but the predicate exists and is total",
 
 test("lspConfigFile takes a path and is not a packaged default", () => {
   const result = validateSettingsObject({ lspConfigFile: "lsp-servers.json" }, "user");
+
   assert.equal(result.ok, true, JSON.stringify(result));
+
   for (const bad of [true, 1, ["a.json"]]) {
     const refused = validateSettingsObject({ lspConfigFile: bad }, "user");
     assert.equal(refused.ok, false, `${JSON.stringify(bad)} was accepted`);
   }
+
   assert.equal(
     Object.hasOwn(PACKAGED_DEFAULTS, "lspConfigFile"),
     false,

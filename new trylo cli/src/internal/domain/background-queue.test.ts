@@ -50,12 +50,15 @@ test("an empty queue is idle, which is not the same claim as unreadable", () => 
   // is the property being asserted: the two shapes are disjoint by construction.
   const claims = (decision: DispatchDecision): string =>
     decision.kind === "unknown" ? `unknown:${decision.code}` : decision.kind;
+
   assert.notEqual(claims(empty), claims(unreadable));
 });
 
 test("a message that survived into storage blank is not started and not dropped", () => {
   const decision = dispatchDecision({ ok: true, value: page([message("   ")]) });
+
   assert.equal(decision.kind, "unknown");
+
   // The refusal names a reason the surface can show, rather than a generic
   // "something is wrong".
   if (decision.kind === "unknown") {
@@ -68,7 +71,9 @@ test("one message starts even when ninety-nine are behind it", () => {
     message(`m${index}`, `q${index}`),
   );
   const decision = dispatchDecision({ ok: true, value: page(many) });
+
   assert.equal(decision.kind, "start");
+
   if (decision.kind === "start") {
     assert.equal(decision.message.id, "q0");
   }

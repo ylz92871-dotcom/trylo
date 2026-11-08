@@ -71,6 +71,7 @@ export function renderProfilePreview(input: {
   if (input.assets.some((asset) => isHiddenCot(asset.body))) {
     return domainFailure("hidden_cot_rejected", "hidden chain-of-thought cannot be a profile asset");
   }
+
   const previewScope = input.previewScope ?? "task";
   const ordered = [...input.assets].sort(compareAssets);
   const conflicts: string[] = [];
@@ -79,29 +80,35 @@ export function renderProfilePreview(input: {
   const kept: PreviewAsset[] = [];
   const trimmed: TrimRecord[] = [];
   const seenBodies = new Set<string>();
+
   for (const asset of ordered) {
     if (conflictsWithCurrent(input.currentInstruction, asset)) {
       conflicts.push(asset.id);
       trimmed.push({ id: asset.id, reason: "conflict_with_current" });
       continue;
     }
+
     if (leaksScope(previewScope, asset.scopeKind)) {
       scopeLeaks.push(asset.id);
       trimmed.push({ id: asset.id, reason: "scope_leakage" });
       continue;
     }
+
     const dupKey = `${asset.kind}|${asset.body}`;
     if (seenBodies.has(dupKey)) {
       duplicates.push(asset.id);
       trimmed.push({ id: asset.id, reason: "duplicate" });
       continue;
     }
+
     seenBodies.add(dupKey);
     kept.push(asset);
   }
+
   const currentTokens = estimateTokens(input.currentInstruction.text);
   let used = currentTokens;
   const applied: PreviewAsset[] = [];
+
   for (const asset of kept) {
     const cost = estimateTokens(asset.body);
     if (used + cost <= input.tokenBudget) {
@@ -111,6 +118,7 @@ export function renderProfilePreview(input: {
       trimmed.push({ id: asset.id, reason: "token_budget" });
     }
   }
+
   const rendered: RenderedLine[] = [
     {
       order: 0,
@@ -152,6 +160,7 @@ export function renderProfilePreview(input: {
       scopeLeaks,
     }),
   };
+
   return preview;
 }
 
@@ -161,9 +170,11 @@ function compareAssets(left: PreviewAsset, right: PreviewAsset): number {
   if (originRank !== otherOrigin) {
     return originRank - otherOrigin;
   }
+
   if (KIND_PRIORITY[left.kind] !== KIND_PRIORITY[right.kind]) {
     return KIND_PRIORITY[left.kind] - KIND_PRIORITY[right.kind];
   }
+
   return left.id.localeCompare(right.id);
 }
 
@@ -188,8 +199,10 @@ function leaksScope(previewScope: ScopeKind, assetScope: ScopeKind | undefined):
   if (assetScope === undefined) {
     return false;
   }
+
   if (assetScope === "user_global" && previewScope !== "user_global") {
     return true;
   }
+
   return false;
 }

@@ -35,6 +35,7 @@ test("W3 去投机分诊：ToolRunnerPort 标记为 OPEN，不提前在主仓铺
   // and tool learning spec §8. It must NOT be prematurely created in src/internal/ports.
   const portsDir = fileURLToPath(new URL("../ports", import.meta.url));
   const toolRunnerPortPath = `${portsDir}/tool-runner.ts`;
+
   assert.equal(
     existsSync(toolRunnerPortPath),
     false,
@@ -64,7 +65,7 @@ test("W3 去投机分诊：在跑包写入集完整性保护（不得误删）",
   const root = fileURLToPath(new URL("../../../", import.meta.url));
   // Method learning, user learning, mcp runtime, and tooling are active workstreams
   const activeFiles = [
-    join(root, "src", "internal", "integration", "method", "wiring.ts"),
+    join(root, "src", "internal", "learning", "agent", "subsystems", "method", "adapters", "wiring.ts"),
     join(root, "src", "internal", "integration", "user-learning", "index.ts"),
     join(root, "src", "internal", "adapters", "mcp-runtime", "index.ts"),
     join(root, "src", "internal", "tooling", "catalog", "index.ts"),

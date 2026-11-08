@@ -66,16 +66,20 @@ function normalizeFunction(
   if (name.length === 0 || name.includes("__") === false && spec.name.trim().length === 0) {
     return err("empty_tool_name", "dynamic tool refuses an empty name");
   }
+
   if (spec.name.trim().length === 0) {
     return err("empty_tool_name", "dynamic tool refuses an empty name");
   }
+
   const guarded = sanitizeToolDescription(spec.description);
   if (!guarded.ok) {
     return err(guarded.code === "prompt_injection" ? "prompt_injection" : "empty_description", guarded.text);
   }
+
   if (!isRecord(spec.inputSchema)) {
     return err("invalid_schema", `dynamic tool ${name} carries no JSON Schema object`);
   }
+
   return ok({
     name,
     description: guarded.text,
@@ -105,16 +109,19 @@ export function normalizeDynamicSpecs(input: {
     out.push(tool);
     return ok(undefined);
   };
+
   for (const spec of input.functions ?? []) {
     const normalized = normalizeFunction(spec, undefined);
     if (!normalized.ok) {
       return normalized;
     }
+
     const added = push(normalized.value);
     if (!added.ok) {
       return added;
     }
   }
+
   for (const group of input.namespaces ?? []) {
     if (group.namespace.trim().length === 0) {
       return err("empty_tool_name", "dynamic namespace refuses an empty name");
@@ -124,28 +131,33 @@ export function normalizeDynamicSpecs(input: {
       if (!normalized.ok) {
         return normalized;
       }
+
       const added = push(normalized.value);
       if (!added.ok) {
         return added;
       }
     }
   }
+
   if (input.legacyNamespace !== undefined || input.legacyTools !== undefined) {
     const namespace = (input.legacyNamespace ?? "").trim();
     if (namespace.length === 0) {
       return err("empty_tool_name", "legacy dynamic namespace refuses an empty name");
     }
+
     for (const spec of input.legacyTools ?? []) {
       const normalized = normalizeFunction(spec, namespace);
       if (!normalized.ok) {
         return normalized;
       }
+
       const added = push(normalized.value);
       if (!added.ok) {
         return added;
       }
     }
   }
+
   return ok(out);
 }
 

@@ -66,6 +66,7 @@ export async function startOAuthCallbackServer(
         error,
         ...(errorDescription === undefined ? {} : { errorDescription }),
       });
+
       return;
     }
 
@@ -77,6 +78,7 @@ export async function startOAuthCallbackServer(
         error: "state_mismatch",
         errorDescription: "State parameter does not match expected CSRF token",
       });
+
       return;
     }
 
@@ -88,6 +90,7 @@ export async function startOAuthCallbackServer(
         error: "missing_code",
         errorDescription: "No authorization code found in callback query",
       });
+
       return;
     }
 

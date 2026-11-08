@@ -81,12 +81,14 @@ function sortCurrent(
   current: Readonly<Partial<Record<CredentialProviderId, string>>>,
 ): Record<string, string> {
   const out: Record<string, string> = {};
+
   for (const key of Object.keys(current).sort()) {
     const value = current[key as CredentialProviderId];
     if (value !== undefined) {
       out[key] = value;
     }
   }
+
   return out;
 }
 
@@ -96,30 +98,37 @@ export function decodeDocument(
   where: string,
 ): { ok: true; value: CredentialLedgerDocument } | CredentialFailure {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(raw);
   } catch {
     return failure("credentials_corrupt", `${where} is not valid JSON`);
   }
+
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return failure("credentials_corrupt", `${where} is not a JSON object`);
   }
+
   const record = parsed as Record<string, unknown>;
   const keyFailure = checkExactKeys(record, where);
   if (keyFailure !== undefined) {
     return keyFailure;
   }
+
   if (record["formatVersion"] !== CREDENTIAL_FORMAT_VERSION) {
     return failure("credentials_corrupt", `${where} has unknown formatVersion`);
   }
+
   const current = decodeCurrent(record["current"], where);
   if (!current.ok) {
     return current;
   }
+
   const records = decodeRecords(record["records"], where);
   if (!records.ok) {
     return records;
   }
+
   const body: DocumentBody = {
     formatVersion: CREDENTIAL_FORMAT_VERSION,
     current: current.value,
@@ -129,21 +138,25 @@ export function decodeDocument(
   if (record["checksum"] !== expected) {
     return failure("credentials_corrupt", `${where} checksum mismatch`);
   }
+
   return { ok: true, value: { ...body, checksum: expected } };
 }
 
 function checkExactKeys(record: Record<string, unknown>, where: string): CredentialFailure | undefined {
   const keys = Object.keys(record);
+
   for (const key of keys) {
     if (!DOCUMENT_KEYS.has(key)) {
       return failure("credentials_corrupt", `${where} has unknown key ${JSON.stringify(key)}`);
     }
   }
+
   for (const required of DOCUMENT_KEYS) {
     if (!keys.includes(required)) {
       return failure("credentials_corrupt", `${where} is missing ${JSON.stringify(required)}`);
     }
   }
+
   return undefined;
 }
 
@@ -154,16 +167,21 @@ function decodeCurrent(
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return failure("credentials_corrupt", `${where} current is not an object`);
   }
+
   const out: Partial<Record<CredentialProviderId, string>> = {};
+
   for (const [key, member] of Object.entries(value as Record<string, unknown>)) {
     if (!isCredentialProviderId(key)) {
       return failure("credentials_corrupt", `${where} current has unknown provider ${JSON.stringify(key)}`);
     }
+
     if (typeof member !== "string" || !isCredentialAccountId(member)) {
       return failure("credentials_corrupt", `${where} current has an invalid accountId`);
     }
+
     out[key] = member;
   }
+
   return { ok: true, value: out };
 }
 
@@ -174,8 +192,10 @@ function decodeRecords(
   if (!Array.isArray(value)) {
     return failure("credentials_corrupt", `${where} records is not an array`);
   }
+
   const out: CredentialRecord[] = [];
   const seen = new Set<string>();
+
   for (let index = 0; index < value.length; index += 1) {
     const candidate = value[index];
     const at = `${where} records[${index}]`;
@@ -183,13 +203,16 @@ function decodeRecords(
     if (invalid !== undefined) {
       return invalid;
     }
+
     const record = toRecord(candidate as Record<string, unknown>);
     const key = `${record.providerId}\u0000${record.accountId}`;
     if (seen.has(key)) {
       return failure("credentials_corrupt", `${at} duplicates (${record.providerId}, ${record.accountId})`);
     }
+
     seen.add(key);
     out.push(record);
   }
+
   return { ok: true, value: out };
 }

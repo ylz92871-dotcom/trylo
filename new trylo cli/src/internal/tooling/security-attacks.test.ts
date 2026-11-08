@@ -4,19 +4,19 @@ import {
   CURATOR_PERMISSIONS,
   createRecordingBoardPort,
   submitBindingDraft,
-} from "../learning/domains/tool/index.js";
-import { assessCandidates } from "./acquisition/comparator.js";
-import { classifyLicense } from "./acquisition/license-policy.js";
-import { vetCandidate } from "./acquisition/vetting.js";
+} from "../learning/agent/subsystems/tool/domain/index.js";
+import { assessCandidates } from "../learning/agent/subsystems/tool/assets/acquisition/comparator.js";
+import { classifyLicense } from "../learning/agent/subsystems/tool/assets/acquisition/license-policy.js";
+import { vetCandidate } from "../learning/agent/subsystems/tool/assets/acquisition/vetting.js";
 import { consumeApproval } from "./approval/gates.js";
-import { executeContribution, prepareContributionBundle } from "./contribution/bundle.js";
+import { executeContribution, prepareContributionBundle } from "../learning/agent/subsystems/tool/assets/contribution/bundle.js";
 import { listProductionTools } from "./catalog/production-search.js";
 import { sanitizeToolDescription } from "./catalog/description-guard.js";
-import { projectMyTools } from "./my-tools/projector.js";
+import { projectMyTools } from "../learning/agent/subsystems/tool/assets/my-tools/projector.js";
 import { enforceOutputBounds } from "./package-spi/manifest.js";
-import { inspectArchive } from "./quarantine/archive-guard.js";
+import { inspectArchive } from "../learning/agent/subsystems/tool/assets/quarantine/archive-guard.js";
 import { archive, candidate, issuedGrantRef, manifest, memoryPermissionStore, pkg, provenance } from "./testing/fixtures.js";
-import { runValidationPipeline } from "./validation/pipeline.js";
+import { runValidationPipeline } from "../learning/agent/subsystems/tool/assets/validation/pipeline.js";
 import { passingSignals } from "./testing/fixtures.js";
 
 test("impersonation of an official repo is rejected", () => {
@@ -46,7 +46,9 @@ test("postinstall bypass is closed", () => {
     }),
     12,
   );
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.code, "postinstall_forbidden");
   }
@@ -75,7 +77,9 @@ test("grant replay across versions is fail-closed", async () => {
     scope: "docs",
     now: "2026-09-12T00:00:00Z",
   });
+
   assert.equal(first.ok, false);
+
   if (!first.ok) {
     assert.equal(first.code, "version_mismatch");
   }
@@ -109,11 +113,15 @@ test("MCP description prompt injection is stripped from production", () => {
 test("tool output leak and overflow become canonical errors", () => {
   const man = manifest({ stdoutBytes: 4, stderrBytes: 4, resultChars: 4 });
   const leak = enforceOutputBounds(man, { stdout: "BEGIN PRIVATE KEY", stderr: "", result: "x" });
+
   assert.equal(leak.ok, false);
+
   if (!leak.ok) {
     assert.equal(leak.code, "secret_leak");
   }
+
   const overflow = enforceOutputBounds(man, { stdout: "12345", stderr: "", result: "x" });
+
   assert.equal(overflow.ok, false);
 });
 
@@ -131,7 +139,9 @@ test("optimized missing upstream is not cataloged", () => {
     actor: "verifier",
     signals: passingSignals(),
   });
+
   assert.equal(result.ok, true);
+
   if (result.ok) {
     assert.equal(result.value.verdict, "fail");
   }
@@ -148,6 +158,7 @@ test("contribution button cannot auto-publish even with a contribute token", asy
     "docs",
     "push",
   );
+
   assert.equal(published.ok, false);
   const local = prepareContributionBundle({
     pkg: pkg({ origin: "direct" }),
@@ -155,11 +166,13 @@ test("contribution button cannot auto-publish even with a contribute token", asy
     tests: [],
     changeSummary: "x",
   });
+
   assert.equal(local.ok, false);
 });
 
 test("Board Permission and My Tools do not each store a writable active state", async () => {
   const store = memoryPermissionStore();
+
   assert.equal(CURATOR_PERMISSIONS.network, false);
   const board = createRecordingBoardPort();
   const entries = projectMyTools({
@@ -168,6 +181,7 @@ test("Board Permission and My Tools do not each store a writable active state", 
     activations: [],
     contributionByPackage: {},
   });
+
   assert.equal(entries[0]?.lifecycle, "verified");
   const bind = await submitBindingDraft(
     board,
@@ -191,6 +205,7 @@ test("Board Permission and My Tools do not each store a writable active state", 
       now: "2026-09-12T00:00:00Z",
     },
   );
+
   assert.equal(bind.ok, true);
   assert.equal(
     board.snapshot().some((item) => item.kind === "submit_binding_draft"),
@@ -213,7 +228,9 @@ test("large-vendor status does not skip assessment alternatives", () => {
   });
   const alt = candidate({ candidateId: "alt", name: "alt" });
   const assessed = assessCandidates([big, alt]);
+
   assert.equal(assessed.ok, true);
+
   if (assessed.ok && assessed.value.kind === "compared") {
     const row = assessed.value.ranked.find((item) => item.candidate.candidateId === "big-co");
     assert.notEqual(row?.vetting.conclusion, "eligible");

@@ -7,6 +7,12 @@ type Base = {
   readonly deliverySequence?: number;
 };
 
+/** Optional failure detail; it changes no approval or execution authority. */
+export type PermissionRefusalDetails = {
+  readonly code?: "invalid_arguments";
+  readonly message?: string;
+};
+
 export type ReduceInput =
   | (Base & {
       readonly type: "start_turn";
@@ -110,7 +116,7 @@ export type ReduceInput =
     })
   | (Base & { readonly type: "cancel" })
   | (Base & { readonly type: "permission_approved"; readonly toolCallId: string })
-  | (Base & { readonly type: "permission_denied"; readonly toolCallId: string })
+  | (Base & PermissionRefusalDetails & { readonly type: "permission_denied"; readonly toolCallId: string })
   | (Base & { readonly type: "permission_expired"; readonly toolCallId: string })
   | (Base & {
       readonly type: "permission_failed";

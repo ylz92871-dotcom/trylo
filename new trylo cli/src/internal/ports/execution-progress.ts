@@ -1,14 +1,18 @@
 import type { Envelope } from "../protocol/envelope.js";
 import type { StreamPartials } from "../protocol/stream-partial.js";
 import type { Transcript, TranscriptItem } from "../protocol/transcript.js";
+import type { PromptInputCheckpoint } from "./prompt-input.js";
 
 /** Closed canonical facts only; partial provider fragments are not messages. */
 export type ExecutionProgress = {
   readonly transcript: Transcript;
   readonly envelopes: ReadonlyArray<Envelope>;
+  /** Private metadata belongs only to its matching accepted stream_end append. */
+  readonly promptInputCheckpoint?: PromptInputCheckpoint;
 };
 
 export type ExecutionEffectOutcome = Extract<TranscriptItem, { kind: "tool_result" }>["outcome"];
+
 export type ProgressWriteOutcome =
   | { readonly ok: true }
   | { readonly ok: false; readonly code: string };

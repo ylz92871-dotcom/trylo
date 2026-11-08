@@ -84,6 +84,7 @@ const STOP_FRAMES: ReadonlyArray<unknown> = [
 function startMockRealEndpoint(): Promise<{ readonly url: string; readonly close: () => Promise<void> }> {
   const server: Server = createServer((req, res) => {
     let body = "";
+
     req.setEncoding("utf8");
     req.on("data", (chunk: string) => {
       body += chunk;
@@ -97,6 +98,7 @@ function startMockRealEndpoint(): Promise<{ readonly url: string; readonly close
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
       const port = typeof address === "object" && address !== null ? address.port : 0;
+
       resolve({
         url: `http://127.0.0.1:${port}/v1/chat/completions`,
         close: () =>
@@ -110,6 +112,7 @@ function startMockRealEndpoint(): Promise<{ readonly url: string; readonly close
 
 test("W2 Harness Fixture 臂：离线全绿可重复，不需要真网络或凭据", async () => {
   const result = await runFixtureArm(SAMPLE_QUERY_PACKAGE);
+
   assert.equal(result.status, "PASSED");
   assert.equal(result.exitCode, 0);
   assert.equal(result.arm, "fixture");
@@ -117,6 +120,7 @@ test("W2 Harness Fixture 臂：离线全绿可重复，不需要真网络或凭�
   assert.notEqual(result.events, undefined);
 
   const eventTypes = (result.events ?? []).map((e) => e["type"]);
+
   assert.equal(eventTypes.includes("run_start"), true);
   assert.equal(eventTypes.includes("tool_use"), true);
   assert.equal(eventTypes.includes("run_result"), true);
@@ -136,6 +140,7 @@ test("W2 Harness Real-Provider 臂门控：无凭据时如实报告 BLOCKED_MISS
       homeDir: emptyHome,
       env: hermeticEnv(emptyHome),
     });
+
     assert.equal(result.status, "BLOCKED_MISSING_CREDENTIAL");
     assert.equal(result.arm, "real-provider");
     assert.equal(result.sampleId, SAMPLE_QUERY_PACKAGE.id);
@@ -144,6 +149,7 @@ test("W2 Harness Real-Provider 臂门控：无凭据时如实报告 BLOCKED_MISS
     // Verify comparison correctly identifies real arm as blocked
     const fixtureResult = await runFixtureArm(SAMPLE_QUERY_PACKAGE);
     const comparison = compareArms(fixtureResult, result);
+
     assert.equal(comparison.comparisonStatus, "BLOCKED_REAL_ARM");
     assert.equal(comparison.notes.includes("Real-provider arm gated by credential"), true);
   } finally {
@@ -154,8 +160,10 @@ test("W2 Harness Real-Provider 臂门控：无凭据时如实报告 BLOCKED_MISS
 test("W2 Harness 双臂对照：当端点与凭据点亮时，两臂皆绿并产生可比对结果", async () => {
   const mockEndpoint = await startMockRealEndpoint();
   const home = emptyHomeDir();
+
   try {
     const fixtureResult = await runFixtureArm(SAMPLE_QUERY_PACKAGE);
+
     assert.equal(fixtureResult.status, "PASSED");
 
     const realResult = await runRealProviderArm(SAMPLE_QUERY_PACKAGE, {
@@ -170,6 +178,7 @@ test("W2 Harness 双臂对照：当端点与凭据点亮时，两臂皆绿并产
     assert.equal(realResult.exitCode, 0);
 
     const comparison = compareArms(fixtureResult, realResult);
+
     assert.equal(comparison.comparisonStatus, "COMPARABLE");
     assert.equal(comparison.notes.includes("Both fixture and real-provider arms executed successfully"), true);
   } finally {
@@ -195,6 +204,7 @@ test("W4 Harness Real-Provider: 从凭据存储自动发现凭据并解锁真实
       secret: "sk-stored-test-credential",
       authType: "api_key",
     });
+
     assert.equal(loginRes.ok, true);
 
     const realResult = await runRealProviderArm(SAMPLE_QUERY_PACKAGE, {
@@ -233,6 +243,7 @@ test("hermetic 隔离：host shell 导出的合成凭据不得越过门控点亮
   // 必然拒绝连接的本机端口，所以红例只会本机失败，绝不向公网发出请求。
   const previousKey = process.env.TRYLO_API_KEY;
   const previousEndpoint = process.env.TRYLO_REAL_ENDPOINT;
+
   process.env.TRYLO_API_KEY = "sk-synthetic-ambient-credential";
   process.env.TRYLO_REAL_ENDPOINT = "http://127.0.0.1:1/v1";
 
@@ -242,6 +253,7 @@ test("hermetic 隔离：host shell 导出的合成凭据不得越过门控点亮
       homeDir: home,
       env: hermeticEnv(home),
     });
+
     assert.equal(result.status, "BLOCKED_MISSING_CREDENTIAL");
     assert.equal(result.exitCode, undefined);
   } finally {

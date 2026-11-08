@@ -77,6 +77,7 @@ export async function executeOAuthFlow(config: OAuthFlowConfig): Promise<OAuthFl
 
   // 3. Start local callback server
   let callbackServer;
+
   try {
     callbackServer = await startOAuthCallbackServer({
       expectedState: state,
@@ -92,12 +93,14 @@ export async function executeOAuthFlow(config: OAuthFlowConfig): Promise<OAuthFl
 
   // 4. Construct Authorization URL
   const authUrl = new URL(config.authorizeEndpoint);
+
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("client_id", config.clientId);
   authUrl.searchParams.set("redirect_uri", callbackServer.redirectUri);
   authUrl.searchParams.set("code_challenge", pkce.challenge);
   authUrl.searchParams.set("code_challenge_method", pkce.method);
   authUrl.searchParams.set("state", state);
+
   if (config.scope !== undefined && config.scope.length > 0) {
     authUrl.searchParams.set("scope", config.scope);
   }
@@ -128,6 +131,7 @@ export async function executeOAuthFlow(config: OAuthFlowConfig): Promise<OAuthFl
   });
 
   let tokenRes: Response;
+
   try {
     tokenRes = await doFetch(config.tokenEndpoint, {
       method: "POST",
@@ -147,6 +151,7 @@ export async function executeOAuthFlow(config: OAuthFlowConfig): Promise<OAuthFl
 
   if (!tokenRes.ok) {
     let errorDetail = `HTTP ${tokenRes.status}`;
+
     try {
       const errJson = (await tokenRes.json()) as { error?: string; error_description?: string };
       if (errJson.error_description) {
@@ -157,6 +162,7 @@ export async function executeOAuthFlow(config: OAuthFlowConfig): Promise<OAuthFl
     } catch {
       // Use fallback error detail
     }
+
     return {
       ok: false,
       code: "token_error",

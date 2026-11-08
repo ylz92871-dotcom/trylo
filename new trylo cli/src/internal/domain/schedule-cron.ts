@@ -86,9 +86,11 @@ function expandField(field: string, range: FieldRange): ReadonlyArray<number> | 
       if (step < 1) {
         return null;
       }
+
       for (let value = min; value <= max; value += step) {
         out.add(value);
       }
+
       continue;
     }
 
@@ -102,9 +104,11 @@ function expandField(field: string, range: FieldRange): ReadonlyArray<number> | 
       if (lo > hi || step < 1 || lo < min || hi > effectiveMax) {
         return null;
       }
+
       for (let value = lo; value <= hi; value += step) {
         out.add(isDayOfWeek && value === 7 ? 0 : value);
       }
+
       continue;
     }
 
@@ -114,9 +118,11 @@ function expandField(field: string, range: FieldRange): ReadonlyArray<number> | 
       if (isDayOfWeek && value === 7) {
         value = 0;
       }
+
       if (value < min || value > max) {
         return null;
       }
+
       out.add(value);
       continue;
     }
@@ -127,6 +133,7 @@ function expandField(field: string, range: FieldRange): ReadonlyArray<number> | 
   if (out.size === 0) {
     return null;
   }
+
   return Array.from(out).sort((left, right) => left - right);
 }
 
@@ -136,7 +143,9 @@ export function parseCronExpression(expression: string): CronFields | null {
   if (parts.length !== 5) {
     return null;
   }
+
   const expanded: Array<ReadonlyArray<number>> = [];
+
   for (let index = 0; index < 5; index += 1) {
     const field = expandField(parts[index] as string, FIELD_RANGES[index] as FieldRange);
     if (field === null) {
@@ -144,6 +153,7 @@ export function parseCronExpression(expression: string): CronFields | null {
     }
     expanded.push(field);
   }
+
   return {
     minute: expanded[0] as ReadonlyArray<number>,
     hour: expanded[1] as ReadonlyArray<number>,
@@ -226,6 +236,7 @@ export function computeNextCronRun(fields: CronFields, from: Date): Date | null 
         return found;
       }
     }
+
     // Day-level jump. Safe precisely because the day already failed the match:
     // moving to midnight of the next day cannot skip a matching day, and it is
     // what keeps a "0 0 29 2 *" answer reachable inside the step budget instead
@@ -233,6 +244,7 @@ export function computeNextCronRun(fields: CronFields, from: Date): Date | null 
     cursor.setDate(cursor.getDate() + 1);
     cursor.setHours(0, 0, 0, 0);
   }
+
   return null;
 }
 
@@ -283,6 +295,7 @@ function findTimeOfDay(
       if (candidate.getTime() <= fromMs) {
         continue;
       }
+
       // The gap check. On a spring-forward day `new Date(y, m, d, 2, 30)` does
       // not fail — JavaScript normalises it to 03:30 local, because no local
       // 02:30 exists. Accepting that would silently move a job to a different
@@ -294,6 +307,7 @@ function findTimeOfDay(
       if (candidate.getHours() !== hours || candidate.getMinutes() !== minutes) {
         continue;
       }
+
       return candidate;
     }
   }
@@ -310,12 +324,15 @@ function matchesDay(
   if (dayOfMonthWild && dayOfWeekWild) {
     return true;
   }
+
   if (dayOfMonthWild) {
     return dayOfWeekSet.has(at.getDay());
   }
+
   if (dayOfWeekWild) {
     return dayOfMonthSet.has(at.getDate());
   }
+
   // Both constrained: either matching is enough (vixie-cron semantics).
   return dayOfMonthSet.has(at.getDate()) || dayOfWeekSet.has(at.getDay());
 }

@@ -110,22 +110,27 @@ export type WorktreeOwnerRecord = {
  */
 export function parseOwnerRecord(text: string): WorktreeOwnerRecord | undefined {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(text);
   } catch {
     return undefined;
   }
+
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return undefined;
   }
+
   const keys = Object.keys(parsed);
   if (keys.some((key) => key !== "version" && key !== "ownerId")) {
     return undefined;
   }
+
   const record = parsed as { readonly version?: unknown; readonly ownerId?: unknown };
   if (record.version !== WORKTREE_OWNER_VERSION || typeof record.ownerId !== "string") {
     return undefined;
   }
+
   return record.ownerId.length > 0 ? { version: WORKTREE_OWNER_VERSION, ownerId: record.ownerId } : undefined;
 }
 

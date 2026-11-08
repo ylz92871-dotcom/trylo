@@ -37,6 +37,7 @@ test("approval is always required, even for a read-only, non-destructive tool", 
     idempotentHint: true,
     openWorldHint: false,
   });
+
   assert.equal(requirement.required, true);
   assert.equal(requirement.reason, "mcp_tools_always_require_approval");
 });
@@ -53,6 +54,7 @@ test("a server arguing for a lighter touch has every such hint flagged", () => {
     idempotentHint: true,
     destructiveHint: false,
   });
+
   assert.deepEqual(requirement.overriddenHints, ["readOnlyHint", "destructiveHint", "idempotentHint"]);
   assert.equal(requirement.required, true);
 });

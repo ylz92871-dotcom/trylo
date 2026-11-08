@@ -18,6 +18,7 @@ function createFixture(): Fixture {
   const root = mkdtempSync(join(os.tmpdir(), "trylo-sa-e2e-"));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
+
   mkdirSync(workspace, { recursive: true });
   mkdirSync(home, { recursive: true });
   mkdirSync(join(workspace, ".trylo"), { recursive: true });
@@ -26,6 +27,7 @@ function createFixture(): Fixture {
     JSON.stringify({ name: "subagent-e2e-demo-pkg", version: "1.0.0" }, null, 2),
     "utf8",
   );
+
   return {
     workspace,
     home,
@@ -41,6 +43,7 @@ function runCli(
     ...process.env,
     TRYLO_HOME: fx.home,
   };
+
   delete env.TRYLO_API_KEY;
   delete env.OPENAI_API_KEY;
 
@@ -50,6 +53,7 @@ function runCli(
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
+
   return {
     status: result.status,
     stdout: result.stdout ?? "",
@@ -62,12 +66,16 @@ function parseJournalRows(homeDir: string): Array<Record<string, unknown>> {
   if (!existsSync(sessionsDir)) {
     return [];
   }
+
   const rows: Array<Record<string, unknown>> = [];
+
   for (const entry of readdirSync(sessionsDir)) {
     if (!entry.endsWith(".ndjson")) {
       continue;
     }
+
     const sessionFile = join(sessionsDir, entry);
+
     for (const line of readFileSync(sessionFile, "utf8").split(/\r?\n/)) {
       const trimmed = line.trim();
       if (trimmed.length > 0) {
@@ -75,6 +83,7 @@ function parseJournalRows(homeDir: string): Array<Record<string, unknown>> {
       }
     }
   }
+
   return rows;
 }
 
@@ -101,6 +110,7 @@ test("SA-S-3 端到端运行：trylo run --provider fixture-subagent 调度真�
 
     // 2. Verify durable session journal on disk contains subagent_spawn and subagent_end
     const rows = parseJournalRows(fx.home);
+
     assert.ok(rows.length > 0, "session journal must not be empty");
 
     const records = rows.map((r) => (r["record"] ?? r) as Record<string, unknown>);
@@ -169,6 +179,7 @@ test("SA-S-5 缺省隔离性：缺省 fixture 运行零子代理副作用，会�
     const subagentEnvelopes = envelopes.filter(
       (e) => e["kind"] === "subagent_spawn" || e["kind"] === "subagent_end",
     );
+
     assert.equal(subagentEnvelopes.length, 0, "default run must have exactly 0 subagent envelopes");
   } finally {
     fx.cleanup();

@@ -168,6 +168,10 @@ export function classifySourceFile(normalizedRelativePath: string): SpeculationS
   // 1. Test support (fixtures, doubles, fake executors, harnesses)
   if (
     f.includes("/testing/") ||
+    // Test-only old-path bridge for integration/check-learning/runtime.test.ts.
+    // Remove this entry with the bridge when the separate check migration
+    // switches that protected consumer to the tool subsystem entrypoint.
+    f === "internal/adapters/tool-evolution/process-verifier.ts" ||
     f.endsWith("fakes.ts") ||
     f.endsWith("scenarios.ts") ||
     f.endsWith("mock-oauth-server.ts") ||
@@ -179,7 +183,14 @@ export function classifySourceFile(normalizedRelativePath: string): SpeculationS
   // 2. Production-reachable modules that were previously deferred (R4 reclassification)
   if (
     f.startsWith("internal/subagent/") ||
-    f.startsWith("internal/learning/method/")
+    f.startsWith("internal/learning/method/") ||
+    // Preserve the pre-move method service, adapter and legacy-prompt classes.
+    (f.startsWith("internal/learning/agent/subsystems/method/") &&
+      !f.startsWith("internal/learning/agent/subsystems/method/adapters/") &&
+      !f.startsWith("internal/learning/agent/subsystems/method/legacy-prompt/") &&
+      f !== "internal/learning/agent/subsystems/method/orchestration/prompt-pipeline.ts") ||
+    f.startsWith("internal/learning/agent/subsystems/tool/adapters/evolution/") ||
+    f === "internal/learning/agent/subsystems/tool/runtime/production-activation.ts"
   ) {
     return "production_reachable";
   }

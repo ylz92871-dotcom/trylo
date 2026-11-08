@@ -117,12 +117,15 @@ export function decodeMessage(value: JsonValue): DecodedMessage {
   if (!isRecord(value)) {
     return { kind: "invalid", detail: "message is not an object" };
   }
+
   if (value["jsonrpc"] !== "2.0") {
     return { kind: "invalid", detail: "missing or unsupported jsonrpc version" };
   }
+
   if (typeof value["method"] === "string") {
     return decodeCallMessage(value);
   }
+
   return decodeResponseMessage(value);
 }
 
@@ -132,6 +135,7 @@ function decodeCallMessage(value: Readonly<Record<string, unknown>>): DecodedMes
   const method = value["method"] as string;
   const id = value["id"];
   const params = value["params"] as JsonValue | undefined;
+
   if (hasValidId(id)) {
     return {
       kind: "request",
@@ -143,9 +147,11 @@ function decodeCallMessage(value: Readonly<Record<string, unknown>>): DecodedMes
       },
     };
   }
+
   if (id !== undefined) {
     return { kind: "invalid", detail: "request has a malformed id" };
   }
+
   return {
     kind: "notification",
     notification: { jsonrpc: "2.0", method, ...(params === undefined ? {} : { params }) },
@@ -166,12 +172,15 @@ function decodeResponseMessage(value: Readonly<Record<string, unknown>>): Decode
   if (hasError && hasResult) {
     return { kind: "invalid", detail: "response has both result and error" };
   }
+
   if (hasError) {
     const error = value["error"];
     if (!isRecord(error) || typeof error["code"] !== "number" || typeof error["message"] !== "string") {
       return { kind: "invalid", detail: "error object is malformed" };
     }
+
     const data = error["data"] as JsonValue | undefined;
+
     return {
       kind: "response",
       response: {
@@ -185,12 +194,14 @@ function decodeResponseMessage(value: Readonly<Record<string, unknown>>): Decode
       },
     };
   }
+
   if (hasResult) {
     if (!hasValidId(id)) {
       return { kind: "invalid", detail: "successful response has no id" };
     }
     return { kind: "response", response: { jsonrpc: "2.0", id, result: value["result"] as JsonValue } };
   }
+
   return { kind: "invalid", detail: "message is neither request, notification nor response" };
 }
 
@@ -217,26 +228,34 @@ export function scanFrames(buffer: string, maxFrameBytes = MAX_FRAME_BYTES): Fra
       }
       break;
     }
+
     let line = rest.slice(0, newline);
+
     rest = rest.slice(newline + 1);
+
     if (line.endsWith("\r")) {
       line = line.slice(0, -1);
     }
+
     if (line.trim().length === 0) {
       // Blank keep-alive lines are tolerated and produce nothing.
       continue;
     }
+
     if (line.length > maxFrameBytes) {
       overflowed = true;
       continue;
     }
+
     let parsed: JsonValue;
+
     try {
       parsed = JSON.parse(line) as JsonValue;
     } catch {
       messages.push({ kind: "invalid", detail: "line is not valid JSON" });
       continue;
     }
+
     messages.push(decodeMessage(parsed));
   }
 

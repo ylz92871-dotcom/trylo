@@ -74,6 +74,7 @@ test("a deletion the operator can be asked about is not a danger signal", () => 
 test("wrappers past the depth cap fail closed instead of failing open", () => {
   const atCap = ["env", "env", "env", "env", "env", "env", "env", "env", "rm", "-rf", "/tmp/x"];
   const overCap = [...atCap.slice(0, 8), "env", "env", "rm", "-rf", "/tmp/x"];
+
   assert.equal(dangerousCommandMatch(atCap, POSIX), "forced_rm");
   assert.equal(
     dangerousCommandMatch(overCap, POSIX),

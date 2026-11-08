@@ -60,4 +60,5 @@ export function isSettingsLayer(value: string): value is SettingsLayer {
  * discovered or read here.
  */
 export const FILE_BACKED_LAYERS = ["system", "user", "project"] as const;
+
 export type FileBackedLayer = (typeof FILE_BACKED_LAYERS)[number];

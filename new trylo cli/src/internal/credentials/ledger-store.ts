@@ -47,10 +47,12 @@ export function providersOf(
   document: import("../ports/credentials.js").CredentialLedgerDocument,
 ): ReadonlyArray<CredentialProviderId> {
   const seen: CredentialProviderId[] = [];
+
   for (const record of document.records) {
     if (!seen.includes(record.providerId)) {
       seen.push(record.providerId);
     }
   }
+
   return seen;
 }

@@ -56,17 +56,22 @@ export async function runHooksForEvent(
 
   for (const hook of selectHooks(store, trigger.event, trigger.matchValue)) {
     const result = await runOneHook(hook, trigger, deps, schedule);
+
     executedIds.push(result.hookId);
     raise(result.verdict);
+
     if (result.reason !== undefined) {
       reasons.push(result.reason);
     }
+
     if (result.additionalContext !== undefined) {
       additionalContexts.push(result.additionalContext);
     }
+
     if (result.updatedInput !== undefined) {
       updatedInputs.push(result.updatedInput);
     }
+
     if (result.hookError !== undefined) {
       hookErrors.push(result.hookError);
     }

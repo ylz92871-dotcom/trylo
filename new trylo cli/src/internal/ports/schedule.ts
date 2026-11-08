@@ -203,6 +203,7 @@ export type ScheduleFailureCode =
   | "occurrence_already_claimed";
 
 export type ScheduleRefusal = { readonly ok: false; readonly code: ScheduleFailureCode; readonly message: string };
+
 export type ScheduleResult<T> = { readonly ok: true; readonly value: T } | ScheduleRefusal;
 
 /**

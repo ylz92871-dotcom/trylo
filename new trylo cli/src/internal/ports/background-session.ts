@@ -218,6 +218,7 @@ export function backgroundSession(
       message: `'${sessionId}' is not a session id`,
     };
   }
+
   const snapshot = registry.get(sessionId);
   if (snapshot === undefined) {
     return {
@@ -226,6 +227,7 @@ export function backgroundSession(
       message: `no background session ${sessionId}; it never ran, or it was reaped`,
     };
   }
+
   return { ok: true, value: rowOf(snapshot) };
 }
 
@@ -248,13 +250,16 @@ export async function killBackgroundSession(
   if (!isSessionId(sessionId)) {
     return { ok: false, code: "invalid_id", message: `'${sessionId}' is not a session id` };
   }
+
   const stopped = await registry.stop(sessionId);
   if (stopped.ok) {
     return { ok: true, value: { alreadyGone: false } };
   }
+
   if (stopped.code === "session_not_found") {
     return { ok: true, value: { alreadyGone: true } };
   }
+
   return { ok: false, code: "stop_failed", message: stopped.message };
 }
 
@@ -280,6 +285,7 @@ export async function readBackgroundSession(
   if (!isSessionId(sessionId)) {
     return { ok: false, code: "invalid_id", message: `'${sessionId}' is not a session id` };
   }
+
   const snapshot = registry.get(sessionId);
   if (snapshot === undefined) {
     return {
@@ -288,6 +294,7 @@ export async function readBackgroundSession(
       message: `no background session ${sessionId}; it may have finished and been reaped`,
     };
   }
+
   const written = await registry.write({
     sessionId,
     input: "",
@@ -306,6 +313,7 @@ export async function readBackgroundSession(
         message: `no background session ${sessionId}; it may have finished and been reaped`,
       };
     }
+
     if (written.code === "session_finished") {
       return {
         ok: true,
@@ -319,8 +327,10 @@ export async function readBackgroundSession(
         },
       };
     }
+
     return { ok: false, code: "write_failed", message: written.message };
   }
+
   return {
     ok: true,
     value: {
@@ -346,6 +356,7 @@ export function renderRow(row: BackgroundSessionRow, nowMs: number): string {
     row.droppedOutput ? "output-dropped" : null,
     row.bufferedBytes > 0 ? `${row.bufferedBytes}B buffered` : null,
   ].filter((flag) => flag !== null);
+
   return `${row.id.padEnd(24)} ${state.padEnd(14)} ${formatDuration(age).padStart(8)}  ${row.command}${
     flags.length === 0 ? "" : `  [${flags.join(", ")}]`
   }`;
@@ -366,18 +377,23 @@ export function formatDuration(ms: number): string {
   if (ms < 0) {
     return "0s";
   }
+
   if (ms < 1000) {
     return `${(ms / 1000).toFixed(1)}s`;
   }
+
   const seconds = Math.floor(ms / 1000);
   if (seconds < 60) {
     return `${seconds}s`;
   }
+
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) {
     return `${minutes}m${String(seconds % 60).padStart(2, "0")}s`;
   }
+
   const hours = Math.floor(minutes / 60);
+
   return `${hours}h${String(minutes % 60).padStart(2, "0")}m`;
 }
 

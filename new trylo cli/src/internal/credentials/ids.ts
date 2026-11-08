@@ -54,12 +54,15 @@ export function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value) ?? "null";
   }
+
   if (Array.isArray(value)) {
     return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
   }
+
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record).sort();
   const parts: string[] = [];
+
   for (const key of keys) {
     const member = record[key];
     if (member === undefined) {
@@ -67,6 +70,7 @@ export function canonicalJson(value: unknown): string {
     }
     parts.push(`${JSON.stringify(key)}:${canonicalJson(member)}`);
   }
+
   return `{${parts.join(",")}}`;
 }
 

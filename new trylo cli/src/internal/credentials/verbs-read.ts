@@ -49,10 +49,12 @@ export function get(
   if (!isCredentialProviderId(providerId)) {
     return failure("unknown_provider", `unknown provider ${JSON.stringify(providerId)}`);
   }
+
   const ledgers = deps.readLedgers();
   if ("ok" in ledgers) {
     return ledgers;
   }
+
   return { ok: true, value: resolveProvider(resolveInput(deps, ledgers, providerId)) };
 }
 
@@ -64,12 +66,15 @@ export function getAccount(
   if (!isCredentialProviderId(input.providerId)) {
     return failure("unknown_provider", `unknown provider ${JSON.stringify(input.providerId)}`);
   }
+
   if (!isCredentialAccountId(input.accountId)) {
     return failure("invalid_account_id", `${JSON.stringify(input.accountId)} is not a valid account id`);
   }
+
   const ledgers = deps.readLedgers();
   if ("ok" in ledgers) {
     return ledgers;
   }
+
   return resolveNamedAccount(input, ledgers, deps.hasProject);
 }

@@ -10,6 +10,7 @@ test("corrupt last-known-good checksum is ignored", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "trylo-lkg-"));
   try {
     const snapshot = emptySnapshot("user", 1, "full", []);
+
     await saveLastKnownGood(dir, snapshot);
     await writeFile(
       path.join(dir, "last-known-good.json"),
@@ -17,6 +18,7 @@ test("corrupt last-known-good checksum is ignored", async () => {
       "utf8",
     );
     const loaded = await loadLastKnownGood(dir);
+
     assert.equal(loaded, undefined);
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -47,8 +49,10 @@ test("an unreadable LKG degrades to a miss and the next write heals it", async (
     assert.equal(await loadLastKnownGood(dir), undefined);
     await rm(path.join(dir, "last-known-good.json"), { recursive: true, force: true });
     const snapshot = emptySnapshot("user", 7, "full", []);
+
     await saveLastKnownGood(dir, snapshot);
     const healed = await loadLastKnownGood(dir);
+
     assert.equal(healed?.createdFromBoardSequence, 7);
   } finally {
     await rm(dir, { recursive: true, force: true });

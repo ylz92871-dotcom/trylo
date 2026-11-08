@@ -47,6 +47,7 @@ test("a reviewer is given the call, not just the tool name", async () => {
       return { answer: "ask_user" };
     },
   };
+
   await runReviewer(reviewer, REQUEST);
   assert.deepEqual(seen, {
     toolCallId: "call-1",
@@ -79,6 +80,7 @@ test("a reviewer that throws is unavailable, not a denial and not an allow", asy
     },
     REQUEST,
   );
+
   assert.equal(outcome.kind, "unavailable");
   assert.equal(outcome.kind === "unavailable" && outcome.reason, "failed");
 });

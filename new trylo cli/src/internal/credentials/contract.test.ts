@@ -34,6 +34,7 @@ function makePort(
     },
     hasProject: options.hasProject ?? false,
   };
+
   return bindVerbs(deps);
 }
 
@@ -52,8 +53,10 @@ function code(result: { ok: boolean; code?: string }): string {
 test("login stores a keyed credential and get returns it with the secret", async () => {
   const port = makePort();
   const stored = await ok(port.login({ providerId: "openai-compatible", secret: "sk-secret", label: "work" }));
+
   assert.equal(stored.accountId.length > 0, true);
   const resolved = await ok(port.get("openai-compatible"));
+
   assert.equal(resolved.layer, "user");
   assert.equal(resolved.secret, "sk-secret");
   assert.equal(resolved.label, "work");
@@ -74,11 +77,13 @@ test("a keyed provider without a secret is refused", () => {
 test("fixture login may omit the secret, and get on an empty fixture is ok:none", async () => {
   const port = makePort();
   const empty = await ok(port.get("fixture"));
+
   assert.equal(empty.layer, "none");
   assert.equal(empty.secret, undefined);
 
   await ok(port.login({ providerId: "fixture" }));
   const resolved = await ok(port.get("fixture"));
+
   assert.equal(resolved.layer, "user");
   assert.equal(resolved.secret, undefined);
 });
@@ -101,11 +106,13 @@ test("a duplicate (providerId, accountId, scope) login is refused", async () => 
 test("status, list and exportPublic never carry a secret (adversarial #1)", async () => {
   const port = makePort();
   const secret = "sk-live-do-not-leak-000111222333";
+
   await ok(port.login({ providerId: "openai-compatible", secret, label: "work" }));
 
   const status = await ok(port.status());
   const list = await ok(port.list());
   const publicView = await ok(port.exportPublic());
+
   for (const rendered of [JSON.stringify(status), JSON.stringify(list), JSON.stringify(publicView)]) {
     assert.equal(rendered.includes(secret), false);
   }
@@ -113,8 +120,10 @@ test("status, list and exportPublic never carry a secret (adversarial #1)", asyn
 
 test("status reports one row per provider with the resolving layer", async () => {
   const port = makePort();
+
   await ok(port.login({ providerId: "openai-compatible", secret: "sk-secret" }));
   const status = await ok(port.status());
+
   assert.deepEqual(status.map((row) => row.providerId), ["openai-compatible", "fixture"]);
   assert.equal(status[0]?.loggedIn, true);
   assert.equal(status[0]?.layer, "user");
@@ -126,6 +135,7 @@ test("status reports one row per provider with the resolving layer", async () =>
 
 test("switch moves only the named provider's pointer (adversarial #11)", async () => {
   const port = makePort();
+
   await ok(port.login({ providerId: "openai-compatible", accountId: "acct-a", secret: "sk-a" }));
   await ok(port.login({ providerId: "openai-compatible", accountId: "acct-b", secret: "sk-b" }));
   await ok(port.login({ providerId: "fixture", accountId: "fx-1" }));
@@ -133,19 +143,23 @@ test("switch moves only the named provider's pointer (adversarial #11)", async (
   await ok(port.switch({ providerId: "openai-compatible", accountId: "acct-a", scope: "user" }));
 
   const openai = await ok(port.get("openai-compatible"));
+
   assert.equal(openai.accountId, "acct-a");
   const fixture = await ok(port.get("fixture"));
+
   assert.equal(fixture.accountId, "fx-1");
 });
 
 test("switch to an unknown account fails and leaves the pointer alone", async () => {
   const port = makePort();
+
   await ok(port.login({ providerId: "openai-compatible", accountId: "acct-a", secret: "sk-a" }));
   assert.equal(
     code(port.switch({ providerId: "openai-compatible", accountId: "acct-zzz", scope: "user" })),
     "unknown_account",
   );
   const resolved = await ok(port.get("openai-compatible"));
+
   assert.equal(resolved.accountId, "acct-a");
 });
 
@@ -160,14 +174,17 @@ test("deleting the current account is refused (adversarial #4)", async () => {
 
 test("deleting a non-current account succeeds once switched away", async () => {
   const port = makePort();
+
   await ok(port.login({ providerId: "openai-compatible", accountId: "acct-a", secret: "sk-a" }));
   await ok(port.login({ providerId: "openai-compatible", accountId: "acct-b", secret: "sk-b" }));
   // acct-b is current; acct-a can be deleted.
   const deleted = await ok(
     port.delete({ providerId: "openai-compatible", accountId: "acct-a", scope: "user" }),
   );
+
   assert.equal(deleted.accountId, "acct-a");
   const remaining = await ok(port.list());
+
   assert.deepEqual(
     remaining.map((entry) => entry.accountId),
     ["acct-b"],
@@ -176,11 +193,14 @@ test("deleting a non-current account succeeds once switched away", async () => {
 
 test("logout clears only the pointer and keeps every record", async () => {
   const port = makePort();
+
   await ok(port.login({ providerId: "openai-compatible", accountId: "acct-a", secret: "sk-a" }));
   await ok(port.logout({ providerId: "openai-compatible", scope: "user" }));
   const resolved = await ok(port.get("openai-compatible"));
+
   assert.equal(resolved.layer, "none");
   const entries = await ok(port.list());
+
   assert.deepEqual(
     entries.map((entry) => entry.accountId),
     ["acct-a"],
@@ -189,25 +209,30 @@ test("logout clears only the pointer and keeps every record", async () => {
 
 test("logout with no scope clears both scopes and is idempotent", async () => {
   const port = makePort({ hasProject: true });
+
   await ok(port.login({ providerId: "fixture", accountId: "u-1", scope: "user" }));
   await ok(port.login({ providerId: "fixture", accountId: "p-1", scope: "project" }));
   await ok(port.logout({ providerId: "fixture" }));
   assert.equal((await ok(port.get("fixture"))).layer, "none");
   // A second logout is still ok — already logged out is not an error.
   const again = await ok(port.logout({ providerId: "fixture" }));
+
   assert.equal(Array.isArray(again), true);
 });
 
 test("list isCurrent agrees with status after a switch (adversarial #11)", async () => {
   const port = makePort();
+
   await ok(port.login({ providerId: "openai-compatible", accountId: "acct-a", secret: "sk-a" }));
   await ok(port.login({ providerId: "openai-compatible", accountId: "acct-b", secret: "sk-b" }));
   await ok(port.switch({ providerId: "openai-compatible", accountId: "acct-a", scope: "user" }));
 
   const entries = await ok(port.list());
   const current = entries.filter((entry) => entry.isCurrent).map((entry) => entry.accountId);
+
   assert.deepEqual(current, ["acct-a"]);
   const status = await ok(port.status());
+
   assert.equal(status.find((row) => row.providerId === "openai-compatible")?.accountId, "acct-a");
 });
 

@@ -57,12 +57,15 @@ export function registerDynamicCall(
   if (input.callId.length === 0) {
     return err("unknown_call_id", "dynamic call refuses an empty call id");
   }
+
   if (registry.pending[input.callId] !== undefined) {
     return err("duplicate_call_id", `dynamic call ${input.callId} is already pending`);
   }
+
   if (!input.allowedTools.has(input.toolName)) {
     return err("tool_not_allowed", `dynamic tool ${input.toolName} is not exposed to this turn`);
   }
+
   const call: PendingDynamicCall = {
     callId: input.callId,
     toolName: input.toolName,
@@ -71,6 +74,7 @@ export function registerDynamicCall(
     timeoutMs: input.timeoutMs,
     status: "pending",
   };
+
   return ok({ registry: { pending: { ...registry.pending, [input.callId]: call } }, call });
 }
 
@@ -83,10 +87,13 @@ function settle(
   if (current === undefined) {
     return err("unknown_call_id", `dynamic call ${callId} is unknown`);
   }
+
   if (current.status !== "pending") {
     return err("call_already_settled", `dynamic call ${callId} already settled as ${current.status}`);
   }
+
   const settled: PendingDynamicCall = { ...current, status };
+
   return ok({ registry: { pending: { ...registry.pending, [callId]: settled } }, call: settled });
 }
 
@@ -118,11 +125,13 @@ export function expireDynamicCalls(
 ): { readonly registry: DynamicCallRegistry; readonly expired: ReadonlyArray<string> } {
   const expired: string[] = [];
   const pending: Record<string, PendingDynamicCall> = { ...registry.pending };
+
   for (const [callId, call] of Object.entries(pending)) {
     if (call.status === "pending" && nowMs - call.startedMs > call.timeoutMs) {
       pending[callId] = { ...call, status: "expired" };
       expired.push(callId);
     }
   }
+
   return { registry: { pending }, expired };
 }

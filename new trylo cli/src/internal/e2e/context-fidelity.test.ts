@@ -17,9 +17,12 @@ import type { ToolPort } from "../ports/tools.js";
 
 const endpoint = "https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions";
 const model = "glm-5.3-flash";
+
 type WireMessage = { role: string; content: string | Array<{ type: string; image_url?: { url: string } }>;
   reasoning_content?: string; tool_calls?: Array<{ function: { arguments: string } }> };
+
 type WireBody = { messages: WireMessage[] };
+
 function response(args?: JsonObject, usage?: number, name = "echo"): Response {
   const frames = [
     { choices: [{ delta: { reasoning_content: "ORIGINAL_NATIVE", content: "Checking.",
@@ -29,13 +32,16 @@ function response(args?: JsonObject, usage?: number, name = "echo"): Response {
   ];
   return new Response(frames.map(frame => `data: ${JSON.stringify(frame)}\n\n`).join("") + "data: [DONE]\n\n");
 }
+
 const permission = createFakePermission("approved");
+
 function echoTools(outputs = ["OK"]): ToolPort {
   let count = 0;
   return { snapshot: () => [echoBinding({ needsApproval: false, parameters: {
     type: "object", properties: { value: { type: "number" } }, required: ["value"],
   } })], execute: async () => toolResult({}, outputs[count++] ?? "OK"), cancel: async () => {} };
 }
+
 const input = { sessionId: "s", turnId: "t", correlationId: "c", model, text: "Use echo.", budget: { maxIterations: 5 } };
 
 test("official Volcano GLM aliases retain original native context after tools", async () => {
@@ -45,6 +51,7 @@ test("official Volcano GLM aliases retain original native context after tools", 
       fetchImpl: async (_url, init) => { bodies.push(JSON.parse(String(init?.body)) as WireBody);
         return bodies.length === 1 ? response({ value: 7 }) : response(); } });
     const result = await runTurn({ provider, permission, profile: emptyProfileLoader(), tools: echoTools() }, { ...input, model: requested });
+
     assert.equal(result.state.terminalReason, "completed");
     assert.equal(bodies[1]!.messages.find(m => m.role === "assistant")?.reasoning_content, "ORIGINAL_NATIVE", requested);
   }
@@ -58,16 +65,21 @@ test("native context remains paired with the original call when execution argume
       return bodies.length === 1 ? response({ arguments: { value: 7 } }) : response(); } });
   const tools = echoTools();
   const result = await runTurn({ provider, permission, profile: emptyProfileLoader(), tools: {
-    ...tools, execute: async call => { executed = call.arguments; return toolResult({}); },
+    ...tools, execute: async call => {
+      executed = call.arguments;
+      return toolResult({});
+    },
   } }, input);
+
   assert.equal(result.state.terminalReason, "completed");
   assert.deepEqual(executed, { value: 7 });
   const assistant = bodies[1]!.messages.find(m => m.role === "assistant")!;
+
   assert.equal(assistant.reasoning_content, "ORIGINAL_NATIVE");
   assert.deepEqual(JSON.parse(assistant.tool_calls![0]!.function.arguments), { arguments: { value: 7 } });
 });
 
-test("the next wire uses the same microcompact view as context budgeting", async () => {
+test("the next wire retains a consumed tool result while context budgeting has room", async () => {
   const bodies: WireBody[] = [];
   const provider = createOpenAiCompatibleProvider({ endpoint, model, apiKey: "fixture-key",
     fetchImpl: async (_url, init) => { bodies.push(JSON.parse(String(init?.body)) as WireBody);
@@ -75,10 +87,12 @@ test("the next wire uses the same microcompact view as context budgeting", async
   const result = await runTurn({ provider, permission, profile: emptyProfileLoader(), tools: echoTools(["A".repeat(25_000), "LATEST"]),
     compaction: compactionWiring({ nowMs: 0 }),
   }, { ...input, budget: { maxIterations: 5, contextTokenLimit: 10_000 } });
+
   assert.equal(result.state.terminalReason, "completed");
   const results = bodies[2]!.messages.filter(m => m.role === "tool");
-  assert.ok(String(results[0]!.content).length < 1000);
-  assert.ok(String(results[0]!.content).includes("elided"));
+
+  assert.equal(String(results[0]!.content).length, 25_000);
+  assert.ok(results[0]!.content === "A".repeat(25_000));
   assert.equal(results[1]!.content, "LATEST");
   assert.equal(result.transcript.find(i => i.kind === "tool_result")?.output.length, 25_000);
 });
@@ -88,11 +102,17 @@ test("automatic compaction preserves the complete original user constraint", asy
   const bodies: WireBody[] = [];
   const provider = createOpenAiCompatibleProvider({ endpoint, model, apiKey: "fixture-key",
     fetchImpl: async (_url, init) => { bodies.push(JSON.parse(String(init?.body)) as WireBody);
-      return bodies.length === 1 ? response({ value: 7 }, 11_000) : response(); } });
+      return bodies.length === 1 ? response({ value: 7 }) : response(); } });
   const result = await runTurn({ provider, permission, profile: emptyProfileLoader(), tools: echoTools(),
     compaction: compactionWiring({ nowMs: 0 }),
-  }, { ...input, text, budget: { maxIterations: 5, contextTokenLimit: 10_000 } });
+  }, { ...input, text, resumedTranscript: [
+    { kind: "user", sequence: 0, text: "A previous completed task." },
+    { kind: "assistant_text", sequence: 1, blockId: "previous-answer", text: "Completed historical answer. ".repeat(2400) },
+  ], budget: { maxIterations: 5, contextTokenLimit: 10_000 } });
+
+  assert.equal(result.state.terminalReason, "completed");
   assert.equal(result.compactions.length, 1);
+  assert.ok(bodies[0]!.messages.some(m => m.role === "user" && m.content === text));
   assert.ok(bodies[1]!.messages.some(m => m.role === "user" && m.content === text));
 });
 
@@ -105,6 +125,7 @@ test("a resumed history with no journaled native source is not reported as lost 
       { kind: "tool_result", sequence: 2, toolCallId: "old", name: "echo", output: "OK", outcome: "succeeded", truncated: false },
     ],
   });
+
   assert.equal(result.state.terminalReason, "completed");
   // WP-CL / A04: no journaled source record means "unknown", not "lost". A
   // count here would be an invented number, and repeating it every process is
@@ -120,6 +141,7 @@ test("an oversized user constraint is refused rather than compacted away", async
   const result = await runTurn({ provider, permission, profile: emptyProfileLoader(), tools: echoTools(),
     compaction: compactionWiring({ nowMs: 0 }),
   }, { ...input, text, budget: { maxIterations: 5, contextTokenLimit: 10_000 } });
+
   assert.equal(result.state.terminalReason, "failed");
   assert.ok(result.envelopes.some(e => e.kind === "terminal" && e.payload.cause === "context_limit"));
   assert.equal(sent, 0, "the first oversized request is rejected locally before network I/O");
@@ -132,11 +154,13 @@ test("a real view_image reaches Chat and survives resume without storing image b
     0,0,0,0,73,68,65,84,53,175,6,30,0,0,0,0,73,69,78,68,174,66,96,130]);
   const bodies: WireBody[] = [];
   const originalFetch = globalThis.fetch;
+
   try {
     writeFileSync(join(root, "image.png"), png);
     globalThis.fetch = async (_url, init) => { bodies.push(JSON.parse(String(init?.body)) as WireBody);
       return bodies.length === 1 ? response({ path: "image.png" }, undefined, "view_image") : response(); };
     const warm = createWarmRegistry();
+
     // A transport reused by a REPL must not retain another workspace's image
     // reader, even when endpoint, account and model are identical.
     buildProvider({ providerId: "openai-compatible", model, endpoint, apiKey: "fixture-key", workspaceRoot: join(root, "other"), permission, warm });
@@ -147,24 +171,30 @@ test("a real view_image reaches Chat and survives resume without storing image b
     };
     const tools = createReadOnlyTools({ workspaceRoot: root, reader: createNodeFileSystemReader() });
     const first = await runTurn({ provider: provider(), permission, profile: emptyProfileLoader(), tools }, input);
+
     assert.equal(first.state.terminalReason, "completed", "image reader must belong to this workspace");
     const images = (body: WireBody) => body.messages.flatMap(m => Array.isArray(m.content) ? m.content : []).filter(p => p.type === "image_url");
+
     assert.equal(images(bodies[1]!).length, 1);
     assert.equal(images(bodies[1]!)[0]!.image_url?.url, `data:image/png;base64,${Buffer.from(png).toString("base64")}`);
     assert.equal(JSON.stringify(first.transcript).includes(Buffer.from(png).toString("base64")), false);
     assert.equal(JSON.stringify(first.envelopes).includes(Buffer.from(png).toString("base64")), false, "image bytes must not enter durable tool-success envelopes");
     const resumed = JSON.parse(JSON.stringify(first.transcript)) as typeof first.transcript;
+
     await runTurn({ provider: provider(), permission, profile: emptyProfileLoader(), tools }, { ...input, turnId: "next", resumedTranscript: resumed });
     assert.equal(images(bodies[2]!).length, 1);
     writeFileSync(join(root, "image.png"), "changed");
     const changed = await runTurn({ provider: provider(), permission, profile: emptyProfileLoader(), tools }, { ...input, turnId: "changed", resumedTranscript: resumed });
+
     assert.equal(bodies.length, 4, "a stale historical image must not permanently block the conversation");
     assert.equal(images(bodies[3]!).length, 0, "changed bytes must never be presented as the old snapshot");
     assert.equal(changed.state.terminalReason, "completed");
-    assert.ok(changed.envelopes.some(e => e.kind === "observation" && e.payload.code === "image_reference_changed"));
+    assert.equal(changed.envelopes.some(e => e.kind === "observation" && e.payload.code === "image_reference_changed"), false);
+    assert.ok(bodies[3]!.messages.some(m => typeof m.content === "string" && m.content.includes("image_reference_changed")));
     assert.ok(bodies[3]!.messages.some(m => typeof m.content === "string" && m.content.includes("view_image")));
     writeFileSync(join(root, "image.png"), png);
     let freshSent = 0;
+
     globalThis.fetch = async () => ++freshSent === 1 ? response({ path: "image.png" }, undefined, "view_image") : response();
     const fresh = await runTurn({ provider: provider(), permission, profile: emptyProfileLoader(), tools: {
       ...tools, execute: async (call, signal) => {
@@ -173,11 +203,16 @@ test("a real view_image reaches Chat and survives resume without storing image b
         return outcome;
       },
     } }, { ...input, turnId: "fresh" });
+
     assert.equal(fresh.state.terminalReason, "failed", "a newly requested image must actually reach the model");
     assert.equal(freshSent, 1, "fresh image validation failure must stop before the next send");
+
     for (const create of [createOpenAiCompatibleProvider, createResponsesProvider]) {
       let sent = 0;
-      const direct = create({ endpoint, model, apiKey: "fixture-key", fetchImpl: async () => { sent++; return response(); } });
+      const direct = create({ endpoint, model, apiKey: "fixture-key", fetchImpl: async () => {
+        sent++;
+        return response();
+      } });
       const unsupported = await runTurn({ provider: direct, permission, profile: emptyProfileLoader(), tools },
         { ...input, turnId: "library", resumedTranscript: resumed });
       assert.equal(sent, 0, "a library adapter without reference hydration must fail before sending");

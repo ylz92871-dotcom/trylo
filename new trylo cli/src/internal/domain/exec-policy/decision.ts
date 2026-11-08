@@ -67,11 +67,13 @@ export function parseExecDecision(raw: string, allowDenyAlias = false): ParsedDe
   if (allowDenyAlias && raw === "deny") {
     return { ok: true, decision: "forbidden" };
   }
+
   if (!isExecDecision(raw)) {
     return {
       ok: false,
       message: `decision must be one of ${EXEC_DECISIONS.join(", ")}${allowDenyAlias ? ", deny" : ""} (got ${raw})`,
     };
   }
+
   return { ok: true, decision: raw };
 }

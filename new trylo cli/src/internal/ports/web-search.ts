@@ -18,6 +18,7 @@
  */
 
 export const WEB_SEARCH_MODES = ["cached", "live"] as const;
+
 export type WebSearchMode = (typeof WEB_SEARCH_MODES)[number];
 
 export function isWebSearchMode(value: string): value is WebSearchMode {
@@ -65,6 +66,7 @@ export const WEB_SEARCH_FAILURE_CODES = [
   /** The provider answered, and the answer contained no cited source. */
   "empty_result",
 ] as const;
+
 export type WebSearchFailureCode = (typeof WEB_SEARCH_FAILURE_CODES)[number];
 
 export type WebSearchFailure = {

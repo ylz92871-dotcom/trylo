@@ -30,17 +30,23 @@ function terminalEnvelope(reason: string, extra: Record<string, unknown> = {}) {
 
 test("valid fixture round-trips", () => {
   const parsed = parseEnvelope(loadFixture("valid.json"));
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   assert.equal(parsed.envelope.producerId, "cli");
   assert.equal(parsed.envelope.producerSequence, 1);
   const again = decodeEnvelope(encodeEnvelope(parsed.envelope));
+
   assert.equal(again.ok, true);
+
   if (!again.ok) {
     return;
   }
+
   assert.deepEqual(again.envelope, parsed.envelope);
 });
 
@@ -51,11 +57,15 @@ test("missing eventId is rejected", () => {
 
 test("unknown kind does not throw and keeps eventId", () => {
   const parsed = parseEnvelope(loadFixture("unknown-kind.json"));
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   const result = consume(parsed.envelope);
+
   assert.equal(result.status, "ignored_unknown_kind");
   assert.equal(result.eventId, "evt-unknown-kind-1");
   assert.equal(result.eventId, parsed.envelope.eventId);
@@ -65,17 +75,21 @@ test("completed cancelled and unknown are distinct", () => {
   const completed = parseEnvelope(terminalEnvelope("completed"));
   const cancelled = parseEnvelope(terminalEnvelope("cancelled"));
   const unknown = parseEnvelope(terminalEnvelope("unknown"));
+
   assert.equal(completed.ok, true);
   assert.equal(cancelled.ok, true);
   assert.equal(unknown.ok, true);
+
   if (!completed.ok || !cancelled.ok || !unknown.ok) {
     return;
   }
+
   const reasons = [
     readTerminalReason(completed.envelope),
     readTerminalReason(cancelled.envelope),
     readTerminalReason(unknown.envelope),
   ];
+
   assert.deepEqual(reasons, ["completed", "cancelled", "unknown"]);
   assert.notEqual(reasons[0], reasons[1]);
   assert.notEqual(reasons[0], reasons[2]);
@@ -84,20 +98,26 @@ test("completed cancelled and unknown are distinct", () => {
 
 test("verified is not a terminal reason", () => {
   const parsed = parseEnvelope(terminalEnvelope("verified"));
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   assert.equal(readTerminalReason(parsed.envelope), undefined);
   assert.notEqual(parsed.envelope.payload.reason, "completed");
 });
 
 test("verified flag does not mix into completed", () => {
   const parsed = parseEnvelope(terminalEnvelope("completed", { verified: true }));
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   assert.equal(readTerminalReason(parsed.envelope), "completed");
   assert.equal(parsed.envelope.payload.verified, true);
   assert.notEqual(readTerminalReason(parsed.envelope), "verified");
@@ -124,10 +144,13 @@ test("oversized payload is rejected", () => {
 
 test("failed is distinct from completed", () => {
   const parsed = parseEnvelope(loadFixture("failed.json"));
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   assert.equal(readTerminalReason(parsed.envelope), "failed");
   assert.notEqual(readTerminalReason(parsed.envelope), "completed");
 });
@@ -152,6 +175,7 @@ test("sequencer assigns monotonic sequence after binding attempt", () => {
     producerId: "cli",
     producerSequence: 8,
   });
+
   assert.equal(first.attemptId, "att-9");
   assert.equal(second.attemptId, "att-9");
   assert.equal(first.sequence, 0);
@@ -160,10 +184,13 @@ test("sequencer assigns monotonic sequence after binding attempt", () => {
 
 test("terminal is immutable and late observation is a new event", () => {
   const parsed = parseEnvelope(terminalEnvelope("cancelled"));
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   assert.throws(() => {
     (parsed.envelope.payload as { reason: string }).reason = "completed";
   }, TypeError);
@@ -182,10 +209,13 @@ test("terminal is immutable and late observation is a new event", () => {
     },
     sequencer,
   );
+
   assert.equal(late.ok, true);
+
   if (!late.ok) {
     return;
   }
+
   assert.notEqual(late.envelope.eventId, parsed.envelope.eventId);
   assert.equal(late.envelope.kind, "observation");
   assert.equal(late.envelope.correlationId, parsed.envelope.eventId);
@@ -202,16 +232,20 @@ test("redact strips path and secret shapes but keeps role error and reason", () 
     payload: {
       role: "assistant",
       reason: "failed",
-      error: "cannot read C:\\work\\demo-ws\\secret.txt token=abcd",
+      error: "cannot read D:\\CC\\trylo\\secret.txt token=abcd",
     },
     producerId: "cli",
     producerSequence: 1,
   });
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   const redacted = redactEnvelope(parsed.envelope);
+
   assert.equal(redacted.eventId, parsed.envelope.eventId);
   assert.equal(redacted.sequence, parsed.envelope.sequence);
   assert.equal(redacted.payload.role, "assistant");
@@ -240,6 +274,7 @@ test("valid fixture has every schema required field", () => {
     required: string[];
   };
   const raw = loadFixture("valid.json") as Record<string, unknown>;
+
   for (const key of schema.required) {
     assert.equal(key in raw, true, key);
   }
@@ -262,11 +297,15 @@ test("redact keeps correlation role reason and order", () => {
     producerId: "cli",
     producerSequence: 4,
   });
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   const redacted = redactEnvelope(parsed.envelope);
+
   assert.equal(redacted.correlationId, "cor-keep");
   assert.equal(redacted.sequence, 4);
   assert.equal(redacted.payload.role, "assistant");

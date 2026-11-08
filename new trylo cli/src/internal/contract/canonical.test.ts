@@ -20,12 +20,14 @@ function walkTs(dir: string, acc: string[] = []): string[] {
 
 function productionDefs(pattern: RegExp): string[] {
   const hits: string[] = [];
+
   for (const file of walkTs(srcRoot)) {
     const text = readFileSync(file, "utf8");
     if (pattern.test(text)) {
       hits.push(relative(srcRoot, file).replaceAll("\\", "/"));
     }
   }
+
   return hits.sort();
 }
 

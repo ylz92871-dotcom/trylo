@@ -8,10 +8,12 @@ export function encodeEnvelope(envelope: Envelope): string {
 
 export function decodeEnvelope(raw: string): ValidateResult {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(raw);
   } catch {
     return { ok: false, code: "invalid_json" };
   }
+
   return parseEnvelope(parsed);
 }

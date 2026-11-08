@@ -70,6 +70,7 @@ function execCli(
     });
     let stdout = "";
     let stderr = "";
+
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
@@ -84,6 +85,7 @@ function execCli(
         : setTimeout(() => {
             child.kill();
           }, options.timeoutMs);
+
     child.on("close", (status) => {
       if (timer !== undefined) {
         clearTimeout(timer);
@@ -140,6 +142,7 @@ export type RealProviderConfig = {
 
 function parseJsonLines(text: string): Array<Record<string, unknown>> {
   const rows: Array<Record<string, unknown>> = [];
+
   for (const line of text.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (trimmed.length > 0) {
@@ -150,6 +153,7 @@ function parseJsonLines(text: string): Array<Record<string, unknown>> {
       }
     }
   }
+
   return rows;
 }
 
@@ -163,6 +167,7 @@ export async function runFixtureArm(sample: HarnessSample): Promise<HarnessArmRe
   const root = mkdtempSync(join(os.tmpdir(), "trylo-harness-fx-"));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
+
   mkdirSync(workspace, { recursive: true });
   mkdirSync(home, { recursive: true });
   writeFileSync(
@@ -192,6 +197,7 @@ export async function runFixtureArm(sample: HarnessSample): Promise<HarnessArmRe
     );
 
     const durationMs = Date.now() - started;
+
     if (res.status !== 0) {
       return {
         arm: "fixture",
@@ -246,6 +252,7 @@ export async function runRealProviderArm(
   let apiKey = config?.apiKey ?? ambient.TRYLO_REAL_API_KEY ?? ambient.OPENAI_API_KEY;
 
   const homeDir = config?.homeDir ?? ambient.TRYLO_HOME ?? os.homedir();
+
   if (apiKey === undefined || apiKey.trim().length === 0) {
     try {
       const port = createCliCredentialPort({
@@ -280,6 +287,7 @@ export async function runRealProviderArm(
   const root = mkdtempSync(join(os.tmpdir(), "trylo-harness-real-"));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
+
   mkdirSync(workspace, { recursive: true });
   mkdirSync(home, { recursive: true });
   writeFileSync(
@@ -314,6 +322,7 @@ export async function runRealProviderArm(
     );
 
     const durationMs = Date.now() - started;
+
     if (res.status !== 0) {
       return {
         arm: "real-provider",
@@ -365,6 +374,7 @@ export function compareArms(
   }
 
   const bothPassed = fixtureResult.status === "PASSED" && realResult.status === "PASSED";
+
   return {
     sampleId: fixtureResult.sampleId,
     fixtureResult,

@@ -115,6 +115,7 @@ export async function verifyIdentity(
   probe: DaemonIdentityProbe,
 ): Promise<IdentityVerdict> {
   let observed: DaemonIdentity | undefined;
+
   try {
     observed = await probe.observe(recorded.pid);
   } catch (error: unknown) {
@@ -126,9 +127,11 @@ export async function verifyIdentity(
       reason: `the process table could not be read: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
+
   if (observed === undefined) {
     return { verdict: "gone", reason: `no process with pid ${recorded.pid}` };
   }
+
   if (!identityMatches(recorded, observed)) {
     return {
       verdict: "gone",
@@ -138,6 +141,7 @@ export async function verifyIdentity(
         `recorded ${new Date(recorded.startedAtMs).toISOString()})`,
     };
   }
+
   return { verdict: "matching" };
 }
 
@@ -151,22 +155,27 @@ export async function verifyIdentity(
  */
 export function decodeIdentity(raw: string): DaemonIdentity | undefined {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(raw);
   } catch {
     return undefined;
   }
+
   if (typeof parsed !== "object" || parsed === null) {
     return undefined;
   }
+
   const record = parsed as Record<string, unknown>;
   if (typeof record["pid"] !== "number" || !Number.isInteger(record["pid"]) || record["pid"] <= 0) {
     return undefined;
   }
+
   const startedAtMs = record["startedAtMs"];
   if (typeof startedAtMs !== "number" || !Number.isFinite(startedAtMs) || startedAtMs <= 0) {
     return undefined;
   }
+
   return { pid: record["pid"], startedAtMs };
 }
 

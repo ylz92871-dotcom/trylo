@@ -31,6 +31,7 @@ export function applyToolRejection(
       event: input.type,
     });
   }
+
   const remembered = remember(state, input.eventId);
   const next: ExecutionState = {
     ...clearOptional(remembered, ["activeToolCallId"]),
@@ -40,6 +41,7 @@ export function applyToolRejection(
       [input.toolCallId]: { ...call, status: "denied" },
     },
   };
+
   return ok(next, [
     emit(
       "tool_result",

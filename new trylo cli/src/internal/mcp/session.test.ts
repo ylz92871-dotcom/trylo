@@ -44,21 +44,27 @@ test("a server added through the registry opens, lists and calls end-to-end", as
       enabled: true,
       scope: "project",
     });
+
     assert.equal(added.ok, true);
 
     const session = createMcpSession({ registry, cwd: repoRoot, clientFactory });
     const opened = await session.open("fake");
+
     assert.equal(opened.ok, true);
+
     if (!opened.ok) {
       return;
     }
+
     assert.deepEqual(
       opened.value.tools.map((tool) => tool.qualifiedName).sort(),
       ["mcp__fake__echo", "mcp__fake__fail", "mcp__fake__hash"],
     );
 
     const called = await opened.value.call("echo", { text: "roundtrip" }, 2_000);
+
     assert.equal(called.ok, true);
+
     if (called.ok && called.outcome.outcome === "result") {
       assert.equal(called.outcome.output, "echo:roundtrip");
     }
@@ -79,7 +85,9 @@ test("opening an unregistered server name is an explicit failure", async () => {
     });
     const session = createMcpSession({ registry, cwd: repoRoot, clientFactory });
     const opened = await session.open("ghost");
+
     assert.equal(opened.ok, false);
+
     if (!opened.ok) {
       assert.equal(opened.code, "missing_entry");
     }

@@ -22,41 +22,53 @@ export function validateManifest(
   if (manifest.healthProbe !== true) {
     return err("missing_health", "package SPI requires a health probe");
   }
+
   if (manifest.cancelSupported !== true) {
     return err("missing_cancel", "package SPI requires cancel support");
   }
+
   if (manifest.timeoutMs <= 0) {
     return err("missing_timeout", "package SPI requires a positive timeout");
   }
+
   if (manifest.idempotencyKeyRequired !== true || manifest.sideEffectCommitPoint.length === 0) {
     return err("missing_idempotency", "package SPI requires idempotency and a side-effect commit point");
   }
+
   if (manifest.stdoutBytes <= 0 || manifest.stderrBytes <= 0 || manifest.resultChars <= 0) {
     return err("missing_output_bounds", "package SPI requires output bounds");
   }
+
   if (manifest.postinstall !== "forbidden") {
     return err("postinstall_not_forbidden", "postinstall is forbidden by default");
   }
+
   if (manifest.processIsolation !== true) {
     return err("not_isolated", "learned tools require a confined process");
   }
+
   const profile = validateRuntimeProfile(manifest);
   if (!profile.ok) {
     return profile;
   }
+
   if (manifest.thirdPartyTypes !== "isolated") {
     return err("third_party_type_leak", "third-party types must not leak into Trylo core");
   }
+
   return ok(manifest);
 }
 
+// Each profile has its own transport ABI; names alone do not establish isolation.
 function validateRuntimeProfile(manifest: ToolPackageManifest): Result<ToolPackageManifest, ManifestFailure> {
-  if (manifest.runtimeProfile === "confined_npm_cli_v1" || manifest.runtimeProfile === "confined_npm_mcp_v1") {
-    if (manifest.moduleFormat !== "node_package" || manifest.inputTransport !== (manifest.runtimeProfile === "confined_npm_cli_v1" ? "argv_stdin" : "mcp_stdio")
-      || "mcpTransport" in manifest || "mcpSchemaVersion" in manifest) return err("unsupported_runtime_profile", "managed Node packages require their explicit CLI or MCP broker ABI");
+  if (manifest.runtimeProfile === "confined_npm_cli_v1" || manifest.runtimeProfile === "confined_npm_mcp_v1" || manifest.runtimeProfile === "confined_npm_library_v1") {
+    const transport = manifest.runtimeProfile === "confined_npm_cli_v1" ? "argv_stdin" : manifest.runtimeProfile === "confined_npm_mcp_v1" ? "mcp_stdio" : "json";
+    if (manifest.moduleFormat !== "node_package" || manifest.inputTransport !== transport
+      || "mcpTransport" in manifest || "mcpSchemaVersion" in manifest) return err("unsupported_runtime_profile", "managed Node packages require their explicit CLI, MCP or library broker ABI");
     if (!safePackagePath(manifest.entrypoint)) return err("invalid_entrypoint", "managed Node entrypoint must be a relative package file");
     return validateNoIoBounds(manifest);
   }
+
   if (manifest.runtimeProfile === "confined_json_function_v1") {
     if (manifest.moduleFormat !== "commonjs" || manifest.inputTransport !== "json"
       || "mcpTransport" in manifest || "mcpSchemaVersion" in manifest) {
@@ -65,11 +77,14 @@ function validateRuntimeProfile(manifest: ToolPackageManifest): Result<ToolPacka
     if (manifest.entrypoint !== "candidate.cjs") return err("invalid_entrypoint", "the confined JSON profile has one fixed script entrypoint");
     return validateNoIoBounds(manifest);
   }
+
   if (manifest.runtimeProfile !== undefined && manifest.runtimeProfile !== "mcp_stdio") {
     return err("unsupported_runtime_profile", "unknown tool runtime profile");
   }
+
   return manifest.mcpTransport === "stdio" ? ok(manifest) : err("not_isolated", "MCP tools require stdio process isolation");
 }
+
 function validateNoIoBounds(manifest: ToolPackageManifest): Result<ToolPackageManifest, ManifestFailure> {
   if (manifest.permissions.length !== 0 || manifest.envWhitelist.length !== 0 || manifest.secretsWhitelist.length !== 0
     || manifest.cwdWhitelist.length !== 0 || manifest.sideEffectCommitPoint !== "none") return err("json_profile_not_pure", "confined pure profiles grant no workspace filesystem, environment, network or secret access");
@@ -85,9 +100,11 @@ export function assertNewVersion(
   if (previous !== undefined && previous.packageVersionId === next.packageVersionId) {
     return err("overwrite_forbidden", "package updates must create a new version id");
   }
+
   if (previous !== undefined && previous.contentHash === next.contentHash && previous.version === next.version) {
     return err("overwrite_forbidden", "package updates must not overwrite the active version in place");
   }
+
   return ok(next);
 }
 
@@ -101,6 +118,7 @@ export type OutputBoundFailure = "stdout_truncated" | "stderr_truncated" | "resu
 
 const SECRET_MARKERS = ["AKIA", "BEGIN PRIVATE KEY", "xoxb-", "ghp_"];
 
+// Reject secret markers before returning any captured output to the caller.
 export function enforceOutputBounds(
   manifest: ToolPackageManifest,
   output: ToolOutput,
@@ -110,14 +128,18 @@ export function enforceOutputBounds(
       return err("secret_leak", "tool output contained a secret marker");
     }
   }
+
   if (Buffer.byteLength(output.stdout, "utf8") > manifest.stdoutBytes) {
     return err("stdout_truncated", "stdout exceeded package bound");
   }
+
   if (Buffer.byteLength(output.stderr, "utf8") > manifest.stderrBytes) {
     return err("stderr_truncated", "stderr exceeded package bound");
   }
+
   if (output.result.length > manifest.resultChars) {
     return err("result_truncated", "result exceeded package bound");
   }
+
   return ok(output);
 }

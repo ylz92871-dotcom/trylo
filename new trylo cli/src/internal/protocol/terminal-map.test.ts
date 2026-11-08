@@ -70,6 +70,7 @@ test("failed 的兜底是多对一的 other，并带出可用以解释的 detail
 test("细化只使用 payload 已有字段：domain 的 cause 优先于 provider 的 finishReason", () => {
   assert.deepEqual([...STOP_REASON_REFINE_FIELDS], ["cause", "finishReason"]);
   const both: JsonObject = { cause: "iterations_exhausted", finishReason: "length" };
+
   assert.equal(fold("failed", both).stopReason, "max_turn_requests");
   assert.equal(fold("failed", { cause: "output_tokens_exhausted" }).stopReason, "max_tokens");
   assert.equal(fold("failed", { cause: "context_limit" }).stopReason, "max_tokens");

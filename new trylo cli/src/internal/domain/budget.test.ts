@@ -31,7 +31,9 @@ test("a cost at or over the ceiling is an explicit budget_usd_exhausted verdict"
     { iterations: 3, outputTokens: 100, promptTokens: 5_000, costUsd: 0.5 },
     BUDGET,
   );
+
   assert.equal(at.kind, "budget_usd_exhausted");
+
   if (at.kind === "budget_usd_exhausted") {
     assert.equal(at.used, 0.5);
     assert.equal(at.limit, 0.5);

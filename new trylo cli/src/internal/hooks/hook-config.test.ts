@@ -71,7 +71,7 @@ test("invalid regular expressions never match (fail-closed)", () => {
 
 /**
  * Side-by-side truth table against the old CLI `matchesPattern`
- * (`C:/work/demo-ws/trylo cli/src/utils/hooks.ts`, read 2026-10-06).
+ * (`D:/CC/trylo/trylo cli/src/utils/hooks.ts`, read 2026-10-06).
  *
  * This table is the permanent guard for P0-1 (2026-10-06 review): an earlier
  * revision of `matchesMatcher` fell every fast-branch miss through to the
@@ -106,6 +106,7 @@ test("matcher-applicable events filter by the caller-supplied value", () => {
   const store: HookStore = {
     hooks: [commandHook("write-only", "PreToolUse", "Write"), commandHook("any-tool", "PreToolUse")],
   };
+
   assert.deepEqual(
     selectHooks(store, "PreToolUse", "Write").map((hook) => hook.id),
     ["any-tool", "write-only"],
@@ -137,6 +138,7 @@ test("selection order is source priority, then matcher, then id", () => {
       { ...commandHook("other-event", "PostToolUse"), source: "user" },
     ],
   };
+
   assert.deepEqual(
     selectHooks(store, "PreToolUse", "Write").map((hook) => hook.id),
     ["a-id", "b-id", "z-matcher", "project-hook"],
@@ -148,6 +150,7 @@ test("disableAll and per-id disables remove hooks without touching the store", (
     hooks: [commandHook("a", "PreToolUse"), commandHook("b", "PreToolUse")],
     disabledIds: new Set(["a"]),
   };
+
   assert.deepEqual(
     selectHooks(store, "PreToolUse", "Write").map((hook) => hook.id),
     ["b"],

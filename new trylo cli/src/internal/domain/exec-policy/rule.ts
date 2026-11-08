@@ -59,6 +59,7 @@ export function matchPrefixRule(
   if (matchedPrefix === undefined) {
     return undefined;
   }
+
   return {
     kind: "prefix",
     matchedPrefix,
@@ -82,12 +83,15 @@ export function executableLookupKey(raw: string, platform: "posix" | "windows"):
   if (platform !== "windows") {
     return raw;
   }
+
   const lowered = raw.toLowerCase();
+
   for (const suffix of WINDOWS_EXECUTABLE_SUFFIXES) {
     if (lowered.endsWith(suffix)) {
       return lowered.slice(0, lowered.length - suffix.length);
     }
   }
+
   return lowered;
 }
 
@@ -100,14 +104,17 @@ export function executableBasename(raw: string, platform: "posix" | "windows"): 
   if (raw.length === 0) {
     return undefined;
   }
+
   const separators = platform === "windows" ? /[\\/]/ : /\//;
   const parts = raw.split(separators);
   const last = parts[parts.length - 1];
   if (last === undefined || last.length === 0) {
     return undefined;
   }
+
   const driveToken =
     platform === "windows" && last.length > 2 && /^[a-zA-Z]:/.test(last) ? last.slice(2) : last;
   const name = driveToken.length > 0 ? driveToken : last;
+
   return executableLookupKey(name, platform);
 }

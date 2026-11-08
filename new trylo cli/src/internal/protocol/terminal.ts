@@ -10,6 +10,7 @@ export function readTerminalReason(envelope: Envelope): TerminalReason | undefin
   if (envelope.kind !== TERMINAL_KIND) {
     return undefined;
   }
+
   const reason = envelope.payload.reason;
   if (
     reason === "completed" ||
@@ -19,6 +20,7 @@ export function readTerminalReason(envelope: Envelope): TerminalReason | undefin
   ) {
     return reason;
   }
+
   return undefined;
 }
 

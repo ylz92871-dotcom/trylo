@@ -26,9 +26,11 @@ export function rmArgsIncludeForce(args: ReadonlyArray<string>): boolean {
     if (arg === "--") {
       return false;
     }
+
     if (arg === "--force") {
       return true;
     }
+
     if (arg.startsWith("-") && !arg.startsWith("--") && arg.includes("f")) {
       return true;
     }
@@ -43,19 +45,23 @@ export function rmArgsIncludeForce(args: ReadonlyArray<string>): boolean {
  */
 function skipEnvPreamble(args: ReadonlyArray<string>): ReadonlyArray<string> {
   let index = 0;
+
   while (index < args.length) {
     const arg = args[index];
     if (arg === "--") {
       return args.slice(index + 1);
     }
+
     const isIgnore = arg === "-i" || arg === "--ignore-environment";
     const isAssignment =
       arg !== undefined && arg.includes("=") && arg.startsWith("-") === false && arg.split("=")[0]?.length !== 0;
     if (!isIgnore && !isAssignment) {
       return args.slice(index);
     }
+
     index += 1;
   }
+
   return [];
 }
 
@@ -91,6 +97,7 @@ function dangerousCommandMatchAtDepth(
   if (head === undefined) {
     return undefined;
   }
+
   const program = executableBasename(head, platform);
 
   if (program === "rm" && rmArgsIncludeForce(argv.slice(1))) {
@@ -105,13 +112,16 @@ function dangerousCommandMatchAtDepth(
   if (program === "sudo") {
     return inner(argv.slice(1));
   }
+
   if (program === "env") {
     return inner(skipEnvPreamble(argv.slice(1)));
   }
+
   if (program === "trap") {
     const action = trapAction(argv);
     return action === undefined ? undefined : inner(["sh", "-c", action]);
   }
+
   return undefined;
 }
 

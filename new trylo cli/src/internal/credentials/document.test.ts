@@ -43,7 +43,9 @@ test("a document with a record round trips byte-identically", () => {
   const document = documentWith([RECORD]);
   const encoded = encodeDocument(document);
   const decoded = decodeDocument(encoded, "doc");
+
   assert.equal(decoded.ok, true);
+
   if (decoded.ok) {
     assert.equal(encodeDocument(decoded.value), encoded);
   }
@@ -53,7 +55,9 @@ test("a checksum mismatch rejects the whole file (adversarial #2)", () => {
   const document = documentWith([RECORD]);
   const tampered = { ...document, checksum: "0".repeat(64) };
   const decoded = decodeDocument(encodeDocument(tampered), "tampered");
+
   assert.equal(decoded.ok, false);
+
   if (!decoded.ok) {
     assert.equal(decoded.code, "credentials_corrupt");
   }
@@ -69,7 +73,9 @@ test("an unknown top-level key rejects the file (adversarial #3)", () => {
   const document = documentWith([RECORD]);
   const text = JSON.stringify({ ...document, extra: "smuggled" });
   const decoded = decodeDocument(text, "extra-key");
+
   assert.equal(decoded.ok, false);
+
   if (!decoded.ok) {
     assert.equal(decoded.code, "credentials_corrupt");
   }
@@ -83,6 +89,7 @@ test("an unknown record key rejects the whole file rather than skipping the row"
     records: [{ ...RECORD, injected: true } as unknown as CredentialRecord],
   });
   const decoded = decodeDocument(encodeDocument(tampered), "bad-row");
+
   assert.equal(decoded.ok, false);
 });
 
@@ -94,6 +101,7 @@ test("an unknown formatVersion rejects the file", () => {
     checksum: "irrelevant",
   });
   const decoded = decodeDocument(text, "v2");
+
   assert.equal(decoded.ok, false);
 });
 
@@ -117,5 +125,6 @@ test("a current pointer to a non-canonical accountId rejects the file", () => {
     records: [RECORD],
   });
   const decoded = decodeDocument(encodeDocument(document), "bad-current");
+
   assert.equal(decoded.ok, false);
 });

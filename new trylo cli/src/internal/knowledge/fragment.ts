@@ -47,6 +47,7 @@ export function parseFragment(value: unknown): Fragment {
   if (!isRecord(value)) {
     throw new Error("fragment is not an object");
   }
+
   const id = requiredString(value, "id");
   const type = requiredString(value, "type");
   const origin = requiredString(value, "origin");
@@ -54,22 +55,29 @@ export function parseFragment(value: unknown): Fragment {
   const body = requiredString(value, "body");
   const state = requiredString(value, "state");
   const version = value.version;
+
   if (!isFragmentType(type)) {
     throw new Error(`unknown fragment type: ${type}`);
   }
+
   if (!isFragmentOrigin(origin)) {
     throw new Error(`unknown fragment origin: ${origin}`);
   }
+
   if (!isFragmentState(state)) {
     throw new Error(`unknown fragment state: ${state}`);
   }
+
   if (typeof version !== "number" || !Number.isInteger(version) || version < 1) {
     throw new Error("fragment version must be an integer >= 1");
   }
+
   const fragment: Fragment = { id, type, origin, scope, version, state, body };
+
   if (typeof value.why === "string" && value.why.length > 0) {
     return { ...fragment, why: value.why };
   }
+
   return fragment;
 }
 

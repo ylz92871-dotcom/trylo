@@ -8,8 +8,14 @@
  */
 
 import { assertExhaustive } from "../contract/index.js";
+import { isSummaryRequestUsage } from "../ports/compaction.js";
+import type { CliRoutingReceipt } from "./routing-receipt.js";
+
+export type { CliRoutingReceipt } from "./routing-receipt.js";
 
 export const CLI_STREAM_EVENT_TYPES = [
+  "goal_state",
+  "workflow_state",
   "run_start",
   "message_start",
   "message_delta",
@@ -46,6 +52,8 @@ export type CliFileMutation = {
 };
 
 export type CliStreamEvent =
+  | import("./workflow-stream.js").WorkflowStreamEvent
+  | { readonly type: "goal_state"; readonly version: 1; readonly goal: import("../domain/goal.js").GoalRecord }
   | { readonly type: "run_start"; readonly sessionId: string; readonly turnId: string; readonly providerId: string; readonly model: string; readonly operation?: "compact"; readonly contextWindow?: number }
   | { readonly type: "message_start" }
   | { readonly type: "message_delta"; readonly text: string }
@@ -72,6 +80,7 @@ export type CliStreamEvent =
       /** Elapsed time between matching tool-use/result journal envelopes. */
       readonly durationMs?: number;
       readonly fileChanges?: ReadonlyArray<CliFileMutation>;
+      readonly routing?: CliRoutingReceipt;
     }
   | {
       readonly type: "warning";
@@ -85,7 +94,8 @@ export type CliStreamEvent =
     }
   | { readonly type: "usage"; readonly usage: CliUsage }
   | { readonly type: "compact"; readonly status: "started" | "completed" | "failed";
-      readonly tokensBefore?: number; readonly tokensAfter?: number; readonly reason: string }
+      readonly tokensBefore?: number; readonly tokensAfter?: number; readonly reason: string;
+      readonly summaryAuthor?: import("../ports/compaction.js").SummaryAuthorReport }
   | { readonly type: "subagent"; readonly kind: "spawn" | "update" | "end"; readonly id: string;
       readonly teamRunId?: string; readonly memberId?: string;
       readonly activity?: import("./subagent-activity.js").SubagentToolActivity;
@@ -123,7 +133,16 @@ export type CliRunResult = {
   readonly usage: CliUsage;
   readonly durationMs: number;
   readonly lastMessage: string;
+  /** Additive parent-call breakdown; older results have only usage. */
+  readonly mainUsage?: CliUsage;
+  readonly auxiliaryUsage?: CliUsage;
+  readonly auxiliaryRequests?: ReadonlyArray<import("../ports/compaction.js").SummaryRequestUsage>;
+  readonly auxiliaryUsageStatus?: "reported" | "partial";
+  readonly costUsd?: number;
 };
+
+export type CliUsageAccounting = Pick<CliRunResult,
+  "mainUsage" | "auxiliaryUsage" | "auxiliaryRequests" | "auxiliaryUsageStatus" | "costUsd">;
 
 export const EXIT_CODES = {
   /** Normal completion. */
@@ -185,10 +204,12 @@ export function isCliRunResult(value: unknown): value is CliRunResult {
   if (!isRecord(value) || value.type !== "run_result") {
     return false;
   }
+
   const status = value.status;
   if (status !== "completed" && status !== "failed" && status !== "cancelled" && status !== "unknown") {
     return false;
   }
+
   return (
     typeof value.finishReason === "string" &&
     typeof value.sessionId === "string" &&
@@ -196,6 +217,11 @@ export function isCliRunResult(value: unknown): value is CliRunResult {
     typeof value.iterations === "number" &&
     typeof value.durationMs === "number" &&
     typeof value.lastMessage === "string" &&
-    isCliUsage(value.usage)
+    isCliUsage(value.usage) &&
+    (value.mainUsage === undefined || isCliUsage(value.mainUsage)) &&
+    (value.auxiliaryUsage === undefined || isCliUsage(value.auxiliaryUsage)) &&
+    (value.auxiliaryRequests === undefined || (Array.isArray(value.auxiliaryRequests) && value.auxiliaryRequests.every(isSummaryRequestUsage))) &&
+    (value.auxiliaryUsageStatus === undefined || value.auxiliaryUsageStatus === "reported" || value.auxiliaryUsageStatus === "partial") &&
+    (value.costUsd === undefined || (typeof value.costUsd === "number" && Number.isFinite(value.costUsd) && value.costUsd >= 0))
   );
 }

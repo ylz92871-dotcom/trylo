@@ -17,10 +17,13 @@ test("observation is a first-class understood kind", () => {
     producerId: "cli",
     producerSequence: 0,
   });
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   assert.equal(consume(parsed.envelope).status, "accepted");
 });
 
@@ -35,11 +38,15 @@ test("unknown future kind is ignored without dropping eventId", () => {
     producerId: "cli",
     producerSequence: 2,
   });
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   const result = consume(parsed.envelope);
+
   assert.equal(result.status, "ignored_unknown_kind");
   assert.equal(result.eventId, "evt-future");
 });

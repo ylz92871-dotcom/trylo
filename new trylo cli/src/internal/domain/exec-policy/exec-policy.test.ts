@@ -85,10 +85,13 @@ test("alternative heads expand into one rule per word", () => {
     },
     POSIX,
   );
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   assert.equal(decide(parsed.policy, ["add", "--verbose"]), "prompt");
   assert.equal(decide(parsed.policy, ["commit", "--verbose"]), "prompt");
   assert.equal(decide(parsed.policy, ["push", "--verbose"]), "prompt", "fallback asked instead");
@@ -102,8 +105,10 @@ test("an absolute path answers to a rule written for its basename", () => {
     { platform: POSIX, resolveHostExecutables: true },
     () => "prompt",
   );
+
   assert.equal(evaluation.decision, "allow");
   const match = evaluation.matchedRules[0];
+
   assert.equal(match?.kind, "prefix");
   assert.equal(match?.kind === "prefix" ? match.resolvedProgram : undefined, "/usr/bin/python");
 });
@@ -114,6 +119,7 @@ test("declaring where a program lives narrows rather than widens", () => {
     hostExecutables: new Map([["python", ["/usr/bin/python"]]]),
   };
   const options = { platform: POSIX, resolveHostExecutables: true } as const;
+
   assert.equal(
     evaluateExecPolicy(policy, ["/usr/bin/python", "a.py"], options, () => "prompt").decision,
     "allow",
@@ -145,6 +151,7 @@ test("an unmatched command falls through to the caller's own approval facts", ()
       return "prompt";
     },
   ).decision;
+
   assert.equal(decision, "prompt");
   assert.deepEqual(seen, [["cargo", "build"]], "the fallback, not this module, owns the answer");
 });

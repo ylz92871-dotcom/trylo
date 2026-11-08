@@ -101,15 +101,18 @@ export function recordEntry(
     }
     return { ledger: new Map(ledger).set(entry.toolCallId, entry), accepted: true };
   }
+
   if (existing.state === entry.state) {
     // A duplicate delivery of the same fact is not a conflict; the event ids
     // differ, the claim does not. Treating that as a rejection would make a
     // retried delivery look like a tampered ledger.
     return { ledger, accepted: true };
   }
+
   if (!canTransition(existing.state, entry.state)) {
     return { ledger, accepted: false };
   }
+
   return { ledger: new Map(ledger).set(entry.toolCallId, entry), accepted: true };
 }
 

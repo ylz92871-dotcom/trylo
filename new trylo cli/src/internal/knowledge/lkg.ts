@@ -19,6 +19,7 @@ export async function saveLastKnownGood(
   const body: LkgFile = { checksum, snapshot };
   const target = path.join(rootDir, LKG_FILE);
   const tmp = `${target}.tmp`;
+
   await writeFile(tmp, `${JSON.stringify(body)}\n`, "utf8");
   await rename(tmp, target);
 }
@@ -27,6 +28,7 @@ export async function loadLastKnownGood(
   rootDir: string,
 ): Promise<ExecutionProfileSnapshot | undefined> {
   let raw: string;
+
   try {
     raw = await readFile(path.join(rootDir, LKG_FILE), "utf8");
   } catch {
@@ -39,15 +41,19 @@ export async function loadLastKnownGood(
     // is the contract this follows.
     return undefined;
   }
+
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(raw);
   } catch {
     return undefined;
   }
+
   if (!isLkgShape(parsed)) {
     return undefined;
   }
+
   // Corrupt-and-regenerate is the documented contract for this file — a
   // cache, not history: unlike the session store's fail-closed recovery, an
   // unusable LKG degrades to "absent" and the knowledge layer rebuilds. The
@@ -57,6 +63,7 @@ export async function loadLastKnownGood(
   if (sha256Hex(canonicalJson(parsed.snapshot)) !== parsed.checksum) {
     return undefined;
   }
+
   return parsed.snapshot;
 }
 
@@ -64,7 +71,9 @@ function isLkgShape(value: unknown): value is LkgFile {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return false;
   }
+
   const record = value as Record<string, unknown>;
+
   return (
     typeof record.checksum === "string" &&
     typeof record.snapshot === "object" &&

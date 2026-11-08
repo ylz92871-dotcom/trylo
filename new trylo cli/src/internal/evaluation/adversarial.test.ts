@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { detectPromptPatch } from "../learning/domains/prompt/detector.js";
+import { detectPromptPatch } from "../learning/agent/subsystems/method/legacy-prompt/detector.js";
 import {
   attributeTwoPromptGains,
   type PromptGainEpisode,
-} from "../learning/domains/prompt/attribution.js";
+} from "../learning/agent/subsystems/method/legacy-prompt/attribution.js";
 import { buildUserRule } from "../learning/domains/user/builder.js";
 import { classifyLearningShape } from "../learning/domains/shared/classify.js";
 import { evaluateCandidate } from "./evaluator.js";
@@ -62,7 +62,9 @@ test("attack: two dissimilar tasks wrongly attributed", () => {
     },
   };
   const result = attributeTwoPromptGains(left, right);
+
   assert.equal(result.kind, "failure");
+
   if (result.kind === "failure") {
     assert.equal(result.code, "insufficient_attribution");
   }
@@ -75,7 +77,9 @@ test("attack: model and tool upgraded but credited to prompt", () => {
     versions: { model: "m2", toolset: "t2", codeBaseline: "c1", workflow: "w1" },
   };
   const result = attributeTwoPromptGains(left, right);
+
   assert.equal(result.kind, "failure");
+
   if (result.kind === "failure") {
     assert.equal(result.code, "insufficient_attribution");
     assert.equal(result.confounders.includes("model"), true);
@@ -99,6 +103,7 @@ test("attack: self-generated tests manufacture fake success", () => {
     },
   };
   const result = attributeTwoPromptGains(left, right);
+
   assert.equal(result.kind, "failure");
 });
 
@@ -106,7 +111,9 @@ test("attack: one user complaint generalized to a global rule", () => {
   const result = buildUserRule({
     text: "不要再这样，所有项目以后都改",
   });
+
   assert.equal(result.kind, "failure");
+
   if (result.kind === "failure") {
     assert.equal(result.code, "scope_too_broad");
   }
@@ -117,7 +124,9 @@ test("attack: prompt patch smuggles permission and tool switch", () => {
     episodes: [episode("a", "c1"), episode("b", "c2")],
     extraClaims: ["permission", "tool_install"],
   });
+
   assert.equal(detected.kind, "failure");
+
   if (detected.kind === "failure") {
     assert.equal(detected.code, "forbidden_payload");
   }
@@ -171,6 +180,7 @@ test("attack: token budget would drop the current user instruction", () => {
     assert.fail("preview should succeed");
     return;
   }
+
   assert.equal(preview.currentInstruction, "KEEP_ME");
   assert.equal(preview.currentInstructionPreserved, true);
   assert.equal(preview.trimmed.some((item) => item.id === "huge"), true);
@@ -193,6 +203,7 @@ test("completed without verifier is not an external pass", () => {
     failureDiversity: 0,
     sampleSize: 2,
   });
+
   assert.equal(bundle.externalPass, false);
   assert.equal(bundle.verdict, "no_external_pass");
 });

@@ -44,7 +44,9 @@ test("getAccount returns the named account and leaves the current pointer alone"
     // The second login moved the current pointer to `personal`.
 
     const named = port.getAccount({ providerId: "openai-compatible", accountId: "work" });
+
     assert.equal(named.ok, true);
+
     if (named.ok) {
       assert.equal(named.value.accountId, "work");
       assert.equal(named.value.secret, "work-key");
@@ -54,7 +56,9 @@ test("getAccount returns the named account and leaves the current pointer alone"
     // And the pointer is exactly where the last login left it: a read of a
     // named account never moved it.
     const current = port.get("openai-compatible");
+
     assert.equal(current.ok, true);
+
     if (current.ok) {
       assert.equal(current.value.accountId, "personal");
     }
@@ -83,9 +87,12 @@ test("an env declaration is never the answer to a named account", () => {
     });
     // `get` resolves the environment variable; the named account must not.
     const viaGet = port.get("openai-compatible");
+
     assert.equal(viaGet.ok && viaGet.value.layer === "env", true);
     const named = port.getAccount({ providerId: "openai-compatible", accountId: "work" });
+
     assert.equal(named.ok, true);
+
     if (named.ok) {
       assert.equal(named.value.secret, "work-key");
       assert.equal(named.value.layer, "user");
@@ -103,13 +110,17 @@ test("a typo is unknown_account with the ids that do exist", () => {
       true,
     );
     const miss = port.getAccount({ providerId: "openai-compatible", accountId: "wrk" });
+
     assert.equal(miss.ok, false);
+
     if (!miss.ok) {
       assert.equal(miss.code, "unknown_account");
       assert.match(miss.detail, /known accounts: work/);
     }
+
     // An account for a *different* provider is not one for this one.
     const other = port.getAccount({ providerId: "fixture", accountId: "work" });
+
     assert.equal(other.ok, false);
   } finally {
     cleanup(home);

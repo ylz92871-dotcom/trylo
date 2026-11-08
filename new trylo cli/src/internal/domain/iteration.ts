@@ -17,10 +17,13 @@ export const ITERATION_CONTINUE_REASONS = [
    * unread user message is not finished, it is merely idle.
    */
   "user_input_pending",
+  "goal_active",
 ] as const;
+
 export type IterationContinueReason = (typeof ITERATION_CONTINUE_REASONS)[number];
 
 export const ITERATION_WAIT_REASONS = ["approval", "user_input"] as const;
+
 export type IterationWaitReason = (typeof ITERATION_WAIT_REASONS)[number];
 
 export const ITERATION_FAILURE_REASONS = [
@@ -35,6 +38,7 @@ export const ITERATION_FAILURE_REASONS = [
   "context_limit",
   "cancelled",
 ] as const;
+
 export type IterationFailureReason = (typeof ITERATION_FAILURE_REASONS)[number];
 
 export type IterationDecision =
@@ -124,18 +128,22 @@ export function evaluateBudget(usage: IterationUsage, budget: IterationBudget): 
   if (outputLimit !== undefined && usage.outputTokens >= outputLimit) {
     return { kind: "output_tokens_exhausted", used: usage.outputTokens, limit: outputLimit };
   }
+
   const costLimit = budget.maxCostUsd;
   if (costLimit !== undefined && (usage.costUsd ?? 0) >= costLimit) {
     return { kind: "budget_usd_exhausted", used: usage.costUsd ?? 0, limit: costLimit };
   }
+
   const contextLimit = budget.contextTokenLimit;
   if (contextLimit !== undefined && usage.promptTokens >= contextLimit) {
     return { kind: "context_limit", used: usage.promptTokens, limit: contextLimit };
   }
+
   const iterationLimit = budget.maxIterations;
   if (iterationLimit !== undefined && usage.iterations >= iterationLimit) {
     return { kind: "iterations_exhausted", used: usage.iterations, limit: iterationLimit };
   }
+
   return { kind: "within_budget" };
 }
 
@@ -148,25 +156,31 @@ export function decideIterationEnd(observation: IterationObservation): Iteration
   if (observation.budgetVerdict.kind !== "within_budget") {
     return { kind: "fail", reason: observation.budgetVerdict.kind };
   }
+
   if (observation.unsettledToolInputCount > 0) {
     // A stream that ended mid-tool-input is a transport failure, not a finish.
     return { kind: "fail", reason: "provider_error" };
   }
+
   if (observation.unsettledToolCallCount > 0) {
     return { kind: "continue", reason: "tool_results_pending" };
   }
+
   // 反方 #21: a queued user message keeps the turn open. Placed after the tool
   // checks because a tool result is owed to the model first, and before
   // `complete` because an unread message means the turn is idle, not done.
   if ((observation.pendingUserInputCount ?? 0) > 0) {
     return { kind: "continue", reason: "user_input_pending" };
   }
+
   if (observation.requiresFollowUp) {
     return { kind: "continue", reason: "provider_follow_up" };
   }
+
   if (observation.providerFinished) {
     return { kind: "complete" };
   }
+
   // Stream ended without a terminal reason and nothing else explains it.
   return { kind: "fail", reason: "provider_error" };
 }
@@ -175,7 +189,9 @@ export function isIterationDecision(value: unknown): value is IterationDecision 
   if (typeof value !== "object" || value === null) {
     return false;
   }
+
   const record = value as Record<string, unknown>;
+
   switch (record.kind) {
     case "complete":
       return true;

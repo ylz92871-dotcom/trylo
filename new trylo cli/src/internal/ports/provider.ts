@@ -20,7 +20,9 @@ export type ProviderRole = "system" | "user" | "assistant" | "tool";
  * silently downgrade it; absence preserves the provider's existing default.
  */
 export const REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
 export function isReasoningEffort(value: string): value is ReasoningEffort {
   return (REASONING_EFFORTS as readonly string[]).includes(value);
 }
@@ -66,6 +68,8 @@ export type ProviderToolSpec = {
 
 export type ProviderRequest = {
   readonly attemptId: string;
+  /** Opt-in observation of the adapter's existing clean return boundary. No extra reads. */
+  readonly observeReturn?: true;
   /** Opaque execution-turn identity for adapter-owned native continuations.
    * Never a permission, transcript item or provider wire field. Absent disables
    * continuation caching; adapters must not reuse it across scopes/identities.
@@ -83,6 +87,9 @@ export type ProviderRequest = {
    * decides its own shape, exactly as before this field existed.
    */
   readonly responseSchema?: JsonObject;
+  /** JSON content mode, independently declared by the connected provider.
+   * It requests an object, not schema enforcement or a tool invocation. */
+  readonly responseFormat?: { readonly type: "json_object" };
   /**
    * A caller-supplied system prompt (`--system-prompt` replace or
    * `--append-system-prompt` append, legacy L67). Applied once in
@@ -100,6 +107,7 @@ export type ProviderRequest = {
 
 /** How a caller-supplied system prompt combines with the assembled seeds. */
 export const SYSTEM_PROMPT_MODES = ["replace", "append"] as const;
+
 export type SystemPromptMode = (typeof SYSTEM_PROMPT_MODES)[number];
 
 export type SystemPromptDirective = {
@@ -119,6 +127,7 @@ export const PROVIDER_FINISH_REASONS = [
   "error",
   "other",
 ] as const;
+
 export type ProviderFinishReason = (typeof PROVIDER_FINISH_REASONS)[number];
 
 export const PROVIDER_ERROR_CLASSES = [
@@ -133,7 +142,15 @@ export const PROVIDER_ERROR_CLASSES = [
   "protocol",
   "unknown",
 ] as const;
+
 export type ProviderErrorClass = (typeof PROVIDER_ERROR_CLASSES)[number];
+
+/** Earliest permitted reconsideration, never proof of provider recovery.
+ * Relative durations become one persisted absolute deadline at the runtime boundary. */
+export type ProviderRecoveryHint =
+  | { readonly kind: "after"; readonly delayMs: number; readonly source: "retry_after" }
+  | { readonly kind: "at"; readonly atMs: number; readonly source: "retry_after" | "quota_reset" }
+  | { readonly kind: "all"; readonly atMs: number; readonly delayMs: number; readonly source: "retry_after_and_quota_reset" };
 
 /**
  * Where the error happened. This is the retry boundary: only `before_headers`
@@ -141,6 +158,7 @@ export type ProviderErrorClass = (typeof PROVIDER_ERROR_CLASSES)[number];
  * text and tool calls.
  */
 export const PROVIDER_STREAM_PHASES = ["before_headers", "after_stream_started"] as const;
+
 export type ProviderStreamPhase = (typeof PROVIDER_STREAM_PHASES)[number];
 
 /**
@@ -155,6 +173,13 @@ export type ProviderUsage = {
   readonly cacheWriteTokens: number;
   readonly reasoningTokens: number;
   readonly totalTokens: number;
+};
+
+/** Provenance for one request's complete input count, separate from billing. */
+export type CompleteInputTokenObservation = {
+  readonly kind: "complete_prompt";
+  readonly source: "provider_complete_input";
+  readonly tokens: number;
 };
 
 export type ProviderWarning = {
@@ -184,7 +209,9 @@ export const NATIVE_CONTINUATION_CAUSES = [
   "history_mismatch",
   "capture_rejected",
 ] as const;
+
 export type NativeContinuationCause = (typeof NATIVE_CONTINUATION_CAUSES)[number];
+
 export type NativeContinuationUnknownCause = "unknown_source";
 
 /**
@@ -212,8 +239,10 @@ export type NativeContinuationDiagnostic = {
  */
 export function isNativeContinuationDiagnostic(value: unknown): value is NativeContinuationDiagnostic {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+
   const fields = value as Record<string, unknown>;
   const causes: ReadonlyArray<string> = NATIVE_CONTINUATION_CAUSES;
+
   return fields["schemaVersion"] === 1
     && (fields["cause"] === "unknown_source" || causes.includes(String(fields["cause"])))
     && typeof fields["affected"] === "number" && Number.isInteger(fields["affected"]) && fields["affected"] >= 0
@@ -274,10 +303,13 @@ export type ProviderEvent =
       readonly rawArguments: string;
       readonly message: string;
     }
-  | { readonly type: "usage"; readonly usage: ProviderUsage }
+  | { readonly type: "usage"; readonly usage: ProviderUsage;
+      readonly inputTokenObservation?: CompleteInputTokenObservation }
   | {
       readonly type: "finish";
       readonly reason: ProviderFinishReason;
+      /** Present only when a supporting adapter naturally reached a clean end with actual usage. */
+      readonly returnObservation?: { readonly schemaVersion: 1; readonly reportedTotalTokens: number };
       /** Provider's own reason string, for diagnostics only. */
       readonly rawReason: string;
       /** Provider contract requires another request even without tool results. */
@@ -289,6 +321,7 @@ export type ProviderEvent =
       readonly retryable: boolean;
       readonly phase: ProviderStreamPhase;
       readonly message: string;
+      readonly recovery?: ProviderRecoveryHint;
     }
   | {
       readonly type: "raw_unknown";
@@ -321,6 +354,41 @@ export const PROVIDER_EVENT_TYPES = [
 
 export type ProviderEventType = (typeof PROVIDER_EVENT_TYPES)[number];
 
+/** Hash-only identity and local estimate of adapter-added input for this full
+ * request. Arrays align with messages, including zero-field occurrences.
+ * Never carries native text, warning delivery state or permission authority. */
+export type ProviderNativeRequestIdentity = {
+  readonly messageFieldDigests: readonly string[];
+  readonly messageOverheadTokens: readonly number[];
+  readonly requestDigest: string;
+};
+
+/** An explicitly verified native session fork may rebind adapter checkpoints.
+ * Counts describe copied checkpoint metadata, never target-provider usability.
+ * Missing/invalid optional native state cannot prevent a public-history fork. */
+export type ProviderContinuationForkReport = {
+  readonly reboundCheckpoints: number;
+  /** Rebound checkpoints that actually contain original native material. */
+  readonly nativeCheckpoints: number;
+  readonly unavailable: readonly {
+    readonly cause: Extract<NativeContinuationCause, "checkpoint_invalid" | "binding_mismatch">;
+    readonly checkpoints: number;
+  }[];
+};
+
+/** Called only after the native fork planner has verified and selected records.
+ * Adapter owns private codecs. It may rebind verified metadata or omit an
+ * unusable optional extension from the child, never modify the parent or grant
+ * permission. Ordinary restore retains its strict session/connection checks. */
+export type ProviderContinuationForkTransfer = (input: {
+  readonly parentSessionId: string;
+  readonly childSessionId: string;
+  readonly records: readonly Omit<SessionRecord, "formatVersion" | "sequence">[];
+}) => {
+  readonly records: readonly Omit<SessionRecord, "formatVersion" | "sequence">[];
+  readonly report: ProviderContinuationForkReport;
+};
+
 /** Opaque native wire state, persisted beside its completed stream envelope.
  * Only the adapter interprets it; it is never a display event or permission.
  */
@@ -336,6 +404,10 @@ export type ProviderContinuationPort = {
   capture(scope: string): JsonObject | undefined;
   /** Pure estimate of native fields added to these exact outgoing messages. */
   readonly estimateOverheadTokens?: (messages: ReadonlyArray<ProviderMessage>) => number;
+  /** Pure observation of the native fields this exact request would send.
+   * Must not begin/capture a stream, alter cache/scope/receipts, or perform IO.
+   * Full-request lookup preserves occurrence identity when messages repeat. */
+  readonly measureRequestIdentity?: (request: ProviderRequest) => ProviderNativeRequestIdentity;
   restore(input: { readonly sessionId: string; readonly turnId: string; readonly records: ReadonlyArray<SessionRecord> }): void;
 };
 
@@ -343,12 +415,33 @@ export function providerContinuationScope(sessionId: string | undefined, turnId:
   return JSON.stringify([sessionId, turnId]);
 }
 
+/** One request-local snapshot. Applying it is pure and may be repeated only
+ * when compaction rebuilds the base history; it must not re-read mutable state,
+ * readmit experience, grant permissions, or invent output allowances. */
+export type ProviderRequestPreparation = {
+  readonly apply: (request: ProviderRequest) => ProviderRequest;
+};
+
+/** A resolved model within the existing connection. Empty matches request fallback.
+ * Omission preserves the configured model; this grants no selection authority. */
+export type ProviderForkOptions = { readonly model: string };
+
 export type ProviderPort = {
-    /** Same transport configuration with independent mutable continuation state.
+  /** Pure proof of the effective origin/model/input configuration. It excludes
+   * operation scope and credentials, never begins a stream, and is required
+   * before complete input metering can be reused after session recovery. */
+  readonly inputBindingDigest?: (request: ProviderRequest) => string | undefined;
+  /** Freeze host context and transport-equivalent tool presentation before
+   * the final context gate. stream must not add further prompt material. */
+  readonly prepareRequest?: (request: ProviderRequest, signal: AbortSignal) => Promise<ProviderRequestPreparation>;
+    /** Same connection with independent mutable continuation state and optional target model.
      * Optional frozen history selects only matching adapter-owned native states;
-     * caller/display reasoning is never a seed. A logical child owns this instance. */
-  readonly fork?: (messages?: ReadonlyArray<ProviderMessage>) => ProviderPort;
+     * caller/display reasoning is never a seed. Native seeds require the exact target
+     * model. One-argument implementations remain compatible. A logical child owns this instance. */
+  readonly fork?: (messages?: ReadonlyArray<ProviderMessage>, options?: ProviderForkOptions) => ProviderPort;
   readonly continuation?: ProviderContinuationPort;
+  /** Explicit wire formats supported by this connection/model; absence is unknown. */
+  readonly responseFormats?: readonly "json_object"[];
   stream(request: ProviderRequest, signal: AbortSignal): AsyncIterable<ProviderEvent>;
 };
 
@@ -383,6 +476,7 @@ export function accumulateUsage(current: ProviderUsage, stream: ProviderUsage): 
     totalTokens: current.totalTokens + stream.totalTokens,
   };
 }
+
 /**
  * Merge usage *within one stream* according to its declared mode. Snapshots
  * replace; deltas add. The result is always a snapshot so callers cannot

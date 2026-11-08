@@ -22,6 +22,7 @@ test("parallel results, native reasoning and remaining output budget survive the
         completion_tokens_details: { reasoning_tokens: first ? 160 : 50 }, total_tokens: first ? 280 : 12_560 };
       const frames = [{ choices: [{ delta, finish_reason: null }] },
         { choices: [{ delta: {}, finish_reason: first ? "tool_calls" : "stop" }] }, { choices: [], usage }];
+
       return new Response(frames.map(frame => `data: ${JSON.stringify(frame)}\n\n`).join("") + "data: [DONE]\n\n");
     } });
   const result = await runTurn({ provider, profile: emptyProfileLoader(), permission: createFakePermission("approved"),
@@ -30,6 +31,7 @@ test("parallel results, native reasoning and remaining output budget survive the
       + (provider.continuation?.estimateOverheadTokens?.(messages) ?? 0) }),
   }, { sessionId: "s", turnId: "t", correlationId: "c", model: "ark-code-latest", text: "Compare both tool results.",
     budget: { maxIterations: 4, maxOutputTokens: 256, contextTokenLimit: 20_000 } });
+
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(bodies.length, 2);
   assert.deepEqual(bodies.map(body => body.max_tokens), [256, 76], "reasoning is already included in completion tokens");

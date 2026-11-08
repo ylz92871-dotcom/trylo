@@ -99,6 +99,7 @@ export function matchesMatcher(matcher: string | undefined, value: string): bool
   if (matcher === undefined || matcher === "" || matcher === "*") {
     return true;
   }
+
   if (/^[a-zA-Z0-9_|]+$/.test(matcher)) {
     if (matcher.includes("|")) {
       return matcher
@@ -108,6 +109,7 @@ export function matchesMatcher(matcher: string | undefined, value: string): bool
     }
     return value === matcher;
   }
+
   try {
     return new RegExp(matcher).test(value);
   } catch {
@@ -122,14 +124,17 @@ function compareHooks(left: HookConfig, right: HookConfig): number {
   if (bySource !== 0) {
     return bySource;
   }
+
   const leftMatcher = left.matcher ?? "";
   const rightMatcher = right.matcher ?? "";
   if (leftMatcher !== rightMatcher) {
     return leftMatcher < rightMatcher ? -1 : 1;
   }
+
   if (left.id !== right.id) {
     return left.id < right.id ? -1 : 1;
   }
+
   return 0;
 }
 
@@ -144,16 +149,21 @@ export function selectHooks(store: HookStore, event: HookEvent, matchValue: stri
   if (store.disableAll === true) {
     return [];
   }
+
   const matcherApplies = isMatcherEvent(event);
   const selected = store.hooks.filter((hook) => {
     if (hook.event !== event) {
       return false;
     }
+
     if (store.disabledIds?.has(hook.id) === true) {
       return false;
     }
+
     return matcherApplies ? matchesMatcher(hook.matcher, matchValue) : true;
   });
+
   selected.sort(compareHooks);
+
   return selected;
 }

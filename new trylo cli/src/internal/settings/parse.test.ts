@@ -60,7 +60,9 @@ test("formatVersion 1 is accepted and stripped from the values", () => {
     { status: "present", raw: '{"formatVersion":1,"model":"m"}' },
     SOURCE,
   );
+
   assert.equal(result.ok, true);
+
   if (result.ok) {
     assert.deepEqual(result.values, { model: "m" });
     assert.equal(Object.hasOwn(result.values, "formatVersion"), false);
@@ -98,7 +100,9 @@ test("a secret key in the file is refused before it can resolve", () => {
     { status: "present", raw: '{"apiKey":"sk-FAKE-not-real"}' },
     SOURCE,
   );
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.code, "secret_key");
   }
@@ -109,7 +113,9 @@ test("an MCP declaration in the file is refused", () => {
     { status: "present", raw: '{"mcpServers":{"fs":{}}}' },
     SOURCE,
   );
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.code, "forbidden_key");
   }
@@ -134,13 +140,18 @@ test("a value failing its rule is refused", () => {
 test("validateCliFlag accepts schema keys and refuses secrets/unknown without a formatVersion escape", () => {
   assert.equal(validateCliFlag({ model: "m" }).ok, true);
   const secret = validateCliFlag({ token: "x" });
+
   assert.equal(secret.ok, false);
+
   if (!secret.ok) {
     assert.equal(secret.code, "secret_key");
   }
+
   // formatVersion is document metadata; in a flag object it is just an unknown key.
   const version = validateCliFlag({ formatVersion: 1 });
+
   assert.equal(version.ok, false);
+
   if (!version.ok) {
     assert.equal(version.code, "unknown_key");
   }

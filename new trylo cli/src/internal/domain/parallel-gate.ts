@@ -65,6 +65,7 @@ export function createParallelGate(): ParallelGate {
       if (next === undefined) {
         return;
       }
+
       if (next.kind === "write") {
         // A writer needs the lock to itself, so it waits for the readers that
         // are already inside; because the queue is arrival-ordered, every
@@ -72,11 +73,14 @@ export function createParallelGate(): ParallelGate {
         if (readers > 0) {
           return;
         }
+
         waiting.shift();
         writing = true;
         next.admit();
+
         return;
       }
+
       waiting.shift();
       readers += 1;
       next.admit();
@@ -93,12 +97,15 @@ export function createParallelGate(): ParallelGate {
         if (spent) {
           return;
         }
+
         spent = true;
+
         if (kind === "write") {
           writing = false;
         } else {
           readers -= 1;
         }
+
         pump();
       };
     });

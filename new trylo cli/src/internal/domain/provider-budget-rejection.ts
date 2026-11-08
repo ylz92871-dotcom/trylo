@@ -60,11 +60,14 @@ export function classifyBudgetRejection(
   if (!BUDGET_REJECTION_CLASSES.includes(errorClass)) {
     return undefined;
   }
+
   if (MEDIA_TOO_LARGE_PATTERNS.some((pattern) => pattern.test(message))) {
     return { kind: "media_too_large", message };
   }
+
   if (PROMPT_TOO_LONG_PATTERNS.some((pattern) => pattern.test(message))) {
     return { kind: "prompt_too_long", message };
   }
+
   return undefined;
 }

@@ -82,24 +82,31 @@ export const BRIEF_MAX_ATTACHMENT_BYTES = 200 * 1024;
 export function sleepIsReadOnly(): boolean {
   return false;
 }
+
 export function sleepIsConcurrencySafe(): boolean {
   return true;
 }
+
 export function monitorIsReadOnly(): boolean {
   return false;
 }
+
 export function monitorIsConcurrencySafe(): boolean {
   return true;
 }
+
 export function briefIsReadOnly(): boolean {
   return true;
 }
+
 export function briefIsConcurrencySafe(): boolean {
   return true;
 }
+
 export function subscribeIsReadOnly(): boolean {
   return true;
 }
+
 export function subscribeIsConcurrencySafe(): boolean {
   return true;
 }
@@ -197,8 +204,11 @@ export type A07Approval = {
 };
 
 export type SleepFailure = ApprovalGateFailure | "invalid_arguments" | WatchFailureCode;
+
 export type MonitorFailure = ApprovalGateFailure | "invalid_arguments" | WatchFailureCode;
+
 export type BriefFailure = ApprovalGateFailure | "invalid_arguments" | QueueFailureCode;
+
 export type SubscribeFailure = ApprovalGateFailure | "remote_required";
 
 async function acquireOrDeny(approval: A07Approval): Promise<Result<true, ApprovalGateFailure>> {
@@ -213,6 +223,7 @@ async function acquireOrDeny(approval: A07Approval): Promise<Result<true, Approv
   if (!gate.ok) {
     return gate;
   }
+
   return ok(true as const);
 }
 
@@ -229,15 +240,18 @@ export async function executeSleepTool(
   if (!gate.ok) {
     return gate;
   }
+
   const hasAt = input.atMs !== undefined;
   const hasIn = input.durationMs !== undefined;
   if (hasAt === hasIn) {
     return err("invalid_arguments", "sleep needs exactly one of atMs or durationMs");
   }
+
   const atMs = hasAt ? (input.atMs as number) : (deps.nowMs() + (input.durationMs as number));
   if (!Number.isFinite(atMs) || atMs <= 0) {
     return err("invalid_arguments", "sleep moment must be a positive epoch ms");
   }
+
   const created = await deps.watches.create({
     trigger: { kind: "deadline", atMs },
     text: input.message,
@@ -246,6 +260,7 @@ export async function executeSleepTool(
   if (!created.ok) {
     return created;
   }
+
   return ok({ watchId: created.value.id });
 }
 
@@ -259,9 +274,11 @@ export async function executeMonitorTool(
   if (!gate.ok) {
     return gate;
   }
+
   if (!isWatchCondition(input.condition)) {
     return err("invalid_arguments", "monitor condition must be file_exists|file_contains|command_exit|flag_set");
   }
+
   const created = await deps.watches.create({
     trigger: { kind: "condition", condition: input.condition },
     text: input.message,
@@ -270,10 +287,12 @@ export async function executeMonitorTool(
   if (!created.ok) {
     return created;
   }
+
   const verdict = await deps.watches.evaluate(created.value.id);
   if (!verdict.ok) {
     return verdict;
   }
+
   return ok({
     watchId: created.value.id,
     met: verdict.value.met,
@@ -303,16 +322,20 @@ function briefAttachmentPathRefusal(item: string): string | undefined {
   if (item.includes("\0")) {
     return "brief attachments must not contain NUL";
   }
+
   if (path.posix.isAbsolute(item) || path.win32.isAbsolute(item)) {
     return `brief attachment is outside the workspace (absolute path): ${item}`;
   }
+
   if (/^[a-zA-Z]:[\\/]/.test(item) || item.startsWith("\\\\")) {
     return `brief attachment is outside the workspace (drive or UNC path): ${item}`;
   }
+
   const segments = item.split(/[\\/]/);
   if (segments.some((part) => part === "..")) {
     return `brief attachment is outside the workspace (.. segment): ${item}`;
   }
+
   return undefined;
 }
 
@@ -326,23 +349,30 @@ export function checkBriefAttachments(value: unknown): string | undefined {
   if (!Array.isArray(value)) {
     return "brief attachments must be an array of path strings when present";
   }
+
   if (value.length > BRIEF_MAX_ATTACHMENTS) {
     return `brief attachments exceed the maximum of ${BRIEF_MAX_ATTACHMENTS} (got ${value.length})`;
   }
+
   let totalBytes = 0;
+
   for (const item of value) {
     if (typeof item !== "string" || item.trim().length === 0) {
       return "brief attachments must be non-empty path strings when present";
     }
+
     const refusal = briefAttachmentPathRefusal(item);
     if (refusal !== undefined) {
       return refusal;
     }
+
     totalBytes += Buffer.byteLength(item, "utf8");
   }
+
   if (totalBytes > BRIEF_MAX_ATTACHMENT_BYTES) {
     return `brief attachments exceed ${BRIEF_MAX_ATTACHMENT_BYTES} bytes of path text (got ${totalBytes})`;
   }
+
   return undefined;
 }
 
@@ -365,21 +395,25 @@ export async function executeBriefTool(
   if (!gate.ok) {
     return gate;
   }
+
   const status = input.status ?? "normal";
   if (status !== "normal" && status !== "proactive") {
     return err("invalid_arguments", "brief status must be normal or proactive");
   }
+
   if (input.attachments !== undefined) {
     const refusal = checkBriefAttachments(input.attachments);
     if (refusal !== undefined) {
       return err("invalid_arguments", refusal);
     }
   }
+
   const text =
     input.attachments === undefined || input.attachments.length === 0
       ? `[brief:${status}] ${input.message}`
       : `[brief:${status}] ${input.message}\nAttachments: ${input.attachments.join(", ")}`;
   const queue = deps.queueFor(input.sessionId);
+
   try {
     const enqueued = await queue.enqueue(text);
     if (!enqueued.ok) {

@@ -53,10 +53,12 @@ export const CREDENTIAL_ACCOUNT_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
  *    stored, so a test run never has to fabricate a fake key.
  */
 export const CREDENTIAL_PROVIDER_IDS = ["openai-compatible", "fixture"] as const;
+
 export type CredentialProviderId = (typeof CREDENTIAL_PROVIDER_IDS)[number];
 
 /** The two ledger scopes, lowest precedence first. */
 export const CREDENTIAL_SCOPES = ["user", "project"] as const;
+
 export type CredentialScope = (typeof CREDENTIAL_SCOPES)[number];
 
 /**
@@ -65,10 +67,12 @@ export type CredentialScope = (typeof CREDENTIAL_SCOPES)[number];
  * a miss, not an error.
  */
 export const CREDENTIAL_LAYERS = ["env", "project", "user", "none"] as const;
+
 export type CredentialLayer = (typeof CREDENTIAL_LAYERS)[number];
 
 /** Backend kinds. `env` is read-only; `keyring` is an adapter slot only. */
 export const CREDENTIAL_BACKEND_KINDS = ["file", "env", "keyring"] as const;
+
 export type CredentialBackendKind = (typeof CREDENTIAL_BACKEND_KINDS)[number];
 
 /**

@@ -30,6 +30,7 @@ function build(env: Record<string, string | undefined> = {}): Built {
     crypto: { randomUUID: () => `00000000-0000-4000-8000-${Math.random().toString(16).slice(2, 14)}` },
     hasProject: true,
   };
+
   return { port: bindVerbs(deps), home, project };
 }
 
@@ -45,14 +46,17 @@ function projectFile(project: string): string {
 
 test("project current overrides user current for the same provider", (t) => {
   const built = build();
+
   t.after(() => cleanup(built));
   const { port } = built;
+
   assert.equal(port.login({ providerId: "openai-compatible", accountId: "user-a", secret: "sk-user" }).ok, true);
   assert.equal(
     port.login({ providerId: "openai-compatible", accountId: "proj-b", secret: "sk-proj", scope: "project" }).ok,
     true,
   );
   const resolved = port.get("openai-compatible");
+
   assert.equal(resolved.ok, true);
   assert.equal(resolved.ok ? resolved.value.layer : "", "project");
   assert.equal(resolved.ok ? resolved.value.accountId : "", "proj-b");
@@ -61,8 +65,10 @@ test("project current overrides user current for the same provider", (t) => {
 
 test("clearing the project pointer falls back to the user layer", (t) => {
   const built = build();
+
   t.after(() => cleanup(built));
   const { port } = built;
+
   assert.equal(port.login({ providerId: "openai-compatible", accountId: "user-a", secret: "sk-user" }).ok, true);
   assert.equal(
     port.login({ providerId: "openai-compatible", accountId: "proj-b", secret: "sk-proj", scope: "project" }).ok,
@@ -70,26 +76,31 @@ test("clearing the project pointer falls back to the user layer", (t) => {
   );
   assert.equal(port.logout({ providerId: "openai-compatible", scope: "project" }).ok, true);
   const resolved = port.get("openai-compatible");
+
   assert.equal(resolved.ok ? resolved.value.layer : "", "user");
   assert.equal(resolved.ok ? resolved.value.secret : "", "sk-user");
 });
 
 test("a project login never copies the user secret into the project file (adversarial #7)", (t) => {
   const built = build();
+
   t.after(() => cleanup(built));
   const { port } = built;
+
   assert.equal(port.login({ providerId: "openai-compatible", secret: "sk-user-only" }).ok, true);
   assert.equal(
     port.login({ providerId: "openai-compatible", accountId: "proj-1", secret: "sk-proj-only", scope: "project" }).ok,
     true,
   );
   const projectText = readFileSync(projectFile(built.project), "utf8");
+
   assert.equal(projectText.includes("sk-user-only"), false);
   assert.equal(projectText.includes("sk-proj-only"), true);
 });
 
 test("no projectDir configured means the project layer is skipped, not an error", (t) => {
   const home = mkdtempSync(join(tmpdir(), "trylo-home-"));
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const deps: PortDeps = {
     store: createFileLedgerStore({ homeDir: home }),
@@ -99,8 +110,10 @@ test("no projectDir configured means the project layer is skipped, not an error"
     hasProject: false,
   };
   const port = bindVerbs(deps);
+
   assert.equal(port.login({ providerId: "openai-compatible", secret: "sk-user" }).ok, true);
   const resolved = port.get("openai-compatible");
+
   assert.equal(resolved.ok ? resolved.value.layer : "", "user");
   // A project-scoped login has nowhere to go.
   assert.equal(
@@ -111,12 +124,15 @@ test("no projectDir configured means the project layer is skipped, not an error"
 
 test("env overrides both files and reports layer:env", (t) => {
   const built = build({ TRYLO_API_KEY: "sk-from-env" });
+
   t.after(() => cleanup(built));
   const { port } = built;
+
   assert.equal(port.login({ providerId: "fixture", accountId: "fx" }).ok, true);
   // The keyed provider is shadowed by env, so storing it is refused...
   assert.equal(port.login({ providerId: "openai-compatible", secret: "sk-file" }).ok, false);
   const resolved = port.get("openai-compatible");
+
   assert.equal(resolved.ok ? resolved.value.layer : "", "env");
   assert.equal(resolved.ok ? resolved.value.secret : "", "sk-from-env");
 });
@@ -130,18 +146,22 @@ test("the provider-specific env variable beats the generic one", (t) => {
 
 test("env never lands on disk (adversarial #5)", (t) => {
   const built = build({ TRYLO_API_KEY: "sk-env-only" });
+
   t.after(() => cleanup(built));
   const { port } = built;
+
   // A refused login must not have written a file containing the env value.
   port.login({ providerId: "openai-compatible", secret: "sk-env-only" });
   // A fixture login writes the file; prove the env value is not in it.
   assert.equal(port.login({ providerId: "fixture" }).ok, true);
   const userText = readFileSync(join(built.home, "credentials.json"), "utf8");
+
   assert.equal(userText.includes("sk-env-only"), false);
 });
 
 test("removing the env variable falls back to the file layer", (t) => {
   const home = mkdtempSync(join(tmpdir(), "trylo-home-"));
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const file = () =>
     bindVerbs({
@@ -151,6 +171,7 @@ test("removing the env variable falls back to the file layer", (t) => {
       crypto: { randomUUID: () => "00000000-0000-4000-8000-000000000001" },
       hasProject: false,
     });
+
   // With no env, store a file credential.
   assert.equal(file().login({ providerId: "openai-compatible", secret: "sk-file" }).ok, true);
 
@@ -162,10 +183,12 @@ test("removing the env variable falls back to the file layer", (t) => {
     crypto: { randomUUID: () => "00000000-0000-4000-8000-000000000002" },
     hasProject: false,
   });
+
   assert.equal(withEnv.get("openai-compatible").ok ? (withEnv.get("openai-compatible") as { value: { layer: string } }).value.layer : "", "env");
 
   // Remove the env again: the file credential is back.
   const resolved = file().get("openai-compatible");
+
   assert.equal(resolved.ok ? resolved.value.layer : "", "user");
   assert.equal(resolved.ok ? resolved.value.secret : "", "sk-file");
 });

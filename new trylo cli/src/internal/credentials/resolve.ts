@@ -89,6 +89,7 @@ export function resolveNamedAccount(
     { scope: "user" as const, document: ledgers.user },
   ];
   const known: string[] = [];
+
   for (const { scope, document } of scopes) {
     const record = document.records.find(
       (entry) => entry.providerId === input.providerId && entry.accountId === input.accountId,
@@ -96,12 +97,14 @@ export function resolveNamedAccount(
     if (record !== undefined) {
       return { ok: true, value: toResolved(input.providerId, scope, record) };
     }
+
     for (const entry of document.records) {
       if (entry.providerId === input.providerId && !known.includes(entry.accountId)) {
         known.push(entry.accountId);
       }
     }
   }
+
   return failure(
     "unknown_account",
     `no account ${JSON.stringify(input.accountId)} for ${input.providerId}${known.length > 0 ? `; known accounts: ${known.join(", ")}` : ""}`,
@@ -139,6 +142,7 @@ export function currentRecord(
   if (accountId === undefined) {
     return undefined;
   }
+
   return document.records.find(
     (record) => record.providerId === providerId && record.accountId === accountId,
   );
@@ -240,11 +244,13 @@ export function withoutCurrent(
   providerId: CredentialProviderId,
 ): CredentialLedgerDocument {
   const current: Partial<Record<CredentialProviderId, string>> = {};
+
   for (const [key, value] of Object.entries(document.current)) {
     if (key !== providerId && value !== undefined) {
       current[key as CredentialProviderId] = value;
     }
   }
+
   return sealDocument({
     formatVersion: document.formatVersion,
     current,
@@ -268,6 +274,7 @@ export function rejectEnvShadowedWrite(
   if (hit === undefined) {
     return undefined;
   }
+
   return failure(
     "env_shadowed",
     `${hit.env} is set and overrides the ledger; unset it before storing a ${providerId} credential`,

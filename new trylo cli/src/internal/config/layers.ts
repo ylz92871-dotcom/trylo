@@ -11,6 +11,7 @@ import type { JsonValue } from "../protocol/envelope.js";
  */
 
 export const CONFIG_LAYERS = ["packaged_default", "user", "project", "cli_flag"] as const;
+
 export type ConfigLayer = (typeof CONFIG_LAYERS)[number];
 
 const PRECEDENCE: Readonly<Record<ConfigLayer, number>> = {
@@ -69,23 +70,28 @@ export function mergeConfigLayers(
 ): ResolvedConfig {
   const resolved: Record<string, ConfigEntry> = {};
   const ordered = [...layers].sort((a, b) => layerPrecedence(a.layer) - layerPrecedence(b.layer));
+
   for (const { layer, values } of ordered) {
     for (const key of Object.keys(values)) {
       const value = values[key];
       if (value === undefined) {
         continue;
       }
+
       const existing = resolved[key];
       const secret = isSecretKey(key);
+
       if (existing === undefined) {
         resolved[key] = entryFor(value, layer, secret);
         continue;
       }
+
       if (layerPrecedence(layer) > layerPrecedence(existing.layer)) {
         resolved[key] = entryFor(value, layer, secret);
       }
     }
   }
+
   return resolved;
 }
 
@@ -96,6 +102,7 @@ export function mergeConfigLayers(
  */
 export function publicConfigView(config: ResolvedConfig): Record<string, JsonValue> {
   const view: Record<string, JsonValue> = {};
+
   for (const key of Object.keys(config).sort()) {
     const entry = config[key];
     if (entry === undefined) {
@@ -103,11 +110,13 @@ export function publicConfigView(config: ResolvedConfig): Record<string, JsonVal
     }
     view[key] = entry.secret ? REDACTED : entry.value;
   }
+
   return view;
 }
 
 export function configSourceView(config: ResolvedConfig): Record<string, string> {
   const view: Record<string, string> = {};
+
   for (const key of Object.keys(config).sort()) {
     const entry = config[key];
     if (entry === undefined) {
@@ -115,6 +124,7 @@ export function configSourceView(config: ResolvedConfig): Record<string, string>
     }
     view[key] = entry.layer;
   }
+
   return view;
 }
 

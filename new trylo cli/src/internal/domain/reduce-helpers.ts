@@ -88,6 +88,7 @@ export function terminate(
     terminalReason: reason,
     attempts: markAttemptTerminal(remembered),
   };
+
   return ok(next, [emit("terminal", { reason, ...payload }, eventId)]);
 }
 
@@ -96,6 +97,7 @@ export function cancelNow(state: ExecutionState, eventId: string): ReduceResult 
     emit("user_cancel", { phase: state.phase }, eventId),
     emit("terminal", { reason: "cancelled" }, `${eventId}:term`),
   ];
+
   if (state.phase === "streaming" || state.phase === "turning") {
     const attemptId = state.currentAttemptId;
     if (attemptId !== undefined) {
@@ -106,15 +108,18 @@ export function cancelNow(state: ExecutionState, eventId: string): ReduceResult 
       });
     }
   }
+
   const inFlight: readonly string[] =
     state.activeToolCallId !== undefined
       ? [state.activeToolCallId]
       : (state.activeToolCallIds ?? []);
+
   if (state.phase === "tooling") {
     for (const id of inFlight) {
       commands.push({ type: "cancel_tool", toolCallId: id, idempotencyKey: `cancel-tool:${id}` });
     }
   }
+
   const remembered = remember(state, eventId);
   const toolCalls = inFlight.reduce<Record<string, ToolCall>>((acc, id) => {
     const call = remembered.toolCalls[id];
@@ -129,5 +134,6 @@ export function cancelNow(state: ExecutionState, eventId: string): ReduceResult 
     terminalReason: "cancelled",
     attempts: markAttemptTerminal(remembered),
   };
+
   return ok(next, commands);
 }

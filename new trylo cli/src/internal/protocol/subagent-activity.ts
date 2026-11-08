@@ -17,8 +17,12 @@ export function subagentToolActivity(envelope: Envelope): SubagentToolActivity |
   const payload = envelope.payload;
   const id = payload.toolCallId;
   const tool = typeof payload.name === "string" && payload.name.length > 0 ? payload.name : undefined;
+
   if (typeof id !== "string" || id.length === 0) return undefined;
+
   if (envelope.kind === "tool_use" && tool !== undefined) return { id, kind: "tool", tool };
+
   if (envelope.kind === "tool_result") return { id, kind: "result", ...(tool === undefined ? {} : { tool }), ok: payload.status === "succeeded" };
+
   return undefined;
 }

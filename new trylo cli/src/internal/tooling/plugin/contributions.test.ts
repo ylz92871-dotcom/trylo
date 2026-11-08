@@ -36,6 +36,7 @@ test("snapshot freezes enabled contributions; registration is not consumption", 
     generation: 7,
     now: "2026-10-06T00:00:00Z",
   });
+
   assert.equal(snapshot.generation, 7);
   assert.equal(findSkillInSnapshot(snapshot, "summarize").ok, true);
   assert.equal(findCommandInSnapshot(snapshot, "missing").ok, false);
@@ -51,9 +52,12 @@ test("stale snapshots never cover a newer registry generation", () => {
     generation: 3,
     now: "2026-10-06T00:00:00Z",
   });
+
   assert.equal(snapshotCoversGeneration(snapshot, 3).ok, true);
   const stale = snapshotCoversGeneration(snapshot, 4);
+
   assert.equal(stale.ok, false);
+
   if (!stale.ok) {
     assert.equal(stale.code, "stale_snapshot");
   }
@@ -74,6 +78,7 @@ test("disabled plugins leave the snapshot instead of lingering", () => {
     generation: 8,
     now: "2026-10-06T00:00:00Z",
   });
+
   assert.equal(snapshot.contributions.length, 0);
   assert.equal(findSkillInSnapshot(snapshot, "summarize").ok, false);
 });

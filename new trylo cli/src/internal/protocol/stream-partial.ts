@@ -90,21 +90,27 @@ export function isStreamPartial(value: unknown): value is StreamPartial {
   if (!isRecord(value)) {
     return false;
   }
+
   if (typeof value.kind !== "string" || !(STREAM_PARTIAL_KINDS as readonly string[]).includes(value.kind)) {
     return false;
   }
+
   if (typeof value.blockId !== "string" || value.blockId.length === 0) {
     return false;
   }
+
   if (typeof value.text !== "string") {
     return false;
   }
+
   if (value.kind === "tool_input" && typeof value.name !== "string") {
     return false;
   }
+
   if (value.kind === "assistant_reasoning" && typeof value.redacted !== "boolean") {
     return false;
   }
+
   return true;
 }
 

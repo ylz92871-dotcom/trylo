@@ -50,13 +50,16 @@ function baseResourceFields(raw: JsonValue):
   if (record === undefined) {
     return undefined;
   }
+
   const name = record["name"];
   if (typeof name !== "string" || name.length === 0) {
     return undefined;
   }
+
   const title = record["title"];
   const description = record["description"];
   const mimeType = record["mimeType"];
+
   return {
     name,
     ...(typeof title === "string" ? { title } : {}),
@@ -76,14 +79,17 @@ export function toResource(raw: JsonValue): McpResource | undefined {
   if (record === undefined) {
     return undefined;
   }
+
   const uri = record["uri"];
   if (typeof uri !== "string" || uri.length === 0) {
     return undefined;
   }
+
   const base = baseResourceFields(raw);
   if (base === undefined) {
     return undefined;
   }
+
   return {
     uri,
     ...base,
@@ -98,14 +104,17 @@ export function toResourceTemplate(raw: JsonValue): McpResourceTemplate | undefi
   if (record === undefined) {
     return undefined;
   }
+
   const uriTemplate = record["uriTemplate"];
   if (typeof uriTemplate !== "string" || uriTemplate.length === 0) {
     return undefined;
   }
+
   const base = baseResourceFields(raw);
   if (base === undefined) {
     return undefined;
   }
+
   return {
     uriTemplate,
     ...base,
@@ -125,18 +134,22 @@ export function interpretResourceList(
   if ("error" in response) {
     return fail("protocol_error", `resources/list failed: ${response.error.code} ${response.error.message}`);
   }
+
   const result = paramsAsObject(response.result);
   const resources = result?.["resources"];
   if (!Array.isArray(resources)) {
     return fail("invalid_resource", "resources/list result has no resources array");
   }
+
   const listed: McpResource[] = [];
+
   for (const raw of resources) {
     const resource = toResource(raw);
     if (resource !== undefined) {
       listed.push(resource);
     }
   }
+
   return { ok: true, value: { resources: listed, ...readCursor(result) } };
 }
 
@@ -149,18 +162,22 @@ export function interpretResourceTemplates(
       `resources/templates/list failed: ${response.error.code} ${response.error.message}`,
     );
   }
+
   const result = paramsAsObject(response.result);
   const templates = result?.["resourceTemplates"];
   if (!Array.isArray(templates)) {
     return fail("invalid_resource", "resources/templates/list result has no resourceTemplates array");
   }
+
   const listed: McpResourceTemplate[] = [];
+
   for (const raw of templates) {
     const template = toResourceTemplate(raw);
     if (template !== undefined) {
       listed.push(template);
     }
   }
+
   return { ok: true, value: { templates: listed, ...readCursor(result) } };
 }
 
@@ -177,21 +194,25 @@ export function toResourceContent(raw: JsonValue): McpResourceContent | undefine
   if (record === undefined) {
     return undefined;
   }
+
   const uri = record["uri"];
   if (typeof uri !== "string" || uri.length === 0) {
     return undefined;
   }
+
   const mimeType = record["mimeType"];
   const mime = typeof mimeType === "string" ? { mimeType } : {};
   const text = record["text"];
   if (typeof text === "string") {
     return { kind: "text", uri, ...mime, text };
   }
+
   const blob = record["blob"];
   if (typeof blob === "string") {
     // Base64 expands 3 bytes to 4 characters; the estimate is noted as such.
     return { kind: "binary", uri, ...mime, byteLength: Math.floor((blob.length * 3) / 4) };
   }
+
   return undefined;
 }
 
@@ -201,18 +222,22 @@ export function interpretResourceRead(
   if ("error" in response) {
     return fail("protocol_error", `resources/read failed: ${response.error.code} ${response.error.message}`);
   }
+
   const result = paramsAsObject(response.result);
   const contents = result?.["contents"];
   if (!Array.isArray(contents)) {
     return fail("invalid_resource", "resources/read result has no contents array");
   }
+
   const read: McpResourceContent[] = [];
+
   for (const raw of contents) {
     const content = toResourceContent(raw);
     if (content !== undefined) {
       read.push(content);
     }
   }
+
   return { ok: true, value: { contents: read } };
 }
 
@@ -229,6 +254,7 @@ export function renderResourceContents(
   maxBytes: number,
 ): { readonly output: string; readonly truncated: boolean } {
   const parts: string[] = [];
+
   for (const content of contents) {
     if (content.kind === "text") {
       parts.push(content.text);
@@ -237,10 +263,12 @@ export function renderResourceContents(
       parts.push(`[binary content omitted: ${mime}, about ${content.byteLength} bytes]`);
     }
   }
+
   const output = parts.join("\n");
   if (Buffer.byteLength(output, "utf8") <= maxBytes) {
     return { output, truncated: false };
   }
+
   return { output: truncateUtf8(output, maxBytes), truncated: true };
 }
 
@@ -249,11 +277,14 @@ function truncateUtf8(text: string, maxBytes: number): string {
   if (bytes.length <= maxBytes) {
     return text;
   }
+
   // Walk back from the cut so no multi-byte character is split.
   let end = maxBytes;
+
   while (end > 0 && isUtf8Continuation(bytes[end])) {
     end -= 1;
   }
+
   return bytes.subarray(0, end).toString("utf8");
 }
 

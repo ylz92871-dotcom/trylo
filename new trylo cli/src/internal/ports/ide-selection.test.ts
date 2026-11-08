@@ -22,8 +22,11 @@ describe("readSelection", () => {
       },
       toWorkspaceRelative,
     );
+
     assert.equal(outcome.ok, true);
+
     if (!outcome.ok) return;
+
     assert.deepEqual(
       { path: outcome.selection.filePath, start: outcome.selection.startLine, lines: outcome.selection.lineCount },
       { path: "src/a.ts", start: 10, lines: 1 },
@@ -84,6 +87,7 @@ describe("readSelection", () => {
       toWorkspaceRelative,
       50,
     );
+
     assert.equal(outcome.ok && outcome.selection.truncated, true);
     assert.equal(outcome.ok && outcome.selection.text.length, 50);
   });

@@ -45,6 +45,7 @@ export function cronToHuman(cron: string, options?: { readonly utc?: boolean }):
   if (parts.length !== 5) {
     return cron;
   }
+
   const [minute, hour, dayOfMonth, month, dayOfWeek] = parts as [
     string,
     string,
@@ -60,17 +61,20 @@ export function cronToHuman(cron: string, options?: { readonly utc?: boolean }):
   if (minute === "*" && hour === "*" && allWild) {
     return "Every minute";
   }
+
   const everyMinutes = minute.match(EVERY_N_MINUTES);
   if (everyMinutes !== null && hour === "*" && allWild) {
     const count = Number.parseInt(everyMinutes[1] as string, 10);
     return count === 1 ? "Every minute" : `Every ${count} minutes`;
   }
+
   const everyHours = hour.match(EVERY_N_HOURS);
   if (everyHours !== null && minute.match(MINUTE_ONLY) !== null && allWild) {
     const count = Number.parseInt(everyHours[1] as string, 10);
     const at = minute === "0" ? "" : ` at :${minute.padStart(2, "0")}`;
     return count === 1 ? `Every hour${at}` : `Every ${count} hours${at}`;
   }
+
   if (minute.match(MINUTE_ONLY) !== null && hour === "*" && allWild) {
     return minute === "0" ? "Every hour" : `Every hour at :${minute.padStart(2, "0")}`;
   }
@@ -78,6 +82,7 @@ export function cronToHuman(cron: string, options?: { readonly utc?: boolean }):
   if (minute.match(MINUTE_ONLY) === null || hour.match(MINUTE_ONLY) === null) {
     return cron;
   }
+
   const minutes = Number.parseInt(minute, 10);
   const hours = Number.parseInt(hour, 10);
   const time = utc ? formatUtcAsLocal(hours, minutes) : formatLocalTime(hours, minutes);
@@ -85,13 +90,16 @@ export function cronToHuman(cron: string, options?: { readonly utc?: boolean }):
   if (allWild) {
     return `Every day at ${time}`;
   }
+
   if (dayOfMonth === "*" && month === "*" && dayOfWeek === "1-5") {
     return `Weekdays at ${time}`;
   }
+
   if (dayOfMonth === "*" && month === "*" && dayOfWeek.match(SINGLE_DIGIT) !== null) {
     const name = DAYS[Number.parseInt(dayOfWeek, 10) % 7];
     return `Every ${name} at ${time}`;
   }
+
   return cron;
 }
 
@@ -109,7 +117,9 @@ function formatLocalTime(hours: number, minutes: number): string {
 
 function formatUtcAsLocal(hours: number, minutes: number): string {
   const at = new Date();
+
   at.setUTCHours(hours, minutes, 0, 0);
+
   return at.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",

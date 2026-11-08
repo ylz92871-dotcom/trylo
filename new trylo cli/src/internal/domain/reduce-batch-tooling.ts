@@ -1,11 +1,10 @@
 import type { ToolCall, ToolCallStatus } from "../contract/execution.js";
 import type { EffectCommand } from "./command.js";
-import type { ReduceInput } from "./input.js";
+import type { PermissionRefusalDetails, ReduceInput } from "./input.js";
 import {
   clearOptional,
   emit,
   fail,
-  markAttemptTerminal,
   ok,
   remember,
   type ReduceResult,
@@ -18,10 +17,9 @@ import { ticketIdFor, type ExecutionState } from "./state.js";
  * than a tool result.
  *
  * The reducer has two shapes of tool execution (see `reduce-tooling.ts`) and
- * they answer a refusal differently on purpose:
+ * each settles the refused call without granting it:
  *
- *  - **single** — the run's only call was refused, so the turn is over. That is
- *    the historical behaviour and it stays byte for byte.
+ *  - **single** — the call settles and the model receives its failed result.
  *  - **batch** — one refused member is a fact about *that* member. The model is
  *    owed a visible result for it, the other members still run, and the phase
  *    only returns to `turning` when the last of them has landed. A batch that
@@ -30,9 +28,8 @@ import { ticketIdFor, type ExecutionState } from "./state.js";
  *    `tool_result`s — the very shape `illegal_transition` / `unsettled_tool_input`
  *    used to produce on a plain four-file read.
  *
- * The one refusal that still fails closed is `permission_failed`: a permission
- * port that cannot answer is a broken gate, not a decision, and a turn that
- * cannot be gated must not keep executing tools.
+ * An unavailable permission port also settles only its call. No approval was
+ * obtained, so it cannot run; other work retains its own admission boundary.
  */
 
 /**
@@ -62,6 +59,7 @@ export function requestBatchApproval(
       [ticketId]: { ticketId, toolCallId: input.toolCallId, status: "requested" },
     },
   };
+
   return ok(next, [
     emit("tool_use", { toolCallId: input.toolCallId, name: input.name }, input.eventId),
     emit("approval_requested", { ticketId, toolCallId: input.toolCallId }, `${input.eventId}:ask`),
@@ -88,12 +86,15 @@ export function applyBatchPermission(
   ids: ReadonlyArray<string>,
   toolCallId: string,
   resolution: "approved" | "denied" | "expired",
+  details: PermissionRefusalDetails = {},
 ): ReduceResult {
   const located = locateMember(state, ids, toolCallId, resolution);
   if ("ok" in located) {
     return located;
   }
+
   const ticketId = ticketIdFor(toolCallId);
+
   if (resolution === "approved") {
     const remembered = remember(state, eventId);
     const next: ExecutionState = {
@@ -108,10 +109,12 @@ export function applyBatchPermission(
         [toolCallId]: { ...located.call, status: "executing" },
       },
     };
+
     return ok(next, [
       { type: "execute_tool", toolCallId, idempotencyKey: `tool:${toolCallId}` },
     ]);
   }
+
   const resolved: ExecutionState = {
     ...state,
     approvals: {
@@ -119,11 +122,12 @@ export function applyBatchPermission(
       [ticketId]: { ticketId, toolCallId, status: resolution },
     },
   };
+
   return settleRefused(resolved, eventId, ids, toolCallId, located.call, "denied", [
-    emit("permission_denied", { toolCallId, resolution }, eventId),
+    emit("permission_denied", { toolCallId, resolution, ...details }, eventId),
     emit(
       "tool_result",
-      { toolCallId, status: "failed", code: "permission_denied", message: resolution },
+      { toolCallId, status: "failed", code: details.code ?? "permission_denied", message: details.message ?? resolution },
       `${eventId}:result`,
     ),
   ]);
@@ -144,6 +148,7 @@ export function applyBatchRejection(
   if ("ok" in located) {
     return located;
   }
+
   return settleRefused(state, input.eventId, ids, input.toolCallId, located.call, "denied", [
     emit(
       "tool_result",
@@ -159,10 +164,8 @@ export function applyBatchRejection(
 }
 
 /**
- * The one refusal that still ends the turn. It mirrors `failPermission`'s
- * single-call behaviour — same envelopes, same terminal reason — because an
- * unanswerable permission port is a broken gate rather than a decision about
- * one call.
+ * A broken permission gate cannot execute this member. Settle it with its
+ * failure so siblings still finish and the next model request can recover.
  */
 export function failBatchPermission(
   state: ExecutionState,
@@ -175,25 +178,18 @@ export function failBatchPermission(
   if ("ok" in located) {
     return located;
   }
+
   const ticketId = ticketIdFor(toolCallId);
-  const remembered = remember(state, eventId);
-  const next: ExecutionState = {
-    ...clearOptional(remembered, ["activeToolCallId", "activeToolCallIds"]),
-    phase: "terminal",
-    terminalReason: "failed",
+  const resolved: ExecutionState = {
+    ...state,
     approvals: {
-      ...remembered.approvals,
+      ...state.approvals,
       [ticketId]: { ticketId, toolCallId, status: "failed" },
     },
-    toolCalls: {
-      ...remembered.toolCalls,
-      [toolCallId]: { ...located.call, status: "permission_failed" },
-    },
-    attempts: markAttemptTerminal(remembered),
   };
-  return ok(next, [
-    emit("error", { code: "permission_unavailable", toolCallId, message }, eventId),
-    emit("terminal", { reason: "failed", cause: "permission_unavailable" }, `${eventId}:term`),
+
+  return settleRefused(resolved, eventId, ids, toolCallId, located.call, "permission_failed", [
+    emit("tool_result", { code: "permission_unavailable", toolCallId, status: "failed", message }, eventId),
   ]);
 }
 
@@ -214,6 +210,7 @@ function locateMember(
       event,
     });
   }
+
   const call = state.toolCalls[toolCallId];
   if (call === undefined) {
     return fail(state, {
@@ -223,6 +220,7 @@ function locateMember(
       event,
     });
   }
+
   return { call };
 }
 
@@ -250,5 +248,6 @@ function settleRefused(
     phase: remaining.length === 0 ? "turning" : "tooling",
     toolCalls: { ...remembered.toolCalls, [toolCallId]: { ...call, status } },
   };
+
   return ok(next, commands);
 }

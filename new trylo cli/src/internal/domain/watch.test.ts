@@ -88,6 +88,7 @@ test("a real file appearing satisfies the watch, and says which file", () => {
         }
       },
     }));
+
     assert.equal(before.met, false);
 
     writeFileSync(target, "done", "utf8");
@@ -101,7 +102,9 @@ test("a real file appearing satisfies the watch, and says which file", () => {
         }
       },
     }));
+
     assert.equal(after.met, true);
+
     if (after.met) assert.match(after.because, /build\.txt exists/);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -113,13 +116,16 @@ test("contents and exit codes are separate conditions, and both name what they s
     { kind: "file_contains", relativePath: "/tmp/out", needle: "DONE" },
     probeFor({ fileContains: () => true }),
   );
+
   assert.equal(contains.met, true);
+
   if (contains.met) assert.match(contains.because, /contains "DONE"/);
 
   const exit = evaluateCondition(
     { kind: "command_exit", exitCode: 0 },
     probeFor({ lastExitCode: () => 0 }),
   );
+
   assert.equal(exit.met, true);
   // A build that failed is not a build that succeeded, even though both are "an
   // exit code" — so the code is part of the condition.
@@ -127,6 +133,7 @@ test("contents and exit codes are separate conditions, and both name what they s
     { kind: "command_exit", exitCode: 0 },
     probeFor({ lastExitCode: () => 1 }),
   );
+
   assert.equal(failed.met, false);
 });
 
@@ -144,6 +151,7 @@ test("the occurrence id is derived, so a restart re-derives the same one", () =>
   // "this already fired".
   const first = watchOccurrenceId("w1", T0);
   const second = watchOccurrenceId("w1", T0);
+
   assert.equal(first, second);
   assert.match(first, /^watch_w1@/);
   // And a different moment is a different occurrence, which is what lets a watch
@@ -168,7 +176,9 @@ test("a different watch at the same moment is a different occurrence", () => {
 test("an armed watch can be cancelled, and says why", () => {
   const armed: WatchState = { state: "armed", watchId: "w1", fireAtMs: T0 };
   const verdict = cancelWatch(armed, "w1", T0 + 5_000);
+
   assert.equal(verdict.kind, "cancelled");
+
   if (verdict.kind === "cancelled") {
     assert.equal(verdict.state.state, "cancelled");
     if (verdict.state.state === "cancelled") {

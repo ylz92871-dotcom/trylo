@@ -56,17 +56,22 @@ export function reduce(state: ExecutionState, input: ReduceInput): ReduceResult 
     }
     return reduceInput(state, input);
   }
+
   if (!Number.isSafeInteger(position) || position < 1 || state.seenEventIds.length > 0) {
     return invalidDelivery(state, input);
   }
+
   const previous = state.lastDeliverySequence ?? 0;
   if (position <= previous) {
     return { ok: true, state, commands: [], events: [], duplicate: true };
   }
+
   if (position !== previous + 1) {
     return invalidDelivery(state, input);
   }
+
   const result = reduceInput(state, input);
+
   // Even a domain refusal consumes a delivered position. Its commands remain
   // refused, while the next cancellation or transport fact can still arrive.
   return {
@@ -83,9 +88,11 @@ function reduceInput(state: ExecutionState, input: ReduceInput): ReduceResult {
   if (state.seenEventIds.includes(input.eventId)) {
     return { ok: true, state, commands: [], events: [], duplicate: true };
   }
+
   if (state.phase === "terminal") {
     return input.type === "check_result" ? applyCheck(state, input) : applyTerminal(state, input);
   }
+
   if (state.seenEventIds.length >= MAX_SEEN_EVENTS) {
     // The cap is per turn, not per session: a turn that emitted this many
     // events cannot settle anything further — every later input would fail the
@@ -96,9 +103,11 @@ function reduceInput(state: ExecutionState, input: ReduceInput): ReduceResult {
       limit: MAX_SEEN_EVENTS,
     });
   }
+
   if (input.type === "check_result") {
     return applyCheck(state, input);
   }
+
   switch (state.phase) {
     case "idle":
       return reduceIdle(state, input);
@@ -125,6 +134,7 @@ function reduceIdle(state: ExecutionState, input: ReduceInput): ReduceResult {
   if (input.type !== "start_turn") {
     return illegal(state, input);
   }
+
   const next: ExecutionState = {
     phase: "turning",
     sessionId: input.sessionId,
@@ -141,6 +151,7 @@ function reduceIdle(state: ExecutionState, input: ReduceInput): ReduceResult {
     finishReason: "",
     requiresFollowUp: false,
   };
+
   return ok(next, [
     emit("turn_start", { turnId: input.turnId, text: input.text }, input.eventId),
   ]);
@@ -303,6 +314,7 @@ function reduceTooling(state: ExecutionState, input: ReduceInput): ReduceResult 
   if (input.type === "usage") {
     return applyUsage(state, input);
   }
+
   const batch = state.activeToolCallIds;
   if (batch !== undefined) {
     switch (input.type) {
@@ -324,7 +336,10 @@ function reduceTooling(state: ExecutionState, input: ReduceInput): ReduceResult 
       case "permission_approved":
         return applyBatchPermission(state, input.eventId, batch, input.toolCallId, "approved");
       case "permission_denied":
-        return applyBatchPermission(state, input.eventId, batch, input.toolCallId, "denied");
+        return applyBatchPermission(state, input.eventId, batch, input.toolCallId, "denied", {
+          ...(input.code === undefined ? {} : { code: input.code }),
+          ...(input.message === undefined ? {} : { message: input.message }),
+        });
       case "permission_expired":
         return applyBatchPermission(state, input.eventId, batch, input.toolCallId, "expired");
       case "permission_failed":
@@ -338,6 +353,7 @@ function reduceTooling(state: ExecutionState, input: ReduceInput): ReduceResult 
         return illegal(state, input);
     }
   }
+
   const toolCallId = state.activeToolCallId;
   if (toolCallId === undefined) {
     return fail(state, {
@@ -347,6 +363,7 @@ function reduceTooling(state: ExecutionState, input: ReduceInput): ReduceResult 
       event: input.type,
     });
   }
+
   switch (input.type) {
     case "tool_succeeded":
       return applyToolOutcome(state, input.eventId, toolCallId, input.toolCallId, "succeeded", toolSuccessPayload(input));

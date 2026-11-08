@@ -43,9 +43,11 @@ export function enterPlanMode(state: PlanModeState, turnId: string): PlanModeTra
   if (state.kind === "plan" || state.kind === "awaiting_approval") {
     return { ok: false, code: "already_in_plan", message: "already in plan mode; exit before entering again" };
   }
+
   if (turnId.trim().length === 0) {
     return { ok: false, code: "already_in_plan", message: "turn id is required to enter plan mode" };
   }
+
   return { ok: true, state: { kind: "plan", enteredAtTurn: turnId } };
 }
 
@@ -54,12 +56,15 @@ export function submitPlanForApproval(state: PlanModeState, planText: string): P
   if (state.kind === "awaiting_approval") {
     return { ok: false, code: "approval_pending", message: "a plan is already awaiting approval" };
   }
+
   if (state.kind !== "plan") {
     return { ok: false, code: "not_in_plan", message: "not in plan mode; enter plan mode before submitting a plan" };
   }
+
   if (planText.trim().length === 0) {
     return { ok: false, code: "empty_plan", message: "plan text must not be empty" };
   }
+
   return { ok: true, state: { kind: "awaiting_approval", planText } };
 }
 
@@ -71,13 +76,16 @@ export function resolvePlanApproval(
   if (state.kind !== "awaiting_approval") {
     return { ok: false, code: "no_plan_to_approve", message: "no plan is awaiting approval" };
   }
+
   if (verdict === "approved") {
     return { ok: true, state: { kind: "working" } };
   }
+
   return { ok: true, state: { kind: "plan", enteredAtTurn: "resumed-after-rejection" } };
 }
 
 export const PLAN_STEP_STATUSES = ["pending", "in_progress", "completed"] as const;
+
 export type PlanStepStatus = (typeof PLAN_STEP_STATUSES)[number];
 
 export type PlanStep = {
@@ -109,34 +117,45 @@ export function validatePlanChecklist(argumentsValue: Record<string, unknown>): 
   if (Array.isArray(raw) === false) {
     return { ok: false, message: "plan must be an array of {step, status}" };
   }
+
   if (raw.length > MAX_PLAN_STEPS) {
     return { ok: false, message: `plan holds ${raw.length} steps; the limit is ${MAX_PLAN_STEPS}` };
   }
+
   const steps: PlanStep[] = [];
   let live = 0;
+
   for (const entry of raw) {
     if (isRecord(entry) === false) {
       return { ok: false, message: "every plan step must be an object with step and status" };
     }
+
     const text = entry["step"];
     const status = entry["status"];
+
     if (typeof text !== "string" || text.trim().length === 0) {
       return { ok: false, message: "every plan step needs a non-empty step string" };
     }
+
     if (text.length > MAX_STEP_CHARS) {
       return { ok: false, message: `plan step is ${text.length} characters; the limit is ${MAX_STEP_CHARS}` };
     }
+
     if (typeof status !== "string" || (PLAN_STEP_STATUSES as readonly string[]).includes(status) === false) {
       return { ok: false, message: `plan step status must be one of: ${PLAN_STEP_STATUSES.join(", ")}` };
     }
+
     if (status === "in_progress") {
       live += 1;
     }
+
     steps.push({ step: text, status: status as PlanStepStatus });
   }
+
   if (live > 1) {
     return { ok: false, message: `plan has ${live} in_progress steps; at most one may be live` };
   }
+
   return { ok: true, steps };
 }
 

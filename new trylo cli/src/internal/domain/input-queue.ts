@@ -95,15 +95,19 @@ export function admit(
   if (inbox.closed) {
     return { kind: "rejected", reason: "turn_closed", inbox };
   }
+
   if (input.turnId !== inbox.turnId) {
     return { kind: "rejected", reason: "turn_mismatch", inbox };
   }
+
   if (input.text.trim().length === 0) {
     return { kind: "rejected", reason: "blank", inbox };
   }
+
   if (inbox.items.length >= MAX_PENDING_INPUT) {
     return { kind: "rejected", reason: "full", inbox };
   }
+
   return {
     kind: "accepted",
     inbox: { ...inbox, items: [...inbox.items, { ...input, turnId: input.turnId }] },
@@ -173,13 +177,17 @@ export function nextPromotion(queue: ReadonlyArray<AddressedUserInput>): Promoti
   if (head === undefined) {
     return NO_PROMOTION;
   }
+
   if (head.mode !== "steer") {
     return { batch: [head], rest: queue.slice(1), resetBudget: false };
   }
+
   let taken = 0;
+
   while (taken < queue.length && queue[taken]?.mode === "steer") {
     taken += 1;
   }
+
   return { batch: queue.slice(0, taken), rest: queue.slice(taken), resetBudget: true };
 }
 

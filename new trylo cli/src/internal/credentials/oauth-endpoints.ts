@@ -30,6 +30,7 @@ export function validateOAuthEndpoint(
   extraAllowedHosts?: ReadonlySet<string>,
 ): EndpointValidationResult {
   let parsed: URL;
+
   try {
     parsed = new URL(endpointUrl);
   } catch {

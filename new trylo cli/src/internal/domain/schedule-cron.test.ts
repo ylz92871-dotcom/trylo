@@ -40,8 +40,11 @@ function nextIn(zone: string, expression: string, fromIso: string): Date | null 
   if (child.status !== 0) {
     throw new Error(`cron child failed (${zone}): ${child.stderr}`);
   }
+
   const line = child.stdout.trim();
+
   assert.notEqual(line, "PARSE_NULL", `${expression} failed to parse in ${zone}`);
+
   return line === "NULL" ? null : new Date(Number(line));
 }
 
@@ -80,10 +83,13 @@ test("next run is always strictly after the anchor", () => {
   const base = Date.parse("2026-10-06T00:00:00Z");
   for (const expression of ["*/5 * * * *", "0 9 * * *", "0 0 1 1 *", "30 14 28 2 *"]) {
     const fields = parseCronExpression(expression);
+
     assert.ok(fields !== null, `${expression} must parse`);
+
     for (const offset of [0, 60_000, 3_600_000]) {
       const from = new Date(base + offset);
       const next = computeNextCronRun(fields, from);
+
       assert.ok(next !== null, `${expression} must have a next run`);
       assert.ok(
         next.getTime() > from.getTime(),
@@ -96,11 +102,14 @@ test("next run is always strictly after the anchor", () => {
 test("day-of-month and day-of-week both constrained means either match", () => {
   // The 13th of a month *and* every Friday.
   const fields = parseCronExpression("0 9 13 * 5");
+
   assert.ok(fields !== null, "0 9 13 * 5 must parse");
   const first = computeNextCronRun(fields, new Date("2026-10-01T00:00:00Z"));
+
   assert.ok(first !== null);
   const isThirteenth = first.getDate() === 13;
   const isFriday = first.getDay() === 5;
+
   assert.ok(isThirteenth || isFriday, `${first.toISOString()} matches neither constraint`);
 });
 
@@ -126,6 +135,7 @@ test("DST fall-back: next run from the second repeated hour is still later in re
   // and could re-arm on an earlier instant indefinitely.
   const from = Date.parse("2026-11-01T01:10:00-05:00");
   const next = nextIn("America/New_York", "* * * * *", new Date(from).toISOString());
+
   assert.ok(next !== null, "there must be a next run inside the repeated hour");
   assert.ok(
     next.getTime() > from,
@@ -139,6 +149,7 @@ test("DST fall-back: next run from the first repeated hour advances by one real 
   // repeated hour advances the reading by an hour instead.
   const from = Date.parse("2026-11-01T01:10:00-04:00");
   const next = nextIn("America/New_York", "* * * * *", new Date(from).toISOString());
+
   assert.ok(next !== null);
   assert.ok(next.getTime() > from, `next=${next.toISOString()} is not after from=${new Date(from).toISOString()}`);
   assert.equal(next.getTime() - from, 60_000);
@@ -153,6 +164,7 @@ test("DST fall-back: the repeated hour fires once, so the second pass moves on",
   // being a special case.
   const from = Date.parse("2026-11-01T01:30:00-05:00");
   const next = nextIn("America/New_York", "* * * * *", new Date(from).toISOString());
+
   assert.ok(next !== null);
   assert.ok(next.getTime() > from);
   assert.equal(next.toISOString(), "2026-11-01T07:00:00.000Z");
@@ -164,6 +176,7 @@ test("DST fall-back: a coarser expression still sees the rest of the same day", 
   // wall-clock "add one minute" produces on this date — skips the whole day.
   const from = Date.parse("2026-11-01T01:30:00-05:00");
   const next = nextIn("America/New_York", "30 * * * *", new Date(from).toISOString());
+
   assert.ok(next !== null);
   assert.equal(next.toISOString(), "2026-11-01T07:30:00.000Z");
   assert.equal(next.getTime() - from, 60 * 60_000);
@@ -184,6 +197,7 @@ test("DST fall-back: from the last minute of the first hour, 61 real minutes ela
   // idle for the extra minute.
   const from = Date.parse("2026-11-01T01:59:00-04:00");
   const next = nextIn("America/New_York", "* * * * *", new Date(from).toISOString());
+
   assert.ok(next !== null);
   assert.equal(next.toISOString(), "2026-11-01T07:00:00.000Z");
   assert.equal(next.getTime() - from, 61 * 60_000);
@@ -195,6 +209,7 @@ test("DST fall-back: a wildcard-hour job does not stall across the transition", 
   // repeated hour and then fire in a burst.
   const from = Date.parse("2026-11-01T01:30:00-05:00");
   const next = nextIn("America/New_York", "30 * * * *", new Date(from).toISOString());
+
   assert.ok(next !== null, "a wildcard-hour job must not stall across the transition");
   assert.ok(next.getTime() > from);
   assert.equal(next.toISOString(), "2026-11-01T07:30:00.000Z");

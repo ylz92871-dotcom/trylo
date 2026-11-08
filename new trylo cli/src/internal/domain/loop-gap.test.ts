@@ -20,6 +20,7 @@ import { openBatch, settleBatch, settlementOrder } from "./tool-batch.js";
  */
 
 let n = 0;
+
 function eid(): string {
   n += 1;
   return `gap-${n}`;
@@ -34,14 +35,17 @@ type Step = {
 
 function step(state: ExecutionState, input: ReduceInput): Step {
   const result = reduce(state, input);
+
   assert.equal(
     result.ok,
     true,
     `${state.phase} <- ${input.type}${result.ok ? "" : `: ${result.error.message}`}`,
   );
+
   if (!result.ok) {
     throw new Error("unreachable");
   }
+
   return {
     state: result.state,
     commands: result.commands,
@@ -88,11 +92,13 @@ function userInput(text: string, mode: "steer" | "queue"): ReduceInput {
 test("反方 #19 — parallel off never introduces a batch", () => {
   const s0 = streaming();
   const requested = step(s0, toolRequest("call-1", false));
+
   assert.equal(requested.state.phase, "tooling");
   assert.equal(requested.state.activeToolCallId, "call-1");
   assert.equal(requested.state.activeToolCallIds, undefined);
 
   const done = step(requested.state, succeeded("call-1"));
+
   assert.equal(done.state.phase, "turning");
   assert.equal(done.state.activeToolCallIds, undefined);
   // The single-tool shape keeps its historical command set exactly: one tool_use
@@ -107,6 +113,7 @@ test("反方 #19 — parallel off never introduces a batch", () => {
 
 test("反方 #18 — a batch stays in tooling until its last member settles", () => {
   let s = streaming();
+
   s = step(s, toolRequest("call-a", true)).state;
   assert.deepEqual(s.activeToolCallIds, ["call-a"]);
   assert.equal(s.activeToolCallId, undefined);
@@ -114,20 +121,25 @@ test("反方 #18 — a batch stays in tooling until its last member settles", ()
   assert.deepEqual(s.activeToolCallIds, ["call-a", "call-b"]);
 
   const first = step(s, succeeded("call-a"));
+
   // The whole point: one result landing must not license the next request.
   assert.equal(first.state.phase, "tooling");
   assert.deepEqual(first.state.activeToolCallIds, ["call-b"]);
 
   const last = step(first.state, succeeded("call-b"));
+
   assert.equal(last.state.phase, "turning");
   assert.equal(last.state.activeToolCallIds, undefined);
 });
 
 test("反方 #18 — a result for a call that is not in the batch is refused", () => {
   let s = streaming();
+
   s = step(s, toolRequest("call-a", true)).state;
   const stranger = reduce(s, succeeded("call-z"));
+
   assert.equal(stranger.ok, false);
+
   if (!stranger.ok) {
     assert.equal(stranger.error.code, "invalid_input");
     assert.equal(stranger.error.message, "tool_result_mismatch");
@@ -158,8 +170,10 @@ test("反方 #20 — a steer is refused everywhere but the safe boundary", () =>
     arguments: {},
     needsApproval: true,
   }).state;
+
   assert.equal(approval.phase, "approval_waiting");
   const tooling = step(streaming(), toolRequest("call-1", false)).state;
+
   assert.equal(tooling.phase, "tooling");
 
   for (const state of [streaming(), tooling, approval]) {
@@ -172,6 +186,7 @@ test("反方 #20 — a steer is refused everywhere but the safe boundary", () =>
   }
 
   const accepted = step(start(), userInput("stop, do it differently", "steer"));
+
   assert.equal(accepted.state.phase, "turning");
   assert.deepEqual(accepted.kinds, ["user_correction"]);
 });
@@ -193,6 +208,7 @@ test("反方 #21 — a waiting user message keeps the turn open", () => {
     requiresFollowUp: false,
     budgetVerdict: { kind: "within_budget" },
   };
+
   assert.deepEqual(decideIterationEnd(base), { kind: "complete" });
   assert.deepEqual(decideIterationEnd({ ...base, pendingUserInputCount: 0 }), {
     kind: "complete",
@@ -211,6 +227,7 @@ test("反方 #21 — a waiting user message keeps the turn open", () => {
 
 test("the input queue promotes one queued message, but every leading steer", () => {
   let q = admitInput([], { text: "later", mode: "queue" });
+
   q = admitInput(q, { text: "   ", mode: "steer" });
   assert.equal(pendingCount(q), 1);
   q = admitInput(q, { text: "actually no", mode: "steer" });
@@ -218,14 +235,17 @@ test("the input queue promotes one queued message, but every leading steer", () 
   q = admitInput(q, { text: "and afterwards", mode: "queue" });
 
   const first = nextPromotion(q);
+
   assert.deepEqual(first.batch.map((i) => i.text), ["later"]);
   assert.equal(first.resetBudget, false);
 
   const second = nextPromotion(first.rest);
+
   assert.deepEqual(second.batch.map((i) => i.text), ["actually no", "and another thing"]);
   assert.equal(second.resetBudget, true);
 
   const third = nextPromotion(second.rest);
+
   assert.deepEqual(third.batch.map((i) => i.text), ["and afterwards"]);
   assert.equal(third.resetBudget, false);
 
@@ -239,9 +259,11 @@ test("反方 #22 — a spent budget is awaiting continuation, not a crash", () =
     eventId: eid(),
     reason: "iterations_exhausted",
   });
+
   assert.equal(exhausted.state.phase, "terminal");
   assert.equal(exhausted.state.terminalReason, "failed");
   const terminal = exhausted.payloads.find((p) => p.reason === "failed");
+
   assert.equal(terminal?.awaitingContinuation, true);
   assert.equal(exhausted.state.activeToolCallIds, undefined);
 
@@ -257,18 +279,22 @@ test("反方 #22 — a waiting turn-failure says so, a plain one does not", () =
     eventId: eid(),
     reason: "waiting:output_tokens_exhausted",
   });
+
   assert.equal(waiting.state.terminalReason, "failed");
   assert.equal(waiting.payloads[0]?.awaitingContinuation, true);
 
   const broken = step(start(), { type: "turn_failed", eventId: eid(), reason: "provider_error" });
+
   assert.equal(broken.payloads[0]?.awaitingContinuation, false);
 });
 
 test("cancelling a batch cancels every member still in flight", () => {
   let s = streaming();
+
   s = step(s, toolRequest("call-a", true)).state;
   s = step(s, toolRequest("call-b", true)).state;
   const cancelled = step(s, { type: "cancel", eventId: eid() });
+
   assert.equal(cancelled.state.phase, "terminal");
   assert.equal(cancelled.state.terminalReason, "cancelled");
   assert.deepEqual(

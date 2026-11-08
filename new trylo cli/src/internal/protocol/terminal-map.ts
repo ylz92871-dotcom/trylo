@@ -99,10 +99,12 @@ export function foldAcpStopReason(reason: TerminalReason, payload: JsonObject): 
   if (base.stopReason !== "other") {
     return base;
   }
+
   const refined = refineStopReason(payload);
   if (refined === undefined) {
     return base;
   }
+
   return {
     stopReason: refined.value,
     lossy: true,
@@ -122,6 +124,7 @@ export function refineStopReason(
     if (typeof raw !== "string") {
       continue;
     }
+
     const value = REFINED_STOP_REASON[raw];
     if (value !== undefined) {
       return { field, key: raw, value };

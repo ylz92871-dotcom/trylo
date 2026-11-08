@@ -70,15 +70,19 @@ function isJsonValue(value: unknown): value is JsonValue {
   if (value === null) {
     return true;
   }
+
   if (typeof value === "string" || typeof value === "boolean") {
     return true;
   }
+
   if (typeof value === "number") {
     return Number.isFinite(value);
   }
+
   if (Array.isArray(value)) {
     return value.every(isJsonValue);
   }
+
   return isRecord(value) && Object.values(value).every(isJsonValue);
 }
 
@@ -94,13 +98,16 @@ export function isTranscriptItem(value: unknown): value is TranscriptItem {
   if (!isRecord(value)) {
     return false;
   }
+
   if (typeof value.sequence !== "number" || !Number.isInteger(value.sequence)) {
     return false;
   }
+
   const kind = value.kind;
   if (typeof kind !== "string" || !isTranscriptItemKind(kind)) {
     return false;
   }
+
   switch (kind) {
     case "system":
     case "user":

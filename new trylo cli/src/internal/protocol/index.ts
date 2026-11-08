@@ -33,3 +33,7 @@ export {
 } from "./sequencer.js";
 export { appendLateObservation, readTerminalReason } from "./terminal.js";
 export { freezeEnvelope, parseEnvelope } from "./validate.js";
+export type { ExperienceOwner, ExperienceBoundaryReceipt, ExperienceUseFeedback } from "./collaboration-experience.js";
+export type { CollaborationResourceReceipt, CollaborationRuntimeReceipt } from "./collaboration-resource.js";
+export type { CollaborationIssueViewV1, CollaborationIssuesSnapshotV1, CollaborationIssueControlV1, CollaborationIssueControlResultV1 } from "./collaboration-control.js";
+export type { MemberCollaborationReport, MemberCollaborationReportObserver } from "./member-collaboration-report.js";

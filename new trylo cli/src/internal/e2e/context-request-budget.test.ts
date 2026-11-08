@@ -6,13 +6,16 @@ import { compactionWiring } from "../surface/cli/compaction-wiring.js";
 import type { ProviderEvent, ProviderRequest } from "../ports/provider.js";
 import { estimateMessagesTokens, estimateToolSpecsTokens } from "../compaction/token-estimate.js";
 
-function fixture() {
+// These original cases declare the fixture provider's deterministic /4 meter.
+// Shipping text bounds are exercised separately below; they cannot prove an
+// unknown model input is over its window.
+function fixture(compaction = compactionWiring({ nowMs: 0, estimatePromptTokens: estimateMessagesTokens })) {
   const requests: ProviderRequest[] = [];
   return {
     requests,
     ports: {
       profile: emptyProfileLoader(), permission: createFakePermission("approved"),
-      tools: createFakeTools([], []), compaction: compactionWiring({ nowMs: 0 }),
+      tools: createFakeTools([], []), compaction,
       provider: { async *stream(request: ProviderRequest): AsyncIterable<ProviderEvent> {
         requests.push(request);
         yield { type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false };
@@ -43,6 +46,7 @@ test("replaced seed instructions do not consume the actual request budget", asyn
   const result = await runTurn(f.ports, { sessionId: "s", turnId: "t", correlationId: "c", text: "Hi",
     callerMessages: [{ role: "system", content: "a".repeat(12_000) }],
     systemPrompt: { mode: "replace", text: "Be concise." }, budget: { maxIterations: 4, contextTokenLimit: 2_000 } });
+
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(f.requests.length, 1);
   assert.equal(f.requests[0]!.messages.some(m => m.content.includes("a".repeat(500))), false);
@@ -61,9 +65,35 @@ test("an explicit output allowance cannot overbook the declared context window",
   const result = await runTurn(f.ports, { sessionId: "s", turnId: "t", correlationId: "c", text: "Hi",
     systemPromptAppend: "recent instructions ".repeat(25),
     budget: { maxOutputTokens: 65_536, contextTokenLimit: 2_000 } });
+
   assert.equal(result.state.terminalReason, "completed");
   const request = f.requests[0]!;
   const prompt = estimateMessagesTokens(request.messages) + estimateToolSpecsTokens(request.tools);
+
   assert.ok(request.maxOutputTokens! > 0);
   assert.ok(prompt + request.maxOutputTokens! <= 2_000, "input and reserved output must fit together");
+});
+
+test("an upper text bound above the window does not claim actual provider input overflow", async () => {
+  const f = fixture(compactionWiring({ nowMs: 0 }));
+  const text = "a".repeat(1200);
+  assert.equal(f.ports.compaction.estimateAccuracy, "text_upper_bound");
+  assert.ok(f.ports.compaction.estimatePromptTokens([{ role: "user", content: text }]) > 1000);
+
+  const result = await runTurn(f.ports, { sessionId: "s", turnId: "t", correlationId: "c", text,
+    budget: { contextTokenLimit: 1000 } });
+
+  assert.equal(result.state.terminalReason, "completed");
+  assert.equal(f.requests.length, 1, "the model, rather than an inexact text bound, determines whether this request fits");
+  assert.equal(result.envelopes.some(event => event.payload.cause === "context_limit"), false);
+});
+
+test("an uncertain text bound preserves the caller's explicit output allocation", async () => {
+  const f = fixture(compactionWiring({ nowMs: 0 }));
+  const result = await runTurn(f.ports, { sessionId: "s", turnId: "t", correlationId: "c", text: "a".repeat(1200),
+    budget: { maxOutputTokens: 700, contextTokenLimit: 1600 } });
+
+  assert.equal(result.state.terminalReason, "completed");
+  assert.equal(f.requests.length, 1);
+  assert.equal(f.requests[0]!.maxOutputTokens, 700, "unknown input cannot shrink the caller allocation using a text upper bound");
 });

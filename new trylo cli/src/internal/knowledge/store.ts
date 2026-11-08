@@ -31,7 +31,9 @@ export function createFragmentStore(rootDir: string): FragmentStore {
         if (!loaded.ok) {
           throw new Error(`${loaded.reason}: ${loaded.detail}`);
         }
+
         const commands = commandsForWrite(fragment, loaded.state);
+
         for (const command of commands) {
           const applied = await store.apply(command);
           if (!applied.ok) {
@@ -84,20 +86,24 @@ export async function ensureMigrated(rootDir: string): Promise<void> {
   if (boardFilesExist(rootDir)) {
     return;
   }
+
   const file = path.join(rootDir, LEGACY_FILE);
   if (!existsSync(file)) {
     return;
   }
+
   const fragments = await readLegacy(rootDir);
   if (fragments.length === 0) {
     return;
   }
+
   const result = await withBoardWriter(rootDir, async (store) => {
     for (const fragment of fragments) {
       const loaded = await store.load();
       if (!loaded.ok) {
         throw new Error(`${loaded.reason}: ${loaded.detail}`);
       }
+
       for (const command of commandsForWrite(fragment, loaded.state)) {
         const applied = await store.apply(command);
         if (!applied.ok) {
@@ -109,6 +115,7 @@ export async function ensureMigrated(rootDir: string): Promise<void> {
   if (result !== undefined && "ok" in result && result.ok === false) {
     throw new Error(`${result.reason}: ${result.detail}`);
   }
+
   await rename(file, `${file}.migrated`);
 }
 
@@ -124,6 +131,7 @@ async function readFragments(rootDir: string): Promise<Fragment[]> {
 async function readLegacy(rootDir: string): Promise<Fragment[]> {
   const file = path.join(rootDir, LEGACY_FILE);
   let raw: string;
+
   try {
     raw = await readFile(file, "utf8");
   } catch (err) {
@@ -132,10 +140,12 @@ async function readLegacy(rootDir: string): Promise<Fragment[]> {
     }
     throw err;
   }
+
   const parsed: unknown = JSON.parse(raw);
   if (!Array.isArray(parsed)) {
     throw new Error("fragments.json is not an array");
   }
+
   return parsed.map(parseFragment);
 }
 
@@ -149,12 +159,14 @@ function projectFragments(state: BoardState): Fragment[] {
       .map((item) => item.entityId),
   );
   const fragments: Fragment[] = [];
+
   for (const proposal of state.proposals) {
     if (removed.has(proposal.proposalId)) {
       continue;
     }
     fragments.push(fragmentFromProposal(state, proposal));
   }
+
   return fragments;
 }
 
@@ -188,11 +200,13 @@ function fragmentFromProposal(state: BoardState, proposal: LearningProposal): Fr
       ? String((asset.content as { text: unknown }).text)
       : proposal.hypothesis,
   };
+
   return fragment;
 }
 
 function commandsForWrite(fragment: Fragment, state: BoardState): BoardCommand[] {
   const issued = issuedAt();
+
   if (fragment.state === "withdrawn") {
     const existing = state.proposals.find((item) => item.proposalId === fragment.id);
     if (existing?.lifecycle === "active") {
@@ -206,6 +220,7 @@ function commandsForWrite(fragment: Fragment, state: BoardState): BoardCommand[]
         },
       ];
     }
+
     if (existing !== undefined) {
       return [
         {
@@ -217,6 +232,7 @@ function commandsForWrite(fragment: Fragment, state: BoardState): BoardCommand[]
         },
       ];
     }
+
     return [
       {
         type: "submit_proposal",
@@ -233,6 +249,7 @@ function commandsForWrite(fragment: Fragment, state: BoardState): BoardCommand[]
       },
     ];
   }
+
   if (fragment.origin === "inferred") {
     return [
       {
@@ -249,7 +266,9 @@ function commandsForWrite(fragment: Fragment, state: BoardState): BoardCommand[]
       },
     ];
   }
+
   const versionId = fragment.id;
+
   return [
     {
       type: "submit_proposal",

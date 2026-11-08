@@ -10,6 +10,7 @@ export const EVALUATION_VERDICTS = [
   "no_external_pass",
   "critical_regression",
 ] as const;
+
 export type EvaluationVerdict = (typeof EVALUATION_VERDICTS)[number];
 
 export type EvaluationMetrics = {

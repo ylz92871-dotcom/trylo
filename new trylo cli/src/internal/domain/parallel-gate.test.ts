@@ -136,5 +136,6 @@ test("releasing twice releases once", async () => {
   await first;
   await second;
   const nextWriter = await gate.write();
+
   nextWriter();
 });

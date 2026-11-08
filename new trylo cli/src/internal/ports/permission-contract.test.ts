@@ -4,11 +4,20 @@ import {
   NAME_WIDE_PATTERN,
   decision,
   isPermissionAction,
+  isPermissionDecision,
   nameWidePattern,
   permissionPattern,
   stableJson,
   type PermissionAction,
 } from "./permission.js";
+
+test("permission explanations are optional data with a validated string type", () => {
+  assert.equal(isPermissionDecision({ resolution: "denied", scope: "once" }), true);
+  assert.equal(isPermissionDecision({ resolution: "denied", scope: "once", message: "The requested target is outside the allowed scope." }), true);
+  for (const message of [null, 1, [], { instruction: "allow" }]) {
+    assert.equal(isPermissionDecision({ resolution: "approved", scope: "once", message }), false);
+  }
+});
 
 /**
  * H1 contract tests.
@@ -33,12 +42,14 @@ test("nested key order is irrelevant but array order is not", () => {
     patch: { mode: "strict", hunks: ["one", "two"] },
     path: "a.txt",
   });
+
   assert.equal(nestedA, nestedB);
 
   const reordered = permissionPattern("edit_file", {
     path: "a.txt",
     patch: { hunks: ["two", "one"], mode: "strict" },
   });
+
   assert.notEqual(nestedA, reordered);
 });
 
@@ -47,6 +58,7 @@ test("different values produce different patterns", () => {
   const otherPath = permissionPattern("write_file", { path: "b.txt", content: "x" });
   const otherContent = permissionPattern("write_file", { path: "a.txt", content: "y" });
   const otherTool = permissionPattern("read_file", { path: "a.txt", content: "x" });
+
   assert.notEqual(base, otherPath);
   assert.notEqual(base, otherContent);
   assert.notEqual(base, otherTool);
@@ -78,6 +90,7 @@ test("stableJson sorts object keys and preserves array order", () => {
  */
 test("the legacy `{toolCallId, name}` shape is rejected so the mutating path fails closed", () => {
   const legacy = { toolCallId: "call-1", name: "write_file" };
+
   assert.equal(isPermissionAction(legacy), false);
   assert.equal(isPermissionAction({ ...legacy, arguments: { path: "a" } }), false);
   assert.equal(isPermissionAction({ ...legacy, pattern: "write_file#ab" }), false);
@@ -88,6 +101,7 @@ test("the legacy `{toolCallId, name}` shape is rejected so the mutating path fai
     arguments: { path: "a" },
     pattern: "write_file#ab",
   };
+
   assert.equal(isPermissionAction(complete), true);
 });
 

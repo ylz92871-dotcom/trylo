@@ -94,6 +94,7 @@ export function discoverSettingsPaths(input: DiscoverInput): DiscoveryResult {
       detail: `project config ${projectCandidate} resolves outside workspace ${input.workspaceDir}`,
     };
   }
+
   plans.push({ layer: "project", candidates: [projectCandidate] });
 
   return { ok: true, plans };

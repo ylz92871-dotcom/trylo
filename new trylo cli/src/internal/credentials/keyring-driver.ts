@@ -63,6 +63,7 @@ export function keyringTarget(
   if (scope === "user") {
     return { ok: true, target: KEYRING_USER_TARGET };
   }
+
   if (projectDir === undefined || projectDir.length === 0) {
     return {
       ok: false,
@@ -70,7 +71,9 @@ export function keyringTarget(
       detail: "no project directory is configured",
     };
   }
+
   const digest = createHash("sha256").update(projectDir, "utf8").digest("hex");
+
   return { ok: true, target: `${KEYRING_SERVICE}:credentials:project:${digest.slice(0, 12)}` };
 }
 

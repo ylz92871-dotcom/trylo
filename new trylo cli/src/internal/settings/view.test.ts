@@ -17,6 +17,7 @@ test("every surviving key carries value and layer, sorted", () => {
     endpoint: { value: "https://e.test", layer: "system" },
   };
   const view = publicSettingsView(resolved);
+
   assert.deepEqual(Object.keys(view), ["endpoint", "model", "provider"]);
   assert.deepEqual(view["model"], { value: "m", layer: "user" });
   assert.deepEqual(view["endpoint"], { value: "https://e.test", layer: "system" });
@@ -37,8 +38,10 @@ test("defence in depth: a smuggled secret key is dropped from the view (adversar
     mcpServers: { value: { fs: {} }, layer: "project" },
   } as unknown as ResolvedSettings;
   const view = publicSettingsView(resolved);
+
   assert.deepEqual(Object.keys(view), ["model"]);
   const serialized = JSON.stringify(view);
+
   assert.equal(serialized.includes("sk-FAKE-not-a-real-key"), false);
   assert.equal(serialized.includes("apiKey"), false);
   assert.equal(serialized.includes("mcpServers"), false);

@@ -32,32 +32,42 @@ function activationAllowsProduction(state: BoardActivationView["state"]): boolea
 
 export function listProductionTools(input: ProductionSearchInput): ProductionTool[] {
   const validationByPackage = new Map<string, ValidationRecord>();
+
   for (const record of input.validations) {
     validationByPackage.set(record.packageVersionId, record);
   }
+
   const activationByPackage = new Map<string, BoardActivationView>();
+
   for (const activation of input.activations) {
     activationByPackage.set(activation.packageVersionId, activation);
   }
+
   const visible: ProductionTool[] = [];
+
   for (const pkg of input.packages) {
     if (pkg.catalogState !== "verified" && pkg.catalogState !== "awaiting_activation_approval") {
       continue;
     }
+
+    // Catalog admission, an independent verdict and activation must all agree.
     const validation = validationByPackage.get(pkg.packageVersionId);
     if (!passedIndependentVerdict(validation)) {
       continue;
     }
+
     const activation = activationByPackage.get(pkg.packageVersionId);
     if (activation === undefined || !activationAllowsProduction(activation.state)) {
       continue;
     }
+
     const rawDescription = input.descriptions[pkg.packageVersionId] ?? pkg.identity;
     const guarded = sanitizeToolDescription(rawDescription);
     if (!guarded.ok) {
       continue;
     }
-      visible.push({
+
+    visible.push({
       packageVersionId: pkg.packageVersionId,
       origin: pkg.origin,
       name: pkg.identity,
@@ -67,6 +77,7 @@ export function listProductionTools(input: ProductionSearchInput): ProductionToo
       alwaysLoad: pkg.manifest.alwaysLoad,
     });
   }
+
   return visible;
 }
 
@@ -76,6 +87,7 @@ export function searchProductionTools(
 ): ProductionTool[] {
   const visible = listProductionTools(input);
   const ranked = rankTools(query, visible);
+
   return ranked.map((tool) => {
     const match = visible.find((item) => item.name === tool.name);
     if (match === undefined) {
@@ -92,8 +104,10 @@ export type DeferredAssembly = {
 };
 
 export function assembleDeferredContext(tools: readonly ProductionTool[]): DeferredAssembly {
+  // Deferred names are advertised here; their schemas are loaded separately.
   const alwaysLoaded = tools.filter((tool) => tool.alwaysLoad || !tool.shouldDefer);
   const deferred = tools.filter((tool) => tool.shouldDefer && !tool.alwaysLoad);
+
   return {
     alwaysLoaded,
     deferredNames: deferred.map((tool) => tool.name),

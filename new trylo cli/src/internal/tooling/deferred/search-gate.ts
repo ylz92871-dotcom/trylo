@@ -68,12 +68,15 @@ export function applySearch(
   matched: ReadonlyArray<string>,
 ): SearchGateState {
   const searched = [...state.searched];
+
   for (const name of matched) {
     if (!searched.includes(name)) {
       searched.push(name);
     }
   }
+
   void query;
+
   return { ...state, phase: "discovery", searched };
 }
 
@@ -85,10 +88,12 @@ export function applySchemaLoad(
   if (!state.searched.includes(toolName)) {
     return err("not_discovered", `schema for ${toolName} needs a search first`);
   }
+
   const next = nextToolUsePhase(state.phase, "load_schema");
   if (next !== "discovery" && next !== "schema_load" && next !== "execution") {
     return err("not_discovered", `schema load for ${toolName} has no discovery behind it`);
   }
+
   return ok({
     ...state,
     phase: next,
@@ -108,10 +113,12 @@ export function evaluateToolCall(input: {
       `call for ${input.toolName} froze generation ${input.expectedGeneration} but gate is at ${input.state.generation}`,
     );
   }
+
   const entry = input.entry;
   if (entry === undefined) {
     return err("unknown_tool", `tool ${input.toolName} is not installed or was uninstalled`);
   }
+
   if (!shouldDeferTool(entry)) {
     const direct = nextToolUsePhase("schema_load", "execute");
     if (direct !== "execution") {
@@ -119,17 +126,21 @@ export function evaluateToolCall(input: {
     }
     return ok({ phase: "execution" });
   }
+
   const loaded = input.state.loadedSchemas[input.toolName];
   if (loaded === undefined) {
     return err("schema_not_loaded", `schema for ${input.toolName} was not sent; ToolSearch select:${input.toolName} first`);
   }
+
   if (loaded !== entry.schemaVersion) {
     return err("schema_conflict", `schema for ${input.toolName} changed ${loaded} -> ${entry.schemaVersion}; re-select first`);
   }
+
   const next = nextToolUsePhase(input.state.phase, "execute");
   if (next !== "execution") {
     return err("execution_before_schema", `tool ${input.toolName} needs schema_load before execute`);
   }
+
   return ok({ phase: next });
 }
 

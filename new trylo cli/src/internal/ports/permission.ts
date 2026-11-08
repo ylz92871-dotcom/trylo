@@ -59,9 +59,11 @@ export type PermissionDecision = {
   readonly scope: PermissionScope;
   /** Optional provenance; older permission adapters can omit it. */
   readonly reason?: PermissionReason;
+  /** Host-provided explanation; data only, never an authorization instruction. */
+  readonly message?: string;
 };
 
-export type PermissionReason = "user_denied" | "policy_denied" | "remembered_denial" | "input_closed" | "user_cancelled";
+export type PermissionReason = "user_denied" | "policy_denied" | "remembered_denial" | "input_closed" | "user_cancelled" | "invalid_arguments";
 
 export type PermissionPort = {
   readonly supportsMemberApproval?: true;
@@ -85,6 +87,9 @@ export function isPermissionDecision(value: unknown): value is PermissionDecisio
   if (typeof record.resolution !== "string" || !["approved", "denied", "cancelled", "expired"].includes(record.resolution)) return false;
   if (record.scope !== "once" && record.scope !== "session") return false;
   if ((record.resolution === "cancelled" || record.resolution === "expired") && record.scope !== "once") return false;
+  if (record.message !== undefined && typeof record.message !== "string") return false;
+  // A malformed call is one failed attempt, never an allowance or a tool-wide ban.
+  if (record.reason === "invalid_arguments") return record.resolution === "denied" && record.scope === "once";
   return record.reason === undefined || (typeof record.reason === "string" && ["user_denied", "policy_denied", "remembered_denial", "input_closed", "user_cancelled"].includes(record.reason));
 }
 
@@ -112,10 +117,13 @@ export function stableJson(value: JsonValue): string {
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value ?? null);
   }
+
   if (Array.isArray(value)) {
     return `[${value.map((item) => stableJson(item)).join(",")}]`;
   }
+
   const entries = Object.entries(value).sort((left, right) => (left[0] < right[0] ? -1 : left[0] > right[0] ? 1 : 0));
+
   return `{${entries
     .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
     .join(",")}}`;
@@ -139,7 +147,9 @@ export function isPermissionAction(value: unknown): value is PermissionAction {
   if (typeof value !== "object" || value === null) {
     return false;
   }
+
   const record = value as Readonly<Record<string, unknown>>;
+
   return (
     typeof record.toolCallId === "string" &&
     record.toolCallId.length > 0 &&

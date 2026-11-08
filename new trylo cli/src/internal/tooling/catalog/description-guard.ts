@@ -18,14 +18,18 @@ export function sanitizeToolDescription(raw: string): DescriptionGuardResult {
   if (stripped.length === 0) {
     return { ok: false, code: "empty_description", text: "" };
   }
+
   const lower = stripped.toLowerCase();
+
   for (const marker of INJECTION_MARKERS) {
     if (lower.includes(marker)) {
       return { ok: false, code: "prompt_injection", text: stripped.slice(0, MAX_MCP_DESCRIPTION_LENGTH) };
     }
   }
+
   if (stripped.length > MAX_MCP_DESCRIPTION_LENGTH) {
     return { ok: true, text: stripped.slice(0, MAX_MCP_DESCRIPTION_LENGTH) };
   }
+
   return { ok: true, text: stripped };
 }

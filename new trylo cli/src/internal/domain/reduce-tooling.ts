@@ -1,13 +1,12 @@
 import type { Attempt, ToolCall } from "../contract/execution.js";
 import type { JsonObject } from "../protocol/envelope.js";
-import type { ReduceInput } from "./input.js";
+import type { PermissionRefusalDetails, ReduceInput } from "./input.js";
 import {
   cancelNow,
   clearOptional,
   emit,
   fail,
   illegal,
-  markAttemptTerminal,
   ok,
   remember,
   type ReduceResult,
@@ -26,8 +25,7 @@ import { ticketIdFor, type ExecutionState } from "./state.js";
  * Two shapes of tool execution live here and they must stay distinguishable:
  *
  *  - **single** — `activeToolCallId` names the one call in flight. This is the
- *    only shape a run uses unless parallelism is explicitly opened, and it is
- *    bit-for-bit the historical behaviour.
+ *    only shape a run uses unless parallelism is explicitly opened.
  *  - **batch** — `activeToolCallIds` names every call in flight; the phase
  *    returns to `turning` only when the last of them settles. Opening a batch
  *    and never settling it is not representable: `settleBatch` is the only way
@@ -52,6 +50,7 @@ export function applyInvalidToolArguments(
       },
     },
   };
+
   return ok(next, [
     emit(
       "tool_result",
@@ -83,6 +82,7 @@ export function applyToolRequest(
       event: input.type,
     });
   }
+
   const call: ToolCall = {
     toolCallId: input.toolCallId,
     name: input.name,
@@ -94,6 +94,7 @@ export function applyToolRequest(
     ...remember(state, input.eventId),
     openToolInputIds: state.openToolInputIds.filter((id) => id !== input.toolCallId),
   };
+
   if (input.needsApproval) {
     // A batch member that needs a person joins the batch and asks, but does not
     // park the whole response in `approval_waiting`: its siblings still have to
@@ -101,6 +102,7 @@ export function applyToolRequest(
     if (batch) {
       return requestBatchApproval(remembered, input, call);
     }
+
     const ticketId = ticketIdFor(input.toolCallId);
     const next: ExecutionState = {
       ...remembered,
@@ -112,6 +114,7 @@ export function applyToolRequest(
         [ticketId]: { ticketId, toolCallId: input.toolCallId, status: "requested" },
       },
     };
+
     return ok(next, [
       emit("tool_use", { toolCallId: input.toolCallId, name: input.name }, input.eventId),
       emit("approval_requested", { ticketId, toolCallId: input.toolCallId }, `${input.eventId}:ask`),
@@ -124,6 +127,7 @@ export function applyToolRequest(
       },
     ]);
   }
+
   if (batch) {
     const next: ExecutionState = {
       ...clearOptional(remembered, ["activeToolCallId"]),
@@ -136,12 +140,14 @@ export function applyToolRequest(
       { type: "execute_tool", toolCallId: input.toolCallId, idempotencyKey: `tool:${input.toolCallId}` },
     ]);
   }
+
   const next: ExecutionState = {
     ...remembered,
     phase: "tooling",
     activeToolCallId: input.toolCallId,
     toolCalls: { ...remembered.toolCalls, [input.toolCallId]: call },
   };
+
   return ok(next, [
     emit("tool_use", { toolCallId: input.toolCallId, name: input.name }, input.eventId),
     { type: "execute_tool", toolCallId: input.toolCallId, idempotencyKey: `tool:${input.toolCallId}` },
@@ -163,6 +169,7 @@ export function resolvePermission(
   expectedId: string,
   gotId: string,
   resolution: "approved" | "denied" | "expired",
+  details: PermissionRefusalDetails = {},
 ): ReduceResult {
   if (expectedId !== gotId) {
     return fail(state, {
@@ -172,6 +179,7 @@ export function resolvePermission(
       event: resolution,
     });
   }
+
   const call = state.toolCalls[expectedId];
   if (call === undefined) {
     return fail(state, {
@@ -181,6 +189,7 @@ export function resolvePermission(
       event: resolution,
     });
   }
+
   const ticketId = ticketIdFor(expectedId);
   const remembered = remember(state, eventId);
   const approvals = {
@@ -191,6 +200,7 @@ export function resolvePermission(
       status: resolution === "approved" ? "approved" : resolution,
     } as const,
   };
+
   if (resolution === "approved") {
     const next: ExecutionState = {
       ...remembered,
@@ -205,20 +215,21 @@ export function resolvePermission(
       { type: "execute_tool", toolCallId: expectedId, idempotencyKey: `tool:${expectedId}` },
     ]);
   }
+
   const next: ExecutionState = {
     ...clearOptional(remembered, ["activeToolCallId"]),
-    phase: "terminal",
-    terminalReason: "failed",
+    phase: "turning",
     approvals,
     toolCalls: {
       ...remembered.toolCalls,
       [expectedId]: { ...call, status: "denied" },
     },
-    attempts: markAttemptTerminal(remembered),
   };
+
   return ok(next, [
-    emit("permission_denied", { toolCallId: expectedId, resolution }, eventId),
-    emit("terminal", { reason: "failed", cause: resolution }, `${eventId}:term`),
+    emit("permission_denied", { toolCallId: expectedId, resolution, ...details }, eventId),
+    emit("tool_result", { toolCallId: expectedId, status: "failed", code: details.code ?? "permission_denied",
+      message: details.message ?? resolution }, `${eventId}:result`),
   ]);
 }
 
@@ -238,6 +249,7 @@ export function applyToolOutcome(
       event: status,
     });
   }
+
   const call = state.toolCalls[expectedId];
   if (call === undefined) {
     return fail(state, {
@@ -247,6 +259,7 @@ export function applyToolOutcome(
       event: status,
     });
   }
+
   const remembered = remember(state, eventId);
   const attemptId = remembered.currentAttemptId;
   if (attemptId === undefined) {
@@ -257,6 +270,7 @@ export function applyToolOutcome(
       event: status,
     });
   }
+
   const next: ExecutionState = {
     ...clearOptional(remembered, ["activeToolCallId"]),
     phase: "turning",
@@ -266,6 +280,7 @@ export function applyToolOutcome(
     },
   };
   const kind = status === "unknown" ? "observation" : "tool_result";
+
   return ok(next, [
     emit(kind, { toolCallId: expectedId, status, ...payload }, eventId),
   ]);
@@ -295,6 +310,7 @@ export function applyBatchOutcome(
       event: status,
     });
   }
+
   const call = state.toolCalls[gotId];
   if (call === undefined) {
     return fail(state, {
@@ -304,6 +320,7 @@ export function applyBatchOutcome(
       event: status,
     });
   }
+
   const remembered = remember(state, eventId);
   if (remembered.currentAttemptId === undefined) {
     return fail(state, {
@@ -313,6 +330,7 @@ export function applyBatchOutcome(
       event: status,
     });
   }
+
   const remaining = settleBatch(ids, gotId);
   const next: ExecutionState = {
     ...remaining.length === 0
@@ -322,6 +340,7 @@ export function applyBatchOutcome(
     toolCalls: { ...remembered.toolCalls, [gotId]: { ...call, status } },
   };
   const kind = status === "unknown" ? "observation" : "tool_result";
+
   return ok(next, [
     emit(kind, { toolCallId: gotId, status, ...payload }, eventId),
   ]);
@@ -337,11 +356,15 @@ export function reduceApproval(state: ExecutionState, input: ReduceInput): Reduc
       event: input.type,
     });
   }
+
   switch (input.type) {
     case "permission_approved":
       return resolvePermission(state, input.eventId, toolCallId, input.toolCallId, "approved");
     case "permission_denied":
-      return resolvePermission(state, input.eventId, toolCallId, input.toolCallId, "denied");
+      return resolvePermission(state, input.eventId, toolCallId, input.toolCallId, "denied", {
+        ...(input.code === undefined ? {} : { code: input.code }),
+        ...(input.message === undefined ? {} : { message: input.message }),
+      });
     case "permission_expired":
       return resolvePermission(state, input.eventId, toolCallId, input.toolCallId, "expired");
     case "permission_failed":

@@ -74,6 +74,7 @@ export function validateRecord(value: unknown, where: string): CredentialFailure
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return failure("credentials_corrupt", `${where} is not a record object`);
   }
+
   const record = value as Record<string, unknown>;
 
   for (const key of Object.keys(record)) {
@@ -81,26 +82,33 @@ export function validateRecord(value: unknown, where: string): CredentialFailure
       return failure("credentials_corrupt", `${where} has unknown key ${JSON.stringify(key)}`);
     }
   }
+
   if (record["formatVersion"] !== CREDENTIAL_FORMAT_VERSION) {
     return failure("credentials_corrupt", `${where} has unknown formatVersion`);
   }
+
   if (typeof record["accountId"] !== "string" || !isCredentialAccountId(record["accountId"])) {
     return failure("credentials_corrupt", `${where} has an invalid accountId`);
   }
+
   if (typeof record["providerId"] !== "string" || !isCredentialProviderId(record["providerId"])) {
     return failure("credentials_corrupt", `${where} has an unknown providerId`);
   }
+
   for (const key of ["createdAt", "updatedAt"] as const) {
     if (typeof record[key] !== "string" || record[key].length === 0) {
       return failure("credentials_corrupt", `${where} has an invalid ${key}`);
     }
   }
+
   if (record["label"] !== undefined && typeof record["label"] !== "string") {
     return failure("credentials_corrupt", `${where} has an invalid label`);
   }
+
   if (record["secret"] !== undefined && typeof record["secret"] !== "string") {
     return failure("credentials_corrupt", `${where} has an invalid secret`);
   }
+
   if (
     record["authType"] !== undefined &&
     record["authType"] !== "api_key" &&
@@ -108,6 +116,7 @@ export function validateRecord(value: unknown, where: string): CredentialFailure
   ) {
     return failure("credentials_corrupt", `${where} has an invalid authType`);
   }
+
   for (const strKey of [
     "accessToken",
     "refreshToken",
@@ -121,6 +130,7 @@ export function validateRecord(value: unknown, where: string): CredentialFailure
       return failure("credentials_corrupt", `${where} has an invalid ${strKey}`);
     }
   }
+
   return undefined;
 }
 
@@ -137,9 +147,11 @@ export function validateSecretForWrite(
   if (!providerRequiresSecret(providerId)) {
     return undefined;
   }
+
   if (secret === undefined || secret.length === 0) {
     return failure("missing_secret", `provider ${providerId} requires a non-empty secret`);
   }
+
   return undefined;
 }
 

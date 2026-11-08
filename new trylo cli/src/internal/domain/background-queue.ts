@@ -57,13 +57,16 @@ export function dispatchDecision(page: QueueResult<QueuePage>): DispatchDecision
   if (!page.ok) {
     return { kind: "unknown", code: page.code };
   }
+
   const head = page.value.items[0];
   if (head === undefined) {
     return { kind: "idle" };
   }
+
   if (head.text.trim().length === 0) {
     return { kind: "unknown", code: "queue_unreadable" };
   }
+
   return { kind: "start", message: head };
 }
 
@@ -93,9 +96,11 @@ export function enqueueVerdict(
   if (text.trim().length === 0) {
     return { kind: "refused", code: "blank" };
   }
+
   if (current >= MAX_QUEUED_MESSAGES) {
     return { kind: "refused", code: "full" };
   }
+
   return { kind: "accepted", text };
 }
 

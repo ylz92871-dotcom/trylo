@@ -36,6 +36,7 @@ test("a listed resource keeps its URI and distrusts its annotations", () => {
     mimeType: "text/markdown",
     annotations: { readOnlyHint: true },
   });
+
   assert.ok(resource !== undefined);
   assert.equal(resource.uri, "file:///notes/today.md");
   assert.equal(resource.annotationsTrust, "untrusted");
@@ -68,10 +69,13 @@ test("resources/list keeps the addressable and reports the cursor", () => {
       nextCursor: "page-2",
     }),
   );
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   assert.deepEqual(
     parsed.value.resources.map((item) => item.uri),
     ["file:///a", "file:///b"],
@@ -101,10 +105,13 @@ test("templates/list keeps the addressable templates", () => {
   const parsed = interpretResourceTemplates(
     response({ resourceTemplates: [{ name: "t", uriTemplate: "file:///{name}" }] }),
   );
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   assert.equal(parsed.value.templates.length, 1);
   assert.equal(parsed.value.nextCursor, undefined);
 });
@@ -128,15 +135,21 @@ test("resources/read keeps text and reports binary by size, never decodes it", (
       ],
     }),
   );
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   assert.equal(parsed.value.contents.length, 2);
   const first = parsed.value.contents[0];
+
   assert.ok(first !== undefined && first.kind === "text" && first.text === "hello");
   const second = parsed.value.contents[1];
+
   assert.ok(second !== undefined && second.kind === "binary");
+
   if (second.kind === "binary") {
     assert.equal(second.byteLength, 6);
   }
@@ -163,6 +176,7 @@ test("rendered text joins in order and marks binary omissions", () => {
     ],
     1024,
   );
+
   assert.equal(rendered.truncated, false);
   assert.ok(rendered.output.includes("first"));
   assert.ok(rendered.output.includes("[binary content omitted: image/png, about 12 bytes]"));

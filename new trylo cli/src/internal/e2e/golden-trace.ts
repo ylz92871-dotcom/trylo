@@ -64,6 +64,7 @@ export function compareTraces(
   if (actualJson === expectedJson) {
     return { matches: true };
   }
+
   return {
     matches: false,
     diff: `Trace mismatch:\n--- EXPECTED ---\n${expectedJson}\n--- ACTUAL ---\n${actualJson}`,

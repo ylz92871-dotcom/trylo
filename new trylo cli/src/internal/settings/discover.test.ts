@@ -20,7 +20,9 @@ import {
 
 test("no systemDir means no system plan (missing, not an error)", () => {
   const result = discoverSettingsPaths({ homeDir: "/home/u", workspaceDir: "/ws" });
+
   assert.equal(result.ok, true);
+
   if (result.ok) {
     assert.deepEqual(
       result.plans.map((p) => p.layer),
@@ -35,7 +37,9 @@ test("systemDir present adds the system plan first (lowest file precedence)", ()
     homeDir: "/home/u",
     workspaceDir: "/ws",
   });
+
   assert.equal(result.ok, true);
+
   if (result.ok) {
     assert.deepEqual(
       result.plans.map((p) => p.layer),
@@ -47,7 +51,9 @@ test("systemDir present adds the system plan first (lowest file precedence)", ()
 
 test("user and project candidate paths are exactly <root>/.trylo/config.json", () => {
   const result = discoverSettingsPaths({ homeDir: "/home/u", workspaceDir: "/ws" });
+
   assert.equal(result.ok, true);
+
   if (result.ok) {
     const user = result.plans.find((p) => p.layer === "user");
     const project = result.plans.find((p) => p.layer === "project");
@@ -81,6 +87,7 @@ test("selectCandidate takes the first existing file and ignores the rest (advers
   };
   const readFile = (p: string): string | undefined => files[p];
   const selected = selectCandidate(["/dir/first.json", "/dir/second.json"], readFile);
+
   assert.equal(selected?.path, "/dir/first.json");
   assert.equal(selected?.raw, "FIRST");
 });

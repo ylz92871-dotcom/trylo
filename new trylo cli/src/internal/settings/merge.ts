@@ -38,12 +38,14 @@ export function concatStringArrays(
 ): ReadonlyArray<string> {
   const seen = new Set<string>();
   const out: string[] = [];
+
   for (const item of [...base, ...override]) {
     if (!seen.has(item)) {
       seen.add(item);
       out.push(item);
     }
   }
+
   return out;
 }
 
@@ -73,18 +75,22 @@ export function resolveSettings(contributions: ReadonlyArray<LayerContribution>)
     (a, b) => layerPrecedence(a.layer) - layerPrecedence(b.layer),
   );
   const resolved: Record<string, SettingsEntry> = {};
+
   for (const { layer, values } of ordered) {
     for (const key of Object.keys(values)) {
       const value = values[key];
       if (value === undefined) {
         continue;
       }
+
       const existing = resolved[key];
+
       resolved[key] =
         existing === undefined
           ? { value, layer }
           : { value: mergeValue(key, existing.value, value), layer };
     }
   }
+
   return resolved;
 }

@@ -25,6 +25,9 @@ export const SESSION_RECORD_TYPES = [
   "effect_unknown",
   "terminal",
   "compact",
+  "goal_state",
+  /** Immutable extension adoption; payload uses ExecutionExtensionMetadata v1. */
+  "execution_extension",
   /**
    * A provider block that was opened and never closed: the durable form of an
    * in-flight chunk. Added in format v1 without renumbering it — readers of
@@ -56,6 +59,8 @@ export type RuntimeFingerprint = {
   readonly model: string;
   readonly toolCatalogHash: string;
   readonly workspaceId: string;
+  /** Optional native path evidence for future read-only workspace compatibility. */
+  readonly workspaceRoot?: string;
 };
 
 /**
@@ -67,13 +72,17 @@ export function isRuntimeFingerprint(value: unknown): value is RuntimeFingerprin
   if (typeof value !== "object" || value === null) {
     return false;
   }
+
   const candidate = value as Record<string, unknown>;
+
   return (
     typeof candidate.schemaVersion === "string" &&
     typeof candidate.providerId === "string" &&
     typeof candidate.model === "string" &&
     typeof candidate.toolCatalogHash === "string" &&
-    typeof candidate.workspaceId === "string"
+    typeof candidate.workspaceId === "string" &&
+    (candidate.workspaceRoot === undefined || typeof candidate.workspaceRoot === "string"
+      && candidate.workspaceRoot.length > 0 && !candidate.workspaceRoot.includes("\0"))
   );
 }
 

@@ -7,9 +7,9 @@ import type {
 } from "../contract/types.js";
 import type { ApprovalGrantRef, GrantIssuanceInput } from "../../ports/approval-consumption.js";
 import { createMemoryPermissionStore, type MemoryPermissionStore } from "../../adapters/permission-store/index.js";
-import type { ArchiveFixture } from "../quarantine/archive-guard.js";
-import type { FakeValidationSignals } from "../validation/pipeline.js";
-import type { ToolDesign } from "../builder/design.js";
+import type { ArchiveFixture } from "../../learning/agent/subsystems/tool/assets/quarantine/archive-guard.js";
+import type { FakeValidationSignals } from "../../learning/agent/subsystems/tool/assets/validation/pipeline.js";
+import type { ToolDesign } from "../../learning/agent/subsystems/tool/assets/builder/design.js";
 
 export function candidate(overrides: Partial<ToolCandidate> & Pick<ToolCandidate, "candidateId" | "name">): ToolCandidate {
   return {

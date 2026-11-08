@@ -22,6 +22,7 @@ export const VOICE_STATUSES = [
   "cancelled",
   "failed",
 ] as const;
+
 export type VoiceStatus = (typeof VOICE_STATUSES)[number];
 
 export type VoiceDelivery = {
@@ -149,14 +150,18 @@ export function checkVoiceAvailability(readiness: VoiceReadiness): VoiceAvailabi
   if (readiness.backend === "absent") {
     return { ok: false, reason: "backend_missing", message: "voice_unavailable: no realtime backend configured (externally_blocked)" };
   }
+
   if (readiness.device === "denied") {
     return { ok: false, reason: "device_denied", message: "voice_unavailable: audio device denied" };
   }
+
   if (readiness.device === "unknown") {
     return { ok: false, reason: "device_unknown", message: "voice_unavailable: audio device authorization unproven" };
   }
+
   if (readiness.modelRealtime === "unsupported") {
     return { ok: false, reason: "model_unsupported", message: "voice_unavailable: model does not support realtime voice" };
   }
+
   return { ok: true };
 }

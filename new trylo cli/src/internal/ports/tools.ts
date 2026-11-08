@@ -1,6 +1,7 @@
 import type { JsonObject } from "../protocol/envelope.js";
 import type { ImageReference } from "../protocol/image-reference.js";
 import type { FileAccessMode } from "./filesystem.js";
+
 export type { FileAccessMode } from "./filesystem.js";
 
 /**
@@ -17,6 +18,8 @@ export type ToolOutputLimits = {
 
 export type ToolBinding = {
   readonly name: string;
+  /** Immutable asset identity when supplied by its runtime owner; absent is unknown. */
+  readonly versionId?: string;
   readonly description: string;
   readonly sideEffect: ToolSideEffectClass;
   /**
@@ -40,7 +43,8 @@ export type ToolBinding = {
   /** JSON Schema object; also sent to the provider as the tool spec. */
   readonly parameters: JsonObject;
   readonly needsApproval: boolean;
-  readonly timeoutMs: number;
+  /** Optional execution deadline; omission does not invent a task budget. */
+  readonly timeoutMs?: number | undefined;
   readonly outputLimits: ToolOutputLimits;
 };
 
@@ -88,6 +92,7 @@ export const TOOL_RESULT_TRUNCATION_CODE = "output_truncated";
  * needing it is an architecture change, not a flag flip.
  */
 export const SANDBOX_MODES = ["workspace_write", "read_only", "deny_all"] as const;
+
 export type SandboxMode = (typeof SANDBOX_MODES)[number];
 
 
@@ -96,6 +101,7 @@ export type SandboxMode = (typeof SANDBOX_MODES)[number];
  * the network, and no tool here declares otherwise.
  */
 export const NETWORK_ACCESS_MODES = ["restricted"] as const;
+
 export type NetworkAccess = (typeof NETWORK_ACCESS_MODES)[number];
 
 export type SandboxPolicy = {

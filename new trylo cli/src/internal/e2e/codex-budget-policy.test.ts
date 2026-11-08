@@ -37,6 +37,7 @@ async function workflow(budget?: IterationBudget) {
     } },
   }, { sessionId: input.sessionId, turnId: input.turnId, correlationId: input.correlationId, text: input.text,
     ...(budget === undefined ? {} : { budget }) });
+
   return { result, requests };
 }
 
@@ -64,10 +65,12 @@ test("an explicit output or context budget does not create an implicit request-c
 
 test("explicit request and cumulative output ceilings remain enforced", async () => {
   const requests = await workflow({ maxIterations: 3 });
+
   assert.equal(requests.requests.length, 3);
   assert.equal(requests.result.state.terminalReason, "failed");
   assert.ok(requests.result.envelopes.some(e => e.payload.cause === "iterations_exhausted"));
   const output = await workflow({ maxIterations: 64, maxOutputTokens: 4_000 });
+
   assert.deepEqual(output.requests.map(r => r.maxOutputTokens), [4_000, 2_000]);
   assert.ok(output.result.envelopes.some(e => e.payload.cause === "output_tokens_exhausted"));
 });
@@ -91,6 +94,7 @@ test("a resumed conversation near its window compacts before the first send", as
     resumedTranscript: [{ kind: "user", sequence: 0, text: "Original constraint" },
       { kind: "assistant_text", sequence: 1, blockId: "old", text: "x".repeat(36_000) }],
     budget: { maxIterations: 3, contextTokenLimit: 10_000 } });
+
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(result.compactions.length, 1);
   assert.equal(requests[0]!.messages.some(m => m.content.startsWith("[compacted history")), true);

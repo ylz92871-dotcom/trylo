@@ -40,12 +40,15 @@ export function exposureForTool(
   if (policy.omitTools.includes(toolName)) {
     return "hidden";
   }
+
   if (namespace !== undefined && policy.codeModeDirectOnly.includes(namespace)) {
     return policy.codeMode ? "direct" : "code_mode_only";
   }
+
   if (policy.searchEnabled && policy.hasDeferred) {
     return "deferred";
   }
+
   return "direct";
 }
 
@@ -70,6 +73,7 @@ export function toolDeniedByRules(toolName: string, denyRules: ReadonlyArray<str
     if (rule === toolName) {
       return true;
     }
+
     const ruleInfo = mcpInfoOf(rule);
     const toolInfo = mcpInfoOf(toolName);
     if (
@@ -91,14 +95,18 @@ export function exposureAllowsCall(
   if (input.denied) {
     return err("tool_denied", "tool is denied by allow/deny rules");
   }
+
   if (exposure === "hidden") {
     return err("tool_hidden", "tool is hidden by the exposure policy");
   }
+
   if (exposure === "code_mode_only" && !input.codeMode) {
     return err("code_mode_only", "tool is available in code mode only");
   }
+
   if (exposure === "deferred") {
     return ok({ via: "deferred" });
   }
+
   return ok({ via: "direct" });
 }

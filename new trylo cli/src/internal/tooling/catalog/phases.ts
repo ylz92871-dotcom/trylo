@@ -9,12 +9,15 @@ export function nextToolUsePhase(
   if (action === "search") {
     return "discovery";
   }
+
   if (action === "load_schema") {
     return current === "discovery" || current === "schema_load" ? "schema_load" : "not_discovered";
   }
+
   if (current !== "schema_load") {
     return "execution_before_schema";
   }
+
   return "execution";
 }
 

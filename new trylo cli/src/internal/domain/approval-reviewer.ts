@@ -125,7 +125,9 @@ export async function runReviewer(
   if (reviewer === undefined) {
     return NOT_INSTALLED;
   }
+
   let raw: unknown;
+
   try {
     raw = await reviewer.review(reviewerInput(request));
   } catch (error) {
@@ -135,6 +137,7 @@ export async function runReviewer(
       message: `reviewer ${reviewer.name} threw: ${describe(error)}`,
     };
   }
+
   if (!isReviewVerdict(raw)) {
     return {
       kind: "unavailable",
@@ -142,6 +145,7 @@ export async function runReviewer(
       message: `reviewer ${reviewer.name} returned something that is not a verdict`,
     };
   }
+
   return { kind: "reviewed", verdict: raw };
 }
 
@@ -149,10 +153,12 @@ function isReviewVerdict(value: unknown): value is ReviewVerdict {
   if (typeof value !== "object" || value === null) {
     return false;
   }
+
   const record = value as Readonly<Record<string, unknown>>;
   if (record.answer !== "allow" && record.answer !== "deny" && record.answer !== "ask_user") {
     return false;
   }
+
   return record.rationale === undefined || typeof record.rationale === "string";
 }
 

@@ -81,20 +81,26 @@ function validateOption(entry: unknown): { readonly ok: true; readonly option: A
   if (isRecord(entry) === false) {
     return { ok: false, message: "every option must be an object with label and description" };
   }
+
   const label = entry["label"];
   const description = entry["description"];
+
   if (typeof label !== "string" || label.trim().length === 0) {
     return { ok: false, message: "every option needs a non-empty label" };
   }
+
   if (label.length > MAX_LABEL_CHARS) {
     return { ok: false, message: `option label is ${label.length} characters; the limit is ${MAX_LABEL_CHARS}` };
   }
+
   if (typeof description !== "string" || description.trim().length === 0) {
     return { ok: false, message: `option "${label}" needs a non-empty description` };
   }
+
   if (description.length > MAX_DESCRIPTION_CHARS) {
     return { ok: false, message: `option "${label}" description is ${description.length} characters; the limit is ${MAX_DESCRIPTION_CHARS}` };
   }
+
   return { ok: true, option: { label, description } };
 }
 
@@ -102,55 +108,71 @@ function validateQuestion(entry: unknown, seenQuestions: Set<string>, seenIds: S
   if (isRecord(entry) === false) {
     return { ok: false, message: "every question must be an object with header, question and options" };
   }
+
   const header = entry["header"];
   const questionText = entry["question"];
   const rawOptions = entry["options"];
   const rawId = entry["id"];
   const rawMulti = entry["multiSelect"];
+
   if (typeof header !== "string" || header.trim().length === 0) {
     return { ok: false, message: "every question needs a non-empty header" };
   }
+
   if (header.length > MAX_HEADER_CHARS) {
     return { ok: false, message: `header "${header}" is ${header.length} characters; the limit is ${MAX_HEADER_CHARS}` };
   }
+
   if (typeof questionText !== "string" || questionText.trim().length === 0) {
     return { ok: false, message: "every question needs a non-empty question string" };
   }
+
   if (questionText.length > MAX_QUESTION_CHARS) {
     return { ok: false, message: `question is ${questionText.length} characters; the limit is ${MAX_QUESTION_CHARS}` };
   }
+
   if (seenQuestions.has(questionText)) {
     return { ok: false, message: `duplicate question text: "${questionText}"` };
   }
+
   if (Array.isArray(rawOptions) === false) {
     return { ok: false, message: `question "${questionText}" needs an options array` };
   }
+
   const options = rawOptions as ReadonlyArray<unknown>;
   if (options.length < MIN_OPTIONS || options.length > MAX_OPTIONS) {
     return { ok: false, message: `question "${questionText}" needs ${MIN_OPTIONS}-${MAX_OPTIONS} options; got ${options.length}` };
   }
+
   const parsedOptions: AskUserOption[] = [];
   const seenLabels = new Set<string>();
+
   for (const raw of options) {
     const parsed = validateOption(raw);
     if (parsed.ok === false) {
       return parsed;
     }
+
     if (seenLabels.has(parsed.option.label)) {
       return { ok: false, message: `duplicate option label "${parsed.option.label}" in question "${questionText}"` };
     }
+
     seenLabels.add(parsed.option.label);
     parsedOptions.push(parsed.option);
   }
+
   const derivedId = typeof rawId === "string" && rawId.trim().length > 0 ? rawId.trim() : slugify(header);
   if (seenIds.has(derivedId)) {
     return { ok: false, message: `duplicate question id: "${derivedId}"` };
   }
+
   if (rawMulti !== undefined && typeof rawMulti !== "boolean") {
     return { ok: false, message: `question "${questionText}" multiSelect must be a boolean when present` };
   }
+
   seenQuestions.add(questionText);
   seenIds.add(derivedId);
+
   return {
     ok: true,
     question: {
@@ -175,12 +197,15 @@ export function validateAskUserInput(argumentsValue: JsonObject): AskValidation 
   if (Array.isArray(raw) === false) {
     return { ok: false, message: "questions must be an array of 1-4 questions" };
   }
+
   if (raw.length < 1 || raw.length > MAX_QUESTIONS) {
     return { ok: false, message: `questions holds ${raw.length} items; the limit is 1-${MAX_QUESTIONS}` };
   }
+
   const seenQuestions = new Set<string>();
   const seenIds = new Set<string>();
   const questions: AskUserQuestion[] = [];
+
   for (const entry of raw) {
     const parsed = validateQuestion(entry, seenQuestions, seenIds);
     if (parsed.ok === false) {
@@ -188,6 +213,7 @@ export function validateAskUserInput(argumentsValue: JsonObject): AskValidation 
     }
     questions.push(parsed.question);
   }
+
   return { ok: true, questions };
 }
 
@@ -220,35 +246,44 @@ export function admitAnswer(
   if (existing === undefined) {
     return { kind: "rejected", reason: "unknown_request", message: `unknown requestId: ${requestId}` };
   }
+
   if (existing.status !== "pending") {
     return { kind: "rejected", reason: "already_settled", message: `request ${requestId} is already ${existing.status}; late answers are rejected` };
   }
+
   const byId = new Map(existing.questions.map((item) => [item.id, item]));
   const byText = new Map(existing.questions.map((item) => [item.question, item]));
   const normalised: Record<string, string> = Object.create(null);
+
   for (const [key, value] of Object.entries(answers)) {
     const target = byId.get(key) ?? byText.get(key);
     if (target === undefined) {
       return { kind: "rejected", reason: "unknown_question", message: `answer names unknown question: "${key}"` };
     }
+
     if (typeof value !== "string" || value.trim().length === 0) {
       return { kind: "rejected", reason: "invalid_answer", message: `answer for "${target.question}" must be a non-empty string` };
     }
+
     const selections = target.multiSelect ? splitSelections(value) : [value.trim()];
     if (target.multiSelect && selections.length === 0) {
       return { kind: "rejected", reason: "invalid_answer", message: `answer for "${target.question}" must name at least one option` };
     }
+
     const labels = new Set(target.options.map((option) => option.label));
     const known = selections.filter((part) => labels.has(part));
     const freeText = selections.filter((part) => labels.has(part) === false).join(", ").trim();
     if (known.length === 0 && freeText.length === 0) {
       return { kind: "rejected", reason: "invalid_answer", message: `answer for "${target.question}" names no known option and carries no text` };
     }
+
     normalised[target.id] = value;
   }
+
   if (Object.keys(normalised).length === 0) {
     return { kind: "rejected", reason: "invalid_answer", message: "answers must cover at least one asked question" };
   }
+
   return {
     kind: "accepted",
     request: { ...existing, status: "answered", answers: { ...normalised } },

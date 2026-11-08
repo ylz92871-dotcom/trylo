@@ -82,11 +82,13 @@ export function readSelection(
     // "nothing to attach", and neither is worth an error the user must read.
     return { ok: false, reason: "empty" };
   }
+
   if (raw.filePath === undefined || raw.filePath.length === 0) {
     // Attaching text with no path would hand the model a quotation it cannot
     // attribute or re-read. Refusing is the only honest option.
     return { ok: false, reason: "incomplete", detail: "selection carried no file path" };
   }
+
   const filePath = workspacePath(raw.filePath);
   if (filePath === undefined) {
     return { ok: false, reason: "incomplete", detail: `${raw.filePath} is outside the workspace` };
@@ -95,10 +97,13 @@ export function readSelection(
   const start = raw.selection?.start;
   let startLine = 0;
   let lineCount = 1;
+
   if (start !== undefined && raw.selection !== null) {
     startLine = start.line;
     const end = raw.selection.end;
+
     lineCount = end.line - start.line + 1;
+
     // Ending at character 0 of a later line means "up to the start of that line",
     // so that line is not actually part of the selection.
     if (end.character === 0 && lineCount > 1) {
@@ -107,6 +112,7 @@ export function readSelection(
   }
 
   const truncated = text.length > maxBytes;
+
   return {
     ok: true,
     selection: {

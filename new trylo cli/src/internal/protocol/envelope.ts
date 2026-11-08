@@ -1,5 +1,7 @@
 export type JsonPrimitive = string | number | boolean | null;
+
 export type JsonValue = JsonPrimitive | JsonObject | readonly JsonValue[];
+
 export type JsonObject = { readonly [key: string]: JsonValue };
 
 export type Envelope = {
@@ -26,4 +28,5 @@ export const TERMINAL_REASONS = [
   "cancelled",
   "unknown",
 ] as const;
+
 export type TerminalReason = (typeof TERMINAL_REASONS)[number];

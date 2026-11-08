@@ -6,10 +6,12 @@ export type TeamRepresentation = { readonly intent: string; readonly vetoes: rea
 
 export function isTeamRepresentation(value: unknown): value is TeamRepresentation {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+
   const row = value as Record<string, unknown>;
   const keys = ["intent", "vetoes", "user_questions", "representation_notes"];
   const items = (input: unknown): boolean => Array.isArray(input) && input.length <= 16
     && input.every(item => typeof item === "string" && item.trim().length > 0 && item.length <= 2000);
+
   return Object.keys(row).length === keys.length && keys.every(key => Object.hasOwn(row, key))
     && typeof row.intent === "string" && row.intent.trim().length > 0 && row.intent.length <= 12000
     && typeof row.representation_notes === "string" && row.representation_notes.length <= 12000
@@ -30,6 +32,7 @@ export function formatTeamRepresentation(value: TeamRepresentation): string {
 export function inspectTeamRepresentation(output: string): TeamRepresentationVerdict {
   const sections = new Map<string, string[]>();
   let current: string | undefined;
+
   for (const line of output.split(/\r?\n/)) {
     const heading = /^#{2,3}\s*\*{0,2}(Intent|Veto|User questions|Representation notes)\b\*{0,2}\s*$/i.exec(line.trim());
     if (heading) {
@@ -37,16 +40,20 @@ export function inspectTeamRepresentation(output: string): TeamRepresentationVer
       sections.set(current, []);
     } else if (current !== undefined) sections.get(current)!.push(line);
   }
+
   if (!["intent", "veto", "user questions", "representation notes"].every(title => sections.has(title))) {
     return { ready: false, reason: "Person must report Intent, Veto, User questions and Representation notes before implementation" };
   }
+
   const veto = sections.get("veto")!.join("\n").trim();
   if (veto !== "" && !/^(none|`none`|无)$/i.test(veto)) {
     return { ready: false, reason: `Person veto: ${veto.slice(0, 240)}` };
   }
+
   const questions = sections.get("user questions")!.join("\n").trim();
   if (!/^(none|empty|无)?$/i.test(questions)) {
     return { ready: false, reason: `Person requires clarification: ${questions.slice(0, 240)}` };
   }
+
   return { ready: true };
 }

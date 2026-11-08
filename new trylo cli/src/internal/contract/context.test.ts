@@ -11,6 +11,7 @@ test("profile failure keeps original messages", async () => {
   });
   const messages = [{ role: "user" as const, content: "keep me" }];
   const assembled = await port.assemble({ taskId: "t1", messages });
+
   assert.equal(assembled.degraded, true);
   assert.equal(assembled.degradedReason, "board_down");
   assert.deepEqual(assembled.messages, messages);
@@ -35,6 +36,7 @@ test("active learned rules are versioned context and current instruction stays l
   });
   const messages = [{ role: "user" as const, content: "current instruction" }];
   const assembled = await port.assemble({ taskId: "t1", messages });
+
   assert.equal(assembled.degraded, false);
   assert.equal(assembled.messages[0]?.role, "system");
   assert.match(assembled.messages[0]?.content ?? "", /prompt_patch:prompt-v2/);

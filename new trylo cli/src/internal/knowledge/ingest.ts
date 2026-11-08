@@ -23,7 +23,9 @@ export function createIngest(store: FragmentStore): Ingest {
         body,
         ...(why.trim().length > 0 ? { why: why.trim() } : {}),
       };
+
       await store.write(fragment);
+
       return fragment;
     },
     async appendCandidate(body) {
@@ -37,7 +39,9 @@ export function createIngest(store: FragmentStore): Ingest {
         state: "pending",
         body: text,
       };
+
       await store.write(fragment);
+
       return fragment;
     },
     async withdraw(id) {
@@ -45,8 +49,11 @@ export function createIngest(store: FragmentStore): Ingest {
       if (existing === undefined) {
         throw new Error("fragment not found");
       }
+
       const next: Fragment = { ...existing, state: "withdrawn" };
+
       await store.write(next);
+
       return next;
     },
     async remove(id) {

@@ -20,15 +20,19 @@ import { isMcpForbiddenKey, isSecretKey } from "./schema.js";
  */
 export function publicSettingsView(resolved: ResolvedSettings): SettingsPublicView {
   const view: Record<string, SettingsEntry> = {};
+
   for (const key of Object.keys(resolved).sort()) {
     if (isSecretKey(key) || isMcpForbiddenKey(key)) {
       continue;
     }
+
     const entry = resolved[key];
     if (entry === undefined) {
       continue;
     }
+
     view[key] = { value: entry.value, layer: entry.layer };
   }
+
   return view;
 }

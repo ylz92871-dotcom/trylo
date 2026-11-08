@@ -74,6 +74,7 @@ function depsOf(overrides?: Partial<HookRunnerDeps>): HookRunnerDeps & {
   const agent: HookAgentPort = {
     run: () => Promise.resolve({ ok: true, reason: "fine", turnsUsed: 1 }),
   };
+
   return { command, gate, http, prompt, agent, executed, httpCalls, ...overrides };
 }
 
@@ -85,6 +86,7 @@ test("exit 0 with a block decision blocks the task", async () => {
   });
   const { store, trigger } = triggerOf({ hooks: [commandHook("guard")] });
   const result = await runHooksForEvent(store, trigger, deps);
+
   assert.equal(result.verdict, "block");
   assert.deepEqual(result.reasons, ["no writes"]);
   assert.deepEqual(result.executedIds, ["guard"]);
@@ -98,6 +100,7 @@ test("exit 0 with plain text observes and injects the text as context", async ()
   });
   const { store, trigger } = triggerOf({ hooks: [commandHook("note")] });
   const result = await runHooksForEvent(store, trigger, deps);
+
   assert.equal(result.verdict, "allow");
   assert.deepEqual(result.additionalContexts, ["remember the schema"]);
 });
@@ -115,9 +118,11 @@ test("exit 2 blocks; any other non-zero exit is a recorded non-blocking error", 
   });
   const fixture: HookStore = { hooks: [commandHook("h")] };
   const blocked = await runHooksForEvent(fixture, triggerOf(fixture).trigger, denied);
+
   assert.equal(blocked.verdict, "block");
   assert.deepEqual(blocked.reasons, ["blocked by policy"]);
   const errored = await runHooksForEvent(fixture, triggerOf(fixture).trigger, failed);
+
   assert.equal(errored.verdict, "allow");
   assert.equal(errored.hookErrors.length, 1);
 });
@@ -130,6 +135,7 @@ test("a denied hook command never reaches the executor", async () => {
   });
   const { store, trigger } = triggerOf({ hooks: [commandHook("side-effect")] });
   const result = await runHooksForEvent(store, trigger, deps);
+
   assert.equal(result.verdict, "block");
   assert.deepEqual(result.reasons, ["hook not approved"]);
   assert.deepEqual(deps.executed, []);
@@ -138,9 +144,11 @@ test("a denied hook command never reaches the executor", async () => {
 test("an aborted trigger cancels without running anything", async () => {
   const deps = depsOf();
   const controller = new AbortController();
+
   controller.abort();
   const { store, trigger } = triggerOf({ hooks: [commandHook("late")] }, { signal: controller.signal });
   const result = await runHooksForEvent(store, trigger, deps);
+
   assert.equal(result.verdict, "cancelled");
   assert.deepEqual(deps.executed, []);
 });
@@ -161,11 +169,13 @@ test("a hook that never finishes is cancelled when the scheduler fires", async (
   const hook: HookConfig = commandHook("hang", { timeoutMs: 25 });
   const { store, trigger } = triggerOf({ hooks: [hook] });
   const pending = runHooksForEvent(store, trigger, deps, manual);
+
   // The runner reaches the scheduler through async seams (gate, executor
   // call); yield one macrotask so the manual timer is armed before firing.
   await new Promise((resolve) => setTimeout(resolve, 0));
   fire?.();
   const result = await pending;
+
   assert.equal(result.verdict, "cancelled");
 });
 
@@ -182,6 +192,7 @@ test("an http hook to a non-allowlisted url never leaves the process", async () 
   };
   const { store, trigger } = triggerOf({ hooks: [hook] });
   const result = await runHooksForEvent(store, trigger, deps);
+
   assert.equal(result.verdict, "allow");
   assert.equal(result.hookErrors.length, 1);
   assert.deepEqual(deps.httpCalls, []);
@@ -204,6 +215,7 @@ test("a throwing http port cancels the aggregation fail-closed", async () => {
   };
   const { store, trigger } = triggerOf({ hooks: [hook] });
   const result = await runHooksForEvent(store, trigger, deps);
+
   assert.equal(result.verdict, "cancelled");
 });
 
@@ -214,6 +226,7 @@ test("a failing prompt port cancels fail-closed", async () => {
   const hook: HookConfig = { id: "judge", event: "PreToolUse", source: "project", kind: "prompt", prompt: "review", timeoutMs: 1000 };
   const fixture: HookStore = { hooks: [hook] };
   const blocked = await runHooksForEvent(fixture, triggerOf(fixture).trigger, blocking);
+
   assert.equal(blocked.verdict, "block");
   assert.deepEqual(blocked.reasons, ["stop that"]);
 
@@ -223,6 +236,7 @@ test("a failing prompt port cancels fail-closed", async () => {
     },
   });
   const errored = await runHooksForEvent(fixture, triggerOf(fixture).trigger, garbled);
+
   assert.equal(errored.verdict, "cancelled");
 });
 
@@ -233,12 +247,14 @@ test("an agent hook without a usable answer cancels; ok:false blocks", async () 
   const hook: HookConfig = { id: "reviewer", event: "PreToolUse", source: "project", kind: "agent", task: "review", timeoutMs: 1000, maxTurns: 5 };
   const fixture: HookStore = { hooks: [hook] };
   const blocked = await runHooksForEvent(fixture, triggerOf(fixture).trigger, blocking);
+
   assert.equal(blocked.verdict, "block");
 
   const empty = depsOf({
     agent: { run: () => Promise.reject(new Error("no structured output")) },
   });
   const cancelled = await runHooksForEvent(fixture, triggerOf(fixture).trigger, empty);
+
   assert.equal(cancelled.verdict, "cancelled");
 });
 
@@ -264,6 +280,7 @@ test("a hook cannot widen the caller's recursion ceiling (P0-2)", async () => {
   const fixture: HookStore = { hooks: [hook] };
   // Caller ceiling is 2, hook claims 10, depth is 5: the tighter bound wins.
   const refused = await runHooksForEvent(fixture, triggerOf(fixture, { depth: 5, maxDepth: 2 }).trigger, deps);
+
   assert.equal(refused.verdict, "cancelled");
   assert.equal(promptCalls, 0);
 
@@ -271,6 +288,7 @@ test("a hook cannot widen the caller's recursion ceiling (P0-2)", async () => {
   const tightHook: HookConfig = { ...hook, maxDepth: 1 };
   const tightFixture: HookStore = { hooks: [tightHook] };
   const tight = await runHooksForEvent(tightFixture, triggerOf(tightFixture, { depth: 2, maxDepth: 5 }).trigger, deps);
+
   assert.equal(tight.verdict, "cancelled");
   assert.equal(promptCalls, 0);
 });
@@ -287,6 +305,7 @@ test("an abort during authorisation never spawns the command (P0-3)", async () =
   });
   const { store, trigger } = triggerOf({ hooks: [commandHook("boom")] }, { signal: controller.signal });
   const result = await runHooksForEvent(store, trigger, deps);
+
   assert.equal(result.verdict, "cancelled");
   assert.deepEqual(deps.executed, []);
 });
@@ -299,6 +318,7 @@ test("an exit-2 hook prefers a JSON reason over raw output", async () => {
   });
   const { store, trigger } = triggerOf({ hooks: [commandHook("blocker")] });
   const result = await runHooksForEvent(store, trigger, deps);
+
   assert.equal(result.verdict, "block");
   assert.deepEqual(result.reasons, ["json-reason"]);
 });
@@ -311,6 +331,7 @@ test("an exit-2 hook with plain-text stdout keeps the text as its reason", async
   });
   const { store, trigger } = triggerOf({ hooks: [commandHook("blocker")] });
   const result = await runHooksForEvent(store, trigger, deps);
+
   assert.equal(result.verdict, "block");
   assert.deepEqual(result.reasons, ["just text"]);
 });
@@ -323,6 +344,7 @@ test("an exit-2 hook prefers stderr over stdout text", async () => {
   });
   const { store, trigger } = triggerOf({ hooks: [commandHook("blocker")] });
   const result = await runHooksForEvent(store, trigger, deps);
+
   assert.equal(result.verdict, "block");
   assert.deepEqual(result.reasons, ["from stderr"]);
 });
@@ -335,6 +357,7 @@ test("an exit-2 hook with a reason-less JSON answer falls back to raw output", a
   });
   const { store, trigger } = triggerOf({ hooks: [commandHook("blocker")] });
   const result = await runHooksForEvent(store, trigger, deps);
+
   assert.equal(result.verdict, "block");
   assert.deepEqual(result.reasons, ['{"decision":"block"}']);
 });
@@ -363,6 +386,7 @@ test("prompt and agent hooks past the recursion bound never reach their ports", 
     ],
   };
   const result = await runHooksForEvent(fixture, triggerOf(fixture, { depth: 3 }).trigger, deps);
+
   assert.equal(result.verdict, "cancelled");
   assert.equal(promptCalls, 0);
   assert.equal(agentCalls, 0);
@@ -381,6 +405,7 @@ test("aggregation keeps execution order and the first block reason wins", async 
   });
   const fixture: HookStore = { hooks: [commandHook("first"), commandHook("second")] };
   const result = await runHooksForEvent(fixture, triggerOf(fixture).trigger, deps);
+
   assert.equal(result.verdict, "block");
   assert.deepEqual(result.executedIds, ["first", "second"]);
   assert.deepEqual(result.additionalContexts, ["ctx-one"]);
@@ -401,6 +426,7 @@ test("a hook may inject context and rewritten input into the next request", asyn
   });
   const { store, trigger } = triggerOf({ hooks: [commandHook("injector")] });
   const result = await runHooksForEvent(store, trigger, deps);
+
   assert.equal(result.verdict, "allow");
   assert.deepEqual(result.additionalContexts, ["use v2 schema"]);
   assert.deepEqual(result.updatedInputs, [{ prompt: "do it with v2" }]);

@@ -14,7 +14,9 @@ export function createAttemptSequencer(attemptId: string): AttemptSequencer {
     attemptId,
     bind(event) {
       const sequence = next;
+
       next += 1;
+
       return freezeEnvelope({
         ...event,
         attemptId,

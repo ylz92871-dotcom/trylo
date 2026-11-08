@@ -35,9 +35,11 @@ import type { JsonObject } from "../protocol/envelope.js";
  * that does not exist yet.
  */
 export const MCP_REGISTRY_TRANSPORTS = ["stdio", "http", "sse"] as const;
+
 export type McpRegistryTransport = (typeof MCP_REGISTRY_TRANSPORTS)[number];
 
 export const MCP_SCOPES = ["user", "project"] as const;
+
 export type McpScope = (typeof MCP_SCOPES)[number];
 
 /** The only document version this package can read or write. */
@@ -122,7 +124,20 @@ export type McpRegistryFailure = {
   readonly detail: string;
 };
 
-export type McpRegistryOk<T> = { readonly ok: true; readonly value: T };
+/** A separately verified runtime remains usable when the base view is unreadable. */
+export type McpRegistryDiagnostic = {
+  readonly source: "base";
+  readonly coverage: "runtime_only";
+  readonly code: McpRegistryFailureCode;
+  /** Internal failure detail; public diagnostics expose the safe code only. */
+  readonly detail: string;
+};
+
+export type McpRegistryOk<T> = {
+  readonly ok: true;
+  readonly value: T;
+  readonly diagnostics?: ReadonlyArray<McpRegistryDiagnostic>;
+};
 
 export type McpRegistryResult<T> = McpRegistryOk<T> | McpRegistryFailure;
 

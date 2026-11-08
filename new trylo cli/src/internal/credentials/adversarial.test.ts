@@ -45,6 +45,7 @@ function code(result: { ok: boolean; code?: string }): string {
 test("adversarial #1: no public view or error detail contains the secret", () => {
   const port = memoryPort();
   const secret = "sk-adversarial-111222333444";
+
   assert.equal(port.login({ providerId: "openai-compatible", secret, label: "work" }).ok, true);
   const rendered = JSON.stringify([
     port.status(),
@@ -53,29 +54,37 @@ test("adversarial #1: no public view or error detail contains the secret", () =>
     port.switch({ providerId: "openai-compatible", accountId: "missing", scope: "user" }),
     port.delete({ providerId: "openai-compatible", accountId: "missing", scope: "user" }),
   ]);
+
   assert.equal(rendered.includes(secret), false);
 });
 
 // #2 — a corrupt checksum refuses get
 test("adversarial #2: a checksum-tampered file refuses get", (t) => {
   const home = tempHome();
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const port = bindVerbs(fileDeps(home));
+
   assert.equal(port.login({ providerId: "openai-compatible", secret: "sk-ok" }).ok, true);
   const file = join(home, "credentials.json");
+
   writeFileSync(file, readFileSync(file, "utf8").replace("sk-ok", "sk-bad"));
   const result = port.get("openai-compatible");
+
   assert.equal(code(result), "credentials_corrupt");
 });
 
 // #3 — an unknown key is not skipped so the rest stays usable
 test("adversarial #3: an unknown key rejects the whole ledger, not just the row", (t) => {
   const home = tempHome();
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const port = bindVerbs(fileDeps(home));
+
   assert.equal(port.login({ providerId: "openai-compatible", secret: "sk-ok" }).ok, true);
   const file = join(home, "credentials.json");
   const document = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+
   document["smuggled"] = "x";
   writeFileSync(file, `${JSON.stringify(document, null, 2)}\n`);
   assert.equal(code(port.status()), "credentials_corrupt");
@@ -94,10 +103,12 @@ test("adversarial #4: deleting the current account is refused", () => {
 // #5 — env is never written to a file by login
 test("adversarial #5: a login under an active env variable writes nothing", (t) => {
   const home = tempHome();
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const deps = { ...fileDeps(home), env: { TRYLO_API_KEY: "sk-env" } };
   const port = bindVerbs(deps);
   const result = port.login({ providerId: "openai-compatible", secret: "sk-env" });
+
   assert.equal(code(result), "env_shadowed");
   assert.equal(existsSync(join(home, "credentials.json")), false);
 });
@@ -116,6 +127,7 @@ test("adversarial #6: a parent-traversing root segment still yields an in-root f
 test("adversarial #7: the project file never contains the user secret", (t) => {
   const home = tempHome();
   const project = tempHome();
+
   t.after(() => {
     rmSync(home, { recursive: true, force: true });
     rmSync(project, { recursive: true, force: true });
@@ -127,12 +139,14 @@ test("adversarial #7: the project file never contains the user secret", (t) => {
     crypto: { randomUUID: () => "acc-1" },
     hasProject: true,
   });
+
   assert.equal(port.login({ providerId: "openai-compatible", secret: "sk-user-only" }).ok, true);
   assert.equal(
     port.login({ providerId: "openai-compatible", accountId: "p1", secret: "sk-proj", scope: "project" }).ok,
     true,
   );
   const projectText = readFileSync(join(project, ".trylo", "credentials.json"), "utf8");
+
   assert.equal(projectText.includes("sk-user-only"), false);
 });
 
@@ -159,6 +173,7 @@ test("adversarial #10: status after a keyring login carries no secret", async ()
   const keyring = createMemoryKeyring();
   const port = createCredentialPort({ homeDir: home, now: () => NOW, keyring: { attached: true, store: keyring.store } });
   const secret = "sk-keyring-adversarial";
+
   assert.equal(port.login({ providerId: "openai-compatible", secret }).ok, true);
   assert.equal(JSON.stringify(port.status()).includes(secret), false);
   rmSync(home, { recursive: true, force: true });
@@ -167,11 +182,13 @@ test("adversarial #10: status after a keyring login carries no secret", async ()
 // #11 — two providers' current pointers do not overwrite each other
 test("adversarial #11: switching one provider does not move another", async () => {
   const port = memoryPort();
+
   assert.equal(port.login({ providerId: "openai-compatible", accountId: "oa", secret: "sk-a" }).ok, true);
   assert.equal(port.login({ providerId: "openai-compatible", accountId: "ob", secret: "sk-b" }).ok, true);
   assert.equal(port.login({ providerId: "fixture", accountId: "fx" }).ok, true);
   assert.equal(port.switch({ providerId: "openai-compatible", accountId: "oa", scope: "user" }).ok, true);
   const fixture = port.get("fixture");
+
   assert.equal(fixture.ok ? fixture.value.accountId : "", "fx");
 });
 
@@ -184,6 +201,7 @@ test("adversarial #12: the compose factory stays within 60 lines", () => {
   const start = source.indexOf("export function createCredentialPort");
   const end = source.indexOf("\n}\n", start);
   const lines = source.slice(start, end === -1 ? undefined : end).split(/\r?\n/).length;
+
   assert.equal(lines <= 60, true, `createCredentialPort is ${lines} lines`);
 });
 

@@ -50,6 +50,7 @@ function raceDeadline<T>(
       if (settled) {
         return;
       }
+
       settled = true;
       timer?.cancel();
       signal.removeEventListener("abort", onAbortSignal);
@@ -58,6 +59,7 @@ function raceDeadline<T>(
     const onAbortSignal = (): void => {
       finish({ kind: "aborted" });
     };
+
     timer = schedule(Math.max(0, timeoutMs), () => {
       finish({ kind: "timeout" });
     });
@@ -140,14 +142,17 @@ function stdinFor(trigger: HookTrigger): string {
 
 export function urlMatchesAllowlist(url: string, patterns: ReadonlyArray<string>): boolean {
   let parsed: URL;
+
   try {
     parsed = new URL(url);
   } catch {
     return false;
   }
+
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     return false;
   }
+
   for (const pattern of patterns) {
     if (pattern === "*") {
       return true;
@@ -160,6 +165,7 @@ export function urlMatchesAllowlist(url: string, patterns: ReadonlyArray<string>
       return true;
     }
   }
+
   return false;
 }
 
@@ -179,11 +185,14 @@ async function runCommandHook(
   if (hook.command.length === 0) {
     return { hookId: hook.id, verdict: "allow", hookError: `hook ${hook.id} declares an empty command` };
   }
+
   const refused = refusedBeforeStart(hook.id, trigger.signal);
   if (refused !== undefined) {
     return refused;
   }
+
   let authorised: boolean;
+
   try {
     const decision = await deps.gate.authorizeHookCommand(hook.command, trigger.event);
     authorised = decision.verdict === "approved";
@@ -196,12 +205,14 @@ async function runCommandHook(
     // if it had been authorised.
     return { hookId: hook.id, verdict: "cancelled", reason: `hook ${hook.id} authorisation failed: ${errorMessage(error)}` };
   }
+
   if (trigger.signal.aborted) {
     // The gate await is the one window where cancellation can arrive after
     // the pre-start check: the executor call below evaluates eagerly, so
     // re-check here, before any spawn, not inside the deadline race.
     return { hookId: hook.id, verdict: "cancelled", reason: `hook ${hook.id} aborted during authorisation` };
   }
+
   const settled = await settleHookPort(
     hook.id,
     "command executor",
@@ -213,6 +224,7 @@ async function runCommandHook(
   if (settled.kind === "stop") {
     return settled.result;
   }
+
   return interpretCommandResult(hook.id, settled.value);
 }
 
@@ -229,10 +241,12 @@ async function runHttpHook(
       hookError: `hook ${hook.id} url is not allowlisted: ${hook.url}`,
     };
   }
+
   const httpRefused = refusedBeforeStart(hook.id, trigger.signal);
   if (httpRefused !== undefined) {
     return httpRefused;
   }
+
   const settled = await settleHookPort(
     hook.id,
     "http transport",
@@ -244,6 +258,7 @@ async function runHttpHook(
   if (settled.kind === "stop") {
     return settled.result;
   }
+
   return interpretHttpResponse(hook.id, settled.value);
 }
 
@@ -256,10 +271,12 @@ async function runPromptHook(
   if (trigger.depth >= depthOf(trigger, hook.maxDepth)) {
     return { hookId: hook.id, verdict: "cancelled", reason: `hook ${hook.id} recursion bound reached at depth ${trigger.depth}` };
   }
+
   const promptRefused = refusedBeforeStart(hook.id, trigger.signal);
   if (promptRefused !== undefined) {
     return promptRefused;
   }
+
   const settled = await settleHookPort(
     hook.id,
     "prompt port",
@@ -271,6 +288,7 @@ async function runPromptHook(
   if (settled.kind === "stop") {
     return settled.result;
   }
+
   return interpretModelAnswer(hook.id, settled.value);
 }
 
@@ -283,10 +301,12 @@ async function runAgentHook(
   if (trigger.depth >= depthOf(trigger, hook.maxDepth)) {
     return { hookId: hook.id, verdict: "cancelled", reason: `hook ${hook.id} recursion bound reached at depth ${trigger.depth}` };
   }
+
   const agentRefused = refusedBeforeStart(hook.id, trigger.signal);
   if (agentRefused !== undefined) {
     return agentRefused;
   }
+
   const settled = await settleHookPort(
     hook.id,
     "agent port",
@@ -301,10 +321,12 @@ async function runAgentHook(
   if (settled.kind === "stop") {
     return settled.result;
   }
+
   const answer = settled.value;
   if (answer.turnsUsed > hook.maxTurns) {
     return { hookId: hook.id, verdict: "cancelled", reason: `hook ${hook.id} exceeded ${hook.maxTurns} turns` };
   }
+
   return interpretModelAnswer(hook.id, answer);
 }
 

@@ -60,10 +60,12 @@ function readLedgers(deps: PortDeps): { user: CredentialLedgerDocument; project:
   if (!user.ok) {
     return user;
   }
+
   const project = deps.store.read("project");
   if (!project.ok) {
     return project;
   }
+
   return { user: user.document, project: project.document };
 }
 
@@ -89,40 +91,50 @@ export function login(deps: PortDeps, input: CredentialLoginInput): CredentialRe
   if (!isCredentialProviderId(input.providerId)) {
     return failure("unknown_provider", `unknown provider ${JSON.stringify(input.providerId)}`);
   }
+
   const scope = loginScope(input);
   if (scope === undefined) {
     return failure("unknown_provider", `unknown scope ${JSON.stringify(input.scope)}`);
   }
+
   const secretFailure = validateSecretForWrite(input.providerId, input.secret);
   if (secretFailure !== undefined) {
     return secretFailure;
   }
+
   const shadowed = rejectEnvShadowedWrite(deps.env, input.providerId);
   if (shadowed !== undefined) {
     return shadowed;
   }
+
   const accountId = input.accountId ?? generateAccountId(deps.crypto);
   if (!isCredentialAccountId(accountId)) {
     return failure("invalid_account_id", `${JSON.stringify(accountId)} is not a valid account id`);
   }
+
   const ledgers = readLedgers(deps);
   if ("ok" in ledgers) {
     return ledgers;
   }
+
   const target = scope === "user" ? ledgers.user : ledgers.project;
+
   if (scope === "project" && !deps.hasProject) {
     return failure("path_escape", "no project directory is configured");
   }
+
   const existing = target.records.find(
     (record) => record.providerId === input.providerId && record.accountId === accountId,
   );
   if (existing !== undefined) {
     return failure("duplicate_account", `(${input.providerId}, ${accountId}) already exists in ${scope}`);
   }
+
   const timestamp = deps.now();
   const record = buildRecord(input, accountId, timestamp);
   const next = withCurrent(withRecord(target, record), input.providerId, accountId);
   const writeFailure = deps.store.write(scope, next);
+
   return writeFailure ?? { ok: true, value: record };
 }
 
@@ -142,28 +154,36 @@ export function logout(
   if (!isCredentialProviderId(input.providerId)) {
     return failure("unknown_provider", `unknown provider ${JSON.stringify(input.providerId)}`);
   }
+
   const scope = input.scope;
   if (scope !== undefined && !isCredentialScope(scope)) {
     return failure("unknown_provider", `unknown scope ${JSON.stringify(scope)}`);
   }
+
   const ledgers = readLedgers(deps);
   if ("ok" in ledgers) {
     return ledgers;
   }
+
   const scopes: ReadonlyArray<CredentialScope> = scope === undefined ? ["user", "project"] : [scope];
+
   for (const target of scopes) {
     const document = target === "user" ? ledgers.user : ledgers.project;
+
     if (target === "project" && !deps.hasProject) {
       continue;
     }
+
     if (document.current[input.providerId] === undefined) {
       continue;
     }
+
     const failureOrUndefined = deps.store.write(target, withoutCurrent(document, input.providerId));
     if (failureOrUndefined !== undefined) {
       return failureOrUndefined;
     }
   }
+
   return statusRows(deps);
 }
 
@@ -176,9 +196,11 @@ export function statusRows(deps: PortDeps): CredentialResult<ReadonlyArray<Crede
   if ("ok" in ledgers) {
     return ledgers;
   }
+
   const rows = (["openai-compatible", "fixture"] as const).map((providerId) =>
     statusRowFor(resolveInput(deps, ledgers, providerId)),
   );
+
   return { ok: true, value: rows };
 }
 
@@ -190,8 +212,10 @@ export function listEntries(
   if ("ok" in ledgers) {
     return ledgers;
   }
+
   const collected = collectEntries(ledgers.user, deps.hasProject ? ledgers.project : undefined);
   const all = [...collected.userEntries, ...collected.projectEntries];
+
   return { ok: true, value: scope === undefined ? all : all.filter((entry) => entry.scope === scope) };
 }
 
@@ -206,19 +230,24 @@ export function switchAccount(
   if (!isCredentialProviderId(input.providerId)) {
     return failure("unknown_provider", `unknown provider ${JSON.stringify(input.providerId)}`);
   }
+
   if (!isCredentialAccountId(input.accountId)) {
     return failure("invalid_account_id", `${JSON.stringify(input.accountId)} is not a valid account id`);
   }
+
   if (!isCredentialScope(input.scope)) {
     return failure("unknown_provider", `unknown scope ${JSON.stringify(input.scope)}`);
   }
+
   if (input.scope === "project" && !deps.hasProject) {
     return failure("path_escape", "no project directory is configured");
   }
+
   const ledgers = readLedgers(deps);
   if ("ok" in ledgers) {
     return ledgers;
   }
+
   const document = input.scope === "user" ? ledgers.user : ledgers.project;
   const target = document.records.find(
     (record) => record.providerId === input.providerId && record.accountId === input.accountId,
@@ -226,6 +255,7 @@ export function switchAccount(
   if (target === undefined) {
     return failure("unknown_account", `(${input.providerId}, ${input.accountId}) is not stored in ${input.scope}`);
   }
+
   const writeFailure = deps.store.write(
     input.scope,
     withCurrent(document, input.providerId, input.accountId),
@@ -233,6 +263,7 @@ export function switchAccount(
   if (writeFailure !== undefined) {
     return writeFailure;
   }
+
   return {
     ok: true,
     value: {
@@ -256,16 +287,20 @@ export function deleteAccount(
   if (!isCredentialProviderId(input.providerId)) {
     return failure("unknown_provider", `unknown provider ${JSON.stringify(input.providerId)}`);
   }
+
   if (!isCredentialScope(input.scope)) {
     return failure("unknown_provider", `unknown scope ${JSON.stringify(input.scope)}`);
   }
+
   if (input.scope === "project" && !deps.hasProject) {
     return failure("path_escape", "no project directory is configured");
   }
+
   const ledgers = readLedgers(deps);
   if ("ok" in ledgers) {
     return ledgers;
   }
+
   const document = input.scope === "user" ? ledgers.user : ledgers.project;
   const target = document.records.find(
     (record) => record.providerId === input.providerId && record.accountId === input.accountId,
@@ -273,16 +308,19 @@ export function deleteAccount(
   if (target === undefined) {
     return failure("unknown_account", `(${input.providerId}, ${input.accountId}) is not stored in ${input.scope}`);
   }
+
   if (document.current[input.providerId] === input.accountId) {
     return failure(
       "current_account_protected",
       `(${input.providerId}, ${input.accountId}) is the current account; switch or logout first`,
     );
   }
+
   const writeFailure = deps.store.write(
     input.scope,
     withoutRecord(document, input.providerId, input.accountId),
   );
+
   return writeFailure ?? { ok: true, value: target };
 }
 
@@ -295,10 +333,12 @@ export function exportPublicView(deps: PortDeps): CredentialResult<CredentialPub
   if ("ok" in ledgers) {
     return ledgers;
   }
+
   const status = (["openai-compatible", "fixture"] as const).map((providerId) =>
     statusRowFor(resolveInput(deps, ledgers, providerId)),
   );
   const collected = collectEntries(ledgers.user, deps.hasProject ? ledgers.project : undefined);
+
   return { ok: true, value: mergePublic({ status, ...collected }) };
 }
 
@@ -309,11 +349,14 @@ export function exportSecretsView(
   if (options.confirm !== true) {
     return failure("confirm_required", "exportSecrets requires { confirm: true }");
   }
+
   const ledgers = readLedgers(deps);
   if ("ok" in ledgers) {
     return ledgers;
   }
+
   const projectRecords = deps.hasProject ? ledgers.project.records : [];
+
   return {
     ok: true,
     value: {
@@ -330,14 +373,17 @@ export function updateToken(
   if (!isCredentialProviderId(input.providerId)) {
     return failure("unknown_provider", `unknown provider ${JSON.stringify(input.providerId)}`);
   }
+
   const scope = input.scope ?? "user";
   if (!isCredentialScope(scope)) {
     return failure("unknown_provider", `unknown scope ${JSON.stringify(scope)}`);
   }
+
   const ledgers = readLedgers(deps);
   if ("ok" in ledgers) {
     return ledgers;
   }
+
   const document = scope === "user" ? ledgers.user : ledgers.project;
   const target = document.records.find(
     (record) => record.providerId === input.providerId && record.accountId === input.accountId,
@@ -345,9 +391,11 @@ export function updateToken(
   if (target === undefined) {
     return failure("unknown_account", `(${input.providerId}, ${input.accountId}) is not stored in ${scope}`);
   }
+
   const updatedRecord = buildUpdatedTokenRecord(target, input, deps.now());
   const nextDoc = withRecord(document, updatedRecord);
   const writeFailure = deps.store.write(scope, nextDoc);
+
   return writeFailure ?? { ok: true, value: updatedRecord };
 }
 

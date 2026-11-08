@@ -23,6 +23,7 @@ export function contextFromProfile(profile: ProfilePort): ExecutionContextPort {
         const snapshot = await profile.load(input.taskId);
         const degraded = snapshot.learningMode !== "full";
         const degradedReason = degraded ? snapshot.diagnostics[0]?.message : undefined;
+
         return {
           messages: composeMessages(snapshot, input.messages),
           profile: snapshot,
@@ -53,6 +54,7 @@ function composeMessages(
   if (learned.length === 0) {
     return callerMessages;
   }
+
   const profileMessage: Message = {
     role: "system",
     content: [
@@ -61,5 +63,6 @@ function composeMessages(
       ...learned,
     ].join("\n"),
   };
+
   return [profileMessage, ...callerMessages];
 }

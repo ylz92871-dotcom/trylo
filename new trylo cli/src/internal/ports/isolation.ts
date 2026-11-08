@@ -154,6 +154,7 @@ export const ISOLATION_FAILURE_CODES = [
   "isolation_start_failed",
   "isolation_refused",
 ] as const;
+
 export type IsolationFailureCode = (typeof ISOLATION_FAILURE_CODES)[number];
 
 /**

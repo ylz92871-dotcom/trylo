@@ -8,7 +8,9 @@ import { isStreamPartial, streamPartialPayload, type StreamPartial } from "./str
 export function partialRecordPayload(next: StreamPartial, previous?: StreamPartial): JsonObject | undefined {
   if (previous === undefined || next.name !== previous.name || next.redacted !== previous.redacted
     || !next.text.startsWith(previous.text)) return streamPartialPayload(next);
+
   if (next.text === previous.text) return undefined;
+
   return {
     version: "2", kind: next.kind, blockId: next.blockId,
     offset: previous.text.length, textDelta: next.text.slice(previous.text.length),
@@ -31,9 +33,11 @@ export function readPartialRecord(payload: JsonObject, previous?: StreamPartial)
   if (payload.version !== "2") {
     return (payload.version === undefined || payload.version === "1") && isStreamPartial(payload) ? payload : undefined;
   }
+
   if (Object.hasOwn(payload, "text") || !Number.isSafeInteger(payload.offset) || typeof payload.offset !== "number"
     || payload.offset < 0 || typeof payload.textDelta !== "string" || previous === undefined
     || payload.offset !== previous.text.length || payload.kind !== previous.kind || payload.blockId !== previous.blockId
     || payload.name !== previous.name || payload.redacted !== previous.redacted) return undefined;
+
   return { ...previous, text: previous.text + payload.textDelta };
 }

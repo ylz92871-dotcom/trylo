@@ -21,8 +21,10 @@ const cli = fileURLToPath(new URL("../../cmd/trylo/main.js", import.meta.url));
 
 function spawnCli(home: string, workspace: string, args: ReadonlyArray<string>) {
   const env: NodeJS.ProcessEnv = { ...process.env, TRYLO_HOME: home };
+
   delete env.TRYLO_API_KEY;
   delete env.OPENAI_API_KEY;
+
   return spawnSync(process.execPath, [cli, ...args], {
     cwd: workspace,
     env,
@@ -36,10 +38,12 @@ function journalRows(home: string, sessionId: string): Array<{ readonly type: st
   if (!existsSync(sessionsDir)) {
     return [];
   }
+
   const file = readdirSync(sessionsDir).find((entry) => entry === `${sessionId}.ndjson`);
   if (file === undefined) {
     return [];
   }
+
   return readFileSync(join(sessionsDir, file), "utf8")
     .split(/\r?\n/)
     .filter((line) => line.trim().length > 0)
@@ -64,6 +68,7 @@ function fixture(): { readonly workspace: string; readonly home: string; readonl
   const root = mkdtempSync(join(os.tmpdir(), "trylo-wp09-"));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
+
   mkdirSync(workspace, { recursive: true });
   mkdirSync(home, { recursive: true });
   mkdirSync(join(workspace, ".trylo"), { recursive: true });
@@ -72,6 +77,7 @@ function fixture(): { readonly workspace: string; readonly home: string; readonl
     JSON.stringify({ name: "wp09-budget-resume-fixture", version: "1.0.0" }, null, 2),
     "utf8",
   );
+
   return { workspace, home, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
@@ -95,6 +101,7 @@ test("a run stopped by its output budget resumes to a real terminal and the task
       "stream-json",
     ]);
     const stoppedText = stopped.stdout + stopped.stderr;
+
     assert.notEqual(stopped.status, 0, `the budgeted run must not complete: ${stoppedText}`);
     assert.equal(stoppedText.includes("output_tokens_exhausted"), true, "the stop names the budget that caused it");
 
@@ -102,6 +109,7 @@ test("a run stopped by its output budget resumes to a real terminal and the task
     // naming the budget that caused it.
     const stoppedRows = journalRows(fx.home, sessionId);
     const stoppedTerminals = stoppedRows.filter((row) => row.type === "terminal");
+
     assert.equal(stoppedTerminals.length, 1, "exactly one terminal after the stopped run");
     assert.equal(stoppedTerminals[0]?.payload["reason"], "failed");
     assert.equal(
@@ -123,6 +131,7 @@ test("a run stopped by its output budget resumes to a real terminal and the task
       "stream-json",
     ]);
     const resumedText = resumed.stdout + resumed.stderr;
+
     assert.equal(resumed.status, 0, `the resumed run must complete: ${resumedText}`);
     assert.equal(resumedText.includes('"status":"completed"'), true, "the resumed turn completes");
 
@@ -130,9 +139,11 @@ test("a run stopped by its output budget resumes to a real terminal and the task
     // the completion: a resume that only re-printed the session id would fail
     // the artifact and terminal checks, not pass them.
     const written = join(fx.workspace, "fixture-output.txt");
+
     assert.equal(existsSync(written), true, "the task's file artifact exists after the resume");
     assert.equal(readFileSync(written, "utf8"), "the fixture wrote this line");
     const terminals = journalRows(fx.home, sessionId).filter((row) => row.type === "terminal");
+
     assert.equal(terminals.length, 2, "the journal keeps the stopped terminal and adds the completed one");
     assert.equal(terminals.at(-1)?.payload["reason"], "completed");
   } finally {
@@ -144,6 +155,7 @@ test("a context ceiling that cannot be cleared ends the run explicitly and resum
   const fx = fixture();
   try {
     const sessionId = "ses-wp09-context";
+
     writeFileSync(
       join(fx.workspace, ".trylo", "config.json"),
       JSON.stringify({ contextTokenLimit: 8, inputPricePerMTok: 1 }, null, 2),
@@ -163,9 +175,11 @@ test("a context ceiling that cannot be cleared ends the run explicitly and resum
       "stream-json",
     ]);
     const stoppedText = stopped.stdout + stopped.stderr;
+
     assert.notEqual(stopped.status, 0, `the over-limit run must not complete: ${stoppedText}`);
     assert.equal(stoppedText.includes("context_limit"), true, "the stop names the context ceiling");
     const stoppedRows = journalRows(fx.home, sessionId).filter((row) => row.type === "terminal");
+
     assert.equal(stoppedRows.at(-1)?.payload["reason"], "failed");
     assert.equal(
       journalNamesCause(fx.home, sessionId, "context_limit"),
@@ -192,8 +206,10 @@ test("a context ceiling that cannot be cleared ends the run explicitly and resum
       "stream-json",
     ]);
     const resumedText = resumed.stdout + resumed.stderr;
+
     assert.equal(resumed.status, 0, `the resumed run must complete: ${resumedText}`);
     const terminals = journalRows(fx.home, sessionId).filter((row) => row.type === "terminal");
+
     assert.equal(terminals.at(-1)?.payload["reason"], "completed");
   } finally {
     fx.cleanup();
