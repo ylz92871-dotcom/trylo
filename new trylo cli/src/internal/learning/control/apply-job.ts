@@ -18,6 +18,8 @@ import {
   replaceById,
   type BoardState,
 } from "./state.js";
+import { allowsManagedJobContinuation } from "./managed-job-continuation.js";
+import { MAX_CENTRAL_LEARNING_RESOURCE } from "./central-learning-resources.js";
 
 const IN_FLIGHT: ReadonlySet<JobState> = new Set([
   "queued",
@@ -30,19 +32,26 @@ export function applyEnqueueJob(
   state: BoardState,
   command: EnqueueJobCommand,
 ): ReduceResult {
+  if (command.job.coordination !== undefined) return fail(state, "invalid_learning_coordination", "central_funding_required");
+
   if (findJob(state, command.job.jobId)) {
     return fail(state, "duplicate_job", command.job.jobId);
   }
+
   const existing = findJobByDedupe(state, command.job.dedupeKey);
+
+  // Only in-flight jobs reserve their deduplication key.
   if (existing !== undefined && IN_FLIGHT.has(existing.state)) {
     return fail(state, "job_dedupe_hit", existing.jobId);
   }
+
   const job: LearningJob = {
     ...command.job,
     state: "queued",
     attempt: 0,
     breakerOpen: false,
   };
+
   return jobChanged(state, command.commandId, command.issuedAt, job, [...state.jobs, job]);
 }
 
@@ -54,17 +63,30 @@ export function applyStartJob(
   if (job === undefined) {
     return fail(state, "job_not_found", command.jobId);
   }
+
+  if (job.coordination !== undefined) return fail(state, "invalid_learning_coordination", "central_claim_required");
+
   if (job.state !== "queued") {
     return fail(state, "illegal_transition", `${job.state}->start_job`);
   }
+
   if (job.breakerOpen) {
     return fail(state, "job_breaker_open", job.jobId);
   }
+
   const attempt = job.attempt + 1;
-  if (attempt > job.maxAttempts) {
+  // Managed continuation requires an attested checkpoint, not just a retry request.
+  const managed = allowsManagedJobContinuation(state, job, command.issuedAt, command.continuation);
+  if (command.continuation !== undefined && !managed) return fail(state, "invalid_learning_coordination", "managed_checkpoint_attestation_invalid");
+
+  if (!Number.isSafeInteger(attempt) || attempt > MAX_CENTRAL_LEARNING_RESOURCE) return fail(state, "job_budget_exceeded", "job_attempt_counter_capacity");
+
+  if (attempt > job.maxAttempts && !managed) {
     return fail(state, "job_budget_exceeded", job.jobId);
   }
+
   const next: LearningJob = { ...job, state: "running", attempt };
+
   return replaceJob(state, command.commandId, command.issuedAt, next);
 }
 
@@ -76,21 +98,34 @@ export function applyCompleteJob(
   if (job === undefined) {
     return fail(state, "job_not_found", command.jobId);
   }
+
+  if (job.coordination !== undefined) return fail(state, "invalid_learning_coordination", "central_finish_required");
+
   if (job.state !== "running") {
     return fail(state, "illegal_transition", `${job.state}->complete_job`);
   }
+
   const next: LearningJob = { ...job, state: command.next };
+
   return replaceJob(state, command.commandId, command.issuedAt, next);
 }
 
 export function applyRequeueJob(state: BoardState, command: RequeueJobCommand): ReduceResult {
   const job = findJob(state, command.jobId);
   if (job === undefined) return fail(state, "job_not_found", command.jobId);
-  if (job.state !== "waiting_evidence" || job.attempt !== command.expectedAttempt) {
+
+  if (job.coordination !== undefined) return fail(state, "invalid_learning_coordination", "central_dependency_required");
+
+  const managed = allowsManagedJobContinuation(state, job, command.issuedAt, command.continuation);
+  if ((job.state !== "waiting_evidence" && !(job.state === "failed" && managed)) || job.attempt !== command.expectedAttempt) {
     return fail(state, "illegal_transition", `${job.state}:${job.attempt}->requeue_job:${command.expectedAttempt}`);
   }
-  if (job.breakerOpen || job.attempt >= job.maxAttempts) return fail(state, "job_budget_exceeded", job.jobId);
-  return replaceJob(state, command.commandId, command.issuedAt, { ...job, state: "queued" });
+
+  if (command.continuation !== undefined && !managed) return fail(state, "invalid_learning_coordination", "managed_checkpoint_attestation_invalid");
+
+  if ((job.breakerOpen || job.attempt >= job.maxAttempts) && !managed) return fail(state, "job_budget_exceeded", job.jobId);
+
+  return replaceJob(state, command.commandId, command.issuedAt, { ...job, state: "queued", breakerOpen: false });
 }
 
 export function applyFailJob(
@@ -101,11 +136,16 @@ export function applyFailJob(
   if (job === undefined) {
     return fail(state, "job_not_found", command.jobId);
   }
+
+  if (job.coordination !== undefined) return fail(state, "invalid_learning_coordination", "central_decision_required");
+
   if (job.state !== "queued" && job.state !== "running") {
     return fail(state, "illegal_transition", `${job.state}->fail_job`);
   }
+
   const breakerOpen = job.attempt >= job.maxAttempts || command.terminal === "expired";
   const next: LearningJob = { ...job, state: command.terminal, breakerOpen };
+
   return replaceJob(state, command.commandId, command.issuedAt, next);
 }
 
@@ -126,9 +166,11 @@ export function applyTombstone(
   if (!TOMBSTONE_ENTITY_TYPES.has(command.entityType)) {
     return fail(state, "invalid_entity_type", command.entityType);
   }
+
   if (findTombstone(state, command.entityId)) {
     return fail(state, "tombstone_exists", command.entityId);
   }
+
   // 外审 R2 §3.3（原文 P1-R3）的最小 Board 侧修复：撤回只能作用于**存在且
   // 尚未终止**的目标。旧实现在目标不存在时照样写入 tombstone，于是「一条完全
   // 无关的撤回 draft」可以退休任意实体，生产搜索从可见变 0。
@@ -140,6 +182,7 @@ export function applyTombstone(
   if (!target.ok) {
     return fail(state, target.reason, command.entityId);
   }
+
   const sequence = nextSeq(state);
   const tombstone = {
     entityId: command.entityId,
@@ -148,6 +191,7 @@ export function applyTombstone(
     reason: command.reason,
   };
   const { proposals, activations } = retireForTombstone(state, command, sequence);
+
   return succeed(state, command.commandId, [
     {
       type: "tombstone_written",
@@ -199,6 +243,7 @@ function retireForTombstone(
           boardSequence: sequence,
         };
       });
+
   return { proposals, activations };
 }
 
@@ -219,22 +264,28 @@ function tombstoneTarget(
     if (proposal === undefined) {
       return { ok: false, reason: "tombstone_target_not_found" };
     }
+
     if (isTerminal(proposal.lifecycle)) {
       return { ok: false, reason: "tombstone_target_retired" };
     }
+
     return { ok: true };
   }
+
   if (command.entityType === "asset") {
     const asset = findAsset(state, command.entityId);
     if (asset === undefined) {
       return { ok: false, reason: "tombstone_target_not_found" };
     }
+
     const activation = state.activations.find((item) => item.versionId === command.entityId);
     if (activation?.pointer === "retired") {
       return { ok: false, reason: "tombstone_target_retired" };
     }
+
     return { ok: true };
   }
+
   // observation / fragment：Board 不拥有这两块空间，无法证明目标存在。
   // 这与「Board 拥有但查不到」是两件事，失败码必须区分，审计才能分辨
   // 「攻击者拿跨空间类型试探」与「用户对已删除实体重复撤回」。

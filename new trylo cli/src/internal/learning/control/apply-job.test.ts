@@ -19,49 +19,71 @@ function enqueue(jobId: string, maxAttempts = 1) {
 
 test("requeue only wakes waiting evidence, preserves attempt budget and rejects stale replay payloads", () => {
   const base = reduceAll(emptyBoardState(), [enqueue("wake", 2), command("start_job", { jobId: "wake" }),
-    command("complete_job", { jobId: "wake", next: "waiting_evidence" })]); assert.ok(base.ok);
+    command("complete_job", { jobId: "wake", next: "waiting_evidence" })]);
+  assert.ok(base.ok);
   const wake = { type: "requeue_job" as const, commandId: "wake-once", issuedAt: "2026-10-29T00:00:00.000Z", jobId: "wake", expectedAttempt: 1 };
-  const stale = reduce(base.state, { ...wake, commandId: "stale", expectedAttempt: 0 }); assert.equal(stale.ok, false);
-  const queued = reduce(base.state, wake); assert.ok(queued.ok);
-  assert.equal(queued.state.jobs[0]?.state, "queued"); assert.equal(queued.state.jobs[0]?.attempt, 1);
-  const replay = reduce(queued.state, wake); assert.ok(replay.ok); assert.equal(replay.idempotent, true);
-  const conflict = reduce(queued.state, { ...wake, expectedAttempt: 2 }); assert.equal(conflict.ok, false);
+  const stale = reduce(base.state, { ...wake, commandId: "stale", expectedAttempt: 0 });
+  assert.equal(stale.ok, false);
+  const queued = reduce(base.state, wake);
+  assert.ok(queued.ok);
+  assert.equal(queued.state.jobs[0]?.state, "queued");
+  assert.equal(queued.state.jobs[0]?.attempt, 1);
+  const replay = reduce(queued.state, wake);
+  assert.ok(replay.ok);
+  assert.equal(replay.idempotent, true);
+  const conflict = reduce(queued.state, { ...wake, expectedAttempt: 2 });
+  assert.equal(conflict.ok, false);
+
   if (!conflict.ok) assert.equal(conflict.reason, "command_payload_conflict");
-  const final = reduceAll(queued.state, [command("start_job", { jobId: "wake" }), command("complete_job", { jobId: "wake", next: "waiting_evidence" })]); assert.ok(final.ok);
+
+  const final = reduceAll(queued.state, [command("start_job", { jobId: "wake" }), command("complete_job", { jobId: "wake", next: "waiting_evidence" })]);
+  assert.ok(final.ok);
   assert.equal(reduce(final.state, { ...wake, commandId: "over", expectedAttempt: 2 }).ok, false);
 });
 
 test("waiting approval cannot be requeued into an automatic approval bypass", () => {
   const base = reduceAll(emptyBoardState(), [enqueue("approval", 3), command("start_job", { jobId: "approval" }),
-    command("complete_job", { jobId: "approval", next: "waiting_approval" })]); assert.ok(base.ok);
+    command("complete_job", { jobId: "approval", next: "waiting_approval" })]);
+  assert.ok(base.ok);
   assert.equal(reduce(base.state, { type: "requeue_job", commandId: "no-bypass", issuedAt: "2026-10-29T00:00:00.000Z", jobId: "approval", expectedAttempt: 1 }).ok, false);
 });
 
 test("complete_job can enter waiting_evidence and waiting_approval", () => {
   const queued = reduce(emptyBoardState(), enqueue("j1"));
+
   assert.equal(queued.ok, true);
+
   if (!queued.ok) {
     return;
   }
+
   const running = reduce(queued.state, command("start_job", { jobId: "j1" }));
+
   assert.equal(running.ok, true);
+
   if (!running.ok) {
     return;
   }
+
   const waiting = reduce(
     running.state,
     command("complete_job", { jobId: "j1", next: "waiting_evidence" }),
   );
+
   assert.equal(waiting.ok, true);
+
   if (waiting.ok) {
     assert.equal(waiting.state.jobs[0]?.state, "waiting_evidence");
   }
+
   const other = reduceAll(emptyBoardState(), [
     enqueue("j2"),
     command("start_job", { jobId: "j2" }),
     command("complete_job", { jobId: "j2", next: "waiting_approval" }),
   ]);
+
   assert.equal(other.ok, true);
+
   if (other.ok) {
     assert.equal(other.state.jobs[0]?.state, "waiting_approval");
   }
@@ -73,10 +95,13 @@ test("budget exceeded refuses to start past maxAttempts", () => {
     command("start_job", { jobId: "j1" }),
     command("fail_job", { jobId: "j1", terminal: "failed" }),
   ]);
+
   assert.equal(prepared.ok, true);
+
   if (!prepared.ok) {
     return;
   }
+
   const again = reduce(
     prepared.state,
     command("enqueue_job", {
@@ -90,17 +115,23 @@ test("budget exceeded refuses to start past maxAttempts", () => {
       },
     }),
   );
+
   assert.equal(again.ok, true);
+
   if (!again.ok) {
     return;
   }
+
   const started = reduce(again.state, command("start_job", { jobId: "j1b" }));
+
   assert.equal(started.ok, true);
   const over = reduceAll(emptyBoardState(), [
     enqueue("j2", 0),
     command("start_job", { jobId: "j2" }),
   ]);
+
   assert.equal(over.ok, false);
+
   if (!over.ok) {
     assert.equal(over.reason, "job_budget_exceeded");
   }
@@ -112,7 +143,9 @@ test("expired job opens the breaker", () => {
     command("start_job", { jobId: "j1" }),
     command("fail_job", { jobId: "j1", terminal: "expired" }),
   ]);
+
   assert.equal(result.ok, true);
+
   if (result.ok) {
     assert.equal(result.state.jobs[0]?.state, "expired");
     assert.equal(result.state.jobs[0]?.breakerOpen, true);
@@ -135,10 +168,13 @@ test("tombstone scopes its effects by entityType (audit P1-1)", () => {
       source: "inferred",
     },
   }));
+
   assert.equal(submitted.ok, true);
+
   if (!submitted.ok) {
     return;
   }
+
   const activated = reduceAll(submitted.state, [
     command("quarantine", { proposalId: "tool_package:c1" }),
     command("start_evaluation", { proposalId: "tool_package:c1" }),
@@ -162,10 +198,13 @@ test("tombstone scopes its effects by entityType (audit P1-1)", () => {
     command("record_approval_decision", { approvalId: "apr-1", status: "granted" }),
     command("activate", { proposalId: "tool_package:c1", versionId: "asset:v1" }),
   ]);
+
   assert.equal(activated.ok, true);
+
   if (!activated.ok) {
     return;
   }
+
   const base = activated.state;
 
   // entityType="fragment"：Board 不拥有 knowledge/observation 空间，无法证明目标
@@ -175,10 +214,13 @@ test("tombstone scopes its effects by entityType (audit P1-1)", () => {
     entityType: "fragment",
     reason: "误报",
   }));
+
   assert.equal(fragment.ok, false);
+
   if (!fragment.ok) {
     assert.equal(fragment.reason, "tombstone_target_out_of_scope");
   }
+
   assert.equal(fragment.state.tombstones.length, 0);
   assert.equal(fragment.state.proposals.find((p) => p.proposalId === "tool_package:c1")?.lifecycle, "active");
   assert.equal(fragment.state.activations[0]?.pointer, "active");
@@ -189,10 +231,13 @@ test("tombstone scopes its effects by entityType (audit P1-1)", () => {
     entityType: "observation",
     reason: "误报",
   }));
+
   assert.equal(observation.ok, false);
+
   if (!observation.ok) {
     assert.equal(observation.reason, "tombstone_target_out_of_scope");
   }
+
   assert.equal(observation.state.tombstones.length, 0);
 
   // Board 拥有但查不到的目标：not_found，与「越界」分开，审计可区分试探与重复撤回。
@@ -201,10 +246,13 @@ test("tombstone scopes its effects by entityType (audit P1-1)", () => {
     entityType: "proposal",
     reason: "撤回幽灵",
   }));
+
   assert.equal(missing.ok, false);
+
   if (!missing.ok) {
     assert.equal(missing.reason, "tombstone_target_not_found");
   }
+
   assert.equal(missing.state.tombstones.length, 0);
 
   // entityType="asset"：只退役该版本的激活，proposal 生命周期不变。
@@ -213,7 +261,9 @@ test("tombstone scopes its effects by entityType (audit P1-1)", () => {
     entityType: "asset",
     reason: "资产删除",
   }));
+
   assert.equal(assetOnly.ok, true);
+
   if (assetOnly.ok) {
     assert.equal(assetOnly.state.proposals.find((p) => p.proposalId === "tool_package:c1")?.lifecycle, "active");
     assert.equal(assetOnly.state.activations[0]?.pointer, "retired");
@@ -225,7 +275,9 @@ test("tombstone scopes its effects by entityType (audit P1-1)", () => {
     entityType: "asset",
     reason: "再次",
   }));
+
   assert.equal(duplicate.ok, false);
+
   if (!duplicate.ok) {
     assert.equal(duplicate.reason, "tombstone_exists");
   }
@@ -236,7 +288,9 @@ test("tombstone scopes its effects by entityType (audit P1-1)", () => {
     entityType: "proposal",
     reason: "整案撤回",
   }));
+
   assert.equal(proposalOnly.ok, true);
+
   if (proposalOnly.ok) {
     assert.equal(proposalOnly.state.proposals.find((p) => p.proposalId === "tool_package:c1")?.lifecycle, "rejected");
     assert.equal(proposalOnly.state.activations[0]?.pointer, "retired");
@@ -247,7 +301,9 @@ test("tombstone scopes its effects by entityType (audit P1-1)", () => {
     command("suspend", { proposalId: "tool_package:c1", breakerReason: "user_withdraw" }),
     command("retire", { proposalId: "tool_package:c1" }),
   ]);
+
   assert.equal(suspended.ok, true);
+
   if (suspended.ok) {
     assert.equal(suspended.state.proposals.find((p) => p.proposalId === "tool_package:c1")?.lifecycle, "retired");
     const retiredRefused = reduce(suspended.state, command("tombstone", {
@@ -255,10 +311,13 @@ test("tombstone scopes its effects by entityType (audit P1-1)", () => {
       entityType: "proposal",
       reason: "重复撤回",
     }));
+
     assert.equal(retiredRefused.ok, false);
+
     if (!retiredRefused.ok) {
       assert.equal(retiredRefused.reason, "tombstone_target_retired");
     }
+
     assert.equal(retiredRefused.state.tombstones.length, 0);
   }
 
@@ -271,7 +330,9 @@ test("tombstone scopes its effects by entityType (audit P1-1)", () => {
     entityType: "tool" as never,
     reason: "y",
   });
+
   assert.equal(invalid.ok, false);
+
   if (!invalid.ok) {
     assert.equal(invalid.reason, "invalid_entity_type");
   }

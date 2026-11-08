@@ -35,20 +35,38 @@ import { applyRewardExposure, applyRewardFeedback } from "./apply-reward.js";
 import { applyToolTrial } from "./apply-tool-trial.js";
 import { applyToolUse } from "./apply-tool-use.js";
 import { applyRewardV2Fact } from './apply-reward-v2.js';
+import { applyCollaborationFact } from "./apply-collaboration.js";
+import { applyCollaborationV2 } from "./apply-collaboration-v2.js";
+import { applyCompactCollaborationV2, applyRehydrateCollaborationV2 } from "./apply-collaboration-v2-retention.js";
+import { applyLearningGrantFact } from "./apply-learning-grant.js";
+import { applyLearningCoordination } from "./apply-coordination.js";
+import { applyCollaborationRuntime } from "./apply-collaboration-runtime.js";
+import { applyMethodExperience } from "./apply-method-experience.js";
 
 export function reduce(state: BoardState, command: BoardCommand): ReduceResult {
   if (wasApplied(state, command.commandId)) {
     return replayMethodCommand(state, command);
   }
+
   const result = reduceNew(state, command);
   const payloadHash = methodPayloadHash(command);
   if (!result.ok || payloadHash === undefined) return result;
+
   return { ...result, state: { ...result.state, appliedCommands: result.state.appliedCommands.map(item =>
     item.commandId === command.commandId ? { ...item, payloadHash } : item) } };
 }
 
 function reduceNew(state: BoardState, command: BoardCommand): ReduceResult {
   switch (command.type) {
+    case "record_method_experience": return applyMethodExperience(state, command);
+    case "record_collaboration_runtime": return applyCollaborationRuntime(state, command);
+    case "coordinate_learning": return applyLearningCoordination(state, command);
+    case "record_learning_grant_fact": return applyLearningGrantFact(state, command);
+    case "compact_collaboration_v2": return applyCompactCollaborationV2(state, command);
+    case "rehydrate_collaboration_v2": return applyRehydrateCollaborationV2(state, command);
+    case "record_collaboration_v2": return applyCollaborationV2(state, command);
+    case "record_collaboration_fact":
+      return applyCollaborationFact(state, command);
     case "record_tool_use":
       return applyToolUse(state, command);
     case 'record_reward_v2_fact':
@@ -118,6 +136,7 @@ export function reduceAll(
 ): ReduceResult {
   let current = state;
   const events: BoardEvent[] = [];
+
   for (const command of commands) {
     const result = reduce(current, command);
     if (!result.ok) {
@@ -126,5 +145,6 @@ export function reduceAll(
     current = result.state;
     events.push(...result.events);
   }
+
   return { ok: true, state: current, events, idempotent: false };
 }

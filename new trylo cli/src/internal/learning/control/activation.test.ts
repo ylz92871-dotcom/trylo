@@ -26,21 +26,28 @@ test("suspend for each breaker cause drops the asset from the next snapshot", ()
       }),
       command("activate", { proposalId: draft.proposalId, versionId: `v-${cause}` }),
     ]);
+
     assert.equal(prepared.ok, true, cause);
+
     if (!prepared.ok) {
       continue;
     }
+
     const suspended = reduce(
       prepared.state,
       command("suspend", { proposalId: draft.proposalId, breakerReason: cause }),
     );
+
     assert.equal(suspended.ok, true, cause);
+
     if (!suspended.ok) {
       continue;
     }
+
     assert.equal(suspended.state.activations[0]?.breaker?.open, true);
     assert.equal(suspended.state.activations[0]?.breaker?.reason, cause);
     const snapshot = resolveProfile(suspended.state, { scope: "user" });
+
     assert.equal(snapshot.userRules.length, 0, cause);
   }
 });
@@ -59,15 +66,21 @@ test("retire keeps history but is absent from snapshot; tombstone refuses a reti
     command("activate", { proposalId: draft.proposalId, versionId: "v-retire" }),
     command("suspend", { proposalId: draft.proposalId, breakerReason: "user_withdraw" }),
   ]);
+
   assert.equal(active.ok, true);
+
   if (!active.ok) {
     return;
   }
+
   const retired = reduce(active.state, command("retire", { proposalId: draft.proposalId }));
+
   assert.equal(retired.ok, true);
+
   if (!retired.ok) {
     return;
   }
+
   // retire 只推进生命周期：proposal 与 asset 的历史仍在，但不再进入读模型快照。
   assert.equal(retired.state.proposals[0]?.lifecycle, "retired");
   assert.equal(retired.state.assets.length, 1);
@@ -83,10 +96,13 @@ test("retire keeps history but is absent from snapshot; tombstone refuses a reti
       reason: "delete",
     }),
   );
+
   assert.equal(refused.ok, false);
+
   if (!refused.ok) {
     assert.equal(refused.reason, "tombstone_target_retired");
   }
+
   assert.equal(refused.state.tombstones.length, 0);
 });
 
@@ -103,10 +119,13 @@ test("tombstone on a live target records the tombstone and retires its activatio
     }),
     command("activate", { proposalId: draft.proposalId, versionId: "v-tombstone" }),
   ]);
+
   assert.equal(active.ok, true);
+
   if (!active.ok) {
     return;
   }
+
   const deleted = reduce(
     active.state,
     command("tombstone", {
@@ -115,10 +134,13 @@ test("tombstone on a live target records the tombstone and retires its activatio
       reason: "delete",
     }),
   );
+
   assert.equal(deleted.ok, true);
+
   if (!deleted.ok) {
     return;
   }
+
   assert.equal(deleted.state.tombstones.length, 1);
   assert.equal(deleted.state.assets.length, 1);
   assert.equal(

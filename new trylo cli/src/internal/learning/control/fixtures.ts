@@ -100,9 +100,11 @@ export function passEvidence(proposalId: string, extra: Partial<EvidenceBundle> 
       sourceDigest: "source:fixture",
     },
   };
+
   if (extra.baselineRef !== undefined) {
     return { ...evidence, baselineRef: extra.baselineRef };
   }
+
   return evidence;
 }
 

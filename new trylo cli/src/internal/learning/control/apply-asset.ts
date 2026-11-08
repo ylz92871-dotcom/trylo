@@ -19,6 +19,13 @@ import {
   type BoardState,
 } from "./state.js";
 import { expectedTo } from "./transitions.js";
+import { isCollaborationPractice } from "../domains/collaboration/parse.js";
+import { practiceSourcesValid } from "../domains/collaboration/practice.js";
+import { isCollaborationPracticeV2 } from "../domains/collaboration/v2-parse.js";
+import { practiceV2SourcesValid } from "../domains/collaboration/v2-policy.js";
+import { lineageFailureV2 } from "../domains/collaboration/v2-admissibility.js";
+import { isCollaborationExperienceContent, collaborationExperiencePublicationValid } from "../agent/subsystems/collaboration/experience/schema.js";
+import { isCollaborationPlan, collaborationPlanPublicationValid } from "../agent/subsystems/collaboration/orchestration/parse.js";
 
 export function applyRecordEvidence(
   state: BoardState,
@@ -29,12 +36,15 @@ export function applyRecordEvidence(
   if (proposal === undefined) {
     return fail(state, "proposal_not_found", evidence.proposalId);
   }
+
   if (proposal.lifecycle !== "evaluating" && proposal.lifecycle !== "shadow") {
     return fail(state, "illegal_transition", `${proposal.lifecycle}->record_evidence`);
   }
+
   if (llmCritiqueClaimsPass(evidence.kinds, evidence.externalVerdict)) {
     return fail(state, "llm_critique_cannot_pass", evidence.evidenceId);
   }
+
   // WP-F / 外审 R2 §3.1：独立证据必须可回查到一条权威收据。
   // Board 保持纯函数（不持有 registry 端口），因此这里检查的是**可追溯性**：
   // 携带 external_verifier / user_feedback 权力的证据必须带 receipt 坐标，且
@@ -42,7 +52,9 @@ export function applyRecordEvidence(
   if (!isTraceableIndependentEvidence(evidence)) {
     return fail(state, "unverifiable_evidence_provenance", evidence.evidenceId);
   }
+
   const sequence = nextSeq(state);
+
   return succeed(state, command.commandId, [
     {
       type: "evidence_recorded",
@@ -62,11 +74,32 @@ export function applyCommitAsset(
   if (proposal === undefined) {
     return fail(state, "proposal_not_found", command.proposalId);
   }
+
   if (findAsset(state, command.versionId)) {
     return fail(state, "active_content_immutable", command.versionId);
   }
+
+  if (proposal.domain === "collaboration" && (proposal.assetKind !== "workflow"
+    || !((command.schemaVersion === 1 && isCollaborationPractice(command.content) && practiceSourcesValid(state, command.content, proposal.scope))
+      || (command.schemaVersion === 2 && isCollaborationPracticeV2(command.content) && practiceV2SourcesValid(state, proposal.scope, command.content))
+      || (command.schemaVersion === 1 && isCollaborationExperienceContent(command.content) && collaborationExperiencePublicationValid(state, proposal.scope, command.content))
+      || (command.schemaVersion === 3 && isCollaborationPlan(command.content) && collaborationPlanPublicationValid(state, proposal.scope, command.content))))) {
+    return fail(state, "collaboration_reference_invalid", "practice_content_or_evidence_invalid");
+  }
+
+  if (proposal.domain === "collaboration" && isCollaborationPracticeV2(command.content)) {
+    const invalid = lineageFailureV2(state, proposal.scope, command.content);
+    if (invalid !== undefined) return fail(state, "collaboration_reference_invalid", invalid);
+  }
+
+  if (proposal.domain === "collaboration" && isCollaborationExperienceContent(command.content)
+    && command.parentVersionId !== command.content.parentVersionId) {
+    return fail(state, "collaboration_reference_invalid", "experience_parent_mismatch");
+  }
+
   const asset = buildAsset(command, proposal);
   const sequence = nextSeq(state);
+
   return succeed(state, command.commandId, [
     {
       type: "asset_committed",
@@ -86,20 +119,26 @@ export function applyEnterShadow(
   if (proposal === undefined) {
     return fail(state, "proposal_not_found", command.proposalId);
   }
+
   if (expectedTo(proposal.lifecycle, "enter_shadow") !== "shadow") {
     return fail(state, "illegal_transition", `${proposal.lifecycle}->enter_shadow`);
   }
+
   const asset = findAsset(state, command.versionId);
   if (asset === undefined) {
     return fail(state, "asset_not_found", command.versionId);
   }
+
   if (asset.createdFromProposalId !== proposal.proposalId || asset.scope !== proposal.scope || asset.kind !== proposal.assetKind) {
     return fail(state, "illegal_transition", "shadow asset does not belong to this proposal");
   }
+
   if (!hasIndependentPass(state, proposal.proposalId)) {
     return fail(state, "external_pass_required", command.proposalId);
   }
+
   const existing = findActivationByProposal(state, proposal);
+
   return commitLifecycleAndPointer(state, command.commandId, command.issuedAt, proposal, "shadow", {
     activationId: existing?.activationId ?? `act:${proposal.scope}:${proposal.assetKind}`,
     scope: proposal.scope,
@@ -119,31 +158,39 @@ export function applyActivate(
   if (proposal === undefined) {
     return fail(state, "proposal_not_found", command.proposalId);
   }
+
   if (expectedTo(proposal.lifecycle, "activate") !== "active") {
     return fail(state, "illegal_transition", `${proposal.lifecycle}->activate`);
   }
+
   const asset = findAsset(state, command.versionId);
   if (asset === undefined) {
     return fail(state, "asset_not_found", command.versionId);
   }
+
   if (asset.createdFromProposalId !== proposal.proposalId || asset.scope !== proposal.scope || asset.kind !== proposal.assetKind) {
     return fail(state, "illegal_transition", "activation asset does not belong to this proposal");
   }
+
   const approvalGate = activationApprovalGate(state, proposal);
   if (approvalGate !== undefined) {
     return fail(state, approvalGate, command.proposalId);
   }
+
   const existing = findActivationByProposal(state, proposal);
   if (casMismatch(command.expectedGeneration, existing)) {
     return fail(state, "activation_cas_mismatch", String(existing?.generation ?? 0));
   }
+
   if (existing?.pointer === "active" && existing.versionId !== command.versionId) {
     return fail(state, "illegal_transition", "active pointer already set");
   }
+
   const previous =
     existing !== undefined && existing.versionId !== command.versionId
       ? { previousVersionId: existing.versionId }
       : existing?.previousVersionId === undefined ? {} : { previousVersionId: existing.previousVersionId };
+
   return commitLifecycleAndPointer(state, command.commandId, command.issuedAt, proposal, "active", {
     activationId: existing?.activationId ?? `act:${proposal.scope}:${proposal.assetKind}`,
     scope: proposal.scope,
@@ -163,9 +210,11 @@ export function applyApprovalDecision(
   if (approval === undefined) {
     return fail(state, "approval_not_found", command.approvalId);
   }
+
   if (approval.status !== "pending" && command.status !== "revoked") {
     return fail(state, "illegal_transition", `${approval.status}->${command.status}`);
   }
+
   const next = { ...approval, status: command.status };
   const sequence = nextSeq(state);
   const proposal = findProposal(state, approval.proposalId);
@@ -198,6 +247,7 @@ export function applyApprovalDecision(
         ]
       : []),
   ];
+
   return succeed(state, command.commandId, events, {
     approvals: replaceById(
       state.approvals,
@@ -236,6 +286,7 @@ export function commitLifecycleAndPointer(
   const nextProposal = { ...proposal, lifecycle: to };
   const seq = nextSeq(state);
   const stamped: ActivationRecord = { ...activation, boardSequence: seq + 1 };
+
   return succeed(state, commandId, [
     {
       type: "proposal_transitioned",
@@ -289,9 +340,11 @@ function buildAsset(
     createdAt: command.issuedAt,
     createdFromProposalId: proposal.proposalId,
   };
+
   if (command.parentVersionId === undefined) {
     return asset;
   }
+
   return { ...asset, parentVersionId: command.parentVersionId };
 }
 
@@ -334,9 +387,11 @@ function isTraceableIndependentEvidence(evidence: EvidenceBundle): boolean {
   if (!claimsIndependent) {
     return true;
   }
+
   if (evidence.receipt === undefined) {
     return false;
   }
+
   return evidence.provenance === `receipt:${evidence.receipt.receiptId}`;
 }
 
@@ -347,12 +402,15 @@ function activationApprovalGate(
   if (proposal.lifecycle !== "awaiting_approval") {
     return undefined;
   }
+
   const approval = state.approvals.find((item) => item.proposalId === proposal.proposalId);
   if (approval === undefined) {
     return "approval_required";
   }
+
   if (approval.status !== "granted") {
     return "approval_not_granted";
   }
+
   return undefined;
 }

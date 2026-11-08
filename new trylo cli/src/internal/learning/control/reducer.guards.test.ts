@@ -17,12 +17,17 @@ test("duplicate commandId is idempotent and does not advance sequence twice", ()
   const draft = userRuleDraft();
   const submit = command("submit_proposal", { proposal: draft, commandId: "same" });
   const first = reduce(emptyBoardState(), submit);
+
   assert.equal(first.ok, true);
+
   if (!first.ok) {
     return;
   }
+
   const second = reduce(first.state, submit);
+
   assert.equal(second.ok, true);
+
   if (second.ok) {
     assert.equal(second.idempotent, true);
     assert.equal(second.events.length, 0);
@@ -37,15 +42,20 @@ test("inferred proposal cannot use fast lane", () => {
     emptyBoardState(),
     command("submit_proposal", { proposal: draft }),
   );
+
   assert.equal(prepared.ok, true);
+
   if (!prepared.ok) {
     return;
   }
+
   const result = reduce(
     prepared.state,
     command("fast_lane_validate", { proposalId: draft.proposalId }),
   );
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "inferred_cannot_skip_verification");
   }
@@ -75,20 +85,26 @@ test("fast lane rejects wrong kind, global scope, and authorities", () => {
       reason: "fast_lane_risk_rejected",
     },
   ] as const;
+
   for (const item of cases) {
     const prepared = reduce(
       emptyBoardState(),
       command("submit_proposal", { proposal: item.draft }),
     );
+
     assert.equal(prepared.ok, true);
+
     if (!prepared.ok) {
       continue;
     }
+
     const result = reduce(
       prepared.state,
       command("fast_lane_validate", { proposalId: item.draft.proposalId }),
     );
+
     assert.equal(result.ok, false, item.reason);
+
     if (!result.ok) {
       assert.equal(result.reason, item.reason);
     }
@@ -103,17 +119,22 @@ test("llm critique cannot produce external pass", () => {
     command("quarantine", { proposalId: draft.proposalId }),
     command("start_evaluation", { proposalId: draft.proposalId }),
   ]);
+
   assert.equal(prepared.ok, true);
+
   if (!prepared.ok) {
     return;
   }
+
   const result = reduce(
     prepared.state,
     command("record_evidence", {
       evidence: passEvidence(draft.proposalId, { kinds: ["llm_critique"] }),
     }),
   );
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "llm_critique_cannot_pass");
   }
@@ -134,15 +155,20 @@ test("shadow requires independent external pass", () => {
       schemaVersion: 1,
     }),
   ]);
+
   assert.equal(prepared.ok, true);
+
   if (!prepared.ok) {
     return;
   }
+
   const result = reduce(
     prepared.state,
     command("enter_shadow", { proposalId: draft.proposalId, versionId }),
   );
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "external_pass_required");
   }
@@ -170,16 +196,21 @@ test("denied approval rejects the proposal and does not activate", () => {
     }),
     command("record_approval_decision", { approvalId: "ap-deny", status: "denied" }),
   ]);
+
   assert.equal(prepared.ok, true);
+
   if (!prepared.ok) {
     return;
   }
+
   assert.equal(proposalOf(prepared.state, draft.proposalId).lifecycle, "rejected");
   const activated = reduce(
     prepared.state,
     command("activate", { proposalId: draft.proposalId, versionId: "v1" }),
   );
+
   assert.equal(activated.ok, false);
+
   if (!activated.ok) {
     assert.equal(activated.reason, "illegal_transition");
   }
@@ -191,7 +222,9 @@ test("unknown command type fails closed", () => {
     commandId: "c-unknown",
     issuedAt: "2026-09-12T00:00:00.000Z",
   } as never);
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "unknown_command");
     assert.equal(result.state.sequence, 0);
@@ -213,10 +246,13 @@ test("resume CAS mismatch fail closed", () => {
     command("activate", { proposalId: draft.proposalId, versionId: "v-cas" }),
     command("suspend", { proposalId: draft.proposalId, breakerReason: "neg-delta" }),
   ]);
+
   assert.equal(prepared.ok, true);
+
   if (!prepared.ok) {
     return;
   }
+
   const generation = prepared.state.activations[0]?.generation;
   const result = reduce(
     prepared.state,
@@ -225,7 +261,9 @@ test("resume CAS mismatch fail closed", () => {
       expectedGeneration: (generation ?? 0) + 99,
     }),
   );
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "activation_cas_mismatch");
   }
@@ -244,10 +282,13 @@ test("commit_asset refuses to mutate an existing version id", () => {
       schemaVersion: 1,
     }),
   ]);
+
   assert.equal(prepared.ok, true);
+
   if (!prepared.ok) {
     return;
   }
+
   const result = reduce(
     prepared.state,
     command("commit_asset", {
@@ -257,10 +298,13 @@ test("commit_asset refuses to mutate an existing version id", () => {
       schemaVersion: 1,
     }),
   );
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "active_content_immutable");
   }
+
   assert.equal(prepared.state.assets[0]?.contentHash, contentHashOf({ text: "one" }));
 });
 
@@ -278,10 +322,13 @@ test("second activate of a different version without suspend fails", () => {
     }),
     command("activate", { proposalId: draft.proposalId, versionId: "v1" }),
   ]);
+
   assert.equal(first.ok, true);
+
   if (!first.ok) {
     return;
   }
+
   const secondDraft = userRuleDraft({ proposalId: "p-other" });
   const second = reduceAll(first.state, [
     command("submit_proposal", { proposal: secondDraft }),
@@ -294,7 +341,9 @@ test("second activate of a different version without suspend fails", () => {
     }),
     command("activate", { proposalId: secondDraft.proposalId, versionId: "v2" }),
   ]);
+
   assert.equal(second.ok, false);
+
   if (!second.ok) {
     assert.equal(second.reason, "illegal_transition");
   }
@@ -324,35 +373,48 @@ test("rollback moves pointer and leaves asset content hash unchanged", () => {
       schemaVersion: 1,
     }),
   ]);
+
   assert.equal(started.ok, true);
+
   if (!started.ok) {
     return;
   }
+
   const activated = reduce(
     started.state,
     command("activate", { proposalId: second.proposalId, versionId: "v2" }),
   );
+
   assert.equal(activated.ok, true);
+
   if (!activated.ok) {
     return;
   }
+
   const suspended = reduce(
     activated.state,
     command("suspend", { proposalId: second.proposalId, breakerReason: "neg" }),
   );
+
   assert.equal(suspended.ok, true);
+
   if (!suspended.ok) {
     return;
   }
+
   const rolled = reduce(
     suspended.state,
     command("rollback", { proposalId: second.proposalId, reason: "restore" }),
   );
+
   assert.equal(rolled.ok, true);
+
   if (!rolled.ok) {
     return;
   }
+
   const activation = rolled.state.activations[0];
+
   assert.equal(activation?.versionId, "v1");
   assert.equal(activation?.pointer, "active");
   assert.equal(rolled.state.assets[0]?.contentHash, contentHashOf({ text: "one" }));
@@ -364,7 +426,9 @@ test("compound proposal without children is rejected", () => {
   resetIds();
   const draft = inferredDraft({ domain: "compound" });
   const result = reduce(emptyBoardState(), command("submit_proposal", { proposal: draft }));
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "compound_must_be_explicit");
   }
@@ -391,15 +455,20 @@ test("awaiting_approval without grant cannot activate", () => {
       action: "activate",
     }),
   ]);
+
   assert.equal(prepared.ok, true);
+
   if (!prepared.ok) {
     return;
   }
+
   const result = reduce(
     prepared.state,
     command("activate", { proposalId: draft.proposalId, versionId: "v1" }),
   );
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "approval_not_granted");
   }

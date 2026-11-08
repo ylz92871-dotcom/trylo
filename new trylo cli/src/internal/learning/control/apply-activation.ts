@@ -31,10 +31,12 @@ export function applyResume(
   if (proposal === undefined) {
     return fail(state, "proposal_not_found", command.proposalId);
   }
+
   const existing = findActivationByProposal(state, proposal);
   if (casMismatch(command.expectedGeneration, existing)) {
     return fail(state, "activation_cas_mismatch", String(existing?.generation ?? 0));
   }
+
   return moveActivePointer(state, command, "active");
 }
 
@@ -46,14 +48,19 @@ export function applyRollback(
   if (proposal === undefined) {
     return fail(state, "proposal_not_found", command.proposalId);
   }
+
   if (expectedTo(proposal.lifecycle, "rollback") !== "rolled_back") {
     return fail(state, "illegal_transition", `${proposal.lifecycle}->rollback`);
   }
+
   const existing = findActivationByProposal(state, proposal);
   if (existing === undefined) {
     return fail(state, "activation_not_found", command.proposalId);
   }
+
   if (!activationOwnedBy(state, existing, proposal)) return fail(state, "illegal_transition", "proposal no longer owns this activation");
+
+  // With no predecessor, rollback closes this pointer instead of activating a replacement.
   if (existing.previousVersionId === undefined) {
     return commitLifecycleAndPointer(
       state,
@@ -64,9 +71,11 @@ export function applyRollback(
       withRollback(existing, "rolled_back", existing.versionId, command.reason),
     );
   }
+
   if (findAsset(state, existing.previousVersionId) === undefined) {
     return fail(state, "rollback_target_missing", existing.previousVersionId);
   }
+
   return commitLifecycleAndPointer(
     state,
     command.commandId,
@@ -94,15 +103,19 @@ function moveActivePointer(
   if (proposal === undefined) {
     return fail(state, "proposal_not_found", command.proposalId);
   }
+
   const to = expectedTo(proposal.lifecycle, command.type);
   if (to === undefined) {
     return fail(state, "illegal_transition", `${proposal.lifecycle}->${command.type}`);
   }
+
   const existing = findActivationByProposal(state, proposal);
   if (existing === undefined) {
     return fail(state, "activation_not_found", command.proposalId);
   }
+
   if (!activationOwnedBy(state, existing, proposal)) return fail(state, "illegal_transition", "proposal no longer owns this activation");
+
   const breaker = command.type === "resume" ? undefined :
     breakerReason === undefined
       ? existing.breaker
@@ -117,6 +130,7 @@ function moveActivePointer(
     generation: existing.generation + 1,
     ...(breaker !== undefined ? { breaker } : {}),
   };
+
   return commitLifecycleAndPointer(
     state,
     command.commandId,
@@ -153,8 +167,10 @@ function withRollback(
     generation: existing.generation + 1,
     rollbackReason: reason,
   };
+
   if (previousVersionId === undefined) {
     return next;
   }
+
   return { ...next, previousVersionId };
 }

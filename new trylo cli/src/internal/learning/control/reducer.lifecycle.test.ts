@@ -47,7 +47,9 @@ test("illegal transitions fail closed without mutating sequence", () => {
     const reached = reach(example.from);
     const before = reached.state.sequence;
     const result = applyRule(reached.state, reached, example.command);
+
     assert.equal(result.ok, false, `${example.from}->${example.command} should fail`);
+
     if (!result.ok) {
       assert.equal(result.reason, "illegal_transition");
       assert.equal(result.state.sequence, before);
@@ -67,9 +69,12 @@ test("main inferred path draft to active", () => {
 test("fast lane draft to validated to active", () => {
   resetIds();
   const reached = reach("validated");
+
   assert.equal(proposalOf(reached.state, reached.proposalId).lifecycle, "validated");
   const activated = applyRule(reached.state, reached, "activate");
+
   assert.equal(activated.ok, true);
+
   if (activated.ok) {
     assert.equal(proposalOf(activated.state, reached.proposalId).lifecycle, "active");
   }
@@ -98,24 +103,31 @@ function reach(lifecycle: ProposalLifecycle): Reached {
   if (lifecycle === "validated" || lifecycle === "draft") {
     return reachExplicit(lifecycle);
   }
+
   if (lifecycle === "rejected") {
     const draft = reachExplicit("draft");
     const result = reduce(
       draft.state,
       command("reject", { proposalId: draft.proposalId, reason: "no" }),
     );
+
     assert.equal(result.ok, true);
+
     return { ...draft, state: result.ok ? result.state : draft.state };
   }
+
   if (lifecycle === "retired") {
     const suspended = reachInferred("suspended");
     const result = reduce(
       suspended.state,
       command("retire", { proposalId: suspended.proposalId }),
     );
+
     assert.equal(result.ok, true);
+
     return { ...suspended, state: result.ok ? result.state : suspended.state };
   }
+
   return reachInferred(lifecycle);
 }
 
@@ -124,6 +136,7 @@ function reachExplicit(lifecycle: "draft" | "validated"): Reached {
   const versionId = `v-${draft.proposalId}`;
   const approvalId = `a-${draft.proposalId}`;
   const commands: BoardCommand[] = [command("submit_proposal", { proposal: draft })];
+
   if (lifecycle === "validated") {
     commands.push(command("fast_lane_validate", { proposalId: draft.proposalId }));
     commands.push(
@@ -135,11 +148,15 @@ function reachExplicit(lifecycle: "draft" | "validated"): Reached {
       }),
     );
   }
+
   const result = reduceAll(emptyBoardState(), commands);
+
   assert.equal(result.ok, true);
+
   if (!result.ok) {
     throw new Error("reachExplicit failed");
   }
+
   return { state: result.state, proposalId: draft.proposalId, versionId, approvalId };
 }
 
@@ -174,6 +191,7 @@ function reachInferred(lifecycle: ProposalLifecycle): Reached {
   if (!result.ok) {
     throw new Error(`${lifecycle}: ${result.reason} ${result.detail}`);
   }
+
   return { state: result.state, proposalId: draft.proposalId, versionId, approvalId };
 }
 

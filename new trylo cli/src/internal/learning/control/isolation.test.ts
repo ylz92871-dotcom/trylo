@@ -14,12 +14,15 @@ test("learning control/profile/journal/knowledge/store do not import execution o
     path.join(SRC, "adapters", "learning-store"),
   ];
   const offenders: string[] = [];
+
   for (const root of roots) {
     for (const file of await listTs(root)) {
       if (file.endsWith(".test.ts")) {
         continue;
       }
+
       const source = await readFile(file, "utf8");
+
       for (const layer of FORBIDDEN) {
         if (importsLayer(source, layer)) {
           offenders.push(`${path.relative(SRC, file)} -> ${layer}`);
@@ -27,6 +30,7 @@ test("learning control/profile/journal/knowledge/store do not import execution o
       }
     }
   }
+
   assert.deepEqual(offenders, []);
 });
 
@@ -39,6 +43,7 @@ function importsLayer(source: string, layer: string): boolean {
 
 async function listTs(target: string): Promise<string[]> {
   let info;
+
   try {
     info = await stat(target);
   } catch (err) {
@@ -47,11 +52,14 @@ async function listTs(target: string): Promise<string[]> {
     }
     throw err;
   }
+
   if (info.isFile()) {
     return target.endsWith(".ts") ? [target] : [];
   }
+
   const entries = await readdir(target, { withFileTypes: true });
   const files: string[] = [];
+
   for (const entry of entries) {
     const full = path.join(target, entry.name);
     if (entry.isDirectory()) {
@@ -60,6 +68,7 @@ async function listTs(target: string): Promise<string[]> {
       files.push(full);
     }
   }
+
   return files;
 }
 

@@ -8,8 +8,8 @@ import type {
   MethodRetention,
 } from "./contracts.js";
 import type { RewardExposureDraft, RewardFeedback } from "../reward/contracts.js";
-import type { ToolTrialRecord } from "../domains/tool/evolution/trial.js";
-import type { ToolUseRecord } from "../domains/tool/evolution/use.js";
+import type { ToolTrialRecord } from "../agent/subsystems/tool/domain/evolution/trial.js";
+import type { ToolUseRecord } from "../agent/subsystems/tool/domain/evolution/use.js";
 
 type CommandBase = {
   readonly commandId: string;
@@ -112,9 +112,16 @@ export type EnqueueJobCommand = CommandBase & {
   readonly job: Omit<LearningJob, "state" | "attempt" | "breakerOpen">;
 };
 
+/** Exact original managed source/lease plus a confirmed native checkpoint, never new funds. */
+export type ManagedJobContinuation = {
+  readonly grantId: string; readonly claimId: string; readonly expectedIssueRevision: number;
+  readonly resultRef: string; readonly expectedAttempt: number;
+};
+
 export type StartJobCommand = CommandBase & {
   readonly type: "start_job";
   readonly jobId: string;
+  readonly continuation?: ManagedJobContinuation;
 };
 
 /** Evidence arrival only requeues work; it grants no authority and consumes no attempt. */
@@ -122,6 +129,7 @@ export type RequeueJobCommand = CommandBase & {
   readonly type: "requeue_job";
   readonly jobId: string;
   readonly expectedAttempt: number;
+  readonly continuation?: ManagedJobContinuation;
 };
 
 export type CompleteJobCommand = CommandBase & {
@@ -155,6 +163,7 @@ export type RecordMethodFieldingCommand = CommandBase & {
   readonly beat: number;
   readonly requestId: string;
   readonly scope: string;
+  readonly binding?: import("../agent/subsystems/method/domain/exposure-binding.js").ExperienceExposureBinding;
 };
 
 export type RecordMethodFeedbackCommand = CommandBase & {
@@ -165,6 +174,7 @@ export type RecordMethodFeedbackCommand = CommandBase & {
   readonly exposureId?: string;
   readonly providerAttemptId?: string;
   readonly sourceEventId?: string;
+  readonly observation?: import("../agent/subsystems/method/domain/inference.js").MethodObservation;
 };
 
 export type SetMethodRetentionCommand = CommandBase & {
@@ -176,6 +186,7 @@ export type RecordRewardExposureCommand = CommandBase & {
   readonly type: "record_reward_exposure";
   readonly exposure: RewardExposureDraft;
 };
+
 export type RecordRewardFeedbackCommand = CommandBase & {
   readonly type: "record_reward_feedback";
   readonly feedback: RewardFeedback;
@@ -186,7 +197,21 @@ export type RecordRewardV2FactCommand = CommandBase & {
   readonly fact: import('../reward/v2-facts.js').RewardV2Draft;
 };
 
+export type RecordCollaborationV2Command = CommandBase & { readonly type: "record_collaboration_v2";
+  readonly fact: import("../domains/collaboration/v2-contracts.js").CollaborationV2Fact; readonly expectedCycleFactId?: string };
+
+export type RecordLearningGrantFactCommand = CommandBase & { readonly type: "record_learning_grant_fact";
+  readonly fact: import("./grant-contract.js").LearningGrantDraft };
+
 export type BoardCommand =
+  | (CommandBase & { readonly type: "record_method_experience"; readonly fact: import("../agent/subsystems/method/domain/experience-facts.js").MethodExperienceFact })
+  | (CommandBase & { readonly type: "record_collaboration_runtime"; readonly receipt: import("../../protocol/collaboration-resource.js").CollaborationRuntimeReceipt })
+  | import("./coordination-contract.js").CoordinateLearningCommand
+  | RecordLearningGrantFactCommand
+  | (CommandBase & { readonly type: "compact_collaboration_v2"; readonly scope: string; readonly expectedSequence: number })
+  | (CommandBase & { readonly type: "rehydrate_collaboration_v2"; readonly scope: string; readonly records: readonly RecordCollaborationV2Command[] })
+  | RecordCollaborationV2Command
+  | (CommandBase & { readonly type: "record_collaboration_fact"; readonly fact: import("../domains/collaboration/contracts.js").CollaborationFact })
   | (CommandBase & { readonly type: "record_tool_use"; readonly record: ToolUseRecord })
   | RecordRewardV2FactCommand
   | (CommandBase & { readonly type: "record_tool_trial"; readonly record: ToolTrialRecord })

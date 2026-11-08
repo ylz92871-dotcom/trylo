@@ -1,3 +1,5 @@
+import { isExposureBinding } from "../agent/subsystems/method/domain/exposure-binding.js";
+
 export const ASSET_KINDS = [
   "user_rule",
   "prompt_patch",
@@ -12,6 +14,7 @@ export const ASSET_KINDS = [
 export type AssetKind = (typeof ASSET_KINDS)[number];
 
 export const LEARNING_DOMAINS = [
+  "collaboration",
   "user",
   "prompt",
   "skill",
@@ -234,6 +237,8 @@ export type LearningJob = {
   readonly maxAttempts: number;
   readonly breakerOpen: boolean;
   readonly dedupeKey: string;
+  /** Centrally funded domain work; generic job commands cannot bypass its claim or budget. */
+  readonly coordination?: { readonly issueId: string; readonly grantId: string; readonly resultRefs?: readonly string[] };
 };
 
 export type Tombstone = {
@@ -269,6 +274,7 @@ export function isMethodRetention(value: unknown): value is MethodRetention {
 }
 
 export type MethodFielding = {
+  readonly useSequence?: number;
   readonly exposureId: string;
   readonly versionId: string;
   readonly proposalId: string;
@@ -276,6 +282,7 @@ export type MethodFielding = {
   readonly beat: number;
   readonly requestId: string;
   readonly scope: string;
+  readonly binding?: import("../agent/subsystems/method/domain/exposure-binding.js").ExperienceExposureBinding;
   readonly recordedAt: string;
 };
 
@@ -286,6 +293,7 @@ export type MethodFielding = {
  * `helped` 明确 true 才算帮助，缺失保持 unknown（M2 消费，不在本包沉降）。
  */
 export type MethodFeedback = {
+  readonly feedbackSequence?: number;
   readonly versionId: string;
   readonly turnId: string;
   readonly helped: boolean;
@@ -293,6 +301,7 @@ export type MethodFeedback = {
   readonly providerAttemptId?: string;
   readonly sourceEventId?: string;
   readonly recordedAt: string;
+  readonly observation?: import("../agent/subsystems/method/domain/inference.js").MethodObservation;
 };
 
 const ASSET_KIND_SET: ReadonlySet<string> = new Set(ASSET_KINDS);
@@ -323,7 +332,9 @@ export function isMethodFielding(value: unknown): value is MethodFielding {
   if (typeof value !== "object" || value === null) {
     return false;
   }
+
   const item = value as Record<string, unknown>;
+
   return (
     isNonEmptyString(item.exposureId) &&
     isNonEmptyString(item.versionId) &&
@@ -332,8 +343,10 @@ export function isMethodFielding(value: unknown): value is MethodFielding {
     typeof item.beat === "number" &&
     Number.isInteger(item.beat) &&
     item.beat > 0 &&
+    (item.useSequence === undefined || typeof item.useSequence === "number" && Number.isSafeInteger(item.useSequence) && item.useSequence > 0) &&
     isNonEmptyString(item.requestId) &&
     isNonEmptyString(item.scope) &&
+    (item.binding === undefined || isExposureBinding(item.binding) && item.binding.context.taskId === item.turnId) &&
     isNonEmptyString(item.recordedAt)
   );
 }
@@ -342,7 +355,9 @@ export function isMethodFeedback(value: unknown): value is MethodFeedback {
   if (typeof value !== "object" || value === null) {
     return false;
   }
+
   const item = value as Record<string, unknown>;
+
   return (
     isNonEmptyString(item.versionId) &&
     isNonEmptyString(item.turnId) &&

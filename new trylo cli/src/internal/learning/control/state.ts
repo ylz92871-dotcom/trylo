@@ -16,8 +16,23 @@ import type { RewardExposure, RewardFeedback } from "../reward/contracts.js";
 import { isRewardV2Fact,validRewardV2Prefix,type RewardV2Fact } from '../reward/v2-facts.js';
 import { isRewardExposure, isRewardFeedback } from "../reward/validate.js";
 import { indexRewardRecords } from "../reward/records.js";
-import { decodeToolTrialRecord, MAX_TOOL_TRIALS, toolTrialKey, type ToolTrialRecord } from "../domains/tool/evolution/trial.js";
-import { isToolUseRecord, MAX_TOOL_USES, type ToolUseRecord } from "../domains/tool/evolution/use.js";
+import { decodeToolTrialRecord, MAX_TOOL_TRIALS, toolTrialKey, type ToolTrialRecord } from "../agent/subsystems/tool/domain/evolution/trial.js";
+import { isToolUseRecord, MAX_TOOL_USES, type ToolUseRecord } from "../agent/subsystems/tool/domain/evolution/use.js";
+import type { CollaborationFact } from "../domains/collaboration/contracts.js";
+import { validCollaborationFacts } from "./apply-collaboration.js";
+import type { CollaborationArchiveV2, CollaborationV2Fact } from "../domains/collaboration/v2-contracts.js";
+import { validCollaborationArchivesV2 } from "../domains/collaboration/v2-retention.js";
+import { validCollaborationV2Facts } from "./apply-collaboration-v2.js";
+import type { LearningGrantFact } from "./grant-contract.js";
+import { validLearningGrantFacts } from "./grant-state.js";
+import type { LearningIssue, CentralLearningGrant, LearningDependency } from "./coordination-contract.js";
+import { validCoordinationState } from "./coordination-state.js";
+import { validCollaborationRuntimeReceipts } from "./apply-collaboration-runtime.js";
+import type { CollaborationRuntimeReceipt } from "../../protocol/collaboration-resource.js";
+import { isMethodExperienceFact, type MethodExperienceFact } from "../agent/subsystems/method/domain/experience-facts.js";
+import { isMethodObservation } from "../agent/subsystems/method/domain/inference.js";
+import { validExperienceSnapshot } from "../agent/subsystems/method/domain/experience-source.js";
+import type { CentralLearningBudget } from "./central-budget-contract.js";
 
 export type AppliedCommand = {
   readonly commandId: string;
@@ -26,6 +41,17 @@ export type AppliedCommand = {
 };
 
 export type BoardState = {
+  readonly centralLearningBudgets?: readonly CentralLearningBudget[];
+  readonly methodExperienceFacts?: readonly MethodExperienceFact[];
+  readonly collaborationRuntimeReceipts?: readonly CollaborationRuntimeReceipt[];
+  readonly learningIssues?: readonly LearningIssue[];
+  readonly centralLearningGrants?: readonly CentralLearningGrant[];
+  readonly learningDependencies?: readonly LearningDependency[];
+  /** Absent in older snapshots. Grant facts belong to this Board, never a second budget file. */
+  readonly learningGrantFacts?: readonly LearningGrantFact[];
+  readonly collaborationV2Archives?: readonly CollaborationArchiveV2[];
+  readonly collaborationV2Facts?: readonly CollaborationV2Fact[];
+  readonly collaborationFacts?: readonly CollaborationFact[];
   readonly toolUses?: readonly ToolUseRecord[];
   readonly rewardV2Facts?: readonly RewardV2Fact[];
   readonly toolTrials?: readonly ToolTrialRecord[];
@@ -77,17 +103,47 @@ export function emptyBoardState(): BoardState {
  *     地把一条畸形记录断言成合法，比丢掉整张快照危险得多。
  */
 export function normalizeBoardState(state: BoardState): BoardState | undefined {
+  const methodExperienceFacts = decodeArray(state.methodExperienceFacts, isMethodExperienceFact);
+  if (methodExperienceFacts === undefined || new Set(methodExperienceFacts.map(item => item.factId)).size !== methodExperienceFacts.length ||
+    methodExperienceFacts.some((item, index) => item.sequence > state.sequence ||
+      (index > 0 && item.sequence <= methodExperienceFacts[index - 1]!.sequence))) return undefined;
+
+  if (!validCollaborationRuntimeReceipts(state)) return undefined;
+
+  const learningIssues = state.learningIssues === undefined ? [] : state.learningIssues;
+  const centralLearningGrants = state.centralLearningGrants === undefined ? [] : state.centralLearningGrants;
+  const learningDependencies = state.learningDependencies === undefined ? [] : state.learningDependencies;
+  if (!validCoordinationState({ ...state, learningIssues, centralLearningGrants, learningDependencies })) return undefined;
+
+  const learningGrantFacts = state.learningGrantFacts === undefined ? [] : state.learningGrantFacts;
+  if (!validLearningGrantFacts(learningGrantFacts, state.sequence)) return undefined;
+
+  const collaborationV2Archives = state.collaborationV2Archives === undefined ? [] : state.collaborationV2Archives;
+  if (!validCollaborationArchivesV2(collaborationV2Archives)) return undefined;
+
+  const collaborationV2Facts = state.collaborationV2Facts === undefined ? [] : state.collaborationV2Facts;
+  if (!validCollaborationV2Facts(state, collaborationV2Facts)) return undefined;
+
+  const collaborationFacts = state.collaborationFacts === undefined ? [] : state.collaborationFacts;
+  if (!validCollaborationFacts(state, collaborationFacts)) return undefined;
+
   const toolUses = decodeArray(state.toolUses, isToolUseRecord);
   if (state.toolUses === null || toolUses === undefined || toolUses.length > MAX_TOOL_USES
     || new Set(toolUses.map(item => item.useId)).size !== toolUses.length) return undefined;
+
   const rewardV2Facts=decodeArray(state.rewardV2Facts,isRewardV2Fact);
   if(state.rewardV2Facts===null||rewardV2Facts===undefined||!validRewardV2Prefix(rewardV2Facts,state.sequence))return undefined;
+
   const toolTrials = decodeArray(state.toolTrials, (item): item is ToolTrialRecord => decodeToolTrialRecord(item) !== undefined);
   if (state.toolTrials === null || toolTrials === undefined || toolTrials.length > MAX_TOOL_TRIALS
     || new Set(toolTrials.map(toolTrialKey)).size !== toolTrials.length) return undefined;
+
   if (state.rewardExposures === null || state.rewardFeedbacks === null) return undefined;
+
   const fieldings = decodeArray((state as { fieldings?: unknown }).fieldings, isMethodFielding);
   const feedbacks = decodeArray((state as { feedbacks?: unknown }).feedbacks, isMethodFeedback);
+  if (feedbacks?.some(item => item.observation !== undefined && !isMethodObservation(item.observation))) return undefined;
+
   const methodRetentions = decodeArray(state.methodRetentions, isMethodRetention);
   const rewardExposures = decodeArray(state.rewardExposures, isRewardExposure);
   const rewardFeedbacks = decodeArray(state.rewardFeedbacks, isRewardFeedback);
@@ -95,8 +151,12 @@ export function normalizeBoardState(state: BoardState): BoardState | undefined {
       rewardExposures === undefined || rewardFeedbacks === undefined) {
     return undefined;
   }
+
+  if (!validExperienceSnapshot({ ...state, feedbacks, methodExperienceFacts })) return undefined;
+
   if (indexRewardRecords({ exposures: rewardExposures, feedbacks: rewardFeedbacks }) === undefined) return undefined;
-  return { ...state, fieldings, feedbacks, methodRetentions, rewardExposures, rewardFeedbacks, toolTrials, rewardV2Facts, toolUses };
+
+  return { ...state, methodExperienceFacts, learningIssues, centralLearningGrants, learningDependencies, learningGrantFacts, collaborationV2Archives, collaborationV2Facts, collaborationFacts, fieldings, feedbacks, methodRetentions, rewardExposures, rewardFeedbacks, toolTrials, rewardV2Facts, toolUses };
 }
 
 /**
@@ -107,16 +167,20 @@ function decodeArray<T>(value: unknown, guard: (item: unknown) => item is T): Re
   if (value === undefined || value === null) {
     return [];
   }
+
   if (!Array.isArray(value)) {
     return undefined;
   }
+
   const decoded: T[] = [];
+
   for (const item of value) {
     if (!guard(item)) {
       return undefined;
     }
     decoded.push(item);
   }
+
   return decoded;
 }
 
@@ -210,7 +274,10 @@ export function replaceById<T>(
   if (index < 0) {
     return [...items, next];
   }
+
   const copy = items.slice();
+
   copy[index] = next;
+
   return copy;
 }

@@ -26,17 +26,21 @@ export function applySubmit(
   if (findTombstone(state, draft.proposalId)) {
     return fail(state, "tombstone_exists", draft.proposalId);
   }
+
   if (findProposal(state, draft.proposalId)) {
     return fail(state, "duplicate_proposal", draft.proposalId);
   }
+
   if (
     draft.domain === "compound" &&
     (draft.compoundChildIds === undefined || draft.compoundChildIds.length === 0)
   ) {
     return fail(state, "compound_must_be_explicit", draft.proposalId);
   }
+
   const proposal: LearningProposal = { ...draft, lifecycle: "draft" };
   const sequence = nextSeq(state);
+
   return succeed(
     state,
     command.commandId,
@@ -61,6 +65,7 @@ export function applySimpleTransition(
   if (proposal === undefined) {
     return fail(state, "proposal_not_found", command.proposalId);
   }
+
   const to = expectedTo(proposal.lifecycle, command.type);
   if (to === undefined) {
     return fail(
@@ -69,6 +74,7 @@ export function applySimpleTransition(
       `${proposal.lifecycle}->${command.type}`,
     );
   }
+
   return transitionProposal(state, command.commandId, command.issuedAt, proposal, to);
 }
 
@@ -80,6 +86,7 @@ export function applyFastLaneValidate(
   if (proposal === undefined) {
     return fail(state, "proposal_not_found", command.proposalId);
   }
+
   if (expectedTo(proposal.lifecycle, "fast_lane_validate") !== "validated") {
     return fail(
       state,
@@ -87,10 +94,12 @@ export function applyFastLaneValidate(
       `${proposal.lifecycle}->fast_lane_validate`,
     );
   }
+
   const gated = fastLaneGate(proposal);
   if (gated !== undefined) {
     return fail(state, gated.reason, gated.detail);
   }
+
   return transitionProposal(
     state,
     command.commandId,
@@ -108,6 +117,7 @@ export function applyRequestApproval(
   if (proposal === undefined) {
     return fail(state, "proposal_not_found", command.proposalId);
   }
+
   if (expectedTo(proposal.lifecycle, "request_approval") !== "awaiting_approval") {
     return fail(
       state,
@@ -115,6 +125,7 @@ export function applyRequestApproval(
       `${proposal.lifecycle}->request_approval`,
     );
   }
+
   const next = { ...proposal, lifecycle: "awaiting_approval" as const };
   const approval = {
     approvalId: command.approvalId,
@@ -124,6 +135,7 @@ export function applyRequestApproval(
     requestedAuthorities: proposal.requestedAuthorities,
   };
   const sequence = nextSeq(state);
+
   return succeed(
     state,
     command.commandId,
@@ -165,6 +177,7 @@ export function transitionProposal(
 ): ReduceResult {
   const next = { ...proposal, lifecycle: to };
   const sequence = nextSeq(state);
+
   return succeed(
     state,
     commandId,
@@ -197,17 +210,22 @@ function fastLaneGate(
       ? { reason: "inferred_cannot_skip_verification", detail: proposal.proposalId }
       : { reason: "fast_lane_source_rejected", detail: proposal.source };
   }
+
   if (proposal.assetKind !== "user_rule") {
     return { reason: "fast_lane_wrong_kind", detail: proposal.assetKind };
   }
+
   if (isBroadScope(proposal.scope)) {
     return { reason: "fast_lane_scope_rejected", detail: proposal.scope };
   }
+
   if (proposal.requestedAuthorities.length > 0) {
     return { reason: "fast_lane_authority_rejected", detail: proposal.proposalId };
   }
+
   if (proposal.risk === "high") {
     return { reason: "fast_lane_risk_rejected", detail: proposal.proposalId };
   }
+
   return undefined;
 }

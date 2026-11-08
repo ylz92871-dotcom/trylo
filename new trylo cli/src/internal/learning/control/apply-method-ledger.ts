@@ -6,6 +6,9 @@ import type { MethodFielding } from "./contracts.js";
 import type { ReduceResult } from "./result.js";
 import { fail, nextSeq, succeed } from "./result.js";
 import type { BoardState } from "./state.js";
+import { isMethodObservation } from "../agent/subsystems/method/domain/inference.js";
+import { experienceSourceOf, validObservationBinding, validObservationRevision } from "../agent/subsystems/method/domain/experience-source.js";
+import { isExposureBinding, validCompilationExposure } from "../agent/subsystems/method/domain/exposure-binding.js";
 
 /**
  * 方法上场/反馈记账（M1，D-M1；归因/唯一性收紧见外审 P1-3）。
@@ -28,31 +31,28 @@ export function applyRecordMethodFielding(
   if (!isNonEmpty(command.exposureId) || !isNonEmpty(command.versionId)) {
     return fail(state, "invalid_fielding", command.exposureId || command.versionId || "empty");
   }
+
   if (!isNonEmpty(command.turnId) || !isNonEmpty(command.requestId) || !isNonEmpty(command.scope)) {
     return fail(state, "invalid_fielding", command.exposureId);
   }
+
   if (!Number.isInteger(command.beat) || command.beat <= 0) {
     return fail(state, "invalid_fielding", command.exposureId);
   }
+
+  if (command.binding !== undefined && (!isExposureBinding(command.binding) || command.binding.context.taskId !== command.turnId)) {
+    return fail(state, "invalid_fielding", "invalid_method_exposure_binding");
+  }
+
+  // Even an exposure invalidated during transmission remains an actual send.
+  // Require its immutable compilation identity, not current default eligibility.
+  if (!validCompilationExposure(state.methodExperienceFacts ?? [], command, state.sequence + 1)) {
+    return fail(state, "invalid_fielding", "unknown_method_compilation");
+  }
+
   const sequence = nextSeq(state);
-  return succeed(state, command.commandId, [
-    {
-      type: "method_fielding_recorded",
-      sequence,
-      commandId: command.commandId,
-      occurredAt: command.issuedAt,
-      fielding: {
-        exposureId: command.exposureId,
-        versionId: command.versionId,
-        proposalId: command.proposalId,
-        turnId: command.turnId,
-        beat: command.beat,
-        requestId: command.requestId,
-        scope: command.scope,
-        recordedAt: command.issuedAt,
-      },
-    },
-  ], { fieldings: [...state.fieldings, {
+  const fielding: MethodFielding = {
+    useSequence: sequence,
     exposureId: command.exposureId,
     versionId: command.versionId,
     proposalId: command.proposalId,
@@ -61,7 +61,18 @@ export function applyRecordMethodFielding(
     requestId: command.requestId,
     scope: command.scope,
     recordedAt: command.issuedAt,
-  }] });
+    ...(command.binding === undefined ? {} : { binding: command.binding }),
+  };
+
+  return succeed(state, command.commandId, [
+    {
+      type: "method_fielding_recorded",
+      sequence,
+      commandId: command.commandId,
+      occurredAt: command.issuedAt,
+      fielding,
+    },
+  ], { fieldings: [...state.fieldings, fielding] });
 }
 
 export function applyRecordMethodFeedback(
@@ -71,9 +82,11 @@ export function applyRecordMethodFeedback(
   if (!isNonEmpty(command.versionId) || !isNonEmpty(command.turnId)) {
     return fail(state, "invalid_feedback", command.versionId || command.turnId || "empty");
   }
+
   if (typeof command.helped !== "boolean") {
     return fail(state, "invalid_feedback", command.versionId);
   }
+
   // 关系守卫（外审 P1-3），全部读 canonical `state`，因此天然在写锁内、对每条入口
   // 一致。精确重放走不到这里——`reduce` 先按 `commandId` 去重。旧日志重放仍绿：状态
   // 机保证一条上场先于它的反馈落盘，所以反馈重放时它对回的那次展示已经在账上。
@@ -83,19 +96,33 @@ export function applyRecordMethodFeedback(
     // 保持 unknown，绝不落 helped 的 true/false。
     return fail(state, "feedback_unattributable", `${command.versionId}@${command.turnId}`);
   }
+
   if (attributed.kind === "ambiguous") {
     // 同一 (versionId, turnId) 有多次不同 exposure，而命令没带 exposureId 去指认其中
     // 一次：无法确定归给哪一次展示，拒绝而不是随手取第一条。
     return fail(state, "feedback_ambiguous", `${command.versionId}@${command.turnId}`);
   }
+
   const exposureId = attributed.exposureId;
-  if (state.feedbacks.some((feedback) => feedback.exposureId === exposureId)) {
+  const observation = command.observation;
+  if (observation !== undefined) {
+    if (!isMethodObservation(observation) || observation.versionId !== command.versionId ||
+      observation.taskId !== command.turnId ||
+      !validObservationRevision(experienceSourceOf(state).observations, observation) ||
+      !validObservationBinding(state, exposureId, observation)) {
+      return fail(state, "invalid_feedback", "invalid_method_observation_revision");
+    }
+  }
+
+  if (observation === undefined && state.feedbacks.some((feedback) => feedback.exposureId === exposureId)) {
     // 一次上场只承载一条判决。第二次对同一 exposure 的反馈——无论 helped 相同还是
     // 相反——都是冲突：与其让同一答案的两行分叉，不如拒掉后来者。
     return fail(state, "feedback_conflict", exposureId);
   }
+
   const sequence = nextSeq(state);
   const feedback = {
+    feedbackSequence: sequence,
     versionId: command.versionId,
     turnId: command.turnId,
     helped: command.helped,
@@ -105,7 +132,9 @@ export function applyRecordMethodFeedback(
     ...(command.providerAttemptId === undefined ? {} : { providerAttemptId: command.providerAttemptId }),
     ...(command.sourceEventId === undefined ? {} : { sourceEventId: command.sourceEventId }),
     recordedAt: command.issuedAt,
+    ...(observation === undefined ? {} : { observation }),
   };
+
   return succeed(state, command.commandId, [
     {
       type: "method_feedback_recorded",
@@ -147,16 +176,19 @@ function attributeFeedback(
       ? { kind: "unattributable" }
       : { kind: "resolved", exposureId: match.exposureId };
   }
+
   const candidates = fieldings.filter(
     (fielding) => fielding.versionId === command.versionId && fielding.turnId === command.turnId,
   );
   if (candidates.length === 0) {
     return { kind: "unattributable" };
   }
+
   const distinct = new Set(candidates.map((candidate) => candidate.exposureId));
   if (distinct.size > 1) {
     return { kind: "ambiguous" };
   }
+
   return { kind: "resolved", exposureId: candidates[0]!.exposureId };
 }
 

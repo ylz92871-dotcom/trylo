@@ -13,12 +13,17 @@ test("shadow replacement retains its predecessor, refuses stale owners and resto
     command("request_approval", { proposalId: draft.proposalId, approvalId: `a${i}`, action: "activate" }),
     command("record_approval_decision", { approvalId: `a${i}`, status: "granted" }), command("activate", { proposalId: draft.proposalId, versionId: `v${i}` }),
   ]);
-  const active = reduceAll(emptyBoardState(), steps); assert.ok(active.ok);
+  const active = reduceAll(emptyBoardState(), steps);
+  assert.ok(active.ok);
   assert.equal(active.state.activations[0]?.previousVersionId, "v0");
-  const stale = reduce(active.state, command("suspend", { proposalId: first.proposalId, breakerReason: "stale" })); assert.equal(stale.ok, false);
-  const suspended = reduce(active.state, command("suspend", { proposalId: second.proposalId, breakerReason: "current-failed" })); assert.ok(suspended.ok);
-  const rolled = reduce(suspended.state, command("rollback", { proposalId: second.proposalId, reason: "restore" })); assert.ok(rolled.ok);
-  assert.equal(rolled.state.activations[0]?.versionId, "v0"); assert.equal(rolled.state.activations[0]?.pointer, "active");
+  const stale = reduce(active.state, command("suspend", { proposalId: first.proposalId, breakerReason: "stale" }));
+  assert.equal(stale.ok, false);
+  const suspended = reduce(active.state, command("suspend", { proposalId: second.proposalId, breakerReason: "current-failed" }));
+  assert.ok(suspended.ok);
+  const rolled = reduce(suspended.state, command("rollback", { proposalId: second.proposalId, reason: "restore" }));
+  assert.ok(rolled.ok);
+  assert.equal(rolled.state.activations[0]?.versionId, "v0");
+  assert.equal(rolled.state.activations[0]?.pointer, "active");
   assert.equal(rolled.state.activations[0]?.breaker, undefined);
   assert.equal(reduce(rolled.state, command("retire", { proposalId: second.proposalId })).ok, false);
 });

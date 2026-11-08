@@ -8,18 +8,24 @@ export type TransitionRule = {
 };
 
 export const LEGAL_PROPOSAL_TRANSITIONS: ReadonlyArray<TransitionRule> = [
+  // Standard proposals collect evidence before requesting activation.
   { from: "draft", to: "quarantined", command: "quarantine" },
   { from: "quarantined", to: "evaluating", command: "start_evaluation" },
   { from: "evaluating", to: "shadow", command: "enter_shadow" },
   { from: "shadow", to: "awaiting_approval", command: "request_approval" },
   { from: "awaiting_approval", to: "active", command: "activate" },
+
+  // The explicit fast lane validates before activation as a separate path.
   { from: "draft", to: "validated", command: "fast_lane_validate" },
   { from: "validated", to: "active", command: "activate" },
+
   { from: "draft", to: "rejected", command: "reject" },
   { from: "quarantined", to: "rejected", command: "reject" },
   { from: "evaluating", to: "rejected", command: "reject" },
   { from: "shadow", to: "rejected", command: "reject" },
   { from: "awaiting_approval", to: "rejected", command: "reject" },
+
+  // Active proposals must be suspended before rollback or retirement.
   { from: "active", to: "suspended", command: "suspend" },
   { from: "suspended", to: "active", command: "resume" },
   { from: "suspended", to: "rolled_back", command: "rollback" },
