@@ -17,6 +17,7 @@ import type {
   StoredCodeChange,
   StoredCodeCheck,
   StoredCodeRunResult,
+  StoredProducedFile,
   StoredConversationResults,
   StoredFileSignature,
   StoredRunMeta,
@@ -29,10 +30,13 @@ import type {
   WorkArtifactChange,
   WorkArtifactSource,
 } from './conversation-result-types';
+import { isOutputArtifactPath } from './output-files/eligibility';
+import { alignWorkRunDelta, eligibleWorkResult } from './work-result-recovery';
 
 // §6.6 fixed upper bounds (UTF-16 code units / item counts).
 export const BOUNDS = {
   codeChanges: 500,
+  codeOutputs: 200,
   codeChecks: 50,
   workArtifacts: 200,
   pathLen: 1024,
@@ -187,11 +191,19 @@ function normalizeCodeRunResult(value: unknown): StoredCodeRunResult | null {
   const attribution = isOneOf(raw.attribution, CODE_ATTRIBUTIONS) ? raw.attribution : 'unavailable';
   const additionsTotal = nonnegInt(raw.additionsTotal);
   const deletionsTotal = nonnegInt(raw.deletionsTotal);
+  const outputs = (Array.isArray(raw.outputs) ? raw.outputs : [])
+    .map(normalizeProducedFile).filter((entry): entry is StoredProducedFile => entry !== null);
+  const uniqueOutputs = [...new Map(outputs.map((file) => [file.path, file])).values()];
+  const outputCountTotal = Math.max(uniqueOutputs.length, nonnegInt(raw.outputCountTotal) ?? 0);
   return {
     meta,
     attribution,
     changes: keptChanges,
     checks: keptChecks,
+    ...(Array.isArray(raw.outputs) ? {
+      outputs: uniqueOutputs.slice(0, BOUNDS.codeOutputs), outputCountTotal,
+      outputsIncomplete: bool(raw.outputsIncomplete) || outputCountTotal > BOUNDS.codeOutputs,
+    } : {}),
     changeCountTotal,
     checkCountTotal,
     truncated,
@@ -206,7 +218,7 @@ function normalizeSignature(value: unknown): StoredFileSignature | null {
   const raw = value as Record<string, unknown>;
   const size = num(raw.size);
   const modifiedMs = num(raw.modifiedMs);
-  if (size === undefined || modifiedMs === undefined) return null;
+  if (size === undefined || modifiedMs === undefined || size < 0 || modifiedMs < 0) return null;
   const contentHash = typeof raw.contentHash === 'string' && raw.contentHash
     ? raw.contentHash.slice(0, 128)
     : undefined;
@@ -215,6 +227,18 @@ function normalizeSignature(value: unknown): StoredFileSignature | null {
     modifiedMs: Math.floor(modifiedMs),
     ...(contentHash ? { contentHash } : {}),
   };
+}
+
+function normalizeProducedFile(value: unknown): StoredProducedFile | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  const path = typeof raw.path === 'string' ? raw.path.replace(/\\/g, '/') : '';
+  if (!path || path.length > BOUNDS.pathLen || path.startsWith('/') || /^[a-z]:/i.test(path)
+    || /[\u0000-\u001f]/.test(path) || path.split('/').some((part) => !part || part === '.' || part === '..')) return null;
+  if (!isOutputArtifactPath(path)) return null;
+  if (raw.change !== 'created' && raw.change !== 'updated') return null;
+  const signature = normalizeSignature(raw.signature);
+  return signature ? { path, change: raw.change, signature } : null;
 }
 
 function normalizeVerificationCheck(value: unknown): StoredWorkArtifactCheck | null {
@@ -332,8 +356,7 @@ function normalizeRunDelta(value: unknown): StoredWorkRunDelta | null {
   const clean = (value: unknown): string[] =>
     (Array.isArray(value) ? value : [])
       .map((entry) => idStr(entry, 300))
-      .filter((entry): entry is string => !!entry)
-      .slice(0, BOUNDS.runDeltaIds);
+      .filter((entry): entry is string => !!entry);
   return {
     runId,
     turnId,
@@ -358,18 +381,21 @@ export function normalizeStoredWorkResult(value: unknown): StoredWorkResult {
   if (!value || typeof value !== 'object') return EMPTY_WORK_RESULT;
   const raw = value as Record<string, unknown>;
   const latestRun = normalizeRunDelta(raw.latestRun) ?? undefined;
-  const artifacts = (Array.isArray(raw.artifacts) ? raw.artifacts : [])
+  const normalizedArtifacts = (Array.isArray(raw.artifacts) ? raw.artifacts : [])
     .map(normalizeWorkArtifact)
-    .filter((artifact): artifact is StoredWorkArtifact => artifact !== null)
-    .slice(0, BOUNDS.workArtifacts);
+    .filter((artifact): artifact is StoredWorkArtifact => artifact !== null);
   const artifactCountTotal = typeof raw.artifactCountTotal === 'number' && Number.isFinite(raw.artifactCountTotal)
-    ? Math.max(artifacts.length, Math.floor(raw.artifactCountTotal))
-    : artifacts.length;
-  const truncated = bool(raw.truncated) || artifacts.length < artifactCountTotal;
+    ? Math.max(normalizedArtifacts.length, Math.floor(raw.artifactCountTotal))
+    : normalizedArtifacts.length;
+  const eligible = eligibleWorkResult({ artifacts: normalizedArtifacts, artifactCountTotal,
+    truncated: bool(raw.truncated), ...(latestRun ? { latestRun } : {}) });
+  const artifacts = eligible.artifacts.slice(0, BOUNDS.workArtifacts);
+  const aligned = eligible.latestRun ? alignWorkRunDelta(eligible.latestRun, artifacts, BOUNDS.runDeltaIds) : undefined;
+  const truncated = eligible.truncated || artifacts.length < eligible.artifactCountTotal;
   return {
-    ...(latestRun ? { latestRun } : {}),
+    ...(aligned ? { latestRun: aligned } : {}),
     artifacts,
-    artifactCountTotal,
+    artifactCountTotal: eligible.artifactCountTotal,
     truncated,
   };
 }

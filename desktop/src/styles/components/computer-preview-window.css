@@ -8,132 +8,125 @@
   border: 0;
   background: var(--bg);
   color: var(--fg);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .computer-preview-window.computer-preview-window > header {
-  height: 36px;
-  gap: 8px;
-  padding: 0 12px;
+  min-height: 38px;
+  height: auto;
+  gap: 12px;
+  padding: 0 10px;
   border: 0;
-  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-faint);
+  background: var(--bg);
 }
-
 .computer-preview-window .tool-preview-badge {
-  margin-left: 4px;
-  font-size: 12px;
+  flex: none;
+  margin-left: 0;
+  font-size: 10px;
 }
-
 .computer-preview-window .tool-preview-badge[data-state='running'] {
-  color: var(--success);
+  color: var(--fg-muted);
+}
+.computer-preview-window .tool-preview-badge[data-state='running'] > i {
+  background: var(--success);
 }
 .computer-preview-window .tool-preview-badge svg {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
 }
 
-.computer-preview-window .preview-activity {
-  min-height: 28px;
+.computer-preview-window .preview-activity,
+.computer-preview-window .preview-activity[data-status='执行中'] {
+  flex: 1;
+  min-width: 0;
+  min-height: 37px;
   margin: 0;
-  padding: 4px 12px;
-  gap: 8px;
+  padding: 6px 0;
+  gap: 7px;
   border: 0;
   border-radius: 0;
-  background: var(--bg);
-  font-size: 13px;
-  line-height: 20px;
+  background: transparent;
+  font-size: 12px;
+  line-height: 18px;
 }
-
+.computer-preview-window .preview-activity__icon {
+  color: var(--fg-muted);
+}
+.computer-preview-window .preview-activity__icon svg {
+  width: 13px;
+  height: 13px;
+}
 .computer-preview-window .preview-activity > div {
   flex-direction: row;
   align-items: baseline;
-  gap: 4px;
+  gap: 8px;
 }
-
 .computer-preview-window .preview-activity strong {
+  flex: none;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 400;
 }
 .computer-preview-window .preview-activity small {
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 18px;
 }
 .computer-preview-window .preview-activity .tool-preview-status {
   display: none;
 }
-.computer-preview-window .preview-activity[data-status='已完成'] .preview-activity__icon {
-  color: var(--success);
-}
-.computer-preview-window .preview-activity[data-status='已中断'] .preview-activity__icon,
-.computer-preview-window .preview-activity[data-status='已停止'] .preview-activity__icon,
-.computer-preview-window .preview-activity[data-status='等待工具操作'] .preview-activity__icon {
-  color: var(--fg-muted);
-}
 .computer-preview-window .preview-activity[data-status='失败'] > div {
-  display: block;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+.computer-preview-window .preview-activity[data-status='失败'] strong {
+  max-width: none;
+}
+.computer-preview-window .preview-activity[data-status='失败'] .preview-activity__icon,
+.computer-preview-window .preview-activity[data-status='失败'] small {
+  color: var(--danger);
 }
 .computer-preview-window .preview-activity[data-status='失败'] small {
-  display: block;
+  max-height: 54px;
+  overflow: auto;
   white-space: normal;
   overflow-wrap: anywhere;
-  color: var(--danger);
 }
 
 .computer-preview-window .computer-preview-window__picture {
-  display: grid;
-  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
-
 .computer-preview-window .preview-image {
-  grid-area: 1 / 1;
   min-width: 0;
   min-height: 0;
   padding: 0;
 }
-
-/* The existing zoom controls share the light toolbar; no second zoom system. */
-.computer-preview-window .preview-image__toolbar {
-  position: absolute;
-  z-index: 2;
-  right: 44px;
-  top: 0;
-  height: 36px;
-  padding: 0;
-  gap: 8px;
-  font-size: 12px;
-}
-
-.computer-preview-window .preview-image__toolbar > div {
-  border: 0;
-  background: transparent;
-  border-radius: 4px;
-  padding: 0;
-}
-
-.computer-preview-window .preview-image__toolbar button {
-  height: 26px;
-  padding: 2px 6px;
-  font-size: 12px;
-}
-
 .computer-preview-window .preview-image__viewport {
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--fg) 4%, var(--bg));
   scrollbar-color: var(--border-strong) transparent;
 }
-
 .computer-preview-window .preview-image__empty {
-  padding: 24px 12px;
-  gap: 8px;
-  font-size: 13px;
-}
-.computer-preview-window .preview-image__empty p {
-  display: none;
+  padding: 12px;
+  gap: 4px;
+  font-size: 12px;
 }
 .computer-preview-window .preview-image__empty svg {
-  color: var(--fg-muted);
+  display: none;
+}
+.computer-preview-window .preview-image__empty p {
+  max-width: 260px;
+  font-size: 11px;
+  line-height: 18px;
 }
 .computer-preview-window .preview-image__target {
   background: transparent;
@@ -143,21 +136,18 @@
 .computer-preview-window .preview-image__target[data-click='true'] {
   animation: none;
 }
-
 .computer-preview-window .computer-preview-window__notice {
-  grid-area: 1 / 1;
-  align-self: start;
-  margin: 8px;
-  z-index: 2;
+  flex: none;
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg);
+  gap: 7px;
+  max-height: 58px;
+  overflow: auto;
+  margin: 0;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-faint);
   color: var(--danger);
-  font-size: 12px;
+  font-size: 11px;
   line-height: 18px;
   overflow-wrap: anywhere;
 }
@@ -167,7 +157,7 @@
 }
 
 .computer-preview-window .computer-preview-window__details {
-  margin-left: auto;
+  flex: none;
   z-index: 4;
 }
 .computer-preview-window summary {
@@ -181,34 +171,32 @@
   display: grid;
   place-items: center;
   width: 26px;
-  height: 26px;
-  border-radius: 4px;
+  height: 28px;
   color: var(--fg-muted);
 }
 .computer-preview-window .computer-preview-window__details[open] > summary,
 .computer-preview-window .computer-preview-window__details > summary:hover {
-  color: var(--brand);
-  background: var(--brand-soft);
+  color: var(--fg);
 }
 .computer-preview-window .computer-preview-window__details-panel {
   position: absolute;
-  top: 36px;
+  top: 34px;
   right: 8px;
-  width: min(300px, calc(100% - 16px));
-  max-height: calc(100% - 72px);
+  width: min(280px, calc(100% - 16px));
+  max-height: calc(100% - 80px);
   overflow: auto;
   padding: 12px;
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
   background: var(--bg);
   color: var(--fg-muted);
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 18px;
   overflow-wrap: anywhere;
 }
 .computer-preview-window .computer-preview-window__details-panel dl {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 4px 12px;
+  gap: 5px 14px;
   margin: 0;
 }
 .computer-preview-window .computer-preview-window__details-panel dd {
@@ -220,62 +208,83 @@
   margin: 8px 0 0;
 }
 
+/* History and the existing zoom controller share one in-flow footer. */
 .computer-preview-window .computer-preview-window__history {
   flex: none;
-  height: 24px;
-  border-top: 1px solid var(--border);
-  font-size: 12px;
+  border-top: 1px solid var(--border-faint);
+  background: var(--bg);
   color: var(--fg-muted);
-  z-index: 3;
+  font-size: 11px;
 }
-.computer-preview-window .computer-preview-window__history > summary {
+.computer-preview-window .computer-preview-window__controls {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 23px;
-  padding: 0 12px;
-}
-.computer-preview-window .computer-preview-window__history > summary:hover {
-  background: var(--bg-panel);
+  min-height: 33px;
+  gap: 16px;
+  padding: 0 10px;
 }
 .computer-preview-window .computer-preview-window__history-toggle {
   display: inline-flex;
+  flex: none;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  cursor: pointer;
 }
-.computer-preview-window .computer-preview-window__collapse {
-  display: none;
-}
-.computer-preview-window .computer-preview-window__history[open] .computer-preview-window__expand {
-  display: none;
-}
-.computer-preview-window
-  .computer-preview-window__history[open]
-  .computer-preview-window__collapse {
-  display: inline;
-}
-.computer-preview-window .computer-preview-window__history[open] summary svg {
+.computer-preview-window .computer-preview-window__history-toggle[aria-expanded='true'] svg {
   transform: rotate(180deg);
 }
+.computer-preview-window .preview-image__toolbar {
+  padding: 0;
+  font-size: 11px;
+}
+.computer-preview-window .preview-image__toolbar > span {
+  display: none;
+}
+.computer-preview-window .preview-image__toolbar > div {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  gap: 8px;
+  background: transparent;
+}
+.computer-preview-window .preview-image__toolbar button,
+.computer-preview-window .preview-image__toolbar button[aria-pressed='true'] {
+  height: 30px;
+  padding: 0 3px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+.computer-preview-window .preview-image__toolbar button[aria-pressed='true'] {
+  color: var(--fg);
+  font-weight: 600;
+}
 .computer-preview-window .computer-preview-window__history-panel {
-  position: absolute;
-  bottom: 24px;
-  left: 0;
-  right: 0;
-  border-top: 1px solid var(--border);
-  background: var(--bg);
+  max-height: min(108px, 24dvh);
+  overflow: auto;
+  border-top: 1px solid var(--border-faint);
 }
 .computer-preview-window .computer-preview-window__history-panel > p {
   margin: 0;
-  padding: 8px 12px;
+  padding: 10px;
 }
 .computer-preview-window .preview-actions {
-  max-height: 96px;
-  padding: 0 12px;
-  font-size: 13px;
+  max-height: none;
+  overflow: visible;
+  padding: 0 10px;
+  font-size: 11px;
 }
 .computer-preview-window .preview-actions li {
-  padding: 5px 0;
+  min-height: 32px;
+  padding: 6px 0;
   border-color: var(--border-faint);
 }
 .computer-preview-window .preview-actions li:first-child {
@@ -284,35 +293,26 @@
 .computer-preview-window .preview-actions strong {
   overflow: hidden;
   text-overflow: ellipsis;
+  font-weight: 400;
 }
 .computer-preview-window .preview-actions small,
 .computer-preview-window .preview-actions em {
-  font-size: 12px;
+  font-size: 11px;
 }
-.computer-preview-window .preview-actions li[data-status='已完成'] > svg {
-  color: var(--success);
-}
-
 .computer-preview-window button:focus-visible,
 .computer-preview-window summary:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: -2px;
-  border-radius: 4px;
+  outline: 1px solid var(--fg);
+  outline-offset: 2px;
 }
 .computer-preview-window button:hover {
-  color: var(--brand);
-  background: var(--brand-soft);
+  color: var(--fg);
+  background: transparent;
 }
 
-@media (max-width: 600px) {
-  .computer-preview-window .preview-image__toolbar > span {
-    display: none;
-  }
+@media (max-height: 420px) {
+  .computer-preview-window .computer-preview-window__history-panel { max-height: 64px; }
 }
-
 @media (prefers-reduced-motion: reduce) {
   .computer-preview-window .preview-actions__spin,
-  .computer-preview-window .preview-image__target {
-    animation: none;
-  }
+  .computer-preview-window .preview-image__target { animation: none; }
 }

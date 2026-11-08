@@ -1,0 +1,15 @@
+{
+  "maxResourceBytes": 20971520,
+  "maxTotalBytes": 104857600,
+  "maxAssets": 512,
+  "csp": "default-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https:; style-src 'self' 'unsafe-inline' https:; connect-src 'self' https: http: ws: wss:; object-src 'none'; base-uri 'self'; form-action 'none'",
+  "mime": {
+    "html": "text/html; charset=utf-8", "htm": "text/html; charset=utf-8",
+    "js": "text/javascript; charset=utf-8", "mjs": "text/javascript; charset=utf-8", "css": "text/css; charset=utf-8",
+    "json": "application/json", "map": "application/json", "wasm": "application/wasm",
+    "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "svg": "image/svg+xml", "gif": "image/gif", "webp": "image/webp", "avif": "image/avif", "ico": "image/x-icon",
+    "woff": "font/woff", "woff2": "font/woff2", "ttf": "font/ttf", "otf": "font/otf",
+    "txt": "text/plain; charset=utf-8", "csv": "text/plain; charset=utf-8", "tsv": "text/plain; charset=utf-8", "glsl": "text/plain; charset=utf-8", "wgsl": "text/plain; charset=utf-8",
+    "xml": "application/xml", "pdf": "application/pdf", "mp4": "video/mp4", "m4v": "video/mp4", "webm": "video/webm", "mp3": "audio/mpeg", "wav": "audio/wav", "ogg": "audio/ogg"
+  }
+}

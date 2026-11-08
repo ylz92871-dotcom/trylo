@@ -54,6 +54,23 @@ beforeEach(() => {
 });
 
 describe('scanWorkOutput — attachment/artifact domain separation', () => {
+  it('does not promote browser profile state even when it appears below the output root', async () => {
+    scanTreeMock.mockResolvedValueOnce({
+      files: [
+        file(`${OUT}/viewport-profile-812-1794140000000/Default/LOCK`),
+        file(`${OUT}/Trylo.exe.WebView2/EBWebView/Default/declarative_performance_observer.db-journal`),
+        file(`${OUT}/.playwright-mcp/screenshot.png`),
+        file(`${OUT}/browser/LOCK`),
+      ],
+      truncated: false,
+      warnings: [],
+    });
+    const result = await scanWorkOutput(ROOT as FilePath);
+    expect(result.artifacts.map(artifact => artifact.id)).toEqual([
+      '.trylo/out/.playwright-mcp/screenshot.png', '.trylo/out/browser/LOCK',
+    ]);
+  });
+
   it('roots the scan at .trylo/out (attachments dir is never scanned)', async () => {
     scanTreeMock.mockResolvedValueOnce({ files: [], truncated: false, warnings: [] });
     await scanWorkOutput(ROOT as FilePath);

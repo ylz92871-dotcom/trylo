@@ -41,14 +41,15 @@ describe('previewKindFor', () => {
     }
   });
 
-  it('falls back to text for code and unclaimed types', () => {
-    expect(previewKindFor('D:/repo/main.ts')).toBe('text');
-    expect(previewKindFor('D:/repo/data.json')).toBe('text');
-    expect(previewKindFor('D:/repo/Makefile')).toBe('text');
+  it('routes source to the read-only code view and unknown readable files to text', () => {
+    expect(previewKindFor('D:/repo/main.ts')).toBe('code');
+    expect(previewKindFor('D:/repo/data.json')).toBe('code');
+    expect(previewKindFor('D:/repo/Makefile')).toBe('code');
+    expect(previewKindFor('D:/repo/unknown.custom')).toBe('text');
     // Deliberately unclaimed: legacy binary Office, CAD natives.
-    expect(previewKindFor('D:/repo/legacy.doc')).toBe('text');
-    expect(previewKindFor('D:/repo/legacy.ppt')).toBe('text');
-    expect(previewKindFor('D:/repo/part.sldprt')).toBe('text');
+    expect(previewKindFor('D:/repo/legacy.doc')).toBe('office');
+    expect(previewKindFor('D:/repo/legacy.ppt')).toBe('office');
+    expect(previewKindFor('D:/repo/part.sldprt')).toBe('unsupported');
     expect(previewKindFor('D:/repo/board.kicad_pcb')).toBe('text');
   });
 
@@ -69,6 +70,11 @@ describe('previewKindFor', () => {
     expect(previewKindFor('D:/repo/board-F_Cu.gbr')).toBe('gerber');
     expect(previewKindFor('D:/repo/board.drl')).toBe('gerber');
   });
+  it('routes notebooks, fonts and ZIP-derived packages to their actual readers', () => {
+    expect(previewKindFor('analysis.ipynb')).toBe('notebook');
+    for (const suffix of ['ttf', 'otf', 'woff', 'woff2']) expect(previewKindFor(`brand.${suffix}`)).toBe('font');
+    for (const suffix of ['zip', 'jar', 'war', 'whl', 'nupkg', 'vsix']) expect(previewKindFor(`output.${suffix}`)).toBe('archive');
+  });
 });
 
 describe('previewKindNeedsBytes', () => {
@@ -79,7 +85,7 @@ describe('previewKindNeedsBytes', () => {
   });
 
   it('keeps text-based renderers on the UTF-8 path', () => {
-    for (const kind of ['markdown', 'html', 'csv', 'dxf', 'gerber', 'text'] as const) {
+    for (const kind of ['markdown', 'html', 'csv', 'dxf', 'gerber', 'text', 'code'] as const) {
       expect(previewKindNeedsBytes(kind), kind).toBe(false);
     }
   });

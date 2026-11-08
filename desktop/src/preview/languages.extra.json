@@ -1,0 +1,10 @@
+[
+  { "id": "matlab", "label": "MATLAB / Octave", "extensions": [".m"], "filenames": [] },
+  { "id": "fortran", "label": "Fortran", "extensions": [".f", ".for", ".f77", ".f90", ".f95", ".f03", ".f08"], "filenames": [] },
+  { "id": "zig", "label": "Zig", "extensions": [".zig", ".zon"], "filenames": [] },
+  { "id": "cmake", "label": "CMake", "extensions": [".cmake"], "filenames": ["CMakeLists.txt", "CMakeCache.txt"] },
+  { "id": "makefile", "label": "Makefile", "extensions": [".mk", ".mak"], "filenames": ["Makefile", "GNUmakefile", "BSDmakefile"] },
+  { "id": "toml", "label": "TOML", "extensions": [".toml"], "filenames": ["Cargo.lock", "poetry.lock", "Pipfile", "uv.lock"] },
+  { "id": "latex", "label": "LaTeX / BibTeX", "extensions": [".tex", ".latex", ".sty", ".bib"], "filenames": [] },
+  { "id": "typst", "label": "Typst", "extensions": [".typ"], "filenames": [] }
+]

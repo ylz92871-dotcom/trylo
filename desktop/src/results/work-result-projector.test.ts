@@ -7,16 +7,20 @@
 // suite); here we pin the orchestration, the mapping, exactly-once and the
 // degraded / recovery paths.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+vi.mock('./output-files/snapshot', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./output-files/snapshot')>(),
+  snapshotOutputFiles: vi.fn(async () => { throw new Error('No workspace snapshot in legacy projector fixture'); }),
+}));
 import { WorkResultProjector, type WorkResultStorePort } from './work-result-projector';
 import type { StoredWorkResult } from './conversation-result-types';
-import type { WorkArtifactScope, ScannedArtifact } from '@trylo/work';
+import type { ArtifactRunScope, ScannedArtifact } from './artifact-types';
 import type { WorkScanOutcome } from './work-artifact-scanner';
 
 const PROJECT = 'ws-P';
 const ROOT = 'D:/repo';
 
-function scope(runId: string, conversationId = 'c1', turnId = 't1', startedAt = 1000): WorkArtifactScope {
+function scope(runId: string, conversationId = 'c1', turnId = 't1', startedAt = 1000): ArtifactRunScope {
   return {
     projectKey: PROJECT,
     projectRoot: ROOT,
@@ -68,6 +72,45 @@ function scriptedScan(script: Array<readonly ScannedArtifact[] | null>): () => P
 }
 
 describe('WorkResultProjector (P2-1 §8.2)', () => {
+  it('shares a pending baseline with an early terminal and finalizes concurrent terminals once', async () => {
+    const { writes, port } = makeGuest();
+    let release!: (value: WorkScanOutcome) => void;
+    let calls = 0;
+    const projector = new WorkResultProjector({ port, scan: async () => {
+      calls += 1;
+      return calls === 1 ? new Promise<WorkScanOutcome>((resolve) => { release = resolve; }) : { artifacts: [scanned('a.md')], truncated: false };
+    } });
+    const s = scope('early');
+    const start = projector.onRunStarted(s);
+    projector.onArtifact(s, `${ROOT}/a.md`);
+    const terminal = projector.onRunTerminal(s, 'completed');
+    const duplicate = projector.onRunTerminal(s, 'completed');
+    expect(calls).toBe(1);
+    release({ artifacts: [], truncated: false });
+    await Promise.all([start, terminal, duplicate]);
+    expect(calls).toBe(2); expect(writes).toHaveLength(1);
+    expect(writes[0]?.work?.latestRun?.createdIds).toEqual(['a.md']);
+  });
+  it('clearing a conversation does not cancel a sibling baseline, and late events cannot resurrect it', async () => {
+    const { writes, port } = makeGuest();
+    let release!: (value: WorkScanOutcome) => void;
+    let calls = 0;
+    const projector = new WorkResultProjector({ port, scan: async () => {
+      calls += 1;
+      return calls === 1 ? new Promise<WorkScanOutcome>((resolve) => { release = resolve; }) : { artifacts: [scanned('b.md')], truncated: false };
+    } });
+    const sibling = scope('sibling', 'c2');
+    const start = projector.onRunStarted(sibling);
+    projector.onArtifact(sibling, `${ROOT}/b.md`);
+    projector.clearConversation(PROJECT, 'c1');
+    projector.onArtifact(scope('deleted', 'c1'), `${ROOT}/foreign.md`);
+    await projector.onRunTerminal(scope('deleted', 'c1'), 'completed');
+    expect(projector.artifactStore.snapshot(PROJECT, 'c1').artifacts).toEqual([]);
+    release({ artifacts: [], truncated: false });
+    await start; await projector.onRunTerminal(sibling, 'completed');
+    expect(writes).toHaveLength(1); expect(writes[0]?.conversationId).toBe('c2');
+    expect(writes[0]?.work?.latestRun?.createdIds).toEqual(['b.md']);
+  });
   it('captures baseline at run start and finalises a created artifact with the real outcome', async () => {
     const { writes, port } = makeGuest();
     // Baseline is empty; terminal scan reveals a.md → created this run.
@@ -128,18 +171,26 @@ describe('WorkResultProjector (P2-1 §8.2)', () => {
     expect(last.work?.latestRun?.updatedIds).toEqual(['a.md']);
   });
 
-  it('recovery (no baseline, terminal direct) maps first-seen files to discovered', async () => {
+  it('recovery with scoped artifact evidence maps files to discovered without claiming creation', async () => {
     const { writes, port } = makeGuest();
     const projector = new WorkResultProjector({
       port,
       scan: () => Promise.resolve({ artifacts: [scanned('a.md', 10, 1)], truncated: false }),
     });
     // No onRunStarted — mimics a reconcile-recovered terminal run.
+    projector.onArtifact(scope('r9'), `${ROOT}/a.md`);
     await projector.onRunTerminal(scope('r9'), 'completed');
     const artifact = writes[0]?.work?.artifacts[0];
     expect(artifact?.lastChange).toBe('discovered');
     expect(artifact?.version).toBe(1);
     expect(writes[0]?.work?.latestRun?.discoveredIds).toEqual(['a.md']);
+  });
+
+  it('never adopts another conversation\'s existing output during scan-only recovery', async () => {
+    const { writes, port } = makeGuest();
+    const projector = new WorkResultProjector({ port, scan: scanOf([scanned('foreign.pdf')]) });
+    await projector.onRunTerminal(scope('recovered'), 'completed');
+    expect(writes[0]?.work?.artifacts).toEqual([]);
   });
 
   it('a failed terminal scan keeps event records and marks the run degraded', async () => {
@@ -203,8 +254,10 @@ describe('WorkResultProjector (P2-1 §8.2)', () => {
       scan: scanOf([scanned('a.md')]),
     });
     await projector.onRunStarted(scope('r1', 'c1'));
+    projector.onArtifact(scope('r1', 'c1'), `${ROOT}/a.md`);
     await projector.onRunTerminal(scope('r1', 'c1'), 'completed');
     await projector.onRunStarted(scope('r1', 'c2'));
+    projector.onArtifact(scope('r1', 'c2'), `${ROOT}/a.md`);
     await projector.onRunTerminal(scope('r1', 'c2'), 'completed');
 
     projector.clearConversation(PROJECT, 'c1');
@@ -250,12 +303,14 @@ describe('WorkResultProjector (P2-1 §8.2)', () => {
     });
     const s = scope('r-iso');
     await projector.onRunStarted(s);
+    await projector.onRunStarted(scope('foreign-run', 'c2'));
     // This run owns exactly one artifact via its scope-correct event.
     projector.onArtifact(s, `${ROOT}/a.md`, 'document');
     await projector.onRunTerminal(s, 'completed');
     const ids = (writes[0]!.work?.artifacts ?? []).map((a) => a.id);
     expect(ids).toContain('a.md');
     expect(ids).not.toContain('b.md');
+    projector.clearConversation(PROJECT, 'c2');
   });
 });
 

@@ -18,7 +18,8 @@
 
 import type { ReactElement } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { PPTXViewer } from 'pptxviewjs';
+import type { PPTXViewer } from 'pptxviewjs';
+import { loadPptxRuntime } from './pptxRuntime';
 import { usePreviewBytes } from './usePreviewBytes';
 
 type SlideMode = 'paged' | 'all';
@@ -30,10 +31,11 @@ const REFIT_DEBOUNCE_MS = 150;
 
 export interface PptxPreviewProps {
   readonly path: string;
+  readonly allowedRoot?: string;
 }
 
 export function PptxPreview(props: PptxPreviewProps): ReactElement {
-  const bytesState = usePreviewBytes(props.path);
+  const bytesState = usePreviewBytes(props.path, undefined, props.allowedRoot);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<PPTXViewer | null>(null);
@@ -57,25 +59,21 @@ export function PptxPreview(props: PptxPreviewProps): ReactElement {
     setSlideIndex(0);
     setZoom(1);
     setMode('paged');
-    const viewer = new PPTXViewer();
-    viewerRef.current = viewer;
-    // A copy: loaders may detach the buffer they are given.
-    viewer.loadFile(bytesState.bytes.slice()).then(
-      () => {
-        if (cancelled) {
-          viewer.destroy();
-          return;
-        }
-        setSlideCount(viewer.getSlideCount());
-      },
-      (err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      },
-    );
+    let viewer: PPTXViewer | undefined;
+    void loadPptxRuntime().then(async ({ PPTXViewer: Viewer }) => {
+      if (cancelled) return;
+      viewer = new Viewer();
+      viewerRef.current = viewer;
+      // A copy: loaders may detach the buffer they are given.
+      await viewer.loadFile(bytesState.bytes.slice());
+      if (!cancelled) setSlideCount(viewer.getSlideCount());
+    }).catch((err: unknown) => {
+      if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+    });
     return () => {
       cancelled = true;
       if (viewerRef.current === viewer) viewerRef.current = null;
-      viewer.destroy();
+      viewer?.destroy();
     };
   }, [bytesState]);
 
@@ -101,7 +99,7 @@ export function PptxPreview(props: PptxPreviewProps): ReactElement {
       window.clearTimeout(refitTimer.current);
       observer.disconnect();
     };
-  }, [bytesState]);
+  }, [bytesState, mode]);
 
   // Render one slide. Sizing IS the zoom: the library fits the slide
   // into the canvas's logical (CSS) size, so fit-width = rail width

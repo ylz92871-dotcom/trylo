@@ -1,0 +1,17 @@
+{
+  "segmentSeconds": 6,
+  "maxDurationSeconds": 604800,
+  "maxSegmentBytes": 16777216,
+  "maxProbeBytes": 262144,
+  "maxPlaylistBytes": 16777216,
+  "prefetchSegments": 2,
+  "mergeTailSeconds": 0.1,
+  "maxConcurrentJobs": 2,
+  "maxQueuedJobs": 8,
+  "maxSessions": 8,
+  "maxCacheBytes": 134217728,
+  "probeTimeoutMs": 15000,
+  "segmentTimeoutMs": 30000,
+  "inputProtocols": "fd",
+  "inputFormats": "mov,mp4,m4a,3gp,3g2,matroska,webm,avi,asf,flv,mpeg,mpegvideo,mpegts,ogg,wav,mp3,flac,aac,aiff,ac3,eac3,dts,ape,au,caf,amr,loas,m4v,mxf,rm"
+}

@@ -13,7 +13,7 @@ import {
 } from './approval-preview';
 import type { FilePath } from '../host-adapter/types';
 
-const ROOT = 'C:/work/demo-ws' as FilePath;
+const ROOT = 'D:/CC/trylo' as FilePath;
 
 describe('approval-preview', () => {
   describe('safeRelativePath', () => {
@@ -138,12 +138,12 @@ describe('approval-preview', () => {
     it('summarises the command and optional cwd', async () => {
       const preview = await buildApprovalPreview({
         toolName: 'Bash',
-        input: { command: 'pnpm test', cwd: 'C:/work/demo-ws/desktop' },
+        input: { command: 'pnpm test', cwd: 'D:/CC/trylo/desktop' },
         projectRoot: ROOT,
       });
       expect(preview.kind).toBe('command');
       expect(preview.command).toBe('pnpm test');
-      expect(preview.cwd).toBe('C:/work/demo-ws/desktop');
+      expect(preview.cwd).toBe('D:/CC/trylo/desktop');
     });
 
     it('returns unavailable when the command field is missing', async () => {
@@ -212,7 +212,7 @@ describe('approval-preview', () => {
     it('shows workspace-relative paths for in-root targets', async () => {
       const preview = await buildApprovalPreview({
         toolName: OFFICECLI,
-        input: { command: 'create', output: 'C:/work/demo-ws/.trylo/out/report.docx' },
+        input: { command: 'create', output: 'D:/CC/trylo/.trylo/out/report.docx' },
         projectRoot: ROOT,
       });
       expect(preview.target).toContain('.trylo/out/report.docx');

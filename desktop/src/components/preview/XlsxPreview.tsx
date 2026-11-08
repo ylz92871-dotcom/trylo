@@ -1,89 +1,53 @@
-// Trylo Desktop — XlsxPreview (base capability).
-//
-// SheetJS CE (Apache-2.0) parses the workbook; policy (caps, display
-// formatting) lives in excelTable.ts. Sheet tabs switch the visible
-// table. Values only — charts, images, and macros are outside a
-// read-only glance and stay in Excel.
-
 import type { ReactElement } from 'react';
 import { useMemo, useState } from 'react';
+import { utils } from 'xlsx';
 import { usePreviewBytes } from './usePreviewBytes';
-import { workbookToTables } from './excelTable';
+import { MAX_SHEET_ROWS, MAX_SHEET_COLS, readWorkbook, sheetToTable } from './excelTable';
+import { PreviewFailure } from './PreviewFailure';
 
-export interface XlsxPreviewProps {
-  readonly path: string;
-}
-
-export function XlsxPreview(props: XlsxPreviewProps): ReactElement {
-  const bytesState = usePreviewBytes(props.path);
-  const [sheetIndex, setSheetIndex] = useState(0);
-
-  const tables = useMemo(
-    () => (bytesState.status === 'ready' ? workbookToTables(bytesState.bytes) : undefined),
-    [bytesState],
-  );
-
-  if (bytesState.status === 'loading' || !tables) {
-    return <div className="preview__empty">Loading spreadsheet…</div>;
-  }
-  if (bytesState.status === 'error') {
-    return <div className="preview__empty">Could not load spreadsheet: {bytesState.message}</div>;
-  }
-  if (tables.sheets.length === 0) {
-    return <div className="preview__empty">Could not parse this workbook — it may be corrupt or password-protected.</div>;
-  }
-
-  const sheet = tables.sheets[Math.min(sheetIndex, tables.sheets.length - 1)];
-  if (!sheet) {
-    return <div className="preview__empty">No sheets to show.</div>;
-  }
-  const [header, ...body] = sheet.rows;
-
-  return (
-    <div className="preview__paged" role="region" aria-label="Spreadsheet preview">
-      {tables.sheets.length > 1 && (
-        <div className="preview__toolbar preview__toolbar--scroll" role="tablist" aria-label="Sheets">
-          {tables.sheets.map((s, i) => (
-            <button
-              key={s.name}
-              type="button"
-              role="tab"
-              aria-selected={i === Math.min(sheetIndex, tables.sheets.length - 1)}
-              className={i === Math.min(sheetIndex, tables.sheets.length - 1) ? 'preview__tab--active' : undefined}
-              onClick={() => setSheetIndex(i)}
-              title={s.name}
-            >
-              {s.name}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="preview__table-wrap">
-        <table className="preview__table">
-          <thead>
-            <tr>
-              {header?.map((cell, i) => (
-                <th key={i}>{cell === '' ? ' ' : cell}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {body.map((row, r) => (
-              <tr key={r}>
-                {row.map((cell, c) => (
-                  <td key={c}>{cell === '' ? ' ' : cell}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {(sheet.folded || tables.foldedSheets) && (
-          <div className="preview__fold-note">
-            Showing {sheet.rows.length} of {sheet.totalRows} rows
-            {tables.foldedSheets ? ' (some sheets hidden)' : ''} — open in Excel for the full workbook.
-          </div>
-        )}
-      </div>
+export interface XlsxPreviewProps { readonly path: string; readonly allowedRoot?: string }
+export function XlsxPreview({ path, allowedRoot }: XlsxPreviewProps): ReactElement {
+  const state = usePreviewBytes(path, undefined, allowedRoot);
+  const bytes = state.status === 'ready' ? state.bytes : undefined;
+  const [selection, setSelection] = useState({ path, index: 0, row: 0, col: 0 });
+  const current = selection.path === path ? selection : { path, index: 0, row: 0, col: 0 };
+  const parsed = useMemo(() => {
+    if (!bytes) return undefined;
+    try { return { workbook: readWorkbook(bytes) }; }
+    catch (error) { return { error: error instanceof Error ? error.message : String(error) }; }
+  }, [bytes]);
+  const sheet = useMemo(() => {
+    const book = parsed?.workbook;
+    const name = book?.SheetNames[current.index];
+    return book && name ? sheetToTable(name, book.Sheets[name], current.row, current.col) : undefined;
+  }, [parsed, current.index, current.row, current.col]);
+  if (state.status === 'error') return <PreviewFailure error={state.message} />;
+  if (state.status === 'loading' || !parsed) return <div className="preview__empty" role="status">正在读取表格…</div>;
+  if (parsed.error || !parsed.workbook || !sheet) return <div className="preview__empty" role="alert">无法解析表格：{parsed.error ?? '文件为空、损坏或受密码保护'}</div>;
+  const move = (row: number, col: number): void => setSelection({ ...current, row, col });
+  const shownCols = Math.min(MAX_SHEET_COLS, sheet.totalCols - sheet.colOffset);
+  return <div className="preview__paged preview__workbook" role="region" aria-label="Spreadsheet preview">
+    <div className="preview__toolbar" aria-label="Table range">
+      <button type="button" disabled={current.row === 0} onClick={() => move(Math.max(0, current.row - MAX_SHEET_ROWS), current.col)}>上一段行</button>
+      <span>{sheet.totalRows ? sheet.rowOffset + 1 : 0}–{Math.min(sheet.totalRows, sheet.rowOffset + MAX_SHEET_ROWS)} / {sheet.totalRows} 行</span>
+      <button type="button" disabled={current.row + MAX_SHEET_ROWS >= sheet.totalRows} onClick={() => move(current.row + MAX_SHEET_ROWS, current.col)}>下一段行</button>
+      <button type="button" disabled={current.col === 0} onClick={() => move(current.row, Math.max(0, current.col - MAX_SHEET_COLS))}>前面列</button>
+      <span>{sheet.totalCols ? `${utils.encode_col(sheet.colOffset)}–${utils.encode_col(sheet.colOffset + shownCols - 1)}` : '0'} / {sheet.totalCols} 列</span>
+      <button type="button" disabled={current.col + MAX_SHEET_COLS >= sheet.totalCols} onClick={() => move(current.row, current.col + MAX_SHEET_COLS)}>后面列</button>
     </div>
-  );
+    <div className="preview__table-wrap">
+      <table className="preview__table"><thead><tr><th aria-label="Row" />
+        {Array.from({ length: shownCols }, (_, i) => <th key={i}>{utils.encode_col(sheet.colOffset + i)}</th>)}
+      </tr></thead><tbody>
+        {sheet.rows.map((row, r) => <tr key={r}><th scope="row">{sheet.rowOffset + r + 1}</th>
+          {Array.from({ length: shownCols }, (_, c) => <td key={c}>{row[c] || ' '}</td>)}
+        </tr>)}
+      </tbody></table>
+      {!sheet.totalRows && <div className="preview__empty">空白工作表</div>}
+    </div>
+    <div className="preview__sheet-tabs" role="tablist" aria-label="Sheets">
+      {parsed.workbook.SheetNames.map((name, index) => <button type="button" key={name} role="tab" aria-selected={index === current.index}
+        onClick={() => setSelection({ path, index, row: 0, col: 0 })}>{name}</button>)}
+    </div>
+  </div>;
 }

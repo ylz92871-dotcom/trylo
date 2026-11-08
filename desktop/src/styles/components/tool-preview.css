@@ -1,8 +1,4 @@
-.browser-tool-sidebar { flex: 0 0 auto; max-width: 55vw; min-width: 320px; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--brand-edge); background: var(--bg-panel); box-shadow: -8px 0 28px var(--brand-ambient); }
-.browser-tool-sidebar > header, .computer-preview-window > header { height: 52px; flex: none; display: flex; align-items: center; gap: 9px; padding: 0 16px; border-bottom: 1px solid var(--brand-edge); font-size: 13px; background: linear-gradient(110deg, var(--brand-soft), var(--bg-panel) 75%); }
-.browser-tool-sidebar > header strong { font-weight: 600; }
-.browser-tool-sidebar > header button { margin-left: auto; width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--fg-muted); cursor: pointer; }
-.browser-tool-sidebar button:hover { background: var(--brand-soft); color: var(--brand); }
+.computer-preview-window > header { height: 52px; flex: none; display: flex; align-items: center; gap: 9px; padding: 0 16px; border-bottom: 1px solid var(--brand-edge); font-size: 13px; background: linear-gradient(110deg, var(--brand-soft), var(--bg-panel) 75%); }
 .tool-preview-badge { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; font-size: 10px; color: var(--fg-muted); white-space: nowrap; }
 .tool-preview-badge > i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 .tool-preview-badge[data-state='running'], .tool-preview-badge[data-state='starting'] { color: var(--brand); }

@@ -1,6 +1,10 @@
 // Trylo Desktop — CodeResultProjector tests (P2-1, spec §12.1).
 
 import { describe, expect, it, vi } from 'vitest';
+vi.mock('./output-files/snapshot', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./output-files/snapshot')>(),
+  snapshotOutputFiles: vi.fn(async () => ({ files: [], incomplete: false })),
+}));
 import type { GitSnapshotEntry, GitWorkspaceSnapshot, GitService } from '../host-adapter';
 import type { LoopEvent } from '../host-adapter/loop-events';
 import type { RuntimeResultScope } from './result-scope';
@@ -417,9 +421,9 @@ describe('CodeResultProjector baseline/terminal race (audit P1-1)', () => {
     pending[0]!.resolve(snapshot([], 'abc'));
     await settle(0);
     projector.onEvents(scope, CHECK_EVENTS); // no buffer left — dropped
-    await projector.onRunTerminal(scope, 'completed'); // terminal w/o start
-    expect(results).toHaveLength(1);
-    expect(results[0]!.checks).toHaveLength(0); // the dropped events prove cleanup
+    await projector.onRunTerminal(scope, 'completed');
+    // A disposed conversation cannot be recreated by a delayed terminal.
+    expect(results).toHaveLength(0);
   });
 });
 

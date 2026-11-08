@@ -3,8 +3,8 @@
 // The one recursive scan of a project's output directory, bounded through the
 // HostAdapter's `scanTree` (a single typed IPC from Rust). It carries no React
 // state and no Tauri import — the HostAdapter is the only IPC boundary. It
-// turns `FileStat[]` into the Work-neutral `ScannedArtifact` shape the scoped
-// `WorkArtifactStore` compares at run start / final.
+// turns `FileStat[]` into the `ScannedArtifact` shape the Desktop result store
+// compares at run start / final.
 //
 // **Filesystem eligibility invariant.** Only an entry with
 // `isFile === true` is eligible to become an artifact. This single rule
@@ -19,14 +19,11 @@
 // scan root and surface arbitrary user content as a deliverable.
 
 import { hostAdapter, type FilePath } from '../host-adapter';
-import {
-  artifactDisplayName,
-  detectArtifactKind,
-  relativeArtifactPath,
-  type ArtifactKind,
-} from '@trylo/work';
-import type { ScannedArtifact, WorkArtifactKind } from '@trylo/work';
+import { artifactDisplayName, relativeArtifactPath } from './artifact-paths';
+import { artifactCardKindFor, type ArtifactCardKind } from '../preview/formats';
+import type { ScannedArtifact } from './artifact-types';
 import type { FileStat } from '../host-adapter/types';
+import { isOutputArtifactPath } from './output-files/eligibility';
 
 export interface WorkScanOptions {
   readonly maxFiles?: number;
@@ -37,12 +34,6 @@ export interface WorkScanOutcome {
   readonly artifacts: readonly ScannedArtifact[];
   readonly truncated: boolean;
   readonly warning?: string;
-}
-
-/** Files the daemon itself writes (its own logs / bookkeeping) and that are
- *  never user deliverables — skipped by the scan (spec §8.4 / old App guard). */
-function isLoopInternal(name: string): boolean {
-  return name.startsWith('loop-trylo-');
 }
 
 /** Defense in depth: the scan is rooted at `.trylo/out`, but if the host
@@ -59,12 +50,12 @@ function isUnderOutRoot(absolutePath: string, outRoot: string): boolean {
 
 function toScanned(file: FileStat, projectRoot: string): ScannedArtifact | undefined {
   const rel = relativeArtifactPath(file.path, projectRoot);
-  if (rel === undefined || rel.length === 0) return undefined;
+  if (rel === undefined || !isOutputArtifactPath(rel)) return undefined;
   return {
     target: { kind: 'file', relativePath: rel },
     id: rel,
     displayName: artifactDisplayName(file.path) || rel.split('/').pop() || rel,
-    artifactKind: (detectArtifactKind(file.path) as WorkArtifactKind) ?? 'file',
+    artifactKind: artifactCardKindFor(file.path),
     absolutePath: file.path,
     signature: { size: file.size, modifiedMs: file.modifiedMs },
   };
@@ -100,10 +91,6 @@ export async function scanWorkOutput(
     // Replaces the previous `if (file.isDirectory) continue;` which let
     // symlinks, reparse points, and special entries become artifacts.
     if (!file.isFile) continue;
-    const name = file.path.split(/[\\/]/).pop() ?? '';
-    if (isLoopInternal(name)) continue;
-    // Defense in depth: never promote an attachment-staging path.
-    if (file.path.includes('.trylo/attachments')) continue;
     // Defense in depth: host must scan only the OUT root.
     if (!isUnderOutRoot(file.path, outRoot)) continue;
     const artifact = toScanned(file, projectRoot);
@@ -127,4 +114,4 @@ export function artifactFromStat(
   return toScanned(file as FileStat, projectRoot);
 }
 
-export type { ArtifactKind };
+export type { ArtifactCardKind as ArtifactKind };

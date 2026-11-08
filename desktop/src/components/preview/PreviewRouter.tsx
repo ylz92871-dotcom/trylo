@@ -16,26 +16,21 @@
 
 import type { ReactElement } from 'react';
 import { Suspense, lazy } from 'react';
-import { previewKindFor } from './previewKind';
+import { previewKindFor, type PreviewKind } from './previewKind';
+import { sourceLanguageFor } from '../../preview/languages';
 import { MarkdownPreview } from './MarkdownPreview';
 import { HtmlPreview } from './HtmlPreview';
 import { CsvPreview } from './CsvPreview';
 import { ImagePreview } from './ImagePreview';
 import { TextPreview } from './TextPreview';
+import { LazyCodePreview } from './LazyCodePreview';
 import { DxfPreview } from './DxfPreview';
+import { MediaPreview } from './MediaPreview';
 
 const PdfPreview = lazy(() =>
   import('./PdfPreview').then((m) => ({ default: m.PdfPreview })),
 );
-const DocxPreview = lazy(() =>
-  import('./DocxPreview').then((m) => ({ default: m.DocxPreview })),
-);
-const XlsxPreview = lazy(() =>
-  import('./XlsxPreview').then((m) => ({ default: m.XlsxPreview })),
-);
-const PptxPreview = lazy(() =>
-  import('./PptxPreview').then((m) => ({ default: m.PptxPreview })),
-);
+const OfficePreview = lazy(() => import('./OfficePreview').then((m) => ({ default: m.OfficePreview })));
 const ModelPreview = lazy(() =>
   import('./ModelPreview').then((m) => ({ default: m.ModelPreview })),
 );
@@ -45,6 +40,9 @@ const ModelPreview = lazy(() =>
 const GerberPreview = lazy(() =>
   import('./GerberPreview').then((m) => ({ default: m.GerberPreview })),
 );
+const NotebookPreview = lazy(() => import('./NotebookPreview').then((m) => ({ default: m.NotebookPreview })));
+const FontPreview = lazy(() => import('./FontPreview').then((m) => ({ default: m.FontPreview })));
+const ArchivePreview = lazy(() => import('./ArchivePreview').then((m) => ({ default: m.ArchivePreview })));
 
 function lazyFallback(): ReactElement {
   return <div className="preview__empty">Loading viewer…</div>;
@@ -53,21 +51,32 @@ function lazyFallback(): ReactElement {
 export interface PreviewRouterProps {
   readonly path: string;
   readonly content: string;
+  readonly allowedRoot?: string;
+  readonly resolvedKind?: PreviewKind;
+  readonly onOpenFile?: (path: string) => void;
+  readonly onOpenExternal?: (url: string) => void;
 }
 
 export function PreviewRouter(props: PreviewRouterProps): ReactElement {
-  switch (previewKindFor(props.path)) {
+  const kind = props.resolvedKind ?? previewKindFor(props.path);
+  switch (kind) {
+    case 'notebook': return <Suspense fallback={lazyFallback()}><NotebookPreview key={props.path} {...props} /></Suspense>;
+    case 'font': return <Suspense fallback={lazyFallback()}><FontPreview key={props.path} path={props.path} allowedRoot={props.allowedRoot} /></Suspense>;
+    case 'archive': return <Suspense fallback={lazyFallback()}><ArchivePreview key={props.path} path={props.path} allowedRoot={props.allowedRoot} /></Suspense>;
     case 'markdown':
-      return <MarkdownPreview content={props.content} />;
+      return <MarkdownPreview key={props.path} content={props.content} path={props.path} allowedRoot={props.allowedRoot} onOpenFile={props.onOpenFile} onOpenExternal={props.onOpenExternal} />;
     case 'html':
-      return <HtmlPreview content={props.content} title={props.path} />;
+      return <HtmlPreview key={props.path} content={props.content} title={props.path} allowedRoot={props.allowedRoot} />;
     case 'csv':
-      return <CsvPreview path={props.path} content={props.content} />;
+      return <CsvPreview key={props.path} path={props.path} content={props.content} />;
     case 'image':
       // Images are binary: the text `content` is unusable, so the
       // component loads bytes itself. (App skips the text read for
       // byte-backed kinds — see previewKindNeedsBytes.)
-      return <ImagePreview path={props.path} />;
+      return <ImagePreview key={props.path} path={props.path} allowedRoot={props.allowedRoot} />;
+    case 'audio':
+    case 'video':
+      return <MediaPreview key={props.path} path={props.path} allowedRoot={props.allowedRoot} kind={kind} />;
     case 'dxf':
       return <DxfPreview content={props.content} />;
     case 'gerber':
@@ -79,34 +88,31 @@ export function PreviewRouter(props: PreviewRouterProps): ReactElement {
     case 'pdf':
       return (
         <Suspense fallback={lazyFallback()}>
-          <PdfPreview path={props.path} />
+          <PdfPreview path={props.path} allowedRoot={props.allowedRoot} />
         </Suspense>
       );
     case 'docx':
-      return (
-        <Suspense fallback={lazyFallback()}>
-          <DocxPreview path={props.path} />
-        </Suspense>
-      );
     case 'xlsx':
-      return (
-        <Suspense fallback={lazyFallback()}>
-          <XlsxPreview path={props.path} />
-        </Suspense>
-      );
     case 'pptx':
+    case 'office':
       return (
         <Suspense fallback={lazyFallback()}>
-          <PptxPreview path={props.path} />
+          <OfficePreview key={props.path} path={props.path} allowedRoot={props.allowedRoot} kind={previewKindFor(props.path) as 'docx' | 'xlsx' | 'pptx' | 'office'} />
         </Suspense>
       );
+    case 'unsupported': return <div className="preview__empty">此格式暂不支持应用内预览。请使用右上角的外部打开或文件夹操作查看原文件。</div>;
     case 'model3d':
       return (
         <Suspense fallback={lazyFallback()}>
-          <ModelPreview path={props.path} />
+          <ModelPreview path={props.path} allowedRoot={props.allowedRoot} />
         </Suspense>
       );
+    case 'code':
+      if (props.content.includes('\u0000')) return <div className="preview__empty">此文件包含二进制内容，请使用外部应用打开。</div>;
+      return <LazyCodePreview key={props.path} path={props.path} content={props.content} />;
     case 'text':
-      return <TextPreview content={props.content} />;
+      if (props.content.includes('\u0000')) return <div className="preview__empty">此文件包含二进制内容，请使用外部应用打开。</div>;
+      if (sourceLanguageFor(props.path, props.content).id !== 'plaintext') return <LazyCodePreview key={props.path} path={props.path} content={props.content} />;
+      return <TextPreview key={props.path} content={props.content} />;
   }
 }

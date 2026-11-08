@@ -59,28 +59,53 @@ export function useBrowserPreview(options: {
   const snapshotRef = useRef(snapshot); snapshotRef.current = snapshot
   const facadeRef = useRef(facade); facadeRef.current = facade
   const applyRef = useRef<(state: NativeBrowserState) => void>(() => {})
+  const nativeFirst = useRef(false)
+  const failRef = useRef<(error: unknown) => void>(() => {})
+  const viewportQueue = useRef<ReturnType<typeof createNativeLayoutQueue>>()
   const layoutQueue = useRef<ReturnType<typeof createNativeLayoutQueue>>()
-  if (!layoutQueue.current) layoutQueue.current = createNativeLayoutQueue(async command => {
+  if (!viewportQueue.current) viewportQueue.current = createNativeLayoutQueue(async command => {
     const host = facadeRef.current
-    if (!host) {
-      if (!command.visible) { await nativeBrowserCommand(command); return }
-      throw new Error('浏览器服务尚未连接')
-    }
+    if (!host) return
     const epoch = generation.current
-    const state = await host.nativeBrowserLayout(command.scope, command.bounds, command.visible === true)
+    const state = await host.nativeBrowserLayout(command.scope, command.bounds, command.visible === true, true)
     if (generation.current === epoch) applyRef.current(state)
+  }, requested => requested === scopeRef.current && visibleRef.current)
+  if (!layoutQueue.current) layoutQueue.current = createNativeLayoutQueue(async command => {
+    if (!facadeRef.current && command.visible) throw new Error('浏览器服务尚未连接')
+    // Window geometry must not wait behind CDP measurement or an agent command.
+    // The host is notified afterward and must never replay these old bounds.
+    const host = facadeRef.current
+    const epoch = generation.current
+    if (host && !nativeFirst.current) {
+      const state = await host.nativeBrowserLayout(command.scope, command.bounds, command.visible === true)
+      if (generation.current === epoch) applyRef.current(state)
+      return
+    }
+    await nativeBrowserCommand(command)
+    void viewportQueue.current!(command).catch(error => {
+      if (generation.current === epoch && command.scope === scopeRef.current) failRef.current(error)
+    })
   }, requested => requested === scopeRef.current && visibleRef.current)
   const layout = useCallback((command: NativeBrowserCommand) => layoutQueue.current!(command), [])
   const apply = useCallback((state: NativeBrowserState): void => {
     if (state.scope !== scopeRef.current) return
     const previous = snapshotRef.current
     if (previous?.scope === state.scope && previous.revision !== undefined && state.revision !== undefined && state.revision < previous.revision) return
+    nativeFirst.current = state.nativeLayout === 'direct'
     snapshotRef.current = state
     setSnapshot(state); setStatus(state.state); setDetail(state.detail)
   }, [])
   applyRef.current = apply
   const fail = useCallback((error: unknown): void => {
     setStatus('error'); setDetail(error instanceof Error ? error.message : String(error))
+  }, [])
+  failRef.current = fail
+  // User actions share the same host-generation boundary as native events.
+  const atCurrentHost = useCallback(async (requested: string, operation: (current: () => boolean) => Promise<void>): Promise<void> => {
+    const epoch = generation.current
+    const current = (): boolean => requested === scopeRef.current && generation.current === epoch
+    try { await operation(current) }
+    catch (error) { if (current()) throw error }
   }, [])
   useEffect(() => {
     setReady(serviceManager?.currentHealth === 'ready')
@@ -89,6 +114,7 @@ export function useBrowserPreview(options: {
         // A previous host cannot settle the replacement host's startup.
         // Its late response/timeout still carries the same conversation.
         generation.current++
+        nativeFirst.current = false
         snapshotRef.current = undefined; setSnapshot(undefined)
         setStatus('error'); setDetail('浏览器服务已断开')
       }
@@ -100,7 +126,11 @@ export function useBrowserPreview(options: {
     let disposed = false, offPage = (): void => {}
     void onNativeBrowserPage(event => {
       if (event.scope !== scopeRef.current || !facade || snapshotRef.current?.scope !== event.scope) return
-      void facade.nativeBrowserState(event.scope).then(apply).catch(error => { if (event.scope === scopeRef.current) fail(error) })
+      // A replacement host reuses the scope but starts a new revision sequence.
+      const epoch = generation.current
+      const current = (): boolean => !disposed && event.scope === scopeRef.current && generation.current === epoch
+      void facade.nativeBrowserState(event.scope).then(state => { if (current()) apply(state) })
+        .catch(error => { if (current()) fail(error) })
     }).then(unsubscribe => { if (disposed) unsubscribe(); else offPage = unsubscribe }).catch(fail)
     return () => { disposed = true; off?.(); offPage() }
   }, [serviceManager, facade, apply, fail])
@@ -112,17 +142,21 @@ export function useBrowserPreview(options: {
       if (event.label && event.label !== snapshotRef.current?.activeLabel) return
       if (event.zoom && Number.isFinite(event.zoom)) {
         const epoch = generation.current
-        const failed = (error: unknown): void => { if (scopeRef.current === event.scope && generation.current === epoch) fail(error) }
+        const current = (): boolean => !disposed && scopeRef.current === event.scope && generation.current === epoch
+        const applied = (state: NativeBrowserState | undefined): void => { if (state && current()) apply(state) }
+        const failed = (error: unknown): void => { if (current()) fail(error) }
         const fixed = snapshotRef.current?.viewport
         if (fixed?.mode === 'fixed' && facadeRef.current && event.zoom !== 1) {
           const label = snapshotRef.current!.activeLabel, host = facadeRef.current
-          void nativeBrowserCommand({ scope: event.scope, operation: 'zoom', zoom: 1 }).then(() => host.nativeBrowserViewport(event.scope, label, fixed)).then(apply).catch(failed)
+          void nativeBrowserCommand({ scope: event.scope, operation: 'zoom', zoom: 1 })
+            .then(() => current() ? host.nativeBrowserViewport(event.scope, label, fixed) : undefined).then(applied).catch(failed)
         } else {
           setZoomValue(event.zoom)
           // Native keyboard zoom is also reflected in the host's geometry.
           if (facadeRef.current) {
             const host = facadeRef.current
-            void nativeBrowserCommand({ scope: event.scope, operation: 'zoom', zoom: event.zoom }).then(() => host.nativeBrowserState(event.scope)).then(apply).catch(failed)
+            void nativeBrowserCommand({ scope: event.scope, operation: 'zoom', zoom: event.zoom })
+              .then(() => current() ? host.nativeBrowserState(event.scope) : undefined).then(applied).catch(failed)
           }
         }
       }
@@ -170,16 +204,25 @@ export function useBrowserPreview(options: {
   }, [scope])
   const closeTab = useCallback(async (label: string): Promise<void> => {
     if (!facade) throw new Error('浏览器服务尚未连接')
-    await nativeBrowserCommand({ scope, operation: 'close', label })
-    apply(await facade.nativeBrowserState(scope))
-  }, [scope, facade, apply])
+    await atCurrentHost(scope, async current => {
+      await nativeBrowserCommand({ scope, operation: 'close', label })
+      if (!current()) return
+      const state = await facade.nativeBrowserState(scope)
+      if (current()) apply(state)
+    })
+  }, [scope, facade, apply, atCurrentHost])
   const setZoom = useCallback(async (value: number): Promise<void> => {
     if (snapshotRef.current?.viewport?.mode === 'fixed') throw new Error('固定页面尺寸使用适应展示比例')
-    await nativeBrowserCommand({ scope, operation: 'zoom', zoom: value })
-    if (scopeRef.current !== scope) return
-    setZoomValue(value)
-    if (facade) apply(await facade.nativeBrowserState(scope))
-  }, [scope, facade, apply])
+    await atCurrentHost(scope, async current => {
+      await nativeBrowserCommand({ scope, operation: 'zoom', zoom: value })
+      if (!current()) return
+      setZoomValue(value)
+      if (facade) {
+        const state = await facade.nativeBrowserState(scope)
+        if (current()) apply(state)
+      }
+    })
+  }, [scope, facade, apply, atCurrentHost])
   const setPageViewport = useCallback(async (viewport: NativeBrowserViewportRequest): Promise<void> => {
     if (!facade || !scope || !snapshotRef.current) throw new Error('浏览器尚未连接')
     const epoch = generation.current, label = snapshotRef.current.activeLabel
@@ -190,29 +233,43 @@ export function useBrowserPreview(options: {
   }, [scope, facade, apply])
   const takeControl = useCallback(async (): Promise<void> => {
     if (!facade || !scope) throw new Error('浏览器尚未连接')
-    const state = await facade.nativeBrowserControl(scope, true)
-    if (scopeRef.current !== scope) return
-    apply(state)
-    await nativeBrowserCommand({ scope, operation: 'focus' })
-  }, [facade, scope, apply])
+    await atCurrentHost(scope, async current => {
+      const state = await facade.nativeBrowserControl(scope, true)
+      if (!current()) return
+      apply(state)
+      await nativeBrowserCommand({ scope, operation: 'focus' })
+    })
+  }, [facade, scope, apply, atCurrentHost])
   const releaseControl = useCallback(async (): Promise<void> => {
     if (!facade || !scope) throw new Error('浏览器尚未连接')
-    apply(await facade.nativeBrowserControl(scope, false))
-  }, [facade, scope, apply])
+    await atCurrentHost(scope, async current => {
+      const state = await facade.nativeBrowserControl(scope, false)
+      if (current()) apply(state)
+    })
+  }, [facade, scope, apply, atCurrentHost])
   const selectTab = useCallback(async (label: string): Promise<void> => {
     if (!facade) throw new Error('浏览器服务尚未连接')
-    apply(await facade.nativeBrowserSelect(scope, label))
-  }, [facade, scope, apply])
+    await atCurrentHost(scope, async current => {
+      const state = await facade.nativeBrowserSelect(scope, label)
+      if (current()) apply(state)
+    })
+  }, [facade, scope, apply, atCurrentHost])
   const createTab = useCallback(async (): Promise<void> => {
     if (!facade) throw new Error('浏览器服务尚未连接')
-    apply(await facade.nativeBrowserCreate(scope))
-  }, [facade, scope, apply])
+    await atCurrentHost(scope, async current => {
+      const state = await facade.nativeBrowserCreate(scope)
+      if (current()) apply(state)
+    })
+  }, [facade, scope, apply, atCurrentHost])
   const input = useCallback(async (_params: ViewportInputParams): Promise<void> => {
     throw new Error('原生浏览器直接接收输入')
   }, [])
   const setViewportSize = useCallback((size: { width: number; height: number }): void => {
     const previous = boundsRef.current
-    if (previous) void setBounds({ ...previous, ...size }, visibleRef.current).catch(fail)
+    const requested = scopeRef.current, epoch = generation.current
+    if (previous) void setBounds({ ...previous, ...size }, visibleRef.current).catch(error => {
+      if (requested === scopeRef.current && generation.current === epoch) fail(error)
+    })
   }, [setBounds, fail])
   return { scope, status, detail, url: snapshot?.tabs.find(tab => tab.label === snapshot.activeLabel)?.url ?? '',
     nativeState: snapshot, zoom, latestFrame: null, frameSeq: 0, start, stop, navigate, input,

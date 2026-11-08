@@ -1,139 +1,174 @@
-// Trylo Desktop — PdfPreview (base capability).
-//
-// PDF.js (Mozilla, Apache-2.0) straight on canvas: one page at a time,
-// prev/next + zoom. The worker URL is bundled by Vite — the assignment
-// MUST stay a single-line `new URL(...)` (Vite ≥7.1 misses multiline
-// forms and the viewer silently falls back to the fake worker).
-//
-// Test note: PDF.js needs canvas + worker, neither exists in jsdom, so
-// this component is typechecked + manually verified, not unit-tested.
-// Routing is covered in previewKind.test.ts.
-
-import type { ReactElement } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  getDocument,
-  GlobalWorkerOptions,
-  type PDFDocumentLoadingTask,
-  type PDFDocumentProxy,
-} from 'pdfjs-dist';
+// PDF.js owns the render queue, high-DPI pages and selectable text.
+// Office page previews reuse this reader with supplied PDF bytes.
+import type { ReactElement, ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, PanelLeft, RotateCw, Search } from 'lucide-react';
+import type { PDFDocumentProxy } from 'pdfjs-dist';
+import { PdfThumbnails } from './PdfThumbnails';
+import { PdfReaderControls } from './PdfReaderControls';
+import { getDocument, GlobalWorkerOptions, PasswordResponses } from 'pdfjs-dist';
+import { EventBus, PDFViewer, PDFSinglePageViewer, PDFLinkService, PDFFindController } from 'pdfjs-dist/web/pdf_viewer.mjs';
+import 'pdfjs-dist/web/pdf_viewer.css';
 import { usePreviewBytes } from './usePreviewBytes';
+import { PreviewFailure } from './PreviewFailure';
 
 GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+export interface PdfPreviewProps { readonly path: string; readonly bytes?: Uint8Array; readonly allowedRoot?: string; readonly presentation?: 'document' | 'slides'; readonly toolbarStart?: ReactNode; readonly initialScale?: 'auto' | 'page-width' }
 
-const MIN_SCALE = 0.5;
-const MAX_SCALE = 3;
-
-export interface PdfPreviewProps {
-  readonly path: string;
-}
-
-export function PdfPreview(props: PdfPreviewProps): ReactElement {
-  const bytesState = usePreviewBytes(props.path);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const docRef = useRef<PDFDocumentProxy | null>(null);
-  // v6 lifecycle: teardown owns the LOADING TASK (doc has no destroy).
-  const taskRef = useRef<PDFDocumentLoadingTask | null>(null);
-  const [numPages, setNumPages] = useState(0);
-  const [pageNum, setPageNum] = useState(1);
+export function PdfPreview({ path, bytes, allowedRoot, presentation = 'document', toolbarStart, initialScale = 'page-width' }: PdfPreviewProps): ReactElement {
+  const slides = presentation === 'slides';
+  const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy>();
+  const [thumbnails, setThumbnails] = useState(slides);
+  const state = usePreviewBytes(path, bytes, allowedRoot);
+  const readyBytes = state.status === 'ready' ? state.bytes : undefined;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const viewerRef = useRef<PDFViewer>();
+  const busRef = useRef<EventBus>();
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [pages, setPages] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageInput, setPageInput] = useState('1');
   const [scale, setScale] = useState(1);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [matches, setMatches] = useState({ current: 0, total: 0 });
+  const [passwordNeeded, setPasswordNeeded] = useState<{ incorrect: boolean }>();
+  const [password, setPassword] = useState('');
+  const unlock = useRef<{ submit: (password: string) => void; cancel: () => void }>();
 
-  // Load the document. A fresh copy of the bytes goes in — PDF.js may
-  // detach (transfer) the buffer it is given, and the hook's copy must
-  // stay intact for a reload.
   useEffect(() => {
-    if (bytesState.status !== 'ready') return undefined;
-    let cancelled = false;
-    setError('');
-    setNumPages(0);
-    setPageNum(1);
-    // Clear the previous document's pixels while the new one loads.
-    if (canvasRef.current) canvasRef.current.width = 0;
-    // Tear down the previous load before starting the next one.
-    const prev = taskRef.current;
-    taskRef.current = null;
-    docRef.current = null;
-    if (prev) void prev.destroy().catch(() => undefined);
-    const loadingTask = getDocument({ data: bytesState.bytes.slice() });
-    taskRef.current = loadingTask;
-    loadingTask.promise.then(
-      (doc) => {
-        if (cancelled || taskRef.current !== loadingTask) {
-          void loadingTask.destroy().catch(() => undefined);
-          return;
-        }
-        docRef.current = doc;
-        setNumPages(doc.numPages);
-      },
-      (err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      },
-    );
-    return () => {
-      cancelled = true;
-      if (taskRef.current === loadingTask) {
-        taskRef.current = null;
-        docRef.current = null;
-        void loadingTask.destroy().catch(() => undefined);
-      }
+    const container = containerRef.current;
+    if (!container || !readyBytes) return;
+    const abort = new AbortController();
+    const eventBus = new EventBus();
+    const linkService = new PDFLinkService({ eventBus });
+    // Keep internal destinations without letting document links navigate
+    // the application shell. Scripting and form editing are not enabled.
+    linkService.externalLinkEnabled = false;
+    const findController = new PDFFindController({ eventBus, linkService });
+    const viewerElement = document.createElement('div');
+    viewerElement.className = 'pdfViewer';
+    container.replaceChildren(viewerElement);
+    // v6 runtime supports abortSignal; its published declaration omits it.
+    const viewerOptions = {
+      container, viewer: viewerElement, eventBus, linkService, findController,
+      annotationMode: 1, textLayerMode: 1, annotationEditorMode: -1,
+      abortSignal: abort.signal,
     };
-  }, [bytesState]);
-
-  // Render the current page. The previous render is cancelled first so
-  // fast page-flipping can't land a stale page on the canvas.
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const doc = docRef.current;
-    if (!canvas || !doc || numPages === 0) return undefined;
-    let cancelled = false;
-    let renderTask: { cancel: () => void; promise: Promise<void> } | undefined;
-    void doc.getPage(pageNum).then((page) => {
-      if (cancelled) return;
-      const viewport = page.getViewport({ scale });
-      canvas.width = Math.floor(viewport.width);
-      canvas.height = Math.floor(viewport.height);
-      // v6 render takes the canvas element (context is derived).
-      renderTask = page.render({ canvas, viewport });
-      renderTask.promise.catch(() => undefined);
+    const viewer = slides ? new PDFSinglePageViewer(viewerOptions) : new PDFViewer(viewerOptions);
+    linkService.setViewer(viewer);
+    viewerRef.current = viewer; busRef.current = eventBus;
+    setPdfDocument(undefined); setPages(0); setPage(1); setPageInput('1'); setQuery('');
+    setMatches({ current: 0, total: 0 }); setError(''); setLoading(true);
+    setPasswordNeeded(undefined); setPassword('');
+    const task = getDocument({
+      data: readyBytes.slice(),
+      cMapUrl: new URL('/pdf-assets/cmaps/', document.baseURI).href, cMapPacked: true,
+      standardFontDataUrl: new URL('/pdf-assets/standard_fonts/', document.baseURI).href,
+      wasmUrl: new URL('/pdf-assets/wasm/', document.baseURI).href,
     });
-    return () => {
-      cancelled = true;
-      renderTask?.cancel();
+    let passwordCancelled = false;
+    task.onPassword = (submit: (password: string) => void, reason: number): void => {
+      if (abort.signal.aborted || passwordCancelled) return;
+      unlock.current = { submit, cancel: () => { passwordCancelled = true; void task.destroy().catch(() => undefined); setPasswordNeeded(undefined); setLoading(false); setError('已取消解锁，请重载文件或使用外部应用打开。'); } };
+      setPasswordNeeded({ incorrect: reason === PasswordResponses.INCORRECT_PASSWORD });
     };
-  }, [pageNum, scale, numPages, props.path]);
+    eventBus.on('pagesinit', () => {
+      if (abort.signal.aborted) return;
+      viewer.currentScaleValue = slides ? 'page-fit' : initialScale; setLoading(false);
+    });
+    eventBus.on('pagechanging', ({ pageNumber }: { pageNumber: number }) => {
+      if (abort.signal.aborted) return;
+      setPage(pageNumber); setPageInput(String(pageNumber));
+    });
+    eventBus.on('scalechanging', ({ scale: next }: { scale: number }) => {
+      if (!abort.signal.aborted) setScale(next);
+    });
+    eventBus.on('pagerendered', ({ error: renderError }: { error?: unknown }) => {
+      if (renderError && !abort.signal.aborted) setError(String(renderError));
+    });
+    eventBus.on('updatefindmatchescount', ({ matchesCount }: { matchesCount: { current: number; total: number } }) => {
+      if (!abort.signal.aborted) setMatches(matchesCount);
+    });
+    eventBus.on('updatefindcontrolstate', ({ matchesCount }: { matchesCount: { current: number; total: number } }) => {
+      if (!abort.signal.aborted && matchesCount) setMatches(matchesCount);
+    });
+    void task.promise.then((doc) => {
+      if (abort.signal.aborted) return;
+      setPdfDocument(doc); setPages(doc.numPages); linkService.setDocument(doc); viewer.setDocument(doc);
+    }).catch((err: unknown) => {
+      if (!abort.signal.aborted && !passwordCancelled) { setError(String(err)); setLoading(false); }
+    });
+    const observer = new ResizeObserver(() => {
+      const fit = viewer.currentScaleValue;
+      if (fit === 'page-width' || fit === 'page-fit' || fit === 'auto') viewer.currentScaleValue = fit;
+    });
+    observer.observe(container);
+    return () => {
+      abort.abort(); observer.disconnect(); viewer.cleanup();
+      unlock.current = undefined;
+      viewerRef.current = undefined; busRef.current = undefined;
+      void task.destroy().catch(() => undefined); container.replaceChildren();
+    };
+  }, [readyBytes, slides, initialScale]);
 
-  const goPage = useCallback(
-    (next: number): void => {
-      setPageNum(Math.min(Math.max(1, next), Math.max(1, numPages)));
-    },
-    [numPages],
-  );
-
-  if (bytesState.status === 'loading') {
-    return <div className="preview__empty">Loading PDF…</div>;
-  }
-  if (bytesState.status === 'error') {
-    return <div className="preview__empty">Could not load PDF: {bytesState.message}</div>;
-  }
-  if (error !== '') {
-    return <div className="preview__empty">Could not render PDF: {error}</div>;
-  }
-
-  return (
-    <div className="preview__paged" role="region" aria-label="PDF preview">
-      <div className="preview__toolbar">
-        <button type="button" onClick={() => goPage(pageNum - 1)} disabled={pageNum <= 1} aria-label="Previous page">‹</button>
-        <span className="preview__page-label">{pageNum} / {numPages === 0 ? '…' : numPages}</span>
-        <button type="button" onClick={() => goPage(pageNum + 1)} disabled={pageNum >= numPages} aria-label="Next page">›</button>
-        <span className="preview__sep" aria-hidden="true">·</span>
-        <button type="button" onClick={() => setScale((s) => Math.max(MIN_SCALE, s - 0.25))} disabled={scale <= MIN_SCALE} aria-label="Zoom out">−</button>
-        <span className="preview__page-label">{Math.round(scale * 100)}%</span>
-        <button type="button" onClick={() => setScale((s) => Math.min(MAX_SCALE, s + 0.25))} disabled={scale >= MAX_SCALE} aria-label="Zoom in">+</button>
-      </div>
-      <div className="preview__canvas-wrap">
-        <canvas ref={canvasRef} className="preview__canvas" />
+  const go = (next: number): void => {
+    if (viewerRef.current && pages) {
+      const number = Math.max(1, Math.min(pages, Math.trunc(next)));
+      viewerRef.current.currentPageNumber = number; setPageInput(String(number));
+    }
+  };
+  const find = (value: string, previous = false, again = false): void => {
+    if (!value) setMatches({ current: 0, total: 0 });
+    busRef.current?.dispatch('find', {
+      source: searchRef.current, type: again ? 'again' : '', query: value,
+      caseSensitive: false, entireWord: false, highlightAll: true,
+      findPrevious: previous, matchDiacritics: false,
+    });
+  };
+  const zoom = (factor: number): void => {
+    const viewer = viewerRef.current;
+    if (viewer) viewer.currentScale = Math.max(0.25, Math.min(4, viewer.currentScale * factor));
+  };
+  const loadError = state.status === 'error' ? state.message : error;
+  return <div className={`preview__paged preview__pdf${slides ? ' preview__pdf--slides' : ''}`} role="region" tabIndex={slides ? 0 : undefined} onKeyDown={event => {
+      if (!slides || event.altKey || event.ctrlKey || event.metaKey || (event.target as HTMLElement).matches('input,select,textarea')) return;
+      const next = event.key === 'ArrowRight' || event.key === 'PageDown' ? page + 1 : event.key === 'ArrowLeft' || event.key === 'PageUp' ? page - 1 : event.key === 'Home' ? 1 : event.key === 'End' ? pages : undefined;
+      if (next !== undefined) { event.preventDefault(); go(next); }
+    }} aria-label={slides ? 'Presentation preview' : 'PDF preview'}>
+    <div className="preview__reader-toolbar" role="toolbar" aria-label="PDF controls">
+      <button type="button" aria-label="页面缩略图" title="页面缩略图" aria-expanded={thumbnails} disabled={!pages} onClick={() => setThumbnails(!thumbnails)}><PanelLeft size={16} /></button>
+      {toolbarStart ?? <span className="preview__reader-mode">文档</span>}
+      <span className="preview__toolbar-spacer" />
+      <button type="button" aria-label="Rotate clockwise" title="顺时针旋转" disabled={!pages} onClick={() => { if (viewerRef.current) viewerRef.current.pagesRotation = (viewerRef.current.pagesRotation + 90) % 360; }}><RotateCw size={15} /></button>
+      <button type="button" aria-label="Search PDF" title="搜索文档" aria-expanded={searchOpen} disabled={!pages} onClick={() => { setSearchOpen(!searchOpen); requestAnimationFrame(() => searchRef.current?.focus()); }}><Search size={15} /></button>
+    </div>
+    {searchOpen && <div className="preview__toolbar preview__search">
+      <input ref={searchRef} aria-label="Search text" placeholder="搜索文档" value={query} onChange={(e) => { setQuery(e.target.value); find(e.target.value); }} onKeyDown={(e) => {
+        if (e.key === 'Enter') find(query, e.shiftKey, true);
+        if (e.key === 'Escape') { e.stopPropagation(); setSearchOpen(false); }
+      }} />
+      <span aria-live="polite">{matches.current} / {matches.total}</span>
+      <button type="button" aria-label="Previous match" disabled={!query} onClick={() => find(query, true, true)}><ChevronLeft size={15} /></button>
+      <button type="button" aria-label="Next match" disabled={!query} onClick={() => find(query, false, true)}><ChevronRight size={15} /></button>
+    </div>}
+    {loadError && <PreviewFailure error={loadError}><p>请重试或使用外部应用打开。</p></PreviewFailure>}
+    {passwordNeeded && <form className="preview__password" onSubmit={(event) => { event.preventDefault(); unlock.current?.submit(password); setPassword(''); setPasswordNeeded(undefined); }}>
+      <label htmlFor="preview-pdf-password">{passwordNeeded.incorrect ? '密码不正确，请重试' : '这份 PDF 需要密码'}</label>
+      <input id="preview-pdf-password" aria-label="PDF 密码" type="password" autoComplete="off" autoFocus value={password} onChange={(event) => setPassword(event.target.value)} />
+      <button type="submit" disabled={!password}>解锁预览</button>
+      <button type="button" onClick={() => { setPassword(''); unlock.current?.cancel(); }}>取消</button>
+    </form>}
+    <div className="preview__reader-body" hidden={!!loadError || !!passwordNeeded}>
+      {thumbnails && pdfDocument && <PdfThumbnails key={pdfDocument.fingerprints[0]} document={pdfDocument} page={page} onSelect={go} />}
+      <div className="preview__pdf-stage">
+        {!passwordNeeded && (loading || state.status === 'loading') && <div className="preview__loading" role="status"><span className="preview__spinner" />正在加载文档…</div>}
+        <div ref={containerRef} className="preview__pdf-container" />
       </div>
     </div>
-  );
+    <PdfReaderControls page={page} pages={pages} pageInput={pageInput} onPageInput={setPageInput} onCommit={go}
+      scale={scale} onZoom={zoom} slides={slides} onFit={value => { if (viewerRef.current) viewerRef.current.currentScaleValue = value; }} />
+  </div>;
 }

@@ -22,6 +22,10 @@ import type {
 } from './conversation-result-types';
 import type { CodeRunLifecycleObserver, CodeRunOutcome } from '../runtime/code-run-lifecycle';
 import { BOUNDS } from './conversation-result-normalizer';
+import { boundedOutputSnapshot, snapshotOutputFiles, type OutputSnapshot, type OutputSnapshotFn } from './output-files/snapshot';
+import { outputFileDelta } from './output-files/delta';
+import { OutputRunOwnership } from './output-files/ownership';
+import { createDesktopOutputWatch, mergeOutputEvidence, type OutputWatch, type OutputWatchFactory } from './output-files/watch';
 
 /** Baseline budget (spec §14): a slow snapshot never waits forever. */
 const BASELINE_BUDGET_MS = 3000;
@@ -52,6 +56,9 @@ export interface CodeResultProjectorOptions {
   readonly finalBudgetMs?: number;
   /** WP-4: bounded budget for the terminal diff-stats fetch. */
   readonly statsBudgetMs?: number;
+  readonly outputSnapshot?: OutputSnapshotFn;
+  readonly outputOwnership?: OutputRunOwnership;
+  readonly outputWatch?: OutputWatchFactory;
 }
 
 /** Per-run projection lifecycle state (audit P1-1). Created SYNCHRONOUSLY by
@@ -62,7 +69,10 @@ export interface CodeResultProjectorOptions {
  *  projection instead of blocking finalize. Once finalized, nothing may
  *  resurrect this state. */
 interface RunProjectionState {
+  readonly owner: { readonly key: string };
+  readonly watch?: OutputWatch;
   readonly baselinePromise: Promise<GitWorkspaceSnapshot | null>;
+  readonly outputBaseline: Promise<OutputSnapshot | null>;
   readonly bufferedEvents: LoopEvent[];
   finalized: boolean;
 }
@@ -287,6 +297,13 @@ export class CodeResultProjector implements CodeRunLifecycleObserver {
    *  never resurrect a baseline/buffer. Keys always contain the runId, so
    *  one run's entry can never shadow another run. */
   private readonly finalized = new Set<string>();
+  private readonly outputSnapshot: OutputSnapshotFn;
+  /** A cleared conversation or a newer run invalidates pending final writes. */
+  private readonly owners = new Map<string, { readonly key: string }>();
+  private readonly outputOwnership: OutputRunOwnership;
+  private readonly outputWatch: OutputWatchFactory;
+  private readonly watches = new Map<string, OutputWatch>();
+  private readonly clearedConversations = new Set<string>();
 
   constructor(options: CodeResultProjectorOptions) {
     this.git = options.git ?? hostAdapter.git;
@@ -295,11 +312,18 @@ export class CodeResultProjector implements CodeRunLifecycleObserver {
     this.baselineBudgetMs = options.baselineBudgetMs ?? BASELINE_BUDGET_MS;
     this.finalBudgetMs = options.finalBudgetMs ?? FINAL_BUDGET_MS;
     this.statsBudgetMs = options.statsBudgetMs ?? STATS_BUDGET_MS;
+    this.outputSnapshot = options.outputSnapshot ?? snapshotOutputFiles;
+    this.outputOwnership = options.outputOwnership ?? new OutputRunOwnership();
+    this.outputWatch = options.outputWatch ?? createDesktopOutputWatch;
   }
 
   /** Reset per-conversation state (e.g. on workspace teardown). */
   clearConversation(projectKey: string, conversationId: string): void {
     const prefix = `${projectKey}/${conversationId}/`;
+    this.owners.delete(`${projectKey}/${conversationId}`);
+    this.clearedConversations.add(`${projectKey}/${conversationId}`);
+    this.outputOwnership.clear(projectKey, conversationId);
+    for (const [key, watch] of this.watches) if (key.startsWith(prefix)) { watch.close(); this.watches.delete(key); }
     for (const key of [...this.runs.keys()]) {
       if (!key.startsWith(prefix)) continue;
       const state = this.runs.get(key);
@@ -315,17 +339,29 @@ export class CodeResultProjector implements CodeRunLifecycleObserver {
    *  exists before the first real event can arrive, while the Git baseline
    *  snapshot runs asynchronously behind the state's shared baselinePromise.
    *  Idempotent; a late start for an already-finalized run is a no-op. */
-  onRunStarted(scope: RuntimeResultScope): void {
+  onRunStarted(scope: RuntimeResultScope): Promise<void> | void {
     const key = snapshotKey(scope);
-    if (this.runs.has(key) || this.finalized.has(key)) return;
+    if (this.runs.has(key)) return this.runs.get(key)?.watch?.ready;
+    if (this.finalized.has(key)) return;
+    this.clearedConversations.delete(`${scope.projectKey}/${scope.conversationId}`);
+    this.outputOwnership.begin(key, scope);
+    const owner = { key };
+    this.owners.set(`${scope.projectKey}/${scope.conversationId}`, owner);
+    let watch: OutputWatch | undefined;
+    try { watch = this.outputWatch(scope.projectRoot); } catch { /* Snapshots remain available when a native watch cannot start. */ }
+    if (watch) this.watches.set(key, watch);
     const state: RunProjectionState = {
+      owner,
+      ...(watch ? { watch } : {}),
       // Bounded and never-rejecting: the terminal awaits this SAME promise,
       // so a slow/failed snapshot degrades the projection, never finalize.
       baselinePromise: boundedSnapshot(this.git, scope.projectRoot, this.baselineBudgetMs),
+      outputBaseline: boundedOutputSnapshot(this.outputSnapshot, scope.projectRoot, this.baselineBudgetMs),
       bufferedEvents: [],
       finalized: false,
     };
     this.runs.set(key, state);
+    return watch?.ready;
   }
 
   onEvents(scope: RuntimeResultScope, events: readonly LoopEvent[]): void {
@@ -338,11 +374,19 @@ export class CodeResultProjector implements CodeRunLifecycleObserver {
 
   async onRunTerminal(scope: RuntimeResultScope, outcome: CodeRunOutcome): Promise<void> {
     const key = snapshotKey(scope);
+    const conversationKey = `${scope.projectKey}/${scope.conversationId}`;
+    if (this.clearedConversations.has(conversationKey)) return;
+    const state = this.runs.get(key);
+    const latestOwner = this.owners.get(conversationKey);
+    // A terminal replay without a local start cannot borrow the ownership
+    // token of a newer run and overwrite its result.
+    if (!state && latestOwner && latestOwner.key !== key) return;
+    const owner = state?.owner ?? latestOwner ?? { key };
+    if (!this.owners.has(conversationKey)) this.owners.set(conversationKey, owner);
     // Exactly-once per runId: duplicate terminals are side-effect-free.
     if (this.finalized.has(key)) return;
     this.finalized.add(key);
 
-    const state = this.runs.get(key);
     // Cleanup happens BEFORE any await: a late baseline resolve or late
     // event can no longer resurrect state, and a successive run of the same
     // conversation can never read a stale baseline / event buffer.
@@ -353,10 +397,20 @@ export class CodeResultProjector implements CodeRunLifecycleObserver {
     // never-rejecting, so terminal-before-baseline waits (within budget)
     // for the real baseline instead of finalizing against an empty one, and
     // a snapshot reject/timeout never blocks finalize (audit P1-1).
-    const baseline = state ? await state.baselinePromise : null;
+    const [baseline, outputBaseline] = await Promise.all([
+      state?.baselinePromise ?? null, state?.outputBaseline ?? null,
+    ]);
     const events = state ? state.bufferedEvents : [];
 
-    const final = await boundedSnapshot(this.git, scope.projectRoot, this.finalBudgetMs);
+    const [final, outputFinal, watched] = await Promise.all([
+      boundedSnapshot(this.git, scope.projectRoot, this.finalBudgetMs),
+      boundedOutputSnapshot(this.outputSnapshot, scope.projectRoot, this.finalBudgetMs),
+      state?.watch?.finish(),
+    ]);
+    this.watches.delete(key);
+    const observedOutputs = mergeOutputEvidence(outputFileDelta(outputBaseline, outputFinal), watched);
+    const exclusive = this.outputOwnership.finish(key);
+    const outputs = exclusive ? observedOutputs : { files: [], incomplete: observedOutputs.incomplete || observedOutputs.files.length > 0 };
 
     const checks = classifyCodeChecks(events, { runId: scope.runId });
     const observedChanges = collectObservedChanges(events, scope.projectRoot);
@@ -413,7 +467,7 @@ export class CodeResultProjector implements CodeRunLifecycleObserver {
     // status reflects the runtime outcome unless the projection degraded a
     // completed run (spec §6.1).
     const status: StoredCodeRunResult['meta']['status'] =
-      outcome === 'completed' && projectionIncomplete
+      outcome === 'completed' && (projectionIncomplete || outputs.incomplete)
         ? 'degraded'
         : mapOutcomeStatus(outcome);
 
@@ -462,6 +516,9 @@ export class CodeResultProjector implements CodeRunLifecycleObserver {
       attribution,
       changes: stattedChanges,
       checks,
+      outputs: outputs.files.slice(0, BOUNDS.codeOutputs),
+      outputCountTotal: outputs.files.length,
+      outputsIncomplete: outputs.incomplete || outputs.files.length > BOUNDS.codeOutputs,
       changeCountTotal: changes.length,
       checkCountTotal: checks.length,
       truncated: truncated || changes.length > BOUNDS.codeChanges || checks.length > BOUNDS.codeChecks,
@@ -470,7 +527,9 @@ export class CodeResultProjector implements CodeRunLifecycleObserver {
       ...(changes.length > 0 ? { statsComplete } : {}),
     };
 
-    this.store.update(scope.projectKey, scope.projectRoot, scope.conversationId, result);
+    if (this.owners.get(conversationKey) === owner) {
+      this.store.update(scope.projectKey, scope.projectRoot, scope.conversationId, result);
+    }
   }
 
   /** Reset per-run state when a conversation's controller is disposed. */

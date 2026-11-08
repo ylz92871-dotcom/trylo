@@ -1,22 +1,18 @@
 // Trylo Desktop — WorkResultProjector (P2-1, spec §5.1 / §8).
 //
-// The Desktop-side orchestration for the Work result pipeline. It is driven
-// by the Work runtime lifecycle (spec §8.2): it captures the `.trylo/out`
-// baseline before the daemon begins, routes accepted artifact items into the
-// scoped `WorkArtifactStore`, and at terminal runs a recursive scan, then
+// The Desktop-side orchestration for Work-surface results. The shared CLI
+// run lifecycle captures the `.trylo/out`
+// baseline before execution begins, routes accepted artifact items into the
+// scoped `ArtifactStore`, and at terminal runs a recursive scan, then
 // finalises the run (exactly once per runId) and maps the store snapshot into
 // Desktop's `StoredWorkResult` for persistence via the injected `port`.
 //
 // It holds no React, no Tauri import and no raw frame parsing. The version /
-// change / merge semantics live in the Work-side scoped store, which this
+// change / merge semantics live in the result owner's scoped store, which this
 // projector drives and maps.
 
-import {
-  WorkArtifactStore,
-  type WorkArtifactScope,
-  type WorkRunOutcome,
-  type WorkResult,
-} from '@trylo/work';
+import { ArtifactStore } from './artifact-store';
+import type { ArtifactRunScope, ArtifactRunOutcome, ArtifactResult } from './artifact-types';
 import { workspaceKey } from '../host-adapter/conversation-history';
 import {
   attachVerifications,
@@ -24,6 +20,11 @@ import {
   type ToolingOfficeArtifactValidation,
 } from '../tooling/office-validation';
 import { type WorkScanOutcome, scanWorkOutput } from './work-artifact-scanner';
+import { artifactFromStat } from './work-artifact-scanner';
+import { boundedOutputSnapshot, snapshotOutputFiles, type OutputSnapshot, type OutputSnapshotFn } from './output-files/snapshot';
+import { outputFileDelta } from './output-files/delta';
+import { OutputRunOwnership } from './output-files/ownership';
+import { createDesktopOutputWatch, mergeOutputEvidence, type OutputWatch, type OutputWatchFactory } from './output-files/watch';
 import type {
   StoredWorkArtifact,
   StoredWorkResult,
@@ -61,12 +62,15 @@ export type OfficeVerifyFn = (
 export interface WorkResultProjectorOptions {
   /** Injectable for tests; defaults to the real HostAdapter-backed scanner. */
   readonly scan?: WorkScanFn;
-  readonly store?: WorkArtifactStore;
+  readonly store?: ArtifactStore;
   readonly port: WorkResultStorePort;
   readonly now?: () => number;
   /** PR-5 (§11): injectable validation pipeline. Absent → no verdict is
    *  ever attached (the pre-PR-5 behaviour). */
   readonly verify?: OfficeVerifyFn;
+  readonly outputSnapshot?: OutputSnapshotFn;
+  readonly outputOwnership?: OutputRunOwnership;
+  readonly outputWatch?: OutputWatchFactory;
 }
 
 /** Baseline budget (spec §14): a slow snapshot never blocks the run start. */
@@ -97,11 +101,10 @@ async function boundedScan(
   }
 }
 
-// ── Desktop ⇄ Work-domain mapping (spec §8.1: lossless, no work → desktop
-//    dependency). The shapes are structurally identical; the mappers exist so
-//    the two sides never have to agree on every field by accident. ──────────
+// The existing persisted format represents absent turn IDs with empty strings;
+// the in-memory result owner keeps those identities absent until serialization.
 
-function mapWorkToStored(work: WorkResult): StoredWorkResult {
+function mapWorkToStored(work: ArtifactResult): StoredWorkResult {
   return {
     ...(work.latestRun ? { latestRun: mapRunDelta(work.latestRun) } : {}),
     artifacts: work.artifacts.map((a): StoredWorkArtifact => ({
@@ -124,7 +127,7 @@ function mapWorkToStored(work: WorkResult): StoredWorkResult {
   };
 }
 
-function mapRunDelta(delta: WorkResult['latestRun']): StoredWorkRunDelta {
+function mapRunDelta(delta: ArtifactResult['latestRun']): StoredWorkRunDelta {
   if (!delta) return undefined as unknown as StoredWorkRunDelta;
   return {
     runId: delta.runId,
@@ -139,7 +142,7 @@ function mapRunDelta(delta: WorkResult['latestRun']): StoredWorkRunDelta {
   };
 }
 
-function mapStoredToWork(stored: StoredWorkResult): WorkResult {
+function mapStoredToWork(stored: StoredWorkResult): ArtifactResult {
   return {
     ...(stored.latestRun ? { latestRun: stored.latestRun } : {}),
     artifacts: stored.artifacts,
@@ -150,7 +153,7 @@ function mapStoredToWork(stored: StoredWorkResult): WorkResult {
 
 export class WorkResultProjector {
   /** The scoped store owned by this app instance (spec §8.1). */
-  readonly artifactStore: WorkArtifactStore;
+  readonly artifactStore: ArtifactStore;
   private readonly scanImpl: WorkScanFn;
   private readonly port: WorkResultStorePort;
   /** PR-5 (§11): the validation pipeline, when one is wired in. */
@@ -158,23 +161,39 @@ export class WorkResultProjector {
   /** C-Core generation guard: bumped by clearConversation / clearProject so
    *  a background verification can never write a verdict back into a deleted
    *  conversation (the repository would silently resurrect the entry). */
-  private generation = 0;
+  private readonly projectGenerations = new Map<string, number>();
+  private readonly conversationGenerations = new Map<string, number>();
   /** conversationKey -> runIds whose baseline was captured; a bounded FIFO
    *  (C-Core) so long-lived projects do not grow this set without limit.
    *  Exactly-once TERMINAL ownership lives in the store itself — the
    *  projector consults `runTerminalState` instead of keeping a parallel
    *  finalized set. */
   private readonly startedRuns = new Map<string, string[]>();
+  private readonly outputSnapshot: OutputSnapshotFn;
+  private readonly outputOwnership: OutputRunOwnership;
+  private readonly outputBaselines = new Map<string, { output: OutputSnapshot | null; out: WorkScanOutcome | null; exclusive?: boolean; endedAt?: number }>();
+  private readonly outputWatch: OutputWatchFactory;
+  private readonly watches = new Map<string, OutputWatch>();
+  private readonly clearedConversations = new Set<string>();
+  private readonly startingRuns = new Map<string, Promise<void>>();
+  private readonly finalizingRuns = new Map<string, Promise<void>>();
+
+  private epoch(scope: Pick<ArtifactRunScope, 'projectKey' | 'conversationId'>): string {
+    return `${this.projectGenerations.get(scope.projectKey) ?? 0}/${this.conversationGenerations.get(`${scope.projectKey}/${scope.conversationId}`) ?? 0}`;
+  }
 
   constructor(options: WorkResultProjectorOptions) {
-    this.artifactStore = options.store ?? new WorkArtifactStore();
+    this.artifactStore = options.store ?? new ArtifactStore();
     this.scanImpl = options.scan ?? ((root) => scanWorkOutput(root));
     this.port = options.port;
     this.verifyImpl = options.verify ?? null;
+    this.outputSnapshot = options.outputSnapshot ?? snapshotOutputFiles;
+    this.outputOwnership = options.outputOwnership ?? new OutputRunOwnership();
+    this.outputWatch = options.outputWatch ?? createDesktopOutputWatch;
   }
 
   /** Returns true the first time this run's start is seen (marks it). */
-  private markStarted(scope: WorkArtifactScope): boolean {
+  private markStarted(scope: ArtifactRunScope): boolean {
     const convo = `${scope.projectKey}::${scope.conversationId}`;
     const list = this.startedRuns.get(convo) ?? [];
     if (list.includes(scope.runId)) return false;
@@ -210,6 +229,7 @@ export class WorkResultProjector {
     projectKey: string,
     conversationId: string,
     scan: WorkScanOutcome | null,
+    observed: ReadonlySet<string> = new Set(),
   ): WorkScanOutcome | null {
     if (!scan || scan.artifacts.length === 0) return scan;
     const known = new Set(
@@ -217,14 +237,7 @@ export class WorkResultProjector {
         .snapshot(projectKey, conversationId)
         .artifacts.map((a) => a.id),
     );
-    if (known.size === 0) {
-      // No ownership evidence yet: a crash-recovered run or a first scan-less
-      // run cannot prove which shared `.trylo/out` files are its own. Prefer
-      // recovery (let the scan corroborate) rather than dropping everything —
-      // a hard drop here would silently lose products after an app crash.
-      return scan;
-    }
-    const kept = scan.artifacts.filter((a) => known.has(a.id));
+    const kept = scan.artifacts.filter((a) => known.has(a.id) || observed.has(a.id));
     if (kept.length === scan.artifacts.length) return scan;
     return { artifacts: kept, truncated: scan.truncated, ...(scan.warning ? { warning: scan.warning } : {}) };
   }
@@ -244,19 +257,44 @@ export class WorkResultProjector {
 
   /** Run-start baseline (spec §8.2). Awaited before the daemon begins, but
    *  bounded: null baseline degrades to `discovered`, never blocks the run. */
-  async onRunStarted(scope: WorkArtifactScope): Promise<void> {
+  onRunStarted(scope: ArtifactRunScope): Promise<void> {
+    if (this.artifactStore.runTerminalState(scope.projectKey, scope.conversationId, scope.runId) === 'finished') return Promise.resolve();
+    const key = outputScopeKey(scope);
+    const existing = this.startingRuns.get(key);
+    if (existing) return existing;
+    const pending = this.captureStart(scope);
+    this.startingRuns.set(key, pending);
+    return pending;
+  }
+
+  private async captureStart(scope: ArtifactRunScope): Promise<void> {
     if (!this.markStarted(scope)) return;
-    const baseline = await boundedScan(this.scanImpl, scope.projectRoot, BASELINE_BUDGET_MS);
-    this.artifactStore.beginRun(scope, this.scopeScan(scope.projectKey, scope.conversationId, baseline)?.artifacts ?? null);
+    this.clearedConversations.delete(`${scope.projectKey}/${scope.conversationId}`);
+    const key = outputScopeKey(scope);
+    const generation = this.epoch(scope);
+    this.outputOwnership.begin(key, scope);
+    let watch: OutputWatch | undefined;
+    try { watch = this.outputWatch(scope.projectRoot); } catch { /* Keep bounded snapshots as fallback. */ }
+    if (watch) this.watches.set(key, watch);
+    const [baseline, output] = await Promise.all([
+      boundedScan(this.scanImpl, scope.projectRoot, BASELINE_BUDGET_MS),
+      boundedOutputSnapshot(this.outputSnapshot, scope.projectRoot, BASELINE_BUDGET_MS),
+      watch?.ready,
+    ]);
+    if (generation !== this.epoch(scope)) return;
+    this.outputBaselines.set(key, { output, out: baseline });
+    const combined = combineScan(baseline, output, scope.projectRoot);
+    this.artifactStore.beginRun(scope, combined && !combined.truncated && !combined.warning ? combined.artifacts : null);
   }
 
   /** One accepted artifact item during a run (spec §8.2). */
   onArtifact(
-    scope: WorkArtifactScope,
+    scope: ArtifactRunScope,
     rawPath: string,
     artifactKind?: string,
     at?: number,
   ): void {
+    if (this.clearedConversations.has(`${scope.projectKey}/${scope.conversationId}`)) return;
     this.artifactStore.upsertEvent(scope, {
       rawPath,
       artifactKind,
@@ -275,29 +313,65 @@ export class WorkResultProjector {
    *  the run), then the delivery validation runs as a bounded background
    *  step and updates the verdicts in place. A failed verdict degrades the
    *  run to `degraded` (§11) — it never rewrites the agent's answer. */
-  async onRunTerminal(scope: WorkArtifactScope, outcome: WorkRunOutcome): Promise<void> {
+  onRunTerminal(scope: ArtifactRunScope, outcome: ArtifactRunOutcome): Promise<void> {
+    const key = outputScopeKey(scope);
+    const existing = this.finalizingRuns.get(key);
+    if (existing) return existing;
+    const pending = this.finalizeRun(scope, outcome);
+    this.finalizingRuns.set(key, pending);
+    const clear = (): void => { if (this.finalizingRuns.get(key) === pending) this.finalizingRuns.delete(key); };
+    void pending.then(clear, clear);
+    return pending;
+  }
+
+  private async finalizeRun(scope: ArtifactRunScope, outcome: ArtifactRunOutcome): Promise<void> {
+    if (this.clearedConversations.has(`${scope.projectKey}/${scope.conversationId}`)) return;
+    const generation = this.epoch(scope);
+    const key = outputScopeKey(scope);
+    await this.startingRuns.get(key);
+    if (generation !== this.epoch(scope)) return;
     const storeState = this.artifactStore.runTerminalState(
       scope.projectKey,
       scope.conversationId,
       scope.runId,
     );
     if (storeState === 'finished') return;
-
-    const scan = await boundedScan(this.scanImpl, scope.projectRoot, FINAL_BUDGET_MS);
-    const scopedScan = this.scopeScan(scope.projectKey, scope.conversationId, scan);
-    const workResult: WorkResult = scopedScan
-      ? this.artifactStore.finishRun(scope, { artifacts: scopedScan.artifacts, truncated: scopedScan.truncated }, outcome)
+    const baseline = this.outputBaselines.get(key);
+    const [scan, output, watched] = await Promise.all([
+      boundedScan(this.scanImpl, scope.projectRoot, FINAL_BUDGET_MS),
+      boundedOutputSnapshot(this.outputSnapshot, scope.projectRoot, FINAL_BUDGET_MS),
+      this.watches.get(key)?.finish(),
+    ]);
+    this.watches.delete(key);
+    if (generation !== this.epoch(scope)) return;
+    const exclusive = baseline?.exclusive ?? this.outputOwnership.finish(key);
+    if (baseline) { baseline.exclusive = exclusive; baseline.endedAt ??= Date.now(); }
+    const observed = mergeOutputEvidence(outputFileDelta(scanAsSnapshot(combineScan(baseline?.out ?? null, baseline?.output ?? null, scope.projectRoot)), scanAsSnapshot(combineScan(scan, output, scope.projectRoot))), watched);
+    const observedIds = new Set(exclusive ? observed.files.filter((file) => !baseline?.endedAt || file.signature.modifiedMs <= baseline.endedAt).map((file) => file.path) : []);
+    const combined = combineScan(combineScan(scan, output, scope.projectRoot), watched ? { files: watched.files.map((file) => ({ path: file.path, signature: file.signature })), incomplete: watched.incomplete } : null, scope.projectRoot);
+    let scopedScan = this.scopeScan(scope.projectKey, scope.conversationId, combined, observedIds);
+    if (baseline && scopedScan) {
+      const known = new Set(this.artifactStore.snapshot(scope.projectKey, scope.conversationId).artifacts.map((a) => a.id));
+      scopedScan = { ...scopedScan, artifacts: scopedScan.artifacts.filter((a) => known.has(a.id) || observedIds.has(a.id)) };
+    }
+    const workResult: ArtifactResult = scopedScan
+      ? this.artifactStore.finishRun(scope, {
+        artifacts: scopedScan.artifacts, truncated: watched ? observed.incomplete : scopedScan.truncated,
+        ...(exclusive && watched ? { observedChanges: new Map(watched.files.map((file) => [file.path, file.change])) } : {}),
+      }, outcome)
       : this.artifactStore.failRun(scope, 'Artifact scan was incomplete.');
 
     const stored = mapWorkToStored(workResult);
     const projectKey = scope.projectKey || projectKeyOf(scope.projectRoot);
     this.port.update(projectKey, scope.projectRoot, scope.conversationId, stored);
+    if (scopedScan) this.outputBaselines.delete(key);
+    this.startingRuns.delete(key);
 
     if (this.verifyImpl) {
       // The generation is captured HERE, on the terminal path — not inside
       // the async verification, which resumes later (after any user-driven
       // deletion could have already bumped it).
-      void this.verifyRunArtifacts(scope, projectKey, stored, this.generation);
+      void this.verifyRunArtifacts(scope, projectKey, stored, this.epoch(scope));
     }
   }
 
@@ -306,10 +380,10 @@ export class WorkResultProjector {
    *  guard: a deleted conversation or a closed project must never receive a
    *  late write (the repository update would resurrect the entry). */
   private async verifyRunArtifacts(
-    scope: WorkArtifactScope,
+    scope: ArtifactRunScope,
     projectKey: string,
     stored: StoredWorkResult,
-    generation: number,
+    generation: string,
   ): Promise<void> {
     const verify = this.verifyImpl;
     if (!verify) return;
@@ -344,7 +418,7 @@ export class WorkResultProjector {
     //   1. the generation counter bumped by clearConversation / clearProject;
     //   2. the store itself is the ground truth — the current snapshot must
     //      still own THIS run (deletion empties it, a newer run replaces it).
-    if (this.generation !== generation) return;
+    if (this.epoch(scope) !== generation) return;
     const current = this.artifactStore.snapshot(scope.projectKey, scope.conversationId);
     if (!current?.latestRun || current.latestRun.runId !== scope.runId) return;
 
@@ -375,21 +449,45 @@ export class WorkResultProjector {
 
   /** Drop one conversation's projection (conversation deletion, C-Core). */
   clearConversation(projectKey: string, conversationId: string): void {
-    this.generation += 1;
+    const conversationKey = `${projectKey}/${conversationId}`;
+    this.conversationGenerations.set(conversationKey, (this.conversationGenerations.get(conversationKey) ?? 0) + 1);
+    this.clearedConversations.add(`${projectKey}/${conversationId}`);
     this.artifactStore.clearConversation(projectKey, conversationId);
     this.pruneStarted('', `${projectKey}::${conversationId}`);
+    for (const key of this.startingRuns.keys()) if (key.startsWith(`${projectKey}/${conversationId}/`)) this.startingRuns.delete(key);
+    this.outputOwnership.clear(projectKey, conversationId);
+    for (const [key, watch] of this.watches) if (key.startsWith(`${projectKey}/${conversationId}/`)) { watch.close(); this.watches.delete(key); }
+    for (const key of this.outputBaselines.keys()) if (key.startsWith(`${projectKey}/${conversationId}/`)) this.outputBaselines.delete(key);
   }
 
   /** Drop a project's projection on workspace close / switch (spec §8.1). */
   clearProject(projectKey: string): void {
-    this.generation += 1;
+    this.projectGenerations.set(projectKey, (this.projectGenerations.get(projectKey) ?? 0) + 1);
+    for (const key of this.startedRuns.keys()) if (key.startsWith(`${projectKey}::`)) this.clearedConversations.add(`${projectKey}/${key.slice(projectKey.length + 2)}`);
     this.artifactStore.clearProject(projectKey);
     this.pruneStarted(`${projectKey}::`);
+    for (const key of this.startingRuns.keys()) if (key.startsWith(`${projectKey}/`)) this.startingRuns.delete(key);
+    this.outputOwnership.clear(projectKey);
+    for (const [key, watch] of this.watches) if (key.startsWith(`${projectKey}/`)) { watch.close(); this.watches.delete(key); }
+    for (const key of this.outputBaselines.keys()) if (key.startsWith(`${projectKey}/`)) this.outputBaselines.delete(key);
   }
 }
 
 /** §11: a bounded, non-sensitive degradation reason (no paths, no content). */
 const VERIFICATION_FAILED_WARNING = '交付物验证未通过：请检查 ResultDock 中的验证状态。';
+
+function outputScopeKey(scope: ArtifactRunScope): string { return `${scope.projectKey}/${scope.conversationId}/work/${scope.runId}`; }
+function combineScan(scan: WorkScanOutcome | null, output: OutputSnapshot | null, root: string): WorkScanOutcome | null {
+  if (!scan && !output) return null;
+  const files = output?.files.flatMap((file) => {
+    const artifact = artifactFromStat({ path: `${root.replace(/[\\/]+$/, '')}/${file.path}`, ...file.signature }, root);
+    return artifact ? [artifact] : [];
+  }) ?? [];
+  return { artifacts: [...new Map([...(scan?.artifacts ?? []), ...files].map((a) => [a.id, a])).values()], truncated: !!scan?.truncated || !!output?.incomplete, ...(scan?.warning ? { warning: scan.warning } : {}) };
+}
+function scanAsSnapshot(scan: WorkScanOutcome | null): OutputSnapshot | null {
+  return scan ? { files: scan.artifacts.flatMap((a) => a.target.kind === 'file' && a.signature ? [{ path: a.id, signature: a.signature }] : []), incomplete: scan.truncated || !!scan.warning } : null;
+}
 
 export type { StoredWorkResult };
 export { mapStoredToWork };

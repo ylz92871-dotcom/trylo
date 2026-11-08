@@ -6,7 +6,7 @@
 // thin and behave identically on slow disks and missing files.
 
 import { useEffect, useState } from 'react';
-import { hostAdapter } from '../../host-adapter';
+import { readPreviewBinary } from '../../host-adapter/preview/resources';
 
 export type PreviewBytesState =
   | { readonly status: 'loading' }
@@ -14,14 +14,16 @@ export type PreviewBytesState =
   | { readonly status: 'error'; readonly message: string };
 
 /** Load a file's raw bytes through the HostAdapter (the only IPC path). */
-export function usePreviewBytes(path: string): PreviewBytesState {
-  const [state, setState] = useState<PreviewBytesState>({ status: 'loading' });
+export function usePreviewBytes(path: string, suppliedBytes?: Uint8Array, allowedRoot?: string): PreviewBytesState {
+  const key = `${allowedRoot ?? ''}\0${path}`;
+  const [loaded, setLoaded] = useState<{ key: string; state: PreviewBytesState }>({ key, state: { status: 'loading' } });
 
   useEffect(() => {
     let cancelled = false;
+    if (suppliedBytes) return undefined;
+    const setState = (state: PreviewBytesState): void => setLoaded({ key, state });
     setState({ status: 'loading' });
-    hostAdapter.fs
-      .readFileBytes(path)
+    readPreviewBinary(path, allowedRoot)
       .then((bytes) => {
         if (cancelled) return;
         setState({ status: 'ready', bytes });
@@ -34,7 +36,9 @@ export function usePreviewBytes(path: string): PreviewBytesState {
     return () => {
       cancelled = true;
     };
-  }, [path]);
+  }, [path, suppliedBytes, allowedRoot, key]);
 
-  return state;
+  if (suppliedBytes) return { status: 'ready', bytes: suppliedBytes };
+  // Never expose stale bytes during the render before the new effect.
+  return loaded.key === key ? loaded.state : { status: 'loading' };
 }

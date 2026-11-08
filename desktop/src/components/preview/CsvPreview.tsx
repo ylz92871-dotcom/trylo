@@ -1,68 +1,32 @@
-// Trylo Desktop — CsvPreview (base capability).
-//
-// Read-only glance at `.csv` / `.tsv` deliverables (e.g. budget
-// tables from Work). First row is treated as the header. Display is
-// capped (rows × cols) so a multi-MB export can't freeze the rail —
-// the cap note tells the user data exists beyond the fold.
-
 import type { ReactElement } from 'react';
-import { useMemo } from 'react';
-import { delimiterFor, parseDelimited } from './csvParse';
+import { useMemo, useState } from 'react';
+import { delimiterFor } from './csvParse';
+import { delimitedWindow, indexDelimited } from './csvIndex';
 
-const MAX_DISPLAY_ROWS = 200;
-const MAX_DISPLAY_COLS = 20;
-
-export interface CsvPreviewProps {
-  readonly path: string;
-  readonly content: string;
-}
-
-export function CsvPreview(props: CsvPreviewProps): ReactElement {
-  const table = useMemo(() => {
-    const parsed = parseDelimited(props.content, delimiterFor(props.path));
-    const rows = parsed.rows.slice(0, MAX_DISPLAY_ROWS);
-    const colCount = Math.min(
-      MAX_DISPLAY_COLS,
-      rows.reduce((widest, row) => Math.max(widest, row.length), 0),
-    );
-    const folded =
-      parsed.truncated ||
-      parsed.rows.length > MAX_DISPLAY_ROWS ||
-      rows.some((row) => row.length > MAX_DISPLAY_COLS);
-    return { rows, colCount, folded, total: parsed.rows.length, truncated: parsed.truncated };
-  }, [props.content, props.path]);
-
-  if (table.rows.length === 0) {
-    return <div className="preview__empty">Empty table — no rows to show.</div>;
-  }
-
-  const [header, ...body] = table.rows;
-  return (
-    <div className="preview__table-wrap" role="region" aria-label="Table preview">
-      <table className="preview__table">
-        <thead>
-          <tr>
-            {header?.slice(0, table.colCount).map((cell, i) => (
-              <th key={i}>{cell === '' ? ' ' : cell}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {body.map((row, r) => (
-            <tr key={r}>
-              {row.slice(0, table.colCount).map((cell, c) => (
-                <td key={c}>{cell === '' ? ' ' : cell}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {table.folded && (
-        <div className="preview__fold-note">
-          Showing {Math.min(table.total, MAX_DISPLAY_ROWS)} of {table.total} rows
-          {table.truncated ? ' (file truncated)' : ''} — open the file for the full data.
-        </div>
-      )}
+const ROWS = 200;
+const COLS = 20;
+export function CsvPreview({ path, content }: { path: string; content: string }): ReactElement {
+  const delimiter = delimiterFor(path);
+  const index = useMemo(() => indexDelimited(content, delimiter), [content, delimiter]);
+  const [position, setPosition] = useState({ row: 0, col: 0 });
+  const row = Math.min(position.row, Math.max(0, index.starts.length - 2));
+  const col = Math.min(position.col, Math.max(0, index.columns - 1));
+  const header = useMemo(() => delimitedWindow(content, index.starts, 0, 1, delimiter)[0] ?? [], [content, index, delimiter]);
+  const rows = useMemo(() => delimitedWindow(content, index.starts, row + 1, ROWS, delimiter), [content, index, row, delimiter]);
+  if (!index.starts.length) return <div className="preview__empty">表格为空。</div>;
+  return <div className="preview__paged">
+    <div className="preview__toolbar" role="toolbar" aria-label="表格导航">
+      <span>{Math.max(0, index.starts.length - 1).toLocaleString()} 行 · {index.columns} 列</span>
+      <button type="button" disabled={!row} onClick={() => setPosition({ row: Math.max(0, row - ROWS), col })}>上一页</button>
+      <label>起始行 <input aria-label="数据起始行" type="number" min={1} max={Math.max(1, index.starts.length - 1)} value={row + 1} onChange={(e) => setPosition({ row: Math.max(0, Math.min(index.starts.length - 2, Number(e.target.value) - 1)), col })} /></label>
+      <button type="button" disabled={row + ROWS >= index.starts.length - 1} onClick={() => setPosition({ row: row + ROWS, col })}>下一页</button>
+      <button type="button" disabled={!col} onClick={() => setPosition({ row, col: Math.max(0, col - COLS) })}>前 {COLS} 列</button>
+      <span>列 {col + 1}–{Math.min(col + COLS, index.columns)}</span>
+      <button type="button" disabled={col + COLS >= index.columns} onClick={() => setPosition({ row, col: col + COLS })}>后 {COLS} 列</button>
     </div>
-  );
+    <div className="preview__table-wrap" role="region" aria-label="Table preview" tabIndex={0}>
+      <table className="preview__table"><thead><tr><th scope="col">行</th>{Array.from({ length: Math.min(COLS, index.columns - col) }, (_, i) => <th scope="col" key={i}>{header[col + i] || `列 ${col + i + 1}`}</th>)}</tr></thead>
+      <tbody>{rows.map((cells, r) => <tr key={row + r}><th scope="row">{row + r + 1}</th>{Array.from({ length: Math.min(COLS, index.columns - col) }, (_, c) => <td key={c}>{cells[col + c] || ' '}</td>)}</tr>)}</tbody></table>
+    </div>
+  </div>;
 }

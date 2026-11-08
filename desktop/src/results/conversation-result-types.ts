@@ -5,6 +5,8 @@
 // file imports React, Tauri, the Git service or the Work runtime. Unknown
 // fields are never passed through to disk (spec §4.6 / §2.5).
 
+import type { ArtifactCardKind } from '../preview/formats';
+
 /** How complete a result projection is. `degraded` means the Agent Run may
  *  have succeeded/failed, but the projection itself is incomplete (e.g. a
  *  Git baseline or terminal scan failed). It never overwrites the runtime
@@ -69,11 +71,21 @@ export interface StoredCodeCheck {
 
 export type CodeAttribution = 'run_delta' | 'workspace_only' | 'unavailable';
 
+/** Observed filesystem outputs, independent of Git attribution. */
+export interface StoredProducedFile {
+  readonly path: string;
+  readonly change: 'created' | 'updated';
+  readonly signature: StoredFileSignature;
+}
+
 export interface StoredCodeRunResult {
   readonly meta: StoredRunMeta;
   readonly attribution: CodeAttribution;
   readonly changes: readonly StoredCodeChange[];
   readonly checks: readonly StoredCodeCheck[];
+  readonly outputs?: readonly StoredProducedFile[];
+  readonly outputCountTotal?: number;
+  readonly outputsIncomplete?: boolean;
   readonly changeCountTotal: number;
   readonly checkCountTotal: number;
   readonly truncated: boolean;
@@ -148,12 +160,7 @@ export interface StoredWorkArtifactVerification {
  *  unknown-extension outputs are not mislabelled as `document`. The Work
  *  side keeps its own richer set; the persisted set is the display-level
  *  set we care about here. */
-export type StoredWorkArtifactKind =
-  | 'document'
-  | 'presentation'
-  | 'spreadsheet'
-  | 'web'
-  | 'file';
+export type StoredWorkArtifactKind = ArtifactCardKind;
 
 export interface StoredFileSignature {
   readonly size: number;
