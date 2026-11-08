@@ -48,6 +48,7 @@ const REMEMBER = {
 test("an explicit request is saved to the ledger and readable from a second reader", () => {
   withService((service, root) => {
     const result = service.remember(REMEMBER);
+
     assert.equal(result.result, "saved");
     assert.ok(existsSync(path.join(root, USER_FACTS_FILE)), "the fact must exist on disk, not only in memory");
 
@@ -58,6 +59,7 @@ test("an explicit request is saved to the ledger and readable from a second read
       turn: { sessionId: "s2", turnId: "t2", userText: "", userEventId: "s2:t2:user" },
     });
     const visible = reopened.visible();
+
     assert.equal(visible.length, 1);
     assert.equal(visible[0]?.statement, REMEMBER.statement);
   });
@@ -66,10 +68,13 @@ test("an explicit request is saved to the ledger and readable from a second read
 test("the same request is idempotent and a different payload under one command is a conflict", () => {
   withService((service) => {
     const first = service.remember(REMEMBER);
+
     assert.equal(first.result, "saved");
     const again = service.remember(REMEMBER);
+
     assert.equal(again.result, "already_saved");
     const conflict = service.remember({ ...REMEMBER, subject: "另一个主体" });
+
     assert.equal(conflict.result, "rejected");
     assert.equal(conflict.result === "rejected" ? conflict.reason : "", "command_conflict");
     assert.equal(service.facts().length, 1);
@@ -105,6 +110,7 @@ test("a disabled switch writes nothing at all", () => {
 test("correct bumps the version and retract stops the fact from being visible", () => {
   withService((service, _root, deps) => {
     const saved = service.remember(REMEMBER);
+
     assert.equal(saved.result, "saved");
     const recordId = saved.result === "saved" ? saved.recordId : "";
     const version = saved.result === "saved" ? saved.version : 0;
@@ -112,16 +118,19 @@ test("correct bumps the version and retract stops the fact from being visible", 
     const correcting = createUserMemoryService({ ...deps, turn: { ...deps.turn, userText: `请更正这条记忆为：${USER_TEXT}` } });
     const stale = correcting.correct({ commandId: "call-2", recordId, expectedVersion: version + 4,
       statement: "我是 YL Z，Trylo 的开发者，请记住" });
+
     assert.equal(stale.result === "rejected" ? stale.reason : "", "version_conflict");
 
     const corrected = correcting.correct({ commandId: "call-3", recordId, expectedVersion: version,
       statement: "我是 YL Z，Trylo 的开发者，请记住" });
+
     assert.equal(corrected.result, "saved");
     assert.equal(corrected.result === "saved" ? corrected.version : 0, version + 1);
     assert.equal(service.visible().length, 1);
 
     const retracted = createUserMemoryService({ ...deps, turn: { ...deps.turn, userText: "请撤回这条记忆" } })
       .retract({ commandId: "call-4", recordId, expectedVersion: version + 1 });
+
     assert.equal(retracted.result, "saved");
     assert.equal(service.visible().length, 0, "a retracted fact must not be retrievable");
     assert.equal(service.facts().length, 3, "every version stays in the ledger as history");
@@ -139,10 +148,12 @@ test("a retracted fact does not come back after a reopen", () => {
     const first = createUserMemoryService(deps("t1"));
     const saved = first.remember(REMEMBER);
     const recordId = saved.result === "saved" ? saved.recordId : "";
+
     createUserMemoryService({ ...deps("retract"), turn: { ...deps("retract").turn, userText: "请撤回这条记忆" } })
       .retract({ commandId: "call-9", recordId, expectedVersion: 1 });
 
     const reopened = createUserMemoryService(deps("t2"));
+
     assert.equal(reopened.visible().length, 0);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -157,6 +168,7 @@ test("project scope does not leak into another workspace", () => {
       now: () => 1_760_000_000_000, switchValue: "user",
       turn: { sessionId: "s1", turnId: "t1", userText: USER_TEXT, userEventId: "s1:t1:user" },
     });
+
     assert.equal(otherWorkspace.visible().length, 0);
   });
 });
@@ -176,8 +188,10 @@ test("two writers on one root cannot both win the same version", () => {
     // Both processes read v1 before either writes. The second one must lose the
     // race loudly: a silent second v2 is a lost update the user cannot see.
     const winner = first.correct({ commandId: "c-a", recordId, expectedVersion: 1, statement: REMEMBER.statement });
+
     assert.equal(winner.result, "saved");
     const loser = open().correct({ commandId: "c-b", recordId, expectedVersion: 1, statement: REMEMBER.statement });
+
     assert.equal(loser.result, "rejected");
     assert.equal(loser.result === "rejected" ? loser.reason : "", "version_conflict");
     assert.equal(open().facts().length, 2, "one create + one correction, no phantom version");
@@ -198,6 +212,7 @@ test("a held lock is a structured refusal, not a silent write", () => {
       turn: { sessionId: "s1", turnId: "t1", userText: USER_TEXT, userEventId: "s1:t1:user" },
     });
     const result = service.remember(REMEMBER);
+
     assert.equal(result.result, "failed");
     assert.match(result.result === "failed" ? result.reason : "", /facts_locked/);
   } finally {
@@ -259,6 +274,7 @@ test("a home directory with a space in it still saves and reads back", () => {
   // spaces. A path bug here would look like "memory silently does not work".
   const parent = mkdtempSync(path.join(tmpdir(), "wpcl-space-"));
   const root = path.join(parent, "try lo home", "learning", "user");
+
   try {
     const deps: UserMemoryDeps = {
       store: createFileFactStore(root), userId: "local-user", workspaceId: "ws-a",
@@ -266,8 +282,10 @@ test("a home directory with a space in it still saves and reads back", () => {
       turn: { sessionId: "s1", turnId: "t1", userText: USER_TEXT, userEventId: "s1:t1:user" },
     };
     const service = createUserMemoryService(deps);
+
     assert.equal(service.remember(REMEMBER).result, "saved");
     const reopened = createUserMemoryService(deps);
+
     assert.equal(reopened.visible().length, 1);
   } finally {
     rmSync(parent, { recursive: true, force: true });
@@ -286,6 +304,7 @@ test("a statement the user did not ask to remember becomes a proposal, not a mem
       turn: { sessionId: "s1", turnId: "t1", userText: plain, userEventId: "s1:t1:user" },
     });
     const result = service.remember({ ...REMEMBER, statement: plain });
+
     assert.equal(result.result, "pending");
     assert.match(result.result === "pending" ? result.proposalId : "", /^prop-/);
     assert.equal(service.visible().length, 0, "a proposal must not be retrievable");
@@ -304,6 +323,7 @@ test("the next confirmation turns a pending proposal into the saved fact", () =>
       now: () => 1_760_000_000_000, switchValue: "user",
       turn: { sessionId: "s1", turnId: "t1", userText: plain, userEventId: "s1:t1:user" },
     });
+
     assert.equal(first.remember({ ...REMEMBER, statement: plain }).result, "pending");
 
     const second = createUserMemoryService({
@@ -315,6 +335,7 @@ test("the next confirmation turns a pending proposal into the saved fact", () =>
       },
     });
     const confirmed = second.remember({ ...REMEMBER, commandId: "call-2", statement: plain });
+
     assert.equal(confirmed.result, "saved");
     assert.equal(second.visible().length, 1);
     assert.equal(second.visible()[0]?.source.kind, "user_confirmation");
@@ -326,9 +347,11 @@ test("the next confirmation turns a pending proposal into the saved fact", () =>
 test("old facts survive hundreds of later writes", () => {
   withService((service, root) => {
     const saved = service.remember(REMEMBER);
+
     assert.equal(saved.result, "saved");
     const store = createFileFactStore(root);
     const noise: UserFactRecord[] = [];
+
     for (let index = 0; index < 600; index += 1) {
       noise.push({
         record: "user_fact", id: `noise-${index}`, version: 1, status: "active", factKind: "project_fact",
@@ -336,8 +359,10 @@ test("old facts survive hundreds of later writes", () => {
         source: { kind: "user_statement", eventId: "e" }, commandId: `noise-${index}`, createdAt: 1,
       });
     }
+
     assert.equal(store.append(noise).ok, true);
     const visible = service.visible();
+
     assert.ok(visible.some((fact) => fact.statement === REMEMBER.statement), "the fact must not scroll out");
     assert.equal(JSON.parse(readFileSync(path.join(root, USER_FACTS_FILE), "utf8").split("\n")[0]!).record, "user_fact");
   });
@@ -354,6 +379,7 @@ function failingStore(inner: UserFactStore, budget: { remaining: number }): User
   return {
     read: () => inner.read(),
     append: (records) => inner.append(records),
+
     transact: (step) => {
       if (budget.remaining > 0) {
         budget.remaining -= 1;
@@ -378,6 +404,7 @@ test("a write the disk refuses is reported as a failure, not as a save", () => {
       turn: { sessionId: "s1", turnId: "t1", userText: USER_TEXT, userEventId: "s1:t1:user" },
     });
     const result = service.remember(REMEMBER);
+
     assert.equal(result.result, "failed");
     assert.match(result.result === "failed" ? result.reason : "", /fact_write_failed/,
       "the reason must be distinguishable from a rejection or a disabled switch");
@@ -400,10 +427,13 @@ test("a retry after a refused write saves exactly once", () => {
       now: () => 1_760_000_000_000, switchValue: "user",
       turn: { sessionId: "s1", turnId: "t1", userText: USER_TEXT, userEventId: "s1:t1:user" },
     };
+
     assert.equal(createUserMemoryService(deps).remember(REMEMBER).result, "failed");
     const retried = createUserMemoryService(deps).remember(REMEMBER);
+
     assert.equal(retried.result, "saved");
     const reopened = createUserMemoryService({ ...deps, store: createFileFactStore(root) });
+
     assert.equal(reopened.visible().length, 1, "one fact, not one per attempt");
     assert.equal(reopened.facts().length, 1);
   } finally {
@@ -417,22 +447,27 @@ test("another profile does not read this profile's identity, and another home ne
   // own scope — not on "who happened to write last".
   const home = mkdtempSync(path.join(tmpdir(), "wpcl-home-a-"));
   const otherHome = mkdtempSync(path.join(tmpdir(), "wpcl-home-b-"));
+
   try {
     const inHome = (root: string, userId: string): UserMemoryDeps => ({
       store: createFileFactStore(root), userId, workspaceId: "ws-a",
       now: () => 1_760_000_000_000, switchValue: "user",
       turn: { sessionId: "s1", turnId: "t1", userText: USER_TEXT, userEventId: "s1:t1:user" },
     });
+
     assert.equal(createUserMemoryService(inHome(home, "local-user")).remember(REMEMBER).result, "saved");
 
     const otherProfile = createUserMemoryService(inHome(home, "someone-else"));
+
     assert.equal(otherProfile.visible().length, 0, "a different profile on the same home sees nothing");
 
     const otherHomeService = createUserMemoryService(inHome(otherHome, "local-user"));
+
     assert.equal(otherHomeService.visible().length, 0, "a different home has its own ledger");
 
     // And saving under the other profile must not disturb this one.
     const mine = createUserMemoryService(inHome(home, "local-user"));
+
     assert.equal(mine.visible().length, 1, "the original profile's fact survives the neighbour's write");
   } finally {
     rmSync(home, { recursive: true, force: true });
@@ -451,8 +486,10 @@ test("a user-scoped identity fact follows the person to another workspace", () =
       now: () => 1_760_000_000_000, switchValue: "user",
       turn: { sessionId: "s1", turnId: "t1", userText: USER_TEXT, userEventId: "s1:t1:user" },
     });
+
     assert.equal(createUserMemoryService(inWorkspace("ws-a")).remember(REMEMBER).result, "saved");
     const moved = createUserMemoryService(inWorkspace("ws-b"));
+
     assert.equal(moved.visible().length, 1);
     assert.equal(moved.visible()[0]?.statement, REMEMBER.statement);
   } finally {

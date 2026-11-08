@@ -24,9 +24,12 @@ export type MemoryDeleteResult =
 export function deleteUserMemory(root: string): MemoryDeleteResult {
   const targets = [USER_FACTS_FILE, USER_LEDGER_FILE, USER_FACTS_COMPACT_FILE];
   const removed: string[] = [], absent: string[] = [];
+
   if (!existsSync(root)) return { ok: true, removed, absent: targets };
+
   const held = acquireFactLock(path.join(root, USER_FACTS_LOCK));
   if (!held.ok) return { ok: false, reason: "facts_locked" };
+
   try {
     for (const name of targets) {
       const file = path.join(root, name);
@@ -34,6 +37,7 @@ export function deleteUserMemory(root: string): MemoryDeleteResult {
         absent.push(name);
         continue;
       }
+
       try {
         rmSync(file, { force: true });
         removed.push(name);

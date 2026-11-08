@@ -135,20 +135,27 @@ export function createUserMemoryService(deps: UserMemoryDeps): UserMemoryService
   function groundingOf(statement: string, action: "remember" | "correct" = "remember"): MemorySource | undefined {
     const explicitManagement = action === "correct" && deps.turn.managementAction === "correct";
     if (!explicitManagement && (!allowsDurableMemorySource(deps.turn.userText) || !allowsDurableMemorySource(statement))) return undefined;
+
     if (comparable(statement).length === 0) return undefined;
+
     if (!explicitManagement && !isConfirmation(deps.turn.userText)
       && !hasHumanClaimSource(deps.turn.userText, statement, action)) return undefined;
+
     if (comparable(deps.turn.userText).includes(comparable(statement))) return source();
+
     if (!isConfirmation(deps.turn.userText)) return undefined;
+
     const prior = deps.turn.priorUser?.at(-1);
     if (prior === undefined || !allowsDurableMemorySource(prior.text) || !comparable(prior.text).includes(comparable(statement))
       || !hasHumanClaimSource(prior.text, statement, action)) return undefined;
+
     if (!confirmsExplicitMemory(deps.turn.userText, prior.text)
       && !(action === "correct" && hasMemoryMutationIntent(prior.text, "correct"))) {
       const proposals = pendingProposals(readRecords() ?? []);
       if (!proposals.some((proposal) => mayManage(proposal) && comparable(proposal.statement) === comparable(statement)
         && proposal.source.eventId === prior.eventId)) return undefined;
     }
+
     return {
       kind: "user_confirmation", eventId: deps.turn.userEventId, confirmsEventId: prior.eventId,
     };
@@ -186,9 +193,11 @@ export function createUserMemoryService(deps: UserMemoryDeps): UserMemoryService
       return step.commit === undefined ? { result: step.result } : { result: step.result, commit: step.commit };
     });
     if (!outcome.ok) return { result: "failed", reason: outcome.reason, retryable: true };
+
     if (written !== undefined && !committed(written)) {
       return { result: "failed", reason: "readback_mismatch", retryable: true };
     }
+
     return outcome.value;
   }
 
@@ -206,10 +215,12 @@ export function createUserMemoryService(deps: UserMemoryDeps): UserMemoryService
 
   function remember(request: RememberRequest): MemoryCommandResult {
     if (!enabled) return { result: "disabled", setting: "--learning=user" };
+
     const statement = request.statement.trim(), subject = request.subject.trim();
     if (statement.length === 0 || subject.length === 0) {
       return { result: "rejected", reason: "invalid_arguments", message: "需要非空的主体与命题正文。" };
     }
+
     const ground = groundingOf(statement);
     if (ground === undefined) {
       return {
@@ -217,26 +228,31 @@ export function createUserMemoryService(deps: UserMemoryDeps): UserMemoryService
         message: "命题缺少有效的持久保存来源：必须来自用户本轮原话或确认；临时、示例或明确禁止记忆的来源不保存。",
       };
     }
+
     const scope = scopeFor(request.scopeKind);
     // The turn identity is the host's, and it is what makes a retried command
     // report `already_saved` instead of writing a second fact.
     const commandId = commandIdOf(request.commandId);
     const requestDigest = createHash("sha256").update(JSON.stringify({ subject, statement, factKind: request.factKind, scope: scopeKey(scope) })).digest("hex");
+
     return transact((records) => {
       if (hasPreviousFactCommand(records, commandId)) {
         return { result: { result: "rejected" as const, reason: "command_conflict" as const, message: "请求属于已替代版本，请读取最新记忆。" } };
       }
+
       const replay = records.find((record) => record.commandId === commandId);
       if (replay !== undefined && isFactRecord(replay)) {
         const latest = latestOf(records, replay.id);
         const samePayload = replay.subject === subject && replay.statement === statement
           && replay.factKind === request.factKind && scopeKey(replay.scope) === scopeKey(scope);
+
         return {
           result: samePayload && latest?.version === replay.version && latest.status === "active"
             ? { result: "already_saved" as const, recordId: replay.id, version: replay.version }
             : { result: "rejected" as const, reason: "command_conflict" as const, message: "同一请求编号提交了不同内容，已拒绝。" },
         };
       }
+
       const proposal = foldProposals(records).find((candidate) => candidate.commandId === commandId);
       if (proposal !== undefined) {
         const samePayload = proposal.subject === subject && proposal.statement === statement
@@ -245,6 +261,7 @@ export function createUserMemoryService(deps: UserMemoryDeps): UserMemoryService
           ? { result: "pending" as const, proposalId: proposal.id, reason: PENDING_REASON }
           : { result: "rejected" as const, reason: "command_conflict" as const, message: "该请求已提交为提案，内容或状态已变化。" } };
       }
+
       const aliasOwner = records.find((record): record is UserFactRecord => isFactRecord(record)
         && record.commandAliases?.some((alias) => alias.commandId === commandId) === true);
       if (aliasOwner !== undefined) {
@@ -254,6 +271,7 @@ export function createUserMemoryService(deps: UserMemoryDeps): UserMemoryService
           ? { result: "already_saved" as const, recordId: latest.id, version: latest.version }
           : { result: "rejected" as const, reason: "command_conflict" as const, message: "同一请求编号已消费，或记录已变化。" } };
       }
+
       // 语义去重也必须在锁内：另一个进程可能刚写了一条同义事实。
       const existing = activeFacts(records).find((record) =>
         sameFact({ factKind: request.factKind, subject, statement, scope }, record));
@@ -261,6 +279,7 @@ export function createUserMemoryService(deps: UserMemoryDeps): UserMemoryService
         return { result: { result: "already_saved" as const, recordId: existing.id, version: existing.version },
           commit: [{ ...existing, commandAliases: [...(existing.commandAliases ?? []), { commandId, requestDigest }] }] };
       }
+
       // A statement the person merely said is not yet a memory. Without an
       // explicit 记住/remember in this turn, the answer is a proposal: it is not
       // retrievable, not versioned and not active until they confirm it.
@@ -271,17 +290,20 @@ export function createUserMemoryService(deps: UserMemoryDeps): UserMemoryService
           factKind: request.factKind, subject, statement, scope, source: ground,
           commandId, createdAt: deps.now(),
         };
+
         return {
           result: { result: "pending" as const, proposalId,
             reason: PENDING_REASON },
           commit: [proposal],
         };
       }
+
       const record: UserFactRecord = {
         record: "user_fact", id: newId(commandId), version: 1, status: "active",
         factKind: request.factKind, subject, statement, scope, source: ground,
         commandId, createdAt: deps.now(),
       };
+
       return {
         result: {
           result: "saved" as const, recordId: record.id, version: record.version, scope: record.scope,
@@ -312,50 +334,63 @@ export function createUserMemoryService(deps: UserMemoryDeps): UserMemoryService
       && record.commandAliases?.some((alias) => alias.commandId === key) === true)) {
       return { result: "rejected", reason: "command_conflict", message: "请求属于已替代版本，请读取最新记忆。" };
     }
+
     const replay = records.find((record) => record.commandId === commandIdOf(request.commandId));
     if (replay === undefined || !isFactRecord(replay)) return undefined;
+
     const same = replay.id === request.recordId && replay.supersedes === request.expectedVersion
       && (statement === undefined ? replay.status === "retracted" : replay.status === "active" && replay.statement === statement)
       && mayManage(replay) && latestOf(records, replay.id)?.version === replay.version;
+
     return same ? { result: "already_saved", recordId: replay.id, version: replay.version }
       : { result: "rejected", reason: "command_conflict", message: "请求已提交或记录已变化，请读取最新版本。" };
   }
 
   function correct(request: ReviseRequest): MemoryCommandResult {
     if (!enabled) return { result: "disabled", setting: "--learning=user" };
+
     if (!mutationAuthorized("correct")) {
       return { result: "rejected", reason: "statement_not_grounded", message: "本轮没有明确更正记忆的有效用户请求，未更正。" };
     }
+
     const statement = request.statement.trim();
     if (statement.length === 0) {
       return { result: "rejected", reason: "invalid_arguments", message: "纠正后的正文不能为空。" };
     }
+
     const ground = groundingOf(statement, "correct");
     if (ground === undefined) {
       return { result: "rejected", reason: "statement_not_grounded", message: "纠正内容缺少有效的持久保存来源；临时、示例或明确禁止记忆的来源不更正。" };
     }
+
     return transact((records) => {
       const replay = revisionReplay(records, request, statement);
       if (replay !== undefined) return { result: replay };
+
       const current = latestOf(records, request.recordId);
       if (current === undefined) {
         return { result: { result: "rejected" as const, reason: "record_not_found" as const, message: "找不到这条记忆。" } };
       }
+
       if (!mayManage(current)) return { result: { result: "rejected" as const, reason: "scope_not_permitted" as const, message: "这条记忆不属于当前作用域。" } };
+
       if (current.version !== request.expectedVersion) {
         return { result: { result: "rejected" as const, reason: "version_conflict" as const,
           message: `当前版本是 v${current.version}，请基于最新版本修改。` } };
       }
+
       if (current.status === "retracted") {
         return { result: { result: "rejected" as const, reason: "version_conflict" as const,
           message: "这条记忆已撤回，不能再修改。" } };
       }
+
       const record: UserFactRecord = {
         record: "user_fact", id: current.id, version: current.version + 1, status: "active",
         factKind: current.factKind, subject: current.subject, statement, scope: current.scope,
         source: ground, commandId: commandIdOf(request.commandId), createdAt: deps.now(),
         supersedes: current.version,
       };
+
       return {
         result: { result: "saved" as const, recordId: record.id, version: record.version,
           scope: record.scope, factKind: record.factKind, effective: record.factKind !== "preference" },
@@ -366,30 +401,38 @@ export function createUserMemoryService(deps: UserMemoryDeps): UserMemoryService
 
   function retract(request: Omit<ReviseRequest, "statement">): MemoryCommandResult {
     if (!enabled) return { result: "disabled", setting: "--learning=user" };
+
     if (!mutationAuthorized("retract")) {
       return { result: "rejected", reason: "statement_not_grounded", message: "本轮没有明确撤回记忆的有效用户请求，未撤回。" };
     }
+
     return transact((records) => {
       const replay = revisionReplay(records, request);
       if (replay !== undefined) return { result: replay };
+
       const current = latestOf(records, request.recordId);
       if (current === undefined) {
         return { result: { result: "rejected" as const, reason: "record_not_found" as const, message: "找不到这条记忆。" } };
       }
+
       if (!mayManage(current)) return { result: { result: "rejected" as const, reason: "scope_not_permitted" as const, message: "这条记忆不属于当前作用域。" } };
+
       if (current.version !== request.expectedVersion) {
         return { result: { result: "rejected" as const, reason: "version_conflict" as const,
           message: `当前版本是 v${current.version}。` } };
       }
+
       if (current.status === "retracted") {
         return { result: { result: "already_saved" as const, recordId: current.id, version: current.version } };
       }
+
       const record: UserFactRecord = {
         record: "user_fact", id: current.id, version: current.version + 1, status: "retracted",
         factKind: current.factKind, subject: current.subject, statement: current.statement,
         scope: current.scope, source: source(), commandId: commandIdOf(request.commandId), createdAt: deps.now(),
         supersedes: current.version,
       };
+
       return {
         result: { result: "saved" as const, recordId: record.id, version: record.version,
           scope: record.scope, factKind: record.factKind, effective: false },

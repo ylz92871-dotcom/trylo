@@ -19,18 +19,23 @@ function checkWithdrawAdmission(
   if (draft.command.kind !== "submit_withdraw") {
     return rejected("kind_mismatch", `expected submit_withdraw got ${draft.command.kind}`);
   }
+
   if (draft.status !== "draft") {
     return rejected("not_a_draft", `status=${draft.status}`);
   }
+
   if (!isNonEmptyString(admission.commandId)) {
     return rejected("missing_admission", "commandId is required");
   }
+
   if (!isIso8601(admission.issuedAt)) {
     return rejected("invalid_admission", "issuedAt must be a parseable ISO-8601 timestamp");
   }
+
   if (!isNonEmptyString(admission.entityId)) {
     return rejected("missing_admission", "entityId is required; targetHintHash cannot be reversed");
   }
+
   // WP-F / 外审 R2 §3.3（原文 P1-R3）：模糊自然语言撤回若没有权威 resolver 的
   // 证明，不得映射到任意 entityId。调用方必须声明目标解析依据（用户明指的实体，
   // 或执行当时绑定的实体）；未声明即「不可解析」，在映射层就不产生 tombstone。
@@ -42,21 +47,26 @@ function checkWithdrawAdmission(
       `targetResolution must be one of ${WITHDRAW_TARGET_RESOLUTIONS.join("|")}`,
     );
   }
+
   if (!isOneOf(ENTITY_TYPES, admission.entityType)) {
     return rejected("invalid_admission", `entityType must be one of ${ENTITY_TYPES.join("|")}`);
   }
+
   if (!isNonEmptyString(admission.reason)) {
     return rejected("missing_admission", "withdraw reason must be explicit");
   }
+
   if (admission.payloadId !== draft.command.payloadId) {
     return rejected(
       "invalid_admission",
       "the withdraw admission does not match the draft payload; the target must resolve from this draft",
     );
   }
+
   if (admission.assetKind !== draft.command.assetKind) {
     return rejected("invalid_admission", "the withdraw admission assetKind does not match the draft");
   }
+
   return undefined;
 }
 
@@ -79,6 +89,7 @@ export function mapWithdrawDraft(
   if (invalid !== undefined) {
     return invalid;
   }
+
   return mapped([
     {
       type: "tombstone",

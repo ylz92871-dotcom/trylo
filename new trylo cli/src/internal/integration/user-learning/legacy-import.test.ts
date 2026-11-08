@@ -37,10 +37,12 @@ function withStore(body: (store: ReturnType<typeof createFileFactStore>) => void
 test("a user-stated legacy fact is imported once and maps to a stable record id", () => {
   withStore((store) => {
     const first = importLegacyFacts(store, [stated], () => 1);
+
     assert.deepEqual(first, [{ legacyId: "old-1", outcome: "imported", recordId: legacyRecordId("old-1"), version: 1 }]);
     assert.equal(legacyRecordId("old-1"), legacyRecordId("old-1"), "the mapping must be stable across runs");
 
     const again = importLegacyFacts(store, [stated], () => 2);
+
     assert.equal(again[0]?.outcome, "already");
     assert.equal(activeFacts(recordsOf(store)).length, 1);
   });
@@ -52,6 +54,7 @@ test("assistant-inferred and unknown provenance stay where they are", () => {
       { ...stated, legacyId: "a", provenance: "assistant_inferred" },
       { ...stated, legacyId: "b", provenance: "unknown" },
     ], () => 1);
+
     assert.deepEqual(decisions.map((decision) => decision.outcome), ["skipped", "skipped"]);
     assert.deepEqual(decisions.map((decision) => decision.outcome === "skipped" ? decision.reason : ""),
       ["provenance_assistant_inferred", "provenance_unknown"]);
@@ -78,8 +81,10 @@ test("a fact the user already saved in a conversation is reused, not duplicated"
       scope: stated.scope, source: { kind: "user_statement" as const, eventId: "e" },
       commandId: "c", createdAt: 1,
     };
+
     assert.equal(store.transact(() => ({ result: 0, commit: [manual] })).ok, true);
     const decisions = importLegacyFacts(store, [stated], () => 1);
+
     assert.equal(decisions[0]?.outcome, "already");
     assert.equal(decisions[0]?.outcome === "already" ? decisions[0].recordId : "", "fact-manual");
   });
@@ -91,10 +96,13 @@ test("a panel backup carrying cliImport is unwrapped exactly once", () => {
   // ignorant of the panel's own snapshot schema.
   const wrapped = { schemaVersion: 7, conversations: { chat: {} }, cliImport: { version: 1, facts: [stated] } };
   const decoded = decodeLegacyDocument(wrapped);
+
   assert.equal(decoded.ok, true);
+
   if (decoded.ok) assert.equal(decoded.value.facts[0]?.legacyId, "old-1");
 
   const tooDeep = { version: 2, cliImport: { version: 2, cliImport: { version: 1, facts: [] } } };
+
   assert.equal(decodeLegacyDocument(tooDeep).ok, false, "one level only");
 });
 

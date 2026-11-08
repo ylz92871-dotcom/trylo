@@ -114,6 +114,7 @@ export function deriveUserPolicy(input: DeriveInput): DerivedUserPolicy {
     mode: "shadow",
     now: input.now,
   });
+
   return {
     scopeFingerprint,
     evidence,
@@ -140,8 +141,10 @@ function freshReceipts(
   if (commitments.length === 0) {
     return [];
   }
+
   const existing = records.filter((item) => item.record === "receipt").map((item) => item.receipt);
   const known = new Set(existing.map((item) => item.id));
+
   return appendReceiptsForNewCommitments({ before: [], after: commitments, evidence, existing, now }).filter(
     (item) => !known.has(item.id),
   );

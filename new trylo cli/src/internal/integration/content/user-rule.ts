@@ -20,25 +20,30 @@ export function mapUserRuleDraft(
   if (statusFailure !== undefined) {
     return statusFailure;
   }
+
   const scopeAdmissionFailure = checkNoAdmittedScope(admission);
   if (scopeAdmissionFailure !== undefined) {
     return scopeAdmissionFailure;
   }
+
   if (draft.permissionClaim !== false || draft.capabilityGranted !== "never") {
     return rejected(
       "authority_claim_present",
       "a user rule draft must never carry a permission claim",
     );
   }
+
   if (draft.permissionLanguageDetected) {
     return rejected(
       "permission_language_present",
       "the source text mentions permissions; it must not be admitted without explicit review",
     );
   }
+
   if (!isNonEmptyString(draft.scope.id)) {
     return rejected("missing_scope", "user rule draft has no scope id");
   }
+
   return buildContentProposal(
     {
       proposalId: draft.id,

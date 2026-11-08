@@ -5,7 +5,7 @@ import { LEARNING_SWITCH_METHOD } from "../method/wiring.js";
  *
  * 一个口进，三个子系统分别在各自那一半接。三件事钉在这里：
  *
- *  - **闭集只有四个成员，且判据只有一处。** `isLearningSwitch` 是唯一判据，别的
+ *  - **闭集与判据只有一处。** `isLearningSwitch` 是唯一判据，别的
  *    地方只传值不判值——宽容一个拼错的值会让它**静默**变成另一种行为，而开关的
  *    全部意义就是「我明确要它」。
  *  - **`method` 那一个字面量不在这里复制。** 它属于方法子系统的组合根
@@ -26,15 +26,22 @@ export const LEARNING_SWITCH_USER = "user";
 
 /** 工具学习那一半的取值（TP-1 §12；owner 2026-09-18 明确要一个独立取值）。 */
 export const LEARNING_SWITCH_TOOL = "tool";
+export const LEARNING_SWITCH_CHECK = "check";
+export const LEARNING_SWITCH_SKILL = "skill";
 
 /** 三半都开。 */
 export const LEARNING_SWITCH_ALL = "all";
+/** Agent capabilities without collecting User Learning or enabling checking. */
+export const LEARNING_SWITCH_AGENT = "agent";
 
 export const LEARNING_SWITCHES = [
   LEARNING_SWITCH_METHOD,
   LEARNING_SWITCH_USER,
   LEARNING_SWITCH_TOOL,
+  LEARNING_SWITCH_CHECK,
+  LEARNING_SWITCH_SKILL,
   LEARNING_SWITCH_ALL,
+  LEARNING_SWITCH_AGENT,
 ] as const;
 
 export type LearningSwitch = (typeof LEARNING_SWITCHES)[number];
@@ -47,7 +54,7 @@ export function isLearningSwitch(value: string | undefined): value is LearningSw
 }
 
 export function switchEnablesMethod(value: LearningSwitch | undefined): boolean {
-  return value === LEARNING_SWITCH_METHOD || value === LEARNING_SWITCH_ALL;
+  return value === LEARNING_SWITCH_METHOD || value === LEARNING_SWITCH_ALL || value === LEARNING_SWITCH_AGENT;
 }
 
 export function switchEnablesUser(value: LearningSwitch | undefined): boolean {
@@ -66,12 +73,21 @@ export function switchEnablesUser(value: LearningSwitch | undefined): boolean {
  * 关学习（`undefined`）永远不含它，这是零差异的全部内容。
  */
 export function switchEnablesTool(value: LearningSwitch | undefined): boolean {
-  return value === LEARNING_SWITCH_TOOL || value === LEARNING_SWITCH_ALL;
+  return value === LEARNING_SWITCH_TOOL || value === LEARNING_SWITCH_ALL || value === LEARNING_SWITCH_AGENT;
+}
+
+/** Executable checking requires its own explicit opt-in; the broad all switch does not enable it. */
+export function switchEnablesCheck(value: LearningSwitch | undefined): boolean {
+  return value === LEARNING_SWITCH_CHECK;
+}
+
+export function switchEnablesSkill(value: LearningSwitch | undefined): boolean {
+  return value === LEARNING_SWITCH_SKILL || value === LEARNING_SWITCH_ALL || value === LEARNING_SWITCH_AGENT;
 }
 
 /** 交给 `wireMethodLearning` 的取值：它唯一的那个，或什么都不给。 */
 export function methodSwitchFor(value: string | undefined): string | undefined {
-  return value === LEARNING_SWITCH_METHOD || value === LEARNING_SWITCH_ALL
+  return isLearningSwitch(value) && switchEnablesMethod(value)
     ? LEARNING_SWITCH_METHOD
     : undefined;
 }

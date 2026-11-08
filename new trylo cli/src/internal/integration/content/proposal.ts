@@ -40,36 +40,46 @@ export function buildSubmitProposal(
   if (!isNonEmptyString(admission.commandId)) {
     return rejected("missing_admission", "commandId is required");
   }
+
   if (!isIso8601(admission.issuedAt)) {
     return rejected("invalid_admission", "issuedAt must be a parseable ISO-8601 timestamp");
   }
+
   if (!isNonEmptyString(core.proposalId)) {
     return rejected("missing_admission", "proposalId cannot be derived from the source draft");
   }
+
   if (!isNonEmptyString(core.scope)) {
     return rejected("missing_scope", "scope cannot be derived from the source draft");
   }
+
   if (!isNonEmptyString(core.candidateRef)) {
     return rejected("missing_admission", "candidateRef cannot be derived from the source draft");
   }
+
   if (!(RISK_LEVELS as readonly string[]).includes(admission.risk)) {
     return rejected("invalid_admission", `risk must be one of ${RISK_LEVELS.join("|")}`);
   }
+
   if (!isNonEmptyString(admission.hypothesis)) {
     return rejected("missing_admission", "hypothesis must be provided explicitly");
   }
+
   if (!isStringArray(admission.requiredVerifiers)) {
     return rejected("invalid_admission", "requiredVerifiers must be an array of strings");
   }
+
   if (!isStringArray(core.observationRefs)) {
     return rejected("invalid_admission", "observationRefs must be an array of strings");
   }
+
   if (options.requireBaseVersion && !isNonEmptyString(admission.baseVersionId)) {
     return rejected(
       "missing_base_version",
       "an edited version must declare the parent asset version id",
     );
   }
+
   if (admission.baseVersionId !== undefined && !isNonEmptyString(admission.baseVersionId)) {
     return rejected("invalid_admission", "baseVersionId must not be empty when provided");
   }

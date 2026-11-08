@@ -14,7 +14,9 @@ export function createRewardGateway(input: {
 }): RewardInputPort {
   async function deliver(records: RewardRecords, scope: string): Promise<RewardDelivery> {
     const revision = records.exposures.length + records.feedbacks.length;
+
     if (!input.enabled()) return { ok: true, delivery: "pending", revision };
+
     try {
       await input.output.replace({ schemaVersion: 1, scope, revision,
         signals: rewardView(records).signals.filter(item => item.context.scope === scope) });
@@ -33,22 +35,32 @@ export function createRewardGateway(input: {
       try { return await input.ledger.expose(exposure); }
       catch { return { ok: false, reason: "reward_ledger_unavailable" }; }
     },
+
     feedback: async feedback => {
       if (!input.enabled()) return { ok: false, reason: "collect_disabled" };
+
       if (!isRewardFeedback(feedback)) return { ok: false, reason: "invalid_reward" };
+
       try {
         const read = await input.ledger.read();
         if (!read.ok) return read;
+
         const exposure = read.records.exposures.find(item => item.id === feedback.exposureId);
         if (exposure === undefined) return { ok: false, reason: "reward_exposure_missing" };
+
         if (!input.catalog.accepts(exposure.context.metric, exposure.targets)) return { ok: false, reason: "reward_catalog_mismatch" };
+
         if (!input.enabled()) return { ok: false, reason: "collect_disabled" };
+
         const result = await input.ledger.feedback(feedback);
         if (!result.ok) return result;
+
         const delivered = await deliver(result.records, exposure.context.scope);
+
         return { ...result, delivery: delivered.ok ? delivered.delivery : "pending" };
       } catch { return { ok: false, reason: "reward_ledger_unavailable" }; }
     },
+
     signals: async scope => {
       if (!input.enabled()) return { ok: false, reason: "collect_disabled" };
       try {
@@ -57,6 +69,7 @@ export function createRewardGateway(input: {
         return result.ok ? { ok: true, signals: rewardView(result.records).signals.filter(item => item.context.scope === scope) } : result;
       } catch { return { ok: false, reason: "reward_ledger_unavailable" }; }
     },
+
     sync: async scope => {
       if (!input.enabled()) return { ok: false, reason: "collect_disabled" };
       try {
@@ -64,6 +77,7 @@ export function createRewardGateway(input: {
         return result.ok ? deliver(result.records, scope) : result;
       } catch { return { ok: false, reason: "reward_ledger_unavailable" }; }
     },
+
     inspect: async exposureId => {
       if (!input.enabled()) return { ok: false, reason: "collect_disabled" };
       try {

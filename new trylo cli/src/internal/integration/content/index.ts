@@ -10,7 +10,7 @@ import {
   isWithdrawDraftShape,
   isWorkflowDraftShape,
 } from "../shared/draft-shape.js";
-import { mapPromptPatchDraft } from "./prompt-patch.js";
+import { mapPromptPatchDraft } from "../../learning/agent/subsystems/method/adapters/content/prompt-patch.js";
 import { mapSkillDraft } from "./skill.js";
 import { mapUserRuleDraft } from "./user-rule.js";
 import { mapWithdrawDraft } from "./withdraw.js";
@@ -30,18 +30,23 @@ export function mapContentDraft(
   if (!isPlainRecord(draft)) {
     return rejected("unknown_source_kind", "draft is not an object");
   }
+
   if (draft.kind === "withdraw") {
     if (!isWithdrawDraftShape(draft)) {
       return rejected("unknown_source_kind", "withdraw draft is malformed");
     }
+
     if (!("entityId" in admission)) {
       return rejected("invalid_admission", "withdraw requires a withdraw admission");
     }
+
     return mapWithdrawDraft(draft, admission);
   }
+
   if ("entityId" in admission) {
     return rejected("invalid_admission", "proposal drafts require a proposal admission");
   }
+
   switch (draft.kind) {
     case "user_rule":
       if (!isUserRuleDraftShape(draft)) {
@@ -68,7 +73,7 @@ export function mapContentDraft(
   }
 }
 
-export { mapPromptPatchDraft } from "./prompt-patch.js";
+export { mapPromptPatchDraft } from "../../learning/agent/subsystems/method/adapters/content/prompt-patch.js";
 export { mapSkillDraft } from "./skill.js";
 export { mapUserRuleDraft } from "./user-rule.js";
 export { mapWithdrawDraft } from "./withdraw.js";

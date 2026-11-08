@@ -34,6 +34,7 @@ function runtimeFor(
   workspaceId: string,
 ): UserLearningRuntime {
   return createUserLearningRuntime({
+    policyMode: "legacy",
     ports,
     userId: "local-user",
     workspaceId,
@@ -64,15 +65,19 @@ test("P1-1: workspace A's preference in a shared ledger never becomes workspace 
 
     // Workspace A states a collaboration preference; it lands as evidence stamped ws-A.
     const a = runtimeFor(ports, "ws-A");
+
     a.capture(journalEvent("turn_start", { turnId: "t-a", text: PREF }, { sessionId: "s-a", turnId: "t-a", eventId: "e-a" }));
     a.capture(journalEvent("terminal", { reason: "completed" }, { sessionId: "s-a", turnId: "t-a", eventId: "e-a2" }));
     a.finishTurn();
 
     const read = ledger.read();
+
     assert.equal(read.ok, true);
     const records = read.ok ? read.records : [];
     const evidence = records.filter((item) => item.record === "evidence");
+
     assert.equal(evidence.length, 1, "A's preference is in the shared physical ledger");
+
     if (evidence[0]?.record === "evidence") {
       assert.equal(evidence[0].evidence.source.workspaceId, "ws-A", "stamped with the workspace it was born in");
     }
@@ -80,6 +85,7 @@ test("P1-1: workspace A's preference in a shared ledger never becomes workspace 
     // A derives from the same ledger: the preference is in scope, so the deep chain grows
     // a model and a rule. This proves the scope filter is not a blanket drop.
     const policyA = deriveUserPolicy({ records, userId: "local-user", workspaceId: "ws-A", now: NOW });
+
     assert.equal(policyA.evidence.length, 1);
     assert.equal(policyA.models.length > 0, true, "A sees its own preference");
     assert.equal(policyA.rules.length > 0, true, "A compiles a rule from it");
@@ -87,6 +93,7 @@ test("P1-1: workspace A's preference in a shared ledger never becomes workspace 
     // B reads the SAME physical ledger. A's evidence carries source ws-A, so it is
     // isolated: B derives no evidence, no model, no rule — and would inject nothing.
     const policyB = deriveUserPolicy({ records, userId: "local-user", workspaceId: "ws-B", now: NOW });
+
     assert.equal(policyB.evidence.length, 0, "B must not adopt A's evidence");
     assert.equal(policyB.models.length, 0, "no B model is built from A's preference");
     assert.equal(policyB.rules.length, 0, "no B rule is compiled from A's preference");
@@ -115,6 +122,7 @@ test("P1-1: legacy evidence with an unknown source stays isolated, never promote
       createdAt: NOW,
     },
   };
+
   assert.deepEqual(evidenceInScope([legacy.evidence], "ws-A"), [], "unknown source is isolated, not adopted");
   assert.deepEqual(evidenceInScope([legacy.evidence], "ws-B"), []);
 });

@@ -18,11 +18,15 @@ function firstCommand(commands: readonly SubmitProposalCommand[]): SubmitProposa
 
 test("a user rule draft becomes a board proposal and nothing else", () => {
   const result = mapUserRuleDraft(userRuleDraft(), proposalAdmission());
+
   assert.equal(result.ok, true);
+
   if (!result.ok) {
     return;
   }
+
   const command = firstCommand(result.value);
+
   assert.equal(command.proposal.assetKind, "user_rule");
   assert.equal(command.proposal.domain, "user");
   assert.equal(command.proposal.scope, "task_family:ts-unit-fix");
@@ -65,7 +69,9 @@ test("a draft that carries its own scope rejects a second scope source", () => {
     ...proposalAdmission(),
     scope: "project:repo-a",
   });
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "invalid_admission");
   }
@@ -95,10 +101,13 @@ test("unknown draft kinds are rejected by the dispatcher", () => {
 
 test("every command an adapter can emit is on the allow list", () => {
   const result = mapUserRuleDraft(userRuleDraft(), proposalAdmission());
+
   assert.equal(result.ok, true);
+
   if (!result.ok) {
     return;
   }
+
   for (const command of result.value) {
     assert.equal(
       (ADAPTER_ALLOWED_COMMAND_TYPES as readonly string[]).includes(command.type),

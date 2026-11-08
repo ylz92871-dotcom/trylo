@@ -27,6 +27,7 @@ import {
  */
 
 export type LegacyProvenance = "user_stated" | "assistant_inferred" | "unknown";
+
 export type LegacyStatus = "active" | "retracted" | "candidate";
 
 export type LegacyFactEntry = {
@@ -63,7 +64,9 @@ function decodeDocument(raw: unknown, depth: number): LegacyDecode {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return { ok: false, reason: "legacy_document_not_an_object" };
   }
+
   const document = raw as Record<string, unknown>;
+
   // A panel backup carries the same document under `cliImport`. Exactly one
   // level of unwrapping: this is a packaging convenience, not a schema, and a
   // nested chain would just be a document pretending to be another document.
@@ -72,30 +75,44 @@ function decodeDocument(raw: unknown, depth: number): LegacyDecode {
       ? { ok: false, reason: "legacy_document_nested_too_deep" }
       : decodeDocument(document["cliImport"], depth + 1);
   }
+
   if (document["version"] !== 1) return { ok: false, reason: "legacy_document_version_unsupported" };
+
   if (!Array.isArray(document["facts"])) return { ok: false, reason: "legacy_document_facts_missing" };
+
   const facts: LegacyFactEntry[] = [];
+
   for (const [index, entry] of document["facts"].entries()) {
     const decoded = decodeEntry(entry);
     if (decoded === undefined) return { ok: false, reason: `legacy_fact_invalid:${index}` };
     facts.push(decoded);
   }
+
   return { ok: true, value: { version: 1, facts } };
 }
 
 function decodeEntry(raw: unknown): LegacyFactEntry | undefined {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+
   const entry = raw as Record<string, unknown>;
   const legacyId = entry["legacyId"], subject = entry["subject"], statement = entry["statement"];
   const factKind = entry["factKind"], provenance = entry["provenance"], status = entry["status"];
   const createdAt = entry["createdAt"];
+
   if (typeof legacyId !== "string" || legacyId.length === 0) return undefined;
+
   if (typeof subject !== "string" || typeof statement !== "string" || statement.trim().length === 0) return undefined;
+
   if (typeof factKind !== "string" || !KINDS.includes(factKind)) return undefined;
+
   if (typeof provenance !== "string" || !PROVENANCES.includes(provenance)) return undefined;
+
   if (typeof status !== "string" || !STATUSES.includes(status)) return undefined;
+
   if (typeof createdAt !== "number" || !Number.isFinite(createdAt)) return undefined;
+
   const scope = decodeScope(entry["scope"]);
+
   return scope === undefined ? undefined : {
     legacyId, subject, statement: statement.trim(), factKind: factKind as MemoryFactKind,
     scope, provenance: provenance as LegacyProvenance, status: status as LegacyStatus, createdAt,
@@ -104,13 +121,16 @@ function decodeEntry(raw: unknown): LegacyFactEntry | undefined {
 
 function decodeScope(raw: unknown): MemoryScope | undefined {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+
   const scope = raw as Record<string, unknown>;
   if (scope["kind"] === "user" && typeof scope["userId"] === "string" && scope["userId"].length > 0) {
     return { kind: "user", userId: scope["userId"] };
   }
+
   if (scope["kind"] === "project" && typeof scope["workspaceId"] === "string" && scope["workspaceId"].length > 0) {
     return { kind: "project", workspaceId: scope["workspaceId"] };
   }
+
   return undefined;
 }
 
@@ -132,15 +152,18 @@ export function importLegacyFacts(
   now: () => number,
 ): ReadonlyArray<LegacyDecision> {
   const decisions: LegacyDecision[] = [];
+
   for (const entry of entries) {
     if (entry.provenance !== "user_stated") {
       decisions.push({ legacyId: entry.legacyId, outcome: "skipped", reason: `provenance_${entry.provenance}` });
       continue;
     }
+
     if (entry.status !== "active") {
       decisions.push({ legacyId: entry.legacyId, outcome: "skipped", reason: `status_${entry.status}` });
       continue;
     }
+
     const commandId = `legacy:${entry.legacyId}`;
     const recordId = legacyRecordId(entry.legacyId);
     const outcome = store.transact<{ readonly kind: "already" | "imported"; readonly recordId: string; readonly version: number }>((records) => {
@@ -149,6 +172,7 @@ export function importLegacyFacts(
       if (replay !== undefined) {
         return { result: { kind: "already" as const, recordId: replay.id, version: replay.version } };
       }
+
       // 同义事实已经存在（用户此前在对话里存过一次）→ 只建立映射，不再写。
       const existing = activeFacts(records).find((record) => sameFact(entry, record));
       if (existing !== undefined) {
@@ -157,6 +181,7 @@ export function importLegacyFacts(
         return { result: { kind: "already" as const, recordId: existing.id, version: existing.version },
           commit: [{ ...existing, previousCommandIds: [...(existing.previousCommandIds ?? []), commandId] }] };
       }
+
       const record: UserFactRecord = {
         record: "user_fact", id: recordId, version: 1, status: "active",
         factKind: entry.factKind, subject: entry.subject, statement: entry.statement,
@@ -164,6 +189,7 @@ export function importLegacyFacts(
         source: { kind: "user_statement", eventId: `legacy:${entry.legacyId}` },
         commandId, createdAt: entry.createdAt > 0 ? entry.createdAt : now(),
       };
+
       return {
         result: { kind: "imported" as const, recordId: record.id, version: record.version },
         commit: [record],
@@ -173,6 +199,7 @@ export function importLegacyFacts(
       decisions.push({ legacyId: entry.legacyId, outcome: "skipped", reason: outcome.reason });
       continue;
     }
+
     decisions.push({
       legacyId: entry.legacyId,
       outcome: outcome.value.kind,
@@ -180,5 +207,6 @@ export function importLegacyFacts(
       version: outcome.value.version,
     });
   }
+
   return decisions;
 }

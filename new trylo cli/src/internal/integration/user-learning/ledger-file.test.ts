@@ -99,7 +99,9 @@ test("E0: bare receipt shell is rejected as unreadable", () => {
   try {
     writeLines(d, [`{"record":"receipt"}\n`]);
     const read = createFileLedgerPort(d).read();
+
     assert.equal(read.ok, true);
+
     if (read.ok) {
       assert.equal(read.records.length, 0);
       assert.equal(read.unreadable, 1);
@@ -116,9 +118,12 @@ test("E0: receipt with unknown reason is rejected", () => {
       record: "receipt",
       receipt: { ...(RECEIPT as { receipt: Record<string, unknown> }).receipt, reason: "super_helpful" },
     });
+
     writeLines(d, [`${bad}\n`]);
     const read = createFileLedgerPort(d).read();
+
     assert.equal(read.ok, true);
+
     if (read.ok) {
       assert.equal(read.records.length, 0);
       assert.equal(read.unreadable, 1);
@@ -138,9 +143,12 @@ test("E0: observation with unknown signal is rejected", () => {
         signal: "vibes_good",
       },
     });
+
     writeLines(d, [`${bad}\n`]);
     const read = createFileLedgerPort(d).read();
+
     assert.equal(read.ok, true);
+
     if (read.ok) {
       assert.equal(read.records.length, 0);
       assert.equal(read.unreadable, 1);
@@ -154,10 +162,13 @@ test("E0: policy missing scopeFingerprint is rejected", () => {
   const d = dir();
   try {
     const { scopeFingerprint: _drop, ...rest } = POLICY as unknown as Record<string, unknown>;
+
     void _drop;
     writeLines(d, [`${JSON.stringify({ ...rest, record: "policy" })}\n`]);
     const read = createFileLedgerPort(d).read();
+
     assert.equal(read.ok, true);
+
     if (read.ok) {
       assert.equal(read.records.length, 0);
       assert.equal(read.unreadable, 1);
@@ -172,7 +183,9 @@ test("E0: signal with unknown kind is rejected", () => {
   try {
     writeLines(d, [`${JSON.stringify({ record: "signal", signal: "telepathy", eventId: "e", at: 1 })}\n`]);
     const read = createFileLedgerPort(d).read();
+
     assert.equal(read.ok, true);
+
     if (read.ok) {
       assert.equal(read.records.length, 0);
       assert.equal(read.unreadable, 1);
@@ -189,9 +202,12 @@ test("E0: evidence missing source identity is rejected", () => {
       record: "evidence",
       evidence: { id: "e9", rawText: "x", textHash: "t" },
     });
+
     writeLines(d, [`${bad}\n`]);
     const read = createFileLedgerPort(d).read();
+
     assert.equal(read.ok, true);
+
     if (read.ok) {
       assert.equal(read.records.length, 0);
       assert.equal(read.unreadable, 1);
@@ -206,7 +222,9 @@ test("E0: valid records of every kind are accepted", () => {
   try {
     writeLines(d, [EVIDENCE, SIGNAL, POLICY, RECEIPT, OBSERVATION].map((r) => `${JSON.stringify(r)}\n`));
     const read = createFileLedgerPort(d).read();
+
     assert.equal(read.ok, true);
+
     if (read.ok) {
       assert.equal(read.records.length, 5);
       assert.equal(read.unreadable, 0);
@@ -255,6 +273,7 @@ test("E0: rule from another scope fingerprint does not match", () => {
       updatedAt: 1_700_000_000_000,
     },
   ];
+
   assert.equal(matchesTask(rule, "帮我写这周的周报，先说结论", "fp-a", models), true);
   assert.equal(matchesTask(rule, "帮我写这周的周报，先说结论", "fp-b", models), false);
 });

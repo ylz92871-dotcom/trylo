@@ -16,16 +16,20 @@ export function mapSkillDraft(
   if (statusFailure !== undefined) {
     return statusFailure;
   }
+
   const scopeAdmissionFailure = checkNoAdmittedScope(admission);
   if (scopeAdmissionFailure !== undefined) {
     return scopeAdmissionFailure;
   }
+
   if (draft.permissionClaim !== false) {
     return rejected("authority_claim_present", "a skill draft must never claim permission");
   }
+
   if (!isNonEmptyString(draft.scope.id)) {
     return rejected("missing_scope", "skill draft has no scope id");
   }
+
   return buildContentProposal(
     {
       proposalId: draft.id,

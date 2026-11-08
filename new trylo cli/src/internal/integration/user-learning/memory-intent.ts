@@ -28,19 +28,31 @@ export function memoryInstructionText(text: string): string {
   const quoteEnds: Readonly<Record<string, string>> = { "“": "”", "‘": "’", "「": "」", '"': '"', "'": "'" };
   const closers: string[] = [];
   let instruction = "", escaped = false;
+
   for (const character of withoutCode) {
     const current = closers.at(-1);
     if (current !== undefined) {
-      if (escaped) { escaped = false; continue; }
-      if ((current === '"' || current === "'") && character === "\\") { escaped = true; continue; }
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if ((current === '"' || current === "'") && character === "\\") {
+        escaped = true;
+        continue;
+      }
       if (character === current) closers.pop();
       else if (current !== '"' && current !== "'" && quoteEnds[character] !== undefined) closers.push(quoteEnds[character]);
       continue;
     }
+
     const closer = quoteEnds[character];
     if (closer === undefined) instruction += character;
-    else { closers.push(closer); instruction += " "; }
+    else {
+      closers.push(closer);
+      instruction += " ";
+    }
   }
+
   return instruction;
 }
 
@@ -48,7 +60,10 @@ export function memoryInstructionText(text: string): string {
 function maskMemoryLineLiterals(text: string): string {
   let literalBlock = false;
   return text.split("\n").map(line => {
-    if (line.trim().length === 0) { literalBlock = false; return ""; }
+    if (line.trim().length === 0) {
+      literalBlock = false;
+      return "";
+    }
     if (/^(?: {0,3}(?:>|\t)| {4})/u.test(line)) literalBlock = true;
     return literalBlock ? "" : line;
   }).join("\n");
@@ -65,6 +80,7 @@ function codeLiteralEnd(text: string, start: number, openingEnd: number, fenced:
   const length = openingEnd - start;
   let cursor = fenced ? text.indexOf("\n", openingEnd) + 1 : openingEnd;
   if (fenced && cursor === 0) return text.length;
+
   while (cursor < text.length) {
     if (fenced) {
       const newline = text.indexOf("\n", cursor);
@@ -80,6 +96,7 @@ function codeLiteralEnd(text: string, start: number, openingEnd: number, fenced:
       cursor = end;
     }
   }
+
   // An unclosed literal has no trustworthy instruction boundary after its opener.
   return text.length;
 }
@@ -87,6 +104,7 @@ function codeLiteralEnd(text: string, start: number, openingEnd: number, fenced:
 /** Finite Markdown literal subset, not a renderer: 0–3-space fences and arbitrary backtick runs. */
 function maskMemoryCode(text: string): string {
   let instruction = "", cursor = 0;
+
   while (cursor < text.length) {
     if (cursor === 0 || text[cursor - 1] === "\n") {
       const fence = /^ {0,3}(`{3,}|~{3,})/u.exec(text.slice(cursor));
@@ -100,8 +118,12 @@ function maskMemoryCode(text: string): string {
     if (text[cursor] === "`") {
       cursor = codeLiteralEnd(text, cursor, runEnd(text, cursor), false);
       instruction += " ";
-    } else { instruction += text[cursor]; cursor += 1; }
+    } else {
+      instruction += text[cursor];
+      cursor += 1;
+    }
   }
+
   return instruction;
 }
 
@@ -119,8 +141,10 @@ export function allowsDurableMemorySource(text: string): boolean {
 /** Explicit chat authority is separate from grounding a name and from tool permission. */
 export function hasMemoryMutationIntent(text: string, action: "correct" | "retract"): boolean {
   if (!allowsDurableMemorySource(text)) return false;
+
   const instruction = memoryInstructionText(text);
   if (action === "correct" && /^我(?:叫|是)[^。\n]+[，,]请(?:更正|改正|纠正)[。.!！]?$/u.test(instruction)) return true;
+
   // Changing a document is not consent to change a memory. Each pattern binds
   // the verb to a memory object, the new identity clause, or an explicit referent.
   const patterns = action === "correct" ? [
@@ -134,6 +158,7 @@ export function hasMemoryMutationIntent(text: string, action: "correct" | "retra
     /^(?:请)?(?:撤回|忘掉|忘记)[。.!！]?$/u,
     /^(?:please\s+)?(?:forget|retract|delete)\s+(?:(?:my|this|that|the)\s+)?(?:memory|identity|record|fact|name)\b/iu,
   ];
+
   return instruction.split(/[，,。；;\n]/u).some(part => {
     const clause = part.trim().replace(/^(?:(?:请|帮我|麻烦你|现在|然后|接着|随后|先|再)\s*)+/u, "");
     return !/[？?]|怎么|如何|是否|要不要|能否|吗\s*$/u.test(clause) && patterns.some(pattern => pattern.test(clause));
@@ -154,7 +179,9 @@ export type LocalMemoryClaim = {
 /** A deliberately small command grammar. Mixed tasks and quoted examples stay with the model. */
 export function localMemoryClaim(text: string, previous?: string): LocalMemoryClaim | undefined {
   if (!isStandaloneClaimSource(text)) return undefined;
+
   let statement: string | undefined;
+
   if (isMemoryConfirmation(text)) {
     // A generic OK can answer any question. Without a bound memory proposal,
     // only an explicit remember request establishes persistence consent.
@@ -167,14 +194,18 @@ export function localMemoryClaim(text: string, previous?: string): LocalMemoryCl
       ?? /^(.+?)[，,。；;\s]*(?:请|帮我)?(?:记住|记一下|记下来|记着)(?:吧)?[。.!！]*$/u.exec(text)?.[1]
       ?? /^(?:please\s+)?remember\s*[:：,]?\s*(.+)$/iu.exec(text)?.[1];
   }
+
   if (statement === undefined) return undefined;
+
   statement = statement.trim().replace(/[，,。；;\s]+$/u, "");
   const identity = /^我(?:是|叫|的名字是)\s*([^，。,.！？!?；;\n]{1,40})/u.exec(statement)
     ?? /^my name is\s+([^,.!?\n]{1,40})/iu.exec(statement);
   if (identity !== null) return { subject: identity[1]!.trim(), statement, factKind: "identity_fact", scopeKind: "user" };
+
   if (/^我(?:喜欢|希望|习惯|偏好|更愿意|不喜欢|讨厌)/u.test(statement)) {
     return { subject: "用户", statement, factKind: "preference", scopeKind: "user" };
   }
+
   return undefined;
 }
 

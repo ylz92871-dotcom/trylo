@@ -8,14 +8,18 @@ import { proposalAdmission, skillDraft, tamper, workflowDraft } from "../testing
 
 test("a skill draft maps to a versioned tool-free proposal", () => {
   const result = mapSkillDraft(skillDraft(), proposalAdmission());
+
   assert.equal(result.ok, true);
+
   if (!result.ok) {
     return;
   }
+
   const command = result.value[0];
   if (command?.type !== "submit_proposal") {
     throw new Error("expected submit_proposal");
   }
+
   assert.equal(command.proposal.assetKind, "skill");
   assert.equal(command.proposal.domain, "skill");
   assert.equal(command.proposal.candidateRef.includes(":1"), true);
@@ -25,15 +29,20 @@ test("a skill draft maps to a versioned tool-free proposal", () => {
 test("an edited skill version must name its parent asset version", () => {
   const edited = editSkill(skillDraft(), { steps: ["a", "b", "c"] });
   const withoutParent = mapSkillDraft(edited, proposalAdmission());
+
   assert.equal(withoutParent.ok, false);
+
   if (!withoutParent.ok) {
     assert.equal(withoutParent.reason, "missing_base_version");
   }
+
   const withParent = mapSkillDraft(
     edited,
     proposalAdmission({ baseVersionId: "asset-v1" }),
   );
+
   assert.equal(withParent.ok, true);
+
   if (withParent.ok) {
     const command = withParent.value[0];
     if (command?.type === "submit_proposal") {
@@ -47,7 +56,9 @@ test("a skill draft that claims permission is rejected", () => {
     tamper(skillDraft(), { permissionClaim: true }),
     proposalAdmission(),
   );
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "authority_claim_present");
   }
@@ -55,15 +66,20 @@ test("a skill draft that claims permission is rejected", () => {
 
 test("workflow scope must be admitted because the draft has none", () => {
   const missing = mapWorkflowDraft(workflowDraft(), proposalAdmission());
+
   assert.equal(missing.ok, false);
+
   if (!missing.ok) {
     assert.equal(missing.reason, "missing_scope");
   }
+
   const admitted = mapWorkflowDraft(
     workflowDraft(),
     proposalAdmission({ scope: "task_family:ts-unit-fix" }),
   );
+
   assert.equal(admitted.ok, true);
+
   if (admitted.ok) {
     const command = admitted.value[0];
     if (command?.type === "submit_proposal") {
@@ -78,7 +94,9 @@ test("a workflow cannot change team topology", () => {
     tamper(workflowDraft(), { teamTopologyChanged: true }),
     proposalAdmission({ scope: "task_family:ts-unit-fix" }),
   );
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "authority_claim_present");
   }
@@ -89,7 +107,9 @@ test("an edited workflow version must name its parent asset version", () => {
     budget: { maxSteps: 3, maxTokens: 100, maxWallMs: 1000 },
   });
   const result = mapWorkflowDraft(edited, proposalAdmission({ scope: "task_family:ts-unit-fix" }));
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "missing_base_version");
   }

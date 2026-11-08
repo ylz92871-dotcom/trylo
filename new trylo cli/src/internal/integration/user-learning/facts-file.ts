@@ -86,13 +86,16 @@ export type FactTransactionResult<T> =
  */
 export function acquireFactLock(lockPath: string): { readonly ok: true; readonly release: () => void } | { readonly ok: false } {
   let fd: number;
+
   try {
     fd = openSync(lockPath, "wx");
   } catch {
     return { ok: false };
   }
+
   return {
     ok: true,
+
     release() {
       closeSync(fd);
       try {
@@ -109,25 +112,34 @@ export function createFileFactStore(root: string): FileFactStore {
   const file = path.join(root, USER_FACTS_FILE);
   const lock = path.join(root, USER_FACTS_LOCK);
   let prepared = false;
+
   function prepare(): void {
     if (prepared) return;
     mkdirSync(root, { recursive: true });
     prepared = true;
   }
+
   function appendNow(records: ReadonlyArray<UserMemoryRecord>): FactAppendResult {
     if (records.length === 0) return { ok: true, appended: 0 };
     try {
       const current = readFacts(file);
       if (!current.ok) return current;
+
       if (current.unreadable > 0) return { ok: false, reason: "facts_corrupt" };
+
       if (current.records.length + records.length > USER_FACTS_MAX_RECORDS) return capacityFailure("records");
+
       const serialized = serializeFacts(records);
       if (!serialized.ok) return serialized;
+
       const existing = readBoundedFacts(file);
       if (!existing.ok) return existing;
+
       if (Buffer.byteLength(existing.text, "utf8") + Buffer.byteLength(serialized.text, "utf8") > USER_FACTS_MAX_BYTES) return capacityFailure("bytes");
+
       prepare();
       appendFileSync(file, serialized.text, "utf8");
+
       return { ok: true, appended: records.length };
     } catch (error) {
       // 目录可能在两次写之间被删掉，所以下一次写还要再试一次建目录。
@@ -135,60 +147,78 @@ export function createFileFactStore(root: string): FileFactStore {
       return { ok: false, reason: `fact_write_failed:${codeOf(error) ?? "unknown"}` };
     }
   }
+
   const store: FileFactStore = {
     read: () => readFacts(file),
+
     append(records) {
       if (records.length === 0) return { ok: true, appended: 0 };
       const committed = store.transact(() => ({ result: records.length, commit: records }));
       return committed.ok ? { ok: true, appended: committed.value } : committed;
     },
+
     compact() {
       try { prepare(); }
       catch (error) { return { ok: false, reason: `fact_write_failed:${codeOf(error) ?? "unknown"}` }; }
+
       const held = acquireFactLock(lock);
       if (!held.ok) return { ok: false, reason: `facts_locked:${lock}` };
+
       try {
         const current = readFacts(file);
         if (!current.ok) return current;
+
         if (current.unreadable > 0) return { ok: false, reason: "facts_corrupt" };
+
         const next = compactMemoryRecords(current.records);
         const serialized = serializeFacts(next);
         if (!serialized.ok) return serialized;
+
         const committed = replaceFacts(file, serialized.text);
+
         return committed.ok ? { ok: true, before: current.records.length, after: next.length } : committed;
       } finally { held.release(); }
     },
+
     transact(step) {
       try {
         prepare();
       } catch (error) {
         return { ok: false, reason: `fact_write_failed:${codeOf(error) ?? "unknown"}` };
       }
+
       const held = acquireFactLock(lock);
       if (!held.ok) return { ok: false, reason: `facts_locked:${lock}` };
+
       try {
         const current = readFacts(file);
         if (!current.ok) return { ok: false, reason: current.reason };
+
         if (current.unreadable > 0) return { ok: false, reason: "facts_corrupt" };
+
         const next = step(current.records);
         if (next.commit !== undefined && next.commit.length > 0) {
           const written = appendNow(next.commit);
           if (!written.ok) return { ok: false, reason: written.reason };
         }
+
         return { ok: true, value: next.result };
       } finally {
         held.release();
       }
     },
   };
+
   return store;
 }
 
 function readFacts(file: string): FactReadResult {
   const bounded = readBoundedFacts(file);
   if (!bounded.ok) return bounded;
+
   const records: UserMemoryRecord[] = [];
   let unreadable = 0;
+
   for (const line of bounded.text.split("\n")) {
     if (line.trim().length === 0) continue;
     if (records.length + unreadable >= USER_FACTS_MAX_RECORDS) return capacityFailure("records");
@@ -197,6 +227,7 @@ function readFacts(file: string): FactReadResult {
     if (decoded === undefined) unreadable += 1;
     else records.push(decoded);
   }
+
   return { ok: true, records, unreadable };
 }
 
@@ -213,13 +244,17 @@ function readBoundedFacts(file: string): SerializedFacts {
     fd = openSync(file, "r");
     const size = fstatSync(fd).size;
     if (size > USER_FACTS_MAX_BYTES) return capacityFailure("bytes");
+
     const bytes = Buffer.alloc(size + 1);
     let used = 0, count = 0;
+
     do {
       count = readSync(fd, bytes, used, bytes.length - used, null);
       used += count;
     } while (count > 0 && used < bytes.length);
+
     if (used > size) return { ok: false, reason: "facts_changed_during_read" };
+
     return { ok: true, text: bytes.subarray(0, used).toString("utf8") };
   } catch (error) {
     const code = codeOf(error);
@@ -231,22 +266,30 @@ function readBoundedFacts(file: string): SerializedFacts {
 
 function serializeFacts(records: ReadonlyArray<UserMemoryRecord>): SerializedFacts {
   if (records.length > USER_FACTS_MAX_RECORDS) return capacityFailure("records");
+
   const lines: string[] = [];
   let total = 0;
+
   for (const record of records) {
     if (record.formatVersion !== undefined && record.formatVersion !== 1 && record.formatVersion !== 2) {
       return { ok: false, reason: "facts_invalid_record" };
     }
+
     // v2 is deliberately incompatible with old writers: ignoring consumed keys
     // could turn a stale retry into a new fact after compaction.
     const line = JSON.stringify({ ...record, formatVersion: 2 });
     const bytes = Buffer.byteLength(line, "utf8");
     if (bytes > USER_FACTS_MAX_LINE_BYTES) return capacityFailure("line_bytes");
+
     total += bytes + 1;
+
     if (total > USER_FACTS_MAX_BYTES) return capacityFailure("bytes");
+
     if (decodeFact(line) === undefined) return { ok: false, reason: "facts_invalid_record" };
+
     lines.push(`${line}\n`);
   }
+
   return { ok: true, text: lines.join("") };
 }
 
@@ -255,6 +298,7 @@ function replaceFacts(file: string, text: string): FactAppendResult {
   const temporary = path.join(path.dirname(file), USER_FACTS_COMPACT_FILE);
   let fd: number | undefined;
   let owned = false;
+
   try {
     fd = openSync(temporary, "wx");
     owned = true;
@@ -264,6 +308,7 @@ function replaceFacts(file: string, text: string): FactAppendResult {
     fd = undefined;
     renameSync(temporary, file);
     owned = false;
+
     return { ok: true, appended: 0 };
   } catch (error) {
     return { ok: false, reason: `facts_compact_failed:${codeOf(error) ?? "unknown"}` };
@@ -284,45 +329,67 @@ function replaceFacts(file: string, text: string): FactAppendResult {
  */
 function decodeFact(line: string): UserMemoryRecord | undefined {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(line) as unknown;
   } catch {
     return undefined;
   }
+
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return undefined;
+
   const fields = parsed as Record<string, unknown>;
   if (fields["formatVersion"] !== undefined && fields["formatVersion"] !== 1 && fields["formatVersion"] !== 2) return undefined;
+
   if (fields["record"] === "memory_proposal") return decodeProposal(fields);
+
   if (fields["record"] !== "user_fact") return undefined;
+
   if (typeof fields["id"] !== "string" || fields["id"].length === 0) return undefined;
+
   if (typeof fields["version"] !== "number" || !Number.isInteger(fields["version"]) || fields["version"] < 1) return undefined;
+
   if (typeof fields["status"] !== "string" || !(MEMORY_FACT_STATUSES as readonly string[]).includes(fields["status"])) return undefined;
+
   if (typeof fields["factKind"] !== "string" || !(MEMORY_FACT_KINDS as readonly string[]).includes(fields["factKind"])) return undefined;
+
   if (typeof fields["subject"] !== "string" || typeof fields["statement"] !== "string") return undefined;
+
   if (typeof fields["commandId"] !== "string" || fields["commandId"].length === 0) return undefined;
+
   const previous = fields["previousCommandIds"];
   if ((previous !== undefined || fields["commandAliases"] !== undefined) && fields["formatVersion"] !== 2) return undefined;
+
   if (previous !== undefined && (!Array.isArray(previous)
     || previous.some((key: unknown) => typeof key !== "string" || key.length === 0)
     || new Set(previous).size !== previous.length || previous.includes(fields["commandId"]))) return undefined;
+
   const aliases = fields["commandAliases"];
   if (aliases !== undefined) {
     if (!Array.isArray(aliases)) return undefined;
+
     const keys = new Set<string>();
+
     for (const raw of aliases) {
       if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+
       const alias = raw as Record<string, unknown>;
       const key = alias["commandId"], digest = alias["requestDigest"];
       if (typeof key !== "string" || key.length === 0 || keys.has(key) || key === fields["commandId"]
         || (Array.isArray(previous) && previous.includes(key))
         || typeof digest !== "string" || !/^[0-9a-f]{64}$/u.test(digest)) return undefined;
+
       keys.add(key);
     }
   }
+
   if (typeof fields["createdAt"] !== "number" || !Number.isFinite(fields["createdAt"])) return undefined;
+
   if (scopeOf(fields["scope"]) === undefined || sourceOf(fields["source"]) === undefined) return undefined;
+
   if (fields["supersedes"] !== undefined
     && (typeof fields["supersedes"] !== "number" || !Number.isInteger(fields["supersedes"]))) return undefined;
+
   return parsed as UserFactRecord;
 }
 
@@ -337,12 +404,19 @@ function decodeProposal(fields: Record<string, unknown>): UserMemoryRecord | und
   const subject = fields["subject"], statement = fields["statement"];
   const commandId = fields["commandId"], createdAt = fields["createdAt"];
   const scope = scopeOf(fields["scope"]), source = sourceOf(fields["source"]);
+
   if (typeof id !== "string" || id.length === 0) return undefined;
+
   if (!isProposalStatus(status) || !isFactKind(factKind)) return undefined;
+
   if (typeof subject !== "string" || typeof statement !== "string") return undefined;
+
   if (typeof commandId !== "string" || commandId.length === 0) return undefined;
+
   if (typeof createdAt !== "number" || !Number.isFinite(createdAt)) return undefined;
+
   if (scope === undefined || source === undefined) return undefined;
+
   return { record: "memory_proposal", id, status, factKind, subject, statement, scope, source, commandId, createdAt };
 }
 
@@ -356,30 +430,37 @@ function isFactKind(value: unknown): value is MemoryFactKind {
 
 function scopeOf(value: unknown): MemoryScope | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+
   const scope = value as Record<string, unknown>;
   if (scope["kind"] === "user") {
     return typeof scope["userId"] === "string" && scope["userId"].length > 0
       ? { kind: "user", userId: scope["userId"] }
       : undefined;
   }
+
   if (scope["kind"] === "project") {
     return typeof scope["workspaceId"] === "string" && scope["workspaceId"].length > 0
       ? { kind: "project", workspaceId: scope["workspaceId"] }
       : undefined;
   }
+
   return undefined;
 }
 
 function sourceOf(value: unknown): MemorySource | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+
   const source = value as Record<string, unknown>;
   if (typeof source["eventId"] !== "string" || source["eventId"].length === 0) return undefined;
+
   if (source["kind"] === "user_statement") return { kind: "user_statement", eventId: source["eventId"] };
+
   if (source["kind"] === "user_confirmation") {
     return typeof source["confirmsEventId"] === "string" && source["confirmsEventId"].length > 0
       ? { kind: "user_confirmation", eventId: source["eventId"], confirmsEventId: source["confirmsEventId"] }
       : undefined;
   }
+
   return undefined;
 }
 

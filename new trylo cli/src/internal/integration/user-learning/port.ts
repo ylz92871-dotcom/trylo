@@ -1,4 +1,5 @@
 import type { UserLearningRuntime } from "./runtime.js";
+import { USER_POLICY_RECEIPT_PREFIX } from "./runtime.js";
 
 /**
  * 用户学习与方法学习**合成一个槽**（UE-2 的「并排 + 共享一个总预算顶」）。
@@ -102,10 +103,12 @@ type LearningBeatReport = {
 export type LearningPortShape = {
   readonly observe: (report: LearningBeatReport) => Promise<void>;
   readonly intentOn: (turnId: string, beat: number) => boolean;
+  /** Optional post-compilation confirmation; absence preserves legacy teaching behavior. */
+  readonly confirmIntent?: (turnId: string, beat: number) => boolean;
   readonly requestSlot: (request: LearningSlotRequest) => Promise<LearningSlotDelivery | undefined>;
   readonly recordFielding: (notice: LearningFieldingNotice) => Promise<void>;
   readonly recordFeedback: (notice: LearningFeedbackNotice) => Promise<void>;
-  readonly endTurn: (turnId: string) => Promise<void>;
+  readonly endTurn: (turnId: string, signal?: AbortSignal) => Promise<void>;
 };
 
 export type ComposeLearningInput = {
@@ -117,27 +120,40 @@ export type ComposeLearningInput = {
 
 export function composeLearningPorts(input: ComposeLearningInput): LearningPortShape | undefined {
   const { method, user } = input;
+
   if (user === undefined) {
     return method;
   }
+
+  const userVersions = new Set<string>();
+
   return {
     observe: async (report) => {
       await method?.observe(report);
     },
     intentOn: (turnId, beat) => method?.intentOn(turnId, beat) ?? false,
-    requestSlot: async (request) => mergeSlots(await method?.requestSlot(request), user),
-    // 上场是方法子系统的事实：用户学习不产生 receipt，所以这一路只转发给方法板。
+    ...(method?.confirmIntent === undefined ? {} : { confirmIntent: (turnId: string, beat: number) => method.confirmIntent!(turnId, beat) }),
+    requestSlot: async (request) => mergeSlots(await method?.requestSlot(request), user, request, userVersions),
+
+    // User owns its exposure. Method never receives a peer's opaque receipt.
     recordFielding: async (notice) => {
-      await method?.recordFielding(notice);
+      const receipts = notice.receipts.filter(receipt => !receipt.ref.startsWith(USER_POLICY_RECEIPT_PREFIX));
+      try { await method?.recordFielding(receipts.length === notice.receipts.length ? notice : { ...notice, receipts }); }
+      finally { user.recordFielding?.(notice); }
     },
-    // 反馈归因到方法卡的上场，同样是方法子系统的事实：用户学习没有版本身份，
-    // 这一路只转发给方法板（与 recordFielding 同一条理由）。
+
+    // Model self-reports cannot stand in for the human's opinion about a policy.
     recordFeedback: async (notice) => {
-      await method?.recordFeedback(notice);
+      const items = notice.items.filter(item => !userVersions.has(item.versionId));
+      await method?.recordFeedback(items.length === notice.items.length ? notice : { ...notice, items });
     },
-    endTurn: async (turnId) => {
-      await method?.endTurn(turnId);
-      user.finishTurn();
+
+    endTurn: async (turnId, signal) => {
+      try { await method?.endTurn(turnId, signal); }
+      finally {
+        user.finishTurn();
+        userVersions.clear();
+      }
     },
   };
 }
@@ -153,21 +169,26 @@ export function composeLearningPorts(input: ComposeLearningInput): LearningPortS
 function mergeSlots(
   learned: LearningSlotDelivery | undefined,
   user: UserLearningRuntime,
+  request: LearningSlotRequest,
+  userVersions: Set<string>,
 ): LearningSlotDelivery | undefined {
-  const spent = learned === undefined ? 0 : learned.message.content.length;
-  const injected = user.policyFor(spent);
+  // Reserve the separator too; the shared character ceiling covers the final text.
+  const spent = learned === undefined ? 0 : learned.message.content.length + 1;
+  const injected = user.policyFor(spent, request);
   if (injected === undefined) {
     return learned;
   }
+
+  if (injected.receipt !== undefined) userVersions.add(injected.receipt.versionId);
+
   return {
     message: {
       role: "system",
       content:
         learned === undefined ? injected.text : `${learned.message.content}\n${injected.text}`,
     },
-    // 用户学习不产生方法 receipt：这一路把方法那一组**原样**带过去。用户学习自己
-    // 编出来的段没有版本身份，也不能凭空长出一条——否则模型回一个不存在的 ref
-    // 就变成了「对用户策略的反馈」，而那件事不在本包的账上。
-    receipts: learned?.receipts ?? [],
+    // A User-only slot still needs an opaque receipt: the execution owner only
+    // notifies actual fielding for a nonempty receipt set after stream_start.
+    receipts: [...(learned?.receipts ?? []), ...(injected.receipt === undefined ? [] : [injected.receipt])],
   };
 }

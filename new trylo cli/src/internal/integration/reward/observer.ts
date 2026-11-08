@@ -16,6 +16,7 @@ export function createRewardObserver(options: {
     unavailable = true;
     inbox.length = 0;
   };
+
   async function drain(): Promise<void> {
     while (inbox.length > 0 && !unavailable) {
       const item = inbox.shift()!;
@@ -26,17 +27,22 @@ export function createRewardObserver(options: {
       } catch { stop("reward_input_unavailable"); }
     }
   }
+
   return {
     capture: event => {
       if (unavailable) return;
       try {
         for (const sensor of options.sensors) {
           const items = sensor.capture(event);
-          if (inbox.length + items.length > 256) { stop("reward_inbox_capacity"); return; }
+          if (inbox.length + items.length > 256) {
+            stop("reward_inbox_capacity");
+            return;
+          }
           inbox.push(...items);
         }
       } catch { stop("reward_sensor_failed"); }
     },
+
     flush: () => {
       if (draining !== undefined) return draining;
       draining = drain().finally(() => { draining = undefined; });

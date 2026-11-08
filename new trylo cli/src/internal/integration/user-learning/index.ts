@@ -17,6 +17,11 @@
  */
 
 export { deriveUserPolicy, evidenceOf, type DerivedUserPolicy, type DeriveInput } from "./chain.js";
+export { createUserLearningPeer, type UserLearningPeer, type UserLearningPeerDeps } from "./peer.js";
+export { createUserPeerRuntimeAdapter } from "./central-runtime-adapter.js";
+export { USER_PEER_STATUS_READ_CONTRACT_VERSION, USER_PEER_STATUS_READ_CONTRACT } from "./central-status-navigation.js";
+export { readPendingUserClarification } from "./clarification.js";
+export type { UserLearningSignal, UserPeerProgress, UserLearningVersion } from "../../learning/domains/user/learning-cycle-contract.js";
 export { createFileLedgerPort, LEDGER_TAIL_RECORDS, USER_LEDGER_FILE } from "./ledger-file.js";
 export {
   createFileFactStore,
@@ -59,12 +64,15 @@ export {
   isLearningSwitch,
   LEARNING_SWITCH_ALL,
   LEARNING_SWITCH_TOOL,
+  LEARNING_SWITCH_SKILL,
   LEARNING_SWITCH_USER,
   LEARNING_SWITCH_VALUES,
   LEARNING_SWITCHES,
   methodSwitchFor,
   switchEnablesMethod,
   switchEnablesTool,
+  switchEnablesCheck,
+  switchEnablesSkill,
   switchEnablesUser,
   type LearningSwitch,
 } from "./switch.js";

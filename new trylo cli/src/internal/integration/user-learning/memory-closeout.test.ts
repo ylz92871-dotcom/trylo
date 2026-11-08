@@ -18,6 +18,7 @@ function fixture(body: (deps: UserMemoryDeps, root: string) => void): void {
       switchValue: "user", turn: { sessionId: "s", turnId: "t", userEventId: "u", userText: "我是 Alice，请记住" } }, root);
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
+
 const remember = { commandId: "save", subject: "Alice", statement: "我是 Alice", factKind: "identity_fact" as const, scopeKind: "user" as const };
 
 test("after an identity correction retrieval quotes the current statement with unambiguous mutation metadata", async () => {
@@ -27,12 +28,17 @@ test("after an identity correction retrieval quotes the current statement with u
       turn: { sessionId: "s", turnId: "t1", userEventId: "u1", userText: "我是 Alice，请记住" } };
     const saved = createUserMemoryService(deps).remember(remember);
     if (saved.result !== "saved") return assert.fail("save failed");
+
     const current = createUserMemoryService({ ...deps, turn: { ...deps.turn, turnId: "t2", userText: "我叫 Alex，请更正" } });
+
     assert.equal(current.correct({ recordId: saved.recordId, expectedVersion: 1, commandId: "edit", statement: "我叫 Alex" }).result, "saved");
     const tool = createMemoryTools(createMemoryReadPort(async () => memoryDocuments({ facts: () => current.visible() })));
     const result = await tool.execute({ toolCallId: "read", name: "memory_search", arguments: { queries: [] } }, new AbortController().signal);
+
     assert.equal(result.outcome, "result");
+
     if (result.outcome !== "result") return;
+
     assert.match(result.output, /我叫 Alex/u);
     assert.doesNotMatch(result.output, /Alice/u);
     assert.match(result.output, new RegExp(`record_id: ${saved.recordId}; expected_version: 2`));
@@ -63,10 +69,14 @@ test("a generic OK can confirm a pending proposal bound to the preceding user ev
 
 test("another profile cannot revise or retract a record even if it knows the id", () => fixture((deps) => {
   const saved = createUserMemoryService(deps).remember(remember);
+
   assert.equal(saved.result, "saved");
+
   if (saved.result !== "saved") return;
+
   const stranger = createUserMemoryService({ ...deps, userId: "bob", turn: { ...deps.turn, userText: "请更正身份为：我是 Bob；请撤回这条记忆" } });
   const update = stranger.correct({ commandId: "edit", recordId: saved.recordId, expectedVersion: 1, statement: "我是 Bob" });
+
   assert.equal(update.result, "rejected");
   assert.equal(update.result === "rejected" && update.reason, "scope_not_permitted");
   assert.equal(stranger.retract({ commandId: "remove", recordId: saved.recordId, expectedVersion: 1 }).result, "rejected");
@@ -130,12 +140,15 @@ test("the model correction tool updates the same record and retraction has a tru
       turn: { sessionId: "s", turnId: "first", userEventId: "u1", userText: "我是 Alice，请记住" } };
     const saved = createUserMemoryService(deps).remember(remember);
     if (saved.result !== "saved") return assert.fail("initial save failed");
+
     const service = createUserMemoryService({ ...deps, turn: { ...deps.turn, turnId: "second", userText: "请更正身份为我叫 Alex；请撤回这条记忆" } });
     const tools = createMemoryWriteTools(service), signal = new AbortController().signal;
     const edited = await tools.execute({ name: "memory_correct", toolCallId: "edit", arguments: { record_id: saved.recordId, expected_version: 1, statement: "我叫 Alex" } }, signal);
+
     assert.equal(edited.outcome, "result");
     assert.equal(service.visible()[0]?.version, 2);
     const removed = await tools.execute({ name: "memory_forget", toolCallId: "remove", arguments: { record_id: saved.recordId, expected_version: 2 } }, signal);
+
     assert.equal(removed.outcome, "result");
     assert.match(removed.outcome === "result" ? removed.output : "", /已撤回/u);
     assert.equal(service.visible().length, 0);
