@@ -1,10 +1,12 @@
-"""Isolation check for the new CLI tree. Does not walk open/ or trylo cli/src."""
+"""Check only CLI source/package inputs; never walk external reference checkouts."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
-OPEN_IMPORT_MARKERS = ('from "open/', "from 'open/", "open/00-protocols")
+POLICY = json.loads(Path(__file__).with_name("reference-isolation.json").read_text(encoding="utf-8"))
+OPEN_IMPORT_MARKERS = tuple(POLICY["importMarkers"])
 
 
 def find_open_imports(repo_root: Path) -> list[str]:
@@ -25,7 +27,7 @@ def find_open_deps(repo_root: Path) -> list[str]:
     if not package_path.is_file():
         return hits
     text = package_path.read_text(encoding="utf-8", errors="ignore")
-    if "open/" in text or '"open"' in text:
+    if any(marker in text for marker in POLICY["dependencyMarkers"]):
         hits.append("package.json")
     return hits
 
@@ -37,5 +39,5 @@ def check(repo_root: Path) -> dict[str, object]:
         "ok": not imports and not deps,
         "importHits": imports,
         "depHits": deps,
-        "skipped": ["open/", "trylo cli/src"],
+        "skipped": POLICY["excludedTrees"],
     }

@@ -8,24 +8,18 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 TRYLO = REPO.parent
-OUT_DIR = (
-    REPO
-    / "docs"
-    / "02-分期工程产出"
-    / "P00-工程地基与质量门禁"
-    / "evidence"
-)
+OUT_DIR = TRYLO / "_workspace" / "tasks" / "release-topology"
 ROOT_FILES = ("README.md", "package.json", "LICENSE", "LICENSE.md", "NOTICE")
 
 NODES = [
     {"id": "new-cli", "path": REPO, "gate": "P00"},
     {"id": "desktop", "path": TRYLO / "desktop", "gate": "P08"},
     {"id": "desktop-services", "path": TRYLO / "desktop-services", "gate": "P08"},
-    {"id": "work", "path": TRYLO / "work", "gate": "P08"},
-    {"id": "runtime", "path": TRYLO / "runtime", "gate": "P08"},
-    {"id": "new_tool", "path": TRYLO / "new_tool", "gate": "P08"},
+    # Retired work and the historical official runtime are local archives,
+    # not release components. Current Desktop code owns its required modules.
+    {"id": "toolchain", "path": TRYLO / "desktop-services" / "toolchain", "gate": "P08"},
     {"id": "mobile-app", "path": TRYLO / "mobile-app", "gate": "P08"},
-    {"id": "legacy-cli-root", "path": TRYLO / "trylo cli", "gate": "P08"},
+    {"id": "legacy-cli-compat", "path": TRYLO / "desktop" / "compat" / "legacy-cli", "gate": "P08"},
 ]
 
 

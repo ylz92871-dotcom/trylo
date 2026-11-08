@@ -1,0 +1,3882 @@
+{
+  "version": "CLI-PARITY-V1",
+  "date": "2026-10-04",
+  "purpose": "work-package ownership and frozen planning snapshot; not a new maturity-state writer",
+  "authoritativeCoverage": "docs/02-分期工程产出/P00-工程地基与质量门禁/evidence/2026-10-04-parity-v1/capability-coverage.json",
+  "baselineItems": 169,
+  "wiringItems": 3,
+  "constructionPackages": 26,
+  "verificationPackages": 2,
+  "prerequisiteSemantics": "released versioned interface plus real adapter and handoff evidence, not full-package acceptance",
+  "integrationSemantics": "required real consumer cross-checks; partial until wired; audited in WP27",
+  "packages": [
+    {
+      "id": "WP01",
+      "title": "耐久会话与未知动作核对",
+      "domain": "R3",
+      "file": "WP01-耐久会话与未知动作核对.md",
+      "capabilityIds": [
+        "C33",
+        "L33",
+        "L71",
+        "F01"
+      ],
+      "prerequisites": [],
+      "integrationDependencies": [
+        "WP02",
+        "WP03",
+        "WP07",
+        "WP18"
+      ],
+      "portBoundary": "Session 单 writer；ExecutionProgressPort；恢复核对命令",
+      "outcome": "在已完成的 W1 上补齐未闭合流与 unknown 核对，崩溃后能继续任务而不重复副作用",
+      "documentStatus": "已批准",
+      "constructionStatus": "partial_existing_W1",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP02",
+      "title": "会话管理-fork与配置迁移",
+      "domain": "R3",
+      "file": "WP02-会话管理-fork与配置迁移.md",
+      "capabilityIds": [
+        "C34",
+        "C39",
+        "C40",
+        "L34",
+        "L38",
+        "F03"
+      ],
+      "prerequisites": [
+        "WP01"
+      ],
+      "integrationDependencies": [
+        "WP11",
+        "WP23",
+        "WP25"
+      ],
+      "portBoundary": "Session 管理服务；恢复兼容投影；CLI 会话命令",
+      "outcome": "补齐会话选择、分叉和变更配置后的安全恢复",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP03",
+      "title": "权限规则-审批与持久账本",
+      "domain": "R10",
+      "file": "WP03-权限规则-审批与持久账本.md",
+      "capabilityIds": [
+        "C62",
+        "C65",
+        "C66",
+        "C67",
+        "L64",
+        "F02"
+      ],
+      "prerequisites": [
+        "WP01"
+      ],
+      "integrationDependencies": [
+        "WP04",
+        "WP05",
+        "WP10",
+        "WP15",
+        "WP17",
+        "WP18",
+        "WP21",
+        "WP22",
+        "WP25",
+        "WP26"
+      ],
+      "portBoundary": "现 PermissionPort/PermissionService；规则与账本机械层",
+      "outcome": "让所有执行入口消费同一权限决策和真实 grant 生命周期",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP04",
+      "title": "OS隔离与Windows沙箱",
+      "domain": "R10",
+      "file": "WP04-OS隔离与Windows沙箱.md",
+      "capabilityIds": [
+        "C63",
+        "C64",
+        "L65"
+      ],
+      "prerequisites": [
+        "WP03"
+      ],
+      "integrationDependencies": [
+        "WP05",
+        "WP06",
+        "WP10",
+        "WP25",
+        "WP26"
+      ],
+      "portBoundary": "Isolation adapter；Permission 决策输入；平台 helper",
+      "outcome": "复用真实平台隔离实现，证明路径和网络边界在 OS 层生效",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP05",
+      "title": "平台shell与普通进程",
+      "domain": "R1",
+      "file": "WP05-平台shell与普通进程.md",
+      "capabilityIds": [
+        "C06",
+        "C07",
+        "C09",
+        "L17",
+        "L19"
+      ],
+      "prerequisites": [
+        "WP01",
+        "WP03",
+        "WP04"
+      ],
+      "integrationDependencies": [
+        "WP06",
+        "WP07",
+        "WP10",
+        "WP12",
+        "WP15",
+        "WP17"
+      ],
+      "portBoundary": "ProcessPort；现 ShellSpawner 兼容 adapter",
+      "outcome": "让完整 shell 语法和非 PTY 进程在统一授权与恢复下可用",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP06",
+      "title": "PTY-长进程-stdin与后台终端",
+      "domain": "R1",
+      "file": "WP06-PTY-长进程-stdin与后台终端.md",
+      "capabilityIds": [
+        "C08",
+        "C10",
+        "C11",
+        "C12",
+        "L18"
+      ],
+      "prerequisites": [
+        "WP05"
+      ],
+      "integrationDependencies": [
+        "WP07",
+        "WP22",
+        "WP23",
+        "WP25"
+      ],
+      "portBoundary": "Process 会话 owner；PTY sidecar；stdin/resize/read 协议",
+      "outcome": "直接复用 Codex utils/pty，交付能持续交互的真实终端",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP07",
+      "title": "取消-进程树清理与输出限额",
+      "domain": "R1/R2",
+      "file": "WP07-取消-进程树清理与输出限额.md",
+      "capabilityIds": [
+        "C13",
+        "C14",
+        "C04",
+        "L04"
+      ],
+      "prerequisites": [
+        "WP05",
+        "WP06"
+      ],
+      "integrationDependencies": [
+        "WP08",
+        "WP09",
+        "WP17",
+        "WP22",
+        "WP26"
+      ],
+      "portBoundary": "现取消 token；Process owner；输出限额合同",
+      "outcome": "中断真实执行并收尽子进程，输出截断不破坏工具结果",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP08",
+      "title": "运行中输入-steer与排队",
+      "domain": "R2",
+      "file": "WP08-运行中输入-steer与排队.md",
+      "capabilityIds": [
+        "C03",
+        "C41",
+        "C82",
+        "L42"
+      ],
+      "prerequisites": [
+        "WP01",
+        "WP07"
+      ],
+      "integrationDependencies": [
+        "WP09",
+        "WP21",
+        "WP22",
+        "WP23"
+      ],
+      "portBoundary": "现 pendingInput owner；turn 输入命令；队列投影",
+      "outcome": "让运行中追加要求实际改变后续操作，并保留正确顺序",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP09",
+      "title": "上下文预算-压缩与截断恢复",
+      "domain": "R2",
+      "file": "WP09-上下文预算-压缩与截断恢复.md",
+      "capabilityIds": [
+        "C35",
+        "C36",
+        "C37",
+        "L06",
+        "L07",
+        "L35",
+        "L36"
+      ],
+      "prerequisites": [
+        "WP01",
+        "WP08"
+      ],
+      "integrationDependencies": [
+        "WP14",
+        "WP17",
+        "WP21",
+        "WP24"
+      ],
+      "portBoundary": "现 CompactionPort；上下文快照 owner；usage 输入",
+      "outcome": "直接复用成熟压缩和 token 机械层，保持任务约束与执行事实",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP10",
+      "title": "多文件patch与精确修改",
+      "domain": "R4",
+      "file": "WP10-多文件patch与精确修改.md",
+      "capabilityIds": [
+        "C15",
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "L14",
+        "L15"
+      ],
+      "prerequisites": [
+        "WP01",
+        "WP03",
+        "WP04",
+        "WP05"
+      ],
+      "integrationDependencies": [
+        "WP11",
+        "WP13",
+        "WP25"
+      ],
+      "portBoundary": "ToolPort；路径授权；file_write事实；patch helper",
+      "outcome": "直接复用 Codex apply-patch 实现，支持安全的多文件变更",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP11",
+      "title": "diff-review-checkpoint与范围回退",
+      "domain": "R4",
+      "file": "WP11-diff-review-checkpoint与范围回退.md",
+      "capabilityIds": [
+        "C20",
+        "C21",
+        "C38",
+        "C75",
+        "L37"
+      ],
+      "prerequisites": [
+        "WP02",
+        "WP10"
+      ],
+      "integrationDependencies": [
+        "WP13",
+        "WP23",
+        "WP24"
+      ],
+      "portBoundary": "Checkpoint/Review 服务；Session owner；TUI投影",
+      "outcome": "审阅真实变更，并仅回退本任务负责的范围",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP12",
+      "title": "搜索-LSP与IDE导航",
+      "domain": "R5",
+      "file": "WP12-搜索-LSP与IDE导航.md",
+      "capabilityIds": [
+        "C22",
+        "C23",
+        "C24",
+        "L09",
+        "L16",
+        "L60",
+        "L61"
+      ],
+      "prerequisites": [
+        "WP03",
+        "WP05"
+      ],
+      "integrationDependencies": [
+        "WP13",
+        "WP19",
+        "WP20",
+        "WP23"
+      ],
+      "portBoundary": "read-only ToolPort；搜索服务；LSP进程 owner",
+      "outcome": "直接复用文本/文件搜索和 LSP 子系统，证明实际项目导航",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP13",
+      "title": "PDF与Notebook读写",
+      "domain": "R5",
+      "file": "WP13-PDF与Notebook读写.md",
+      "capabilityIds": [
+        "L11",
+        "L12",
+        "L13"
+      ],
+      "prerequisites": [
+        "WP03",
+        "WP10",
+        "WP11",
+        "WP12"
+      ],
+      "integrationDependencies": [
+        "WP19",
+        "WP23"
+      ],
+      "portBoundary": "reader ToolPort；Notebook mutating adapter；file_write事实",
+      "outcome": "复用现成文档工具，保持 notebook 结构和真实页范围",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP14",
+      "title": "Skill与项目指令实际消费",
+      "domain": "R6",
+      "file": "WP14-Skill与项目指令实际消费.md",
+      "capabilityIds": [
+        "C31",
+        "C32",
+        "C51",
+        "C52",
+        "C53",
+        "L49",
+        "L50",
+        "L52",
+        "L53"
+      ],
+      "prerequisites": [
+        "WP03",
+        "WP09"
+      ],
+      "integrationDependencies": [
+        "WP16",
+        "WP17",
+        "WP22"
+      ],
+      "portBoundary": "SkillDescriptor/context；项目指令装载；现资产治理 owner",
+      "outcome": "直接复用 loader 与调用算法，让安装后的技能真正影响任务",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP15",
+      "title": "MCP传输-资源-认证与连接管理",
+      "domain": "R6",
+      "file": "WP15-MCP传输-资源-认证与连接管理.md",
+      "capabilityIds": [
+        "C46",
+        "C47",
+        "C48",
+        "C50",
+        "L56",
+        "L57",
+        "L58"
+      ],
+      "prerequisites": [
+        "WP03",
+        "WP05",
+        "WP18"
+      ],
+      "integrationDependencies": [
+        "WP16",
+        "WP17",
+        "WP22",
+        "WP25"
+      ],
+      "portBoundary": "现 McpClient；CredentialPort；资源读取；Permission owner",
+      "outcome": "复用传输和资源管理，真实 server 工具及资源可消费",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP16",
+      "title": "Plugin-动态工具与延迟搜索",
+      "domain": "R6",
+      "file": "WP16-Plugin-动态工具与延迟搜索.md",
+      "capabilityIds": [
+        "C49",
+        "C54",
+        "C55",
+        "C56",
+        "C83",
+        "L08",
+        "L54",
+        "L55",
+        "L59"
+      ],
+      "prerequisites": [
+        "WP14",
+        "WP15"
+      ],
+      "integrationDependencies": [
+        "WP22",
+        "WP23",
+        "WP25"
+      ],
+      "portBoundary": "现 catalog/ToolPort；Plugin配置；动态schema边界",
+      "outcome": "安装、搜索、注册、调用和卸载形成可复核闭环",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP17",
+      "title": "生命周期Hooks",
+      "domain": "R6",
+      "file": "WP17-生命周期Hooks.md",
+      "capabilityIds": [
+        "C57",
+        "L62",
+        "L63"
+      ],
+      "prerequisites": [
+        "WP03",
+        "WP05",
+        "WP09"
+      ],
+      "integrationDependencies": [
+        "WP14",
+        "WP15",
+        "WP22",
+        "WP26"
+      ],
+      "portBoundary": "HookInvocation/Result 边界；既有runner；Session事件",
+      "outcome": "直接复用配置匹配和执行适配，接真实生命周期并保持权限统一",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP18",
+      "title": "Provider-认证-Responses与结构化输出",
+      "domain": "R9",
+      "file": "WP18-Provider-认证-Responses与结构化输出.md",
+      "capabilityIds": [
+        "C68",
+        "C69",
+        "C70",
+        "C71",
+        "C74",
+        "L05",
+        "L67",
+        "L68",
+        "L69"
+      ],
+      "prerequisites": [
+        "WP03"
+      ],
+      "integrationDependencies": [
+        "WP09",
+        "WP15",
+        "WP19",
+        "WP20",
+        "WP22",
+        "WP24",
+        "WP26"
+      ],
+      "portBoundary": "现 ProviderPort/CredentialPort；能力协商；流事件转换",
+      "outcome": "复用成熟 provider/auth 实现并保留现有国模路径",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP19",
+      "title": "多模态-图像-语音与computer-use",
+      "domain": "R9",
+      "file": "WP19-多模态-图像-语音与computer-use.md",
+      "capabilityIds": [
+        "C25",
+        "C26",
+        "C59",
+        "C85",
+        "L10",
+        "A09",
+        "A10"
+      ],
+      "prerequisites": [
+        "WP12",
+        "WP18"
+      ],
+      "integrationDependencies": [
+        "WP13",
+        "WP21",
+        "WP23"
+      ],
+      "portBoundary": "自有内容块；媒体ToolPort；授权与设备边界",
+      "outcome": "接实际存在的媒体实现，保留缺件和实验条件的真实限制",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP20",
+      "title": "Web搜索-抓取与memory读取",
+      "domain": "R9",
+      "file": "WP20-Web搜索-抓取与memory读取.md",
+      "capabilityIds": [
+        "C58",
+        "C60",
+        "L20",
+        "L21",
+        "L51"
+      ],
+      "prerequisites": [
+        "WP12",
+        "WP18"
+      ],
+      "integrationDependencies": [
+        "WP14",
+        "WP23",
+        "WP24"
+      ],
+      "portBoundary": "只读ToolPort；内容上下文；来源与截断metadata",
+      "outcome": "复用现成搜索/抓取和记忆读取工具，提供可追溯实际内容",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP21",
+      "title": "用户问答-Plan-Task与Goal生命周期",
+      "domain": "R7",
+      "file": "WP21-用户问答-Plan-Task与Goal生命周期.md",
+      "capabilityIds": [
+        "C27",
+        "C28",
+        "C29",
+        "C30",
+        "C61",
+        "L22",
+        "L23",
+        "L24",
+        "L25"
+      ],
+      "prerequisites": [
+        "WP03",
+        "WP08",
+        "WP09"
+      ],
+      "integrationDependencies": [
+        "WP19",
+        "WP22",
+        "WP23",
+        "WP26"
+      ],
+      "portBoundary": "UserInputPort；Task/Goal状态owner；现Permission独立",
+      "outcome": "直接复用问答和任务工具，让用户回答与计划真正控制后续执行",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP22",
+      "title": "工具并行-子代理与团队",
+      "domain": "R7",
+      "file": "WP22-工具并行-子代理与团队.md",
+      "capabilityIds": [
+        "C05",
+        "C42",
+        "C43",
+        "C44",
+        "C45",
+        "L03",
+        "L26",
+        "L27",
+        "L29",
+        "L30",
+        "L31"
+      ],
+      "prerequisites": [
+        "WP02",
+        "WP06",
+        "WP07",
+        "WP08",
+        "WP18",
+        "WP21"
+      ],
+      "integrationDependencies": [
+        "WP14",
+        "WP15",
+        "WP16",
+        "WP17",
+        "WP25",
+        "WP26"
+      ],
+      "portBoundary": "现 SubagentRuntime/ToolRunnerPort；Task owner；权限唯一",
+      "outcome": "直接复用成熟并发/子代理机械层，保证隔离、消息和终态有据",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP23",
+      "title": "日用TUI输入-渲染-键位与等待原因",
+      "domain": "R8",
+      "file": "WP23-日用TUI输入-渲染-键位与等待原因.md",
+      "capabilityIds": [
+        "C01",
+        "C02",
+        "C81",
+        "L01",
+        "L02",
+        "L39",
+        "L40",
+        "L41",
+        "L43",
+        "L44",
+        "L45",
+        "L46",
+        "L47"
+      ],
+      "prerequisites": [
+        "WP06",
+        "WP08",
+        "WP11",
+        "WP12",
+        "WP19",
+        "WP21",
+        "WP22"
+      ],
+      "integrationDependencies": [
+        "WP14",
+        "WP16",
+        "WP24",
+        "WP25"
+      ],
+      "portBoundary": "既有TUI服务；Trylo协议投影；CLI命令",
+      "outcome": "直接复用成熟视图子树，覆盖真实终端日用交互",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP24",
+      "title": "Headless-诊断-输出样式与工作流入口",
+      "domain": "R8",
+      "file": "WP24-Headless-诊断-输出样式与工作流入口.md",
+      "capabilityIds": [
+        "C72",
+        "C73",
+        "C86",
+        "L48",
+        "L66",
+        "A08",
+        "A12"
+      ],
+      "prerequisites": [
+        "WP02",
+        "WP09",
+        "WP11",
+        "WP18",
+        "WP23"
+      ],
+      "integrationDependencies": [
+        "WP16",
+        "WP25",
+        "WP26"
+      ],
+      "portBoundary": "CLI入口；headless协议；现diagnostic服务",
+      "outcome": "复用可用命令与样式，机器入口和交互入口共享执行事实",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP25",
+      "title": "本地RPC-worktree与code-mode",
+      "domain": "R10",
+      "file": "WP25-本地RPC-worktree与code-mode.md",
+      "capabilityIds": [
+        "C76",
+        "C77",
+        "C79",
+        "C84",
+        "L28",
+        "L70",
+        "A02"
+      ],
+      "prerequisites": [
+        "WP02",
+        "WP03",
+        "WP04",
+        "WP06",
+        "WP10",
+        "WP16"
+      ],
+      "integrationDependencies": [
+        "WP22",
+        "WP23",
+        "WP24",
+        "WP26"
+      ],
+      "portBoundary": "Trylo协议 adapter；委托ToolRunnerPort；工作树生命周期",
+      "outcome": "复用真实本地协议/工作树/code执行，不引入第二套核心owner",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md"
+    },
+    {
+      "id": "WP26",
+      "title": "本地后台任务、调度监控与既有远程控制接线",
+      "domain": "R10",
+      "file": "WP26-远端-Cloud-daemon与定时后台任务.md",
+      "capabilityIds": [
+        "C78",
+        "C80",
+        "L32",
+        "A01",
+        "A03",
+        "A04",
+        "A05",
+        "A06",
+        "A07",
+        "A11"
+      ],
+      "prerequisites": [
+        "WP07",
+        "WP17",
+        "WP18",
+        "WP22",
+        "WP25"
+      ],
+      "integrationDependencies": [
+        "WP02",
+        "WP03",
+        "WP23",
+        "WP24"
+      ],
+      "portBoundary": "远端transport/delegate adapter；调度端口；权限与Session",
+      "outcome": "完成本地后台、长进程、日志、取消恢复、定时监控，复用已有远控；取消 Cloud/runner/模板部署及厂商私有接入。",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "construction",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md",
+      "activeCapabilityIds": [
+        "C78",
+        "L32",
+        "A01",
+        "A03",
+        "A04",
+        "A06",
+        "A07",
+        "A11"
+      ],
+      "excludedCapabilityIds": [
+        "C80",
+        "A05"
+      ]
+    },
+    {
+      "id": "WP27",
+      "title": "全量整合回归与172项复核",
+      "domain": "验收",
+      "file": "WP27-全量整合回归与172项复核.md",
+      "capabilityIds": [],
+      "prerequisites": [
+        "WP01",
+        "WP02",
+        "WP03",
+        "WP04",
+        "WP05",
+        "WP06",
+        "WP07",
+        "WP08",
+        "WP09",
+        "WP10",
+        "WP11",
+        "WP12",
+        "WP13",
+        "WP14",
+        "WP15",
+        "WP16",
+        "WP17",
+        "WP18",
+        "WP19",
+        "WP20",
+        "WP21",
+        "WP22",
+        "WP23",
+        "WP24",
+        "WP25",
+        "WP26"
+      ],
+      "integrationDependencies": [],
+      "portBoundary": "全量能力矩阵；跨包合同；独立review记录",
+      "outcome": "以172项唯一主责与实际调用链复核同一个超大版本",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "verification",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md",
+      "productScopeDecision": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md"
+    },
+    {
+      "id": "WP28",
+      "title": "固定制品-真实provider-TTY与发行验收",
+      "domain": "验收",
+      "file": "WP28-固定制品-真实provider-TTY与发行验收.md",
+      "capabilityIds": [],
+      "prerequisites": [
+        "WP27"
+      ],
+      "integrationDependencies": [],
+      "portBoundary": "固定安装制品；独立环境；真实账户与TTY",
+      "outcome": "证明用户安装得到的版本可完成真实任务并安全恢复",
+      "documentStatus": "已批准",
+      "constructionStatus": "not_accepted",
+      "role": "verification",
+      "actualRevalidationRequired": true,
+      "actualRevalidationContract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md",
+      "productScopeDecision": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md"
+    }
+  ],
+  "interfaceReadyLayers": [
+    [
+      "WP01"
+    ],
+    [
+      "WP02",
+      "WP03"
+    ],
+    [
+      "WP04",
+      "WP18"
+    ],
+    [
+      "WP05"
+    ],
+    [
+      "WP06",
+      "WP10",
+      "WP12",
+      "WP15"
+    ],
+    [
+      "WP07",
+      "WP11",
+      "WP19",
+      "WP20"
+    ],
+    [
+      "WP08",
+      "WP13"
+    ],
+    [
+      "WP09"
+    ],
+    [
+      "WP14",
+      "WP17",
+      "WP21"
+    ],
+    [
+      "WP16",
+      "WP22"
+    ],
+    [
+      "WP23",
+      "WP25"
+    ],
+    [
+      "WP24",
+      "WP26"
+    ],
+    [
+      "WP27"
+    ],
+    [
+      "WP28"
+    ]
+  ],
+  "rows": [
+    {
+      "id": "C01",
+      "name": "普通交互 Agent 入口",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "交互 Agent 与多轮执行已接线。",
+      "reuse": "沿用新版 runner/TUI；旧终端视图补呈现。",
+      "primaryWorkPackage": "WP23",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C02",
+      "name": "模型流式响应与工具继续执行",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "流式文本、reasoning、工具继续执行、usage 已有。",
+      "reuse": "沿用 openai-stream 与 loop，补其他 provider 的 wire adapter。",
+      "primaryWorkPackage": "WP23",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C03",
+      "name": "运行中补充输入/steer",
+      "sourceState": "未接全",
+      "priority": "P0",
+      "package": "R2",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "核心有队列；运行中的 TUI 没有继续读用户输入。",
+      "reuse": "取 Codex turn_input/input_queue 接到新版既有队列。",
+      "primaryWorkPackage": "WP08",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C04",
+      "name": "显式中断及工具取消",
+      "sourceState": "部分",
+      "priority": "P0",
+      "package": "R2",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "本轮取消已有；后台/PTY/子孙进程的统一取消缺口见 C12/C13。",
+      "reuse": "取 utils/pty process_group，沿用新版 cancel 合同。",
+      "primaryWorkPackage": "WP07",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C05",
+      "name": "工具并行/串行有序仲裁",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "工具 effect 顺序 await；没有按可并行能力及读写冲突调度。",
+      "reuse": "取 core/tools/parallel 的 gate/能力仲裁，接 ToolPort 批执行。",
+      "primaryWorkPackage": "WP22",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C06",
+      "name": "完整 shell 命令字符串",
+      "sourceState": "缺失",
+      "priority": "P0",
+      "package": "R1",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "run_shell 无 shell；只有结构化 steps/管道，缺完整 shell 语法。",
+      "reuse": "取 shell-command 与 shell 参数构造，执行现成系统 shell。",
+      "primaryWorkPackage": "WP05",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C07",
+      "name": "PowerShell/Bash/Zsh 等平台 shell",
+      "sourceState": "部分",
+      "priority": "P0",
+      "package": "R1",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "Windows 可启动程序，但缺用户可选 PowerShell/Bash 等完整 shell 环境。",
+      "reuse": "取 Codex shell_detect；旧 shellProvider/powershellProvider 同语言可直接搬。",
+      "primaryWorkPackage": "WP05",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C08",
+      "name": "PTY/交互程序",
+      "sourceState": "缺失",
+      "priority": "P0",
+      "package": "R1",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无 PTY；交互命令无法形成 stdin/resize/输出会话。",
+      "reuse": "直接复用 utils/pty 做 Rust helper，接新增 ProcessPort。",
+      "primaryWorkPackage": "WP06",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C09",
+      "name": "非 PTY 管道进程",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R1",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "非 PTY pipes 的普通程序执行已有。",
+      "reuse": "沿用原 spawner；与 PTY 共用进程结果合同。",
+      "primaryWorkPackage": "WP05",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C10",
+      "name": "长运行命令 yield 与 session ID",
+      "sourceState": "缺失",
+      "priority": "P0",
+      "package": "R1",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "命令最多 120 秒；无 yield 后继续运行的 session ID。",
+      "reuse": "取 unified_exec 句柄/终态逻辑和 utils/pty，新增进程会话工具。",
+      "primaryWorkPackage": "WP06",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C11",
+      "name": "write_stdin 后续交互/轮询",
+      "sourceState": "缺失",
+      "priority": "P0",
+      "package": "R1",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无 write_stdin、持续轮询、空写读输出。",
+      "reuse": "复用 unified_exec/write_stdin 及进程桥，别重新启动原命令。",
+      "primaryWorkPackage": "WP06",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C12",
+      "name": "背景终端可发现与停止",
+      "sourceState": "缺失",
+      "priority": "P0",
+      "package": "R1",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "没有后台终端列表、查看输出、按 ID 停止的用户入口。",
+      "reuse": "取 Codex /ps、/stop + process manager，接 TUI/工具目录。",
+      "primaryWorkPackage": "WP06",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C13",
+      "name": "进程组/后代清理",
+      "sourceState": "部分",
+      "priority": "P0",
+      "package": "R1",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "当前对直接 child.kill；不等价于完整后代进程清理。",
+      "reuse": "取 utils/pty/process_group 与 Windows JobObject 实现。",
+      "primaryWorkPackage": "WP07",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C14",
+      "name": "输出限额与截断事实",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R1",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "有字节/行截断和标志；无持续输出读取与同等 token 截断口径。",
+      "reuse": "取 utils/output-truncation；增量输出按 ProcessPort 消费。",
+      "primaryWorkPackage": "WP07",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C15",
+      "name": "多文件 patch",
+      "sourceState": "部分",
+      "priority": "P0",
+      "package": "R4",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "单文件 edit 有；缺一次多文件 add/update/delete/move patch。",
+      "reuse": "直接复用 Codex apply-patch 二进制或其 parser/update 最小闭包。",
+      "primaryWorkPackage": "WP10",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C16",
+      "name": "patch 新增文件",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R4",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "write_file 能新增；统一 patch 内的 AddFile 分支没有。",
+      "reuse": "复用 apply-patch AddFile，沿已有 checkpoint/权限写盘。",
+      "primaryWorkPackage": "WP10",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C17",
+      "name": "patch 删除文件",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R4",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "标准 patch 没有 DeleteFile；不能用任意命令绕行算同等 patch 能力。",
+      "reuse": "复用 apply-patch DeleteFile 与实际改动 delta。",
+      "primaryWorkPackage": "WP10",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C18",
+      "name": "patch 移动/重命名文件",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R4",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "edit 禁止 rename/move；无标准多文件移动补丁。",
+      "reuse": "复用 apply-patch move_path，审批覆盖源和目的路径。",
+      "primaryWorkPackage": "WP10",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C19",
+      "name": "patch 的部分成功/失败证据",
+      "sourceState": "缺失",
+      "priority": "P0",
+      "package": "R4",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无多文件 patch 的部分成功 delta；单文件失败不改盘是另一种合同。",
+      "reuse": "直接复用 AppliedPatchDelta/ApplyPatchFailure，映射新版事件。",
+      "primaryWorkPackage": "WP10",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C20",
+      "name": "每轮净 diff 追踪",
+      "sourceState": "缺失",
+      "priority": "P0",
+      "package": "R4",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "缺本轮所有已发生改动的净 diff 汇总。",
+      "reuse": "取 turn_diff_tracker 算法；用新版 turn ID 与实际写入事实。",
+      "primaryWorkPackage": "WP11",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C21",
+      "name": "用户 /diff（含未跟踪）",
+      "sourceState": "缺失",
+      "priority": "P0",
+      "package": "R4",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "TUI 无 /diff 或整体变更审阅。",
+      "reuse": "复用 Codex Git diff 入口及旧 StructuredDiff 组件。",
+      "primaryWorkPackage": "WP11",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C22",
+      "name": "文件提及与模糊查找",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R5",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "@文本文件已有；没有模糊选择器/交互文件搜索。",
+      "reuse": "直接构建 codex-file-search，接新版 mention/picker。",
+      "primaryWorkPackage": "WP12",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C23",
+      "name": "ignore-aware 搜索",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R5",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "新版已有局部 .gitignore、受控子树和 include/exclude。",
+      "reuse": "沿用现有导航事实；file-search 只补增量文件名查找。",
+      "primaryWorkPackage": "WP12",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C24",
+      "name": "模型本地读/grep/glob",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R5",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "新版 read/list/search/glob 已覆盖本地读与查找。",
+      "reuse": "保留现有工具；完整 shell 接入后自然使用 rg 等程序。",
+      "primaryWorkPackage": "WP12",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C25",
+      "name": "本地图片查看",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无本地图像查看工具，消息合同也只有文本。",
+      "reuse": "取 utils/image/view_image，扩展自有内容块与工具结果。",
+      "primaryWorkPackage": "WP19",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C26",
+      "name": "图片输入参数/附件",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无图片参数、附件、剪贴板图片输入链。",
+      "reuse": "复用旧图片准备或 Codex attachment/composer 状态，接多模态 provider。",
+      "primaryWorkPackage": "WP19",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C27",
+      "name": "用户 Todo/Plan 工具",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "有 todo_write 的 pending/in_progress/completed 列表。",
+      "reuse": "沿用新版 todo；持久任务和 Plan mode另见 C28/L增量。",
+      "primaryWorkPackage": "WP21",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C28",
+      "name": "Plan 模式",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "/mode 是权限模式，不能替代“先计划、再执行”的 Plan mode。",
+      "reuse": "取 Codex collaboration-mode 模板或旧 Enter/ExitPlanMode。",
+      "primaryWorkPackage": "WP21",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C29",
+      "name": "结构化向用户提问",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无专门的多选/文本向用户提问工具。",
+      "reuse": "复用 request_user_input DTO/表单；TS 优先旧 AskUserQuestion。",
+      "primaryWorkPackage": "WP21",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C30",
+      "name": "异步用户提问/消息",
+      "sourceState": "缺失",
+      "priority": "P2",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无异步提问、回答到达后继续工作的用户消息协议。",
+      "reuse": "取 Codex async 用户输入合同，接新版输入队列；按模型能力启用。",
+      "primaryWorkPackage": "WP21",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C31",
+      "name": "AGENTS.md 分层指令",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "AGENTS 祖先/局部规则、来源/hash、每轮重读与冻结已有。",
+      "reuse": "继续复用现有 project-instructions，不重建 loader。",
+      "primaryWorkPackage": "WP14",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C32",
+      "name": "指令上下文大小控制",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "项目规则和读取输出已有预算/截断。",
+      "reuse": "沿用现有预算；补齐最终请求估算见 C35。",
+      "primaryWorkPackage": "WP14",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C33",
+      "name": "会话保存与恢复",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R3",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "按 ID 的持久会话恢复、锁、尾部修复已有。",
+      "reuse": "保留新版 SessionPort；选择器/运行中崩溃见 C39/F01。",
+      "primaryWorkPackage": "WP01",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C34",
+      "name": "会话 fork",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R3",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "没有会话 fork 和父子来源记录。",
+      "reuse": "取 Codex ForkSnapshot 或旧 fork session 逻辑，接自有 session writer。",
+      "primaryWorkPackage": "WP02",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C35",
+      "name": "持续上下文与 token usage",
+      "sourceState": "部分",
+      "priority": "P0",
+      "package": "R2",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "usage 已有；上下文估算字符/4，没有完整最终请求 token 口径。",
+      "reuse": "取 context_manager/history 估算/服务端用量区分，包含工具 schema。",
+      "primaryWorkPackage": "WP09",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C36",
+      "name": "手动压缩",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R2",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "/compact 和 extractive/model 两种摘要接线已有。",
+      "reuse": "保留已有压缩服务；补任务保真与连续压缩见 C37。",
+      "primaryWorkPackage": "WP09",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C37",
+      "name": "自动压缩并继续",
+      "sourceState": "部分",
+      "priority": "P0",
+      "package": "R2",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "自动压缩接点有；单轮 gap 压缩受一次限制，默认抽取摘要。",
+      "reuse": "复用 Codex compact 历史转换/阈值机制；连续长任务可多次收缩。",
+      "primaryWorkPackage": "WP09",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C38",
+      "name": "会话回滚",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R4",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "没有按轮回退对话历史；文件 restore 是另一条能力。",
+      "reuse": "取 thread/rollback 语义，沿新版 journal 增追加回退事实。",
+      "primaryWorkPackage": "WP11",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C39",
+      "name": "会话列表/分页历史/归档",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R3",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "session list/ID resume 有；缺分页预览、搜索、选择、归档。",
+      "reuse": "复用旧会话 picker/查询层，或 Codex thread-store 查询边界。",
+      "primaryWorkPackage": "WP02",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C40",
+      "name": "会话重命名/导出",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R3",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "缺会话 rename/export 工作流。",
+      "reuse": "取 Codex transcript exporter/rename 外围，写入新版 session 元信息。",
+      "primaryWorkPackage": "WP02",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C41",
+      "name": "背景消息队列",
+      "sourceState": "未接全",
+      "priority": "P2",
+      "package": "R2",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "库有输入队列；无持久后台消息排队/CLI queue 工作流。",
+      "reuse": "取 ext/queue 的命令/状态形状，接已有队列与单 writer。",
+      "primaryWorkPackage": "WP08",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C42",
+      "name": "子代理派发",
+      "sourceState": "部分",
+      "priority": "P0",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "--subagent 有真实委派，但只有一个阻塞 delegate 工具。",
+      "reuse": "复用 multi_agents V1 控制工具，沿现有 SubagentRuntime 生命周期。",
+      "primaryWorkPackage": "WP22",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C43",
+      "name": "子代理输入/等待/恢复/关闭",
+      "sourceState": "未接全",
+      "priority": "P0",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "runtime 有 handle/wait/cancel；模型不能独立 spawn/send/wait/close/resume。",
+      "reuse": "取 Codex V1 handlers 暴露控制面，补消息/恢复合同。",
+      "primaryWorkPackage": "WP22",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C44",
+      "name": "子代理角色/模型配置",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "子任务默认同父模型；无角色、独立模型/预算/能力配置。",
+      "reuse": "直接复用旧 agent 定义/配置加载，取 Codex agent-roles 语义。",
+      "primaryWorkPackage": "WP22",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C45",
+      "name": "V2 团队消息/后续任务/中断/列表",
+      "sourceState": "缺失",
+      "priority": "P2",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无多代理列表、互发消息、后续任务和中断控制。",
+      "reuse": "复用 Codex V2 agent graph/handlers 或旧 Team/SendMessage 模块。",
+      "primaryWorkPackage": "WP22",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C46",
+      "name": "MCP stdio 与 HTTP",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "MCP stdio、HTTP/SSE 注册、tools/list/call/cancel 已接线。",
+      "reuse": "保留现有 McpClientPort；增加协议面见 C47–C50。",
+      "primaryWorkPackage": "WP15",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C47",
+      "name": "MCP OAuth/凭据管理",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "通用 provider OAuth 不是 MCP HTTP server 的 OAuth 登录/登出。",
+      "reuse": "直接复用 rmcp-client MCP OAuth/凭据 adapter。",
+      "primaryWorkPackage": "WP15",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C48",
+      "name": "MCP resources/templates/read",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "缺 MCP resources/templates/read；当前只挂工具。",
+      "reuse": "复用 mcp_resource handlers/rmcp transport，增加资源工具。",
+      "primaryWorkPackage": "WP15",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C49",
+      "name": "MCP tool 安全策略/暴露",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "有描述清洗、审批与工具名边界；缺细粒度暴露和 deferred 策略。",
+      "reuse": "复用 Codex MCP exposure/discovery；转为自有 ToolBinding。",
+      "primaryWorkPackage": "WP16",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C50",
+      "name": "MCP 状态/刷新/elicitation",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "有配置清单和每轮重新打开；无同等 TUI status/refresh/elicitation。",
+      "reuse": "复用 rmcp client 与状态/刷新 UI；保留现有取消和超时合同。",
+      "primaryWorkPackage": "WP15",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C51",
+      "name": "Skills 元信息加载/校验",
+      "sourceState": "缺失",
+      "priority": "P0",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "没有用户 SKILL.md 的加载、元数据、校验和选用链。",
+      "reuse": "直接复用 codex-skills parser/loading/selection；TS可取旧 SkillTool。",
+      "primaryWorkPackage": "WP14",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C52",
+      "name": "Skills host/executor/orchestrator 来源",
+      "sourceState": "缺失",
+      "priority": "P2",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无 host/executor/orchestrator 多来源 Skill provider。",
+      "reuse": "取 skills provider 接口与渐进加载，将来源转换为 Trylo DTO。",
+      "primaryWorkPackage": "WP14",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C53",
+      "name": "Skills search/依赖获取",
+      "sourceState": "缺失",
+      "priority": "P2",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无 Skill 搜索/依赖发现/安装消费链。",
+      "reuse": "复用 ext/skills 与 mcp_skill_dependencies 的外围流程。",
+      "primaryWorkPackage": "WP14",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C54",
+      "name": "Plugins/marketplace 安装/移除",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无 Plugin bundle、marketplace、安装/卸载和实际消费。",
+      "reuse": "直接复用旧 plugins manager/commands；Codex plugins 格式作兼容。",
+      "primaryWorkPackage": "WP16",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C55",
+      "name": "Apps/connector 工具",
+      "sourceState": "部分",
+      "priority": "P2",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "MCP 可接外部服务；无原生 connector 账户/发现/状态工作流。",
+      "reuse": "复用 Codex Apps client/MCP bridge，接 Trylo 自己的账号服务。",
+      "primaryWorkPackage": "WP16",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C56",
+      "name": "模型可搜索的延迟工具",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "全部工具 schema 进入目录；无按需 tool_search/deferred 加载。",
+      "reuse": "取 Codex discovery/schema 或旧 MCP tool search，按模型能力接入。",
+      "primaryWorkPackage": "WP16",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C57",
+      "name": "生命周期 Hooks",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "方法学习的 hook 标签不是用户配置的生命周期 Hooks。",
+      "reuse": "直接复用旧 hooks 执行器/配置；或 Codex hooks crate 窄进程桥。",
+      "primaryWorkPackage": "WP17",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C58",
+      "name": "缓存/实时网络搜索",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "web_fetch 只抓给定 URL，不提供 cached/live web search 与引用。",
+      "reuse": "复用 Codex hosted search；支持上游搜索工具的 Anthropic/Vertex/Foundry 路径直接取旧 WebSearch；其他兼容端点接真实搜索服务 adapter。",
+      "primaryWorkPackage": "WP20",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C59",
+      "name": "生成图片",
+      "sourceState": "缺失",
+      "priority": "P2",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无图像生成工具和输出素材链。",
+      "reuse": "取 ext/image-generation 服务 adapter，接有能力的实际图像服务。",
+      "primaryWorkPackage": "WP19",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C60",
+      "name": "memory检索与上下文",
+      "sourceState": "部分",
+      "priority": "P2",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "新版学习/知识代码已有；没有同等可选择的独立 memory 读取/工具面。",
+      "reuse": "仅复用 Codex memories 的检索/上下文叶子，保留 Trylo 学习所有权。",
+      "primaryWorkPackage": "WP20",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C61",
+      "name": "持续 Goal/预算与生命周期",
+      "sourceState": "部分",
+      "priority": "P2",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "有单轮预算；无持续 Goal 工具、跨轮目标和预算生命周期。",
+      "reuse": "取 ext/goal 状态/预算模块，映射自有任务事实；与学习分开。",
+      "primaryWorkPackage": "WP21",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C62",
+      "name": "权限方案与用户审批",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "交互审批、会话 allow/deny/revoke 和共享权限事实已有。",
+      "reuse": "继续用 Permission Service；补细粒度规则和自动复核见 C66/C67。",
+      "primaryWorkPackage": "WP03",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C63",
+      "name": "OS sandbox 真实执行",
+      "sourceState": "缺失",
+      "priority": "P0",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "当前是计划/路径检查；没有 OS 文件系统/网络沙箱执行。",
+      "reuse": "优先核查旧CLI已安装sandbox-runtime 0.0.73与预编译Windows helper的最小闭包，接Trylo真实执行端口；Codex隔离保留候选，实际文件/网络边界仍须实机证明。",
+      "primaryWorkPackage": "WP04",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ],
+      "reuseRouteCorrection": {
+        "date": "2026-10-04",
+        "adr": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-04-ADR-WP04-Windows复用来源更正.md",
+        "sourceEvidence": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/evidence/2026-10-04-wp04-route-correction/source-evidence.json",
+        "sourceStateUnchanged": true,
+        "deliveryUnchanged": true
+      }
+    },
+    {
+      "id": "C64",
+      "name": "Windows沙箱安装/就绪",
+      "sourceState": "缺失",
+      "priority": "P0",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "没有 Windows OS sandbox 安装、就绪与故障诊断链。",
+      "reuse": "优先复用现成srt-win.exe与Windows install/status/ACL机械层，固定版本/hash/制品路径；status可跑不等于installed/ready，Codex setup作为候选。",
+      "primaryWorkPackage": "WP04",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ],
+      "reuseRouteCorrection": {
+        "date": "2026-10-04",
+        "adr": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-04-ADR-WP04-Windows复用来源更正.md",
+        "sourceEvidence": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/evidence/2026-10-04-wp04-route-correction/source-evidence.json",
+        "sourceStateUnchanged": true,
+        "deliveryUnchanged": true
+      }
+    },
+    {
+      "id": "C65",
+      "name": "审批缓存及沙箱拒绝后重试",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "批准缓存已有；无 OS sandbox 拒绝后同一请求升级/重试闭环。",
+      "reuse": "取 Codex orchestrator 的状态语义，真实授权仍由新版权限服务裁决。",
+      "primaryWorkPackage": "WP03",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C66",
+      "name": "命令执行策略与规则",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "规则多以工具名为单位；无同等命令前缀/exec policy evaluator。",
+      "reuse": "直接复用 execpolicy parser/evaluator，输入自有审批事实。",
+      "primaryWorkPackage": "WP03",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C67",
+      "name": "自动审批复核（guardian）",
+      "sourceState": "缺失",
+      "priority": "P2",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无配置化自动审批复核 reviewer；学习不能代替它。",
+      "reuse": "取 Codex guardian adapter；接独立审批策略与错误合同。",
+      "primaryWorkPackage": "WP03",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C68",
+      "name": "Provider自定义与本地模型",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "自定义 Chat Completions 端点有；缺 Responses 和相应本地/native 路径。",
+      "reuse": "新增 Codex Responses adapter；保留现有国模路径，旧 provider 工具可补。",
+      "primaryWorkPackage": "WP18",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C69",
+      "name": "认证/登录/退出",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "API key、多账户、PKCE/refresh 已有；官方订阅/device 登录未证明。",
+      "reuse": "直接复用 Codex login/device/auth/secure store 的完整账户接线。",
+      "primaryWorkPackage": "WP18",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C70",
+      "name": "模型目录/能力驱动工具",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "模型声明/选择菜单有；能力集仅 streaming/reasoning/tools/cancellation。",
+      "reuse": "复用 model catalog/capability DTO：输入模态、窗口、reasoning effort、工具类型。",
+      "primaryWorkPackage": "WP18",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C71",
+      "name": "响应重试/连接恢复",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "发流前有界重试和401 refresh已有；缺 Responses/WS 及连接降级。",
+      "reuse": "取 codex-api/client 传输模块，保持明确 before/after stream 语义。",
+      "primaryWorkPackage": "WP18",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C72",
+      "name": "headless exec",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "headless run、stdin 文本、预算、退出码已有。",
+      "reuse": "保留现有 run 入口；增加子命令时复用 Codex/旧命令外围。",
+      "primaryWorkPackage": "WP24",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C73",
+      "name": "JSONL machine输出",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "stream-json 实时机器输出与 run_result 已有。",
+      "reuse": "继续投影 Trylo Protocol，不创建第二种核心事件。",
+      "primaryWorkPackage": "WP24",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C74",
+      "name": "结构化最终输出/最后消息文件",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "output-last-message 有；无 schema 约束的结构化最终输出。",
+      "reuse": "复用 Codex exec output_schema 接线；ProviderRequest 增 response schema。",
+      "primaryWorkPackage": "WP18",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C75",
+      "name": "exec恢复/fork与review",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R4",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "已有按 ID 的 headless resume；没有专门 review target/base/commit/uncommitted 和 exec fork 工作流。",
+      "reuse": "直接取 Codex exec resume/fork 外围、review prompts/target resolver；复用旧 review/PR 命令外围。",
+      "primaryWorkPackage": "WP11",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C76",
+      "name": "app-server RPC服务与SDK schema",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "Desktop 单轮 stdio 审批已有；不是完整 thread/turn/config API 服务。",
+      "reuse": "复用 app-server 的 schema/client/双向RPC机械层，映射 Trylo 服务。",
+      "primaryWorkPackage": "WP25",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C77",
+      "name": "命令/文件等外部客户端RPC",
+      "sourceState": "部分",
+      "priority": "P2",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "文件/命令工具已有；客户端 RPC 缺 watch、command session/resize 等。",
+      "reuse": "复用 exec-server/file-system sidecar 与新版过程/文件端口连接。",
+      "primaryWorkPackage": "WP25",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C78",
+      "name": "remote app-server/exec-server",
+      "sourceState": "缺失",
+      "priority": "P3",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无远端 app-server/exec-server/remote-control 产品路径。",
+      "reuse": "只核对已有远控需要的 adapter，不建设独立 exec-server 执行平台。 当前施工按 D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md；不因范围更新提升成熟度。",
+      "primaryWorkPackage": "WP26",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ],
+      "productScope": {
+        "state": "limited_to_existing_remote_control",
+        "reason": "只核对已有远控需要的 adapter，不建设独立 exec-server 执行平台。",
+        "decision": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md"
+      }
+    },
+    {
+      "id": "C79",
+      "name": "worktree会话",
+      "sourceState": "缺失",
+      "priority": "P2",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "没有 worktree 会话管理和隔离执行工作流。",
+      "reuse": "取 Codex worktree/git-utils；TS优先旧 Enter/ExitWorktree。",
+      "primaryWorkPackage": "WP25",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C80",
+      "name": "Cloud任务和diff apply",
+      "sourceState": "缺失",
+      "priority": "P3",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无 Cloud task 管理/状态/diff apply。",
+      "reuse": "用户取消 Cloud 任务平台；本地 diff 修改/审阅能力仍归 WP10/WP11。 当前施工按 D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md；不因范围更新提升成熟度。",
+      "primaryWorkPackage": "WP26",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ],
+      "productScope": {
+        "state": "excluded_by_user",
+        "reason": "用户取消 Cloud 任务平台；本地 diff 修改/审阅能力仍归 WP10/WP11。",
+        "decision": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md"
+      }
+    },
+    {
+      "id": "C81",
+      "name": "多行、粘贴保护、历史与外部编辑器",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "有多行、历史、补全、@文本；缺同等粘贴保护、外部编辑器和附件。",
+      "reuse": "直接搬旧 composer/输入子树；或复用 Codex Composer 状态机。",
+      "primaryWorkPackage": "WP23",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C82",
+      "name": "Composer运行中排队与草稿恢复",
+      "sourceState": "未接全",
+      "priority": "P0",
+      "package": "R2",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "TUI 运行中 queue/steer/草稿恢复未贯通。",
+      "reuse": "复用 input_queue/draft，与 C03 同一输入所有者交付。",
+      "primaryWorkPackage": "WP08",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C83",
+      "name": "动态工具由客户端提供",
+      "sourceState": "缺失",
+      "priority": "P2",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无客户端动态工具声明/调用响应的 app-server 模式。",
+      "reuse": "复用 dynamic_tools DTO/机械层，映射自有 ToolPort。",
+      "primaryWorkPackage": "WP16",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C84",
+      "name": "code-mode工具编排",
+      "sourceState": "缺失",
+      "priority": "P3",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无 code-mode 的代码化工具编排/等待协议。",
+      "reuse": "复用 Codex code_mode sidecar；按该快照开发开关单独交付。",
+      "primaryWorkPackage": "WP25",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C85",
+      "name": "实时语音",
+      "sourceState": "缺失",
+      "priority": "P3",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无语音输入/实时对话及对应内容协议。",
+      "reuse": "直接复用 voice-host/realtime 客户端；接真实服务与设备入口。",
+      "primaryWorkPackage": "WP19",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "C86",
+      "name": "安装健康诊断/自动补全/升级",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "doctor 和三种 shell completion 已有；缺完整升级/渠道/包交付。",
+      "reuse": "复用 cli doctor/completion/update 外围；发布清单排除测试与fixture。",
+      "primaryWorkPackage": "WP24",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L01",
+      "name": "连续模型—工具—结果—模型循环（共用 C01）",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "交互 Agent 与多轮执行已接线。",
+      "reuse": "沿用新版 runner/TUI；旧终端视图补呈现。",
+      "primaryWorkPackage": "WP23",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L02",
+      "name": "流式文本、工具参数及思考块（共用 C02）",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "流式文本、reasoning、工具继续执行、usage 已有。",
+      "reuse": "沿用 openai-stream 与 loop，补其他 provider 的 wire adapter。",
+      "primaryWorkPackage": "WP23",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L03",
+      "name": "并行安全工具与串行写操作调度（共用 C05）",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "工具 effect 顺序 await；没有按可并行能力及读写冲突调度。",
+      "reuse": "取 core/tools/parallel 的 gate/能力仲裁，接 ToolPort 批执行。",
+      "primaryWorkPackage": "WP22",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L04",
+      "name": "取消与中断后工具结果配对（共用 C04）",
+      "sourceState": "部分",
+      "priority": "P0",
+      "package": "R2",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "本轮取消已有；后台/PTY/子孙进程的统一取消缺口见 C12/C13。",
+      "reuse": "取 utils/pty process_group，沿用新版 cancel 合同。",
+      "primaryWorkPackage": "WP07",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L05",
+      "name": "API 错误重试、退避及模型 fallback",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "有重试/401刷新，无可配置fallback模型。",
+      "reuse": "取services/api/withRetry与fallback resolver。",
+      "primaryWorkPackage": "WP18",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L06",
+      "name": "context 太长、媒体过大、输出截断恢复",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R2",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "自动压缩有；媒体过大/context拒绝/截断恢复不完整。",
+      "reuse": "取query分类恢复分支及compact helpers。",
+      "primaryWorkPackage": "WP09",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L07",
+      "name": "轮数、token、金额及 usage/cost 约束",
+      "sourceState": "部分",
+      "priority": "P2",
+      "package": "R2",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "迭代/token预算有；美元价格/金额预算无。",
+      "reuse": "取旧cost/预算计量，provider给价格。",
+      "primaryWorkPackage": "WP09",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L08",
+      "name": "工具 allow/deny、按需显露与合并 MCP（共用 C49）",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "有描述清洗、审批与工具名边界；缺细粒度暴露和 deferred 策略。",
+      "reuse": "复用 Codex MCP exposure/discovery；转为自有 ToolBinding。",
+      "primaryWorkPackage": "WP16",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L09",
+      "name": "读取文本，按 offset/limit 读取（共用 C24）",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R5",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "新版 read/list/search/glob 已覆盖本地读与查找。",
+      "reuse": "保留现有工具；完整 shell 接入后自然使用 rg 等程序。",
+      "primaryWorkPackage": "WP12",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L10",
+      "name": "图像文件读取与图像 payload（共用 C25）",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无本地图像查看工具，消息合同也只有文本。",
+      "reuse": "取 utils/image/view_image，扩展自有内容块与工具结果。",
+      "primaryWorkPackage": "WP19",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L11",
+      "name": "PDF 文件与页范围读取",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R5",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "没有PDF页范围/图像读取链。",
+      "reuse": "取FileReadTool PDF分支与页提取辅助。",
+      "primaryWorkPackage": "WP13",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L12",
+      "name": "Notebook 读取",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R5",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "没有Notebook cell-aware读取。",
+      "reuse": "取FileReadTool Notebook分支+utils/notebook。",
+      "primaryWorkPackage": "WP13",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L13",
+      "name": "Notebook 插入/替换/删除 cell",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R5",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "没有Notebook cell插入/替换/删除。",
+      "reuse": "搬NotebookEditTool+utils/notebook。",
+      "primaryWorkPackage": "WP13",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L14",
+      "name": "精确编辑、replace_all、外部修改检测",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R4",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "diff已有；无old_string/replace_all及等价外部修改检查。",
+      "reuse": "取FileEditTool匹配/替换/读版本校验。",
+      "primaryWorkPackage": "WP10",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L15",
+      "name": "写文件/新文件、编辑 diff 与快照",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R4",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "write/新增文件/写前快照已有；编辑差异预览与统一diff呈现待补。",
+      "reuse": "保留新写工具/checkpoint，直接搬旧FileEditToolDiff/StructuredDiff视图。",
+      "primaryWorkPackage": "WP10",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L16",
+      "name": "Glob 文件匹配与 Grep 内容检索",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R5",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "regex/glob/ignore有；规模仍受walker限额。",
+      "reuse": "取GrepTool/utils/ripgrep，注入rg程序路径。",
+      "primaryWorkPackage": "WP12",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L17",
+      "name": "shell 命令、超时、进度与输出（共用 C06）",
+      "sourceState": "缺失",
+      "priority": "P0",
+      "package": "R1",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "run_shell 无 shell；只有结构化 steps/管道，缺完整 shell 语法。",
+      "reuse": "取 shell-command 与 shell 参数构造，执行现成系统 shell。",
+      "primaryWorkPackage": "WP05",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L18",
+      "name": "后台命令、输出查询与停止（共用 C10）",
+      "sourceState": "缺失",
+      "priority": "P0",
+      "package": "R1",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "命令最多 120 秒；无 yield 后继续运行的 session ID。",
+      "reuse": "取 unified_exec 句柄/终态逻辑和 utils/pty，新增进程会话工具。",
+      "primaryWorkPackage": "WP06",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L19",
+      "name": "Windows PowerShell 专用工具（共用 C07）",
+      "sourceState": "部分",
+      "priority": "P0",
+      "package": "R1",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "Windows 可启动程序，但缺用户可选 PowerShell/Bash 等完整 shell 环境。",
+      "reuse": "取 Codex shell_detect；旧 shellProvider/powershellProvider 同语言可直接搬。",
+      "primaryWorkPackage": "WP05",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L20",
+      "name": "URL 抓取、网页内容处理",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "URL文本fetch有；缺网页prompt处理/缓存/二进制材料引用。",
+      "reuse": "取WebFetchTool内容处理、缓存及材料引用。",
+      "primaryWorkPackage": "WP20",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L21",
+      "name": "网页搜索（共用 C58）",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "web_fetch 只抓给定 URL，不提供 cached/live web search 与引用。",
+      "reuse": "复用 Codex hosted search/扩展 adapter；非 Responses 服务走旧 WebSearch 实现。",
+      "primaryWorkPackage": "WP20",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L22",
+      "name": "模型主动多选问用户（共用 C29）",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无专门的多选/文本向用户提问工具。",
+      "reuse": "复用 request_user_input DTO/表单；TS 优先旧 AskUserQuestion。",
+      "primaryWorkPackage": "WP21",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L23",
+      "name": "Todo 列表（共用 C27）",
+      "sourceState": "已有",
+      "priority": "—",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "有 todo_write 的 pending/in_progress/completed 列表。",
+      "reuse": "沿用新版 todo；持久任务和 Plan mode另见 C28/L增量。",
+      "primaryWorkPackage": "WP21",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L24",
+      "name": "Task 创建、读取、更新、列举与依赖/认领",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "todo不是持久Task CRUD；缺依赖/认领/锁。",
+      "reuse": "搬utils/tasks+TaskCreate/Get/Update/List，store根注入。",
+      "primaryWorkPackage": "WP21",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L25",
+      "name": "进入计划与退出计划审批（共用 C28）",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "/mode 是权限模式，不能替代“先计划、再执行”的 Plan mode。",
+      "reuse": "取 Codex collaboration-mode 模板或旧 Enter/ExitPlanMode。",
+      "primaryWorkPackage": "WP21",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L26",
+      "name": "同步/后台子 agent、模型继承/覆盖（共用 C42）",
+      "sourceState": "部分",
+      "priority": "P0",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "--subagent 有真实委派，但只有一个阻塞 delegate 工具。",
+      "reuse": "复用 multi_agents V1 控制工具，沿现有 SubagentRuntime 生命周期。",
+      "primaryWorkPackage": "WP22",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L27",
+      "name": "自定义 agent 文件、tools/model/MCP/skills/权限配置（共用 C44）",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "子任务默认同父模型；无角色、独立模型/预算/能力配置。",
+      "reuse": "直接复用旧 agent 定义/配置加载，取 Codex agent-roles 语义。",
+      "primaryWorkPackage": "WP22",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L28",
+      "name": "子 agent 的 worktree 隔离",
+      "sourceState": "缺失",
+      "priority": "P2",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "子代理没有worktree隔离。",
+      "reuse": "取AgentTool worktree分支与旧Git helpers。",
+      "primaryWorkPackage": "WP25",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L29",
+      "name": "fork 子 agent 继承整个父对话",
+      "sourceState": "缺失",
+      "priority": "P2",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无fork子代理继承父对话快照。",
+      "reuse": "取forkSubagent，接自有session来源记录。",
+      "primaryWorkPackage": "WP22",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L30",
+      "name": "TeamCreate/Delete、SendMessage、队友协作（共用 C45）",
+      "sourceState": "缺失",
+      "priority": "P2",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无多代理列表、互发消息、后续任务和中断控制。",
+      "reuse": "复用 Codex V2 agent graph/handlers 或旧 Team/SendMessage 模块。",
+      "primaryWorkPackage": "WP22",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L31",
+      "name": "Trylo 工作团队席位、member_id、职责/工具约束",
+      "sourceState": "缺失",
+      "priority": "P2",
+      "package": "R7",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无Trylo席位/member_id/职责工具约束。",
+      "reuse": "搬team-roster/seat resolver/冻结身份DTO。",
+      "primaryWorkPackage": "WP22",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L32",
+      "name": "managed-work 持久后台委派",
+      "sourceState": "缺失",
+      "priority": "P2",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [
+        "src/internal/adapters/worker/claim.ts",
+        "src/internal/ports/background-queue.ts",
+        "src/internal/adapters/queue-store/file-queue.test.ts"
+      ],
+      "gap": "无workd持久后台委派及回执。",
+      "reuse": "保留必要本地持久委派与回执，不新增云后端或第二 Agent 总管。 当前施工按 D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md；不因范围更新提升成熟度。",
+      "currentState": "本地持久委派沿既有执行体系；交接失败经 requeue 补回队尾（保 id/保到达时间、同写锁、已在队内幂等），unknown 不自动重做；不建 Cloud 后端",
+      "primaryWorkPackage": "WP26",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ],
+      "productScope": {
+        "state": "retained_local_background",
+        "reason": "保留必要本地持久委派与回执，不新增云后端或第二 Agent 总管。",
+        "decision": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md"
+      }
+    },
+    {
+      "id": "L33",
+      "name": "主会话历史 JSONL、agent sidechain 与元数据",
+      "sourceState": "部分",
+      "priority": "P0",
+      "package": "R3",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "有轮末保存；缺运行中耐久写与agent sidechain。",
+      "reuse": "取sessionStorage追加写机械层，沿唯一journal writer。",
+      "primaryWorkPackage": "WP01",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L34",
+      "name": "最近会话继续、ID/搜索选择恢复、会话 fork、按消息截取",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R3",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "按ID resume/list有；--last/搜索选择/fork/按消息截取没有。",
+      "reuse": "取旧resume picker/continue/fork外壳，复用新版SessionPort。",
+      "primaryWorkPackage": "WP02",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L35",
+      "name": "手动压缩与自动压缩（共用 C37）",
+      "sourceState": "部分",
+      "priority": "P0",
+      "package": "R2",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "自动压缩接点有；单轮 gap 压缩受一次限制，默认抽取摘要。",
+      "reuse": "复用 Codex compact 历史转换/阈值机制；连续长任务可多次收缩。",
+      "primaryWorkPackage": "WP09",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L36",
+      "name": "工具结果 microcompact；压缩边界恢复",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R2",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无tool-result microcompact/缓存编辑链。",
+      "reuse": "取services/compact的microcompact helpers。",
+      "primaryWorkPackage": "WP09",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L37",
+      "name": "文件 checkpoint、diff、rewind",
+      "sourceState": "部分",
+      "priority": "P0",
+      "package": "R4",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "写前checkpoint与独立restore有；TUI diff/rewind/对话回退未成闭环。",
+      "reuse": "取旧fileHistory的diff/restore与rewind视图；继续自有快照writer。",
+      "primaryWorkPackage": "WP11",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L38",
+      "name": "rename/tag/export/copy/diff/context/cost/status",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R3",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "status/usage/details有；tag/copy/export/diff/context/cost菜单不全。",
+      "reuse": "搬必要command handler/菜单，调用新版services。",
+      "primaryWorkPackage": "WP02",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L39",
+      "name": "全交互 TTY：草稿/光标/多行输入与长粘贴（共用 C81）",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "有多行、历史、补全、@文本；缺同等粘贴保护、外部编辑器和附件。",
+      "reuse": "直接搬旧 composer/输入子树；或复用 Codex Composer 状态机。",
+      "primaryWorkPackage": "WP23",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L40",
+      "name": "上下历史与历史搜索",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "readline上下历史有；无同等历史搜索/picker。",
+      "reuse": "搬useArrowKeyHistory/useHistorySearch。",
+      "primaryWorkPackage": "WP23",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L41",
+      "name": "文件 @、IDE 选区 @、图像粘贴",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "@文本有；IDE选区/图像粘贴缺失。",
+      "reuse": "搬paste/@准备模块及IDE MCP transport。",
+      "primaryWorkPackage": "WP23",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L42",
+      "name": "运行中提交额外消息/排队（共用 C03）",
+      "sourceState": "未接全",
+      "priority": "P0",
+      "package": "R2",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "核心有队列；运行中的 TUI 没有继续读用户输入。",
+      "reuse": "取 Codex turn_input/input_queue 接到新版既有队列。",
+      "primaryWorkPackage": "WP08",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L43",
+      "name": "Markdown、表格、代码块、工具 diff",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "frame/theme/details有；缺同等Markdown表格/代码块/diff组件链。",
+      "reuse": "搬Markdown/MarkdownTable/StructuredDiff小视图闭包。",
+      "primaryWorkPackage": "WP23",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L44",
+      "name": "审批/提问/elicitation 队列与可见等待原因",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "审批展示与暂停重绘有；提问/elicitation/后台等待队列缺口。",
+      "reuse": "搬旧问答/elicitation队列和视图。",
+      "primaryWorkPackage": "WP23",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L45",
+      "name": "Vim 输入模式",
+      "sourceState": "缺失",
+      "priority": "P2",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无Vim输入。",
+      "reuse": "搬VimTextInput+src/vim状态机。",
+      "primaryWorkPackage": "WP23",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L46",
+      "name": "默认快捷键与自定义 keybindings",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "基本键位有；无产品键表/自定义JSON/热加载。",
+      "reuse": "取keybindings parser/resolver/defaultBindings/watcher。",
+      "primaryWorkPackage": "WP23",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L47",
+      "name": "theme/terminal setup/statusline/config/model/effort",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "theme/模型/状态行有；terminal setup/statusline/effort不全。",
+      "reuse": "搬旧commands/菜单；补自有effort字段。",
+      "primaryWorkPackage": "WP23",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L48",
+      "name": "Output styles：用户/项目 Markdown 风格 prompt",
+      "sourceState": "缺失",
+      "priority": "P2",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无Output styles发现/选择。",
+      "reuse": "搬outputStyles loader/frontmatter parser。",
+      "primaryWorkPackage": "WP24",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L49",
+      "name": "user/project/local/managed settings 与额外目录",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "分层配置有；local/managed/settings sources/add-dir不全。",
+      "reuse": "取旧settings source/权限目录解析。",
+      "primaryWorkPackage": "WP14",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L50",
+      "name": "项目指令 CLAUDE.md、rules、路径作用域及导入",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "AGENTS/CLAUDE/GEMINI文件发现已有；缺旧rules的paths过滤与import完整兼容。",
+      "reuse": "只取claudemd import/path-scope规则解析，复用现有发现/冻结链。",
+      "primaryWorkPackage": "WP14",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L51",
+      "name": "本地 memory 与自动 memory 读取",
+      "sourceState": "部分",
+      "priority": "P2",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "学习/知识代码有；memory维护/读取入口不等价。",
+      "reuse": "取memory/context读写叶子，接现有学习/隐私所有者。",
+      "primaryWorkPackage": "WP20",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L52",
+      "name": "Skills：发现、slash、模型调用与 frontmatter（共用 C51）",
+      "sourceState": "缺失",
+      "priority": "P0",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "没有用户 SKILL.md 的加载、元数据、校验和选用链。",
+      "reuse": "直接复用 codex-skills parser/loading/selection；TS可取旧 SkillTool。",
+      "primaryWorkPackage": "WP14",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L53",
+      "name": "Skills 限 tools/model/paths、fork execution、局部 hooks",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无完整Skill tools/model/paths/fork/hooks语义。",
+      "reuse": "搬loadSkillsDir/SkillTool/registerSkillHooks。",
+      "primaryWorkPackage": "WP14",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L54",
+      "name": "Plugins/marketplace 安装、卸载、启停、更新、inline plugin-dir（共用 C54）",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无 Plugin bundle、marketplace、安装/卸载和实际消费。",
+      "reuse": "直接复用旧 plugins manager/commands；Codex plugins 格式作兼容。",
+      "primaryWorkPackage": "WP16",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L55",
+      "name": "Plugin 贡献 commands/skills/agents/output styles",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "Plugin不能贡献command/skill/agent/style。",
+      "reuse": "搬旧plugin loader聚合，接各注册端口。",
+      "primaryWorkPackage": "WP16",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L56",
+      "name": "MCP 配置 CRUD、strict config、导入 desktop、serve",
+      "sourceState": "部分",
+      "priority": "P2",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "MCP CRUD有；strict配置/desktop导入/serve无。",
+      "reuse": "搬旧MCP配置/导入/serve handlers。",
+      "primaryWorkPackage": "WP15",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L57",
+      "name": "MCP stdio/SSE/Streamable HTTP/WebSocket/IDE 连接",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "stdio/HTTP/SSE有；WebSocket/IDE transport缺。",
+      "reuse": "搬services/mcp/client对应transport。",
+      "primaryWorkPackage": "WP15",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L58",
+      "name": "MCP OAuth/资源/prompts/elicitation/连接管理",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "已有连接管理、list/call/cancel；MCP prompts/resources/OAuth/elicitation 用户链未接全。",
+      "reuse": "搬 MCPConnectionManager/auth/elicitationHandler/prompt loader，接现有 MCP 客户端。",
+      "primaryWorkPackage": "WP15",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L59",
+      "name": "deferred tool 搜索、减少工具描述上下文（共用 C56）",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "全部工具 schema 进入目录；无按需 tool_search/deferred 加载。",
+      "reuse": "取 Codex discovery/schema 或旧 MCP tool search，按模型能力接入。",
+      "primaryWorkPackage": "WP16",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L60",
+      "name": "LSP 定义、引用、hover、符号、实现、调用图",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R5",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无LSP定义/引用/hover/符号/实现/调用图。",
+      "reuse": "搬LSPTool+LSPClient/ServerInstance/ServerManager。",
+      "primaryWorkPackage": "WP12",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L61",
+      "name": "IDE 自动连接、选区与 IDE 日志",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R5",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无真实IDE自动连接/选区/IDE日志链。",
+      "reuse": "搬IDE MCP transport与selection UI。",
+      "primaryWorkPackage": "WP12",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L62",
+      "name": "生命周期 hooks：tool/permission/stop/prompt/session/compact/subagent/task（共用 C57）",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "方法学习的 hook 标签不是用户配置的生命周期 Hooks。",
+      "reuse": "直接复用旧 hooks 执行器/配置；或 Codex hooks crate 窄进程桥。",
+      "primaryWorkPackage": "WP17",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L63",
+      "name": "hooks 执行器：command/prompt/agent/HTTP；file-change/CWD/指令载入/worktree",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R6",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无command/prompt/agent/HTTP hook runners。",
+      "reuse": "取hooks执行器/schema/matcher，沿新版权限端口。",
+      "primaryWorkPackage": "WP17",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L64",
+      "name": "权限模式、工具/路径/命令规则及拒权过滤（共用 C66）",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "规则多以工具名为单位；无同等命令前缀/exec policy evaluator。",
+      "reuse": "直接复用 execpolicy parser/evaluator，输入自有审批事实。",
+      "primaryWorkPackage": "WP03",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L65",
+      "name": "OS sandbox 文件/网络边界与命令包装（共用 C63）",
+      "sourceState": "缺失",
+      "priority": "P0",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "当前是计划/路径检查；没有 OS 文件系统/网络沙箱执行。",
+      "reuse": "当前旧CLI runtime已有Windows二进制与隔离机械层；优先薄桥接线，保持权限唯一owner，文件/网络完整性逐项验收，不能凭adapter旧注释排除Windows。",
+      "primaryWorkPackage": "WP04",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ],
+      "reuseRouteCorrection": {
+        "date": "2026-10-04",
+        "adr": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-04-ADR-WP04-Windows复用来源更正.md",
+        "sourceEvidence": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/evidence/2026-10-04-wp04-route-correction/source-evidence.json",
+        "sourceStateUnchanged": true,
+        "deliveryUnchanged": true
+      }
+    },
+    {
+      "id": "L66",
+      "name": "非交互文本/JSON/流 JSON、双向流输入及 partial chunks",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "stream-json有；无同等多消息双向stream输入。",
+      "reuse": "取print双向流/partial adapter，接既有队列。",
+      "primaryWorkPackage": "WP24",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L67",
+      "name": "JSON schema 约束输出、系统 prompt 替换/追加（结构化输出共用 C74）",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "output-last-message 有；无 schema 约束的结构化最终输出，也缺系统 prompt replace/append 的用户入口。",
+      "reuse": "复用 Codex exec output_schema 接线，ProviderRequest 增 response schema；搬旧 prompt 拼装及 CLI flags，保留新版项目规则冻结。",
+      "primaryWorkPackage": "WP18",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L68",
+      "name": "Anthropic 原生与兼容 endpoint、Bedrock/Vertex/Foundry",
+      "sourceState": "缺失",
+      "priority": "P1",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "真实provider仅Chat Completions家族。",
+      "reuse": "搬services/api/client/claude及Anthropic/Bedrock/Vertex/Foundry adapters。",
+      "primaryWorkPackage": "WP18",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L69",
+      "name": "OAuth/API Key 登录/状态/注销与 doctor/update",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "API key/多账户/PKCE/doctor已有；订阅device登录与发布渠道update未闭合。",
+      "reuse": "取旧/Codexauth与update外围，连接Trylo自身账户/交付渠道。",
+      "primaryWorkPackage": "WP18",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L70",
+      "name": "git worktree 开始/退出与 tmux 启动（共用 C79）",
+      "sourceState": "缺失",
+      "priority": "P2",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "没有 worktree 会话管理和隔离执行工作流。",
+      "reuse": "取 Codex worktree/git-utils；TS优先旧 Enter/ExitWorktree。",
+      "primaryWorkPackage": "WP25",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "L71",
+      "name": "Trylo loop JSONL 可观测事件与子 agent 收据",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R3",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "规范事件有；旧宿主loop词汇/子代理收据不全兼容。",
+      "reuse": "取loopEvents vocabulary/订阅，外围转Trylo Protocol。",
+      "primaryWorkPackage": "WP01",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "A01",
+      "name": "remote-control / bridge",
+      "sourceState": "缺失",
+      "priority": "P3",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无remote-control/bridge。",
+      "reuse": "复用已有 Trylo 远程控制，不重建系统；厂商私有 bridge 接入已取消。 当前施工按 D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md；不因范围更新提升成熟度。",
+      "primaryWorkPackage": "WP26",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ],
+      "productScope": {
+        "state": "retained_existing_system",
+        "reason": "复用已有 Trylo 远程控制，不重建系统；厂商私有 bridge 接入已取消。",
+        "excludedSubcapabilities": [
+          "claude.ai private bridge service integration"
+        ],
+        "decision": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md"
+      }
+    },
+    {
+      "id": "A02",
+      "name": "session server / cc:// direct connect",
+      "sourceState": "缺失",
+      "priority": "P3",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无session server/direct connect。",
+      "reuse": "取旧server/remote机械层，接自有session。",
+      "primaryWorkPackage": "WP25",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "A03",
+      "name": "SSH remote CLI",
+      "sourceState": "缺失",
+      "priority": "P3",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无SSH部署/远端CLI/凭据隧道。",
+      "reuse": "只核对已有远控实际需要的接点，不建设 SSH 部署平台或默认索要主机。 当前施工按 D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md；不因范围更新提升成熟度。",
+      "primaryWorkPackage": "WP26",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ],
+      "productScope": {
+        "state": "limited_to_existing_remote_control",
+        "reason": "只核对已有远控实际需要的接点，不建设 SSH 部署平台或默认索要主机。",
+        "decision": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md"
+      }
+    },
+    {
+      "id": "A04",
+      "name": "daemon / worker /后台会话 ps/logs/attach/kill",
+      "sourceState": "基线缺件",
+      "priority": "P3",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [
+        "src/internal/surface/cli/commands-bg.ts",
+        "src/internal/surface/cli/family-entries.ts",
+        "src/internal/surface/cli/commands-bg.test.ts"
+      ],
+      "gap": "旧daemon/background入口引用缺目录，不能计旧默认可用。",
+      "reuse": "保留本地后台任务、长进程、日志、取消与恢复；沿用既有执行体系。 当前施工按 D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md；不因范围更新提升成熟度。",
+      "currentState": "本地后台 ps/logs/attach/kill 经 durable job 表跨进程可达；pid 以 verifyIdentity 确认（unverifiable 拒绝 signal，gone 标 lost 不伪造 exit）；attach 为 watch-only（不发 stdin/resize、不转移 owner）；bg 自身四动词与 watch 五动词分属两族，不混记",
+      "primaryWorkPackage": "WP26",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ],
+      "productScope": {
+        "state": "required",
+        "reason": "保留本地后台任务、长进程、日志、取消与恢复；沿用既有执行体系。",
+        "decision": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md"
+      }
+    },
+    {
+      "id": "A05",
+      "name": "BYOC/self-hosted runner / template jobs",
+      "sourceState": "基线缺件",
+      "priority": "P3",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "BYOC/self-hosted/template runner有缺件或外部服务条件。",
+      "reuse": "用户取消 BYOC/self-hosted runner、执行节点管理与模板部署；本地后台 worker 保留。 当前施工按 D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md；不因范围更新提升成熟度。",
+      "primaryWorkPackage": "WP26",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ],
+      "productScope": {
+        "state": "excluded_by_user",
+        "reason": "用户取消 BYOC/self-hosted runner、执行节点管理与模板部署；本地后台 worker 保留。",
+        "decision": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md"
+      }
+    },
+    {
+      "id": "A06",
+      "name": "CronCreate/Delete/List、remote trigger",
+      "sourceState": "缺失",
+      "priority": "P2",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [
+        "src/internal/surface/cli/family-entries.ts",
+        "src/internal/surface/cli/commands-schedule.ts",
+        "src/internal/surface/cli/family-entries.test.ts"
+      ],
+      "gap": "无Cron CRUD/remote trigger。",
+      "reuse": "保留定时执行、唤醒、去重和恢复；共用既有队列与执行 owner。 当前施工按 D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md；不因范围更新提升成熟度。",
+      "currentState": "schedule 经 family 委派（根只认词，args 交家族解析）；occurrence 生命周期含 cancelled 终态（ports/schedule.ts:152），未派发即停按 cancelled 结算不伪造 attempt 结果；unknown 为一等终态不自动重做；firing 经既有 background queue，不另起 runner；单 writer 串行",
+      "primaryWorkPackage": "WP26",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ],
+      "productScope": {
+        "state": "required",
+        "reason": "保留定时执行、唤醒、去重和恢复；共用既有队列与执行 owner。",
+        "decision": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md"
+      }
+    },
+    {
+      "id": "A07",
+      "name": "sleep/proactive/monitor/brief、push、PR订阅",
+      "sourceState": "缺失",
+      "priority": "P3",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [
+        "src/internal/domain/watch.ts",
+        "src/internal/ports/watch.ts",
+        "src/internal/adapters/watch/file-watch-store.ts",
+        "src/internal/adapters/watch/node-probe.ts",
+        "src/internal/surface/cli/commands-watch.ts",
+        "src/internal/surface/cli/args-watch.ts",
+        "src/internal/surface/cli/command-vocabulary.ts"
+      ],
+      "gap": "无sleep/proactive monitor/brief/push/PR订阅。",
+      "reuse": "保留 sleep、条件监控与通用已授权接点；取消厂商私有服务。 当前施工按 D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md；不因范围更新提升成熟度。",
+      "primaryWorkPackage": "WP26",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ],
+      "productScope": {
+        "state": "required_with_exclusions",
+        "reason": "保留 sleep、条件监控与通用已授权接点；取消厂商私有服务。",
+        "excludedSubcapabilities": [
+          "Kairos private service integration"
+        ],
+        "decision": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md"
+      },
+      "currentState": "条件监控经 watch 五动词（add/list/cancel/check/forget，command-vocabulary.ts:72 为唯一词表）接生产路由；WatchState 三态 armed/fired/cancelled，cancelled 为终态（domain/watch.ts:54/215，取消不伪造 fire）；occurrence 按 watch_<id>@<fireAtMs> 派生去重，每 occurrence 只触发一次；poller 经 runStep 接 daemon tick；不接 Kairos 私有服务"
+    },
+    {
+      "id": "A08",
+      "name": "Workflow scripts、终端捕获、context inspect/snip",
+      "sourceState": "缺失",
+      "priority": "P3",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "无Workflow scripts/terminal capture/context inspect-snip。",
+      "reuse": "取旧对应tools/commands，接进程/context边界。",
+      "primaryWorkPackage": "WP24",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "A09",
+      "name": "WebBrowser/computer-use/Chrome集成",
+      "sourceState": "基线缺件",
+      "priority": "P3",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "旧browser/computer-use部分构建为空数组；新版也无完整链。",
+      "reuse": "仅复用非空transport/Chrome集成；空工具部分明确补实现。",
+      "primaryWorkPackage": "WP19",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "A10",
+      "name": "voice mode、assistant/Kairos、ultraplan",
+      "sourceState": "部分",
+      "priority": "P3",
+      "package": "R9",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "语音见C85；assistant/Kairos/ultraplan部分为stub。",
+      "reuse": "取非空voice/assistant或Codex voice-host；stub不报完成。",
+      "primaryWorkPackage": "WP19",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "A11",
+      "name": "内部 REPL、Tungsten、plan verifier、background PR",
+      "sourceState": "基线缺件",
+      "priority": "P3",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "内部gate、background PR缺文件及monitor stub。",
+      "reuse": "保留通用代码执行/验证/后台操作；取消内部专用服务。 当前施工按 D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md；不因范围更新提升成熟度。",
+      "primaryWorkPackage": "WP26",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ],
+      "productScope": {
+        "state": "required_with_exclusions",
+        "reason": "保留通用代码执行/验证/后台操作；取消内部专用服务。",
+        "excludedSubcapabilities": [
+          "Tungsten private service integration"
+        ],
+        "decision": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md"
+      }
+    },
+    {
+      "id": "A12",
+      "name": "remote managed settings / snapshot chooser",
+      "sourceState": "基线缺件",
+      "priority": "P3",
+      "package": "R8",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "remote managed settings/security/snapshot chooser有固定结果/空UI。",
+      "reuse": "取DTO/client，接真实管理服务/选择器，不能搬固定成功。",
+      "primaryWorkPackage": "WP24",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "F01",
+      "name": "运行中耐久记录",
+      "sourceState": "未接全",
+      "priority": "P0",
+      "package": "R3",
+      "delivery": "mock_verified",
+      "evidence": [
+        "independent-review.md",
+        "engineering-final.txt",
+        "windows-process-crash-probe.json",
+        "wire-freeze.json"
+      ],
+      "gap": "CLI 在 runTurn 完成后成批写会话；进程中途崩溃时本轮事实可能不在盘上。",
+      "reuse": "直接复用旧sessionStorage或Codex rollout增量追加机械层；接新版唯一journal writer，先写issued再执行。",
+      "currentState": "W1闭合事实与真实工具动作耐久接点已接通；平台fixture中断场景通过",
+      "remaining": "未闭合delta逐token留存、人工reconciliation、固定安装制品和真实provider验收未交付",
+      "reuseDecision": "直接复用现NDJSON机械层，通过窄ExecutionProgressPort接唯一Session writer；未引入第二套rollout",
+      "primaryWorkPackage": "WP01",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "F02",
+      "name": "持久权限账本消费",
+      "sourceState": "未接全",
+      "priority": "P1",
+      "package": "R10",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "持久Permission账本只有构造/就绪读取，未成为普通执行的完整grant消费链。",
+      "reuse": "复用旧规则持久化/读取机械层，接新版既有grant cache/PermissionService；一个权限owner。",
+      "currentReuseConstraint": "tooling单次file ledger与临时session grant cache寿命不同，先补scope/lifetime合同，不直接互当授权",
+      "primaryWorkPackage": "WP03",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    },
+    {
+      "id": "F03",
+      "name": "恢复时配置迁移",
+      "sourceState": "部分",
+      "priority": "P1",
+      "package": "R3",
+      "delivery": "contracted",
+      "evidence": [],
+      "gap": "resume要求workspace/provider/model/catalog匹配；改模型/工具后不能一般地接旧会话。",
+      "reuse": "取旧/Codex恢复override/兼容投影做外围迁移；写明确迁移事实，保留旧记录。",
+      "primaryWorkPackage": "WP02",
+      "verificationPackages": [
+        "WP27",
+        "WP28"
+      ]
+    }
+  ],
+  "actualRevalidationRequirement": {
+    "required": true,
+    "decisionDate": "2026-10-04",
+    "contract": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-实际复核与路线确认.md",
+    "evidenceTemplate": "D:/CC/trylo/new trylo cli/docs/01-分期施工总技术文档与架构/CLI-PARITY-V1-分包/00-单包施工交接模板.md",
+    "statusMeaning": "requirement only; no package is marked actually verified by this documentation update",
+    "approvedScopeAndOwnersUnchanged": true
+  },
+  "productScopeDecision": {
+    "date": "2026-10-07",
+    "status": "approved_by_user",
+    "document": "D:/CC/trylo/new trylo cli/docs/02-分期工程产出/P00-工程地基与质量门禁/2026-10-07-ADR-WP26范围收缩与本地后台能力保留.md",
+    "baselineRegistryItems": 172,
+    "activeCapabilityIds": 170,
+    "excludedCapabilityIds": [
+      "C80",
+      "A05"
+    ],
+    "acceptance": "Verify approved subcapabilities; exclusions are not PASS or outstanding resource debt."
+  }
+}

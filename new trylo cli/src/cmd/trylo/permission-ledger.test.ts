@@ -43,12 +43,14 @@ function fixture(): Fixture {
   const root = mkdtempSync(join(os.tmpdir(), "trylo-ledger-"));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
+
   mkdirSync(workspace, { recursive: true });
   mkdirSync(home, { recursive: true });
   writeFileSync(
     join(workspace, "package.json"),
     JSON.stringify({ name: "@trylo/fixture-workspace" }, null, 2),
   );
+
   return {
     workspace,
     home,
@@ -60,6 +62,7 @@ function fixture(): Fixture {
 
 function run(fx: Fixture, args: readonly string[]): RunResult {
   const env: NodeJS.ProcessEnv = { ...process.env, TRYLO_HOME: fx.home };
+
   delete env.TRYLO_API_KEY;
   const result = spawnSync(process.execPath, [cli, ...args], {
     cwd: fx.workspace,
@@ -67,6 +70,7 @@ function run(fx: Fixture, args: readonly string[]): RunResult {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
+
   return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
 }
 
@@ -85,6 +89,7 @@ test("the switch is off by default: no ledger directory is created, and a corrup
     // 如果接线在默认路径上读了这本账，这次运行就会失败。
     plantCorruptLedger(fx);
     const result = run(fx, ["run", "--provider", "fixture", "answer in one line"]);
+
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /@trylo\/fixture-workspace/);
     assert.equal(result.stderr.includes("ledger"), false, result.stderr);
@@ -109,6 +114,7 @@ test("with the switch on, an unreadable ledger refuses the run instead of passin
   try {
     plantCorruptLedger(fx);
     const result = run(fx, ["run", "--provider", "fixture", "--permission-ledger", "answer"]);
+
     // 52 = config：账本的位置来自配置，它的不可用是运行前就必须挡住的前提失败。
     assert.equal(result.status, 52, result.stderr);
     assert.match(result.stderr, /durable permission ledger is unusable/);

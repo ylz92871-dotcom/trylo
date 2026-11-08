@@ -89,12 +89,14 @@ function startProvider(pageUrl: string): Promise<Endpoint> {
   const requests: CapturedRequest[] = [];
   const server: Server = createServer((req, res) => {
     let body = "";
+
     req.setEncoding("utf8");
     req.on("data", (chunk: string) => {
       body += chunk;
     });
     req.on("end", () => {
       let toolNames: ReadonlyArray<string> = [];
+
       try {
         const parsed = JSON.parse(body) as {
           tools?: ReadonlyArray<{ readonly function?: { readonly name?: string } }>;
@@ -104,14 +106,17 @@ function startProvider(pageUrl: string): Promise<Endpoint> {
         // An unparsable body is recorded as an empty request; the assertions
         // then fail on the missing tool name rather than on a crash here.
       }
+
       requests.push({ toolNames });
       sse(res, requests.length === 1 ? fetchFrames(pageUrl) : stopFrames("understood"));
     });
   });
+
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
       const port = typeof address === "object" && address !== null ? address.port : 0;
+
       resolve({
         url: `http://127.0.0.1:${port}/v1/chat/completions`,
         requests,
@@ -137,10 +142,12 @@ function startPage(): Promise<PageServer> {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     res.end(PAGE_HTML);
   });
+
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
       const port = typeof address === "object" && address !== null ? address.port : 0;
+
       resolve({
         url: `http://127.0.0.1:${port}/page`,
         hits: () => hits,
@@ -163,9 +170,11 @@ function fixture(prefix: string): Fixture {
   const root = mkdtempSync(join(os.tmpdir(), prefix));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
+
   mkdirSync(workspace, { recursive: true });
   mkdirSync(home, { recursive: true });
   writeFileSync(join(workspace, "package.json"), JSON.stringify({ name: "web-mount-fixture" }), "utf8");
+
   return { workspace, home, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
@@ -197,6 +206,7 @@ function run(fx: Fixture, endpoint: string, args: readonly string[]): Promise<Ru
     "--format",
     "stream-json",
   ];
+
   return new Promise((resolve) => {
     const child = spawn(process.execPath, argv, {
       cwd: fx.workspace,
@@ -205,6 +215,7 @@ function run(fx: Fixture, endpoint: string, args: readonly string[]): Promise<Ru
     });
     let stdout = "";
     let stderr = "";
+
     child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString("utf8");
     });
@@ -227,9 +238,11 @@ type JournalRecord = { readonly type?: string; readonly payload?: Record<string,
  */
 function journalRecords(homeDir: string): ReadonlyArray<JournalRecord> {
   const sessionsDir = join(homeDir, "sessions");
+
   if (!readdirSync(homeDir).includes("sessions")) {
     return [];
   }
+
   const records: JournalRecord[] = [];
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir)) {
@@ -238,11 +251,13 @@ function journalRecords(homeDir: string): ReadonlyArray<JournalRecord> {
         walk(full);
         continue;
       }
+
       for (const line of readFileSync(full, "utf8").split("\n")) {
         const text = line.trim();
         if (text.length === 0) {
           continue;
         }
+
         const parsed = JSON.parse(text) as { record?: JournalRecord };
         if (parsed.record !== undefined) {
           records.push(parsed.record);
@@ -250,7 +265,9 @@ function journalRecords(homeDir: string): ReadonlyArray<JournalRecord> {
       }
     }
   };
+
   walk(sessionsDir);
+
   return records;
 }
 
@@ -266,6 +283,7 @@ test("with --allow-web and an approval, web_fetch is in the catalog and really f
   const fx = fixture("trylo-web-on-");
   const page = await startPage();
   const endpoint = await startProvider(page.url);
+
   try {
     const result = await run(fx, endpoint.url, [
       "run",
@@ -276,11 +294,13 @@ test("with --allow-web and an approval, web_fetch is in the catalog and really f
       "--session",
       "ses-web-on",
     ]);
+
     assert.equal(result.status, 0, result.stderr);
 
     // The mount is a fact in the request body, not an inference from exit 0.
     assert.ok(endpoint.requests.length >= 1, "the mock provider was never called");
     const first = endpoint.requests[0]!;
+
     assert.ok(
       first.toolNames.includes("web_fetch"),
       `tool table must carry web_fetch, got: ${first.toolNames.join(", ")}`,
@@ -288,6 +308,7 @@ test("with --allow-web and an approval, web_fetch is in the catalog and really f
 
     assert.equal(page.hits(), 1, "the page must be fetched exactly once");
     const outputs = toolResultOutputs(journalRecords(fx.home));
+
     assert.equal(outputs.length, 1, "exactly one tool_result in the journal");
     assert.ok(outputs[0]!.includes(PAGE_MARK), `journal echo was: ${outputs[0]}`);
     // Stripped, not shipped raw: the markup and the script never traveled.
@@ -304,6 +325,7 @@ test("with --allow-web but no approval, a non-interactive run denies the fetch b
   const fx = fixture("trylo-web-unapproved-");
   const page = await startPage();
   const endpoint = await startProvider(page.url);
+
   try {
     const result = await run(fx, endpoint.url, [
       "run",
@@ -312,11 +334,13 @@ test("with --allow-web but no approval, a non-interactive run denies the fetch b
       "--session",
       "ses-web-unapproved",
     ]);
+
     // 非交互默认 `ask=never`：审批门直接拒 —— 拒绝让运行失败，这正是
     // 「external 的闸是人而不是旗标」的形状（与 write_file 被拒同一合同）。
     assert.equal(result.status, 1, result.stderr);
 
     const first = endpoint.requests[0]!;
+
     assert.ok(first.toolNames.includes("web_fetch"), "the tool is mounted by the flag alone");
     assert.match(result.stdout, /permission_denied|"denied"/);
     assert.equal(page.hits(), 0, "a denied call must not reach the network");
@@ -331,6 +355,7 @@ test("without --allow-web, web_fetch is not in the catalog and the page is never
   const fx = fixture("trylo-web-off-");
   const page = await startPage();
   const endpoint = await startProvider(page.url);
+
   try {
     const result = await run(fx, endpoint.url, [
       "run",
@@ -338,9 +363,11 @@ test("without --allow-web, web_fetch is not in the catalog and the page is never
       "--session",
       "ses-web-off",
     ]);
+
     assert.equal(result.status, 0, result.stderr);
 
     const first = endpoint.requests[0]!;
+
     assert.equal(
       first.toolNames.includes("web_fetch"),
       false,
@@ -350,6 +377,7 @@ test("without --allow-web, web_fetch is not in the catalog and the page is never
     // The hallucinated call meets the same `unknown_tool` refusal any unplanned
     // name meets — R1: a flag-off run behaves as if web never existed.
     const outputs = toolResultOutputs(journalRecords(fx.home));
+
     assert.equal(outputs.length, 1);
     assert.match(outputs[0]!, /unknown_tool|web_fetch/);
   } finally {

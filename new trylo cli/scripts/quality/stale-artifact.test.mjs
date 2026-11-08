@@ -13,6 +13,7 @@ test("deleted source tests are not selected even if old dist js remains", () => 
   const root = mkdtempSync(join(tmpdir(), "trylo-stale-"));
   const srcRoot = join(root, "src");
   const distRoot = join(root, "dist");
+
   mkdirSync(join(srcRoot, "internal", "protocol"), { recursive: true });
   mkdirSync(join(distRoot, "internal", "protocol"), { recursive: true });
   writeFileSync(join(srcRoot, "internal", "protocol", "live.test.ts"), "export {}\n");
@@ -21,11 +22,13 @@ test("deleted source tests are not selected even if old dist js remains", () => 
   writeFileSync(join(distRoot, "internal", "protocol", "test.js"), "export {}\n");
 
   const runnable = discoverRunnableTests(srcRoot, distRoot);
+
   assert.equal(runnable.length, 1);
   assert.equal(runnable[0]?.srcFile.endsWith("live.test.ts"), true);
 
   const distTests = listDistTestFiles(distRoot);
   const stale = distTests.filter((file) => isStaleDistTest(file, srcRoot, distRoot));
+
   assert.equal(
     stale.some((file) => file.endsWith("ghost.test.js")),
     true,

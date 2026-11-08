@@ -5,7 +5,9 @@ import { createProcessContext } from "./main.js";
 for (const terminal of [false, true]) {
   test(`root lends the keyboard interface only when stdin is a terminal (${terminal})`, () => {
     const original = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+
     Object.defineProperty(process.stdin, "isTTY", { value: terminal, configurable: true });
+
     try {
       const ctx = createProcessContext();
       if (terminal) {

@@ -41,12 +41,14 @@ function fixture(): Fixture {
   const root = mkdtempSync(join(os.tmpdir(), "trylo-subagent-flag-"));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
+
   mkdirSync(workspace, { recursive: true });
   mkdirSync(home, { recursive: true });
   writeFileSync(
     join(workspace, "package.json"),
     JSON.stringify({ name: "@trylo/fixture-workspace" }, null, 2),
   );
+
   return {
     workspace,
     home,
@@ -56,6 +58,7 @@ function fixture(): Fixture {
 
 function run(fx: Fixture, args: readonly string[]): RunResult {
   const env: NodeJS.ProcessEnv = { ...process.env, TRYLO_HOME: fx.home };
+
   delete env.TRYLO_API_KEY;
   const result = spawnSync(process.execPath, [cli, ...args], {
     cwd: fx.workspace,
@@ -63,6 +66,7 @@ function run(fx: Fixture, args: readonly string[]): RunResult {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
+
   return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
 }
 
@@ -70,8 +74,10 @@ test("--subagent mounts the runtime without changing a run that never calls it",
   const fx = fixture();
   try {
     const plain = run(fx, ["run", "--provider", "fixture", "answer in one line"]);
+
     assert.equal(plain.status, 0, plain.stderr);
     const withFlag = run(fx, ["run", "--provider", "fixture", "--subagent", "answer in one line"]);
+
     assert.equal(withFlag.status, 0, withFlag.stderr);
     assert.match(withFlag.stdout, /@trylo\/fixture-workspace/);
     // The fixture script calls read_file, not delegate_subagent: the answer

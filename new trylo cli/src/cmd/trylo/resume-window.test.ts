@@ -91,40 +91,49 @@ function startEndpoint(): Promise<Endpoint> {
   let hitsInPhase = 0;
   const server: Server = createServer((req, res) => {
     let body = "";
+
     req.setEncoding("utf8");
     req.on("data", (chunk: string) => {
       body += chunk;
     });
     req.on("end", () => {
       let messages: Captured["messages"] = [];
+
       try {
         const parsed = JSON.parse(body) as { messages?: Captured["messages"] };
         messages = parsed.messages ?? [];
       } catch {
         messages = [];
       }
+
       requests.push({ messages });
       hitsInPhase += 1;
+
       // The first stream of a tool-then-stop run asks for a tool; the gap after
       // it is where compaction happens. Every later stream just stops.
       if (phase === "tool-then-stop" && hitsInPhase === 1) {
         sse(res, toolCallFrames());
         return;
       }
+
       sse(res, STOP_FRAMES);
     });
   });
+
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
       const port = typeof address === "object" && address !== null ? address.port : 0;
+
       resolve({
         url: `http://127.0.0.1:${port}/v1/chat/completions`,
         requests,
+
         setPhase: (next) => {
           phase = next;
           hitsInPhase = 0;
         },
+
         close: () =>
           new Promise<void>((done) => {
             server.close(() => done());
@@ -150,15 +159,18 @@ function journalRows(root: string): ReadonlyArray<Row> {
         walk(full);
         continue;
       }
+
       for (const line of readFileSync(full, "utf8").split("\n")) {
         const text = line.trim();
         if (text.length === 0) {
           continue;
         }
+
         const parsed = JSON.parse(text) as {
           sequence: number;
           record: { type: string; payload: Record<string, unknown> };
         };
+
         rows.push({
           sequence: parsed.sequence,
           type: parsed.record.type,
@@ -167,7 +179,9 @@ function journalRows(root: string): ReadonlyArray<Row> {
       }
     }
   };
+
   walk(root);
+
   return rows.sort((left, right) => left.sequence - right.sequence);
 }
 
@@ -181,6 +195,7 @@ function fixture(): Fixture {
   const root = mkdtempSync(join(os.tmpdir(), "trylo-resume-"));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
+
   mkdirSync(workspace, { recursive: true });
   mkdirSync(home, { recursive: true });
   mkdirSync(join(workspace, ".trylo"), { recursive: true });
@@ -195,6 +210,7 @@ function fixture(): Fixture {
     }),
     "utf8",
   );
+
   return { workspace, home, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
@@ -225,6 +241,7 @@ function run(fx: Fixture, endpoint: string, args: readonly string[]): Promise<Ru
     "stream-json",
     "--tools=read_file",
   ];
+
   return new Promise((resolve) => {
     const child = spawn(process.execPath, argv, {
       cwd: fx.workspace,
@@ -233,6 +250,7 @@ function run(fx: Fixture, endpoint: string, args: readonly string[]): Promise<Ru
     });
     let stdout = "";
     let stderr = "";
+
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
@@ -248,9 +266,11 @@ function run(fx: Fixture, endpoint: string, args: readonly string[]): Promise<Ru
 test("反方 #26 — a resumed run sends the stored window, not the replayed transcript", async () => {
   const endpoint = await startEndpoint();
   const fx = fixture();
+
   try {
     endpoint.setPhase("tool-then-stop");
     const first = await run(fx, endpoint.url, ["run", LONG_TEXT, "--session", "resume-1"]);
+
     assert.equal(first.status, 0, `${first.stderr}\n${first.stdout}`);
     // The gap compacted. The CLI stream does not project `compact` — it is a
     // journal fact, not a surface event — so the evidence is read off the
@@ -258,6 +278,7 @@ test("反方 #26 — a resumed run sends the stored window, not the replayed tra
     const rows = journalRows(fx.home);
     const items = rows.filter((row) => row.type === "transcript_item");
     const window = rows.find((row) => row.type === "compact")?.payload;
+
     assert.notEqual(window, undefined);
     assert.equal(items.length >= 4, true);
 
@@ -271,13 +292,16 @@ test("反方 #26 — a resumed run sends the stored window, not the replayed tra
     assert.equal(items[0]?.sequence, 2);
 
     const before = endpoint.requests.length;
+
     assert.equal(before >= 2, true);
 
     endpoint.setPhase("stop-only");
     const second = await run(fx, endpoint.url, ["run", "again", "--resume", "resume-1"]);
+
     assert.equal(second.status, 0, `${second.stderr}\n${second.stdout}`);
 
     const resumed = endpoint.requests.slice(before);
+
     assert.equal(resumed.length, 1, "a resumed turn rebuilds one request");
     const messages = resumed[0]?.messages ?? [];
 
@@ -287,6 +311,7 @@ test("反方 #26 — a resumed run sends the stored window, not the replayed tra
     assert.deepEqual(messages.filter(message => message.role !== "system").map(message => message.role), ["user", "assistant", "user"]);
     assert.equal(messages.some(message => message.role === "user" && message.content === LONG_TEXT), true);
     const system = messages.filter(message => message.role === "system");
+
     assert.equal(system.filter(message => message.content.startsWith("You are Trylo, a coding agent")).length, 1);
     assert.equal(system.filter(message => message.content.includes("Available tools this run")).length, 1);
     assert.equal(system.filter(message => message.content.includes("workspace root:")).length, 1);

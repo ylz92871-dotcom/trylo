@@ -16,12 +16,14 @@ const names = new Set(
 );
 
 let failed = false;
+
 for (const name of required) {
   if (!names.has(name)) {
     console.error(`missing ${name}`);
     failed = true;
     continue;
   }
+
   const expectPass = name.endsWith(".PASS");
   const expectFail = name.endsWith(".FAIL");
   if (expectPass === expectFail) {
@@ -29,6 +31,7 @@ for (const name of required) {
     failed = true;
     continue;
   }
+
   console.log(`OK ${name} assert=${expectPass ? "PASS" : "FAIL"}`);
 }
 

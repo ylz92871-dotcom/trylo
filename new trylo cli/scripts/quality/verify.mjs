@@ -11,6 +11,7 @@ import {
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runStaticScans } from "./static-scans.mjs";
+import { hasReferenceDependency, hasReferenceImport } from "./reference-isolation.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const win = process.platform === "win32";
@@ -53,6 +54,7 @@ function runCmd(command, args, options = {}) {
     shell: win && isNpm,
     ...options,
   });
+
   return {
     code: result.status === null ? 1 : result.status,
     stdout: result.stdout ?? "",
@@ -65,23 +67,29 @@ function walkFiles(dir, acc = []) {
   if (!dir || !existsSync(dir)) {
     return acc;
   }
+
   let entries;
+
   try {
     entries = readdirSync(dir, { withFileTypes: true });
   } catch {
     return acc;
   }
+
   for (const entry of entries) {
     if (skipDirs.has(entry.name)) {
       continue;
     }
+
     const full = join(dir, entry.name);
+
     if (entry.isDirectory()) {
       walkFiles(full, acc);
     } else if (entry.isFile()) {
       acc.push(full);
     }
   }
+
   return acc;
 }
 
@@ -96,6 +104,7 @@ function step0_repositoryBaseline() {
   if (!existsSync(pkgPath)) {
     issues.push("missing package.json");
   }
+
   if (!existsSync(lockPath)) {
     issues.push("missing package-lock.json");
   }
@@ -119,24 +128,32 @@ function step0_repositoryBaseline() {
     issues.push(`tracked build/dependency artifacts in git: ${gitCheck.stdout.trim()}`);
   }
 
-  // Verify isolation from open/ and trylo cli/src
+  // Keep external reference trees and archives outside product inputs.
   const srcFiles = walkFiles(join(root, "src")).filter((f) => f.endsWith(".ts"));
   const openHits = [];
+
   for (const file of srcFiles) {
     const text = readFileSync(file, "utf8");
-    if (text.includes('from "open/') || text.includes("from 'open/") || text.includes("open/00-protocols")) {
+    if (hasReferenceImport(text)) {
       openHits.push(posix(file));
     }
   }
+
+  if (hasReferenceDependency(readFileSync(join(root, "package.json"), "utf8"))) {
+    openHits.push("package.json");
+  }
+
   if (openHits.length > 0) {
-    issues.push(`isolation violation: imports from open/: ${openHits.join(", ")}`);
+    issues.push(`isolation violation: external reference inputs: ${openHits.join(", ")}`);
   }
 
   // Record lockfile hash and inventory
   let lockHash = "missing";
+
   if (existsSync(lockPath)) {
     lockHash = createHash("sha256").update(readFileSync(lockPath)).digest("hex");
   }
+
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
   const deps = { ...pkg.dependencies, ...pkg.devDependencies };
 
@@ -189,6 +206,7 @@ function step3_lintHygiene() {
     );
   }
 }
+
 // -------------------------------------------------------------
 // Step 4: 4-architecture
 // -------------------------------------------------------------
@@ -199,6 +217,7 @@ function step4_architecture() {
   const portsDir = join(root, "src", "internal", "ports");
 
   const coreDirs = [loopDir, domainDir];
+
   for (const dir of coreDirs) {
     for (const file of walkFiles(dir).filter((f) => f.endsWith(".ts"))) {
       const text = readFileSync(file, "utf8");
@@ -304,6 +323,7 @@ function step6_unitTests() {
 
   const discoveryFile = join(root, "dist", "test-discovery.json");
   let testCount = 0;
+
   if (existsSync(discoveryFile)) {
     try {
       const data = JSON.parse(readFileSync(discoveryFile, "utf8"));
@@ -361,13 +381,16 @@ function step8_licenseAndSbom() {
       issues.push(`dependency not installed: ${dep} (node_modules/${dep}/package.json missing)`);
       continue;
     }
+
     try {
       const depPkg = JSON.parse(readFileSync(depPkgPath, "utf8"));
       const license = depPkg.license ?? "UNKNOWN";
       const version = depPkg.version ?? "0.0.0";
+
       if (!ALLOWED_LICENSES.has(license)) {
         issues.push(`unapproved license: ${dep}@${version} → ${license}`);
       }
+
       sbomComponents.push({
         name: dep,
         version,
@@ -388,10 +411,13 @@ function step8_licenseAndSbom() {
       if (entry.name.startsWith("@")) {
         const scopeDir = join(nmDir, entry.name);
         const scoped = readdirSync(scopeDir, { withFileTypes: true });
+
         for (const s of scoped) {
           if (!s.isDirectory()) continue;
+
           const fullName = `${entry.name}/${s.name}`;
           if (allDeps.includes(fullName)) continue;
+
           const pPath = join(scopeDir, s.name, "package.json");
           if (existsSync(pPath)) {
             try {
@@ -400,6 +426,7 @@ function step8_licenseAndSbom() {
               if (!ALLOWED_LICENSES.has(lic)) {
                 issues.push(`unapproved transitive license: ${fullName}@${p.version} → ${lic}`);
               }
+
               sbomComponents.push({
                 name: fullName,
                 version: p.version ?? "0.0.0",
@@ -411,6 +438,7 @@ function step8_licenseAndSbom() {
         }
       } else if (entry.isDirectory()) {
         if (allDeps.includes(entry.name)) continue;
+
         const pPath = join(nmDir, entry.name, "package.json");
         if (existsSync(pPath)) {
           try {
@@ -419,6 +447,7 @@ function step8_licenseAndSbom() {
             if (!ALLOWED_LICENSES.has(lic)) {
               issues.push(`unapproved transitive license: ${entry.name}@${p.version} → ${lic}`);
             }
+
             sbomComponents.push({
               name: entry.name,
               version: p.version ?? "0.0.0",
@@ -436,6 +465,7 @@ function step8_licenseAndSbom() {
   if (existsSync(manifestPath)) {
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
     const fixtures = manifest.fixtures ?? [];
+
     for (const name of fixtures) {
       const compPath = join(root, "testdata", "licenses", name, "component.json");
       if (!existsSync(compPath)) {
@@ -456,11 +486,13 @@ function step8_licenseAndSbom() {
     },
     components: sbomComponents,
   };
+
   writeFileSync(join(root, "dist", "sbom.json"), JSON.stringify(sbom, null, 2) + "\n");
 
   // Generate THIRD_PARTY_NOTICES from real data
   const noticeLines = sbomComponents.map((c) => `- ${c.name}@${c.version}: ${c.licenses[0]?.license?.id ?? "UNKNOWN"}`);
   const notices = `# Third-Party Notices\n\nThis distribution includes components licensed under:\n${noticeLines.join("\n")}\n`;
+
   writeFileSync(join(root, "dist", "THIRD_PARTY_NOTICES.md"), notices);
 
   if (issues.length > 0) {
@@ -483,10 +515,12 @@ function step9_sourceScan() {
       if (st.size > 1_000_000) {
         problems.push(`large:${posix(file)} (${st.size} bytes)`);
       }
+
       const ext = file.slice(file.lastIndexOf(".")).toLowerCase();
       if ([".exe", ".dll", ".bin", ".node"].includes(ext)) {
         problems.push(`binary:${posix(file)}`);
       }
+
       if ([".ts", ".json", ".md"].some((e) => file.endsWith(e))) {
         const text = readFileSync(file, "utf8");
         for (const re of secretPatterns) {
@@ -556,24 +590,37 @@ function step10_docEvidencePresence() {
 // Main Runner (11 steps)
 // -------------------------------------------------------------
 console.log("=== TRYLO CLI QUALITY VERIFICATION PIPELINE (11 STEPS) ===");
+
 const startTime = Date.now();
 
 step0_repositoryBaseline();
+
 step1_format();
+
 step2_typecheck();
+
 step3_lintHygiene();
+
 step4_architecture();
+
 step5_contractTests();
+
 step6_unitTests();
+
 step7_transitions();
+
 step8_licenseAndSbom();
+
 step9_sourceScan();
+
 step10_docEvidencePresence();
 
 const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+
 console.log(`\n=== VERIFICATION RESULT: ${hasFailure ? "FAILED" : "ALL PASS"} (${elapsed}s) ===`);
 
 mkdirSync(join(root, "dist"), { recursive: true });
+
 writeFileSync(
   join(root, "dist", "verify-result.json"),
   JSON.stringify({ ok: !hasFailure, elapsed, steps: stepReports }, null, 2) + "\n",

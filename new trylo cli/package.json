@@ -18,17 +18,18 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-vendor.mjs && node scripts/pty/copy-pty-vendor.mjs && node scripts/release-inventory.mjs",
+    "check:layout": "node ../scripts/check-workspace-layout.mjs",
+    "build": "node ../scripts/check-workspace-layout.mjs && tsc -p tsconfig.json && node scripts/copy-vendor.mjs && node scripts/pty/copy-pty-vendor.mjs && node scripts/release-inventory.mjs",
     "clean": "node scripts/quality/clean-dist.mjs",
     "prepack": "npm run build",
     "format:check": "node scripts/quality/format-check.mjs",
     "test": "node scripts/quality/run-tests.mjs --layer=hermetic",
     "test:hermetic": "node scripts/quality/run-tests.mjs --layer=hermetic",
-    "test:platform": "node scripts/quality/run-tests.mjs --layer=platform",
+    "test:platform": "node scripts/quality/run-tests.mjs --layer=platform && node --test scripts/pty/copy-pty-vendor.platform.test.mjs",
     "test:real": "node scripts/quality/run-tests.mjs --layer=real",
     "test:all": "node scripts/quality/run-tests.mjs --layer=all",
-    "verify": "node scripts/quality/verify.mjs",
-    "quality:new-cli": "node scripts/quality/verify.mjs"
+    "verify": "node ../scripts/check-workspace-layout.mjs && node scripts/quality/verify.mjs",
+    "quality:new-cli": "node ../scripts/check-workspace-layout.mjs && node scripts/quality/verify.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

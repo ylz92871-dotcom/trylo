@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, realpathSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
@@ -13,7 +13,7 @@ import type { CliContext, DirEntryInfo } from "../../internal/surface/cli/contex
 import { readSecretLine } from "../../internal/surface/cli/secret-prompt.js";
 import { createTerminalLineReader } from "./terminal-line-reader.js";
 import { IsolationCleanupError } from "../../internal/adapters/sandbox/windows-isolation-error.js";
-import { createToolProductionService } from "./tool-production-service.js";
+import { lazyToolProductionService } from "./lazy-tool-production-service.js";
 
 /**
  * Process entry point.
@@ -38,19 +38,23 @@ function terminalKeys(): CliContext["keys"] {
   if (process.stdin.isTTY !== true) {
     return undefined;
   }
+
   let listener: ((chunk: Buffer) => void) | undefined;
   const attach = (withRaw: boolean): void => {
     if (listener !== undefined) {
       return;
     }
+
     // A borrowed readline can leave stdin flowing without delivering keys.
     // Give the restored owner an explicit pause/resume edge.
     process.stdin.pause();
     listener = (chunk) => onChunk(chunk.toString("utf8"));
     process.stdin.on("data", listener);
+
     if (withRaw) {
       process.stdin.setRawMode(true);
     }
+
     process.stdin.resume();
   };
   const detach = (): void => {
@@ -62,13 +66,16 @@ function terminalKeys(): CliContext["keys"] {
     process.stdin.setRawMode(false);
   };
   let onChunk: (chunk: string) => void = () => {};
+
   return {
     start: (handler) => {
       onChunk = handler;
       attach(true);
     },
+
     suspend: () => detach(),
     resume: () => attach(true),
+
     stop: () => {
       detach();
       process.stdin.pause();
@@ -86,8 +93,11 @@ async function editInEditor(text: string): Promise<string | undefined> {
   if (editor === undefined || editor.trim().length === 0) {
     return undefined;
   }
+
   const file = path.join(tmpdir(), `trylo-edit-${randomUUID()}.md`);
+
   writeFileSync(file, text, "utf8");
+
   try {
     const result = spawnSync(editor, [file], { stdio: "inherit", shell: process.platform === "win32" });
     if (result.error !== undefined || result.status !== 0) {
@@ -126,6 +136,7 @@ function safeReadDir(absolutePath: string): ReadonlyArray<DirEntryInfo> {
     return readdirSync(absolutePath, { withFileTypes: true }).map((entry) => {
       let bytes = 0;
       let modifiedAtMs = 0;
+
       try {
         const info = statSync(path.join(absolutePath, entry.name));
         bytes = info.size;
@@ -133,6 +144,7 @@ function safeReadDir(absolutePath: string): ReadonlyArray<DirEntryInfo> {
       } catch {
         // A file that vanished between listing and stat is simply unsized.
       }
+
       return { name: entry.name, bytes, modifiedAtMs };
     });
   } catch {
@@ -166,6 +178,9 @@ export function createProcessContext(): ProcessContext {
   let readline: ReturnType<typeof createInterface> | undefined;
   const interrupts = processInterrupts();
   const keys = terminalKeys();
+  const toolProduction = lazyToolProductionService(() => import("./tool-production-service.js")
+    .then(module => module.createToolProductionService({ homeDir: homedir(), env: process.env,
+      now: () => Date.now(), newId: prefix => `${prefix}-${randomUUID()}` })));
   // "close" fires exactly once, when stdin hits EOF (a pipe) or Ctrl-D (a
   // terminal); after that every `question` throws ERR_USE_AFTER_CLOSE, so the
   // closed fact is latched and reported as the end of input instead.
@@ -184,7 +199,9 @@ export function createProcessContext(): ProcessContext {
   const pipedWaiters: Array<(line: string | undefined) => void> = [];
   const terminalReader = createTerminalLineReader(process.stdin, process.stderr, line => {
     const [commands] = slashCompleter(line);
+
     if (commands.length > 0) return [[...commands], line];
+
     return [[...pathCompletions(line, process.cwd(), absolutePath => {
       try {
         return readdirSync(absolutePath, { withFileTypes: true }).map(entry => ({ name: entry.name, isDirectory: entry.isDirectory() }));
@@ -213,14 +230,14 @@ export function createProcessContext(): ProcessContext {
     }
     return readline;
   };
-  return {
-    get toolProduction() {
-      return createToolProductionService({ homeDir: homedir(), env: process.env, now: () => Date.now(), newId: prefix => `${prefix}-${randomUUID()}` });
-    },
+  const context: ProcessContext = {
+    libraryHosts: input => import("../../internal/surface/cli/library-host-wiring.js").then(module => module.openCliLibraryHosts(context, input)),
+    toolProduction,
     env: process.env,
     homeDir: homedir(),
     cwd: process.cwd(),
     nodeVersion: process.version,
+    nodeExecutable: process.execPath,
     // The platform, injected beside `nodeVersion` for the same reason: this file
     // is the one sanctioned owner of `process`, and a run that tells the model
     // which platform it is on must not read `process` for it anywhere else.
@@ -228,19 +245,30 @@ export function createProcessContext(): ProcessContext {
     stdinIsTty: process.stdin.isTTY === true,
     readFile: safeReadFile,
     isDirectory: safeIsDirectory,
+
+    realPath: absolutePath => {
+      try { return realpathSync.native(absolutePath); }
+      catch { return undefined; } // An unavailable physical identity is never treated as an alias proof.
+    },
+
     readDir: safeReadDir,
     writeFile: safeWriteFile,
     readStdin: readAllStdin,
+
     readLine: async (prompt?: string) => {
       // The composer suspends before lending the terminal. Closing this short
       // reader detaches keypress listeners before the composer resumes.
       if (process.stdin.isTTY === true) return terminalReader.read(prompt);
+
       ensureReadline();
       const queued = pipedLines.shift();
       if (queued !== undefined) return queued;
+
       if (stdinClosed) return undefined;
+
       return new Promise<string | undefined>(resolve => pipedWaiters.push(resolve));
     },
+
     // The login secret gets the echo-off reader. The generic `readLine` above
     // deliberately stays generic: it is for the repl and the permission prompt,
     // which are talking to a person, not collecting a key.
@@ -265,6 +293,7 @@ export function createProcessContext(): ProcessContext {
     editInEditor,
     now: () => Date.now(),
     newId: (prefix) => `${prefix}-${randomUUID()}`,
+
     close: () => {
       terminalReader.close();
       readline?.close();
@@ -274,6 +303,8 @@ export function createProcessContext(): ProcessContext {
       interrupts?.close();
     },
   };
+
+  return context;
 }
 
 /**
@@ -298,6 +329,7 @@ function processInterrupts(): NonNullable<CliContext["interrupts"]> & { readonly
       each();
     }
   };
+
   return {
     observe: (handler) => {
       handlers.push(handler);
@@ -306,6 +338,7 @@ function processInterrupts(): NonNullable<CliContext["interrupts"]> & { readonly
         process.on("SIGINT", onInterrupt);
       }
     },
+
     unobserve: (handler) => {
       const index = handlers.indexOf(handler);
       if (index >= 0) handlers.splice(index, 1);
@@ -314,6 +347,7 @@ function processInterrupts(): NonNullable<CliContext["interrupts"]> & { readonly
         installed = false;
       }
     },
+
     exit: (code) => {
       process.exit(code);
     },

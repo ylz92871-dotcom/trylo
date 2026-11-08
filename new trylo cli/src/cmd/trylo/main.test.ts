@@ -32,12 +32,14 @@ function fixture(): Fixture {
   const root = mkdtempSync(join(os.tmpdir(), "trylo-cli-"));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
+
   mkdirSync(workspace, { recursive: true });
   mkdirSync(home, { recursive: true });
   writeFileSync(
     join(workspace, "package.json"),
     JSON.stringify({ name: "@trylo/fixture-workspace" }, null, 2),
   );
+
   return {
     workspace,
     home,
@@ -47,6 +49,7 @@ function fixture(): Fixture {
 
 function run(fx: Fixture, args: readonly string[], input?: string): RunResult {
   const env: NodeJS.ProcessEnv = { ...process.env, TRYLO_HOME: fx.home };
+
   // Ambient credentials must never change a test outcome: the gate has to use
   // local fixtures only, with no network and no real account in play.
   delete env.TRYLO_API_KEY;
@@ -65,17 +68,20 @@ function run(fx: Fixture, args: readonly string[], input?: string): RunResult {
     encoding: "utf8",
     ...(input === undefined ? { stdio: ["ignore", "pipe", "pipe"] } : { input }),
   });
+
   return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
 }
 
 function jsonLines(stdout: string): Array<Record<string, unknown>> {
   const rows: Array<Record<string, unknown>> = [];
+
   for (const line of stdout.split(/\r?\n/)) {
     if (line.trim().length === 0) {
       continue;
     }
     rows.push(JSON.parse(line) as Record<string, unknown>);
   }
+
   return rows;
 }
 
@@ -141,8 +147,10 @@ test("run --provider accepts an id the person declared, not only a shipped one",
       "--endpoint", "https://x.invalid/v1",
       "--model", "m1",
     ]);
+
     assert.equal(add.status, 0, add.stderr);
     const result = run(fx, ["run", "--provider", "myhost", "hi"]);
+
     assert.notEqual(result.status, 2, `a declared provider is not a usage error: ${result.stderr}`);
     assert.equal(result.status, 41, "nothing is logged in yet, so the honest failure is auth");
     assert.match(result.stderr, /myhost|credential|auth/i);
@@ -194,17 +202,22 @@ test("stream-json stdout is a pure JSON event stream ending in one run_result", 
   const fx = fixture();
   try {
     const result = run(fx, ["run", "--provider", "fixture", "--format", "stream-json", "answer"]);
+
     assert.equal(result.status, 0, result.stderr);
     const events = jsonLines(result.stdout);
+
     assert.equal(events.length > 0, true);
     const results = events.filter((event) => event.type === "run_result");
+
     assert.equal(results.length, 1);
     const final = results[0];
+
     assert.equal(final?.status, "completed");
     assert.equal(typeof final?.finishReason, "string");
     assert.equal(typeof final?.lastMessage, "string");
     assert.equal(final?.lastMessage !== "", true);
     const types = events.map((event) => event.type);
+
     assert.equal(types[0], "run_start");
     assert.equal(types.at(-1), "run_result");
     // No human text may leak into the protocol stream.
@@ -238,6 +251,7 @@ test("--output-last-message writes the final assistant text", () => {
       target,
       "answer",
     ]);
+
     assert.equal(result.status, 0, result.stderr);
     assert.match(readFileSync(target, "utf8"), /@trylo\/fixture-workspace/);
   } finally {
@@ -249,14 +263,17 @@ test("a durable session survives and resume rebuilds provider messages from the 
   const fx = fixture();
   try {
     const first = run(fx, ["run", "--provider", "fixture", "--session", "demo", "first turn"]);
+
     assert.equal(first.status, 0, first.stderr);
     assert.match(first.stderr, /-> read_file /);
 
     const listed = run(fx, ["session", "list"]);
+
     assert.equal(listed.status, 0);
     assert.match(listed.stdout, /demo/);
 
     const second = run(fx, ["run", "--provider", "fixture", "--resume", "demo", "second turn"]);
+
     assert.equal(second.status, 0, second.stderr);
     // The persisted transcript already carries the tool result, so the fixture
     // answers without asking for the tool again. A resume that only replayed UI
@@ -286,31 +303,40 @@ test("WP02: session rename, fork, info, export, archive and remove form a closed
     assert.equal(run(fx, ["run", "--provider", "fixture", "--session", "origin", "first turn"]).status, 0);
     assert.equal(run(fx, ["session", "rename", "origin", "Origin story"]).status, 0);
     const listed = run(fx, ["session", "list"]);
+
     assert.equal(listed.status, 0);
     assert.match(listed.stdout, /Origin story/);
     assert.match(listed.stdout, /first turn/);
 
     const forked = run(fx, ["session", "fork", "origin", "--new-id", "branch"]);
+
     assert.equal(forked.status, 0, forked.stderr);
     assert.match(forked.stdout, /origin -> branch/);
     const info = run(fx, ["session", "info", "branch", "--json"]);
+
     assert.equal(info.status, 0, info.stderr);
     const view = JSON.parse(info.stdout) as { forkedFrom: { parentSessionId: string } | null };
+
     assert.equal(view.forkedFrom?.parentSessionId, "origin");
 
     const exported = run(fx, ["session", "export", "branch"]);
+
     assert.equal(exported.status, 0, exported.stderr);
     const dump = JSON.parse(exported.stdout) as { transcript: Array<{ text: string }> };
+
     assert.equal(dump.transcript[0]?.text, "first turn");
 
     assert.equal(run(fx, ["session", "archive", "origin"]).status, 0);
     const parked = run(fx, ["session", "list"]);
+
     assert.equal(parked.status, 0);
     assert.doesNotMatch(parked.stdout, /origin/);
     const all = run(fx, ["session", "list", "--all"]);
+
     assert.match(all.stdout, /origin/);
 
     const removed = run(fx, ["session", "remove", "branch"]);
+
     assert.equal(removed.status, 0, removed.stderr);
     assert.match(removed.stdout, /removed branch/);
     assert.equal(run(fx, ["session", "info", "branch"]).status, 52);
@@ -337,15 +363,18 @@ test("doctor reports the same structured data in text and JSON", () => {
   const fx = fixture();
   try {
     const text = run(fx, ["doctor"]);
+
     assert.equal(text.status, 0, text.stderr);
     assert.match(text.stdout, /runtime\.node/);
     assert.match(text.stdout, /workspace\.root/);
 
     const json = run(fx, ["doctor", "--json"]);
+
     assert.equal(json.status, 0, json.stderr);
     const report = JSON.parse(json.stdout) as {
       checks: Array<{ id: string; status: string; detail: string }>;
     };
+
     assert.equal(report.checks.some((check) => check.id === "runtime.node"), true);
     assert.equal(report.checks.some((check) => check.id === "learning.isolation"), true);
     assert.equal(report.checks.every((check) => check.status !== "fail"), true);
@@ -363,11 +392,13 @@ test("config show reports each value's source layer", () => {
       JSON.stringify({ endpoint: "https://example.invalid/v1" }),
     );
     const json = run(fx, ["config", "show", "--json"]);
+
     assert.equal(json.status, 0, json.stderr);
     const view = JSON.parse(json.stdout) as {
       values: Record<string, { value: unknown; sourceLayer: string }>;
       layers: Array<{ layer: string; status: string }>;
     };
+
     assert.equal(view.values["endpoint"]?.value, "https://example.invalid/v1");
     assert.equal(view.values["endpoint"]?.sourceLayer, "project");
     assert.equal(view.values["provider"]?.sourceLayer, "packaged_default");
@@ -379,6 +410,7 @@ test("config show reports each value's source layer", () => {
     );
 
     const text = run(fx, ["config", "show"]);
+
     assert.equal(text.status, 0, text.stderr);
     assert.match(text.stdout, /endpoint = "https:\/\/example.invalid\/v1" {2}\(from project\)/);
   } finally {
@@ -398,14 +430,17 @@ test("a config carrying a credential fails closed and never renders it", () => {
     // secret on the way out (`<redacted>`); the closed schema refuses it on the
     // way in. Both keep the value off the wire; only the second proves it.
     const json = run(fx, ["config", "show", "--json"]);
+
     assert.equal(json.status, 52);
     assert.equal(json.stdout.includes("super-secret-value"), false);
     assert.equal(json.stderr.includes("super-secret-value"), false);
 
     const text = run(fx, ["config", "show"]);
+
     assert.equal(text.stdout.includes("super-secret-value"), false);
 
     const doctor = run(fx, ["doctor"]);
+
     assert.equal(doctor.stdout.includes("super-secret-value"), false);
     assert.equal(doctor.stderr.includes("super-secret-value"), false);
   } finally {
@@ -453,6 +488,7 @@ test("openai-compatible with an endpoint but no credential fails closed without 
       "https://example.invalid/v1/chat/completions",
     ];
     const result = run(fx, [...args, "hello"]);
+
     assert.equal(result.status, 41);
     assert.equal(result.stdout, "");
     // A failed run must say why, in text mode as well as in the JSON stream.
@@ -460,9 +496,11 @@ test("openai-compatible with an endpoint but no credential fails closed without 
     assert.match(result.stderr, /credential/i);
 
     const json = run(fx, [...args, "--format", "stream-json", "hello"]);
+
     assert.equal(json.status, 41);
     const rows = jsonLines(json.stdout);
     const diagnostic = rows.find((row) => row["type"] === "warning");
+
     assert.equal(diagnostic?.["code"], "auth");
     assert.match(String(diagnostic?.["message"]), /credential/i);
     // One run_result, and nothing resembling a credential is echoed back.

@@ -1,7 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "outDir": "dist-wp19",
+    "outDir": "../_workspace/artifacts/new-cli-builds/wp19",
     "noEmitOnError": false,
     "declaration": false
   },

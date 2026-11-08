@@ -1,0 +1,11 @@
+{
+  "importMarkers": [
+    "from \"open/",
+    "from 'open/",
+    "open/00-protocols",
+    "_workspace/research/",
+    "_workspace/archive/"
+  ],
+  "dependencyMarkers": ["open/", "\"open\"", "_workspace/research/", "_workspace/archive/"],
+  "excludedTrees": ["_workspace/research/", "_workspace/archive/", "desktop/compat/legacy-cli/"]
+}

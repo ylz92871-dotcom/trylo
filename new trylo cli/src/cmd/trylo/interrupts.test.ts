@@ -21,7 +21,9 @@ type Interrupts = NonNullable<ReturnType<typeof createProcessContext>["interrupt
 function withFakedTty<T>(value: boolean, body: () => T): T {
   const stdin = process.stdin as unknown as { isTTY?: boolean };
   const original = Object.getOwnPropertyDescriptor(stdin, "isTTY");
+
   Object.defineProperty(stdin, "isTTY", { value, configurable: true });
+
   try {
     return body();
   } finally {
@@ -52,10 +54,12 @@ test("a piped run can observe SIGINT and detach its observer after the run", () 
     const before = process.listenerCount("SIGINT");
     const ctx = withFakedTty(false, () => createProcessContext());
     const interrupts = ctx.interrupts;
+
     assert(interrupts);
     assert.equal(process.listenerCount("SIGINT"), before);
     let seen = 0;
     const observer = () => { seen += 1; };
+
     interrupts.observe(observer);
     process.emit("SIGINT");
     assert.equal(seen, 1);
@@ -69,12 +73,16 @@ test("a terminal gets the surface, and SIGINT is hooked only when somebody asks"
     const before = process.listenerCount("SIGINT");
     const ctx = withFakedTty(true, () => createProcessContext());
     const interrupts: Interrupts | undefined = ctx.interrupts;
+
     assert.notEqual(interrupts, undefined);
+
     if (interrupts === undefined) {
       return;
     }
+
     assert.equal(process.listenerCount("SIGINT"), before, "asking is what installs it, not building the context");
     const seen: string[] = [];
+
     interrupts.observe(() => seen.push("first"));
     assert.equal(process.listenerCount("SIGINT"), before + 1);
     interrupts.observe(() => seen.push("second"));

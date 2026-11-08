@@ -33,6 +33,7 @@ const AMBIENT_FILE_ALLOWLIST = new Set([
   // `src/internal/adapters/daemon/process-ambient.ts` for the named seam and why a
   // second exemption was not taken for the whole file.
   "src/cmd/trylo/daemon-main.ts",
+  "src/cmd/trylo/central-runtime-main.ts", // private managed process entry; startup/stdin, readiness and signal IO only; scope policy is injected
   // The process-session wiring for a run (WP26 / A04). Same discipline as
   // daemon-main.ts: it reads `homedir()` and `process.env` once, passes them to
   // `tryloHome(...)` to locate the durable job table, and makes no decision of its
@@ -42,10 +43,11 @@ const AMBIENT_FILE_ALLOWLIST = new Set([
   "src/internal/surface/cli/doctor.ts", // display-only token-expiry check
   "src/internal/e2e/regression-harness.ts", // harness that drives processes
   "src/internal/adapters/mcp-stdio/transport-env.ts", // the child env allowlist itself
+  "src/internal/adapters/mcp-runtime/broker-host.ts", // private MCP process entry: stdin receipt, shutdown and stdout IPC
   "src/internal/adapters/sandbox/executable.ts", // PATH/PATHEXT resolution
   "src/internal/adapters/tools/mutating/shell-spawn.ts", // child spawn env
   "src/internal/credentials/env-table.ts", // env-backed credential table
-  "src/internal/tooling/quarantine/acquire.ts", // deferred tooling, platform detection
+  "src/internal/learning/agent/subsystems/tool/adapters/quarantine/acquire.ts", // same quarantine adapter, platform detection
   "src/internal/subagent/runtime.ts", // id generator default; `idGenerator` seam exists
 ]);
 
@@ -82,6 +84,7 @@ function toPosix(p) {
 function walkFiles(dir) {
   const out = [];
   const entries = readdirSync(dir, { withFileTypes: true });
+
   for (const entry of entries) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
@@ -90,6 +93,7 @@ function walkFiles(dir) {
       out.push(full);
     }
   }
+
   return out;
 }
 
@@ -129,13 +133,16 @@ export function runStaticScans(root) {
       if (line.includes("@ts-ignore")) {
         issues.push(`${rel}:${i + 1}: contains @ts-ignore`);
       }
+
       if (/catch\s*(\([^\)]*\))?\s*\{\s*\}/.test(line)) {
         issues.push(`${rel}:${i + 1}: contains literal empty catch block`);
       }
+
       if (!isCommentLine(line)) {
         if (/:\s*any\b/.test(line) || /\bas\s+any\b/.test(line)) {
           issues.push(`${rel}:${i + 1}: contains 'any' type assertion`);
         }
+
         // Ambient sources, production files only: tests legitimately use
         // bounded wall-clock polls and process fixtures — their determinism
         // is judged by review (the P0 blocker on time-dependent tests), not
@@ -151,6 +158,7 @@ export function runStaticScans(root) {
             );
           }
         }
+
         // Double casts: allowed only at listed boundaries.
         if (!isTest && doubleCastRe.test(line) && !DOUBLE_CAST_ALLOWLIST.has(rel)) {
           issues.push(`${rel}:${i + 1}: 'as unknown as' outside the boundary allowlist`);

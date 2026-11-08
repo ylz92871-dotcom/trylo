@@ -1,6 +1,7 @@
-import json, pathlib, subprocess, datetime
+import json
+from pathlib import Path
 
-base = pathlib.Path("open")
+base = Path(__file__).resolve().parents[1] / "docs/references/open-source"
 log_path = base / "PULL-LOG.json"
 log = json.loads(log_path.read_text(encoding="utf-8"))
 
@@ -17,6 +18,7 @@ md = f"""# PULL-LOG — P0 首次拉取台账
 > 生成时间: {log[0]['pulled_at']}
 > 核验基准: 2026-09-09 commit 级浅克隆 (--depth 1 --single-branch, core.longpaths=true)
 > 分类: reference (not-evaluated)
+> 路径说明: 表格和命令保留 2026-09-09 历史目标；现 checkout 位于仓库根 `_workspace/research/new-cli-open/`。本台账是资料导航，不是设计权威。
 
 ## 概览
 
@@ -49,9 +51,9 @@ md = f"""# PULL-LOG — P0 首次拉取台账
 
 ## 后续
 
-- open/ 已隔离，禁止 import/build/package。
+- `_workspace/research/new-cli-open/` 已隔离，禁止 import/build/package；历史 `open/` 目标不作为新的写入位置。
 - 如需历史研究: git -C <target> fetch --unshallow
 """
 
-pathlib.Path("open/PULL-LOG.md").write_text(md, encoding="utf-8")
-print("written PULL-LOG.md")
+(base / "PULL-LOG.md").write_text(md, encoding="utf-8")
+print(f"written {base / 'PULL-LOG.md'}")

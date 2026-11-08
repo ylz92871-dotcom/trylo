@@ -104,6 +104,7 @@ const results = CONCEPTS.map((concept) => {
   const row = rowById.get(concept.owner);
   const rowText = `${row?.currentState ?? ""} ${(row?.evidence ?? []).join(" ")}`;
   const missing = concept.requiredInRow.filter((term) => !rowText.includes(term));
+
   return {
     concept: concept.concept,
     owner: concept.owner,
@@ -141,10 +142,13 @@ writeFileSync(
   join(root, "docs", "02-分期工程产出", "P00-工程地基与质量门禁", "evidence", evidenceDir, "wp27-scope-semantic-check.json"),
   `${JSON.stringify(report, null, 2)}\n`,
 );
+
 console.log(verdict);
+
 for (const item of unnamed) {
   console.log(`UNNAMED ${item.concept} @ ${item.owner} (missing: ${item.missingTerms.join(", ")})`);
 }
+
 if (staleRows.length > 0) {
   console.log(`STALE ROWS: ${staleRows.join(", ")}`);
 }

@@ -18,8 +18,10 @@ function failPipeline(error: unknown): void {
 try {
   const children = startShellPipeline(readStages(process.argv[2]), (shape, receiver) => startShellChild(shape, process.cwd(), [receiver ? "pipe" : "ignore", "pipe", "pipe"], process.env, "win32"));
   const last = children.at(-1);
+
   last?.stdout?.pipe(process.stdout, { end: false });
   let closed = 0;
+
   for (const child of children) {
     child.stderr?.pipe(process.stderr, { end: false });
     child.on("error", failPipeline);

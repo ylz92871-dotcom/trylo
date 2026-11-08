@@ -23,6 +23,7 @@ if (!existsSync(modulePath)) {
   console.error("FAIL build first: this verdict is computed by the shipped module, not restated by hand");
   process.exit(2);
 }
+
 const { validateFreezeCandidate } = await import(pathToFileURL(modulePath).href);
 
 const args = process.argv.slice(2);
@@ -123,6 +124,9 @@ writeFileSync(
   join(root, "docs", "02-分期工程产出", "P00-工程地基与质量门禁", "evidence", evidenceDir, "wp27-freeze-self-check.json"),
   `${JSON.stringify(report, null, 2)}\n`,
 );
+
 console.log(`WP27 self freeze: ${self.kind}${self.kind === "not_freezable" ? ` (${self.failures.map((f) => f.code).join(", ")})` : ""}`);
+
 console.log(`excluded-carrying-pass: ${excludedCarryingPass.kind}`);
+
 console.log(`sourceHash=${sourceHash.slice(0, 16)} reviewedHash=${reviewedHash === "" ? "(none)" : reviewedHash.slice(0, 16)}`);

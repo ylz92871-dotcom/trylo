@@ -36,6 +36,7 @@ const rows = coverage.rows
   .map((row) => {
     const hasState = (row.currentState ?? "").trim().length > 0;
     const evidence = row.evidence ?? [];
+
     return {
       id: row.id,
       name: row.name,
@@ -62,6 +63,7 @@ function tally(list) {
 
 const byPriority = Object.fromEntries(PRIORITIES.map((p) => [p, tally(rows.filter((row) => row.priority === p))]));
 const byOwner = {};
+
 for (const row of rows.filter((item) => item.state === "unrecorded" && !item.excludedByUser)) {
   byOwner[row.owner ?? "(unmapped)"] = (byOwner[row.owner ?? "(unmapped)"] ?? 0) + 1;
 }
@@ -89,6 +91,9 @@ writeFileSync(
   join(root, "docs", "02-分期工程产出", "P00-工程地基与质量门禁", "evidence", evidenceDir, "wp27-priority-ledger.json"),
   `${JSON.stringify(report, null, 2)}\n`,
 );
+
 console.log(`P0/P1 ledger: total=${overall.total} recorded=${overall.recorded} unrecorded=${overall.unrecorded} excluded=${overall.excludedByUser}`);
+
 console.log(`P0: ${JSON.stringify(byPriority.P0)}`);
+
 console.log(`P1: ${JSON.stringify(byPriority.P1)}`);

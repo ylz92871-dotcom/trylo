@@ -14,8 +14,7 @@ import { test } from "node:test";
  * 背书（长消息 + 小上限 + 一次工具调用 → 迭代间隙里压缩）。本文件只回答一个差距
  * 问题：**摘要文本是谁写的**——
  *
- *  - 缺省（不带旗标）：摘要器不调用模型，账里落下的是 extractive 摘要，端点从未
- *    收到过带 summarizer 标记的请求（R1：absent 即关，逐字节与今天相同）；
+ *  - 显式 extractive：摘要器不调用模型，账里落下的是 extractive 摘要；
  *  - 带 `--compact-summary=model`：端点收到一个带 summarizer 标记的独立请求，
  *    账里 `compact` 记录的 summary 是**模型给的那句话**，下一个主请求携带
  *    `[compacted history w1] <模型摘要>`；
@@ -103,38 +102,48 @@ function startEndpoint(): Promise<Endpoint> {
   let mainHits = 0;
   const server: Server = createServer((req, res) => {
     let body = "";
+
     req.setEncoding("utf8");
     req.on("data", (chunk: string) => {
       body += chunk;
     });
     req.on("end", () => {
       let messages: Captured["messages"] = [];
+
       try {
         const parsed = JSON.parse(body) as { messages?: Captured["messages"] };
         messages = parsed.messages ?? [];
       } catch {
         messages = [];
       }
+
       const captured = { messages };
+
       requests.push(captured);
+
       // 摘要请求走自己的分支（它没有"第一次要工具"的身份）；主请求第一次要工具，
       // 之后一律停。与 resume-window 的 fixture 同一触发形状。
       if (isSummarizerRequest(captured)) {
         sse(res, SUMMARY_FRAMES);
         return;
       }
+
       mainHits += 1;
+
       if (mainHits === 1) {
         sse(res, toolCallFrames());
         return;
       }
+
       sse(res, STOP_FRAMES);
     });
   });
+
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
       const port = typeof address === "object" && address !== null ? address.port : 0;
+
       resolve({
         url: `http://127.0.0.1:${port}/v1/chat/completions`,
         requests,
@@ -157,6 +166,7 @@ function fixture(prefix: string): Fixture {
   const root = mkdtempSync(join(os.tmpdir(), prefix));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
+
   mkdirSync(workspace, { recursive: true });
   mkdirSync(home, { recursive: true });
   mkdirSync(join(workspace, ".trylo"), { recursive: true });
@@ -171,6 +181,7 @@ function fixture(prefix: string): Fixture {
     }),
     "utf8",
   );
+
   return { workspace, home, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
@@ -198,6 +209,7 @@ function run(fx: Fixture, endpoint: string, args: readonly string[]): Promise<Ru
     "stream-json",
     "--tools=read_file",
   ];
+
   return new Promise((resolve) => {
     const child = spawn(process.execPath, argv, {
       cwd: fx.workspace,
@@ -206,6 +218,7 @@ function run(fx: Fixture, endpoint: string, args: readonly string[]): Promise<Ru
     });
     let stdout = "";
     let stderr = "";
+
     child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString("utf8");
     });
@@ -233,26 +246,32 @@ function journalRows(root: string): ReadonlyArray<Row> {
         walk(full);
         continue;
       }
+
       for (const line of readFileSync(full, "utf8").split("\n")) {
         const text = line.trim();
         if (text.length === 0) {
           continue;
         }
+
         const parsed = JSON.parse(text) as {
           sequence: number;
           record: { type: string; payload: Record<string, unknown> };
         };
+
         rows.push({ sequence: parsed.sequence, type: parsed.record.type, payload: parsed.record.payload });
       }
     }
   };
+
   walk(root);
+
   return rows.sort((left, right) => left.sequence - right.sequence);
 }
 
 test("with --compact-summary=model, the model authors the stored summary", async () => {
   const fx = fixture("trylo-compact-model-");
   const endpoint = await startEndpoint();
+
   try {
     const result = await run(fx, endpoint.url, [
       "run",
@@ -262,22 +281,28 @@ test("with --compact-summary=model, the model authors the stored summary", async
       "--session",
       "ses-compact-model",
     ]);
+
     assert.equal(result.status, 0, result.stderr);
 
     // 1. 有一个独立的、带 summarizer 标记的请求——摘要确实是模型写的，不是本地拼的。
     const summarizerRequests = endpoint.requests.filter(isSummarizerRequest);
+
     assert.equal(summarizerRequests.length, 1, "exactly one summarizer request");
 
     // 2. 账里的 compact 记录携带模型给的那句话。
     const compacts = journalRows(fx.home).filter((row) => row.type === "compact");
+
     assert.equal(compacts.length, 1, "one compact record in the journal");
     const window = compacts[0]!.payload as unknown as { readonly summary?: string };
+
     assert.equal(window.summary, MODEL_SUMMARY);
 
     // 3. 压缩之后的主请求带着窗口摘要，而不是被替换的原文。
     const mainAfter = endpoint.requests.filter((r) => !isSummarizerRequest(r)).slice(1);
+
     assert.ok(mainAfter.length >= 1, "no main request after the gap");
     const carried = mainAfter.map((r) => r.messages.map((m) => m.content).join("\n")).join("\n");
+
     assert.match(carried, /\[compacted history w1\]/);
     assert.match(carried, new RegExp(MODEL_SUMMARY.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   } finally {
@@ -286,19 +311,23 @@ test("with --compact-summary=model, the model authors the stored summary", async
   }
 });
 
-test("by default no model is asked: zero summarizer requests and the extractive digest is stored", async () => {
+test("explicit extractive asks no model and stores the deterministic digest", async () => {
   const fx = fixture("trylo-compact-default-");
   const endpoint = await startEndpoint();
+
   try {
-    const result = await run(fx, endpoint.url, ["run", LONG_TEXT, "--session", "ses-compact-default"]);
+    const result = await run(fx, endpoint.url, ["run", LONG_TEXT, "--compact-summary", "extractive", "--session", "ses-compact-default"]);
+
     assert.equal(result.status, 0, result.stderr);
 
-    // R1 的直接证据：缺省运行连摘要请求都不发。
+    // 显式 extractive 保留零模型摘要请求的选择。
     assert.equal(endpoint.requests.filter(isSummarizerRequest).length, 0);
 
     const compacts = journalRows(fx.home).filter((row) => row.type === "compact");
+
     assert.equal(compacts.length, 1, "compaction still happens by default");
     const window = compacts[0]!.payload as unknown as { readonly summary?: string };
+
     assert.notEqual(window.summary, MODEL_SUMMARY);
     // extractive 摘要的形状：逐条 `kind: 前缀` 行，长行以省略号收尾。
     assert.match(window.summary ?? "", /^user: /);
@@ -311,6 +340,7 @@ test("by default no model is asked: zero summarizer requests and the extractive 
 test("--compact-summary is a closed set: an unknown value is a usage error", async () => {
   const fx = fixture("trylo-compact-bad-");
   const endpoint = await startEndpoint();
+
   try {
     const result = await run(fx, endpoint.url, [
       "run",
@@ -320,6 +350,7 @@ test("--compact-summary is a closed set: an unknown value is a usage error", asy
       "--session",
       "ses-compact-bad",
     ]);
+
     assert.equal(result.status, 2, result.stderr);
     assert.match(result.stderr, /unknown --compact-summary value: poetry/);
     assert.match(result.stderr, /extractive, model/);

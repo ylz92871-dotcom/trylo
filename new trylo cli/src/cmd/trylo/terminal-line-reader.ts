@@ -5,16 +5,21 @@ import type { Readable, Writable } from "node:stream";
 export function createTerminalLineReader(input: Readable, output: Writable, completer: Completer) {
   let activeClose: (() => void) | undefined;
   const history: string[] = [];
+
   return {
     read(prompt = ""): Promise<string | undefined> {
       if (activeClose !== undefined) return Promise.reject(new Error("terminal_reader_busy: a borrowed read is already active"));
+
       if (input.readableEnded) return Promise.resolve(undefined);
+
       const reader = createInterface({ input, output, terminal: true, completer, history, historySize: 200 });
+
       return new Promise(resolve => {
         const onClose = () => {
           activeClose = undefined;
           resolve(undefined);
         };
+
         activeClose = () => reader.close();
         reader.once("close", onClose);
         reader.question(prompt, answer => {
@@ -27,6 +32,7 @@ export function createTerminalLineReader(input: Readable, output: Writable, comp
         });
       });
     },
+
     close(): void { activeClose?.(); },
   };
 }

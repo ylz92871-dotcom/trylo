@@ -21,6 +21,7 @@ if (!existsSync(modulePath)) {
   console.error("FAIL build first: this evidence is computed by the shipped module, not restated by hand");
   process.exit(2);
 }
+
 const { CROSS_LOOP_STAGES, evaluateCrossLoop } = await import(pathToFileURL(modulePath).href);
 
 const date = process.argv.slice(2).find((arg) => arg.startsWith("--date="))?.slice("--date=".length)
@@ -112,7 +113,9 @@ writeFileSync(
   join(root, "docs", "02-分期工程产出", "P00-工程地基与质量门禁", "evidence", evidenceDir, "wp27-cross-loop-realistic.json"),
   `${JSON.stringify(report, null, 2)}\n`,
 );
+
 console.log(`cross-loop verdict: ${verdict.kind}`);
+
 if (verdict.kind === "partial") {
   console.log(`pending stages: ${verdict.pendingStages.join(", ")}`);
 }

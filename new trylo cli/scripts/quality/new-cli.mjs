@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { hasReferenceDependency, hasReferenceImport } from "./reference-isolation.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const win = process.platform === "win32";
@@ -39,6 +40,7 @@ function run(command, args) {
     console.error(result.error.message);
     return 1;
   }
+
   return result.status === null ? 1 : result.status;
 }
 
@@ -46,23 +48,29 @@ function walkFiles(dir, acc = []) {
   if (!dir) {
     return acc;
   }
+
   let ents;
+
   try {
     ents = readdirSync(dir, { withFileTypes: true });
   } catch {
     return acc;
   }
+
   for (const ent of ents) {
     if (skipDirs.has(ent.name)) {
       continue;
     }
+
     const path = join(dir, ent.name);
+
     if (ent.isDirectory()) {
       walkFiles(path, acc);
     } else {
       acc.push(path);
     }
   }
+
   return acc;
 }
 
@@ -81,6 +89,7 @@ if (licenseCode !== 0) {
 
 const loopDir = join(root, "src", "internal", "loop");
 const hits = [];
+
 for (const file of walkFiles(loopDir).filter((path) => path.endsWith(".ts"))) {
   const text = readFileSync(file, "utf8");
   for (const match of text.matchAll(importRe)) {
@@ -91,6 +100,7 @@ for (const file of walkFiles(loopDir).filter((path) => path.endsWith(".ts"))) {
     }
   }
 }
+
 if (hits.length > 0) {
   fail("4-loop-imports", hits.join("\n"));
 } else {
@@ -98,31 +108,41 @@ if (hits.length > 0) {
 }
 
 const srcHits = [];
+
 for (const file of walkFiles(join(root, "src")).filter((path) => path.endsWith(".ts"))) {
   const text = readFileSync(file, "utf8");
-  if (text.includes('from "open/') || text.includes("from 'open/") || text.includes("open/00-protocols")) {
+  if (hasReferenceImport(text)) {
     srcHits.push(posix(file));
   }
 }
+
+if (hasReferenceDependency(readFileSync(join(root, "package.json"), "utf8"))) {
+  srcHits.push("package.json");
+}
+
 if (srcHits.length > 0) {
   fail("isolation", srcHits.join("\n"));
 } else {
-  pass("isolation", "skipped open/ and trylo cli/src");
+  pass("isolation", "external research/archive and Desktop legacy compatibility remain excluded");
 }
 
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+
 pass("6-inventory", JSON.stringify(deps));
 
 const problems = [];
+
 for (const file of walkFiles(join(root, "src"))) {
   const st = statSync(file);
   if (st.size > 1_000_000) {
     problems.push(`large:${posix(file)}`);
   }
+
   if ([".exe", ".dll", ".bin"].includes(file.slice(file.lastIndexOf(".")).toLowerCase())) {
     problems.push(`binary:${posix(file)}`);
   }
+
   if ([".ts", ".json", ".md"].some((ext) => file.endsWith(ext))) {
     const text = readFileSync(file, "utf8");
     if (secretRe.some((re) => re.test(text))) {
@@ -130,6 +150,7 @@ for (const file of walkFiles(join(root, "src"))) {
     }
   }
 }
+
 if (problems.length > 0) {
   fail("8-secret-large", problems.join("\n"));
 } else {

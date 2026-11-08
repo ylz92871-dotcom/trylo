@@ -158,6 +158,7 @@ export async function runDaemon(input: {
       clock: { now: input.now, newId: (prefix) => `${prefix}_${attemptSuffix()}` },
       queuePathFor: (sessionId) => sessionQueuePath(ambient.homeDir, ambient.env, sessionId),
     }),
+
     // The watch step (A07). Wired here, inside the tick and under the same
     // lease, which is the whole point: a watch and a cron schedule are rows of one
     // record, so polling them from a second writer would be a lost-update race.
@@ -181,19 +182,23 @@ export async function runDaemon(input: {
       const polled = await pollWatches(
         {
           watches,
+
           enqueue: async (sessionId, text) => {
             const queue = createFileBackgroundQueue({
               path: sessionQueuePath(ambient.homeDir, ambient.env, sessionId),
               clock: { now: input.now, newId: (prefix) => `${prefix}_${attemptSuffix()}` },
             });
             const enqueued = await queue.enqueue(text);
+
             // A queue that refused is reported as a refusal, not as a fired watch:
             // the message is not on the queue and the record must not claim it is.
             if (!enqueued.ok) {
               throw new Error(`could not deliver a watch message: ${enqueued.code}`);
             }
+
             return enqueued.value.id;
           },
+
           occurrences: access.occurrences,
           maxFiresPerPass: input.maxFiresPerPass ?? 5,
         },
@@ -204,9 +209,11 @@ export async function runDaemon(input: {
           note(ambient.home, `watch ${fire.watchId} fired: ${fire.because}`);
         }
       }
+
       // 后台 worker 消费队列。它和 watch 共用同一个 tick、同一份租约，
       // 所以不会冒出「第二个写者」—— 这正是把它当 step 而不是另起进程的理由。
       let taken = 0;
+
       if (worker !== undefined) {
         const pass = await worker.pass();
         taken = pass.taken;
@@ -214,8 +221,10 @@ export async function runDaemon(input: {
           note(ambient.home, `worker pass stopped: ${pass.refused}`);
         }
       }
+
       return polled.fired.length + taken;
     },
+
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     onStop: (reason) => note(ambient.home, `stopped: ${reason}`),
   });
@@ -224,13 +233,16 @@ export async function runDaemon(input: {
   // tick; the second leaves at once, because a person who pressed Ctrl-C twice has
   // said they do not want to wait for a tick.
   let interrupts = 0;
+
   ambient.onSignal(["SIGINT", "SIGTERM"], () => {
     interrupts += 1;
+
     if (interrupts === 1) {
       note(ambient.home, "interrupt: finishing the current tick, then stopping");
       loop.stop();
       return;
     }
+
     note(ambient.home, "interrupt: second one, leaving now");
     // 130 is the conventional "interrupted" code, and is what a shell reports for
     // a process that stopped because it was asked to.
@@ -239,6 +251,7 @@ export async function runDaemon(input: {
 
   note(ambient.home, `started as pid ${ambient.pid}`);
   await loop.run();
+
   if (interrupts > 0) {
     ambient.setExitCode(130);
   }
@@ -270,6 +283,7 @@ if (ambientEnv["TRYLO_DAEMON_NO_AUTOSTART"] === undefined) {
     // 换成假执行器把它清掉，会比不开工糟得多，而且从外面看不出来。
     note(tryloHome(homeDir, ambientEnv), `worker disabled: ${built.reason}`);
   }
+
   await runDaemon({
     env: ambientEnv,
     homeDir,
@@ -280,6 +294,7 @@ if (ambientEnv["TRYLO_DAEMON_NO_AUTOSTART"] === undefined) {
     now: ambientNow,
     pid: process.pid,
     ...(built.ok ? { workerExecutor: built.executor } : {}),
+
     installSignals: (signals, handler) => {
       const listeners = signals.map((signal) => {
         const listener = (): void => handler();
@@ -288,6 +303,7 @@ if (ambientEnv["TRYLO_DAEMON_NO_AUTOSTART"] === undefined) {
       });
       return () => listeners.forEach((remove) => remove());
     },
+
     report: (code) => {
       process.exitCode = code;
     },

@@ -25,6 +25,7 @@ function run(command, args) {
     console.error(result.error.message);
     return 1;
   }
+
   return result.status === null ? 1 : result.status;
 }
 
@@ -40,6 +41,7 @@ if (buildCode !== 0) {
 
 const args = process.argv.slice(2);
 let layer = "hermetic";
+
 for (const arg of args) {
   if (arg.startsWith("--layer=")) {
     layer = arg.slice("--layer=".length);
@@ -83,12 +85,15 @@ const extra =
 const all = [...distFiles, ...extra];
 
 console.log(`TEST-DISCOVERY (layer=${layer})`);
+
 console.log(`count=${all.length}`);
+
 for (const file of all) {
   console.log(relative(root, file).replaceAll("\\", "/"));
 }
 
 mkdirSync(join(root, "dist"), { recursive: true });
+
 const tapPath = join(root, "dist", `tests${layer === "hermetic" ? "" : `-${layer}`}.tap`);
 // The whole suite is spawned in chunks, not as one `node --test <all files>`
 // command: 400+ file arguments exceed the Windows command-line limit and
@@ -102,6 +107,7 @@ const CHUNK_SIZE = 40;
 const TEST_CONCURRENCY = 4;
 const chunkTapFiles = [];
 let chunkFailures = 0;
+
 for (let start = 0; start < all.length; start += CHUNK_SIZE) {
   const chunk = all.slice(start, start + CHUNK_SIZE);
   const chunkTap = join(root, "dist", `tests${layer === "hermetic" ? "" : `-${layer}`}-chunk${start / CHUNK_SIZE}.tap`);
@@ -130,20 +136,26 @@ for (let start = 0; start < all.length; start += CHUNK_SIZE) {
     console.error(testCode.error.message);
     process.exit(1);
   }
+
   if (testCode.status !== 0) {
     chunkFailures += 1;
   }
+
   chunkTapFiles.push(chunkTap);
 }
+
 // A failing test makes its chunk's process exit nonzero but the remaining
 // chunks still run (the old single-process run had the same property: a red
 // test never hid the rest of the suite). The final exit is red if any chunk was.
 writeFileSync(tapPath, chunkTapFiles.map((file) => readFileSync(file, "utf8")).join("\n"));
+
 for (const file of chunkTapFiles) {
   rmSync(file);
 }
+
 const testCode = { status: chunkFailures === 0 ? 0 : 1 };
 const names = [];
+
 if (existsSync(tapPath)) {
   for (const line of readFileSync(tapPath, "utf8").split(/\r?\n/)) {
     const match = /^(?:not )?ok \d+ - (.+)$/.exec(line);
@@ -152,8 +164,11 @@ if (existsSync(tapPath)) {
     }
   }
 }
+
 names.sort((a, b) => a.localeCompare(b));
+
 console.log(`TEST-NAMES count=${names.length}`);
+
 const discoveryData = {
   layer,
   count: all.length,
@@ -161,18 +176,22 @@ const discoveryData = {
   testCount: names.length,
   names,
 };
+
 writeFileSync(
   join(root, "dist", `test-discovery${layer === "hermetic" ? "" : `-${layer}`}.json`),
   `${JSON.stringify(discoveryData, null, 2)}\n`,
 );
+
 if (layer === "hermetic") {
   writeFileSync(
     join(root, "dist", "test-discovery.json"),
     `${JSON.stringify(discoveryData, null, 2)}\n`,
   );
 }
+
 if (names.length === 0) {
   console.error("FAIL test-discovery: no TAP test names captured");
   process.exit(1);
 }
+
 process.exit(testCode.status === null ? 1 : testCode.status);

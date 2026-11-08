@@ -106,6 +106,7 @@ export function buildDaemonWorkerExecutor(
       reason: `no such provider ${selected.denial.id}; known: ${selected.denial.known.join(", ")}`,
     };
   }
+
   const entry = selected.entry;
 
   // 端点与模型来自**同一个条目**，与前台 `resolveProvider` 同源。分开取就会出现
@@ -115,15 +116,18 @@ export function buildDaemonWorkerExecutor(
 
   // 需要 key 的家族才去动账本。fixture 家族不查账本，所以离线验收不需要凭据。
   let apiKey: string | undefined;
+
   if (isKeyedProviderKind(entry.kind)) {
     if (endpoint.length === 0) {
       return { ok: false, reason: `provider ${entry.id} has no endpoint; nothing to send a turn to` };
     }
+
     // 模型名是逐轮请求带的（见 `loop-executor.ts::workerTurnRequest`），空的名字
     // 打到端点只会换回一个 404 —— 不如在这里用一句人话拒掉。
     if (model.length === 0) {
       return { ok: false, reason: `provider ${entry.id} declares no model; set \`model\` in providers.json` };
     }
+
     const port = createCliCredentialPort({
       homeDir: input.homeDir,
       cwd: input.cwd,
@@ -142,9 +146,11 @@ export function buildDaemonWorkerExecutor(
     if (!resolved.ok) {
       return { ok: false, reason: `credential for ${entry.id} unresolved: ${resolved.code}` };
     }
+
     if (resolved.apiKey === undefined) {
       return { ok: false, reason: `credential for ${entry.id} resolved to no key (layer ${resolved.layer})` };
     }
+
     apiKey = resolved.apiKey;
   }
 

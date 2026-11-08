@@ -34,9 +34,11 @@ function fixture(): Fixture {
   const root = mkdtempSync(join(os.tmpdir(), "trylo-mutating-"));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
+
   mkdirSync(workspace, { recursive: true });
   mkdirSync(home, { recursive: true });
   writeFileSync(join(workspace, "package.json"), JSON.stringify({ name: "@trylo/fixture-workspace" }, null, 2));
+
   return {
     root,
     workspace,
@@ -47,6 +49,7 @@ function fixture(): Fixture {
 
 function run(fx: Fixture, args: readonly string[]): RunResult {
   const env: NodeJS.ProcessEnv = { ...process.env, TRYLO_HOME: fx.home };
+
   // Ambient credentials must never change a test outcome.
   delete env.TRYLO_API_KEY;
   const result = spawnSync(process.execPath, [cli, ...args], {
@@ -55,6 +58,7 @@ function run(fx: Fixture, args: readonly string[]): RunResult {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
+
   return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
 }
 
@@ -90,18 +94,23 @@ test("a link out of the workspace is refused even when writes are allowed", (t) 
   const fx = fixture();
   try {
     const outside = join(fx.root, "outside.txt");
+
     writeFileSync(outside, "original");
     let linked = true;
+
     try {
       symlinkSync(outside, join(fx.workspace, WRITE_FIXTURE_PATH), "file");
     } catch {
       linked = false;
     }
+
     if (linked === false) {
       t.skip("the platform refused to create the symlink, so this escape case cannot run here");
       return;
     }
+
     const result = run(fx, ["run", "--provider", "fixture-write", "--allow-writes", "write a file"]);
+
     assert.equal(readFileSync(outside, "utf8"), "original");
     assert.match(result.stdout, /did not land/);
   } finally {

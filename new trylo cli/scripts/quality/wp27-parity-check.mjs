@@ -66,11 +66,13 @@ if (!isRealIsoDay(date)) {
   console.error(`FAIL --date must be a real calendar day shaped like ${DATE_SHAPE_HINT}, got: ${date}`);
   process.exit(2);
 }
+
 const evidenceDirName = readFlag("out") ?? `${date}-WP27`;
 if (!EVIDENCE_DIR_SHAPE.test(evidenceDirName)) {
   console.error(`FAIL --out must be this checker's own directory name shaped like ${EVIDENCE_DIR_HINT}, got: ${evidenceDirName}`);
   process.exit(2);
 }
+
 const outputDir = join(root, "docs", "02-分期工程产出", "P00-工程地基与质量门禁", "evidence", evidenceDirName);
 
 const mapping = JSON.parse(readFileSync(mappingPath, "utf8"));
@@ -99,11 +101,14 @@ if (rows.length !== EXPECTED_TOTAL) {
 
 const missingPrimaryWorkPackage = [];
 const seen = new Set();
+
 for (const row of rows) {
   if (seen.has(row.id)) {
     fail(`duplicate capability id: ${row.id}`);
   }
+
   seen.add(row.id);
+
   if (typeof row.primaryWorkPackage !== "string" || row.primaryWorkPackage.trim().length === 0) {
     fail(`missing primaryWorkPackage: ${row.id}`);
     missingPrimaryWorkPackage.push(row.id);
@@ -118,6 +123,7 @@ for (const excluded of EXCLUDED_BY_USER) {
 
 const coverageIds = new Set((coverage.rows ?? []).map((row) => row.id));
 const missingInCoverage = [];
+
 for (const row of rows) {
   if (!coverageIds.has(row.id)) {
     fail(`mapping id missing in capability-coverage.json: ${row.id}`);
@@ -133,6 +139,7 @@ const packages = new Map(mapping.packages.map((pkg) => [pkg.id, pkg]));
  * can satisfy. Every dangling edge is named before the walk runs.
  */
 const danglingPrerequisites = [];
+
 for (const pkg of mapping.packages) {
   for (const dep of pkg.prerequisites ?? []) {
     if (!packages.has(dep)) {
@@ -140,6 +147,7 @@ for (const pkg of mapping.packages) {
     }
   }
 }
+
 if (danglingPrerequisites.length > 0) {
   fail(`prerequisite names an unknown package: ${danglingPrerequisites.join(", ")}`);
 }
@@ -147,31 +155,39 @@ if (danglingPrerequisites.length > 0) {
 const visited = new Set();
 const stack = new Set();
 let cycle = null;
+
 function dfs(id, trail) {
   if (stack.has(id)) {
     const start = trail.indexOf(id);
     cycle = start < 0 ? [id] : [...trail.slice(start), id];
     return true;
   }
+
   if (visited.has(id)) {
     return false;
   }
+
   visited.add(id);
   stack.add(id);
   const pkg = packages.get(id);
+
   for (const dep of pkg?.prerequisites ?? []) {
     if (dfs(dep, [...trail, id])) {
       return true;
     }
   }
+
   stack.delete(id);
+
   return false;
 }
+
 for (const pkg of mapping.packages) {
   if (dfs(pkg.id, [])) {
     break;
   }
 }
+
 if (cycle !== null) {
   fail(`prerequisite cycle: ${cycle.join(" -> ")}`);
 }
@@ -188,9 +204,11 @@ const wp27Prerequisites = packages.get("WP27")?.prerequisites ?? [];
 const wp27PrerequisiteSet = new Set(wp27Prerequisites);
 const missingPrerequisites = constructionIds.filter((id) => !wp27PrerequisiteSet.has(id));
 const extraPrerequisites = [...wp27PrerequisiteSet].filter((id) => !constructionIds.includes(id));
+
 if (missingPrerequisites.length > 0) {
   fail(`WP27 does not depend on construction packages: ${missingPrerequisites.join(", ")}`);
 }
+
 if (extraPrerequisites.length > 0) {
   fail(`WP27 depends on packages that are not construction packages: ${extraPrerequisites.join(", ")}`);
 }
@@ -211,6 +229,7 @@ function hasConstructionRecord(file, id) {
 const prodDir = join(root, "docs", "02-分期工程产出", "P00-工程地基与质量门禁");
 const prodFiles = existsSync(prodDir) ? readdirSync(prodDir) : [];
 const constructionRecordsMissing = [];
+
 for (const id of constructionIds) {
   if (!prodFiles.some((file) => hasConstructionRecord(file, id))) {
     warn(`no P00 construction record yet: ${id} (parallel work in progress; WP27 keeps it unclosed)`);
@@ -255,15 +274,21 @@ const report = {
 };
 
 mkdirSync(outputDir, { recursive: true });
+
 writeFileSync(join(outputDir, "wp27-parity-report.json"), `${JSON.stringify(report, null, 2)}\n`);
+
 mkdirSync(join(root, "dist"), { recursive: true });
+
 writeFileSync(join(root, "dist", "wp27-parity-report.json"), `${JSON.stringify(report, null, 2)}\n`);
 
 console.log(`WP27 parity: total=${report.total} inScope=${report.inScopeCount} excluded=${report.excludedByUser.length}`);
+
 console.log(`evidence written to: ${evidenceDirName}/wp27-parity-report.json`);
+
 for (const warning of warnings) {
   console.log(`WARN ${warning}`);
 }
+
 if (failures.length > 0) {
   for (const failure of failures) {
     console.error(`FAIL ${failure}`);

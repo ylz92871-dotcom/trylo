@@ -88,6 +88,7 @@ function startEndpoint(): Promise<Endpoint> {
   const requests: CapturedRequest[] = [];
   const server: Server = createServer((req, res) => {
     let body = "";
+
     req.setEncoding("utf8");
     req.on("data", (chunk: string) => {
       body += chunk;
@@ -95,6 +96,7 @@ function startEndpoint(): Promise<Endpoint> {
     req.on("end", () => {
       let toolNames: ReadonlyArray<string> = [];
       let messages: CapturedRequest["messages"] = [];
+
       try {
         const parsed = JSON.parse(body) as {
           tools?: ReadonlyArray<{ readonly function?: { readonly name?: string } }>;
@@ -106,18 +108,23 @@ function startEndpoint(): Promise<Endpoint> {
         // An unparsable body is recorded as an empty request; the assertions
         // below then fail on the missing tool call rather than on a crash here.
       }
+
       requests.push({ toolNames, messages });
+
       if (requests.length === 1) {
         sse(res, delegateFrames());
         return;
       }
+
       sse(res, stopFrames("done"));
     });
   });
+
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
       const port = typeof address === "object" && address !== null ? address.port : 0;
+
       resolve({
         url: `http://127.0.0.1:${port}/v1/chat/completions`,
         requests,
@@ -140,9 +147,11 @@ function fixture(prefix: string): Fixture {
   const root = mkdtempSync(join(os.tmpdir(), prefix));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
+
   mkdirSync(workspace, { recursive: true });
   mkdirSync(home, { recursive: true });
   writeFileSync(join(workspace, "package.json"), JSON.stringify({ name: "sa-mount-fixture" }), "utf8");
+
   return { workspace, home, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
@@ -174,6 +183,7 @@ function run(fx: Fixture, endpoint: string, args: readonly string[]): Promise<Ru
     "--format",
     "stream-json",
   ];
+
   return new Promise((resolve) => {
     const child = spawn(process.execPath, argv, {
       cwd: fx.workspace,
@@ -182,6 +192,7 @@ function run(fx: Fixture, endpoint: string, args: readonly string[]): Promise<Ru
     });
     let stdout = "";
     let stderr = "";
+
     child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString("utf8");
     });
@@ -198,9 +209,11 @@ type Envelope = { readonly kind: string; readonly payload: Record<string, unknow
 
 function journalEnvelopes(homeDir: string): ReadonlyArray<Envelope> {
   const sessionsDir = join(homeDir, "sessions");
+
   if (!readdirSync(homeDir).includes("sessions")) {
     return [];
   }
+
   const envelopes: Envelope[] = [];
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir)) {
@@ -209,11 +222,13 @@ function journalEnvelopes(homeDir: string): ReadonlyArray<Envelope> {
         walk(full);
         continue;
       }
+
       for (const line of readFileSync(full, "utf8").split("\n")) {
         const text = line.trim();
         if (text.length === 0) {
           continue;
         }
+
         const parsed = JSON.parse(text) as {
           record?: { type?: string; payload?: { envelope?: Envelope } };
         };
@@ -224,13 +239,16 @@ function journalEnvelopes(homeDir: string): ReadonlyArray<Envelope> {
       }
     }
   };
+
   walk(sessionsDir);
+
   return envelopes;
 }
 
 test("with --subagent, an ordinary provider run mounts and really runs delegate_subagent", async () => {
   const fx = fixture("trylo-sa-mount-on-");
   const endpoint = await startEndpoint();
+
   try {
     const result = await run(fx, endpoint.url, [
       "run",
@@ -239,11 +257,13 @@ test("with --subagent, an ordinary provider run mounts and really runs delegate_
       "--session",
       "ses-sa-mount-on",
     ]);
+
     assert.equal(result.status, 0, result.stderr);
 
     // The mount is a fact in the request body, not an inference from exit 0.
     assert.ok(endpoint.requests.length >= 1, "the mock endpoint was never called");
     const first = endpoint.requests[0]!;
+
     assert.ok(
       first.toolNames.includes("delegate_subagent"),
       `tool table must carry delegate_subagent, got: ${first.toolNames.join(", ")}`,
@@ -258,6 +278,7 @@ test("with --subagent, an ordinary provider run mounts and really runs delegate_
     const envelopes = journalEnvelopes(fx.home);
     const spawns = envelopes.filter((entry) => entry.kind === "subagent_spawn");
     const ends = envelopes.filter((entry) => entry.kind === "subagent_end");
+
     assert.equal(spawns.length, 1, "exactly one subagent_spawn in the journal");
     assert.equal(ends.length, 1, "exactly one subagent_end in the journal");
     assert.equal(ends[0]!.payload["status"], "completed");
@@ -270,6 +291,7 @@ test("with --subagent, an ordinary provider run mounts and really runs delegate_
 test("without --subagent, the same delegate call finds no tool and leaves zero subagent traces", async () => {
   const fx = fixture("trylo-sa-mount-off-");
   const endpoint = await startEndpoint();
+
   try {
     const result = await run(fx, endpoint.url, [
       "run",
@@ -277,9 +299,11 @@ test("without --subagent, the same delegate call finds no tool and leaves zero s
       "--session",
       "ses-sa-mount-off",
     ]);
+
     assert.equal(result.status, 0, result.stderr);
 
     const first = endpoint.requests[0]!;
+
     assert.equal(
       first.toolNames.includes("delegate_subagent"),
       false,
@@ -290,6 +314,7 @@ test("without --subagent, the same delegate call finds no tool and leaves zero s
     const subagentEnvelopes = envelopes.filter(
       (entry) => entry.kind === "subagent_spawn" || entry.kind === "subagent_end",
     );
+
     assert.equal(subagentEnvelopes.length, 0, "a default run leaves zero subagent envelopes");
   } finally {
     await endpoint.close();

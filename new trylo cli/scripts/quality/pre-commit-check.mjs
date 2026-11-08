@@ -25,6 +25,7 @@ if (formatRun.status !== 0) {
 }
 
 const { issues } = runStaticScans(root);
+
 if (issues.length > 0) {
   process.stderr.write(`${issues.join("\n")}\n`);
   process.exit(1);

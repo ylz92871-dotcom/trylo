@@ -15,6 +15,7 @@ test("the real CLI opts into Responses summaries only for declared reasoning", a
   const root = mkdtempSync(join(tmpdir(), "trylo-summary-process-"));
   const profile = join(root, "profile");
   const workspace = join(root, "workspace");
+
   mkdirSync(profile);
   mkdirSync(workspace);
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -22,9 +23,11 @@ test("the real CLI opts into Responses summaries only for declared reasoning", a
   let summaryDelivery = "delta";
   const server = createServer((request, response) => {
     let raw = "";
+
     request.on("data", chunk => { raw += String(chunk); });
     request.on("end", () => {
       const body = JSON.parse(raw) as Record<string, unknown>;
+
       bodies.push(body);
       const summaryText = "Inspect the public fixture.";
       const summaryItem = { type: "reasoning", id: "rs-1", summary: [{ type: "summary_text", text: summaryText }] };
@@ -32,6 +35,7 @@ test("the real CLI opts into Responses summaries only for declared reasoning", a
         ? frame("response.reasoning_summary_text.delta", { output_index: 0, delta: summaryText })
         : summaryDelivery === "text.done" ? frame("response.reasoning_summary_text.done", { output_index: 0, summary_index: 0, text: summaryText })
           : summaryDelivery === "part.done" ? frame("response.reasoning_summary_part.done", { output_index: 0, summary_index: 0, part: summaryItem.summary[0] }) : "";
+
       response.writeHead(200, { "Content-Type": "text/event-stream" });
       response.end(
         (body["reasoning"] === undefined ? "" :
@@ -43,11 +47,14 @@ test("the real CLI opts into Responses summaries only for declared reasoning", a
       );
     });
   });
+
   t.after(() => server.close());
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
+
   assert.ok(address !== null && typeof address !== "string");
   const cli = fileURLToPath(new URL("./main.js", import.meta.url));
+
   for (const [declaredReasoning, delivery] of [[true, "delta"], [true, "text.done"], [true, "part.done"], [true, "item.done"], [false, "delta"]] as const) {
     summaryDelivery = delivery;
     writeFileSync(join(profile, "providers.json"), JSON.stringify({
@@ -60,6 +67,7 @@ test("the real CLI opts into Responses summaries only for declared reasoning", a
       stdio: ["ignore", "pipe", "pipe"],
     });
     let output = "";
+
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", chunk => { output += chunk; });
     child.stderr.resume();
@@ -68,9 +76,12 @@ test("the real CLI opts into Responses summaries only for declared reasoning", a
       child.on("error", reject);
       child.on("close", resolve);
     }).finally(() => clearTimeout(timer));
+
     assert.equal(code, 0);
     const events = output.trim().split("\n").map(line => JSON.parse(line) as Record<string, unknown>);
+
     assert.equal(events.filter(event => event["type"] === "run_result").length, 1);
+
     if (declaredReasoning) {
       assert.deepEqual(bodies.at(-1)?.["reasoning"], { summary: "auto" });
       assert.equal(events.filter(event => event["type"] === "reasoning_delta").map(event => event["text"]).join(""), "Inspect the public fixture.");

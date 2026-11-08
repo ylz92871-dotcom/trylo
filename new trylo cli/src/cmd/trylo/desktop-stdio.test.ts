@@ -14,6 +14,7 @@ async function runDesktop(answer: "allow" | "deny" | "eof"): Promise<{
   const root = mkdtempSync(join(os.tmpdir(), "trylo-desktop-stdio-"));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
+
   mkdirSync(workspace);
   mkdirSync(home);
   writeFileSync(join(workspace, "package.json"), '{"name":"stdio-contract"}');
@@ -25,15 +26,19 @@ async function runDesktop(answer: "allow" | "deny" | "eof"): Promise<{
   const frames: Array<Record<string, unknown>> = [];
   let buffer = "";
   let stderr = "";
+
   child.stderr.on("data", chunk => { stderr += String(chunk); });
   child.stdout.on("data", chunk => {
     buffer += String(chunk);
     for (;;) {
       const end = buffer.indexOf("\n");
       if (end < 0) break;
+
       const frame = JSON.parse(buffer.slice(0, end)) as Record<string, unknown>;
+
       buffer = buffer.slice(end + 1);
       frames.push(frame);
+
       if (frame.type === "control_request") {
         assert.equal(existsSync(join(workspace, "fixture-output.txt")), false, "must wait for approval before writing");
         if (answer === "eof") child.stdin.end();
@@ -44,6 +49,7 @@ async function runDesktop(answer: "allow" | "deny" | "eof"): Promise<{
     }
   });
   const timer = setTimeout(() => child.kill(), 10_000);
+
   try {
     child.stdin.write(`${JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text: "write a fixture" }] } })}\n`);
     const code = await new Promise<number | null>((resolve, reject) => {
@@ -51,6 +57,7 @@ async function runDesktop(answer: "allow" | "deny" | "eof"): Promise<{
       child.once("close", resolve);
     });
     const target = join(workspace, "fixture-output.txt");
+
     return { code, frames, written: existsSync(target) ? readFileSync(target, "utf8") : undefined, stderr };
   } finally {
     clearTimeout(timer);
@@ -61,11 +68,14 @@ async function runDesktop(answer: "allow" | "deny" | "eof"): Promise<{
 
 test("Desktop stdio runs before EOF and exits after approving the actual write", async () => {
   const result = await runDesktop("allow");
+
   assert.equal(result.code, 0, result.stderr);
   assert.equal(typeof result.written, "string");
   const request = result.frames.find(frame => frame.type === "control_request");
+
   assert.equal((request?.request as Record<string, unknown>).tool_name, "write_file");
   const use = result.frames.find(frame => frame.type === "tool_use");
+
   assert.equal((use?.input as Record<string, unknown>).path, "fixture-output.txt");
   assert.equal(result.frames.filter(frame => frame.type === "run_result").length, 1);
 });

@@ -57,12 +57,14 @@ function startProvider(wire: "chat" | "responses" = "chat"): Promise<Endpoint> {
   const seen: ReadonlyArray<string>[] = [];
   const server: Server = createServer((req, res) => {
     let body = "";
+
     req.setEncoding("utf8");
     req.on("data", (chunk: string) => {
       body += chunk;
     });
     req.on("end", () => {
       let names: ReadonlyArray<string> = [];
+
       try {
         // Two wire shapes, one per family: chat completions nests the name under
         // `function`, Responses puts it beside `type: "function"`. Reading only
@@ -76,7 +78,9 @@ function startProvider(wire: "chat" | "responses" = "chat"): Promise<Endpoint> {
         // Recorded as an empty catalog: the assertion then fails on the missing
         // name rather than on a parse error hiding the real fact.
       }
+
       seen.push(names);
+
       if (wire === "responses") {
         res.writeHead(200, { "content-type": "text/event-stream" });
         res.write('event: response.output_text.delta\ndata: {"output_index":0,"delta":"ok"}\n\n');
@@ -86,10 +90,12 @@ function startProvider(wire: "chat" | "responses" = "chat"): Promise<Endpoint> {
       }
     });
   });
+
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
       const port = typeof address === "object" && address !== null ? address.port : 0;
+
       resolve({
         url: `http://127.0.0.1:${port}/v1/${wire === "responses" ? "responses" : "chat/completions"}`,
         toolNames: () => seen,
@@ -105,9 +111,11 @@ function fixture(prefix: string, withRuleFile: boolean): Fixture {
   const root = mkdtempSync(join(os.tmpdir(), prefix));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
+
   mkdirSync(workspace, { recursive: true });
   mkdirSync(home, { recursive: true });
   writeFileSync(join(workspace, "package.json"), JSON.stringify({ name: "wp20-fixture" }), "utf8");
+
   if (withRuleFile) {
     writeFileSync(
       join(workspace, "AGENTS.md"),
@@ -115,6 +123,7 @@ function fixture(prefix: string, withRuleFile: boolean): Fixture {
       "utf8",
     );
   }
+
   return { workspace, home, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
@@ -144,6 +153,7 @@ function run(
     "--format",
     "stream-json",
   ];
+
   return new Promise((resolve) => {
     const child = spawn(process.execPath, argv, {
       cwd: fx.workspace,
@@ -152,6 +162,7 @@ function run(
     });
     let stdout = "";
     let stderr = "";
+
     child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString("utf8");
     });
@@ -199,6 +210,7 @@ test("an openai-compatible provider mounts web_fetch but never web_search", asyn
   // pass approval and then lie.
   const fx = fixture("trylo-wp20-compat-", false);
   const provider = await startProvider();
+
   try {
     const result = await run(fx, provider.url, ["run", "hi", "--allow-web"], "openai-compatible");
     assert.equal(result.status, 0, result.stderr);
@@ -213,15 +225,19 @@ test("an openai-compatible provider mounts web_fetch but never web_search", asyn
 test("an openai-responses provider mounts web_search, admitted because it is in the catalog", async () => {
   const fx = fixture("trylo-wp20-resp-", false);
   const provider = await startProvider("responses");
+
   try {
     declareProvider(fx.home, "responses-fixture", "openai-responses", provider.url);
     // The declared id, so the run is built from the `openai-responses` family.
     // Naming the built-in id instead would test the wrong provider entirely.
     const result = await run(fx, provider.url, ["run", "hi", "--allow-web"], "responses-fixture");
+
     assert.equal(result.status, 0, result.stderr);
     const terminal = result.stdout.trim().split("\n").map(line => JSON.parse(line)).find(event => event.type === "run_result");
+
     assert.equal(terminal?.lastMessage, "ok", "catalog acceptance must still deliver the actual Responses answer");
     const catalog = provider.toolNames()[0] ?? [];
+
     assert.equal(catalog.includes("web_search"), true, "a Responses provider does offer hosted search");
     assert.equal(catalog.includes("web_fetch"), true);
   } finally {
@@ -235,6 +251,7 @@ test("memory tools are absent with no learning switch and no rules, and present 
   // to something real: a project rule file is a record the run actually holds.
   const bare = fixture("trylo-wp20-mem-off-", false);
   const provider = await startProvider();
+
   try {
     const off = await run(bare, provider.url, ["run", "hi", "--allow-web"], "openai-compatible");
     assert.equal(off.status, 0, off.stderr);
@@ -246,6 +263,7 @@ test("memory tools are absent with no learning switch and no rules, and present 
 
   const ruled = fixture("trylo-wp20-mem-on-", true);
   const second = await startProvider();
+
   try {
     const on = await run(ruled, second.url, ["run", "hi", "--allow-web"], "openai-compatible");
     assert.equal(on.status, 0, on.stderr);
@@ -261,6 +279,7 @@ test("memory tools are absent with no learning switch and no rules, and present 
 test("no flag means no network tools at all, byte for byte as before", async () => {
   const fx = fixture("trylo-wp20-flagoff-", false);
   const provider = await startProvider();
+
   try {
     const result = await run(fx, provider.url, ["run", "hi"], "openai-compatible");
     assert.equal(result.status, 0, result.stderr);
@@ -288,17 +307,21 @@ test("a tool-free turn is really tool-free: the model is offered no web_search",
   // "no web tool was on offer" — which is the part this package owns.
   const fx = fixture("trylo-wp20-journal-", false);
   const provider = await startProvider();
+
   try {
     const result = await run(fx, provider.url, ["run", "hi"], "openai-compatible");
+
     assert.equal(result.status, 0);
     // The run really reached the provider, so every assertion below is a fact
     // about this run and not about a fixture that silently never started.
     assert.ok(provider.toolNames().length > 0, "the run never reached the provider");
+
     for (const catalog of provider.toolNames()) {
       assert.equal(catalog.includes("web_search"), false);
       assert.equal(catalog.includes("web_fetch"), false);
       assert.equal(catalog.some((name) => name.startsWith("memory_")), false);
     }
+
     void CITATION;
   } finally {
     provider.close();

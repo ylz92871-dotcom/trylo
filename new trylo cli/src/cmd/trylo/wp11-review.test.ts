@@ -45,6 +45,7 @@ function fixture(): Fixture {
 
 function run(fx: Fixture, args: readonly string[], input?: string) {
   const env: NodeJS.ProcessEnv = { ...process.env, TRYLO_HOME: fx.home };
+
   delete env.TRYLO_API_KEY;
   env.USERPROFILE = fx.home;
   env.HOME = fx.home;
@@ -54,6 +55,7 @@ function run(fx: Fixture, args: readonly string[], input?: string) {
     encoding: "utf8",
     ...(input === undefined ? { stdio: ["ignore", "pipe", "pipe"] } : { input }),
   });
+
   return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
 }
 
@@ -78,8 +80,10 @@ test("F11 `diff` inside a git repository shows untracked files", () => {
     if (init.status !== 0) {
       assert.fail("git is required for this case");
     }
+
     writeFileSync(join(fx.workspace, "new.txt"), "hello-untracked\n", "utf8");
     const result = run(fx, ["diff"]);
+
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /hello-untracked/);
   } finally {
@@ -92,21 +96,27 @@ test("F11 `checkpoint diff` previews a restore and refuses unknown ids", async (
   try {
     const storage = join(fx.home, "checkpoints");
     const store = createFileCheckpointStore({ workspaceRoot: fx.workspace, storageRoot: storage });
+
     writeFileSync(join(fx.workspace, "a.ts"), "before", "utf8");
     const taken = await store.snapshot({
       workspaceRoot: fx.workspace,
       label: "before:write",
       createdAt: "2026-10-05T00:00:00.000Z",
     });
+
     assert.equal(taken.ok, true);
+
     if (!taken.ok) {
       return;
     }
+
     writeFileSync(join(fx.workspace, "a.ts"), "after", "utf8");
     const result = run(fx, ["checkpoint", "diff", taken.value.checkpointId]);
+
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /M a\.ts/);
     const missing = run(fx, ["checkpoint", "diff", "cp-does-not-exist"]);
+
     assert.equal(missing.status, 52, missing.stderr);
   } finally {
     fx.cleanup();
@@ -118,20 +128,26 @@ test("F11 `checkpoint restore --only` rewinds in scope and keeps user files", as
   try {
     const storage = join(fx.home, "checkpoints");
     const store = createFileCheckpointStore({ workspaceRoot: fx.workspace, storageRoot: storage });
+
     writeFileSync(join(fx.workspace, "task.ts"), "before", "utf8");
     const taken = await store.snapshot({
       workspaceRoot: fx.workspace,
       label: "before:write",
       createdAt: "2026-10-05T00:00:00.000Z",
     });
+
     assert.equal(taken.ok, true);
+
     if (!taken.ok) {
       return;
     }
+
     const id = taken.value.checkpointId;
+
     writeFileSync(join(fx.workspace, "task.ts"), "after", "utf8");
     writeFileSync(join(fx.workspace, "mine.txt"), "user file", "utf8");
     const result = run(fx, ["checkpoint", "restore", id, "--only", "task.ts"]);
+
     assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
     assert.match(result.stdout, /scoped to 1 path/);
     assert.equal(readFileSync(join(fx.workspace, "task.ts"), "utf8"), "before");
@@ -145,9 +161,11 @@ test("F11 `session review` shows one turn through the binary", async () => {
   const fx = fixture();
   try {
     const sessionId = "wp11-e2e";
+
     mkdirSync(join(fx.home, "sessions"), { recursive: true });
     const store = createNdjsonSessionStore({ path: join(fx.home, "sessions", `${sessionId}.ndjson`) });
     const started = await store.start({ sessionId, createdAt: "2026-10-05T00:00:00.000Z", fingerprint: FINGERPRINT });
+
     assert.equal(started.ok, true);
     const appended = await store.append({
       type: "transcript_item",
@@ -156,14 +174,18 @@ test("F11 `session review` shows one turn through the binary", async () => {
       at: "2026-10-05T00:00:01.000Z",
       payload: { kind: "user", sequence: 0, text: "fix it" },
     });
+
     assert.equal(appended.ok, true);
     await store.release();
     const result = run(fx, ["session", "review", sessionId]);
+
     assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
     assert.match(result.stdout, /turn turn-1/);
     const machine = run(fx, ["session", "review", sessionId, "--json"]);
+
     assert.equal(machine.status, 0, machine.stderr);
     const parsed = JSON.parse(machine.stdout) as { turn: { turnId: string } };
+
     assert.equal(parsed.turn.turnId, "turn-1");
   } finally {
     fx.cleanup();

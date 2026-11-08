@@ -38,15 +38,19 @@ function fixture(): Fixture {
   const root = mkdtempSync(join(os.tmpdir(), "trylo-checkpoint-"));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
+
   mkdirSync(workspace, { recursive: true });
   mkdirSync(home, { recursive: true });
   const note = join(workspace, "note.txt");
+
   writeFileSync(note, "BEFORE-CONTENT", "utf8");
+
   return { workspace, home, note, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
 function run(fx: Fixture, args: readonly string[]): RunResult {
   const env: NodeJS.ProcessEnv = { ...process.env, TRYLO_HOME: fx.home };
+
   delete env.TRYLO_API_KEY;
   const result = spawnSync(process.execPath, [cli, ...args], {
     cwd: fx.workspace,
@@ -54,6 +58,7 @@ function run(fx: Fixture, args: readonly string[]): RunResult {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
+
   return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
 }
 
@@ -74,6 +79,7 @@ async function takeSnapshot(fx: Fixture): Promise<string> {
   if (!taken.ok) {
     throw new Error(`fixture snapshot failed: ${taken.code} ${taken.detail}`);
   }
+
   return taken.value.checkpointId;
 }
 
@@ -95,9 +101,11 @@ test("反方 #24 — restore puts the file back and reports what it touched", as
   const fx = fixture();
   try {
     const id = await takeSnapshot(fx);
+
     writeFileSync(fx.note, "AFTER-CONTENT", "utf8");
 
     const restored = run(fx, ["checkpoint", "restore", id]);
+
     assert.equal(restored.status, 0, restored.stderr);
     assert.equal(readFileSync(fx.note, "utf8"), "BEFORE-CONTENT");
     assert.match(restored.stdout, new RegExp(`restored ${id}`));
@@ -113,6 +121,7 @@ test("反方 #25 — restore is never automatic: an unknown id fails closed", as
     writeFileSync(fx.note, "AFTER-CONTENT", "utf8");
 
     const missing = run(fx, ["checkpoint", "restore", "cp-does-not-exist"]);
+
     // 52: a store that cannot answer is a configuration problem, not a crash.
     assert.equal(missing.status, 52, missing.stderr);
     // The failed restore changed nothing: failing closed means the text stays.

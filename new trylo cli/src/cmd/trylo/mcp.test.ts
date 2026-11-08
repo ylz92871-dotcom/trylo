@@ -41,6 +41,7 @@ function fixture(): Fixture {
 
 function run(fx: Fixture, args: readonly string[]): RunResult {
   const env: NodeJS.ProcessEnv = { ...process.env, TRYLO_HOME: fx.home };
+
   // No ambient credential may change an outcome here; the registry is local.
   delete env.TRYLO_API_KEY;
   const result = spawnSync(process.execPath, [cli, ...args], {
@@ -49,6 +50,7 @@ function run(fx: Fixture, args: readonly string[]): RunResult {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
+
   return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
 }
 
@@ -75,9 +77,11 @@ test("add then list round-trips through the real registry files", () => {
   const fx = fixture();
   try {
     const added = run(fx, ["mcp", "add", "demo", "--", "node", "server.js", "--port", "1"]);
+
     assert.equal(added.status, 0, added.stderr);
     assert.match(added.stdout, /added demo to the user registry/);
     const servers = listed(fx);
+
     assert.equal(servers.length, 1);
     assert.equal(servers[0]?.name, "demo");
     assert.equal(servers[0]?.transport, "stdio");
@@ -141,6 +145,7 @@ test("attack #8: a project-scoped remove never deletes the user entry", () => {
 
     assert.equal(run(fx, ["mcp", "remove", "demo", "--scope", "project"]).status, 0);
     const after = listed(fx);
+
     assert.equal(after.length, 1, "the user entry must survive");
     assert.deepEqual(after[0]?.scopes, ["user"]);
     assert.deepEqual(after[0]?.args, ["user.js"]);
@@ -155,6 +160,7 @@ test("attack #9: a corrupted registry fails closed instead of reading as 'no ser
     assert.equal(run(fx, ["mcp", "add", "demo", "--", "node", "a.js"]).status, 0);
     writeFileSync(join(fx.home, "mcp-servers.json"), "{ not json");
     const result = run(fx, ["mcp", "list"]);
+
     assert.equal(result.status, 52, "an undecodable registry is a configuration failure");
     assert.equal(result.stdout.includes("no MCP servers"), false);
     assert.match(result.stderr, /invalid_document|not be read/);
@@ -162,6 +168,7 @@ test("attack #9: a corrupted registry fails closed instead of reading as 'no ser
     // The same file must also stop a write: adding through a broken registry
     // would destroy whatever the file really contained.
     const added = run(fx, ["mcp", "add", "other", "--", "node", "b.js"]);
+
     assert.equal(added.status, 52);
   } finally {
     fx.cleanup();

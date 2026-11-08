@@ -1,7 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "outDir": "dist-wp23",
+    "outDir": "../_workspace/artifacts/new-cli-builds/wp23",
     "noEmitOnError": false,
     "declaration": false
   },

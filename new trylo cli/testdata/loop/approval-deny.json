@@ -1,4 +1,4 @@
 {
-  "terminal": "failed",
-  "requiredKinds": ["permission_denied", "terminal"]
+  "terminal": "completed",
+  "requiredKinds": ["permission_denied", "tool_result", "text", "terminal"]
 }

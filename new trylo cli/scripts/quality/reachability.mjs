@@ -17,14 +17,18 @@ const skipDirs = new Set(["node_modules", "dist", ".git", "open", "coverage", "_
 
 function walkTs(dir, acc = []) {
   if (!existsSync(dir)) return acc;
+
   let entries;
+
   try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return acc; }
+
   for (const e of entries) {
     if (skipDirs.has(e.name)) continue;
     const full = join(dir, e.name);
     if (e.isDirectory()) walkTs(full, acc);
     else if (e.isFile() && e.name.endsWith(".ts")) acc.push(full);
   }
+
   return acc;
 }
 
@@ -34,6 +38,7 @@ function toPosix(abs) {
 
 function resolveImport(fromFile, spec) {
   if (!spec.startsWith(".") && !spec.startsWith("/")) return null;
+
   const fromDir = dirname(fromFile);
   let candidate = resolve(fromDir, spec);
 
@@ -41,12 +46,14 @@ function resolveImport(fromFile, spec) {
   if (candidate.endsWith(".js")) {
     candidate = candidate.slice(0, -3) + ".ts";
   }
+
   // No extension → try .ts, /index.ts
   if (!extname(candidate)) {
     if (existsSync(candidate + ".ts")) return candidate + ".ts";
     if (existsSync(join(candidate, "index.ts"))) return join(candidate, "index.ts");
     return null;
   }
+
   return existsSync(candidate) ? candidate : null;
 }
 
@@ -63,11 +70,15 @@ function extractImports(file) {
 function computeReachable(entryPoints) {
   const visited = new Set();
   const queue = [...entryPoints];
+
   while (queue.length > 0) {
     const file = queue.shift();
     if (visited.has(file)) continue;
+
     if (!existsSync(file)) continue;
+
     visited.add(file);
+
     for (const spec of extractImports(file)) {
       const resolved = resolveImport(file, spec);
       if (resolved && !visited.has(resolved)) {
@@ -75,11 +86,16 @@ function computeReachable(entryPoints) {
       }
     }
   }
+
   return visited;
 }
 
 // Classification rules
 const TEST_SUPPORT_PATTERNS = [
+  // Thin bridge used only by protected integration/check-learning/runtime.test.ts.
+  // Remove this exact entry together with the bridge when that subsystem's
+  // separate migration switches the test to the tool subsystem entrypoint.
+  /^internal\/adapters\/tool-evolution\/process-verifier\.ts$/,
   /mock-oauth-server\.ts$/,
   /golden-trace\.ts$/,
   /golden-run-trace\.ts$/,
@@ -126,6 +142,12 @@ const APPROVED_DEFERRED_PREFIXES = [
 ];
 
 const APPROVED_DEFERRED_FILES = new Set([
+  // P05 collaboration owner retains this exact V1/V2 host assembly entry for
+  // historical migration compatibility (collaborationRuntimeFor / collaborationSessionFor).
+  // No current src/scripts caller imports it; this is not a shared pure library.
+  // Remove this entry when that legacy ABI is retired. A future main import is
+  // still production_reachable because the actual BFS check precedes this set.
+  "internal/surface/cli/collaboration-wiring.ts",
   "internal/loop/recover.ts",
   "internal/loop/reorder.ts",
   "internal/loop/replay.ts",
@@ -138,7 +160,7 @@ const APPROVED_DEFERRED_FILES = new Set([
 const RECLASSIFIED_TO_PRODUCTION = [
   "internal/adapters/mcp-",
   "internal/subagent/",
-  "internal/learning/method/",
+  "internal/learning/agent/subsystems/method/",
 ];
 
 function classify(relPath, reachableSet) {
@@ -193,6 +215,7 @@ const taxonomy = {
 for (const f of prodFiles) {
   const state = classify(f, reachableRel);
   if (state === "test") continue;
+
   if (taxonomy[state]) {
     taxonomy[state].push(f);
   } else {
@@ -203,6 +226,7 @@ for (const f of prodFiles) {
 // Also check: reclassified modules that are in reachable set
 // Move from approved_deferred to production_reachable if actually reachable
 const reclassified = [];
+
 taxonomy.approved_deferred = taxonomy.approved_deferred.filter((f) => {
   if (reachableRel.has(f)) {
     reclassified.push(f);
@@ -210,6 +234,7 @@ taxonomy.approved_deferred = taxonomy.approved_deferred.filter((f) => {
   }
   return true;
 });
+
 taxonomy.production_reachable.push(...reclassified);
 
 const summary = {
@@ -246,6 +271,7 @@ if (wantJson) {
   console.log(`  test_support:         ${taxonomy.test_support.length}`);
   console.log(`  approved_deferred:    ${taxonomy.approved_deferred.length}`);
   console.log(`  unclassified:         ${taxonomy.unclassified.length}`);
+
   if (reclassified.length > 0) {
     console.log(`\n  (reclassified from deferred → production: ${reclassified.length})`);
     for (const f of reclassified.slice(0, 20)) {
@@ -253,6 +279,7 @@ if (wantJson) {
     }
     if (reclassified.length > 20) console.log(`    ... and ${reclassified.length - 20} more`);
   }
+
   if (taxonomy.unclassified.length > 0) {
     console.log(`\n  UNCLASSIFIED (needs triage):`);
     for (const f of taxonomy.unclassified.slice(0, 30)) {
