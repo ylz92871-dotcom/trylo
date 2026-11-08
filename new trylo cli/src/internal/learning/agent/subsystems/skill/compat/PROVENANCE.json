@@ -1,0 +1,36 @@
+{
+  "newComposition": [
+    "index.mjs",
+    "index.d.mts"
+  ],
+  "externalPackagesAdded": [],
+  "reuse": "existing Trylo Hermes peripheral wrappers",
+  "pathAdapter": {
+    "change": "Resolve only the local ../vendor/legacy tree; use pathToFileURL for dynamic imports.",
+    "sha256": "06fbe641d07064bf5ae3dcd3d16c94851736cb5c3aef9492f200994019684e9f",
+    "sourceSha256": "bc5e09bc7764e20c93b752571bf2a2b20b442886e0e1bb8edf45012ebf7f0e7d",
+    "file": "vendor-path.mjs",
+    "source": "desktop-services/src/learning/vendor-path.mjs"
+  },
+  "schemaVersion": 1,
+  "copiedWrappers": [
+    {
+      "sha256": "e6aca7ce1c66342b8db7518fb2cb26e5c2df85739311fc4de0acd3ce47bcc2af",
+      "unchanged": true,
+      "file": "skills-client.mjs",
+      "source": "desktop-services/src/learning/skills-client.mjs"
+    },
+    {
+      "sha256": "b972c5afcbf957f1c79d56d25486e403dd2277427267be78f8040b328a41ef09",
+      "unchanged": true,
+      "file": "pending-admin-service.mjs",
+      "source": "desktop-services/src/learning/pending-admin-service.mjs"
+    },
+    {
+      "sha256": "6226d3877a62081bf11f0470ca346bf5afaaecd54963d01da71019b3ed46ebba",
+      "unchanged": true,
+      "file": "file-memento.mjs",
+      "source": "desktop-services/src/learning/file-memento.mjs"
+    }
+  ]
+}

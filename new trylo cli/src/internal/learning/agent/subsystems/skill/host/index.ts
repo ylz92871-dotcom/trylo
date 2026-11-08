@@ -1,0 +1,25 @@
+/** Runtime composition surface; native processes remain outside domain policy. */
+export { createHermesNodeClient } from "./client.js";
+export type { HermesShadowRequest, HermesToolProfile } from "./client.js";
+export { hermesReviewBackend } from "./review-client.js";
+export { createHermesNativeContext } from "./native-context.js";
+export { createHermesExplicitResolver } from "./explicit-resolver.js";
+export type { HermesExplicitProvided, HermesExplicitSelection, HermesExplicitResult } from "./explicit-resolver.js";
+export { HERMES_VIEW_MAX_BYTES_ENV, withHermesViewTransportBudget, isCompleteHermesViewOutput } from "./view-transport.js";
+export { normalContextPrompt, SKILL_AUTHORITY_GUIDANCE } from "./normal-context.js";
+export { bindHermesNormalContext } from "./normal-binding.js";
+export { createJournalSkillOpportunity } from "./journal-opportunity.js";
+export { hermesProfileRegistry } from "./mcp-profile.js";
+export { hermesProfileClientFor } from "./mcp-client-for.js";
+export { withSkillCentralFunding } from "./funded-provider.js";
+export { withSkillReviewDeadline } from "./review-deadline.js";
+export { createTeamSkillProvisionObserver } from "./team-provision.js";
+export { createHermesManagedSkillRuntime } from "./managed-runtime.js";
+export { readSkillReviewContinuation } from "./review-continuation.js";
+export type { SkillReviewContinuationInput } from "./review-continuation.js";
+export { verifyCentralSkillCreation, repairCentralSkillOrigin } from "./central-provenance.js";
+export type { CentralSkillCreationRepairInput, VerifiedCentralSkillCreation } from "./central-provenance.js";
+export { hermesReviewExecution } from "./review-execution.js";
+export { createSkillLifecycleObserver } from "./lifecycle-observer.js";
+export { createSkillPendingReview } from "./pending-review.js";
+export type { SkillPendingReviewOptions } from "./pending-review.js";

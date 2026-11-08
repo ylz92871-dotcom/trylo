@@ -1,0 +1,342 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Existing Trylo Hermes learning integration byte snapshot",
+  "selectionDate": "2026-11-03",
+  "baseline": "Current repository source; not a reconstruction of all historical Desktop binaries",
+  "modifications": [
+    {
+      "date": "2026-11-04",
+      "asset": "legacy/hermes-capabilities/admin.py",
+      "reason": "Trylo-owned adapter: restore trusted background_review origin only during approved create replay so the official Hermes provenance marker survives UI approval; approved revisions retain foreground consent semantics.",
+      "previousSha256": "fc2bc018986f3e2e68b7ce2bd3d9997d805df995a54c7dc7942753c5c3554b9b",
+      "previousBytes": 22770,
+      "baselineEvidence": "work/hermes-internalization-20261104/approval-baseline/source-hashes-before.json",
+      "upstreamLibraryModified": false
+    },
+    {
+      "date": "2026-11-04",
+      "asset": "legacy/hermes-capabilities/skills_adapter.py",
+      "reason": "Trylo-owned read-only UI adapter: disable upstream inline-shell preprocessing while retaining official directory-template substitution and the existing response envelope.",
+      "previousSha256": "369bc3628ea5125d0ccdf79d75f713b9e776c4e035b5b59ac876df493ad9c89c",
+      "previousBytes": 3326,
+      "baselineEvidence": "work/hermes-internalization-20261104/ui-readonly-baseline/source-hashes-before.json",
+      "upstreamLibraryModified": false
+    },
+    {
+      "date": "2026-11-04",
+      "asset": "legacy/hermes-capabilities/curation_adapter.py",
+      "reason": "Trylo-owned adapter: resolve skill directories with the original Hermes _find_skill resolver instead of reconstructing category/name paths; retain the existing curation contracts.",
+      "previousSha256": "e507a26f69d37401458323f1303088aaea1c32e1d36192b594b60465b51d0df4",
+      "previousBytes": 14589,
+      "baselineEvidence": "work/hermes-internalization-20261104/curation-path-baseline/",
+      "upstreamLibraryModified": false
+    },
+    {
+      "date": "2026-11-04",
+      "asset": "legacy/hermes-capabilities/admin.py",
+      "reason": "Trylo-owned compatibility adapter: use the pinned public raw skill_view lookup in place of an undefined private resolver; add exact native pending/payload/instruction-hash receipts only after original hash-checked commit, with post-commit body comparison. This observes lifecycle without changing approval authority or the pinned upstream library.",
+      "previousSha256": "8588aeb4bfbe5c6d134d2bd11d55f2c1e50b5c231e221de2456b17a1b15fa20c",
+      "previousBytes": 23634,
+      "vendoredSha256": "3191f05413f4ff3e4c515d7f3f672f744eb6c1d3f2c0c9170ac9cf6fdcdfea66",
+      "bytes": 25379,
+      "baselineEvidence": "work/central-integration-20261104/hermes-native-provenance/",
+      "upstreamLibraryModified": false
+    }
+  ],
+  "assets": [
+    {
+      "destination": "legacy/hermes-capability-manager.js",
+      "source": "desktop-services/vendor/legacy/hermes-capability-manager.js",
+      "bytes": 10386,
+      "sourceSha256": "92c0de20a2ff3f619198696dd74b0570dd3b2c9f75f724a2692de03eedb7ef34",
+      "vendoredSha256": "92c0de20a2ff3f619198696dd74b0570dd3b2c9f75f724a2692de03eedb7ef34",
+      "modified": false
+    },
+    {
+      "destination": "legacy/hermes-pending-admin.js",
+      "source": "desktop-services/vendor/legacy/hermes-pending-admin.js",
+      "bytes": 11931,
+      "sourceSha256": "65457f94962737be683af70fceb2024e6975315387319282710ca4a58c63a146",
+      "vendoredSha256": "65457f94962737be683af70fceb2024e6975315387319282710ca4a58c63a146",
+      "modified": false
+    },
+    {
+      "destination": "legacy/hermes-python-resolver.js",
+      "source": "desktop-services/vendor/legacy/hermes-python-resolver.js",
+      "bytes": 1512,
+      "sourceSha256": "4addc069cecc3ff7da1f7505113f80205a787d21844726b582cbcaf2a8b13436",
+      "vendoredSha256": "4addc069cecc3ff7da1f7505113f80205a787d21844726b582cbcaf2a8b13436",
+      "modified": false
+    },
+    {
+      "destination": "legacy/learning-loop/candidate-controller.js",
+      "source": "desktop-services/vendor/legacy/learning-loop/candidate-controller.js",
+      "bytes": 9589,
+      "sourceSha256": "65e09604809e3b1a8367fbed517503bab0bf8345fd6528eba3ca5e78404588b2",
+      "vendoredSha256": "65e09604809e3b1a8367fbed517503bab0bf8345fd6528eba3ca5e78404588b2",
+      "modified": false
+    },
+    {
+      "destination": "legacy/learning-loop/candidate-policy.js",
+      "source": "desktop-services/vendor/legacy/learning-loop/candidate-policy.js",
+      "bytes": 9684,
+      "sourceSha256": "a8e5397a2b4b48f5d1ff55d49fb4e67ac6f6a9ff8595f24d8036c379f860ec80",
+      "vendoredSha256": "a8e5397a2b4b48f5d1ff55d49fb4e67ac6f6a9ff8595f24d8036c379f860ec80",
+      "modified": false
+    },
+    {
+      "destination": "legacy/learning-loop/evidence-builder.js",
+      "source": "desktop-services/vendor/legacy/learning-loop/evidence-builder.js",
+      "bytes": 7078,
+      "sourceSha256": "5d516687dfe488f15092fcf34b6542ea791a93a32fe3f9d4ee674ab428321347",
+      "vendoredSha256": "5d516687dfe488f15092fcf34b6542ea791a93a32fe3f9d4ee674ab428321347",
+      "modified": false
+    },
+    {
+      "destination": "legacy/learning-loop/learning-state.js",
+      "source": "desktop-services/vendor/legacy/learning-loop/learning-state.js",
+      "bytes": 23936,
+      "sourceSha256": "02d2a6f82e1d6316a27208af1248dddc3afafa6798637196ed36b802bfe90282",
+      "vendoredSha256": "02d2a6f82e1d6316a27208af1248dddc3afafa6798637196ed36b802bfe90282",
+      "modified": false
+    },
+    {
+      "destination": "legacy/learning-loop/orchestrator.js",
+      "source": "desktop-services/vendor/legacy/learning-loop/orchestrator.js",
+      "bytes": 21182,
+      "sourceSha256": "30bc36ad6d026ec58970c8ce062e6a417d140df0ae079c7fc5481cc756810735",
+      "vendoredSha256": "30bc36ad6d026ec58970c8ce062e6a417d140df0ae079c7fc5481cc756810735",
+      "modified": false
+    },
+    {
+      "destination": "legacy/learning-loop/prompt-client.js",
+      "source": "desktop-services/vendor/legacy/learning-loop/prompt-client.js",
+      "bytes": 6741,
+      "sourceSha256": "07298a37fb437c1e9402cede146f91e30b85da30a5fc3739f1f4927bfe751703",
+      "vendoredSha256": "07298a37fb437c1e9402cede146f91e30b85da30a5fc3739f1f4927bfe751703",
+      "modified": false
+    },
+    {
+      "destination": "legacy/learning-loop/skill-governance.js",
+      "source": "desktop-services/vendor/legacy/learning-loop/skill-governance.js",
+      "bytes": 9882,
+      "sourceSha256": "4b5a5abcbf6f702907f50b98419767cad953f08cb4152e8b6df48a9a6440dadd",
+      "vendoredSha256": "4b5a5abcbf6f702907f50b98419767cad953f08cb4152e8b6df48a9a6440dadd",
+      "modified": false
+    },
+    {
+      "destination": "legacy/learning-loop/trigger-policy.js",
+      "source": "desktop-services/vendor/legacy/learning-loop/trigger-policy.js",
+      "bytes": 7607,
+      "sourceSha256": "88fc76cfbb87755a16740508bd08623fb4e550722cf3534d4c934c9c7868a2ce",
+      "vendoredSha256": "88fc76cfbb87755a16740508bd08623fb4e550722cf3534d4c934c9c7868a2ce",
+      "modified": false
+    },
+    {
+      "destination": "legacy/hermes-capabilities/admin.py",
+      "source": "desktop/sidecars/hermes-capabilities/admin.py",
+      "bytes": 25379,
+      "sourceSha256": "8588aeb4bfbe5c6d134d2bd11d55f2c1e50b5c231e221de2456b17a1b15fa20c",
+      "vendoredSha256": "3191f05413f4ff3e4c515d7f3f672f744eb6c1d3f2c0c9170ac9cf6fdcdfea66",
+      "modified": true
+    },
+    {
+      "destination": "legacy/hermes-capabilities/curation_adapter.py",
+      "source": "desktop/sidecars/hermes-capabilities/curation_adapter.py",
+      "bytes": 14983,
+      "sourceSha256": "72f0c9c918dc7eb2dc82c0f61de630d58eb6e54114986808fcad8294fec03c26",
+      "vendoredSha256": "72f0c9c918dc7eb2dc82c0f61de630d58eb6e54114986808fcad8294fec03c26",
+      "modified": true
+    },
+    {
+      "destination": "legacy/hermes-capabilities/learning_prompt_adapter.py",
+      "source": "desktop/sidecars/hermes-capabilities/learning_prompt_adapter.py",
+      "bytes": 4844,
+      "sourceSha256": "38ee47cd8c9031a941d0b7d221a7da860dc64742f23677ed1e5da8e0a4d56708",
+      "vendoredSha256": "38ee47cd8c9031a941d0b7d221a7da860dc64742f23677ed1e5da8e0a4d56708",
+      "modified": false
+    },
+    {
+      "destination": "legacy/hermes-capabilities/server.py",
+      "source": "desktop/sidecars/hermes-capabilities/server.py",
+      "bytes": 17253,
+      "sourceSha256": "d98af1cce21e3e8a6b10df5025a5687ccc27324f141fd111528ce3b6daed44ad",
+      "vendoredSha256": "d98af1cce21e3e8a6b10df5025a5687ccc27324f141fd111528ce3b6daed44ad",
+      "modified": false
+    },
+    {
+      "destination": "legacy/hermes-capabilities/session_adapter.py",
+      "source": "desktop/sidecars/hermes-capabilities/session_adapter.py",
+      "bytes": 8068,
+      "sourceSha256": "b8a33d93c686eb53b5814ec350132fa5cec76ba55184ec38d4d027638aa6fdf5",
+      "vendoredSha256": "b8a33d93c686eb53b5814ec350132fa5cec76ba55184ec38d4d027638aa6fdf5",
+      "modified": false
+    },
+    {
+      "destination": "legacy/hermes-capabilities/skills_adapter.py",
+      "source": "desktop/sidecars/hermes-capabilities/skills_adapter.py",
+      "bytes": 4066,
+      "sourceSha256": "10913cf5ac9d961a4242ee37f20349efd182f4f1bae5956ca65ee80b6e869785",
+      "vendoredSha256": "10913cf5ac9d961a4242ee37f20349efd182f4f1bae5956ca65ee80b6e869785",
+      "modified": true
+    },
+    {
+      "destination": "legacy/hermes-capabilities/upstream.py",
+      "source": "desktop/sidecars/hermes-capabilities/upstream.py",
+      "bytes": 4814,
+      "sourceSha256": "e37cb560e506a115ee046b3854a380cd9a5bdd97aa607e6601db8af2d711d396",
+      "vendoredSha256": "e37cb560e506a115ee046b3854a380cd9a5bdd97aa607e6601db8af2d711d396",
+      "modified": false
+    },
+    {
+      "destination": "legacy/hermes-capabilities/PINNED_VERSIONS.md",
+      "source": "desktop/sidecars/hermes-capabilities/PINNED_VERSIONS.md",
+      "bytes": 5331,
+      "sourceSha256": "f77171c07ad446dd7fe060e8e7cdfa78901938e46203be148d7ebb0210a72871",
+      "vendoredSha256": "f77171c07ad446dd7fe060e8e7cdfa78901938e46203be148d7ebb0210a72871",
+      "modified": false
+    },
+    {
+      "destination": "legacy/hermes-capabilities/README.upstream.md",
+      "source": "desktop/sidecars/hermes-capabilities/README.upstream.md",
+      "bytes": 4605,
+      "sourceSha256": "05cfbf35e692df6277d810340cba6499e5b88406380da11eb103a8809fa60fc9",
+      "vendoredSha256": "05cfbf35e692df6277d810340cba6499e5b88406380da11eb103a8809fa60fc9",
+      "modified": false
+    },
+    {
+      "destination": "legacy/hermes-capabilities/requirements.lock",
+      "source": "desktop/sidecars/hermes-capabilities/requirements.lock",
+      "bytes": 220,
+      "sourceSha256": "9ba9f6e1a4b245ef5ffc9d9a5d6feb47aac5e1ce94414e1a93e24b8d3d06eecf",
+      "vendoredSha256": "9ba9f6e1a4b245ef5ffc9d9a5d6feb47aac5e1ce94414e1a93e24b8d3d06eecf",
+      "modified": false
+    },
+    {
+      "destination": "licenses/hermes-agent-0.19.0-LICENSE",
+      "source": "${APPDATA}/uv/tools/hermes-agent/Lib/site-packages/hermes_agent-0.19.0.dist-info/licenses/LICENSE",
+      "bytes": 1070,
+      "sourceSha256": "821556e6336796450ab852d375117b48a4887e71d255794fd6318d99982a5ab6",
+      "vendoredSha256": "821556e6336796450ab852d375117b48a4887e71d255794fd6318d99982a5ab6",
+      "modified": false
+    }
+  ],
+  "generatedFiles": [
+    {
+      "destination": "legacy/package.json",
+      "sha256": "a51bff776fdd53226e2e67d8f654d17dadfe3decc8bf8bf869cba3aff9813826",
+      "reason": "CommonJS boundary required because the enclosing new CLI package is ESM; source JS bytes unchanged."
+    }
+  ],
+  "runtimeDependencies": [
+    {
+      "distribution": "hermes-agent",
+      "version": "0.19.0",
+      "binding": "Existing installed interpreter; no installation or site-packages copy",
+      "metadataSource": "${APPDATA}/uv/tools/hermes-agent/Lib/site-packages/hermes_agent-0.19.0.dist-info/METADATA",
+      "metadataSha256": "1b8999eb2a4925a8a5de329c3b5e0e44875ada4ba5ec569b94a52aa3a331f802",
+      "license": "licenses/hermes-agent-0.19.0-LICENSE"
+    },
+    {
+      "distribution": "mcp",
+      "binding": "FastMCP in the existing pinned Python environment; declared in original requirements.lock"
+    }
+  ],
+  "runtimeConfiguration": {
+    "python": "HERMES_PYTHON, otherwise original uv tool dir resolver",
+    "storageRoot": "Runtime-owned value passed to original APIs; getHermesHome(root) remains <root>/hermes-capabilities/v1",
+    "capabilitiesDir": "Absolute path to legacy/hermes-capabilities",
+    "environmentBeforeFirstRequire": [
+      "TRYLO_HERMES_CAPABILITIES_DIR=<capabilitiesDir>",
+      "TRYLO_HERMES_SERVER_SCRIPT=<capabilitiesDir>/server.py"
+    ],
+    "pythonEnvironment": "HERMES_HOME supplied by runtime; write_approval for skills must remain enabled to preserve baseline staging",
+    "packaging": "Copy this non-TypeScript tree, package boundary and license into the runtime artifact; tsc alone does not emit it."
+  },
+  "boundaries": {
+    "nodeImports": [
+      "node:child_process",
+      "node:crypto",
+      "node:fs",
+      "node:fs/promises",
+      "node:os",
+      "node:path"
+    ],
+    "npmDependencies": [],
+    "pythonLibraryImports": [
+      "agent.background_review",
+      "agent.curator_backup",
+      "agent.learn_prompt",
+      "agent.learning_graph",
+      "hermes_state",
+      "mcp.server.fastmcp",
+      "tools.memory_tool",
+      "tools.session_search_tool",
+      "tools.skill_manager_tool",
+      "tools.skill_usage",
+      "tools.skills_guard",
+      "tools.skills_tool",
+      "tools.threat_patterns",
+      "tools.write_approval"
+    ],
+    "excluded": [
+      "Desktop UI",
+      "Service Host",
+      "shadow-runner transport",
+      "history-mining orchestration",
+      "jobs/scheduler",
+      "entire Hermes or uv environment",
+      "user configs, skills, sessions, proposals, credentials"
+    ]
+  },
+  "observedRuntimeCopies": [
+    {
+      "file": "server.py",
+      "observedSource": "desktop/src-tauri/target/debug/sidecars/hermes-capabilities/server.py",
+      "observedSha256": "d98af1cce21e3e8a6b10df5025a5687ccc27324f141fd111528ce3b6daed44ad",
+      "selectedSource": "desktop/sidecars/hermes-capabilities/server.py",
+      "selectedSha256": "d98af1cce21e3e8a6b10df5025a5687ccc27324f141fd111528ce3b6daed44ad",
+      "equalToSelected": true
+    },
+    {
+      "file": "upstream.py",
+      "observedSource": "desktop/src-tauri/target/debug/sidecars/hermes-capabilities/upstream.py",
+      "observedSha256": "e37cb560e506a115ee046b3854a380cd9a5bdd97aa607e6601db8af2d711d396",
+      "selectedSource": "desktop/sidecars/hermes-capabilities/upstream.py",
+      "selectedSha256": "e37cb560e506a115ee046b3854a380cd9a5bdd97aa607e6601db8af2d711d396",
+      "equalToSelected": true
+    },
+    {
+      "file": "learning_prompt_adapter.py",
+      "observedSource": "desktop/src-tauri/target/debug/sidecars/hermes-capabilities/learning_prompt_adapter.py",
+      "observedSha256": "c6b4ac47dd9215c447bafd9e7f664a34808249b210e1af7165ac50cfe5965ca8",
+      "selectedSource": "desktop/sidecars/hermes-capabilities/learning_prompt_adapter.py",
+      "selectedSha256": "38ee47cd8c9031a941d0b7d221a7da860dc64742f23677ed1e5da8e0a4d56708",
+      "equalToSelected": false
+    },
+    {
+      "file": "session_adapter.py",
+      "observedSource": "desktop/src-tauri/target/debug/sidecars/hermes-capabilities/session_adapter.py",
+      "observedSha256": "b8a33d93c686eb53b5814ec350132fa5cec76ba55184ec38d4d027638aa6fdf5",
+      "selectedSource": "desktop/sidecars/hermes-capabilities/session_adapter.py",
+      "selectedSha256": "b8a33d93c686eb53b5814ec350132fa5cec76ba55184ec38d4d027638aa6fdf5",
+      "equalToSelected": true
+    },
+    {
+      "file": "admin.py",
+      "observedSource": "desktop/src-tauri/target/debug/sidecars/hermes-capabilities/admin.py",
+      "observedSha256": "41608bac4441ca606ec36315e1c51079e06a015ddea66e0598448927ba8abe3b",
+      "selectedSource": "desktop/sidecars/hermes-capabilities/admin.py",
+      "selectedSha256": "fc2bc018986f3e2e68b7ce2bd3d9997d805df995a54c7dc7942753c5c3554b9b",
+      "equalToSelected": false
+    }
+  ],
+  "verification": {
+    "originalBytesMatched": 22,
+    "localJavascriptClosure": "all static relative require targets included",
+    "localPythonClosure": "AST local import closure included",
+    "testsRun": false,
+    "modelCalls": 0,
+    "installs": 0
+  }
+}
