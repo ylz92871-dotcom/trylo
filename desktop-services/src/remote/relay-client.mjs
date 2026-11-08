@@ -83,12 +83,13 @@ export function createRelayClient({ appDataDir = process.env.TRYLO_APP_DATA_DIR,
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw Object.assign(new Error(data.error || `服务器请求失败 (${response.status})`), { status: response.status, code: data.error, interval: data.interval });
+    if (!response.ok) throw Object.assign(new Error(['mfa_required', 'mfa_invalid', 'mfa_enrollment_required'].includes(data.code) ? '此账号需要验证器验证，请使用网页登录完成验证。' : data.error || `服务器请求失败 (${response.status})`), { status: response.status, code: data.code || data.error, interval: data.interval });
     return data;
   }
   function status() { return { loggedIn: Boolean(session?.accessToken && session.expiresAt > Date.now()), username: session?.username || '', serverUrl: session?.serverUrl || '', online }; }
   function changed() { onStatus(status()); }
   async function acceptLogin(serverUrl, result) {
+    if (result.mfa?.restricted) throw Object.assign(new Error('请先通过网页绑定验证器，再使用网页登录授权 Desktop。'), { code: 'mfa_enrollment_required' });
     if (typeof result.username !== 'string' || typeof result.accessToken !== 'string' || result.accessToken.length < 32 || !Number.isFinite(result.expiresAt)) throw new Error('服务器返回的登录信息不完整。');
     if (session?.deviceId && (session.serverUrl !== serverUrl || session.username !== result.username)) throw new Error('请先退出当前服务器账号，再切换账号。');
     let registration = session?.serverUrl === serverUrl && session.username === result.username ? { deviceId: session.deviceId, deviceSecret: session.deviceSecret, desktopIdentity: session.desktopIdentity } : {};

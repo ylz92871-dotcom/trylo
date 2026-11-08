@@ -2,7 +2,6 @@
 // This intentionally does NOT start Tauri or claim native WebView2 acceptance.
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import http from 'node:http';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
@@ -10,10 +9,12 @@ import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import { createNativeBrowserService, nativeBrowserScope } from '../src/tooling/native-browser-service.mjs';
 import { probePlaywrightChromium } from '../src/tooling/tool-browser-condition.mjs';
+import { artifactPath, temporaryPath } from '../../scripts/workspace-paths.mjs';
 
 const workspace = path.resolve(fileURLToPath(new URL('../../', import.meta.url)));
-const output = process.env.TRYLO_NATIVE_HEADLESS_OUTPUT ? path.resolve(process.env.TRYLO_NATIVE_HEADLESS_OUTPUT) : path.join(workspace, 'desktop/spike-results/native-browser-2026-10-13');
-const tempRoot = path.resolve(os.tmpdir());
+const output = process.env.TRYLO_NATIVE_HEADLESS_OUTPUT ? path.resolve(process.env.TRYLO_NATIVE_HEADLESS_OUTPUT) : artifactPath('desktop-native-browser-headless');
+const tempRoot = temporaryPath('desktop-native-browser-headless');
+await fs.mkdir(tempRoot, { recursive: true });
 const profile = await fs.mkdtemp(path.join(tempRoot, 'trylo-native-headless-'));
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const probe = probePlaywrightChromium();
@@ -30,7 +31,7 @@ async function socket(url) {
   return { ws, send(method, params = {}) { return new Promise((resolve, reject) => { const id = ++next, timer = setTimeout(() => { pending.delete(id); reject(new Error(`${method} timeout`)); }, 10000); pending.set(id, { resolve, reject, timer }); ws.send(JSON.stringify({ id, method, params })); }); } };
 }
 async function mcp(gate, endpoint) {
-  const entry = path.join(workspace, 'new_tool/browser/playwright-mcp/cli.js');
+  const entry = path.join(workspace, 'desktop-services/toolchain/browser/playwright-mcp/cli.js');
   const processHandle = spawn(process.execPath, [process.env.TRYLO_NATIVE_HOST_ENTRY || path.join(workspace, 'desktop-services/src/host.mjs'), '--native-browser-mcp', gate, entry, '--cdp-endpoint', endpoint], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], cwd: profile });
   const pending = new Map(); let next = 0, diagnostic = '';
   processHandle.stderr.on('data', value => { diagnostic = (diagnostic + value).slice(-5000); });

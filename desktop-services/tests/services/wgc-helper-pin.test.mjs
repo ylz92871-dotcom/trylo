@@ -41,7 +41,7 @@ test('the manifest pins exactly one WGC helper build', () => {
   assert.equal(HELPER.packagedDirName, 'wgc-helper');
   assert.equal(
     HELPER.sourceTree,
-    'new_tool/computer-control/Windows-MCP/native/wgc-helper',
+    'desktop-services/toolchain/computer-control/Windows-MCP/native/wgc-helper',
   );
 });
 

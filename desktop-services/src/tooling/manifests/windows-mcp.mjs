@@ -23,7 +23,7 @@
 //     dependency set is pinned by the tarball's `uv.lock` (digest of the
 //     LF-normalised file — the same bytes the GitHub tarball ships);
 //   - Trylo maintains a LOCAL FORK of `src/windows_mcp` at
-//     `new_tool/computer-control/Windows-MCP` (same upstream commit plus
+//     `desktop-services/toolchain/computer-control/Windows-MCP` (same upstream commit plus
 //     CAD-workflow fixes: focused-mode Type, modifier clicks, press/hold +
 //     release for every button, double-click timing for right/middle,
 //     wheel-delta granularity, window pre-focus, IME detection, live
@@ -137,7 +137,7 @@ export const WINDOWS_MCP_MANIFEST = Object.freeze({
     packagedDirName: 'wgc-helper',
     sha256: '240c8132cafd4e694841a6b4847973abb9bc4ccf5d728a601e4028ae07d235cb',
     sizeBytes: 42067483,
-    sourceTree: 'new_tool/computer-control/Windows-MCP/native/wgc-helper',
+    sourceTree: 'desktop-services/toolchain/computer-control/Windows-MCP/native/wgc-helper',
   }),
 
   mcp: Object.freeze({

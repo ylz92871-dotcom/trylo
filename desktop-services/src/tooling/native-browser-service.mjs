@@ -9,11 +9,13 @@ import { createWorkspacePagePreview } from './workspace-page-preview.mjs';
 import { createNativeViewport, viewportRequest } from './native-browser-viewport.mjs';
 import { createViewportCdp } from './native-browser-cdp.mjs';
 import { nativeDisplayInput } from './native-browser-input.mjs';
+import { navigationFailure } from './native-browser-navigation.mjs';
 
 export function nativeBrowserScope({ projectRoot = '', conversationId = '' } = {}) {
   return JSON.stringify([path.resolve(projectRoot || '.').replaceAll('\\', '/').toLowerCase().replace(/\/$/, ''), conversationId]);
 }
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+class NativeBrowserConnectionError extends Error {}
 const json = (response, status, value) => {
   response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   response.end(JSON.stringify(value));
@@ -55,11 +57,11 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
   }
   function state(session) {
     const failure = session.failed || session.viewport.error();
-    return { ok: true, scope: session.scope, revision: session.revision = (session.revision ?? 0) + 1, state: failure ? 'error' : 'running', detail: failure || '',
+    return { ok: true, scope: session.scope, nativeLayout: 'direct', revision: session.revision = (session.revision ?? 0) + 1, state: failure ? 'error' : 'running', detail: failure || '',
       control: session.held ? session.leases.size ? 'pending' : 'user' : 'agent', inFlight: session.leases.size,
       activeLabel: session.record.activeLabel,
       viewport: session.viewport.snapshot(),
-      tabs: [...session.targets].map(([id, tab]) => ({ id, label: tab.label, title: tab.title || '新标签页', url: tab.url || '', popup: session.record.tabs.find(native => native.label === tab.label)?.popup === true })) };
+      tabs: [...session.targets].map(([id, tab]) => ({ id, label: tab.label, title: tab.title || '新标签页', url: tab.url || '', popup: session.record.tabs.find(native => native.label === tab.label)?.popup === true, ...(tab.navigationError ? { navigationError: tab.navigationError } : {}) })) };
   }
   function report(session) {
     if (!session.leases.size && (session.held || !session.clients.size)) for (const cursor of session.cursors.values()) cursor.hide();
@@ -81,7 +83,7 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
         }
       }
       if (label && !session.record.tabs.some(tab => tab.label === label)) session.record = await requestNative(session.scope, 'ensure');
-      if (session.record.tabs.some(tab => tab.label === label)) session.targets.set(page.id, { label, title: page.title, url: page.url, socket: page.webSocketDebuggerUrl });
+      if (session.record.tabs.some(tab => tab.label === label)) session.targets.set(page.id, { label, title: page.title, url: page.url, socket: page.webSocketDebuggerUrl, navigationError: await navigationFailure(page.webSocketDebuggerUrl, cdp) });
     }
     const alive = new Set(list.map(page => page.id));
     for (const [id, target] of session.targets) if (!alive.has(id) || !session.record.tabs.some(tab => tab.label === target.label)) {
@@ -96,13 +98,17 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
     const record = await requestNative(session.scope, operation, params);
     if (!record || record.scope !== session.scope || record.cdpPort !== session.record.cdpPort) throw new Error('原生浏览器会话不匹配');
     session.record = record;
+    // This operation owns the selected native view, not the readiness of
+    // every sibling. A reconnecting background tab cannot block Network.enable
+    // and poison initialization of an otherwise healthy page.
+    const ready = () => [...session.targets.values()].some(target => target.label === record.activeLabel);
     const deadline = Date.now() + 5000;
     do {
       await refresh(session);
-      if (session.targets.size >= record.tabs.length) break;
+      if (ready()) break;
       await pause(50);
     } while (Date.now() < deadline);
-    if (!record.tabs.every(tab => [...session.targets.values()].some(target => target.label === tab.label))) throw new Error('原生标签页尚未连接');
+    if (!ready()) throw new NativeBrowserConnectionError('原生标签页尚未连接');
     report(session);
     return record;
   }
@@ -178,8 +184,26 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
       const upstream = new WebSocket(upstreamUrl, { maxPayload: 64 * 1024 * 1024 });
       session.connections.add(downstream); session.connections.add(upstream);
       const queue = [], pending = new Map(), attached = new Map(), inputReceipts = new Map();
-      let interceptTail = Promise.resolve();
-      const write = message => { if (downstream.readyState === WebSocket.OPEN) downstream.send(JSON.stringify(message)); };
+      let interceptTail = Promise.resolve(), disconnected = false, retiring = false;
+      const write = (message, callback) => {
+        if (downstream.readyState === WebSocket.OPEN) downstream.send(JSON.stringify(message), callback);
+      };
+      const retireAfterResponse = message => {
+        retiring = true;
+        write(message, () => {
+          downstream.close(1012, 'native page connection unavailable');
+          upstream.close();
+        });
+      };
+      const rejectCommand = (message, error) => {
+        // Puppeteer caches a failed page initialization while its browser stays
+        // connected. Retire only this transport after delivering the failure;
+        // the next explicit tool call can attach to the same native pages.
+        const response = { id: message.id, ...(message.sessionId ? { sessionId: message.sessionId } : {}),
+          error: { code: -32000, message: String(error.message ?? error) } };
+        if (error instanceof NativeBrowserConnectionError) retireAfterResponse(response);
+        else write(response);
+      };
       const feedback = message => {
         const targetId = attached.get(message.sessionId) ?? defaultTarget;
         const target = session.targets.get(targetId);
@@ -191,9 +215,19 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
           cursor.show({ x: point.x, y: point.y, click: point.type === 'mousePressed' });
         }
       };
-      const forward = message => { if (upstream.readyState === WebSocket.OPEN) upstream.send(JSON.stringify(message)); else queue.push(message); };
+      const forward = message => {
+        if (disconnected || retiring) return;
+        if (upstream.readyState === WebSocket.OPEN) upstream.send(JSON.stringify(message)); else queue.push(message);
+      };
       upstream.once('open', () => { for (const message of queue.splice(0)) forward(message); });
-      const finish = () => { for (const settle of inputReceipts.values()) settle(); inputReceipts.clear(); session.connections.delete(downstream); session.connections.delete(upstream); downstream.close(); upstream.close(); };
+      const finish = () => {
+        if (disconnected) return;
+        disconnected = true;
+        queue.length = 0;
+        for (const settle of inputReceipts.values()) settle();
+        inputReceipts.clear(); session.connections.delete(downstream); session.connections.delete(upstream);
+        downstream.close(); upstream.close();
+      };
       upstream.once('error', finish); downstream.once('error', finish); upstream.once('close', finish); downstream.once('close', finish);
       upstream.on('message', raw => {
         const message = JSON.parse(String(raw));
@@ -203,6 +237,11 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
           inputReceipts.get(message.id)?.(); inputReceipts.delete(message.id);
           if (sent?.method === 'Target.attachToTarget' && message.result?.sessionId) attached.set(message.result.sessionId, sent.params.targetId);
           if (sent && !message.error) feedback(sent);
+          // This is transport setup, not a business operation. Reconnecting
+          // next time discards Puppeteer's cached rejected Page promise.
+          if (sent?.method === 'Network.enable' && message.error) {
+            retireAfterResponse(message); return;
+          }
         }
         write(message);
       });
@@ -220,6 +259,7 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
           // Reads and input after a resize must observe the committed dimensions.
           // Recheck takeover when the queued operation actually executes.
           interceptTail = interceptTail.then(() => serial(session, async () => {
+            if (disconnected || retiring) return;
             if (mutating && session.held && session.leases.size === 0) throw new Error('你已接管浏览器，等待交回控制权');
             const target = session.targets.get(attached.get(message.sessionId) ?? defaultTarget);
             if (session.leases.size && target && target.label !== session.record.activeLabel) {
@@ -234,10 +274,11 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
             }) : undefined;
             forward(nativeDisplayInput(message, session.viewport.snapshot(target?.label)));
             if (receipt) await receipt;
-          })).catch(error => write({ id: message.id, ...(message.sessionId ? { sessionId: message.sessionId } : {}), error: { code: -32000, message: String(error.message ?? error) } }));
+          })).catch(error => rejectCommand(message, error));
           return;
         }
         interceptTail = interceptTail.then(() => serial(session, async () => {
+          if (disconnected || retiring) return;
           let result;
           if (mutating && session.held && session.leases.size === 0) throw new Error('你已接管浏览器，等待交回控制权');
           if (message.method === 'Browser.close') throw new Error('浏览器由 Trylo 持有，请关闭对应标签页');
@@ -275,7 +316,7 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
             result = message.method === 'Target.closeTarget' ? { success: true } : {};
           }
           write({ id: message.id, ...(message.sessionId ? { sessionId: message.sessionId } : {}), result });
-        })).catch(error => write({ id: message.id, ...(message.sessionId ? { sessionId: message.sessionId } : {}), error: { code: -32000, message: String(error.message ?? error) } }));
+        })).catch(error => rejectCommand(message, error));
       });
     });
   }
@@ -349,9 +390,9 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
   async function open(params = {}) { await configure({ ...params, packageId: 'playwright' }); return snapshot({ scope: nativeBrowserScope(params) }); }
   async function select({ scope, label } = {}) { const session = get(scope); return serial(session, async () => { await nativeOperation(session, 'activate', { label }); await session.viewport.sync(label); report(session); return state(session); }); }
   async function create({ scope } = {}) { const session = get(scope); return serial(session, async () => { await nativeOperation(session, 'create'); await session.viewport.sync(session.record.activeLabel); report(session); return state(session); }); }
-  async function layout({ scope, bounds, visible } = {}) { const session = get(scope); return serial(session, async () => {
+  async function layout({ scope, bounds, visible, nativeApplied = false } = {}) { const session = get(scope); return serial(session, async () => {
     if (typeof visible !== 'boolean') throw new Error('浏览器显示状态无效');
-    try { await session.viewport.layout(bounds, visible); } finally { report(session); }
+    try { await session.viewport.layout(bounds, visible, nativeApplied === true); } finally { report(session); }
     return state(session);
   }); }
   async function viewport({ scope, label, viewport: input } = {}) { const session = get(scope); return serial(session, async () => {

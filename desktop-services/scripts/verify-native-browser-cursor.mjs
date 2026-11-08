@@ -8,10 +8,11 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { WebSocket } from 'ws';
 import { createNativeBrowserService, nativeBrowserScope } from '../src/tooling/native-browser-service.mjs';
+import { artifactPath } from '../../scripts/workspace-paths.mjs';
 
 const workspace = path.resolve(fileURLToPath(new URL('../../', import.meta.url)));
-const output = path.join(workspace, 'desktop/spike-results/browser-feedback-2026-10-14');
-const { chromium } = createRequire(path.join(workspace, 'new_tool/browser/playwright-mcp/package.json'))('playwright');
+const output = artifactPath('desktop-native-browser-cursor');
+const { chromium } = createRequire(path.join(workspace, 'desktop-services/toolchain/browser/playwright-mcp/package.json'))('playwright');
 const proof = { kind: 'headless Chromium with real CDP input and isolated cursor overlay', nativeVerified: false, checks: [], images: [] };
 const check = name => proof.checks.push({ name, result: 'pass' });
 const portProbe = net.createServer();

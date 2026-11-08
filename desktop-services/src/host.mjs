@@ -26,6 +26,7 @@ import { createLearningServices } from './learning/index.mjs';
 import { createRemoteServices } from './remote/index.mjs';
 import { createToolingServices } from './tooling/index.mjs';
 import { runNativeBrowserMcp } from './tooling/native-browser-mcp.mjs';
+import { runModelPreviewMcp } from './tooling/model-preview-mcp.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -211,6 +212,10 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
     .register('tooling', 'nativeBrowserLayout', params => tooling.nativeBrowserLayout(params))
     .register('tooling', 'nativeBrowserViewport', params => tooling.nativeBrowserViewport(params))
     .register('tooling', 'nativeBrowserCommandResult', params => tooling.nativeBrowserCommandResult(params))
+    .register('tooling', 'modelPreviewAttach', () => tooling.modelPreviewAttach())
+    .register('tooling', 'modelPreviewDetach', params => tooling.modelPreviewDetach(params))
+    .register('tooling', 'modelPreviewCommandResult', params => tooling.modelPreviewCommandResult(params))
+    .register('tooling', 'modelPreviewClose', params => tooling.modelPreviewClose(params))
     .register('tooling', 'health', (params) => tooling.health(params))
     .register('tooling', 'listProfiles', () => tooling.listProfiles())
     .register('tooling', 'install', (params) => tooling.install(params))
@@ -331,5 +336,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv[2] === '--native-browser-mcp') {
     await runNativeBrowserMcp({ gate: process.argv[3], entry: process.argv[4], args: process.argv.slice(5) });
+  } else if (process.argv[2] === '--model-preview-mcp') {
+    await runModelPreviewMcp({ gate: process.argv[3] });
   } else { createHost().start(); }
 }

@@ -79,3 +79,36 @@ test('context-sized model requests are bounded and reused leases retain fresh ca
   assert.equal(rejected.status, 413); await rejected.text();
   assert.equal(calls, 1);
 });
+
+test('the native model bridge does not invent an execution deadline', async t => {
+  const timeouts = [];
+  t.mock.method(AbortSignal, 'timeout', milliseconds => { timeouts.push(milliseconds); return new AbortController().signal; });
+  const gateway = createModelGateway({
+    account: async () => ({ owner: 'fixture', serverUrl: 'https://example.invalid', accessToken: 'synthetic-session' }),
+    models: async () => ({ models: [{ id: 'chat', chat: true, pool: 'free' }] }),
+    transport: async () => Response.json({ result: { choices: [] } }),
+  });
+  t.after(() => gateway.close());
+  const connection = await gateway.connection({ model: 'chat' });
+  const reply = await send(connection); await reply.text();
+  assert.equal(reply.status, 200);
+  assert.equal(timeouts.includes(125000), false);
+});
+
+test('a model connection remains usable after two hours while the owning account is unchanged', async t => {
+  let clock = Date.now();
+  t.mock.method(Date, 'now', () => clock);
+  const gateway = createModelGateway({
+    account: async () => ({ owner: 'fixture', serverUrl: 'https://example.invalid', accessToken: 'synthetic-session' }),
+    models: async () => ({ models: [{ id: 'chat', chat: true, pool: 'free' }] }),
+    transport: async () => Response.json({ result: { choices: [] } }),
+  });
+  t.after(() => gateway.close());
+  const connection = await gateway.connection({ model: 'chat' });
+  clock += 3 * 3600000;
+  const reply = await send(connection); await reply.text();
+  assert.equal(reply.status, 200);
+  gateway.invalidate();
+  const revoked = await send(connection); await revoked.text();
+  assert.equal(revoked.status, 401);
+});

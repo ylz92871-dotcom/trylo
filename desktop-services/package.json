@@ -5,8 +5,9 @@
   "description": "Trylo Desktop's Node sidecar: Service Host frame loop + pet/learning/remote adapters over legacy vendor modules.",
   "main": "src/host.mjs",
   "scripts": {
+    "check:layout": "node ../scripts/check-workspace-layout.mjs",
     "start": "node src/host.mjs",
-    "test": "node scripts/no-external-paths.mjs && node --test --test-concurrency=1 \"tests/**/*.test.mjs\" && node scripts/pet-chain-smoke.cjs",
+    "test": "node ../scripts/check-workspace-layout.mjs && node scripts/no-external-paths.mjs && node --test --test-concurrency=1 \"tests/**/*.test.mjs\" && node scripts/pet-chain-smoke.cjs",
     "smoke:pet-chain": "node scripts/pet-chain-smoke.cjs",
     "smoke:pet-chain:exe": "node scripts/pet-chain-smoke.cjs --require-exe",
     "smoke:legacy-gateway": "node vendor/legacy/remote-gateway/smoke-test.js && node vendor/legacy/remote-gateway/handoff-test.js",

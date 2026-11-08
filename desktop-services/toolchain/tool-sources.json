@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "tools": {
+    "officecli": {
+      "entry": "office/OfficeCLI/_dist-trylo/officecli.exe",
+      "policy": "repository-local"
+    },
+    "playwright": {
+      "entry": "browser/playwright-mcp/cli.js",
+      "policy": "repository-local"
+    },
+    "windows-mcp": {
+      "entry": "computer-control/Windows-MCP/src/windows_mcp/__main__.py",
+      "policy": "managed-local"
+    },
+    "chrome-devtools": {
+      "entry": "browser/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js",
+      "policy": "repository-local"
+    }
+  }
+}

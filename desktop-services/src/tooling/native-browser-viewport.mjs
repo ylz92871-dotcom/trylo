@@ -18,6 +18,7 @@ export function viewportBounds(value) {
 
 export function createNativeViewport({ record, target, native, cdp }) {
   const settings = new Map();
+  const nativePanels = new Map();
   let panel, fault = '';
   const bounds = () => panel ?? record().bounds;
   function snapshot(label = record().activeLabel) {
@@ -41,16 +42,22 @@ export function createNativeViewport({ record, target, native, cdp }) {
     }
     const desiredZoom = config.mode === 'fixed' ? 1 : config.restoreZoom ?? record().zoom ?? 1;
     if ((record().zoom ?? 1) !== desiredZoom) await native('zoom', { zoom: desiredZoom });
-    const area = bounds(), zoom = record().zoom ?? 1;
-    const width = config.mode === 'fixed' ? config.width : Math.max(1, Math.round(area.width / zoom));
-    const height = config.mode === 'fixed' ? config.height : Math.max(1, Math.round(area.height / zoom));
-    const scale = config.mode === 'fixed' ? Math.min(1, area.width / width, area.height / height) : 1;
-    if (config.mode === 'panel') await cdp(page.socket, 'Emulation.clearDeviceMetricsOverride');
-    // Explicit dimensions also restore engines where clear alone retains the
-    // last emulated surface. Fit affects native display, not screenshot pixels.
+    if (config.mode === 'panel') {
+      // Native bounds already resize the real viewport. Reinstalling explicit
+      // CDP dimensions here freezes it until a later serialized host update.
+      if (nativePanels.get(label) !== page.socket) {
+        await cdp(page.socket, 'Emulation.clearDeviceMetricsOverride');
+        nativePanels.set(label, page.socket);
+      }
+      fault = '';
+      return;
+    }
+    nativePanels.delete(label);
+    const area = bounds(), { width, height } = config;
+    const scale = Math.min(1, area.width / width, area.height / height);
     await cdp(page.socket, 'Emulation.setDeviceMetricsOverride', { width, height, scale,
-      deviceScaleFactor: config.mode === 'fixed' ? config.deviceScaleFactor : 0,
-      mobile: config.mode === 'fixed' && config.mobile, screenWidth: width, screenHeight: height, dontSetVisibleSize: true });
+      deviceScaleFactor: config.deviceScaleFactor,
+      mobile: config.mobile, screenWidth: width, screenHeight: height, dontSetVisibleSize: true });
     let actual;
     for (let attempt = 0; attempt < 20; attempt++) {
       actual = await measured(page.socket);
@@ -75,16 +82,16 @@ export function createNativeViewport({ record, target, native, cdp }) {
   }
   return {
     snapshot, set, error: () => fault,
-    invalidate() { fault = '页面尺寸控制连接已断开，请重新连接浏览器'; },
+    invalidate() { nativePanels.clear(); fault = '页面尺寸控制连接已断开，请重新连接浏览器'; },
     async capture(label, params) {
       const page = target(label);
       if (!page) throw new Error('页面不属于当前原生浏览器会话');
       if (fault) await apply(label, settings.get(label) ?? { mode: 'panel' });
       return cdp(page.socket, 'Page.captureScreenshot', params);
     },
-    async layout(value, visible) {
+    async layout(value, visible, nativeApplied = false) {
       const next = value === undefined ? bounds() : viewportBounds(value);
-      await native('layout', { ...(next ? { bounds: next } : {}), visible });
+      if (!nativeApplied) await native('layout', { ...(next ? { bounds: next } : {}), visible });
       if (next) panel = next;
       if (visible) {
         try { await apply(record().activeLabel, settings.get(record().activeLabel) ?? { mode: 'panel' }); }
@@ -92,6 +99,9 @@ export function createNativeViewport({ record, target, native, cdp }) {
       }
     },
     async sync(label) { if (bounds() || settings.has(label)) await apply(label, settings.get(label) ?? { mode: 'panel' }); },
-    retain(labels) { for (const label of settings.keys()) if (!labels.includes(label)) settings.delete(label); },
+    retain(labels) {
+      for (const map of [settings, nativePanels])
+        for (const label of map.keys()) if (!labels.includes(label)) map.delete(label);
+    },
   };
 }

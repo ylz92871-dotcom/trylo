@@ -82,7 +82,7 @@ export function createShadowRunner({ mcpArgs, log = null, spawn: injectedSpawn =
           return;
         }
         const nodeScript = /\.(m?js|cjs)$/i.test(cli.cliPath);
-        const command = nodeScript ? (cli.nodeProgram || process.execPath) : cli.cliPath;
+        const command = nodeScript ? 'node' : cli.cliPath;
         const args = [
           ...(nodeScript ? [cli.cliPath] : []),
           ...defaultArgv(),

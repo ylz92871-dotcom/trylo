@@ -63,7 +63,7 @@ test('runs the CLI with the learning MCP args and returns the collected answer',
   const result = await runner.run('review this task');
   assert.equal(result.answer, '{"candidates":[]}');
 
-  assert.equal(calls[0].command, process.execPath); // Reuse the sidecar's pinned interpreter
+  assert.equal(calls[0].command, 'node'); // .js CLI is spawned through node
   assert.equal(calls[0].args[0], CLI.cliPath);
   assert.ok(calls[0].args.includes('--mcp-config'));
   assert.notEqual(calls[0].opts.cwd, 'd:/repo');
@@ -166,14 +166,4 @@ test('openai-format providers get their custom auth header', async () => {
   runner.configure({ ...CLI, apiFormat: 'openai', apiKeyHeader: 'X-API-Key', apiKeyPrefix: 'Bearer ' });
   await runner.run('review');
   assert.equal(calls[0].opts.env['X-API-Key'], 'Bearer sk-test');
-});
-
-
-test('a configured interpreter is preserved for packaged legacy learning', async () => {
-  const { calls, spawnFn } = fakeSpawn({ frames: [assistantFrame('ok')] });
-  const runner = createShadowRunner({ mcpArgs: mcpArgs(), spawn: spawnFn });
-  const nodeProgram = 'C:/Program Files/Trylo/runtime/node/win-x64/node.exe';
-  runner.configure({ ...CLI, nodeProgram });
-  await runner.run('review');
-  assert.equal(calls[0].command, nodeProgram);
 });

@@ -98,13 +98,14 @@ function parseOverrides(raw) {
 /**
  * Local-first tool wiring: `<installRoot>/local-overrides.json` pins a
  * package id straight at an absolute local executable, e.g.
- * `{ "officecli": "D:/CC/trylo/new_tool/office/OfficeCLI/_dist-trylo/officecli.exe" }`.
+ * `{ "officecli": "D:/CC/trylo/desktop-services/toolchain/office/OfficeCLI/_dist-trylo/officecli.exe" }`.
  * The file survives restarts (Tauri does not forward ad-hoc env into the
  * sidecar); `TRYLO_TOOL_PACKAGE_OVERRIDES` keeps working and wins per-key.
  * Shape violations degrade to `{}` — never a throw (§4.4).
  */
 export const LOCAL_OVERRIDES_FILENAME = 'local-overrides.json';
 export const REPOSITORY_TOOL_REGISTRY_FILENAME = 'tool-sources.json';
+export const BUILTIN_TOOL_IDS = Object.freeze(['officecli', 'playwright', 'chrome-devtools', 'windows-mcp']);
 
 export function localOverridesPath(installRoot) {
   if (!installRoot) return null;
@@ -131,16 +132,19 @@ export function loadFileOverrides(installRoot) {
 
 /** Candidate registries for a source checkout. The first path is the
  * explicit CI/dev seam; the remaining paths cover this module before and
- * after esbuild bundling. Packaged applications normally have no `new_tool`
- * tree and therefore resolve no repository registry. */
+ * after esbuild bundling. The developer registry belongs to this service's
+ * toolchain; packaged applications normally have no source checkout there. */
 export function repositoryToolRegistryCandidates(env = process.env) {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   const explicit = String(env.TRYLO_LOCAL_TOOL_REGISTRY ?? '').trim();
   return [...new Set([
     ...(explicit ? [path.resolve(explicit)] : []),
-    path.resolve(moduleDir, '../../../', REPOSITORY_TOOL_REGISTRY_FILENAME),
-    path.resolve(moduleDir, '../../', REPOSITORY_TOOL_REGISTRY_FILENAME),
-    path.resolve(process.cwd(), REPOSITORY_TOOL_REGISTRY_FILENAME),
+    path.resolve(moduleDir, '../builtin-tools', REPOSITORY_TOOL_REGISTRY_FILENAME),
+    path.resolve(moduleDir, '../../../desktop/src-tauri/resources/desktop-services/builtin-tools', REPOSITORY_TOOL_REGISTRY_FILENAME),
+    path.resolve(moduleDir, '../../toolchain', REPOSITORY_TOOL_REGISTRY_FILENAME),
+    path.resolve(moduleDir, '../toolchain', REPOSITORY_TOOL_REGISTRY_FILENAME),
+    path.resolve(process.cwd(), 'desktop-services/toolchain', REPOSITORY_TOOL_REGISTRY_FILENAME),
+    path.resolve(process.cwd(), 'toolchain', REPOSITORY_TOOL_REGISTRY_FILENAME),
   ])];
 }
 
@@ -182,16 +186,23 @@ export function loadRepositoryToolRegistry(registryPath) {
         problems.push(`${id}.entry escapes the registry root`);
         continue;
       }
-      const policy=typeof value === 'object' && value?.policy === 'managed-local'
-        ? 'managed-local' : 'repository-local';
+      const policy = ['managed-local', 'bundled'].includes(value?.policy)
+        ? value.policy : 'repository-local';
+      if (policy === 'bundled' && (!/^\d+\.\d+\.\d+[\w.+-]*$/.test(value.version ?? '')
+        || !/^[a-f0-9]{64}$/.test(value.sha256 ?? '')
+        || (value.args !== undefined && (!Array.isArray(value.args) || value.args.some(arg => typeof arg !== 'string'))))) {
+        problems.push(`${id} bundled entry requires version, sha256 and string args`);
+        continue;
+      }
       // A maintained source tree need not execute its workspace venv. Native
       // input uses the pinned managed runtime; the fork is synced separately.
-      if(policy === 'repository-local') overrides[id] = target;
+      if (policy !== 'managed-local') overrides[id] = target;
       entries[id] = {
         entry,
         path: target,
         available: isFileSync(target),
         policy,
+        ...(policy === 'bundled' ? { version: value.version, sha256: value.sha256, args: value.args ?? [] } : {}),
       };
     }
     return { file, overrides, entries, problems };
@@ -312,11 +323,19 @@ export function createToolPackageManager(options = {}) {
   // Live merge on every read: the file is the durable local-first wiring,
   // the env var is the ephemeral dev/CI seam and wins per-key. Re-reading
   // the (tiny) file keeps a long-lived sidecar honest after a set/clear.
-  const currentOverrides = () => ({
-    ...repositoryRegistry().overrides,
-    ...loadFileOverrides(installRoot),
-    ...envOverrides,
-  });
+  const currentOverrides = () => {
+    const usableEnvOverrides = { ...envOverrides };
+    // A desktop launched before a toolchain relocation can keep a stale
+    // dev-only environment path forever, shadowing its correct file/default.
+    // Core built-ins recover from that missing inherited path. Explicit API
+    // overrides and every non-core override retain their existing semantics.
+    if (options.enableRepositoryTools && options.overrides === undefined) {
+      for (const id of BUILTIN_TOOL_IDS) {
+        if (usableEnvOverrides[id] && !isFileSync(usableEnvOverrides[id])) delete usableEnvOverrides[id];
+      }
+    }
+    return { ...repositoryRegistry().overrides, ...loadFileOverrides(installRoot), ...usableEnvOverrides };
+  };
   // §6.5 zero-config mirror: a `<storageRoot>/pinned-artifact-mirror`
   // directory (marker: mirror-manifest.json from the mirror script) is
   // honoured automatically when TRYLO_ARTIFACT_MIRROR is unset — dropping
@@ -426,19 +445,32 @@ export function createToolPackageManager(options = {}) {
    */
   async function resolve(manifest) {
     const override = currentOverrides()[manifest.id];
+    const entry = repositoryRegistry().entries[manifest.id];
+    const builtIn = options.enableRepositoryTools && BUILTIN_TOOL_IDS.includes(manifest.id);
     if (override) {
+      const bundled = entry?.policy === 'bundled' && entry.path === override;
+      const exists = isFileSync(override);
+      const valid = !bundled || !exists || (await sha256OfFile(override)) === entry.sha256;
       return {
         id: manifest.id,
-        version: manifest.version,
+        version: bundled ? entry.version : manifest.version,
         installDir: toolInstallDir(manifest,override),
-        executable: isFileSync(override) ? override : null,
-        state: isFileSync(override) ? 'override' : 'not-installed',
-        detail: isFileSync(override)
+        executable: exists && valid ? override : null,
+        state: !valid ? 'hash-mismatch' : exists ? (bundled ? 'installed' : 'override') : 'not-installed',
+        builtIn: Boolean(builtIn || bundled),
+        ...(bundled ? { argsPrefix: entry.args } : {}),
+        detail: !valid ? 'built-in executable digest mismatch' : exists
           ? `dev override: ${path.basename(override)}`
           : 'dev override path does not exist',
         autoUpdate: false,
       };
     }
+
+    if (builtIn && entry?.policy !== 'managed-local') return {
+      id: manifest.id, version: manifest.version, installDir: '', executable: null,
+      state: 'not-installed', detail: 'built-in runtime is missing; repair the Trylo application',
+      builtIn: true, autoUpdate: false,
+    };
 
     if (!installRoot) {
       return {
@@ -448,6 +480,7 @@ export function createToolPackageManager(options = {}) {
         executable: null,
         state: 'not-installed',
         detail: 'tool package install root is not configured',
+        builtIn: Boolean(builtIn),
         autoUpdate: false,
       };
     }
@@ -461,6 +494,7 @@ export function createToolPackageManager(options = {}) {
         executable: null,
         state: 'not-installed',
         detail: `pinned ${manifest.id} ${manifest.version} is not installed`,
+        builtIn: Boolean(builtIn),
         autoUpdate: false,
       };
     }
@@ -476,6 +510,7 @@ export function createToolPackageManager(options = {}) {
         executable: null,
         state: 'hash-mismatch',
         detail: 'recorded digest does not match the pinned manifest',
+        builtIn: Boolean(builtIn),
         autoUpdate: Boolean(state?.autoUpdate),
       };
     }
@@ -499,6 +534,7 @@ export function createToolPackageManager(options = {}) {
       installDir: versionDir(manifest),
       executable: exe,
       state: 'installed',
+      builtIn: Boolean(builtIn),
       detail: recorded ? 'digest verified' : 'installed without a recorded digest',
       autoUpdate: Boolean(state?.autoUpdate),
     };
@@ -572,6 +608,9 @@ export function createToolPackageManager(options = {}) {
     if (!id) return { ok: false, reasonCode: 'missing_id', error: 'a package id is required' };
     const manifest = options.catalog?.get(id);
     if (!manifest) return { ok: false, id, reasonCode: 'unknown_package' };
+    if (options.enableRepositoryTools && BUILTIN_TOOL_IDS.includes(id)) {
+      return { ok: false, id, reasonCode: 'builtin_tool', error: 'This tool ships with Trylo; repair or update the application.' };
+    }
     if (!installRoot) {
       return { ok: false, id, reasonCode: 'no_install_root', error: 'install root is not configured' };
     }
@@ -1428,6 +1467,7 @@ export function createToolPackageManager(options = {}) {
     const id = String(params.id ?? '');
     const manifest = options.catalog?.get(id);
     if (!manifest) return { ok: false, id, reasonCode: 'unknown_package' };
+    if (options.enableRepositoryTools && BUILTIN_TOOL_IDS.includes(id)) return { ok: false, id, reasonCode: 'builtin_tool' };
     if (!installRoot) return { ok: false, id, reasonCode: 'no_install_root' };
     try {
       await fsp.rm(versionDir(manifest), { recursive: true, force: true });
@@ -1461,6 +1501,7 @@ export function createToolPackageManager(options = {}) {
    */
   async function installBrowser(params = {}) {
     const id = String(params.id ?? '');
+    if (options.enableRepositoryTools && BUILTIN_TOOL_IDS.includes(id)) return { ok: false, id, reasonCode: 'builtin_tool' };
     const manifest = options.catalog?.get(id);
     if (!manifest) return { ok: false, id, reasonCode: 'unknown_package' };
     if (manifest.browserCondition?.kind !== 'playwright-chromium') {
@@ -1631,7 +1672,7 @@ function runBoundedCommand(executable, args, timeoutMs, opts = {}) {
  *  while the tarball remains the source of truth for DEPENDENCIES.
  *
  *  Two candidates, first existing wins:
- *    1. dev/CI — the monorepo checkout (`new_tool/computer-control/...`,
+ *    1. dev/CI — the service toolchain (`toolchain/computer-control/...`,
  *       resolved relative to THIS module);
  *    2. packaged app — `windows-mcp-fork/` staged NEXT TO the bundled
  *       service host by prepare-sidecars.ps1
@@ -1639,11 +1680,11 @@ function runBoundedCommand(executable, args, timeoutMs, opts = {}) {
  *       `resources/desktop-services/windows-mcp-fork`). Without it a fresh
  *       install from the upstream tarball alone would expose only the 12
  *       upstream tools and drift against the manifest's 14.
- *  Deployed source of truth: `new_tool/computer-control/Windows-MCP`. */
+ *  Deployed source of truth: `desktop-services/toolchain/computer-control/Windows-MCP`. */
 function windowsMcpForkCandidates() {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   return [
-    path.resolve(moduleDir, '../../../new_tool/computer-control/Windows-MCP/src/windows_mcp'),
+    path.resolve(moduleDir, '../../toolchain/computer-control/Windows-MCP/src/windows_mcp'),
     path.resolve(moduleDir, '../windows-mcp-fork'),
   ];
 }
@@ -1659,7 +1700,7 @@ export const WINDOWS_MCP_FORK_SRC = windowsMcpForkCandidates()[0];
  *  artifact NEXT TO the bundled host instead). */
 export const WGC_HELPER_DEV_SRC = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../../../new_tool/computer-control/Windows-MCP/native/wgc-helper/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish',
+  '../../toolchain/computer-control/Windows-MCP/native/wgc-helper/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish',
 );
 
 /**

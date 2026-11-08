@@ -12,6 +12,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { WINDOWS_MCP_MANIFEST } from '../src/tooling/manifests/windows-mcp.mjs';
+import { verifyBuiltinTools } from '../../desktop/scripts/verify-builtin-tools.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(packageRoot, '..');
@@ -151,6 +152,21 @@ async function checkBundleParity(packagedBundle) {
 }
 
 async function main() {
+  if (verifyingPackaged) {
+    for (const retired of [
+      'workd', 'work/bin/trylo-workd.mjs', 'cli/dist/internal/adapters/managed-work',
+      'cli/dist/internal/domain/managed-work.js', 'cli/dist/internal/domain/managed-work.d.ts',
+      'cli/dist/internal/ports/managed-work.js', 'cli/dist/internal/ports/managed-work.d.ts',
+    ]) {
+      try {
+        await fs.access(path.join(resourceRoot, retired));
+      } catch (error) {
+        if (error.code === 'ENOENT') continue;
+        throw error;
+      }
+      throw new Error(`release-inventory: retired CoWork artifact remains: ${retired}`);
+    }
+  }
   const distributionPath = verifyingPackaged
     ? path.join(resourceRoot, 'distribution.json')
     : path.join(repoRoot, 'desktop', 'distribution.json');
@@ -163,10 +179,8 @@ async function main() {
     console.error('release-inventory: expected the core Desktop profile with optional CoWork excluded');
     process.exit(1);
   }
-  // Explicit maintenance check for the separately prepared experimental dependency.
-  // An old staged Work tree or TRYLO_WORKD_ARTIFACT_DIR never opts core into it.
-  const includeWorkd = process.env.TRYLO_INCLUDE_WORKD === '1';
   const packagedBundle = path.join(serviceRoot, 'dist', 'host.bundle.mjs');
+  if (verifyingPackaged) await verifyBuiltinTools(path.join(serviceRoot, 'builtin-tools'));
   const items = [
     distributionItem,
     await checkItem('service-host bundle', packagedBundle, true),
@@ -198,64 +212,7 @@ async function main() {
     // Phase 3 read-only Skills adapter (desktop-services/src/learning/skills-client.mjs
     // spawns it; a missing file degrades the Learning UI, not Code/Work).
     await checkItem('Hermes skills adapter', path.join(sidecarsRoot, 'hermes-capabilities', 'skills_adapter.py'), true),
-    ...(includeWorkd ? [
-      // Audit §3.3 — the Work daemon wrapper. Without it `workd.start` cannot
-      // spawn at all, and the failure used to surface only as a raw ENOENT.
-      await checkItem(
-        'Work daemon wrapper',
-        path.join(resourceRoot, 'work', 'bin', 'trylo-workd.mjs'),
-        verifyingPackaged,
-      ),
-      // Audit P0-C §5.2 — the minimal managed-work sidecar release artifact.
-      // The installed app launches `workd/dist/daemon/daemon/main.js` under
-      // the pinned Node; npm/build/rebuild never run on the user machine.
-      // REQUIRED when gating a packaged resources tree.
-      await checkItem(
-        'workd daemon main (packaged sidecar)',
-        path.join(resourceRoot, 'workd', 'dist', 'daemon', 'daemon', 'main.js'),
-        verifyingPackaged,
-      ),
-      await checkItem(
-        'workd sidecar manifest',
-        path.join(resourceRoot, 'workd', 'manifest.json'),
-        verifyingPackaged,
-      ),
-      await checkItem(
-        'workd better-sqlite3 package',
-        path.join(resourceRoot, 'workd', 'node_modules', 'better-sqlite3', 'package.json'),
-        verifyingPackaged,
-      ),
-      // The prebuilt native binding for the bundled Node ABI. A missing
-      // binding means the daemon would die on first DB open — audit §5.2
-      // forces the probe at build time and the presence here. better-sqlite3
-      // v12 ships node-gyp-build prebuilds (prebuilds/<triple>.node); older
-      // layouts used build/Release.
-      await checkAny(
-        'workd better-sqlite3 native binding',
-        path.join(resourceRoot, 'workd', 'node_modules', 'better-sqlite3'),
-        ['prebuilds/win32-x64.node', 'build/Release/better_sqlite3.node'],
-        verifyingPackaged,
-      ),
-      await checkItem(
-        'workd ws package',
-        path.join(resourceRoot, 'workd', 'node_modules', 'ws', 'package.json'),
-        verifyingPackaged,
-      ),
-      // The CoWork runtime the wrapper drives in `real` mode (§7.3).
-      // ADVISORY even when packaged: `workd_spawn` defaults to `stub`, and the
-      // vendor checkout is >1 GB, so it is staged by a dedicated packaging job
-      // rather than by `prepare-sidecars.ps1`. A wrapper without this runtime
-      // fails fast in real mode with a reason code — it does not hang.
-      await checkAny(
-        'CoWork runtime entrypoint (real mode only)',
-        resourceRoot,
-        [
-          path.join('work', 'vendor', 'cowork-os', 'bin', 'coworkd-node.js'),
-          path.join('work', 'vendor', 'cowork-os', 'bin', 'coworkd.js'),
-        ],
-        false,
-      ),
-    ] : []),
+    await checkItem('derived artifact UI MIT notice', path.join(resourceRoot, 'runtime/licenses/CoWork-OS-MIT.txt'), verifyingPackaged),
     // The pinned Node runtime. The installed app must never depend on
     // `node` being on the system PATH (audit §2.3 Task W4).
     await checkAny('pinned Node runtime', resourceRoot, NODE_RUNTIME_CANDIDATES, verifyingPackaged),
@@ -274,7 +231,7 @@ async function main() {
   console.log('Trylo Desktop Services — release inventory');
   console.log(
     verifyingPackaged
-      ? `mode: PACKAGED (resources=${packagedResourceRoot}) — core Desktop; optional CoWork checks=${includeWorkd}`
+      ? `mode: PACKAGED (resources=${packagedResourceRoot}) — new CLI only`
       : 'mode: DEV (set TRYLO_RESOURCE_DIR to gate a real resources tree) — packaging-only items are advisory',
   );
   console.log('─────────────────────────────────────────────');
@@ -285,7 +242,7 @@ async function main() {
     console.error('\nrelease-inventory: FAILED (required artifact missing)');
     process.exit(1);
   }
-  console.log(includeWorkd ? 'CoWork: explicit experimental-dependency checks included' : 'CoWork: excluded; ordinary Work uses the CLI');
+  console.log('CoWork: retired; Code and Work use the new CLI');
   console.log('release-inventory: OK');
 }
 

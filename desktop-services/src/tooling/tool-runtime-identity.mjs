@@ -31,11 +31,14 @@ export function toolRuntimeIdentity(manifest, installed) {
   }
   if (root && manifest.artifact?.sourceEntry) files.push(path.join(root,manifest.artifact.sourceEntry));
   if (root && manifest.id==='windows-mcp') {
+    const source = installed.builtIn && path.basename(executable ?? '').toLowerCase() === 'python.exe'
+      ? 'Lib/site-packages/windows_mcp' : 'src/windows_mcp';
     for(const relative of ['__main__.py','uia/core.py','desktop/service.py','runtime/snapshot_store.py']) {
-      files.push(path.join(root,'src/windows_mcp',relative));
+      files.push(path.join(root,source,relative));
     }
   }
   if (root && manifest.id==='autocad-mcp') files.push(path.join(root,'.venv/Lib/site-packages/backends/com_backend.py'));
   return crypto.createHash('sha256').update(JSON.stringify({id:manifest.id,version:manifest.version,
+    shippedVersion:installed.version,argsPrefix:installed.argsPrefix,
     state:installed.state,autoUpdate:installed.autoUpdate,files:[...new Set(files)].map(fileIdentity)})).digest('hex');
 }

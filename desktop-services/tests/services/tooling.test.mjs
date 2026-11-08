@@ -160,14 +160,14 @@ describe('tooling.resolveProfile', () => {
     });
     assert.equal(resolved.ok, true);
     assert.equal(resolved.profileId, 'code.core.v1');
-    assert.equal(resolved.profileRevision, '2');
+    assert.equal(resolved.profileRevision, '3');
     // Nothing installed in the test root: Hermes intact, browser + desktop
     // degrade to reported unavailable capabilities (§4.4), never a failure.
     assert.deepEqual(resolved.serverNames, ['trylo-hermes-capabilities']);
     const ids = resolved.unavailableCapabilities.map((c) => c.id);
     assert.ok(ids.includes('playwright'));
     assert.ok(ids.includes('windows-mcp'));
-    assert.ok(!ids.includes('officecli'), 'officecli stays Work-only');
+    assert.ok(ids.includes('officecli'), 'officecli is a shared default');
     // §4.3: Code keeps reading the user's own MCP servers — no strict flag.
     assert.equal(resolved.strictMcpConfig, false);
     assert.ok(!resolved.cliArgs.includes('--strict-mcp-config'));
@@ -272,7 +272,7 @@ describe('tooling.resolveProfile', () => {
 });
 
 describe('tooling.resolveProfile with an available package', () => {
-  it('injects OfficeCLI into work.core.v1 and keeps it out of code.core.v1', async () => {
+  it('injects OfficeCLI into both default Code and Work runtimes', async () => {
     const exePath = path.join(tmpRoot, 'fake-officecli.exe');
     fs.writeFileSync(exePath, 'binary');
     // The dev override seam stands in for a pinned install; the profile
@@ -292,9 +292,9 @@ describe('tooling.resolveProfile with an available package', () => {
       projectRoot: tmpRoot,
       conversationId: 'c1',
     });
-    assert.ok(!code.serverNames.includes('trylo-office'));
-    // The two surfaces must never land on the same config hash (§4.3).
-    assert.notEqual(work.mcpConfigHash, code.mcpConfigHash);
+    assert.ok(code.serverNames.includes('trylo-office'));
+    assert.equal(code.strictMcpConfig, false);
+    assert.equal(work.strictMcpConfig, true);
   });
 
   it('a version mismatch on the PINNED path degrades the package (§4.4)', async () => {
@@ -526,10 +526,10 @@ describe('tooling.health / listProfiles', () => {
     // 办公基底 (rev 2): office + browser + desktop control in one default.
     const core = profiles.find((p) => p.id === 'work.core.v1');
     assert.deepEqual(core.packageIds, ['officecli', 'playwright', 'windows-mcp']);
-    // B (rev 2): code 对齐 browser + desktop control，officecli 仍是 Work-only.
+    // Shared defaults: Office, one browser implementation and desktop control.
     const code = profiles.find((p) => p.id === 'code.core.v1');
-    assert.equal(code.revision, '2');
-    assert.deepEqual(code.packageIds, ['playwright', 'windows-mcp']);
+    assert.equal(code.revision, '3');
+    assert.deepEqual(code.packageIds, ['officecli', 'playwright', 'windows-mcp']);
     const debug = profiles.find((p) => p.id === 'work.browser-debug.v1');
     assert.deepEqual(debug.packageIds, ['officecli', 'chrome-devtools', 'windows-mcp']);
     const cad = profiles.find((p) => p.id === 'work.cad.v1');

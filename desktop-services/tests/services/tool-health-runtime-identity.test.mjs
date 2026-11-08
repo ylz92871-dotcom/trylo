@@ -7,9 +7,79 @@ import path from 'node:path';
 import {toolInstallDir, toolRuntimeIdentity} from '../../src/tooling/tool-runtime-identity.mjs';
 import {createToolProfileService} from '../../src/tooling/tool-profile-service.mjs';
 import {OFFICECLI_MANIFEST} from '../../src/tooling/manifests/officecli.mjs';
+import {temporaryPath} from '../../../scripts/workspace-paths.mjs';
 
 const manifest={id:'officecli',version:'1.0.145',healthCheck:'version-handshake',
   mcp:{serverName:'office',expectedTools:[]},artifact:{}};
+
+test('failed probes are rechecked immediately while healthy cache reuse stays intact',async()=>{
+  let calls=0;
+  let at=1000;
+  const service=createToolHealthService({
+    packages:{resolve:async()=>({state:'installed',executable:'C:/fixture/stable.exe',autoUpdate:false})},
+    probe:async()=>++calls===1?null:'1.0.145',
+    now:()=>at,
+  });
+  const failed=await service.check(manifest);
+  assert.equal(failed.available,false);
+  const healthy=await service.check(manifest);
+  assert.equal(healthy.available,true);
+  assert.equal(healthy.runtimeIdentity,failed.runtimeIdentity);
+  assert.equal(calls,2);
+  assert.equal(await service.check(manifest),healthy);
+  assert.equal(calls,2);
+  await service.check(manifest,{deep:true});
+  assert.equal(calls,3);
+  at+=5*60*1000;
+  await service.check(manifest);
+  assert.equal(calls,4);
+});
+
+test('failed runtime conditions are rechecked without accepting a still-missing browser',async()=>{
+  let available=false;
+  let calls=0;
+  const browser={...manifest,id:'playwright',browserCondition:{kind:'playwright-chromium'}};
+  const service=createToolHealthService({
+    packages:{resolve:async()=>({state:'installed',executable:'C:/fixture/browser.js',autoUpdate:false})},
+    probe:async()=>manifest.version,
+    probeCondition:()=>{calls++;return {ok:available,reasonCode:available?'ready':'browser_missing',detail:'fixture condition'};},
+    now:()=>1000,
+  });
+  const first=await service.check(browser);
+  assert.equal(first.available,false);
+  assert.equal((await service.check(browser)).available,false);
+  assert.equal(calls,2);
+  available=true;
+  const recovered=await service.check(browser);
+  assert.equal(recovered.available,true);
+  assert.equal(recovered.runtimeIdentity,first.runtimeIdentity);
+  assert.equal(calls,3);
+  assert.equal(await service.check(browser),recovered);
+  assert.equal(calls,3);
+});
+
+test('the next conversation can mount a recovered package while preserving honest partial-profile facts',async t=>{
+  const parent=temporaryPath('desktop-services-tests');
+  fs.mkdirSync(parent,{recursive:true});
+  const root=fs.mkdtempSync(path.join(parent,'health-next-conversation-'));
+  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  let probes=0;
+  const packages={resolve:async()=>({state:'installed',executable:path.join(root,'office.exe'),installDir:root,autoUpdate:false})};
+  const health=createToolHealthService({packages,probe:async()=>++probes===1?null:OFFICECLI_MANIFEST.version,now:()=>1000});
+  const service=createToolProfileService({storageRoot:root,packages,health,
+    catalog:{get:id=>id==='officecli'?OFFICECLI_MANIFEST:undefined,list:()=>[OFFICECLI_MANIFEST]}});
+  const first=await service.resolve({surface:'work',projectRoot:root,conversationId:'first'});
+  assert.equal(first.ok,true);
+  assert.equal(first.serverNames.includes(OFFICECLI_MANIFEST.mcp.serverName),false);
+  assert.equal(first.packageHealth.find(item=>item.id==='officecli').available,false);
+  assert.ok(first.unavailableCapabilities.some(item=>item.id==='officecli'));
+  const next=await service.resolve({surface:'work',projectRoot:root,conversationId:'next'});
+  assert.equal(next.ok,true);
+  assert.equal(next.serverNames.includes(OFFICECLI_MANIFEST.mcp.serverName),true);
+  assert.equal(next.packageHealth.find(item=>item.id==='officecli').available,true);
+  assert.equal(next.unavailableCapabilities.some(item=>item.id==='officecli'),false);
+  assert.equal(probes,2);
+});
 
 test('switching an override invalidates health before the five-minute TTL',async()=>{
   let executable='C:/fixture/good.exe';

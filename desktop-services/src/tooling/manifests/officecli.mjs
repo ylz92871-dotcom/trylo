@@ -48,7 +48,7 @@ export const OFFICECLI_MANIFEST = Object.freeze({
     serverName: 'trylo-office',
     transport: 'stdio',
     args: Object.freeze(['mcp']),
-    env: Object.freeze({}),
+    env: Object.freeze({ OFFICECLI_SKIP_UPDATE: '1', OFFICECLI_NO_AUTO_INSTALL: '1' }),
     // Official OfficeCLI MCP exposes exactly ONE tool; `command` inside the
     // tool input routes create/view/get/query/set/add/remove/move/validate
     // /batch/raw/merge/help (spec §5.1).

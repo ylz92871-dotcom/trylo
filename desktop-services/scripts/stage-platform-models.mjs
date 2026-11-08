@@ -5,8 +5,8 @@ import crypto from 'node:crypto';
 import { build } from 'esbuild';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const output = process.argv[3] ? path.resolve(process.argv[3]) : path.join(repo, 'output/amd-dual-pool-desktop-20261025');
-if (!output.startsWith(path.join(repo, 'output') + path.sep)) throw Error('Stage evidence must remain under workspace output');
+const output = process.argv[3] ? path.resolve(process.argv[3]) : path.join(repo, '_workspace/artifacts/output/amd-dual-pool-desktop-20261025');
+if (!output.startsWith(path.join(repo, '_workspace/artifacts/output') + path.sep)) throw Error('Stage evidence must remain under workspace output');
 const label = process.argv[2] || ''; if (label && !/^[a-z-]+$/.test(label)) throw Error('Invalid stage evidence label');
 const staged = path.join(output, 'service-host/host.bundle.mjs');
 const targets = [path.join(repo, 'desktop-services/dist/host.bundle.mjs'), path.join(repo, 'desktop/src-tauri/resources/desktop-services/dist/host.bundle.mjs')];

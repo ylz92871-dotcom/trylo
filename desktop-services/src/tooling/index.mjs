@@ -17,13 +17,14 @@ import { createMcpArgsService } from '../learning/mcp-args-service.mjs';
 import { createArtifactPromoter } from './artifact-promoter.mjs';
 import { createOfficeValidator, runBounded } from './office-validator.mjs';
 import { createToolResultCache } from './tool-result-cache.mjs';
-import { createToolCatalog } from './tool-catalog.mjs';
+import { createToolCatalog, CORE_TOOL_RUNTIME_REVISION } from './tool-catalog.mjs';
 import { createToolPackageManager } from './tool-package-manager.mjs';
 import { createToolHealthService } from './tool-health-service.mjs';
 import { createToolProfileService } from './tool-profile-service.mjs';
 import { createViewportBridge } from './viewport-bridge.mjs';
 import { createBrowserObserver } from './browser-observer.mjs';
 import { createNativeBrowserService } from './native-browser-service.mjs';
+import { createModelPreviewService } from './model-preview-service.mjs';
 import { createComputerPreviewStream, resolveComputerPreviewPython } from './computer-preview-stream.mjs';
 
 /**
@@ -62,7 +63,7 @@ export function createToolingServices(options = {}) {
     ...(seam.download ? { download: seam.download } : {}),
     // Test seam: replaces the browser-body install child process (§3.3-7).
     ...(seam.runCommand ? { runCommand: seam.runCommand } : {}),
-    // A real source-checkout host reads the repository tool-sources.json. Test
+    // A real source-checkout host reads this service's toolchain registry. Test
     // seams and packaged installs remain hermetic unless explicitly wired.
     enableRepositoryTools,
     ...(options.localToolRegistryPath
@@ -96,6 +97,7 @@ export function createToolingServices(options = {}) {
   const emitViewport = (topic, payload) => options.emit?.(`tooling.${topic}`, payload);
   const browserObserver = createBrowserObserver({ storageRoot, emit: emitViewport });
   const nativeBrowser = createNativeBrowserService({ emit: emitViewport, ...(seam.nativeBrowser ?? {}) });
+  const modelPreview = createModelPreviewService({ emit: emitViewport, ...(seam.modelPreview ?? {}) });
   const computerPreview = createComputerPreviewStream({
     emit: emitViewport,
     resolveExecutable: () => resolveComputerPreviewPython({ catalog, packages }),
@@ -108,6 +110,7 @@ export function createToolingServices(options = {}) {
     hermes,
     storageRoot,
     browserObserver,
+    modelPreview,
     ...(options.hostEntrypoint ? { hostEntrypoint: options.hostEntrypoint } : {}),
     ...(enableRepositoryTools || seam.nativeBrowser ? { nativeBrowser } : {}),
     ...(seam.profilesRoot ? { profilesRoot: seam.profilesRoot } : {}),
@@ -175,8 +178,8 @@ export function createToolingServices(options = {}) {
     if (
       resolved.state !== 'override'
       && version
-      && manifest.version
-      && !version.includes(manifest.version)
+      && resolved.version
+      && !version.includes(resolved.version)
     ) {
       // A binary that answers `--version` with something the manifest did
       // not pin is NOT the pinned package: refuse it (§3 / §15.2 hash drift).
@@ -209,6 +212,10 @@ export function createToolingServices(options = {}) {
     nativeBrowserLayout: params => nativeBrowser.layout(params),
     nativeBrowserViewport: params => nativeBrowser.viewport(params),
     nativeBrowserCommandResult: params => nativeBrowser.commandResult(params),
+    modelPreviewAttach: () => modelPreview.attach(),
+    modelPreviewDetach: params => modelPreview.detach(params),
+    modelPreviewCommandResult: params => modelPreview.commandResult(params),
+    modelPreviewClose: params => modelPreview.close(params),
 
     /** `tooling.resolveProfile` — compose a Profile for one run. */
     resolveProfile(params = {}) {
@@ -221,6 +228,7 @@ export function createToolingServices(options = {}) {
       const records = id ? [await health.forId(id)].filter(Boolean) : await health.listAll();
       return {
         ok: true,
+        coreToolsRevision: CORE_TOOL_RUNTIME_REVISION,
         installRoot: packages.installRoot,
         profilesRoot: profiles.profilesRoot,
         rejected: catalog.rejected(),
@@ -383,6 +391,7 @@ export function createToolingServices(options = {}) {
     /** Bounded flush on host exit. Nothing here holds a process. */
     dispose() {
       void nativeBrowser.dispose();
+      void modelPreview.dispose();
       toolResultCache.stop();
       health.clearCache();
       void viewport.stop();

@@ -27,20 +27,27 @@ export async function runNativeBrowserMcp({ gate, entry, args = [], stdin = proc
   };
   const { clientId } = await post('client/open', { pid: process.pid });
   const child = spawnProcess(process.execPath, [entry, ...childArgs], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
-  const leases = new Map(), waiting = new Map();
-  let disposed = false, outputTail = Promise.resolve();
-  const writeError = (id, error) => stdout.write(JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32000, message: String(error.message ?? error) } }) + '\n');
+  const leases = new Map(), waiting = new Map(), pendingRequests = new Set();
+  let disposed = false, childEnded = false, childFailure, outputTail = Promise.resolve();
+  const writeError = (id, error) => {
+    pendingRequests.delete(id);
+    stdout.write(JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32000, message: String(error.message ?? error) } }) + '\n');
+  };
   const input = readline.createInterface({ input: stdin, crlfDelay: Infinity });
   const output = readline.createInterface({ input: child.stdout, crlfDelay: Infinity });
   child.stderr.pipe(stderr, { end: false });
   async function stop() {
     if (disposed) return; disposed = true; abort.abort();
     for (const controller of waiting.values()) controller.abort();
+    pendingRequests.clear();
     child.stdin.end(); child.kill(); input.close(); output.close();
     await post('client/close', { clientId }, AbortSignal.timeout(3000)).catch(() => {});
   }
   input.on('line', line => {
     let message; try { message = JSON.parse(line); } catch { return; }
+    const request = typeof message.method === 'string' && message.id !== undefined;
+    if (request) pendingRequests.add(message.id);
+    if (childEnded) { if (request) writeError(message.id, childFailure); return; }
     if (message.method === 'notifications/cancelled') {
       waiting.get(message.params?.requestId)?.abort();
       child.stdin.write(line + '\n'); return;
@@ -48,19 +55,23 @@ export async function runNativeBrowserMcp({ gate, entry, args = [], stdin = proc
     if (message.method !== 'tools/call') { child.stdin.write(line + '\n'); return; }
     const controller = new AbortController(); waiting.set(message.id, controller);
     void post('lease/start', { clientId }, controller.signal).then(async ({ leaseId }) => {
-      waiting.delete(message.id);
-      if (disposed || controller.signal.aborted) { void post('lease/end', { clientId, leaseId }).catch(() => {}); return; }
+      if (disposed || childEnded || controller.signal.aborted) { void post('lease/end', { clientId, leaseId }).catch(() => {}); return; }
       leases.set(message.id, leaseId);
       const call = message.params;
-      if ((call?.name === 'browser_navigate' || (call?.name === 'browser_tabs' && call.arguments?.action === 'new'))
-        && typeof call.arguments?.url === 'string' && call.arguments.url.toLowerCase().startsWith('file:')) {
-        const preview = await post('preview/resolve', { clientId, leaseId, url: call.arguments.url }, controller.signal);
+      const navigation = call?.name === 'browser_navigate' || call?.name === 'new_page'
+        || (call?.name === 'browser_tabs' && call.arguments?.action === 'new')
+        || (call?.name === 'navigate_page' && (call.arguments?.type === undefined || call.arguments.type === 'url'));
+      const url = typeof call?.arguments?.url === 'string' ? call.arguments.url.trim() : '';
+      if (navigation && /^file:/i.test(url)) {
+        const preview = await post('preview/resolve', { clientId, leaseId, url }, controller.signal);
         message.params = { ...call, arguments: { ...call.arguments, url: preview.url } };
         line = JSON.stringify(message);
       }
-      if (disposed || controller.signal.aborted) {
+      if (disposed || childEnded || controller.signal.aborted) {
         leases.delete(message.id); await post('lease/end', { clientId, leaseId }).catch(() => {}); return;
       }
+      // Keep cancellation live through local-page resolution, until dispatch.
+      waiting.delete(message.id);
       child.stdin.write(line + '\n');
     }).catch(error => {
       waiting.delete(message.id);
@@ -70,14 +81,33 @@ export async function runNativeBrowserMcp({ gate, entry, args = [], stdin = proc
     });
   });
   output.on('line', line => {
-    outputTail = outputTail.then(async () => {
+    outputTail = outputTail.then(() => {
       let message; try { message = JSON.parse(line); } catch { return; }
       const leaseId = leases.get(message.id);
-      if (leaseId) { leases.delete(message.id); await post('lease/end', { clientId, leaseId }).catch(() => {}); }
-      if (!disposed) stdout.write(line + '\n');
+      if (leaseId) {
+        leases.delete(message.id);
+        // The upstream response completes the call. Cleanup must not hold
+        // its result or prevent client/close from releasing remaining leases.
+        void post('lease/end', { clientId, leaseId }).catch(() => {});
+      }
+      if (!disposed) {
+        if (!message.method) pendingRequests.delete(message.id);
+        stdout.write(line + '\n');
+      }
     });
   });
-  input.once('close', () => { void stop(); }); child.once('error', () => { void stop(); }); child.once('exit', () => { void stop(); });
-  child.stdin.on('error', () => { void stop(); });
+  input.once('close', () => { void stop(); });
+  child.once('error', error => { childFailure = error; });
+  // `exit` can precede drained stdout and the lease-end RPC. Preserve the
+  // final upstream response, then settle only requests that never received one.
+  child.once('close', (code, signal) => {
+    childEnded = true;
+    childFailure ??= new Error(`native browser MCP process closed (${signal ? `signal ${signal}` : `exit ${code}`})`);
+    void outputTail.then(async () => {
+      if (!disposed) for (const id of [...pendingRequests]) writeError(id, childFailure);
+      await stop();
+    });
+  });
+  child.stdin.on('error', error => { childFailure ??= error; child.kill(); });
   return { stop, child };
 }

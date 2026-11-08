@@ -9,12 +9,12 @@ async function fixture(t) {
   const tabs = [{ id: 'root', label: 'native-root', marker: 'about:blank#trylo-native-native-root' }];
   const actions = [], native = [], events = [];
   let sequence = 0, activeLabel = 'native-root', zoom = 1, bounds = { x: 0, y: 0, width: 480, height: 640 };
-  const dimensions = new Map(), emulationOwners = new Map();
-  let metricsBarrier;
+  const dimensions = new Map(), emulationOwners = new Map(), disconnected = new Set();
+  let metricsBarrier, unreachableUrl, networkFailure = false;
   const engine = http.createServer((request, response) => {
     response.setHeader('Content-Type', 'application/json');
     response.end(JSON.stringify(request.url?.startsWith('/json/version') ? { Browser: 'Chrome/test', webSocketDebuggerUrl: `ws://127.0.0.1:${engine.address().port}/browser` }
-      : tabs.map(tab => ({ id: tab.id, type: 'page', title: tab.label, url: tab.marker, webSocketDebuggerUrl: `ws://127.0.0.1:${engine.address().port}/page/${tab.id}` }))));
+      : tabs.filter(tab => !disconnected.has(tab.id)).map(tab => ({ id: tab.id, type: 'page', title: tab.label, url: tab.marker, webSocketDebuggerUrl: `ws://127.0.0.1:${engine.address().port}/page/${tab.id}` }))));
   });
   const sockets = new WebSocketServer({ server: engine });
   sockets.on('connection', (ws, request) => {
@@ -26,22 +26,29 @@ async function fixture(t) {
     }
     const target = request.url?.split('/page/')[1] ?? 'root';
     if (command.method === 'Emulation.setDeviceMetricsOverride') { dimensions.set(target, { width: command.params.width, height: command.params.height }); emulationOwners.set(target, ws); }
-    const result = command.method === 'Target.attachToTarget' ? { sessionId: 'attached-root' }
-      : command.method === 'Page.getFrameTree' ? { frameTree: { frame: { id: 'frame-root' } } }
+    const result = command.method === 'Target.attachToTarget' ? { sessionId: `attached-${command.params.targetId}` }
+      : command.method === 'Page.getFrameTree' ? { frameTree: { frame: { id: 'frame-root', ...(unreachableUrl ? { url: 'chrome-error://chromewebdata/', unreachableUrl } : {}) } } }
         : command.method === 'Page.createIsolatedWorld' ? { executionContextId: 7 }
-          : command.method === 'Runtime.evaluate' ? { result: { value: command.params.expression.includes('innerWidth') ? dimensions.get(target) ?? { width: bounds.width, height: bounds.height } : 'native-root' } } : {};
+          : command.method === 'Runtime.evaluate' ? { result: { value: command.params.expression.includes('error-code') ? 'ERR_NAME_NOT_RESOLVED' : command.params.expression.includes('innerWidth') ? dimensions.get(target) ?? { width: bounds.width, height: bounds.height } : 'native-root' } } : {};
     const failed = command.method === 'Input.dispatchMouseEvent' && command.params.type === 'invalid';
-    ws.send(JSON.stringify({ id: command.id, ...(command.sessionId ? { sessionId: command.sessionId } : {}), ...(failed ? { error: { message: 'invalid mouse event' } } : { result }) }));
+    const failedInitialization = command.method === 'Network.enable' && networkFailure;
+    if (failedInitialization) networkFailure = false;
+    ws.send(JSON.stringify({ id: command.id, ...(command.sessionId ? { sessionId: command.sessionId } : {}),
+      ...(failed || failedInitialization ? { error: { code: -32000, message: failed ? 'invalid mouse event' : 'initialization connection lost' } } : { result }) }));
     });
   });
   await new Promise(resolve => engine.listen(0, '127.0.0.1', resolve));
   const record = () => ({ scope, cdpPort: engine.address().port, tabs: tabs.map(({ label, marker }) => ({ label, marker })), activeLabel, bounds, zoom });
+  let activatingFault;
   const service = createNativeBrowserService({ emit: (topic, payload) => events.push({ topic, payload }), requestNative: async (key, operation, params) => {
     native.push({ key, operation, params });
     if (operation === 'layout' && params.bounds) bounds = params.bounds;
     if (operation === 'zoom') zoom = params.zoom;
     if (operation === 'create') { const id = `new-${++sequence}`; tabs.push({ id, label: id, marker: `about:blank#trylo-native-${id}` }); activeLabel = id; }
-    if (operation === 'activate') activeLabel = params.label;
+    if (operation === 'activate') {
+      activeLabel = params.label;
+      activatingFault?.();
+    }
     if (operation === 'close') { const index = tabs.findIndex(tab => tab.label === params.label); tabs.splice(index, 1); if (activeLabel === params.label) activeLabel = tabs[0].label; }
     return record();
   } });
@@ -52,7 +59,13 @@ async function fixture(t) {
     const result = await fetch(`${endpoint}/${route}`, { method: 'POST', body: JSON.stringify(value), signal });
     return { status: result.status, body: await result.json() };
   };
-  return { service, scope, endpoint, record, native, actions, events, post,
+  return { service, scope, endpoint, record, native, actions, events, post, failNavigation: url => { unreachableUrl = url; },
+    onActivate: callback => { activatingFault = callback; },
+    failNetworkInitialization: () => { networkFailure = true; },
+    disconnect: id => disconnected.add(id), reconnect: (id, replacement) => {
+      disconnected.delete(id);
+      if (replacement) tabs.find(tab => tab.id === id).id = replacement;
+    },
     pauseMetrics: () => {
       let enter, release;
       const entered = new Promise(resolve => { enter = resolve; }), wait = new Promise(resolve => { release = resolve; });
@@ -256,4 +269,86 @@ test('a new MCP call waits until a user viewport transaction has settled', async
   barrier.release(); await changing;
   const leaseId = await lease; assert.ok(leaseId);
   await f.post('lease/end', { clientId, leaseId });
+});
+
+test('failed top-level navigation is a tab failure and clears after a successful navigation', async t => {
+  const f = await fixture(t);
+  f.failNavigation('https://qoder/');
+  const failed = await f.service.snapshot({ scope: f.scope });
+  assert.equal(failed.state, 'running');
+  assert.deepEqual(failed.tabs[0].navigationError, { url: 'https://qoder/', code: 'ERR_NAME_NOT_RESOLVED' });
+  f.failNavigation(undefined);
+  const recovered = await f.service.snapshot({ scope: f.scope });
+  assert.equal(recovered.tabs[0].navigationError, undefined);
+});
+
+test('a disconnected sibling cannot poison page initialization and reconnects in the same session', async t => {
+  const f = await fixture(t), connection = await connect(f.endpoint); t.after(() => connection.ws.terminate());
+  await connection.send('Target.attachToTarget', { targetId: 'root', flatten: true });
+  await f.service.create({ scope: f.scope });
+  const { body: { clientId } } = await f.post('client/open', { pid: process.pid });
+  const { body: { leaseId } } = await f.post('lease/start', { clientId });
+  f.disconnect('new-1');
+  const initialized = await connection.send('Network.enable', {}, 'attached-root');
+  assert.ok(initialized.result, JSON.stringify(initialized));
+  assert.equal(f.actions.filter(action => action.method === 'Network.enable').length, 1);
+  assert.equal(f.record().tabs.length, 2, 'a lost CDP target must not delete its native page');
+  assert.equal(f.record().activeLabel, 'native-root');
+  f.reconnect('new-1', 'reconnected-1');
+  const recovered = await f.service.snapshot({ scope: f.scope });
+  assert.equal(recovered.state, 'running'); assert.equal(recovered.tabs.length, 2);
+  assert.equal(recovered.tabs.some(tab => tab.id === 'new-1'), false, 'discovery must replace stale target identities');
+  const activated = await connection.send('Target.activateTarget', { targetId: 'reconnected-1' });
+  assert.ok(activated.result, JSON.stringify(activated));
+  assert.equal(f.record().activeLabel, 'new-1');
+  const attached = await connection.send('Target.attachToTarget', { targetId: 'reconnected-1', flatten: true });
+  assert.equal(attached.result.sessionId, 'attached-reconnected-1');
+  assert.ok((await connection.send('Network.enable', {}, 'attached-reconnected-1')).result);
+  assert.equal(f.native.filter(operation => operation.operation === 'create').length, 1, 'recovery must not open a replacement page');
+  await f.post('lease/end', { clientId, leaseId });
+});
+
+test('failed page initialization retires only its CDP connection and the next connection recovers', async t => {
+  const f = await fixture(t), first = await connect(f.endpoint);
+  t.after(() => first.ws.terminate());
+  await first.send('Target.attachToTarget', { targetId: 'root', flatten: true });
+  await f.service.create({ scope: f.scope });
+  const { body: { clientId } } = await f.post('client/open', { pid: process.pid });
+  const { body: { leaseId } } = await f.post('lease/start', { clientId });
+  f.onActivate(() => f.disconnect('root'));
+  const closed = new Promise(resolve => first.ws.once('close', resolve));
+  const initializing = first.send('Network.enable', {}, 'attached-root');
+  // Already queued work must not run between the failure frame and close.
+  void first.send('Target.createTarget', { url: 'about:blank' });
+  const failed = await initializing;
+  assert.match(failed.error.message, /原生标签页尚未连接/);
+  let closedBeforeDeadline = false;
+  await Promise.race([closed.then(() => { closedBeforeDeadline = true; }), new Promise(resolve => setTimeout(resolve, 1000))]);
+  assert.equal(closedBeforeDeadline, true, 'the client must not keep a rejected page-initialization promise alive');
+  f.onActivate(undefined); f.reconnect('root', 'root');
+  const second = await connect(f.endpoint); t.after(() => second.ws.terminate());
+  await second.send('Target.attachToTarget', { targetId: 'root', flatten: true });
+  assert.ok((await second.send('Network.enable', {}, 'attached-root')).result);
+  assert.equal(f.actions.filter(action => action.method === 'Network.enable').length, 1,
+    'the failed command is not replayed; only the subsequent explicit call executes');
+  assert.equal(f.record().tabs.length, 2);
+  assert.equal(f.native.filter(action => action.operation === 'create').length, 1);
+  await f.post('lease/end', { clientId, leaseId });
+});
+
+test('an upstream Network.enable failure invalidates its attachment instead of poisoning later calls', async t => {
+  const f = await fixture(t), first = await connect(f.endpoint); t.after(() => first.ws.terminate());
+  f.failNetworkInitialization();
+  const closed = new Promise(resolve => first.ws.once('close', resolve));
+  const failed = await first.send('Network.enable');
+  assert.equal(failed.error.message, 'initialization connection lost');
+  let closedBeforeDeadline = false;
+  await Promise.race([closed.then(() => { closedBeforeDeadline = true; }), new Promise(resolve => setTimeout(resolve, 1000))]);
+  assert.equal(closedBeforeDeadline, true);
+  const second = await connect(f.endpoint); t.after(() => second.ws.terminate());
+  assert.ok((await second.send('Network.enable')).result);
+  assert.equal(f.record().tabs.length, 1);
+  const invalidInput = await second.send('Input.dispatchMouseEvent', { type: 'invalid' });
+  assert.equal(invalidInput.error.message, 'invalid mouse event');
+  assert.equal(second.ws.readyState, WebSocket.OPEN, 'ordinary input errors must not reset a healthy connection');
 });

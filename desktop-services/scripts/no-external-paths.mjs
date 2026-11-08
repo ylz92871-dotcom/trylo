@@ -1,7 +1,7 @@
 // Trylo Desktop Services — repository self-containment gate.
 // See migration spec §0.2 / §9.2.
 //
-// Scans C:/work/demo-ws for any reference to the old read-only repo path in
+// Scans D:/CC/trylo for any reference to the old read-only repo path in
 // *runnable* surfaces: build scripts, Node/Rust sources, configs that feed
 // import/require/spawn/where the packaged app would load a file from. The gate
 // is a tripwire for *runtime* coupling — it must flag any code that would make
@@ -22,13 +22,13 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
 const cwd = process.cwd();
-const PROJECT_ROOT = path.resolve(cwd, '..'); // C:/work/demo-ws
+const PROJECT_ROOT = path.resolve(cwd, '..'); // D:/CC/trylo
 
 const FORBIDDEN = [
   'claude-code-v-2.1.88',
   'mini-vscode-agent',
-  String.raw`C:\work\claude-code`,
-  'C:/work/claude-code',
+  String.raw`D:\CC\claude-code`,
+  'D:/CC/claude-code',
 ];
 
 // Relative paths (forward-slash, lowercase) containing the marker only in
@@ -56,6 +56,9 @@ const RUNTIME_PROBE = /\b(require|import)\s*\(|\brequire\b|\bspawn\(|--extension
 
 function isDocOrArtifact(p, norm) {
   return (
+    // Unified research, retired runtimes and raw evidence are not runnable
+    // product surfaces. Keep their original historical bytes out of this scan.
+    norm === '_workspace' || norm.startsWith('_workspace/') ||
     norm.startsWith('docs/') ||
     norm.startsWith('desktop/spike-results/') ||
     norm.endsWith('.md') ||
@@ -69,10 +72,6 @@ function isDocOrArtifact(p, norm) {
     // bundle embeds the legacy webapp and trips the gate on stale output,
     // not on source. Excluded by directory, not per-file allowlisting.
     norm.startsWith('mobile-app/android/') && norm.includes('/build/') ||
-    // Work test recordings are CAPTURED TRAFFIC FIXTURES (PR work-recordings):
-    // the payload quotes historical repo prose, never loads it. Excluded as a
-    // fixture directory once its content was confirmed pure test data.
-    norm.startsWith('work/tests/fixtures/') ||
     norm.includes('/.cowork/') || norm.startsWith('.cowork/') ||
     norm.includes('/.trylo/') || norm.startsWith('.trylo/') ||
     norm.includes('/out/') ||

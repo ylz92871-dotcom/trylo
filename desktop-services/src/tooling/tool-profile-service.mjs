@@ -29,6 +29,8 @@ import { browserRuntimeEnv } from './browser-runtime-env.mjs';
 
 import { resolvePinnedWgcHelper } from './tool-package-manager.mjs';
 import { toolRuntimeIdentity } from './tool-runtime-identity.mjs';
+import { CORE_TOOL_RUNTIME_REVISION } from './tool-catalog.mjs';
+import { MODEL_PREVIEW_NAMES, MODEL_PREVIEW_VERSION } from './model-preview-contract.mjs';
 
 /** Placeholder expanded per-run in a manifest's argv (spec §10.2). */
 const RUNTIME_DIR_TOKEN = '{runtimeDir}';
@@ -47,7 +49,7 @@ const WINDOWS_MCP_PACKAGE_ID = 'windows-mcp';
 // instead of hand-copying a complete package list. This makes the invariant
 // executable: specialist Work modes may replace the browser implementation
 // or add CAD/EDA adapters, but can never accidentally drop the shared base.
-const CODE_BASE_PACKAGES = Object.freeze(['playwright', WINDOWS_MCP_PACKAGE_ID]);
+const CODE_BASE_PACKAGES = Object.freeze(['officecli', 'playwright', WINDOWS_MCP_PACKAGE_ID]);
 const WORK_BASE_PACKAGES = Object.freeze(['officecli', 'playwright', WINDOWS_MCP_PACKAGE_ID]);
 const WORK_DEBUG_BASE_PACKAGES = Object.freeze(['officecli', 'chrome-devtools', WINDOWS_MCP_PACKAGE_ID]);
 const CAD_EDA_PACKAGES = Object.freeze([
@@ -70,14 +72,12 @@ function withCadEda(base) {
 export const TOOL_PROFILES = Object.freeze({
   'code.core.v1': Object.freeze({
     id: 'code.core.v1',
-    revision: '2',
+    revision: '3',
     surface: 'code',
     hermesProfile: 'normal',
-    // B (2026-09-07): code 与 work.core 对齐，挂浏览器 + 桌面控制。
-    // officecli 不进 code（那是 work 交付物面的）。strict 保持 false：
-    // Code 继续读用户自己的 MCP，pinned 包只是叠加（§4.3）。
-    // 按动作门控不变（§6.6 leases + bypass-immune approvals）——
-    // 合并只挂载工具，从不自动放行敏感动作。
+    // Office, browser and desktop control are the shared default tools.
+    // Code still overlays the user's MCP configuration; action approvals
+    // remain independent of mounting these capabilities.
     packageIds: CODE_BASE_PACKAGES,
     // §4.3: Code keeps reading the user's own MCP servers today; Work does
     // not. The two surfaces therefore do not share one argv.
@@ -204,6 +204,7 @@ export function createToolProfileService(options = {}) {
   const now = options.now ?? (() => Date.now());
   const browserObserver = options.browserObserver;
   const nativeBrowser = options.nativeBrowser;
+  const modelPreview = options.modelPreview;
   // An embedded caller's argv[1] is its launcher, which need not implement
   // --native-browser-mcp. The service host supplies its own path when bundled.
   const hostEntrypoint = options.hostEntrypoint ?? fileURLToPath(new URL('../host.mjs', import.meta.url));
@@ -309,8 +310,8 @@ export function createToolProfileService(options = {}) {
     const requested = String(params.requestedProfileId ?? '').trim();
     const profileId = requested || DEFAULT_PROFILE_BY_SURFACE[surface];
     const profile = TOOL_PROFILES[profileId];
-    // Default: computer use ON. Only a Work surface with an explicit
-    // `computerUse: false` drops Windows desktop control from the Profile.
+    // User-facing defaults always include desktop control. Internal callers
+    // may still explicitly isolate a noninteractive/background operation.
     const computerUse = params.computerUse !== false;
 
     if (!profile) {
@@ -342,133 +343,179 @@ export function createToolProfileService(options = {}) {
     const mcpServers = { ...hermesPart.servers };
     const packageHealth = [];
     const unavailableCapabilities = [];
-    const runtimeDirs = [];
+
+    function markPackageUnavailable(id, manifest, reasonCode, detail, userMessage) {
+      const priorIndex = packageHealth.findIndex(record => record.id === id);
+      const record = {
+        ...(priorIndex < 0 ? {} : packageHealth[priorIndex]),
+        id,
+        displayName: manifest?.displayName ?? id,
+        version: manifest?.version ?? '',
+        serverName: manifest?.mcp.serverName,
+        expectedTools: [...(manifest?.mcp.expectedTools ?? [])],
+        state: 'condition-missing',
+        available: false,
+        reasonCode,
+        detail,
+        protocol: 'not-checked',
+        checkedAt: now(),
+      };
+      if (priorIndex < 0) packageHealth.push(record);
+      else packageHealth[priorIndex] = record;
+      unavailableCapabilities.push({ id, type: 'package', displayName: record.displayName,
+        version: record.version, reasonCode, detail, userMessage });
+    }
 
     for (const id of profile.packageIds) {
       // 电脑控制开关: when explicitly disabled, the desktop-control package is
       // dropped from the Profile. Not an "unavailable capability" (the user
       // turned it off, not a missing dependency) — the tools are simply absent.
       if (!computerUse && id === WINDOWS_MCP_PACKAGE_ID) continue;
-      const manifest = catalog.get(id);
-      if (!manifest) {
-        unavailableCapabilities.push({
-          id,
-          type: 'package',
-          reasonCode: 'not_in_catalog',
-          userMessage: `工具包 ${id} 尚未纳入 Trylo 工具目录`,
-        });
-        continue;
-      }
-
-      const record = await health.check(manifest);
-      packageHealth.push(record);
-
-      if (!record.available) {
-        unavailableCapabilities.push({
-          id,
-          type: 'package',
-          displayName: manifest.displayName,
-          version: manifest.version,
-          reasonCode: record.reasonCode ?? (record.state === 'version-mismatch' ? 'version_mismatch' : 'not_installed'),
-          detail: record.detail,
-          userMessage: `${manifest.displayName}（${manifest.version}）不可用：${record.detail}`,
-        });
-        continue;
-      }
-
-      const installed = await packages.resolve(manifest);
-      const runtimeIdentity = toolRuntimeIdentity(manifest,installed);
-      if (record.runtimeIdentity && record.runtimeIdentity !== runtimeIdentity) {
-        unavailableCapabilities.push({ id, type:'package', reasonCode:'runtime_changed',
-          userMessage:`${manifest.displayName} 的运行环境在检查后发生变化，请重新发送以重新检查。` });
-        continue;
-      }
-      const identityEnv={TRYLO_TOOL_RUNTIME_ID:runtimeIdentity};
-      // §8.2 outputDir contract: a manifest may rename its per-run runtime
-      // dir (playwright → `browser/<conversationId>`). Default: package id.
-      const dirName = manifest.runtimeDirName ?? manifest.id;
-      const runtimeDir = runtimeDirFor(projectRoot, dirName, conversationId);
-      // §8.2 origin configuration: forwarded verbatim as the server's own
-      // request filter. Semicolon-joined per the pinned server's --help.
-      const originArgs = [];
-      if (Array.isArray(manifest.mcp.allowedOrigins) && manifest.mcp.allowedOrigins.length > 0) {
-        originArgs.push('--allowed-origins', manifest.mcp.allowedOrigins.join(';'));
-      }
-      if (Array.isArray(manifest.mcp.blockedOrigins) && manifest.mcp.blockedOrigins.length > 0) {
-        originArgs.push('--blocked-origins', manifest.mcp.blockedOrigins.join(';'));
-      }
-      const nativePackage = nativeBrowser && ['playwright', 'chrome-devtools'].includes(id);
-      const { expanded, dirs } = expandArgs([...manifest.mcp.args].filter(arg => !nativePackage || arg !== '--isolated'), runtimeDir, installed.installDir);
-      runtimeDirs.push(...dirs);
-      let nativeConnection;
-      if (nativePackage) {
-        try { nativeConnection = await nativeBrowser.configure({ packageId: id, projectRoot, conversationId }); expanded.push(...nativeConnection.args); }
-        catch (error) {
-          unavailableCapabilities.push({ id, type: 'package', reasonCode: 'native_browser_unavailable',
-            userMessage: `原生浏览器连接失败：${String(error?.message ?? error)}` });
+      let manifest;
+      try {
+        manifest = catalog.get(id);
+        if (!manifest) {
+          unavailableCapabilities.push({
+            id,
+            type: 'package',
+            reasonCode: 'not_in_catalog',
+            userMessage: `工具包 ${id} 尚未纳入 Trylo 工具目录`,
+          });
           continue;
         }
-      } else if (browserObserver && ['playwright', 'chrome-devtools'].includes(id)) {
-        expanded.push(...await browserObserver.configure({ packageId: id, projectRoot, conversationId }));
-      }
 
-      // WCC-P2-05 wiring (spec §19.8): a manifest may pin a native helper the
-      // sidecar needs at runtime (windows-mcp's .NET WGC capture helper). The
-      // fork's WgcProvider resolves it via WINDOWS_MCP_WGC_HELPER first (wgc.py
-      // `default_helper_path`), so the host injects its digest-verified
-      // resolution here — the packaged sidecar's only other candidate is a
-      // repo-relative dev path that does not exist in an installed tree. A
-      // failed resolution (not staged / digest drift) injects NOTHING: the
-      // child's own lookup then comes up empty and the capture path degrades
-      // to the honest legacy status (§13.1); we never point the child at
-      // unverified native code.
-      let helperEnv = null;
-      if (id === WINDOWS_MCP_PACKAGE_ID) {
-        helperEnv = { WINDOWS_MCP_SCREENSHOT_NATIVE: '1', WINDOWS_MCP_PREVIEW_CACHE: path.join(path.dirname(storageRoot), 'tool-cache') };
-      }
-      if (manifest.helper) {
-        try {
-          const helper = await resolvePinnedWgcHelper(manifest);
-          if (helper.ok && helper.path) {
-            helperEnv = { ...helperEnv, WINDOWS_MCP_WGC_HELPER: helper.path };
-          }
-        } catch {
-          // Keep preview quality even if the optional native helper is unavailable.
+        const record = await health.check(manifest);
+        packageHealth.push(record);
+
+        if (!record.available) {
+          unavailableCapabilities.push({
+            id,
+            type: 'package',
+            displayName: manifest.displayName,
+            version: manifest.version,
+            reasonCode: record.reasonCode ?? (record.state === 'version-mismatch' ? 'version_mismatch' : 'not_installed'),
+            detail: record.detail,
+            userMessage: `${manifest.displayName}（${manifest.version}）不可用：${record.detail}`,
+          });
+          continue;
         }
+
+        const installed = await packages.resolve(manifest);
+        const runtimeIdentity = toolRuntimeIdentity(manifest,installed);
+        if (record.runtimeIdentity && record.runtimeIdentity !== runtimeIdentity) {
+          markPackageUnavailable(id, manifest, 'runtime_changed', 'runtime changed after health check',
+            `${manifest.displayName} 的运行环境在检查后发生变化，请重新发送以重新检查。`);
+          continue;
+        }
+        // Broker reuse must also retire an older host relay implementation.
+        const identityEnv = { TRYLO_TOOL_RUNTIME_ID: runtimeIdentity,
+          TRYLO_CORE_TOOL_RUNTIME_REVISION: String(CORE_TOOL_RUNTIME_REVISION) };
+        // §8.2 outputDir contract: a manifest may rename its per-run runtime
+        // dir (playwright → `browser/<conversationId>`). Default: package id.
+        const dirName = manifest.runtimeDirName ?? manifest.id;
+        const runtimeDir = runtimeDirFor(projectRoot, dirName, conversationId);
+        // §8.2 origin configuration: forwarded verbatim as the server's own
+        // request filter. Semicolon-joined per the pinned server's --help.
+        const originArgs = [];
+        if (Array.isArray(manifest.mcp.allowedOrigins) && manifest.mcp.allowedOrigins.length > 0) {
+          originArgs.push('--allowed-origins', manifest.mcp.allowedOrigins.join(';'));
+        }
+        if (Array.isArray(manifest.mcp.blockedOrigins) && manifest.mcp.blockedOrigins.length > 0) {
+          originArgs.push('--blocked-origins', manifest.mcp.blockedOrigins.join(';'));
+        }
+        const nativePackage = nativeBrowser && ['playwright', 'chrome-devtools'].includes(id);
+        const { expanded, dirs } = expandArgs([...manifest.mcp.args].filter(arg => !nativePackage || arg !== '--isolated'), runtimeDir, installed.installDir);
+        for (const dir of dirs) await fsp.mkdir(dir, { recursive: true });
+        let nativeConnection;
+        if (nativePackage) {
+          try { nativeConnection = await nativeBrowser.configure({ packageId: id, projectRoot, conversationId }); expanded.push(...nativeConnection.args); }
+          catch (error) {
+            const detail = String(error?.message ?? error);
+            markPackageUnavailable(id, manifest, 'native_browser_unavailable', detail,
+              `原生浏览器连接失败：${detail}`);
+            continue;
+          }
+        } else if (browserObserver && ['playwright', 'chrome-devtools'].includes(id)) {
+          expanded.push(...await browserObserver.configure({ packageId: id, projectRoot, conversationId }));
+        }
+
+        // WCC-P2-05 wiring (spec §19.8): a manifest may pin a native helper the
+        // sidecar needs at runtime (windows-mcp's .NET WGC capture helper). The
+        // fork's WgcProvider resolves it via WINDOWS_MCP_WGC_HELPER first (wgc.py
+        // `default_helper_path`), so the host injects its digest-verified
+        // resolution here — the packaged sidecar's only other candidate is a
+        // repo-relative dev path that does not exist in an installed tree. A
+        // failed resolution (not staged / digest drift) injects NOTHING: the
+        // child's own lookup then comes up empty and the capture path degrades
+        // to the honest legacy status (§13.1); we never point the child at
+        // unverified native code.
+        let helperEnv = null;
+        if (id === WINDOWS_MCP_PACKAGE_ID) {
+          helperEnv = { WINDOWS_MCP_SCREENSHOT_NATIVE: '1', WINDOWS_MCP_PREVIEW_CACHE: path.join(path.dirname(storageRoot), 'tool-cache') };
+        }
+        if (manifest.helper) {
+          try {
+            const helper = await resolvePinnedWgcHelper(manifest);
+            if (helper.ok && helper.path) {
+              helperEnv = { ...helperEnv, WINDOWS_MCP_WGC_HELPER: helper.path };
+            }
+          } catch {
+            // Keep preview quality even if the optional native helper is unavailable.
+          }
+        }
+
+        const browserEnv = id === 'playwright' ? browserRuntimeEnv(runtimeDir) : {};
+
+        // Never let two manifests claim one server name — the catalog
+        // guarantees uniqueness, but a late collision must not silently
+        // overwrite Hermes or another package.
+        if (mcpServers[manifest.mcp.serverName]) {
+          markPackageUnavailable(id, manifest, 'server_name_collision', 'MCP server name already occupied',
+            `${manifest.displayName} 的 MCP server 名冲突，已跳过`);
+          continue;
+        }
+
+        // §8.2: a `runner: 'node'` package's entry is a .js script — the
+        // command is the Node runtime the Service Host itself runs under,
+        // and the entry path is the first argv (never `npx`).
+        if (manifest.artifact.runner === 'node') {
+          mcpServers[manifest.mcp.serverName] = {
+            command: process.execPath,
+            args: nativeConnection
+              ? [hostEntrypoint, '--native-browser-mcp', nativeConnection.gate, installed.executable, ...expanded, ...originArgs]
+              : [installed.executable, ...expanded, ...originArgs],
+            env: { ...manifest.mcp.env, ...helperEnv, ...browserEnv, ...identityEnv },
+          };
+        } else {
+          mcpServers[manifest.mcp.serverName] = {
+            command: installed.executable,
+            args: [...(installed.argsPrefix ?? []), ...expanded, ...originArgs],
+            env: { ...manifest.mcp.env, ...helperEnv, ...identityEnv },
+          };
+        }
+      } catch (error) {
+        // One optional package must not discard the other servers in this run.
+        const detail = String(error?.message ?? error);
+        markPackageUnavailable(id, manifest, 'package_resolution_failed', detail,
+          `${manifest?.displayName ?? id} 准备失败，其他工具仍可继续使用。`);
       }
+    }
 
-      const browserEnv = id === 'playwright' ? browserRuntimeEnv(runtimeDir) : {};
-
-      // Never let two manifests claim one server name — the catalog
-      // guarantees uniqueness, but a late collision must not silently
-      // overwrite Hermes or another package.
-      if (mcpServers[manifest.mcp.serverName]) {
-        unavailableCapabilities.push({
-          id,
-          type: 'package',
-          reasonCode: 'server_name_collision',
-          userMessage: `${manifest.displayName} 的 MCP server 名冲突，已跳过`,
-        });
-        continue;
-      }
-
-      // §8.2: a `runner: 'node'` package's entry is a .js script — the
-      // command is the Node runtime the Service Host itself runs under,
-      // and the entry path is the first argv (never `npx`).
-      if (manifest.artifact.runner === 'node') {
-        mcpServers[manifest.mcp.serverName] = {
-          command: process.execPath,
-          args: nativeConnection
-            ? [hostEntrypoint, '--native-browser-mcp', nativeConnection.gate, installed.executable, ...expanded, ...originArgs]
-            : [installed.executable, ...expanded, ...originArgs],
-          env: { ...manifest.mcp.env, ...helperEnv, ...browserEnv, ...identityEnv },
-        };
-      } else {
-        mcpServers[manifest.mcp.serverName] = {
-          command: installed.executable,
-          args: [...expanded, ...originArgs],
-          env: { ...manifest.mcp.env, ...helperEnv, ...identityEnv },
-        };
+    // The host-owned preview has no package installation lifecycle.
+    if (modelPreview && projectRoot && conversationId) {
+      try {
+        if (mcpServers['trylo-preview']) throw new Error('model_preview_server_name_collision');
+        const connection = await modelPreview.configure({ projectRoot, conversationId });
+        mcpServers['trylo-preview'] = { command: process.execPath,
+          args: [hostEntrypoint, '--model-preview-mcp', connection.gate], env: {} };
+        packageHealth.push({ id: 'model-preview', classifierId: 'model-preview', displayName: '3D 模型预览',
+          version: MODEL_PREVIEW_VERSION, adoption: 'stable', serverName: 'trylo-preview', state: 'installed',
+          available: true, active: true, builtIn: true, runtimeIdentity: `model-preview@${MODEL_PREVIEW_VERSION}`,
+          detail: 'Built into the Service Host', autoUpdate: false, expectedTools: [...MODEL_PREVIEW_NAMES],
+          protocol: 'not-checked', checkedAt: now(), reportedVersion: MODEL_PREVIEW_VERSION, versionMatches: true });
+      } catch (error) {
+        unavailableCapabilities.push({ id: 'model-preview', type: 'adapter', reasonCode: 'model_preview_unavailable',
+          detail: String(error.message ?? error), userMessage: '3D 预览暂时无法连接，其他工具仍可继续使用。' });
       }
     }
 
@@ -482,6 +529,7 @@ export function createToolProfileService(options = {}) {
     // bypassPermissions in the CLI (verified: permissions.ts step 1b
     // precedes step 2a), so this is bypass-immune.
     const askRules = catalog.list().map((m) => `mcp__${m.mcp.serverName}__*`);
+    if (modelPreview) askRules.push('mcp__trylo-preview__*');
     const settingsContents = `${stableStringify({
       permissions: { ask: askRules, deny: [] },
     })}\n`;
@@ -493,9 +541,6 @@ export function createToolProfileService(options = {}) {
     let nativeRegistryPath = null;
 
     try {
-      for (const dir of runtimeDirs) {
-        await fsp.mkdir(dir, { recursive: true });
-      }
       const writtenMcp = await writeContentAddressed(profilesRoot, 'mcp.json', mcpContents);
       const writtenSettings = await writeContentAddressed(profilesRoot, 'settings.json', settingsContents);
       const servers = Object.entries(mcpServers).map(([name, server]) => {

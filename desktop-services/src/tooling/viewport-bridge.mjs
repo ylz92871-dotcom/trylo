@@ -15,6 +15,7 @@
 
 import net from 'node:net';
 import { spawn } from 'node:child_process';
+import { stopViewportProcess } from './stop-viewport-process.mjs';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -100,6 +101,7 @@ export function viewportMetrics(width, height, deviceScaleFactor = 1) {
 export function createViewportBridge({ log = null, emit = null, storageRoot = '', probe = probePlaywrightChromium, startTimeoutMs = START_TIMEOUT_MS } = {}) {
   let state = 'stopped'; // stopped | starting | running | error
   let child = null;
+  let childStop = null;
   let ws = null;
   let cdpPort = 0;
   let currentUrl = '';
@@ -262,15 +264,14 @@ export function createViewportBridge({ log = null, emit = null, storageRoot = ''
 
   async function killChild() {
     const processToKill = child;
-    child = null;
     if (!processToKill) return;
-    try {
-      processToKill.kill();
-    } catch { /* best effort */ }
-    if (process.platform === 'win32') {
-      // Chrome keeps subprocess trees; taskkill /T is the reliable sweep.
-      spawn('taskkill', ['/PID', String(processToKill.pid), '/T', '/F'], { windowsHide: true });
-    }
+    if (childStop) return childStop;
+    const stopping = stopViewportProcess(processToKill).then(() => {
+      if (child === processToKill) child = null;
+    });
+    childStop = stopping;
+    try { await stopping; }
+    finally { if (childStop === stopping) childStop = null; }
   }
 
   /** `tooling.viewportStart`. Idempotent: a running bridge answers with its
@@ -278,6 +279,7 @@ export function createViewportBridge({ log = null, emit = null, storageRoot = ''
   async function start(params = {}) {
     if (state === 'running') return { ok: true, cdpPort, url: currentUrl, alreadyRunning: true };
     if (state === 'starting') return startingPromise ?? { ok: false, reasonCode: 'start_failed', error: 'start already in flight' };
+    if (child) return { ok: false, reasonCode: 'start_failed', error: 'Previous browser stop is unconfirmed; retry Stop.' };
 
     terminalError = false;
     report('starting');
@@ -311,7 +313,7 @@ export function createViewportBridge({ log = null, emit = null, storageRoot = ''
           // death). Sweep the dir again on stop.
           profileDir = path.join(storageRoot || '.', `viewport-profile-${process.pid}-${Date.now()}`);
           await fsp.mkdir(profileDir, { recursive: true });
-          child = spawn(executable, [
+          const ownedChild = spawn(executable, [
             `--remote-debugging-port=${cdpPort}`,
             `--user-data-dir=${profileDir}`,
             '--no-first-run',
@@ -327,13 +329,16 @@ export function createViewportBridge({ log = null, emit = null, storageRoot = ''
             '--window-size=1280,800',
             'about:blank',
           ], { stdio: 'ignore', windowsHide: true });
-          child.on('exit', () => {
+          child = ownedChild;
+          ownedChild.on('exit', () => {
+            if (child !== ownedChild) return;
+            child = null;
             if (state === 'running' || state === 'starting') {
               closeWebSocket();
               report('stopped', '浏览器已退出');
             }
           });
-          child.on('error', (error) => logLine(`spawn failed: ${error?.message ?? error}`));
+          ownedChild.on('error', (error) => logLine(`spawn failed: ${error?.message ?? error}`));
         }
 
         // The DevTools HTTP endpoint is the real readiness gate.
@@ -367,7 +372,12 @@ export function createViewportBridge({ log = null, emit = null, storageRoot = ''
         return { ok: true, cdpPort, url: currentUrl };
       } catch (error) {
         closeWebSocket();
-        await killChild();
+        try { await killChild(); }
+        catch (cleanup) {
+          report('error', String(cleanup?.message ?? cleanup).slice(0, 200));
+          return { ok: false, reasonCode: 'start_failed', error: String(error?.message ?? error).slice(0, 200),
+            cleanupError: String(cleanup?.message ?? cleanup).slice(0, 200) };
+        }
         report('error', String(error?.message ?? error).slice(0, 200));
         return { ok: false, reasonCode: 'start_failed', error: String(error?.message ?? error).slice(0, 200) };
       } finally {
@@ -465,7 +475,12 @@ export function createViewportBridge({ log = null, emit = null, storageRoot = ''
   /** `tooling.viewportStop`. */
   async function stop() {
     closeWebSocket();
-    await killChild();
+    try { await killChild(); }
+    catch (error) {
+      terminalError = true;
+      report('error', String(error?.message ?? error).slice(0, 200));
+      return { ok: false, reasonCode: 'stop_failed', error: String(error?.message ?? error).slice(0, 200) };
+    }
     if (profileDir) {
       const dir = profileDir;
       profileDir = null;

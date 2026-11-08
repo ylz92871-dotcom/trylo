@@ -211,13 +211,16 @@ export function createToolHealthService({ packages, catalog, now = () => Date.no
     // the five-minute version cache (including a previously cached Low result).
     if (!opts.deep && manifest.id !== 'windows-mcp') {
       const hit = cache.get(key);
-      if (hit && hit.runtimeIdentity === runtimeIdentity && now() - hit.checkedAt < CACHE_TTL_MS) return hit;
+      // A transient probe/condition failure must not freeze later conversations.
+      // Reuse only positive health; every new check can observe a recovery.
+      if (hit?.available && hit.runtimeIdentity === runtimeIdentity && now() - hit.checkedAt < CACHE_TTL_MS) return hit;
     }
 
     const record = {
       runtimeIdentity,
       id: manifest.id,
-      version: manifest.version,
+      version: installed.builtIn ? installed.version : manifest.version,
+      builtIn: installed.builtIn === true,
       displayName: manifest.displayName,
       adoption: manifest.adoption,
       serverName: manifest.mcp.serverName,
@@ -264,12 +267,12 @@ export function createToolHealthService({ packages, catalog, now = () => Date.no
         // Local override: the user's own build. Report the version compare
         // truthfully but do NOT refuse on drift — override is an explicit
         // user-supplied path.
-        record.versionMatches = reported.includes(manifest.version);
+        record.versionMatches = reported.includes(record.version);
         record.detail = record.versionMatches
           ? `local override active (version verified): binary reports ${reported.trim()}`
           : `local override active (version differs from pin): binary reports ${reported.trim()}, pinned ${manifest.version}`;
       } else {
-        record.versionMatches = reported.includes(manifest.version);
+        record.versionMatches = reported.includes(record.version);
         if (!record.versionMatches) {
           record.state = 'version-mismatch';
           record.available = false;
@@ -295,12 +298,12 @@ export function createToolHealthService({ packages, catalog, now = () => Date.no
       } else if (installed.state === 'override') {
         // Same local-override relaxation as version-handshake above: the
         // user's own build version may differ from the pinned release.
-        record.versionMatches = reported === manifest.version;
+        record.versionMatches = reported === record.version;
         record.detail = record.versionMatches
           ? `local override active (version verified): distribution reports '${reported}'`
           : `local override active (version differs from pin): distribution reports '${reported}', pinned ${manifest.version}`;
       } else {
-        record.versionMatches = reported === manifest.version;
+        record.versionMatches = reported === record.version;
         if (!record.versionMatches) {
           record.state = 'version-mismatch';
           record.available = false;

@@ -25,7 +25,7 @@ function requireRule(condition, message) {
 const catalog = createToolCatalog();
 requireRule(catalog.rejected().length === 0, `catalog rejects manifests: ${JSON.stringify(catalog.rejected())}`);
 
-const localRegistryPath = path.join(repoRoot, 'tool-sources.json');
+const localRegistryPath = path.join(packageRoot, 'toolchain', 'tool-sources.json');
 const localRegistry = loadRepositoryToolRegistry(localRegistryPath);
 requireRule(localRegistry.problems.length === 0, `local registry invalid: ${localRegistry.problems.join('; ')}`);
 
@@ -54,11 +54,7 @@ for (const profile of Object.values(TOOL_PROFILES)) {
   requireRule(profile.packageIds.includes('windows-mcp'), `${profile.id} must carry desktop control`);
   const browserCount = ['playwright', 'chrome-devtools'].filter((id) => profile.packageIds.includes(id)).length;
   requireRule(browserCount === 1, `${profile.id} must carry exactly one browser implementation`);
-  if (profile.surface === 'code') {
-    requireRule(!profile.packageIds.includes('officecli'), `${profile.id} must keep OfficeCLI Work-only`);
-  } else {
-    requireRule(profile.packageIds.includes('officecli'), `${profile.id} must carry the Work Office layer`);
-  }
+  requireRule(profile.packageIds.includes('officecli'), `${profile.id} must carry the default Office layer`);
   if (profile.id.includes('cad')) {
     for (const id of cadEdaIds) requireRule(profile.packageIds.includes(id), `${profile.id} is missing ${id}`);
   }

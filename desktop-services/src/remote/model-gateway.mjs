@@ -14,7 +14,7 @@ export function createModelGateway({ account, models, transport = fetch }) {
     try {
       if (request.headers.origin || request.method !== 'POST' || request.url !== '/v1/chat/completions') return json(response, 403, { error: { message: '仅限 Desktop 本机模型调用。' } });
       const token = request.headers.authorization?.replace(/^Bearer /, ''), lease = leases.get(token);
-      if (!lease || lease.expiresAt <= Date.now() || lease.epoch !== epoch) return json(response, 401, { error: { message: '请重新登录或重新发送本次对话。' } });
+      if (!lease || lease.epoch !== epoch) return json(response, 401, { error: { message: '请重新登录或重新发送本次对话。' } });
       let length = 0; const chunks = [];
       for await (const chunk of request) { length += chunk.length; if (length > 8 * 1024 * 1024) { json(response, 413, { error: { message: '模型请求超过 8MiB，请缩小附件或压缩上下文。' } }); request.resume(); return; } chunks.push(chunk); }
       let payload; try { payload = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return json(response, 400, { error: { message: '模型请求格式无效。' } }); }
@@ -23,7 +23,7 @@ export function createModelGateway({ account, models, transport = fetch }) {
       if (lease.epoch !== epoch || lease.owner !== session.owner) return json(response, 401, { error: { message: '账号已变化，请重新发送。' } });
       const { model, ...body } = payload;
       const remote = await transport(session.serverUrl + '/relay/model-requests', {
-        method: 'POST', redirect: 'error', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(125000)]),
+        method: 'POST', redirect: 'error', signal: controller.signal,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
         body: JSON.stringify({ pool: 'free', model, requestKey: crypto.randomUUID(), payload: body }),
       });
@@ -62,16 +62,14 @@ export function createModelGateway({ account, models, transport = fetch }) {
       const metadata = Number.isSafeInteger(capacity) && capacity > 0 ? { modelContextWindow: capacity } : {};
       await listen();
       if (scope !== epoch) throw Error('账号已变化，请重试。');
-      for (const [key, lease] of leases) if (lease.expiresAt <= Date.now()) leases.delete(key);
       for (const [apiKey, lease] of leases) {
         if (lease.epoch === epoch && lease.owner === session.owner && lease.model === model) {
-          lease.expiresAt = Date.now() + 2 * 3600000;
           return { apiHost: `http://127.0.0.1:${server.address().port}/v1`, apiKey, apiModel: model, providerId: 'openai-compatible', apiFormat: 'openai', ...metadata };
         }
       }
       if (leases.size >= 128) throw Error('模型连接过多，请稍后重试。');
       const apiKey = crypto.randomBytes(32).toString('base64url');
-      leases.set(apiKey, { model, epoch, owner: session.owner, expiresAt: Date.now() + 2 * 3600000 });
+      leases.set(apiKey, { model, epoch, owner: session.owner });
       return { apiHost: `http://127.0.0.1:${server.address().port}/v1`, apiKey, apiModel: model, providerId: 'openai-compatible', apiFormat: 'openai', ...metadata };
     },
     async close() { invalidate(); if (starting) await starting.catch(() => {}); const old = server; server = undefined; if (old) { old.closeAllConnections(); await new Promise(resolve => old.close(resolve)); } },
