@@ -81,7 +81,9 @@ test("a window removes the replaced segment from the prompt but not from the rec
     userItem(4, "third"),
   ];
   const projected = service.projectForPrompt({ records });
+
   assert.equal(projected.ok, true);
+
   if (projected.ok) {
     // The model sees one live message plus the summary; the journal still knows
     // about all three. This inequality is the compaction contract.
@@ -103,7 +105,9 @@ test("two consecutive windows leave only the newest one standing", () => {
     userItem(7, "fifth"),
   ];
   const projected = service.projectForPrompt({ records });
+
   assert.equal(projected.ok, true);
+
   if (projected.ok) {
     assert.equal(projected.view.window?.windowId, "w2");
     assert.equal(projected.view.items.length, 1);
@@ -122,6 +126,7 @@ test("a prompt view after a reload matches the view taken before it", () => {
   ];
   const before = service.projectForPrompt({ records });
   const after = service.projectForPrompt({ records });
+
   assert.deepEqual(before, after);
 });
 
@@ -139,7 +144,9 @@ test("a compact record with an extra key is rejected rather than partially read"
     }),
   ];
   const projected = service.projectForPrompt({ records });
+
   assert.equal(projected.ok, false);
+
   if (!projected.ok) {
     assert.equal(projected.code, "compact_payload_malformed");
   }
@@ -152,7 +159,9 @@ test("a compact record with a missing key is rejected", () => {
     record(2, "compact", { windowId: "w1", summary: "only half a window" }),
   ];
   const projected = service.projectForPrompt({ records });
+
   assert.equal(projected.ok, false);
+
   if (!projected.ok) {
     assert.equal(projected.code, "compact_payload_malformed");
   }
@@ -165,7 +174,9 @@ test("an unknown compact format version fails the whole projection", () => {
     window(2, { replacedToSequence: 1, formatVersion: "99" }),
   ];
   const projected = service.projectForPrompt({ records });
+
   assert.equal(projected.ok, false);
+
   if (!projected.ok) {
     assert.equal(projected.code, "compact_format_unknown");
   }
@@ -181,7 +192,9 @@ test("overlapping windows are refused instead of adjudicated", () => {
     window(5, { windowId: "w2", replacedFromSequence: 2, replacedToSequence: 4, summary: "overlap" }),
   ];
   const projected = service.projectForPrompt({ records });
+
   assert.equal(projected.ok, false);
+
   if (!projected.ok) {
     assert.equal(projected.code, "compact_window_not_monotonic");
   }
@@ -190,10 +203,14 @@ test("overlapping windows are refused instead of adjudicated", () => {
 test("a rolled-back horizon hides transcript items after it and nothing else changes", () => {
   const records = journalWithFourItems();
   const rollback = service.rollbackTranscript({ records, sequence: 2 });
+
   assert.equal(rollback.ok, true);
+
   if (rollback.ok) {
     const projected = service.projectForPrompt({ records, horizonSequence: rollback.horizonSequence });
+
     assert.equal(projected.ok, true);
+
     if (projected.ok) {
       assert.deepEqual(
         projected.view.items.map((item) => item.sequence),
@@ -238,7 +255,9 @@ test("compact builds the first window over everything written so far", () => {
     at: "2026-09-14T00:01:00.000Z",
     summary: "four messages, nothing resolved yet",
   });
+
   assert.equal(outcome.ok, true);
+
   if (outcome.ok) {
     assert.equal(outcome.record.type, "compact");
     assert.deepEqual(outcome.record.payload, {
@@ -258,10 +277,13 @@ test("a second compact starts where the first one ended", () => {
     at: "2026-09-14T00:01:00.000Z",
     summary: "first four",
   });
+
   assert.equal(first.ok, true);
+
   if (!first.ok) {
     return;
   }
+
   const afterFirst: readonly SessionRecord[] = [
     ...journalWithFourItems().slice(0, 5),
     record(5, "compact", first.record.payload),
@@ -273,7 +295,9 @@ test("a second compact starts where the first one ended", () => {
     at: "2026-09-14T00:02:00.000Z",
     summary: "then a fifth",
   });
+
   assert.equal(second.ok, true);
+
   if (second.ok) {
     assert.equal(second.record.payload.windowId, "w2");
     assert.equal(second.record.payload.replacedFromSequence, 5);
@@ -288,7 +312,9 @@ test("compact refuses a summary that would leak", () => {
     at: "2026-09-14T00:01:00.000Z",
     summary: "the user pasted api_key=sk-example1234567 into the prompt",
   });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.code, "summary_unsafe");
   }
@@ -301,7 +327,9 @@ test("compact refuses when there is nothing left to summarize", () => {
     window(2, { replacedFromSequence: 1, replacedToSequence: 1, summary: "first" }),
   ];
   const outcome = service.compact({ records, sessionId: "s1", at: "now", summary: "nothing new" });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.code, "nothing_to_compact");
   }
@@ -310,10 +338,13 @@ test("compact refuses when there is nothing left to summarize", () => {
 test("a horizon suppresses compacting over transcript cut out of the prompt view", () => {
   const records = journalWithFourItems();
   const rollback = service.rollbackTranscript({ records, sequence: 2 });
+
   assert.equal(rollback.ok, true);
+
   if (!rollback.ok) {
     return;
   }
+
   const outcome = service.compact({
     records,
     sessionId: "s1",
@@ -321,7 +352,9 @@ test("a horizon suppresses compacting over transcript cut out of the prompt view
     summary: "only the visible prefix",
     horizonSequence: rollback.horizonSequence,
   });
+
   assert.equal(outcome.ok, true);
+
   if (outcome.ok) {
     assert.equal(outcome.record.payload.replacedToSequence, 2);
   }
@@ -340,7 +373,9 @@ test("compacting under a horizon that leaves nothing visible is refused", () => 
     summary: "nothing visible",
     horizonSequence: 0,
   });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.code, "nothing_to_compact");
   }
@@ -365,7 +400,9 @@ test("a foreign transcript_item payload fails the prompt view instead of being g
   // must fail closed, never project a guess.
   const records = [record(1, "transcript_item", { kind: "user" })];
   const outcome = projectForPrompt({ records });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.code, "compact_payload_malformed");
     assert.match(outcome.detail, /sequence 1/);
@@ -378,9 +415,12 @@ test("listTranscript classifies a foreign payload out rather than showing a gues
     record(2, "transcript_item", { kind: "user" }),
   ];
   const items = listTranscript(records);
+
   assert.equal(items.length, 1);
   const first = items[0];
+
   assert.equal(first?.kind, "user");
+
   if (first?.kind === "user") {
     assert.equal(first.text, "real");
   }

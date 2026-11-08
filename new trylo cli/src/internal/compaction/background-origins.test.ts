@@ -26,18 +26,24 @@ function progress(items: TranscriptItem[]): void {
 
 test("the first request preserves multiple middle process origins without copying command or env inputs", () => {
   const items = request();
+
   start(items, "a", true, "Started in the background as session ps_one.");
   start(items, "b", true, "Started in the background as session ps_two.");
   progress(items);
   const summary = summarizeTranscript(items);
-  assert.ok(summary.includes("ps_one")); assert.ok(summary.includes("ps_two"));
-  assert.ok(summary.includes("LATEST_STATE_119")); assert.ok(summary.includes("CURRENT_CASE"));
-  assert.equal(summary.includes("PRIVATE_COMMAND"), false); assert.equal(summary.includes("PRIVATE_ENV"), false);
+
+  assert.ok(summary.includes("ps_one"));
+  assert.ok(summary.includes("ps_two"));
+  assert.ok(summary.includes("LATEST_STATE_119"));
+  assert.ok(summary.includes("CURRENT_CASE"));
+  assert.equal(summary.includes("PRIVATE_COMMAND"), false);
+  assert.equal(summary.includes("PRIVATE_ENV"), false);
   assert.equal(validateSummary(summary).ok, true);
 });
 
 test("repeated tool ids preserve only the matching successful background occurrence as a process origin", () => {
   const items = request();
+
   start(items, "same", false, "FOREGROUND_ONLY");
   start(items, "same", true, "Started in the background as session ps_actual.");
   start(items, "same", true, "FAILED_START", "failed");
@@ -45,27 +51,37 @@ test("repeated tool ids preserve only the matching successful background occurre
   progress(items);
   const summary = summarizeTranscript(items, { previousSummary: "Earlier context." });
   const origins = summary.split("[background process starts in this request]\n")[1]?.split("\nuser:")[0] ?? "";
+
   assert.ok(origins.includes("ps_actual"));
-  assert.equal(origins.includes("FOREGROUND_ONLY"), false); assert.equal(origins.includes("FAILED_START"), false);
+  assert.equal(origins.includes("FOREGROUND_ONLY"), false);
+  assert.equal(origins.includes("FAILED_START"), false);
 });
 
 test("many process origins remain bounded with explicit elision and the newest state", () => {
   const items = request();
+
   for (let i = 0; i < 40; i++) start(items, "start-" + i, true, "Started in the background as session ps_" + i + ". " + "Start detail ".repeat(10));
+
   progress(items);
   const summary = summarizeTranscript(items);
-  assert.ok(summary.includes("[elided ")); assert.ok(summary.includes("ps_39"));
-  assert.ok(summary.includes("LATEST_STATE_119")); assert.ok(summary.length <= 4000);
+
+  assert.ok(summary.includes("[elided "));
+  assert.ok(summary.includes("ps_39"));
+  assert.ok(summary.includes("LATEST_STATE_119"));
+  assert.ok(summary.length <= 4000);
   assert.equal(validateSummary(summary).ok, true);
 });
 
 test("small custom summary budgets and disclosure scrubbing still bound process observations", () => {
   const items = request();
+
   start(items, "start", true, "Started in the background as session ps_safe. token=credential-value /private/source");
   progress(items);
+
   for (const maxChars of [80, 300, 1000, 4000]) {
     const summary = summarizeTranscript(items, { maxChars, previousSummary: "Earlier context." });
-    assert.ok(summary.length <= maxChars); assert.equal(validateSummary(summary).ok, true);
+    assert.ok(summary.length <= maxChars);
+    assert.equal(validateSummary(summary).ok, true);
     assert.equal(summary.includes("credential-value"), false);
   }
 });

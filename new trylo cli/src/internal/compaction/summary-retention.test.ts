@@ -33,6 +33,7 @@ test("an overflowing digest keeps the first line and the last line", () => {
     userItem(41, `${TAIL_MARK}: switch to the other module`),
   ];
   const summary = summarizeTranscript(items, { maxChars: 1_200 });
+
   assert.ok(summary.length <= 1_200, `summary is ${summary.length} chars`);
   assert.equal(summary.includes(HEAD_MARK), true, "the standing constraint (head) must survive");
   assert.equal(summary.includes(TAIL_MARK), true, "the latest steer (tail) must survive");
@@ -53,6 +54,7 @@ test("a near-limit single-paragraph previous summary retains its head alongside 
   // The old implementation ignores this additional option; that must fail the retention assertion.
   const options = { maxChars: 4000, previousSummary };
   const summary = summarizeTranscript([userItem(9, "Verify the next stage. " + "latest ".repeat(27))], options);
+
   assert.match(summary, /Keep the public API compatible/);
   assert.match(summary, /Verify the next stage/);
   assert.ok(summary.length <= 4000);

@@ -38,11 +38,13 @@ function scanners(): readonly Scanner[] {
 
 export function findDisclosureRisks(text: string): readonly DisclosureRisk[] {
   const found: DisclosureRisk[] = [];
+
   for (const scanner of scanners()) {
     for (const match of text.matchAll(scanner.pattern)) {
       found.push({ kind: scanner.kind, index: match.index ?? 0 });
     }
   }
+
   return found.sort((left, right) => left.index - right.index);
 }
 

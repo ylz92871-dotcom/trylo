@@ -31,8 +31,10 @@ export function shouldCompact(probe: CompactionProbe): CompactionDecision {
     // an empty window is indistinguishable from a corrupted one downstream.
     return { outcome: "hold", reason: "nothing_to_compact" };
   }
+
   if (probe.estimatedPromptTokens >= autoCompactTokenLimit(probe.contextTokenLimit)) {
     return { outcome: "compact", reason: "estimated_tokens_reached_limit" };
   }
+
   return { outcome: "hold", reason: "within_limit" };
 }

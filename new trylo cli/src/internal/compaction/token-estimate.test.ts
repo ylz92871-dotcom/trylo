@@ -3,21 +3,24 @@ import { test } from "node:test";
 import type { ProviderMessage, ProviderToolSpec } from "../ports/provider.js";
 import {
   CHARS_PER_TOKEN,
+  boundTextTokens,
+  boundMessagesTextTokens,
+  boundToolSpecsTextTokens,
   estimateMessageTokens,
   estimateMessagesTokens,
   estimateToolSpecsTokens,
 } from "./token-estimate.js";
-import { estimatePromptTokens } from "../surface/cli/compaction-wiring.js";
+import { compactionWiring, estimatePromptTokens } from "../surface/cli/compaction-wiring.js";
 
 /**
  * WP09.1 / C35 — the final-request token basis.
  *
  * The shipped estimator divided `message.content` characters by four and
  * stopped there. A final provider request is more than that: assistant turns
- * carry `toolCalls` (whose JSON arguments can dwarf the text), messages carry
- * base64 image attachments, and the wire carries the tool table itself. This
- * file pins the complete basis: every byte the request actually carries is
- * counted, per message, with the same four-bytes-per-token rule.
+ * carry `toolCalls` (whose JSON arguments can dwarf the text), and the wire
+ * carries the tool table itself. This file pins that textual basis per message
+ * with the same four-bytes-per-token heuristic. Visual context usage is unknown
+ * locally; base64 transport size must not be mistaken for visual tokens.
  *
  * Written against the unfixed estimator first (red evidence, WP09 交接记录);
  * the first group asserts through the wiring's `estimatePromptTokens` (the
@@ -38,6 +41,7 @@ test("tool call arguments count toward the message that carries them", () => {
   ];
   const bare: ProviderMessage[] = [{ role: "assistant", content: "" }];
   const delta = estimatePromptTokens(withCall) - estimatePromptTokens(bare);
+
   // The arguments are real request payload: their JSON serialization must show
   // up in the estimate, not vanish behind an empty `content` string.
   assert.ok(
@@ -46,7 +50,7 @@ test("tool call arguments count toward the message that carries them", () => {
   );
 });
 
-test("image attachments count their base64 payload, not zero", () => {
+test("image transport payload does not alter the wiring's text-only lower basis", () => {
   const dataBase64 = "i".repeat(8_000);
   const withImage: ProviderMessage[] = [
     {
@@ -57,13 +61,12 @@ test("image attachments count their base64 payload, not zero", () => {
   ];
   const bare: ProviderMessage[] = [{ role: "user", content: "look" }];
   const delta = estimatePromptTokens(withImage) - estimatePromptTokens(bare);
-  assert.ok(
-    delta >= dataBase64.length / CHARS_PER_TOKEN,
-    `expected the attachment payload to add at least ${Math.floor(dataBase64.length / CHARS_PER_TOKEN)} tokens, added ${delta}`,
-  );
+
+  assert.equal(delta, 0);
+  assert.equal(estimatePromptTokens(withImage), Math.ceil(Buffer.byteLength("look", "utf8") / CHARS_PER_TOKEN));
 });
 
-test("per-message rounding never undercounts a full request", () => {
+test("per-message text rounding preserves each message's contribution", () => {
   // ceil applied per message: ten 1-char messages cost ten tokens, not three.
   const messages: ProviderMessage[] = Array.from({ length: 10 }, () => ({
     role: "user" as const,
@@ -76,7 +79,7 @@ test("per-message rounding never undercounts a full request", () => {
 // The canonical module, directly (no wiring detour).
 // ---------------------------------------------------------------------------
 
-test("estimateMessageTokens counts content, call JSON and attachment payload", () => {
+test("estimateMessageTokens counts content and call JSON without guessing visual usage", () => {
   const arguments_ = { text: "e".repeat(40) };
   const message: ProviderMessage = {
     role: "assistant",
@@ -86,19 +89,22 @@ test("estimateMessageTokens counts content, call JSON and attachment payload", (
   };
   // The call's identifiers count beside its argument JSON (outboundCallBytes).
   const expected = Math.ceil(
-    (4 + "c1".length + "echo".length + JSON.stringify(arguments_).length + 80) / CHARS_PER_TOKEN,
+    (4 + "c1".length + "echo".length + JSON.stringify(arguments_).length) / CHARS_PER_TOKEN,
   );
+
   assert.equal(estimateMessageTokens(message), expected);
 });
 
 test("an unserializable call argument still counts the id and name", () => {
   const circular: { self?: unknown } = {};
+
   circular.self = circular;
   const message: ProviderMessage = {
     role: "assistant",
     content: "",
     toolCalls: [{ toolCallId: "c1", name: "echo", arguments: circular as never }],
   };
+
   // Monotonicity floor: the estimate is positive and at least the identifiers.
   assert.ok(estimateMessageTokens(message) >= Math.ceil(("c1echo".length) / CHARS_PER_TOKEN));
 });
@@ -132,4 +138,40 @@ test("non-ASCII tool arguments and schema descriptions use the same byte rule", 
     Math.ceil(Buffer.byteLength("cecho" + JSON.stringify(arguments_), "utf8") / 4));
   const spec = { name: "echo", description: "中文说明", parameters: { description: "输入参数" } };
   assert.equal(estimateToolSpecsTokens([spec]), Math.ceil(Buffer.byteLength(spec.name + spec.description + JSON.stringify(spec.parameters), "utf8") / 4));
+});
+
+test("cold request admission bounds byte-fallback text without guessing its character density", () => {
+  const wiring = compactionWiring({ nowMs: 0 });
+  const rare = String.fromCodePoint(0xf0137).repeat(1000);
+
+  for (const content of ["plain ASCII payload", "中文段落", rare, "ascii中文" + rare]) {
+    const messages: ProviderMessage[] = [{ role: "user", content }];
+    assert.equal(wiring.estimatePromptTokens(messages), Buffer.byteLength(content, "utf8"));
+    assert.equal(boundMessagesTextTokens(messages), Buffer.byteLength(content, "utf8"));
+    assert.equal(estimateMessagesTokens(messages), Math.ceil(Buffer.byteLength(content, "utf8") / CHARS_PER_TOKEN),
+      "the display estimate remains a labeled heuristic, separate from admission");
+  }
+});
+
+test("text admission bounds the same original tool-call JSON and function table", () => {
+  const originalArguments = { text: String.fromCodePoint(0xf0137).repeat(50) };
+  const messages: ProviderMessage[] = [{ role: "assistant", content: "", toolCalls: [{
+    toolCallId: "call", name: "echo", arguments: { text: "normalized" }, originalArguments,
+  }] }];
+  const spec = { name: "echo", description: "中文说明", parameters: { description: "输入参数" } };
+
+  assert.equal(boundMessagesTextTokens(messages), Buffer.byteLength("callecho" + JSON.stringify(originalArguments), "utf8"));
+  assert.equal(boundToolSpecsTextTokens([spec]), Buffer.byteLength(spec.name + spec.description + JSON.stringify(spec.parameters), "utf8"));
+});
+
+test("the byte-level bound covers Unicode normalization expansion without rewriting text", () => {
+  const text = "\u0344\ufdfa";
+  const original = text;
+
+  for (const form of ["NFC", "NFD", "NFKC", "NFKD"] as const) {
+    assert.ok(boundTextTokens(text) >= Buffer.byteLength(text.normalize(form), "utf8"));
+  }
+
+  assert.equal(text, original);
+  assert.ok(boundTextTokens(text) > Buffer.byteLength(text, "utf8"));
 });

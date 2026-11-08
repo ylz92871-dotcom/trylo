@@ -5,7 +5,6 @@ import type {
 import type { SessionRecord } from "../ports/session.js";
 import { isTranscriptItem, type TranscriptItem } from "../protocol/transcript.js";
 import { collectWindows } from "./window.js";
-import { elideOversizedToolResults } from "./microcompact.js";
 
 /**
  * The two views over one journal.
@@ -30,6 +29,7 @@ import { elideOversizedToolResults } from "./microcompact.js";
 
 export function listTranscript(records: readonly SessionRecord[]): readonly TranscriptItem[] {
   const items: TranscriptItem[] = [];
+
   for (const record of records) {
     if (record.type === "transcript_item") {
       // An audit view of *transcript items*: a payload that is not one is
@@ -40,6 +40,7 @@ export function listTranscript(records: readonly SessionRecord[]): readonly Tran
       }
     }
   }
+
   return items;
 }
 
@@ -62,12 +63,14 @@ export function projectForPrompt(input: {
   if (!scanned.ok) {
     return scanned;
   }
+
   const windows = scanned.windows;
   const window = windows[windows.length - 1];
   const from = window === undefined ? 0 : window.replacedToSequence + 1;
   const upperBound = horizonSequence ?? Number.POSITIVE_INFINITY;
 
   const items: TranscriptItem[] = [];
+
   for (const record of records) {
     if (record.sequence < from || record.sequence > upperBound) {
       continue;
@@ -86,10 +89,9 @@ export function projectForPrompt(input: {
     }
   }
 
-  // The view is one path, so the microcompact rides here and every reader of
-  // "what the model sees" sees the same elision (WP09.1/L36): oversized tool
-  // outputs become bounded stubs in the view, never in the journal, and the
-  // newest tool result stays verbatim.
-  const view: PromptView = { items: elideOversizedToolResults(items), window, horizonSequence };
+  // Only a validated compact window may replace recorded observations. A
+  // result's size or age alone says nothing about the available context budget.
+  const view: PromptView = { items, window, horizonSequence };
+
   return { ok: true, view };
 }

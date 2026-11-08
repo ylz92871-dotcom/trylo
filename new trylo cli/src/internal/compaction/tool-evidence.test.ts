@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { summarizeTranscript, validateSummary } from "./summary.js";
-import { elideOversizedToolResults } from "./microcompact.js";
+import { createCompactionService } from "./service.js";
+import { journalView } from "../loop/compact-ledger.js";
 import { summaryMessage } from "../loop/prompt-view.js";
 import type { TranscriptItem } from "../protocol/transcript.js";
 import { toolOutputExcerpt } from "./tool-excerpt.js";
@@ -23,6 +24,7 @@ function exchange(id: string, path: string, marker: string): TranscriptItem[] {
 test("default summaries retain distinctive middle evidence and relative read sources over three windows", () => {
   const items = [...exchange("a", "资料 甲.txt", "sample-739"), ...exchange("b", "资料 乙.txt", "sample-862")];
   let summary = summarizeTranscript(items);
+
   for (let window = 0; window < 3; window++) {
     assert.ok(summary.includes("sample-739"), `first file missing in window ${window}`);
     assert.ok(summary.includes("sample-862"), `second file missing in window ${window}`);
@@ -42,6 +44,7 @@ test("read provenance includes its range and paired result outcome, never unrela
     { kind: "tool_result", sequence: 3, toolCallId: "source-b", name: "read_file", output: "read_failed", outcome: "failed", truncated: false },
   ];
   const summary = summarizeTranscript(items);
+
   assert.match(summary, /missing\.txt/);
   assert.match(summary, /offset.*55/);
   assert.match(summary, /limit.*20/);
@@ -51,7 +54,9 @@ test("read provenance includes its range and paired result outcome, never unrela
 
 test("new tool excerpts are scrubbed before sampling and respect small summary limits", () => {
   const items = exchange("a", "notes.txt", "sample-739");
+
   items.push({ kind: "tool_result", sequence: 2, toolCallId: "unsafe", name: "read_file", output: output("password=private-fixture-value C:\\private\\file.txt"), outcome: "failed", truncated: false });
+
   for (const maxChars of [80, 4000]) {
     const summary = summarizeTranscript(items, { maxChars });
     assert.ok(summary.length <= maxChars);
@@ -68,14 +73,15 @@ test("a compacted window quotes untrusted tool text as data without replacing th
   assert.ok(messages[0]!.content.includes(JSON.stringify(summary)));
 });
 
-test("parallel fresh results remain verbatim while older giant results stay explicitly lossy", () => {
+test("uncompacted parallel and older large results remain available as original evidence", () => {
   const items = [...exchange("a", "first.txt", "sample-739"), ...exchange("b", "second.txt", "sample-862")];
-  assert.deepEqual(elideOversizedToolResults(items), items);
   const giant = output("sample-739").repeat(3);
   const old: TranscriptItem = { kind: "tool_result", sequence: 0, name: "read_file", toolCallId: "old", output: giant, outcome: "succeeded", truncated: false };
-  const projected = elideOversizedToolResults([old, ...items]);
-  assert.ok(projected[0]!.kind === "tool_result" && projected[0]!.truncated);
-  assert.deepEqual(projected.slice(1), items);
+  const transcript = [old, ...items].map((item, sequence) => ({ ...item, sequence }));
+  const projected = createCompactionService().projectForPrompt({ records: journalView("evidence", transcript, []) });
+
+  assert.ok(projected.ok);
+  assert.deepEqual(projected.view.items, transcript);
   assert.equal(old.output, giant, "journal evidence is never rewritten");
 });
 

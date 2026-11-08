@@ -18,9 +18,8 @@ import { validateSummary } from "./summary.js";
  * which keeps one writer for the journal. The rollback horizon is handed back to
  * the caller to carry forward, so nothing here remembers anything between calls.
  *
- * The read-time view comes from `projection.ts`, which is also where the
- * tool-result microcompact (WP09.1/L36) is applied — one projection path, so
- * every reader of "what the model sees" sees the same elision.
+ * The read-time view comes from `projection.ts`: only a validated window may
+ * replace a recorded prefix; tool observations in its live suffix stay intact.
  */
 
 export function createCompactionService(): CompactionPort {
@@ -33,16 +32,25 @@ export function createCompactionService(): CompactionPort {
 }
 
 function compact(request: CompactRequest): CompactOutcome {
+  if (request.replacedToSequence !== undefined
+    && (!Number.isInteger(request.replacedToSequence) || request.replacedToSequence < 0)) {
+    return { ok: false, code: "compact_window_not_monotonic", detail: "invalid replaced prefix boundary" };
+  }
+
   const scanned = collectWindows(request.records, request.horizonSequence);
   if (!scanned.ok) {
     return scanned;
   }
+
   const windows = scanned.windows;
   const previous = windows[windows.length - 1];
-  const bounds = liveTranscriptBounds(request.records, previous, request.horizonSequence);
+  const bounds = liveTranscriptBounds(request.records, previous,
+    request.replacedToSequence === undefined ? request.horizonSequence
+      : Math.min(request.replacedToSequence, request.horizonSequence ?? Number.POSITIVE_INFINITY));
   if (bounds === undefined) {
     return { ok: false, code: "nothing_to_compact", detail: "no live transcript items" };
   }
+
   const replacedFromSequence = previous === undefined ? 0 : previous.replacedToSequence + 1;
   if (bounds.last < replacedFromSequence) {
     return {
@@ -51,23 +59,39 @@ function compact(request: CompactRequest): CompactOutcome {
       detail: `${bounds.last} < ${replacedFromSequence}`,
     };
   }
+
   const validated = validateSummary(request.summary);
   if (!validated.ok) {
     return validated;
   }
+
   const window: CompactWindow = {
-    // Derived from what is already stored, so the identifier cannot drift when
-    // two writers race: whoever appends second gets the next number or nothing.
-    windowId: `w${windows.length + 1}`,
+    windowId: nextWindowId(windows),
     replacedFromSequence,
     replacedToSequence: bounds.last,
     summary: request.summary,
     formatVersion: COMPACTION_FORMAT_VERSION,
   };
+
   return {
     ok: true,
     record: { type: "compact", sessionId: request.sessionId, at: request.at, payload: window },
   };
+}
+
+/** A resumed decision view may retain only its last window, not its count.
+ * Opaque historical IDs stay readable; without a numeric ID retain the old
+ * count-based starting point. BigInt keeps string ordinals exact past 2^53. */
+function nextWindowId(windows: readonly CompactWindow[]): string {
+  let highest = 0n;
+
+  for (const window of windows) {
+    if (!/^w[1-9]\d*$/.test(window.windowId)) continue;
+    const ordinal = BigInt(window.windowId.slice(1));
+    if (ordinal > highest) highest = ordinal;
+  }
+
+  return `w${(highest === 0n ? BigInt(windows.length) : highest) + 1n}`;
 }
 
 function liveTranscriptBounds(
@@ -79,18 +103,23 @@ function liveTranscriptBounds(
   const upperBound = horizonSequence ?? Number.POSITIVE_INFINITY;
   let first: number | undefined;
   let last: number | undefined;
+
   for (const record of records) {
     if (record.sequence < from || record.sequence > upperBound) {
       continue;
     }
+
     if (record.type !== "transcript_item") {
       continue;
     }
+
     if (first === undefined) {
       first = record.sequence;
     }
+
     last = record.sequence;
   }
+
   return first === undefined || last === undefined ? undefined : { first, last };
 }
 
@@ -103,8 +132,10 @@ function rollbackTranscript(input: {
   if (!Number.isInteger(input.sequence) || input.sequence < 0 || highest < 0) {
     return { ok: false, code: "sequence_unknown", detail: `${input.sequence}` };
   }
+
   if (input.sequence >= highest) {
     return { ok: false, code: "nothing_to_roll_back", detail: `${input.sequence} >= ${highest}` };
   }
+
   return { ok: true, horizonSequence: input.sequence };
 }

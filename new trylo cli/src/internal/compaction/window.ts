@@ -29,12 +29,14 @@ function isWindowPayload(value: unknown): value is CompactWindow {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return false;
   }
+
   const shape = value as Record<string, unknown>;
   const keys = Object.keys(shape).sort();
   const expected = [...COMPACT_WINDOW_KEYS].sort();
   if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
     return false;
   }
+
   return (
     typeof shape.windowId === "string" &&
     shape.windowId.length > 0 &&
@@ -65,6 +67,7 @@ export function readCompactWindow(record: SessionRecord): CompactWindowScan {
   if (record.type !== "compact") {
     return { ok: true, window: undefined };
   }
+
   const payload: unknown = record.payload;
   if (!isWindowPayload(payload)) {
     return {
@@ -73,6 +76,7 @@ export function readCompactWindow(record: SessionRecord): CompactWindowScan {
       detail: `sequence ${record.sequence}`,
     };
   }
+
   if (payload.formatVersion !== COMPACTION_FORMAT_VERSION) {
     return {
       ok: false,
@@ -80,6 +84,7 @@ export function readCompactWindow(record: SessionRecord): CompactWindowScan {
       detail: `sequence ${record.sequence} version ${payload.formatVersion}`,
     };
   }
+
   if (!isInternallyConsistent(payload)) {
     return {
       ok: false,
@@ -87,6 +92,7 @@ export function readCompactWindow(record: SessionRecord): CompactWindowScan {
       detail: `sequence ${record.sequence}`,
     };
   }
+
   return { ok: true, window: payload };
 }
 
@@ -102,18 +108,22 @@ export function collectWindows(
   horizonSequence?: number,
 ): WindowScanOutcome {
   const windows: CompactWindow[] = [];
+
   for (const record of records) {
     if (horizonSequence !== undefined && record.sequence > horizonSequence) {
       break;
     }
+
     const scanned = readCompactWindow(record);
     if (!scanned.ok) {
       return scanned;
     }
+
     const window = scanned.window;
     if (window === undefined) {
       continue;
     }
+
     const previous = windows[windows.length - 1];
     if (previous !== undefined && window.replacedFromSequence <= previous.replacedToSequence) {
       return {
@@ -122,6 +132,7 @@ export function collectWindows(
         detail: `sequence ${record.sequence} overlaps ${previous.windowId}`,
       };
     }
+
     if (previous !== undefined && window.replacedToSequence <= previous.replacedToSequence) {
       return {
         ok: false,
@@ -129,7 +140,9 @@ export function collectWindows(
         detail: `sequence ${record.sequence} retreats to ${window.replacedToSequence}`,
       };
     }
+
     windows.push(window);
   }
+
   return { ok: true, windows };
 }

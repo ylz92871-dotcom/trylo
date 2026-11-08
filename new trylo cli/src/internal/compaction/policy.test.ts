@@ -123,11 +123,12 @@ test("the built-in digest scrubs credential shapes instead of carrying them", ()
   assert.ok(digest.includes("[secret]"));
 });
 
-test("the built-in digest never echoes the redacted reasoning placeholder as content", () => {
+test("the built-in digest excludes redacted reasoning from public history", () => {
   const digest = summarizeTranscript([
     { kind: "assistant_reasoning", sequence: 0, blockId: "b1", text: "", redacted: true },
   ]);
-  assert.ok(digest.includes("[redacted]"));
+  assert.equal(digest.includes("[redacted]"), false);
+  assert.equal(digest.includes("assistant_reasoning"), false);
 });
 
 test("the built-in digest is bounded", () => {
@@ -147,7 +148,7 @@ test("the built-in digest stays inside its own smaller bound when asked", () => 
   assert.equal(digest.length <= 200, true);
 });
 
-test("every item kind contributes a line without throwing", () => {
+test("every public item kind contributes a line without exposing reasoning", () => {
   const digest = summarizeTranscript([
     { kind: "system", sequence: 0, text: "you are an assistant" },
     { kind: "user", sequence: 1, text: "hello" },
@@ -164,5 +165,7 @@ test("every item kind contributes a line without throwing", () => {
       outcome: "succeeded",
     },
   ]);
-  assert.equal(digest.split("\n").length, 6);
+
+  assert.equal(digest.split("\n").length, 5);
+  assert.equal(digest.includes("thinking"), false);
 });
