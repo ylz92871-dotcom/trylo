@@ -1,0 +1,22 @@
+/** Explicit check-learning entrypoints. Importing this module does not enable or schedule learning. */
+export { createExecutableCheckLearning } from "./runtime/v2/runtime.js";
+export type * from "./domain/v2/contracts.js";
+export type { CheckerAllowance, CheckerGenerator, CheckerEngineOptions, CheckerCatalog } from "./runtime/v2/contracts.js";
+export { requirementDigest, parseCheckInput, parseCheckRequirements } from "./domain/v2/parse.js";
+export { createCheckerProviderGenerator } from "./adapters/provider/provider-generator.js";
+export { createCheckerProcessOwner } from "./adapters/process/process-owner.js";
+export { createApprovedCheckerExecutor } from "./adapters/execution/checker-executor.js";
+export { createCheckArtifactAccess } from "./adapters/execution/artifacts.js";
+export { assessDailyCheckInput, checkAssessmentCompatibility } from "./adapters/schema/task-assessment.js";
+export { evaluateSchemaOutput } from "./adapters/schema/schema-oracle.js";
+export { readCheckerBoard, saveCheckerRecord, validAllowance } from "./adapters/board/store.js";
+export { deriveCheckerVersionQualification } from "./runtime/v2/version-qualification.js";
+export { createCheckTurn } from "./application/turn.js";
+export { requirementsForCheckTask } from "./application/turn-facts.js";
+export { DEFAULT_CHECK_ALLOWANCE } from "./application/turn-contracts.js";
+export type { CheckTurnInput, CheckArtifactAccess, CheckLearningHost, CheckLearningAllowance, DailyCheckRuntime, DailyCheckRun } from "./application/turn-contracts.js";
+export { prepareCheckLearningOperation, dispatchCheckLearningOperation } from "./application/operations.js";
+export type { CheckLearningOperation, CheckLearningOperationService } from "./application/operations.js";
+export { createCheckLearningSubsystem } from "./runtime/legacy/runtime.js";
+export type { CheckTask, CheckLearningOptions } from "./runtime/legacy/runtime.js";
+export type * from "./domain/legacy/contracts.js";
