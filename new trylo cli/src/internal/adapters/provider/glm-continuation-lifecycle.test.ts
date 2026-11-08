@@ -11,6 +11,7 @@ const endpoint = "https://ark.cn-beijing.volces.com/api/coding/v3/chat/completio
 const call = { toolCallId: "reused-id", name: "echo", arguments: { value: 1 } };
 const message: ProviderMessage = { role: "assistant", content: "Checking.", toolCalls: [call] };
 const request: ProviderRequest = { attemptId: "a", continuationScope: JSON.stringify(["s", "t"]), model, messages: [], tools: [] };
+
 function finish(capture: GlmToolContinuation | undefined, reasoning: string) {
   assert.ok(capture);
   capture.observe({ type: "reasoning_delta", blockId: "r", text: reasoning, redacted: false });
@@ -29,20 +30,23 @@ test("native Chinese reasoning uses the same UTF-8 context estimate as visible m
 
 test("reused tool ids preserve distinct native reasoning in complete ordered history", () => {
   const c = createGlmToolContinuation(endpoint, model), first = { ...message }, second = { ...message };
-  finish(c.begin(request), "FIRST"); finish(c.begin(request), "SECOND");
+  finish(c.begin(request), "FIRST");
+  finish(c.begin(request), "SECOND");
   const next = c.begin({ ...request, messages: [first, second] })!;
   assert.deepEqual([next.fieldsFor(first).reasoning_content, next.fieldsFor(second).reasoning_content], ["FIRST", "SECOND"]);
 });
 
 test("an ambiguous compacted or evicted repeated identity never receives a different response's reasoning", () => {
   const c = createGlmToolContinuation(endpoint, model);
-  finish(c.begin(request), "FIRST"); finish(c.begin(request), "SECOND");
+  finish(c.begin(request), "FIRST");
+  finish(c.begin(request), "SECOND");
   assert.equal(c.begin({ ...request, messages: [message] })!.fieldsFor(message).reasoning_content, undefined);
 });
 
 test("a late overlapping request in the same scope cannot replace the newer checkpoint", () => {
   const c = createGlmToolContinuation(endpoint, model), older = c.begin(request), newer = c.begin({ ...request, attemptId: "b" });
-  finish(newer, "NEWER"); finish(older, "OLDER");
+  finish(newer, "NEWER");
+  finish(older, "OLDER");
   const assistant = c.persistence!.capture(request.continuationScope!)!["assistant"];
   assert.deepEqual(assistant, { reasoning: "NEWER", text: "Checking.", calls: [call] });
 });
@@ -66,16 +70,20 @@ test("native overhead uses exactly the fields which will be replayed", () => {
 
 test("completed final-answer native context is preserved without inventing a tool call", () => {
   const c = createGlmToolContinuation(endpoint, model), capture = c.begin(request)!;
+
   capture.observe({ type: "reasoning_delta", blockId: "r", text: "FINAL_NATIVE", redacted: false });
   capture.observe({ type: "text_delta", blockId: "b", text: "Final answer." });
   capture.observe({ type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false });
   capture.commit();
   const final: ProviderMessage = { role: "assistant", content: "Final answer." };
   const checkpoint = c.persistence!.capture(request.continuationScope!)!;
+
   assert.ok(checkpoint);
   const next = c.begin({ ...request, messages: [final] })!;
+
   assert.equal(next.fieldsFor(final).reasoning_content, "FINAL_NATIVE");
   const restored = createGlmToolContinuation(endpoint, model);
+
   restored.persistence!.restore({ sessionId: "s", turnId: "next", records: [{ formatVersion: "1", sequence: 0,
     type: "envelope", sessionId: "s", turnId: "t", at: "2026-10-16T00:00:00Z",
     payload: { envelope: { kind: "stream_end" }, providerContinuation: checkpoint } }] });
@@ -101,6 +109,7 @@ test("production model-summary compaction preserves the parent tool continuation
         function: { name: call.name, arguments: JSON.stringify(call.arguments) } }] }, finish_reason: null }] },
       { choices: [{ delta: {}, finish_reason: "tool_calls" }] },
     ] : [{ choices: [{ delta: { content: bodies.length === 2 ? "Safe summary." : "Done." }, finish_reason: "stop" }] }];
+
     return new Response(frames.map(frame => `data: ${JSON.stringify(frame)}\n\n`).join("") + "data: [DONE]\n\n");
   } });
   const compact = createFakeCompaction({ estimatedPromptTokens: 9000, estimatedAfterCompactionTokens: 100 });
@@ -108,6 +117,7 @@ test("production model-summary compaction preserves the parent tool continuation
     tools: createFakeTools([toolResult({ value: 1 })], [echoBinding({ needsApproval: false })]),
     compaction: { ...compact.wiring, summarize: createModelSummarizer({ provider, model }) },
   }, { sessionId: "s", turnId: "t", correlationId: "c", text: "Use echo.", model, budget: { maxIterations: 4, contextTokenLimit: 8000 } });
+
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(result.compactions.length, 1);
   assert.equal(bodies.length, 3);

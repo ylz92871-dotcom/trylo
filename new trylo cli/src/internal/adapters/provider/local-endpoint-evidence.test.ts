@@ -47,10 +47,12 @@ function startEndpoint(respond: (hit: number, res: ServerResponse) => void): Pro
     req.resume();
     respond(hits, res);
   });
+
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
       const port = typeof address === "object" && address !== null ? address.port : 0;
+
       resolve({
         url: `http://127.0.0.1:${port}/v1/chat/completions`,
         auth: () => [...seen],
@@ -94,6 +96,7 @@ async function withProvider<T>(
 ): Promise<T> {
   const endpoint = await startEndpoint(respond);
   const secret = secretFile();
+
   try {
     return await run(endpoint, secret.value);
   } finally {
@@ -122,6 +125,7 @@ test("a real 401 is classified auth and is not retried", async () => {
         providerOf(endpoint.url, apiKey).stream(REQUEST, new AbortController().signal),
       );
       const failure = events.find((event) => event.type === "error");
+
       assert.equal(failure?.type, "error");
       assert.equal(failure !== undefined && failure.class, "auth");
       assert.equal(failure !== undefined && failure.retryable, false);
@@ -150,6 +154,7 @@ test("a real 429 is retried once against the same socket and then succeeds", asy
           new AbortController().signal,
         ),
       );
+
       assert.equal(endpoint.hits(), 2);
       assert.equal(
         events.some(
@@ -183,6 +188,7 @@ test("usage carries the cache dimension and reasoning survives the wire", async 
         providerOf(endpoint.url, apiKey).stream(REQUEST, new AbortController().signal),
       );
       const usage = events.find((event) => event.type === "usage");
+
       assert.equal(usage?.type, "usage");
       assert.equal(usage !== undefined && usage.usage.inputTokens, 120);
       assert.equal(usage !== undefined && usage.usage.cacheReadTokens, 64);
@@ -210,8 +216,10 @@ test("the key travels in the header and in nothing else observable", async () =>
       const events = await drain(
         providerOf(endpoint.url, apiKey).stream(REQUEST, new AbortController().signal),
       );
+
       assert.equal(endpoint.auth()[0], `Bearer ${SECRET}`);
       const wire = JSON.stringify(events);
+
       assert.equal(wire.includes(SECRET), false);
       assert.equal(wire.includes("Authorization"), false);
     },
@@ -229,6 +237,7 @@ test("a refused connection is a network failure, not a crash", async () => {
       ),
     );
     const failure = events.find((event) => event.type === "error");
+
     assert.equal(failure?.type, "error");
     assert.equal(failure !== undefined && failure.class, "network");
   } finally {

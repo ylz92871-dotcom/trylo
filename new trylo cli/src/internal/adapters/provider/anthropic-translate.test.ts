@@ -17,6 +17,7 @@ test("text and usage flow through with the wire block index", () => {
     ...translator.push("content_block_stop", { index: 0 }),
     ...translator.push("message_delta", { delta: { stop_reason: "end_turn" }, usage: { output_tokens: 2 } }),
   ];
+
   assert.deepEqual(events[0], {
     type: "usage",
     usage: {
@@ -32,6 +33,7 @@ test("text and usage flow through with the wire block index", () => {
   assert.deepEqual(events[1], { type: "text_start", blockId: "text-0" });
   assert.deepEqual(events[2], { type: "text_delta", blockId: "text-0", text: "hi" });
   const finish = events.find((event) => event.type === "finish");
+
   assert.ok(finish !== undefined && finish.type === "finish" && finish.reason === "stop");
   assert.equal(finish.type === "finish" && finish.requiresFollowUp, false);
 });
@@ -55,6 +57,7 @@ test("tool_use assembles input_json fragments and settles with the wire id", () 
     ...translator.push("message_delta", { delta: { stop_reason: "tool_use" }, usage: { output_tokens: 5 } }),
   ];
   const call = events.find((event) => event.type === "tool_call");
+
   assert.deepEqual(call, {
     type: "tool_call",
     toolCallId: "toolu-7",
@@ -62,6 +65,7 @@ test("tool_use assembles input_json fragments and settles with the wire id", () 
     arguments: { path: "x" },
   });
   const finish = events.find((event) => event.type === "finish");
+
   assert.ok(finish !== undefined && finish.type === "finish" && finish.reason === "tool_calls");
   assert.equal(finish.type === "finish" && finish.requiresFollowUp, true);
 });
@@ -71,8 +75,10 @@ test("max_tokens ends length, errors end explicitly, pings are silent", () => { 
     usage: { output_tokens: 64 },
   });
   const finish = stopped.find((event) => event.type === "finish");
+
   assert.ok(finish !== undefined && finish.type === "finish" && finish.reason === "length");
   const failed = createAnthropicTranslator().push("error", { error: { message: "overloaded" } });
+
   assert.deepEqual(failed, [
     {
       type: "error",
@@ -91,16 +97,19 @@ test("F7: signature deltas are silent and all-zero usage is suppressed", () => {
     index: 2,
     content_block: { type: "thinking" },
   });
+
   assert.deepEqual(opened, [{ type: "reasoning_start", blockId: "reasoning-2", redacted: false }]);
   assert.deepEqual(
     translator.push("content_block_delta", { index: 2, delta: { type: "signature_delta", signature: "opaque" } }),
     [],
   );
   const terminal = translator.push("message_delta", { delta: { stop_reason: "end_turn" }, usage: { output_tokens: 0 } });
+
   assert.equal(
     terminal.some((event) => event.type === "usage"),
     false,
   );
   const finish = terminal.find((event) => event.type === "finish");
+
   assert.ok(finish !== undefined && finish.type === "finish" && finish.reason === "stop");
 });

@@ -68,14 +68,17 @@ function input(overrides: Partial<ResolveInput> = {}): ResolveInput {
 
 test("every shipped provider declares itself", () => {
   const registry = builtinRegistry();
+
   assert.deepEqual(
     registry.entries.map((entry) => entry.id),
     ["fixture", "fixture-write", "fixture-subagent", "openai-compatible"],
   );
+
   for (const entry of registry.entries) {
     assert.equal(entry.builtin, true);
     assert.equal(typeof entry.capabilities.auth, "string");
   }
+
   // No shipped provider claims a reasoning channel it does not translate.
   assert.equal(registry.entries.some((entry) => entry.capabilities.reasoning), false);
 });
@@ -88,13 +91,17 @@ test("openai-compatible declares no models rather than inventing a catalogue", (
 
 test("a missing file is the default state, not an error", () => {
   const registry = readRegistry(ioWith(undefined));
+
   assert.equal("entries" in registry, true);
+
   if (!("entries" in registry)) {
     return;
   }
+
   assert.equal(registry.declared, false);
   assert.equal(registry.selected, undefined);
   const selected = selectProvider(registry);
+
   assert.equal(selected.ok && selected.entry.id, DEFAULT_PROVIDER_ID);
 });
 
@@ -116,10 +123,13 @@ test("declared providers are added without disturbing the built-ins", () => {
 
 test("an unknown provider is refused with the list of known ones", () => {
   const denial = requireProvider(builtinRegistry(), "claude");
+
   assert.equal(denial.ok, false);
+
   if (denial.ok) {
     return;
   }
+
   assert.equal(denial.denial.code, "unknown_provider");
   assert.deepEqual(denial.denial.known, [
     "fixture",
@@ -132,19 +142,25 @@ test("an unknown provider is refused with the list of known ones", () => {
 test("selection precedence: requested, then the document, then the default", () => {
   const registry = registryOfDocument({ ...DECLARED, selected: "lab" });
   const byFlag = selectProvider(registry, "fixture-write");
+
   assert.equal(byFlag.ok && byFlag.entry.id, "fixture-write");
   const byDocument = selectProvider(registry);
+
   assert.equal(byDocument.ok && byDocument.entry.id, "lab");
   const byDefault = selectProvider(builtinRegistry());
+
   assert.equal(byDefault.ok && byDefault.entry.id, "fixture");
 });
 
 test("a keyed provider with no endpoint is refused, not half-built", () => {
   const resolved = resolveProvider(input({ requested: "openai-compatible" }));
+
   assert.equal(resolved.ok, false);
+
   if (resolved.ok) {
     return;
   }
+
   assert.equal(resolved.failure.kind, "endpoint");
   assert.match(
     resolved.failure.kind === "endpoint" ? resolved.failure.detail : "",
@@ -154,10 +170,13 @@ test("a keyed provider with no endpoint is refused, not half-built", () => {
 
 test("a resolved provider is one object: endpoint, model and caps from one entry", () => {
   const resolved = resolveProvider(input({ registry: registryOfDocument(DECLARED), requested: "lab" }));
+
   assert.equal(resolved.ok, true);
+
   if (!resolved.ok) {
     return;
   }
+
   assert.equal(resolved.value.providerId, "lab");
   assert.equal(resolved.value.kind, "openai-compatible");
   assert.equal(resolved.value.endpoint, "https://lab.example/v1");
@@ -174,10 +193,13 @@ test("an explicit --endpoint / --model wins over the declaration", () => {
       modelOverride: "other-1",
     }),
   );
+
   assert.equal(resolved.ok, true);
+
   if (!resolved.ok) {
     return;
   }
+
   assert.equal(resolved.value.endpoint, "https://other.example/v1");
   assert.equal(resolved.value.model, "other-1");
 });
@@ -186,10 +208,13 @@ test("with no declaration the run's own endpoint and model survive", () => {
   const resolved = resolveProvider(
     input({ requested: "openai-compatible", endpoint: "https://cfg.example/v1", model: "cfg-model" }),
   );
+
   assert.equal(resolved.ok, true);
+
   if (!resolved.ok) {
     return;
   }
+
   assert.equal(resolved.value.endpoint, "https://cfg.example/v1");
   assert.equal(resolved.value.model, "cfg-model");
 });
@@ -199,29 +224,40 @@ test("resolution can demand a capability, and says which refusal it hit", () => 
     input({ registry: registryOfDocument(DECLARED), requested: "lab" }),
     "reasoning",
   );
+
   assert.equal(missing.ok, false);
+
   if (!missing.ok) {
     assert.equal(missing.failure.kind, "capability");
   }
+
   const unknown = resolveRequiring(input({ requested: "nope" }), "streaming");
+
   assert.equal(unknown.ok, false);
+
   if (!unknown.ok) {
     assert.equal(unknown.failure.kind, "provider");
   }
+
   const granted = resolveRequiring(
     input({ registry: registryOfDocument(DECLARED), requested: "lab" }),
     "tools",
   );
+
   assert.equal(granted.ok, true);
 });
 
 test("the registry answers a capability question without resolving a run", () => {
   const registry = registryOfDocument(DECLARED);
+
   assert.deepEqual(demandCapability(registry, "lab", "streaming"), { ok: true });
   const denied = demandCapability(registry, "lab", "reasoning");
+
   assert.equal(denied.ok, false);
   const unknown = demandCapability(registry, "nope", "streaming");
+
   assert.equal(unknown.ok, false);
+
   if (!unknown.ok) {
     assert.equal(unknown.denial.code === "unknown_provider" ? unknown.denial.id : "", "nope");
   }
@@ -240,10 +276,13 @@ test("a declared context window becomes the ceiling unless configured otherwise"
     ],
   });
   const resolved = resolveProvider(input({ registry, requested: "lab" }));
+
   assert.equal(resolved.ok, true);
+
   if (!resolved.ok) {
     return;
   }
+
   assert.equal(resolved.value.contextWindow, 200000);
   // No configured ceiling: the declared window is the ceiling.
   assert.deepEqual(resolverForBudget(resolved.value, undefined), {
@@ -261,10 +300,12 @@ test("a declared context window becomes the ceiling unless configured otherwise"
 
 test("switching rewrites the whole document, not one key", () => {
   const next = withSelected(DECLARED, "lab");
+
   assert.equal(next.selected, "lab");
   assert.deepEqual(next.providers, DECLARED.providers);
   assert.equal(next.version, PROVIDERS_DOCUMENT_VERSION);
   assert.equal(selectProvider(registryOfDocument(next)).ok, true);
   const selected = selectProvider(registryOfDocument(next));
+
   assert.equal(selected.ok ? selected.entry.id : "", "lab");
 });

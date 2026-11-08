@@ -1,4 +1,4 @@
-import type { ProviderEvent, ProviderFinishReason } from "../../ports/provider.js";
+import type { CompleteInputTokenObservation, ProviderEvent, ProviderFinishReason } from "../../ports/provider.js";
 import { parseToolInput } from "./invalid-tool-input.js";
 import { openAiStreamError } from "./openai-stream-error.js";
 
@@ -71,25 +71,31 @@ export function createOpenAiTranslator() {
  */
 function pushChunk(state: TranslatorState, payload: unknown): ProviderEvent[] {
   const events: ProviderEvent[] = [];
+
   if (typeof payload !== "object" || payload === null) {
     return events;
   }
+
   const record = payload as Record<string, unknown>;
   const usage = usageEvent(record.usage);
   if (usage !== undefined) {
     events.push(usage);
   }
+
   const failure = openAiStreamError(record.error);
   if (failure !== undefined) return [...events, failure];
+
   const choices = record.choices;
   if (!Array.isArray(choices) || choices.length === 0) {
     return events;
   }
+
   const choice = choices[0] as Record<string, unknown>;
   const delta = choice.delta;
   // Completion metadata is independent from content. Compatible gateways may
   // end with a null/omitted delta; dropping it loses finish and native state.
   const deltaRecord = typeof delta === "object" && delta !== null ? delta as Record<string, unknown> : {};
+
   events.push(...textEvents(state, deltaRecord.content));
   // Two spellings exist in the wild: `reasoning_content` (DeepSeek/OpenRouter
   // style) and `reasoning` on the delta. The AMD MiMo endpoint sends *both* — a
@@ -101,6 +107,7 @@ function pushChunk(state: TranslatorState, payload: unknown): ProviderEvent[] {
   events.push(...reasoningEvents(state, deltaRecord.reasoning_content ?? deltaRecord.reasoning));
   events.push(...toolCallEvents(state, deltaRecord.tool_calls));
   events.push(...finishEvents(state, choice.finish_reason));
+
   return events;
 }
 
@@ -109,6 +116,7 @@ function usageEvent(usage: unknown): ProviderEvent | undefined {
   if (typeof usage !== "object" || usage === null) {
     return undefined;
   }
+
   const record = usage as Record<string, unknown>;
   const num = (key: string): number =>
     typeof record[key] === "number" ? (record[key] as number) : 0;
@@ -120,6 +128,8 @@ function usageEvent(usage: unknown): ProviderEvent | undefined {
     }
     return 0;
   };
+  const inputTokenObservation = completePromptInputObservation(record);
+
   return {
     type: "usage",
     usage: {
@@ -132,16 +142,26 @@ function usageEvent(usage: unknown): ProviderEvent | undefined {
       reasoningTokens: reasoningTokenCount(record),
       totalTokens: num("total_tokens"),
     },
+    ...(inputTokenObservation === undefined ? {} : { inputTokenObservation }),
   };
+}
+
+function completePromptInputObservation(record: Record<string, unknown>): CompleteInputTokenObservation | undefined {
+  const tokens = record.prompt_tokens;
+  return typeof tokens === "number" && Number.isSafeInteger(tokens) && tokens >= 0
+    ? { kind: "complete_prompt", source: "provider_complete_input", tokens } : undefined;
 }
 
 function reasoningTokenCount(record: Record<string, unknown>): number {
   const valid = (value: unknown): value is number =>
     typeof value === "number" && Number.isFinite(value) && value >= 0;
   if (valid(record.reasoning_tokens)) return record.reasoning_tokens;
+
   const details = record.completion_tokens_details;
   if (typeof details !== "object" || details === null) return 0;
+
   const value = (details as Record<string, unknown>).reasoning_tokens;
+
   return valid(value) ? value : 0;
 }
 
@@ -150,12 +170,16 @@ function textEvents(state: TranslatorState, content: unknown): ProviderEvent[] {
   if (typeof content !== "string" || content.length === 0) {
     return [];
   }
+
   const events: ProviderEvent[] = [];
+
   if (state.textBlock === undefined) {
     state.textBlock = "text-0";
     events.push({ type: "text_start", blockId: state.textBlock });
   }
+
   events.push({ type: "text_delta", blockId: state.textBlock, text: content });
+
   return events;
 }
 
@@ -169,17 +193,21 @@ function reasoningEvents(state: TranslatorState, content: unknown): ProviderEven
   if (typeof content !== "string" || content.length === 0) {
     return [];
   }
+
   const events: ProviderEvent[] = [];
+
   if (state.reasoningBlock === undefined) {
     state.reasoningBlock = "reasoning-0";
     events.push({ type: "reasoning_start", blockId: state.reasoningBlock, redacted: false });
   }
+
   events.push({
     type: "reasoning_delta",
     blockId: state.reasoningBlock,
     text: content,
     redacted: false,
   });
+
   return events;
 }
 
@@ -193,13 +221,16 @@ function reasoningEvents(state: TranslatorState, content: unknown): ProviderEven
  */
 function toolCallEvents(state: TranslatorState, toolCalls: unknown): ProviderEvent[] {
   const events: ProviderEvent[] = [];
+
   if (!Array.isArray(toolCalls)) {
     return events;
   }
+
   for (const raw of toolCalls) {
     if (typeof raw !== "object" || raw === null) {
       continue;
     }
+
     const call = raw as Record<string, unknown>;
     const index = typeof call.index === "number" ? call.index : 0;
     const id = typeof call.id === "string" ? call.id : `call-${index}`;
@@ -216,10 +247,13 @@ function toolCallEvents(state: TranslatorState, toolCalls: unknown): ProviderEve
       }
       continue;
     }
+
     existing.text += argsText;
+
     if (name.length > 0 && existing.name.length === 0) {
       existing.name = name;
     }
+
     if (argsText.length > 0) {
       // The *open* call's id, not this fragment's: later fragments carry only
       // `index` and `arguments`, and re-deriving an id here (`call-0`) would
@@ -228,6 +262,7 @@ function toolCallEvents(state: TranslatorState, toolCalls: unknown): ProviderEve
       events.push({ type: "tool_input_delta", toolCallId: existing.id, argumentsText: argsText });
     }
   }
+
   return events;
 }
 
@@ -242,8 +277,10 @@ function finishEvents(state: TranslatorState, finishReason: unknown): ProviderEv
   if (typeof finishReason !== "string" || finishReason.length === 0) {
     return [];
   }
+
   const events = closeOpenBlocks(state);
   const tools = closeAllTools(state);
+
   events.push(...tools);
   events.push({
     type: "finish",
@@ -251,26 +288,31 @@ function finishEvents(state: TranslatorState, finishReason: unknown): ProviderEv
     rawReason: finishReason,
     requiresFollowUp: finishReason === "tool_calls" || (finishReason === "stop" && tools.length > 0),
   });
+
   return events;
 }
 
 /** Ends the open text and reasoning blocks, if any. */
 function closeOpenBlocks(state: TranslatorState): ProviderEvent[] {
   const events: ProviderEvent[] = [];
+
   if (state.textBlock !== undefined) {
     events.push({ type: "text_end", blockId: state.textBlock });
     state.textBlock = undefined;
   }
+
   if (state.reasoningBlock !== undefined) {
     events.push({ type: "reasoning_end", blockId: state.reasoningBlock });
     state.reasoningBlock = undefined;
   }
+
   return events;
 }
 
 /** Settles every open tool call, in wire order. Invalid arguments stay visible. */
 function closeAllTools(state: TranslatorState): ProviderEvent[] {
   const events: ProviderEvent[] = [];
+
   for (const [index, assembly] of [...state.tools.entries()].sort((a, b) => a[0] - b[0])) {
     state.tools.delete(index);
     const parsed = parseToolInput(assembly.text);
@@ -278,6 +320,7 @@ function closeAllTools(state: TranslatorState): ProviderEvent[] {
       events.push({ type: "tool_call", toolCallId: assembly.id, name: assembly.name, arguments: parsed.arguments });
       continue;
     }
+
     events.push({
       type: "tool_call_invalid",
       toolCallId: assembly.id,
@@ -286,6 +329,7 @@ function closeAllTools(state: TranslatorState): ProviderEvent[] {
       message: parsed.message,
     });
   }
+
   return events;
 }
 

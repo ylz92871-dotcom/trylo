@@ -25,6 +25,7 @@ test("usage: a usage-only frame reports every dimension, including the cached on
   assert.deepEqual(events, [
     {
       type: "usage",
+      inputTokenObservation: { kind: "complete_prompt", source: "provider_complete_input", tokens: 10 },
       usage: {
         mode: "snapshot",
         inputTokens: 10,
@@ -58,6 +59,7 @@ test("usage: a frame without usage fields reports zeroes rather than guessing", 
 
 test("text: the first content opens the block, later content only extends it", () => {
   const translator = createOpenAiTranslator();
+
   assert.deepEqual(translator.push(chunk({ content: "he" })), [
     { type: "text_start", blockId: "text-0" },
     { type: "text_delta", blockId: "text-0", text: "he" },
@@ -105,6 +107,7 @@ test("a null `reasoning_content` placeholder does not mask the field that carrie
 
 test("when both spellings are filled, `reasoning_content` wins and nothing doubles", () => {
   const translator = createOpenAiTranslator();
+
   assert.deepEqual(translator.push(chunk({ reasoning_content: "a", reasoning: "b" })), [
     { type: "reasoning_start", blockId: "reasoning-0", redacted: false },
     { type: "reasoning_delta", blockId: "reasoning-0", text: "a", redacted: false },
@@ -124,6 +127,7 @@ test("a null placeholder alone with content invents no reasoning", () => {
 
 test("tool calls: fragments append to the call opened by the first mention", () => {
   const translator = createOpenAiTranslator();
+
   assert.deepEqual(
     translator.push(
       chunk({
@@ -152,6 +156,7 @@ test("tool calls: a nameless index still gets a stable id, and a late name is ad
 
 test("finish: a tool_calls finish closes the open text block, settles the call, then finishes", () => {
   const translator = createOpenAiTranslator();
+
   translator.push(chunk({ content: "ok" }));
   translator.push(chunk({ tool_calls: [{ index: 0, id: "call_a", function: { name: "read", arguments: '{"path":"x"}' } }] }));
   assert.deepEqual(translator.push(chunk({}, "tool_calls")), [
@@ -175,9 +180,11 @@ test("finish: a chunk with no reason is not a finish", () => {
 
 test("invalid arguments stay visible instead of being dropped or guessed", () => {
   const translator = createOpenAiTranslator();
+
   translator.push(chunk({ tool_calls: [{ index: 0, id: "call_bad", function: { name: "write", arguments: "{not json" } }] }));
   const events = translator.push(chunk({}, "tool_calls"));
   const invalid = events[0];
+
   assert.ok(invalid?.type === "tool_call_invalid");
   assert.ok(invalid.message.startsWith(INVALID_TOOL_INPUT_MESSAGE));
   assert.match(invalid.message, /ended with an open JSON string or container/);
@@ -195,10 +202,12 @@ test("invalid arguments stay visible instead of being dropped or guessed", () =>
 
 test("arguments that parse to a non-object are invalid too, empty arguments are {}", () => {
   const asArray = createOpenAiTranslator();
+
   asArray.push(chunk({ tool_calls: [{ index: 0, id: "c1", function: { name: "f", arguments: "[1]" } }] }));
   assert.equal(asArray.push(chunk({}, "tool_calls")).at(0)?.type, "tool_call_invalid");
 
   const empty = createOpenAiTranslator();
+
   empty.push(chunk({ tool_calls: [{ index: 0, id: "c2", function: { name: "f", arguments: "  " } }] }));
   assert.deepEqual(empty.push(chunk({}, "tool_calls")).at(0), {
     type: "tool_call",
@@ -210,6 +219,7 @@ test("arguments that parse to a non-object are invalid too, empty arguments are 
 
 test("complete: a stream that ends without a finish reason still closes what it opened", () => {
   const translator = createOpenAiTranslator();
+
   translator.push(chunk({ reasoning_content: "r" }));
   translator.push(chunk({ tool_calls: [{ index: 0, id: "call_c", function: { name: "f", arguments: "{}" } }] }));
   assert.deepEqual(translator.complete(), [

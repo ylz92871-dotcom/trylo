@@ -36,6 +36,7 @@ test("the second acquisition is the first provider, not a new one", () => {
   const warm = createWarmRegistry({ now: () => 0 });
   const first = warm.acquire(spec(), provider);
   const second = warm.acquire(spec(), provider);
+
   assert.equal(first.reused, false);
   assert.equal(second.reused, true);
   assert.equal(first.provider === second.provider, true, "the same object, not a look-alike");
@@ -46,8 +47,10 @@ test("an entry older than the window is rebuilt, not reused", () => {
   let clock = 0;
   const warm = createWarmRegistry({ now: () => clock });
   const first = warm.acquire(spec(), provider);
+
   clock = WARM_TTL_MS + 1;
   const second = warm.acquire(spec(), provider);
+
   assert.equal(first.provider === second.provider, false);
   assert.equal(second.reused, false);
   assert.deepEqual(warm.stats(), { builds: 2, hits: 0, rebuilds: 1, evictions: 0 });
@@ -76,6 +79,7 @@ test("enabling a reasoning summary builds a new adapter instead of reusing the s
   const summarized = { ...base, reasoningSummary: "auto" as const };
   const silent = warm.acquire(base, provider);
   const enabled = warm.acquire(summarized, provider);
+
   assert.equal(silent.provider === enabled.provider, false);
   assert.equal(warm.acquire(summarized, provider).provider === enabled.provider, true);
   assert.equal(warm.stats().builds, 2);
@@ -84,8 +88,10 @@ test("enabling a reasoning summary builds a new adapter instead of reusing the s
 test("a session reported broken is dropped and its next turn rebuilds", () => {
   const warm = createWarmRegistry({ now: () => 0 });
   const first = warm.acquire(spec(), provider);
+
   warm.invalidate(spec());
   const second = warm.acquire(spec(), provider);
+
   assert.equal(first.provider === second.provider, false);
   assert.equal(warm.stats().evictions, 1);
   assert.equal(warm.stats().builds, 2);
@@ -93,6 +99,7 @@ test("a session reported broken is dropped and its next turn rebuilds", () => {
 
 test("invalidateAll drops everything", () => {
   const warm = createWarmRegistry({ now: () => 0 });
+
   warm.acquire(spec({ accountId: "a" }), provider);
   warm.acquire(spec({ accountId: "b" }), provider);
   assert.equal(warm.size(), 2);

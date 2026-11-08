@@ -16,6 +16,7 @@ test("reserved report stays the latest request on Chat wire without inventing hu
       const choice = wires.length === 1
         ? { delta: { tool_calls: [{ index: 0, id: "observed", function: { name: "echo", arguments: "{}" } }] }, finish_reason: "tool_calls" }
         : { delta: { content: "已取得工具结果；验收尚未完成。" }, finish_reason: "stop" };
+
       return new Response(`data: ${JSON.stringify({ choices: [choice] })}\n\ndata: [DONE]\n\n`, {
         headers: { "content-type": "text/event-stream" },
       });
@@ -23,11 +24,15 @@ test("reserved report stays the latest request on Chat wire without inventing hu
   });
   const result = await runTurn({ provider, permission: createFakePermission("approved"), profile: emptyProfileLoader(),
     tools: { snapshot: () => [echoBinding({ needsApproval: false })],
-      async execute() { executions += 1; return toolResult({ observed: true }); }, async cancel() { return; } },
+      async execute() {
+        executions += 1;
+        return toolResult({ observed: true });
+      }, async cancel() { return; } },
   }, { sessionId: "report-position", turnId: "turn1", correlationId: "corr", model: "DeepSeek-V4-Flash-Vision-Exp", text: "Implement and validate.",
     callerMessages: [{ role: "system", content: "Governing instructions stay in the system channel." }],
     budget: { maxIterations: 2, finalRequest: "report_only" },
   });
+
   assert.equal(wires.length, 2);
   assert.deepEqual(wires[1]?.messages.at(-1), { role: "user", content: finalReportInstructions(result.transcript) });
   assert.match(wires[1]!.messages.at(-1)!.content, /echo: succeeded/);

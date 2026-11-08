@@ -19,17 +19,22 @@ export function createResponsesSummary() {
 
   function append(output: number, part: number, text: string): ProviderEvent[] {
     if (!text || sealed.has(output)) return [];
+
     const events: ProviderEvent[] = [];
     let block = blocks.get(output);
     const blockId = `reasoning-${output}`;
+
     if (!block) {
       block = { parts: new Map() };
       blocks.set(output, block);
       events.push({ type: "reasoning_start", blockId, redacted: false });
     }
+
     const separator = !block.parts.has(part) && block.parts.size > 0 ? "\n\n" : "";
+
     block.parts.set(part, (block.parts.get(part) ?? "") + text);
     events.push({ type: "reasoning_delta", blockId, text: separator + text, redacted: false });
+
     return events;
   }
 

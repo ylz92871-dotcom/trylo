@@ -150,10 +150,12 @@ export function readRegistry(io: RegistryIo): ProviderRegistry | DocumentFailure
   if (raw === undefined) {
     return builtinRegistry();
   }
+
   const decoded = decodeDocument(raw);
   if (!decoded.ok) {
     return decoded.failure;
   }
+
   return registryOfDocument(decoded.value);
 }
 
@@ -193,6 +195,7 @@ export function requireProvider(
       denial: { code: "unknown_provider", id, known: reg.entries.map((item) => item.id) },
     };
   }
+
   return { ok: true, entry };
 }
 

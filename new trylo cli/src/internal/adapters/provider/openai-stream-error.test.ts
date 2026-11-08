@@ -22,6 +22,7 @@ test("HTTP 200 gateway error frames retain server classification and cannot comp
     { choices: [{ delta: {}, finish_reason: "tool_calls" }] },
   ]), new AbortController().signal));
   const errors = events.filter(event => event.type === "error");
+
   assert.equal(errors.length, 1);
   assert.deepEqual(errors[0], { type: "error", class: "server", retryable: false,
     phase: "after_stream_started", message: "provider_stream_server_error" });
@@ -43,10 +44,12 @@ test("stream error codes classify auth, rate limits and invalid requests without
 test("a gateway error after headers never replays the provider request", async () => {
   let requests = 0;
   const provider = createOpenAiCompatibleProvider({ endpoint: "http://local.invalid/v1/chat/completions", model: "test",
-    apiKey: "unit-key", fetchImpl: async () => { requests += 1; return new Response(sse([
+    apiKey: "unit-key", fetchImpl: async () => { requests += 1;
+    return new Response(sse([
       { error: { type: "gateway_error", details: { statusCode: 502 } } },
     ]), { headers: { "content-type": "text/event-stream" } }); } });
   const events = await collect(provider.stream({ attemptId: "no-replay", model: "test", messages: [], tools: [] }, new AbortController().signal));
+
   assert.equal(requests, 1);
   assert.equal(events.find(event => event.type === "error")?.class, "server");
 });

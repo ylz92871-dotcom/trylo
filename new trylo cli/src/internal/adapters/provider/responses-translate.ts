@@ -69,9 +69,11 @@ function pushResponsesEvent(
   if (state.finished) {
     return [];
   }
+
   if (!isRecord(payload)) {
     return [];
   }
+
   switch (event) {
     case "response.output_text.delta":
       return state.text.delta(payload);
@@ -128,23 +130,30 @@ function completed(state: ResponsesState, payload: Record<string, unknown>): Pro
   if (usage !== undefined) {
     events.push(usage);
   }
+
   const status = str(detail, "status");
+
   state.finished = true;
+
   if (status === "failed") {
     events.push(responsesProviderError(detail, "response_failed"));
     return events;
   }
+
   if (status === "cancelled") return [...events, { type: "cancel_ack" }];
+
   // Some compatible endpoints omit status, but an explicit nonterminal or
   // unknown value never means completed, regardless of the event's name.
   if (status !== "" && status !== "completed" && status !== "incomplete") {
     return [...events, responsesProtocolError("responses_terminal_status_invalid")];
   }
+
   const reason: ProviderFinishReason = status === "incomplete" ? "length" : "stop";
   const output = detail["output"];
   if (Array.isArray(output)) output.forEach((item: unknown, output_index: number) => {
     events.push(...outputItemDone(state, { item, output_index }));
   });
+
   events.push(...closeOpenResponsesBlocks(state));
   events.push(...state.tools.complete());
   events.push({
@@ -153,6 +162,7 @@ function completed(state: ResponsesState, payload: Record<string, unknown>): Pro
     rawReason: status.length > 0 ? status : "completed",
     requiresFollowUp: state.tools.count() > 0,
   });
+
   return events;
 }
 
@@ -161,12 +171,14 @@ function usageEvent(usage: unknown): ProviderEvent | undefined {
   if (!isRecord(usage)) {
     return undefined;
   }
+
   const input = num(usage, "input_tokens");
   const output = num(usage, "output_tokens");
   const total = num(usage, "total_tokens");
   if (input === 0 && output === 0 && total === 0) {
     return undefined;
   }
+
   return {
     type: "usage",
     usage: {

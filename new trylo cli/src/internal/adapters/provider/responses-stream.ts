@@ -36,6 +36,7 @@ async function* decodeResponsesBody(
   let buffer = "";
   let sawAny = false;
   let bodyClosed = false;
+
   try {
     stream: for (;;) {
       const step = await reader.read();
@@ -43,9 +44,12 @@ async function* decodeResponsesBody(
         bodyClosed = true;
         break;
       }
+
       const text = decoder.decode(step.value, { stream: true });
       const parsed = parseSseFrames(text, buffer);
+
       buffer = parsed.buffer;
+
       for (const frame of parsed.frames) {
         if (isDoneFrame(frame)) {
           break stream;
@@ -67,6 +71,7 @@ async function* decodeResponsesBody(
       phase: "after_stream_started",
       message: signal.aborted ? "cancelled" : "stream_interrupted",
     };
+
     return;
   } finally {
     try {
@@ -82,6 +87,7 @@ async function* decodeResponsesBody(
       reader.releaseLock();
     }
   }
+
   if (!sawAny) {
     yield {
       type: "error",
@@ -92,6 +98,7 @@ async function* decodeResponsesBody(
     };
     return;
   }
+
   yield* translator.complete();
 }
 

@@ -13,10 +13,13 @@ import {
 
 test("a fallback equal to the primary is refused", () => {
   const refused = validateFallback("lab-7b", "lab-7b");
+
   assert.equal(refused.ok, false);
+
   if (!refused.ok) {
     assert.equal(refused.code, "same_model");
   }
+
   assert.deepEqual(validateFallback("lab-7b", undefined), {
     ok: true,
     declaration: { primary: "lab-7b" },
@@ -29,6 +32,7 @@ test("a fallback equal to the primary is refused", () => {
 
 test("only transient classes move, and only once", () => {
   const declaration = { primary: "lab-7b", fallback: "lab-70b" };
+
   assert.equal(isFallbackRescuable("rate_limit"), true);
   assert.equal(isFallbackRescuable("server"), true);
   assert.equal(isFallbackRescuable("network"), true);

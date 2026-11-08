@@ -3,25 +3,38 @@ import { test } from "node:test";
 import { createOpenAiCompatibleProvider } from "./openai-compatible.js";
 import { httpFailureMessage } from "./http-failure-message.js";
 import { runTurn } from "../../loop/runner.js";
-import { createFakeCompaction, createFakePermission, createFakeTools, emptyProfileLoader } from "../../loop/fakes.js";
+import { createFakePermission, createFakeTools, emptyProfileLoader } from "../../loop/fakes.js";
+import { compactionWiring } from "../../surface/cli/compaction-wiring.js";
 
 const endpoint = "https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions", model = "glm-5.3-flash";
 const diagnostics = { error: { code: "context_length_exceeded", message: "maximum context length exceeded PRIVATE-MARKER" } };
-for (const repeated of [false, true]) test(`actual HTTP context rejection reaches one bounded loop recovery; repeated=${repeated}`, async () => {
+
+for (const repeated of [false, true]) test(`actual HTTP context rejection retries a shrinking wire; repeated=${repeated}`, async () => {
   const bodies: Array<{ messages: Array<{ content: string }> }> = [];
   const provider = createOpenAiCompatibleProvider({ endpoint, model, apiKey: "fixture-key", fetchImpl: async (_url, init) => {
     bodies.push(JSON.parse(String(init?.body)));
     return bodies.length === 1 || repeated ? new Response(JSON.stringify(diagnostics), { status: 400 })
       : new Response('data: {"choices":[{"delta":{"content":"Recovered."},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n');
   } });
-  const compact = createFakeCompaction({ estimatedPromptTokens: 100, estimatedAfterCompactionTokens: 100, summary: "SUMMARY-MARKER" });
+  const compact = compactionWiring({ nowMs: 0, summarize: () => "SUMMARY-MARKER" });
   const result = await runTurn({ provider, profile: emptyProfileLoader(), tools: createFakeTools([]),
-    permission: createFakePermission("approved"), compaction: compact.wiring,
-  }, { sessionId: "s", turnId: "t", correlationId: "c", text: "Old input.", model, budget: { maxIterations: 6, contextTokenLimit: 8000 } });
+    permission: createFakePermission("approved"), compaction: compact,
+  }, { sessionId: "s", turnId: "t", correlationId: "c", text: "Current input.", model,
+    budget: { maxIterations: 6, contextTokenLimit: 8000 }, resumedTranscript: [
+      { kind: "user", sequence: 0, text: "An older completed task." },
+      { kind: "assistant_text", sequence: 1, blockId: "old", text: "Older completed observations. ".repeat(100) },
+    ] });
+
   assert.equal(bodies.length, 2);
-  assert.equal(result.compactions.length, 1);
+  assert.ok(result.compactions.some(record => record.payload.summary.includes("SUMMARY-MARKER")),
+    "the older-prefix summary is recorded");
   assert.equal(result.state.terminalReason, repeated ? "failed" : "completed");
   assert.ok(bodies[1]!.messages.some(item => item.content.includes("SUMMARY-MARKER")));
+  assert.ok(Buffer.byteLength(JSON.stringify(bodies[1]!.messages)) < Buffer.byteLength(JSON.stringify(bodies[0]!.messages)),
+    "the retried wire must shrink actual older history rather than delete the current request");
+
+  for (const body of bodies) assert.ok(body.messages.some(item => item.content === "Current input."));
+
   assert.equal(JSON.stringify(result.envelopes).includes("PRIVATE-MARKER"), false);
 });
 
@@ -44,6 +57,7 @@ test("a stalled diagnostic body is cancelled by an injected deadline without mas
   const body = new ReadableStream<Uint8Array>({ cancel() { cancelled = true; } });
   const pending = httpFailureMessage(new Response(body, { status: 400 }), "invalid_request", new AbortController().signal,
     { timeoutSignal: deadline.signal });
+
   deadline.abort();
   assert.equal(await pending, "http_400");
   assert.equal(cancelled, true);

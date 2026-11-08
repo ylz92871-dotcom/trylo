@@ -2,14 +2,16 @@ import type { ProviderEvent } from "../../ports/provider.js";
 import { coalesceDeltas, type CoalesceEvent } from "./coalesce-deltas.js";
 import { createOpenAiTranslator } from "./openai-translate.js";
 import { isDoneFrame, parseSseFrames, type SseFrame } from "./sse.js";
+import { createOpenAiReturnObservation } from "./openai-return-observation.js";
 
 /** Coalesce wire fragments without changing text, arguments, or block ordering. */
 export async function* translateBody(
   body: ReadableStream<Uint8Array>,
   signal: AbortSignal,
+  observeReturn?: true,
 ): AsyncGenerator<ProviderEvent> {
   const reader = body.getReader();
-  yield* coalesceDeltas(decodeBody(reader, signal), async () => {
+  yield* coalesceDeltas(decodeBody(reader, signal, observeReturn), async () => {
     try {
       await reader.cancel();
     } catch {
@@ -22,31 +24,43 @@ export async function* translateBody(
 async function* decodeBody(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   signal: AbortSignal,
+  observeReturn?: true,
 ): AsyncGenerator<CoalesceEvent> {
   const translator = createOpenAiTranslator();
   const decoder = new TextDecoder();
   let buffer = "";
   let sawAny = false;
-  let heldFinish: ProviderEvent | undefined;
+  let heldFinish: Extract<ProviderEvent, { type: "finish" }> | undefined;
+  const observation = observeReturn === true ? createOpenAiReturnObservation() : undefined;
+  let doneFrame = false;
   let finishDeadline: AbortSignal | undefined;
   let finishTailTimedOut = false;
   let bodyClosed = false;
+
   try {
     stream: for (;;) {
       const step = await readBeforeFinishDeadline(reader, finishDeadline);
-      if (step === undefined) { finishTailTimedOut = true; break; }
+      if (step === undefined) {
+        finishTailTimedOut = true;
+        break;
+      }
+
       if (step.done === true) {
         bodyClosed = true;
         break;
       }
+
       const text = decoder.decode(step.value, { stream: true });
       const parsed = parseSseFrames(text, buffer);
+
       buffer = parsed.buffer;
+
       for (const frame of parsed.frames) {
         if (isDoneFrame(frame)) {
+          doneFrame = true;
           break stream;
         }
-        for (const event of translateFrame(translator, frame)) {
+        for (const event of translateFrame(translator, frame, observation)) {
           if (event.type === "finish" && heldFinish === undefined) {
             heldFinish = event;
             // Usage may trail finish, but an endpoint that keeps HTTP alive
@@ -56,11 +70,17 @@ async function* decodeBody(
             sawAny = true;
             continue;
           }
-          if (heldFinish !== undefined && event.type !== "usage") {
+
+          // A malformed outer frame remains a safe protocol-gap marker even
+          // in the accounting tail. Never deliver its original payload.
+          if (heldFinish !== undefined && event.type !== "usage"
+            && !(event.type === "raw_unknown" && event.wire === "sse.unparseable")) {
             continue;
           }
+
           sawAny = true;
           yield event;
+
           // Do not complete buffered tool fragments or accept later finish
           // frames after the endpoint has explicitly failed this response.
           if (event.type === "error") return;
@@ -68,20 +88,23 @@ async function* decodeBody(
       }
       // The coalescer bounds later fragments by both content and time.
     }
-  } catch {
+  } catch (error) {
     bodyClosed = true;
+
     // Past headers: an interrupted body is unknown-state, not retryable.
     // A finish that already arrived still counts — the provider did conclude.
     if (heldFinish !== undefined) {
       yield heldFinish;
     }
+
     yield {
       type: "error",
       class: signal.aborted ? "cancelled" : "network",
       retryable: false,
       phase: "after_stream_started",
-      message: signal.aborted ? "cancelled" : "stream_interrupted",
+      message: signal.aborted ? "cancelled" : streamInterruptionMessage(error),
     };
+
     return;
   } finally {
     try {
@@ -99,8 +122,10 @@ async function* decodeBody(
       reader.releaseLock();
     }
   }
+
   if (finishTailTimedOut) yield { type: "warning", code: "stream_finish_tail_timeout",
     message: "Provider finished but did not close its stream; usage includes only received frames." };
+
   if (heldFinish === undefined) {
     for (const event of translator.complete()) {
       sawAny = true;
@@ -110,8 +135,10 @@ async function* decodeBody(
     // The finish already closed everything the translator tracks, so there
     // is nothing left for complete() to settle — emitting it would only
     // invent block closures the loop never saw open.
-    yield heldFinish;
+    yield observation?.finish(heldFinish, !signal.aborted && !finishTailTimedOut
+      && (doneFrame || bodyClosed) && buffer.trim().length === 0) ?? heldFinish;
   }
+
   if (!sawAny) {
     yield {
       type: "error",
@@ -123,15 +150,33 @@ async function* decodeBody(
   }
 }
 
+/** Retain a fixed transport code, never a raw exception, endpoint or header. */
+function streamInterruptionMessage(error: unknown): string {
+  const allowed = new Set(["UND_ERR_BODY_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_SOCKET",
+    "ECONNRESET", "ETIMEDOUT", "ECONNABORTED", "EPIPE", "ENOTFOUND", "EAI_AGAIN", "ERR_STREAM_PREMATURE_CLOSE"]);
+  let cause: unknown = error;
+
+  for (let depth = 0; depth < 4 && typeof cause === "object" && cause !== null; depth++) {
+    if ("code" in cause && typeof cause.code === "string" && allowed.has(cause.code)) return `stream_interrupted:${cause.code}`;
+    cause = "cause" in cause ? cause.cause : undefined;
+  }
+
+  return "stream_interrupted";
+}
+
 async function readBeforeFinishDeadline(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   deadline: AbortSignal | undefined,
 ): Promise<Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>> | undefined> {
   if (deadline === undefined) return reader.read();
+
   if (deadline.aborted) return undefined;
+
   let expire = () => {};
   const expired = new Promise<undefined>(resolve => { expire = () => resolve(undefined); });
+
   deadline.addEventListener("abort", expire, { once: true });
+
   try {
     return await Promise.race([reader.read(), expired]);
   } finally {
@@ -144,11 +189,15 @@ async function readBeforeFinishDeadline(
 function translateFrame(
   translator: ReturnType<typeof createOpenAiTranslator>,
   frame: SseFrame,
+  observation?: ReturnType<typeof createOpenAiReturnObservation>,
 ): ProviderEvent[] {
   try {
     const payload: unknown = JSON.parse(frame.data);
-    return translator.push(payload);
+    const events = translator.push(payload);
+    observation?.frame(payload, events);
+    return events;
   } catch {
+    observation?.frame(undefined, []);
     return [
       {
         type: "raw_unknown",

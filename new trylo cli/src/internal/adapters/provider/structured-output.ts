@@ -50,17 +50,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  */
 export function loadResponseSchema(text: string): SchemaResult {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(text);
   } catch {
     return { ok: false, failure: { code: "not_json", detail: "schema file is not valid JSON" } };
   }
+
   if (!isRecord(parsed)) {
     return { ok: false, failure: { code: "not_object", detail: "schema must be a JSON object" } };
   }
+
   if (Object.keys(parsed).length === 0) {
     return { ok: false, failure: { code: "empty_schema", detail: "schema must not be an empty object" } };
   }
+
   return { ok: true, schema: parsed as JsonObject };
 }
 
@@ -84,6 +88,31 @@ export function chatStructuredFields(schema: JsonObject | undefined): {
       json_schema: { name: "trylo_structured_output", strict: true, schema },
     },
   };
+}
+
+/** Refuse incompatible JSON content requests before credentials or transport.
+ * No format request preserves all existing tool/schema combinations. */
+export function chatResponseFormatFailure(request: ProviderRequest, supported: readonly "json_object"[]): string | undefined {
+  const format = request.responseFormat;
+  if (format === undefined) return undefined;
+
+  if (request.responseSchema !== undefined) return "response_format_schema_conflict";
+
+  if (request.tools.length > 0) return "response_format_tools_conflict";
+
+  if (!isRecord(format) || Object.getPrototypeOf(format) !== Object.prototype && Object.getPrototypeOf(format) !== null
+    || Reflect.ownKeys(format).length !== 1 || !Object.hasOwn(format, "type") || format.type !== "json_object") {
+    return "response_format_invalid";
+  }
+
+  return supported.includes("json_object") ? undefined : "response_format_unsupported";
+}
+
+/** JSON object mode does not imply a JSON schema or a function call. */
+export function chatJsonObjectFields(format: ProviderRequest["responseFormat"]): {
+  readonly response_format: { readonly type: "json_object" };
+} | undefined {
+  return format === undefined ? undefined : { response_format: { type: "json_object" } };
 }
 
 /**

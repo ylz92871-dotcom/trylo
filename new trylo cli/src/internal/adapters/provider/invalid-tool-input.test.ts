@@ -36,6 +36,7 @@ for (const family of ["Chat", "Responses", "Anthropic"] as const) {
   test(`${family} reports unclosed JSON input with a smaller-call recovery hint, never its contents`, () => {
     const raw = '{"content":"fixture-private-sentinel ' + "repeated code ".repeat(200);
     let events: readonly ProviderEvent[];
+
     if (family === "Chat") {
       const translator = createOpenAiTranslator();
       translator.push({ choices: [{ delta: { tool_calls: [{ index: 0, id: "bad", function: { name: "write_file", arguments: raw } }] } }] });
@@ -48,8 +49,10 @@ for (const family of ["Chat", "Responses", "Anthropic"] as const) {
       translator.push("content_block_delta", { index: 0, delta: { type: "input_json_delta", partial_json: raw } });
       events = translator.complete();
     }
+
     assertRecoveryHint(events);
     const invalid = events.find(event => event.type === "tool_call_invalid");
+
     assert.ok(invalid?.type === "tool_call_invalid");
     assert.match(invalid.message, /ended with an open JSON string or container/);
     assert.match(invalid.message, /smaller complete call/);

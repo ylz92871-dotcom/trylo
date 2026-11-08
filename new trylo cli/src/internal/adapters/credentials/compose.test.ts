@@ -28,42 +28,52 @@ function tempHome(): string {
 
 test("with no keyring selection the port uses the file ledger (no keyring_unavailable)", (t) => {
   const home = tempHome();
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const port = createCredentialPort({ homeDir: home, now: () => NOW });
   const logged = port.login({ providerId: "openai-compatible", secret: "sk-file-backend" });
+
   assert.equal(logged.ok, true);
   const resolved = port.get("openai-compatible");
+
   assert.equal(resolved.ok, true);
   assert.equal(resolved.ok ? resolved.value.secret : "", "sk-file-backend");
 });
 
 test("an attached keyring carries login/status/logout end to end", (t) => {
   const home = tempHome();
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const keyring = createMemoryKeyring();
   const port = createCredentialPort({ homeDir: home, now: () => NOW, keyring: { attached: true, store: keyring.store } });
 
   const secret = "sk-keyring-secret-999";
+
   assert.equal(port.login({ providerId: "openai-compatible", secret }).ok, true);
 
   // status carries no secret (adversarial #10).
   const status = port.status();
+
   assert.equal(status.ok, true);
   assert.equal(JSON.stringify(status).includes(secret), false);
 
   const resolved = port.get("openai-compatible");
+
   assert.equal(resolved.ok ? resolved.value.secret : "", secret);
 
   assert.equal(port.logout({ providerId: "openai-compatible" }).ok, true);
   const after = port.get("openai-compatible");
+
   assert.equal(after.ok ? after.value.layer : "", "none");
 });
 
 test("the keyring path does not touch the home directory", (t) => {
   const home = tempHome();
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const keyring = createMemoryKeyring();
   const port = createCredentialPort({ homeDir: home, now: () => NOW, keyring: { attached: true, store: keyring.store } });
+
   assert.equal(port.login({ providerId: "openai-compatible", secret: "sk-keyring" }).ok, true);
 
   // No ledger file was created — the credential lives in the keyring store.
@@ -72,8 +82,10 @@ test("the keyring path does not touch the home directory", (t) => {
 
 test("an explicitly unattached keyring fails closed on every verb", (t) => {
   const home = tempHome();
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const port = createCredentialPort({ homeDir: home, now: () => NOW, keyring: { attached: false } });
+
   for (const result of [
     port.login({ providerId: "openai-compatible", secret: "sk-x" }),
     port.logout({ providerId: "openai-compatible" }),

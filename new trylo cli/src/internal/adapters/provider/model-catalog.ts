@@ -21,6 +21,7 @@
  */
 
 export const INPUT_MODALITIES = ["text", "image", "audio", "video", "pdf"] as const;
+
 export type InputModality = (typeof INPUT_MODALITIES)[number];
 
 export function isInputModality(value: string): value is InputModality {
@@ -28,6 +29,7 @@ export function isInputModality(value: string): value is InputModality {
 }
 
 export const REASONING_EFFORTS = ["none", "low", "medium", "high"] as const;
+
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 
 export function isReasoningEffort(value: string): value is ReasoningEffort {
@@ -36,6 +38,7 @@ export function isReasoningEffort(value: string): value is ReasoningEffort {
 
 /** Hosted tool kinds a model may be offered (Codex `spec_plan` hosted tools). */
 export const MODEL_TOOL_KINDS = ["function", "web_search", "code_interpreter", "image_generation"] as const;
+
 export type ModelToolKind = (typeof MODEL_TOOL_KINDS)[number];
 
 export function isModelToolKind(value: string): value is ModelToolKind {
@@ -114,6 +117,7 @@ export function demandModel(
       denial: { code: "unknown_model", modelId, known: catalog.models.map((entry) => entry.id) },
     };
   }
+
   switch (demand.kind) {
     case "modality":
       if (card.inputModalities !== undefined && !card.inputModalities.includes(demand.modality)) {
@@ -161,4 +165,28 @@ export function demandStructuredSupport(
     return { ok: true };
   }
   return demandModel(catalog, modelId, { kind: "structured" });
+}
+
+const JSON_OBJECT_FORMATS = Object.freeze(["json_object"] as const);
+const NO_RESPONSE_FORMATS = Object.freeze([] as const);
+const ARK_CHAT_JSON_MODELS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  "https://ark.cn-beijing.volces.com/api/v3/chat/completions": Object.freeze([
+    "deepseek-v4-1-flash-261017", "deepseek-v4-1-flash-260910",
+  ]),
+  "https://ark.cn-beijing.volces.com/api/plan/v3/chat/completions": Object.freeze(["deepseek-v4.1-flash"]),
+});
+
+/** Documented Chat JSON mode only, separate from json_schema support.
+ * https://console.volcengine.com/ark/region:cn-beijing/docs/model-list (2026-11-02)
+ * https://console.volcengine.com/ark/region:cn-beijing/docs/structured-output-beta (2026-10-16)
+ * https://console.volcengine.com/ark/region:cn-beijing/docs/agent-plan-personal-zcode (2026-11-04)
+ * Plan compatibility is advertised, not a claim of a successful provider probe;
+ * an actual refusal remains terminal rather than selecting a paid fallback. */
+export function knownChatResponseFormats(endpoint: string, model: string): readonly "json_object"[] {
+  try {
+    const url = new URL(endpoint), models = ARK_CHAT_JSON_MODELS[url.href];
+    return models?.includes(model) === true ? JSON_OBJECT_FORMATS : NO_RESPONSE_FORMATS;
+  } catch {
+    return NO_RESPONSE_FORMATS; // A malformed connection has no documented format capability.
+  }
 }

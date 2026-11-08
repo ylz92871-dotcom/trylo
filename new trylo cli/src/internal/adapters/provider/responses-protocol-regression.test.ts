@@ -11,6 +11,7 @@ const call = { type: "function_call", id: "item", call_id: "call", name: "echo",
 const usage = { input_tokens: 100, output_tokens: 50, total_tokens: 150,
   input_tokens_details: { cached_tokens: 80 }, output_tokens_details: { reasoning_tokens: 40 } };
 const completion = frame("response.completed", { response: { status: "completed", usage } });
+
 async function observe(wire: string) {
   let sequence = 0;
   return consumeProviderStream({ port: createResponsesProvider({ endpoint: "http://local.invalid/responses", model: "synthetic",
@@ -46,6 +47,7 @@ test("Responses final arguments are authoritative and overlapping final snapshot
     ...translator.push("response.output_item.done", { output_index: 0, item }),
     ...translator.push("response.completed", { response: { status: "completed", output: [item] } }),
   ];
+
   assert.deepEqual(events.filter(event => event.type === "tool_call").map(event => event.arguments), [{ value: 7 }]);
   assert.equal(events.some(event => event.type === "tool_call_invalid"), false);
 });
@@ -64,6 +66,7 @@ test("Responses message snapshots deliver missing text once across done and comp
     ...translator.push("response.output_item.done", { output_index: 0, item }),
     ...translator.push("response.completed", { response: { status: "completed", output: [item] } }),
   ];
+
   assert.equal(events.filter(event => event.type === "text_delta").map(event => event.text).join(""), "COMPLETE");
   assert.equal(events.filter(event => event.type === "text_end").length, 1);
 });

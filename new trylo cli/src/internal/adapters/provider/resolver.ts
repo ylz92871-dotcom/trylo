@@ -81,6 +81,7 @@ function resolvedOf(entry: ProviderEntry, input: ResolveInput): ResolvedProvider
     ? entry.capabilities.endpoint
     : input.endpoint);
   const model = input.modelOverride ?? (entry.model.length > 0 ? entry.model : input.model);
+
   return {
     providerId: entry.id,
     kind: entry.kind,
@@ -109,6 +110,7 @@ export function resolveProvider(input: ResolveInput): Resolution {
   if (!found.ok) {
     return { ok: false, failure: { kind: "provider", denial: found.denial } };
   }
+
   const value = resolvedOf(found.entry, input);
   if (kindNeedsEndpoint(value.kind) && value.endpoint.length === 0) {
     return {
@@ -119,6 +121,7 @@ export function resolveProvider(input: ResolveInput): Resolution {
       },
     };
   }
+
   return { ok: true, value };
 }
 
@@ -137,10 +140,12 @@ export function resolveRequiring(
   if (!resolved.ok) {
     return resolved;
   }
+
   const gate = requireCapability(resolved.value.providerId, resolved.value.capabilities, capability);
   if (!gate.ok) {
     return { ok: false, failure: { kind: "capability", denial: gate.denial } };
   }
+
   return resolved;
 }
 
@@ -157,6 +162,7 @@ export function resolverForBudget(
 ): { readonly declared?: number; readonly effective?: number; readonly overridden: boolean } {
   const declared = resolved.contextWindow;
   const effective = resolveContextWindow(configuredCeiling, declared, modelContextWindow);
+
   return {
     ...(declared === undefined ? {} : { declared }),
     effective,

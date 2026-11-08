@@ -33,6 +33,7 @@ function createFakeDriver(options?: {
 }): FakeDriver {
   const blobs = new Map<string, string>();
   const calls: FakeCall[] = [];
+
   return {
     id: "fake-keyring",
     blobs,
@@ -65,6 +66,7 @@ function tempHome(): string {
 
 test("a login/get/logout cycle rides the keyring store end to end", (t) => {
   const home = tempHome();
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const driver = createFakeDriver();
   const port = createCredentialPort({
@@ -75,19 +77,23 @@ test("a login/get/logout cycle rides the keyring store end to end", (t) => {
 
   assert.equal(port.login({ providerId: "openai-compatible", secret: SECRET }).ok, true);
   const resolved = port.get("openai-compatible");
+
   assert.equal(resolved.ok, true);
   assert.equal(resolved.ok ? resolved.value.secret : "", SECRET);
   assert.equal(port.logout({ providerId: "openai-compatible" }).ok, true);
   const after = port.get("openai-compatible");
+
   assert.equal(after.ok ? after.value.layer : "", "none");
 
   // The user-scope write went to the one fixed target.
   const targets = driver.calls.filter((call) => call.op === "write").map((call) => call.target);
+
   assert.deepEqual([...new Set(targets)], [KEYRING_USER_TARGET]);
 });
 
 test("an empty keyring is a miss, not a failure (NoEntry => Ok(None))", (t) => {
   const home = tempHome();
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const driver = createFakeDriver();
   const port = createCredentialPort({
@@ -96,14 +102,17 @@ test("an empty keyring is a miss, not a failure (NoEntry => Ok(None))", (t) => {
     keyring: { attached: true, store: createOsKeyringLedgerStore({ driver }) },
   });
   const resolved = port.get("openai-compatible");
+
   assert.equal(resolved.ok, true);
   assert.equal(resolved.ok ? resolved.value.layer : "", "none");
 });
 
 test("a corrupt keyring entry is refused whole (fail closed, like the file backend)", (t) => {
   const home = tempHome();
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const driver = createFakeDriver();
+
   driver.blobs.set(KEYRING_USER_TARGET, "{ not a ledger document");
   const port = createCredentialPort({
     homeDir: home,
@@ -111,12 +120,14 @@ test("a corrupt keyring entry is refused whole (fail closed, like the file backe
     keyring: { attached: true, store: createOsKeyringLedgerStore({ driver }) },
   });
   const resolved = port.get("openai-compatible");
+
   assert.equal(resolved.ok, false);
   assert.equal(resolved.ok === false ? resolved.code : "", "credentials_corrupt");
 });
 
 test("a keyring read failure is read_failed, never a silent file fallback", (t) => {
   const home = tempHome();
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const driver = createFakeDriver({ failRead: new Error("cm busted") });
   const port = createCredentialPort({
@@ -125,6 +136,7 @@ test("a keyring read failure is read_failed, never a silent file fallback", (t) 
     keyring: { attached: true, store: createOsKeyringLedgerStore({ driver }) },
   });
   const resolved = port.get("openai-compatible");
+
   assert.equal(resolved.ok, false);
   assert.equal(resolved.ok === false ? resolved.code : "", "read_failed");
   // The failure detail names the driver error, not the secret.
@@ -134,6 +146,7 @@ test("a keyring read failure is read_failed, never a silent file fallback", (t) 
 
 test("a keyring write failure is write_failed and stores nothing anywhere", (t) => {
   const home = tempHome();
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const driver = createFakeDriver({ failWrite: new Error("cm full") });
   const port = createCredentialPort({
@@ -142,6 +155,7 @@ test("a keyring write failure is write_failed and stores nothing anywhere", (t) 
     keyring: { attached: true, store: createOsKeyringLedgerStore({ driver }) },
   });
   const logged = port.login({ providerId: "openai-compatible", secret: SECRET });
+
   assert.equal(logged.ok, false);
   assert.equal(logged.ok === false ? logged.code : "", "write_failed");
   assert.equal(existsSync(join(home, "credentials.json")), false);
@@ -149,6 +163,7 @@ test("a keyring write failure is write_failed and stores nothing anywhere", (t) 
 
 test("the keyring path does not touch the home directory", (t) => {
   const home = tempHome();
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const driver = createFakeDriver();
   const port = createCredentialPort({
@@ -156,12 +171,14 @@ test("the keyring path does not touch the home directory", (t) => {
     now: () => NOW,
     keyring: { attached: true, store: createOsKeyringLedgerStore({ driver }) },
   });
+
   assert.equal(port.login({ providerId: "openai-compatible", secret: "sk-keyring" }).ok, true);
   assert.equal(existsSync(join(home, "credentials.json")), false);
 });
 
 test("project scopes are namespaced per workspace, and absent projectDir is path_escape", (t) => {
   const home = tempHome();
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const driver = createFakeDriver();
   const alpha = createCredentialPort({
@@ -179,12 +196,14 @@ test("project scopes are namespaced per workspace, and absent projectDir is path
 
   assert.equal(alpha.login({ providerId: "openai-compatible", secret: "sk-alpha", scope: "project" }).ok, true);
   const seen = new Set(driver.calls.filter((call) => call.op === "write").map((call) => call.target));
+
   assert.equal(seen.has(KEYRING_USER_TARGET), false);
   assert.equal(seen.size, 1);
 
   // Beta's project ledger does not see alpha's credential: its project target
   // is a different keyring entry.
   const betaResolved = beta.get("openai-compatible");
+
   assert.equal(betaResolved.ok, true);
   assert.equal(betaResolved.ok ? betaResolved.value.layer : "", "none");
 
@@ -195,6 +214,7 @@ test("project scopes are namespaced per workspace, and absent projectDir is path
     keyring: { attached: true, store: createOsKeyringLedgerStore({ driver }) },
   });
   const denied = orphan.login({ providerId: "openai-compatible", secret: "sk-x", scope: "project" });
+
   assert.equal(denied.ok, false);
   assert.equal(denied.ok === false ? denied.code : "", "path_escape");
 });

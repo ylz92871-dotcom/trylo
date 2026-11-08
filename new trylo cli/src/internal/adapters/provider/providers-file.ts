@@ -45,6 +45,7 @@ export const PROVIDER_KINDS = [
   "openai-compatible",
   "openai-responses",
 ] as const;
+
 export type ProviderKind = (typeof PROVIDER_KINDS)[number];
 
 export function isProviderKind(value: string): value is ProviderKind {
@@ -189,24 +190,31 @@ function entryOf(raw: unknown, index: number): DeclaredProvider | DocumentFailur
   if (!isRecord(raw)) {
     return { code: "bad_entry", detail: `providers[${index}] is not an object` };
   }
+
   const unknown = unknownField(raw, ENTRY_FIELDS);
   if (unknown !== undefined) {
     return { code: "unknown_field", detail: `providers[${index}].${unknown} is not a known field` };
   }
+
   const id = str(raw["id"])?.trim() ?? "";
   const kind = str(raw["kind"]) ?? "";
+
   if (id.length === 0) {
     return { code: "bad_entry", detail: `providers[${index}].id is required` };
   }
+
   if (!isProviderKind(kind)) {
     return { code: "bad_entry", detail: `providers[${index}].kind is not supported: ${kind}` };
   }
+
   if (RESERVED_IDS.includes(id)) {
     return { code: "reserved_id", detail: `providers[${index}].id redefines a built-in provider: ${id}` };
   }
+
   const capabilities = capabilitiesFor(kind, raw);
   const contextWindow = contextWindowOf(raw);
   const accountId = str(raw["accountId"])?.trim() ?? "";
+
   return {
     id,
     kind,
@@ -220,42 +228,53 @@ function entryOf(raw: unknown, index: number): DeclaredProvider | DocumentFailur
 
 export function decodeDocument(text: string): DecodeResult {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(text);
   } catch {
     return { ok: false, failure: { code: "not_json", detail: "file is not valid JSON" } };
   }
+
   if (!isRecord(parsed)) {
     return { ok: false, failure: { code: "bad_shape", detail: "document is not an object" } };
   }
+
   const unknown = unknownField(parsed, TOP_LEVEL_FIELDS);
   if (unknown !== undefined) {
     return { ok: false, failure: { code: "unknown_field", detail: `${unknown} is not a known field` } };
   }
+
   if (parsed["version"] !== PROVIDERS_DOCUMENT_VERSION) {
     return {
       ok: false,
       failure: { code: "bad_version", detail: `version must be ${PROVIDERS_DOCUMENT_VERSION}` },
     };
   }
+
   const rawProviders = parsed["providers"];
   if (!Array.isArray(rawProviders)) {
     return { ok: false, failure: { code: "bad_shape", detail: "providers must be an array" } };
   }
+
   const providers: DeclaredProvider[] = [];
   const seen = new Set<string>();
+
   for (let index = 0; index < rawProviders.length; index += 1) {
     const entry = entryOf(rawProviders[index], index);
     if (!("id" in entry)) {
       return { ok: false, failure: entry };
     }
+
     if (seen.has(entry.id)) {
       return { ok: false, failure: { code: "duplicate_id", detail: `duplicate provider id: ${entry.id}` } };
     }
+
     seen.add(entry.id);
     providers.push(entry);
   }
+
   const selected = str(parsed["selected"])?.trim();
+
   return {
     ok: true,
     value: {
@@ -325,6 +344,7 @@ function declaredTarget(
   if (RESERVED_IDS.includes(id)) {
     return { ok: false, failure: { code: "reserved_id", detail: `${id} is a built-in provider and cannot be changed` } };
   }
+
   const index = doc.providers.findIndex((entry) => entry.id === id);
   if (index < 0) {
     return {
@@ -332,6 +352,7 @@ function declaredTarget(
       failure: { code: "unknown_provider", detail: `unknown provider: ${id}`, known: knownIdsOf(doc) },
     };
   }
+
   return { ok: true, index };
 }
 
@@ -350,6 +371,7 @@ export function removeDeclared(
   if (!target.ok) {
     return target;
   }
+
   // `selected` is rebuilt rather than spread: spreading `...doc` would carry a
   // selection that points at the entry just removed.
   const value: ProvidersDocument = {
@@ -357,6 +379,7 @@ export function removeDeclared(
     ...(doc.selected === undefined || doc.selected === id ? {} : { selected: doc.selected }),
     providers: doc.providers.filter((entry) => entry.id !== id),
   };
+
   return { ok: true, value, clearedSelected: doc.selected === id };
 }
 
@@ -376,12 +399,14 @@ export function editDeclared(
   if (!target.ok) {
     return target;
   }
+
   const empty = (["endpoint", "model", "accountId"] as const)
     .filter((key) => patch[key] !== undefined)
     .filter((key) => (patch[key] ?? "").trim().length === 0);
   if (empty.length > 0) {
     return { ok: false, failure: { code: "missing_field", detail: `providers edit needs non-empty ${empty.join(" and ")}` } };
   }
+
   const current = doc.providers[target.index];
   if (current === undefined) {
     return {
@@ -389,11 +414,14 @@ export function editDeclared(
       failure: { code: "unknown_provider", detail: `unknown provider: ${id}`, known: knownIdsOf(doc) },
     };
   }
+
   const endpoint = patch.endpoint === undefined ? current.endpoint : patch.endpoint.trim();
   const model = patch.model === undefined ? current.model : patch.model.trim();
+
   if (patch.contextWindow !== undefined && (!Number.isInteger(patch.contextWindow) || patch.contextWindow <= 0)) {
     return { ok: false, failure: { code: "missing_field", detail: "providers edit needs a positive integer --context-window" } };
   }
+
   const changed = [
     ...(patch.endpoint === undefined ? [] : ["endpoint"]),
     ...(patch.model === undefined ? [] : ["model"]),
@@ -416,6 +444,7 @@ export function editDeclared(
       ...(patch.contextWindow === undefined ? {} : { contextWindow: patch.contextWindow }),
     },
   };
+
   return {
     ok: true,
     value: { ...doc, providers: doc.providers.map((entry) => (entry.id === id ? next : entry)) },

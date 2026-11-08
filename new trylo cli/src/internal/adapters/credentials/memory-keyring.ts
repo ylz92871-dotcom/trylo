@@ -41,6 +41,7 @@ export type MemoryKeyring = {
 export function createMemoryKeyring(options: MemoryKeyringOptions = {}): MemoryKeyring {
   const unavailable = options.unavailable === true;
   const scopes = new Map<CredentialScope, CredentialLedgerDocument>();
+
   if (options.seed !== undefined) {
     for (const [scope, document] of Object.entries(options.seed)) {
       if (document !== undefined) {
@@ -60,10 +61,12 @@ export function createMemoryKeyring(options: MemoryKeyringOptions = {}): MemoryK
       if (unavailable) {
         return refuse();
       }
+
       const document = scopes.get(scope);
       if (document === undefined) {
         return { ok: true, document: emptyDocument(), existed: false };
       }
+
       return { ok: true, document, existed: true };
     },
     write: (scope, document): CredentialFailure | undefined => {

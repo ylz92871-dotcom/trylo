@@ -112,6 +112,7 @@ export function glmCheckpoint(
       ? { version, binding, scope, state: "absent", identity: identityOf(state.identity) }
       : { version, binding, scope, state: "rejected", cause: state.cause,
           identity: identityOf(state.identity) };
+
   return JSON.stringify(value).length <= MAX_CHECKPOINT_CHARS ? value : undefined;
 }
 
@@ -132,28 +133,60 @@ function identityOf(identity: NativeIdentity): JsonObject {
  * session loader checks journal integrity, this boundary checks the native
  * payload and the originating session/turn independently.
  */
-export function readGlmCheckpoint(record: SessionRecord, sessionId: string, binding: string): CheckpointRead {
+type CheckpointRecord = Pick<SessionRecord, "type" | "sessionId" | "turnId" | "payload">;
+
+export function readGlmCheckpoint(record: CheckpointRecord, sessionId: string, binding: string): CheckpointRead {
   if (record.sessionId !== sessionId || record.turnId === undefined || record.type !== "envelope") {
     return { ok: false, key: undefined, cause: "checkpoint_invalid" };
   }
+
   const envelope = record.payload["envelope"], value = record.payload["providerContinuation"];
   if (!object(envelope) || envelope["kind"] !== "stream_end" || !object(value)) {
     return { ok: false, key: undefined, cause: "checkpoint_invalid" };
   }
+
   if (value["scope"] !== providerContinuationScope(record.sessionId, record.turnId)) {
     return { ok: false, key: undefined, cause: "binding_mismatch" };
   }
+
   const version = value["version"];
   if (version !== 1 && version !== NATIVE_CHECKPOINT_VERSION) {
     return { ok: false, key: undefined, cause: "checkpoint_invalid" };
   }
+
   if (value["binding"] !== binding) {
     return { ok: false, key: keyOfPayload(value), cause: "binding_mismatch" };
   }
+
   if (JSON.stringify(value).length > MAX_CHECKPOINT_CHARS) {
     return { ok: false, key: undefined, cause: "checkpoint_invalid" };
   }
+
   return version === 1 ? readV1(value) : readV2(value);
+}
+
+/** A native fork is the sole authority to transfer a verified source scope.
+ * Native body, version and binding remain untouched. The destination adapter
+ * must still validate that binding against its own actual connection. */
+export function forkGlmCheckpoint(
+  record: CheckpointRecord,
+  parentSessionId: string,
+  childSessionId: string,
+): { readonly ok: true; readonly checkpoint: JsonObject; readonly state: NativeCheckpointState["kind"] }
+  | Extract<CheckpointRead, { readonly ok: false }> {
+  if (record.sessionId !== childSessionId) return { ok: false, key: undefined, cause: "binding_mismatch" };
+
+  const value = record.payload["providerContinuation"];
+  if (!object(value) || typeof value["binding"] !== "string" || value["binding"].length === 0) return invalidRead();
+
+  const source = readGlmCheckpoint({ ...record, sessionId: parentSessionId }, parentSessionId, value["binding"]);
+  if (!source.ok) return source;
+
+  const checkpoint = { ...value, scope: providerContinuationScope(childSessionId, record.turnId) };
+  const target = readGlmCheckpoint({ ...record, payload: { ...record.payload, providerContinuation: checkpoint } }, childSessionId, value["binding"]);
+  if (!target.ok) return target;
+
+  return { ok: true, checkpoint, state: source.state.kind };
 }
 
 /** Version 1 had no state: a readable payload always meant full native data. */
@@ -174,25 +207,31 @@ function readV2(value: JsonObject): CheckpointRead {
       ? invalidRead()
       : { ok: true, key: assistantKey(identity.text, identity.calls), state: { kind: "absent", identity } };
   }
+
   if (state === "rejected") {
     if (!sameKeys(value, ["binding", "cause", "identity", "scope", "state", "version"])
       || value["cause"] !== "capture_rejected") return invalidRead();
+
     const identity = identityOfPayload(value["identity"]);
+
     return identity === undefined
       ? invalidRead()
       : { ok: true, key: assistantKey(identity.text, identity.calls),
           state: { kind: "rejected", cause: "capture_rejected", identity } };
   }
+
   if (state !== "native" || !sameKeys(value, ["assistant", "binding", "scope", "state", "version"])) {
     return invalidRead();
   }
+
   const assistant = nativeAssistantOf(value["assistant"]);
+
   return assistant === undefined
     ? invalidRead()
     : { ok: true, key: assistantKey(assistant.text, assistant.calls), state: { kind: "native", assistant } };
 }
 
-function invalidRead(): CheckpointRead {
+function invalidRead(): Extract<CheckpointRead, { readonly ok: false }> {
   return { ok: false, key: undefined, cause: "checkpoint_invalid" };
 }
 
@@ -214,7 +253,9 @@ function identityOfPayload(raw: JsonValue | undefined): NativeIdentity | undefin
 
 function callsOfPayload(raw: JsonValue | undefined): ProviderOutboundToolCall[] | undefined {
   if (!Array.isArray(raw)) return undefined;
+
   const calls: ProviderOutboundToolCall[] = [], ids = new Set<string>();
+
   for (const item of raw) {
     if (!object(item) || !sameKeys(item, ["arguments", "name", "toolCallId"])) return undefined;
     const candidate = { kind: "tool_call", sequence: 0, ...item };
@@ -222,17 +263,21 @@ function callsOfPayload(raw: JsonValue | undefined): ProviderOutboundToolCall[] 
     ids.add(candidate.toolCallId);
     calls.push({ toolCallId: candidate.toolCallId, name: candidate.name, arguments: candidate.arguments });
   }
+
   return calls;
 }
 
 function nativeAssistantOf(raw: JsonValue | undefined): NativeAssistant | undefined {
   if (!object(raw) || !sameKeys(raw, ["calls", "reasoning", "text"])) return undefined;
+
   const reasoning = raw["reasoning"], text = raw["text"], rawCalls = raw["calls"];
   if (typeof reasoning !== "string" || reasoning.length === 0 || reasoning.length > MAX_REASONING_CHARS
     || typeof text !== "string" || !Array.isArray(rawCalls) || (rawCalls.length === 0 && text.length === 0)) {
     return undefined;
   }
+
   const calls: ProviderOutboundToolCall[] = [], ids = new Set<string>();
+
   for (const item of rawCalls) {
     if (!object(item) || !sameKeys(item, ["arguments", "name", "toolCallId"])) return undefined;
     const candidate = { kind: "tool_call", sequence: 0, ...item };
@@ -240,5 +285,6 @@ function nativeAssistantOf(raw: JsonValue | undefined): NativeAssistant | undefi
     ids.add(candidate.toolCallId);
     calls.push({ toolCallId: candidate.toolCallId, name: candidate.name, arguments: candidate.arguments });
   }
+
   return { reasoning, text, calls };
 }

@@ -78,6 +78,7 @@ export function createCredentialPortPreferringKeyring(options: PreferKeyringOpti
       report: { backend: "os-keyring", driverId: driver.id },
     };
   }
+
   return {
     port: createCredentialPort(options),
     report: { backend: "file", fallback: true, reason: availability.reason },

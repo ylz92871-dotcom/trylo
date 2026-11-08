@@ -57,6 +57,7 @@ test("createOpenAiCompatibleProvider renews token on 401 and retries bounded", a
   });
 
   const events: ProviderEvent[] = [];
+
   for await (const event of provider.stream(DUMMY_REQUEST, new AbortController().signal)) {
     events.push(event);
   }
@@ -68,6 +69,7 @@ test("createOpenAiCompatibleProvider renews token on 401 and retries bounded", a
     .filter((e) => e.type === "text_delta")
     .map((e) => (e as { text: string }).text)
     .join("");
+
   assert.equal(texts, "Hi there!");
 });
 
@@ -94,12 +96,14 @@ test("createOpenAiCompatibleProvider fails closed if 401 refresh fails", async (
   });
 
   const events: ProviderEvent[] = [];
+
   for await (const event of provider.stream(DUMMY_REQUEST, new AbortController().signal)) {
     events.push(event);
   }
 
   assert.equal(requestCount, 1, "Should not retry if refresh failed");
   const errorEvent = events.find((e) => e.type === "error");
+
   assert.ok(errorEvent !== undefined);
   assert.equal(errorEvent.class, "auth");
   assert.match((errorEvent as { message: string }).message, /token_refresh_failed/);
@@ -116,6 +120,7 @@ test("D5: maxOutputTokens is sent as max_tokens in the request body", async () =
       'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":3,"total_tokens":8}}\n\n',
       "data: [DONE]\n\n",
     ].join("");
+
     return new Response(sseBody, {
       status: 200,
       headers: { "Content-Type": "text/event-stream" },
@@ -128,9 +133,11 @@ test("D5: maxOutputTokens is sent as max_tokens in the request body", async () =
     fetchImpl: mockFetch,
   });
   const request: ProviderRequest = { ...DUMMY_REQUEST, maxOutputTokens: 50 };
+
   for await (const _event of provider.stream(request, new AbortController().signal)) {
     // drain
   }
+
   assert.equal(body?.["max_tokens"], 50);
 });
 
@@ -150,9 +157,11 @@ test("D5: no max_tokens key is sent when no budget was given", async () => {
     apiKey: "k",
     fetchImpl: mockFetch,
   });
+
   for await (const _event of provider.stream(DUMMY_REQUEST, new AbortController().signal)) {
     // drain
   }
+
   assert.equal("max_tokens" in (body ?? {}), false);
 });
 
@@ -179,12 +188,16 @@ test("D6: a usage frame trailing the finish frame is ordered before finish", asy
     fetchImpl: mockFetch,
   });
   const events: ProviderEvent[] = [];
+
   for await (const event of provider.stream(DUMMY_REQUEST, new AbortController().signal)) {
     events.push(event);
   }
+
   const kinds = events.map((event) => event.type);
+
   assert.ok(kinds.includes("usage"), "trailing usage must survive");
   assert.ok(kinds.indexOf("usage") < kinds.indexOf("finish"), "usage must precede finish");
   const usage = events.find((event) => event.type === "usage");
+
   assert.equal(usage?.type === "usage" ? usage.usage.totalTokens : -1, 8);
 });

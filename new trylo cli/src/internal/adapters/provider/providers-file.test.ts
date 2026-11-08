@@ -41,11 +41,15 @@ function failureCodeOf(text: string): DocumentFailureCode {
 
 test("a minimal declaration decodes with the kind's defaults", () => {
   const decoded = decodeDocument(document());
+
   assert.equal(decoded.ok, true);
+
   if (!decoded.ok) {
     return;
   }
+
   const entry = decoded.value.providers[0];
+
   assert.equal(entry?.id, "lab");
   assert.equal(entry?.kind, "openai-compatible");
   assert.equal(entry?.model, "lab-7b");
@@ -63,10 +67,13 @@ test("a fixture declaration needs no credential", () => {
     providers: [{ id: "offline", kind: "fixture" }],
   });
   const decoded = decodeDocument(text);
+
   assert.equal(decoded.ok, true);
+
   if (!decoded.ok) {
     return;
   }
+
   assert.equal(decoded.value.providers[0]?.capabilities.auth, "none");
 });
 
@@ -87,11 +94,15 @@ test("a declared capability set and window are honoured verbatim", () => {
     ],
   });
   const decoded = decodeDocument(text);
+
   assert.equal(decoded.ok, true);
+
   if (!decoded.ok) {
     return;
   }
+
   const caps = decoded.value.providers[0]?.capabilities;
+
   assert.deepEqual(caps?.models, ["big-1", "big-2"]);
   assert.equal(caps?.auth, "oauth");
   assert.equal(caps?.reasoning, true);
@@ -148,15 +159,21 @@ test("a built-in provider cannot be redefined", () => {
 
 test("encode then decode is a round trip", () => {
   const decoded = decodeDocument(document({ selected: "lab" }));
+
   assert.equal(decoded.ok, true);
+
   if (!decoded.ok) {
     return;
   }
+
   const again = decodeDocument(encodeDocument(decoded.value));
+
   assert.equal(again.ok, true);
+
   if (!again.ok) {
     return;
   }
+
   assert.deepEqual(again.value, decoded.value);
 });
 

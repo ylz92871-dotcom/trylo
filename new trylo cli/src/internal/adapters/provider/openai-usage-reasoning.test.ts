@@ -7,8 +7,11 @@ test("Chat usage preserves top-level reasoning tokens without adding them to out
     prompt_tokens: 100, completion_tokens: 80, total_tokens: 180,
     reasoning_tokens: 60, completion_tokens_details: { reasoning_tokens: 60 },
   } })[0];
+
   assert.equal(event?.type, "usage");
+
   if (event?.type !== "usage") throw new Error("missing usage");
+
   assert.equal(event.usage.reasoningTokens, 60);
   assert.equal(event.usage.outputTokens, 80);
   assert.equal(event.usage.totalTokens, 180);

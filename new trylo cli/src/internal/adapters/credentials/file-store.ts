@@ -67,11 +67,14 @@ export function ledgerPath(
     const candidate = path.join(path.resolve(config.homeDir), USER_LEDGER_RELATIVE);
     return guardWithin(path.resolve(config.homeDir), candidate, "homeDir");
   }
+
   if (config.projectDir === undefined) {
     return { ok: false, code: "path_escape", detail: "no project directory is configured" };
   }
+
   const root = path.resolve(config.projectDir);
   const candidate = path.join(root, PROJECT_LEDGER_RELATIVE);
+
   return guardWithin(root, candidate, "projectDir");
 }
 
@@ -89,6 +92,7 @@ function guardWithin(
       detail: `${label} resolves outside its root (${candidate})`,
     };
   }
+
   return { ok: true, path: resolved };
 }
 
@@ -104,28 +108,36 @@ function readScope(config: FileStoreConfig, scope: CredentialScope): LedgerReadR
   if (scope !== "user" && config.projectDir === undefined) {
     return { ok: true, document: emptyDocument(), existed: false };
   }
+
   const located = ledgerPath(config, scope as FileScope);
   if (!located.ok) {
     return located;
   }
+
   const file = located.path;
   if (!existsSync(file)) {
     return { ok: true, document: emptyDocument(), existed: false };
   }
+
   const insecure = insecureCheck(file);
   if (insecure !== undefined) {
     return insecure;
   }
+
   let raw: string;
+
   try {
     raw = readFileSync(file, "utf8");
   } catch {
     return { ok: false, code: "read_failed", detail: `${file} could not be read` };
   }
+
   if (raw.trim().length === 0) {
     return { ok: false, code: "credentials_corrupt", detail: `${file} is empty` };
   }
+
   const decoded = decodeDocument(raw, file);
+
   return decoded.ok ? { ok: true, document: decoded.value, existed: true } : decoded;
 }
 
@@ -138,6 +150,7 @@ function insecureCheck(file: string): CredentialFailure | undefined {
   if (process.platform === "win32") {
     return undefined;
   }
+
   try {
     const mode = statSync(file).mode & 0o777;
     if ((mode & 0o077) !== 0) {
@@ -150,6 +163,7 @@ function insecureCheck(file: string): CredentialFailure | undefined {
   } catch {
     return { ok: false, code: "read_failed", detail: `${file} could not be inspected` };
   }
+
   return undefined;
 }
 
@@ -163,12 +177,14 @@ function writeScope(
   if (!located.ok) {
     return located;
   }
+
   const file = located.path;
   const lock = `${file}.lock`;
   const lockFailure = acquire(lock, scope as FileScope, held);
   if (lockFailure !== undefined) {
     return lockFailure;
   }
+
   try {
     return replace(file, encodeDocument(document));
   } finally {
@@ -180,20 +196,25 @@ function acquire(lock: string, scope: FileScope, held: Set<FileScope>): Credenti
   if (held.has(scope)) {
     return { ok: false, code: "lock_conflict", detail: `${scope} ledger is already locked by this writer` };
   }
+
   try {
     mkdirSync(path.dirname(lock), { recursive: true });
   } catch {
     return { ok: false, code: "directory_unavailable", detail: `cannot create ${path.dirname(lock)}` };
   }
+
   try {
     const handle = openSync(lock, "wx");
+
     try {
       writeFileSync(handle, `${process.pid}\n`);
       fsyncSync(handle);
     } finally {
       closeSync(handle);
     }
+
     held.add(scope);
+
     return undefined;
   } catch {
     return { ok: false, code: "lock_conflict", detail: `${lock} is held by another writer` };
@@ -213,9 +234,11 @@ function release(lock: string, scope: FileScope, held: Set<FileScope>): void {
 
 function replace(file: string, text: string): CredentialFailure | undefined {
   const temporary = `${file}.${randomUUID()}.tmp`;
+
   try {
     writeFileSync(temporary, text, { encoding: "utf8", flag: "wx", mode: 0o600 });
     const handle = openSync(temporary, "r+");
+
     try {
       fsyncSync(handle);
     } finally {
@@ -225,12 +248,14 @@ function replace(file: string, text: string): CredentialFailure | undefined {
     discard(temporary);
     return { ok: false, code: "write_failed", detail: `${file} could not be written` };
   }
+
   try {
     renameSync(temporary, file);
   } catch {
     discard(temporary);
     return { ok: false, code: "write_failed", detail: `${file} could not be replaced` };
   }
+
   return undefined;
 }
 
@@ -250,6 +275,7 @@ export function isRegularFile(file: string): boolean {
     return false;
   }
 }/** Exposed for the port's `exportPublic`/`status` assembly, which needs the paths. */
+
 export function describePaths(config: FileStoreConfig): FileStorePaths {
   const user = ledgerPath(config, "user");
   const project = config.projectDir === undefined ? undefined : ledgerPath(config, "project");

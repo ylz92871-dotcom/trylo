@@ -233,13 +233,16 @@ function run(
   if (result.error !== undefined) {
     throw new Error(`keyring backend could not run (${command}): ${result.error.message}`);
   }
+
   if (result.status !== 0) {
     throw new Error(`keyring backend exited with status ${String(result.status)}`);
   }
+
   const parsed = parseResponse(result.stdout);
   if (!parsed.ok) {
     throw new Error(`keyring backend reported: ${parsed.error}`);
   }
+
   return parsed;
 }
 
@@ -248,24 +251,30 @@ function parseResponse(stdout: string): DriverResponse {
   if (text.length === 0) {
     throw new Error("keyring backend produced no output");
   }
+
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(text);
   } catch {
     throw new Error("keyring backend produced unreadable output");
   }
+
   if (typeof parsed !== "object" || parsed === null) {
     throw new Error("keyring backend produced an unexpected response shape");
   }
+
   const record = parsed as Record<string, unknown>;
   if (record["ok"] !== true) {
     return { ok: false, error: typeof record["error"] === "string" ? record["error"] : "unknown error" };
   }
+
   const found = record["found"] === true;
   const blob = typeof record["blob"] === "string" ? record["blob"] : "";
   if (found && blob.length === 0) {
     throw new Error("keyring backend claimed a blob but sent none");
   }
+
   return { ok: true, found, blob };
 }
 
@@ -307,6 +316,7 @@ function writeOnce(
       `credential document is ${String(bytes.length)} bytes; the Windows Credential Manager blob limit is ${String(KEYRING_BLOB_MAX_BYTES)}`,
     );
   }
+
   run(spawn, command, timeoutMs, { op: "write", target, blob });
 }
 

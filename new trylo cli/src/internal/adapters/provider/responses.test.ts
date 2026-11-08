@@ -23,6 +23,7 @@ function startEndpoint(respond: (hit: number, res: ServerResponse, body: string)
   let hits = 0;
   const server = createServer((request, response) => {
     let body = "";
+
     request.on("data", (chunk) => {
       body += String(chunk);
     });
@@ -39,6 +40,7 @@ function startEndpoint(respond: (hit: number, res: ServerResponse, body: string)
       resolve(`http://127.0.0.1:${address.port}/v1/responses`);
     });
   });
+
   return { server, url, bodies };
 }
 
@@ -72,6 +74,7 @@ test("a Responses endpoint streams text, usage and finish with the schema sent",
     assert.equal(hit, 1);
     sseTextThenComplete("hello")(res);
   });
+
   t.after(() => endpoint.server.close());
   const url = await endpoint.url;
   const port = createResponsesProvider({
@@ -81,12 +84,15 @@ test("a Responses endpoint streams text, usage and finish with the schema sent",
     sleep: async () => {},
   });
   const events = await collect(port);
+
   assert.equal(events[0]?.type, "stream_start");
   const sent = JSON.parse(endpoint.bodies[0] ?? "{}") as Record<string, unknown>;
+
   assert.equal(sent["model"], "lab-7b");
   assert.equal(sent["stream"], true);
   assert.ok(Array.isArray(sent["input"]));
   const finish = events.find((event) => event.type === "finish");
+
   assert.ok(finish !== undefined && finish.type === "finish" && finish.reason === "stop");
 });
 
@@ -94,6 +100,7 @@ test("declared reasoning summaries are requested and survive the HTTP stream", a
   const endpoint = startEndpoint((_hit, res, raw) => {
     const sent = JSON.parse(raw) as Record<string, unknown>;
     const reasoning = sent["reasoning"];
+
     res.writeHead(200, { "Content-Type": "text/event-stream" });
     res.end(
       (reasoning !== undefined
@@ -104,6 +111,7 @@ test("declared reasoning summaries are requested and survive the HTTP stream", a
       frame("response.completed", { response: { status: "completed" } }),
     );
   });
+
   t.after(() => endpoint.server.close());
   const config = {
     endpoint: await endpoint.url,
@@ -113,6 +121,7 @@ test("declared reasoning summaries are requested and survive the HTTP stream", a
   };
   const events = await collect(createResponsesProvider(config));
   const sent = JSON.parse(endpoint.bodies[0] ?? "{}") as Record<string, unknown>;
+
   assert.deepEqual(sent["reasoning"], { summary: "auto" });
   assert.ok(events.some((event) => event.type === "reasoning_delta" && event.text === "Inspect the target file."));
   assert.ok(events.findIndex((event) => event.type === "reasoning_end") < events.findIndex((event) => event.type === "text_start"));
@@ -130,13 +139,16 @@ test("a 429 retries before headers and sends the structured format once", async 
   let hits = 0;
   const endpoint = startEndpoint((hit, res) => {
     hits = hit;
+
     if (hit === 1) {
       res.writeHead(429, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "busy" }));
       return;
     }
+
     sseTextThenComplete("recovered")(res);
   });
+
   t.after(() => endpoint.server.close());
   const url = await endpoint.url;
   const schema = { type: "object", properties: { a: { type: "string" } } };
@@ -149,13 +161,16 @@ test("a 429 retries before headers and sends the structured format once", async 
     tools: [],
     responseSchema: schema,
   };
+
   for await (const event of port.stream(request, new AbortController().signal)) {
     events.push(event);
   }
+
   assert.equal(hits, 2);
   const sent = JSON.parse(endpoint.bodies[1] ?? "{}") as Record<string, unknown>;
   const text = sent["text"] as Record<string, unknown>;
   const format = (text["format"] ?? {}) as Record<string, unknown>;
+
   assert.equal(format["type"], "json_schema");
   assert.ok(events.some((event) => event.type === "finish"));
 });
@@ -165,10 +180,12 @@ test("a 401 without a token manager is an auth refusal, not a retry", async (t) 
     res.writeHead(401, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "nope" }));
   });
+
   t.after(() => endpoint.server.close());
   const url = await endpoint.url;
   const port = createResponsesProvider({ endpoint: url, model: "m", apiKey: "k", sleep: async () => {} });
   const events = await collect(port);
+
   assert.equal(events.length, 1);
   assert.deepEqual(events[0], {
     type: "error",
@@ -198,6 +215,7 @@ test("tool output and assistant calls map to Responses input items", () => {
     },
   ) as Record<string, unknown>;
   const input = body["input"] as ReadonlyArray<Record<string, unknown>>;
+
   assert.deepEqual(input[1], {
     type: "function_call",
     call_id: "fc-1",

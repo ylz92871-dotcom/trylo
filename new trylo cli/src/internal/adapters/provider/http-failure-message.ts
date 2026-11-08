@@ -1,23 +1,29 @@
 import { classifyBudgetRejection } from "../../domain/provider-budget-rejection.js";
-import type { ProviderErrorClass } from "../../ports/provider.js";
+import type { ProviderErrorClass, ProviderRecoveryHint } from "../../ports/provider.js";
 import { classifyHttpStatus } from "./http-status.js";
-import { quotaFailureMessage } from "./quota-failure.js";
+import { quotaFailureDiagnostic, type QuotaFailureDiagnostic } from "./quota-failure.js";
+import { httpRecoveryHint } from "./http-recovery.js";
 
 const MAX_ERROR_BYTES = 8192;
+
 function object(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function diagnosticMessage(text: string, errorClass: ProviderErrorClass): string | undefined {
+function diagnosticMessage(text: string, errorClass: ProviderErrorClass): QuotaFailureDiagnostic | undefined {
   try {
     const parsed: unknown = JSON.parse(text);
     if (!object(parsed)) return undefined;
-    if (errorClass === "rate_limit") return quotaFailureMessage(parsed);
+
+    if (errorClass === "rate_limit") return quotaFailureDiagnostic(parsed);
+
     const error = object(parsed.error) ? parsed.error : parsed;
     const fields = [error.code, error.type, error.message].filter((value): value is string => typeof value === "string");
     const rejection = classifyBudgetRejection("invalid_request", fields.join(" "));
-    if (rejection?.kind === "prompt_too_long") return "prompt is too long";
-    if (rejection?.kind === "media_too_large") return "media is too large";
+    if (rejection?.kind === "prompt_too_long") return { message: "prompt is too long" };
+
+    if (rejection?.kind === "media_too_large") return { message: "media is too large" };
+
     return undefined;
   } catch {
     // Unknown diagnostics never escape the adapter or change its HTTP failure.
@@ -35,16 +41,27 @@ export async function httpFailureMessage(
   signal: AbortSignal,
   options: { readonly timeoutSignal?: AbortSignal } = {},
 ): Promise<string> {
-  const fallback = `http_${response.status}`;
+  return (await readHttpFailureDiagnostic(response, errorClass, signal, options)).message;
+}
+
+async function readHttpFailureDiagnostic(response: Response, errorClass: ProviderErrorClass, signal: AbortSignal,
+  options: { readonly timeoutSignal?: AbortSignal } = {}): Promise<QuotaFailureDiagnostic> {
+  const fallback = { message: `http_${response.status}` };
+
   if (response.body === null) return fallback;
+
   const reader = response.body.getReader();
   const diagnosticSignal = AbortSignal.any([signal, options.timeoutSignal ?? AbortSignal.timeout(1000)]);
   const cancel = (): void => { void reader.cancel().catch(() => { /* Cleanup cannot replace the classified HTTP failure. */ }); };
+
   diagnosticSignal.addEventListener("abort", cancel, { once: true });
+
   try {
     if ((errorClass !== "invalid_request" && errorClass !== "rate_limit") || diagnosticSignal.aborted) return fallback;
+
     const decoder = new TextDecoder();
     let bytes = 0, text = "";
+
     for (;;) {
       const step = await reader.read();
       if (diagnosticSignal.aborted) return fallback;
@@ -66,8 +83,13 @@ export async function httpFailureMessage(
 }
 
 /** Status plus bounded structured diagnostics decide one canonical failure. */
-export async function classifyHttpFailure(response: Response, signal: AbortSignal): Promise<{ readonly class: ProviderErrorClass; readonly message: string }> {
+export async function classifyHttpFailure(response: Response, signal: AbortSignal): Promise<{
+  readonly class: ProviderErrorClass; readonly message: string; readonly recovery?: ProviderRecoveryHint;
+}> {
   const initial = classifyHttpStatus(response.status);
-  const message = await httpFailureMessage(response, initial, signal);
-  return { class: message === "quota_exceeded" || message.startsWith("quota_exceeded; ") ? "quota" : initial, message };
+  const diagnostic = await readHttpFailureDiagnostic(response, initial, signal), message = diagnostic.message;
+  const classification = message === "quota_exceeded" || message.startsWith("quota_exceeded; ") ? "quota" : initial;
+  const recovery = !signal.aborted && (classification === "rate_limit" || classification === "quota")
+    ? httpRecoveryHint(response.headers.get("retry-after"), diagnostic.recovery) : undefined;
+  return { class: classification, message, ...(recovery === undefined ? {} : { recovery }) };
 }

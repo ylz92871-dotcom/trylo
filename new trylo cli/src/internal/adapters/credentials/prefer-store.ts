@@ -42,10 +42,12 @@ function readPreferring(
   scope: CredentialScope,
 ): LedgerReadResult {
   const preferred = options.preferred.read(scope);
+
   // Two ways the file ledger is never consulted: the keyring refused the read
   // (fail closed), or it holds this scope's document (it is authoritative).
   if (!preferred.ok || preferred.existed) {
     return preferred;
   }
+
   return options.fallback.read(scope);
 }

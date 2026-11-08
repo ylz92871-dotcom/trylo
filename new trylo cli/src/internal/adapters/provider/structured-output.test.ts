@@ -23,7 +23,9 @@ test("a schema file must be a non-empty JSON object", () => {
   assert.equal(loadResponseSchema("[1,2]").ok, false);
   assert.equal(loadResponseSchema("{}").ok, false);
   const good = loadResponseSchema('{"type":"object","properties":{"a":{"type":"string"}}}');
+
   assert.equal(good.ok, true);
+
   if (good.ok) {
     assert.equal(good.schema["type"], "object");
   }
@@ -34,10 +36,12 @@ test("absent schema means absent wire fields, never a default", () => {
   assert.equal(responsesStructuredFields(undefined), undefined);
   const schema: JsonObject = { type: "object" };
   const chat = chatStructuredFields(schema);
+
   assert.equal(chat?.response_format.type, "json_schema");
   assert.equal(chat?.response_format.json_schema.strict, true);
   assert.equal(chat?.response_format.json_schema.name, "trylo_structured_output");
   const responses = responsesStructuredFields(schema);
+
   assert.equal(responses?.text.format.type, "json_schema");
 });
 

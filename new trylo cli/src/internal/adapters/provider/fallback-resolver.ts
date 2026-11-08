@@ -35,6 +35,7 @@ export function validateFallback(primary: string, fallback: string | undefined):
   if (wanted.length === 0) {
     return { ok: true, declaration: { primary } };
   }
+
   if (wanted === primary) {
     return {
       ok: false,
@@ -42,6 +43,7 @@ export function validateFallback(primary: string, fallback: string | undefined):
       detail: "fallback model cannot be the same as the main model; specify a different model for --fallback-model",
     };
   }
+
   return { ok: true, declaration: { primary, fallback: wanted } };
 }
 
@@ -80,8 +82,10 @@ export function decideFallback(
   if (target === undefined || alreadyFellBack) {
     return { action: "stay" };
   }
+
   if (!isFallbackRescuable(errorClass)) {
     return { action: "stay" };
   }
+
   return { action: "switch", model: target };
 }

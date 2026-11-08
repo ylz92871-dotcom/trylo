@@ -52,9 +52,11 @@ export function createCredentialPort(options: ComposeOptions): CredentialPort {
     crypto: options.crypto ?? { randomUUID: () => globalThis.crypto.randomUUID() },
     hasProject: options.projectDir !== undefined,
   };
+
   if (options.keyring !== undefined && !options.keyring.attached) {
     return unavailablePort(deps);
   }
+
   return bindVerbs(deps);
 }
 
@@ -75,7 +77,9 @@ function unavailablePort(deps: PortDeps): CredentialPort {
     code: "keyring_unavailable",
     detail: "a keyring backend was requested but no adapter is attached",
   });
+
   void deps;
+
   return {
     login: failure,
     logout: failure,

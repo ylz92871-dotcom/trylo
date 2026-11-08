@@ -48,6 +48,7 @@ function spySpawn(seen: Array<readonly string[]>): SpawnSyncImpl {
   return (command: string, args: readonly string[], options: SpawnSyncOptions) => {
     seen.push(args);
     const result = spawnSync(command, args, options);
+
     return {
       status: result.status,
       ...(result.error === undefined ? {} : { error: result.error }),
@@ -71,8 +72,10 @@ test("probe reports the live Credential Manager as available", (t) => {
   if (!IS_WIN32) {
     return t.skip("win32 only");
   }
+
   const driver = createWindowsCredentialManagerDriver();
   const availability = driver.probe();
+
   assert.equal(availability.available, true);
   // Memoized: a second probe answers without running the stack again.
   assert.equal(driver.probe(), availability);
@@ -82,11 +85,14 @@ test("write then read round-trips a whole ledger document through Credential Man
   if (!IS_WIN32) {
     return t.skip("win32 only");
   }
+
   t.after(() => cleanup([ROUNDTRIP_TARGET]));
   const driver = createWindowsCredentialManagerDriver();
   const document = realisticDocument();
+
   driver.write(ROUNDTRIP_TARGET, document);
   const read = driver.read(ROUNDTRIP_TARGET);
+
   assert.equal(read, document);
   assert.equal(read?.includes(SECRET), true);
 });
@@ -103,8 +109,10 @@ test("remove clears the entry, and removing a missing entry is not an error", (t
   if (!IS_WIN32) {
     return t.skip("win32 only");
   }
+
   t.after(() => cleanup([ROUNDTRIP_TARGET]));
   const driver = createWindowsCredentialManagerDriver();
+
   driver.write(ROUNDTRIP_TARGET, realisticDocument());
   driver.remove(ROUNDTRIP_TARGET);
   assert.equal(driver.read(ROUNDTRIP_TARGET), undefined);
@@ -115,8 +123,10 @@ test("a document above the 2560-byte Credential Manager blob limit is refused be
   if (!IS_WIN32) {
     return t.skip("win32 only");
   }
+
   const driver = createWindowsCredentialManagerDriver();
   const tooLarge = "a".repeat(2561);
+
   assert.throws(() => driver.write(NEVER_TARGET, tooLarge), (error: unknown) => {
     return error instanceof Error && error.message.includes("2560");
   });
@@ -126,21 +136,27 @@ test("the secret never appears in the child process argv", (t) => {
   if (!IS_WIN32) {
     return t.skip("win32 only");
   }
+
   t.after(() => cleanup([SPY_TARGET]));
   const seen: Array<readonly string[]> = [];
   const driver = createWindowsCredentialManagerDriver({ spawnImpl: spySpawn(seen) });
+
   driver.write(SPY_TARGET, realisticDocument());
   assert.equal(driver.read(SPY_TARGET)?.includes(SECRET), true);
 
   assert.equal(seen.length >= 2, true);
+
   for (const args of seen) {
     // argv = [flags..., "-EncodedCommand", base64 of the static script].
     assert.equal(args.includes("-EncodedCommand"), true);
+
     for (const argument of args) {
       assert.equal(argument.includes(SECRET), false, "secret leaked into argv");
     }
+
     const encoded = args[args.length - 1] ?? "";
     const script = Buffer.from(encoded, "base64").toString("utf16le");
+
     assert.equal(script.includes(SECRET), false, "secret leaked into the script text");
   }
 });

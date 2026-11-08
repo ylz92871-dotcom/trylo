@@ -23,6 +23,7 @@
 
 /** The closed vocabulary of capabilities a provider may declare. */
 export const CAPABILITY_KEYS = ["streaming", "reasoning", "tools", "cancellation"] as const;
+
 export type CapabilityKey = (typeof CAPABILITY_KEYS)[number];
 
 export function isCapabilityKey(value: string): value is CapabilityKey {
@@ -32,6 +33,7 @@ export function isCapabilityKey(value: string): value is CapabilityKey {
 /** How a provider expects to be authenticated. `none` is a real answer, not a
  *  placeholder: the offline fixtures need no credential at all. */
 export const PROVIDER_AUTH_TYPES = ["none", "api_key", "oauth"] as const;
+
 export type ProviderAuthType = (typeof PROVIDER_AUTH_TYPES)[number];
 
 export function isProviderAuthType(value: string): value is ProviderAuthType {

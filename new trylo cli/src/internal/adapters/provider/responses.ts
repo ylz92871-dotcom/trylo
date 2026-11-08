@@ -6,6 +6,7 @@
   ReasoningEffort,
 } from "../../ports/provider.js";
 import {
+  canRetryHttpFailureImmediately,
   isRetryableClass,
   type TokenManagerLike,
 } from "./openai-compatible.js";
@@ -13,6 +14,7 @@ import { classifyHttpFailure } from "./http-failure-message.js";
 import { responsesStructuredFields } from "./structured-output.js";
 import { translateResponsesBody } from "./responses-stream.js";
 import { responsesContentOf, unresolvedImageReference } from "../media/image-attachments.js";
+import { normalizedToolArgumentRequest } from "./tool-argument-presentation.js";
 
 /**
  * Responses wire adapter over Node's built-in fetch (WP18.2: C68, C71).
@@ -61,10 +63,12 @@ export function readResponsesCredential(config: ResponsesConfig): ResponsesCrede
   if (config.endpoint.length === 0) {
     return { ok: false, reason: "missing_endpoint" };
   }
+
   const value = config.apiKey;
   if ((value === undefined || value.length === 0) && config.tokenManager === undefined) {
     return { ok: false, reason: "missing_api_key" };
   }
+
   return { ok: true, apiKey: value ?? "" };
 }
 
@@ -132,6 +136,7 @@ async function acquireResponsesResponse(
   signal: AbortSignal,
 ): Promise<FetchOutcome> {
   let lastClass: ProviderErrorClass = "network";
+
   for (let attempt = 1; attempt <= policy.maxAttempts; attempt += 1) {
     const outcome = await sendOnce(config, request, apiKey, policy, signal);
     if (outcome.kind === "failed") {
@@ -139,15 +144,19 @@ async function acquireResponsesResponse(
       if (event.type === "error" && event.class === "cancelled") {
         return outcome;
       }
+
       if (attempt < policy.maxAttempts) {
         await policy.sleep(policy.baseDelay * attempt);
         continue;
       }
+
       return { kind: "failed", event };
     }
+
     if (outcome.response.ok) {
       return outcome;
     }
+
     if (outcome.response.status === 401 && config.tokenManager) {
       await outcome.response.body?.cancel();
       const refreshed = await config.tokenManager.handleAuthError(401);
@@ -156,8 +165,11 @@ async function acquireResponsesResponse(
         if (retryOutcome.kind === "response" && retryOutcome.response.ok) {
           return retryOutcome;
         }
+
         if (retryOutcome.kind === "response") await retryOutcome.response.body?.cancel();
+
         const retryStatus = retryOutcome.kind === "response" ? retryOutcome.response.status : 0;
+
         return {
           kind: "failed",
           event: {
@@ -169,6 +181,7 @@ async function acquireResponsesResponse(
           },
         };
       }
+
       return {
         kind: "failed",
         event: {
@@ -180,13 +193,17 @@ async function acquireResponsesResponse(
         },
       };
     }
+
     const failure = await classifyHttpFailure(outcome.response, signal);
+
     lastClass = failure.class;
     const retryable = isRetryableClass(lastClass);
-    if (retryable && attempt < policy.maxAttempts) {
+
+    if (canRetryHttpFailureImmediately(failure) && attempt < policy.maxAttempts) {
       await policy.sleep(policy.baseDelay * attempt);
       continue;
     }
+
     return {
       kind: "failed",
       event: {
@@ -195,9 +212,11 @@ async function acquireResponsesResponse(
         retryable,
         phase: "before_headers",
         message: failure.message,
+        ...(!signal.aborted && failure.recovery !== undefined ? { recovery: failure.recovery } : {}),
       },
     };
   }
+
   return {
     kind: "failed",
     event: {
@@ -212,10 +231,17 @@ async function acquireResponsesResponse(
 
 export function createResponsesProvider(config: ResponsesConfig): ProviderPort {
   return {
-    fork: () => createResponsesProvider(config),
+    fork: (_messages, options) => createResponsesProvider({ ...config, model: options?.model || config.model }),
+    async prepareRequest() {
+      return { apply: normalizedToolArgumentRequest };
+    },
     async *stream(request: ProviderRequest, signal: AbortSignal): AsyncIterable<ProviderEvent> {
       const unresolved = unresolvedImageReference(request);
-      if (unresolved !== undefined) { yield unresolved; return; }
+      if (unresolved !== undefined) {
+        yield unresolved;
+        return;
+      }
+
       const credential = readResponsesCredential(config);
       if (!credential.ok) {
         yield {
@@ -227,8 +253,10 @@ export function createResponsesProvider(config: ResponsesConfig): ProviderPort {
         };
         return;
       }
+
       const policy = attemptPolicyOf(config);
       let apiKey = credential.apiKey;
+
       if (config.tokenManager?.getValidAccessToken) {
         try {
           apiKey = await config.tokenManager.getValidAccessToken();
@@ -236,11 +264,13 @@ export function createResponsesProvider(config: ResponsesConfig): ProviderPort {
           // fall back to the resolved key
         }
       }
+
       const acquired = await acquireResponsesResponse(config, request, apiKey, policy, signal);
       if (acquired.kind === "failed") {
         yield acquired.event;
         return;
       }
+
       const body = acquired.response.body;
       if (body === null) {
         yield {
@@ -252,10 +282,11 @@ export function createResponsesProvider(config: ResponsesConfig): ProviderPort {
         };
         return;
       }
+
       yield {
         type: "stream_start",
         providerId: "openai-responses",
-        model: config.model,
+        model: request.model || config.model,
         warnings: [],
       };
       yield* translateResponsesBody(body, signal);
@@ -268,9 +299,11 @@ function buildResponsesHeaders(config: ResponsesConfig, apiKey: string): Record<
     "content-type": "application/json",
     ...(config.headers ?? {}),
   };
+
   if (apiKey.length > 0) {
     headers.authorization = `Bearer ${apiKey}`;
   }
+
   return headers;
 }
 
@@ -285,6 +318,7 @@ function buildResponsesHeaders(config: ResponsesConfig, apiKey: string): Record<
  */
 export function buildResponsesBody(config: ResponsesConfig, request: ProviderRequest): unknown {
   const input: unknown[] = [];
+
   for (const message of request.messages) {
     if (message.role === "tool") {
       input.push({
@@ -294,10 +328,12 @@ export function buildResponsesBody(config: ResponsesConfig, request: ProviderReq
       });
       continue;
     }
+
     if (message.role === "assistant" && message.toolCalls !== undefined) {
       if (message.content.length > 0) {
         input.push({ role: "assistant", content: message.content });
       }
+
       for (const call of message.toolCalls) {
         input.push({
           type: "function_call",
@@ -306,12 +342,15 @@ export function buildResponsesBody(config: ResponsesConfig, request: ProviderReq
           arguments: JSON.stringify(call.arguments),
         });
       }
+
       continue;
     }
+
     // WP19.1: text-only messages keep the plain string; an attached image
     // becomes the wire's own input_image part beside the input_text.
     input.push({ role: message.role, content: responsesContentOf(message.content, message.attachments) });
   }
+
   return {
     model: request.model.length > 0 ? request.model : config.model,
     input,

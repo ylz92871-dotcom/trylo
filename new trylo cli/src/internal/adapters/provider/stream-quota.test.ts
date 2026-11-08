@@ -13,13 +13,20 @@ for (const wire of ["chat", "responses-error", "responses-failed", "responses-co
         : wire === "responses-error" ? `event: error\ndata: ${JSON.stringify(error)}\n\n`
           : `event: ${wire === "responses-failed" ? "response.failed" : "response.completed"}\ndata: ${JSON.stringify({ response: { status: "failed", error } })}\n\n`;
       const config = { endpoint: "http://fixture.invalid", model: "fixture", apiKey: "fixture-key",
-        fetchImpl: async () => { calls++; return new Response(frame, { headers: { "Content-Type": "text/event-stream" } }); }, sleep: async () => {} };
+        fetchImpl: async () => {
+          calls++;
+          return new Response(frame, { headers: { "Content-Type": "text/event-stream" } });
+        }, sleep: async () => {} };
       const provider = wire === "chat" ? createOpenAiCompatibleProvider(config) : createResponsesProvider(config);
       const events: ProviderEvent[] = [];
+
       for await (const event of provider.stream({ attemptId: "stream-quota", model: "fixture", messages: [], tools: [] }, new AbortController().signal)) events.push(event);
+
       assert.equal(calls, 1);
-      const failure = events.find(event => event.type === "error"); assert.ok(failure);
-      assert.equal(failure.class, "quota"); assert.equal(failure.retryable, false);
+      const failure = events.find(event => event.type === "error");
+      assert.ok(failure);
+      assert.equal(failure.class, "quota");
+      assert.equal(failure.retryable, false);
       assert.equal(failure.phase, "after_stream_started");
       assert.ok(failure.message.includes("window=5-hour"));
       assert.ok(failure.message.includes("reset_at=2026-10-25T23:20:06+08:00"));

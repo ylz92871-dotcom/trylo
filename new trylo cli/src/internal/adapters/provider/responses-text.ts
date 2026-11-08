@@ -9,19 +9,26 @@ type Block = { readonly parts: Map<number, string> };
  */
 export function createResponsesText() {
   const open = new Map<number, Block>(), sealed = new Map<number, Block>();
+
   function append(output: number, part: number, text: string): ProviderEvent[] {
     if (!text || sealed.has(output)) return [];
+
     const events: ProviderEvent[] = [], blockId = `text-${output}`;
     let block = open.get(output);
     if (block === undefined) {
-      block = { parts: new Map() }; open.set(output, block);
+      block = { parts: new Map() };
+      open.set(output, block);
       events.push({ type: "text_start", blockId });
     }
+
     const separator = !block.parts.has(part) && block.parts.size > 0 ? "\n\n" : "";
+
     block.parts.set(part, (block.parts.get(part) ?? "") + text);
     events.push({ type: "text_delta", blockId, text: separator + text });
+
     return events;
   }
+
   function snapshot(output: number, part: number, value: unknown): ProviderEvent[] {
     if (typeof value !== "string") return [];
     const delivered = (open.get(output) ?? sealed.get(output))?.parts.get(part) ?? "";
@@ -30,6 +37,7 @@ export function createResponsesText() {
     }
     return append(output, part, value.slice(delivered.length));
   }
+
   function close(output: number): ProviderEvent[] {
     const block = open.get(output);
     if (block === undefined) return [];
@@ -37,6 +45,7 @@ export function createResponsesText() {
     sealed.set(output, block);
     return [{ type: "text_end", blockId: `text-${output}` }];
   }
+
   return {
     delta(payload: Record<string, unknown>): ProviderEvent[] {
       const delta = payload["delta"];

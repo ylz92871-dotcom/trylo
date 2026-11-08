@@ -49,6 +49,7 @@ function tempHome(): string {
 
 test("an available keyring backs the port, and the report names the driver", (t) => {
   const home = tempHome();
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const driver = fakeDriver({ available: true });
   const composed = createCredentialPortPreferringKeyring({ homeDir: home, now: () => NOW, driver });
@@ -56,6 +57,7 @@ test("an available keyring backs the port, and the report names the driver", (t)
   assert.deepEqual(composed.report, { backend: "os-keyring", driverId: "fake-keyring" });
   assert.equal(composed.port.login({ providerId: "openai-compatible", secret: SECRET }).ok, true);
   const resolved = composed.port.get("openai-compatible");
+
   assert.equal(resolved.ok, true);
   assert.equal(resolved.ok ? resolved.value.secret : "", SECRET);
   // The secret lives in the keyring blob, not in a file under home.
@@ -65,6 +67,7 @@ test("an available keyring backs the port, and the report names the driver", (t)
 
 test("an unavailable keyring degrades to the file ledger with a stated reason", (t) => {
   const home = tempHome();
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const driver = fakeDriver({ available: false, reason: "no keyring on this machine" });
   const composed = createCredentialPortPreferringKeyring({ homeDir: home, now: () => NOW, driver });
@@ -79,25 +82,30 @@ test("an unavailable keyring degrades to the file ledger with a stated reason", 
   // The degraded port is an ordinary file-backed port.
   assert.equal(composed.port.login({ providerId: "openai-compatible", secret: SECRET }).ok, true);
   const resolved = composed.port.get("openai-compatible");
+
   assert.equal(resolved.ok, true);
   assert.equal(resolved.ok ? resolved.value.secret : "", SECRET);
   const ledger = readFileSync(join(home, "credentials.json"), "utf8");
+
   assert.equal(ledger.includes(SECRET), true);
 });
 
 test("neither report shape ever carries a secret", (t) => {
   const home = tempHome();
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const available = createCredentialPortPreferringKeyring({
     homeDir: home,
     now: () => NOW,
     driver: fakeDriver({ available: true }),
   });
+
   assert.equal(JSON.stringify(available.report).includes(SECRET), false);
   const degraded = createCredentialPortPreferringKeyring({
     homeDir: home,
     now: () => NOW,
     driver: fakeDriver({ available: false, reason: "down" }),
   });
+
   assert.equal(JSON.stringify(degraded.report).includes(SECRET), false);
 });

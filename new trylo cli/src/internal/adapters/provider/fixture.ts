@@ -117,14 +117,18 @@ export function createMemoryFixtureProvider(): ProviderPort {
           });
           return;
         }
+
         yield* answer(`保存回执：${quote(receipt)}`, signal);
+
         return;
       }
+
       const hits = toolOutput(request.messages, MEMORY_FIXTURE_SEARCH_CALL);
       if (hits === undefined) {
         yield* callTool(signal, MEMORY_FIXTURE_SEARCH_CALL, "memory_search", { queries: ["YL Z"] });
         return;
       }
+
       yield* answer(`记忆检索结果：${quote(hits)}`, signal);
     },
   };
@@ -141,7 +145,9 @@ async function* callTool(
   args: Readonly<Record<string, unknown>>,
 ): AsyncIterable<ProviderEvent> {
   const rawArguments = JSON.stringify(args);
+
   yield { type: "tool_input_start", toolCallId, name };
+
   for (const chunk of rawArguments.match(/.{1,8}/gs) ?? []) {
     if (signal.aborted) {
       yield { type: "cancel_ack" };
@@ -149,6 +155,7 @@ async function* callTool(
     }
     yield { type: "tool_input_delta", toolCallId, argumentsText: chunk };
   }
+
   yield { type: "tool_input_end", toolCallId };
   yield { type: "usage", usage: usage(16, 8) };
   yield { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true };
@@ -159,7 +166,9 @@ async function* answer(
   signal: AbortSignal,
 ): AsyncIterable<ProviderEvent> {
   const blockId = "fx-text-1";
+
   yield { type: "text_start", blockId };
+
   for (const chunk of text.match(/.{1,12}/gs) ?? []) {
     if (signal.aborted) {
       yield { type: "cancel_ack" };
@@ -167,6 +176,7 @@ async function* answer(
     }
     yield { type: "text_delta", blockId, text: chunk };
   }
+
   yield { type: "text_end", blockId };
   yield { type: "usage", usage: usage(32, 12) };
   yield { type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false };
@@ -189,6 +199,7 @@ export function createFixtureProvider(script: FixtureScript = DEFAULT_FIXTURE_SC
         yield* callTool(signal, script.toolCallId, script.toolName, script.toolArguments);
         return;
       }
+
       if (script.verify !== undefined) {
         const verified = request.messages.find(
           (message) => message.role === "tool" && message.toolCallId === script.verify?.toolCallId,
@@ -202,14 +213,19 @@ export function createFixtureProvider(script: FixtureScript = DEFAULT_FIXTURE_SC
           );
           return;
         }
+
         yield* answer(describeVerifiedWrite(String(script.toolArguments["path"] ?? ""), verified.content), signal);
+
         return;
       }
+
       if (script.providerId === "fixture-subagent") {
         yield* answer(`Subagent finished: ${toolResult?.content ?? "done"}`, signal);
         return;
       }
+
       const blockId = "fx-text-1";
+
       yield { type: "text_start", blockId };
       yield { type: "text_delta", blockId, text: "The package name is " };
       const sourceText =
@@ -217,6 +233,7 @@ export function createFixtureProvider(script: FixtureScript = DEFAULT_FIXTURE_SC
         request.messages.find((m) => m.role === "system" && m.content.includes("[compacted history"))?.content ??
         "";
       const name = /"name"\s*:\s*"([^"]+)"/.exec(sourceText)?.[1] ?? "unknown";
+
       yield { type: "text_delta", blockId, text: `${name}.` };
       yield { type: "text_end", blockId };
       yield { type: "usage", usage: usage(32, 12) };

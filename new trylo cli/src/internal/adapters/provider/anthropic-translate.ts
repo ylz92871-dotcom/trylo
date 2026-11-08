@@ -73,19 +73,23 @@ function pushAnthropicEvent(state: AnthropicState, event: string, payload: unkno
   if (state.finished) {
     return [];
   }
+
   if (!isRecord(payload)) {
     return [];
   }
+
   switch (event) {
     case "message_start": {
       const message = payload["message"];
       if (!isRecord(message)) {
         return [];
       }
+
       const usage = message["usage"];
       if (!isRecord(usage)) {
         return [];
       }
+
       return [
         {
           type: "usage",
@@ -116,7 +120,9 @@ function pushAnthropicEvent(state: AnthropicState, event: string, payload: unkno
     case "error": {
       const inner = payload["error"];
       const message = isRecord(inner) ? str(inner, "message") : str(payload, "message");
+
       state.finished = true;
+
       return [
         {
           type: "error",
@@ -139,12 +145,14 @@ function blockStart(state: AnthropicState, payload: Record<string, unknown>): Pr
   if (!isRecord(block)) {
     return [];
   }
+
   const kind = str(block, "type");
   if (kind === "text") {
     const id = `text-${index}`;
     state.blocks.set(index, { kind: "text", id, redacted: false });
     return [{ type: "text_start", blockId: id }];
   }
+
   if (kind === "tool_use") {
     const id = str(block, "id").length > 0 ? str(block, "id") : `tool-${index}`;
     const name = str(block, "name");
@@ -152,12 +160,14 @@ function blockStart(state: AnthropicState, payload: Record<string, unknown>): Pr
     state.tools.set(index, { toolCallId: id, name, text: "" });
     return [{ type: "tool_input_start", toolCallId: id, name }];
   }
+
   if (kind === "thinking" || kind === "redacted_thinking") {
     const id = `reasoning-${index}`;
     const redacted = kind === "redacted_thinking";
     state.blocks.set(index, { kind: "reasoning", id, redacted });
     return [{ type: "reasoning_start", blockId: id, redacted }];
   }
+
   return [];
 }
 
@@ -168,32 +178,39 @@ function blockDelta(state: AnthropicState, payload: Record<string, unknown>): Pr
   if (open === undefined) {
     return [];
   }
+
   const delta = payload["delta"];
   if (!isRecord(delta)) {
     return [];
   }
+
   const kind = str(delta, "type");
   if (open.kind === "text" && kind === "text_delta") {
     const text = str(delta, "text");
     return text.length === 0 ? [] : [{ type: "text_delta", blockId: open.id, text }];
   }
+
   if (open.kind === "tool" && kind === "input_json_delta") {
     const fragment = str(delta, "partial_json");
     if (fragment.length === 0) {
       return [];
     }
+
     const assembly = state.tools.get(index);
     if (assembly !== undefined) {
       assembly.text += fragment;
     }
+
     return [{ type: "tool_input_delta", toolCallId: open.id, argumentsText: fragment }];
   }
+
   if (open.kind === "reasoning" && kind === "thinking_delta") {
     const text = str(delta, "thinking");
     return text.length === 0
       ? []
       : [{ type: "reasoning_delta", blockId: open.id, text, redacted: open.redacted }];
   }
+
   // `signature_delta` carries the opaque thinking signature, not text: the
   // client replays it verbatim when it re-sends the block, but it is never
   // rendered and therefore yields no event — same silence as any unknown
@@ -208,13 +225,17 @@ function blockStop(state: AnthropicState, payload: Record<string, unknown>): Pro
   if (open === undefined) {
     return [];
   }
+
   state.blocks.delete(index);
+
   if (open.kind === "text") {
     return [{ type: "text_end", blockId: open.id }];
   }
+
   if (open.kind === "reasoning") {
     return [{ type: "reasoning_end", blockId: open.id }];
   }
+
   return [{ type: "tool_input_end", toolCallId: open.id }];
 }
 
@@ -231,6 +252,7 @@ function messageDelta(state: AnthropicState, payload: Record<string, unknown>): 
   const delta = payload["delta"];
   const stopReason = isRecord(delta) ? str(delta, "stop_reason") : "";
   const usage = payload["usage"];
+
   // A zero-output usage frame carries no fact (`mergeUsage` with zeros is the
   // identity), so it is suppressed — the same all-zero rule the Responses
   // translator keeps, stated once per wire so a drift reads as a diff.
@@ -249,19 +271,23 @@ function messageDelta(state: AnthropicState, payload: Record<string, unknown>): 
       },
     });
   }
+
   if (stopReason.length === 0) {
     return events;
   }
+
   state.finished = true;
   events.push(...closeOpenAnthropicBlocks(state));
   events.push(...settleAnthropicTools(state));
   const reason: ProviderFinishReason = mapStopReason(stopReason);
+
   events.push({
     type: "finish",
     reason,
     rawReason: stopReason,
     requiresFollowUp: stopReason === "tool_use",
   });
+
   return events;
 }
 
@@ -281,6 +307,7 @@ function mapStopReason(raw: string): ProviderFinishReason {
 
 function closeOpenAnthropicBlocks(state: AnthropicState): ProviderEvent[] {
   const events: ProviderEvent[] = [];
+
   for (const [index, open] of [...state.blocks.entries()].sort((a, b) => a[0] - b[0])) {
     state.blocks.delete(index);
     if (open.kind === "text") {
@@ -291,12 +318,14 @@ function closeOpenAnthropicBlocks(state: AnthropicState): ProviderEvent[] {
       events.push({ type: "tool_input_end", toolCallId: open.id });
     }
   }
+
   return events;
 }
 
 /** Settle every assembled tool call, in wire order. Invalid JSON stays visible. */
 function settleAnthropicTools(state: AnthropicState): ProviderEvent[] {
   const events: ProviderEvent[] = [];
+
   for (const [index, assembly] of [...state.tools.entries()].sort((a, b) => a[0] - b[0])) {
     state.tools.delete(index);
     state.toolCallsEmitted += 1;
@@ -305,6 +334,7 @@ function settleAnthropicTools(state: AnthropicState): ProviderEvent[] {
       events.push({ type: "tool_call", toolCallId: assembly.toolCallId, name: assembly.name, arguments: parsed.arguments });
       continue;
     }
+
     events.push({
       type: "tool_call_invalid",
       toolCallId: assembly.toolCallId,
@@ -313,6 +343,7 @@ function settleAnthropicTools(state: AnthropicState): ProviderEvent[] {
       message: parsed.message,
     });
   }
+
   return events;
 }
 

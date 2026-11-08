@@ -27,6 +27,7 @@ function fixture(finish = "tool_calls", configuredEndpoint = endpoint, configure
       return new Response(frames.map(frame => `data: ${JSON.stringify(frame)}\n\n`).join("") + "data: [DONE]\n\n",
         { headers: { "content-type": "text/event-stream" } });
     } });
+
   return { provider, bodies, async drain(input: ProviderRequest) {
     for await (const _event of provider.stream(input, new AbortController().signal)) { /* Complete transport consumption. */ }
   } };
@@ -75,6 +76,7 @@ test("native recovery rejects foreign, partial, malformed and unsupported checkp
     ["duplicate calls", value => record({ ...value, assistant: { reasoning, text: "Checking.", calls: [call, call] } })],
     ["oversized reasoning", value => record({ ...value, assistant: { reasoning: "x".repeat(262145), text: "Checking.", calls: [call] } })],
   ];
+
   for (const [name, mutate] of cases) await t.test(name, async () => {
     const f = fixture();
     f.provider.continuation!.restore({ sessionId: "session-a", turnId: "second", records: [mutate(value)] });
@@ -85,23 +87,28 @@ test("native recovery rejects foreign, partial, malformed and unsupported checkp
 
 test("model binding and complete endpoint binding prevent foreign native replay", async () => {
   const value = await checkpoint();
+
   for (const [url, name] of [[endpoint + "?account=other", model], [endpoint, "glm-5-3-flash"]]) {
     const f = fixture("tool_calls", url, name);
     f.provider.continuation!.restore({ sessionId: "session-a", turnId: "second", records: [record(value)] });
     await f.drain({ ...resumed, model: name! });
     assert.equal(f.bodies[0]!.messages.find(message => message.role === "assistant")?.reasoning_content, undefined);
   }
+
   assert.equal(fixture("tool_calls", "https://other.example/v1/chat/completions").provider.continuation, undefined);
 });
 
 test("truncated responses have no checkpoint, and a new request erases a stale completed checkpoint", async () => {
   const truncated = fixture("length");
+
   await truncated.drain(request);
   assert.equal(truncated.provider.continuation?.capture(scope("first")), undefined);
   const f = fixture();
+
   await f.drain(request);
   assert.ok(f.provider.continuation?.capture(scope("first")));
   const iterator = f.provider.stream({ ...request, attemptId: "next" }, new AbortController().signal)[Symbol.asyncIterator]();
+
   await iterator.next();
   assert.equal(f.provider.continuation?.capture(scope("first")), undefined);
   await iterator.return?.();

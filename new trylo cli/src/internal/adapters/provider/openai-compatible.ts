@@ -1,18 +1,25 @@
+import { createHash } from "node:crypto";
 import type {
   NativeContinuationDiagnostic,
   ProviderErrorClass,
   ProviderEvent,
   ProviderPort,
+  ProviderRecoveryHint,
   ProviderRequest,
   ReasoningEffort,
 } from "../../ports/provider.js";
 import { translateBody } from "./openai-stream.js";
-import { chatStructuredFields } from "./structured-output.js";
+import { chatJsonObjectFields, chatResponseFormatFailure, chatStructuredFields } from "./structured-output.js";
+import { knownChatResponseFormats } from "./model-catalog.js";
 import { chatContentOf, unresolvedImageReference } from "../media/image-attachments.js";
 import { chatSystemMessages } from "./chat-system-messages.js";
-import { createGlmToolContinuation, type GlmToolContinuation } from "./glm-tool-continuation.js";
+import { createChatToolContinuation, type ChatToolContinuation } from "./glm-tool-continuation.js";
+import { chatContinuationRequestFields } from "./chat-continuation-profile.js";
+import { chatToolArgumentRequest } from "./tool-argument-presentation.js";
 import { classifyHttpFailure } from "./http-failure-message.js";
+
 export { classifyHttpStatus } from "./http-status.js";
+
 import type { NativeCheckpointState } from "./glm-continuation-checkpoint.js";
 
 /**
@@ -39,6 +46,9 @@ export type OpenAiCompatibleConfig = {
   readonly reasoningEffort?: ReasoningEffort;
   readonly endpoint: string;
   readonly model: string;
+  /** Explicit connection capability. [] disables known defaults; omission uses
+   * only the documented endpoint/model table, never structuredOutput. */
+  readonly responseFormats?: readonly "json_object"[];
   /**
    * The resolved key, when one was resolved. The adapter never reads an
    * environment or a ledger itself: credential resolution is the composition
@@ -65,15 +75,25 @@ export function readCredential(config: OpenAiCompatibleConfig): CredentialStatus
   if (config.endpoint.length === 0) {
     return { ok: false, reason: "missing_endpoint" };
   }
+
   const value = config.apiKey;
   if ((value === undefined || value.length === 0) && config.tokenManager === undefined) {
     return { ok: false, reason: "missing_api_key" };
   }
+
   return { ok: true, apiKey: value ?? "" };
 }
 
 export function isRetryableClass(consumer: ProviderErrorClass): boolean {
   return consumer === "rate_limit" || consumer === "server" || consumer === "network" || consumer === "timeout";
+}
+
+/** A validated provider recovery constraint belongs to the runtime scheduler.
+ * Keep the failure retryable there; fixed local backoff cannot override it. */
+export function canRetryHttpFailureImmediately(failure: {
+  readonly class: ProviderErrorClass; readonly recovery?: ProviderRecoveryHint;
+}): boolean {
+  return isRetryableClass(failure.class) && failure.recovery === undefined;
 }
 
 /**
@@ -151,6 +171,7 @@ async function acquireResponse(
   signal: AbortSignal,
 ): Promise<FetchOutcome> {
   let lastClass: ProviderErrorClass = "network";
+
   for (let attempt = 1; attempt <= policy.maxAttempts; attempt += 1) {
     const outcome = await sendOnce(config, apiKey, policy, signal);
     if (outcome.kind === "failed") {
@@ -158,17 +179,21 @@ async function acquireResponse(
       if (event.type === "error" && event.class === "cancelled") {
         return outcome;
       }
+
       if (attempt < policy.maxAttempts) {
         await policy.sleep(policy.baseDelay * attempt);
         continue;
       }
+
       // Out of attempts: the last failure is the turn's, and it is retryable so
       // an outer caller may try the whole turn again.
       return { kind: "failed", event };
     }
+
     if (outcome.response.ok) {
       return outcome;
     }
+
     if (outcome.response.status === 401 && config.tokenManager) {
       await outcome.response.body?.cancel();
       const refreshed = await config.tokenManager.handleAuthError(401);
@@ -178,8 +203,11 @@ async function acquireResponse(
         if (retryOutcome.kind === "response" && retryOutcome.response.ok) {
           return retryOutcome;
         }
+
         if (retryOutcome.kind === "response") await retryOutcome.response.body?.cancel();
+
         const retryStatus = retryOutcome.kind === "response" ? retryOutcome.response.status : 0;
+
         return {
           kind: "failed",
           event: {
@@ -191,6 +219,7 @@ async function acquireResponse(
           },
         };
       }
+
       return {
         kind: "failed",
         event: {
@@ -202,14 +231,19 @@ async function acquireResponse(
         },
       };
     }
+
     const failure = await classifyHttpFailure(outcome.response, signal);
+
     lastClass = failure.class;
     const retryable = isRetryableClass(lastClass);
-    if (retryable && attempt < policy.maxAttempts) {
+
+    if (canRetryHttpFailureImmediately(failure) && attempt < policy.maxAttempts) {
       await policy.sleep(policy.baseDelay * attempt);
       continue;
     }
+
     const message = failure.message;
+
     // HTTP diagnostics are not model output; recovery remains before headers.
     return {
       kind: "failed",
@@ -219,9 +253,11 @@ async function acquireResponse(
         retryable: !signal.aborted && retryable,
         phase: "before_headers",
         message: signal.aborted ? "cancelled" : message,
+        ...(!signal.aborted && failure.recovery !== undefined ? { recovery: failure.recovery } : {}),
       },
     };
   }
+
   return {
     kind: "failed",
     event: {
@@ -250,13 +286,42 @@ export function nativeContinuationNotice(diagnostic: NativeContinuationDiagnosti
 }
 
 export function createOpenAiCompatibleProvider(config: OpenAiCompatibleConfig, inherited: ReadonlyArray<NativeCheckpointState> = []): ProviderPort {
-  const continuations = createGlmToolContinuation(config.endpoint, config.model, inherited);
+  if (config.responseFormats !== undefined && (!Array.isArray(config.responseFormats)
+    || Array.from(config.responseFormats).some(format => format !== "json_object") || new Set(config.responseFormats).size !== config.responseFormats.length)) {
+    throw new Error("provider_response_formats_invalid");
+  }
+
+  const declaredFormats = config.responseFormats === undefined ? undefined : Object.freeze([...config.responseFormats]);
+  const responseFormats = declaredFormats ?? knownChatResponseFormats(config.endpoint, config.model);
+  const forkConfig = declaredFormats === undefined ? config : { ...config, responseFormats: declaredFormats };
+  const continuations = createChatToolContinuation(config.endpoint, config.model, inherited);
+
   return {
-    fork: messages => createOpenAiCompatibleProvider(config, continuations.copyMatching(messages ?? [])),
+    inputBindingDigest: request => inputBindingDigest(config, request),
+    async prepareRequest() {
+      return { apply: request => chatToolArgumentRequest(config.endpoint, config.model, request) };
+    },
+    fork: (messages, options) => {
+      const model = options?.model || config.model;
+      const inherited = model === config.model ? continuations.copyMatching(messages ?? [], model) : [];
+      return createOpenAiCompatibleProvider({ ...forkConfig, model }, inherited);
+    },
     ...(continuations.persistence === undefined ? {} : { continuation: continuations.persistence }),
+    responseFormats,
     async *stream(request: ProviderRequest, signal: AbortSignal): AsyncIterable<ProviderEvent> {
+      const model = request.model.length > 0 ? request.model : config.model;
+      const formatFailure = chatResponseFormatFailure(request, declaredFormats ?? knownChatResponseFormats(config.endpoint, model));
+      if (formatFailure !== undefined) {
+        yield { type: "error", class: "invalid_request", retryable: false, phase: "before_headers", message: formatFailure };
+        return;
+      }
+
       const unresolved = unresolvedImageReference(request);
-      if (unresolved !== undefined) { yield unresolved; return; }
+      if (unresolved !== undefined) {
+        yield unresolved;
+        return;
+      }
+
       const credential = readCredential(config);
       if (!credential.ok) {
         yield {
@@ -268,9 +333,11 @@ export function createOpenAiCompatibleProvider(config: OpenAiCompatibleConfig, i
         };
         return;
       }
+
       const continuation = continuations.begin(request);
       const policy = attemptPolicyOf(config, buildBody(config, request, continuation));
       let apiKey = credential.apiKey;
+
       if (config.tokenManager?.getValidAccessToken) {
         try {
           apiKey = await config.tokenManager.getValidAccessToken();
@@ -278,11 +345,13 @@ export function createOpenAiCompatibleProvider(config: OpenAiCompatibleConfig, i
           // fallback to credential.apiKey
         }
       }
+
       const acquired = await acquireResponse(config, apiKey, policy, signal);
       if (acquired.kind === "failed") {
         yield acquired.event;
         return;
       }
+
       const body = acquired.response.body;
       if (body === null) {
         yield {
@@ -294,12 +363,14 @@ export function createOpenAiCompatibleProvider(config: OpenAiCompatibleConfig, i
         };
         return;
       }
+
       yield {
         type: "stream_start",
         providerId: "openai-compatible",
-        model: config.model,
+        model,
         warnings: [],
       };
+
       if (continuation?.diagnostic !== undefined) {
         yield {
           type: "warning", code: "native_continuation_unavailable",
@@ -307,7 +378,8 @@ export function createOpenAiCompatibleProvider(config: OpenAiCompatibleConfig, i
           diagnostic: continuation.diagnostic,
         };
       }
-      for await (const event of translateBody(body, signal)) {
+
+      for await (const event of translateBody(body, signal, request.observeReturn)) {
         continuation?.observe(event);
         // The loop stops pulling at finish. Retain a complete native response
         // before handing over that terminal event, not after the next pull.
@@ -323,16 +395,19 @@ function buildHeaders(config: OpenAiCompatibleConfig, apiKey: string): Record<st
     "content-type": "application/json",
     ...(config.headers ?? {}),
   };
+
   if (apiKey.length > 0) {
     headers.authorization = `Bearer ${apiKey}`;
   }
+
   return headers;
 }
 
-function buildBody(config: OpenAiCompatibleConfig, request: ProviderRequest, continuation?: GlmToolContinuation): unknown {
+function buildBody(config: OpenAiCompatibleConfig, request: ProviderRequest, continuation?: ChatToolContinuation): Record<string, unknown> {
   const model = request.model.length > 0 ? request.model : config.model;
   return {
     model,
+    ...chatContinuationRequestFields(config.endpoint, model),
     stream: true,
     stream_options: { include_usage: true },
     messages: chatSystemMessages(config.endpoint, model, request.messages).map((message) => ({
@@ -373,7 +448,20 @@ function buildBody(config: OpenAiCompatibleConfig, request: ProviderRequest, con
     // for byte what it always sent, and an endpoint that cannot honour it
     // refuses with 400 (`invalid_request`), never with silent plain text.
     ...(chatStructuredFields(request.responseSchema) ?? {}),
+    ...(chatJsonObjectFields(request.responseFormat) ?? {}),
   };
+}
+
+/** Bind the real serializer's effective input options, without operation scope,
+ * output reservations, credentials or native contents. Per-occurrence native
+ * input is measured separately by its owner on the same prepared request. */
+function inputBindingDigest(config: OpenAiCompatibleConfig, request: ProviderRequest): string {
+  const { messages: _messages, tools: _tools, max_tokens: _output, stream: _stream, stream_options: _streamOptions,
+    ...inputOptions } = buildBody(config, { ...request, messages: [], tools: [] });
+  const credentialHeaders = new Set(["authorization", "proxy-authorization", "x-api-key", "api-key", "cookie"]);
+  const routeHeaders = Object.entries(config.headers ?? {}).filter(([key]) => !credentialHeaders.has(key.toLowerCase()))
+    .map(([key, value]) => [key.toLowerCase(), value]).sort(([a], [b]) => a!.localeCompare(b!));
+  return createHash("sha256").update(JSON.stringify(["openai-chat-input-v1", config.endpoint, inputOptions, routeHeaders])).digest("hex");
 }
 
 async function defaultSleep(ms: number): Promise<void> {

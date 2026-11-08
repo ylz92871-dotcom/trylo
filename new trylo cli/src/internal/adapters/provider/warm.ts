@@ -55,6 +55,8 @@ export type WarmSpec = {
   readonly workspaceId?: string;
   /** Cache raw transport, never a turn's external-image authority. */
   readonly imageReferenceScope?: "transport";
+  /** A metered stream cannot reuse a transport with automatic HTTP retries. */
+  readonly requestAttemptPolicy?: "single_request";
 };
 
 export type WarmStats = {
@@ -103,7 +105,8 @@ export function warmKeyOf(spec: WarmSpec): string {
   const key = spec.reasoningSummary === undefined ? base : `${base}|summary:${spec.reasoningSummary}`;
   const configured = spec.reasoningEffort === undefined ? key : `${key}|effort:${spec.reasoningEffort}`;
   const scoped = spec.workspaceId === undefined ? configured : `${configured}|workspace:${spec.workspaceId}`;
-  return spec.imageReferenceScope === undefined ? scoped : `${scoped}|images:${spec.imageReferenceScope}`;
+  const images = spec.imageReferenceScope === undefined ? scoped : `${scoped}|images:${spec.imageReferenceScope}`;
+  return spec.requestAttemptPolicy === undefined ? images : `${images}|request_policy:${spec.requestAttemptPolicy}`;
 }
 
 export function createWarmRegistry(options: WarmOptions = {}): WarmRegistry {
@@ -123,6 +126,7 @@ export function createWarmRegistry(options: WarmOptions = {}): WarmRegistry {
     if (entry === undefined) {
       return { kind: "missing" };
     }
+
     if (now() - entry.builtAtMs > ttlMs) {
       // Expired: dropped rather than refreshed in place, because "still there"
       // and "still good" are different claims and only the second one is worth
@@ -130,6 +134,7 @@ export function createWarmRegistry(options: WarmOptions = {}): WarmRegistry {
       entries.delete(key);
       return { kind: "expired" };
     }
+
     return { kind: "fresh", entry };
   }
 
@@ -141,15 +146,19 @@ export function createWarmRegistry(options: WarmOptions = {}): WarmRegistry {
         counters.hits += 1;
         return { provider: found.entry.provider, reused: true, key };
       }
+
       if (found.kind === "expired") {
         // There was one and it went stale. Counted apart from a cold build so
         // "never had a session" and "had one, it aged out" stay distinguishable
         // in the numbers — the second one is the interesting failure.
         counters.rebuilds += 1;
       }
+
       counters.builds += 1;
       const provider = build();
+
       entries.set(key, { provider, builtAtMs: now() });
+
       return { provider, reused: false, key };
     },
     invalidate(spec) {

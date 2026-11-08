@@ -20,16 +20,19 @@ function textFlow() {
       },
     }),
   ];
+
   return events;
 }
 
 test("text deltas open one block and usage precedes finish", () => {
   const events = textFlow();
+
   assert.deepEqual(events[0], { type: "text_start", blockId: "text-0" });
   assert.deepEqual(events[1], { type: "text_delta", blockId: "text-0", text: "hel" });
   assert.deepEqual(events[2], { type: "text_delta", blockId: "text-0", text: "lo" });
   const usage = events.find((event) => event.type === "usage");
   const finish = events.find((event) => event.type === "finish");
+
   assert.ok(usage !== undefined && usage.type === "usage" && usage.usage.inputTokens === 12);
   assert.ok(finish !== undefined && finish.type === "finish" && finish.reason === "stop");
   assert.equal(finish.type === "finish" && finish.requiresFollowUp, false);
@@ -38,6 +41,7 @@ test("text deltas open one block and usage precedes finish", () => {
 
 test("a completed reasoning item seals its summary before the assistant answer", () => {
   const translator = createResponsesTranslator();
+
   translator.push("response.reasoning_summary_text.delta", { output_index: 0, delta: "Inspect the target." });
   assert.deepEqual(
     translator.push("response.output_item.done", { output_index: 0, item: { type: "reasoning", id: "rs-1" } }),
@@ -74,6 +78,7 @@ test("function calls assemble across deltas and settle with the wire call id", (
     ...translator.push("response.completed", { response: { status: "completed" } }),
   ];
   const call = events.find((event) => event.type === "tool_call");
+
   assert.ok(call !== undefined);
   assert.deepEqual(call, {
     type: "tool_call",
@@ -82,11 +87,13 @@ test("function calls assemble across deltas and settle with the wire call id", (
     arguments: { path: "x" },
   });
   const finish = events.find((event) => event.type === "finish");
+
   assert.ok(finish !== undefined && finish.type === "finish" && finish.requiresFollowUp === true);
 });
 
 test("failed and incomplete responses end explicitly, never silently", () => {
   const failed = createResponsesTranslator().push("response.failed", { message: "boom" });
+
   assert.equal(failed.length, 1);
   assert.deepEqual(failed[0], {
     type: "error",
@@ -97,15 +104,18 @@ test("failed and incomplete responses end explicitly, never silently", () => {
   });
   const incomplete = createResponsesTranslator().push("response.incomplete", {});
   const finish = incomplete.find((event) => event.type === "finish");
+
   assert.ok(finish !== undefined && finish.type === "finish" && finish.reason === "length");
 });
 
 test("lifecycle frames carry no fact and EOF without a terminal frame is a protocol failure", () => {
   const translator = createResponsesTranslator();
+
   assert.deepEqual(translator.push("response.created", { response: { id: "r-1" } }), []);
   assert.deepEqual(translator.push("response.in_progress", {}), []);
   assert.deepEqual(translator.push("response.output_item.added", { output_index: 0 }), []);
   const done = translator.complete();
+
   assert.equal(done.some(event => event.type === "finish"), false);
   assert.ok(done.some(event => event.type === "error" && event.class === "protocol"));
   assert.deepEqual(translator.complete(), []);

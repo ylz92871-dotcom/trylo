@@ -24,6 +24,7 @@ type Recorder = {
 function recordingStore(result: LedgerReadResult): Recorder {
   const reads: CredentialScope[] = [];
   const writes: CredentialScope[] = [];
+
   return {
     reads,
     writes,

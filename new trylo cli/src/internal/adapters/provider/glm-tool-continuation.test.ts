@@ -19,8 +19,11 @@ const next = {
     { role: "tool" as const, content: "ok", toolCallId: call.toolCallId },
   ],
 };
+
 type WireMessage = { role: string; reasoning_content?: string };
+
 type WireBody = { messages: WireMessage[] };
+
 function response(text = reasoning, finish = "tool_calls"): Response {
   const frames = [
     { choices: [{ delta: { reasoning_content: text }, finish_reason: null }] },
@@ -31,6 +34,7 @@ function response(text = reasoning, finish = "tool_calls"): Response {
   return new Response(frames.map(frame => `data: ${JSON.stringify(frame)}\n\n`).join("") + "data: [DONE]\n\n",
     { headers: { "content-type": "text/event-stream" } });
 }
+
 function fixture(options: { endpoint?: string; finish?: string; text?: string } = {}) {
   const bodies: WireBody[] = [];
   const provider = createOpenAiCompatibleProvider({
@@ -42,10 +46,12 @@ function fixture(options: { endpoint?: string; finish?: string; text?: string } 
           { headers: { "content-type": "text/event-stream" } });
     },
   });
+
   return { provider, bodies, async drain(request: ProviderRequest, signal = new AbortController().signal) {
     for await (const _event of provider.stream(request, signal)) { /* Drain a complete transport round. */ }
   } };
 }
+
 const assistant = (body: WireBody) => body.messages.find(message => message.role === "assistant");
 
 test("Volcano GLM sends actual native tool reasoning back on the matching assistant message", async () => {
@@ -61,6 +67,7 @@ test("production loop scopes native continuation and replays it across a real ad
   const result = await runTurn({ provider: f.provider, permission: createFakePermission("approved"), profile: emptyProfileLoader(),
     tools: { snapshot: () => [echoBinding({ needsApproval: false })], execute: async () => toolResult({ ok: true }), cancel: async () => undefined },
   }, { sessionId: "s", turnId: "t", correlationId: "c", text: "Run echo, then report.", model: first.model, budget: { maxIterations: 4 } });
+
   assert.equal(assistant(f.bodies[1]!)?.reasoning_content, reasoning);
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(result.state.verification.status, "unset");
@@ -84,13 +91,15 @@ test("unscoped library calls do not retain native continuation", async () => {
 
 test("other hosts retain the existing no-reasoning-replay behavior", async () => {
   const f = fixture({ endpoint: "https://other.example/v1/chat/completions" });
-  await f.drain(first); await f.drain(next);
+  await f.drain(first);
+  await f.drain(next);
   assert.equal(assistant(f.bodies[1]!)?.reasoning_content, undefined);
 });
 
 test("an interrupted or truncated native tool response is never replayed", async () => {
   const f = fixture({ finish: "length" });
-  await f.drain(first); await f.drain(next);
+  await f.drain(first);
+  await f.drain(next);
   assert.equal(assistant(f.bodies[1]!)?.reasoning_content, undefined);
 });
 
@@ -104,6 +113,7 @@ test("the same tool identity with changed arguments cannot recover unrelated rea
 
 test("oversized native reasoning is not partially replayed", async () => {
   const f = fixture({ text: "x".repeat(262145) });
-  await f.drain(first); await f.drain(next);
+  await f.drain(first);
+  await f.drain(next);
   assert.equal(assistant(f.bodies[1]!)?.reasoning_content, undefined);
 });

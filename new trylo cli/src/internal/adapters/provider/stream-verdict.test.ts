@@ -36,11 +36,18 @@ async function exercise(wire: string, kind: "responses" | "chat", resumedTranscr
   const provider = kind === "responses" ? createResponsesProvider(options) : createOpenAiCompatibleProvider(options);
   const permission = createFakePermission("approved");
   const result = await runTurn({ provider, profile: emptyProfileLoader(),
-    permission: { ...permission, request: async (...args) => { approvals++; return permission.request(...args); } },
+    permission: { ...permission, request: async (...args) => {
+      approvals++;
+      return permission.request(...args);
+    } },
     tools: { snapshot: () => [echoBinding({ needsApproval: true })], cancel: async () => {},
-      execute: async () => { executions++; return toolResult({ ok: true }); } },
+      execute: async () => {
+        executions++;
+        return toolResult({ ok: true });
+      } },
   }, { sessionId: "s", turnId: "t", correlationId: "c", text: "Use echo and verify.", model: "synthetic",
     ...(resumedTranscript === undefined ? {} : { resumedTranscript }), budget: { maxIterations: 3 } });
+
   return { result, executions, requests, approvals };
 }
 
@@ -51,6 +58,7 @@ test("Responses repeated semantic snapshots and sparse duplicate items settle on
     frame("response.output_item.done", { output_index: 0, item: first })
     + frame("response.output_item.done", { output_index: 0, item: { ...item, arguments: "" } })
     + frame("response.completed", { response: { status: "completed", output: [repeated] } }), "responses");
+
   assert.equal(executions, 1);
   assert.equal(requests, 2);
   assert.equal(result.state.terminalReason, "completed");
@@ -59,23 +67,27 @@ test("Responses repeated semantic snapshots and sparse duplicate items settle on
 for (const [name, wire] of cases) {
   test(`Responses verdict: ${name} cannot execute or ask approval`, async () => {
     const { result, executions, requests, approvals } = await exercise(wire, "responses");
+
     assert.equal(executions, 0, "tentative tools cannot produce effects before an accepted response");
     assert.equal(approvals, 0, "a failed response must not ask the user to approve its tools");
     assert.equal(requests, 1, "a failed response must not start a follow-up");
     assert.notEqual(result.state.terminalReason, "completed");
     assert.equal(result.envelopes.filter(event => event.kind === "terminal").length, 1);
     const resumed = await exercise(text("RESUMED") + completed, "responses", result.transcript);
+
     assert.equal(resumed.executions, 0, "resuming cannot execute rejected tentative calls");
     assert.equal(resumed.result.state.terminalReason, "completed");
   });
 }
 
 const chatCall = 'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call","function":{"name":"echo","arguments":"{}"}}]},"finish_reason":null}]}\n\n';
+
 for (const reason of [undefined, "length", "content_filter", "error", "unrecognized"]) {
   test(`Chat verdict: ${reason ?? "EOF"} cannot execute or ask approval`, async () => {
     const wire = chatCall + (reason === undefined ? "data: [DONE]\n\n"
       : `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: reason }] })}\n\n`);
     const { result, executions, approvals, requests } = await exercise(wire, "chat");
+
     assert.equal(executions, 0);
     assert.equal(approvals, 0);
     assert.equal(requests, 1);
@@ -88,6 +100,7 @@ for (const kind of ["responses", "chat"] as const) {
     const wire = kind === "responses" ? done + frame("response.completed", { response: { status: "completed", output: [item] } })
       : chatCall + 'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n';
     const { result, executions, requests, approvals } = await exercise(wire, kind);
+
     assert.equal(executions, 1);
     assert.equal(approvals, 1);
     assert.equal(requests, 2);

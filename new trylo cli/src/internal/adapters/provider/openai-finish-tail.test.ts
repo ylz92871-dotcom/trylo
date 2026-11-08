@@ -19,10 +19,12 @@ test("a finished Chat stream cannot wait forever for DONE or an HTTP close", asy
     for await (const event of translateBody(body, new AbortController().signal)) events.push(event);
     return events;
   };
+
   try {
     const events = await Promise.race([consume(), new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error("finish was held indefinitely after the model stopped")), 2_000);
     })]);
+
     assert.equal(events.filter(e => e.type === "finish").length, 1);
     assert.equal(events.some(e => e.type === "error"), false);
     assert.equal(events.some(e => e.type === "warning" && e.code === "stream_finish_tail_timeout"), true);

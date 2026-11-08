@@ -4,6 +4,7 @@ import { createOpenAiCompatibleProvider } from "./openai-compatible.js";
 import type { ProviderMessage } from "../../ports/provider.js";
 
 const endpoint = "https://developer.amd.com.cn/radeon/api/v1/chat/completions";
+
 async function wire(model: string, messages: readonly ProviderMessage[], url = endpoint) {
   let body: { messages: readonly ProviderMessage[] } | undefined;
   const provider = createOpenAiCompatibleProvider({ endpoint: url, model, apiKey: "fixture-key",
@@ -14,10 +15,13 @@ async function wire(model: string, messages: readonly ProviderMessage[], url = e
       });
     },
   });
+
   for await (const event of provider.stream({ attemptId: "system-position", model, messages, tools: [] }, new AbortController().signal)) {
     assert.notEqual(event.type, "error");
   }
+
   assert.ok(body);
+
   return body.messages;
 }
 
@@ -30,6 +34,7 @@ test("AMD DeepSeek final reporting sends one leading system segment and keeps th
   ];
   const before = JSON.stringify(history);
   const messages = await wire("DeepSeek-V4-Flash-Vision-Exp", history);
+
   assert.deepEqual(messages.filter(m => m.role === "system"), [{ role: "system", content: "agent rules\n\nfinal reporting rules" }]);
   assert.deepEqual(messages.map(m => m.role), ["system", "user", "assistant", "tool"]);
   assert.equal(messages[3]?.content, "actual result");

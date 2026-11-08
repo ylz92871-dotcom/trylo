@@ -39,8 +39,11 @@ for (const variant of variants) for (const restart of [false, true]) {
       startSequence: 0, nextEventId: () => String(++sequence), ...variant.channels() });
     const messages = transcriptToMessages(observed.transcriptItems);
     const visible = messages.find(message => message.role === "assistant");
-    assert.ok(visible); assert.equal(visible.content.includes("```"), false);
+
+    assert.ok(visible);
+    assert.equal(visible.content.includes("```"), false);
     const saved = provider.continuation!.capture(scope);
+
     assert.ok(saved);
     // A stale scope or a different tool response must never rebind this answer.
     provider.continuation!.bindCanonicalResponse?.({ scope: "stale", message: { ...visible, content: "WRONG" } });
@@ -48,16 +51,19 @@ for (const variant of variants) for (const restart of [false, true]) {
       { toolCallId: "foreign", name: "echo", arguments: {} },
     ] } });
     assert.deepEqual(provider.continuation!.capture(scope), saved);
+
     if (restart) {
       const records: SessionRecord[] = [{ formatVersion: "1", sequence: 0, type: "envelope", sessionId: "s", turnId: "t1", at: "fixture",
         payload: { envelope: { kind: "stream_end" }, providerContinuation: saved } }];
       provider = createOpenAiCompatibleProvider(config);
       provider.continuation!.restore({ sessionId: "s", turnId: "t2", records });
     }
+
     await consumeProviderStream({ port: provider, request: { ...request, continuationScope: restart ? providerContinuationScope("s", "t2") : scope,
       messages: [...messages, { role: "tool", content: "OK", toolCallId: "call" }] },
     signal: new AbortController().signal, startSequence: 0, nextEventId: () => String(++sequence) });
     const replay = bodies[1]?.messages.find(message => message.role === "assistant");
+
     assert.equal(replay?.reasoning_content, native, "the trusted visible projection must retain its exact native continuation");
     assert.equal(replay.content, visible.content, "hidden learning cards must not return in public messages");
   });

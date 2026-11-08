@@ -51,11 +51,14 @@ function readScope(config: OsKeyringStoreConfig, scope: CredentialScope): Ledger
   if (scope === "project" && config.projectDir === undefined) {
     return { ok: true, document: emptyDocument(), existed: false };
   }
+
   const located = keyringTarget(scope, config.projectDir);
   if (!located.ok) {
     return located;
   }
+
   let stored: string | undefined;
+
   try {
     stored = config.driver.read(located.target);
   } catch (error) {
@@ -65,10 +68,13 @@ function readScope(config: OsKeyringStoreConfig, scope: CredentialScope): Ledger
       detail: `keyring entry ${located.target} could not be read (${messageOf(error)})`,
     };
   }
+
   if (stored === undefined) {
     return { ok: true, document: emptyDocument(), existed: false };
   }
+
   const decoded = decodeDocument(stored, `keyring:${located.target}`);
+
   return decoded.ok ? { ok: true, document: decoded.value, existed: true } : decoded;
 }
 
@@ -81,6 +87,7 @@ function writeScope(
   if (!located.ok) {
     return located;
   }
+
   try {
     config.driver.write(located.target, encodeDocument(document));
     return undefined;

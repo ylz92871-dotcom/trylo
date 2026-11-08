@@ -17,18 +17,21 @@ test("a short reasoning network chunk is delivered without waiting for 128 chara
       body = controller;
     },
   });
+
   body.enqueue(
     new TextEncoder().encode(
       'data: {"choices":[{"delta":{"reasoning_content":"first"},"finish_reason":null}]}\n\n',
     ),
   );
   const stream = translateBody(source, new AbortController().signal);
+
   assert.equal((await stream.next()).value?.type, "reasoning_start");
   let delivered = false;
   const next = stream.next().then((value) => {
     delivered = true;
     return value;
   });
+
   try {
     await new Promise<void>((resolve) => setImmediate(resolve));
     assert.equal(
@@ -71,13 +74,17 @@ test("returning after a timed flush cancels the outstanding network read", async
       ),
     );
   const stream = translateBody(source, new AbortController().signal);
+
   send("first");
   await stream.next();
   await stream.next();
   send(" tail");
   const delta = (await stream.next()).value;
+
   assert.equal(delta?.type, "text_delta");
+
   if (delta?.type === "text_delta") assert.equal(delta.text, " tail");
+
   await stream.return(undefined);
   assert.equal(cancelled, true);
   assert.equal(source.locked, false);
@@ -100,13 +107,16 @@ test("later reasoning is flushed while the provider is paused below the characte
         }) +
         "\n\n",
     );
+
   body.enqueue(frame("first"));
   const stream = translateBody(source, new AbortController().signal);
+
   await stream.next();
   await stream.next();
   body.enqueue(frame(" second"));
   const next = stream.next();
   let timeout: ReturnType<typeof setTimeout> | undefined;
+
   try {
     const received = await Promise.race([
       next.then((result) => result.value),
@@ -114,11 +124,13 @@ test("later reasoning is flushed while the provider is paused below the characte
         timeout = setTimeout(() => resolve(undefined), 250);
       }),
     ]);
+
     assert.equal(
       received?.type,
       "reasoning_delta",
       "received reasoning must flush without another upstream event or EOF",
     );
+
     if (received?.type === "reasoning_delta")
       assert.equal(received.text, " second");
   } finally {

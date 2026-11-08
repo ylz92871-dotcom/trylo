@@ -19,6 +19,7 @@ import type { LedgerReadResult, LedgerStore } from "../../credentials/ledger-sto
 
 export function createMemoryLedgerStore(seed?: Readonly<Partial<Record<CredentialScope, CredentialLedgerDocument>>>): LedgerStore {
   const scopes = new Map<CredentialScope, CredentialLedgerDocument>();
+
   if (seed !== undefined) {
     for (const [scope, document] of Object.entries(seed)) {
       if (document !== undefined) {
@@ -26,6 +27,7 @@ export function createMemoryLedgerStore(seed?: Readonly<Partial<Record<Credentia
       }
     }
   }
+
   return {
     read: (scope): LedgerReadResult => {
       const document = scopes.get(scope);
