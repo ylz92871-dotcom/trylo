@@ -7,10 +7,13 @@ test("explicit future directive becomes a scoped user rule draft", () => {
     text: "以后都这样：先跑指定检查再改代码",
     taskFamilyId: "ts-unit-fix",
   });
+
   assert.equal(result.kind, "draft");
+
   if (result.kind !== "draft") {
     return;
   }
+
   assert.equal(result.draft.status, "draft");
   assert.equal(result.draft.scope.kind, "task_family");
   assert.equal(result.draft.speechAct, "future_directive");
@@ -32,20 +35,28 @@ test("withdraw produces a withdraw command draft", () => {
 
 test("skip-approval text does not grant permission", () => {
   const only = buildUserRule({ text: "以后跳过审批" });
+
   assert.equal(only.kind, "failure");
+
   if (only.kind === "failure") {
     assert.equal(only.code, "permission_claim_rejected");
   }
+
   const network = buildUserRule({ text: "以后允许网络" });
+
   assert.equal(network.kind, "failure");
+
   if (network.kind === "failure") {
     assert.equal(network.code, "permission_claim_rejected");
   }
+
   const mixed = buildUserRule({
     text: "以后都这样用 pnpm，并跳过审批",
     projectId: "repo-a",
   });
+
   assert.equal(mixed.kind, "draft");
+
   if (mixed.kind === "draft") {
     assert.equal(mixed.draft.capabilityGranted, "never");
     assert.equal(mixed.draft.permissionClaim, false);
@@ -60,7 +71,9 @@ test("one complaint is not a global rule", () => {
     text: "不要再这样，所有项目都改",
     explicitGlobal: true,
   });
+
   assert.equal(result.kind, "failure");
+
   if (result.kind === "failure") {
     assert.equal(result.code, "scope_too_broad");
   }
@@ -77,7 +90,9 @@ test("explicit confirm is a scoped user rule", () => {
     text: "yes exactly, keep doing that",
     taskFamilyId: "ts-unit-fix",
   });
+
   assert.equal(result.kind, "draft");
+
   if (result.kind === "draft") {
     assert.equal(result.draft.speechAct, "confirm");
     assert.notEqual(result.draft.scope.kind, "user_global");

@@ -26,17 +26,20 @@ export function inferDimension(text: string): PolicyDimension {
   ) {
     return "reporting_information_density";
   }
+
   if (
     /方案|文稿|文档|幻灯片|提案|草稿/i.test(text) &&
     /先(?:看|给|出)?结构|结构优先|先(?:出|给|写)?完整|先出一版|先草稿/.test(text)
   ) {
     return "work_artifact_workflow";
   }
+
   for (const hint of DIMENSION_HINTS) {
     if (hint.pattern.test(text)) {
       return hint.dimension;
     }
   }
+
   return "agent_autonomy";
 }
 
@@ -44,9 +47,11 @@ function pairType(a: UserEvidence, b: UserEvidence): EvidenceRelation["type"] | 
   if (a.id === b.id) {
     return null;
   }
+
   if (inferDimension(a.claim ?? "") !== inferDimension(b.claim ?? "")) {
     return null;
   }
+
   const textA = `${a.rawText} ${a.claim ?? ""}`;
   const textB = `${b.rawText} ${b.claim ?? ""}`;
   const coreA = /核心|生产|持久|迁移/.test(textA);
@@ -55,15 +60,19 @@ function pairType(a: UserEvidence, b: UserEvidence): EvidenceRelation["type"] | 
   const reduceB = /减少|重复|低收益|直接/.test(textB);
   const keepA = /必须|保留|最终|验证/.test(textA);
   const keepB = /必须|保留|最终|验证/.test(textB);
+
   if ((coreA && reduceB) || (coreB && reduceA)) {
     return "refines_scope";
   }
+
   if ((reduceA && keepB && !coreB) || (reduceB && keepA && !coreA)) {
     return "contradicts";
   }
+
   if (/如果|当.*时|仅限|只在|不适用于/.test(textA) || /如果|当.*时|仅限|只在|不适用于/.test(textB)) {
     return "conditions";
   }
+
   return "supports";
 }
 
@@ -80,6 +89,7 @@ export function discoverEvidenceRelations(input: {
   const now = input.now ?? Date.now();
   const pool = [...input.existing, ...input.fresh];
   const relations: EvidenceRelation[] = [];
+
   for (const item of input.fresh) {
     const candidates = pool.filter((other) => other.id !== item.id).slice(0, 12);
     for (const other of candidates) {
@@ -87,6 +97,7 @@ export function discoverEvidenceRelations(input: {
       if (type === null) {
         continue;
       }
+
       relations.push({
         id: shortId("erel", [item.id, other.id, type]),
         userId: input.userId,
@@ -98,34 +109,42 @@ export function discoverEvidenceRelations(input: {
       });
     }
   }
+
   return relations;
 }
 
 function scoreConclusion(supporting: readonly UserEvidence[], counterCount: number): number {
   const bands = supporting.map((item) => item.answers.governance ?? 1);
   let score = 0.5 + Math.min(0.2, supporting.length * 0.06);
+
   if (bands.some((level) => level >= 2)) {
     score += 0.12;
   }
+
   if (supporting.some((item) => item.answers.contextInformedness === "post_execution" || item.answers.contextInformedness === "post_outcome")) {
     score += 0.08;
   }
+
   score -= Math.min(0.25, counterCount * 0.12);
+
   return Math.min(0.93, Math.max(0.2, score));
 }
 
 function synthesizeStatement(dimension: PolicyDimension, items: readonly UserEvidence[]): string | null {
   const claims = items.map((item) => item.claim ?? "");
+
   if (dimension === "verification_audit") {
     const reduces = claims.some((claim) => /减少|重复/.test(claim));
     const keeps = claims.some((claim) => /核心|最终|生产/.test(claim));
     if (reduces && keeps) {
       return "用户反感的主要是重复、低收益审核，而不是验证本身；进入核心路径时仍要求保留高价值最终验证。";
     }
+
     if (reduces) {
       return "在中低风险任务中，用户倾向减少重复、同质审核。";
     }
   }
+
   if (dimension === "planning_direct_execution") {
     const direct = claims.some((claim) => /直接/.test(claim));
     const plan = claims.some((claim) => /计划|规划|边界/.test(claim));
@@ -133,10 +152,13 @@ function synthesizeStatement(dimension: PolicyDimension, items: readonly UserEvi
       return "用户的计划偏好受任务风险影响：低风险可回滚任务倾向直接执行，核心或高回滚成本任务要求先明确方案。";
     }
   }
+
   if (dimension === "reporting_information_density") {
     return "在执行任务中，用户对低信息密度过程性叙述接受度较低，有效反馈集中在决策、状态、产物与风险。";
   }
+
   const first = claims.find((claim) => claim.trim().length > 0);
+
   return first === undefined || first.trim().length === 0 ? null : first;
 }
 
@@ -156,22 +178,28 @@ export type SynthesizeConclusionsInput = {
  */
 export function synthesizeConclusions(input: SynthesizeConclusionsInput): readonly ConclusionRecord[] {
   const now = input.now ?? Date.now();
+
   if (input.fresh.length === 0) {
     return [];
   }
+
   const byDimension = new Map<PolicyDimension, UserEvidence[]>();
+
   for (const item of input.fresh) {
     const dimension = inferDimension(item.claim ?? "");
     const bucket = byDimension.get(dimension) ?? [];
     bucket.push(item);
     byDimension.set(dimension, bucket);
   }
+
   const incoming: ConclusionRecord[] = [];
+
   for (const [dimension, items] of byDimension) {
     const strong = items.filter((item) => (item.answers.governance ?? 1) >= 2);
     if (strong.length === 0 && items.length < 2) {
       continue;
     }
+
     const counter = items.filter((item) =>
       input.relations.some(
         (relation) =>
@@ -190,8 +218,10 @@ export function synthesizeConclusions(input: SynthesizeConclusionsInput): readon
     if (statement === null) {
       continue;
     }
+
     const strength = scoreConclusion(items, counter.length);
     const stableKey = [input.userId, dimension, input.scopeFingerprint].join("::");
+
     incoming.push({
       id: shortId("con", [stableKey, statement]),
       userId: input.userId,
@@ -210,6 +240,7 @@ export function synthesizeConclusions(input: SynthesizeConclusionsInput): readon
       updatedAt: now,
     });
   }
+
   return mergeWithExisting(input.existing, incoming, now);
 }
 
@@ -224,6 +255,7 @@ function mergeWithExisting(
     if (prior === undefined) {
       return next;
     }
+
     if (prior.statement === next.statement) {
       return {
         ...prior,
@@ -234,6 +266,7 @@ function mergeWithExisting(
         updatedAt: now,
       };
     }
+
     return { ...next, version: prior.version + 1, supersedes: prior.id };
   });
 }

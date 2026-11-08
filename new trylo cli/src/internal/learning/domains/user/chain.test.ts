@@ -41,20 +41,25 @@ function runChain() {
     evidence: [evidence],
     eligibility: [eligibility],
   });
+
   return { evidence, eligibility, relations, conclusions, models, commitments };
 }
 
 test("the full chain runs evidence to bundle with no skipped step", () => {
   const { evidence, eligibility, conclusions, models, commitments } = runChain();
+
   assert.equal(eligibility.classification, "personalization_candidate");
   assert.equal(conclusions.length, 1);
   const conclusion = conclusions[0] as ConclusionRecord;
+
   assert.ok(conclusion.supporting.includes(evidence.id));
   assert.equal(models.length, 1);
   const model = models[0] as UserModelRecord;
+
   assert.deepEqual(model.derivedFromConclusionIds, [conclusion.id]);
   assert.equal(commitments.length, 1);
   const commitment = commitments[0] as BehaviorCommitment;
+
   assert.deepEqual(commitment.provenanceEvidenceIds, [evidence.id]);
   assert.equal(commitment.userModelId, model.id);
 
@@ -63,6 +68,7 @@ test("the full chain runs evidence to bundle with no skipped step", () => {
     commitments,
     models,
   });
+
   assert.equal(compiled.rules.length, 1);
   assert.deepEqual(compiled.bundle.ruleIds, compiled.rules.map((rule) => rule.id));
   assert.equal(verifyBundleChecksum(compiled), true);
@@ -72,15 +78,18 @@ test("the full chain runs evidence to bundle with no skipped step", () => {
 
 test("every active commitment traces back to evidence", () => {
   const { commitments } = runChain();
+
   for (const commitment of commitments) {
     assert.ok(commitment.provenanceEvidenceIds.length > 0);
   }
+
   const orphan = compileBehaviorCommitments({
     userId: "local-user",
     models: runChain().models,
     evidence: [],
     eligibility: [],
   });
+
   assert.equal(orphan.length, 0);
 });
 
@@ -97,6 +106,7 @@ test("models without a decision point grow no commitment", () => {
     evidence: [evidence],
     eligibility: [eligibility],
   });
+
   assert.equal(commitments.length, 0);
 });
 
@@ -110,6 +120,7 @@ test("recompiling supersedes the prior commitment instead of duplicating", () =>
     existing: first.commitments,
   });
   const live = second.filter((item) => item.state !== "superseded");
+
   assert.equal(live.length, 1);
   assert.equal((live[0] as BehaviorCommitment).version, 2);
   assert.equal((live[0] as BehaviorCommitment).supersedes, (first.commitments[0] as BehaviorCommitment).id);
@@ -119,6 +130,7 @@ test("bundle compilation has no render or inject surface", () => {
   const { commitments, models } = runChain();
   const compiled = compilePolicyBundle({ userId: "local-user", commitments, models });
   const serialized = JSON.stringify({ bundle: compiled.bundle, rules: compiled.rules });
+
   assert.equal(serialized.includes("promptMessages"), false);
   assert.equal(serialized.includes("render"), false);
   assert.equal(serialized.includes("inject"), false);
@@ -129,6 +141,7 @@ test("current pointer switches atomically and retires the old bundle", () => {
   const { commitments, models } = runChain();
   const first = compilePolicyBundle({ userId: "local-user", commitments, models });
   let state: BundlePointerState = { bundles: [] };
+
   state = commitBundle(state, first);
   assert.equal(state.currentBundleId, first.bundle.id);
   const second = compilePolicyBundle({
@@ -137,6 +150,7 @@ test("current pointer switches atomically and retires the old bundle", () => {
     models,
     previousBundle: first.bundle,
   });
+
   state = commitBundle(state, second);
   assert.equal(state.currentBundleId, second.bundle.id);
   assert.equal(
@@ -154,8 +168,10 @@ test("a tampered bundle fails verification and never becomes current", () => {
     bundle: { ...compiled.bundle, ruleIds: [...compiled.bundle.ruleIds, "pol_forged"] },
     rules: compiled.rules,
   };
+
   assert.equal(verifyBundleChecksum(tampered), false);
   const state: BundlePointerState = { bundles: [] };
+
   assert.deepEqual(commitBundle(state, tampered), state);
 });
 
@@ -176,6 +192,7 @@ test("receipts show scope, effect, and revoke paths without claiming enforcement
     evidence: [evidence],
     reason: "created",
   });
+
   assert.notEqual(receipt, null);
   assert.match((receipt as { message: string }).message, /已记录，尚未用于执行/);
   assert.deepEqual((receipt as { revokeActions: readonly string[] }).revokeActions, [
@@ -190,12 +207,14 @@ test("receipts show scope, effect, and revoke paths without claiming enforcement
     existing: receipt === null ? [] : [receipt],
     reason: "created",
   });
+
   assert.equal(again, null);
   const receipts = appendReceiptsForNewCommitments({
     before: [],
     after: commitments,
     evidence: [evidence],
   });
+
   assert.equal(receipts.length, 1);
 });
 
@@ -207,6 +226,7 @@ test("task completion never raises preference confidence", () => {
     events: [],
     taskOutcome: "completed",
   });
+
   assert.equal(observations.length, 1);
   assert.equal(observations[0]?.signal, "task_completed");
   assert.equal(observations[0]?.attribution, "unknown");
@@ -229,12 +249,14 @@ test("explicit rejection pauses the commitment", () => {
     commitmentIds: [id],
     events: [{ kind: "feedback_text", text: "不对，不是这样，别再这样" }],
   });
+
   assert.equal(bad.observations[0]?.signal, "explicit_unhelpful");
   assert.deepEqual(bad.pauseCommitmentIds, [id]);
   const good = evaluateOutcome({
     commitmentIds: [id],
     events: [{ kind: "feedback_text", text: "这样很好，以后就这样" }],
   });
+
   assert.equal(good.observations[0]?.signal, "explicit_helpful");
   assert.deepEqual(good.pauseCommitmentIds, []);
 });

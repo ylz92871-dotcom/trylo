@@ -14,9 +14,11 @@
  */
 
 export const MEMORY_FACT_KINDS = ["identity_fact", "preference", "project_fact"] as const;
+
 export type MemoryFactKind = (typeof MEMORY_FACT_KINDS)[number];
 
 export const MEMORY_FACT_STATUSES = ["active", "retracted"] as const;
+
 export type MemoryFactStatus = (typeof MEMORY_FACT_STATUSES)[number];
 
 /**
@@ -88,6 +90,7 @@ export function sameFact(
  */
 export function foldFacts(records: ReadonlyArray<UserMemoryRecord>): ReadonlyArray<UserFactRecord> {
   const latest = new Map<string, UserFactRecord>();
+
   for (const record of records) {
     if (!isFactRecord(record)) continue;
     const current = latest.get(record.id);
@@ -96,7 +99,9 @@ export function foldFacts(records: ReadonlyArray<UserMemoryRecord>): ReadonlyArr
       latest.set(record.id, record);
     }
   }
+
   const metadata = new Map<string, { readonly aliases: Map<string, string>; readonly previous: Set<string> }>();
+
   for (const candidate of records) {
     if (!isFactRecord(candidate) || latest.get(candidate.id)?.version !== candidate.version) continue;
     const merged = metadata.get(candidate.id) ?? { aliases: new Map<string, string>(), previous: new Set<string>() };
@@ -104,6 +109,7 @@ export function foldFacts(records: ReadonlyArray<UserMemoryRecord>): ReadonlyArr
     for (const alias of candidate.commandAliases ?? []) merged.aliases.set(alias.commandId, alias.requestDigest);
     metadata.set(candidate.id, merged);
   }
+
   return [...latest.values()].map((record) => {
     const { aliases, previous } = metadata.get(record.id) ?? { aliases: new Map<string, string>(), previous: new Set<string>() };
     return { ...record, ...(previous.size > 0 ? { previousCommandIds: [...previous].sort() } : {}),
@@ -119,6 +125,7 @@ export function hasPreviousFactCommand(records: ReadonlyArray<UserMemoryRecord>,
 /** Latest versions retain every consumed key; tombstones and final proposal states survive. */
 export function compactMemoryRecords(records: ReadonlyArray<UserMemoryRecord>): ReadonlyArray<UserMemoryRecord> {
   const commands = new Map<string, Set<string>>();
+
   for (const record of records) {
     if (!isFactRecord(record)) continue;
     const keys = commands.get(record.id) ?? new Set<string>();
@@ -127,12 +134,14 @@ export function compactMemoryRecords(records: ReadonlyArray<UserMemoryRecord>): 
     for (const alias of record.commandAliases ?? []) keys.add(alias.commandId);
     commands.set(record.id, keys);
   }
+
   const facts = foldFacts(records).map((record): UserFactRecord => {
     const keys = commands.get(record.id) ?? new Set<string>();
     keys.delete(record.commandId);
     for (const alias of record.commandAliases ?? []) keys.delete(alias.commandId);
     return { ...record, previousCommandIds: [...keys].sort() };
   });
+
   return [...facts, ...foldProposals(records)];
 }
 
@@ -184,6 +193,7 @@ export function factLines(record: UserFactRecord): ReadonlyArray<string> {
  * `activeFacts` 的每个调用点都要记得排除它，而漏一处就等于偷偷记住了。
  */
 export const MEMORY_PROPOSAL_STATUSES = ["pending", "committed", "discarded"] as const;
+
 export type MemoryProposalStatus = (typeof MEMORY_PROPOSAL_STATUSES)[number];
 
 export type MemoryProposal = {
@@ -214,11 +224,13 @@ export function isProposalRecord(record: UserMemoryRecord): record is MemoryProp
 /** 每个提案 id 的最新状态。同 id 多行时按写入时间取最后一条。 */
 export function foldProposals(records: ReadonlyArray<UserMemoryRecord>): ReadonlyArray<MemoryProposal> {
   const latest = new Map<string, MemoryProposal>();
+
   for (const record of records) {
     if (!isProposalRecord(record)) continue;
     const current = latest.get(record.id);
     if (current === undefined || record.createdAt >= current.createdAt) latest.set(record.id, record);
   }
+
   return [...latest.values()];
 }
 

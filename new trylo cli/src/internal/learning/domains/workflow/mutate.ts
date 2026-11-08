@@ -1,46 +1,5 @@
-import { domainFailure, type DomainFailure } from "../shared/types.js";
-import type { WorkflowBudget, WorkflowDraft, WorkflowFallback } from "./inducer.js";
-
-export type WorkflowMutation =
-  | { readonly field: "budget.maxSteps"; readonly value: number }
-  | { readonly field: "budget.maxTokens"; readonly value: number }
-  | { readonly field: "failureFallback"; readonly value: readonly WorkflowFallback[] };
-
-export type MutationResult =
-  | { readonly kind: "draft"; readonly draft: WorkflowDraft }
-  | DomainFailure;
-
-export function applyWorkflowMutation(
-  draft: WorkflowDraft,
-  mutation: WorkflowMutation,
-): MutationResult {
-  if (!draft.mutableFields.includes(mutation.field)) {
-    return domainFailure(
-      "mutation_rejected",
-      `field ${mutation.field} is not in mutableFields`,
-      [mutation.field],
-    );
-  }
-  let budget: WorkflowBudget = draft.budget;
-  let failureFallback = draft.failureFallback;
-  if (mutation.field === "budget.maxSteps") {
-    budget = { ...draft.budget, maxSteps: mutation.value };
-  } else if (mutation.field === "budget.maxTokens") {
-    budget = { ...draft.budget, maxTokens: mutation.value };
-  } else {
-    failureFallback = mutation.value;
-  }
-  return {
-    kind: "draft",
-    draft: {
-      ...draft,
-      version: draft.version + 1,
-      budget,
-      failureFallback,
-    },
-  };
-}
-
-export function rejectImmutableMutation(field: string): DomainFailure {
-  return domainFailure("mutation_rejected", `cannot mutate ${field}`, [field]);
-}
+/** Compatibility for existing CLI, integration and external callers.
+ * Owner: workflow subsystem. Remove when the recorded consumers migrate.
+ * Mapping and removal condition: 2026-11-04-迁移记录-Workflow子系统归属.md.
+ */
+export * from "../../agent/subsystems/workflow/domain/mutate.js";

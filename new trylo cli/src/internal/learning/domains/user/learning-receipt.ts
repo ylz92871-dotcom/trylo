@@ -24,8 +24,10 @@ export function createLearningReceipt(input: CreateReceiptInput): LearningReceip
   if ((input.existing ?? []).some((item) => item.dedupeKey === dedupeKey)) {
     return null;
   }
+
   const now = input.now ?? Date.now();
   const behavior = input.commitment.behaviorDelta.adaptedBehavior;
+
   return {
     id: shortId("receipt", [dedupeKey]),
     commitmentId: input.commitment.id,
@@ -61,10 +63,12 @@ export function appendReceiptsForNewCommitments(input: AppendReceiptsInput): rea
   const now = input.now ?? Date.now();
   let receipts = [...(input.existing ?? [])];
   const beforeIds = new Set(input.before.map((item) => item.id));
+
   for (const commitment of input.after) {
     if (beforeIds.has(commitment.id) || commitment.state === "superseded") {
       continue;
     }
+
     const receipt = createLearningReceipt({
       commitment,
       evidence: input.evidence,
@@ -81,5 +85,6 @@ export function appendReceiptsForNewCommitments(input: AppendReceiptsInput): rea
       receipts = [...receipts, receipt];
     }
   }
+
   return receipts;
 }

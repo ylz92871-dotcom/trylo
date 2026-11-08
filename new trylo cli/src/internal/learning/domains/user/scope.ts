@@ -24,6 +24,7 @@ export function decideScope(input: ScopeInput, speechAct: string): ScopeDecision
       scope: narrowScope(input),
     };
   }
+
   return { kind: "ok", scope: narrowScope(input) };
 }
 
@@ -31,8 +32,10 @@ function narrowScope(input: ScopeInput): Scope {
   if (input.taskFamilyId !== undefined) {
     return { kind: "task_family", id: input.taskFamilyId };
   }
+
   if (input.projectId !== undefined) {
     return { kind: "project", id: input.projectId };
   }
+
   return { kind: "task", id: "current_task" };
 }

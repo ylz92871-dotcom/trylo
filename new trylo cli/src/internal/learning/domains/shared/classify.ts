@@ -35,23 +35,29 @@ export function classifyLearningShape(input: {
       activationEligible: false,
     };
   }
+
   if (input.explicitFutureDirective && input.phrasingOnly) {
     return { kind: "user_rule" };
   }
+
   if (input.phrasingOnly) {
     return { kind: "prompt_patch", strongCandidate: false };
   }
+
   if (input.processGraph && input.multiStepWithChecks === false) {
     return { kind: "workflow" };
   }
+
   if (input.multiStepWithChecks && input.processGraph === false) {
     return { kind: "skill" };
   }
+
   if (input.multiStepWithChecks && input.processGraph) {
     return domainFailure(
       "needs_more_evidence",
       "ambiguous skill vs workflow shape without matching identities",
     );
   }
+
   return domainFailure("needs_more_evidence", "shape is too thin to classify");
 }

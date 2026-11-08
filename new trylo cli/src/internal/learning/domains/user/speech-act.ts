@@ -5,6 +5,7 @@ export const USER_SPEECH_ACTS = [
   "withdraw",
   "not_explicit",
 ] as const;
+
 export type UserSpeechAct = (typeof USER_SPEECH_ACTS)[number];
 
 const FUTURE = /以后(都)?这样|以后都这样|以后都这么做|from now on|always do this|keep doing that from now/i;
@@ -18,15 +19,19 @@ export function detectSpeechAct(text: string): UserSpeechAct {
   if (WITHDRAW.test(text)) {
     return "withdraw";
   }
+
   if (FUTURE.test(text)) {
     return "future_directive";
   }
+
   if (CORRECTION.test(text)) {
     return "correction";
   }
+
   if (CONFIRM.test(text)) {
     return "confirm";
   }
+
   return "not_explicit";
 }
 

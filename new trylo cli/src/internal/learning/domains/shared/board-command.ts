@@ -6,6 +6,7 @@ export const BOARD_COMMAND_KINDS = [
   "submit_evidence",
   "submit_withdraw",
 ] as const;
+
 export type BoardCommandKind = (typeof BOARD_COMMAND_KINDS)[number];
 
 export type BoardCommandDraft = {

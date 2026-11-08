@@ -30,16 +30,20 @@ function scanTokens(
   tokens: readonly string[],
 ): readonly string[] {
   const hits: string[] = [];
+
   for (const text of texts) {
     const lowered = text.toLowerCase();
+
     for (const claim of tokens) {
       if (lowered.includes(claim)) {
         hits.push(claim);
       }
     }
+
     if (lowered.includes("curl http") || lowered.includes("npm i ")) {
       hits.push("download");
     }
   }
+
   return [...new Set(hits)];
 }

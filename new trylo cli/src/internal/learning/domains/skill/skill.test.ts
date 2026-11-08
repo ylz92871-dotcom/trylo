@@ -30,9 +30,11 @@ function episode(
     steps: ["reproduce failing test", "patch the production code", "re-run the same test"],
     checks: ["unit_test exit 0"],
   };
+
   if (failureMode === undefined) {
     return base;
   }
+
   return { ...base, failureMode };
 }
 
@@ -42,10 +44,13 @@ test("three similar multi-step episodes induce a skill draft with pos/neg/checks
     episode("s2", "success"),
     episode("f1", "failure", "patched tests instead of production code"),
   ]);
+
   assert.equal(result.kind, "draft");
+
   if (result.kind !== "draft") {
     return;
   }
+
   assert.equal(result.draft.status, "draft");
   assert.ok(result.draft.trigger.length > 0);
   assert.equal(result.draft.steps.length >= 3, true);
@@ -65,15 +70,20 @@ test("same-name improvement suggests a new version instead of in-place write", (
     episode("s2", "success"),
     episode("f1", "failure", "skipped verify"),
   ]);
+
   assert.equal(first.kind, "draft");
+
   if (first.kind !== "draft") {
     return;
   }
+
   const second = induceSkill(
     [episode("s3", "success"), episode("s4", "success"), episode("f2", "failure", "flaky setup")],
     [first.draft.version],
   );
+
   assert.equal(second.kind, "draft");
+
   if (second.kind === "draft") {
     assert.equal(second.draft.version, 2);
     assert.notEqual(second.draft.id, first.draft.id);
@@ -96,15 +106,19 @@ test("a single better phrasing is not a skill", () => {
       checks: [],
     },
   ]);
+
   assert.equal(result.kind, "failure");
+
   if (result.kind === "failure") {
     assert.equal(result.code, "needs_more_evidence");
   }
+
   const classified = classifyLearningShape({
     explicitFutureDirective: false,
     phrasingOnly: true,
     multiStepWithChecks: false,
     processGraph: false,
   });
+
   assert.equal(classified.kind, "prompt_patch");
 });

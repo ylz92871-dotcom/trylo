@@ -10,6 +10,7 @@ import {
 import { inferDimension } from "./conclusion.js";
 
 export const DECISION_POINTS = ["report.section_order", "artifact.structure_before_draft"] as const;
+
 export type DecisionPoint = (typeof DECISION_POINTS)[number];
 
 const PERSIST_MARK = /以后|今后|每次|一直|默认|项目里|这个项目|长期/;
@@ -31,6 +32,7 @@ export function decisionPointFor(dimension: UserModelRecord["dimension"]): Decis
 
 function deltaFor(point: DecisionPoint, evidence: readonly UserEvidence[]): BehaviorDelta {
   const text = evidence.map((item) => `${item.rawText} ${item.claim ?? ""}`).join(" ");
+
   if (point === "report.section_order") {
     const adapted = /背景优先|先说背景/.test(text)
       ? "先给必要背景，再给结论与依据"
@@ -45,7 +47,9 @@ function deltaFor(point: DecisionPoint, evidence: readonly UserEvidence[]): Beha
       rollbackBehavior: "恢复通用报告章节顺序",
     };
   }
+
   const structureFirst = /先(?:看|给|出)?结构|结构优先/.test(text);
+
   return {
     decisionPoint: point,
     baselineBehavior: "按通用流程直接生成交付稿",
@@ -83,11 +87,13 @@ export function compileBehaviorCommitments(input: CompileCommitmentsInput): read
       .filter((decision) => decision.classification === "personalization_candidate")
       .flatMap((decision) => decision.sourceEvidenceIds),
   );
+
   for (const model of input.models) {
     const point = decisionPointFor(model.dimension);
     if (point === null) {
       continue;
     }
+
     const sources = input.evidence.filter(
       (item) =>
         eligibleEvidenceIds.has(item.id) &&
@@ -97,6 +103,7 @@ export function compileBehaviorCommitments(input: CompileCommitmentsInput): read
     if (sources.length === 0) {
       continue;
     }
+
     const stableKey = [input.userId, point, model.scopeFingerprint].join("::");
     const prior = [...output]
       .reverse()
@@ -128,10 +135,12 @@ export function compileBehaviorCommitments(input: CompileCommitmentsInput): read
       createdAt: now,
       updatedAt: now,
     };
+
     output = [
       ...output.map((item) => (item.id === prior?.id ? { ...item, state: "superseded" as const } : item)),
       commitment,
     ];
   }
+
   return output;
 }

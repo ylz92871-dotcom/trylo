@@ -14,6 +14,7 @@ export const ELIGIBILITY_CLASSES = [
   "authorization_or_permission",
   "insufficient_information",
 ] as const;
+
 export type EligibilityClass = (typeof ELIGIBILITY_CLASSES)[number];
 
 /** 资格闸之后"该去哪"：只有 personalization_chain 进 user_rule 深链。 */
@@ -24,6 +25,7 @@ export const ELIGIBILITY_ROUTES = [
   "permission_service",
   "drop_insufficient",
 ] as const;
+
 export type EligibilityRoute = (typeof ELIGIBILITY_ROUTES)[number];
 
 export function routeForClass(classification: EligibilityClass): EligibilityRoute {
@@ -64,6 +66,7 @@ export const EVIDENCE_EVENT_KINDS = [
   "override",
   "intervention",
 ] as const;
+
 export type EvidenceEventKind = (typeof EVIDENCE_EVENT_KINDS)[number];
 
 export const INFORMEDNESS_STAGES = [
@@ -73,9 +76,11 @@ export const INFORMEDNESS_STAGES = [
   "post_outcome",
   "unknown",
 ] as const;
+
 export type InformednessStage = (typeof INFORMEDNESS_STAGES)[number];
 
 export const SCOPE_NARROWNESS = ["narrow", "medium", "broad"] as const;
+
 export type ScopeNarrowness = (typeof SCOPE_NARROWNESS)[number];
 
 /**
@@ -155,6 +160,7 @@ export const POLICY_DIMENSIONS = [
   "architecture_refactor",
   "agent_autonomy",
 ] as const;
+
 export type PolicyDimension = (typeof POLICY_DIMENSIONS)[number];
 
 export const EVIDENCE_RELATION_TYPES = [
@@ -167,6 +173,7 @@ export const EVIDENCE_RELATION_TYPES = [
   "same_underlying_pattern",
   "temporal_supersedes",
 ] as const;
+
 export type EvidenceRelationType = (typeof EVIDENCE_RELATION_TYPES)[number];
 
 export type EvidenceRelation = {
@@ -260,6 +267,7 @@ export const COMMITMENT_STATES = [
   "retracted",
   "superseded",
 ] as const;
+
 export type CommitmentState = (typeof COMMITMENT_STATES)[number];
 
 export type BehaviorCommitment = {
@@ -286,6 +294,7 @@ export const RECEIPT_REASONS = [
   "paused",
   "retracted",
 ] as const;
+
 export type ReceiptReason = (typeof RECEIPT_REASONS)[number];
 
 export type LearningReceipt = {
@@ -349,6 +358,7 @@ export const OUTCOME_SIGNALS = [
   "rollback",
   "task_completed",
 ] as const;
+
 export type OutcomeSignal = (typeof OUTCOME_SIGNALS)[number];
 
 export type OutcomeObservation = {

@@ -29,7 +29,9 @@ function claimFor(eventKind: EvidenceEventKind, text: string): string | null {
   if (trimmed.length === 0) {
     return null;
   }
+
   const head = trimmed.slice(0, 180);
+
   switch (eventKind) {
     case "correction":
       return `用户明确纠正当前理解：${head}`;
@@ -51,18 +53,23 @@ function eventKindFor(text: string, hint?: EvidenceEventKind): EvidenceEventKind
   if (hint !== undefined) {
     return hint;
   }
+
   if (CORRECTION_MARK.test(text)) {
     return "correction";
   }
+
   if (CHOICE_MARK.test(text)) {
     return "choice";
   }
+
   if (INTERVENTION_MARK.test(text)) {
     return "intervention";
   }
+
   if (APPROVAL_MARK.test(text)) {
     return "approval";
   }
+
   return "explicit_statement";
 }
 
@@ -107,19 +114,23 @@ export function extractEvidence(input: ExtractEvidenceInput): UserEvidence | nul
   if (rawText.length === 0) {
     return null;
   }
+
   if (OFF_TOPIC_MARK.test(rawText)) {
     return null;
   }
+
   const eventKind = eventKindFor(rawText, input.eventKind);
   const claim = claimFor(eventKind, rawText);
   if (claim === null) {
     return null;
   }
+
   const textHash = hashUserText(rawText);
   const sourceHash = `sh_${sha256Hex(
     [input.source.sessionId, input.source.turnId ?? "", input.source.actionId ?? "", rawText].join(""),
   )}`;
   const now = input.now ?? Date.now();
+
   return {
     id: shortId("ev", [sourceHash, textHash]),
     rawText,

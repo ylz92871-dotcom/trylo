@@ -22,6 +22,7 @@ export const MEMORY_REJECT_REASONS = [
   "invalid_arguments",
   "schema_unsupported",
 ] as const;
+
 export type MemoryRejectReason = (typeof MEMORY_REJECT_REASONS)[number];
 
 export type MemoryCommandResult =

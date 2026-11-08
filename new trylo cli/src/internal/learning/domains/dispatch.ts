@@ -1,7 +1,7 @@
 import { classifyLearningShape, type CompoundProposalSuggestion } from "./shared/classify.js";
 import type { DomainFailure } from "./shared/types.js";
-import { detectPromptPatch, type PromptDetectInput } from "./prompt/detector.js";
-import type { PromptPatchDraft } from "./prompt/builder.js";
+import { detectPromptPatch, type PromptDetectInput } from "../agent/subsystems/method/legacy-prompt/detector.js";
+import type { PromptPatchDraft } from "../agent/subsystems/method/legacy-prompt/builder.js";
 import { buildUserRule, type UserBuildResult } from "./user/builder.js";
 import type { ScopeInput } from "./user/scope.js";
 import { induceSkill, type SkillDraft, type SkillEpisode } from "./skill/inducer.js";
@@ -52,6 +52,7 @@ export function dispatchLearning(input: DispatchInput): DispatchResult {
       };
     }
   }
+
   return {
     ...(user === undefined ? {} : { user }),
     ...(prompt === undefined ? {} : { prompt }),

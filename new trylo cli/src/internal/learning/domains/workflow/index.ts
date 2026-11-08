@@ -1,22 +1,5 @@
-export {
-  DEFAULT_WORKFLOW_MIN_REPEATS,
-  editWorkflow,
-  induceWorkflow,
-  renderWorkflowMarkdown,
-  withdrawWorkflow,
-  type WorkflowBudget,
-  type WorkflowCheckpoint,
-  type WorkflowDraft,
-  type WorkflowEpisode,
-  type WorkflowFallback,
-  type WorkflowInduceResult,
-  type WorkflowNode,
-  type WorkflowTransition,
-} from "./inducer.js";
-export {
-  applyWorkflowMutation,
-  rejectImmutableMutation,
-  type MutationResult,
-  type WorkflowMutation,
-} from "./mutate.js";
-export { parseWorkflowEpisodeList } from "./parse-episode.js";
+/** Compatibility for existing CLI, integration and external callers.
+ * Owner: workflow subsystem. Remove when the recorded consumers migrate.
+ * Mapping and removal condition: 2026-11-04-迁移记录-Workflow子系统归属.md.
+ */
+export * from "../../agent/subsystems/workflow/domain/index.js";

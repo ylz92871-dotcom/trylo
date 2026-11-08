@@ -1,10 +1,13 @@
 export const ASSET_KINDS = ["user_rule", "prompt_patch", "skill", "workflow"] as const;
+
 export type AssetKind = (typeof ASSET_KINDS)[number];
 
 export const DRAFT_STATUS = "draft" as const;
+
 export type DraftStatus = typeof DRAFT_STATUS;
 
 export const SCOPE_KINDS = ["task", "project", "task_family", "user_global"] as const;
+
 export type ScopeKind = (typeof SCOPE_KINDS)[number];
 
 export type Scope = {
@@ -20,6 +23,7 @@ export type VersionPins = {
 };
 
 export const CHECK_KINDS = ["unit_test", "compile", "lint", "acceptance"] as const;
+
 export type CheckKind = (typeof CHECK_KINDS)[number];
 
 export type TaskFamily = {
@@ -37,9 +41,11 @@ export const EXTERNAL_VERDICT_KINDS = [
   "user_acceptance",
   "independent_verifier",
 ] as const;
+
 export type ExternalVerdictKind = (typeof EXTERNAL_VERDICT_KINDS)[number];
 
 export const VERDICT_RESULTS = ["pass", "fail", "partial"] as const;
+
 export type VerdictResult = (typeof VERDICT_RESULTS)[number];
 
 export type ExternalVerdict = {
@@ -57,6 +63,7 @@ export const WEAK_SIGNAL_KINDS = [
   "self_generated_tests",
   "judge_rubric",
 ] as const;
+
 export type WeakSignalKind = (typeof WEAK_SIGNAL_KINDS)[number];
 
 export type WeakSignal = {
@@ -93,6 +100,7 @@ export const FAILURE_CODES = [
   "malformed_input",
   "mutation_rejected",
 ] as const;
+
 export type FailureCode = (typeof FAILURE_CODES)[number];
 
 export type DomainFailure = {
@@ -109,6 +117,7 @@ export const PROMPT_SECTIONS = [
   "tool_description",
   "phrasing",
 ] as const;
+
 export type PromptSection = (typeof PROMPT_SECTIONS)[number];
 
 export type PromptOp =

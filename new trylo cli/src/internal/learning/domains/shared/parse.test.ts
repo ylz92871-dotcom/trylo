@@ -4,12 +4,14 @@ import { parsePromptOps, parseTaskFamily, parseVersionPins } from "./parse.js";
 
 test("malformed task family fail-closes", () => {
   const missing = parseTaskFamily({ id: "x" });
+
   assert.equal(missing.ok, false);
   const badKind = parseTaskFamily({
     id: "x",
     intentClass: "fix",
     checkKind: "not-a-kind",
   });
+
   assert.equal(badKind.ok, false);
 });
 
@@ -26,7 +28,9 @@ test("valid task family with checkSchema parses", () => {
     checkKind: "unit_test",
     checkSchema: "npm test -- test/foo.test.ts",
   });
+
   assert.equal(parsed.ok, true);
+
   if (parsed.ok) {
     assert.equal(parsed.value.checkSchema, "npm test -- test/foo.test.ts");
   }

@@ -64,6 +64,7 @@ test("relation discovery only links evidence inside one dimension", () => {
     fresh: [a, b],
     existing: [c],
   });
+
   assert.equal(
     relations.some((relation) => relation.type === "supports"),
     true,
@@ -86,8 +87,10 @@ test("one strong evidence yields an emerging conclusion", () => {
     relations: [],
     scopeFingerprint: SCOPE,
   });
+
   assert.equal(conclusions.length, 1);
   const conclusion = conclusions[0] as ConclusionRecord;
+
   assert.equal(conclusion.dimension, "reporting_information_density");
   assert.equal(conclusion.temporalState, "emerging");
   assert.equal(conclusion.supporting.length, 1);
@@ -115,6 +118,7 @@ test("a lone weak evidence never becomes a conclusion", () => {
     relations: [],
     scopeFingerprint: SCOPE,
   });
+
   assert.equal(conclusions.length, 0);
 });
 
@@ -126,6 +130,7 @@ test("re-running the same statement merges instead of duplicating", () => {
     relations: [],
     scopeFingerprint: SCOPE,
   });
+
   assert.equal(first.length, 1);
   const second = synthesizeConclusions({
     userId: "local-user",
@@ -134,8 +139,10 @@ test("re-running the same statement merges instead of duplicating", () => {
     relations: [],
     scopeFingerprint: SCOPE,
   });
+
   assert.equal(second.length, 1);
   const merged = second[0] as ConclusionRecord;
+
   assert.equal(merged.version, 1);
   assert.ok(merged.supporting.length >= 1);
 });
@@ -153,6 +160,7 @@ test("distance classification keeps D3 out of persistence", () => {
     userId: "local-user",
     conclusions: [conclusionFor("用户很懒，没有耐心看过程")],
   });
+
   assert.equal(rejected.models.length, 0);
   assert.equal(rejected.rejected[0]?.reason, "d3_forbidden");
 });
@@ -162,9 +170,11 @@ test("stable conclusions become D0 models with four separate confidences", () =>
     userId: "local-user",
     conclusions: [conclusionFor("在执行任务中，用户对低信息密度过程性叙述接受度较低。")],
   });
+
   assert.equal(rejected.length, 0);
   assert.equal(models.length, 1);
   const model = models[0] as UserModelRecord;
+
   assert.equal(model.distance, "D0");
   assert.equal(model.effectiveness, "unknown");
   assert.equal(model.confirmation, "unconfirmed");
@@ -184,8 +194,10 @@ test("emerging conclusions are capped at D2 and carry context limits", () => {
       }),
     ],
   });
+
   assert.equal(models.length, 1);
   const model = models[0] as UserModelRecord;
+
   assert.equal(model.distance, "D2");
   assert.ok(model.truth.score <= 0.72);
 });
@@ -200,6 +212,7 @@ test("weak conclusions never promote to D2 models", () => {
       }),
     ],
   });
+
   assert.equal(models.length, 0);
   assert.equal(rejected[0]?.reason, "weak_conclusion");
 });

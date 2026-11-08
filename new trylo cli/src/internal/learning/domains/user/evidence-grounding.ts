@@ -27,15 +27,19 @@ export function classifyUserSignal(text: string, eventKind: EvidenceEventKind): 
   if (eventKind === "override" || eventKind === "intervention") {
     return { durability: "task_local", signalKind: "task_override" };
   }
+
   if (COLLABORATION_MARK.test(text)) {
     return { durability: "long_term_candidate", signalKind: "collaboration_preference" };
   }
+
   if (TASK_LOCAL_MARK.test(text)) {
     return { durability: "task_local", signalKind: "task_requirement" };
   }
+
   if (eventKind === "correction") {
     return { durability: "session_local", signalKind: "correction" };
   }
+
   return { durability: "session_local", signalKind: "task_requirement" };
 }
 
@@ -79,24 +83,30 @@ export function groundEvidenceCandidate(input: {
   if (input.event === undefined) {
     return { accepted: false, reasonCode: "source_event_missing" };
   }
+
   if (input.event.actor !== "user") {
     return { accepted: false, reasonCode: "actor_not_user" };
   }
+
   const observation = input.event.text.trim();
   if (observation.length === 0) {
     return { accepted: false, reasonCode: "raw_span_mismatch" };
   }
+
   const proposedRaw = (input.candidate.proposedRaw ?? "").trim();
   if (proposedRaw.length > 0 && !observation.includes(proposedRaw) && proposedRaw !== observation) {
     return { accepted: false, reasonCode: "raw_span_mismatch" };
   }
+
   const dedupe = `sh_${sha256Hex([input.source.sessionId, input.event.eventId, observation].join(""))}`;
   if (input.seen.has(dedupe)) {
     return { accepted: false, reasonCode: "duplicate_source" };
   }
+
   const eventKind = input.candidate.proposedEventKind ?? "explicit_statement";
   const signal = classifyUserSignal(observation, eventKind);
   const now = input.now ?? Date.now();
+
   return {
     accepted: true,
     reasonCode: "grounded_user_event",

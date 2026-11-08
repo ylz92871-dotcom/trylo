@@ -1,4 +1,5 @@
 import type { LearningReceipt, OutcomeObservation, UserEvidence } from "./contracts.js";
+import type { UserCycleRecord } from "./learning-cycle-contract.js";
 
 /**
  * 用户学习的四个调度端口 —— 总控制板将来接管的那个 seam（UE-1）。
@@ -59,6 +60,7 @@ export type WorkOrder = {
 
 /** 账本里能出现的东西。闭集，判别联合——新增一种记录要改这里，改不了别处。 */
 export type UserLearningRecord =
+  | UserCycleRecord
   | { readonly record: "evidence"; readonly evidence: UserEvidence }
   | {
       readonly record: "signal";
@@ -100,6 +102,7 @@ export const STRONG_SIGNALS = [
   "steer",
   "artifact",
 ] as const;
+
 export type StrongSignalKind = (typeof STRONG_SIGNALS)[number];
 
 export type LedgerReadResult =

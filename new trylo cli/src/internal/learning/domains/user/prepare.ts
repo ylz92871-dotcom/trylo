@@ -72,9 +72,11 @@ export function matchesTask(
   if (rule.status !== "active") {
     return false;
   }
+
   if (inferDimension(taskText) !== rule.domain) {
     return false;
   }
+
   return inScope(rule, scopeFingerprint, models);
 }
 
@@ -111,26 +113,32 @@ export function prepareUserPolicy(input: PrepareUserPolicyInput): UserPolicySele
   if (input.budgetChars <= 0 || input.rules.length === 0) {
     return EMPTY;
   }
+
   const hit = input.rules
     .filter((rule) => matchesTask(rule, input.taskText, input.scopeFingerprint, input.models))
     .sort(order);
   const kept: CompiledPolicyRule[] = [];
   const lines: string[] = [];
   let body = 0;
+
   for (const rule of hit) {
     const line = `${USER_POLICY_LINE_PREFIX}${rule.instruction}`;
     const next = body + line.length + (lines.length === 0 ? 0 : 1);
     if (USER_POLICY_HEADER.length + 1 + next > input.budgetChars) {
       break;
     }
+
     kept.push(rule);
     lines.push(line);
     body = next;
   }
+
   if (kept.length === 0) {
     return { ...EMPTY, droppedRuleIds: hit.map((rule) => rule.id) };
   }
+
   const segment = `${USER_POLICY_HEADER}\n${lines.join("\n")}`;
+
   return {
     segment,
     adoptedRuleIds: kept.map((rule) => rule.id),

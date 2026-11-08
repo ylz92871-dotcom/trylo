@@ -26,9 +26,11 @@ function strengthFor(model: UserModelRecord): CompiledPolicyRule["strength"] {
   if (model.distance === "D2") {
     return "advisory";
   }
+
   if (model.truth.band === "high") {
     return "strong_default";
   }
+
   return "soft";
 }
 
@@ -47,14 +49,17 @@ export function compilePolicyBundle(input: CompileBundleInput): CompiledBundle {
     String(now),
   ]);
   const rules: CompiledPolicyRule[] = [];
+
   for (const commitment of input.commitments) {
     if (commitment.state !== "shadow" && commitment.state !== "active") {
       continue;
     }
+
     const model = input.models.find((item) => item.id === commitment.userModelId);
     if (model === undefined || model.status !== "active") {
       continue;
     }
+
     rules.push({
       id: shortId("pol", [bundleId, commitment.id]),
       bundleId,
@@ -72,6 +77,7 @@ export function compilePolicyBundle(input: CompileBundleInput): CompiledBundle {
       createdAt: now,
     });
   }
+
   const checksum = sha256Hex(rules.map((rule) => `${rule.id}${rule.instruction}`).join(""));
   const bundle: ImmutablePolicyBundle = {
     id: bundleId,
@@ -83,6 +89,7 @@ export function compilePolicyBundle(input: CompileBundleInput): CompiledBundle {
     status: mode === "active" ? "active" : "shadow",
     createdAt: now,
   };
+
   return { bundle, rules };
 }
 
@@ -91,11 +98,14 @@ export function verifyBundleChecksum(compiled: CompiledBundle): boolean {
   if (compiled.bundle.ruleIds.length !== compiled.rules.length) {
     return false;
   }
+
   const ids = new Set(compiled.rules.map((rule) => rule.id));
   if (!compiled.bundle.ruleIds.every((id) => ids.has(id))) {
     return false;
   }
+
   const checksum = sha256Hex(compiled.rules.map((rule) => `${rule.id}${rule.instruction}`).join(""));
+
   return checksum === compiled.bundle.checksum;
 }
 

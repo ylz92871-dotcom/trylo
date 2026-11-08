@@ -88,9 +88,12 @@ export function strongSignalOf(event: JournalEvent): StrongSignal | undefined {
   if (signal === undefined) {
     return undefined;
   }
+
   if (!TEXT_KINDS.has(event.kind)) {
     return { signal };
   }
+
   const text = textOf(event.payload);
+
   return text === undefined ? undefined : { signal, text };
 }

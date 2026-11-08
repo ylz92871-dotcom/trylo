@@ -2,6 +2,7 @@ import { sha256Hex, shortId } from "../shared/hash.js";
 import type { OutcomeObservation } from "./contracts.js";
 
 export const OUTCOME_EVENT_KINDS = ["feedback_text", "manual_edit", "rollback", "correction"] as const;
+
 export type OutcomeEventKind = (typeof OUTCOME_EVENT_KINDS)[number];
 
 export type OutcomeEvent = {
@@ -43,6 +44,7 @@ function signalFor(
 ): Pick<OutcomeObservation, "signal" | "attribution"> & { readonly correctionKey?: string } {
   const text = event.text ?? "";
   const key = correctionKeyFor(text);
+
   if (event.kind === "rollback") {
     return {
       signal: "rollback",
@@ -50,26 +52,32 @@ function signalFor(
       ...(key === undefined ? {} : { correctionKey: key }),
     };
   }
+
   if (HELPFUL_MARK.test(text)) {
     return { signal: "explicit_helpful", attribution: "direct" };
   }
+
   if (UNHELPFUL_MARK.test(text)) {
     return { signal: "explicit_unhelpful", attribution: "direct" };
   }
+
   if (event.kind === "manual_edit") {
     return { signal: "material_rework", attribution: "partial" };
   }
+
   if (event.kind === "correction") {
     const key = correctionKeyFor(text);
     if (key !== undefined && priorKeys.has(key)) {
       return { signal: "repeated_correction", attribution: "direct", correctionKey: key };
     }
+
     return {
       signal: "material_rework",
       attribution: "partial",
       ...(key === undefined ? {} : { correctionKey: key }),
     };
   }
+
   return { signal: "material_rework", attribution: "partial" };
 }
 
@@ -85,11 +93,13 @@ export function evaluateOutcome(input: EvaluateOutcomeInput): EvaluateOutcomeRes
   const observations: OutcomeObservation[] = [];
   const seenKeys = new Set<string>(input.priorCorrectionKeys ?? []);
   const repeatedCounts = new Map<string, number>();
+
   for (const commitmentId of input.commitmentIds) {
     for (const event of input.events) {
       if (event.kind === "feedback_text" && !HELPFUL_MARK.test(event.text ?? "") && !UNHELPFUL_MARK.test(event.text ?? "")) {
         continue;
       }
+
       const mapped = signalFor(event, seenKeys);
       if (mapped.correctionKey !== undefined) {
         seenKeys.add(mapped.correctionKey);
@@ -97,6 +107,7 @@ export function evaluateOutcome(input: EvaluateOutcomeInput): EvaluateOutcomeRes
           repeatedCounts.set(commitmentId, (repeatedCounts.get(commitmentId) ?? 0) + 1);
         }
       }
+
       observations.push({
         id: shortId("outcome", [commitmentId, mapped.signal, String(now)]),
         commitmentId,
@@ -117,14 +128,17 @@ export function evaluateOutcome(input: EvaluateOutcomeInput): EvaluateOutcomeRes
       });
     }
   }
+
   const pauseCommitmentIds = input.commitmentIds.filter((commitmentId) => {
     const relevant = observations.filter((item) => item.commitmentId === commitmentId);
     if (relevant.some((item) => item.signal === "explicit_unhelpful" || item.signal === "rollback")) {
       return true;
     }
+
     // 跨批累计由接线方把历史 repeated key 喂给 priorCorrectionKeys；
     // 本批内出现 ≥2 次重复纠正即建议暂停。
     return (repeatedCounts.get(commitmentId) ?? 0) >= 2;
   });
+
   return { observations, pauseCommitmentIds };
 }

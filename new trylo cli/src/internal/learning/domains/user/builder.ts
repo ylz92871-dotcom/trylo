@@ -102,16 +102,19 @@ function routed(
 }
 
 export function buildUserRule(input: UserRuleInput): UserBuildResult {
+  // A permission-only request cannot become a learned preference.
   if (isPermissionOnly(input.text)) {
     return domainFailure(
       "permission_claim_rejected",
       "user text asked for a capability; learning cannot grant permission",
     );
   }
+
   const speechAct = detectSpeechAct(input.text);
   if (speechAct === "not_explicit") {
     return buildImplicit(input);
   }
+
   if (speechAct === "withdraw") {
     const id = shortId("uw", [hashUserText(input.text)]);
     return {
@@ -125,6 +128,7 @@ export function buildUserRule(input: UserRuleInput): UserBuildResult {
       },
     };
   }
+
   const permissionLanguageDetected = detectsPermissionLanguage(input.text);
   const ruleText = residualPreference(input.text);
   const scopeDecision = decideScope(input, speechAct);
@@ -135,11 +139,13 @@ export function buildUserRule(input: UserRuleInput): UserBuildResult {
       ["user_global"],
     );
   }
+
   // D3 硬门：先落证据、先过资格闸，只有 personalization_candidate 才进规则。
   const gate = passEligibilityGate(input, speechAct, ruleText);
   if (gate.kind === "routed") {
     return gate;
   }
+
   return finishDraft(input, speechAct, scopeDecision.scope, ruleText, permissionLanguageDetected);
 }
 
@@ -178,6 +184,7 @@ function finishDraft(
     },
     command: submitDraftCommand("user_rule", id),
   };
+
   return { kind: "draft", draft };
 }
 
@@ -209,10 +216,12 @@ function buildImplicit(input: UserRuleInput): UserBuildResult {
       ["user_global"],
     );
   }
+
   const evidence = extractFastEvidence(input, "not_explicit");
   if (evidence === null) {
     return domainFailure("not_explicit", "no explicit correction, confirm, withdraw, or future directive");
   }
+
   const eligibility = classifyEligibility({ evidence, speechAct: "not_explicit" });
   if (eligibility.classification === "personalization_candidate") {
     return finishDraft(
@@ -223,9 +232,11 @@ function buildImplicit(input: UserRuleInput): UserBuildResult {
       detectsPermissionLanguage(input.text),
     );
   }
+
   if (eligibility.classification === "insufficient_information") {
     return domainFailure("not_explicit", "no explicit correction, confirm, withdraw, or future directive");
   }
+
   return routed(eligibility.route, eligibility.classification, evidence, eligibility, eligibility.rationale);
 }
 
@@ -245,10 +256,12 @@ function passEligibilityGate(
       "no evidence could be extracted; nothing enters the rule path",
     );
   }
+
   const eligibility = classifyEligibility({ evidence, speechAct, residualText });
   if (eligibility.classification !== "personalization_candidate") {
     return routed(eligibility.route, eligibility.classification, evidence, eligibility, eligibility.rationale);
   }
+
   return { kind: "pass" };
 }
 
@@ -258,6 +271,7 @@ function extractFastEvidence(
 ): UserEvidence | null {
   const eventKind = speechAct === "correction" ? "correction" : "explicit_statement";
   const signal = classifyUserSignal(input.text, eventKind);
+
   return extractEvidence({
     text: input.text,
     eventKind,

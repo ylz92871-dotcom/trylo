@@ -24,13 +24,16 @@ export function classifyInferenceDistance(statement: string, conclusion: string)
   if (TRAIT_MARK.test(statement)) {
     return "D3";
   }
+
   if (RELIABILITY_MARK.test(statement)) {
     return "D1";
   }
+
   const head = conclusion.slice(0, 24);
   if ((head.length > 0 && statement.startsWith(head)) || similar(statement, conclusion)) {
     return "D0";
   }
+
   return "D2";
 }
 
@@ -47,9 +50,11 @@ function modelStatementFor(conclusion: ConclusionRecord): string {
   if (conclusion.counter.length > 0 || conclusion.temporalState === "disputed") {
     return `${conclusion.statement}（该信号可靠性仍受反证约束，不应直接作为跨任务验收标准。）`;
   }
+
   if (conclusion.temporalState === "emerging") {
     return `在当前项目语境下，用户可能倾向：${conclusion.statement}`;
   }
+
   return conclusion.statement;
 }
 
@@ -93,27 +98,33 @@ export function reasonUserModels(input: ReasonUserModelsInput): ReasonUserModels
   const models: UserModelRecord[] = [];
   const rejected: UserModelRejection[] = [];
   const live = (input.existing ?? []).filter((item) => item.status === "active");
+
   for (const conclusion of input.conclusions) {
     if (conclusion.status !== "active") {
       continue;
     }
+
     if (conclusion.statement.trim().length === 0) {
       rejected.push({ conclusionId: conclusion.id, reason: "empty_statement" });
       continue;
     }
+
     const statement = modelStatementFor(conclusion);
     const distance = classifyInferenceDistance(statement, conclusion.statement);
     if (distance === "D3") {
       rejected.push({ conclusionId: conclusion.id, reason: "d3_forbidden" });
       continue;
     }
+
     if (conclusion.strength < 0.6 && distance === "D2") {
       rejected.push({ conclusionId: conclusion.id, reason: "weak_conclusion" });
       continue;
     }
+
     const truth = bandFor(Math.min(DISTANCE_CAP[distance], conclusion.strength));
     const stableKey = [input.userId, conclusion.dimension, conclusion.scopeFingerprint].join("::");
     const prior = live.find((item) => item.stableKey === stableKey);
+
     models.push({
       id: shortId("um", [stableKey, conclusion.id, String(prior?.version ?? 0)]),
       userId: input.userId,
@@ -139,5 +150,6 @@ export function reasonUserModels(input: ReasonUserModelsInput): ReasonUserModels
       updatedAt: now,
     });
   }
+
   return { models, rejected };
 }

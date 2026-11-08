@@ -53,6 +53,7 @@ test("grounding accepts a real user event and rejects everything else", () => {
     source: { sessionId: "s1" },
     seen,
   });
+
   assert.equal(accepted.accepted, true);
 
   const agent = groundEvidenceCandidate({
@@ -61,6 +62,7 @@ test("grounding accepts a real user event and rejects everything else", () => {
     source: { sessionId: "s1" },
     seen,
   });
+
   assert.deepEqual(agent, { accepted: false, reasonCode: "actor_not_user" });
 
   const missing = groundEvidenceCandidate({
@@ -68,6 +70,7 @@ test("grounding accepts a real user event and rejects everything else", () => {
     source: { sessionId: "s1" },
     seen,
   });
+
   assert.deepEqual(missing, { accepted: false, reasonCode: "source_event_missing" });
 
   const mismatch = groundEvidenceCandidate({
@@ -76,6 +79,7 @@ test("grounding accepts a real user event and rejects everything else", () => {
     source: { sessionId: "s1" },
     seen,
   });
+
   assert.deepEqual(mismatch, { accepted: false, reasonCode: "raw_span_mismatch" });
 });
 
@@ -86,16 +90,20 @@ test("grounding rejects a duplicate source hash", () => {
     source: { sessionId: "s1" },
     seen: new Set<string>(),
   });
+
   assert.equal(first.accepted, true);
+
   if (!first.accepted) {
     return;
   }
+
   const second = groundEvidenceCandidate({
     candidate: { candidateId: "ev_8", proposedClaim: "x" },
     event: { eventId: "m1", actor: "user", text: "以后报告都先说结论" },
     source: { sessionId: "s1" },
     seen: new Set<string>([first.evidence.sourceHash]),
   });
+
   assert.deepEqual(second, { accepted: false, reasonCode: "duplicate_source" });
 });
 
@@ -115,6 +123,7 @@ test("persistent correction is a personalization candidate", () => {
     evidence: evidenceFor("以后都这样：先跑指定检查再改代码"),
     speechAct: "future_directive",
   });
+
   assert.equal(decision.classification, "personalization_candidate");
   assert.equal(decision.route, "personalization_chain");
   assert.equal(decision.sourceEvidenceIds.length, 1);
@@ -152,6 +161,7 @@ test("pure permission language belongs to the permission service", () => {
     speechAct: "future_directive",
     residualText: "",
   });
+
   assert.equal(decision.classification, "authorization_or_permission");
   assert.equal(decision.route, "permission_service");
 });
@@ -186,6 +196,7 @@ test("scope v2 fingerprints are stable and comparable", () => {
   const a = fingerprintScopeV2({ projectId: "repo-a" });
   const b = fingerprintScopeV2({ projectId: "repo-a" });
   const c = fingerprintScopeV2({ projectId: "repo-b" });
+
   assert.equal(a, b);
   assert.notEqual(a, c);
   assert.equal(
