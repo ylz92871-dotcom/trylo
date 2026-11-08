@@ -1,6 +1,7 @@
-"""Click-through Win32 feedback owned by actual desktop tool dispatches.
+"""Win32 feedback and a top stop control owned by desktop tool dispatches.
 
-No input hooks, focus changes, system cursor replacement or durable UI process.
+The surround and cursor are click-through; only the small stop control receives
+clicks. No new input hooks, focus changes, cursor replacement or durable process.
 The daemon ends with its MCP server. Screenshots temporarily hide all its windows;
 recording outside those short capture windows retains the gold surround.
 """
@@ -14,7 +15,8 @@ import threading
 import time
 
 from windows_mcp.desktop import flash_overlay as native
-from windows_mcp.desktop.control_visuals import premultiplied, render_cursor, render_halo
+from windows_mcp.desktop.control_visuals import premultiplied, render_cursor, render_halo, render_control_banner
+from windows_mcp.runtime.input_cancellation import ControlCancellation
 
 logger = logging.getLogger(__name__)
 _lock = threading.RLock()
@@ -24,7 +26,8 @@ _TAIL = 1.6
 
 
 class _Activity:
-    def __init__(self):
+    def __init__(self, cancellation=None):
+        self.cancellation = cancellation or ControlCancellation()
         self.stop = threading.Event()
         self.closed = threading.Event()
         self.hidden = threading.Event()
@@ -34,7 +37,7 @@ class _Activity:
         self.click_at = None
 
 
-def begin():
+def begin(cancellation=None):
     """Best-effort visuals must never prevent an input operation."""
     global _current
     if native._flash_disabled():
@@ -49,7 +52,7 @@ def begin():
             if not previous.closed.wait(1.0):
                 return None
         with _lock:
-            activity = _Activity()
+            activity = _Activity(cancellation)
             _current = activity
             threading.Thread(target=_run, args=(activity,), daemon=True,
                              name="trylo-gold-control").start()
@@ -134,6 +137,8 @@ def hidden_for_capture():
 def _run(activity):
     global _current
     windows = []
+    screen_windows = []
+    banner_handles = set()
     prior_dpi = None
     try:
         # Physical coordinates match UIA / SendInput even on mixed-DPI displays.
@@ -149,8 +154,28 @@ def _run(activity):
             scale = max(96, native._user32.GetDpiForWindow(hwnd)) / 96
             pixels = premultiplied(render_halo(w, h, scale))
             windows[-1] = (hwnd, instance, name, rect.left, rect.top, w, h, pixels)
+            screen_windows.append(windows[-1])
         if not windows:
             return
+        @native._WNDPROC
+        def banner_proc(hwnd, message, wparam, lparam):
+            if message == 0x0202:  # WM_LBUTTONUP; this small window is the stop control.
+                activity.cancellation.cancel()
+                activity.stop.set()
+                return 0
+            if message == 0x0021:  # MA_NOACTIVATE: never move focus from the user's app.
+                return 3
+            return native._wnd_proc(hwnd, message, wparam, lparam)
+
+        for index, monitor in enumerate(screen_windows):
+            scale = max(96, native._user32.GetDpiForWindow(monitor[0])) / 96
+            image = render_control_banner(scale, escape_available=activity.cancellation.escape_available)
+            name = f"TryloControlBanner_{id(activity):x}_{index}"
+            x = monitor[3] + (monitor[5] - image.width) // 2
+            y = monitor[4] + round(6 * scale)
+            hwnd, instance = native._create_layered_window(name, x, y, image.width, image.height, transparent=False, wnd_proc=banner_proc)
+            windows.append((hwnd, instance, name, x, y, image.width, image.height, premultiplied(image)))
+            banner_handles.add(hwnd)
         name = f"TryloGoldCursor_{id(activity):x}"
         hwnd, instance = native._create_layered_window(name, 0, 0, 88, 88)
         windows.append((hwnd, instance, name, 0, 0, 88, 88, None))
@@ -160,6 +185,9 @@ def _run(activity):
         was_hidden = True
         last_input = None
         while not activity.stop.is_set():
+            if activity.cancellation.requested():
+                activity.stop.set()
+                break
             now = time.monotonic()
             with _lock:
                 hide = _capture_depth > 0
@@ -176,6 +204,9 @@ def _run(activity):
                     was_hidden = True
                 else:
                     activity.hidden.clear()
+                    if not active:
+                        for banner in banner_handles:
+                            native._user32.ShowWindow(banner, 0)
                     # The tail belongs to the receipt. Any subsequent human input
                     # dismisses it immediately; no new hooks or takeover policy.
                     if not active:
@@ -191,12 +222,15 @@ def _run(activity):
                     if alpha != previous_alpha or was_hidden:
                         for window in windows[:-1]:
                             target, _, _, x, y, w, h, pixels = window
+                            if target in banner_handles and not active:
+                                native._user32.ShowWindow(target, 0)
+                                continue
                             native._push_bitmap(target, x, y, w, h, pixels, opacity=alpha)
                             native._user32.ShowWindow(target, native._SW_SHOWNA)
                         previous_alpha = alpha
                     if point:
                         # Cursor size follows the monitor containing the receipt.
-                        monitor = next((window for window in windows[:-1]
+                        monitor = next((window for window in screen_windows
                                         if window[3] <= point[0] < window[3]+window[5]
                                         and window[4] <= point[1] < window[4]+window[6]), None)
                         if monitor:

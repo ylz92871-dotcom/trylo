@@ -111,6 +111,7 @@ class UserInputHookWatcher:
         self._lock = threading.Lock()
         self._last_event_monotonic: float | None = None
         self._last_event_kind: str | None = None
+        self._last_escape_monotonic: float | None = None
         self._heartbeat = 0.0
 
     # ── lifecycle ─────────────────────────────────────────────────────────
@@ -168,6 +169,14 @@ class UserInputHookWatcher:
         if not self._trustworthy():
             return None
         return self._monotonic()
+
+    def escape_since(self, since_monotonic: float | None) -> bool:
+        """Only a recorded, non-Trylo Esc keydown can stop a control scope."""
+        if since_monotonic is None:
+            return False
+        with self._lock:
+            escaped = self._last_escape_monotonic
+        return escaped is not None and escaped > since_monotonic
 
     def user_input_since_precise(self, since_monotonic: float | None) -> bool | None:
         """Three-state verdict: True (user input after ``since``), False
@@ -323,6 +332,8 @@ class UserInputHookWatcher:
                     with self._lock:
                         self._last_event_monotonic = self._monotonic()
                         self._last_event_kind = kind
+                        if int(message) in (WM_KEYDOWN, WM_SYSKEYDOWN) and _KBDLLHOOKSTRUCT.from_address(l_param).vkCode == 0x1B:
+                            self._last_escape_monotonic = self._last_event_monotonic
         except Exception:
             pass
         return self._call_next_hook(n_code, message, l_param)
@@ -344,12 +355,12 @@ class UserInputHookWatcher:
         address = l_param if isinstance(l_param, int) else None
         if not address or address <= 0:
             return None
-        if not _address_readable(address, 8):
-            return None
         if message in (WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP):
             struct_type = _KBDLLHOOKSTRUCT
         else:
             struct_type = _MSLLHOOKSTRUCT
+        if not _address_readable(address, ctypes.sizeof(struct_type)):
+            return None
         event = struct_type.from_address(address)
         return int(event.dwExtraInfo)
 
@@ -362,18 +373,28 @@ class UserInputHookWatcher:
             return 0
 
 
+class _MemoryBasicInformation(ctypes.Structure):
+    _fields_ = [("base", ctypes.c_void_p), ("allocation_base", ctypes.c_void_p),
+                ("allocation_protect", ctypes.c_uint32), ("region_size", ctypes.c_size_t),
+                ("state", ctypes.c_uint32), ("protect", ctypes.c_uint32), ("kind", ctypes.c_uint32)]
+
+
 def _address_readable(address: int, size: int) -> bool:
     """True when ``size`` bytes at ``address`` can be read without faulting.
 
-    Probes with kernel32.IsBadReadPtr (the Win32-sanctioned guard): reading
-    through ``ctypes.string_at`` or ``.contents`` on a garbage pointer is an
-    unrecoverable access violation — the one failure a hook callback must
-    never have. IsBadReadPtr itself is harmless to call on any address.
+    Query page metadata before dereferencing the complete hook structure.
+    IsBadReadPtr probes by causing an access violation; even when Windows
+    handles it, Python's fault handler prints a misleading fatal stack.
     """
     try:
-        return not ctypes.windll.kernel32.IsBadReadPtr(
-            ctypes.c_void_p(address), ctypes.c_size_t(size)
-        )
+        query = ctypes.windll.kernel32.VirtualQuery
+        query.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t]
+        query.restype = ctypes.c_size_t
+        info = _MemoryBasicInformation()
+        if not query(ctypes.c_void_p(address), ctypes.byref(info), ctypes.sizeof(info)):
+            return False
+        return (info.state == 0x1000 and not info.protect & (0x1 | 0x100)
+                and info.base is not None and address + size <= info.base + info.region_size)
     except AttributeError:
         # No ctypes.windll (non-Windows): nothing to probe with. The real
         # path is Windows-only and its l_param is always a live OS struct;

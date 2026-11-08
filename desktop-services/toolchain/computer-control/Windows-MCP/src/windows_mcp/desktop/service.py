@@ -15,6 +15,7 @@ from windows_mcp.tree.service import Tree
 from windows_mcp.desktop import screenshot as screenshot_capture
 from windows_mcp.desktop import flash_overlay
 from windows_mcp.desktop import control_overlay
+from windows_mcp.runtime.input_cancellation import ControlCancellation, InputCancelled, cancellable_input, check_input_cancelled
 from windows_mcp.desktop.ocr_backend import (
     OcrBackend,
     WindowsOcrPowerShellBackend,
@@ -239,11 +240,34 @@ class Desktop:
         # A refused operation must not light up as an agent action.
         if getattr(self, "_takeover_terminal", None) is not None:
             return self._mutation_takeover_inner(dispatch)
-        activity = control_overlay.begin()
+        watcher = getattr(self, "_user_input_hook", None)
+        anchor = watcher.precise_now() if watcher is not None else None
+        cancellation = ControlCancellation(lambda: watcher is not None and watcher.escape_since(anchor), escape_available=anchor is not None)
+        activity = control_overlay.begin(cancellation)
         try:
-            result = self._mutation_takeover_inner(dispatch)
+            with cancellable_input(cancellation):
+                result = self._mutation_takeover_inner(dispatch)
+                check_input_cancelled()
+        except InputCancelled as exc:
+            # The actor still owns input release and the takeover state. The
+            # overlay/hook only records intent; it never injects cleanup input.
+            control_overlay.finish(activity)
+            guard = getattr(self, "_takeover_guard", None)
+            self._takeover_terminal = guard.guard_cancel_by_user() if guard is not None else TakeoverState.CANCELLED
+            try:
+                cancellation.release_all()
+                self.safe_release_input()
+            except Exception as release_error:
+                raise TargetResolutionError(ErrorCode.CANCELLED_BY_USER_INPUT, "computer control stopped; some held input could not be released") from release_error
+            raise TargetResolutionError(ErrorCode.CANCELLED_BY_USER_INPUT, str(exc)) from exc
         except BaseException:
             control_overlay.finish(activity)
+            try:
+                cancellation.release_all()
+            except Exception:
+                # Preserve the original dispatch failure; cleanup failure is
+                # additional diagnostic evidence, never a successful action.
+                logger.exception("could not release input after dispatch failure")
             raise
         control_overlay.finish(activity, result, click=feedback_click)
         return result
@@ -3299,8 +3323,13 @@ class Desktop:
         x, y = loc
         uia.MoveTo(x, y, moveSpeed=10)
 
-    @control_overlay.operation()
     def shortcut(self, shortcut: str):
+        def dispatch():
+            self._shortcut_input(shortcut)
+            return {}
+        self._mutation_takeover(dispatch)
+
+    def _shortcut_input(self, shortcut: str):
         keys = shortcut.split("+")
         sendkeys_str = ""
         for key in keys:

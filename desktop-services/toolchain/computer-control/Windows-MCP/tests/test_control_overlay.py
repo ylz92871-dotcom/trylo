@@ -76,7 +76,7 @@ def test_capture_refuses_pixels_if_window_thread_cannot_hide(monkeypatch):
 
 def test_dispatch_exception_and_yield_clear_feedback(monkeypatch):
     activity = overlay._Activity()
-    monkeypatch.setattr(overlay, "begin", lambda: activity)
+    monkeypatch.setattr(overlay, "begin", lambda *_: activity)
     desktop = Desktop.__new__(Desktop)
     desktop._mutation_takeover_inner = Mock(side_effect=RuntimeError("failed"))
     with pytest.raises(RuntimeError):

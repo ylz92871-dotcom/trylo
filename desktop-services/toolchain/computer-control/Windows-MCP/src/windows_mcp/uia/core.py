@@ -21,6 +21,7 @@ import struct
 import threading
 import ctypes
 import ctypes.wintypes
+from windows_mcp.runtime.input_cancellation import check_input_cancelled, record_dispatched_input
 from dataclasses import dataclass
 import comtypes
 import comtypes.client
@@ -303,6 +304,7 @@ def SetCursorPos(x: int, y: int) -> bool:
     y: int.
     Return bool, True if succeed otherwise False.
     """
+    check_input_cancelled()
     ctypes.set_last_error(0)
     return bool(_input_user32.SetCursorPos(x, y))
 
@@ -1555,12 +1557,35 @@ def SendInput(*inputs) -> int:
     """
     if not inputs:
         return 0
+    # Releases must remain possible after Esc, including SendKeys' own cleanup.
+    release_only = all(
+        (item.type == 1 and item.union.ki.dwFlags & 0x2)
+        or (item.type == 0 and item.union.mi.dwFlags & 0x154
+            and not item.union.mi.dwFlags & ~(0x154 | 0x8000 | 0x4000))
+        for item in inputs
+    )
+    check_input_cancelled(releasing=release_only)
     nInputs = len(inputs)
     LPINPUT = INPUT * nInputs
     pInputs = LPINPUT(*inputs)
     cbSize = ctypes.c_int(ctypes.sizeof(INPUT))
     ctypes.set_last_error(0)
-    return int(_input_user32.SendInput(nInputs, pInputs, cbSize))
+    inserted = int(_input_user32.SendInput(nInputs, pInputs, cbSize))
+    for item in inputs[:inserted]:
+        if item.type == 1:
+            key = item.union.ki
+            identity = (1, key.wVk, key.wScan, key.dwFlags & ~0x2)
+            release = INPUT.from_buffer_copy(item)
+            release.union.ki.dwFlags |= 0x2
+            record_dispatched_input(identity, lambda release=release: _require_send_input(release), pressed=not key.dwFlags & 0x2)
+        elif item.type == 0:
+            for down, up in ((0x2, 0x4), (0x8, 0x10), (0x20, 0x40), (0x80, 0x100)):
+                if item.union.mi.dwFlags & (down | up):
+                    release = INPUT.from_buffer_copy(item)
+                    release.union.mi.dwFlags = up
+                    record_dispatched_input((0, down, item.union.mi.mouseData), lambda release=release: _require_send_input(release),
+                                            pressed=bool(item.union.mi.dwFlags & down))
+    return inserted
 
 
 def SendUnicodeChar(char: str, charMode: bool = True) -> int:

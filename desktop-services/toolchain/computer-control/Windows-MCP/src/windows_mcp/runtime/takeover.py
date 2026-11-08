@@ -362,6 +362,13 @@ class TryloTakeoverGuard:
             self._state = TakeoverState.YIELDED
             return self._state
 
+    def guard_cancel_by_user(self) -> TakeoverState:
+        """Explicit stop intent, consumed through the existing re-arm policy."""
+        with self._lock:
+            self._state = TakeoverState.CANCELLED
+            self._mutating = False
+            return self._state
+
     def guard_reset(self) -> TakeoverState:
         """YIELDED/CANCELLED/VERIFYING-terminal → IDLE with a fresh mutation
         right. The MODEL cannot call this through a tool: the next dispatch

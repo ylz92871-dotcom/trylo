@@ -88,6 +88,21 @@ class _FakeClock:
         return self.now
 
 
+def test_physical_escape_is_distinct_from_trylo_injected_escape(monkeypatch):
+    clock = _FakeClock()
+    watcher = UserInputHookWatcher(user32=_FakeUser32(), clock=clock)
+    monkeypatch.setattr(watcher, "_trustworthy", lambda: True)
+    anchor = watcher.precise_now()
+    from windows_mcp.runtime.takeover import injection_tag
+    own = _KBDLLHOOKSTRUCT(vkCode=0x1B, scanCode=1, flags=0, time=0, dwExtraInfo=injection_tag())
+    clock.now += 1
+    watcher.on_event(0, WM_KEYDOWN, ctypes.addressof(own))
+    assert not watcher.escape_since(anchor)
+    human = _KBDLLHOOKSTRUCT(vkCode=0x1B, scanCode=1, flags=0, time=0, dwExtraInfo=0)
+    watcher.on_event(0, WM_KEYDOWN, ctypes.addressof(human))
+    assert watcher.escape_since(anchor)
+
+
 def _started_watcher(user32: _FakeUser32, clock: _FakeClock) -> UserInputHookWatcher:
     watcher = UserInputHookWatcher(user32=user32, clock=clock)
     watcher.start()

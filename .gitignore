@@ -167,33 +167,33 @@ __pycache__/
 # 工具链浅克隆（supply-chain 审计缓存，不入库；manifest 内含 pin �?hash�?
 # 安装�?pinned release 传输进行 �?审计 §5.3「关键源文件纳入 Git；构建产�?
 # 只有确有发行需要时才纳入」）
-/new_tool/*
-!/new_tool/README.md
-!/new_tool/computer-control/
-/new_tool/computer-control/*
-!/new_tool/computer-control/Windows-MCP/
-/new_tool/computer-control/Windows-MCP/*
-!/new_tool/computer-control/Windows-MCP/src/
-/new_tool/computer-control/Windows-MCP/src/*
-!/new_tool/computer-control/Windows-MCP/src/windows_mcp/
-!/new_tool/computer-control/Windows-MCP/tests/
-!/new_tool/computer-control/Windows-MCP/scripts/
-/new_tool/computer-control/Windows-MCP/scripts/*
-!/new_tool/computer-control/Windows-MCP/scripts/check_versions.py
-!/new_tool/computer-control/Windows-MCP/native/
-/new_tool/computer-control/Windows-MCP/native/*
-!/new_tool/computer-control/Windows-MCP/native/wgc-helper/
-/new_tool/computer-control/Windows-MCP/native/wgc-helper/*
-!/new_tool/computer-control/Windows-MCP/native/wgc-helper/*.cs
-!/new_tool/computer-control/Windows-MCP/native/wgc-helper/*.csproj
-!/new_tool/computer-control/Windows-MCP/README.md
-!/new_tool/computer-control/Windows-MCP/PROVENANCE.json
-!/new_tool/computer-control/Windows-MCP/LICENSE.md
-!/new_tool/computer-control/Windows-MCP/pyproject.toml
-!/new_tool/computer-control/Windows-MCP/uv.lock
-!/new_tool/computer-control/Windows-MCP/.python-version
-!/new_tool/computer-control/Windows-MCP/manifest.json
-!/new_tool/computer-control/Windows-MCP/server.json
+/desktop-services/toolchain/*
+!/desktop-services/toolchain/README.md
+!/desktop-services/toolchain/computer-control/
+/desktop-services/toolchain/computer-control/*
+!/desktop-services/toolchain/computer-control/Windows-MCP/
+/desktop-services/toolchain/computer-control/Windows-MCP/*
+!/desktop-services/toolchain/computer-control/Windows-MCP/src/
+/desktop-services/toolchain/computer-control/Windows-MCP/src/*
+!/desktop-services/toolchain/computer-control/Windows-MCP/src/windows_mcp/
+!/desktop-services/toolchain/computer-control/Windows-MCP/tests/
+!/desktop-services/toolchain/computer-control/Windows-MCP/scripts/
+/desktop-services/toolchain/computer-control/Windows-MCP/scripts/*
+!/desktop-services/toolchain/computer-control/Windows-MCP/scripts/check_versions.py
+!/desktop-services/toolchain/computer-control/Windows-MCP/native/
+/desktop-services/toolchain/computer-control/Windows-MCP/native/*
+!/desktop-services/toolchain/computer-control/Windows-MCP/native/wgc-helper/
+/desktop-services/toolchain/computer-control/Windows-MCP/native/wgc-helper/*
+!/desktop-services/toolchain/computer-control/Windows-MCP/native/wgc-helper/*.cs
+!/desktop-services/toolchain/computer-control/Windows-MCP/native/wgc-helper/*.csproj
+!/desktop-services/toolchain/computer-control/Windows-MCP/README.md
+!/desktop-services/toolchain/computer-control/Windows-MCP/PROVENANCE.json
+!/desktop-services/toolchain/computer-control/Windows-MCP/LICENSE.md
+!/desktop-services/toolchain/computer-control/Windows-MCP/pyproject.toml
+!/desktop-services/toolchain/computer-control/Windows-MCP/uv.lock
+!/desktop-services/toolchain/computer-control/Windows-MCP/.python-version
+!/desktop-services/toolchain/computer-control/Windows-MCP/manifest.json
+!/desktop-services/toolchain/computer-control/Windows-MCP/server.json
 # ── 2026-09-06：本地构建产�?/ agent 痕迹（组长确认不入库）───────────
 .trae/
 .vite/
@@ -254,3 +254,13 @@ new trylo cli/trylo-audit-*
 /trylocode-site/
 
 /website/
+
+# Retired/private local material is excluded from the public source snapshot.
+/_workspace/
+/work/
+/result/
+/third_party/
+/new_tool/
+/tools/
+/tool-sources.json
+!/desktop-services/toolchain/tool-sources.json

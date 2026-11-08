@@ -340,12 +340,12 @@ def _wnd_proc(hwnd, msg, wparam, lparam):
     return _user32.DefWindowProcW(hwnd, msg, wparam, lparam)
 
 
-def _create_layered_window(class_name: str, x: int, y: int, w: int, h: int):
+def _create_layered_window(class_name: str, x: int, y: int, w: int, h: int, *, transparent=True, wnd_proc=None):
     h_instance = _kernel32.GetModuleHandleW(None)
     wc = _WNDCLASSEX()
     wc.cbSize = ctypes.sizeof(_WNDCLASSEX)
     wc.style = 0
-    wc.lpfnWndProc = _wnd_proc
+    wc.lpfnWndProc = wnd_proc or _wnd_proc
     wc.cbClsExtra = 0
     wc.cbWndExtra = 0
     wc.hInstance = h_instance
@@ -361,7 +361,7 @@ def _create_layered_window(class_name: str, x: int, y: int, w: int, h: int):
         raise OSError(f"RegisterClassExW failed: {ctypes.get_last_error()}")
 
     ex_style = (
-        _WS_EX_LAYERED | _WS_EX_TRANSPARENT | _WS_EX_TOPMOST | _WS_EX_TOOLWINDOW | _WS_EX_NOACTIVATE
+        _WS_EX_LAYERED | (_WS_EX_TRANSPARENT if transparent else 0) | _WS_EX_TOPMOST | _WS_EX_TOOLWINDOW | _WS_EX_NOACTIVATE
     )
     hwnd = _user32.CreateWindowExW(
         ex_style,

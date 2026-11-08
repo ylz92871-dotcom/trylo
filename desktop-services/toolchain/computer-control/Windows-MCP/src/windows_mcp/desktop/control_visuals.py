@@ -1,12 +1,48 @@
 """Trylo's gold activity halo and receipt cursor, in physical screen pixels."""
 
 import math
+import os
+from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 GOLD = (232, 189, 101)  # #e8bd65 — shared with the native browser cursor
 INK = (59, 43, 19)
 IVORY = (255, 247, 221)
+
+
+def render_control_banner(scale=1.0, *, escape_available=True):
+    """The approved top-centred stop control, at the monitor's physical DPI."""
+    def px(value):
+        return round(value * scale)
+
+    font_path = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts" / "msyh.ttc"
+    font = ImageFont.truetype(str(font_path), px(12))
+    small = ImageFont.truetype(str(font_path), px(11))
+    label = "Trylo 正在操控你的电脑"
+    text_width = math.ceil(font.getlength(label))
+    width = px(13 + 23 + 10 + 15 + 14 + 25 + 6 + 24 + 14) + text_width
+    pad, height = px(6), px(44)
+    image = Image.new("RGBA", (width + 2 * pad, height + 2 * pad))
+    shadow = Image.new("RGBA", image.size)
+    ImageDraw.Draw(shadow).rounded_rectangle((pad, pad + px(2), pad + width, pad + height + px(2)), radius=px(22), fill=(0, 0, 0, 65))
+    image = shadow.filter(ImageFilter.GaussianBlur(px(3)))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((pad, pad, pad + width, pad + height), radius=px(22), fill="#202020", outline="#3e3e3e", width=max(1, px(1)))
+    logo = Image.open(Path(__file__).with_name("assets") / "trylo-control-logo.png").convert("RGBA").resize((px(23), px(23)), Image.Resampling.LANCZOS)
+    image.alpha_composite(logo, (pad + px(13), pad + px(10)))
+    x, centre = pad + px(46), pad + height // 2
+    draw.text((x, centre), label, font=font, fill="#f4f4f4", anchor="lm")
+    separator = x + text_width + px(15)
+    draw.line((separator, pad + px(10), separator, pad + px(34)), fill="#484848", width=max(1, px(1)))
+    if escape_available:
+        left = separator + px(14)
+        draw.rounded_rectangle((left, pad + px(12), left + px(25), pad + px(32)), radius=px(4), fill="#303030", outline="#606060")
+        draw.text((left + px(12.5), centre), "Esc", font=small, fill="#f1f1f1", anchor="mm")
+        draw.text((left + px(31), centre), "退出", font=font, fill="#b6b6b6", anchor="lm")
+    else:
+        draw.text((separator + px(14), centre), "点击退出", font=font, fill="#b6b6b6", anchor="lm")
+    return image
 
 
 def render_halo(width: int, height: int, scale: float = 1.0) -> Image.Image:
