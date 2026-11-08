@@ -53,7 +53,7 @@ View conversations beside documents, inspect interactive web outputs, and use na
 
 There are standard and selected-tester invitation tiers. Daily token quotas are provided during testing; flagship model-pool and related limited API benefits are for selected high-quality testers.
 
-The upcoming program uses invitations and daily token quotas. Selected testers may receive flagship model-pool access and limited video, image and language API quotas, subject to review, availability and the current invitation terms.
+We are inviting people who will use Trylo for real work, report issues and help shape the next generation of personal agents.
 
 The flagship pool includes **Kimi 3.1 Pro, DeepSeek V4.11017 (original provider), Qwen 3.8 Max and GLM 5.3**, alongside limited **ByteDance flagship video, image and language API** quotas.
 
