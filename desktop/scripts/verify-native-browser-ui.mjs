@@ -5,13 +5,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import { artifactPath } from '../../scripts/workspace-paths.mjs';
 const desktop = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
-const output = process.env.TRYLO_NATIVE_UI_OUTPUT ? path.resolve(process.env.TRYLO_NATIVE_UI_OUTPUT) : path.join(desktop, 'spike-results/native-browser-2026-10-13');
-const require = createRequire(path.join(desktop, '../new_tool/browser/playwright-mcp/package.json'));
+const output = process.env.TRYLO_NATIVE_UI_OUTPUT ? path.resolve(process.env.TRYLO_NATIVE_UI_OUTPUT) : artifactPath('desktop-native-browser-acceptance');
+const require = createRequire(path.join(desktop, '../desktop-services/toolchain/browser/playwright-mcp/package.json'));
 const { chromium } = require('playwright');
 const { build } = createRequire(path.join(desktop, '../desktop-services/package.json'))('esbuild');
 const assets = path.join(output, 'headless-ui-assets');
-await build({ entryPoints: [path.join(desktop, 'prototype/native-browser-acceptance/fixture.tsx')],
+await build({ entryPoints: [path.join(desktop, 'testdata/native-browser-acceptance/fixture.tsx')],
   outfile: path.join(assets, 'fixture.js'), bundle: true, platform: 'browser', format: 'esm', jsx: 'automatic',
   define: { 'process.env.NODE_ENV': '"production"' }, loader: { '.woff2': 'file', '.woff': 'file', '.svg': 'file', '.png': 'file', '.ttf': 'file' },
   plugins: [{ name: 'unused-lazy-previews', setup(builder) { builder.onResolve({ filter: /.*/ }, args => args.kind === 'dynamic-import' ? { path: args.path, external: true } : undefined); } }],

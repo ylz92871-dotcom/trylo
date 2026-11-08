@@ -60,7 +60,7 @@ foreach ($relative in @('trylo-desktop.exe', 'runtime/node/win-x64/node.exe',
 # every owned component before changing any label; never follow reparse points
 # into user installations, tool caches or developer dependency junctions.
 $pending = [Collections.Generic.Queue[IO.DirectoryInfo]]::new()
-foreach ($relative in @('runtime', 'cli', 'cli-legacy', 'desktop-services', 'sidecars')) {
+foreach ($relative in @('runtime', 'cli', 'desktop-services', 'sidecars', 'preview')) {
     $component = Join-Path $root $relative
     if (Test-Path -LiteralPath $component) { $pending.Enqueue((Get-Item -LiteralPath $component)) }
 }
@@ -70,14 +70,20 @@ while ($pending.Count) {
     foreach ($entry in $directory.GetFileSystemInfos()) {
         if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Redirected bundled runtime entry.' }
         if ($entry -is [IO.DirectoryInfo]) { $pending.Enqueue($entry) }
-        elseif ($entry.Extension -ieq '.exe') { [void]$executables.Add($entry.FullName) }
+        elseif ($entry.Extension -ieq '.exe' -or (
+            $directory.FullName -ieq (Join-Path $root 'preview\office\program') -and
+            $entry.Name -in @('soffice.com', 'soffice.bin')
+        )) { [void]$executables.Add($entry.FullName) }
     }
 }
 foreach ($file in $executables) {
     # Hide every native descendant as well as the PowerShell host. Suppressing
     # output alone does not prevent Windows from allocating a console window.
-    $result = Invoke-BackgroundNative "$env:SystemRoot\System32\icacls.exe" ('"' + $file + '" /setintegritylevel ' + $integrity)
+    # Preview converters use ordinary cache/profile directories. Interactive
+    # tools retain the launcher's choice; conversion workers stay Medium.
+    $selectedIntegrity = if ($file.StartsWith((Join-Path $root 'preview') + '\', [StringComparison]::OrdinalIgnoreCase)) { 'M' } else { $integrity }
+    $result = Invoke-BackgroundNative "$env:SystemRoot\System32\icacls.exe" ('"' + $file + '" /setintegritylevel ' + $selectedIntegrity)
     if ($result.ExitCode -ne 0) { throw ("Could not prepare bundled runtime integrity: " + $result.Error.Trim()) }
 }
-Write-Output "Prepared $($executables.Count) bundled executables at the launcher's existing integrity level."
+Write-Output "Prepared $($executables.Count) bundled executables; preview workers use Medium integrity."
 if (-not $PrepareOnly) { Start-Process -FilePath (Join-Path $root 'trylo-desktop.exe') -WorkingDirectory $root }

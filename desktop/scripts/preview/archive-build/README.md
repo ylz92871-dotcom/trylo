@@ -1,0 +1,13 @@
+# Archive preview decoder build
+
+This is an isolated, replaceable byte decoder, not a runtime platform. The core is libarchive 3.8.11 with fixed zlib, bzip2 1.0.8, liblzma 5.8.4 and Zstandard sources. `inputs.lock.json` records the exact source/tool hashes. The previous libarchive.js/libarchive-wasm npm candidates were inspected but are not product dependencies.
+
+Use Windows x64, Python 3.14 and Node.js. Put the original six source archives from the matching installer source companion in a source directory. Put the three fixed tool downloads listed in `inputs.lock.json` in `<fresh-workspace>/tools/`. These are build tools, not runtime dependencies.
+
+Run `python prepare.py --sources <source-directory> --workspace <fresh-workspace>`, then set `TRYLO_ARCHIVE_BUILD_ROOT=<fresh-workspace>` in the current shell and run `node build.mjs`. The preparation verifies every source/tool before extracting and rejects unsafe paths. All compiler/cache/configuration files remain in this workspace. No installer, browser or GUI program is used. CMake feature detection can be slow on Windows; completed results remain cached in the workspace.
+
+The build keeps upstream source unchanged. Zstandard is compiled as C only with assembly, threads and old-format compatibility disabled; this avoids its CMake recipe attempting CXX probes without enabling that language for the Emscripten target. liblzma uses its single-threaded build. libarchive disables crypto providers, XML, system ACL/XATTR, CLI programs and tests. Encrypted and multivolume files are not promised. Its reader/filter codecs remain available through a narrow C API; no host filesystem or process bridge is provided to the WASM.
+
+The resulting `engine/libarchive.js` and `.wasm` target classic Workers only, with filesystem support off, 32 MiB initial and **256 MiB maximum** linear memory. The production owner supplies an 8-second deadline and terminates the worker on timeout/close. Input is capped at 100 MiB; metadata at 10,000 entries and 4 MiB of path text; selected output at 10 MiB of actual emitted bytes. No archive path is used as a host path. Links and special files are listed but never followed/read.
+
+Retest real TAR/gzip/bzip2/xz/zstd, RAR4/5 and 7z compressed files, corruption, large dictionaries/inflation and cancellation before updating the product pin. Keep unchanged original licenses, source header notices, Emscripten/musl/compiler-rt notices and corresponding sources. Update `archive-engine.lock.json`, stage the external codec resources, and rerun the source/release verification. A source companion and a successful console matrix do not establish native WebView rendering or installer acceptance.

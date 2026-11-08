@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "name": "libarchive-3.8.11.tar.xz",
+      "url": "https://github.com/libarchive/libarchive/releases/download/v3.8.11/libarchive-3.8.11.tar.xz",
+      "bytes": 6754236,
+      "sha256": "a3dc0872b1b39da34dc18ef1b944f0f11ffd37425d70ae04be679279f1cf43d2",
+      "owner": "libarchive-3.8.11"
+    },
+    {
+      "name": "012-25-xz.tar.gz",
+      "url": "https://codeload.github.com/tukaani-project/xz/tar.gz/299eb5c3f597f107fd6019bf156885ac8bfaa5ea",
+      "bytes": 1740597,
+      "sha256": "c1f497513e85cbc2f3760990a6ed9cbebe6386f273481b87251d0d6eb481c51a",
+      "revision": "299eb5c3f597f107fd6019bf156885ac8bfaa5ea",
+      "owner": "xz"
+    },
+    {
+      "name": "046-45-zstd.tar.gz",
+      "url": "https://codeload.github.com/facebook/zstd/tar.gz/49cf51799ea051457f57243527aa2058f999f005",
+      "bytes": 2492560,
+      "sha256": "20b3aa4295de44d8ea74c0bedbd036364c9d82609325b660a4900becbd56383a",
+      "revision": "49cf51799ea051457f57243527aa2058f999f005",
+      "owner": "zstd"
+    },
+    {
+      "name": "004-20-zlib.tar.gz",
+      "url": "https://codeload.github.com/madler/zlib/tar.gz/9d314c341b2ce16e01ae44e27ec3dd2f32aa58fd",
+      "bytes": 1570648,
+      "sha256": "bb27c6019ed72ea6d3ceb574cd8074083a7391afa08404ddf945bcd24f01742b",
+      "revision": "9d314c341b2ce16e01ae44e27ec3dd2f32aa58fd",
+      "owner": "zlib"
+    },
+    {
+      "name": "bzip2-1.0.8.tar.gz",
+      "url": "https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz",
+      "bytes": 810029,
+      "sha256": "ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269",
+      "owner": "bzip2"
+    },
+    {
+      "name": "emscripten-source.tar.gz",
+      "url": "https://api.github.com/repos/emscripten-core/emscripten/tarball/4.0.23",
+      "bytes": 34283404,
+      "sha256": "1297c96bb5422a0c32fce87594b318f4bfddc4e01fec443799b0c8bec7794617",
+      "revision": "4.0.23"
+    }
+  ],
+  "tools": [
+    {
+      "name": "emscripten-4.0.23-win.zip",
+      "url": "https://storage.googleapis.com/webassembly/emscripten-releases-builds/win/aaa43392544d695232b70eda706d751f18980c2a/wasm-binaries.zip",
+      "bytes": 641817859,
+      "sha256": "c2e1b9a2eed20f9d5903780b559ce2b384132713f07936512e6d962dd5a5dae6"
+    },
+    {
+      "name": "cmake-3.31.6-py3-none-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/18/58/909d6d99acb4e0886d0f660cf4e0fb26f586590e370b2e4ce7a10d06b145/cmake-3.31.6-py3-none-win_amd64.whl",
+      "bytes": 36396448,
+      "sha256": "bbaed969cef3c427f4f17591feb28db4ae595e3a4bbd45cb35522cee14df6a32"
+    },
+    {
+      "name": "ninja-1.13.2-py3-none-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/3f/dd/3766b5f4d32e8a9b97d195496b0b01fbbe2e1a41669dab0cd6492a6ce199/ninja-1.13.2-py3-none-win_amd64.whl",
+      "bytes": 311798,
+      "sha256": "1293f4078278b70d0ee4b6cc8f3a9e030656c9b2f59909970343c4fe76070118"
+    }
+  ]
+}

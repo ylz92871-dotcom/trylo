@@ -1,13 +1,46 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="light dark" />
     <title>Trylo</title>
+    <link rel="stylesheet" href="/src/styles/startup.css" />
+    <link rel="preload" href="/startup/approved-facet.png" as="image" />
+    <link rel="preload" href="/startup/approved-contour.png" as="image" />
+    <link rel="preload" href="/startup/manrope.woff" as="font" type="font/woff" crossorigin />
   </head>
   <body>
     <div id="root"></div>
+    <!-- Approved v9 composition over the real application, before React loads. -->
+    <div id="trylo-startup" class="startup-screen" data-phase="loading">
+      <div id="trylo-startup-veil" class="startup-screen__veil" aria-hidden="true"></div>
+      <div id="trylo-startup-position" class="startup-screen__position" aria-hidden="true">
+        <div id="trylo-startup-turn" class="startup-screen__turn">
+          <canvas id="trylo-startup-material" width="800" height="800"></canvas>
+          <img id="trylo-startup-fallback" class="startup-screen__identity" src="/startup/approved-facet.png" width="400" height="400" fetchpriority="high" decoding="sync" alt="" />
+        </div>
+      </div>
+      <div id="trylo-startup-signature" class="startup-screen__signature" role="img" aria-label="Try your dream. Try your best.">
+        <div class="startup-screen__lockup" aria-hidden="true">
+          <p><span class="startup-screen__clip"><span class="startup-screen__word startup-screen__lead" id="trylo-dream-lead">Try your</span></span><span class="startup-screen__clip"><span class="startup-screen__word startup-screen__key" id="trylo-dream-key">dream.</span></span></p>
+          <p><span class="startup-screen__clip"><span class="startup-screen__word startup-screen__lead" id="trylo-best-lead">Try your</span></span><span class="startup-screen__clip"><span class="startup-screen__word startup-screen__key" id="trylo-best-key">best.</span></span></p>
+        </div>
+      </div>
+      <div id="trylo-startup-tile" class="startup-screen__tile" aria-hidden="true"></div>
+      <svg id="trylo-startup-flat" class="startup-screen__flat" width="77" height="77" viewBox="0 0 1024 1024" fill="none" aria-hidden="true">
+        <g transform="translate(-5 3.5)" stroke="currentColor" stroke-width="60" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M475 308 L475 444 L595 444"/><path d="M337 675 L447 610 L397 512"/><path d="M533 633 L593 537 L715 607"/>
+        </g>
+      </svg>
+        <div class="startup-screen__feedback">
+          <p id="trylo-startup-status" class="startup-screen__status" role="status" aria-live="polite">正在启动 Trylo…</p>
+          <button id="trylo-startup-reload" class="startup-screen__reload" type="button" hidden>重新加载</button>
+        </div>
+    </div>
+    <script src="/startup/material.js"></script>
+    <script src="/startup/sequence.js"></script>
+    <script src="/startup.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

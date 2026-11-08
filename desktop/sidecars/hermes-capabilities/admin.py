@@ -223,6 +223,26 @@ def get_detail(subsystem: str, pending_id: str) -> str:
     )
 
 
+def _replay_approved_skill(rec: Dict[str, Any]) -> str:
+    """Preserve autonomous-create provenance after the existing approval checks.
+
+    The caller supplies the live native pending record it already checked,
+    never model-supplied origin metadata. Approved revisions remain foreground
+    user-directed writes; replaying them as a background review would demand
+    read marks from a different, already-finished process.
+    """
+    payload = rec.get("payload") or {}
+    if rec.get("origin") != "background_review" or payload.get("action") != "create":
+        return apply_skill_pending(payload)
+    from tools.skill_provenance import reset_current_write_origin, set_current_write_origin
+
+    token = set_current_write_origin("background_review")
+    try:
+        return apply_skill_pending(payload)
+    finally:
+        reset_current_write_origin(token)
+
+
 def apply_pending(subsystem: str, pending_id: str, expected_hash: Optional[str] = None) -> str:
     if subsystem not in _SUBSYSTEMS:
         return err(f"unknown subsystem: {subsystem}")
@@ -260,7 +280,7 @@ def apply_pending(subsystem: str, pending_id: str, expected_hash: Optional[str] 
             store = load_on_disk_store()
             result = apply_memory_pending(payload, store)
         else:  # skills
-            result_str = apply_skill_pending(payload)
+            result_str = _replay_approved_skill(rec)
             result = json.loads(result_str) if isinstance(result_str, str) else result_str
     except Exception as exc:  # pragma: no cover - surfaced to the UI
         logger.exception("apply failed for %s/%s", subsystem, pending_id)
@@ -396,7 +416,7 @@ def apply_skill_with_snapshot(pending_id: str, expected_hash: Optional[str], rea
 
     # Official apply
     try:
-        result_str = apply_skill_pending(payload)
+        result_str = _replay_approved_skill(rec)
         result = json.loads(result_str) if isinstance(result_str, str) else result_str
     except Exception as exc:  # pragma: no cover
         logger.exception("apply_skill_pending failed for %s", pending_id)

@@ -17,7 +17,8 @@ dist/
 # Rust / Tauri
 src-tauri/target/
 src-tauri/gen/
-# bundle.icon inputs and their generation recipe are committed.
+src-tauri/resources/preview/
+src-tauri/icons/
 # Commit Cargo.lock for an app (deterministic builds).
 # src-tauri/Cargo.lock
 *.exe
@@ -36,3 +37,8 @@ build/
 
 # Vite config-reload artifacts (regenerated on every config touch)
 vite.config.ts.timestamp-*.mjs
+
+# Independently staged preview engines and codecs
+src-tauri/resources/preview/office/
+src-tauri/resources/preview/codecs/
+.cache/preview/

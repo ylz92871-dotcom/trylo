@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+<rect width="1440" height="900" fill="#e9ecee"/><rect x="40" y="36" width="1360" height="828" rx="12" fill="#fff" stroke="#d8dde1"/>
+<path d="M52 36h1336q12 0 12 12v40H40V48q0-12 12-12" fill="#f5f6f7"/><circle cx="66" cy="62" r="6" fill="#9babb4"/>
+<g font-family="Segoe UI,Microsoft YaHei,sans-serif" fill="#26333c"><text x="88" y="69" font-size="18">项目文件 · 季度报告</text><text x="1320" y="69" font-size="16">—　□　×</text>
+<path d="M40 88h224v776H52q-12 0-12-12" fill="#f8f9fa"/>
+<text x="68" y="135" fill="#79838c" font-size="14">工作区</text><text x="76" y="180" font-size="17">项目文件</text><text x="88" y="228" font-size="16">资料</text>
+<rect x="56" y="250" width="190" height="42" rx="6" fill="#e6edf1"/><text x="88" y="277" font-size="16">季度报告.docx</text><text x="88" y="325" font-size="16">预算明细.xlsx</text><text x="88" y="373" font-size="16">参考图</text>
+<text x="308" y="140" font-size="17">季度报告.docx</text><text x="308" y="175" font-size="13" fill="#78858d">项目 / 报告　　刚刚编辑</text>
+<rect x="1240" y="110" width="110" height="38" rx="6" fill="#334b5c"/><text x="1295" y="135" fill="#fff" text-anchor="middle" font-size="15">保存</text>
+<rect x="330" y="211" width="1000" height="604" rx="3" fill="#fff" stroke="#e3e6e8"/><text x="390" y="295" font-size="32" font-weight="600">项目季度进展</text>
+<text x="390" y="345" font-size="16" fill="#78858d">2026 年第四季度 · 工作草稿</text><path d="M390 378h880" stroke="#e5e8eb"/>
+<text x="390" y="430" font-size="21" font-weight="500">工作概况</text><text x="390" y="475" font-size="17" fill="#59656e">本季度完成了计划中的主要工作，并整理了相关材料。</text>
+<rect x="390" y="520" width="880" height="44" fill="#f2f5f7"/><text x="412" y="548" font-size="15">事项</text><text x="918" y="548" font-size="15">状态</text><text x="1130" y="548" font-size="15">更新时间</text>
+<g font-size="16"><text x="412" y="598">资料整理</text><text x="918" y="598" fill="#45705c">已完成</text><text x="1130" y="598">今天</text><text x="412" y="658">报告检查</text><text x="918" y="658">进行中</text><text x="1130" y="658">今天</text></g>
+<path d="M390 622h880M390 682h880" stroke="#edf0f2"/><text x="390" y="746" font-size="14" fill="#94a0a8">合成验收画面 · 不含用户桌面或文件</text></g></svg>

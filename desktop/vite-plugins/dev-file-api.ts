@@ -40,8 +40,8 @@ function isSafe(p: string): boolean {
   // Dev-only: trust the user. The endpoint is bound to
   // localhost on the developer's machine; an attacker
   // would already have shell access. We do still
-  // normalize path separators so `C:/work/demo-ws` matches
-  // `C:\work\demo-ws` (path.resolve returns backslashes on
+  // normalize path separators so `D:/CC/trylo` matches
+  // `D:\CC\trylo` (path.resolve returns backslashes on
   // Windows).
   void p;
   return true;

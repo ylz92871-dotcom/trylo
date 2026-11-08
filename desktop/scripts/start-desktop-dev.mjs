@@ -41,7 +41,7 @@ if (!args.some(arg => arg === '--help' || arg === '-h')) {
 // Ask that exact checkout's window to close; never kill it or other checkouts.
 if (process.platform === 'win32' && !args.some(arg => arg === '--help' || arg === '-h')) {
   // Vite's native transforms and sandbox checks must not share a locked temp DLL.
-  const developmentTemp = resolve(desktopRoot, '../Temp/desktop-dev', String(process.pid));
+  const developmentTemp = resolve(desktopRoot, '../_workspace/tmp/desktop-dev', String(process.pid));
   mkdirSync(developmentTemp, { recursive: true });
   environment.TEMP = developmentTemp;
   environment.TMP = developmentTemp;
@@ -56,14 +56,38 @@ if (process.platform === 'win32' && !args.some(arg => arg === '--help' || arg ==
   const check = spawnSync('powershell.exe', ['-NoProfile', '-Command', String.raw`
 $ErrorActionPreference = 'Stop'
 $expected = $env:TRYLO_DEV_EXECUTABLE
+function Test-DesktopExited($app) {
+    $app.Refresh()
+    return ($app.HasExited -or $app.WaitForExit(0))
+}
 $running = Get-CimInstance Win32_Process -Filter "Name = 'trylo-desktop.exe'" |
     Where-Object { $_.ExecutablePath -eq $expected }
 foreach ($row in $running) {
     $app = Get-Process -Id $row.ProcessId -ErrorAction SilentlyContinue
     if (-not $app) { continue }
+    if (Test-DesktopExited $app) { continue }
+    if ($app.MainWindowHandle -eq [IntPtr]::Zero) {
+        # A previous close may already be finishing native cleanup. Observe the
+        # same exit bound without sending WM_CLOSE to an unrelated window.
+        if ($app.WaitForExit(10000) -or (Test-DesktopExited $app)) { continue }
+        throw "[TRYLO_DEV_NO_WINDOW_PENDING] Desktop PID $($app.Id) has no main window but still holds $expected. Native exit has not completed; it was not force-stopped."
+    }
     Write-Host "Closing previous Desktop window (PID $($app.Id)) before rebuilding."
-    if (-not $app.CloseMainWindow() -or -not $app.WaitForExit(10000)) {
-        throw "Desktop PID $($app.Id) still holds $expected. Close that instance before retrying; it was not force-stopped."
+    try { $requested = $app.CloseMainWindow() }
+    catch {
+        if (Test-DesktopExited $app) { continue }
+        $failure = $_.Exception.GetBaseException()
+        if ($failure -is [ComponentModel.Win32Exception] -and $failure.NativeErrorCode -eq 5) {
+            throw "[TRYLO_DEV_CLOSE_ACCESS_DENIED] Windows denied closing Desktop PID $($app.Id): $expected. No permissions were changed and it was not force-stopped."
+        }
+        throw "[TRYLO_DEV_CLOSE_FAILED] Closing Desktop PID $($app.Id) failed: $($failure.Message). It was not force-stopped."
+    }
+    if (-not $requested) {
+        if (Test-DesktopExited $app) { continue }
+        throw "[TRYLO_DEV_CLOSE_NOT_REQUESTED] CloseMainWindow did not request closing Desktop PID $($app.Id): $expected. Check its window state and access; it was not force-stopped."
+    }
+    if (-not $app.WaitForExit(10000) -and -not (Test-DesktopExited $app)) {
+        throw "[TRYLO_DEV_EXIT_PENDING] CloseMainWindow returned true for Desktop PID $($app.Id), but it still holds $expected. Native exit has not completed; it was not force-stopped."
     }
 }
 `], {
@@ -74,6 +98,18 @@ foreach ($row in $running) {
   });
   if (check.error) throw check.error;
   if (check.status !== 0) process.exit(check.status ?? 1);
+
+  // tauri-build copies resources before the native runner is reached. Its
+  // generated executable must match the runtime labels left by the last run,
+  // including when Cargo compiles a new build-script fingerprint.
+  const buildPreparation = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass',
+    '-File', resolve(desktopRoot, 'scripts/prepare-native-dev-build.ps1'),
+    '-BuildDirectory', resolve(desktopRoot, 'src-tauri/target/debug/build'),
+    '-IntegrityLevel', environment.TRYLO_DESKTOP_INTEGRITY ?? 'M'], {
+    cwd: desktopRoot, stdio: 'inherit', windowsHide: true,
+  });
+  if (buildPreparation.error) throw buildPreparation.error;
+  if (buildPreparation.status !== 0) process.exit(buildPreparation.status ?? 1);
 
   const triple = process.arch === 'arm64' ? 'AARCH64_PC_WINDOWS_MSVC' : 'X86_64_PC_WINDOWS_MSVC';
   const runnerKey = `CARGO_TARGET_${triple}_RUNNER`;

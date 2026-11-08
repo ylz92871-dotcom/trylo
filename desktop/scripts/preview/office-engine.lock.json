@@ -1,0 +1,15 @@
+{
+  "provider": "libreoffice",
+  "version": "26.8.2.2",
+  "buildId": "9dea406ab7695df6325b11b0e19fdca8db4b7276",
+  "sourceUrl": "https://download.documentfoundation.org/libreoffice/stable/26.8.2/win/x86_64/LibreOffice_26.8.2_Win_x86-64.msi",
+  "sourceCodeUrl": "https://download.documentfoundation.org/libreoffice/src/26.8.2/",
+  "criticalFiles": {
+    "program/soffice.com": "4f133aba4d8db66122ec34bc17eeaa8b274cfa5ded03feb384953f6ae357d4cf",
+    "program/soffice.bin": "63ed285089907d931264be001152b4ba07b4cba0b11af7081669efd4bf6bce39",
+    "program/mergedlo.dll": "eac63accb28228f11777bf40396dc0efb9400e6dc26dabec0cc234752552229c",
+    "program/version.ini": "22aa2c78538971ce5094da8d648e29523369610e659e456b943e254f35bc506d"
+  },
+  "packageSha256": "ff4b911403b67ee9e6249f820f9782c44bb32c94fdaa45b0da53a8e419e5307a",
+  "distributionFilesSha256": "0d3d0b9371090adc58d3d4dd1accc2fcaa1791d2c2dd233e3754a528a7468ff2"
+}

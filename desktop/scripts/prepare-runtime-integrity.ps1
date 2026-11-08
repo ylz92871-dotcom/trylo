@@ -1,4 +1,7 @@
-param([Parameter(Mandatory = $true)][string]$RuntimeRoot)
+param(
+    [Parameter(Mandatory = $true)][string]$RuntimeRoot,
+    [ValidateSet('M', 'H')][string]$IntegrityLevel = 'M'
+)
 
 $ErrorActionPreference = 'Stop'
 if ($env:OS -ne 'Windows_NT') { throw 'Runtime preparation is Windows-only.' }
@@ -19,15 +22,18 @@ while ($pending.Count) {
     foreach ($entry in $directory.GetFileSystemInfos()) {
         if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Redirected runtime entry.' }
         if ($entry -is [IO.DirectoryInfo]) { $pending.Enqueue($entry) }
-        elseif ($entry.Extension -ieq '.exe') { $executables.Add($entry.FullName) }
+        elseif ($entry.Extension -ieq '.exe' -or (
+            $directory.FullName -ieq (Join-Path $root.FullName 'preview\office\program') -and
+            $entry.Name -in @('soffice.com', 'soffice.bin')
+        )) { $executables.Add($entry.FullName) }
     }
 }
 if (-not $executables.Count) { throw 'No executable in the staged runtime.' }
 foreach ($file in $executables) {
     # An inherited Low label on a build directory caps child processes even
-    # when Desktop is High. Set an explicit Medium label on release copies.
-    # This changes no DACL, never requests elevation, and never selects High.
-    & "$env:SystemRoot\System32\icacls.exe" $file /setintegritylevel M | Out-Null
+    # when Desktop is High. Release staging defaults to Medium; a development
+    # launcher can pass its already-selected level. No token or DACL is changed.
+    & "$env:SystemRoot\System32\icacls.exe" $file /setintegritylevel $IntegrityLevel | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Runtime integrity preparation failed: $file" }
 }
-Write-Output "Prepared $($executables.Count) staged executables at Medium integrity."
+Write-Output "Prepared $($executables.Count) staged executables at integrity ($IntegrityLevel)."

@@ -35,9 +35,15 @@ importers:
       gerber-to-svg:
         specifier: ^4.2.8
         version: 4.2.8
+      hls.js:
+        specifier: 1.7.4
+        version: 1.7.4
       jszip:
         specifier: ^3.10.1
         version: 3.10.1
+      libheif-js:
+        specifier: 1.23.5
+        version: 1.23.5
       lucide-react:
         specifier: ^1.31.0
         version: 1.31.0(react@18.3.0)
@@ -47,6 +53,9 @@ importers:
       monaco-languageclient:
         specifier: ^9.0.0
         version: 9.0.0(@codingame/monaco-vscode-api@11.1.2)(@codingame/monaco-vscode-base-service-override@13.0.0)(@codingame/monaco-vscode-chat-extensions-notebook-common@11.1.2)(@codingame/monaco-vscode-comments-extensions-common@11.1.2)(@codingame/monaco-vscode-configuration-service-override@11.1.2)(@codingame/monaco-vscode-editor-api@11.1.2)(@codingame/monaco-vscode-environment-service-override@11.1.2)(@codingame/monaco-vscode-extensions-service-override@11.1.2)(@codingame/monaco-vscode-files-service-override@11.1.2)(@codingame/monaco-vscode-host-service-override@11.1.2)(@codingame/monaco-vscode-layout-service-override@11.1.2)(@codingame/monaco-vscode-localization-service-override@11.1.2)(@codingame/monaco-vscode-model-service-override@11.1.2)(@codingame/monaco-vscode-quickaccess-service-override@11.1.2)
+      occt-import-js:
+        specifier: 0.0.23
+        version: 0.0.23
       pdfjs-dist:
         specifier: ^6.3.289
         version: 6.3.289
@@ -71,6 +80,9 @@ importers:
       three:
         specifier: ^0.185.1
         version: 0.185.1
+      utif:
+        specifier: 3.1.0
+        version: 3.1.0
       xlsx:
         specifier: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
         version: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
@@ -2762,6 +2774,9 @@ packages:
   hast-util-whitespace@3.0.0:
     resolution: {integrity: sha512-88JUN06ipLwsnv+dVn+OIYOvAuvBMy/Qoi6O7mQHxdPXpjy+Cd6xRkWwux7DKO+4sYILtLBRIKgsdpS2gQc7qw==}
 
+  hls.js@1.7.4:
+    resolution: {integrity: sha512-3GlxGdPvT2YHvQYOt+yOzT/DEior/qJVNIylHA77kgeoBTdQQqi70GwefNEUmHQeNGyjC8U62+bruqW/Tpm+tg==}
+
   hmac-drbg@1.0.1:
     resolution: {integrity: sha512-Tti3gMqLdZfhOQY1Mzf/AanLiqh1WTiJgEj26ZuYQ9fbkLomzGchCws4FyrSd4VkpBfiNhaE1On+lOz894jvXg==}
 
@@ -3030,6 +3045,10 @@ packages:
   levn@0.4.1:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
     engines: {node: '>= 0.8.0'}
+
+  libheif-js@1.23.5:
+    resolution: {integrity: sha512-umXZPthnWZtF3iG/5mQG+AZ2V6i0UeYpo3z2CkggTEgL8dKmIIwJT6TDuAMuabXa1yTW8uJ1ZAgR+CxNTklYYw==}
+    engines: {node: '>=8.0.0'}
 
   lie@3.3.0:
     resolution: {integrity: sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==}
@@ -3783,6 +3802,9 @@ packages:
     resolution: {integrity: sha512-gXah6aZrcUxjWg2zR2MwouP2eHlCBzdV4pygudehaKXSGW4v2AsRQUK+lwwXhii6KFZcunEnmSUoYp5CXibxtA==}
     engines: {node: '>= 0.4'}
 
+  occt-import-js@0.0.23:
+    resolution: {integrity: sha512-RFfYQXYFX5C1mB1Aywm0ShcUKzXOr/VzTnlzhBSDJOR6YCAPt1HYCzeXWg1vwwjn/cUxwqRNhhtf1dlewoZYCQ==}
+
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
@@ -4391,6 +4413,9 @@ packages:
   url@0.11.4:
     resolution: {integrity: sha512-oCwdVC7mTuWiPyjLUz/COz5TLk6wgp0RCsN+wHZ2Ekneac9w8uuV0njcbbie2ME+Vs+d6duwmYuR3HgQXs1fOg==}
     engines: {node: '>= 0.4'}
+
+  utif@3.1.0:
+    resolution: {integrity: sha512-WEo4D/xOvFW53K5f5QTaTbbiORcm2/pCL9P6qmJnup+17eYfKaEhDeX9PeQkuyEoIxlbGklDuGl8xwuXYMrrXQ==}
 
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
@@ -7207,6 +7232,8 @@ snapshots:
     dependencies:
       '@types/hast': 3.0.5
 
+  hls.js@1.7.4: {}
+
   hmac-drbg@1.0.1:
     dependencies:
       hash.js: 1.1.7
@@ -7481,6 +7508,8 @@ snapshots:
     dependencies:
       prelude-ls: 1.2.1
       type-check: 0.4.0
+
+  libheif-js@1.23.5: {}
 
   lie@3.3.0:
     dependencies:
@@ -8047,6 +8076,8 @@ snapshots:
       call-bound: 1.0.4
       define-properties: 1.2.1
       es-object-atoms: 1.1.2
+
+  occt-import-js@0.0.23: {}
 
   once@1.4.0:
     dependencies:
@@ -8798,6 +8829,10 @@ snapshots:
     dependencies:
       punycode: 1.4.1
       qs: 6.16.0
+
+  utif@3.1.0:
+    dependencies:
+      pako: 1.0.11
 
   util-deprecate@1.0.2: {}
 

@@ -8,20 +8,24 @@ import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react-swc';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { devFileApi } from './vite-plugins/dev-file-api';
+import { pdfAssets } from './vite-plugins/preview/pdf-assets';
+import { officePreview } from './vite-plugins/preview/office';
+import { previewResources } from './vite-plugins/preview/resources';
+import { previewFormatAssets } from './vite-plugins/preview/format-assets';
 
 // Vite config for Trylo Desktop (Tauri 2 + React + Monaco).
 // See docs/ARCHITECTURE.md for the architecture.
 
 const host = process.env.TAURI_DEV_HOST;
 
-// Work sub-app lives at ../work/src (sibling package, see
-// ../../work/README.md). Aliasing lets App.tsx import the
-// Work components as `@trylo/work/...` without a separate
-// build step. Vite re-uses the desktop's React and lucide-react
-// from node_modules.
-const workSrc = fileURLToPath(new URL('../work/src', import.meta.url));
-
 export default defineConfig({
+  // Tests must not replace optimization metadata used by an open Desktop window.
+  cacheDir: fileURLToPath(new URL(
+    process.env.VITEST === 'true' ? './node_modules/.vite-test' : './node_modules/.vite-desktop',
+    import.meta.url,
+  )),
+  // Readers import Monaco lazily; prepare it before serving an open conversation.
+  optimizeDeps: { include: ['monaco-editor'] },
   // nodePolyfills: the Gerber stack (gerber-parser) needs Node's
   // string_decoder/Buffer shims in the webview. Scoped here so the
   // shims ride the lazy preview chunk, not every module.
@@ -31,17 +35,15 @@ export default defineConfig({
     react(),
     ...(process.env.VITEST === 'true' ? [] : [nodePolyfills()]),
     devFileApi(),
+    pdfAssets(),
+    officePreview(),
+    previewResources(),
+    previewFormatAssets(),
   ],
 
   resolve: {
     alias: {
-      '@trylo/work': fileURLToPath(new URL('../work/src/renderer/index.ts', import.meta.url)),
-      '@trylo/work/': workSrc + '/',
-      // The work sub-app's React/lucide imports resolve to
-      // the desktop's installed packages. We don't run
-      // `pnpm install` in work/ (kept light), so the runtime
-      // would otherwise 404 on these. Same path mapping as
-      // tsconfig.json.
+      // Keep one React runtime across renderer and lazy preview modules.
       react: fileURLToPath(new URL('./node_modules/react', import.meta.url)),
       'react-dom': fileURLToPath(new URL('./node_modules/react-dom', import.meta.url)),
       'react/jsx-runtime': fileURLToPath(
@@ -69,7 +71,7 @@ export default defineConfig({
       : undefined,
     watch: {
       // Tauri controls the Rust side; don't watch those.
-      ignored: ['**/src-tauri/**', '**/target/**'],
+      ignored: ['**/src-tauri/**', '**/target/**', '**/.cache/preview/**'],
     },
   },
 

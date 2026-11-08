@@ -5,13 +5,25 @@ import { expect, it } from 'vitest';
 
 const launcher = fileURLToPath(new URL('./start-desktop-dev.mjs', import.meta.url));
 const checkoutCli = fileURLToPath(new URL('../../new trylo cli/dist/cmd/trylo/main.js', import.meta.url));
+const readinessModule = new URL('./ensure-dev-cli.mjs', import.meta.url).href;
 
 /** Run the actual launcher with its child-spawn boundary replaced, so no app is opened or closed. */
 function launch(override, args = [], missingBuild = false, nodeOverride = '') {
+  // CLI freshness/help/build behavior has its own ensure-dev-cli.test.mjs.
+  // Keep this launcher probe independent of the live checkout's build state.
+  const readinessLoader = `
+    export async function load(url, context, nextLoad) {
+      if (url === ${JSON.stringify(readinessModule)}) {
+        return { format: 'module', shortCircuit: true, source: 'export function ensureDevelopmentCli() {}' };
+      }
+      return nextLoad(url, context);
+    }
+  `;
   const preload = `
     import childProcess from 'node:child_process';
     import fs from 'node:fs';
-    import { syncBuiltinESMExports } from 'node:module';
+    import { register, syncBuiltinESMExports } from 'node:module';
+    register(${JSON.stringify(`data:text/javascript,${encodeURIComponent(readinessLoader)}`)}, import.meta.url);
     Object.defineProperty(process, 'platform', { value: 'linux' });
     ${missingBuild ? `fs.existsSync = path => !String(path).includes('new trylo cli');` : ''}
     childProcess.spawnSync = (command, argv, options) => {

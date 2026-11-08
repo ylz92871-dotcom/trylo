@@ -1,0 +1,9 @@
+Manrope font: the approved WOFF is copied without modification from the
+startup-desk-v9 preview. Its embedded copyright reads:
+Copyright 2019 The Manrope Project Authors (https://github.com/googlefonts/manrope)
+
+The accompanying Manrope-OFL.txt is the upstream SIL Open Font License 1.1
+and notice obtained from the official Google Fonts repository:
+https://github.com/google/fonts/blob/main/ofl/manrope/OFL.txt
+
+The approved-facet.png brand asset is the existing user-approved Trylo asset.

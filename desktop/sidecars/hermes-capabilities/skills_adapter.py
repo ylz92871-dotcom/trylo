@@ -26,6 +26,7 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
 from typing import Any
 
 import upstream
@@ -53,6 +54,22 @@ def _respond(op: str, upstream_json: str) -> dict[str, Any]:
     }
     body.update(parsed)
     return body
+
+
+def _read_skill_view(name: str) -> str:
+    """Preserve native lookup/templates without executing skill-authored shell."""
+    raw = skill_view(name, preprocess=False)
+    body = json.loads(raw)
+    if not isinstance(body, dict) or not body.get("success") or not isinstance(body.get("content"), str):
+        return raw
+    from agent.skill_preprocessing import load_skills_config, substitute_template_vars
+
+    if load_skills_config().get("template_vars", True):
+        directory = body.get("skill_dir")
+        body["content"] = substitute_template_vars(
+            body["content"], Path(directory) if isinstance(directory, str) else None, None
+        )
+    return json.dumps(body, ensure_ascii=False)
 
 
 def main() -> int:
@@ -86,7 +103,7 @@ def main() -> int:
             if not NAME_RE.match(name):
                 sys.stdout.write(err("invalid skill name", op=op))
                 return 1
-            body = _respond(op, skill_view(name))
+            body = _respond(op, _read_skill_view(name))
         else:
             sys.stdout.write(err("unsupported op: %s" % op, op=op))
             return 1

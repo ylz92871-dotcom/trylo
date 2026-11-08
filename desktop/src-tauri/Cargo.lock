@@ -4274,7 +4274,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "trylo-desktop"
-version = "1.2.0"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "libc",
@@ -4291,6 +4291,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "webview2-com",
+ "windows-core 0.61.2",
  "windows-sys 0.61.2",
 ]
 

@@ -3,11 +3,12 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { resolve } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { prepareDevResources } from './prepare-dev-resources.mjs';
+import { temporaryPath } from '../../scripts/workspace-paths.mjs';
 
 const roots = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 function fixture() {
-  const parent = resolve('spike-results/dev-resource-tests');
+  const parent = temporaryPath('desktop-dev-resource-tests');
   mkdirSync(parent, { recursive: true });
   const workspace = mkdtempSync(resolve(parent, 'checkout-'));
   roots.push(workspace);
@@ -45,18 +46,8 @@ it('rejects a missing or malformed source rather than writing a placeholder', ()
   expect(() => prepareDevResources(resolve(root, 'absent'))).toThrow();
 });
 
-it('omits only the absent release legacy resource when the checkout runtime exists', () => {
+it('stages development resources without any compatibility runtime', () => {
   const root = fixture();
-  mkdirSync(resolve(root, 'src-tauri'), { recursive: true });
-  writeFileSync(resolve(root, 'src-tauri/tauri.conf.json'), JSON.stringify({ bundle: { resources: { 'resources/cli-legacy/': 'cli-legacy/' } } }));
-  expect(() => prepareDevResources(root)).toThrow(/needs trylo cli/);
-  // A sibling checkout represents the native resolver's existing development fallback.
-  const legacy = resolve(root, '../trylo cli');
-  mkdirSync(legacy, { recursive: true });
-  writeFileSync(resolve(legacy, 'cli.js'), '// fixture');
-  try {
-    expect(prepareDevResources(root)).toEqual({ bundle: { resources: { 'resources/cli-legacy/': null } } });
-    mkdirSync(resolve(root, 'src-tauri/resources/cli-legacy'));
-    expect(prepareDevResources(root)).toBeUndefined();
-  } finally { rmSync(legacy, { recursive: true, force: true }); }
+  expect(prepareDevResources(root)).toBeUndefined();
+  expect(readFileSync(resolve(root, 'src-tauri/resources/distribution.json'))).toEqual(readFileSync(resolve(root, 'distribution.json')));
 });

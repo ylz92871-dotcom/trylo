@@ -106,6 +106,18 @@ def _build_usage_report() -> dict[str, Any]:
     return out
 
 
+def _skill_directory(name: str) -> str | None:
+    """Resolve through Hermes without loading instructions or marking a review read.
+
+    Native lookup owns category directories, external roots and name precedence.
+    A summary is metadata observation, never read-before-write authorization.
+    """
+    from tools.skill_manager_tool import _find_skill
+
+    found = _find_skill(name)
+    return None if found is None else _os.fspath(found["path"])
+
+
 def _build_verdicts(names: list) -> dict[str, Any]:
     """31 L5: official scan_skill(Path) per skill -> { name: {verdict, reasons} }.
 
@@ -113,15 +125,14 @@ def _build_verdicts(names: list) -> dict[str, Any]:
     yields `VERDICT_MISSING` for it (warning), not a whole-run abort.
     """
     import pathlib
-    home = _os.environ.get("HERMES_HOME", "")
-    skills_root = _os.path.join(home, "skills") if home else ""
     out = {}
     for name in names:
         try:
-            if not skills_root:
+            directory = _skill_directory(name)
+            if directory is None:
                 out[name] = {"verdict": "unknown", "reasons": []}
                 continue
-            p = pathlib.Path(_os.path.join(skills_root, name))
+            p = pathlib.Path(directory)
             res = scan_skill(p, source="community")
             verdict = getattr(res, "verdict", "unknown") or "unknown"
             findings = getattr(res, "findings", []) or []
@@ -163,14 +174,14 @@ def _read_frontmatter(skill_path: str) -> dict[str, Any]:
 
 def _build_frontmatter(names: list) -> dict[str, Any]:
     """31 L5: { skillName: {applies_to_platform, applies_to_workspace, deprecated, archive, security_blocked} }."""
-    home = _os.environ.get("HERMES_HOME", "")
-    skills_root = _os.path.join(home, "skills") if home else ""
     out = {}
     for name in names:
-        if not skills_root:
+        try:
+            directory = _skill_directory(name)
+            out[name] = {} if directory is None else _read_frontmatter(directory)
+        except Exception:
+            # The existing metadata-only contract represents unavailable fields as absent.
             out[name] = {}
-            continue
-        out[name] = _read_frontmatter(_os.path.join(skills_root, name))
     return out
 
 

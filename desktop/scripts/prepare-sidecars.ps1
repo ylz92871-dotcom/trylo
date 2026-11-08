@@ -15,7 +15,8 @@
 # Requires (system PATH): node ≥22, esbuild (devDependency of desktop-services),
 # and dotnet ≥9. HERMES python stays on the user's side (uv / HERMES_PYTHON).
 
-param([switch]$IncludeWorkd)
+[CmdletBinding()]
+param()
 
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot 'release-file-hash.ps1')
@@ -36,9 +37,27 @@ if (Test-Path -LiteralPath $publicSourceGate) {
 $dsRoot = Join-Path $resources "desktop-services"
 $dsDist = Join-Path $dsRoot "dist"
 $sidecarPub = Join-Path $resources "sidecars"
-$backupRoot = Join-Path $repoRoot ".local-release\sidecar-backups"
+$backupRoot = Join-Path $repoRoot "_workspace\artifacts\local-release\sidecar-backups"
 New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
 Copy-Item -LiteralPath (Join-Path $repoRoot "desktop\distribution.json") -Destination (Join-Path $resources "distribution.json") -Force
+
+# Core tools are assembled on the build machine. No runtime downloads or venv
+# creation are permitted on the user's machine. Preserve the previous bundle.
+New-Item -ItemType Directory -Force -Path $dsRoot | Out-Null
+$builtinTarget = Join-Path $dsRoot 'builtin-tools'
+$builtinCandidate = Join-Path $backupRoot ('builtin-candidate-' + [Guid]::NewGuid().ToString('N'))
+node (Join-Path $PSScriptRoot 'stage-builtin-tools.mjs') $builtinCandidate
+if ($LASTEXITCODE -ne 0) { throw 'Built-in tool staging failed' }
+node (Join-Path $PSScriptRoot 'verify-builtin-tools.mjs') $builtinCandidate
+if ($LASTEXITCODE -ne 0) { throw 'Built-in tool verification failed' }
+if (Test-Path -LiteralPath $builtinTarget) {
+  $resolvedBuiltin = [IO.Path]::GetFullPath($builtinTarget)
+  if (-not $resolvedBuiltin.StartsWith(([IO.Path]::GetFullPath($resources) + '\'), [StringComparison]::OrdinalIgnoreCase)) { throw 'Built-in target escapes resources' }
+  if ((Get-Item -LiteralPath $builtinTarget).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Redirected built-in target' }
+  Move-Item -LiteralPath $builtinTarget -Destination (Join-Path $backupRoot ('builtin-tools-' + [Guid]::NewGuid().ToString('N')))
+}
+if (-not ([IO.Path]::GetFullPath($builtinCandidate)).StartsWith(([IO.Path]::GetFullPath($backupRoot) + '\'), [StringComparison]::OrdinalIgnoreCase)) { throw 'Built-in candidate escapes artifact root' }
+Move-Item -LiteralPath $builtinCandidate -Destination $builtinTarget
 
 Write-Host "prepare-sidecars: npm ci + build service host bundle"
 Push-Location $ds
@@ -109,51 +128,12 @@ $runtimeLicenses = Join-Path $resources 'runtime/licenses'
 New-Item -ItemType Directory -Force -Path $runtimeLicenses | Out-Null
 Copy-Item -LiteralPath (Join-Path $repoRoot 'desktop/licenses/NODE-v24.14.1-LICENSE.txt') -Destination (Join-Path $runtimeLicenses 'NODE-LICENSE.txt') -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot 'desktop/licenses/TRYLO-LICENSE.txt') -Destination (Join-Path $runtimeLicenses 'TRYLO-LICENSE.txt') -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot 'desktop/licenses/CoWork-OS-MIT.txt') -Destination (Join-Path $runtimeLicenses 'CoWork-OS-MIT.txt') -Force
 Write-Host "prepare-sidecars: pinned node $nodeVersion -> $nodeTargetDir\node.exe"
 
 
-# CoWork is no longer a dependency of ordinary Work. Only stage it explicitly
-# when producing the separate experimental dependency archive.
-if ($IncludeWorkd) {
-  Write-Host "prepare-sidecars: build the managed-work sidecar (audit P0-C §5.2)"
-  # Stages resources/workd = built dist/daemon + production node_modules
-  # closure + better-sqlite3 probe under the pinned Node ABI. The probe and
-  # the inventory below are the release gate: the installed app must run the
-  # real daemon with NO npm/build/rebuild on the user machine.
-  if ($env:TRYLO_WORKD_ARTIFACT_DIR) {
-    node (Join-Path $PSScriptRoot "stage-workd-artifact.mjs")
-    if ($LASTEXITCODE -ne 0) { throw "stage-workd-artifact failed (exit $LASTEXITCODE)" }
-  } else {
-    node (Join-Path $repoRoot "desktop\scripts\build-workd-sidecar.mjs") --rebuild
-    if ($LASTEXITCODE -ne 0) { throw "build-workd-sidecar failed (exit $LASTEXITCODE)" }
-  }
-
-  # Prune into a fresh candidate; keep the original artifact outside bundle.resources.
-  $slimId = [Guid]::NewGuid().ToString("N")
-  $workCandidate = Join-Path $resources "workd-slim-$slimId"
-  $workTarget = Join-Path $resources "workd"
-  node (Join-Path $PSScriptRoot "slim-workd-artifact.mjs") --source $workTarget --output $workCandidate
-  if ($LASTEXITCODE -ne 0) { throw "Work artifact pruning failed" }
-  $backupRoot = Join-Path $repoRoot ".local-release\sidecar-backups"
-  New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
-  $workBackup = Join-Path $backupRoot "workd-$slimId"
-  Move-Item -LiteralPath $workTarget -Destination $workBackup
-  try { Move-Item -LiteralPath $workCandidate -Destination $workTarget }
-  catch {
-    if (-not (Test-Path -LiteralPath $workTarget)) { Move-Item -LiteralPath $workBackup -Destination $workTarget }
-    throw
-  }
-
-  Write-Host "prepare-sidecars: probe pruned Work native/document dependencies"
-  & (Join-Path $nodeTargetDir "node.exe") (Join-Path $PSScriptRoot "verify-workd-package.mjs") $workTarget
-  if ($LASTEXITCODE -ne 0) { throw "Work package runtime probes failed" }
-
-} else {
-  Write-Host "prepare-sidecars: CoWork excluded from core; ordinary Work uses CLI"
-}
-
 Write-Host "prepare-sidecars: copy into src-tauri/resources/"
-# The optional Work wrapper is staged only for the separate dependency.
+# Only the new CLI and current Desktop services enter the resources tree.
 $targets = @(
   @{ src = "$ds\dist";               dst = "$dsDist" },
   @{ src = "$ds\vendor";             dst = "$dsRoot\vendor" },
@@ -168,13 +148,10 @@ $targets = @(
   # packaged app gets the Trylo fork surface (14 tools incl. Ocr) instead
   # of the 12-tool upstream one. The bundled host resolves it as the
   # `windows-mcp-fork` sibling of dist/host.bundle.mjs.
-  @{ src = "$repoRoot\new_tool\computer-control\Windows-MCP\src\windows_mcp"; dst = "$dsRoot\windows-mcp-fork" },
+  @{ src = "$repoRoot\desktop-services\toolchain\computer-control\Windows-MCP\src\windows_mcp"; dst = "$dsRoot\windows-mcp-fork" },
   @{ src = "$sidecars\desktop-companion\publish"; dst = "$sidecarPub\desktop-companion\publish" },
   @{ src = "$sidecars\hermes-capabilities";      dst = "$sidecarPub\hermes-capabilities" }
 )
-if ($IncludeWorkd) {
-  $targets += @{ src = (Join-Path $repoRoot "work\bin"); dst = "$resources\work\bin" }
-}
 foreach ($t in $targets) {
   if (-not (Test-Path $t.src)) { throw "prepare-sidecars: missing source $($t.src)" }
   # A compressed pet publish must not merge with stale loose .NET runtime DLLs.
@@ -216,11 +193,7 @@ node (Join-Path $PSScriptRoot "stage-cli.mjs")
 if ($LASTEXITCODE -ne 0) { throw "stage-cli failed (exit $LASTEXITCODE)" }
 
 $distribution = Get-Content -LiteralPath (Join-Path $repoRoot 'desktop/distribution.json') -Raw | ConvertFrom-Json
-if ($distribution.components.legacyCliRuntime.bundled) {
-  if (-not $env:TRYLO_LEGACY_RUNTIME_DIR) { throw 'Dual-runtime release requires TRYLO_LEGACY_RUNTIME_DIR pointing to an inventoried compatibility artifact (manifest.json and files.json).' }
-  python (Join-Path $PSScriptRoot 'stage-legacy.py') --source $env:TRYLO_LEGACY_RUNTIME_DIR
-  if ($LASTEXITCODE -ne 0) { throw 'Legacy runtime staging failed; no incomplete artifact may be packaged.' }
-}
+
 
 # Verify what actually landed in resources/ (audit §3.2 W4: a copy that
 # silently produced an incomplete tree used to reach `tauri build` and only
@@ -234,12 +207,12 @@ Write-Host "prepare-sidecars: stage the pinned WGC capture helper (spec §19.8)"
 # service host, and digest-verified by release-inventory.mjs below against
 # the manifest's pinned value. A missing or drifted helper is a release
 # failure — the capture path never downloads or substitutes one at runtime.
-$wgcSource = Join-Path $repoRoot "new_tool\computer-control\Windows-MCP\native\wgc-helper\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish"
+$wgcSource = Join-Path $repoRoot "desktop-services\toolchain\computer-control\Windows-MCP\native\wgc-helper\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish"
 $wgcTarget = Join-Path $dsRoot "wgc-helper"
 if (-not (Test-Path (Join-Path $wgcSource "trylo-wgc-helper.exe"))) {
   throw @"
 prepare-sidecars: trylo-wgc-helper.exe not found at $wgcSource
-  Build it first: dotnet publish new_tool/computer-control/Windows-MCP/native/wgc-helper/TryloWgcHelper.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
+  Build it first: dotnet publish desktop-services/toolchain/computer-control/Windows-MCP/native/wgc-helper/TryloWgcHelper.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
 "@
 }
 New-Item -ItemType Directory -Force -Path $wgcTarget | Out-Null
@@ -248,20 +221,21 @@ Write-Host "prepare-sidecars: staged WGC helper -> $wgcTarget"
 
 $licenseDirectory = Join-Path $dsRoot "licenses"
 New-Item -ItemType Directory -Force -Path $licenseDirectory | Out-Null
-Copy-Item -LiteralPath (Join-Path $repoRoot "new_tool/computer-control/Windows-MCP/LICENSE.md") -Destination (Join-Path $licenseDirectory "Windows-MCP-LICENSE.md") -Force
-Copy-Item -LiteralPath (Join-Path $repoRoot "new_tool/computer-control/Windows-MCP/PROVENANCE.json") -Destination (Join-Path $licenseDirectory "Windows-MCP-PROVENANCE.json") -Force
-& (Join-Path $PSScriptRoot "stage-wgc-notices.ps1") -ProjectDirectory (Join-Path $repoRoot "new_tool/computer-control/Windows-MCP/native/wgc-helper") -Destination (Join-Path $licenseDirectory "wgc-dotnet")
+Copy-Item -LiteralPath (Join-Path $repoRoot "desktop-services/toolchain/computer-control/Windows-MCP/LICENSE.md") -Destination (Join-Path $licenseDirectory "Windows-MCP-LICENSE.md") -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot "desktop-services/toolchain/computer-control/Windows-MCP/PROVENANCE.json") -Destination (Join-Path $licenseDirectory "Windows-MCP-PROVENANCE.json") -Force
+& (Join-Path $PSScriptRoot "stage-wgc-notices.ps1") -ProjectDirectory (Join-Path $repoRoot "desktop-services/toolchain/computer-control/Windows-MCP/native/wgc-helper") -Destination (Join-Path $licenseDirectory "wgc-dotnet")
 
 Write-Host "prepare-sidecars: verify resource inventory"
+& (Join-Path $PSScriptRoot 'preview/supply-office-engine.ps1')
+node (Join-Path $PSScriptRoot 'preview/stage-codecs.mjs')
+if ($LASTEXITCODE -ne 0) { throw 'External preview codecs staging failed.' }
 & (Join-Path $PSScriptRoot "prepare-runtime-integrity.ps1") -RuntimeRoot $resources
 if ($LASTEXITCODE -ne 0) { throw "Runtime integrity preparation failed" }
 $env:TRYLO_RESOURCE_DIR = $resources
 $env:TRYLO_SIDECARS_DIR = ""
 Push-Location $ds
 try {
-  $priorIncludeWorkd = $env:TRYLO_INCLUDE_WORKD
-  $env:TRYLO_INCLUDE_WORKD = if ($IncludeWorkd) { "1" } else { "0" }
-  try { node scripts/release-inventory.mjs } finally { $env:TRYLO_INCLUDE_WORKD = $priorIncludeWorkd }
+  node scripts/release-inventory.mjs
   if ($LASTEXITCODE -ne 0) {
     throw "release-inventory failed against $resources (exit $LASTEXITCODE)"
   }

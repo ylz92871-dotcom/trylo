@@ -57,6 +57,13 @@ test('portable preparation restores a nested CLI helper, not only the four top-l
       const helper = path.join(root, 'cli/dist/helpers/nested-helper.exe');
       mkdirSync(path.dirname(helper), { recursive: true }); copyFileSync(process.execPath, helper);
       execFileSync('icacls.exe', [helper, '/setintegritylevel', 'L'], { windowsHide: true });
+      const media = path.join(root, 'preview/media/bin/ffmpeg.exe');
+      mkdirSync(path.dirname(media), { recursive: true }); copyFileSync(process.execPath, media);
+      execFileSync('icacls.exe', [media, '/setintegritylevel', 'L'], { windowsHide: true });
+      const office = path.join(root, 'preview/office/program/soffice.com');
+      mkdirSync(path.dirname(office), { recursive: true });
+      copyFileSync(path.join(process.env.SystemRoot, 'System32/whoami.exe'), office);
+      execFileSync('icacls.exe', [office, '/setintegritylevel', 'L'], { windowsHide: true });
       execFileSync('icacls.exe', [destination, '/setintegritylevel', '(OI)(CI)M'], { windowsHide: true });
       const prepared = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', launcher, '-PrepareOnly'], { encoding: 'utf8', windowsHide: true });
       assert.equal(prepared.status, 0, prepared.stderr);
@@ -64,7 +71,72 @@ test('portable preparation restores a nested CLI helper, not only the four top-l
       const written = spawnSync(helper, ['-e', "require('node:fs').writeFileSync(process.argv[1],'nested helper works')", effect], { encoding: 'utf8', windowsHide: true });
       assert.equal(written.status, 0, written.stderr);
       assert.equal(readFileSync(effect, 'utf8'), 'nested helper works');
+      const previewEffect = path.join(destination, 'preview.txt');
+      const preview = spawnSync(media, ['-e', "require('node:fs').writeFileSync(process.argv[1],'preview works')", previewEffect], { encoding: 'utf8', windowsHide: true });
+      assert.equal(preview.status, 0, preview.stderr);
+      assert.equal(readFileSync(previewEffect, 'utf8'), 'preview works');
+      const token = execFileSync(office, ['/groups', '/fo', 'csv'], { encoding: 'utf8', windowsHide: true });
+      assert.ok(Number(token.match(/S-1-16-([0-9]+)/)?.[1]) >= 8192);
     } finally {
+      assert.equal(path.dirname(root), path.resolve(os.tmpdir()));
+      assert.equal(path.dirname(destination), path.resolve(os.tmpdir()));
       rmSync(root, { recursive: true, force: true }); rmSync(destination, { recursive: true, force: true });
+    }
+  });
+
+test('native dev prepares copied runtimes before Desktop starts its workers',
+  { skip: process.platform !== 'win32' }, () => {
+    const temp = path.join(checkout, 'Temp');
+    mkdirSync(temp, { recursive: true });
+    const root = mkdtempSync(path.join(temp, 'native-dev-node-'));
+    const destination = mkdtempSync(path.join(os.tmpdir(), 'trylo-dev-node-write-'));
+    try {
+      const desktop = path.join(root, 'trylo-desktop.exe');
+      const node = path.join(root, 'runtime/node/win-x64/node.exe');
+      const output = path.join(destination, 'written.txt');
+      const workers = ['cli/dist/internal/vendor/pty/win-x64/trylo-pty.exe',
+        'desktop-services/wgc-helper/trylo-wgc-helper.exe',
+        'sidecars/desktop-companion/publish/TryloDesktopPet.exe',
+        'preview/media/bin/ffmpeg.exe'].map(relative => path.join(root, relative));
+      mkdirSync(path.dirname(node), { recursive: true });
+      copyFileSync(process.execPath, desktop);
+      copyFileSync(process.execPath, node);
+      execFileSync('icacls.exe', [node, '/setintegritylevel', 'L'], { windowsHide: true });
+      for (const worker of workers) {
+        mkdirSync(path.dirname(worker), { recursive: true });
+        copyFileSync(path.join(process.env.SystemRoot, 'System32/whoami.exe'), worker);
+        execFileSync('icacls.exe', [worker, '/setintegritylevel', 'L'], { windowsHide: true });
+      }
+      execFileSync('icacls.exe', [destination, '/setintegritylevel', '(OI)(CI)M'], { windowsHide: true });
+      const write = "require('node:fs').writeFileSync(process.argv[1],'dev CLI worker works')";
+      const program = `
+        const { spawnSync } = require('node:child_process');
+        const child = spawnSync(process.argv[1], ['-e', process.argv[2], process.argv[3]], {
+          encoding: 'utf8', windowsHide: true,
+        });
+        process.stderr.write(child.stderr || '');
+        if (child.status !== 0) process.exit(child.status ?? 1);
+        for (const worker of JSON.parse(process.argv[4])) {
+          const token = spawnSync(worker, ['/groups', '/fo', 'csv'], { encoding: 'utf8', windowsHide: true });
+          const rid = Number(token.stdout?.match(/S-1-16-([0-9]+)/)?.[1]);
+          if (token.status !== 0 || !(rid >= 8192)) {
+            process.stderr.write('Worker retained Low integrity: ' + worker);
+            process.exit(1);
+          }
+        }
+      `;
+      const launched = spawnSync(process.execPath, [fileURLToPath(new URL('./run-native-dev.mjs', import.meta.url)),
+        desktop, '-e', program, node, write, output, JSON.stringify(workers)], {
+        encoding: 'utf8', windowsHide: true,
+        env: { ...process.env, TRYLO_DESKTOP_INTEGRITY: 'M' },
+        timeout: 30000,
+      });
+      assert.equal(launched.status, 0, launched.stderr);
+      assert.equal(readFileSync(output, 'utf8'), 'dev CLI worker works');
+    } finally {
+      assert.equal(path.dirname(root), path.resolve(temp));
+      assert.equal(path.dirname(destination), path.resolve(os.tmpdir()));
+      rmSync(root, { recursive: true, force: true });
+      rmSync(destination, { recursive: true, force: true });
     }
   });

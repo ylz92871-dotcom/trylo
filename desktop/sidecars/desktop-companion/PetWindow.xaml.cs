@@ -1,4 +1,6 @@
 using System.Windows;
+using Point = System.Windows.Point;
+using Size = System.Windows.Size;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -105,9 +107,11 @@ public partial class PetWindow : Window
         InitializeComponent();
         _atlas = LoadAtlas();
         _actionFrames = LoadActionFrames();
-        _settings = PetSettings.Load();
+        _settings = startServer ? PetSettings.Load() : new PetSettings();
         Topmost = _settings.Topmost;
         RestorePosition();
+        SourceInitialized += (_, _) => { if (!_qaRender) ClampIntoScreen(); };
+        SystemParameters.StaticPropertyChanged += OnScreenMetricsChanged;
 
         if (startServer)
         {
@@ -994,9 +998,11 @@ public partial class PetWindow : Window
     {
         if (!double.IsNaN(_settings.Left) && !double.IsNaN(_settings.Top))
         {
-            var virtualScreen = Forms.SystemInformation.VirtualScreen;
-            Left = Math.Clamp(_settings.Left, virtualScreen.Left, virtualScreen.Right - Width);
-            Top = Math.Clamp(_settings.Top, virtualScreen.Top, virtualScreen.Bottom - Height);
+            var position = PetWindowPlacement.Clamp(
+                new Point(_settings.Left, _settings.Top), new Size(Width, Height),
+                PetWindowPlacement.DesktopBounds);
+            Left = position.X;
+            Top = position.Y;
             return;
         }
         var area = SystemParameters.WorkArea;
@@ -1006,7 +1012,8 @@ public partial class PetWindow : Window
 
     private void SavePosition()
     {
-        if (WindowState != WindowState.Normal) return;
+        // Render-only QA has no server and must not move the user's real pet.
+        if (_server is null || WindowState != WindowState.Normal) return;
         _settings.Left = Left;
         _settings.Top = Top;
         _settings.Save();
@@ -1019,17 +1026,11 @@ public partial class PetWindow : Window
     {
         try
         {
-            var virtualScreen = Forms.SystemInformation.VirtualScreen;
-            var maxLeft = Math.Max(virtualScreen.Left, virtualScreen.Right - Math.Min(Width, 96));
-            var maxTop = Math.Max(virtualScreen.Top, virtualScreen.Bottom - Math.Min(Height, 96));
-            var isOffScreen =
-                Left < virtualScreen.Left - 1 ||
-                Top < virtualScreen.Top - 1 ||
-                Left > virtualScreen.Right - 8 ||
-                Top > virtualScreen.Bottom - 8;
-            if (!isOffScreen) return;
-            Left = Math.Clamp(Left, virtualScreen.Left, maxLeft);
-            Top = Math.Clamp(Top, virtualScreen.Top, maxTop);
+            var position = PetWindowPlacement.Clamp(
+                new Point(Left, Top), new Size(Width, Height), PetWindowPlacement.DesktopBounds);
+            if (position.X == Left && position.Y == Top) return;
+            Left = position.X;
+            Top = position.Y;
             SavePosition();
         }
         catch
@@ -1038,8 +1039,18 @@ public partial class PetWindow : Window
         }
     }
 
+    private void OnScreenMetricsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (_qaRender || !IsLoaded) return;
+        if (e.PropertyName is nameof(SystemParameters.VirtualScreenLeft) or
+            nameof(SystemParameters.VirtualScreenTop) or nameof(SystemParameters.VirtualScreenWidth) or
+            nameof(SystemParameters.VirtualScreenHeight) or nameof(SystemParameters.WorkArea))
+            Dispatcher.BeginInvoke(new Action(ClampIntoScreen));
+    }
+
     private void OnClosed(object? sender, EventArgs e)
     {
+        SystemParameters.StaticPropertyChanged -= OnScreenMetricsChanged;
         _animationTimer.Stop();
         _clientTimer.Stop();
         _server?.Dispose();

@@ -1,0 +1,6 @@
+/* Only size the isolated host; production result components retain their CSS. */
+.deliverable-acceptance {
+  height: 100%;
+  overflow: auto;
+  padding: 24px 12px 32px;
+}

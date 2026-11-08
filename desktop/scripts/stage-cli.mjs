@@ -16,19 +16,24 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import { stageCliOptions } from './stage-cli-options.mjs';
 
 // Build-machine only: stage the audited CLI closure and exercise it outside the checkout.
 const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const source = path.resolve(desktop, '../new trylo cli');
-const resources = path.join(desktop, 'src-tauri/resources');
-const target = path.join(resources, 'cli');
-const node = path.join(resources, 'runtime/node/win-x64/node.exe');
+const bundledResources = path.join(desktop, 'src-tauri/resources');
+const options = stageCliOptions(process.argv.slice(2), { cwd: process.cwd(), source, resources: bundledResources });
+const target = options.target;
+const resources = path.dirname(target);
+const node = path.join(bundledResources, 'runtime/node/win-x64/node.exe');
 const entry = 'dist/cmd/trylo/main.js';
+if (options.isolatedOutput) assert.ok(!existsSync(target), 'Candidate output already exists; choose a fresh --output');
+mkdirSync(resources, { recursive: true });
 
 /** Publish a verified candidate, keeping the old bundle recoverable on failure. */
 function replaceStagedBundle(staged) {
   assert.equal(path.dirname(staged), resources);
-  assert.equal(path.relative(resources, target), 'cli');
+  assert.equal(path.dirname(target), resources);
   assert.ok(
     !existsSync(target) || !lstatSync(target).isSymbolicLink(),
     'Refuse to replace a redirected staging directory',
@@ -72,19 +77,20 @@ assert.ok(existsSync(node), 'Stage the pinned Node runtime before the CLI');
 
 // Reuse the CLI release pipeline, including verified sandbox/PTY helpers and SBOM.
 // No install or downloads: all build inputs and locked packages must already exist.
-execFileSync(
+if (!options.skipBuild) execFileSync(
   process.execPath,
-  [path.join(source, 'node_modules/typescript/bin/tsc'), '-p', path.join(source, 'tsconfig.json')],
+  [path.join(source, 'node_modules/typescript/bin/tsc'), '-p', path.join(source, 'tsconfig.json'), '--outDir', options.dist],
   { cwd: source, stdio: 'inherit' },
 );
-for (const script of [
+for (const script of options.preparedClosure ? ['scripts/release-inventory.mjs'] : [
   'scripts/copy-vendor.mjs',
   'scripts/pty/copy-pty-vendor.mjs',
   'scripts/release-inventory.mjs',
 ]) {
-  execFileSync(process.execPath, [path.join(source, script)], { cwd: source, stdio: 'inherit' });
+  execFileSync(process.execPath, [path.join(source, script), `--out-dir=${options.dist}`,
+    ...(options.preparedClosure ? ['--check-only'] : [])], { cwd: source, stdio: 'inherit' });
 }
-const sbom = JSON.parse(readFileSync(path.join(source, 'dist/sbom.json'), 'utf8'));
+const sbom = JSON.parse(readFileSync(path.join(options.dist, 'sbom.json'), 'utf8'));
 const dependencies = Object.entries(lock.packages)
   .filter(([location, locked]) => location.startsWith('node_modules/') && locked.dev !== true)
   .map(([location, locked]) => {
@@ -123,10 +129,10 @@ for (const [name, version] of Object.entries(manifest.dependencies)) {
 // Keep the current bundle intact until the replacement passes its isolated smoke.
 const staged = mkdtempSync(path.join(resources, 'cli-stage-'));
 try {
-  cpSync(path.join(source, 'dist'), path.join(staged, 'dist'), {
+  cpSync(options.dist, path.join(staged, 'dist'), {
     recursive: true,
     filter: (item) => {
-      const relative = path.relative(path.join(source, 'dist'), item).replaceAll(path.sep, '/');
+      const relative = path.relative(options.dist, item).replaceAll(path.sep, '/');
       return (
         !/\.test\.|\.test$/.test(path.basename(item)) &&
         !/^(?:tests[^/]*\.tap|quality-report\.json|wp27-[^/]*\.json)$/.test(relative)
@@ -144,6 +150,7 @@ try {
     .update(readFileSync(path.join(staged, entry)))
     .digest('hex');
   const inventory = {
+    buildInput: { path: options.dist, compilationSkipped: options.skipBuild },
     version: manifest.version,
     entry,
     sha256: digest,
@@ -162,12 +169,25 @@ try {
   try {
     cpSync(staged, path.join(isolated, 'cli'), { recursive: true });
     cpSync(node, path.join(isolated, 'node.exe'));
+    // The smoke runs with the build host's authority. A copied executable must
+    // not silently downgrade that process through an inherited integrity label.
+    // Only this owned temporary copy changes; the packaged runtime stays intact.
+    let smokeIntegrity;
+    if (process.platform === 'win32') {
+      assert.equal(path.dirname(isolated), path.resolve(tmpdir()));
+      const system = path.join(process.env.SystemRoot, 'System32');
+      const groups = execFileSync(path.join(system, 'whoami.exe'), ['/groups'], { encoding: 'utf8', windowsHide: true });
+      smokeIntegrity = groups.includes('S-1-16-12288') ? 'H' : 'M';
+      execFileSync(path.join(system, 'icacls.exe'), [path.join(isolated, 'node.exe'), '/setintegritylevel', smokeIntegrity], { windowsHide: true });
+    }
     const workspace = path.join(isolated, 'workspace');
     const home = path.join(isolated, 'home');
     mkdirSync(workspace);
     mkdirSync(home);
     const isolatedEnv = {
       ...process.env,
+      // Resolve runtime dependencies only from the copied bundle, never caller overrides.
+      NODE_PATH: '',
       PATH: '',
       TRYLO_HOME: home,
       USERPROFILE: home,
@@ -209,7 +229,9 @@ try {
       },
     );
     let buffer = '';
+    let stdout = '';
     let stderr = '';
+    const smokeStartedAt = Date.now();
     let approvalRequests = 0;
     const frames = [];
     child.stderr.on('data', (chunk) => {
@@ -227,6 +249,7 @@ try {
         else code === 0 ? resolve() : reject(new Error(`Staged CLI exit ${code}: ${stderr}`));
       });
       child.stdout.on('data', (chunk) => {
+        stdout += String(chunk);
         buffer += String(chunk);
         for (;;) {
           const end = buffer.indexOf('\n');
@@ -279,12 +302,26 @@ try {
       assert.equal(frames.find((frame) => frame.type === 'run_result').status, 'completed');
       inventory.isolatedSmoke = {
         passed: true,
+        ...(smokeIntegrity === undefined ? {} : { integrity: smokeIntegrity }),
+        elapsedMs: Date.now() - smokeStartedAt,
         noSystemNode: true,
         dependencyResolution: true,
         approvalBeforeWrite: true,
         approvalRequests,
         terminalCount: 1,
       };
+    } catch (error) {
+      // Keep the actual failure visible even though transient staging trees
+      // are removed. The isolated smoke contains synthetic data and no key.
+      const diagnostic = path.join(resources, `cli-smoke-failure-${smokeStartedAt}.json`);
+      writeFileSync(diagnostic, JSON.stringify({ phase: 'permission-smoke',
+        buildInput: options.dist, entrySha256: digest, nodeSha256: inventory.nodeSha256,
+        startedAt: new Date(smokeStartedAt).toISOString(), elapsedMs: Date.now() - smokeStartedAt,
+        timedOut, approvalRequests, frames, stdout, stderr,
+        error: error instanceof Error ? error.message : String(error),
+        fixtureOutputPresent: existsSync(path.join(workspace, 'fixture-output.txt')),
+      }, null, 2) + '\n');
+      throw error;
     } finally {
       clearTimeout(timer);
       child.stdin.destroy();

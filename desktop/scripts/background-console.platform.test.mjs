@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { before, test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { artifactPath } from '../../scripts/workspace-paths.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const enabled = process.platform === 'win32';
@@ -13,7 +14,7 @@ let evidence, gui, child, runner;
 
 before(() => {
   if (!enabled) return;
-  const evidenceRoot = process.env.TRYLO_CONSOLE_EVIDENCE_DIR || path.join(root, 'Temp/background-console');
+  const evidenceRoot = process.env.TRYLO_CONSOLE_EVIDENCE_DIR || artifactPath('desktop-background-console');
   mkdirSync(evidenceRoot, { recursive: true });
   evidence = mkdtempSync(path.join(evidenceRoot, 'probe-'));
   gui = path.join(evidence, 'gui.exe');

@@ -1,0 +1,6 @@
+Trylo archive preview leaf decoder
+
+Source-built libarchive 3.8.11, liblzma 5.8.4, Zstandard, bzip2 1.0.8 and zlib; exact revisions and complete sources accompany this distribution.
+Worker-only WebAssembly, no filesystem, 256 MiB maximum linear memory. Network and process capabilities are not provided to the decoder. Copyright notices and unchanged source header notices accompany these files. Emscripten 4.0.23 glue/system runtime is supplied under its original notices.
+
+This engine reads directories and selected bytes only. It never extracts host paths. Encrypted/multivolume or unsupported compression formats may require an external application. Native WebView acceptance is separate from backend decoding.

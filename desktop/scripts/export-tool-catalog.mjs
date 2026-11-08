@@ -1,10 +1,11 @@
 // Browser-safe catalogue data. Runtime health still comes exclusively from tooling.health.
 import fs from 'node:fs';
-import { createToolCatalog } from '../../desktop-services/src/tooling/tool-catalog.mjs';
+import { createToolCatalog, CORE_TOOL_RUNTIME_REVISION } from '../../desktop-services/src/tooling/tool-catalog.mjs';
 import { TOOL_PROFILES } from '../../desktop-services/src/tooling/tool-profile-service.mjs';
 const catalog = createToolCatalog();
 if (catalog.rejected().length) throw new Error(JSON.stringify(catalog.rejected()));
 const data = {
+  coreToolsRevision: CORE_TOOL_RUNTIME_REVISION,
   packages: catalog.list().map(manifest => ({
     id: manifest.id, displayName: manifest.displayName, version: manifest.version,
     expectedTools: manifest.mcp.expectedTools,

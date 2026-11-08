@@ -17,17 +17,5 @@ export function prepareDevResources(desktopRoot) {
   if (!existsSync(target) || !readFileSync(target).equals(bytes)) {
     writeFileSync(target, bytes);
   }
-  // Native dev already resolves this entry from the checkout. Only release
-  // packaging requires the separately inventoried compatibility artifact.
-  const configPath = resolve(desktopRoot, 'src-tauri/tauri.conf.json');
-  const config = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : {};
-  const legacyResource = 'resources/cli-legacy/';
-  if (config.bundle?.resources?.[legacyResource] && !existsSync(resolve(resources, 'cli-legacy'))) {
-    if (!existsSync(resolve(desktopRoot, '../trylo cli/cli.js'))) {
-      throw new Error('Desktop dev needs trylo cli/cli.js or a staged resources/cli-legacy runtime.');
-    }
-    // Tauri uses JSON Merge Patch: null removes this release-only resource.
-    return { bundle: { resources: { [legacyResource]: null } } };
-  }
   return undefined;
 }

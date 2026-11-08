@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "version": "libarchive-3.8.11-trylo-wasm1",
+  "memoryLimitBytes": 268435456,
+  "files": [
+    {
+      "path": "libarchive.js",
+      "bytes": 18689,
+      "sha256": "9dfcd2ab38dfc4ea989c8dfe31649b1c1e248296c5fbfda101c6a9edb1c765a9"
+    },
+    {
+      "path": "libarchive.wasm",
+      "bytes": 531573,
+      "sha256": "68d66dbad0c31c7d67e32b9d81e53adcf2f846181873a9ae2fd42ad4e6fa5e3a"
+    },
+    {
+      "path": "LICENSE-0BSD.txt",
+      "bytes": 607,
+      "sha256": "0b01625d853911cd0e2e088dcfb743261034a091bb379246cb25a14cc4c74bf1"
+    },
+    {
+      "path": "LICENSE-bzip2.txt",
+      "bytes": 1896,
+      "sha256": "c6dbbf828498be844a89eaa3b84adbab3199e342eb5cb2ed2f0d4ba7ec0f38a3"
+    },
+    {
+      "path": "LICENSE-compiler-rt.txt",
+      "bytes": 16708,
+      "sha256": "1a8f1058753f1ba890de984e48f0242a3a5c29a6a8f2ed9fd813f36985387e8d"
+    },
+    {
+      "path": "LICENSE-Emscripten.txt",
+      "bytes": 5093,
+      "sha256": "620a78084fc7ca97c0b5dea9abf891f3ffcadfdbf305276f099c9c4e12fc1d86"
+    },
+    {
+      "path": "LICENSE-libarchive.txt",
+      "bytes": 3089,
+      "sha256": "30e556b3959e3985d66efefec5eaac51d4995053caa1d3cffe6eb916f146f229"
+    },
+    {
+      "path": "LICENSE-libcxx.txt",
+      "bytes": 16703,
+      "sha256": "539dd7aed86e8a4f12cbdd0e6c50c189c7d74847e4fecc64ce2c6ee3a01da38b"
+    },
+    {
+      "path": "LICENSE-libcxxabi.txt",
+      "bytes": 16706,
+      "sha256": "e2b35be49f7284a45b7baca8fc7b3ab7440e7902392b2528a457816b5bb2a15c"
+    },
+    {
+      "path": "LICENSE-liblzma.txt",
+      "bytes": 3119,
+      "sha256": "616a3ad264ce29b8f1cb97e53037b139d406899ca8d1f799651e17bfa09830b8"
+    },
+    {
+      "path": "LICENSE-libunwind.txt",
+      "bytes": 16706,
+      "sha256": "b5efebcaca80879234098e52d1725e6d9eb8fb96a19fce625d39184b705f7b6d"
+    },
+    {
+      "path": "LICENSE-musl.txt",
+      "bytes": 6204,
+      "sha256": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af"
+    },
+    {
+      "path": "LICENSE-zlib.txt",
+      "bytes": 1002,
+      "sha256": "e32ff4e00d9d94930537635291da39e7e612703334bf6fde8c7f1686fe8a45a2"
+    },
+    {
+      "path": "LICENSE-zstd.txt",
+      "bytes": 1549,
+      "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
+    },
+    {
+      "path": "NOTICE-source-headers.txt",
+      "bytes": 240722,
+      "sha256": "2d84eefa3b4a711963767b8049a89dda6db9e85e591ddecdbfd6c21f43fae744"
+    },
+    {
+      "path": "NOTICE.txt",
+      "bytes": 715,
+      "sha256": "9c1aea962e9696215b1f9dec5ffad4f6b979c53e0d83b88243ecfda4b8aa6196"
+    }
+  ],
+  "sources": [
+    {
+      "name": "libarchive-3.8.11.tar.xz",
+      "url": "https://github.com/libarchive/libarchive/releases/download/v3.8.11/libarchive-3.8.11.tar.xz",
+      "bytes": 6754236,
+      "sha256": "a3dc0872b1b39da34dc18ef1b944f0f11ffd37425d70ae04be679279f1cf43d2",
+      "owner": "libarchive-3.8.11"
+    },
+    {
+      "name": "012-25-xz.tar.gz",
+      "url": "https://codeload.github.com/tukaani-project/xz/tar.gz/299eb5c3f597f107fd6019bf156885ac8bfaa5ea",
+      "bytes": 1740597,
+      "sha256": "c1f497513e85cbc2f3760990a6ed9cbebe6386f273481b87251d0d6eb481c51a",
+      "revision": "299eb5c3f597f107fd6019bf156885ac8bfaa5ea",
+      "owner": "xz"
+    },
+    {
+      "name": "046-45-zstd.tar.gz",
+      "url": "https://codeload.github.com/facebook/zstd/tar.gz/49cf51799ea051457f57243527aa2058f999f005",
+      "bytes": 2492560,
+      "sha256": "20b3aa4295de44d8ea74c0bedbd036364c9d82609325b660a4900becbd56383a",
+      "revision": "49cf51799ea051457f57243527aa2058f999f005",
+      "owner": "zstd"
+    },
+    {
+      "name": "004-20-zlib.tar.gz",
+      "url": "https://codeload.github.com/madler/zlib/tar.gz/9d314c341b2ce16e01ae44e27ec3dd2f32aa58fd",
+      "bytes": 1570648,
+      "sha256": "bb27c6019ed72ea6d3ceb574cd8074083a7391afa08404ddf945bcd24f01742b",
+      "revision": "9d314c341b2ce16e01ae44e27ec3dd2f32aa58fd",
+      "owner": "zlib"
+    },
+    {
+      "name": "bzip2-1.0.8.tar.gz",
+      "url": "https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz",
+      "bytes": 810029,
+      "sha256": "ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269",
+      "owner": "bzip2"
+    },
+    {
+      "name": "emscripten-source.tar.gz",
+      "url": "https://api.github.com/repos/emscripten-core/emscripten/tarball/4.0.23",
+      "bytes": 34283404,
+      "sha256": "1297c96bb5422a0c32fce87594b318f4bfddc4e01fec443799b0c8bec7794617",
+      "revision": "4.0.23"
+    }
+  ],
+  "recipes": [
+    {
+      "path": "scripts/preview/archive-build/README.md",
+      "sha256": "8796693e26509c13998fd1649193f2b40fc7dc210fac1b1bc6a68eebc7743aa4"
+    },
+    {
+      "path": "scripts/preview/archive-build/prepare.py",
+      "sha256": "bb03dd9f994323c06d9b8d6dd3ac817ec3ac140e0f6d01c3479e61a51cb539db"
+    },
+    {
+      "path": "scripts/preview/archive-build/build.mjs",
+      "sha256": "c8a301cca392fe7dd4b1f992fe2032ba452684a9395db40274714d7838b5cee0"
+    },
+    {
+      "path": "scripts/preview/archive-build/shim.c",
+      "sha256": "8c8ec71c494812a2c1ac936bccef20de2fcca9879dc949e54f82ef65de434901"
+    },
+    {
+      "path": "scripts/preview/archive-build/inputs.lock.json",
+      "sha256": "01413ceac7d96fbf687bb79832e5ca9c1b91de555dc13fba4d3a951682ce1297"
+    }
+  ]
+}

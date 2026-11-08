@@ -1,19 +1,14 @@
 {
   "schemaVersion": 1,
   "product": "Trylo Desktop",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "distribution": "core",
   "ordinaryWorkRuntime": "trylo-cli",
   "components": {
     "coworkRuntime": {
       "bundled": false,
       "requiredForOrdinaryWork": false,
-      "status": "separate-experimental-dependency"
-    },
-    "legacyCliRuntime": {
-      "bundled": false,
-      "sourcePublished": false,
-      "mode": "excluded"
+      "status": "retired"
     }
   },
   "defaultCliRuntime": "trylo-v1"

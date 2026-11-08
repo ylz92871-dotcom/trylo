@@ -1,6 +1,12 @@
 # Trylo Desktop Pet
 
-Windows-only WPF companion for the Trylo Code VS Code extension.
+Windows-only WPF companion for Trylo Desktop (the original extension integration is retained below).
+
+Desktop's enable switch starts the companion channel. The native tray's **Show only when Trylo is minimized** is a separate display preference; enabling the companion does not override it. Uncheck that tray option to keep the pet visible while Desktop is foreground.
+
+Saved window positions use WPF device-independent units. `PetWindowPlacement` reads WPF screen bounds in the same units and keeps the entire window inside the virtual desktop during restore, explicit wake and display-layout changes. Render-only QA never loads or saves the user's pet settings.
+
+The dependency-free placement checks live in `desktop/testdata/pet-placement/`. Build and check outputs belong under `_workspace/`, not beside this source.
 
 Build the framework-dependent executable:
 

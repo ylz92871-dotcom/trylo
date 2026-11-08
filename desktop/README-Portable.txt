@@ -1,4 +1,4 @@
-Trylo Desktop 1.2.0 - new CLI only
+Trylo Desktop 2.0.0 - new CLI only
 
 This update contains only the new Trylo CLI (trylo-v1) and a fixed Node runtime.
 No legacy CLI or CoWork runtime is bundled. No system Node is required.
@@ -14,8 +14,8 @@ Keep the resource
 folders beside the executable. Startup failures are shown as a normal error
 dialog and recorded in Start-Trylo.log; no command window is used.
 Configure your own provider/model in Settings.
-Code and ordinary Work share the selected CLI. CoWork is a separate experimental
-dependency and is excluded from this core distribution.
+Code and Work use the new Trylo CLI. The CoWork runtime is retired; it has no
+startup command, optional component or release package.
 
 Approved new-CLI shell commands run with Desktop's current authority. Read-only
 still blocks commands and writes. Standalone new CLI keeps its sandbox default;

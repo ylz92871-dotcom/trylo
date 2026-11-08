@@ -1,0 +1,14 @@
+{
+  "approvedOn": "2026-11-08",
+  "normalization": "UTF-8 text, CRLF normalized to LF",
+  "reference": "User-approved preview at http://127.0.0.1:56020/",
+  "choreography": "Staggered masked text reveal; one centre turn with concurrent shrink and defocus; short curved transfer into the sidebar.",
+  "changePolicy": "Preserve this approved choreography and timing. Obtain user approval before changing the words, sequence, rotation, shrink, blur, path or timing.",
+  "files": {
+    "public/startup/sequence.js": "4ea428dcff898fcc43763fadb6d9436ae13baf61443a725d4d298ee6e3fba66b",
+    "public/startup.js": "201fb6432a101946cc9c36b54538c49acc44f1a290a57553d48a346395dc8c0e",
+    "src/styles/startup.css": "d94341fd607b5854366ec9f32b1b6a72afc44d9e888e61d41e4974f99020b4bc",
+    "public/startup/material.js": "89126a21e7c85a6b64a2d561519f6db1ebec3a25d3a70fd4758681e6b7e6f7c8",
+    "public/startup/material-worker.js": "736edaddd3f15eafbf6638334bc9f737a708df2d64e08236a2477dd3182de0aa"
+  }
+}

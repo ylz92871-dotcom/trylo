@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "engineVersion": "9.0.2-trylo-preview-g1e65c6cd5d",
+  "ffmpegCommit": "1e65c6cd5d3d2d12cbb374460dbf08bedf54772a",
+  "builderCommit": null,
+  "complete": true,
+  "files": [
+    {
+      "name": "ffmpeg-source.tar.gz",
+      "url": "https://api.github.com/repos/FFmpeg/FFmpeg/tarball/1e65c6cd5d3d2d12cbb374460dbf08bedf54772a",
+      "bytes": 17321503,
+      "sha256": "4401b4fe672ceae51dded26ac7b0ba6416da0fc257f31be642fde8b5141fe070"
+    },
+    {
+      "name": "hls-js-source.tar.gz",
+      "url": "https://api.github.com/repos/video-dev/hls.js/tarball/142fcab1fd0de99beafb0e1b07102ec674a9ddf9",
+      "bytes": 1005142,
+      "sha256": "13c89565ecfc6217e2e09d54281e0aa9cd1f734b2b4d6097e2f13afeb684e8eb"
+    },
+    {
+      "name": "101-50-openh264.tar.gz",
+      "url": "https://codeload.github.com/cisco/openh264/tar.gz/1bca62311e447fd9c39fc93de2c4b96cd5ce971c",
+      "bytes": 60334161,
+      "sha256": "2238d3e5956ef0d288dd43842a0220015cf72c4327d98684e8bc47ffa7cf5308",
+      "revision": "1bca62311e447fd9c39fc93de2c4b96cd5ce971c"
+    },
+    {
+      "name": "git-025-50-dav1d.tar.gz",
+      "bytes": 1750720,
+      "sha256": "3d5849a5bd1fcc58ae523deb4de655dbf84168fb786893b2bb3da7f5159e9cc7",
+      "revision": "b8b2d726b4b78a2fb174cb45baff441b5969672c",
+      "url": "https://code.videolan.org/videolan/dav1d.git"
+    },
+    {
+      "name": "004-20-zlib.tar.gz",
+      "url": "https://codeload.github.com/madler/zlib/tar.gz/9d314c341b2ce16e01ae44e27ec3dd2f32aa58fd",
+      "bytes": 1570648,
+      "sha256": "bb27c6019ed72ea6d3ceb574cd8074083a7391afa08404ddf945bcd24f01742b",
+      "revision": "9d314c341b2ce16e01ae44e27ec3dd2f32aa58fd"
+    }
+  ],
+  "notices": [
+    {
+      "path": "preview/media/LICENSE.txt",
+      "bytes": 26517,
+      "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
+    },
+    {
+      "path": "preview/media/licenses/OpenH264-LICENSE.txt",
+      "bytes": 1295,
+      "sha256": "dd5c1c9668512530fa5a96e4c29ac4033d70a7eeb0eed7a42fddb6dd794ebdbb"
+    },
+    {
+      "path": "preview/media/licenses/dav1d-LICENSE.txt",
+      "bytes": 1317,
+      "sha256": "dd92c3c2247c5651606fc23a5e2d6a1ebc5ace9a3e49cbde0e12f05ad1cb1ee5"
+    },
+    {
+      "path": "preview/media/licenses/zlib-LICENSE.txt",
+      "bytes": 1002,
+      "sha256": "e32ff4e00d9d94930537635291da39e7e612703334bf6fde8c7f1686fe8a45a2"
+    },
+    {
+      "path": "preview/media/licenses/hls-js-LICENSE.txt",
+      "bytes": 1338,
+      "sha256": "ca8773cf798c7ed997d4dd7c8e23c348699f8d5b7462636694cc14de6cda12db"
+    },
+    {
+      "path": "preview/media/licenses/GCC-COPYING3.txt",
+      "bytes": 35821,
+      "sha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b"
+    },
+    {
+      "path": "preview/media/licenses/GCC-COPYING.RUNTIME.txt",
+      "bytes": 3397,
+      "sha256": "90077ba306ee9d8ed966cab1b4abd69b6e728acf08777283cc50283cd9503fa6"
+    },
+    {
+      "path": "preview/media/licenses/MinGW-COPYING",
+      "bytes": 2368,
+      "sha256": "253aba9804544809db693d59153a57de7679be617e77f2e1fb2f9f4441f3fb61"
+    },
+    {
+      "path": "preview/media/licenses/MinGW-COPYING.MinGW-w64-runtime.txt",
+      "bytes": 11158,
+      "sha256": "e7a33fd8d164abd188ee629bbe3b07912419b29192a6bbfdce29de0ad4f0e7fb"
+    },
+    {
+      "path": "preview/media/licenses/MinGW-COPYING.MinGW-w64.txt",
+      "bytes": 6040,
+      "sha256": "8b5b2c7c74842122f7a2479653dc612aa8e1c313bfec63808f90517ae13af40a"
+    },
+    {
+      "path": "preview/media/licenses/MinGW-ddk-readme.txt",
+      "bytes": 782,
+      "sha256": "59d6381f3ce105685d2c41cc1716023323b0d2fb49dd425d5cb82c7776b18338"
+    },
+    {
+      "path": "preview/media/licenses/MinGW-direct-x-COPYING.lib",
+      "bytes": 27032,
+      "sha256": "1e7e6bae5a5bde32f1ae5a7c37a082d1ab03cf89354f7f936ac40be9e39a6531"
+    },
+    {
+      "path": "preview/media/licenses/MinGW-direct-x-readme.txt",
+      "bytes": 1004,
+      "sha256": "a185dab90c124660c7d785fd529cb3d23075ff7500ae4086e0fb342963072a12"
+    },
+    {
+      "path": "preview/media/licenses/MinGW-DISCLAIMER",
+      "bytes": 2288,
+      "sha256": "84db291f8e4654556fd6de6ca888d9891c414154ddc20deda82265dacf10d236"
+    },
+    {
+      "path": "preview/media/licenses/MinGW-DISCLAIMER.PD",
+      "bytes": 466,
+      "sha256": "716fee4352b35ba28ea2cec0c0d7654ca3a93966226f4eb9555e4f9b900866e3"
+    },
+    {
+      "path": "preview/media/NOTICE.txt",
+      "bytes": 1114,
+      "sha256": "ab54f1fe85822e5c071d72019fd2906aa370db2994879ee836722a196dd50c46"
+    },
+    {
+      "path": "preview/media/build-tools.lock.json",
+      "bytes": 1377,
+      "sha256": "70c989fcb36ba4e47ea26572b34e5edb0e59f36b75d9c6b964b336e6a46490ee"
+    },
+    {
+      "path": "preview/media/static-cxx-runtime.json",
+      "bytes": 316,
+      "sha256": "8d6a857309c9f0991eda97aca0d44a14452d78e3d286f2501934235b38ad3abb"
+    }
+  ]
+}

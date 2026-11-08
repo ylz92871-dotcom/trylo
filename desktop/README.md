@@ -2,7 +2,7 @@
 
 Tauri 2 shell + Trylo React app + monaco-vscode-api. Long-term home for the Trylo agent system.
 
-**The full technical plan lives in `C:/work/demo-ws/docs/ARCHITECTURE.md`.** Read that first. This README only covers the local dev loop.
+**The full technical plan lives in `D:/CC/trylo/docs/ARCHITECTURE.md`.** Read that first. This README only covers the local dev loop.
 
 ## Stack
 
@@ -81,7 +81,7 @@ Outputs:
 - `src-tauri/target/release/bundle/deb/*.deb` (Linux)
 
 On Windows, use the complete installer or keep the executable with its staged
-`desktop-services`, `runtime`, `sidecars`, `cli`, `work`, and `workd` directories.
+`desktop-services`, `runtime`, `sidecars`, and `cli` directories.
 Copying only `trylo-desktop.exe` to another directory does not produce a complete
 app. Resource mappings place these directories directly beside the executable,
 matching the native service resolvers. Packaging verifies a real Service Host
@@ -117,7 +117,8 @@ See `docs/ARCHITECTURE.md` §9. One-sentence version:
 ```
 src/         — Trylo React app (UI + HostAdapter + state)
 src-tauri/   — Rust shell (commands, channels, PTY, watcher)
-spike-results/ — Phase 0 spike output
+testdata/    — maintained synthetic acceptance entry points
+docs/spikes/ — retained early architecture and interaction contracts
 config/      — shared lint/format/typecheck config
 ```
 
@@ -131,10 +132,16 @@ See `docs/ARCHITECTURE.md` §10 for the full standards. Quick rules:
 - Comments explain WHY, not WHAT
 - Tests for `host-adapter/` and Rust `commands/`
 
-## Spike
+## Historical spike records
 
-Phase 0 is a 1-week spike (see `docs/ARCHITECTURE.md` §3 Phase 0 and `spike-results/`). Strict GO criteria; we stop if any fail.
+Early architecture contracts are indexed in `docs/spikes/README.md`. Historical implementation notes and generated evidence live under the repository `_workspace/`; their recorded Phase 0 status is historical context, not the current project state.
 
 ## License
 
 Apache-2.0 (TBD — see `docs/ARCHITECTURE.md` §12).
+
+## CLI runtime
+
+Desktop uses only the independently implemented engine in `new trylo cli/`. Each turn starts its new CLI runner and resumes the conversation journal. Runtime selection, legacy fallbacks and resident legacy prewarming are retired. Settings do not expose a runtime or executable path; native resolution supplies the new entry and its Node interpreter. Existing stored runtime/path fields are ignored and removed on the next successful settings save; connection, permission and learning preferences retain their existing owners.
+
+See [the retirement decision](docs/decisions/2026-11-08-new-cli-only.md).

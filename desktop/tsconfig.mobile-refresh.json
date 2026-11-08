@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["src/**/*", "../work/src/**/*"],
-  "exclude": ["node_modules", "dist", "src-tauri/target", "src-tauri/gen", "**/*.test.ts", "**/*.test.tsx", "../work/src/**/*.test.ts", "../work/src/**/*.test.tsx"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "src-tauri/target", "src-tauri/gen", "**/*.test.ts", "**/*.test.tsx"]
 }

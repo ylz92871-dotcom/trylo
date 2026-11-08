@@ -1,11 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Trylo",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "identifier": "me.trylocode.trylo",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build:bundle",
+    "beforeBundleCommand": "node scripts/preview/verify-release.mjs",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
@@ -26,7 +27,7 @@
     ],
     "withGlobalTauri": true,
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost ws: wss:; font-src 'self' data:",
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' asset: http://asset.localhost blob: trylo-media: http://trylo-media.localhost; connect-src 'self' ipc: http://ipc.localhost asset: http://asset.localhost trylo-media: http://trylo-media.localhost ws: wss:; font-src 'self' data:",
       "assetProtocol": {
         "enable": true,
         "scope": [
@@ -51,6 +52,7 @@
     "shortDescription": "Trylo Desktop — Agent-native IDE",
     "longDescription": "Trylo is a long-running Personal Agent that grows with the user and represents them in a temporary Specialist Team. This is the desktop shell.",
     "resources": {
+      "resources/preview/": "preview/",
       "resources/desktop-services/": "desktop-services/",
       "resources/sidecars/desktop-companion/publish/": "sidecars/desktop-companion/publish/",
       "resources/sidecars/hermes-capabilities/": "sidecars/hermes-capabilities/",

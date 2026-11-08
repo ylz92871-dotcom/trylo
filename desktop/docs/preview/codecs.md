@@ -1,0 +1,15 @@
+# Preview codec resources
+
+Trylo uses unmodified third-party files for TIFF (UTIF 3.1.0 / pako), HEIC (libheif-js 1.23.5), and STEP/IGES/BREP (occt-import-js 0.0.23 / OCCT 7.6.1).
+
+Archive decoding uses a separately source-built libarchive 3.8.11 WASM leaf with zlib, bzip2, liblzma and Zstandard. Its upstream sources stay unchanged; the narrow Trylo C shim and exact build recipe are supplied in `scripts/preview/archive-build/`. It is not one of the old npm wrapper binaries. See `archives.md` for budgets and format boundaries. The actual source/vendor/build pins are in `archive-engine.lock.json` and are checked by `verify-archive-engine.mjs` before staging/release.
+
+Native Desktop loads these files from the installation's `preview/codecs` directory through the existing local asset protocol. The original libraries run only in owned preview workers. They are not linked into the application IPC or agent runtime. Embedded frontend copies are used only by browser builds; the native adapter explicitly selects external installation resources.
+
+To replace a provider, close Trylo, retain a backup, and replace its compatible JS/WASM files in the same subdirectory. Keep matching JS/WASM pairs and the same public provider interface. Restart Trylo. Runtime does not require codec files to match the original distribution hashes; the manifest records the original supply for auditing. An incompatible replacement produces a preview error and does not silently select the embedded original.
+
+Licenses and upstream instructions are next to each provider. UTIF and pako are MIT; libheif-js/libheif use LGPL-3.0 and included dependency notices; occt-import-js uses LGPL-2.1, with OCCT's own LGPL exception and notices. Refer to the actual license files for terms.
+
+The source companion is prepared by `scripts/preview/fetch-sources.mjs` and the offline `verify-release.mjs` bundle gate. Set `TRYLO_PREVIEW_SOURCES_DIR` to the supplied archive directory before bundling. URLs, sizes, and SHA256 are pinned in `source-archives.lock.json`. It contains fixed upstream wrapper commits, the libheif build repository and exact libheif submodule, libde265 1.0.15, the OCCT wrapper and its exact OCCT 7.6.1 submodule, plus the matching official LibreOffice source distributions. Upstream build recipes are retained inside those archives. They are downloaded as data and are not executed by the preparation script.
+
+The original TIFF/HEIC/CAD provider files are unchanged. Application-owned worker adapters and resource/loading code are in Trylo's source tree. The archive leaf is a pinned source build with its own corresponding sources and unchanged original notices; it includes Emscripten/musl/compiler-rt notices and upstream source header notices. Source archive inventory records upstream URLs and SHA256; LibreOffice and libarchive release archives additionally match official published SHA256. Public distribution must provide the matching source companion and all bundled third-party notices alongside the binary release.

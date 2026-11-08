@@ -1,0 +1,9 @@
+Trylo uses MiSans Medium by Xiaomi for the opening heading.
+
+The original MiSans-Medium.woff2 is included without modification.
+Official package: https://hyperos.mi.com/font-download/MiSans.zip
+Official site: https://hyperos.mi.com/font/zh/
+Font SHA-256: 44e28ca6c2f0ca79829f192831ef87b5eec7c464f5cfb7a83467f57bb6e58114
+
+The official MiSans font license is included as MiSans-LICENSE.pdf in this directory.
+The renderer credits MiSans in Settings > Appearance.

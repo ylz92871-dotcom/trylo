@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "officeVersion": "26.8.2.2",
+  "files": [
+    {
+      "name": "libde265-source.tar.gz",
+      "url": "https://api.github.com/repos/strukturag/libde265/tarball/v1.0.15",
+      "sha256": "017d17a454c3742b78a2b25c39c513c76e360ce5895650ba26ee98f180251764",
+      "bytes": 438540
+    },
+    {
+      "name": "libheif-emscripten-source.tar.gz",
+      "url": "https://api.github.com/repos/catdad-experiments/libheif-emscripten/tarball/v1.23.5",
+      "sha256": "71ffe49eaaab850a0bf58969ced9f7dc8501f9ac70e7d0f719d2820f5d3bf13d",
+      "bytes": 3118
+    },
+    {
+      "name": "libheif-js-source.tar.gz",
+      "url": "https://api.github.com/repos/catdad-experiments/libheif-js/tarball/d8ec4bc3bc5bf8055975577bccbbc7e1d7313c2d",
+      "sha256": "bf0f905fc53d8e6c46032c9d1d221ffffcc437d5968e744bdf5feab9dad3161e",
+      "bytes": 10262
+    },
+    {
+      "name": "libheif-source.tar.gz",
+      "url": "https://api.github.com/repos/strukturag/libheif/tarball/413e2a87e6a70b3eccc3a3adc5801179dd2d9e00",
+      "sha256": "b0b6070facdb250efc1a5e60d52362d58547086fc7c21bd898c8a8fcff92e89e",
+      "bytes": 2219804
+    },
+    {
+      "name": "libreoffice-26.8.2.2.tar.xz",
+      "url": "https://download.documentfoundation.org/libreoffice/src/26.8.2/libreoffice-26.8.2.2.tar.xz",
+      "sha256": "f0012302d9cc70955bd55890d3aaccf6c55677c4a6a46e1003f996b1b0dae8e7",
+      "bytes": 302823256
+    },
+    {
+      "name": "libreoffice-dictionaries-26.8.2.2.tar.xz",
+      "url": "https://download.documentfoundation.org/libreoffice/src/26.8.2/libreoffice-dictionaries-26.8.2.2.tar.xz",
+      "sha256": "d1b206157ea69249d754cabd8e9213b9dc69fc072fca91f51a681e95228239e0",
+      "bytes": 62318564
+    },
+    {
+      "name": "libreoffice-help-26.8.2.2.tar.xz",
+      "url": "https://download.documentfoundation.org/libreoffice/src/26.8.2/libreoffice-help-26.8.2.2.tar.xz",
+      "sha256": "e7e0270c30b13c4c52acae57e6c7529dc2146d9946123b5da17ae236e3bb4f68",
+      "bytes": 53513028
+    },
+    {
+      "name": "libreoffice-translations-26.8.2.2.tar.xz",
+      "url": "https://download.documentfoundation.org/libreoffice/src/26.8.2/libreoffice-translations-26.8.2.2.tar.xz",
+      "sha256": "1a3b6077ebfac899f2c31666d283e29e94c2d30704dd162fda7ba06d77212dd2",
+      "bytes": 236276788
+    },
+    {
+      "name": "occt-import-js-source.tar.gz",
+      "url": "https://api.github.com/repos/kovacsv/occt-import-js/tarball/c2148e54b456b571238d35cac037d304053d64b2",
+      "sha256": "f84eadb3cd70509a66fe8331b133dcb98ed8ceda5653abc54cee9a5a38443ab3",
+      "bytes": 4398104
+    },
+    {
+      "name": "occt-source.tar.gz",
+      "url": "https://api.github.com/repos/Open-Cascade-SAS/OCCT/tarball/d2abb6d844231cb8f29be6894440874a4700e4a5",
+      "sha256": "170584750a871f7660509e0ae0b9f35f6c85dd7a97740b7a66a069deeead32b6",
+      "bytes": 48210026
+    }
+  ]
+}

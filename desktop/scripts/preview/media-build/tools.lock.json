@@ -1,0 +1,33 @@
+{
+  "tools": [
+    {
+      "name": "meson-1.12.1-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/57/99/36cd25f9598eef70db97577440a70a360af505f6f01c2338a18d1556079c/meson-1.12.1-py3-none-any.whl",
+      "bytes": 1108668,
+      "sha256": "930bc7542cbd9f57009e182fd014eba48cf1a0180a7b9006d2d32d8f168d8b02"
+    },
+    {
+      "name": "ninja-1.13.2-py3-none-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/3f/dd/3766b5f4d32e8a9b97d195496b0b01fbbe2e1a41669dab0cd6492a6ce199/ninja-1.13.2-py3-none-win_amd64.whl",
+      "bytes": 311798,
+      "sha256": "1293f4078278b70d0ee4b6cc8f3a9e030656c9b2f59909970343c4fe76070118"
+    },
+    {
+      "name": "nasm-3.02-win64.zip",
+      "url": "https://www.nasm.us/pub/nasm/releasebuilds/3.02/win64/nasm-3.02-win64.zip",
+      "bytes": 641314,
+      "sha256": "161d0bfaff53c2f9e9f3e69fd0672323ebabafd1268976a5cec11be92a19aee7"
+    },
+    {
+      "name": "pkgconf-source.tar.gz",
+      "url": "https://codeload.github.com/pkgconf/pkgconf/tar.gz/d81b4731d6efb33ad971a7936be449d705bb1ae9",
+      "revision": "d81b4731d6efb33ad971a7936be449d705bb1ae9",
+      "bytes": 273734,
+      "sha256": "95f77fc460620ac65af1da36eb7827d6fb6e4be76f9157191fa84dfa6740d10b"
+    }
+  ],
+  "compiler": {
+    "path": "D:/x86_64-15.2.0-release-win32-seh-ucrt-rt_v13-rev0/mingw64/bin",
+    "expectedVersion": "15.2.0"
+  }
+}

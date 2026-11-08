@@ -17,7 +17,7 @@ if (-not $outDir.StartsWith($repoRoot + "\", [StringComparison]::OrdinalIgnoreCa
 if ((Test-Path -LiteralPath $outDir) -and ((Get-Item -LiteralPath $outDir).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw "Redirected publish output" }
 $id = [Guid]::NewGuid().ToString("N")
 $candidate = "$outDir-candidate-$id"
-$backup = Join-Path $repoRoot ".local-release\sidecar-backups\pet-$id"
+$backup = Join-Path $repoRoot "_workspace\artifacts\local-release\sidecar-backups\pet-$id"
 $sc = if ($SelfContained) { "true" } else { "false" }
 Write-Host "build-desktop-pet: fresh publish (self-contained=$sc) -> $candidate"
 # PowerShell 5 treats successful native diagnostics on stderr as errors under Stop.

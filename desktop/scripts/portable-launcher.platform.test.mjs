@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { before, test } from 'node:test';
 import { buildPortableLauncher } from './build-portable-launcher.mjs';
+import { artifactPath } from '../../scripts/workspace-paths.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const windows = process.platform === 'win32';
@@ -12,7 +13,7 @@ const run = (file, args) => execFileSync(file, args, { windowsHide: true, encodi
 let evidence, launcher, probe;
 before(() => {
   if (!windows) return;
-  const destination = process.env.TRYLO_CONSOLE_EVIDENCE_DIR || path.join(root, 'Temp/portable-launcher');
+  const destination = process.env.TRYLO_CONSOLE_EVIDENCE_DIR || artifactPath('desktop-portable-launcher');
   mkdirSync(destination, { recursive: true });
   evidence = mkdtempSync(path.join(destination, 'launcher-'));
   launcher = buildPortableLauncher(path.join(evidence, 'build'));
