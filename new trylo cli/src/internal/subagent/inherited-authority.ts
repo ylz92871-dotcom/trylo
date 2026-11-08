@@ -34,8 +34,10 @@ export function inheritedPermission(parent: PermissionPort): PermissionPort {
   const policy = parent.inheritance;
   if (policy === undefined) return parent.isDenied === undefined ? SUBAGENT_PERMISSION
     : { ...SUBAGENT_PERMISSION, isDenied: name => parent.isDenied?.(name) === true };
+
   const pending = new Map<string, PermissionDecision>();
   let sequence = 0;
+
   return {
     ...(parent.isDenied === undefined ? {} : { isDenied: (name: string) => parent.isDenied?.(name) === true }),
     request: async action => {

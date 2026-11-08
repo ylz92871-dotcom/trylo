@@ -17,10 +17,13 @@
  *    hold its governance slot until the turn's timeout.
  */
 
-import type { SubagentDelivery } from "../protocol/subagent-handoff.js";
+import type { SubagentDelivery, SubagentHandoff } from "../protocol/subagent-handoff.js";
 
 export type SubagentInput = {
   readonly message: string;
+  readonly handoff?: SubagentHandoff;
+  /** Declared prerequisites for this input; admission still belongs to ControlAgentSessions. */
+  readonly dependencies?: readonly string[];
   readonly receipt?: Pick<SubagentDelivery, "submissionId" | "parentToolCallId">;
   /**
    * Drop whatever is still queued and take this one instead.
@@ -80,18 +83,23 @@ export function createSubagentInputChannel(): SubagentInputChannel {
       if (closed) {
         return false;
       }
+
       if (input.interrupt === true) {
         queue.length = 0;
       }
+
       if (waiting !== undefined) {
         deliveredRound += 1;
         settle(input);
         return true;
       }
+
       if (queue.length >= SUBAGENT_INPUT_QUEUE_LIMIT) {
         return false;
       }
+
       queue.push(input);
+
       return true;
     },
 
@@ -99,7 +107,9 @@ export function createSubagentInputChannel(): SubagentInputChannel {
       if (closed) {
         return;
       }
+
       closed = true;
+
       if (waiting !== undefined) {
         settle("closed");
       }
@@ -109,19 +119,23 @@ export function createSubagentInputChannel(): SubagentInputChannel {
       if (signal.aborted) {
         throw signal.reason;
       }
+
       const queued = queue.shift();
       if (queued !== undefined) {
         deliveredRound += 1;
         return queued;
       }
+
       if (closed) {
         return "closed";
       }
+
       return await new Promise<SubagentInput | "closed">((resolve, reject) => {
         const onAbort = (): void => {
           waiting = undefined;
           reject(signal.reason);
         };
+
         signal.addEventListener("abort", onAbort, { once: true });
         waiting = {
           resolve: (value) => {

@@ -73,6 +73,7 @@ export function createSubagentToolBoundary(
     async execute(call: ToolCallRequest, signal: AbortSignal): Promise<ToolOutcome> {
       // Any dispatch attempt spends its exact-call proof, including a refusal.
       const approvedAction = permissions.approvedAction?.consume(call) === true;
+
       // 1. Cancellation is checked before anything else. A tool reached under an
       //    already-aborted signal is an effect nobody can take back, and the run
       //    is over, so the call is refused rather than evaluated: `cancelled` is
@@ -93,6 +94,7 @@ export function createSubagentToolBoundary(
       if (permissions.inheritedDenial?.(call.name)) {
         return { outcome: "error", code: "subagent_permission_denied", message: `The parent has disabled tool '${call.name}'` };
       }
+
       const constrained = permissions.constrainTool?.(call);
       if (constrained && !constrained.ok) {
         return { outcome: "error", code: constrained.code, message: constrained.message };
@@ -140,7 +142,9 @@ export function createSubagentToolBoundary(
         }
         executionTools = localTools;
       }
+
       activePorts.set(call.toolCallId, executionTools);
+
       try { return await dispatchUnderRunCancel(executionTools, call, signal, runSignal); }
       finally { activePorts.delete(call.toolCallId); }
     },
@@ -188,6 +192,7 @@ async function dispatchUnderRunCancel(
     if (first.kind === "threw") {
       throw first.error;
     }
+
     if (first.kind === "outcome") {
       return first.outcome;
     }
@@ -204,6 +209,7 @@ async function dispatchUnderRunCancel(
     if (answer.kind === "threw") {
       throw answer.error;
     }
+
     if (answer.kind === "outcome") {
       return answer.outcome;
     }
@@ -242,6 +248,7 @@ function linkSignals(signals: ReadonlyArray<AbortSignal>): {
   const forward = (): void => {
     controller.abort();
   };
+
   for (const signal of signals) {
     if (signal.aborted) {
       forward();
@@ -250,6 +257,7 @@ function linkSignals(signals: ReadonlyArray<AbortSignal>): {
     signal.addEventListener("abort", forward, { once: true });
     attached.push(signal);
   }
+
   return {
     signal: controller.signal,
     stop: () => {
@@ -271,6 +279,7 @@ function watchAbort(signal: AbortSignal): {
   if (signal.aborted) {
     return { aborted: Promise.resolve(), stop: () => {} };
   }
+
   let resolveAborted: () => void = () => {};
   const aborted = new Promise<void>((resolve) => {
     resolveAborted = resolve;
@@ -278,7 +287,9 @@ function watchAbort(signal: AbortSignal): {
   const onAbort = (): void => {
     resolveAborted();
   };
+
   signal.addEventListener("abort", onAbort, { once: true });
+
   return {
     aborted,
     stop: () => {

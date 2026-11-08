@@ -51,6 +51,7 @@ function createMockWorkspaceTools(): {
     },
     async execute(call: ToolCallRequest): Promise<ToolOutcome> {
       executedCalls.push(call);
+
       if (call.name === "read_file") {
         return {
           outcome: "result",
@@ -59,6 +60,7 @@ function createMockWorkspaceTools(): {
           truncated: false,
         };
       }
+
       return { outcome: "error", code: "unsupported", message: "unsupported" };
     },
     async cancel() {},
@@ -98,6 +100,7 @@ test("SA-S-1 真实执行器：再入同一引擎完成子任务，输出结果�
   });
 
   const res = await handle.wait();
+
   assert.equal(res.status, "completed");
   assert.ok(res.output);
   assert.equal(res.output.status, "completed");
@@ -108,6 +111,7 @@ test("SA-S-1 真实执行器：再入同一引擎完成子任务，输出结果�
 
   // Assert lineage on child envelopes
   assert.ok(childEnvelopes.length > 0);
+
   for (const env of childEnvelopes) {
     assert.equal(env.attemptId, "att-root-99");
   }
@@ -142,6 +146,7 @@ test("SA-S-1 真实执行器：工具边界拦截，未授权工具在子任务�
   });
 
   const res = await handle.wait();
+
   assert.equal(res.status, "failed");
   assert.equal(res.error?.code, "subagent_permission_denied");
   // Underlying tool was never executed because boundary blocked it
@@ -181,6 +186,7 @@ test("SA-S-1 真实执行器：Token 预算硬顶，超额消耗中止子 turn",
   });
 
   const res = await handle.wait();
+
   assert.equal(res.status, "failed");
   assert.equal(res.error?.code, "token_budget_exhausted");
 });

@@ -29,9 +29,11 @@ export class TaskResourceStop {
     if (this.state.kind === "stopping") {
       return new SubagentGovernanceError("agent_cleanup_pending", "Task resource cleanup is still pending");
     }
+
     if (this.state.kind === "failed") {
       return new SubagentGovernanceError("agent_cleanup_failed", this.state.message);
     }
+
     return undefined;
   }
 
@@ -42,18 +44,28 @@ export class TaskResourceStop {
 
   stop(operation: () => Promise<void>): Promise<void> {
     if (this.state.kind === "stopping") return this.state.result;
+
     let resolve!: () => void;
     let reject!: (error: unknown) => void;
-    const result = new Promise<void>((success, failure) => { resolve = success; reject = failure; });
+    const result = new Promise<void>((success, failure) => {
+      resolve = success;
+      reject = failure;
+    });
     const fail = (error: unknown): void => {
       const message = error instanceof Error ? error.message : String(error);
       this.state = { kind: "failed", message };
       reject(new SubagentGovernanceError("agent_cleanup_failed", message));
     };
+
     // Register the hold before cancellation can notify reentrant observers.
     this.state = { kind: "stopping", result };
-    try { void operation().then(() => { this.state = { kind: "idle" }; resolve(); }, fail); }
+
+    try { void operation().then(() => {
+      this.state = { kind: "idle" };
+      resolve();
+    }, fail); }
     catch (error) { fail(error); }
+
     return result;
   }
 }

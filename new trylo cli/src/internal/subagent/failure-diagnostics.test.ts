@@ -8,6 +8,7 @@ import { SubagentRuntime } from "./runtime.js";
 
 const tools: ToolPort = { snapshot: () => [], execute: async () => ({ outcome: "error", code: "unexpected", message: "unexpected" }), cancel: async () => {} };
 const permission = { request: async () => { throw new Error("unexpected approval"); }, awaitDecision: async () => { throw new Error("unexpected approval"); } };
+
 for (const kind of ["delegate", "interactive"] as const) {
   for (const errorClass of ["auth", "rate_limit", "invalid_request", "network"] satisfies ProviderErrorClass[]) {
     test(`${kind}: the parent receives the ${errorClass} cause instead of an undifferentiated failed`, async () => {
@@ -20,6 +21,7 @@ for (const kind of ["delegate", "interactive"] as const) {
       const runtime = new SubagentRuntime({ tools });
       const handle = runtime.spawn<unknown>({ name: kind, worker, permissions: { allowedTools: [] }, lineage: { parentAgentId: "parent", rootAttemptId: "root" } });
       const result = await handle.wait();
+
       assert.equal(result.status, "failed");
       assert.equal(result.error?.code, errorClass);
       assert.match(result.error?.message ?? "", new RegExp(message));

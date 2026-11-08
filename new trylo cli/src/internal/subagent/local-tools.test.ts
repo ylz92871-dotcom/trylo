@@ -9,6 +9,7 @@ const signal = new AbortController().signal;
 const todo = (count: number) => ({ toolCallId: "todo", name: "todo_write", arguments: {
   todos: Array.from({ length: count }, (_, index) => ({ content: `item ${index}`, status: "pending" })),
 } });
+
 async function run(parent: ToolPort, local: ToolPort, worker: (context: SubagentContext) => Promise<ToolOutcome>,
   permissions: SubagentPermissions = { allowedTools: ["todo_write"] }) {
   const runtime = new SubagentRuntime({ tools: parent });
@@ -18,17 +19,23 @@ async function run(parent: ToolPort, local: ToolPort, worker: (context: Subagent
   };
   const handle = runtime.spawn(request);
   const result = await handle.wait();
+
   await runtime.waitForRetirement(handle.subagentId, 1000, signal);
   assert.equal(result.status, "completed");
+
   return result.output;
 }
 
 test("child-local record tools leave the parent reducer untouched", async () => {
   const parent = createTodoTools();
+
   await parent.execute(todo(2), signal);
   const child = await run(parent, createTodoTools(), context => context.tools.execute(todo(1), context.signal));
+
   assert.equal(child?.outcome, "result");
+
   if (child?.outcome === "result") assert.equal(child.value.previousTotal, 0);
+
   const after = await parent.execute(todo(2), signal);
   if (after.outcome === "result") assert.equal(after.value.previousTotal, 2);
   else assert.fail("parent reducer failed");
@@ -49,9 +56,13 @@ test("local tools cannot bypass the frozen member constraint or tool whitelist",
 test("a local record port cannot shadow a parent mutation binding", async () => {
   let effects = 0;
   const parent: ToolPort = { snapshot: () => [{ ...createTodoTools().snapshot()[0]!, sideEffect: "workspace_write" }],
-    execute: async () => { effects += 1; return { outcome: "result", value: {}, output: "mutated", truncated: false }; },
+    execute: async () => {
+      effects += 1;
+      return { outcome: "result", value: {}, output: "mutated", truncated: false };
+    },
     cancel: async () => {} };
   const result = await run(parent, createTodoTools(), context => context.tools.execute(todo(1), context.signal));
+
   assert.equal(result?.outcome, "error");
   assert.equal(effects, 0);
 });
@@ -59,6 +70,7 @@ test("a local record port cannot shadow a parent mutation binding", async () => 
 test("cancelling an unowned call cannot reach the shared parent tool port", async () => {
   const cancelled: string[] = [];
   const parent = { ...createTodoTools(), cancel: async (id: string) => { cancelled.push(id); } };
+
   await run(parent, createTodoTools(), async context => {
     await context.tools.cancel("parent-live-call");
     return context.tools.execute(todo(1), context.signal);
@@ -71,13 +83,17 @@ test("an in-flight local call is cancelled through its own port", async () => {
   let finish!: (result: ToolOutcome) => void;
   const local: ToolPort = { ...createTodoTools(),
     execute: () => new Promise<ToolOutcome>(resolve => { finish = resolve; }),
-    cancel: async id => { cancelled.push(`local:${id}`); finish({ outcome: "cancelled" }); } };
+    cancel: async id => {
+      cancelled.push(`local:${id}`);
+      finish({ outcome: "cancelled" });
+    } };
   const parent = { ...createTodoTools(), cancel: async (id: string) => { cancelled.push(`parent:${id}`); } };
   const result = await run(parent, local, async context => {
     const pending = context.tools.execute(todo(1), context.signal);
     await context.tools.cancel("todo");
     return pending;
   });
+
   assert.equal(result?.outcome, "cancelled");
   assert.deepEqual(cancelled, ["local:todo"]);
 });

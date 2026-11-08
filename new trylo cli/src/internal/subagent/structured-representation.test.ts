@@ -29,14 +29,23 @@ for (const vetoes of [[], ["不得覆盖已有文件"]]) test(`Person submits st
       request: async () => { throw new Error("unexpected approval"); }, awaitDecision: async () => { throw new Error("unexpected approval"); },
     }, team: { runId: "structured", inspectRepresentation: inspectTeamRepresentation,
       members: ["person", "worker"].map(role => ({ memberId: role, baseRole: role, displayName: role, role: { name: role, description: role } })) } });
+
   t.after(() => ports.runtime.cancelAll());
   let calls = 0;
   const call = (name: string, args: JsonObject) => ports.tools.execute({ name, toolCallId: `call-${++calls}`, arguments: args }, new AbortController().signal);
   const person = await call("spawn_agent", { agent_type: "person", member_id: "person", message: "确认用户范围" });
-  assert.equal(person.outcome, "result"); if (person.outcome !== "result") return;
+
+  assert.equal(person.outcome, "result");
+  if (person.outcome !== "result") return;
+
   const observed = await call("wait_agent", { targets: [String(person.value["task_id"])], timeout_ms: 1000 });
+
   assert.equal(observed.outcome, "result");
   const worker = await call("spawn_agent", { agent_type: "worker", member_id: "worker", message: "实现范围" });
+
   if (vetoes.length === 0) assert.equal(worker.outcome, "result", "valid structured scope should clear the existing representation barrier");
-  else { assert.equal(worker.outcome, "error"); if (worker.outcome === "error") assert.equal(worker.code, "team_representation_held"); }
+  else {
+    assert.equal(worker.outcome, "error");
+    if (worker.outcome === "error") assert.equal(worker.code, "team_representation_held");
+  }
 });

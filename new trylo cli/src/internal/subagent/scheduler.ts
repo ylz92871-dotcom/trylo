@@ -35,7 +35,16 @@ export type TimerScheduler = (delayMs: number, fire: () => void) => TimerHandle;
  * is correct, it *is* still running — and a finished one leaves nothing behind.
  */
 export const systemTimerScheduler: TimerScheduler = (delayMs, fire) => {
-  const handle = setTimeout(fire, delayMs);
+  let remaining = delayMs;
+  let handle: ReturnType<typeof setTimeout>;
+  const arm = (): void => {
+    const segment = Math.min(remaining, 2_147_483_647);
+    remaining -= segment;
+    handle = setTimeout(() => { if (remaining > 0) arm(); else fire(); }, segment);
+  };
+
+  arm();
+
   return {
     cancel: () => {
       clearTimeout(handle);

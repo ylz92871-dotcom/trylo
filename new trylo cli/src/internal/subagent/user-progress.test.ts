@@ -19,6 +19,7 @@ test("children receive a dedicated progress channel without gaining execution to
     yield { type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false };
   } };
   const worker = createInteractiveChildWorker({ provider, permission: { request: async () => { throw new Error("no approval expected"); }, awaitDecision: async () => { throw new Error("no decision expected"); } }, message: "Read only" });
+
   await worker({ subagentId: "child", name: "child", lineage: { parentAgentId: "main", rootAttemptId: "root" },
     signal: new AbortController().signal, tools: { snapshot: () => [], execute: async () => ({ outcome: "cancelled" }), cancel: async () => {} },
     reportProgress: () => {}, recordUsage: () => {} });
@@ -28,10 +29,12 @@ test("reports publish concise authored observations and never forward execution"
   const reports: SubagentObservation[] = [];
   const tools = withMemberReporting({ snapshot: () => [], execute: async () => { throw new Error("must not execute"); }, cancel: async () => {} }, event => reports.push(event), () => 2);
   const call = { name: "report_progress", toolCallId: "report-2", arguments: { state: "blocked", message: "读取失败，需要核对路径。" } };
+
   assert.equal((await tools.execute(call, new AbortController().signal)).outcome, "result");
   assert.deepEqual(reports, [{ id: "report-2", round: 2, kind: "report", reportState: "blocked", text: "读取失败，需要核对路径。" }]);
   assert.equal((await tools.execute({ ...call, arguments: { state: "ready", message: "x".repeat(1201) } }, new AbortController().signal)).outcome, "error");
-  const cancel = new AbortController(); cancel.abort();
+  const cancel = new AbortController();
+  cancel.abort();
   assert.equal((await tools.execute(call, cancel.signal)).outcome, "cancelled");
   assert.equal(reports.length, 1);
 });
@@ -57,6 +60,7 @@ test("the actual child loop publishes a report without an approval or extra summ
   const result = await worker({ subagentId: "child", name: "child", lineage: { parentAgentId: "main", rootAttemptId: "root" },
     signal: new AbortController().signal, tools: { snapshot: () => [], execute: async () => { throw new Error("no execution tool"); }, cancel: async () => {} },
     reportProgress: () => {}, recordUsage: () => {}, reportObservation: event => observations.push(event) });
+
   assert.equal(requests, 2);
   assert.equal(result.output, "Full internal answer");
   assert.equal(observations.filter(event => event.kind === "report").length, 1);
@@ -69,6 +73,7 @@ test("member transcript preserves chronology without emitting redacted thinking"
   let sequence = 0;
   const envelope = (kind: string, payload: Envelope['payload']): Envelope => ({ protocolVersion: "0.0", eventId: `e${++sequence}`, sequence,
     timestamp: "2026-10-27T00:00:00Z", kind, payload, producerId: "loop", producerSequence: sequence });
+
   observe(envelope("text", { text: "先读取" }), 1);
   observe(envelope("text", { text: "入口文件。" }), 1);
   observe(envelope("thinking", { text: "redacted secret", redacted: true }), 1);

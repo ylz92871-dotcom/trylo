@@ -20,11 +20,15 @@ for (const remembered of [false, true]) {
     const args = { path: "probe.txt", content: "probe" };
     const tools: ToolPort = { snapshot: () => [{ name: "write_file", description: "write", parameters: {},
       sideEffect: "workspace_write", needsApproval: true, timeoutMs: 1000, outputLimits: { maxBytes: 1000, maxLines: 10 } }],
-      execute: async () => { dispatched += 1; return { outcome: "result", value: {}, output: "written", truncated: false }; },
+      execute: async () => {
+        dispatched += 1;
+        return { outcome: "result", value: {}, output: "written", truncated: false };
+      },
       cancel: async () => {} };
     const provider: ProviderPort = { async *stream(request) {
       if (!request.messages.some(message => message.role === "tool")) {
-        entered(); await released;
+        entered();
+        await released;
         yield { type: "tool_call", name: "write_file", toolCallId: "write", arguments: args };
         yield { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true };
       } else {
@@ -32,18 +36,27 @@ for (const remembered of [false, true]) {
       }
     } };
     const grants = createPermissionGrantCache();
+
     if (remembered) grants.record(buildPermissionAction("approved", "write_file", args), "approved", "session");
+
     const permission = { ...(remembered ? createDenyAllPermission() : createAllowToolsPermission(new Set(["write_file"]))),
       isDenied: (name: string) => denied && name === "write_file" };
     const built = buildSubagentPorts({ parentTools: tools, workspaceTools: tools, childProvider: provider, permission, grants,
       model: "test", callerMessages: undefined, roles: [{ name: "worker", description: "worker", allowedTools: ["write_file"] }] });
-    t.after(async () => { release(); await built.runtime.cancelAll(); });
+
+    t.after(async () => {
+      release();
+      await built.runtime.cancelAll();
+    });
     let sequence = 0;
     const call = (name: string, arguments_: JsonObject) => built.tools.execute({ name, arguments: arguments_,
       toolCallId: `parent-${++sequence}` }, new AbortController().signal);
     const spawned = await call("spawn_agent", { message: "write", agent_type: "worker" });
+
     assert.equal(spawned.outcome, "result");
+
     if (spawned.outcome !== "result") return;
+
     await ready;
     denied = true;
     release();
@@ -60,16 +73,22 @@ for (const needsApproval of [false, true]) {
     const args = { path: "probe.txt" };
     const tools: ToolPort = { snapshot: () => [{ name, description: name, parameters: {}, needsApproval,
       sideEffect: needsApproval ? "workspace_write" : "read_only", timeoutMs: 1000, outputLimits: { maxBytes: 1000, maxLines: 10 } }],
-      execute: async () => { dispatched += 1; return { outcome: "result", value: {}, output: "done", truncated: false }; },
+      execute: async () => {
+        dispatched += 1;
+        return { outcome: "result", value: {}, output: "done", truncated: false };
+      },
       cancel: async () => {} };
     const grants = createPermissionGrantCache();
+
     grants.record(buildPermissionAction("approved", name, args), "approved", "session");
     const permissions = { allowedTools: [name], inheritedGrants: grants, inheritedDenial: () => denied };
     const signal = new AbortController().signal;
     const boundary = createSubagentToolBoundary(tools, permissions, { parentAgentId: "parent", rootAttemptId: "root" }, signal);
+
     assert.equal(boundary.snapshot().length, 1);
     denied = true;
     const result = await boundary.execute({ name, toolCallId: "final", arguments: args }, signal);
+
     assert.equal(result.outcome, "error");
     assert.equal(dispatched, 0);
     assert.deepEqual(boundary.snapshot(), []);

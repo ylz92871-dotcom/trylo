@@ -39,14 +39,17 @@ function scriptedProvider(answers: ReadonlyArray<string>): {
 } {
   const requests: ProviderRequest[] = [];
   let index = 0;
+
   return {
     requests,
     port: {
       async *stream(request: ProviderRequest): AsyncIterable<ProviderEvent> {
         requests.push(request);
         const text = answers[index] ?? `answer-${index}`;
+
         index += 1;
         const blockId = `blk-${index}`;
+
         yield { type: "text_start", blockId };
         yield { type: "text_delta", blockId, text };
         yield { type: "text_end", blockId };
@@ -60,6 +63,7 @@ function scriptedProvider(answers: ReadonlyArray<string>): {
 type Harness = ReturnType<typeof harness>;
 
 const runtimes: SubagentRuntime[] = [];
+
 afterEach(async () => {
   for (const runtime of runtimes.splice(0)) await runtime.cancelAll();
 });
@@ -77,6 +81,7 @@ function harness(
     tools: noTools(),
     idGenerator: (name) => `${name}-${++counter}`,
   });
+
   runtimes.push(runtime);
   const control = createSubagentControlTool({
     runtime,
@@ -104,6 +109,7 @@ function harness(
       ? { value: outcome.value }
       : { code: outcome.outcome === "error" ? outcome.code : outcome.outcome };
   };
+
   return { provider, control, call };
 }
 
@@ -121,12 +127,15 @@ async function settle(): Promise<void> {
 test("a spawned agent keeps running instead of finishing, and closing it ends the run", async () => {
   const { call, provider } = harness();
   const agentId = agentIdOf(await call(SPAWN_AGENT_TOOL, { message: "look around" }));
+
   await settle();
 
   const before = await call(WAIT_AGENT_TOOL, { targets: [agentId], timeout_ms: 10 });
+
   // A round answer is available while the lifecycle stays open for follow-up.
   assert.equal(before.value?.["timed_out"], false);
   const report = (before.value?.["results"] as JsonObject)[agentId] as JsonObject;
+
   assert.equal(report["output"], "round one");
   assert.equal(report["phase"], "awaiting_input");
   assert.equal(report["status"], "running");
@@ -134,15 +143,18 @@ test("a spawned agent keeps running instead of finishing, and closing it ends th
 
   await call(CLOSE_AGENT_TOOL, { target: agentId });
   const after = await call(WAIT_AGENT_TOOL, { targets: [agentId], timeout_ms: 500 });
+
   assert.equal((after.value?.["status"] as Record<string, string>)[agentId], "completed");
 });
 
 test("send_input makes the same agent run another round", async () => {
   const { call, provider } = harness();
   const agentId = agentIdOf(await call(SPAWN_AGENT_TOOL, { message: "first" }));
+
   await settle();
 
   const queued = await call(SEND_INPUT_TOOL, { target: agentId, message: "second" });
+
   assert.equal(typeof queued.value?.["submission_id"], "string");
   await settle();
   await call(CLOSE_AGENT_TOOL, { target: agentId });
@@ -151,6 +163,7 @@ test("send_input makes the same agent run another round", async () => {
   // The second round has to carry the first one's answer, or "continue" is a lie.
   const second = provider.requests[1];
   const carried = (second?.messages ?? []).map((m) => m.content).join(" ");
+
   assert.match(carried, /round one/, "the continuation must carry what came before");
   assert.match(carried, /second/, "and the new instruction");
 });
@@ -162,10 +175,12 @@ test("fork_context hands the parent conversation to the child", async () => {
       { role: "assistant", content: "the parent replied that" },
     ],
   });
+
   await call(SPAWN_AGENT_TOOL, { message: "carry on", fork_context: true });
   await settle();
 
   const carried = (provider.requests[0]?.messages ?? []).map((m) => m.content).join(" ");
+
   assert.match(carried, /the parent said this/);
   assert.match(carried, /the parent replied that/);
 });
@@ -186,28 +201,33 @@ test("an unknown agent id is refused by name, not answered optimistically", asyn
 test("a closed agent takes no more input", async () => {
   const { call } = harness();
   const agentId = agentIdOf(await call(SPAWN_AGENT_TOOL, { message: "first" }));
+
   await settle();
   await call(CLOSE_AGENT_TOOL, { target: agentId });
 
   const outcome = await call(SEND_INPUT_TOOL, { target: agentId, message: "more" });
+
   assert.equal(outcome.code, "agent_closed");
 });
 
 test("resume starts a new agent that carries the finished one's transcript", async () => {
   const { call, provider } = harness();
   const agentId = agentIdOf(await call(SPAWN_AGENT_TOOL, { message: "remember alpha" }));
+
   await settle();
   await call(CLOSE_AGENT_TOOL, { target: agentId });
   await call(WAIT_AGENT_TOOL, { targets: [agentId], timeout_ms: 500 });
   await settle();
 
   const resumed = agentIdOf(await call(RESUME_AGENT_TOOL, { target: agentId }));
+
   assert.notEqual(resumed, agentId, "resume must be a new run, not the same one reopened");
   await settle();
 
   const carried = (provider.requests[provider.requests.length - 1]?.messages ?? [])
     .map((m) => m.content)
     .join(" ");
+
   assert.match(carried, /round one/, "the resumed agent must know what came before");
 });
 
@@ -223,11 +243,14 @@ test("resume refuses an agent that is still running", async () => {
 test("a forced close reports cancelled rather than completed", async () => {
   const { call } = harness();
   const agentId = agentIdOf(await call(SPAWN_AGENT_TOOL, { message: "long job" }));
+
   await settle();
 
   const closed = await call(CLOSE_AGENT_TOOL, { target: agentId, force: true });
+
   assert.equal(closed.value?.["forced"], true);
   const after = await call(WAIT_AGENT_TOOL, { targets: [agentId], timeout_ms: 500 });
+
   // A run cut short is not a run that finished. Reporting it as `completed`
   // would be the one lie the status field exists to prevent.
   assert.equal((after.value?.["status"] as Record<string, string>)[agentId], "cancelled");
@@ -242,6 +265,7 @@ test("a role narrows the child's tools and reports what it could not have", asyn
   });
 
   const outcome = await call(SPAWN_AGENT_TOOL, { message: "go", agent_type: "reader" });
+
   assert.equal(outcome.value?.["role"], "reader");
   assert.deepEqual(outcome.value?.["allowed_tools"], ["read_file"]);
   // The role asked for a tool this run cannot grant. It is named in the result
@@ -256,6 +280,7 @@ test("the spawn tool tells the model which roles this run has", () => {
   const properties = (
     spawn?.parameters as { readonly properties: Record<string, { readonly enum?: ReadonlyArray<string> }> }
   ).properties;
+
   assert.deepEqual(properties["agent_type"]?.enum, ["reader"]);
   assert.match(spawn?.description ?? "", /reader: only reads/);
 });

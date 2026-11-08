@@ -11,4 +11,5 @@ export * from "./interactive-worker.js";
 export * from "./role.js";
 export * from "./control-bindings.js";
 export * from "./control-tools.js";
+export type { SubagentMemberConfigurationPort, SubagentMemberConfigurationMetadata, ReadyMemberConfiguration } from "./member-configuration.js";
 export * from "../ports/tool-runner-port.js";

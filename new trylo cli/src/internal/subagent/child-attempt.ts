@@ -15,7 +15,7 @@ import type { SubagentContext, SubagentWorker } from "./types.js";
 import { createGovernedChildProvider } from "./child-provider.js";
 import { inheritedGrantView, inheritedPermission } from "./inherited-authority.js";
 import { createChildProviderSession } from "./child-provider-session.js";
-import { childCompaction, DEFAULT_CHILD_CONTEXT_TOKENS } from "./context-budget.js";
+import { childCompaction } from "./context-budget.js";
 
 /**
  * ChildAttemptWorker — Subagent Real Executor backed by re-entering the existing loop.
@@ -58,23 +58,27 @@ export const DEFAULT_PROFILE_PORT: ProfilePort = {
 
 export function extractAssistantText(transcript: Transcript): string {
   const chunks: string[] = [];
+
   for (const item of transcript) {
     if (item.kind === "assistant_text") {
       chunks.push(item.text);
     }
   }
+
   return chunks.join("");
 }
 
 /** A round report excludes replies inherited from earlier turns or a fork. */
 export function extractLatestAssistantText(transcript: Transcript): string {
   let start = 0;
+
   for (let index = transcript.length - 1; index >= 0; index -= 1) {
     if (transcript[index]?.kind === "user") {
       start = index + 1;
       break;
     }
   }
+
   return extractAssistantText(transcript.slice(start));
 }
 
@@ -82,12 +86,14 @@ export function extractLatestAssistantText(transcript: Transcript): string {
 export function requireCompletedChild(result: Pick<RunTurnResult, "state" | "inputs">): void {
   const terminalReason = result.state.terminalReason;
   if (terminalReason === "completed") return;
+
   const failure = [...result.inputs].reverse().find(input =>
     input.type === "transport_fail" || input.type === "transport_unknown" || input.type === "budget_exhausted"
     || input.type === "tool_failed" || input.type === "tool_unknown" || input.type === "tool_rejected"
     || input.type === "permission_denied" || input.type === "permission_failed" || input.type === "permission_expired");
   let code: string = terminalReason ?? "child_attempt_failed";
   let message = `Child attempt failed with terminal reason: ${terminalReason ?? "unknown"}`;
+
   if (failure?.type === "transport_fail" || failure?.type === "transport_unknown") {
     code = failure.errorClass ?? failure.type;
     message = failure.message;
@@ -104,7 +110,9 @@ export function requireCompletedChild(result: Pick<RunTurnResult, "state" | "inp
     code = "subagent_permission_denied";
     message = "The child has no usable parent approval for this call; grant the exact action in the parent before delegating it";
   }
+
   const error = new Error(message);
+
   (error as { code?: string }).code = code;
   throw error;
 }
@@ -115,7 +123,7 @@ export function createChildAttemptWorker(
   return async (context: SubagentContext): Promise<ChildAttemptResult> => {
     const publish = context.reportObservation ?? (() => {});
     const observe = createSubagentObserver(publish);
-    const session = createChildProviderSession(options.provider);
+    const session = createChildProviderSession(options.provider, undefined, options.model);
     const grants = inheritedGrantView(context.inheritedGrants ?? options.grants);
     // 1. Build child ports using existing parent ports + context.tools (already bounded)
     const childPorts: LoopPorts = {
@@ -138,16 +146,18 @@ export function createChildAttemptWorker(
       text: options.prompt,
       callerMessages: [...(options.callerMessages ?? []), { role: "system", content: MEMBER_REPORTING_INSTRUCTIONS }],
       ...(options.model !== undefined ? { model: options.model } : {}),
-      budget: { contextTokenLimit: DEFAULT_CHILD_CONTEXT_TOKENS, ...options.budget },
+      ...(options.budget === undefined ? {} : { budget: options.budget }),
       cancelSignal: context.signal,
       onEnvelope: (env) => {
         observe(env, 1);
         const activity = subagentToolActivity(env);
         if (activity !== undefined) context.reportTool?.(activity);
+
         const stamped: Envelope = {
           ...env,
           attemptId: context.lineage.rootAttemptId,
         };
+
         options.onEnvelope?.(stamped);
       },
     };

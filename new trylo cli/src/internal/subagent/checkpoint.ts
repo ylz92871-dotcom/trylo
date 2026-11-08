@@ -5,9 +5,14 @@ import type { ResolvedRole } from "./role.js";
 import type { TeamMemberIdentity } from "./team.js";
 import { toolPairingOf } from "../protocol/tool-pairing.js";
 import { isTranscriptItem } from "../protocol/transcript.js";
+import type { SubagentRoutingReceipt } from "../ports/subagent-routing.js";
+import { isSubagentRoutingReceipt } from "./routing.js";
+import { isSubagentConfigurationCheckpoint, type SubagentConfigurationCheckpoint } from "./configuration-checkpoint.js";
 
 /** A replay boundary, never a serialized execution, approval, or provider cache. */
 export type SubagentCheckpoint = {
+  readonly configuration?: SubagentConfigurationCheckpoint;
+  readonly routing?: SubagentRoutingReceipt;
   readonly version: 1;
   readonly taskId: string;
   readonly agentId: string;
@@ -55,9 +60,13 @@ const count = (value: unknown): value is number => typeof value === "number" && 
 
 function portableMessage(value: unknown): value is ProviderMessage {
   if (!record(value) || typeof value.content !== "string" || !["user", "system", "assistant", "tool"].includes(String(value.role))) return false;
+
   if (Object.keys(value).some(key => !["role", "content", "toolCallId", "toolCalls"].includes(key))) return false;
+
   if (value.role === "tool" && !text(value.toolCallId)) return false;
+
   if (value.toolCallId !== undefined && !text(value.toolCallId)) return false;
+
   return value.toolCalls === undefined || value.role === "assistant" && Array.isArray(value.toolCalls)
     && value.toolCalls.every(call => record(call) && Object.keys(call).every(key => ["toolCallId", "name", "arguments", "originalArguments"].includes(key))
       && isTranscriptItem({ ...call, kind: "tool_call", sequence: 0 }));
@@ -66,19 +75,24 @@ function portableMessage(value: unknown): value is ProviderMessage {
 /** The boundary rejects opaque fields, notably authority and native continuation state. */
 export function isSubagentCheckpoint(value: unknown): value is SubagentCheckpoint {
   if (!record(value) || value.version !== 1) return false;
+
   if (Object.keys(value).some(key => !["version", "taskId", "agentId", "round", "phase", "nickname", "instruction", "role", "roleBinding",
-    "model", "teamMember", "allowedTools", "dependencies", "idleTimeoutMs", "budget", "cursor", "transcript", "forkMessages", "contextUnavailable"].includes(key))) return false;
+    "model", "teamMember", "allowedTools", "dependencies", "idleTimeoutMs", "budget", "cursor", "transcript", "forkMessages", "contextUnavailable", "routing", "configuration"].includes(key))) return false;
+
   const member = value.teamMember;
+
   return [value.taskId, value.agentId].every(identity) && [value.nickname, value.instruction, value.roleBinding].every(text)
     && text(value.role) && value.role.length <= 128
     && count(value.round) && value.round > 0 && ["round_ready", "interrupted"].includes(String(value.phase))
     && (value.model === undefined || text(value.model))
     && (member === undefined || record(member) && Object.keys(member).length === 2 && identity(member.teamRunId) && identity(member.memberId))
     && strings(value.allowedTools) && strings(value.dependencies) && value.dependencies.length <= 16
-    && count(value.idleTimeoutMs) && value.idleTimeoutMs > 0 && value.idleTimeoutMs <= 300_000
+    && count(value.idleTimeoutMs) && value.idleTimeoutMs > 0
     && isSubagentBudgetSnapshot(value.budget) && count(value.cursor) && isTranscript(value.transcript) && toolPairingOf(value.transcript).orphans.length === 0
     && Array.isArray(value.forkMessages) && value.forkMessages.every(portableMessage)
-    && (value.contextUnavailable === undefined || value.contextUnavailable === true);
+    && (value.contextUnavailable === undefined || value.contextUnavailable === true)
+    && (value.routing === undefined || isSubagentRoutingReceipt(value.routing))
+    && (value.configuration === undefined || isSubagentConfigurationCheckpoint(value.configuration));
 }
 
 export function portableFork(messages: readonly ProviderMessage[] = []): { readonly forkMessages: readonly ProviderMessage[]; readonly contextUnavailable?: true } {

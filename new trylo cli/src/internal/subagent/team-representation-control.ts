@@ -26,16 +26,20 @@ export class TeamRepresentationControl {
 
   failure(role: string): SubagentGovernanceError | undefined {
     if (role !== "worker" || this.inspect === undefined) return;
+
     for (const state of this.states.values()) if (state.kind === "settled" && !state.verdict.ready) {
       return new SubagentGovernanceError("team_representation_held", state.verdict.reason);
     }
+
     if (this.states.size === 0 || [...this.states.values()].some(state => state.kind !== "settled")) {
       return new SubagentGovernanceError("team_representation_pending", "Collect every frozen Person member's current representation before implementation");
     }
+
     for (const worker of this.workers()) {
       const failure = worker.resourceStop.failure();
       if (failure !== undefined) return failure;
     }
+
     return undefined;
   }
 

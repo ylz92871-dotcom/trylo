@@ -108,6 +108,7 @@ test("SA-S-2 subagent-tool: execute 成功调度真实子代理再入，返回�
   );
 
   assert.equal(outcome.outcome, "result");
+
   if (outcome.outcome === "result") {
     assert.equal(outcome.value["status"], "completed");
     assert.match(String(outcome.value["output"]), /@trylo\/subagent-tool-pkg/);
@@ -165,6 +166,7 @@ test("SA-S-2 subagent-tool: mountSubagentTool 挂载入主工具目录且互不�
 
   assert.equal(snapshot.length, 2);
   const names = snapshot.map((b) => b.name);
+
   assert.ok(names.includes("read_file"));
   assert.ok(names.includes(SUBAGENT_TOOL_NAME));
 
@@ -173,6 +175,7 @@ test("SA-S-2 subagent-tool: mountSubagentTool 挂载入主工具目录且互不�
     { toolCallId: "call-read-1", name: "read_file", arguments: { path: "package.json" } },
     new AbortController().signal,
   );
+
   assert.equal(readRes.outcome, "result");
 
   // Subagent tool can be called
@@ -188,6 +191,7 @@ test("SA-S-2 subagent-tool: mountSubagentTool 挂载入主工具目录且互不�
     },
     new AbortController().signal,
   );
+
   assert.equal(saRes.outcome, "result");
 });
 
@@ -219,6 +223,7 @@ test("CLI-01B subagent-tool：delegation 超时结束运行，名额仍由 worke
   );
 
   assert.equal(outcome.outcome, "error");
+
   if (outcome.outcome === "error") {
     assert.equal(outcome.code, "subagent_timed_out");
   }
@@ -228,6 +233,7 @@ test("CLI-01B subagent-tool：delegation 超时结束运行，名额仍由 worke
   // slot it keeps holding. That is the documented boundary, not a claim that it
   // stopped.
   const [activeId] = runtime.getActiveInstances();
+
   assert.ok(activeId !== undefined, "an unstoppable worker keeps its slot");
   assert.equal(runtime.status(activeId), "timed_out");
 });
@@ -246,6 +252,7 @@ test("CLI-01B subagent-tool：父调用取消时工具报 cancelled，不报失�
   });
 
   const cancelled = new AbortController();
+
   cancelled.abort("parent_cancelled");
 
   const outcome = await subagentTool.execute(

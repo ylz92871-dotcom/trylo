@@ -33,6 +33,7 @@ for (const kind of ["delegate", "interactive"] as const) {
     const handle = runtime.spawn<unknown>({ name: kind, worker, permissions: { allowedTools: [] },
       lineage: { parentAgentId: "parent", rootAttemptId: "root" } });
     const result = await handle.wait();
+
     assert.equal(result.status, "failed");
     assert.equal(result.error?.code, "token_budget_exhausted");
     assert.equal(requests, 3, "the third completed response crosses the budget; a fourth request must not start");
@@ -46,11 +47,13 @@ for (const kind of ["delegate", "interactive"] as const) {
     const blocked = new Promise<void>(resolve => { started = resolve; });
     const provider: ProviderPort = { async *stream(_request, signal): AsyncIterable<ProviderEvent> {
       requests += 1;
+
       if (requests === 2) {
         started();
         await new Promise<void>(resolve => { if (signal.aborted) resolve(); else signal.addEventListener("abort", () => resolve(), { once: true }); });
         return;
       }
+
       yield* responseUsage();
       yield { type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: true };
     } };
@@ -60,9 +63,11 @@ for (const kind of ["delegate", "interactive"] as const) {
     const runtime = new SubagentRuntime({ tools, governance: new SubagentGovernanceTracker({ tokenBudget: 1000, timeoutMs: 0 }) });
     const handle = runtime.spawn<unknown>({ name: kind, worker, permissions: { allowedTools: [] },
       lineage: { parentAgentId: "parent", rootAttemptId: "root" } });
+
     await blocked;
     await handle.cancel();
     const result = await handle.wait();
+
     assert.equal(result.status, "cancelled");
     assert.deepEqual(result.usage, { inputTokens: 80, outputTokens: 20 }, "the completed first request is charged before the round ends");
     await new Promise(resolve => setImmediate(resolve));

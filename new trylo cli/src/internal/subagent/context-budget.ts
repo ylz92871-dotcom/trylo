@@ -1,19 +1,17 @@
 import { createCompactionService } from "../compaction/service.js";
 import { summarizeTranscript } from "../compaction/summary.js";
-import { estimateMessagesTokens, estimateToolSpecsTokens } from "../compaction/token-estimate.js";
+import { boundMessagesTextTokens, boundToolSpecsTextTokens } from "../compaction/token-estimate.js";
 import type { CompactionWiring } from "../loop/compact-boundary.js";
 import type { ProviderPort } from "../ports/provider.js";
 
-/** A finite fallback for embeddings without declared model metadata. Production
- * passes its resolved context ceiling; the cumulative task budget is separate.
- */
-export const DEFAULT_CHILD_CONTEXT_TOKENS = 32_000;
-
+// Child prompt estimates include provider continuation overhead and the current tool set.
 export function childCompaction(provider: ProviderPort): CompactionWiring {
   return {
     port: createCompactionService(),
-    estimatePromptTokens: messages => estimateMessagesTokens(messages) + (provider.continuation?.estimateOverheadTokens?.(messages) ?? 0),
-    estimateOverheadTokens: tools => estimateToolSpecsTokens(tools.snapshot().map(binding => ({ name: binding.name,
+    estimateAccuracy: "text_upper_bound",
+    estimatePromptTokens: messages => boundMessagesTextTokens(messages) + (provider.continuation?.estimateOverheadTokens?.(messages) ?? 0),
+    estimateTextPromptTokens: boundMessagesTextTokens,
+    estimateOverheadTokens: tools => boundToolSpecsTextTokens(tools.snapshot().map(binding => ({ name: binding.name,
       description: binding.description, parameters: binding.parameters }))),
     summarize: (items, previousSummary, _signal, requestTranscript) => summarizeTranscript(items, {
       ...(previousSummary === undefined ? {} : { previousSummary }),

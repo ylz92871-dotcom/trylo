@@ -18,12 +18,18 @@ test("shared tool cancellation isolates parent and siblings that reuse a provide
     async execute(call) {
       const own = registry.begin(call.toolCallId);
       const owner = String(call.arguments.owner);
+
       started.push({ owner, id: call.toolCallId });
+
       if (started.length === 3) ready();
+
       try {
         return await new Promise<ToolOutcome>(resolve => {
           const finish = () => { resolve({ outcome: "cancelled" }); };
-          own.signal.addEventListener("abort", () => { cancelled.push(owner); finish(); }, { once: true });
+          own.signal.addEventListener("abort", () => {
+            cancelled.push(owner);
+            finish();
+          }, { once: true });
           cleanup.push(finish);
         });
       } finally { registry.end(call.toolCallId); }
@@ -34,18 +40,27 @@ test("shared tool cancellation isolates parent and siblings that reuse a provide
   const runtime = new SubagentRuntime({ tools });
   let cancelFirst!: () => Promise<void>;
   const handles = ["first", "second"].map(owner => runtime.spawn({ name: owner,
-    permissions: { allowedTools: ["read_file"], constrainTool: request => { modelIds.push(request.toolCallId); return { ok: true }; } },
+    permissions: { allowedTools: ["read_file"], constrainTool: request => {
+      modelIds.push(request.toolCallId);
+      return { ok: true };
+    } },
     lineage: { parentAgentId: "parent", rootAttemptId: owner },
     worker: context => {
       if (owner === "first") cancelFirst = () => context.tools.cancel("call_1");
       return context.tools.execute(call(owner), context.signal);
     } }));
   let actualCancelled: string[];
-  try { await allStarted; await cancelFirst(); actualCancelled = [...cancelled]; }
+
+  try {
+    await allStarted;
+    await cancelFirst();
+    actualCancelled = [...cancelled];
+  }
   finally {
     for (const finish of cleanup) finish();
     await Promise.all([parent, ...handles.map(handle => handle.wait())]);
   }
+
   assert.deepEqual(actualCancelled, ["first"]);
   assert.equal(new Set(started.map(item => item.id)).size, 3);
   assert.deepEqual(modelIds, ["call_1", "call_1"]);
@@ -55,13 +70,17 @@ test("parent dispatch cannot impersonate a child internal call namespace", async
   const seen: string[] = [];
   const tools: ToolPort = { snapshot: () => [{ name: "read_file", description: "inspection", sideEffect: "read_only",
     needsApproval: false, parameters: {}, timeoutMs: 1000, outputLimits: { maxBytes: 100, maxLines: 10 } }],
-    execute: async call => { seen.push(call.toolCallId); return { outcome: "result", value: {}, output: "read", truncated: false }; },
+    execute: async call => {
+      seen.push(call.toolCallId);
+      return { outcome: "result", value: {}, output: "read", truncated: false };
+    },
     cancel: async () => {} };
   const built = buildSubagentPorts({ parentTools: tools, workspaceTools: tools,
     childProvider: { async *stream() { yield { type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false }; } },
     model: "test", callerMessages: undefined, permission: {
       request: async () => { throw new Error("no approval"); }, awaitDecision: async () => { throw new Error("no approval"); } } });
   const childId = JSON.stringify(["subagent:fixed", "call_1"]);
+
   await built.tools.execute({ name: "read_file", toolCallId: childId, arguments: {} }, new AbortController().signal);
   assert.notEqual(seen[0], childId, "parent provider ids are wrapped in the parent namespace");
 });

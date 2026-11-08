@@ -3,6 +3,7 @@ import type { ObservationOutcome } from "../ports/tool-runner-port.js";
 import type { PermissionGrantCache } from "../loop/permission-grants.js";
 import type { SubagentInputChannel } from "./input-channel.js";
 import type { SubagentBudgetSnapshot } from "../protocol/subagent-budget.js";
+
 export type { SubagentBudgetSnapshot } from "../protocol/subagent-budget.js";
 
 /**
@@ -72,7 +73,7 @@ export type SubagentContext = {
   readonly recordUsage: (inputTokens: number, outputTokens: number) => void;
   readonly setActivity?: ((activity: "working" | "idle") => void) | undefined;
   readonly inheritedGrants?: PermissionGrantCache | undefined;
-  readonly remainingTokens?: (() => number) | undefined;
+  readonly remainingTokens?: (() => number | undefined) | undefined;
   /**
    * The reading end of the channel the control surface writes to (C43).
    * Absent means the worker runs once and finishes — the historical shape, and

@@ -38,7 +38,9 @@ export function createSubagentApprovalScope(options: Options): SubagentApprovalS
   let detach = (): void => {};
   const remember = (action: PermissionAction): void => {
     if (cancel.signal.aborted) return;
+
     permits.set(action.toolCallId, action);
+
     while (permits.size > MAX_APPROVED_ACTIONS) {
       const oldest = permits.keys().next().value;
       if (oldest === undefined) break;
@@ -51,10 +53,17 @@ export function createSubagentApprovalScope(options: Options): SubagentApprovalS
   return {
     bind(current) {
       if (context !== undefined && context !== current) throw new Error("member_approval_scope_rebound");
+
       context = current;
-      const abort = (): void => { cancel.abort(current.signal.reason); permits.clear(); pending.clear(); };
+      const abort = (): void => {
+        cancel.abort(current.signal.reason);
+        permits.clear();
+        pending.clear();
+      };
+
       if (current.signal.aborted) abort();
       else current.signal.addEventListener("abort", abort, { once: true });
+
       detach = () => { current.signal.removeEventListener("abort", abort); };
       const permission: PermissionPort = {
         isDenied: name => options.permission.isDenied?.(name) === true || options.grants?.isDenied(name) === true,
@@ -66,20 +75,32 @@ export function createSubagentApprovalScope(options: Options): SubagentApprovalS
         },
         awaitDecision: async ticketId => {
           const action = pending.get(ticketId);
+
           pending.delete(ticketId);
+
           if (cancel.signal.aborted) return decision("cancelled");
+
           if (action === undefined || denied(action)) return decision("denied", "once", "policy_denied");
+
           const call = { name: action.name, toolCallId: action.toolCallId, arguments: action.arguments };
           if (!options.constrain(call).ok) return decision("denied", "once", "policy_denied");
+
           activeWaits += 1;
+
           if (activeWaits === 1) current.setActivity?.("idle");
+
           try {
             const answered = await options.parent(action, options.requester(current), cancel.signal);
             if (!isPermissionDecision(answered)) throw new Error("member_parent_decision_invalid");
+
             if (cancel.signal.aborted) return decision("cancelled");
+
             if (denied(action) || !options.constrain(call).ok) return decision("denied", "once", "policy_denied");
+
             if (answered.resolution === "approved" && (answered.scope === "once" || options.grants === undefined)) remember(action);
+
             if (answered.resolution === "cancelled") options.onCancelled();
+
             return answered;
           } finally {
             activeWaits -= 1;
@@ -88,6 +109,7 @@ export function createSubagentApprovalScope(options: Options): SubagentApprovalS
         },
       };
       const execPolicy = options.execPolicy;
+
       return { permission, ...(execPolicy === undefined ? {} : { execPolicy: (call: Parameters<ExecPolicyGuard>[0]) => {
         const constrained = options.constrain(call);
         if (!constrained.ok) return { kind: "denied" as const, code: constrained.code, message: constrained.message };
@@ -103,6 +125,11 @@ export function createSubagentApprovalScope(options: Options): SubagentApprovalS
       const action = buildPermissionAction(call.toolCallId, call.name, call.arguments);
       return permit.name === action.name && permit.pattern === action.pattern && !denied(action);
     },
-    dispose() { detach(); cancel.abort("member_execution_retired"); permits.clear(); pending.clear(); },
+    dispose() {
+      detach();
+      cancel.abort("member_execution_retired");
+      permits.clear();
+      pending.clear();
+    },
   };
 }

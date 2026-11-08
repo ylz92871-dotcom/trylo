@@ -9,12 +9,15 @@ import { accumulatedBudget } from "./budget-snapshot.js";
 import type { CompactWindow } from "../ports/compaction.js";
 import type { SubagentObservation } from "../protocol/subagent-observation.js";
 import type { SubagentDelivery } from "../protocol/subagent-handoff.js";
+import type { MemberCollaborationReport } from "../protocol/member-collaboration-report.js";
 
 export const DEFAULT_AGENT_WAIT_MS = 10_000;
 export const MAX_AGENT_WAIT_MS = 60_000;
 export const MAX_MEMBER_REPORTS = 16;
+
 type MemberReport = { readonly id: string; readonly round: number; readonly state: "progress" | "blocked" | "ready";
-  readonly message: string; readonly cursor: number };
+  readonly message: string; readonly cursor: number; readonly collaboration?: MemberCollaborationReport };
+
 export type MemberReportHistory = { readonly reports: readonly MemberReport[]; readonly droppedThrough: number };
 
 /** Round observations do not own or replace the runtime's terminal state. */
@@ -38,22 +41,28 @@ export class AgentRoundObservation {
     this.transcript = transcript;
     this.cursor = cursor;
     this.answerCursor = cursor;
-    this.reports = [...(history?.reports ?? [])];
+    this.reports = structuredClone([...(history?.reports ?? [])]);
     this.droppedReportCursor = history?.droppedThrough ?? 0;
   }
 
-  get reportHistory(): MemberReportHistory { return { reports: [...this.reports], droppedThrough: this.droppedReportCursor }; }
+  get reportHistory(): MemberReportHistory { return { reports: structuredClone(this.reports), droppedThrough: this.droppedReportCursor }; }
 
   /** Authored reports are observations, never round answers or permission decisions. */
   publishProgress(report: SubagentObservation): boolean {
     if (report.kind !== "report" || !report.text || report.reportState === undefined || this.terminal !== undefined) return false;
+
     if (this.reports.some(previous => previous.id === report.id && previous.round === report.round
-      && previous.state === report.reportState && previous.message === report.text)) return false;
+      && previous.state === report.reportState && previous.message === report.text
+      && JSON.stringify(previous.collaboration) === JSON.stringify(report.collaboration))) return false;
+
     this.cursor += 1;
-    this.reports.push({ id: report.id, round: report.round, state: report.reportState, message: report.text, cursor: this.cursor });
+    this.reports.push({ id: report.id, round: report.round, state: report.reportState, message: report.text, cursor: this.cursor,
+      ...(report.collaboration === undefined ? {} : { collaboration: structuredClone(report.collaboration) }) });
     const removed = this.reports.length > MAX_MEMBER_REPORTS ? this.reports.shift() : undefined;
     if (removed !== undefined) this.droppedReportCursor = removed.cursor;
+
     this.notify();
+
     return true;
   }
 
@@ -73,6 +82,7 @@ export class AgentRoundObservation {
   }
 
   startRound(round: number): void { this.activeRound = round; }
+
   get lastRound(): number { return this.activeRound; }
 
   checkpoint(transcript: Transcript, window?: CompactWindow): void {
@@ -99,7 +109,10 @@ export class AgentRoundObservation {
     const changed = this.terminal?.usage.inputTokens !== result.usage.inputTokens
       || this.terminal?.usage.outputTokens !== result.usage.outputTokens;
     this.terminal = result;
-    if (changed) { this.answerCursor = ++this.cursor; this.notify(); }
+    if (changed) {
+      this.answerCursor = ++this.cursor;
+      this.notify();
+    }
   }
 
   isReady(after?: number): boolean {
@@ -114,9 +127,9 @@ export class AgentRoundObservation {
 
   budgetSnapshot(budget?: SubagentBudgetSnapshot): JsonObject {
     const current = this.currentBudget(budget);
-    return current === undefined ? {} : { token_limit: current.tokenLimit, tokens_used: current.tokensUsed,
-      tokens_remaining: current.tokensRemaining, timeout_ms: current.timeoutMs,
-      active_ms_remaining: current.timeRemainingMs, timeout_mode: current.timeoutMode };
+    return current === undefined ? {} : { tokens_used: current.tokensUsed, timeout_mode: current.timeoutMode,
+      ...(current.tokenLimit === undefined || current.tokensRemaining === undefined ? {} : { token_limit: current.tokenLimit, tokens_remaining: current.tokensRemaining }),
+      ...(current.timeoutMs === undefined || current.timeRemainingMs === undefined ? {} : { timeout_ms: current.timeoutMs, active_ms_remaining: current.timeRemainingMs }) };
   }
 
   snapshot(status: SubagentStatus, after?: number, budget?: SubagentBudgetSnapshot, reportLimit = MAX_MEMBER_REPORTS): JsonObject {
@@ -133,6 +146,7 @@ export class AgentRoundObservation {
     const output = this.terminal === undefined
       ? (report !== undefined && report.rounds >= this.requestedRound ? report.output : "")
       : this.terminal.output?.output ?? (currentCheckpoint ? extractLatestAssistantText(this.transcript) : "");
+
     return {
       phase: this.terminal !== undefined ? "terminal" : this.isReady() ? "awaiting_input" : "working",
       round: this.terminal === undefined ? report?.rounds ?? 0 : this.activeRound,
@@ -140,7 +154,7 @@ export class AgentRoundObservation {
       output: this.answerCursor > cursor || after !== undefined && this.answerCursor <= after ? "" : output,
       cursor,
       changed: after === undefined || cursor > after,
-      reports: reports.map(item => ({ ...item })),
+      reports: reports.map(item => structuredClone({ ...item })),
       has_more_reports: nextUnread !== undefined,
       ...(this.delivery === undefined ? {} : { delivery: { ...this.delivery } }),
       reports_truncated: this.droppedReportCursor > (after ?? 0),
@@ -169,16 +183,21 @@ export async function waitForAgentReports(input: {
   readonly scheduler: TimerScheduler;
 }): Promise<"ready" | "timeout" | "cancelled"> {
   if (input.signal.aborted) return "cancelled";
+
   const ready = input.ready;
   if (ready()) return "ready";
+
   if (input.timeoutMs === 0) return "timeout";
+
   let settle!: (outcome: "ready" | "timeout" | "cancelled") => void;
   const answer = new Promise<"ready" | "timeout" | "cancelled">(resolve => { settle = resolve; });
   const changed = (): void => { if (ready()) settle("ready"); };
   const detach = input.subscribe(changed);
   const cancel = (): void => { settle("cancelled"); };
+
   input.signal.addEventListener("abort", cancel, { once: true });
   let timer: TimerHandle | undefined;
+
   try {
     timer = input.scheduler(input.timeoutMs, () => { settle("timeout"); });
     if (input.signal.aborted) cancel();

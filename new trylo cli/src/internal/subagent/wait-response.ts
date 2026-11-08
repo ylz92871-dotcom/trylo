@@ -5,6 +5,7 @@ import type { SubagentStatus } from "./types.js";
 
 export type WaitMemberReader = { readonly target: string; readonly status: SubagentStatus;
   readonly read: (reportLimit: number) => JsonObject };
+
 const bytes = (value: unknown): number => Buffer.byteLength(JSON.stringify(value), "utf8");
 
 /** Bound the structured result before the loop's generic text truncation can break JSON. */
@@ -19,6 +20,7 @@ export function boundedWaitResponse(members: readonly WaitMemberReader[], timedO
       // Asking for fewer targets must be explicit if this page cannot make progress.
       return pending && !delivered ? undefined : answer;
     }
+
     // Keep whole report messages. Each re-read returns its own safe consumption cursor.
     const multiReport = pages.filter(page => Array.isArray(page.snapshot["reports"]) && page.snapshot["reports"].length > 1)
       .sort((left, right) => bytes(right.snapshot["reports"]) - bytes(left.snapshot["reports"]))[0];
@@ -27,6 +29,7 @@ export function boundedWaitResponse(members: readonly WaitMemberReader[], timedO
       multiReport.snapshot = multiReport.member.read(multiReport.limit);
       continue;
     }
+
     // Full answers already have an independent member transcript. Mark any preview cut explicitly.
     const output = pages.filter(page => typeof page.snapshot["output"] === "string" && page.snapshot["output"].length > 0)
       .sort((left, right) => bytes(right.snapshot["output"]) - bytes(left.snapshot["output"]))[0];
@@ -35,8 +38,10 @@ export function boundedWaitResponse(members: readonly WaitMemberReader[], timedO
       output.snapshot = { ...output.snapshot, output: cutToBytes(text, Math.floor(Buffer.byteLength(text, "utf8") / 2)), output_truncated: true };
       continue;
     }
+
     const singleReport = pages.find(page => Array.isArray(page.snapshot["reports"]) && page.snapshot["reports"].length > 0);
     if (singleReport === undefined) return undefined;
+
     singleReport.limit = 0;
     singleReport.snapshot = singleReport.member.read(0);
   }

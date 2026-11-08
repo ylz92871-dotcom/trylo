@@ -34,6 +34,7 @@ test("a role naming a tool the parent lacks gets the intersection, and says so",
     "tester",
     PARENT,
   );
+
   assert.deepEqual(resolved.allowedTools, ["read_file"]);
   // Refusing to spawn over a config file's optimism would turn a typo into an
   // outage; narrowing is safe, so it narrows and reports.
@@ -57,8 +58,10 @@ test("a role's denials beat its own wish list", () => {
 
 test("a role may ask for a lower turn ceiling but not a higher one", () => {
   const lower = resolveRole([role({ maxIterations: 3 })], "tester", PARENT);
+
   assert.equal(lower.maxIterations, 3);
   const higher = resolveRole([role({ maxIterations: 99 })], "tester", PARENT);
+
   assert.equal(
     higher.maxIterations,
     10,
@@ -102,11 +105,13 @@ test("with no roles the catalog description is empty, so the tool text is unchan
 
 test("nicknames never repeat while an agent with that name is still around", () => {
   const scout = role({ nicknameCandidates: ["scout"] });
+
   assert.equal(uniqueNicknameFor(scout, "agent-1", new Set()), "scout");
   // The second instance of the same role must not answer to the same name:
   // the model reads these, and "ask scout" has to name one agent.
   assert.equal(uniqueNicknameFor(scout, "agent-2", new Set(["scout"])), "scout-2");
   const many = new Set(["scout", "scout-2", "scout-3"]);
+
   assert.equal(uniqueNicknameFor(scout, "agent-9", many), "scout-4");
 });
 

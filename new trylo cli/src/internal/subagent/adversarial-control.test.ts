@@ -23,27 +23,41 @@ for (const operation of ["spawn", "resume", "delegate"] as const) test(`capacity
     yield { type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false };
   } };
   const runtime = new SubagentRuntime({ tools, governance: new SubagentGovernanceTracker({ timeoutMs: 0 }) });
-  t.after(async () => { await runtime.cancelAll(); await flush(); });
+
+  t.after(async () => {
+    await runtime.cancelAll();
+    await flush();
+  });
   const control = createSubagentControlTool({ runtime, provider, permission, model: "test" });
   const delegated = createSubagentToolPort({ runtime, provider, permission, model: "test" });
   let sequence = 0;
   const call = (name: string, args: JsonObject) => control.execute({ toolCallId: `call-${++sequence}`, name, arguments: args }, new AbortController().signal);
   const historical = await call("spawn_agent", { message: "fast" });
+
   assert.equal(historical.outcome, "result");
+
   if (historical.outcome !== "result") return;
+
   const historicalId = String(historical.value["agent_id"]);
-  await flush(); await call("close_agent", { target: historicalId }); await flush();
+
+  await flush();
+  await call("close_agent", { target: historicalId });
+  await flush();
+
   for (let index = 0; index < 4; index++) assert.equal((await call("spawn_agent", { message: "park" })).outcome, "result");
+
   await flush();
   const before = runtime.getActiveInstances();
   const beforeRequests = requests;
   const outcome = operation === "spawn" ? await call("spawn_agent", { message: "extra" })
     : operation === "resume" ? await call("resume_agent", { target: historicalId })
     : await delegated.execute({ toolCallId: "extra-delegate", name: "delegate_subagent", arguments: { taskName: "extra", prompt: "extra" } }, new AbortController().signal);
+
   assert.equal(outcome.outcome, "error");
   assert.equal(outcome.outcome === "error" ? outcome.code : "", "concurrency_limit_exceeded");
   assert.deepEqual(runtime.getActiveInstances(), before);
   assert.equal(requests, beforeRequests, "a refused child must never reach its provider");
-  await call("close_agent", { target: before[0] ?? "", force: true }); await flush();
+  await call("close_agent", { target: before[0] ?? "", force: true });
+  await flush();
   assert.equal((await call("spawn_agent", { message: "replacement" })).outcome, "result", "capacity is usable after actual retirement");
 });

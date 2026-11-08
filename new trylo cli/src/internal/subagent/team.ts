@@ -4,13 +4,17 @@ import type { SubagentRole } from "./role.js";
 import type { TeamRepresentationVerdict } from "../protocol/team-representation.js";
 
 export type TeamMemberIdentity = { readonly teamRunId: string; readonly memberId: string };
+
 export type SubagentTeamMember = {
+  readonly expert?: import("./experts/index.js").ExpertSelection;
   readonly memberId: string;
   readonly baseRole: string;
   readonly displayName: string;
   readonly role: SubagentRole;
 };
+
 export type SubagentTeam = {
+  readonly profileId?: string;
   readonly surface?: "code" | "work";
   readonly constrainTool?: (memberId: string, call: ToolCallRequest) => SandboxVerdict;
   readonly inspectRepresentation?: (output: string) => TeamRepresentationVerdict;
@@ -19,6 +23,12 @@ export type SubagentTeam = {
   readonly heldRoles?: ReadonlyArray<string>;
 };
 
+/** The same frozen-model policy governs both admission and tool advertisement. */
+export function fixedTeamModel(member: SubagentTeamMember | undefined): string | undefined {
+  const model = member?.role.model;
+  return model && model !== "inherit" ? model : undefined;
+}
+
 const INSPECTION_TOOLS = ["read_file", "list_files", "search_text", "glob_files", "find_files",
   "lsp_navigate", "view_image", "read_pdf", "read_notebook"];
 const IMPLEMENTATION_TOOLS = ["write_file", "edit_file", "apply_patch", "notebook_edit", "run_shell",
@@ -26,8 +36,9 @@ const IMPLEMENTATION_TOOLS = ["write_file", "edit_file", "apply_patch", "noteboo
 const WORK_IMPLEMENTATION_TOOLS = ["write_file", "edit_file", "todo_write"];
 const RESEARCH_TOOLS = ["web_fetch", "web_search"];
 
-function memberTools(member: SubagentTeamMember, catalog: ReadonlyArray<ToolBinding>, surface: SubagentTeam["surface"]): string[] {
+export function narrowTeamMemberToolNames(member: Pick<SubagentTeamMember, "baseRole" | "role">, availableNames: readonly string[], surface: SubagentTeam["surface"]): string[] {
   const allowed = new Set(INSPECTION_TOOLS);
+
   if (member.baseRole === "worker") {
     for (const name of surface === "work" ? WORK_IMPLEMENTATION_TOOLS : IMPLEMENTATION_TOOLS) allowed.add(name);
     // Selected skills are preloaded by team profile wiring. A shared skill
@@ -41,16 +52,18 @@ function memberTools(member: SubagentTeamMember, catalog: ReadonlyArray<ToolBind
     allowed.add("write_file");
     allowed.add("edit_file");
   }
+
   // A read-only seat cannot safely borrow the general shell. It needs a
   // separately enforced inspection-only command port before that floor can grow.
-  const floor = catalog.filter(tool => allowed.has(tool.name)).map(tool => tool.name);
+  const floor = availableNames.filter(name => allowed.has(name));
+
   return member.role.allowedTools === undefined ? floor : member.role.allowedTools.filter(name => floor.includes(name));
 }
 
 /** Frozen role policy may only subtract from the parent's dispatch allowance. */
 export function narrowTeamTools(team: SubagentTeam, catalog: ReadonlyArray<ToolBinding>): SubagentTeam {
   return { ...team, members: team.members.map(member => ({ ...member, role: { ...member.role,
-    allowedTools: memberTools(member, catalog, team.surface) } })) };
+    allowedTools: narrowTeamMemberToolNames(member, catalog.map(tool => tool.name), team.surface) } })) };
 }
 
 /** An explicit identity is never downgraded to a same-role FIFO match. */
@@ -60,13 +73,17 @@ export function selectTeamMember(team: SubagentTeam | undefined, role: string | 
     if (memberId !== undefined) throw new SubagentGovernanceError("team_unavailable", "No frozen team is attached to this turn");
     return undefined;
   }
+
   const member = memberId === undefined
     ? team.members.find(candidate => candidate.baseRole === role && !occupied.has(candidate.memberId))
     : team.members.find(candidate => candidate.memberId === memberId && (role === undefined || candidate.baseRole === role));
   if (member === undefined) {
     throw new SubagentGovernanceError("team_member_unavailable", "The member is absent, has a different role, or is already assigned; use send_input for existing members");
   }
-  if (occupied.has(member.memberId)) throw new SubagentGovernanceError("team_member_busy", "This frozen member already has a task; use send_input or resume_agent");
+
+  if (occupied.has(member.memberId)) throw new SubagentGovernanceError("team_member_busy", "This frozen member already has a bound task, including after closure. Use list_agents to find its task_id, then send_input or resume_agent instead of spawning a replacement");
+
   if (team.heldRoles?.includes(member.baseRole)) throw new SubagentGovernanceError("team_role_held", "This role is held pending clarification");
+
   return member;
 }

@@ -70,6 +70,7 @@ type ActiveSubagentRecord<T> = {
 };
 
 let subagentSeq = 0;
+
 /**
  * The shipped id generator, and only that: it is the default of the
  * `idGenerator` seam, which is where ambient randomness and the clock are
@@ -150,6 +151,7 @@ export class SubagentRuntime {
     if (active !== undefined) {
       return active.status;
     }
+
     // A settled terminal stays answerable until the bounded history drops it.
     // An id that was never seen — or was dropped — answers `failed`: this
     // contract has no separate "unknown" state. A caller that owns the handle
@@ -220,6 +222,7 @@ export class SubagentRuntime {
         round: request.continuation.roundOffset + 1, displayName: request.continuation.displayName }),
       budget: accumulatedBudget(this.governance.snapshot(subagentId), request.budgetBefore),
     };
+
     this.emitEvent("subagent_spawn", spawnPayload, request.lineage.rootAttemptId);
 
     record.status = "running";
@@ -307,6 +310,7 @@ export class SubagentRuntime {
       if (settled !== undefined) {
         return settled as SubagentResult<T>;
       }
+
       return {
         subagentId,
         name: "unknown",
@@ -371,12 +375,14 @@ export class SubagentRuntime {
     if (!this.onEvent) {
       return;
     }
+
     // Lineage is this module's own invariant: a malformed attribution is a
     // bug in the emitter, not in the observer, and it propagates.
     const guarded = guardSubagentAttribution(kind, payload, {
       parentAgentId: "subagent_host",
       rootAttemptId,
     });
+
     try {
       this.onEvent(guarded.kind, payload, guarded.rootAttemptId);
     } catch (err) {
@@ -450,6 +456,7 @@ export class SubagentRuntime {
       budget: this.governance.snapshot(record.subagentId),
       lineage: record.request.lineage,
     };
+
     record.result = result;
 
     // Emit subagent_end event
@@ -469,6 +476,7 @@ export class SubagentRuntime {
         ? { toolCallId: record.request.lineage.toolCallId }
         : {}),
     };
+
     this.emitEvent("subagent_end", endPayload, record.request.lineage.rootAttemptId);
 
     // Resolve wait promise
@@ -498,11 +506,13 @@ export class SubagentRuntime {
   private retire<T>(record: ActiveSubagentRecord<T>, terminal: SubagentResult<T>): void {
     const accounted = { ...terminal, usage: this.governance.getUsage(record.subagentId),
       budget: this.governance.snapshot(record.subagentId) };
+
     record.result = accounted;
     this.active.delete(record.subagentId);
     this.governance.release(record.subagentId);
 
     this.history.set(record.subagentId, accounted);
+
     while (this.history.size > this.historyLimit) {
       const oldest = this.history.keys().next().value;
       if (oldest === undefined) {
@@ -510,8 +520,11 @@ export class SubagentRuntime {
       }
       this.history.delete(oldest);
     }
+
     record.resolveRetired();
+
     for (const listener of record.retirementListeners) listener();
+
     record.retirementListeners.clear();
   }
 
@@ -539,6 +552,7 @@ export class SubagentRuntime {
     if (repaired === undefined) {
       throw new Error("subagent runtime invariant: a finished run must have a terminal");
     }
+
     return repaired;
   }
 
@@ -590,7 +604,7 @@ export class SubagentRuntime {
       recordUsage,
       setActivity: activity => { this.governance.setActivity(record.subagentId, activity); },
       inheritedGrants: inheritedGrantView(record.request.permissions.inheritedGrants),
-      remainingTokens: () => this.governance.snapshot(record.subagentId)?.tokensRemaining ?? 0,
+      remainingTokens: () => this.governance.snapshot(record.subagentId)?.tokensRemaining,
       ...(record.request.input === undefined ? {} : { input: record.request.input }),
     };
 
@@ -628,6 +642,7 @@ export class SubagentRuntime {
           message: `Subagent was cancelled: ${reason}`,
         });
       }
+
       return;
     }
 

@@ -26,11 +26,14 @@ function harness(answer: (action: PermissionAction) => Promise<PermissionDecisio
     const ticket = await permission.request(buildPermissionAction(call.toolCallId, call.name, call.arguments));
     return permission.awaitDecision(ticket.ticketId);
   };
+
   return { scope, call, approve, cancel, activity, deny: () => { denied = true; }, hold: () => { allowed = false; } };
 }
 
 test("a once proof cannot be replayed, transferred to another execution, or used for changed arguments", async () => {
-  const owner = harness(); const sibling = harness();
+  const owner = harness();
+  const sibling = harness();
+
   await owner.approve();
   assert.equal(sibling.scope.consume(owner.call), false);
   assert.equal(owner.scope.consume({ ...owner.call, arguments: { ...owner.call.arguments, content: "changed" } }), false);
@@ -38,12 +41,14 @@ test("a once proof cannot be replayed, transferred to another execution, or used
   await owner.approve();
   assert.equal(owner.scope.consume(owner.call), true);
   assert.equal(owner.scope.consume(owner.call), false);
-  owner.scope.dispose(); sibling.scope.dispose();
+  owner.scope.dispose();
+  sibling.scope.dispose();
 });
 
 test("a live parent denial, execution cancellation, or retirement revokes an approved action", async () => {
   for (const revoke of ["deny", "cancel", "dispose"] as const) {
-    const h = harness(); await h.approve();
+    const h = harness();
+    await h.approve();
     if (revoke === "deny") h.deny();
     else if (revoke === "cancel") h.cancel.abort();
     else h.scope.dispose();
@@ -56,9 +61,11 @@ test("human wait pauses member work and a new constraint rejects a reply before 
   let release!: (answer: PermissionDecision) => void;
   const held = new Promise<PermissionDecision>(resolve => { release = resolve; });
   const h = harness(async () => held);
-  const pending = h.approve(); await new Promise<void>(resolve => setImmediate(resolve));
+  const pending = h.approve();
+  await new Promise<void>(resolve => setImmediate(resolve));
   assert.deepEqual(h.activity, ["idle"]);
-  h.hold(); release({ resolution: "approved", scope: "once" });
+  h.hold();
+  release({ resolution: "approved", scope: "once" });
   assert.equal((await pending).resolution, "denied");
   assert.deepEqual(h.activity, ["idle", "working"]);
   assert.equal(h.scope.consume(h.call), false);

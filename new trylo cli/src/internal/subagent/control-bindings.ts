@@ -17,6 +17,7 @@ export const WAIT_AGENT_TOOL = "wait_agent";
 export const CLOSE_AGENT_TOOL = "close_agent";
 export const RESUME_AGENT_TOOL = "resume_agent";
 export const LIST_AGENTS_TOOL = "list_agents";
+export const RECONFIGURE_AGENT_TOOL = "reconfigure_agent";
 
 const LIMITS = { maxBytes: 65_536, maxLines: 1_000 } as const;
 const DEPENDENCIES = { type: "array", maxItems: 16, items: { type: "string", minLength: 1, maxLength: 512 },
@@ -25,7 +26,7 @@ const DEPENDENCIES = { type: "array", maxItems: 16, items: { type: "string", min
 export const SPAWN_AGENT_BINDING: ToolBinding = {
   name: SPAWN_AGENT_TOOL,
   description:
-    "Start a bounded subagent and return its execution agent_id, stable task_id, tools and budget. Default 32000 tokens and 300000ms active execution; idle waiting pauses the execution clock and releases the slot after 30000ms. send_input continues an automatically parked task. fork_context includes completed parent tool results and images.",
+    "Start a subagent and return its execution agent_id, stable task_id, tools and usage. No cumulative token budget or execution deadline is imposed unless supplied. Idle waiting releases the slot after 30000ms; send_input continues the same automatically parked task. fork_context includes completed parent tool results and images.",
   sideEffect: "read_only",
   needsApproval: false,
   timeoutMs: 10_000,
@@ -34,6 +35,7 @@ export const SPAWN_AGENT_BINDING: ToolBinding = {
     type: "object",
     properties: {
       message: { type: "string", description: "The instruction the subagent starts with." },
+      configuration_ref: { type: "string", minLength: 1, maxLength: 512, description: "Optional opaque existing or approved expert configuration. The host resolves it at dispatch; this is not authorization." },
         depends_on: DEPENDENCIES,
       agent_type: {
         type: "string",
@@ -45,9 +47,9 @@ export const SPAWN_AGENT_BINDING: ToolBinding = {
       },
       model: { type: "string", description: "Model override for this subagent." },
       allowed_tools: { type: "array", items: { type: "string" }, description: "Optional subset of the parent's available tools; the role may narrow it further." },
-      token_budget: { type: "integer", minimum: 1, maximum: 100_000, description: "Cumulative task input plus output tokens, including repeated context and automatic continuation. Default 32000. Enforced after each provider response." },
-      timeout_ms: { type: "integer", minimum: 1, maximum: 900_000, description: "Active execution budget in milliseconds. Default 300000; time waiting for input is excluded." },
-      idle_timeout_ms: { type: "integer", minimum: 1, maximum: 300_000, description: "Release the execution slot after this much idle time. Default 30000; later input continues the same task." },
+      token_budget: { type: "integer", minimum: 1, description: "Optional cumulative task input plus output allowance. Omission is unlimited; explicit allowances include repeated context and continuation." },
+      timeout_ms: { type: "integer", minimum: 1, description: "Optional active execution deadline in milliseconds. Omission is unlimited; time waiting for input is excluded." },
+      idle_timeout_ms: { type: "integer", minimum: 1, description: "Release the execution slot after this much idle time. Default 30000; later input continues the same task." },
     },
     required: ["message"],
   },
@@ -55,7 +57,7 @@ export const SPAWN_AGENT_BINDING: ToolBinding = {
 
 export const SEND_INPUT_BINDING: ToolBinding = {
   name: SEND_INPUT_TOOL,
-  description: "Give a task its next instruction using agent_id or stable task_id. Optional handoff supplies scope, artifacts, evidence, pending work and blockers to the actual recipient. depends_on refuses dispatch until prerequisite rounds are ready. append queues input; replace_queued replaces input not yet started; restart waits for cleanup before continuing. A submission_id receipt means queued, not processed: wait_agent.delivery distinguishes started and answered. None of these states proves independent acceptance.",
+  description: "Give a task its next instruction using agent_id or stable task_id. Optional handoff supplies scope, artifacts, evidence, pending work and blockers to the actual recipient. depends_on refuses dispatch until prerequisite rounds are ready. append queues input; replace_queued replaces input not yet started; restart waits for cleanup before continuing. append can start a later round before you collect the preceding full answer: collect an answer needed for handoff first, or explicitly request a consolidated reply after revisions. A submission_id receipt means queued, not processed: wait_agent.delivery distinguishes started and answered. None of these states proves independent acceptance.",
   sideEffect: "read_only",
   needsApproval: false,
   timeoutMs: 10_000,
@@ -79,7 +81,7 @@ export const SEND_INPUT_BINDING: ToolBinding = {
 
 export const WAIT_AGENT_BINDING: ToolBinding = {
   name: WAIT_AGENT_TOOL,
-  description: "Collect round answers, terminal results and authored progress reports, including budget, usage, cursor, task_id and phase. Set wake_on_report to observe new progress or blockers before a round ends. Pass each returned cursor in after to suppress repeats; while has_more_reports is true, read the next page with after and timeout_ms=0. Reports are member statements, not acceptance or permission decisions. reports_truncated identifies lost older reports; output_truncated marks a shortened full-answer preview. release_on_ready frees only genuinely ready execution slots. A timed-out or cancelled observation leaves children running.",
+  description: "Collect round answers, terminal results and authored progress reports, including budget, usage, cursor, task_id and phase. output is the latest requested round's answer, not an archive of earlier answers; collect full answers needed for later handoff before queueing a new round. Set wake_on_report to observe new progress or blockers before a round ends. Pass each returned cursor in after to suppress repeats; while has_more_reports is true, page authored reports with after and timeout_ms=0. This paging does not recover prior round answers. Reports are member statements, not acceptance or permission decisions. reports_truncated identifies lost older reports; output_truncated marks a shortened full-answer preview. release_on_ready frees only genuinely ready execution slots. A timed-out or cancelled observation leaves children running.",
   sideEffect: "read_only",
   needsApproval: false,
   timeoutMs: 120_000,
@@ -89,7 +91,7 @@ export const WAIT_AGENT_BINDING: ToolBinding = {
     properties: {
       targets: { type: "array", items: { type: "string" }, description: "Agent ids to wait for." },
       timeout_ms: { type: "number", minimum: 0, maximum: 60_000, description: "One deadline for all targets, in milliseconds. Default 10000, maximum 60000; 0 returns a snapshot immediately." },
-      after: { type: "object", additionalProperties: { type: "integer", minimum: 0 }, description: "Map target ids to their previously collected result cursors. Omitted targets retain legacy snapshot behavior." },
+      after: { type: "object", additionalProperties: { type: "integer", minimum: 0 }, description: "Map only ids in this call's targets to their previously collected result cursors. When removing a target, remove its after key too. A current target omitted from after returns its legacy snapshot." },
       wake_on_report: { type: "boolean", description: "Also return when a member authors a new progress, blocked or ready report. Default false preserves waiting for a full round. Use after cursors to avoid rereading reports; a report does not make an execution ready for release." },
       release_on_ready: { type: "boolean", description: "Close ready workers and release their slots; later send_input transparently continues their task." },
     },
@@ -125,8 +127,8 @@ export const RESUME_AGENT_BINDING: ToolBinding = {
     type: "object",
     properties: { target: { type: "string", description: "The execution or task id to continue from." },
       message: { type: "string", description: "Optional next instruction; verify recorded effects before repeating actions." },
-      token_budget: { type: "integer", minimum: 1, maximum: 100_000, description: "Explicit replacement for the remaining token budget. Omit to retain the task's remaining allowance." },
-      timeout_ms: { type: "integer", minimum: 1, maximum: 900_000, description: "Explicit replacement for remaining active time. Omit to retain the task's remaining allowance." } },
+      token_budget: { type: "integer", minimum: 1, description: "Explicit replacement for the remaining token budget. Omit to retain the task's remaining allowance." },
+      timeout_ms: { type: "integer", minimum: 1, description: "Explicit replacement for remaining active time. Omit to retain the task's remaining allowance." } },
     required: ["target"],
   },
 };
@@ -145,3 +147,14 @@ export const SUBAGENT_CONTROL_BINDINGS: ReadonlyArray<ToolBinding> = [
   CLOSE_AGENT_BINDING,
   RESUME_AGENT_BINDING,
 ];
+
+export const RECONFIGURE_AGENT_BINDING: ToolBinding = {
+  name: RECONFIGURE_AGENT_TOOL, sideEffect: "read_only", needsApproval: false, timeoutMs: 10_000, outputLimits: LIMITS,
+  description: "Apply an existing or approved expert configuration at a real handoff boundary. Busy or queued work returns waiting_handoff without stopping members. A completed handoff, old worker retirement and task resource cleanup are required before a fresh configured execution starts. send_input/resume_agent retain the old configuration.",
+  parameters: { type: "object", additionalProperties: false, properties: {
+    target: { type: "string", minLength: 1 }, configuration_ref: { type: "string", minLength: 1, maxLength: 512 },
+    message: { type: "string", minLength: 1 }, handoff: HANDOFF_SCHEMA,
+    token_budget: { type: "integer", minimum: 1, description: "Explicit task allowance replacement; omission preserves the remaining budget." },
+    timeout_ms: { type: "integer", minimum: 1, maximum: 900000 },
+  }, required: ["target", "configuration_ref", "message", "handoff"] },
+};

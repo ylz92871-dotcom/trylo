@@ -46,10 +46,9 @@ export type SubagentToolOptions = {
 
 export const DELEGATE_SUBAGENT_BINDING: ToolBinding = {
   name: SUBAGENT_TOOL_NAME,
-  description: "Delegate a sub-task to a bounded subagent worker. Runs to completion and returns the result.",
+  description: "Delegate a sub-task to a subagent worker. Runs to completion and returns the result. No execution deadline is imposed unless timeoutMs is supplied.",
   sideEffect: "read_only",
   needsApproval: false,
-  timeoutMs: 310_000,
   outputLimits: {
     maxBytes: 65_536,
     maxLines: 1_000,
@@ -109,6 +108,7 @@ export function createSubagentToolPort(options: SubagentToolOptions): ToolPort {
       const timeoutMs = typeof call.arguments["timeoutMs"] === "number"
         ? call.arguments["timeoutMs"]
         : undefined;
+
       if (!allowedTools.every(name => typeof name === "string") || (ceiling !== undefined
         && allowedTools.some(name => !ceiling.includes(name)))) {
         return { outcome: "error", code: "subagent_permission_denied", message: "allowedTools must be a subset of the parent's available tools" };
@@ -129,6 +129,7 @@ export function createSubagentToolPort(options: SubagentToolOptions): ToolPort {
       });
 
       let handle: SubagentHandle<ChildAttemptResult>;
+
       try {
         handle = options.runtime.spawn({
           name: taskName,
@@ -158,6 +159,7 @@ export function createSubagentToolPort(options: SubagentToolOptions): ToolPort {
       const onAbort = () => {
         void handle.cancel("parent_signal_aborted");
       };
+
       if (signal.aborted) {
         onAbort();
       } else {
@@ -225,11 +227,13 @@ export function createSubagentToolPort(options: SubagentToolOptions): ToolPort {
  */
 export function mountSubagentTool(parentTools: ToolPort, ...children: ReadonlyArray<ToolPort>): ToolPort {
   const owner = new Map<string, ToolPort>();
+
   for (const child of children) {
     for (const binding of child.snapshot()) {
       owner.set(binding.name, child);
     }
   }
+
   return {
     snapshot(): ReadonlyArray<ToolBinding> {
       return [...parentTools.snapshot(), ...children.flatMap((child) => child.snapshot())];

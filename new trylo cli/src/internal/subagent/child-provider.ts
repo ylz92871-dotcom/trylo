@@ -5,15 +5,19 @@ import { SubagentGovernanceError } from "./governance.js";
 /** Charge each response before the loop can start another one in the same round. */
 export function createGovernedChildProvider(provider: ProviderPort, context: SubagentContext): ProviderPort {
   return {
+    ...(provider.inputBindingDigest === undefined ? {} : { inputBindingDigest: request => provider.inputBindingDigest!(request) }),
+    ...(provider.prepareRequest === undefined ? {} : { prepareRequest: (request, signal) => provider.prepareRequest!(request, signal) }),
     ...(provider.continuation === undefined ? {} : { continuation: provider.continuation }),
     async *stream(request, signal) {
       if (context.remainingTokens?.() === 0) throw new SubagentGovernanceError("token_budget_exhausted", "Subagent has no remaining token allowance");
+
       let usage = emptyUsage();
       let recorded = false;
       const record = (): void => {
         recorded = true;
         context.recordUsage(usage.inputTokens, usage.outputTokens);
       };
+
       try {
         for await (const event of provider.stream(request, signal)) {
           if (event.type === "usage") usage = mergeUsage(usage, event.usage);

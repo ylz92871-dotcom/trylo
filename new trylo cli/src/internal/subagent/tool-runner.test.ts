@@ -42,6 +42,7 @@ test("SA-3 ToolRunnerPort 降级执行器：同步执行 + 进度走 observation
 
   const localProgress: ToolRunnerProgress[] = [];
   const { taskId } = await runner.submit(task);
+
   assert.equal(taskId, "task-fb-1");
 
   runner.onProgress(taskId, (p) => {
@@ -49,6 +50,7 @@ test("SA-3 ToolRunnerPort 降级执行器：同步执行 + 进度走 observation
   });
 
   const res = await runner.wait(taskId);
+
   assert.equal(res.status, "completed");
   assert.deepEqual(res.output, { refinedDescription: "better doc", tool: "fetch_repo" });
 
@@ -59,6 +61,7 @@ test("SA-3 ToolRunnerPort 降级执行器：同步执行 + 进度走 observation
   assert.equal(observations[0]?.percentage, 50);
 
   const status = await runner.status(taskId);
+
   assert.equal(status, "completed");
 });
 
@@ -81,9 +84,11 @@ test("SA-3 ToolRunnerPort 降级执行器：取消语义成立", async () => {
 
   await runner.submit(task);
   const cancelled = await runner.cancel("task-cancel-1");
+
   assert.equal(cancelled, true);
 
   const res = await runner.wait("task-cancel-1");
+
   assert.equal(res.status, "cancelled");
   assert.equal(await runner.status("task-cancel-1"), "cancelled");
 });
@@ -108,6 +113,7 @@ test("SA-3 ToolRunnerPort 子代理执行器：基于真实 SubagentRuntime 后�
 
   const progressEvents: ToolRunnerProgress[] = [];
   const { taskId } = await runner.submit(task);
+
   assert.equal(taskId, "task-sa-1");
 
   runner.onProgress(taskId, (p) => {
@@ -115,6 +121,7 @@ test("SA-3 ToolRunnerPort 子代理执行器：基于真实 SubagentRuntime 后�
   });
 
   const res = await runner.wait(taskId);
+
   assert.equal(res.status, "completed");
   assert.deepEqual(res.output, { artifact: "script.py", lines: 15 });
   assert.equal(await runner.status(taskId), "completed");
@@ -128,6 +135,7 @@ test("SA-3 ToolRunnerPort 契约一致性与可替换性：降级与真执行器
       input: { data: 100 },
     });
     const result = await port.wait(taskId);
+
     return result.status;
   }
 
@@ -139,6 +147,7 @@ test("SA-3 ToolRunnerPort 契约一致性与可替换性：降级与真执行器
     input: task.input,
   }));
   const res1 = await runWorkflow(fallbackRunner, "wf-1");
+
   assert.equal(res1, "completed");
 
   // 2. Run with SubagentToolRunner
@@ -148,6 +157,7 @@ test("SA-3 ToolRunnerPort 契约一致性与可替换性：降级与真执行器
     input: task.input,
   }));
   const res2 = await runWorkflow(subagentRunner, "wf-2");
+
   assert.equal(res2, "completed");
 });
 
@@ -208,6 +218,7 @@ test("CLI-01B 降级执行器：取消后执行器迟到成功不得复活已结
   await flushContinuations();
 
   const res = await runner.wait("task-late");
+
   assert.equal(res.status, "cancelled", "a late executor result must not revive a cancelled task");
   assert.equal(await runner.status("task-late"), "cancelled");
 });
@@ -234,6 +245,7 @@ test("CLI-01B 降级执行器：观察超时只结束这一次等待，任务继
   await flushContinuations();
 
   const observed = await runner.wait("task-slow", 5);
+
   assert.equal(observed.observed, "timeout");
   assert.equal(observed.status, "running");
   assert.equal(await runner.status("task-slow"), "running", "the wait gave up, not the task");
@@ -241,6 +253,7 @@ test("CLI-01B 降级执行器：观察超时只结束这一次等待，任务继
   finishExecutor();
   await flushContinuations();
   const settled = await runner.wait("task-slow");
+
   assert.equal(settled.observed, "terminal");
   assert.equal(settled.status, "completed");
 });

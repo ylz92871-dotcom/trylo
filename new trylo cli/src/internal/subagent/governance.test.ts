@@ -79,6 +79,7 @@ test("SA-4 治理：Token 预算硬顶，超额消耗中止子代理，主任务
   });
 
   const res = await handle.wait();
+
   assert.equal(res.status, "failed");
   assert.equal(res.error?.code, "token_budget_exhausted");
   assert.equal(governance.getActiveCount(), 0); // slot cleaned up
@@ -111,11 +112,14 @@ test("SA-4 治理：后台非阻塞并发，主 Agent 不受子代理耗时阻�
 
   // Main agent spawn call is non-blocking (returns immediately)
   const spawnDuration = Date.now() - startTime;
+
   assert.ok(spawnDuration < 50, `Spawn took ${spawnDuration}ms, should be non-blocking (<50ms)`);
 
   // Await all in parallel
   const results = await Promise.all(handles.map((h) => h.wait()));
+
   assert.equal(results.length, 3);
+
   for (const r of results) {
     assert.equal(r.status, "completed");
   }

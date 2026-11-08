@@ -72,6 +72,7 @@ function stubbornWorker(): {
       resolve();
     };
   });
+
   return {
     worker: async () => {
       await alive;
@@ -96,7 +97,9 @@ async function runToCompletion(
     worker: async () => name,
   });
   const result = await handle.wait();
+
   assert.equal(result.status, "completed");
+
   return handle.subagentId;
 }
 
@@ -129,6 +132,7 @@ test("SA-1 运行时：spawn 子代理并正常执行完成，带回结果且生
   assert.equal(handle.status(), "running");
 
   const result = await handle.wait();
+
   assert.equal(result.status, "completed");
   assert.deepEqual(result.output, { count: 42, summary: "processed" });
 
@@ -189,15 +193,18 @@ test("SA-1 运行时：取消正在执行的子代理，中止任务、回收资
 
   // Cancel while in flight
   const cancelled = await handle.cancel("manual_stop");
+
   assert.equal(cancelled, true);
 
   const result = await handle.wait();
+
   assert.equal(result.status, "cancelled");
   assert.equal(taskAborted, true);
   assert.equal(handle.status(), "cancelled");
 
   // Verify subagent_end was emitted with status "cancelled"
   const endEvent = events.find((e) => e.kind === "subagent_end");
+
   assert.ok(endEvent);
   assert.equal(endEvent.payload.status, "cancelled");
 });
@@ -231,9 +238,11 @@ test("SA-1 运行时：子代理超时自动中止，状态标记为 timed_out",
   });
 
   const result = await handle.wait();
+
   assert.equal(result.status, "timed_out");
 
   const endEvent = events.find((e) => e.kind === "subagent_end");
+
   assert.ok(endEvent);
   assert.equal(endEvent.payload.status, "timed_out");
 });
@@ -258,6 +267,7 @@ test("SA-1 运行时：工作逻辑异常安全捕获，状态为 failed 且宿�
   });
 
   const result = await handle.wait();
+
   assert.equal(result.status, "failed");
   assert.ok(result.error);
   assert.equal(result.error.message, "unhandled_business_error");
@@ -322,6 +332,7 @@ test("a throwing event sink never takes down the subagent it observes", async ()
     },
   });
   const result = await handle.wait();
+
   assert.equal(result.status, "completed");
   assert.equal(result.status === "completed" ? result.output : undefined, "done");
   assert.ok(sinkFailures >= 2, `the sink was called for spawn and end (got ${sinkFailures})`);
@@ -416,6 +427,7 @@ test("CLI-01B 观察超时只结束这一次观察：不取消任务，也不冒
 
   stubborn.finish();
   const settled = await handle.wait();
+
   assert.equal(settled.status, "completed");
 });
 
@@ -432,6 +444,7 @@ test("CLI-01B 结束的子代理不再占活动名额，终态仍可从历史查
     [],
     "no settled subagent may still hold an active slot",
   );
+
   for (const id of [first, second, third]) {
     assert.equal(runtime.status(id), "completed", "a settled terminal stays answerable");
   }
@@ -483,6 +496,7 @@ test("CLI-01B 执行超时：由注入调度器驱动，终态唯一，名额仍
   await flushContinuations();
 
   const timedOut = await handle.wait();
+
   assert.equal(timedOut.status, "timed_out");
   assert.equal(timedOut.observed, "terminal");
   // The worker ignored its abort, so the cap still applies to it.
@@ -520,10 +534,12 @@ test("CLI-01B 多 waiter：各自的观察超时互不影响，也不取消任�
   await flushContinuations();
   const firstWaiter = handle.wait(50);
   const secondWaiter = handle.wait(50);
+
   assert.equal(clock.pendingCount(), 2, "each waiter arms its own timeout");
 
   clock.fireAll();
   const [firstAnswer, secondAnswer] = await Promise.all([firstWaiter, secondWaiter]);
+
   assert.equal(firstAnswer.observed, "timeout");
   assert.equal(secondAnswer.observed, "timeout");
   assert.equal(firstAnswer.status, "running");
@@ -531,6 +547,7 @@ test("CLI-01B 多 waiter：各自的观察超时互不影响，也不取消任�
 
   stubborn.finish();
   const settled = await handle.wait();
+
   assert.equal(settled.observed, "terminal");
   assert.equal(settled.status, "completed");
 });
@@ -590,6 +607,7 @@ test("CLI-01B 集成：取消后 context.tools.execute 被拒，真实工具零�
       return "done";
     },
   });
+
   t.after(async () => {
     await handle.cancel("test_cleanup");
     finish();

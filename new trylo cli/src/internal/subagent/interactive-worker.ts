@@ -4,6 +4,7 @@ import { runTurn, type LoopPorts } from "../loop/runner.js";
 import type { PermissionPort } from "../ports/permission.js";
 import type { ToolSandbox } from "../ports/tools.js";
 import type { ProviderMessage, ProviderPort, ProviderUsage } from "../ports/provider.js";
+import { acknowledgesProviderResponse } from "../ports/provider-response.js";
 import { emptyUsage } from "../ports/provider.js";
 import type { Envelope } from "../protocol/envelope.js";
 import type { Message } from "../contract/execution.js";
@@ -13,7 +14,7 @@ import { DEFAULT_PROFILE_PORT, extractLatestAssistantText, requireCompletedChild
 import type { SubagentContext, SubagentWorker } from "./types.js";
 import { createGovernedChildProvider } from "./child-provider.js";
 import { forkBackgroundMessages } from "./fork-context.js";
-import { childCompaction, DEFAULT_CHILD_CONTEXT_TOKENS } from "./context-budget.js";
+import { childCompaction } from "./context-budget.js";
 import { createChildProviderSession, type ChildProviderSession } from "./child-provider-session.js";
 import { systemTimerScheduler, type TimerScheduler } from "./scheduler.js";
 import { inheritedPermission } from "./inherited-authority.js";
@@ -24,6 +25,8 @@ import { MEMBER_REPORTING_INSTRUCTIONS, withMemberReporting } from "./user-progr
 import { REPRESENTATION_REPORTING_INSTRUCTIONS, withRepresentationReporting } from "./representation-reporting.js";
 import type { TeamRepresentation } from "../protocol/team-representation.js";
 import type { SubagentInput } from "./input-channel.js";
+import type { SubagentHandoff } from "../protocol/subagent-handoff.js";
+import { withCollaborationReporting, type CollaborationMemberReport } from "./collaboration-reporting.js";
 
 /**
  * The worker behind the multi-agent control tools (WP22.2 / C43, L29).
@@ -41,6 +44,14 @@ import type { SubagentInput } from "./input-channel.js";
  */
 
 export type InteractiveChildOptions = {
+  readonly onExecutionEnvelope?: (event: Envelope) => void;
+  readonly onRequestUsage?: (requestId: string) => void;
+  readonly onCollaborationReport?: (report: CollaborationMemberReport, requestId?: string, requestSequence?: number) => Promise<void>;
+  readonly onRequestDispatched?: (round: number, requestId: string, request: import("../ports/provider.js").ProviderRequest) => Promise<void>;
+  readonly prepareRound?: (round: number, prompt: string, handoff: SubagentHandoff | undefined, signal: AbortSignal,
+    dependencies?: readonly string[]) => Promise<string | undefined>;
+  readonly onRoundDispatched?: (round: number, requestId: string, guidance: string | undefined) => Promise<void>;
+  readonly initialHandoff?: SubagentHandoff;
   readonly approvalScope?: SubagentApprovalScope;
   readonly providerSession?: ChildProviderSession;
   readonly callerMessages?: ReadonlyArray<Message>;
@@ -109,6 +120,7 @@ export function createInteractiveChildWorker(
 ): SubagentWorker<InteractiveChildResult> {
   const background = forkBackgroundMessages(options.forkMessages ?? []);
   const callerMessages = options.callerMessages === undefined ? undefined : structuredClone(options.callerMessages);
+
   return async (context: SubagentContext): Promise<InteractiveChildResult> => {
     let observationRound = 1;
     const publish = (event: SubagentObservation): void => {
@@ -118,10 +130,47 @@ export function createInteractiveChildWorker(
     const observe = createSubagentObserver(publish);
     const approval = options.approvalScope?.bind(context);
     const execPolicy = approval?.execPolicy ?? options.execPolicy;
-    const session = options.providerSession ?? createChildProviderSession(options.provider, background);
-    const reporting = withMemberReporting(context.tools, publish, () => observationRound);
+    const session = options.providerSession ?? createChildProviderSession(options.provider, background, options.model);
+    let roundGuidance: string | undefined;
+    let dispatchedRound = 0;
+    let requestSequence = 0;
+    let currentRequest: { readonly requestId: string; readonly sequence: number } | undefined;
+    const boundaryProvider: ProviderPort = options.onRoundDispatched === undefined && options.onRequestDispatched === undefined
+      && options.onRequestUsage === undefined && options.onCollaborationReport === undefined ? session.provider : {
+      ...(session.provider.inputBindingDigest === undefined ? {} : { inputBindingDigest: request => session.provider.inputBindingDigest!(request) }),
+      ...(session.provider.prepareRequest === undefined ? {} : { prepareRequest: (request, signal) => session.provider.prepareRequest!(request, signal) }),
+      ...(session.provider.continuation === undefined ? {} : { continuation: session.provider.continuation }),
+      async *stream(request, signal) {
+        currentRequest = { requestId: request.attemptId, sequence: ++requestSequence };
+        let requestDispatched = false;
+
+        for await (const event of session.provider.stream(request, signal)) {
+          if (event.type === "usage") options.onRequestUsage?.(request.attemptId);
+
+          const acknowledged = acknowledgesProviderResponse(event);
+          if (!requestDispatched && !signal.aborted && acknowledged) {
+            requestDispatched = true;
+            await options.onRequestDispatched?.(observationRound, request.attemptId, request);
+          }
+
+          if (dispatchedRound !== observationRound && !signal.aborted && acknowledged) {
+            dispatchedRound = observationRound;
+            const sent = roundGuidance !== undefined && request.messages.some(message =>
+              message.role === "system" && message.content === roundGuidance) ? roundGuidance : undefined;
+            await options.onRoundDispatched?.(observationRound, request.attemptId, sent);
+          }
+
+          yield event;
+        }
+      },
+    };
+    const reporting = options.onCollaborationReport === undefined ? withMemberReporting(context.tools, publish, () => observationRound)
+      : withCollaborationReporting(context.tools, publish, () => observationRound, report => {
+        const request = currentRequest;
+        return options.onCollaborationReport!(report, request?.requestId, request?.sequence);
+      }, options.scheduler);
     const childPorts: LoopPorts = {
-      provider: createGovernedChildProvider(session.provider, context),
+      provider: createGovernedChildProvider(boundaryProvider, context),
       compaction: childCompaction(session.provider),
       // Already bounded by the runtime to what this subagent may touch.
       tools: options.onRepresentation === undefined ? reporting
@@ -137,6 +186,8 @@ export function createInteractiveChildWorker(
     let carried: Transcript = forked;
     let prompt = options.message;
     let receipt = options.initialSubmission;
+    let handoff = options.initialHandoff;
+    let dependencies: readonly string[] | undefined;
     let transcript: Transcript = [];
     let envelopes: ReadonlyArray<Envelope> = [];
     let usage: ProviderUsage = emptyUsage("snapshot");
@@ -148,21 +199,29 @@ export function createInteractiveChildWorker(
         observationRound = rounds + 1;
         context.setActivity?.("working");
         await options.onRoundStarted?.(rounds + 1, prompt, receipt);
+
         if (context.signal.aborted) break;
+
+        roundGuidance = await options.prepareRound?.(rounds + 1, prompt, handoff, context.signal, dependencies);
+
+        if (context.signal.aborted) break;
+
         const result = await runTurn(childPorts, {
           sessionId: options.sessionId ?? "subagent-session",
           turnId: `trn-sub-${context.subagentId}-r${rounds + 1}`,
           correlationId: context.lineage.rootAttemptId,
           text: prompt,
           cancelSignal: context.signal,
-          budget: { contextTokenLimit: DEFAULT_CHILD_CONTEXT_TOKENS, ...options.budget },
+          ...(options.budget === undefined ? {} : { budget: options.budget }),
           callerMessages: [...(callerMessages ?? []), { role: "system", content: MEMBER_REPORTING_INSTRUCTIONS },
+            ...(roundGuidance === undefined ? [] : [{ role: "system" as const, content: roundGuidance }]),
             ...(options.onRepresentation === undefined ? [] : [{ role: "system" as const, content: REPRESENTATION_REPORTING_INSTRUCTIONS }])],
           ...(background.length === 0 ? {} : { backgroundMessages: background }),
           ...(window === undefined ? {} : { resumedWindow: window }),
           ...(carried.length === 0 ? {} : { resumedTranscript: carried }),
           ...(options.model === undefined ? {} : { model: options.model }),
           onEnvelope: (envelope) => {
+            options.onExecutionEnvelope?.(envelope);
             observe(envelope, observationRound);
             const activity = subagentToolActivity(envelope);
             if (activity !== undefined) context.reportTool?.(activity);
@@ -180,6 +239,7 @@ export function createInteractiveChildWorker(
         // over-budget round cannot keep issuing requests until runTurn returns.
         requireCompletedChild(result);
         const rawOutput = extractLatestAssistantText(transcript);
+
         await options.onRoundReady?.({ status: "completed", output: options.formatOutput?.(rounds, rawOutput) ?? rawOutput,
           rounds, usage, transcript, envelopes, ...(window === undefined ? {} : { promptView: window }) });
 
@@ -187,6 +247,7 @@ export function createInteractiveChildWorker(
         if (context.input === undefined) {
           break;
         }
+
         context.setActivity?.("idle");
         const idleTimer = options.idleTimeoutMs === undefined ? undefined
           : (options.scheduler ?? systemTimerScheduler)(options.idleTimeoutMs, () => {
@@ -194,14 +255,19 @@ export function createInteractiveChildWorker(
             context.input?.close();
           });
         let next;
+
         try { next = await context.input.next(context.signal); }
         finally { idleTimer?.cancel(); }
+
         if (next === "closed") {
           break;
         }
+
         carried = transcript;
         prompt = next.message;
         receipt = next.receipt;
+        handoff = next.handoff;
+        dependencies = next.dependencies;
         context.reportProgress(
           `Round ${rounds} answered; taking the next instruction`,
           undefined,
@@ -210,7 +276,9 @@ export function createInteractiveChildWorker(
 
       const rawOutput = extractLatestAssistantText(transcript);
       const output = options.formatOutput?.(rounds, rawOutput) ?? rawOutput;
+
       context.reportProgress(`Subagent finished after ${rounds} round(s)`, 100);
+
       return {
         status: "completed",
         output,
@@ -221,7 +289,10 @@ export function createInteractiveChildWorker(
         parked: options.isParked?.() ?? false,
         ...(window === undefined ? {} : { promptView: window }),
       };
-    } finally { options.approvalScope?.dispose(); if (options.providerSession === undefined) session.close(); }
+    } finally {
+      options.approvalScope?.dispose();
+      if (options.providerSession === undefined) session.close();
+    }
   };
 }
 

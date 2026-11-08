@@ -85,6 +85,7 @@ function toolsFor(
         // of the file would want to know, and both end the same way — not given.
         withheld.push(name);
       }
+
       return usable;
     });
 
@@ -95,6 +96,7 @@ function toolsFor(
       withheld,
     };
   }
+
   return { tools: granted, withheld };
 }
 
@@ -182,12 +184,15 @@ export function uniqueNicknameFor(
   if (candidates.length === 0) {
     return agentId;
   }
+
   for (const name of candidates) {
     if (!taken.has(name)) {
       return name;
     }
   }
+
   const base = candidates[0] as string;
+
   for (let suffix = 2; ; suffix += 1) {
     const numbered = `${base}-${suffix}`;
     if (!taken.has(numbered)) {

@@ -3,8 +3,6 @@ import type { SubagentBudgetSnapshot, SubagentGovernance, SubagentUsage } from "
 import type { ToolOutcome } from "../ports/tools.js";
 
 export const DEFAULT_MAX_CONCURRENCY = 4;
-export const DEFAULT_SUBAGENT_TOKEN_BUDGET = 32_000;
-export const DEFAULT_SUBAGENT_TIMEOUT_MS = 300_000;
 
 export class SubagentGovernanceError extends Error {
   readonly code: string;
@@ -29,10 +27,10 @@ type ManagedSubagentResources = {
   readonly abortController: AbortController;
   timer: TimerHandle | undefined;
   usage: SubagentUsage;
-  readonly tokenBudget: number;
-  readonly timeoutMs: number;
+  readonly tokenBudget: number | undefined;
+  readonly timeoutMs: number | undefined;
   readonly timeoutMode: "wall" | "active";
-  remainingMs: number;
+  remainingMs: number | undefined;
   startedAt: number | undefined;
   readonly onTimeout: (() => void) | undefined;
   released: boolean;
@@ -54,8 +52,8 @@ export type SubagentGovernanceOptions = SubagentGovernance & {
 
 export class SubagentGovernanceTracker {
   private readonly maxConcurrency: number;
-  private readonly defaultTokenBudget: number;
-  private readonly defaultTimeoutMs: number;
+  private readonly defaultTokenBudget: number | undefined;
+  private readonly defaultTimeoutMs: number | undefined;
   private readonly scheduler: TimerScheduler;
   private readonly now: () => number;
   private activeCount = 0;
@@ -63,8 +61,8 @@ export class SubagentGovernanceTracker {
 
   constructor(options: SubagentGovernanceOptions = {}) {
     this.maxConcurrency = options.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY;
-    this.defaultTokenBudget = options.tokenBudget ?? DEFAULT_SUBAGENT_TOKEN_BUDGET;
-    this.defaultTimeoutMs = options.timeoutMs ?? DEFAULT_SUBAGENT_TIMEOUT_MS;
+    this.defaultTokenBudget = options.tokenBudget;
+    this.defaultTimeoutMs = options.timeoutMs;
     this.scheduler = options.scheduler ?? systemTimerScheduler;
     this.now = options.now ?? Date.now;
   }
@@ -87,8 +85,8 @@ export class SubagentGovernanceTracker {
     onTimeout?: () => void,
   ): {
     readonly abortController: AbortController;
-    readonly tokenBudget: number;
-    readonly timeoutMs: number;
+    readonly tokenBudget: number | undefined;
+    readonly timeoutMs: number | undefined;
   } {
     if (this.activeCount >= this.maxConcurrency) {
       throw new SubagentGovernanceError(
@@ -115,6 +113,7 @@ export class SubagentGovernanceTracker {
       onTimeout,
       released: false,
     };
+
     this.managed.set(subagentId, entry);
     this.arm(entry);
 
@@ -141,7 +140,7 @@ export class SubagentGovernanceTracker {
     };
 
     const total = entry.usage.inputTokens + entry.usage.outputTokens;
-    if (total > entry.tokenBudget) {
+    if (entry.tokenBudget !== undefined && total > entry.tokenBudget) {
       entry.abortController.abort("token_budget_exhausted");
       throw new SubagentGovernanceError(
         "token_budget_exhausted",
@@ -159,15 +158,20 @@ export class SubagentGovernanceTracker {
   snapshot(subagentId: string): SubagentBudgetSnapshot | undefined {
     const entry = this.managed.get(subagentId);
     if (entry === undefined) return undefined;
+
     const used = entry.usage.inputTokens + entry.usage.outputTokens;
-    return { tokenLimit: entry.tokenBudget, tokensUsed: used,
-      tokensRemaining: Math.max(0, entry.tokenBudget - used), timeoutMs: entry.timeoutMs,
-      timeRemainingMs: this.remaining(entry), timeoutMode: entry.timeoutMode };
+
+    return { tokensUsed: used, timeoutMode: entry.timeoutMode,
+      ...(entry.tokenBudget === undefined ? {} : { tokenLimit: entry.tokenBudget,
+        tokensRemaining: Math.max(0, entry.tokenBudget - used) }),
+      ...(entry.timeoutMs === undefined ? {} : { timeoutMs: entry.timeoutMs,
+        timeRemainingMs: this.remaining(entry) }) };
   }
 
   setActivity(subagentId: string, activity: "working" | "idle"): void {
     const entry = this.managed.get(subagentId);
     if (entry === undefined || entry.timeoutMode === "wall" || entry.abortController.signal.aborted) return;
+
     if (activity === "idle") {
       entry.remainingMs = this.remaining(entry);
       entry.startedAt = undefined;
@@ -176,12 +180,14 @@ export class SubagentGovernanceTracker {
     } else if (entry.startedAt === undefined) this.arm(entry);
   }
 
-  private remaining(entry: ManagedSubagentResources): number {
+  private remaining(entry: ManagedSubagentResources): number | undefined {
+    if (entry.remainingMs === undefined) return undefined;
     return Math.max(0, entry.remainingMs - (entry.startedAt === undefined ? 0 : Math.max(0, this.now() - entry.startedAt)));
   }
 
   private arm(entry: ManagedSubagentResources): void {
-    if (entry.timeoutMs <= 0 || !Number.isFinite(entry.timeoutMs)) return;
+    if (entry.remainingMs === undefined || entry.timeoutMs === undefined || entry.timeoutMs <= 0 || !Number.isFinite(entry.timeoutMs)) return;
+
     entry.startedAt = this.now();
     entry.timer = this.scheduler(entry.remainingMs, () => {
       entry.remainingMs = 0;

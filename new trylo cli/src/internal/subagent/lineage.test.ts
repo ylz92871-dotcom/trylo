@@ -29,6 +29,7 @@ function createCatalogTools(bindings: ToolBinding[]): {
     },
     async cancel() {},
   };
+
   return { tools, executedCalls };
 }
 
@@ -80,6 +81,7 @@ test("SA-2 权限血缘：子代理权限严格继承，只能调用白名单范
 
   // snapshot only exposes allowed tool
   const snapshot = subagentTools.snapshot();
+
   assert.equal(snapshot.length, 1);
   assert.equal(snapshot[0]?.name, "read_file");
 
@@ -88,6 +90,7 @@ test("SA-2 权限血缘：子代理权限严格继承，只能调用白名单范
     { toolCallId: "call-1", name: "read_file", arguments: { path: "a.txt" } },
     new AbortController().signal,
   );
+
   assert.equal(res.outcome, "result");
   assert.equal(executedCalls.length, 1);
 });
@@ -109,6 +112,7 @@ test("SA-2 对抗/红线（必红被阻断）：子代理试图拓宽权限调�
   );
 
   assert.equal(res.outcome, "error");
+
   if (res.outcome === "error") {
     assert.equal(res.code, "subagent_permission_denied");
   }
@@ -131,6 +135,7 @@ test("SA-2 对抗/红线（必红被阻断）：子代理无独立审批通道�
   );
 
   assert.equal(res.outcome, "error");
+
   if (res.outcome === "error") {
     assert.equal(res.code, "subagent_approval_channel_forbidden");
     assert.match(res.message, /cannot prompt users/);
@@ -143,6 +148,7 @@ test("SA-2 权限血缘：父代理已预授权的 grant 可被子代理安全�
   const grants = createPermissionGrantCache();
   const writeArgs = { path: "safe.txt" };
   const action = buildPermissionAction("call-preapproved", "write_file", writeArgs);
+
   // Pre-approved by human in parent agent with session scope
   grants.record(action, "approved", "session");
 
@@ -169,6 +175,7 @@ test("SA-2 血缘归因：子代理事件与日志严格归属于 rootAttemptId"
     { subagentId: "sub-1", name: "scanner" },
     lineage,
   );
+
   assert.equal(guarded.rootAttemptId, "att-root-77");
 });
 
@@ -240,6 +247,7 @@ test("CLI-01B 工具边界：已取消的调用不得派发到真实工具", asy
   );
 
   const cancelled = new AbortController();
+
   cancelled.abort("parent_cancelled");
 
   const res = await subagentTools.execute(
@@ -296,6 +304,7 @@ test("CLI-01B 工具边界：在飞调用走 ToolPort.cancel，工具给出的�
 
   assert.deepEqual(cancelledCalls, ["call-in-flight"], "the existing cancel path is used");
   assert.equal(outcome.outcome, "result");
+
   if (outcome.outcome === "result") {
     assert.equal(outcome.output, "stopped");
   }
@@ -339,6 +348,7 @@ test("CLI-01B 工具边界：工具不回应取消时显式报 unknown，不报�
 
   assert.deepEqual(cancelledCalls, ["call-unknown"], "the existing cancel path is used");
   assert.equal(outcome.outcome, "unknown");
+
   if (outcome.outcome === "unknown") {
     assert.equal(outcome.code, "call_cancelled_outcome_unknown");
   }

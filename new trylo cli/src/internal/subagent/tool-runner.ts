@@ -73,6 +73,7 @@ export class DefaultFallbackToolRunner implements ToolRunnerPort {
         "DefaultFallbackToolRunner requires an executor: without one there is no work to run and no result to report",
       );
     }
+
     this.executor = executor;
     this.onObservation = onObservation;
   }
@@ -94,6 +95,7 @@ export class DefaultFallbackToolRunner implements ToolRunnerPort {
       resolve: resolveResult,
       status: "running",
     };
+
     this.tasks.set(task.taskId, record);
 
     const reportProgress = (progress: ToolRunnerProgress): void => {
@@ -142,7 +144,9 @@ export class DefaultFallbackToolRunner implements ToolRunnerPort {
         this.settle(record, cancelledTask(taskId));
         return;
       }
+
       const message = err instanceof Error ? err.message : String(err);
+
       this.settle(record, {
         taskId,
         status: "failed",
@@ -170,7 +174,9 @@ export class DefaultFallbackToolRunner implements ToolRunnerPort {
     if (!record) {
       return () => {};
     }
+
     record.listeners.add(listener);
+
     return () => {
       record.listeners.delete(listener);
     };
@@ -181,8 +187,10 @@ export class DefaultFallbackToolRunner implements ToolRunnerPort {
     if (record === undefined || isTerminalRunnerStatus(record.status)) {
       return false;
     }
+
     record.abortController.abort();
     this.settle(record, cancelledTask(taskId));
+
     return true;
   }
 
@@ -305,7 +313,9 @@ export class SubagentToolRunner implements ToolRunnerPort {
     if (!entry) {
       return () => {};
     }
+
     entry.progressListeners.add(listener);
+
     return () => {
       entry.progressListeners.delete(listener);
     };
@@ -331,6 +341,7 @@ export class SubagentToolRunner implements ToolRunnerPort {
     }
 
     const res = await entry.handle.wait(timeoutMs);
+
     return {
       taskId,
       status: res.status,
