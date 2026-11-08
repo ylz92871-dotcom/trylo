@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1020" viewBox="0 0 1400 1020" role="img" aria-labelledby="title desc">
+<title id="title">Trylo 2.0 中央学习系统 Beta</title><desc id="desc">任务与反馈提供材料，中央在授权内判断并安排用户学习和智能体领域学习，产物通过审阅采用后将反馈送回原学习目的。</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0 0 8 4 0 8" fill="none" stroke="#7a715f" stroke-width="1.5"/></marker></defs>
+<rect width="1400" height="1020" rx="20" fill="#faf9f5"/>
+<g font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" fill="#252824">
+<text x="70" y="82" font-size="38" font-weight="600">任务带来经验，经验回到任务。</text>
+<text x="70" y="120" font-size="19" fill="#666b62">Trylo 2.0 · 中央学习系统 Beta · 用户自主开启，授权范围内运行</text>
+<rect x="70" y="165" width="1260" height="110" rx="12" fill="#eeeee8"/>
+<text x="100" y="205" font-size="24" font-weight="600">真实工作材料</text>
+<text x="100" y="245" font-size="20">任务与文件　·　工具结果　·　用户纠正　·　实际采用与反馈　·　来源与条件</text>
+<path d="M700 278V318" stroke="#7a715f" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="240" y="332" width="920" height="182" rx="14" fill="#e9dec4"/>
+<text x="280" y="378" font-size="29" font-weight="600">中央学习 · 安排与判断</text>
+<text x="280" y="421" font-size="21">识别机会 → 形成目的与适用条件 → 协调资源 → 选择下一步</text>
+<text x="280" y="462" font-size="20">思考 / 读取 / 咨询 / 分派　　继续 / 等待事实与反馈 / 结束</text>
+<text x="280" y="493" font-size="17" fill="#625d50">累计授权由 CLI 账本持有；领域状态与执行权限保持各自的所有权。</text>
+<path d="M485 518V555H295V583M915 518V555H965V583" fill="none" stroke="#7a715f" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="70" y="598" width="450" height="147" rx="12" fill="#e7ece6"/>
+<text x="102" y="641" font-size="27" font-weight="600">用户学习</text>
+<text x="102" y="682" font-size="20">协作偏好 · 用户纠正 · 依据与应用</text>
+<text x="102" y="717" font-size="17" fill="#586153">采集、应用与停用遵循用户独立设置。</text>
+<rect x="550" y="598" width="780" height="147" rx="12" fill="#e9ecef"/>
+<text x="582" y="641" font-size="27" font-weight="600">Agent 学习子系统</text>
+<text x="582" y="682" font-size="22">工具　　方法　　协作　　技能</text>
+<text x="582" y="717" font-size="17" fill="#58616a">按实际开放状态提供；检查学习等扩展暂未开放。</text>
+<path d="M295 750V790H700M965 750V790H700V818" fill="none" stroke="#7a715f" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="240" y="832" width="920" height="96" rx="12" fill="#eeeee8"/>
+<text x="280" y="872" font-size="24" font-weight="600">产物 → 原有审阅与采用入口 → 实际使用 → 反馈与修订</text>
+<text x="280" y="909" font-size="18" fill="#666b62">学习结果回到任务。失败与反例保留，长期收益仍需真实内测验证。</text>
+<path d="M1165 881H1360V424H1165" fill="none" stroke="#9d8552" stroke-width="2.5" marker-end="url(#arrow)"/>
+<text x="70" y="981" font-size="17" fill="#666b62">机制示意 · 不代表自动授予工具权限，不等同模型权重训练。默认关闭，可在设置中开启或停止。</text>
+</g></svg>

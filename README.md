@@ -1,130 +1,113 @@
 <div align="center">
 
-<img src="desktop/src-tauri/icons/128x128@2x.png" alt="Trylo 正式 Logo" width="88" height="88" />
+<img src="desktop/src-tauri/icons/128x128@2x.png" width="88" height="88" alt="Trylo" />
 
-# Trylo：面向长期协作的个人学习智能体
+# Trylo 2.0
 
-**把想法推进成成果，把协作经验留给下一次。**
+**任务带来经验，经验回到任务。**
 
-从代码、文档到浏览器与桌面操作，在一个工作台里执行任务、检查结果，并逐步建立由你掌控的记忆与技能。
+一个会与你持续协作的个人智能体。代码、文档、浏览器与实际成果，在同一个工作台里展开。
 
-[简体中文](README.md) · [English](README.en.md)
+中央学习系统 Beta · 全新 Desktop · 独立的新一代 Trylo CLI
 
-[![Windows Desktop](https://img.shields.io/badge/Windows-Desktop_1.2.0-242629?style=flat-square)](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.2.0) [![Android](https://img.shields.io/badge/Android-1.6.0-47765A?style=flat-square)](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Code-v1.6.0.apk) [![Status](https://img.shields.io/badge/Status-Alpha-B49A52?style=flat-square)](docs/release/CURRENT_SOURCE_CHECKPOINT.md) [![License](https://img.shields.io/badge/License-Apache--2.0-687786?style=flat-square)](LICENSE)
-
-**[下载桌面版](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.2.0/Trylo_1.2.0_x64-setup.exe) · [下载 Android APP](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Code-v1.6.0.apk) · [了解架构](docs/architecture/README.md)**
+[官网下载](https://trylocode.me/download/desktop/) · [GitHub Releases](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v2.0.0) · [更新说明](docs/release/DESKTOP_2_0_0.md) · [English](README.en.md)
 
 </div>
 
-## Desktop 1.2.0 更新
+![Trylo 2.0 全新工作台：项目、任务与 Code / Work 入口](docs/images/v2/desktop-home.png)
 
-- 新增工具生产管理：在学习中心查看工具的生产计划、审批、证据与用途，启用前必须经过明确审批。
-- 新增工具学习记录：展示真实的待审、部分检索与验证状态，未通过验证的工具不会显示为可用。
-- 改进团队协作：团队进度按成员投影，补充成员交付与交接信息，长任务中断后更容易接续。
-- 修复后台命令闪窗：Git 快照、diff、搜索、目录选择与 LSP 配置等后台命令不再弹出控制台窗口。
-- 便携包改用图形界面启动器 `Start-Trylo.exe`，不再附带 `.cmd` 脚本；新版 CLI 补齐工具获取与 npm 安装闭包、子智能体检查点与学习控制。
+## 这一次，把学习放在中央
 
-[完整更新说明](docs/release/DESKTOP_1_2_0.md) · [官网下载](https://trylocode.me/download/desktop/)
+Trylo 2.0 是一次大版本更新。全新工作台、预览体验、上下文处理与原生工具一同进化；**中央学习系统以测试功能首次作为本次发布的核心能力开放**。
 
-## Trylo宣传视频
+我们希望一个长期陪你工作的智能体，能把一次任务里的经验变成下一次任务可参考的做法：哪些步骤有用，工具哪里需要改进，你怎样判断一份合格的交付，以及原先的方法什么时候应该修订。
 
-4 分 34 秒，看看 Trylo 如何连接任务执行、电脑操作与个人学习。
+中央学习围绕这些问题组织工作。它读取有出处的任务材料、用户纠正和使用反馈，形成带目的与条件的学习安排，协调相应子系统，再把产物交还原来的任务与学习入口。后续采用与反馈继续参与修订。
 
-https://github.com/user-attachments/assets/3dadb313-565c-49b6-8e07-6038dbb2fcfd
+![中央学习架构：来源、中央安排、用户与智能体子系统、采用反馈闭环](docs/images/v2/central-learning.svg)
 
-[下载 Trylo宣传视频 · 1080p 原片](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo.mp4)
-
-## 一个工作台，接着把事情做完
-
-打开项目，描述目标，从当前文件和已有任务继续推进。Trylo 将对话、工具调用、文件修改与结果放在同一条工作流里，让你既能交代任务，也能随时检查进展。
-
-![Trylo 原生桌面工作台：项目、任务、浏览器、电脑与结果入口](docs/images/showcase/desktop.png)
-
-| 推进任务 | 理解你的工作方式 | 积累可复用经验 |
-| --- | --- | --- |
-| 读写文件、运行命令，连接浏览器与电脑工具。 | 在开启用户学习后，记录协作依据，查看与纠正偏好。 | 查看记忆与技能提案，审核完整内容，再决定是否采纳。 |
-
-## 从对话走向实际操作
-
-写代码、整理文档、验证网页，或通过电脑工具参与桌面软件操作。Trylo 把调用的工具、输入输出与执行状态展开给你看，让任务过程有迹可循。
-
-![真实任务中的工具调用与浏览器执行详情](docs/images/showcase/tools.png)
-
-文件改动可以直接查看差异，再打开产物继续检查。从“准备做什么”到“实际改了什么”，都能回到具体内容。
-
-![文件修改差异与打开文件入口](docs/images/showcase/diff.png)
-
-## 长期协作，从可控的学习开始
-
-每个人对计划、解释、检查和交付的要求都不同。Trylo 将**用户学习**与**智能体学习**分别呈现：前者关注你的协作方式，后者管理任务中沉淀的记忆与技能。
-
-### 偏好如何参与任务，由你决定
-
-用户学习需要显式开启。你可以查看学习依据、纠正偏好，并选择仅观察、应用偏好或停用偏好。记录下来的内容是否适合继续使用，可以由你持续判断。
-
-![用户学习的应用设置：仅观察、应用偏好与停用偏好](docs/images/showcase/learning-controls.png)
-
-### 经验沉淀之前，先让你过目
-
-智能体学习产生的记忆与技能提案进入待审批队列；展开完整内容、检查修改，再决定批准或拒绝。学习结果与执行权限分别管理，批准学习内容不会自动授予工具权限。
-
-![智能体学习待审批队列：记忆与技能逐项审核](docs/images/showcase/learning-approval.png)
-
-## 桌面、终端与手机，连接同一份工作
-
-| 入口 | 可以做什么 |
+| 层次 | 负责的事情 |
 | --- | --- |
-| **Desktop** | 原生桌面工作台，集中查看项目、任务、工具、学习与结果。 |
-| **Trylo CLI / TUI** | 在终端使用执行循环、工具、会话恢复与学习能力；新版 TypeScript 源码随库公开。 |
-| **Android APP** | 配对桌面端，作为远程工作台查看与接续任务；需要桌面服务及可达网络。 |
-| **工具与服务** | 文件、命令、浏览器和 Windows 电脑工具由本地服务连接；能力取决于已安装组件、模型与权限配置。 |
+| **中央学习** | 识别学习机会，维护目的与条件，决定继续、等待、咨询或分派；在用户授权资源内协调学习。 |
+| **用户学习** | 理解协作偏好与纠正；保留依据，由用户决定采集、应用与停用。 |
+| **工具学习** | 从工具使用与失败中整理改进机会，连接生产、审阅与使用反馈。 |
+| **方法学习** | 整理可复用步骤、适用条件与反例，让后续任务参考并修订做法。 |
+| **协作学习** | 关注角色分工、交接与共同推进任务的经验。 |
+| **技能学习** | 连接技能发现、采用和反馈，管理可复用能力。 |
+| **共同边界** | 原始执行、工具权限、学习产物审阅各有其权威；中央学习不会自动扩大操作权限。 |
 
-CoWork 后台保持独立，作为可选依赖，不随核心桌面包捆绑。
+**这是 Beta / 测试功能。** 在 **设置 → 学习 → 中央学习系统** 自主开启或关闭，默认关闭。开启后首次启动随下一次正常任务进行；已有工作区可恢复保存的学习配置。关闭并保存会停止当前工作区的中央学习后台，已有经验保留。累计 token 与调用授权由你设置，后台可能在业务任务结束后继续或等待。独立的用户学习与其他学习选项仍按各自设置生效。
 
-## 开始使用
+当前已打通部分受控的学习、采用与反馈路径；持续运行、跨领域泛化与长期收益仍需要内测验证。各子系统按实际开放状态提供，检查学习仍暂未开放。本版本不会将学习记录数量当成学习效果，也不承诺每次学习都有效。这是一套工作经验与策略的学习系统，不涉及自动训练模型权重。
 
-1. 从 [GitHub Releases](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.2.0) 下载 Windows 安装版或便携版。
-2. 打开工作区，在设置中配置模型服务与凭据，按任务需要选择工具和权限。
-3. 创建一个任务，从读懂项目、修复代码或整理资料开始；需要长期学习时，再显式开启对应选项。
-4. 需要手机接续时，安装 Android APP，按桌面端远程连接界面的指引完成配对。
+[深入了解学习机制与边界](docs/architecture/CENTRAL_LEARNING_2_0.md)
 
-| 下载 | 版本与说明 |
+## 从想法到成果，工作过程完整展开
+
+### 在文档里看见交付
+
+对话、工具结果与文档预览并排呈现。写完之后，继续打开、检查和修改成果，让任务有清晰的落点。
+
+![Work 任务与 PDF 文档预览](docs/images/v2/document-preview.png)
+
+### 在预览里继续创作
+
+网页可以交互，代码与成果可以来回查看。本次完善了多类文件预览、资源加载与展示体验，减少在不同应用之间切换的打断。
+
+![Code 任务中的交互式网页预览](docs/images/v2/interactive-preview.png)
+
+### 工具就在工作现场
+
+内置浏览器、文件、命令与桌面工具连接实际工作。原生工具体验与错误反馈进一步优化；能否执行仍由平台能力、模型配置和用户授权决定。
+
+![原生浏览器中的真实 3D 网页任务](docs/images/v2/native-browser-3d.png)
+
+### 长任务，有可以接着走的上下文
+
+新 CLI 改进了上下文估算、压缩、使用量呈现与任务续接，修复了多项已知执行问题。此次更新建立在此前多轮压力与长任务测试工作的基础上；模型和任务差异仍会影响实际表现。
+
+![长任务的完成结果与对话定位](docs/images/v2/conversation-bookshelf.png)
+
+## 选择你的平台
+
+| 平台 | 本次发布 |
 | --- | --- |
-| [Windows x64 安装版](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.2.0/Trylo_1.2.0_x64-setup.exe) | Desktop 1.2.0 |
-| [Windows x64 便携版](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.2.0/Trylo-Desktop-1.2.0-windows-x64-portable-core.zip) | 核心桌面包，CoWork 独立 |
-| [Android APK](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Code-v1.6.0.apk) | Android 1.6.0；沿用已签名构建 |
-| [SHA-256 校验值](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.2.0/SHA256SUMS.txt) | 下载后可核对文件完整性 |
+| **Windows x64** | Desktop **2.0.0**，本次主要发布平台。 |
+| **macOS Apple Silicon** | **首版 Beta**。目前仅提供 Apple Silicon 构建，平台适配仍早期，预计存在较多问题。 |
+| **Linux x86_64** | **首版 Beta**，Debian 包；以 Ubuntu 24.04 / X11 构建环境为基线，其他发行版及 Wayland 体验尚待验证，预计存在较多问题。 |
+| **Android** | 继续使用现有版本，与在线的 Desktop 配对接续任务。 |
 
-**当前为 Alpha。** Desktop 1.2.0 仅包含并默认使用新版 Trylo CLI，旧 CLI 与 CoWork 后台不随包分发，旧版选择会迁移为新版。官网源码自本次起不再进入公库。验证范围见[当前检查点](docs/release/CURRENT_SOURCE_CHECKPOINT.md)和[发布记录](docs/release/DESKTOP_1_2_0.md)；界面截图与演示不代表所有模型、软件与设备组合均已验证。
+**[前往官网下载](https://trylocode.me/download/desktop/)** · [发布资产与 SHA-256](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v2.0.0)
 
-## 为开发者准备的入口
+Desktop 2.0 仅使用独立研发的新版 Trylo CLI，旧 CLI 已退役，不再提供引擎切换。Windows 安装前请退出 Trylo；首次 macOS/Linux Beta 的签名、系统兼容性与权限体验仍有待完善。
 
-Trylo 将界面、执行内核、本地工具服务和学习机制分开组织，便于理解职责与追踪任务链路。
+## 即将进入邀请码内测
 
-| 目录 | 职责 |
+邀请码分为常规内测与优质内测两类。测试阶段提供每日 token 配额，旗舰模型池及相关限量 API 权益面向优质内测用户开放。
+
+我们正在邀请愿意认真使用、记录问题和提供反馈的内测伙伴。测试计划提供每日 token 配额；优质内测用户可按审核结果、资源供应和当期规则体验国内旗舰模型池及限量视频、生图与语言 API 配额。
+
+内测旗舰模型池：**Kimi 3.1 Pro、DeepSeek V4.11017（原厂版）、Qwen 3.8 Max、GLM 5.3** 等。另提供 **字节旗舰视频、生图与语言模型 API** 的限量体验配额。
+
+<sub>具体模型、额度与开放时间以邀请通知及当期供应为准。</sub>
+
+请发送邮件至 **[ylz92871@gmail.com](mailto:ylz92871@gmail.com?subject=Trylo%202.0%20内测申请)**，介绍使用场景、操作系统与可以提供的反馈。作者人工审核后通过邮件发放邀请码；申请不代表自动获批，具体模型与额度以邀请通知为准。
+
+[了解内测计划](https://trylocode.me/#beta)
+
+## 开发者入口与公开范围
+
+本仓库公开核心源码。**官网和网页端源码为内部代码，不开源**；macOS/Linux 平台适配仓库也保持私有，仅开放 Beta 二进制。开发过程、真实会话、凭据、研究副本与 `_workspace/` 不在公开范围内。
+
+| 目录 | 内容 |
 | --- | --- |
-| [`desktop/`](desktop/) | React + Tauri 原生桌面 |
-| [`new trylo cli/`](new%20trylo%20cli/) | TypeScript CLI/TUI、执行、协议、权限、上下文与学习 |
-| [`desktop-services/`](desktop-services/) | 本地 Service Host、工具、浏览器与远程服务 |
-| [`new_tool/`](new_tool/README.md) | Windows-MCP fork、来源记录与依赖安装 |
-| [`work/`](work/) | 工作流、运行适配与交付物 |
-| [`mobile-app/`](mobile-app/) | Android 远程工作台 |
-| 官网 | 源码不随本仓库分发；下载页见 <https://trylocode.me/download/desktop/> |
+| `new trylo cli/` | 独立的新一代 CLI / TUI、执行、上下文、工具与学习系统。 |
+| `desktop/` | Windows Desktop 工作台、预览与原生宿主。 |
+| `desktop-services/` | 本地服务、工具桥接与工具链来源说明。 |
+| `mobile-app/` | 手机端工程。 |
+| `remote-relay/` | 远程连接与配套服务的公开源码部分。 |
+| `docs/` | 架构、使用说明与发布记录。 |
 
-[架构说明](docs/architecture/README.md) · [源码构建](docs/development/build-from-source.md) · [目录与迁移](docs/development/repository-layout.md) · [近期 CLI 排障与验证](docs/release/NEW_CLI_DEBUG_2026_10_22.md)
+构建入口见 [Desktop](desktop/README.md)、[CLI](new%20trylo%20cli/README.md) 与各工程依赖清单。第三方工具、字体、编解码器与其他分发组件遵循各自许可证；发布二进制的对应来源及许可材料随发布资产提供。
 
-Windows x64 / Node.js ≥ 22 的新版 CLI 构建：
-
-```powershell
-# 仓库根目录：显式准备固定版本的原生依赖
-node scripts/setup-cli-native.mjs --install
-cd "new trylo cli"
-npm ci
-npm run build
-```
-
-完整 Desktop 发行构建还需要对应的运行时及制品清单，具体前置条件见[构建说明](docs/development/build-from-source.md)。源码检查、真实模型验证、原生桌面与安装包验收在文档中分别记录。
-
-## 开源与致谢
-
-项目自产代码采用 [Apache-2.0](LICENSE)，第三方组件保留各自许可证与来源说明，详见 [NOTICE](NOTICE)。公开源码不包含旧 CLI 源码、凭据和本机构建缓存。欢迎通过 [Issues](https://github.com/ylz92871-dotcom/trylo/issues) 反馈可复现的问题，通过 Pull Request 参与改进。
+项目许可证见 [LICENSE](LICENSE)，第三方声明见 [NOTICE](NOTICE)。

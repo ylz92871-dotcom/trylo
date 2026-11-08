@@ -1,120 +1,68 @@
 <div align="center">
 
-<img src="desktop/src-tauri/icons/128x128@2x.png" alt="Trylo logo" width="88" height="88" />
+<img src="desktop/src-tauri/icons/128x128@2x.png" width="88" alt="Trylo" />
 
-# Trylo
+# Trylo 2.0
 
-**A personal learning agent for long-term collaboration.**
+**Turn work into experience. Bring experience back to work.**
 
-Turn ideas into deliverables. Keep useful collaboration experience for the next task.
+A personal agent for ongoing collaboration across code, documents, browsers and real deliverables.
 
-[简体中文](README.md) · [English](README.en.md)
-
-**[Download Desktop](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.2.0) · [Download Android](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Code-v1.6.0.apk) · [Architecture](docs/architecture/README.md)**
-
-Windows Desktop 1.2.0 · Android 1.6.0 · Alpha · Apache-2.0
+[Download](https://trylocode.me/download/desktop/) · [Release](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v2.0.0) · [简体中文](README.md)
 
 </div>
 
-## Desktop 1.2.0
+![The new Trylo Desktop](docs/images/v2/desktop-home.png)
 
-Tool production management with explicit approval before enabling a tool; honest tool learning records; per-member team progress with delivery and handoff details; background commands no longer flash a console window; the portable package now starts through the GUI launcher Start-Trylo.exe. Tool-learning never grants tool permissions by itself.
+## Central learning, now in Beta
 
-[Release notes](docs/release/DESKTOP_1_2_0.md) · [Download](https://trylocode.me/download/desktop/)
+Trylo 2.0 brings a redesigned workbench, an independent next-generation CLI, improved previews and native tools, and a central learning system released as an optional experimental feature.
 
-## Trylo宣传视频
+Central learning organizes grounded opportunities from task materials, corrections and usage feedback. It maintains a purpose and conditions, coordinates resources, and can think, read, consult, dispatch work, wait for meaningful feedback, or end an activity. User learning and the tool, method, collaboration and skill subsystems keep their own responsibilities. Results return through existing review and adoption paths; later use and feedback can inform revision.
 
-A 4-minute, 34-second look at task execution, computer interaction, and personal learning.
+![Central learning architecture](docs/images/v2/central-learning.svg)
 
-https://github.com/user-attachments/assets/3dadb313-565c-49b6-8e07-6038dbb2fcfd
+**Experimental, off by default.** Use Settings → Learning → Central learning to opt in or out. First activation starts with the next normal task; existing workspaces can resume their saved configuration. Saving the disabled state stops the current workspace's central background learner and preserves existing experience. Independent user-learning and agent-learning settings still apply separately. Token and call authorization remain under your control; learning may continue or wait after a normal task ends.
 
-[Download Trylo宣传视频 · original 1080p video](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo.mp4)
+Some controlled adoption and feedback paths have been exercised. Long-term benefit, broad generalization and sustained operation still need real-world testing. Subsystems follow their actual availability; check learning remains unavailable. This is experience and strategy learning, not automatic model-weight training or a promise that every learning attempt succeeds.
 
-## A workspace to keep work moving
+## One workbench for the whole task
 
-Open a project, describe the goal, and continue from its files and existing tasks. Trylo brings conversation, tool calls, file changes, and results into one workflow.
+View conversations beside documents, inspect interactive web outputs, and use native browser and desktop tools within the selected permissions. Context estimation, compaction, usage reporting and continuation have been improved following the project's earlier stress and long-task testing.
 
-![Trylo native desktop workspace](docs/images/showcase/desktop.png)
+![Document delivery and preview](docs/images/v2/document-preview.png)
 
-| Execute tasks | Understand your working style | Reuse experience |
-| --- | --- | --- |
-| Read and edit files, run commands, and connect browser and computer tools. | Enable user learning to inspect evidence and correct collaboration preferences. | Review proposed memories and skills before adopting them. |
+![Interactive web preview](docs/images/v2/interactive-preview.png)
 
-## Follow the work, down to the changes
+![A real 3D task in the native browser](docs/images/v2/native-browser-3d.png)
 
-Write code, organize documents, inspect web pages, or use computer tools to interact with desktop applications. Expand tool inputs, outputs, and execution status to inspect what happened.
+![Long-task completion and conversation navigation](docs/images/v2/conversation-bookshelf.png)
 
-![Tool execution and browser operation details](docs/images/showcase/tools.png)
+## Platforms
 
-Review file diffs and open the resulting files to check the work directly.
-
-![File changes in the task workflow](docs/images/showcase/diff.png)
-
-## Learning you can inspect and control
-
-Trylo separates **user learning**, which concerns collaboration preferences, from **agent learning**, which manages proposed memories and reusable skills.
-
-User learning is explicitly enabled. Inspect its evidence, correct preferences, and choose whether to observe, apply, or disable them.
-
-![Controls for observing, applying, or disabling preferences](docs/images/showcase/learning-controls.png)
-
-Memory and skill proposals enter a review queue. Read the full content and changes before approving or rejecting them. Learning approval and execution permissions are separate: approving a skill does not grant tool access.
-
-![Memory and skill approval queue](docs/images/showcase/learning-approval.png)
-
-## Desktop, terminal, and phone
-
-| Surface | Role |
+| Platform | Release |
 | --- | --- |
-| **Desktop** | Native workspace for projects, tasks, tools, learning, and results. |
-| **CLI / TUI** | Terminal execution, tools, session recovery, and learning; the new TypeScript CLI source is included. |
-| **Android** | A paired remote workbench for viewing and continuing desktop tasks; requires the desktop service and network connectivity. |
-| **Local services** | File, shell, browser, and Windows computer tools, subject to installed components, model support, and permission settings. |
+| Windows x64 | Desktop **2.0.0**, the primary release platform. |
+| macOS Apple Silicon | **First Beta**. Early platform support; expect substantial issues. |
+| Linux x86_64 | **First Beta**, Debian package, built against Ubuntu 24.04 / X11. Other distributions and Wayland need further testing. Expect substantial issues. |
+| Android | Existing release remains available for pairing with an online Desktop. |
 
-CoWork remains a separate optional dependency, outside the core desktop package.
+[Download packages and checksums](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v2.0.0). macOS signing, platform permissions and compatibility are still being improved. Desktop uses only the independent new Trylo CLI; the retired engine and engine selector are removed.
 
-## Get started
+## Invite-only testing
 
-1. Download the Windows installer or portable package from [Releases](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.2.0).
-2. Open a workspace, configure your model provider and credentials, and select appropriate tools and permissions.
-3. Start with a project question, a code change, or a document task. Explicitly enable learning when you want to use it.
-4. For remote access, install the Android app and follow the desktop pairing instructions.
+There are standard and selected-tester invitation tiers. Daily token quotas are provided during testing; flagship model-pool and related limited API benefits are for selected high-quality testers.
 
-| Download | Version |
-| --- | --- |
-| [Windows x64 installer](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.2.0/Trylo_1.2.0_x64-setup.exe) | Desktop 1.2.0 |
-| [Windows x64 portable](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.2.0/Trylo-Desktop-1.2.0-windows-x64-portable-core.zip) | Core package; CoWork separate |
-| [Android APK](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.5/Trylo-Code-v1.6.0.apk) | Android 1.6.0, existing signed build |
-| [SHA-256 checksums](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.2.0/SHA256SUMS.txt) | File integrity checks |
+The upcoming program uses invitations and daily token quotas. Selected testers may receive flagship model-pool access and limited video, image and language API quotas, subject to review, availability and the current invitation terms.
 
-**Alpha status.** Desktop 1.2.0 bundles and defaults to the new Trylo CLI only. Legacy CLI selections migrate to trylo-v1; the legacy engine and CoWork runtime are excluded. Website source no longer enters this repository. See the [checkpoint](docs/release/CURRENT_SOURCE_CHECKPOINT.md) and [release record](docs/release/DESKTOP_1_2_0.md) for verification boundaries. Screenshots and demos do not establish support for every model, application, or device combination.
+The flagship pool includes **Kimi 3.1 Pro, DeepSeek V4.11017 (original provider), Qwen 3.8 Max and GLM 5.3**, alongside limited **ByteDance flagship video, image and language API** quotas.
 
-## Explore the source
+<sub>Exact models, availability and quotas follow the invitation terms.</sub>
 
-| Directory | Responsibility |
-| --- | --- |
-| [`desktop/`](desktop/) | React + Tauri native application |
-| [`new trylo cli/`](new%20trylo%20cli/) | TypeScript CLI/TUI, execution, protocol, permissions, context, and learning |
-| [`desktop-services/`](desktop-services/) | Local Service Host, tooling, browser, and remote services |
-| [`new_tool/`](new_tool/README.md) | Windows-MCP fork, provenance, and dependency setup |
-| [`work/`](work/) | Workflows, runtime adapters, and deliverables |
-| [`mobile-app/`](mobile-app/) | Android remote workbench |
-| Website | Source is not distributed here; downloads: <https://trylocode.me/download/desktop/> |
+Email **[ylz92871@gmail.com](mailto:ylz92871@gmail.com?subject=Trylo%202.0%20testing%20application)** with your use case, operating system and feedback plan. Applications are reviewed manually; invitations and exact entitlements are sent by email.
 
-[Architecture](docs/architecture/README.md) · [Build from source](docs/development/build-from-source.md) · [Repository layout](docs/development/repository-layout.md) · [Recent CLI fixes and verification](docs/release/NEW_CLI_DEBUG_2026_10_22.md)
+## Source and licensing
 
-New CLI build on Windows x64 with Node.js ≥ 22:
+Core source is public: `new trylo cli/`, Windows `desktop/`, local `desktop-services/`, the mobile project and the public portion of `remote-relay/`. **Website/web source stays private.** macOS/Linux adaptation repositories stay private; their Beta binaries are distributed separately. `_workspace/`, real sessions, credentials and research checkouts are excluded.
 
-```powershell
-# From the repository root: explicitly prepare pinned native dependencies.
-node scripts/setup-cli-native.mjs --install
-cd "new trylo cli"
-npm ci
-npm run build
-```
-
-A complete Desktop release build needs additional runtime artifacts and manifests; see the [build instructions](docs/development/build-from-source.md). Source checks, real-provider runs, native UI, and installer acceptance are documented separately.
-
-## Open source
-
-First-party code uses [Apache-2.0](LICENSE). Third-party components retain their own licenses and attribution; see [NOTICE](NOTICE). Legacy CLI source, credentials, and local build caches are excluded. Reproducible [issue reports](https://github.com/ylz92871-dotcom/trylo/issues) and pull requests are welcome.
+See the project [LICENSE](LICENSE) and [NOTICE](NOTICE). Third-party components retain their own licenses; required matching source and notices accompany binary releases.
