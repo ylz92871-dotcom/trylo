@@ -3,7 +3,7 @@
 // Spec TRYLO-CORE-AGENT-TOOL-EXTENSION-TECHNICAL-SPEC §6.5 × §6.3 × §4.1
 // (work.browser-debug.v1) — PR-7. Pinned here:
 //   - reads auto at every level; explicit file writes follow the §6.3 write
-//     rules (the pinned server bounds them to the OS temp dir);
+//     rules (the server validates negotiated workspace roots plus OS temp);
 //   - evaluate_script is bypass-immune (always approval);
 //   - navigation follows the §6.5 origin flow with the SHARED origin lease
 //     (same store instance as the playwright classifier);
@@ -24,6 +24,7 @@ import {
 import { BrowserOriginLeases } from './playwright-classifier';
 import type { ToolRiskContext } from '../tool-risk-classifier';
 import type { PermissionLevel } from '../../permission/permission-policy';
+import { resolveCodeToolPolicy } from '../../permission/code-tool-policy';
 
 const ALL_LEVELS: readonly PermissionLevel[] = [
   'read_only',
@@ -82,6 +83,61 @@ describe('pinned surface (PR-7)', () => {
   });
 });
 
+describe('workspace HTML navigation uses the existing local-page authority', () => {
+  it('accepts encoded workspace pages and product outputs without minting an origin lease', () => {
+    for (const tool of ['new_page', 'navigate_page']) {
+      for (const url of ['file:///D:/work/proj/index.html',
+        ' FILE:///D:/work/proj/%E8%AF%BE%E4%BB%B6%20preview/index.htm?mode=teach#part-2 ',
+        'file:///D:/work/proj/.trylo/out/dc-motor-teaching/index.html',
+        'file:///D:/WORK/PROJ/.TRYLO/OUT/result.html']) {
+        for (const level of ALL_LEVELS) {
+          const context = ctx(tool, { url, ...(tool === 'navigate_page' ? { type: 'url' } : {}) }, level);
+          const route = classifyChromeDevtoolsTool(context);
+          expect(route.behavior, `${tool} ${url} ${level}`).toBe('prompt');
+          expect(route.reasonCode).toBe('workspace_page_requires_approval');
+          expect('lease' in route).toBe(false);
+          const final = resolveCodeToolPolicy(context, route);
+          expect(final.behavior).toBe(level === 'unrestricted' ? 'auto_allow' : level === 'read_only' ? 'deny' : 'prompt');
+        }
+      }
+    }
+  });
+
+  it('keeps external, hosted, private and non-HTML file navigation closed', () => {
+    for (const url of ['file:///D:/else/index.html', 'file://server/share/index.html',
+      'file://localhost/D:/work/proj/index.html', 'file:///D:/work/proj/.trylo/sessions/index.html',
+      'file:///D:/work/proj/.git/index.html', 'file:///D:/work/proj/.trylo/out/.private/index.html',
+      'file:///D:/work/proj/docs/CON.html', 'file:///D:/work/proj/a.html%3Asecret.html',
+      'file:///D:/work/proj/readme.md', 'javascript:alert(1)', 'data:text/html,secret']) {
+      expect(classifyChromeDevtoolsTool(ctx('new_page', { url }, 'unrestricted')).behavior, url).toBe('deny');
+    }
+  });
+
+  it('reports malformed local-page arguments without inventing a policy denial', () => {
+    for (const url of ['file:///D:/work/proj/%ZZ/index.html', 'file:///D:/work/proj/a%2fb/index.html']) {
+      const route = classifyChromeDevtoolsTool(ctx('new_page', { url }, 'unrestricted'));
+      expect(route.behavior).toBe('deny');
+      expect(route.behavior === 'deny' && route.failureCode).toBe('invalid_arguments');
+    }
+  });
+
+  it('keeps local file paths case-sensitive on a case-sensitive workspace', () => {
+    const context = { ...ctx('new_page', { url: 'file:///home/proj/.trylo/out/index.html' }), projectRoot: '/home/proj' };
+    expect(classifyChromeDevtoolsTool(context).behavior).toBe('prompt');
+    expect(classifyChromeDevtoolsTool({ ...context, input: { url: 'file:///home/PROJ/index.html' } }).behavior).toBe('deny');
+    expect(classifyChromeDevtoolsTool({ ...context, input: { url: 'file:///home/proj/.TRYLO/out/index.html' } }).behavior).toBe('deny');
+  });
+
+  it('supports explicitly selected drive-root and filesystem-root workspaces', () => {
+    for (const [projectRoot, url] of [['C:/', 'file:///C:/Project/index.html'], ['/', 'file:///project/index.html']] as const) {
+      const route = classifyChromeDevtoolsTool({ ...ctx('new_page', { url }), projectRoot });
+      expect(route.behavior).toBe('prompt');
+      expect(route.reasonCode).toBe('workspace_page_requires_approval');
+    }
+    expect(classifyChromeDevtoolsTool({ ...ctx('new_page', { url: 'file:///D:/outside/index.html' }), projectRoot: 'C:/' }).behavior).toBe('deny');
+  });
+});
+
 describe('reads (§6.5 auto)', () => {
   const READS = [
     ['list_pages', {}],
@@ -111,13 +167,25 @@ describe('reads (§6.5 auto)', () => {
   });
 });
 
-describe('file writes (pinned server bounds them to OS temp — §6.3 write rules)', () => {
+describe('file writes (workspace roots plus OS temp — §6.3 write rules)', () => {
   const CASES: [string, Record<string, unknown>][] = [
     ['take_screenshot', { filePath: 'shot.png' }],
     ['take_snapshot', { filePath: 'snap.yml' }],
     ['get_network_request', { requestId: 'r1', requestFilePath: 'req.bin', responseFilePath: 'res.bin' }],
     ['take_heapsnapshot', { filePath: 'heap.heapsnapshot' }],
   ];
+
+  it('describes negotiated workspace roots and temp writes without recording the output path', () => {
+    for (const filePath of ['shot.png', 'D:/work/proj/中文 preview/shot.png']) {
+      const route = classifyChromeDevtoolsTool(ctx('take_screenshot', { filePath }, 'workspace_write'));
+      expect(route.behavior).toBe('prompt');
+      expect(route.reasonCode).toBe('file_write_requires_approval');
+      expect(route.audit.pathZones).toEqual([{ field: 'filePath', zone: 'workspace-or-os-temp' }]);
+      expect(JSON.stringify(route.audit)).not.toContain(filePath);
+      if (route.behavior === 'prompt' && route.preview.kind === 'summary')
+        expect(route.preview.reason).toBe('将把输出写入文件（目标须位于当前工作区或系统临时目录），需审批');
+    }
+  });
 
   it('read_only denies file writes outright', () => {
     for (const [tool, input] of CASES) {
@@ -232,9 +300,9 @@ describe('navigation (§6.5 origin flow, shared lease store)', () => {
     expect(blocked.reasonCode).toBe('origin_blocked');
   });
 
-  it('new_page without a url is a blank page (read)', () => {
+  it('new_page without its required url is an argument failure', () => {
     const route = classifyChromeDevtoolsTool(ctx('new_page', {}, 'workspace_write'));
-    expect(route.behavior).toBe('auto_allow');
+    expect(route).toMatchObject({ behavior: 'deny', failureCode: 'invalid_arguments' });
   });
 
   it('close_page is an approval at ask/workspace_write, auto in unrestricted', () => {

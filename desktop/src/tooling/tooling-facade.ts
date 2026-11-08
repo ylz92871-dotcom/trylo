@@ -6,10 +6,9 @@
 // caller knows whether a missing tool is fatal for this surface.
 //
 // Failure policy (spec §4.4):
-//   - `ok:false` from the host resolves as `null` for the resolver — the run
-//     continues WITHOUT a Profile rather than failing.
-//   - A transport failure (Service Host down) also resolves as `null`.
-//     Optional callers may degrade; required Work sends surface the error.
+//   - Optional resolution projects whole-profile/transport failure as `null`.
+//   - User-run resolution is required: it awaits Host readiness and preserves
+//     whole-profile errors. Individual unavailable packages remain a valid Profile.
 //   - `health` / `listProfiles` surface their `ok:false` to the caller so
 //     Diagnostics can show the real reason instead of an empty list.
 
@@ -40,7 +39,7 @@ import type {
   ViewportStartResult,
   ViewportStopResult,
 } from '../services-host/methods';
-import type { ResolveToolRuntimeRequest } from './types';
+import type { ResolveToolRuntimeRequest, ToolRuntimeResolver } from './types';
 import { nativeBrowserCommand } from '../host-adapter/native-browser';
 
 /**
@@ -66,7 +65,26 @@ function profileFailureMessage(code: string): string {
   return '工具服务尚未就绪，请稍后重试；若持续失败，请重新启动 Trylo。';
 }
 
-export function createToolingFacade(client: ServicesClient) {
+export interface ToolingFacadeOptions {
+  /** Uses Desktop's existing ServiceManager; it owns startup and coalescing. */
+  readonly ensureReady?: () => Promise<void>;
+}
+
+async function waitForReady(ensureReady: ToolingFacadeOptions['ensureReady'], signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  if (!ensureReady) return;
+  const ready = ensureReady();
+  if (!signal) return ready;
+  await new Promise<void>((resolve, reject) => {
+    const cancel = (): void => { signal.removeEventListener('abort', cancel); reject(signal.reason); };
+    signal.addEventListener('abort', cancel, { once: true });
+    ready.then(() => { signal.removeEventListener('abort', cancel); resolve(); },
+      error => { signal.removeEventListener('abort', cancel); reject(error); });
+    if (signal.aborted) cancel();
+  });
+}
+
+export function createToolingFacade(client: ServicesClient, readiness: ToolingFacadeOptions = {}) {
   return {
     // Subscribe during effect setup, not facade construction in render.
     // StrictMode discards a render and replays setup/cleanup; each setup
@@ -82,7 +100,7 @@ export function createToolingFacade(client: ServicesClient) {
     nativeBrowserControl: (scope: string, heldByUser: boolean) => client.request('tooling.nativeBrowserControl', { scope, heldByUser }),
     nativeBrowserSelect: (scope: string, label: string) => client.request('tooling.nativeBrowserSelect', { scope, label }),
     nativeBrowserCreate: (scope: string) => client.request('tooling.nativeBrowserCreate', { scope }),
-    nativeBrowserLayout: (scope: string, bounds: import('../host-adapter/native-browser').NativeBrowserBounds | undefined, visible: boolean) => client.request('tooling.nativeBrowserLayout', { scope, bounds, visible }),
+    nativeBrowserLayout: (scope: string, bounds: import('../host-adapter/native-browser').NativeBrowserBounds | undefined, visible: boolean, nativeApplied = false) => client.request('tooling.nativeBrowserLayout', { scope, bounds, visible, nativeApplied }),
     nativeBrowserViewport: (scope: string, label: string, viewport: import('../host-adapter/native-browser').NativeBrowserViewportRequest) => client.request('tooling.nativeBrowserViewport', { scope, label, viewport }),
     /**
      * Compose one run's tool Profile, or `null` when the tool plane cannot
@@ -90,9 +108,11 @@ export function createToolingFacade(client: ServicesClient) {
      */
     async resolveProfile(
       request: ResolveToolRuntimeRequest,
-      options?: { readonly required?: boolean },
+      options?: { readonly required?: boolean; readonly signal?: AbortSignal },
     ): Promise<ResolvedToolRuntime | null> {
       try {
+        await waitForReady(readiness.ensureReady, options?.signal);
+        options?.signal?.throwIfAborted();
         const result = await client.request('tooling.resolveProfile', {
           surface: request.surface,
           ...(request.requestedProfileId
@@ -295,7 +315,11 @@ export type ToolingFacade = ReturnType<typeof createToolingFacade>;
  * transport so tests can inject a plain resolver without a client.
  */
 export function createToolingRuntimeResolver(
-  facade: ToolingFacade,
-): (request: ResolveToolRuntimeRequest) => Promise<ResolvedToolRuntime | null> {
-  return (request) => facade.resolveProfile(request);
+  facade: ToolingFacade | (() => ToolingFacade | null),
+): ToolRuntimeResolver {
+  return (request, options) => {
+    const current = typeof facade === 'function' ? facade() : facade;
+    if (!current) return Promise.reject(new ServiceRequestError('NOT_CONNECTED', profileFailureMessage('NOT_CONNECTED')));
+    return current.resolveProfile(request, { required: true, signal: options?.signal });
+  };
 }

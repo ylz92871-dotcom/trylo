@@ -20,7 +20,6 @@ import type {
   WorkspaceIndex,
 } from '../host-adapter/conversation-history';
 import type { CodePermissionRequest } from '../runtime/code-permission-registry';
-import type { PetPermissionRequest } from '../companion/companion-port';
 import type { ChatMessage } from '../components/chat/types';
 
 // ── fixtures ────────────────────────────────────────────────────────────
@@ -448,35 +447,10 @@ describe('projectApprovals', () => {
     input: {},
     at: 1,
   }];
-  const work: PetPermissionRequest[] = [
-    { requestId: 'w1', title: 'Run tests', detail: 'npm test', description: 'npm test', category: 'command', approvalState: 'pending' },
-    { requestId: 'w2', title: 'Edit file', detail: 'edit', description: 'edit', approvalState: 'pending' },
-  ];
 
-  it('maps work permissions with risk derived from category', () => {
-    const out = projectApprovals({ code: [], work, now });
-    expect(out.type).toBe('permissionRequestState');
-    expect(out.requests[0]).toEqual({
-      requestId: 'w1',
-      category: 'command',
-      title: 'Run tests',
-      detail: 'npm test',
-      description: 'npm test',
-      risk: 'medium',
-      requestedAt: 8888,
-    });
-    expect(out.requests[1]).toEqual({
-      requestId: 'w2',
-      title: 'Edit file',
-      detail: 'edit',
-      description: 'edit',
-      risk: 'low',
-      requestedAt: 8888,
-    });
-  });
 
   it('maps code permissions to edit category and low risk', () => {
-    const out = projectApprovals({ code, work: [], now });
+    const out = projectApprovals({ code, now });
     expect(out.requests[0]).toEqual({
       requestId: 'c1',
       category: 'edit',
@@ -492,16 +466,17 @@ describe('projectApprovals', () => {
     const req: CodePermissionRequest = {
       requestId: 'x', processId: 'p', projectKey: 'k', conversationId: 'cv', toolName: 'Grep', input: {}, at: 1,
     };
-    const out = projectApprovals({ code: [req], work: [], now });
+    const out = projectApprovals({ code: [req], now });
     expect(out.requests[0]?.title).toBe('Grep');
   });
 
-  it('code wins on duplicate requestId', () => {
-    const dupCode: CodePermissionRequest[] = [{ ...code[0]!, requestId: 'w1', toolName: 'Bash' }];
-    const out = projectApprovals({ code: dupCode, work, now });
-    const entry = out.requests.find((r) => r.requestId === 'w1');
+  it('the latest current CLI request replaces an earlier matching id', () => {
+    const dupCode: CodePermissionRequest[] = [{ ...code[0]!, toolName: 'Bash' }];
+    const out = projectApprovals({ code: [...code, ...dupCode], now });
+    expect(out.requests).toHaveLength(1);
+    const entry = out.requests.find((r) => r.requestId === 'c1');
     expect(entry).toEqual({
-      requestId: 'w1',
+      requestId: 'c1',
       category: 'edit',
       title: 'Bash',
       detail: 'Bash',
@@ -523,7 +498,6 @@ describe('buildFullSnapshot', () => {
     index: null,
     currentWorkspace: null,
     code: [] as CodePermissionRequest[],
-    work: [] as PetPermissionRequest[],
     now,
   };
 

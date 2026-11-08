@@ -6,11 +6,8 @@
 // projection → publish, re-enables after Service Host restarts, and degrades
 // when the host is down (§5.1). Framework-free.
 
-import type { ConversationItem } from '@trylo/work';
-
 import type { ApprovalService } from '../approval/approval-service';
-import type { PetChatHandle, PetPermissionRequest } from '../companion/companion-port';
-import { workApprovalToPetRequest } from '../companion/companion-projection';
+import type { PetChatHandle } from '../companion/companion-port';
 import type { ConversationKind, PersistedWorkspaceEntry, WorkspaceConversationHistory, WorkspaceIndex } from '../host-adapter/conversation-history';
 import type { LoopEvent } from '../host-adapter/loop-events';
 import type { CodeRunLifecycleObserver, CodeRunOutcome } from '../runtime/code-run-lifecycle';
@@ -74,7 +71,6 @@ export interface RemoteControllerOptions {
   readonly currentWorkspace: () => PersistedWorkspaceEntry | null;
   readonly conversationKind: () => ConversationKind;
   readonly codePermissions: () => readonly CodePermissionRequest[];
-  readonly workApprovals: () => readonly PetPermissionRequest[];
   readonly projectKey: () => string;
   readonly conversationId: () => string;
   readonly mode: () => string;
@@ -84,7 +80,6 @@ export class RemoteController {
   private readonly options: RemoteControllerOptions;
   private readonly router: RemoteRouter;
   private readonly disposers: (() => void)[] = [];
-  private readonly pendingWorkApprovals = new Map<string, PetPermissionRequest>();
   private readonly statusListeners = new Set<(status: RemoteStatusResult) => void>();
   private readonly thinkAccum = new Map<string, string>();
   private readonly textAccum = new Map<string, string>();
@@ -143,14 +138,6 @@ export class RemoteController {
       );
     },
   };
-
-  onWorkItem(item: ConversationItem): void {
-    if (item.kind !== 'approval') return;
-    const request = workApprovalToPetRequest(item);
-    if (request) this.pendingWorkApprovals.set(request.requestId, request);
-    else this.pendingWorkApprovals.delete(item.approvalId);
-    this.publishPermissions();
-  }
 
   async setEnabled(enabled: boolean): Promise<void> {
     if (this.disposed) return;
@@ -376,7 +363,6 @@ export class RemoteController {
     this.startupInFlight = false;
     this.needsReenable = false;
     for (const dispose of this.disposers.splice(0)) dispose();
-    this.pendingWorkApprovals.clear();
     this.lastPublishedState = '';
     this.lastPublishedPermissionKey = '';
     this.setStatus(EMPTY_REMOTE_STATUS);
@@ -433,7 +419,6 @@ export class RemoteController {
       index: o.workspaceIndex(),
       currentWorkspace: o.currentWorkspace(),
       code: o.codePermissions(),
-      work: this.mergeWorkApprovals(),
       now: Date.now,
     });
     for (const event of asEvents(snapshot)) this.publish(event);
@@ -441,7 +426,7 @@ export class RemoteController {
 
   private publishPermissions(): void {
     const event = asPermissionEvent(
-      projectApprovals({ code: this.options.codePermissions(), work: this.mergeWorkApprovals(), now: Date.now }),
+      projectApprovals({ code: this.options.codePermissions(), now: Date.now }),
     );
     const key = event.requests.map((request) => String(request.requestId ?? '')).join(',');
     if (key === this.lastPublishedPermissionKey) return;
@@ -457,13 +442,6 @@ export class RemoteController {
 
   private publish(event: RemoteGatewayEvent): void {
     void this.options.port.publish(event).catch(() => {});
-  }
-
-  /** Injected getter (App's list) merged with what onWorkItem tracked. */
-  private mergeWorkApprovals(): PetPermissionRequest[] {
-    const out = new Map<string, PetPermissionRequest>();
-    for (const request of [...this.options.workApprovals(), ...this.pendingWorkApprovals.values()]) out.set(request.requestId, request);
-    return [...out.values()];
   }
 
   private setStatus(next: RemoteStatusResult): void {

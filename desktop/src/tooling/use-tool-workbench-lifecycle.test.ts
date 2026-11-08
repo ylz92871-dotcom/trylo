@@ -64,4 +64,31 @@ describe('tool workbench lifecycle', () => {
     await act(async () => finish?.(42))
     expect(result.current.computerVisible).toBe(false)
   })
+  it('opens a first fast browser result arriving later in the same turn without an intermediate active render', () => {
+    const showBrowser = vi.fn()
+    const { rerender } = renderHook(({ browser }) => useToolWorkbenchLifecycle({
+      scope: 'fast-browser', running: true, browser, computer: idle, showBrowser, onError: vi.fn(),
+    }), { initialProps: { browser: { ...idle, hasStarted: false } } })
+    expect(showBrowser).not.toHaveBeenCalled()
+    rerender({ browser: { ...idle, hasStarted: true } })
+    expect(showBrowser).toHaveBeenCalledOnce()
+    rerender({ browser: { ...idle, hasStarted: true, title: '后续已完成操作' } })
+    expect(showBrowser).toHaveBeenCalledOnce()
+  })
+  it('opens fast computer results added in the same turn while preserving closed and background scope boundaries', async () => {
+    const showBrowser = vi.fn()
+    const { result, rerender } = renderHook(({ computer, scope, running }) => useToolWorkbenchLifecycle({
+      scope, running, browser: idle, computer, showBrowser, onError: vi.fn(),
+    }), { initialProps: { computer: { ...idle, hasStarted: false }, scope: 'original', running: true } })
+    rerender({ computer: { ...idle, hasStarted: true }, scope: 'original', running: true })
+    await waitFor(() => expect(result.current.computerVisible).toBe(true))
+    act(() => mocks.closed?.('original'))
+    rerender({ computer: { ...idle, hasStarted: true }, scope: 'original', running: true })
+    expect(result.current.computerVisible).toBe(false)
+    expect(mocks.open).toHaveBeenCalledOnce()
+    rerender({ computer: { ...idle, hasStarted: true }, scope: 'historical', running: false })
+    expect(result.current.computerVisible).toBe(false)
+    expect(mocks.open).toHaveBeenCalledOnce()
+    expect(showBrowser).not.toHaveBeenCalled()
+  })
 })

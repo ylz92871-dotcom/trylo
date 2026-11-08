@@ -14,17 +14,16 @@
 //   resize                          → read, auto at every level
 //   take_snapshot / take_screenshot / get_network_request
 //                                   → WITHOUT a path param: read, auto.
-//                                     WITH one: FILE WRITE (the server
-//                                     bounds writes to the OS temp dir —
-//                                     verified in the pinned build:
-//                                     McpContext#validatePath allows only
-//                                     os.tmpdir() when no MCP roots are
-//                                     negotiated, which the Trylo CLI never
-//                                     does). read_only denies; ask /
+//                                     WITH one: FILE WRITE. The server
+//                                     validates destinations against MCP
+//                                     workspace roots plus os.tmpdir();
+//                                     roots describe context, not approval.
+//                                     read_only denies; ask /
 //                                     workspace_write approve; unrestricted
 //                                     auto (§6.3 write rules).
-//   navigate_page / new_page        → §6.5 origin flow: URL parsed
-//                                     (http/https only, no credentials),
+//   navigate_page / new_page        → workspace HTML uses the managed preview
+//                                     and existing local-page approval;
+//                                     HTTP(S) uses §6.5 origin flow (no credentials),
 //                                     blocked origins deny, non-empty
 //                                     allowlist + outside → prompt without
 //                                     lease; read_only/ask approve;
@@ -66,7 +65,13 @@
 // (for uploads) paths outside the workspace are denied.
 
 import type { ApprovalPreview } from '../../approval/approval-preview';
-import { parseBrowserOrigin } from './playwright-classifier';
+import { canonicalizeCwd } from '../runtime-fingerprint';
+import { INVALID_NAVIGATION_ARGUMENT_MESSAGE, parseBrowserOrigin } from './playwright-classifier';
+import {
+  analyzeWorkspacePageUrl,
+  BROWSER_WORKSPACE_FILE_SCOPE_MESSAGE,
+  INVALID_BROWSER_NAVIGATION_URL_MESSAGE,
+} from '../workspace-local-page';
 import type { BrowserOriginLeases } from './playwright-classifier';
 import type {
   PackageRiskClassifier,
@@ -293,8 +298,9 @@ const DENY_MESSAGES: Readonly<Record<string, string>> = {
     'Denied: the browser debug tool input could not be parsed safely. Send the tool its documented string/number fields.',
   unknown_tool:
     'Denied: this tool is not part of the pinned Chrome DevTools tool set.',
-  invalid_url:
-    'Denied: navigation requires a valid http(s) URL. file:, javascript:, data: and other schemes are not allowed.',
+  invalid_url: INVALID_BROWSER_NAVIGATION_URL_MESSAGE,
+  invalid_navigation_argument:
+    INVALID_NAVIGATION_ARGUMENT_MESSAGE,
   url_with_credentials:
     'Denied: URLs carrying embedded credentials are not allowed.',
   origin_blocked:
@@ -305,8 +311,7 @@ const DENY_MESSAGES: Readonly<Record<string, string>> = {
   drive_relative_path: 'Denied: drive-relative paths are not allowed; use a full path.',
   reserved_device_name: 'Denied: the path uses a reserved Windows device name.',
   dotdot_segment: "Denied: '..' segments are not allowed in browser tool paths.",
-  path_outside_workspace:
-    'Denied: the upload path resolves outside the workspace root; files offered to the browser must live inside the workspace.',
+  path_outside_workspace: BROWSER_WORKSPACE_FILE_SCOPE_MESSAGE,
   interaction_denied_read_only:
     'Denied: this conversation is read-only. Browser clicks, typing and dialogs are unavailable.',
   code_denied_read_only:
@@ -320,6 +325,8 @@ function denyMessage(reasonCode: string): string {
 }
 
 interface CdpAnalysis {
+  readonly failureCode?: 'invalid_arguments';
+  readonly localPage?: string;
   readonly problem: string | null;
   readonly oversized: boolean;
   readonly origin: string | null;
@@ -349,13 +356,18 @@ function analyzeCdpInput(
 
   if (NAVIGATION_TOOLS.has(toolName)) {
     const url = input['url'];
-    if (url === undefined || url === null) {
-      // new_page without a url opens a blank page — nothing external.
+    if (toolName === 'navigate_page' && (url === undefined || url === null)
+      && ['back', 'forward', 'reload'].includes(String(input['type'] ?? ''))) {
+      // The shipped tool's history/reload operations do not take a URL.
       return base;
     }
-    if (typeof url !== 'string') return { ...base, problem: 'invalid_url' };
+    const local = analyzeWorkspacePageUrl(url, canonicalRoot);
+    if (local.kind === 'invalid') return { ...base, problem: local.reasonCode,
+      ...(local.failureCode ? { failureCode: local.failureCode } : {}) };
+    if (local.kind === 'local') return { ...base, localPage: local.display };
     const parsed = parseBrowserOrigin(url);
-    if (parsed.kind === 'invalid') return { ...base, problem: parsed.reasonCode };
+    if (parsed.kind === 'invalid') return { ...base, problem: parsed.reasonCode,
+      ...(parsed.failureCode ? { failureCode: parsed.failureCode } : {}) };
     if (blockedOrigins.some((o) => o.toLowerCase() === parsed.origin.toLowerCase())) {
       return { ...base, origin: parsed.origin, problem: 'origin_blocked' };
     }
@@ -406,7 +418,7 @@ function buildAudit(
   reasonCode: string,
 ): SafeAudit {
   const pathZones: { field: string; zone: string }[] = [];
-  if (analysis.writesFile) pathZones.push({ field: 'filePath', zone: 'os-temp' });
+  if (analysis.writesFile) pathZones.push({ field: 'filePath', zone: 'workspace-or-os-temp' });
   if (analysis.uploads) pathZones.push({ field: 'filePaths', zone: 'workspace' });
   return {
     at: context.at,
@@ -433,7 +445,7 @@ export function classifyChromeDevtoolsTool(
 ): ToolRiskDecision {
   const blocked = options.blockedOrigins ?? [];
   const allowed = options.allowedOrigins ?? [];
-  const canonicalRoot = context.projectRoot.replace(/[\\/]+$/, '');
+  const canonicalRoot = canonicalizeCwd(context.projectRoot);
   const shortName = context.toolName.split('__').pop() ?? context.toolName;
   const analysis = analyzeCdpInput(shortName, context.input, blocked, allowed, canonicalRoot);
 
@@ -441,6 +453,7 @@ export function classifyChromeDevtoolsTool(
     behavior: 'deny',
     reasonCode,
     userMessage: denyMessage(reasonCode),
+    ...(analysis.failureCode ? { failureCode: analysis.failureCode } : {}),
     audit: buildAudit(context, analysis, 'deny', null, reasonCode),
   });
   const prompt = (
@@ -464,6 +477,8 @@ export function classifyChromeDevtoolsTool(
   });
 
   if (analysis.problem) return deny(analysis.problem);
+  if (analysis.localPage) return prompt('sensitive', 'workspace_page_requires_approval',
+    `打开工作区本地页面需要确认：${analysis.localPage}`);
   if (analysis.oversized && context.permissionLevel !== 'unrestricted') {
     return prompt('sensitive', 'input_too_large', '输入超过自动分类上限，需人工确认');
   }
@@ -474,15 +489,14 @@ export function classifyChromeDevtoolsTool(
     return prompt('sensitive', 'evaluate_requires_approval', '浏览器内执行脚本可能修改页面或触发外部操作');
   }
 
-  // §6.3 write rules: the server bounds explicit filePath writes to the OS
-  // temp dir, but a write is a write (§6.2 path rules — the destination is
-  // outside .trylo/out and the runtime dir either way).
+  // §6.3 write rules still apply when the server permits the destination
+  // through negotiated workspace roots or its OS temporary-directory root.
   if (analysis.writesFile) {
     if (context.permissionLevel === 'read_only') return deny('file_write_denied_read_only');
     if (context.permissionLevel === 'unrestricted') {
       return autoAllow('unrestricted_file_write', 'workspace-write');
     }
-    return prompt('external', 'file_write_requires_approval', '将把输出写入文件（服务器限制在系统临时目录），需审批');
+    return prompt('external', 'file_write_requires_approval', '将把输出写入文件（目标须位于当前工作区或系统临时目录），需审批');
   }
 
   if (READ_TOOLS.has(shortName)) {
@@ -490,9 +504,7 @@ export function classifyChromeDevtoolsTool(
   }
 
   if (NAVIGATION_TOOLS.has(shortName)) {
-    // new_page without a url opens a blank local page — nothing external
-    // (navigate_page without a url is a server-side schema error; auto is
-    // harmless because the server rejects it).
+    // History/reload operations navigate without a new URL.
     if (analysis.origin === null) {
       return autoAllow('new_blank_page');
     }

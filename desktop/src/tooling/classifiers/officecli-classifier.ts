@@ -3,12 +3,12 @@
 // Spec TRYLO-CORE-AGENT-TOOL-EXTENSION-TECHNICAL-SPEC §6.4 (command table) /
 // §6.3 (permission matrix) / §6.2 (path rules).
 //
-// REAL MCP CONTRACT (pinned officecli 1.0.145, `officecli mcp`, verified
+// REAL MCP CONTRACT (bundled officecli, `officecli mcp`, verified
 // against OfficeCLI/src/officecli/McpServer.cs):
 //   The server exposes exactly ONE tool (`officecli`) with ONE parameter:
-//   `command` — a full officecli command line as a STRING
-//   (e.g. "add deck.pptx /slide[1] --type shape --prop text=Hi") or a
-//   pre-split argv ARRAY of strings. A leading "officecli" token is
+//   `command` — a command-line string (e.g. "add deck.pptx /slide[1]
+//   --type shape --prop text=Hi") or a pre-split argv array of strings.
+//   A leading "officecli" token is
 //   optional. There are NO per-verb structured fields: the document path is
 //   a POSITIONAL token (e.g. "view deck.pptx outline",
 //   "create .trylo/out/deck.pptx"), element selectors look like
@@ -22,23 +22,27 @@
 // path options. Element selectors, modes, prop values and inline JSON are
 // never mistaken for filesystem paths.
 //
-// Policy table (§6.4) — the PINNED command enum (exactly 13 verbs):
-//   view/get/query/validate/help                 → read (paths must be in scope)
-//   create/set/add/move/merge                    → workspace-write
+// The shipped runtime also exposes skill reads and document lifecycle,
+// dump/import/swap/refresh/raw-set/add-part commands. Keep these explicit:
+// protocol additions must not become spurious permission denials.
+// Policy table (§6.4), extended to the shipped document command contract:
+//   view/get/query/validate/help/dump/skills      → read (paths must be in scope)
+//   create/set/add/move/merge/swap/refresh/...   → workspace-write
 //                                    · target under .trylo/out → may auto
 //                                    · any other workspace path → modifies
 //                                      the ORIGINAL → approval
-//   remove                       → destructive   (always approval; read_only deny)
-//   raw                          → sensitive     (always approval; read_only deny)
+//   remove                       → destructive   (approval; read_only deny)
+//   raw/raw-set                  → sensitive     (approval; read_only deny)
 //   batch                        → recursive     (highest risk wins; parse
 //                                                   failure NEVER auto-allows;
 //                                                   a batch with no inspectable
 //                                                   payload fails CLOSED (deny);
-//                                                   a --input payload file
+//                                                   a --input/--from/--resume payload
 //                                                   cannot be inspected
-//                                                   lexically and always
-//                                                   requires human approval)
+//                                                   lexically and requires approval)
 //   anything else (incl. vendor drift verbs)    → deny
+// Explicit unrestricted mode permits scoped writes and sensitive commands;
+// it does not override malformed input or paths outside the workspace.
 //
 // Path rules (§6.4 「禁止 ..、绝对路径逃逸、UNC/设备路径和 symlink 逃逸」):
 //   control chars, UNC and device-namespace paths, drive-relative forms,
@@ -70,18 +74,25 @@ type PathField = (typeof PATH_FIELDS)[number];
  */
 const BATCH_ARRAY_FIELDS = ['batch', 'operations', 'commands'] as const;
 
-// ── verb tables (the pinned officecli 1.0.145 command set) ──────────
+// ── verb tables (shipped MCP document and embedded-skill commands) ────
 
-/** Read-only verbs — the pinned §6.4 read set. */
-const READ_COMMANDS = new Set(['view', 'get', 'query', 'validate', 'help']);
+const SKILL_COMMANDS = new Set(['load_skill', 'skill', 'skills']);
 
-/** Verbs that create or modify a document — the pinned §6.4 write set. */
-const WRITE_COMMANDS = new Set(['create', 'set', 'add', 'move', 'merge', 'layout']);
+/** Embedded skill reads never resolve names against the workspace. */
+const READ_COMMANDS = new Set([
+  'view', 'get', 'query', 'validate', 'help', 'dump',
+  '--help', '-h', '-?', '--version', ...SKILL_COMMANDS,
+]);
+
+/** Document mutations and resident operations that may flush edits. */
+const WRITE_COMMANDS = new Set([
+  'create', 'set', 'add', 'move', 'merge', 'layout', 'swap', 'refresh',
+  'add-part', 'import', 'open', 'save', 'close',
+]);
 
 const REMOVE_COMMANDS = new Set(['remove']);
-/** `raw` reads/writes raw XML (sensitive: the universal escape hatch);
- *  it always requires approval. */
-const RAW_COMMANDS = new Set(['raw']);
+/** Raw XML access uses the sensitive-operation policy. */
+const RAW_COMMANDS = new Set(['raw', 'raw-set']);
 const BATCH_COMMANDS = new Set(['batch']);
 
 /** Control verbs inside an inline batch payload (e.g. {"command":"meta",
@@ -96,11 +107,10 @@ const ALL_COMMANDS = new Set<string>([
   ...BATCH_COMMANDS,
 ]);
 
-/** Inputs above this canonical-JSON size are never auto-allowed (§14.2
- *  「超大 input」/§6.2 「解析失败不能自动放行」). */
+/** Oversized reads prompt outside explicit unrestricted mode. */
 const MAX_INPUT_JSON_LENGTH = 256 * 1024;
 
-/** Deliverables directory — the ONLY write zone that may auto-allow. */
+/** Automatic write zone for workspace-write mode. */
 const OUT_DIR_SEGMENTS = '.trylo/out';
 
 const OFFICECLI_SERVER_NAME = 'trylo-office';
@@ -134,7 +144,7 @@ interface MergedAnalysis {
   readonly subCount: number;
   readonly oversized: boolean;
   /** Batch contents the lexical classifier cannot verify (a --input
-   *  payload file): never auto-allowed — a human must approve. */
+ *  payload file): approval is required outside unrestricted mode. */
   readonly unverifiedBatch: boolean;
 }
 
@@ -193,21 +203,27 @@ function isOfficeCliToken(token: string): boolean {
 }
 
 /**
- * Extract the argv vector from the tool input. The pinned MCP contract is
- * a single STRING command line; any other type (number, array, object,
- * missing) fails CLOSED as malformed input (§6.2 解析失败不能自动放行).
+ * Extract the argv vector from the tool input. The shipped MCP contract is
+ * a string command line or an argv array of strings. Preserve empty argv
+ * values, as the MCP server does; malformed shapes fail closed.
  * Strips an optional leading "officecli" token. Never throws.
  */
 function extractArgv(
   input: Readonly<Record<string, unknown>>,
 ): { argv?: string[]; reasonCode?: string } {
   const raw = input['command'];
-  if (typeof raw !== 'string' || raw.trim() === '') {
+  let argv: string[];
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    argv = tokenizeOfficecliCommand(raw);
+  } else if (Array.isArray(raw) && raw.every((value): value is string => typeof value === 'string')) {
+    argv = [...raw];
+  } else {
     return { reasonCode: 'malformed_input' };
   }
-  let argv = tokenizeOfficecliCommand(raw);
   if (argv.length > 0 && isOfficeCliToken(argv[0]!)) argv = argv.slice(1);
-  if (argv.length === 0) return { reasonCode: 'malformed_input' };
+  // --json is a global CLI flag and may precede the verb.
+  while (argv[0] === '--json') argv = argv.slice(1);
+  if (argv.length === 0 || argv[0] === '') return { reasonCode: 'malformed_input' };
   return { argv };
 }
 
@@ -380,6 +396,7 @@ const BOOLEAN_OPTIONS = new Set([
   '--minimal',
   '--stop-on-error',
   '--best-effort',
+  '--force-resume',
   '--page-count',
   '--bare',
 ]);
@@ -399,6 +416,13 @@ function positionalPathSlots(verb: string, docDirection: PathDirection): Readonl
   const slots = new Map<number, SlotRule>();
   switch (verb) {
     case 'help':
+    case '--help':
+    case '-h':
+    case '-?':
+    case '--version':
+    case 'load_skill':
+    case 'skill':
+    case 'skills':
       return slots; // help topics only
     case 'create':
       slots.set(0, { field: 'output', direction: 'write' }); // output file
@@ -406,6 +430,10 @@ function positionalPathSlots(verb: string, docDirection: PathDirection): Readonl
     case 'merge':
       slots.set(0, { field: 'file', direction: 'read' }); // template
       slots.set(1, { field: 'output', direction: 'write' }); // merged output
+      return slots;
+    case 'import':
+      slots.set(0, { field: 'file', direction: 'write' });
+      slots.set(2, { field: 'path', direction: 'read' });
       return slots;
     default:
       // view/get/query/set/add/remove/move/validate/raw/batch:
@@ -463,7 +491,17 @@ function parseCommandLine(
       const eq = token.indexOf('=');
       const name = eq >= 0 ? token.slice(0, eq) : token;
       const inline = eq >= 0 ? token.slice(eq + 1) : null;
-      const optKind = OPTION_VALUE_KIND[name];
+      if (verb === 'batch' && name === '--resume') {
+        batchInputFile = true;
+        const value = inline ?? (argv[i + 1] && !argv[i + 1]!.startsWith('-') ? argv[++i]! : '');
+        if (value) pushPath(entries, problems, value, 'path', 'read', canonicalRoot, windowsFS);
+        continue;
+      }
+      // A skill --path names an embedded reference; batch --from names
+      // an on-disk text script (add/move --from remains a node selector).
+      const optKind = SKILL_COMMANDS.has(verb) && name === '--path' ? 'skip'
+        : verb === 'batch' && name === '--from' ? 'read-path'
+          : OPTION_VALUE_KIND[name];
       if (optKind === undefined) {
         // Unknown long option: System.CommandLine would reject it; treat it
         // as value-consuming so its argument cannot be misread as a
@@ -482,7 +520,7 @@ function parseCommandLine(
       }
       if (optKind === 'read-path') {
         if (value) {
-          if (name === '--input') batchInputFile = true;
+          if (verb === 'batch' && (name === '--input' || name === '--from')) batchInputFile = true;
           pushPath(entries, problems, value, 'path', 'read', canonicalRoot, windowsFS);
         }
         continue;
@@ -787,7 +825,7 @@ const DENY_MESSAGES: Readonly<Record<string, string>> = {
   malformed_input:
     'Denied: the officecli input could not be parsed safely. Provide `command` as a string command line (e.g. "view deck.pptx outline" or "create .trylo/out/deck.pptx") or an argv array of strings.',
   unknown_command:
-    "Denied: this command is not part of the pinned officecli command set (create/view/get/query/set/add/remove/move/validate/batch/raw/merge/help).",
+    'Denied: this OfficeCLI command has no document-tool policy. Use help to inspect the bundled document commands; installation and client configuration commands are outside this tool policy.',
   malformed_path_field:
     'Denied: the file/output/path field must be a string path.',
   invalid_path: "Denied: the '{field}' path contains control characters.",
@@ -1016,7 +1054,14 @@ function collectRawPathValues(input: Readonly<Record<string, unknown>>): string[
       const eq = token.indexOf('=');
       const name = eq >= 0 ? token.slice(0, eq) : token;
       const inline = eq >= 0 ? token.slice(eq + 1) : null;
-      const optKind = OPTION_VALUE_KIND[name];
+      if (verb === 'batch' && name === '--resume') {
+        const value = inline ?? (argv[i + 1] && !argv[i + 1]!.startsWith('-') ? argv[++i]! : '');
+        if (value) targets.push(value);
+        continue;
+      }
+      const optKind = SKILL_COMMANDS.has(verb) && name === '--path' ? 'skip'
+        : verb === 'batch' && name === '--from' ? 'read-path'
+          : OPTION_VALUE_KIND[name];
       if (optKind === 'write-path' || optKind === 'read-path') {
         const value = inline ?? (i + 1 < argv.length ? argv[i + 1] : '');
         if (value) targets.push(value);

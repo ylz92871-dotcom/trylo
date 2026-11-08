@@ -45,24 +45,72 @@ function ctx(
   };
 }
 
+describe('shipped MCP command contract', () => {
+  it.each(ALL_LEVELS)('accepts argv help and skill discovery at %s', level => {
+    for (const command of [['help', 'docx', 'equation'], ['officecli', 'help'],
+      ['load_skill', 'word'], ['skill', 'excel'], ['skills'], 'load_skill word']) {
+      expect(classifyOfficecli(ctx({ command }, level))).toMatchObject({ behavior: 'auto_allow', risk: 'read' });
+    }
+  });
+
+  it('keeps array arguments intact when paths or property values contain spaces and quotes', () => {
+    const command = ['set', '.trylo/out/中文 文档.docx', '/body/p[1]', '--prop', 'text=A "quoted" value', '--prop', 'title='];
+    expect(classifyOfficecli(ctx({ command }))).toMatchObject({ behavior: 'auto_allow', risk: 'workspace-write' });
+    expect(analyzeOfficecliInput({ command }, ROOT).entries).toMatchObject([{ display: '.trylo/out/中文 文档.docx' }]);
+  });
+
+  it.each(ALL_LEVELS)('applies the same path boundary to argv at %s', level => {
+    expect(classifyOfficecli(ctx({ command: ['view', 'C:/elsewhere/private.docx'] }, level)))
+      .toMatchObject({ behavior: 'deny', reasonCode: 'path_outside_workspace' });
+  });
+
+  it('rejects array shapes outside the advertised string-item schema', () => {
+    for (const command of [[], [42], ['view', null], ['view', { path: 'a.docx' }]]) {
+      expect(classifyOfficecli(ctx({ command }))).toMatchObject({ behavior: 'deny', reasonCode: 'malformed_input' });
+    }
+  });
+
+  it('classifies the shipped swap verb as a write', () => {
+    const command = ['swap', '.trylo/out/deck.pptx', '/slide[1]', '/slide[2]'];
+    expect(classifyOfficecli(ctx({ command }))).toMatchObject({ behavior: 'auto_allow', risk: 'workspace-write' });
+    expect(classifyOfficecli(ctx({ command }, 'read_only'))).toMatchObject({ behavior: 'deny', reasonCode: 'write_denied_read_only' });
+  });
+});
+
 describe('command table (§6.4)', () => {
-  it('covers exactly the pinned command enum', () => {
+  it('covers the shipped document and embedded-skill command enum', () => {
     expect([...OFFICECLI_COMMANDS].sort()).toEqual(
       [
         'add',
+        'add-part',
         'batch',
+        'close',
         'create',
+        'dump',
         'get',
         'help',
+        'import',
         'layout',
+        'load_skill',
         'merge',
         'move',
+        'open',
         'query',
         'raw',
+        'raw-set',
+        'refresh',
         'remove',
+        'save',
         'set',
+        'skill',
+        'skills',
+        'swap',
         'validate',
         'view',
+        '--help',
+        '--version',
+        '-h',
+        '-?',
       ].sort(),
     );
   });
@@ -77,14 +125,14 @@ describe('command table (§6.4)', () => {
     }
   });
 
-  it('a missing or non-string command fails closed (§6.2 解析失败不能自动放行)', () => {
+  it('a missing or malformed command fails closed (§6.2 解析失败不能自动放行)', () => {
     expect(classifyOfficecli(ctx({})).behavior).toBe('deny');
     expect(classifyOfficecli(ctx({ command: 42 })).behavior).toBe('deny');
     expect(classifyOfficecli(ctx({ command: '' })).behavior).toBe('deny');
     expect(
       classifyOfficecli(ctx('not an object' as unknown as Record<string, unknown>)).behavior,
     ).toBe('deny');
-    expect(classifyOfficecli(ctx({ command: ['view'] })).behavior).toBe('deny');
+    expect(classifyOfficecli(ctx({ command: ['view', 42] })).behavior).toBe('deny');
   });
 });
 

@@ -38,7 +38,6 @@ import type {
   WorkspaceIndex,
 } from '../host-adapter/conversation-history';
 import type { CodePermissionRequest } from '../runtime/code-permission-registry';
-import type { PetPermissionRequest } from '../companion/companion-port';
 import type { ChatMessage } from '../components/chat/types';
 
 // ── string caps (gateway limits; mobile is the downstream consumer) ─────
@@ -300,29 +299,13 @@ export function projectProjectsState(opts: {
   return { type: 'projectsState', projects, activeProjectId };
 }
 
-/** Merge Code + Work pending permissions into the gateway's
- *  permissionRequestState payload. Code wins on duplicate requestId. Risk is
- *  derived from category (command → medium, else low) — the same heuristic
- *  the gateway itself applies. */
+/** Project the supervisor's pending CLI permissions into the gateway payload. */
 export function projectApprovals(opts: {
   code: readonly CodePermissionRequest[];
-  work: readonly PetPermissionRequest[];
   now: () => number;
 }): RemotePermissionRequestStateEvent {
   const now = opts.now();
   const merged = new Map<string, RemotePermissionSummary>();
-  for (const request of opts.work) {
-    const category = request.category;
-    merged.set(request.requestId, {
-      requestId: request.requestId,
-      ...(category !== undefined ? { category } : {}),
-      title: request.title.trim().slice(0, TITLE_CAP),
-      detail: (request.detail ?? '').trim().slice(0, DETAIL_CAP),
-      description: (request.description ?? '').trim(),
-      risk: category === 'command' ? 'medium' : 'low',
-      requestedAt: now,
-    });
-  }
   for (const request of opts.code) {
     const title = (request.title && request.title.trim()) || request.toolName.trim();
     merged.set(request.requestId, {
@@ -377,7 +360,6 @@ export function buildFullSnapshot(opts: {
   index: WorkspaceIndex | null;
   currentWorkspace: PersistedWorkspaceEntry | null;
   code: readonly CodePermissionRequest[];
-  work: readonly PetPermissionRequest[];
   now: () => number;
 }): RemoteGatewayEvent[] {
   const events: RemoteGatewayEvent[] = [];
@@ -385,6 +367,6 @@ export function buildFullSnapshot(opts: {
   if (binding) events.push(binding);
   events.push(projectSessionState({ history: opts.history, kind: opts.kind, now: opts.now }));
   events.push(projectProjectsState({ index: opts.index, currentWorkspace: opts.currentWorkspace, now: opts.now }));
-  events.push(projectApprovals({ code: opts.code, work: opts.work, now: opts.now }));
+  events.push(projectApprovals({ code: opts.code, now: opts.now }));
   return events;
 }

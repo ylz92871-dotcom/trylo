@@ -44,6 +44,11 @@
 
 import type { ApprovalPreview } from '../../approval/approval-preview';
 import { canonicalizeCwd } from '../runtime-fingerprint';
+import {
+  analyzeWorkspacePageUrl,
+  BROWSER_WORKSPACE_FILE_SCOPE_MESSAGE,
+  INVALID_BROWSER_NAVIGATION_URL_MESSAGE,
+} from '../workspace-local-page';
 import type {
   PackageRiskClassifier,
   SafeAudit,
@@ -263,20 +268,31 @@ function hasControlChars(value: string): boolean {
  * only; credentials in the URL are refused (they are secrets riding in a
  * navigable string); the returned origin is `scheme://host[:port]`.
  */
-export function parseBrowserOrigin(raw: string): { kind: 'ok'; origin: string } | { kind: 'invalid'; reasonCode: string } {
-  if (typeof raw !== 'string' || raw.trim() === '' || hasControlChars(raw)) {
+export const INVALID_NAVIGATION_ARGUMENT_MESSAGE =
+  '导航地址参数无效：请提供完整的 http(s) URL，例如 http://localhost:3000/index.html。本工具不会按当前页面补全相对地址；本次调用未执行，请修正 url 后重试。';
+
+export function parseBrowserOrigin(raw: unknown): { kind: 'ok'; origin: string }
+  | { kind: 'invalid'; reasonCode: string; failureCode?: 'invalid_arguments' } {
+  const invalidArguments = { kind: 'invalid', reasonCode: 'invalid_navigation_argument', failureCode: 'invalid_arguments' } as const;
+  if (typeof raw !== 'string' || raw.trim() === '') return invalidArguments;
+  const value = raw.trim();
+  // A host:port is an incomplete address, rather than an unknown URI scheme.
+  const hostWithPort = /^(?:localhost|(?:[a-z0-9-]+\.)+[a-z0-9-]+):\d+(?:[/?#].*)?$/i.test(value);
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(value)?.[1]?.toLowerCase();
+  if (scheme && scheme !== 'http' && scheme !== 'https' && !hostWithPort) {
     return { kind: 'invalid', reasonCode: 'invalid_url' };
   }
+  if (hostWithPort || hasControlChars(value)) return invalidArguments;
   let parsed: URL;
   try {
-    parsed = new URL(raw.trim());
+    parsed = new URL(value);
   } catch {
-    return { kind: 'invalid', reasonCode: 'invalid_url' };
+    return invalidArguments;
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     return { kind: 'invalid', reasonCode: 'invalid_url' };
   }
-  if (!parsed.hostname) return { kind: 'invalid', reasonCode: 'invalid_url' };
+  if (!parsed.hostname) return invalidArguments;
   if (parsed.username || parsed.password) {
     return { kind: 'invalid', reasonCode: 'url_with_credentials' };
   }
@@ -358,8 +374,9 @@ const DENY_MESSAGES: Readonly<Record<string, string>> = {
     'Denied: the browser tool input could not be parsed safely. Send the tool its documented string/number fields.',
   unknown_tool:
     'Denied: this tool is not part of the pinned Playwright tool set.',
-  invalid_url:
-    'Denied: navigation requires a valid http(s) URL. file:, javascript:, data: and other schemes are not allowed.',
+  invalid_url: INVALID_BROWSER_NAVIGATION_URL_MESSAGE,
+  invalid_navigation_argument:
+    INVALID_NAVIGATION_ARGUMENT_MESSAGE,
   url_with_credentials:
     'Denied: URLs carrying embedded credentials are not allowed.',
   origin_blocked:
@@ -372,8 +389,7 @@ const DENY_MESSAGES: Readonly<Record<string, string>> = {
   dotdot_segment: "Denied: '..' segments are not allowed in browser tool paths.",
   absolute_output_filename:
     "Denied: 'filename' must be a relative name; results are stored in the Trylo-controlled runtime output directory.",
-  path_outside_workspace:
-    'Denied: the path resolves outside the workspace root; files offered to the browser must live inside the workspace.',
+  path_outside_workspace: BROWSER_WORKSPACE_FILE_SCOPE_MESSAGE,
   interaction_denied_read_only:
     'Denied: this conversation is read-only. Browser clicks, typing, uploads and dialogs are unavailable.',
   code_denied_read_only:
@@ -389,6 +405,7 @@ function denyMessage(reasonCode: string): string {
 }
 
 interface PlaywrightAnalysis {
+  readonly failureCode?: 'invalid_arguments';
   readonly localPage: string | null;
   readonly problem: string | null;
   /** A prompt-without-lease: the origin is outside a configured allow list.
@@ -436,21 +453,13 @@ function analyzePlaywrightInput(
       url = input['url'];
       if (url === undefined || url === null) return base; // blank tab
     }
-    if (typeof url !== 'string') return { ...base, problem: 'invalid_url' };
-    if (url.toLowerCase().startsWith('file:')) {
-      try {
-        const parsed = new URL(url);
-        const pathname = decodeURIComponent(parsed.pathname).replace(/^\/([a-zA-Z]:\/)/, '$1');
-        if (parsed.hostname || !/\.html?$/i.test(pathname)) return { ...base, problem: 'invalid_url' };
-        if (hasControlChars(pathname) || pathname.split(/[\\/]/).includes('..')
-          || !locateInWorkspace(pathname, canonicalRoot).inside) {
-          return { ...base, problem: 'path_outside_workspace' };
-        }
-        return { ...base, localPage: pathname };
-      } catch { return { ...base, problem: 'invalid_url' }; }
-    }
+    const local = analyzeWorkspacePageUrl(url, canonicalRoot);
+    if (local.kind === 'invalid') return { ...base, problem: local.reasonCode,
+      ...(local.failureCode ? { failureCode: local.failureCode } : {}) };
+    if (local.kind === 'local') return { ...base, localPage: local.display };
     const parsed = parseBrowserOrigin(url);
-    if (parsed.kind === 'invalid') return { ...base, problem: parsed.reasonCode };
+    if (parsed.kind === 'invalid') return { ...base, problem: parsed.reasonCode,
+      ...(parsed.failureCode ? { failureCode: parsed.failureCode } : {}) };
     if (manifestBlocked.some((o) => o.toLowerCase() === parsed.origin.toLowerCase())) {
       return { ...base, origin: parsed.origin, problem: 'origin_blocked' };
     }
@@ -540,6 +549,7 @@ export function classifyPlaywrightTool(
     behavior: 'deny',
     reasonCode,
     userMessage: denyMessage(reasonCode),
+    ...(analysis.failureCode ? { failureCode: analysis.failureCode } : {}),
     audit: buildAudit(context, analysis, 'deny', null, reasonCode),
   });
   const prompt = (
@@ -565,7 +575,7 @@ export function classifyPlaywrightTool(
   // A 完全自动：仅硬拒绝拦；oversized 在非完全自动下才卡
   if (analysis.problem) return deny(analysis.problem);
   if (analysis.localPage) return prompt('sensitive', 'workspace_page_requires_approval',
-    `打开工作区本地页面需要确认：${locateInWorkspace(analysis.localPage, context.projectRoot.replace(/\\/g, '/')).display}`);
+    `打开工作区本地页面需要确认：${analysis.localPage}`);
   if (analysis.oversized && context.permissionLevel !== 'unrestricted') {
     return prompt('sensitive', 'input_too_large', '输入超过自动分类上限，需人工确认');
   }

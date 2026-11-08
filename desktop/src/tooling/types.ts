@@ -99,13 +99,15 @@ export interface ResolveToolRuntimeRequest {
   readonly permissionLevel: PermissionLevel
 }
 
-/**
- * Resolves `null` when the tool plane is unavailable. `null` is a VALID,
- * expected answer meaning "run without a Profile" — the caller degrades to
- * the legacy Hermes args, it does not fail the run (spec §4.4).
- */
+export interface ToolRuntimeResolveOptions {
+  /** Cancels this send's wait, never the shared Service Host. */
+  readonly signal?: AbortSignal
+}
+
+/** Partial profiles are valid; a wired user resolver must report whole-plane failure. */
 export type ToolRuntimeResolver = (
   request: ResolveToolRuntimeRequest,
+  options?: ToolRuntimeResolveOptions,
 ) => Promise<ResolvedToolRuntime | null>
 
 /** Capabilities this run was asked for but cannot provide (§4.4). */

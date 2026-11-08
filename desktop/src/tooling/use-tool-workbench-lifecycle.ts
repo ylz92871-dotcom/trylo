@@ -44,8 +44,8 @@ export function useToolWorkbenchLifecycle(options: {
       if (kind === 'browser') current.current.showBrowser()
       else void open(true)
     }
-  }, [options.scope, options.running, options.browser.active, options.browser.turnId,
-    options.computer.active, options.computer.turnId, open])
+  }, [options.scope, options.running, options.browser.active, options.browser.hasStarted, options.browser.turnId,
+    options.computer.active, options.computer.hasStarted, options.computer.turnId, open])
   return {
     openComputer: () => open(false),
     computerVisible: observer?.scope === options.scope,

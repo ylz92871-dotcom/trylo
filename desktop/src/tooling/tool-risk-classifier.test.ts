@@ -131,6 +131,7 @@ describe('routing (§6.2)', () => {
       'trylo-browser',
       'trylo-windows',
       'trylo-chrome',
+      'trylo-preview',
       'trylo-solidworks',
       'trylo-autocad',
       'trylo-kicad',
@@ -270,9 +271,10 @@ describe('cross-package contract with the shipped manifest', () => {
   it('every pinned chrome-devtools tool is handled by the classifier (no unknown_tool on the pinned surface)', () => {
     const router = createToolRiskClassifier();
     for (const full of CHROME_DEVTOOLS_EXPECTED_TOOLS) {
+      const navigation = full.endsWith('__new_page') || full.endsWith('__navigate_page');
       const route = router.classify(request({
         toolName: full,
-        input: {},
+        input: navigation ? { url: 'https://example.com/', pageId: 1, type: 'url' } : {},
         managedPackageIds: ['officecli', 'playwright', 'windows-mcp', 'chrome-devtools'],
       }));
       if (route.behavior === 'deny') {

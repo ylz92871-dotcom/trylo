@@ -1,6 +1,6 @@
 // Trylo Desktop — per-conversation model choice store unit tests.
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest'
 import {
   effectiveModelForConversation,
   getConversationChoice,
@@ -9,19 +9,19 @@ import {
   setConversationChoice,
   settingsForConversation,
   type ConversationModelMap,
-} from './conversation-models';
-import type { TryloSettings } from './settings-store';
+} from './conversation-models'
+import type { TryloSettings } from './settings-store'
 
 it('an explicit own/profile conversation clears the global pool override before spawn', () => {
-  const settings = { ...SETTINGS, poolModel: 'Qwen3.8-Flash-Next' };
-  let map = setConversationChoice({}, 'ws', 'mine', { kind: 'own' });
-  map = setConversationChoice(map, 'ws', 'profile', { kind: 'profile', id: 'cfg-profile-a' });
-  map = setConversationChoice(map, 'ws', 'free', { kind: 'pool', model: 'Qwen3.8-27B' });
-  expect(settingsForConversation(settings, 'ws', 'mine', map).poolModel).toBe('');
-  expect(settingsForConversation(settings, 'ws', 'profile', map).poolModel).toBe('');
-  expect(settingsForConversation(settings, 'ws', 'free', map).poolModel).toBe('Qwen3.8-27B');
-  expect(settingsForConversation(settings, 'ws', 'new', map).poolModel).toBe('Qwen3.8-Flash-Next');
-});
+  const settings = { ...SETTINGS, poolModel: 'Qwen3.8-Flash-Next' }
+  let map = setConversationChoice({}, 'ws', 'mine', { kind: 'own' })
+  map = setConversationChoice(map, 'ws', 'profile', { kind: 'profile', id: 'cfg-profile-a' })
+  map = setConversationChoice(map, 'ws', 'free', { kind: 'pool', model: 'Qwen3.8-27B' })
+  expect(settingsForConversation(settings, 'ws', 'mine', map).poolModel).toBe('')
+  expect(settingsForConversation(settings, 'ws', 'profile', map).poolModel).toBe('')
+  expect(settingsForConversation(settings, 'ws', 'free', map).poolModel).toBe('Qwen3.8-27B')
+  expect(settingsForConversation(settings, 'ws', 'new', map).poolModel).toBe('Qwen3.8-Flash-Next')
+})
 
 const SETTINGS: TryloSettings = {
   apiKey: 'sk-ant-global',
@@ -86,9 +86,7 @@ const SETTINGS: TryloSettings = {
   workComputer: true,
   workCad: false,
   hermesWorkLearning: true,
-  cliPath: 'C:/trylo-cli/cli.js',
-  workspace: 'C:/work/demo-ws',
-  cliRuntimeProtocol: 'legacy-stream-json',
+  workspace: 'D:/CC/trylo',
   userLearning: {
     enabled: false,
     defaultMode: 'shadow',
@@ -109,23 +107,29 @@ const SETTINGS: TryloSettings = {
     userLearningOutcomeEvaluation: true,
     userLearningNoTraceMode: true,
   },
-};
+}
 
 describe('conversation-models: set/get', () => {
   it('round-trips a choice per conversation without cross-talk', () => {
-    let map: ConversationModelMap = {};
-    map = setConversationChoice(map, 'ws-a', 'conv-1', { kind: 'pool', model: 'grok-4.5' });
-    map = setConversationChoice(map, 'ws-a', 'conv-2', { kind: 'profile', id: 'cfg-profile-a' });
-    map = setConversationChoice(map, 'ws-b', 'conv-3', { kind: 'own' });
+    let map: ConversationModelMap = {}
+    map = setConversationChoice(map, 'ws-a', 'conv-1', { kind: 'pool', model: 'grok-4.5' })
+    map = setConversationChoice(map, 'ws-a', 'conv-2', { kind: 'profile', id: 'cfg-profile-a' })
+    map = setConversationChoice(map, 'ws-b', 'conv-3', { kind: 'own' })
 
-    expect(getConversationChoice(map, 'ws-a', 'conv-1')).toEqual({ kind: 'pool', model: 'grok-4.5' });
-    expect(getConversationChoice(map, 'ws-a', 'conv-2')).toEqual({ kind: 'profile', id: 'cfg-profile-a' });
-    expect(getConversationChoice(map, 'ws-b', 'conv-3')).toEqual({ kind: 'own' });
+    expect(getConversationChoice(map, 'ws-a', 'conv-1')).toEqual({
+      kind: 'pool',
+      model: 'grok-4.5',
+    })
+    expect(getConversationChoice(map, 'ws-a', 'conv-2')).toEqual({
+      kind: 'profile',
+      id: 'cfg-profile-a',
+    })
+    expect(getConversationChoice(map, 'ws-b', 'conv-3')).toEqual({ kind: 'own' })
     // distinct conversations / workspaces don't leak
-    expect(getConversationChoice(map, 'ws-a', 'conv-3')).toBeUndefined();
-    expect(getConversationChoice(map, 'ws-a', 'conv-2')).not.toEqual({ kind: 'own' });
-  });
-});
+    expect(getConversationChoice(map, 'ws-a', 'conv-3')).toBeUndefined()
+    expect(getConversationChoice(map, 'ws-a', 'conv-2')).not.toEqual({ kind: 'own' })
+  })
+})
 
 describe('conversation-models: resolveRunConnection', () => {
   it('falls back to global connection when no choice is saved', () => {
@@ -138,28 +142,30 @@ describe('conversation-models: resolveRunConnection', () => {
       apiKeyPrefix: '',
       extraHeadersText: '{}',
       providerId: '',
-    });
-  });
+    })
+  })
 
   it('own choice uses the global connection', () => {
-    let map: ConversationModelMap = {};
-    map = setConversationChoice(map, 'ws', 'conv', { kind: 'own' });
-    expect(resolveRunConnection(SETTINGS, 'ws', 'conv', map).apiModel).toBe('claude-3-5-sonnet-latest');
-  });
+    let map: ConversationModelMap = {}
+    map = setConversationChoice(map, 'ws', 'conv', { kind: 'own' })
+    expect(resolveRunConnection(SETTINGS, 'ws', 'conv', map).apiModel).toBe(
+      'claude-3-5-sonnet-latest',
+    )
+  })
 
   it('pool choice overrides only the model, keeps global auth', () => {
-    let map: ConversationModelMap = {};
-    map = setConversationChoice(map, 'ws', 'conv', { kind: 'pool', model: 'grok-4.5' });
-    const conn = resolveRunConnection(SETTINGS, 'ws', 'conv', map);
-    expect(conn.apiModel).toBe('grok-4.5');
-    expect(conn.apiKey).toBe('sk-ant-global');
-    expect(conn.apiHost).toBe('https://global.example.com');
-  });
+    let map: ConversationModelMap = {}
+    map = setConversationChoice(map, 'ws', 'conv', { kind: 'pool', model: 'grok-4.5' })
+    const conn = resolveRunConnection(SETTINGS, 'ws', 'conv', map)
+    expect(conn.apiModel).toBe('grok-4.5')
+    expect(conn.apiKey).toBe('sk-ant-global')
+    expect(conn.apiHost).toBe('https://global.example.com')
+  })
 
   it('profile choice expands the full saved connection', () => {
-    let map: ConversationModelMap = {};
-    map = setConversationChoice(map, 'ws', 'conv', { kind: 'profile', id: 'cfg-profile-a' });
-    const conn = resolveRunConnection(SETTINGS, 'ws', 'conv', map);
+    let map: ConversationModelMap = {}
+    map = setConversationChoice(map, 'ws', 'conv', { kind: 'profile', id: 'cfg-profile-a' })
+    const conn = resolveRunConnection(SETTINGS, 'ws', 'conv', map)
     expect(conn).toEqual({
       apiKey: 'sk-grok',
       apiHost: 'http://localhost:8080',
@@ -169,35 +175,39 @@ describe('conversation-models: resolveRunConnection', () => {
       apiKeyPrefix: 'Bearer ',
       extraHeadersText: '{"X-A":"1"}',
       providerId: 'grok',
-    });
-  });
+    })
+  })
 
   it('falls back to global when the referenced profile was deleted', () => {
-    let map: ConversationModelMap = {};
-    map = setConversationChoice(map, 'ws', 'conv', { kind: 'profile', id: 'cfg-gone' });
-    const conn = resolveRunConnection(SETTINGS, 'ws', 'conv', map);
-    expect(conn.apiModel).toBe('claude-3-5-sonnet-latest');
-    expect(conn.apiKey).toBe('sk-ant-global');
-  });
+    let map: ConversationModelMap = {}
+    map = setConversationChoice(map, 'ws', 'conv', { kind: 'profile', id: 'cfg-gone' })
+    const conn = resolveRunConnection(SETTINGS, 'ws', 'conv', map)
+    expect(conn.apiModel).toBe('claude-3-5-sonnet-latest')
+    expect(conn.apiKey).toBe('sk-ant-global')
+  })
 
   it('a different conversation keeps its own connection (no cross-talk)', () => {
-    let map: ConversationModelMap = {};
-    map = setConversationChoice(map, 'ws', 'conv-a', { kind: 'profile', id: 'cfg-profile-a' });
-    expect(resolveRunConnection(SETTINGS, 'ws', 'conv-b', map).apiModel).toBe('claude-3-5-sonnet-latest');
-  });
-});
+    let map: ConversationModelMap = {}
+    map = setConversationChoice(map, 'ws', 'conv-a', { kind: 'profile', id: 'cfg-profile-a' })
+    expect(resolveRunConnection(SETTINGS, 'ws', 'conv-b', map).apiModel).toBe(
+      'claude-3-5-sonnet-latest',
+    )
+  })
+})
 
 describe('conversation-models: effectiveModelForConversation', () => {
   it('reflects the chosen model for the context window', () => {
-    let map: ConversationModelMap = {};
-    map = setConversationChoice(map, 'ws', 'conv', { kind: 'pool', model: 'grok-4.5' });
-    expect(effectiveModelForConversation(SETTINGS, 'ws', 'conv', map)).toBe('grok-4.5');
-    expect(effectiveModelForConversation(SETTINGS, 'ws', 'other', map)).toBe('claude-3-5-sonnet-latest');
-  });
-});
+    let map: ConversationModelMap = {}
+    map = setConversationChoice(map, 'ws', 'conv', { kind: 'pool', model: 'grok-4.5' })
+    expect(effectiveModelForConversation(SETTINGS, 'ws', 'conv', map)).toBe('grok-4.5')
+    expect(effectiveModelForConversation(SETTINGS, 'ws', 'other', map)).toBe(
+      'claude-3-5-sonnet-latest',
+    )
+  })
+})
 
 describe('conversation-models: resolveChoiceToConnection', () => {
   it('handles undefined explicitly', () => {
-    expect(resolveChoiceToConnection(SETTINGS, undefined).apiModel).toBe('claude-3-5-sonnet-latest');
-  });
-});
+    expect(resolveChoiceToConnection(SETTINGS, undefined).apiModel).toBe('claude-3-5-sonnet-latest')
+  })
+})

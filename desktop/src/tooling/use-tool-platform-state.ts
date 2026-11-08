@@ -24,6 +24,7 @@
 // `reduceActionState`) so the acceptance behaviour is testable without React.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import toolCatalog from './tool-catalog.generated.json';
 import type { ServiceManager, ServiceHealth } from '../services-host/service-manager';
 import { ServiceRequestError } from '../services-host/services-client';
 import type {
@@ -46,6 +47,7 @@ export type ToolPackageUiState =
 /** Fixed, UI-ready text per failure shape (§3.3: 固定错误文案 — the raw
  *  `detail` may carry absolute paths and is never rendered verbatim). */
 export function fixedStateMessage(pkg: ToolPackageHealth): string {
+  if (pkg.builtIn && !pkg.available) return '内置工具文件缺失或运行检查失败，请修复或更新 Trylo 后重新检测。';
   if (pkg.reasonCode === 'input_runtime_low_integrity') return '电脑控制进程权限不匹配，请修复工具运行环境后重新检测。';
   if (pkg.reasonCode === 'input_permission_probe_failed') return '无法验证电脑控制进程的输入权限，请重新检测工具运行环境。';
   switch (pkg.state) {
@@ -87,6 +89,7 @@ export function isHealthAvailable(pkg: ToolPackageHealth): boolean {
 export type ToolPackageAction = 'install' | 'install-browser' | 'retry' | 'uninstall' | 'none';
 
 export function actionFor(pkg: ToolPackageHealth, uiState: ToolPackageUiState): ToolPackageAction {
+  if (pkg.builtIn) return 'none';
   switch (uiState) {
     case 'unknown':
     case 'checking':
@@ -150,6 +153,8 @@ export interface UseToolPlatformStateOptions {
 }
 
 export interface ToolPlatformState {
+  readonly needsServiceReload?: boolean;
+  readonly reloadService?: () => Promise<void>;
   readonly serviceHealth: ServiceHealth;
   readonly packages: readonly ToolPackageHealth[];
   /** Snapshot keyed by package id for O(1) card lookups. */
@@ -180,6 +185,7 @@ export function useToolPlatformState(options: UseToolPlatformStateOptions): Tool
   const [actions, setActions] = useState<Record<string, ToolUiActionState>>({});
   const [loading, setLoading] = useState(false);
   const [transportError, setTransportError] = useState<string | null>(null);
+  const [needsServiceReload, setNeedsServiceReload] = useState(false);
   const healthSequence = useRef(0);
 
   useEffect(() => {
@@ -197,6 +203,7 @@ export function useToolPlatformState(options: UseToolPlatformStateOptions): Tool
       // A stale answer (a newer refresh already started) must not win.
       if (seq !== healthSequence.current) return;
       if (result && result.ok) {
+        setNeedsServiceReload(result.coreToolsRevision !== toolCatalog.coreToolsRevision);
         setPackages(result.packages);
         setTransportError(null);
       } else {
@@ -210,6 +217,18 @@ export function useToolPlatformState(options: UseToolPlatformStateOptions): Tool
       if (seq === healthSequence.current) setLoading(false);
     }
   }, [facade]);
+
+  const reloadService = useCallback(async (): Promise<void> => {
+    if (!serviceManager) return;
+    setLoading(true);
+    try {
+      await serviceManager.restart();
+    } catch {
+      setTransportError('工具服务重载失败，请重试。');
+    } finally {
+      setLoading(false);
+    }
+  }, [serviceManager]);
 
   // §3.3-1: one health call when the Service Host first becomes ready, and
   // one whenever it RE-enters ready (a restart invalidates on-disk truth
@@ -302,6 +321,8 @@ export function useToolPlatformState(options: UseToolPlatformStateOptions): Tool
     actions,
     loading,
     transportError,
+    needsServiceReload,
+    reloadService,
     refresh,
     install,
     installBrowser,
@@ -371,119 +392,18 @@ export function fixedInstallError(_id: string, reasonCode: string | undefined, r
   }
 }
 
-/**
- * The pre-send capability gate (audit §3.3-5): given the resolved runtime's
- * unavailable capabilities and the user's text, decide what the Work send
- * does.
- *
- *   - no capabilities → `allow`
- *   - missing packages, request does not explicitly need them → `degrade`
- *     (non-blocking capability notice)
- *   - request explicitly needs a missing capability → `block` (阻止伪开工)
- *
- * The keyword match is deliberately narrow (product names + strong Chinese
- * task nouns): a false "needs office" on an ordinary message must never
- * block a legitimate file write.
- */
-export type CapabilityGateDecision =
-  | { readonly behavior: 'allow' }
-  | { readonly behavior: 'degrade'; readonly notice: string }
-  | { readonly behavior: 'block'; readonly notice: string; readonly missingIds: readonly string[] };
-
-const CAPABILITY_SIGNALS: readonly { readonly id: string; readonly patterns: readonly RegExp[] }[] = [
-  {
-    // Office surface: the package id is officecli.
-    id: 'officecli',
-    patterns: [
-      /\b(docx|xlsx|pptx|pdf)\b/i,
-      /word|excel|powerpoint|office/i,
-      /文档|表格|幻灯片|演示文稿|工作簿|会议纪要|周报.*(docx|xlsx|pptx|pdf)/i,
-    ],
-  },
-  {
-    // Browser surface: playwright OR chrome-devtools both satisfy it.
-    id: 'playwright|chrome-devtools',
-    patterns: [
-      /浏览器|网页|web 页|网站|登录.*(网页|网站)/i,
-      /\b(browser|playwright|chrome)\b/i,
-    ],
-  },
-  {
-    // Desktop-control surface.
-    id: 'windows-mcp',
-    patterns: [
-      /电脑|桌面|鼠标|键盘|截屏|截取.*屏幕|屏幕截图/i,
-      /\b(computer use|desktop)\b/i,
-    ],
-  },
-  {
-    // CAD/EDA adapter surface (TRYLO-CAD-EDA-TOOL-ADAPTER §8): any one of
-    // the six adapters satisfies it. The gate only fires while work.cad.v1
-    // is the active Profile, so these product names never block a run that
-    // never asked for the CAD tools.
-    id: 'solidworks-mcp|autocad-mcp|kicad-mcp|jlceda-mcp|freecad-mcp|blender-mcp',
-    patterns: [
-      /solidworks|autocad|\bkicad\b|嘉立创|立创eda|\bfreecad\b|\bblender\b/i,
-      /\b(cad|eda|pcb)\b/i,
-      /原理图|布线|封装|打样|装配体|工程图/,
-    ],
-  },
-];
-
-function capabilityIdsForText(text: string): readonly string[] {
-  const ids: string[] = [];
-  for (const signal of CAPABILITY_SIGNALS) {
-    if (signal.patterns.some((p) => p.test(text))) ids.push(signal.id);
-  }
-  return ids;
-}
-
-/** Does the unavailable capability list satisfy a signal id? `a|b` means
- *  EITHER package makes the capability present: satisfied iff at least one
- *  alternative is NOT unavailable. */
-function capabilitySatisfied(signalId: string, unavailableIds: readonly string[]): boolean {
-  const alternatives = signalId.split('|');
-  return alternatives.some((alt) => !unavailableIds.includes(alt));
-}
+/** Compatibility entry: package health never vetoes a user's message. The
+ * agent receives availability facts; execution still requires real permission. */
+export type CapabilityGateDecision = { readonly behavior: 'allow' };
 
 export function decideSendCapabilityGate(
-  text: string,
-  unavailableCapabilities: readonly {
+  _text: string,
+  _unavailableCapabilities: readonly {
     readonly id: string;
     readonly type: string;
     readonly displayName?: string;
     readonly userMessage?: string;
   }[],
 ): CapabilityGateDecision {
-  if (unavailableCapabilities.length === 0) return { behavior: 'allow' };
-  const packageCapabilities = unavailableCapabilities.filter((c) => c.type === 'package');
-  if (packageCapabilities.length === 0) {
-    // Adapter-level (hermes) degradation is informational only.
-    return { behavior: 'allow' };
-  }
-  const missingIds = packageCapabilities.map((c) => c.id);
-  // §3.3 / tooling/types.ts describeUnavailableCapabilities: the raw
-  // `userMessage`/`detail` may carry absolute paths and English internals —
-  // the chat bubble shows the DISPLAY NAME only.
-  const labels = packageCapabilities.map((c) => c.displayName ?? c.id);
-  const notice = `本次运行缺少可选工具：${labels.join('、')}。可在 设置 → Work 工具 安装；本次先以现有能力继续。`;
-
-  // Which capabilities does the user's request EXPLICITLY need? A needed
-  // capability that is missing blocks the pseudo-start (audit §3.3-5).
-  const needed = capabilityIdsForText(text);
-  const blocked = needed.filter((signalId) => !capabilitySatisfied(signalId, missingIds));
-  if (blocked.length > 0) {
-    const blockedLabels = blocked.map((signalId) =>
-      packageCapabilities
-        .filter((c) => signalId.split('|').includes(c.id))
-        .map((c) => c.displayName ?? c.id)
-        .join('、'),
-    ).filter(Boolean);
-    return {
-      behavior: 'block',
-      notice: `您的请求需要的能力当前不可用：${blockedLabels.join('、')}。已阻止发送以避免伪开工。可在 设置 → Work 工具 安装后重试。`,
-      missingIds,
-    };
-  }
-  return { behavior: 'degrade', notice };
+  return { behavior: 'allow' };
 }

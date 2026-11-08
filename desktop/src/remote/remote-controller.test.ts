@@ -4,7 +4,7 @@
 // Service Host running, dispose stops it, and a Service Host restart re-enables
 // the gateway. Routing: every handler name (projects/project/session/task/
 // cancel/permission/chat/fun) including the error paths — a failing authority
-// answers with an error, never a hang. Projection: work-approval tracking and
+// answers with an error, never a hang. Projection: current CLI permissions and
 // supervisor bumps flow into remote.publish. Status: push events + onDown.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,7 +14,7 @@ import { emptyWorkspaceHistory } from '../host-adapter/conversation-history';
 import { IDLE_CODE_VIEW_STATE } from '../runtime/runtime-types';
 import type { ConversationRunSupervisor } from '../runtime/conversation-run-supervisor';
 import type { ServiceHealth, ServiceManager } from '../services-host/service-manager';
-import type { RemoteAgentStateEvent, RemoteGatewayEvent, RemotePermissionRequestStateEvent, RemotePermissionSummary, RemoteRequestEvent, RemoteRespondParams, RemoteStatusResult } from '../services-host/methods';
+import type { RemoteAgentStateEvent, RemoteGatewayEvent, RemotePermissionRequestStateEvent, RemoteRequestEvent, RemoteRespondParams, RemoteStatusResult } from '../services-host/methods';
 import type { ServicesRemotePort } from './remote-port';
 import { EMPTY_REMOTE_STATUS } from './remote-port';
 import { RemoteController } from './remote-controller';
@@ -22,9 +22,9 @@ import { RemoteController } from './remote-controller';
 /** Projection is built in parallel; mocked here so these tests are pure
  *  controller logic. */
 const projectionMock = vi.hoisted(() => {
-  const approvals = (opts: { code: unknown; work: readonly RemotePermissionSummary[]; now: unknown }): RemotePermissionRequestStateEvent => ({
+  const approvals = (opts: { code: readonly { requestId: string; toolName: string; title?: string }[]; now: unknown }): RemotePermissionRequestStateEvent => ({
     type: 'permissionRequestState',
-    requests: opts.work,
+    requests: opts.code.map(request => ({ requestId: request.requestId, title: request.title || request.toolName, risk: 'low', requestedAt: 0 })),
   });
   return {
     projectBindingState: vi.fn((): RemoteAgentStateEvent | null => ({ type: 'agentState', state: 'idle' })),
@@ -156,7 +156,6 @@ function createHarness(options: { chatHandle?: boolean } = {}) {
     currentWorkspace: () => ({ id: 'w1', root: '/w', name: workspaceName }),
     conversationKind: () => 'code',
     codePermissions: () => [],
-    workApprovals: () => [],
     projectKey: () => 'p1',
     conversationId: () => 'c1',
     mode: () => 'agent',
@@ -557,27 +556,7 @@ describe('RemoteController handler routing', () => {
 });
 
 describe('RemoteController projection taps', () => {
-  it('onWorkItem tracks pending work approvals into permissionRequestState', async () => {
-    const h = createHarness();
-    await h.controller.setEnabled(true);
-    h.controller.onWorkItem({
-      kind: 'approval', id: 'a1', at: 0, conversationId: 'c1', approvalId: 'ap-1', type: 'bash',
-      description: 'run tests', status: 'pending', taskId: 't', runId: 'r', turnId: undefined,
-    });
-    await waitFor(
-      () => h.published.some((e) => e.type === 'permissionRequestState' && (e as { requests?: readonly { requestId: string }[] }).requests?.some((r) => r.requestId === 'ap-1')),
-      'permissionRequestState with ap-1',
-    );
-    h.controller.onWorkItem({
-      kind: 'approval', id: 'a1', at: 0, conversationId: 'c1', approvalId: 'ap-1', type: 'bash',
-      description: 'run tests', status: 'approved', taskId: 't', runId: 'r', turnId: undefined,
-    });
-    await waitFor(
-      () => h.published.filter((e) => e.type === 'permissionRequestState').at(-1) !== undefined
-        && (h.published.filter((e) => e.type === 'permissionRequestState').at(-1) as { requests?: readonly unknown[] }).requests?.length === 0,
-      'cleared permissionRequestState',
-    );
-  });
+
 
   it('supervisor bumps re-project binding state and permissions', async () => {
     const h = createHarness();

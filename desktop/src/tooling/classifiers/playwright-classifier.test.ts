@@ -67,6 +67,26 @@ describe('pinned surface', () => {
   });
 });
 
+describe('workspace HTML uses the shared lexical boundary', () => {
+  it('retains local-page approval for encoded workspace and .trylo/out documents', () => {
+    for (const url of [' FILE:///D:/work/proj/%E8%AF%BE%E4%BB%B6%20preview/index.html ',
+      'file:///D:/work/proj/.trylo/out/dc-motor-teaching/index.html']) {
+      const route = classifyPlaywrightTool(ctx('browser_navigate', { url }, 'unrestricted'));
+      expect(route.behavior).toBe('prompt');
+      expect(route.reasonCode).toBe('workspace_page_requires_approval');
+      expect('lease' in route).toBe(false);
+    }
+  });
+
+  it('rejects private hidden paths, hosted file URLs and encoded path separators', () => {
+    for (const url of ['file:///D:/work/proj/.trylo/sessions/index.html', 'file:///D:/work/proj/.git/index.html',
+      'file:///D:/work/proj/.trylo/out/.private/index.html', 'file://localhost/D:/work/proj/index.html',
+      'file:///D:/work/proj/a%2fb/index.html']) {
+      expect(classifyPlaywrightTool(ctx('browser_navigate', { url }, 'unrestricted')).behavior, url).toBe('deny');
+    }
+  });
+});
+
 describe('read tools auto-allow at every level (§6.5 snapshot/console/network 读取)', () => {
   const readCases: readonly [string, Record<string, unknown>][] = [
     ['browser_snapshot', {}],
@@ -186,7 +206,10 @@ describe('navigate × permission level (§6.5: 首次访问新域审批，域内
     for (const bad of ['javascript:alert(1)', 'file:///C:/secrets.md', 'data:text/html,x', 'not a url', '']) {
       const decision = classifyPlaywrightTool(ctx('browser_navigate', { url: bad }));
       expect(decision.behavior).toBe('deny');
-      if (decision.behavior === 'deny') expect(decision.reasonCode).toBe('invalid_url');
+      if (decision.behavior === 'deny') {
+        expect(decision.reasonCode).toBe(['not a url', ''].includes(bad) ? 'invalid_navigation_argument' : 'invalid_url');
+        if (['not a url', ''].includes(bad)) expect(decision.failureCode).toBe('invalid_arguments');
+      }
     }
     const creds = classifyPlaywrightTool(ctx('browser_navigate', { url: 'https://user:pass@example.com/' }));
     expect(creds.behavior).toBe('deny');

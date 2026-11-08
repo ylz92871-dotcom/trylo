@@ -32,6 +32,7 @@ import { officecliClassifier } from './classifiers/officecli-classifier';
 import { playwrightClassifier } from './classifiers/playwright-classifier';
 import { windowsClassifier } from './classifiers/windows-mcp-classifier';
 import { chromeDevtoolsClassifier } from './classifiers/chrome-devtools-classifier';
+import { modelPreviewClassifier } from './classifiers/model-preview-classifier';
 import { CAD_EDA_CLASSIFIERS } from './classifiers/cad-eda-classifier';
 import type { BrowserLeaseGrant } from './classifiers/playwright-classifier';
 import type { WindowsLeaseGrant } from './classifiers/windows-mcp-classifier';
@@ -90,7 +91,9 @@ export type ToolRiskDecision =
        *  by the model — the permission registry records it only on an
        *  explicit approval. */
       readonly lease?: ToolLeaseGrant }
-  | { readonly behavior: 'deny'; readonly reasonCode: string; readonly userMessage: string; readonly audit: SafeAudit };
+  | { readonly behavior: 'deny'; readonly reasonCode: string; readonly userMessage: string; readonly audit: SafeAudit;
+      /** Refused before dispatch because the arguments cannot represent a call. */
+      readonly failureCode?: 'invalid_arguments' };
 
 /**
  * The router's answer for a control_request. `unmanaged` means "not one of
@@ -185,6 +188,7 @@ export function createToolRiskClassifier(
     playwrightClassifier,
     windowsClassifier,
     chromeDevtoolsClassifier,
+    modelPreviewClassifier,
     // CAD/EDA adapters (TRYLO-CAD-EDA-TOOL-ADAPTER §7): six explicit policy
     // tables over the audited tool surfaces.
     ...CAD_EDA_CLASSIFIERS,

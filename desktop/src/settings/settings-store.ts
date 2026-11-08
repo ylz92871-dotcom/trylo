@@ -1,3 +1,24 @@
+import {
+  collaborationLearningSettings,
+  DEFAULT_COLLABORATION_LEARNING,
+  type CollaborationLearningSettings,
+} from './collaboration-learning'
+import {
+  agentLearningSettings,
+  DEFAULT_AGENT_LEARNING,
+  type AgentLearningSettings,
+} from './agent-learning'
+import {
+  workflowLearningSettings,
+  DEFAULT_WORKFLOW_LEARNING,
+  type WorkflowLearningSettings,
+} from './workflow-learning'
+import { settingsNotices, withoutSettingsNotice, type SettingsNotice } from './settings-notices'
+import {
+  checkLearningSettings,
+  DEFAULT_CHECK_LEARNING,
+  type CheckLearningSettings,
+} from './check-learning'
 // Trylo Desktop — Settings store.
 //
 // v1.15: persistent settings for the Trylo CLI spawn. The
@@ -43,68 +64,61 @@
 // Phase 3 will move *Key fields to a Rust-side encrypted
 // store (keyring / stronghold).
 
-export type ApiFormat = 'anthropic' | 'openai';
-import { parseReasoningEffort, type ReasoningEffort } from './reasoning-effort';
-import { parseModelContextPreferences, type ModelContextPreferences } from './context-window';
-import { parseModelReasoningPreferences, type ModelReasoningPreferences } from './model-reasoning';
-import { isLegacyRuntimeDefaultCliPath } from '../runtime/cli-runtime-path-defaults';
-export type SettingsSaveIntent = 'connection' | 'preferences';
+export type ApiFormat = 'anthropic' | 'openai'
+import { parseReasoningEffort, type ReasoningEffort } from './reasoning-effort'
+import { parseModelContextPreferences, type ModelContextPreferences } from './context-window'
+import { parseModelReasoningPreferences, type ModelReasoningPreferences } from './model-reasoning'
+export type SettingsSaveIntent = 'connection' | 'preferences'
 /** Legacy permission mode kept only for one-way migration (P2, spec §4.4).
  *  New code must consume `PermissionLevel` from
  *  `../permission/permission-policy.ts`; the picker no longer writes this
  *  field, but `loadSettings` still reads it so an existing user keeps
  *  their old selection when the picker ships. */
-export type PermissionMode = 'chat' | 'plan' | 'agent';
+export type PermissionMode = 'chat' | 'plan' | 'agent'
 /** Re-exported here for convenience — the UI picker and any settings
  *  consumer that needs to know the runtime-native mode imports it from
  *  this module so the type surface stays alongside the persisted
  *  defaults. The mapping itself lives in permission-policy.ts. */
-import type { PermissionLevel } from '../permission/permission-policy';
-import {
-  DEFAULT_CLI_RUNTIME_PROTOCOL,
-  isNewCliOnlyDistribution,
-  parseCliRuntimeProtocol,
-  type CliRuntimeProtocol,
-} from '../runtime/cli-runtime-protocol';
+import type { PermissionLevel } from '../permission/permission-policy'
 import {
   DEFAULT_LEARNING_INFERENCE,
   DEFAULT_USER_LEARNING_SETTINGS,
   type EnforcementMode,
   type UserLearningSettings,
-} from '../user-learning/types';
+} from '../user-learning/types'
 
 /** Desktop pet (companion) settings, migration spec §6.5. Effective on
  *  Windows only; other platforms show "unsupported" in the UI. */
 export interface CompanionSettings {
-  readonly enabled: boolean;
+  readonly enabled: boolean
 }
 
 /** Remote access (migration spec §8.1, arch §7). Effective on Windows /
  *  Tauri only; the controller reads this group defensively. Defaults mirror
  *  the legacy plugin (`enabled` → `config.get('enabled', false)`). */
 export interface RemoteSettings {
-  readonly connectionMode?: 'tunnel' | 'server';
-  readonly relayUrl?: string;
-  readonly enabled: boolean;
-  readonly port: number;
-  readonly publicUrl: string;
-  readonly tunnelMode: 'named' | 'quick' | 'manual' | 'off';
-  readonly autoStartTunnel: boolean;
-  readonly cloudflaredPath: string;
+  readonly connectionMode?: 'tunnel' | 'server'
+  readonly relayUrl?: string
+  readonly enabled: boolean
+  readonly port: number
+  readonly publicUrl: string
+  readonly tunnelMode: 'named' | 'quick' | 'manual' | 'off'
+  readonly autoStartTunnel: boolean
+  readonly cloudflaredPath: string
 }
 
 /** A sub-connection (vision / summary). Mirrors the primary
  *  connection but with a `usePrimaryConnection` shortcut. */
 export interface SubConnection {
-  readonly usePrimaryConnection: boolean;
-  readonly providerId: string;
-  readonly apiFormat: ApiFormat;
-  readonly endpoint: string;
-  readonly apiKey: string;
-  readonly model: string;
-  readonly apiKeyHeader: string;
-  readonly apiKeyPrefix: string;
-  readonly extraHeadersText: string;
+  readonly usePrimaryConnection: boolean
+  readonly providerId: string
+  readonly apiFormat: ApiFormat
+  readonly endpoint: string
+  readonly apiKey: string
+  readonly model: string
+  readonly apiKeyHeader: string
+  readonly apiKeyPrefix: string
+  readonly extraHeadersText: string
 }
 
 /**
@@ -115,34 +129,36 @@ export interface SubConnection {
  * it into the active primary connection.
  */
 export interface ModelProfile {
-  readonly id: string;
-  readonly name: string;
-  readonly apiKey: string;
-  readonly apiHost: string;
-  readonly apiModel: string;
-  readonly reasoningEffort?: ReasoningEffort;
-  readonly apiFormat: ApiFormat;
-  readonly apiKeyHeader: string;
-  readonly apiKeyPrefix: string;
-  readonly extraHeadersText: string;
-  readonly providerId: string;
+  readonly id: string
+  readonly name: string
+  readonly apiKey: string
+  readonly apiHost: string
+  readonly apiModel: string
+  readonly reasoningEffort?: ReasoningEffort
+  readonly apiFormat: ApiFormat
+  readonly apiKeyHeader: string
+  readonly apiKeyPrefix: string
+  readonly extraHeadersText: string
+  readonly providerId: string
 }
 
 /** Create a stable unique profile id. Works in Tauri's browser runtime. */
 export function createProfileId(): string {
-  const c = (typeof crypto !== 'undefined' ? crypto : null) as (Crypto & {
-    getRandomValues?: <T extends ArrayBufferView>(a: T) => T;
-  }) | null;
+  const c = (typeof crypto !== 'undefined' ? crypto : null) as
+    | (Crypto & {
+        getRandomValues?: <T extends ArrayBufferView>(a: T) => T
+      })
+    | null
   if (c?.getRandomValues) {
-    const u = new Uint32Array(4);
-    c.getRandomValues(u);
-    return `cfg-${u.reduce((a, n) => a + n.toString(16), '')}`;
+    const u = new Uint32Array(4)
+    c.getRandomValues(u)
+    return `cfg-${u.reduce((a, n) => a + n.toString(16), '')}`
   }
-  return `cfg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return `cfg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 }
 
 /** The full connection subset (all ModelProfile fields except id/name). */
-export type ModelConnectionFields = Omit<ModelProfile, 'id' | 'name'>;
+export type ModelConnectionFields = Omit<ModelProfile, 'id' | 'name'>
 
 type ConnectionSource = Pick<
   TryloSettings,
@@ -155,7 +171,7 @@ type ConnectionSource = Pick<
   | 'apiKeyPrefix'
   | 'extraHeadersText'
   | 'providerId'
->;
+>
 
 /** Snapshot the primary connection fields from settings or a profile. */
 export function connectionFields(s: ConnectionSource): ModelConnectionFields {
@@ -169,21 +185,26 @@ export function connectionFields(s: ConnectionSource): ModelConnectionFields {
     apiKeyPrefix: s.apiKeyPrefix,
     extraHeadersText: s.extraHeadersText,
     providerId: s.providerId,
-  };
+  }
 }
 
 /** Compare only the canonical connection fields, including wire format and provider. */
 export function sameConnection(a: ModelConnectionFields, b: ModelConnectionFields): boolean {
-  return (Object.keys(connectionFields(a)) as (keyof ModelConnectionFields)[]).every(key => a[key] === b[key]);
+  return (Object.keys(connectionFields(a)) as (keyof ModelConnectionFields)[]).every(
+    (key) => a[key] === b[key],
+  )
 }
 
 /** Editing a connection creates a custom selection unless it still matches a saved profile.
  *  Named profiles are changed only by the user's explicit overwrite action. */
 export function settingsForSave(previous: TryloSettings, next: TryloSettings): TryloSettings {
-  const edited = !sameConnection(previous, next);
-  const active = next.modelProfiles.find(profile => profile.id === next.activeModelProfileId);
-  return { ...next, poolModel: edited && next.poolModel === previous.poolModel ? '' : next.poolModel,
-    activeModelProfileId: active && sameConnection(active, next) ? active.id : '' };
+  const edited = !sameConnection(previous, next)
+  const active = next.modelProfiles.find((profile) => profile.id === next.activeModelProfileId)
+  return {
+    ...next,
+    poolModel: edited && next.poolModel === previous.poolModel ? '' : next.poolModel,
+    activeModelProfileId: active && sameConnection(active, next) ? active.id : '',
+  }
 }
 
 /** Apply a profile to the active primary connection. Never touches pool. */
@@ -192,35 +213,35 @@ export function applyProfile(s: TryloSettings, profile: ModelProfile): TryloSett
     ...s,
     ...connectionFields(profile),
     activeModelProfileId: profile.id,
-  };
+  }
 }
 
 /** Add or replace (by id) a profile; returns a new settings copy. */
 export function upsertProfile(s: TryloSettings, profile: ModelProfile): TryloSettings {
-  const existing = s.modelProfiles.some((p) => p.id === profile.id);
+  const existing = s.modelProfiles.some((p) => p.id === profile.id)
   const modelProfiles = existing
     ? s.modelProfiles.map((p) => (p.id === profile.id ? profile : p))
-    : [...s.modelProfiles, profile];
-  return { ...s, modelProfiles };
+    : [...s.modelProfiles, profile]
+  return { ...s, modelProfiles }
 }
 
 /** Remove a profile; clears the active pointer when it pointed at it. */
 export function removeProfile(s: TryloSettings, id: string): TryloSettings {
-  const modelProfiles = s.modelProfiles.filter((p) => p.id !== id);
-  const activeModelProfileId = s.activeModelProfileId === id ? '' : s.activeModelProfileId;
-  return { ...s, modelProfiles, activeModelProfileId };
+  const modelProfiles = s.modelProfiles.filter((p) => p.id !== id)
+  const activeModelProfileId = s.activeModelProfileId === id ? '' : s.activeModelProfileId
+  return { ...s, modelProfiles, activeModelProfileId }
 }
 
 export interface TryloSettings {
   /** Working windows and declared capacities, scoped to endpoint/protocol/model. */
-  readonly modelContextPreferences?: ModelContextPreferences;
-  readonly modelReasoningPreferences?: ModelReasoningPreferences;
+  readonly modelContextPreferences?: ModelContextPreferences
+  readonly modelReasoningPreferences?: ModelReasoningPreferences
   // ── Primary connection ──────────────────────────────────
-  readonly apiKey: string;
-  readonly apiHost: string;
-  readonly apiModel: string;
+  readonly apiKey: string
+  readonly apiHost: string
+  readonly apiModel: string
   /** Absent means the provider default, never an implicit low effort. */
-  readonly reasoningEffort?: ReasoningEffort;
+  readonly reasoningEffort?: ReasoningEffort
   /**
    * v-modelsel: active built-in free-compute pool model override
    * ('' = none). Distinct from `apiModel` — the pool override never
@@ -228,50 +249,49 @@ export interface TryloSettings {
    * pool and back always restores their model. Effective model for a
    * run = `poolModel || apiModel`.
    */
-  readonly poolModel: string;
+  readonly poolModel: string
   /**
    * Named connection snapshots (我的配置). Each entry holds a full
    * connection; selecting one loads it into the primary fields above.
    */
-  readonly modelProfiles: readonly ModelProfile[];
+  readonly modelProfiles: readonly ModelProfile[]
   /** The profile (in `modelProfiles`) currently driving the primary
    *  connection, '' = none (the loose primary fields are the source). */
-  readonly activeModelProfileId: string;
-  readonly apiFormat: ApiFormat;
-  readonly apiKeyHeader: string;
-  readonly apiKeyPrefix: string;
-  readonly extraHeadersText: string;
-  readonly providerId: string;
+  readonly activeModelProfileId: string
+  readonly apiFormat: ApiFormat
+  readonly apiKeyHeader: string
+  readonly apiKeyPrefix: string
+  readonly extraHeadersText: string
+  readonly providerId: string
   // ── Behavior ────────────────────────────────────────────
-  readonly systemPrompt: string;
+  readonly systemPrompt: string
   /** Legacy `chat | plan | agent`. Read once at load to seed
    *  `permissionLevel`; the picker no longer writes it. */
-  readonly permissionMode: PermissionMode;
+  readonly permissionMode: PermissionMode
   /** P2 (spec §4.4): the UI permission level. Preferred source for the
    *  picker + the runtime args; legacy `permissionMode` is the
    *  one-shot fallback for existing users. */
-  readonly permissionLevel: PermissionLevel;
+  readonly permissionLevel: PermissionLevel
   // ── Sub-connections ─────────────────────────────────────
-  readonly vision: SubConnection;
-  readonly summary: SubConnection;
+  readonly vision: SubConnection
+  readonly summary: SubConnection
   // ── Desktop pet (spec §6.5) ─────────────────────────────
-  readonly companion: CompanionSettings;
+  readonly companion: CompanionSettings
   // ── Remote access (spec §8.1 / arch §7) ─────────────────
-  readonly remote: RemoteSettings;
+  readonly remote: RemoteSettings
   /** PR-6 / 电脑控制 (Computer Use): explicit switch for the Windows desktop
    *  control tools (windows-mcp, MCP server `trylo-windows`). Default `true`
-   *  — desktop control is mounted with the 办公基底 (work.core.v1) and the
-   *  CAD profile. `false` excludes windows-mcp from the resolved Work Profile
-   *  entirely, so a Work agent cannot see/use desktop tools at all (the
-   *  per-action §6.6 gates remain the enforcement when it IS mounted). */
-  readonly workComputer: boolean;
+   *  Legacy persisted field. User-facing defaults now always mount desktop
+   *  control; loading settings normalizes it to true. Per-action consent
+   *  remains separate from mounting the default tool. */
+  readonly workComputer: boolean
   /** PR-7 (spec §4.1/§10.x): explicit 浏览器调试 capability switch. `false`
    *  (the default) keeps the default Work Profile with Playwright. `true`
    *  swaps Playwright OUT for the pinned Chrome DevTools MCP surface
    *  (`work.browser-debug.v1`) — §4.1: the two browser surfaces are never
    *  co-resident, and the model can never pull the debug Profile in by
    *  itself. */
-  readonly workBrowserDebug: boolean;
+  readonly workBrowserDebug: boolean
   /** TRYLO-CAD-EDA-TOOL-ADAPTER §4: explicit CAD/EDA capability switch.
    *  `false` (the default) keeps the default Work Profile. `true` upgrades
    *  Work sends to `work.cad.v1`, which carries the six pinned CAD/EDA
@@ -282,29 +302,24 @@ export interface TryloSettings {
    *  an unavailable capability when its host application is missing.
    *  Highest Work-profile priority (2026-09-06: previously 电脑控制 always
    *  shadowed it, so the CAD adapters were unreachable in practice). */
-  readonly workCad: boolean;
+  readonly workCad: boolean
   /** TRYLO-DUAL-SURFACE-SPEC §2.4: Hermes learning for the Work surface.
    *  Default `true`. `false` turns Work mirror + review OFF (Code and User
    *  Learning unaffected). NOT a User Learning setting — modelled as its own
    *  top-level flag so the Work task-plane gate can read it independently. */
-  readonly hermesWorkLearning: boolean;
-  // ── Desktop-only ────────────────────────────────────────
-  readonly cliPath: string;
-  readonly workspace: string;
-  readonly userLearning: UserLearningSettings;
-  /**
-   * P08 §4.1: which CLI runtime contract Desktop spawns.
-   *
-   * Standard development and release builds select `trylo-v1`, including old
-   * stored choices. Compatibility builds can configure an external legacy engine.
-   */
-  readonly cliRuntimeProtocol: CliRuntimeProtocol;
-  /** The settings picker is authoritative over a checkout's preview default. */
-  readonly cliRuntimeSelection?: 'user';
+  readonly hermesWorkLearning: boolean
+  readonly workspace: string
+  readonly userLearning: UserLearningSettings
+  readonly workflowLearning?: WorkflowLearningSettings
+  readonly agentLearning?: AgentLearningSettings
+  /** Dismissible UI-only notices for retired stored settings. */
+  readonly settingsNotices?: readonly SettingsNotice[]
+  readonly checkLearning?: CheckLearningSettings
+  readonly collaborationLearning?: CollaborationLearningSettings
 }
 
-const STORAGE_KEY = 'trylo:settings:v1';
-const STORAGE_BACKUP_KEY = 'trylo:settings:v1:backup';
+const STORAGE_KEY = 'trylo:settings:v1'
+const STORAGE_BACKUP_KEY = 'trylo:settings:v1:backup'
 
 const DEFAULTS: TryloSettings = {
   modelContextPreferences: {},
@@ -331,11 +346,14 @@ const DEFAULTS: TryloSettings = {
   workComputer: true,
   workCad: false,
   hermesWorkLearning: true,
-  cliPath: '',
-  workspace: '',
+  workspace: 'D:/CC/trylo',
   userLearning: { ...DEFAULT_USER_LEARNING_SETTINGS },
-  cliRuntimeProtocol: DEFAULT_CLI_RUNTIME_PROTOCOL,
-};
+  workflowLearning: { ...DEFAULT_WORKFLOW_LEARNING },
+  agentLearning: { ...DEFAULT_AGENT_LEARNING },
+  settingsNotices: [],
+  checkLearning: { ...DEFAULT_CHECK_LEARNING },
+  collaborationLearning: { ...DEFAULT_COLLABORATION_LEARNING },
+}
 
 function subConnectionDefaults(): SubConnection {
   return {
@@ -348,7 +366,7 @@ function subConnectionDefaults(): SubConnection {
     apiKeyHeader: '',
     apiKeyPrefix: '',
     extraHeadersText: '{}',
-  };
+  }
 }
 
 /** Defaults for the remote group. Exported so callers (Settings UI, tests)
@@ -363,30 +381,24 @@ export function remoteSettingsDefaults(): RemoteSettings {
     tunnelMode: 'named',
     autoStartTunnel: true,
     cloudflaredPath: '',
-  };
+  }
 }
 
-const VALID_API_FORMAT: ReadonlySet<ApiFormat> = new Set(['anthropic', 'openai']);
-const VALID_PERMISSION_MODE: ReadonlySet<PermissionMode> = new Set([
-  'chat',
-  'plan',
-  'agent',
-]);
+const VALID_API_FORMAT: ReadonlySet<ApiFormat> = new Set(['anthropic', 'openai'])
+const VALID_PERMISSION_MODE: ReadonlySet<PermissionMode> = new Set(['chat', 'plan', 'agent'])
 const VALID_REMOTE_TUNNEL_MODE: ReadonlySet<RemoteSettings['tunnelMode']> = new Set([
   'named',
   'quick',
   'manual',
   'off',
-]);
+])
 
 function objectRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null
-    ? value as Record<string, unknown>
-    : null;
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null
 }
 
 function stringValue(value: unknown, fallback: string): string {
-  return typeof value === 'string' ? value : fallback;
+  return typeof value === 'string' ? value : fallback
 }
 
 /**
@@ -395,8 +407,8 @@ function stringValue(value: unknown, fallback: string): string {
  * Unknown fields are ignored and missing/invalid fields fall back individually.
  */
 function migrateSubConnection(value: unknown, fallback: SubConnection): SubConnection {
-  const stored = objectRecord(value);
-  if (!stored) return { ...fallback };
+  const stored = objectRecord(value)
+  if (!stored) return { ...fallback }
   return {
     usePrimaryConnection:
       typeof stored['usePrimaryConnection'] === 'boolean'
@@ -404,7 +416,7 @@ function migrateSubConnection(value: unknown, fallback: SubConnection): SubConne
         : fallback.usePrimaryConnection,
     providerId: stringValue(stored['providerId'], fallback.providerId),
     apiFormat: VALID_API_FORMAT.has(stored['apiFormat'] as ApiFormat)
-      ? stored['apiFormat'] as ApiFormat
+      ? (stored['apiFormat'] as ApiFormat)
       : fallback.apiFormat,
     endpoint: stringValue(stored['endpoint'], fallback.endpoint),
     apiKey: stringValue(stored['apiKey'], fallback.apiKey),
@@ -412,45 +424,46 @@ function migrateSubConnection(value: unknown, fallback: SubConnection): SubConne
     apiKeyHeader: stringValue(stored['apiKeyHeader'], fallback.apiKeyHeader),
     apiKeyPrefix: stringValue(stored['apiKeyPrefix'], fallback.apiKeyPrefix),
     extraHeadersText: stringValue(stored['extraHeadersText'], fallback.extraHeadersText),
-  };
+  }
 }
 
 /** Field-tolerant remote group migration (spec §8.1). A malformed remote
  *  block must never erase unrelated credentials — each field falls back
  *  individually. */
 function migrateRemoteSettings(value: unknown, fallback: RemoteSettings): RemoteSettings {
-  const stored = objectRecord(value);
-  if (!stored) return { ...fallback };
+  const stored = objectRecord(value)
+  if (!stored) return { ...fallback }
   return {
-    connectionMode: stored['connectionMode'] === 'server' || stored['connectionMode'] === 'tunnel' ? stored['connectionMode']
-      : stored['publicUrl'] || stored['cloudflaredPath'] ? 'tunnel' : undefined,
+    connectionMode:
+      stored['connectionMode'] === 'server' || stored['connectionMode'] === 'tunnel'
+        ? stored['connectionMode']
+        : stored['publicUrl'] || stored['cloudflaredPath']
+          ? 'tunnel'
+          : undefined,
     relayUrl: stringValue(stored['relayUrl'], fallback.relayUrl || 'https://relay.trylocode.me'),
-    enabled:
-      typeof stored['enabled'] === 'boolean'
-        ? stored['enabled']
-        : fallback.enabled,
+    enabled: typeof stored['enabled'] === 'boolean' ? stored['enabled'] : fallback.enabled,
     port:
       typeof stored['port'] === 'number' && Number.isFinite(stored['port']) && stored['port'] > 0
         ? stored['port']
         : fallback.port,
     publicUrl: stringValue(stored['publicUrl'], fallback.publicUrl),
     tunnelMode: VALID_REMOTE_TUNNEL_MODE.has(stored['tunnelMode'] as RemoteSettings['tunnelMode'])
-      ? stored['tunnelMode'] as RemoteSettings['tunnelMode']
+      ? (stored['tunnelMode'] as RemoteSettings['tunnelMode'])
       : fallback.tunnelMode,
     autoStartTunnel:
       typeof stored['autoStartTunnel'] === 'boolean'
         ? stored['autoStartTunnel']
         : fallback.autoStartTunnel,
     cloudflaredPath: stringValue(stored['cloudflaredPath'], fallback.cloudflaredPath),
-  };
+  }
 }
 
 function migrateModelProfiles(value: unknown): readonly ModelProfile[] {
-  if (!Array.isArray(value)) return [];
-  const profiles: ModelProfile[] = [];
+  if (!Array.isArray(value)) return []
+  const profiles: ModelProfile[] = []
   for (const raw of value) {
-    const rec = objectRecord(raw);
-    if (!rec) continue;
+    const rec = objectRecord(raw)
+    if (!rec) continue
     profiles.push({
       id: stringValue(rec['id'], createProfileId()),
       name: stringValue(rec['name'], '未命名配置'),
@@ -459,21 +472,21 @@ function migrateModelProfiles(value: unknown): readonly ModelProfile[] {
       apiModel: stringValue(rec['apiModel'], ''),
       reasoningEffort: parseReasoningEffort(rec['reasoningEffort']),
       apiFormat: VALID_API_FORMAT.has(rec['apiFormat'] as ApiFormat)
-        ? rec['apiFormat'] as ApiFormat
+        ? (rec['apiFormat'] as ApiFormat)
         : DEFAULTS.apiFormat,
       apiKeyHeader: stringValue(rec['apiKeyHeader'], ''),
       apiKeyPrefix: stringValue(rec['apiKeyPrefix'], ''),
       extraHeadersText: stringValue(rec['extraHeadersText'], '{}'),
       providerId: stringValue(rec['providerId'], ''),
-    });
+    })
   }
-  return profiles;
+  return profiles
 }
 
 function migrateSettings(value: unknown): TryloSettings | null {
-  const stored = objectRecord(value);
-  if (!stored) return null;
-  const companion = objectRecord(stored['companion']);
+  const stored = objectRecord(value)
+  if (!stored) return null
+  const companion = objectRecord(stored['companion'])
   // P2: prefer the new `permissionLevel`; fall back to a one-shot
   // migration of the legacy `permissionMode` (chat/plan/agent). The
   // legacy field is still accepted on read so a downgrade is not
@@ -485,20 +498,19 @@ function migrateSettings(value: unknown): TryloSettings | null {
   // `unrestricted`. The legacy default `agent` is a hostile
   // choice for a new user; the migration is a one-shot read
   // helper, not a way to set the default.
-  const hasLegacy = 'permissionMode' in stored
-    && VALID_PERMISSION_MODE.has(stored['permissionMode'] as PermissionMode);
-  const hasNew = 'permissionLevel' in stored
-    && parsePermissionLevel(stored['permissionLevel']) !== null;
-  const legacyMode = hasLegacy
-    ? (stored['permissionMode'] as PermissionMode)
-    : null;
-  let resolvedLevel: PermissionLevel;
+  const hasLegacy =
+    'permissionMode' in stored &&
+    VALID_PERMISSION_MODE.has(stored['permissionMode'] as PermissionMode)
+  const hasNew =
+    'permissionLevel' in stored && parsePermissionLevel(stored['permissionLevel']) !== null
+  const legacyMode = hasLegacy ? (stored['permissionMode'] as PermissionMode) : null
+  let resolvedLevel: PermissionLevel
   if (hasNew) {
-    resolvedLevel = parsePermissionLevel(stored['permissionLevel'])!;
+    resolvedLevel = parsePermissionLevel(stored['permissionLevel'])!
   } else if (hasLegacy) {
-    resolvedLevel = legacyPermissionMigration(legacyMode!);
+    resolvedLevel = legacyPermissionMigration(legacyMode!)
   } else {
-    resolvedLevel = DEFAULT_PERMISSION_LEVEL;
+    resolvedLevel = DEFAULT_PERMISSION_LEVEL
   }
   return {
     modelContextPreferences: parseModelContextPreferences(stored['modelContextPreferences']),
@@ -509,9 +521,12 @@ function migrateSettings(value: unknown): TryloSettings | null {
     reasoningEffort: parseReasoningEffort(stored['reasoningEffort']),
     poolModel: stringValue(stored['poolModel'], DEFAULTS.poolModel),
     modelProfiles: migrateModelProfiles(stored['modelProfiles']),
-    activeModelProfileId: stringValue(stored['activeModelProfileId'], DEFAULTS.activeModelProfileId),
+    activeModelProfileId: stringValue(
+      stored['activeModelProfileId'],
+      DEFAULTS.activeModelProfileId,
+    ),
     apiFormat: VALID_API_FORMAT.has(stored['apiFormat'] as ApiFormat)
-      ? stored['apiFormat'] as ApiFormat
+      ? (stored['apiFormat'] as ApiFormat)
       : DEFAULTS.apiFormat,
     apiKeyHeader: stringValue(stored['apiKeyHeader'], DEFAULTS.apiKeyHeader),
     apiKeyPrefix: stringValue(stored['apiKeyPrefix'], DEFAULTS.apiKeyPrefix),
@@ -531,154 +546,176 @@ function migrateSettings(value: unknown): TryloSettings | null {
           : DEFAULTS.companion.enabled,
     },
     remote: migrateRemoteSettings(stored['remote'], DEFAULTS.remote),
-    // 电脑控制 default ON (matches the 办公基底 mount). A stored `false`
-    // persists the user's opt-out; absent (never persisted / pre-2026 value)
-    // falls back to the current default `true` so desktop control stays usable
-    // unless the user explicitly turns it off.
-    workComputer: stored['workComputer'] !== false,
+    // Office/browser/desktop control are the user-requested shared defaults.
+    // Keep the legacy field readable without restoring an obsolete opt-out.
+    workComputer: true,
     workBrowserDebug: stored['workBrowserDebug'] === true,
     workCad: stored['workCad'] === true,
     // Whitelist: absent (= never persisted) ⇒ default `true`; an explicit
     // `false` persists the user's opt-out (spec §2.4).
     hermesWorkLearning: stored['hermesWorkLearning'] !== false,
-    cliPath: stringValue(stored['cliPath'], DEFAULTS.cliPath),
     workspace: stringValue(stored['workspace'], DEFAULTS.workspace),
     userLearning: migrateUserLearning(stored['userLearning'], DEFAULTS.userLearning),
-    // P08 §4.1: additive migration. An unrecognised value falls back to
-    // the product default rather than throwing — a bad stored value must
-    // never lock the user out of their settings.
-    cliRuntimeProtocol:
-      parseCliRuntimeProtocol(stored['cliRuntimeProtocol']) ?? DEFAULT_CLI_RUNTIME_PROTOCOL,
-    ...(stored['cliRuntimeSelection'] === 'user' ? { cliRuntimeSelection: 'user' as const } : {}),
-  };
+    workflowLearning: workflowLearningSettings(stored['workflowLearning']),
+    agentLearning: agentLearningSettings(stored['agentLearning']),
+    settingsNotices: settingsNotices(stored),
+    checkLearning: checkLearningSettings(stored['checkLearning']),
+    collaborationLearning: collaborationLearningSettings(stored['collaborationLearning']),
+  }
 }
 
-const VALID_ENFORCEMENT: ReadonlySet<EnforcementMode> = new Set(['shadow', 'enforced', 'off']);
+const VALID_ENFORCEMENT: ReadonlySet<EnforcementMode> = new Set(['shadow', 'enforced', 'off'])
 
 function migrateUserLearning(value: unknown, fallback: UserLearningSettings): UserLearningSettings {
-  const stored = objectRecord(value);
-  if (!stored) return { ...fallback, dimensionMode: { ...fallback.dimensionMode } };
-  const mode = stored['defaultMode'];
+  const stored = objectRecord(value)
+  if (!stored) return { ...fallback, dimensionMode: { ...fallback.dimensionMode } }
+  const mode = stored['defaultMode']
   return {
     enabled: typeof stored['enabled'] === 'boolean' ? stored['enabled'] : fallback.enabled,
-    defaultMode: VALID_ENFORCEMENT.has(mode as EnforcementMode) ? mode as EnforcementMode : fallback.defaultMode,
+    defaultMode: VALID_ENFORCEMENT.has(mode as EnforcementMode)
+      ? (mode as EnforcementMode)
+      : fallback.defaultMode,
     dimensionMode: isObject(stored['dimensionMode'])
-      ? { ...fallback.dimensionMode, ...(stored['dimensionMode'] as UserLearningSettings['dimensionMode']) }
+      ? {
+          ...fallback.dimensionMode,
+          ...(stored['dimensionMode'] as UserLearningSettings['dimensionMode']),
+        }
       : { ...fallback.dimensionMode },
-    cognitionEnabled: typeof stored['cognitionEnabled'] === 'boolean'
-      ? stored['cognitionEnabled']
-      : fallback.cognitionEnabled,
+    cognitionEnabled:
+      typeof stored['cognitionEnabled'] === 'boolean'
+        ? stored['cognitionEnabled']
+        : fallback.cognitionEnabled,
     inference: isObject(stored['inference'])
-      ? { ...DEFAULT_LEARNING_INFERENCE, ...fallback.inference, ...(stored['inference'] as Partial<typeof DEFAULT_LEARNING_INFERENCE>) }
+      ? {
+          ...DEFAULT_LEARNING_INFERENCE,
+          ...fallback.inference,
+          ...(stored['inference'] as Partial<typeof DEFAULT_LEARNING_INFERENCE>),
+        }
       : (fallback.inference ?? DEFAULT_LEARNING_INFERENCE),
-    teamAccessEnabled: typeof stored['teamAccessEnabled'] === 'boolean'
-      ? stored['teamAccessEnabled']
-      : (fallback.teamAccessEnabled ?? false),
+    teamAccessEnabled:
+      typeof stored['teamAccessEnabled'] === 'boolean'
+        ? stored['teamAccessEnabled']
+        : (fallback.teamAccessEnabled ?? false),
     // Foundation spec §9.4 / Pitfall 27: must be whitelisted here or the
     // user's toggle is silently dropped on every migrate.
-    teamComposerEnabled: typeof stored['teamComposerEnabled'] === 'boolean'
-      ? stored['teamComposerEnabled']
-      : (fallback.teamComposerEnabled ?? false),
-    userLearningV2Coordinator: typeof stored['userLearningV2Coordinator'] === 'boolean'
-      ? stored['userLearningV2Coordinator']
-      : (fallback.userLearningV2Coordinator ?? true),
-    userLearningBehaviorCommitments: typeof stored['userLearningBehaviorCommitments'] === 'boolean'
-      ? stored['userLearningBehaviorCommitments']
-      : (fallback.userLearningBehaviorCommitments ?? true),
-    userLearningReceipts: typeof stored['userLearningReceipts'] === 'boolean'
-      ? stored['userLearningReceipts']
-      : (fallback.userLearningReceipts ?? true),
-    userLearningOutcomeEvaluation: typeof stored['userLearningOutcomeEvaluation'] === 'boolean'
-      ? stored['userLearningOutcomeEvaluation']
-      : (fallback.userLearningOutcomeEvaluation ?? true),
-    userLearningNoTraceMode: typeof stored['userLearningNoTraceMode'] === 'boolean'
-      ? stored['userLearningNoTraceMode']
-      : (fallback.userLearningNoTraceMode ?? true),
-  };
+    teamComposerEnabled:
+      typeof stored['teamComposerEnabled'] === 'boolean'
+        ? stored['teamComposerEnabled']
+        : (fallback.teamComposerEnabled ?? false),
+    userLearningV2Coordinator:
+      typeof stored['userLearningV2Coordinator'] === 'boolean'
+        ? stored['userLearningV2Coordinator']
+        : (fallback.userLearningV2Coordinator ?? true),
+    userLearningBehaviorCommitments:
+      typeof stored['userLearningBehaviorCommitments'] === 'boolean'
+        ? stored['userLearningBehaviorCommitments']
+        : (fallback.userLearningBehaviorCommitments ?? true),
+    userLearningReceipts:
+      typeof stored['userLearningReceipts'] === 'boolean'
+        ? stored['userLearningReceipts']
+        : (fallback.userLearningReceipts ?? true),
+    userLearningOutcomeEvaluation:
+      typeof stored['userLearningOutcomeEvaluation'] === 'boolean'
+        ? stored['userLearningOutcomeEvaluation']
+        : (fallback.userLearningOutcomeEvaluation ?? true),
+    userLearningNoTraceMode:
+      typeof stored['userLearningNoTraceMode'] === 'boolean'
+        ? stored['userLearningNoTraceMode']
+        : (fallback.userLearningNoTraceMode ?? true),
+  }
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+  return typeof value === 'object' && value !== null
 }
 
 function parseStoredSettings(raw: string | null): TryloSettings | null {
-  if (!raw) return null;
+  if (!raw) return null
   try {
-    return migrateSettings(JSON.parse(raw) as unknown);
+    return migrateSettings(JSON.parse(raw) as unknown)
   } catch {
-    return null;
+    return null
   }
 }
-
 export function loadSettings(): TryloSettings {
-  // A malformed/partially-written primary must not strand the user. The
-  // backup is the last parseable value captured before a successful save.
-  const settings = typeof window === 'undefined' ? DEFAULTS
-    : parseStoredSettings(window.localStorage.getItem(STORAGE_KEY))
-      ?? parseStoredSettings(window.localStorage.getItem(STORAGE_BACKUP_KEY)) ?? DEFAULTS;
-  // Standard development and release builds use the new CLI. Keep connection,
-  // authority and original storage intact, but select protocol and entry together.
-  if (isNewCliOnlyDistribution()) {
-    return { ...settings, cliRuntimeProtocol: 'trylo-v1',
-      cliPath: settings.cliRuntimeProtocol === 'legacy-stream-json'
-        || isLegacyRuntimeDefaultCliPath(settings.cliPath) ? '' : settings.cliPath };
-  }
-  const preview = import.meta.env.DEV
-    ? parseCliRuntimeProtocol(import.meta.env.VITE_TRYLO_CLI_RUNTIME_PROTOCOL) : null;
-  // A local preview is a fallback until the person selects a runtime in
-  // Settings. Persisted explicit choices must survive reloads in dev too.
-  if (settings.cliRuntimeSelection === 'user') return settings;
-  // A local preview selects protocol and entry together. An empty v1 path
-  // delegates to the native resolver (and TRYLO_CLI_SCRIPT from the launcher),
-  // without rewriting the user's persisted runtime or connection settings.
-  return preview ? { ...settings, cliRuntimeProtocol: preview,
-    cliPath: preview === 'trylo-v1' ? '' : DEFAULTS.cliPath } : settings;
+  // Native resolution owns the new CLI entry; stored runtime choices are retired.
+  return typeof window === 'undefined'
+    ? DEFAULTS
+    : (parseStoredSettings(window.localStorage.getItem(STORAGE_KEY)) ??
+        parseStoredSettings(window.localStorage.getItem(STORAGE_BACKUP_KEY)) ??
+        DEFAULTS)
 }
 
 export function saveSettings(s: TryloSettings): void {
-  if (typeof window === 'undefined') return;
-  let previousRaw: string | null;
-  let reclaimedBackup = false;
+  if (typeof window === 'undefined') return
+  let previousRaw: string | null
+  let reclaimedBackup = false
   try {
-    const storage = window.localStorage;
-    previousRaw = storage.getItem(STORAGE_KEY);
-    const raw = JSON.stringify(s);
+    const storage = window.localStorage
+    previousRaw = storage.getItem(STORAGE_KEY)
+    const persisted: Record<string, unknown> = { ...s, settingsNotices: settingsNotices(s) }
+    delete persisted['routingLearningConfig']
+    for (const key of ['cliPath', 'cliRuntimeProtocol', 'cliRuntimeSelection'])
+      delete persisted[key]
+    const raw = JSON.stringify(persisted)
     try {
-      storage.setItem(STORAGE_KEY, raw);
+      storage.setItem(STORAGE_KEY, raw)
     } catch (error) {
       // Reclaim only our redundant backup. Never discard the only valid copy
       // or unrelated history/learning data to make a settings write succeed.
-      const backup = storage.getItem(STORAGE_BACKUP_KEY);
-      if (!(error instanceof DOMException && error.name === 'QuotaExceededError')
-        || !parseStoredSettings(previousRaw) || backup === null) throw error;
-      storage.removeItem(STORAGE_BACKUP_KEY);
+      const backup = storage.getItem(STORAGE_BACKUP_KEY)
+      if (
+        !(error instanceof DOMException && error.name === 'QuotaExceededError') ||
+        !parseStoredSettings(previousRaw) ||
+        backup === null
+      )
+        throw error
+      storage.removeItem(STORAGE_BACKUP_KEY)
       try {
-        storage.setItem(STORAGE_KEY, raw);
-        reclaimedBackup = true;
+        storage.setItem(STORAGE_KEY, raw)
+        reclaimedBackup = true
       } catch (retryError) {
-        try { storage.setItem(STORAGE_BACKUP_KEY, backup); } catch { /* primary remains intact */ }
-        throw retryError;
+        try {
+          storage.setItem(STORAGE_BACKUP_KEY, backup)
+        } catch {
+          /* primary remains intact */
+        }
+        throw retryError
       }
     }
   } catch (error) {
     if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-      throw new Error('浏览器本地存储额度已满（QuotaExceededError），设置未保存。请重新打开工作区以释放已落盘的会话副本后重试。');
+      throw new Error(
+        '浏览器本地存储额度已满（QuotaExceededError），设置未保存。请重新打开工作区以释放已落盘的会话副本后重试。',
+      )
     }
     if (error instanceof DOMException && error.name === 'SecurityError') {
-      throw new Error('浏览器禁止访问本地存储（SecurityError），设置未保存。请检查应用的存储访问权限。');
+      throw new Error(
+        '浏览器禁止访问本地存储（SecurityError），设置未保存。请检查应用的存储访问权限。',
+      )
     }
-    throw new Error('设置保存失败，未应用更改。请检查应用存储是否可用后重试。');
+    throw new Error('设置保存失败，未应用更改。请检查应用存储是否可用后重试。')
   }
   // Backup is best-effort and follows the primary commit: an optional backup
   // hitting quota must never silently keep the old primary connection active.
   try {
-    if (!reclaimedBackup && parseStoredSettings(previousRaw)) window.localStorage.setItem(STORAGE_BACKUP_KEY, previousRaw!);
+    if (!reclaimedBackup && parseStoredSettings(previousRaw))
+      window.localStorage.setItem(STORAGE_BACKUP_KEY, previousRaw!)
   } catch {
     // The primary is already committed; retain any older backup as-is.
   }
 }
 
-export const settingsDefaults = DEFAULTS;
+/** Acknowledgment commits only current stored preferences, never unsaved form edits. */
+export function dismissSettingsNotice(notice: SettingsNotice): void {
+  const current = loadSettings()
+  saveSettings({
+    ...current,
+    settingsNotices: withoutSettingsNotice(current.settingsNotices, notice),
+  })
+}
+
+export const settingsDefaults = DEFAULTS
 
 import {
   codePermissionMode,
@@ -686,7 +723,7 @@ import {
   legacyPermissionMigration,
   parsePermissionLevel,
   toolsForLevel,
-} from '../permission/permission-policy';
+} from '../permission/permission-policy'
 
 /**
  * Map the UI `PermissionLevel` to the CLI's `--permission-mode` value.
@@ -696,17 +733,17 @@ import {
  * stays consistent across the legacy and the new picker.
  */
 export function permissionModeForCli(level: PermissionLevel): string {
-  return codePermissionMode(level);
+  return codePermissionMode(level)
 }
 
 /** What to pass `--tools` as. Read-only level disables built-in tools. */
 export function toolsForMode(level: PermissionLevel): string {
-  return toolsForLevel(level);
+  return toolsForLevel(level)
 }
 
 /** Backwards-compatible helper for any code still passing a legacy
  *  `chat | plan | agent` shape through the old call sites. Routes
  *  through the same migration used at load time. */
 export function legacyPermissionModeForCli(mode: PermissionMode): string {
-  return codePermissionMode(legacyPermissionMigration(mode));
+  return codePermissionMode(legacyPermissionMigration(mode))
 }

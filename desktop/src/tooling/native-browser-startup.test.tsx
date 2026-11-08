@@ -39,7 +39,7 @@ async function stopChild(child: ChildProcessWithoutNullStreams) {
 }
 
 async function repositoryBrowserEntry(): Promise<string> {
-  const registryPath = path.resolve('../tool-sources.json')
+  const registryPath = path.resolve('../desktop-services/toolchain/tool-sources.json')
   const config: unknown = JSON.parse(await fs.readFile(registryPath, 'utf8'))
   if (!config || typeof config !== 'object' || !('tools' in config)) {
     throw new Error('Repository tool registry is missing its tools declaration')

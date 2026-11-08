@@ -31,10 +31,7 @@ describe('model-scoped context preferences', () => {
     expect(sameConnection(current, changed)).toBe(true)
   })
   it('defaults the actual new-CLI run snapshot to 200K', () => {
-    const run = settingsForCodeRun(
-      { ...settingsDefaults, cliRuntimeProtocol: 'trylo-v1' },
-      'D:/fixture' as never,
-    )
+    const run = settingsForCodeRun({ ...settingsDefaults }, 'D:/fixture' as never)
     expect(run.contextTokenLimit).toBe(200_000)
   })
   it.each([400_000, 600_000, 800_000, 1_000_000])(
@@ -53,10 +50,7 @@ describe('model-scoped context preferences', () => {
       expect(contextPreference(loaded)).toEqual({ window, capacity: 1_000_000 })
       expect(contextPreference({ ...loaded, apiModel: 'model-b' })).toEqual({})
       expect(contextPreference({ ...loaded, apiHost: 'https://two.invalid/v1' })).toEqual({})
-      const run = settingsForCodeRun(
-        { ...loaded, cliRuntimeProtocol: 'trylo-v1' },
-        'D:/fixture' as never,
-      )
+      const run = settingsForCodeRun({ ...loaded }, 'D:/fixture' as never)
       expect(run.contextTokenLimit).toBe(window)
       expect(run.modelContextWindow).toBe(1_000_000)
       const { args } = buildTryloV1Args(run)
@@ -70,11 +64,8 @@ describe('model-scoped context preferences', () => {
         ),
       ).toEqual(['--model-context-window', '1000000'])
       expect(
-        settingsForCodeRun(
-          { ...loaded, cliRuntimeProtocol: 'legacy-stream-json' },
-          'D:/fixture' as never,
-        ).contextTokenLimit,
-      ).toBeUndefined()
+        settingsForCodeRun({ ...loaded }, 'D:/fixture' as never).contextTokenLimit,
+      ).toBe(window)
     },
   )
   it('never lets a user declaration raise the service capacity', () => {

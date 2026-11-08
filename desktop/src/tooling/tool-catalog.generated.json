@@ -1,4 +1,5 @@
 {
+  "coreToolsRevision": 7,
   "packages": [
     {
       "id": "officecli",
@@ -677,6 +678,7 @@
   ],
   "profiles": {
     "code.core.v1": [
+      "officecli",
       "playwright",
       "windows-mcp"
     ],

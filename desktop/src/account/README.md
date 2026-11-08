@@ -10,4 +10,4 @@ New RPCs `remote.relayBrowserOpen` and `remote.relayAccountOpen` launch the syst
 
 Authentication never enables remote access. After an explicit login/logout, AppShell only pauses an already-enabled **server** remote connection; it does not switch connection mode or stop an independent tunnel. Initial session restoration does not apply that pause. Logout while server remote access is active explains the disconnection before executing.
 
-Verification and preserved initial failures are under `desktop/spike-results/2026-10-23-account-popover/`. The browser fixture in `desktop/prototype/account-login-wired/` imports these real components and state machine with synthetic IO; it is not a production route or native-login acceptance.
+Verification and preserved initial failures are archived under `_workspace/tasks/desktop-spike-history-20261107/2026-10-23-account-popover/`. The historical browser fixture is preserved in `_workspace/archive/tracked/desktop-prototypes-20261107/account-login-wired/`; it used these real components and state machine with synthetic IO. It is not a production route or native-login acceptance.

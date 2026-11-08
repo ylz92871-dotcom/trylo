@@ -4,9 +4,8 @@
 // pre-send capability gate:
 //   - the §3.3 fixed state machine (未安装→安装中→校验中→可用 / 失败分支);
 //   - hash / version drift and condition-missing NEVER read as 可用;
-//   - the capability gate degrades non-blocking but BLOCKS a request that
-//     explicitly needs a missing capability (阻止伪开工);
-//   - browser-capability alternation (playwright OR chrome-devtools).
+//   - missing capability health never vetoes the user's message;
+//   - recovery guidance belongs to the agent's run context.
 
 import { describe, expect, it } from 'vitest';
 
@@ -129,51 +128,44 @@ describe('decideSendCapabilityGate (§3.3-5 pre-send gate)', () => {
     expect(decideSendCapabilityGate('写个周报', [])).toEqual({ behavior: 'allow' });
   });
 
-  it('degrades non-blocking when nothing in the text needs the missing tools', () => {
-    const decision = expectBehavior(
-      decideSendCapabilityGate('写一份周报保存到 .trylo/out', [
+  it('allows unrelated requests without an optional-tool banner', () => {
+    expect(decideSendCapabilityGate('写一份周报保存到 .trylo/out', [
         { id: 'officecli', type: 'package', displayName: 'OfficeCLI', userMessage: 'OfficeCLI（1.0.145）不可用' },
-      ]),
-      'degrade',
-    );
-    expect(decision.notice).toContain('OfficeCLI');
-    expect(decision.notice).toContain('Work 工具');
+      ])).toEqual({ behavior: 'allow' });
   });
 
-  it('the degrade notice shows display names, never the raw detail', () => {
-    const decision = expectBehavior(
-      decideSendCapabilityGate('写一份周报保存到 .trylo/out', [
+  it('does not project optional package diagnostics into a chat notice', () => {
+    expect(decideSendCapabilityGate('写一份周报保存到 .trylo/out', [
         {
           id: 'playwright',
           type: 'package',
           displayName: 'Playwright MCP',
           userMessage: "Playwright MCP（0.0.79）不可用：pinned playwright 0.0.79 is not installed at C:\\Users\\x\\tool-packages",
         },
-      ]),
-      'degrade',
-    );
-    expect(decision.notice).toContain('Playwright MCP');
-    expect(decision.notice).not.toContain('C:\\Users');
-    expect(decision.notice).not.toContain('pinned playwright');
+      ])).toEqual({ behavior: 'allow' });
   });
 
-  it('blocks a pseudo-start when the request explicitly needs office', () => {
-    const decision = expectBehavior(
+  it('leaves optional CAD setup guidance to the agent even when CAD is requested', () => {
+    const missing = ['solidworks-mcp', 'autocad-mcp', 'kicad-mcp', 'jlceda-mcp', 'freecad-mcp', 'blender-mcp']
+      .map(id => ({ id, type: 'package', displayName: id }));
+    expect(decideSendCapabilityGate('用 KiCad 画原理图', missing)).toEqual({ behavior: 'allow' });
+  });
+
+  it('allows an explicit Office request so the agent can explain or recover', () => {
+    expectBehavior(
       decideSendCapabilityGate('生成一份会议纪要 docx', [
         { id: 'officecli', type: 'package', userMessage: 'OfficeCLI（1.0.145）不可用' },
       ]),
-      'block',
+      'allow',
     );
-    expect(decision.notice).toContain('已阻止发送');
-    expect(decision.missingIds).toContain('officecli');
   });
 
-  it('blocks desktop-control requests when windows-mcp is missing', () => {
+  it('allows a desktop request without enabling an unavailable control tool', () => {
     expectBehavior(
       decideSendCapabilityGate('截取当前桌面并描述', [
         { id: 'windows-mcp', type: 'package', userMessage: 'Windows-MCP 不可用' },
       ]),
-      'block',
+      'allow',
     );
   });
 
@@ -183,17 +175,17 @@ describe('decideSendCapabilityGate (§3.3-5 pre-send gate)', () => {
         // playwright missing but chrome-devtools available → degrade, not block
         { id: 'playwright', type: 'package', userMessage: 'Playwright MCP 不可用' },
       ]),
-      'degrade',
+      'allow',
     );
   });
 
-  it('blocks the browser request when BOTH browser packages are missing', () => {
+  it('allows a browser request when both browser packages need recovery', () => {
     expectBehavior(
       decideSendCapabilityGate('打开 example.com 网页', [
         { id: 'playwright', type: 'package', userMessage: 'Playwright MCP 不可用' },
         { id: 'chrome-devtools', type: 'package', userMessage: 'Chrome DevTools MCP 不可用' },
       ]),
-      'block',
+      'allow',
     );
   });
 
