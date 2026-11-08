@@ -11,8 +11,12 @@ export function createUtf8OutputSink(accept: (bytes: Buffer) => void): Utf8Outpu
   const decoder = new StringDecoder("utf8");
   let ended = false;
   const emit = (text: string): void => { if (text.length > 0) accept(Buffer.from(text, "utf8")); };
+
   return {
     write(chunk) { if (!ended) emit(decoder.write(chunk)); },
-    end() { if (!ended) { ended = true; emit(decoder.end()); } },
+    end() { if (!ended) {
+      ended = true;
+      emit(decoder.end());
+    } },
   };
 }

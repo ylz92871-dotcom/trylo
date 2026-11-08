@@ -37,16 +37,20 @@ export function applyRestore(input: {
   if (!existsSync(manifestPath)) {
     return failureOf("checkpoint_not_found", input.checkpointId);
   }
+
   let text: string;
+
   try {
     text = readFileSync(manifestPath, "utf8");
   } catch (error) {
     return failureOf("manifest_unreadable", String(error));
   }
+
   const parsed = parseManifest(text);
   if (!parsed.ok) {
     return failureOf(parsed.code, parsed.detail);
   }
+
   const manifest = parsed.manifest;
   if (manifest.checkpointId !== input.checkpointId) {
     return failureOf("checkpoint_not_found", `${input.checkpointId} != ${manifest.checkpointId}`);
@@ -76,17 +80,21 @@ function verifyStored(
 ): { ok: true } | { ok: false; code: "checksum_mismatch" | "checkpoint_not_found"; detail: string } {
   for (const entry of manifest.files) {
     const source = nativeJoin(filesRoot, entry.path);
+
     try {
       statSync(source);
     } catch {
       return { ok: false, code: "checkpoint_not_found", detail: entry.path };
     }
+
     let actual: string;
+
     try {
       actual = sha256Of(source);
     } catch (error) {
       return { ok: false, code: "checksum_mismatch", detail: `${entry.path}: ${String(error)}` };
     }
+
     if (actual !== entry.sha256) {
       return { ok: false, code: "checksum_mismatch", detail: entry.path };
     }

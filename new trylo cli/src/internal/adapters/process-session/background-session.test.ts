@@ -45,13 +45,19 @@ test("ps lists a real running session with its real command", async () => {
     cols: 80,
     maxBufferBytes: 4096,
   });
+
   assert.equal(started.status, "running");
+
   try {
     const listed = backgroundSessions(sessions);
+
     assert.equal(listed.ok, true);
+
     if (!listed.ok) return;
+
     assert.equal(listed.value.length, 1);
     const row = listed.value[0];
+
     assert.ok(row !== undefined);
     assert.equal(row.status, "running");
     // The command as it was asked for, not re-parsed — that is what makes the
@@ -74,11 +80,16 @@ test("logs returns output the process actually produced", async () => {
     cols: 80,
     maxBufferBytes: 8192,
   });
+
   assert.equal(started.status, "running");
+
   try {
     const logs = await readBackgroundSession(sessions, "ps_bbbbbbbbbbbbbbbbbbbbbbbb", { yieldMs: 1500 });
+
     assert.equal(logs.ok, true);
+
     if (!logs.ok) return;
+
     // The marker is the assertion: a registry that reported success without the
     // process having printed anything would fail here.
     assert.match(logs.value.text, /MARKER-ALPHA/);
@@ -100,6 +111,7 @@ test("a session that exits on its own reports the real exit code", async () => {
     cols: 80,
     maxBufferBytes: 4096,
   });
+
   assert.equal(started.status, "running");
   // Poll until the exit has actually been *observed*. The registry's terminal
   // state arrives when its `exit` handler runs, which is not synchronously with
@@ -108,6 +120,7 @@ test("a session that exits on its own reports the real exit code", async () => {
   // assuming one poll is enough is what makes this a test of the exit code
   // instead of a test of process scheduling.
   const deadline = Date.now() + 10_000;
+
   while (sessions.get("ps_cccccccccccccccccccccccc")?.status === "running" && Date.now() < deadline) {
     await sessions.write({
       sessionId: "ps_cccccccccccccccccccccccc",
@@ -118,8 +131,11 @@ test("a session that exits on its own reports the real exit code", async () => {
   }
 
   const row = backgroundSession(sessions, "ps_cccccccccccccccccccccccc");
+
   assert.equal(row.ok, true);
+
   if (!row.ok) return;
+
   // The exit code the process chose, not one the wrapper invented.
   assert.equal(row.value.status, "exited");
   assert.equal(row.value.exitCode, 3);
@@ -138,16 +154,22 @@ test("attach reads without taking the session over", async () => {
     cols: 80,
     maxBufferBytes: 8192,
   });
+
   assert.equal(started.status, "running");
+
   try {
     const first = await readBackgroundSession(sessions, "ps_dddddddddddddddddddddddd", { yieldMs: 1200 });
+
     assert.equal(first.ok, true);
+
     if (first.ok) assert.match(first.value.text, /FIRST/);
 
     // A second read is a cursor, not a replay: the point of `attach` is that a
     // watcher does not re-read everything every time.
     const second = await readBackgroundSession(sessions, "ps_dddddddddddddddddddddddd", { yieldMs: 1200 });
+
     assert.equal(second.ok, true);
+
     if (second.ok) {
       assert.doesNotMatch(second.value.text, /FIRST/, "a second read must not replay what the first took");
     }
@@ -169,18 +191,24 @@ test("kill ends a waiting session, and the process really goes", async () => {
     cols: 80,
     maxBufferBytes: 4096,
   });
+
   assert.equal(started.status, "running");
 
   const killed = await killBackgroundSession(sessions, "ps_eeeeeeeeeeeeeeeeeeeeeeee");
+
   assert.equal(killed.ok, true);
+
   if (!killed.ok) return;
+
   assert.equal(killed.value.alreadyGone, false);
 
   // The assertion a mock could not make: the session is terminal afterwards, and
   // asking about it is still a valid answer rather than a refusal — "how did it
   // end" is exactly what a person needs next.
   const after = backgroundSession(sessions, "ps_eeeeeeeeeeeeeeeeeeeeeeee");
+
   assert.equal(after.ok, true);
+
   if (after.ok) {
     assert.notEqual(after.value.status, "running");
   }
@@ -211,8 +239,11 @@ test("a malformed id is refused before it reaches a lookup", async () => {
 test("reading an unknown session says so instead of printing nothing", async () => {
   const sessions = registry();
   const logs = await readBackgroundSession(sessions, "ps_111111111111111111111111", { yieldMs: 100 });
+
   assert.equal(logs.ok, false);
+
   if (logs.ok) return;
+
   // "No output" and "no such session" lead to opposite conclusions, and only one
   // of them is true.
   assert.equal(logs.code, "session_not_found");
@@ -253,6 +284,7 @@ test("a ps row names what a person needs: state, age, command, and the warnings"
     },
     65_000,
   );
+
   assert.match(rendered, /npm run build/);
   assert.match(rendered, /1m05s/);
   // The flags are the part a person cannot derive: a truncated log and a lost one

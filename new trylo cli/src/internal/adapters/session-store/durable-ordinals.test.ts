@@ -37,8 +37,10 @@ test("a compaction translates projected positions using source items with ordina
   const source = journalView("s", transcript, []);
   const translate: (win: typeof window, records: typeof durable, basis: typeof source) => typeof window | undefined = windowOnJournal;
   const mapped = translate(window, durable, source);
+
   assert.equal(mapped, undefined, "a source item missing from disk must not produce a partial window");
   const withNew = [...durable, { ...source[2]!, sequence: 5 }];
+
   assert.deepEqual(translate(window, withNew, source), { ...window, replacedFromSequence: 1, replacedToSequence: 5 });
 });
 
@@ -47,6 +49,7 @@ test("adopting a persisted window counts only the projected transcript, leaving 
   const ledger = createCompactionLedger();
   const projected: Transcript = [...history.slice(0, 3), { kind: "user", sequence: 4, text: "next" }];
   const adopt: (target: typeof ledger, win: typeof window, records: typeof durable, items: Transcript) => void = adoptResumedWindow;
+
   adopt(ledger, { ...window, replacedToSequence: 4 }, durable, projected);
   assert.equal(ledger.replacedPrefix, 3);
   assert.equal(projected.slice(ledger.replacedPrefix)[0]?.kind, "user");

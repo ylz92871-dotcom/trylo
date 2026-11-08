@@ -13,6 +13,7 @@ export function attachSessionOutput(record: {
   const streams = [record.child.stdout, record.child.stderr].filter(stream => stream !== null);
   let open = streams.length;
   const closers: Array<() => void> = [];
+
   for (const stream of streams) {
     const decoder = createUtf8OutputSink(bytes => record.buffer.write(bytes));
     let closed = false;
@@ -23,10 +24,16 @@ export function attachSessionOutput(record: {
       if (--open === 0) record.buffer.end();
       wake();
     };
+
     closers.push(close);
-    stream.on("data", (chunk: Buffer) => { decoder.write(chunk); publish(chunk); wake(); });
+    stream.on("data", (chunk: Buffer) => {
+      decoder.write(chunk);
+      publish(chunk);
+      wake();
+    });
     stream.once("end", close);
     stream.once("close", close);
   }
+
   record.child.once("close", () => { for (const close of closers) close(); });
 }

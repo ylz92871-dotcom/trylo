@@ -58,10 +58,12 @@ describe("pty sidecar frames", () => {
       encodeFrame(PTY_EVENT.data, Buffer.from("one", "utf8")),
       encodeFrame(PTY_EVENT.data, Buffer.from("two", "utf8")),
     ]);
+
     // One byte at a time: no read boundary may be assumed to be a frame boundary.
     for (const byte of whole) {
       decode(Buffer.from([byte]));
     }
+
     assert.equal(seen.length, 3);
     assert.equal(seen[1]?.text, "one");
     assert.equal(seen[2]?.text, "two");
@@ -77,6 +79,7 @@ describe("pty sidecar frames", () => {
       },
     );
     const lying = Buffer.alloc(5);
+
     lying[0] = PTY_EVENT.data;
     lying.writeUInt32LE(PTY_MAX_FRAME_BYTES + 1, 1);
     decode(lying);
@@ -113,6 +116,7 @@ describe("pty sidecar frames", () => {
     const output = Buffer.from([0x1b, 0x5b, 0x33, 0x31, 0x6d, 0x00]);
     const frame = encodeFrame(PTY_EVENT.data, encodeIdPrefixed("ps_alpha", output));
     const decoded = decodeIdPayload(frame.subarray(5));
+
     assert.ok(decoded !== undefined, "a data frame must be decodable");
     assert.equal(decoded.sessionId, "ps_alpha");
     assert.deepEqual([...decoded.body], [...output], "the bytes after the id are untouched");

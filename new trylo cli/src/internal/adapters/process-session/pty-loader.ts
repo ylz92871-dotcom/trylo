@@ -95,15 +95,18 @@ function builtPlatforms(repoRoot: string): string[] {
   if (!existsSync(provenance)) {
     return [];
   }
+
   try {
     const parsed: unknown = JSON.parse(readFileSync(provenance, "utf8"));
     if (typeof parsed !== "object" || parsed === null) {
       return [];
     }
+
     const artifacts = (parsed as Record<string, unknown>)["artifacts"];
     if (typeof artifacts !== "object" || artifacts === null) {
       return [];
     }
+
     return Object.keys(artifacts as Record<string, unknown>)
       .map((key) => key.replace(/^trylo-pty-/, ""))
       .sort();
@@ -120,16 +123,20 @@ function builtPlatforms(repoRoot: string): string[] {
  */
 function findRepoRoot(startDir: string): string | undefined {
   let current = startDir;
+
   for (let depth = 0; depth < 8; depth += 1) {
     if (existsSync(path.join(current, "vendor-bin", "pty", "PROVENANCE.json"))) {
       return current;
     }
+
     const parent = path.dirname(current);
     if (parent === current) {
       return undefined;
     }
+
     current = parent;
   }
+
   return undefined;
 }
 
@@ -163,6 +170,7 @@ export function resolvePtyHelper(input: ResolutionInput = {}): PtyHelperResoluti
     built.length === 0
       ? "No platform artifacts are recorded in vendor-bin/pty/PROVENANCE.json."
       : `Recorded artifacts: ${built.join(", ")}.`;
+
   return {
     ok: false,
     code: "pty_helper_not_built_for_platform",

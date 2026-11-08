@@ -100,12 +100,15 @@ export function terminalize(
   if (isTerminalProcessStatus(record.status)) {
     return;
   }
+
   record.buffer.end();
   record.status = end.kind;
   record.end = end;
+
   for (const wake of [...record.waiters]) {
     wake();
   }
+
   record.waiters.clear();
   void now;
 }
@@ -129,6 +132,7 @@ export function createPtySidecarHost(options: PtySidecarHostOptions): PtySidecar
   const retire = (record: PtySessionRecord): void => {
     retired.delete(record.id);
     retired.set(record.id, record);
+
     while (retired.size > RETAINED_LIMIT) {
       const oldest = retired.keys().next();
       if (oldest.done === true) {
@@ -140,14 +144,19 @@ export function createPtySidecarHost(options: PtySidecarHostOptions): PtySidecar
 
   const failAll = (reason: string): void => {
     const current = sidecar;
+
     sidecar = undefined;
+
     for (const waiter of waiters) {
       waiter.reject(new Error(`PTY helper: ${reason}`));
     }
+
     waiters = [];
+
     if (current === undefined) {
       return;
     }
+
     // Marked *and retained*, not cleared. The earlier version marked them and
     // then dropped the only structure holding them, so the state existed and
     // could not be observed: every lookup went through `current`, which was
@@ -167,12 +176,16 @@ export function createPtySidecarHost(options: PtySidecarHostOptions): PtySidecar
           failAll("the hello frame could not be parsed, so it is not speaking this protocol");
           return;
         }
+
         current.protocol = hello.protocol;
         current.version = hello.version;
+
         for (const waiter of waiters) {
           waiter.resolve();
         }
+
         waiters = [];
+
         return;
       }
       case PTY_EVENT.ready: {
@@ -180,10 +193,12 @@ export function createPtySidecarHost(options: PtySidecarHostOptions): PtySidecar
         if (ready === undefined) {
           return;
         }
+
         const record = current.sessions.get(ready.id);
         if (record !== undefined) {
           record.pid = ready.pid;
         }
+
         return;
       }
       case PTY_EVENT.data: {
@@ -198,14 +213,18 @@ export function createPtySidecarHost(options: PtySidecarHostOptions): PtySidecar
           // in a terminal that did not produce them.
           return;
         }
+
         const record = current.sessions.get(addressed.sessionId);
         if (record === undefined) {
           return;
         }
+
         record.buffer.write(addressed.body);
+
         for (const wake of [...record.waiters]) {
           wake();
         }
+
         return;
       }
       case PTY_EVENT.exit: {
@@ -213,16 +232,19 @@ export function createPtySidecarHost(options: PtySidecarHostOptions): PtySidecar
         if (exit === undefined) {
           return;
         }
+
         const record = current.sessions.get(exit.id);
         if (record === undefined) {
           return;
         }
+
         // Terminal state is recorded, not deleted. A poll after the fact is how
         // a caller reads what the program said before it ended, and the pipes
         // registry keeps the record for the same reason — two paths that answer
         // "can I still see this?" differently is a bug waiting to be found.
         terminalize(record, { kind: "exited", exitCode: exit.code }, options.now);
         retire(record);
+
         return;
       }
       case PTY_EVENT.error: {
@@ -231,20 +253,24 @@ export function createPtySidecarHost(options: PtySidecarHostOptions): PtySidecar
           failAll("an error frame could not be parsed, so it is not speaking this protocol");
           return;
         }
+
         if (error.code === "pty_protocol_mismatch") {
           failAll(`protocol mismatch: ${error.message}`);
           return;
         }
+
         const record = error.id === undefined ? undefined : current.sessions.get(error.id);
         if (record === undefined) {
           return;
         }
+
         terminalize(
           record,
           { kind: "failed", code: error.code, message: error.message },
           options.now,
         );
         retire(record);
+
         return;
       }
       default:
@@ -259,6 +285,7 @@ export function createPtySidecarHost(options: PtySidecarHostOptions): PtySidecar
     if (sidecar !== undefined) {
       return sidecar;
     }
+
     const child = options.spawnHelper(options.helperPath);
     const current: PtySidecar = { child, sessions: new Map(), protocol: 0, version: "unknown" };
     const decode = createFrameDecoder(
@@ -269,6 +296,7 @@ export function createPtySidecarHost(options: PtySidecarHostOptions): PtySidecar
         failAll(reason);
       },
     );
+
     child.stdout?.on("data", decode);
     child.stderr?.resume();
     child.stdin?.on("error", () => {
@@ -288,13 +316,16 @@ export function createPtySidecarHost(options: PtySidecarHostOptions): PtySidecar
     const handshake = new Promise<void>((resolve, reject) => {
       waiters.push({ resolve, reject });
     });
+
     child.stdin?.write(encodeJsonFrame(PTY_OP.hello, { protocol: PTY_PROTOCOL_VERSION }));
     await handshake;
+
     if (current.protocol !== PTY_PROTOCOL_VERSION) {
       const detail = `helper ${current.version} speaks protocol ${current.protocol}, this build speaks ${PTY_PROTOCOL_VERSION}`;
       failAll(detail);
       throw new Error(`pty_protocol_mismatch: ${detail}`);
     }
+
     return current;
   };
 
@@ -318,18 +349,24 @@ export function createPtySidecarHost(options: PtySidecarHostOptions): PtySidecar
     },
     shutdown(): void {
       const current = sidecar;
+
       sidecar = undefined;
+
       for (const waiter of waiters) {
         waiter.reject(new Error("PTY helper: the owner shut down"));
       }
+
       waiters = [];
+
       if (current === undefined) {
         return;
       }
+
       // Closing the helper's stdin *is* the shutdown: it kills every session it
       // owns on the way out, which is stronger than asking each one politely.
       current.child.stdin?.end();
       current.child.kill();
+
       for (const record of current.sessions.values()) {
         terminalize(
           record,
@@ -337,6 +374,7 @@ export function createPtySidecarHost(options: PtySidecarHostOptions): PtySidecar
           options.now,
         );
       }
+
       // Cleared here and only here: the owner is gone, so there is nobody left
       // to ask. Everywhere else a terminal session stays readable.
       current.sessions.clear();

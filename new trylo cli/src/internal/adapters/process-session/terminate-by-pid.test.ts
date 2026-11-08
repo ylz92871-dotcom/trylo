@@ -52,8 +52,11 @@ test("a POSIX by-pid tree kill is explicitly refused and launches no helper", as
         return 0;
       },
     });
+
     assert.equal(outcome.ok, false, `${platform} must not claim the tree died`);
+
     if (outcome.ok) throw new Error("expected failure");
+
     assert.equal(outcome.code, "tree_kill_unsupported_platform");
     assert.match(outcome.message, /tree-killed by pid/);
     assert.match(outcome.message, new RegExp(platform));

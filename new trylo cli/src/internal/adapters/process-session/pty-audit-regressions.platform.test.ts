@@ -51,6 +51,7 @@ function locateHelperPid(): number | undefined {
   if (systemRoot === undefined) {
     return undefined;
   }
+
   try {
     const listing = execFileSync(
       path.join(systemRoot, "System32", "tasklist.exe"),
@@ -58,6 +59,7 @@ function locateHelperPid(): number | undefined {
       { encoding: "utf8" },
     );
     const match = /"(\d+)"/.exec(listing);
+
     return match === null || match[1] === undefined ? undefined : Number(match[1]);
   } catch {
     return undefined;
@@ -100,6 +102,7 @@ async function drain(
   attempts = 6,
 ): Promise<string> {
   let output = "";
+
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const read = await registry.write({ sessionId, input: "", eof: false, yieldMs: 250 });
     if (!read.ok) {
@@ -107,6 +110,7 @@ async function drain(
     }
     output += read.read.output;
   }
+
   return output;
 }
 
@@ -117,6 +121,7 @@ async function readUntil(
   attempts = 25,
 ): Promise<string> {
   let output = "";
+
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const read = await registry.write({ sessionId, input: "", eof: false, yieldMs: 300 });
     if (read.ok) {
@@ -125,11 +130,13 @@ async function readUntil(
         return output;
       }
     }
+
     const current = registry.get(sessionId);
     if (current !== undefined && current.status !== "running") {
       break;
     }
   }
+
   return output;
 }
 
@@ -140,6 +147,7 @@ describe(
     it("keeps two live terminals' output in the session that produced it", async () => {
       assert.ok(interpreter !== undefined);
       const registry = createPtySessionRegistry();
+
       try {
         // Both interpreters stay at their prompts and the marker is typed into
         // one of them. Both must be *running* for this bug to be visible: a
@@ -149,6 +157,7 @@ describe(
         // and hid it exactly this way.
         const listener = await registry.start(startOf([interpreter], `ps_listen0024`));
         const talker = await registry.start(startOf([interpreter], `ps_talker0024`));
+
         await sleep(1_200);
         assert.equal(registry.get(listener.id)?.status, "running", "the listener stays open");
         assert.equal(registry.get(talker.id)?.status, "running", "the talker stays open");
@@ -164,7 +173,9 @@ describe(
           eof: false,
           yieldMs: 1_500,
         });
+
         assert.equal(typed.ok, true);
+
         if (typed.ok) {
           assert.match(
             typed.read.output,
@@ -180,7 +191,9 @@ describe(
           eof: false,
           yieldMs: 600,
         });
+
         assert.equal(other.ok, true);
+
         if (other.ok) {
           assert.doesNotMatch(
             other.read.output,
@@ -196,6 +209,7 @@ describe(
     it("gives two live terminals separate buffers, read back independently", async () => {
       assert.ok(interpreter !== undefined);
       const registry = createPtySessionRegistry();
+
       try {
         // The same fact from the other side: instead of checking that one
         // session lacks the other's marker, this checks that each session's own
@@ -204,6 +218,7 @@ describe(
         // marker appears intact.
         const one = await registry.start(startOf([interpreter], `ps_one00000024`));
         const two = await registry.start(startOf([interpreter], `ps_two00000024`));
+
         await sleep(1_200);
         await drain(registry, one.id);
         await drain(registry, two.id);
@@ -223,6 +238,7 @@ describe(
 
         const oneOut = await readUntil(registry, one.id, "ONE-SIDE");
         const twoOut = await readUntil(registry, two.id, "TWO-SIDE");
+
         assert.match(oneOut, /ONE-SIDE/, "the first reads back its own complete output");
         assert.match(twoOut, /TWO-SIDE/, "the second reads back its own complete output");
         assert.doesNotMatch(oneOut, /TWO-SIDE/, "and not the other's");
@@ -235,6 +251,7 @@ describe(
     it("attributes output while both sessions are still running, not after they end", async () => {
       assert.ok(interpreter !== undefined);
       const registry = createPtySessionRegistry();
+
       try {
         // A session left open at its prompt produces nothing, so anything that
         // shows up in its buffer came from elsewhere. This is the shape of the
@@ -244,6 +261,7 @@ describe(
           startOf([interpreter, "/d", "/c", "echo GAMMA-ONLY-MARKER"], "ps_busy0000000024"),
         );
         const busyOut = await readUntil(registry, busy.id, "GAMMA-ONLY-MARKER");
+
         assert.match(busyOut, /GAMMA-ONLY-MARKER/);
 
         // Read the idle session directly from its snapshot-free path.
@@ -253,7 +271,9 @@ describe(
           eof: false,
           yieldMs: 300,
         });
+
         assert.equal(idleRead.ok, true);
+
         if (idleRead.ok) {
           assert.doesNotMatch(
             idleRead.read.output,
@@ -261,6 +281,7 @@ describe(
             "an idle terminal must not collect another session's output",
           );
         }
+
         assert.equal(registry.get(idle.id)?.status, "running", "the idle session is still running");
       } finally {
         registry.shutdown();
@@ -275,6 +296,7 @@ describe(
       // correct, and would test nothing about `lost`. The state under test is
       // the one where the helper vanished while the program was still alive.
       const session = await registry.start(startOf([interpreter], "ps_delta00000024"));
+
       await sleep(900);
       assert.equal(registry.get(session.id)?.status, "running", "the session is alive before the kill");
 
@@ -286,6 +308,7 @@ describe(
       await sleep(1_200);
 
       const after = registry.get(session.id);
+
       assert.notEqual(after, undefined, "a lost session must still be readable after the helper dies");
       assert.equal(after?.status, "lost", "and its state must be lost, not unknown");
       assert.equal(after?.end?.kind, "lost");
@@ -303,7 +326,9 @@ describe(
         eof: false,
         yieldMs: 300,
       });
+
       assert.equal(polled.ok, true, "a lost session is readable, not missing");
+
       if (polled.ok) {
         // Whatever it managed to print before the helper went — the console
         // banner is enough. What is asserted is the state, not the content.
@@ -313,6 +338,7 @@ describe(
 
       // And it appears in the listing, or a user cannot discover that it ended.
       const listed = registry.list().sessions;
+
       assert.ok(
         listed.some((entry) => entry.id === session.id),
         "a lost session is still listed",
@@ -324,6 +350,7 @@ describe(
       assert.ok(interpreter !== undefined);
       const registry = createPtySessionRegistry();
       const session = await registry.start(startOf([interpreter], "ps_epsilon0000024"));
+
       await sleep(600);
       killHelper();
       await sleep(1_200);
@@ -334,11 +361,14 @@ describe(
         eof: false,
         yieldMs: 300,
       });
+
       assert.equal(typed.ok, false, "there is no terminal left to type into");
+
       if (!typed.ok) {
         assert.equal(typed.code, "session_finished");
         assert.equal(typed.end?.kind, "lost", "and the refusal carries the lost state");
       }
+
       registry.shutdown();
     });
   },

@@ -103,12 +103,14 @@ export function decodeIdPayload(
   if (payload.byteLength < 4) {
     return undefined;
   }
+
   const view = Buffer.from(payload.buffer, payload.byteOffset, payload.byteLength);
   const idLength = view.readUInt32LE(0);
   const end = 4 + idLength;
   if (view.byteLength < end) {
     return undefined;
   }
+
   return {
     sessionId: view.subarray(4, end).toString("utf8"),
     body: Buffer.from(view.subarray(end)),
@@ -139,6 +141,7 @@ export function createFrameDecoder(
       if (pending.byteLength < 5) {
         return;
       }
+
       const length = pending.readUInt32LE(1);
       if (length > PTY_MAX_FRAME_BYTES) {
         pending = Buffer.alloc(0);
@@ -147,11 +150,14 @@ export function createFrameDecoder(
         );
         return;
       }
+
       if (pending.byteLength < 5 + length) {
         return;
       }
+
       const type = pending[0] as number;
       const payload = Buffer.from(pending.subarray(5, 5 + length));
+
       pending = pending.subarray(5 + length);
       onFrame({ type, payload });
     }
@@ -172,18 +178,22 @@ export type PtyErrorEvent = {
  */
 export function parsePtyError(payload: Uint8Array): PtyErrorEvent | undefined {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(Buffer.from(payload).toString("utf8"));
   } catch {
     return undefined;
   }
+
   if (typeof parsed !== "object" || parsed === null) {
     return undefined;
   }
+
   const record = parsed as Record<string, unknown>;
   if (typeof record["code"] !== "string" || typeof record["message"] !== "string") {
     return undefined;
   }
+
   return {
     ...(typeof record["id"] === "string" ? { id: record["id"] } : {}),
     code: record["code"],
@@ -192,7 +202,9 @@ export function parsePtyError(payload: Uint8Array): PtyErrorEvent | undefined {
 }
 
 export type PtyReadyEvent = { readonly id: string; readonly pid: number };
+
 export type PtyExitEvent = { readonly id: string; readonly code: number };
+
 export type PtyHelloEvent = { readonly protocol: number; readonly version: string };
 
 function parseRecord(payload: Uint8Array): Record<string, unknown> | undefined {
@@ -236,7 +248,9 @@ export function parsePtyHello(payload: Uint8Array): PtyHelloEvent | undefined {
   if (record === undefined) {
     return undefined;
   }
+
   const { protocol, version } = record;
+
   return typeof protocol === "number" && typeof version === "string"
     ? { protocol, version }
     : undefined;

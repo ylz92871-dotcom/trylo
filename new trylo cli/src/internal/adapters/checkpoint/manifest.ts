@@ -37,9 +37,11 @@ export function canonicalManifestBody(body: ManifestBody): string {
     `totalBytes=${body.totalBytes}`,
     `ignores=${[...body.ignores].sort().join(",")}`,
   ];
+
   for (const file of sortEntries(body.files)) {
     lines.push(`file=${file.path}\u0000${file.bytes}\u0000${file.sha256}`);
   }
+
   return lines.join("\n");
 }
 
@@ -71,18 +73,23 @@ export type ParsedManifest =
  */
 export function parseManifest(text: string): ParsedManifest {
   let raw: unknown;
+
   try {
     raw = JSON.parse(text);
   } catch {
     return { ok: false, code: "manifest_malformed", detail: "not json" };
   }
+
   if (!isManifestShape(raw)) {
     return { ok: false, code: "manifest_malformed", detail: "unexpected shape" };
   }
+
   const { digest, ...body } = raw;
+
   if (manifestDigest(body) !== digest) {
     return { ok: false, code: "checksum_mismatch", detail: body.checkpointId };
   }
+
   return { ok: true, manifest: raw };
 }
 
@@ -90,10 +97,12 @@ function isManifestShape(value: unknown): value is CheckpointManifest {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return false;
   }
+
   const shape = value as Record<string, unknown>;
   if (shape.formatVersion !== CHECKPOINT_FORMAT_VERSION) {
     return false;
   }
+
   if (
     typeof shape.checkpointId !== "string" ||
     typeof shape.label !== "string" ||
@@ -106,6 +115,7 @@ function isManifestShape(value: unknown): value is CheckpointManifest {
   ) {
     return false;
   }
+
   return shape.files.every((file) => isEntryShape(file));
 }
 
@@ -113,7 +123,9 @@ function isEntryShape(value: unknown): value is CheckpointFileEntry {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return false;
   }
+
   const shape = value as Record<string, unknown>;
+
   return (
     typeof shape.path === "string" &&
     typeof shape.bytes === "number" &&

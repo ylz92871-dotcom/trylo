@@ -29,11 +29,13 @@ export function splitLines(raw: string): { lines: readonly string[]; tornTail: b
   if (raw.length === 0) {
     return { lines: [], tornTail: false };
   }
+
   const parts = raw.split("\n");
   const last = parts[parts.length - 1] ?? "";
   // A file ending in "\n" yields a trailing "" that is not a record; a file
   // ending in anything else yields a partial record that must not be parsed.
   const tornTail = last !== "";
+
   return { lines: parts.slice(0, -1).filter((line) => line.trim().length > 0), tornTail };
 }
 
@@ -56,24 +58,30 @@ export function decodeJournal(raw: string): JournalDecodeOutcome {
 
   for (const [index, line] of lines.entries()) {
     let parsed: StoredLine;
+
     try {
       parsed = JSON.parse(line) as StoredLine;
     } catch {
       return { ok: false, code: "mid_file_corruption", detail: `unparseable line ${index}` };
     }
+
     const record = parsed.record;
     if (record === undefined) {
       return { ok: false, code: "mid_file_corruption", detail: `no record at ${index}` };
     }
+
     if (record.formatVersion !== SESSION_FORMAT_VERSION) {
       return { ok: false, code: "unknown_format_version", detail: record.formatVersion };
     }
+
     if (record.sequence !== expectedSequence) {
       return { ok: false, code: "sequence_gap", detail: `${record.sequence} != ${expectedSequence}` };
     }
+
     if (parsed.sum !== checksumFor(record.sequence, record)) {
       return { ok: false, code: "checksum_mismatch", detail: `line ${index}` };
     }
+
     expectedSequence += 1;
     records.push(record);
   }

@@ -6,6 +6,7 @@ import type { SessionRecord } from "../../ports/session.js";
 function record(type: SessionRecord["type"], turnId: string, key: string, sequence: number): SessionRecord {
   return { type, turnId, sessionId: "s", formatVersion: "1", at: "2026-10-04T00:00:00Z", sequence, payload: { key } };
 }
+
 const start: SessionRecord = {
   type: "session_start", sessionId: "s", formatVersion: "1", at: "2026-10-04T00:00:00Z", sequence: 0,
   payload: { fingerprint: { schemaVersion: "1", workspaceId: "w", providerId: "fixture", model: "m", toolCatalogHash: "h" } },

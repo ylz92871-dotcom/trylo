@@ -35,7 +35,7 @@ export type ForkProvenance = {
   readonly beforeUserMessage?: number;
 };
 
-export type MigrationScope = "model" | "catalog";
+export type MigrationScope = "provider" | "model" | "catalog";
 
 export type MigrationRecord = {
   readonly at: string;
@@ -72,24 +72,30 @@ function isForkProvenance(value: unknown): value is ForkProvenance {
   if (!isRecord(value)) {
     return false;
   }
+
   const snapshot = value.snapshot;
   if (snapshot !== "settled-prefix" && snapshot !== "interrupted" && snapshot !== "before-user-message") {
     return false;
   }
+
   if (typeof value.parentSessionId !== "string" || value.parentSessionId.length === 0) {
     return false;
   }
+
   if (typeof value.at !== "string" || value.at.length === 0) {
     return false;
   }
+
   if (!isNonNegativeInt(value.parentLastSequence) || !isNonNegativeInt(value.droppedPending) ||
     !isNonNegativeInt(value.droppedPartials) || !isNonNegativeInt(value.copiedRecords)) {
     return false;
   }
+
   if (value.beforeUserMessage !== undefined &&
     (typeof value.beforeUserMessage !== "number" || !Number.isInteger(value.beforeUserMessage) || value.beforeUserMessage < 1)) {
     return false;
   }
+
   return true;
 }
 
@@ -97,16 +103,20 @@ function isMigrationRecord(value: unknown): value is MigrationRecord {
   if (!isRecord(value)) {
     return false;
   }
+
   if (typeof value.at !== "string" || value.at.length === 0) {
     return false;
   }
+
   if (!isRuntimeFingerprint(value.from) || !isRuntimeFingerprint(value.to)) {
     return false;
   }
+
   if (!Array.isArray(value.scope) || value.scope.length === 0) {
     return false;
   }
-  return value.scope.every(entry => entry === "model" || entry === "catalog");
+
+  return value.scope.every(entry => entry === "provider" || entry === "model" || entry === "catalog");
 }
 
 /**
@@ -118,32 +128,41 @@ export function parseSessionMeta(raw: string | undefined): MetaLoadOutcome {
   if (raw === undefined) {
     return { ok: true, meta: defaultSessionMeta(), present: false };
   }
+
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(raw) as unknown;
   } catch {
     return { ok: false, code: "meta_corrupt", detail: "sidecar is not JSON" };
   }
+
   if (!isRecord(parsed)) {
     return { ok: false, code: "meta_corrupt", detail: "sidecar is not an object" };
   }
+
   if (parsed.version !== SESSION_META_VERSION) {
     return { ok: false, code: "meta_corrupt", detail: `unsupported sidecar version: ${String(parsed.version)}` };
   }
+
   if (parsed.displayName !== undefined &&
     (typeof parsed.displayName !== "string" || parsed.displayName.length === 0 || parsed.displayName.length > 100)) {
     return { ok: false, code: "meta_corrupt", detail: "displayName must be 1-100 characters" };
   }
+
   if (parsed.archived !== undefined && typeof parsed.archived !== "boolean") {
     return { ok: false, code: "meta_corrupt", detail: "archived must be a boolean" };
   }
+
   if (parsed.forkedFrom !== undefined && !isForkProvenance(parsed.forkedFrom)) {
     return { ok: false, code: "meta_corrupt", detail: "forkedFrom is not a fork provenance record" };
   }
+
   if (parsed.migrations !== undefined &&
     (!Array.isArray(parsed.migrations) || !parsed.migrations.every(isMigrationRecord))) {
     return { ok: false, code: "meta_corrupt", detail: "migrations is not a migration log" };
   }
+
   const meta: SessionMeta = { version: SESSION_META_VERSION };
   const withName: SessionMeta = parsed.displayName === undefined
     ? meta
@@ -154,9 +173,11 @@ export function parseSessionMeta(raw: string | undefined): MetaLoadOutcome {
   const withFork: SessionMeta = parsed.forkedFrom === undefined
     ? withArchived
     : { ...withArchived, forkedFrom: parsed.forkedFrom as ForkProvenance };
+
   if (parsed.migrations === undefined) {
     return { ok: true, meta: withFork, present: true };
   }
+
   return { ok: true, meta: { ...withFork, migrations: parsed.migrations as ReadonlyArray<MigrationRecord> }, present: true };
 }
 
@@ -179,11 +200,13 @@ export function sessionMetaPath(sessionsDir: string, sessionId: string): string 
 
 export function loadSessionMeta(sessionsDir: string, sessionId: string): MetaLoadOutcome {
   let raw: string | undefined;
+
   try {
     raw = readFileSync(sessionMetaPath(sessionsDir, sessionId), "utf8");
   } catch {
     return { ok: true, meta: defaultSessionMeta(), present: false };
   }
+
   return parseSessionMeta(raw);
 }
 
@@ -213,18 +236,23 @@ export function deleteSessionFiles(journalPath: string): SessionDeleteOutcome {
   if (existsSync(`${journalPath}.lock`)) {
     return { ok: false, code: "lock_conflict", detail: "a live writer holds this session; retry once it exits" };
   }
+
   if (!existsSync(journalPath)) {
     return { ok: false, code: "missing_session", detail: journalPath };
   }
+
   const metaPath = journalPath.endsWith(SESSION_JOURNAL_SUFFIX)
     ? `${journalPath.slice(0, -SESSION_JOURNAL_SUFFIX.length)}${META_FILE_SUFFIX}`
     : `${journalPath}${META_FILE_SUFFIX}`;
+
   try {
     unlinkSync(journalPath);
   } catch {
     return { ok: false, code: "remove_failed", detail: `cannot remove ${journalPath}` };
   }
+
   let removedMeta = false;
+
   if (existsSync(metaPath)) {
     try {
       unlinkSync(metaPath);
@@ -233,5 +261,6 @@ export function deleteSessionFiles(journalPath: string): SessionDeleteOutcome {
       return { ok: false, code: "remove_failed", detail: `journal removed but cannot remove ${metaPath}` };
     }
   }
+
   return { ok: true, removedJournal: true, removedMeta };
 }

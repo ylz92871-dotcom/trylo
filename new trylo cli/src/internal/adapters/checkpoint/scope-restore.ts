@@ -52,6 +52,7 @@ export function diffSnapshot(
   const removed: Array<{ path: string; bytes: number }> = [];
   const modified: Array<{ path: string; beforeBytes: number; afterBytes: number }> = [];
   let unchangedCount = 0;
+
   for (const [path, row] of now) {
     const old = before.get(path);
     if (old === undefined) {
@@ -62,13 +63,16 @@ export function diffSnapshot(
       unchangedCount += 1;
     }
   }
+
   for (const [path, row] of before) {
     if (!now.has(path)) {
       removed.push({ path, bytes: row.bytes });
     }
   }
+
   const byPath = (left: { path: string }, right: { path: string }): number =>
     left.path < right.path ? -1 : 1;
+
   return {
     added: added.sort(byPath),
     removed: removed.sort(byPath),
@@ -113,26 +117,32 @@ export function planScopedRestore(input: {
   if (input.scope.length === 0) {
     return { ok: false, code: "empty_scope", detail: "a scoped rewind with no paths would change nothing" };
   }
+
   const before = new Map(input.snapshot.map((row) => [row.path, row]));
   const now = new Map(input.current.map((row) => [row.path, row]));
   const inScope = new Set(input.scope);
+
   for (const path of inScope) {
     if (!before.has(path) && !now.has(path)) {
       return { ok: false, code: "unknown_scope_path", detail: `scoped path is in neither the snapshot nor the workspace: ${path}` };
     }
   }
+
   const writes: Array<Extract<ScopedAction, { action: "overwrite" | "recreate" }>> = [];
   const removals: Array<Extract<ScopedAction, { action: "remove" }>> = [];
   const alreadyCurrent: string[] = [];
+
   for (const path of [...inScope].sort()) {
     const old = before.get(path);
     const row = now.get(path);
+
     if (old === undefined) {
       if (row !== undefined) {
         removals.push({ action: "remove", path });
       }
       continue;
     }
+
     if (row === undefined) {
       writes.push({ action: "recreate", path, bytes: old.bytes });
     } else if (row.sha256 !== old.sha256) {
@@ -141,7 +151,9 @@ export function planScopedRestore(input: {
       alreadyCurrent.push(path);
     }
   }
+
   const keptOutsideScope = [...now.keys()].filter((path) => !inScope.has(path)).sort();
+
   return { ok: true, plan: { writes, removals, alreadyCurrent, keptOutsideScope } };
 }
 
@@ -169,6 +181,7 @@ export type ScopedRestoreOutcome =
  */
 export async function applyScopedPlan(plan: ScopedPlan, io: ScopedRestoreIo): Promise<ScopedRestoreOutcome> {
   let restoredFiles = 0;
+
   try {
     for (const write of plan.writes) {
       const data = await io.readSnapshot(write.path);
@@ -183,7 +196,9 @@ export async function applyScopedPlan(plan: ScopedPlan, io: ScopedRestoreIo): Pr
       completed: { restoredFiles, removedFiles: 0 },
     };
   }
+
   let removedFiles = 0;
+
   try {
     for (const removal of plan.removals) {
       await io.removeFile(removal.path);
@@ -197,5 +212,6 @@ export async function applyScopedPlan(plan: ScopedPlan, io: ScopedRestoreIo): Pr
       completed: { restoredFiles, removedFiles },
     };
   }
+
   return { ok: true, value: { restoredFiles, removedFiles } };
 }

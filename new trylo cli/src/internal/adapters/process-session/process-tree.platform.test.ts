@@ -68,6 +68,7 @@ function spawnProductionShape(dir: string, marker: string, delayMs: number): Sha
     `setInterval(()=>{},1000)`,
   ].join("");
   const parentFile = path.join(dir, "wp07-parent.cjs");
+
   writeFileSync(parentFile, parentScript, "utf8");
 
   // Verbatim arguments, the same way `shell-spawn.ts` spawns a `shell` shape —
@@ -80,6 +81,7 @@ function spawnProductionShape(dir: string, marker: string, delayMs: number): Sha
   const read = (marker: string): Promise<number> =>
     new Promise((resolve) => {
       let buf = "";
+
       child.stdout?.setEncoding("utf8");
       child.stdout?.on("data", (chunk: string) => {
         buf += chunk;
@@ -114,11 +116,14 @@ test("BASELINE (diagnostic, never fails): a direct-child kill leaves the product
     t.skip("this observation is about Windows tree semantics");
     return;
   }
+
   const dir = mkdtempSync(path.join(tmpdir(), "trylo-wp07-base-"));
   const middle = { pid: 0 };
   let grandchild = 0;
+
   try {
     const shape = spawnProductionShape(dir, path.join(dir, "acted.txt"), 4000);
+
     grandchild = await shape.grandchildPid;
     middle.pid = await shape.middlePid;
     assert.ok(grandchild > 0, "the probe must actually start a descendant");
@@ -142,13 +147,16 @@ test("terminateProcessTree leaves no descendant running and none able to act", a
     t.skip("this assertion is about the Windows tree walk");
     return;
   }
+
   const dir = mkdtempSync(path.join(tmpdir(), "trylo-wp07-tree-"));
   const marker = path.join(dir, "acted-after-kill.txt");
   let middle = 0;
   let grandchild = 0;
+
   try {
     // The descendant acts at 5s; we check at 8s, so a survivor cannot hide.
     const shape = spawnProductionShape(dir, marker, 5000);
+
     grandchild = await shape.grandchildPid;
     middle = await shape.middlePid;
     assert.ok(grandchild > 0, "the probe must actually start a descendant");
@@ -156,6 +164,7 @@ test("terminateProcessTree leaves no descendant running and none able to act", a
     assert.equal(listedInTasklist(grandchild), true, "descendant must be running before the walk");
 
     const outcome = await terminateProcessTree(shape.child);
+
     assert.equal(outcome.ok, true, `tree walk failed: ${JSON.stringify(outcome)}`);
 
     await new Promise((resolve) => setTimeout(resolve, 8000));

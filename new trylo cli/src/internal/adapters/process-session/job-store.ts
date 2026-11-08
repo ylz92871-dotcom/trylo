@@ -96,7 +96,9 @@ function isRecord(value: unknown): value is BackgroundJobRecord {
   if (typeof value !== "object" || value === null) {
     return false;
   }
+
   const record = value as Record<string, unknown>;
+
   return (
     typeof record.id === "string" &&
     record.id.length > 0 &&
@@ -123,13 +125,16 @@ function publishAtomic(file: string, text: string, ownerPid: number, seq: number
     // stay separate until the rename, so a reader never sees a partial file.
     const temp = `${file}.${ownerPid}.${seq}.tmp`;
     const fd = openSync(temp, "w");
+
     try {
       writeFileSync(fd, text, "utf8");
       fsyncSync(fd);
     } finally {
       closeSync(fd);
     }
+
     renameSync(temp, file);
+
     try {
       // fsyncing the directory is what makes the rename survive a crash. win32
       // cannot open a directory for sync, and that is a platform fact rather than
@@ -143,6 +148,7 @@ function publishAtomic(file: string, text: string, ownerPid: number, seq: number
     } catch {
       // Best-effort on Windows; the record is published either way.
     }
+
     return true;
   } catch {
     // A record that cannot be written must not be reported as written: `bg ps`
@@ -168,11 +174,13 @@ export function createJobStore(options: JobStoreOptions): JobStore {
     if (ok) {
       published.set(record.id, record);
     }
+
     return ok;
   }
 
   function read(id: ProcessSessionId): BackgroundJobRead {
     let text: string;
+
     try {
       text = readFileSync(recordFile(options.home, id), "utf8");
     } catch (error: unknown) {
@@ -183,7 +191,9 @@ export function createJobStore(options: JobStoreOptions): JobStore {
         detail: code === "missing" ? "no job record for this id" : `cannot read the job record: ${String(error)}`,
       };
     }
+
     let decoded: unknown;
+
     try {
       decoded = JSON.parse(text);
     } catch (error: unknown) {
@@ -191,9 +201,11 @@ export function createJobStore(options: JobStoreOptions): JobStore {
       // beats returning a record with an undefined pid.
       return { ok: false, code: "unreadable", detail: `the job record is not decodable: ${String(error)}` };
     }
+
     if (!isRecord(decoded)) {
       return { ok: false, code: "unreadable", detail: "the job record does not match its shape" };
     }
+
     return { ok: true, record: decoded, raw: text };
   }
 
@@ -204,6 +216,7 @@ export function createJobStore(options: JobStoreOptions): JobStore {
         // would be a second truth. The owner must mint a new id.
         return false;
       }
+
       const record: BackgroundJobRecord = {
         id: start.id,
         pid: start.pid,
@@ -219,6 +232,7 @@ export function createJobStore(options: JobStoreOptions): JobStore {
       if (!write(record)) {
         return false;
       }
+
       try {
         // Created eagerly so `bg logs <id>` can say "no output yet" instead of
         // "there is no such job".
@@ -228,6 +242,7 @@ export function createJobStore(options: JobStoreOptions): JobStore {
         // Already there (a retried id) or the directory is not writable; the
         // append path opens on demand either way.
       }
+
       return true;
     },
 
@@ -245,6 +260,7 @@ export function createJobStore(options: JobStoreOptions): JobStore {
           return;
         }
       }
+
       if (writer.bytes + chunk.length > maxLogBytes) {
         // Said once, in the record, rather than silently truncating: a log that
         // looks complete when it is not is how a person concludes a command
@@ -254,8 +270,10 @@ export function createJobStore(options: JobStoreOptions): JobStore {
         if (known !== undefined && !known.droppedOutput) {
           write({ ...known, droppedOutput: true });
         }
+
         return;
       }
+
       try {
         writeSync(writer.fd, chunk);
         writer.bytes += chunk.length;
@@ -272,9 +290,11 @@ export function createJobStore(options: JobStoreOptions): JobStore {
         const found = read(id);
         base = found.ok ? found.record : undefined;
       }
+
       if (base === undefined) {
         return false;
       }
+
       const writer = writers.get(id);
       const endedAtMs = now();
       const record: BackgroundJobRecord = {
@@ -288,9 +308,11 @@ export function createJobStore(options: JobStoreOptions): JobStore {
         ...(end.kind === "failed" ? { failure: `${end.code}: ${end.message}` } : {}),
       };
       const ok = write(record);
+
       // Nothing will ever append to this id again.
       writers.delete(id);
       published.delete(id);
+
       return ok;
     },
 
@@ -302,6 +324,7 @@ export function createJobStore(options: JobStoreOptions): JobStore {
 
     list(): ReadonlyArray<BackgroundJobRead> {
       let names: ReadonlyArray<string>;
+
       try {
         names = readdirSync(jobsDir(options.home));
       } catch {
@@ -309,12 +332,14 @@ export function createJobStore(options: JobStoreOptions): JobStore {
         // background command.
         return [];
       }
+
       const reads = names.filter((name) => !name.startsWith(".")).map((name) => read(name));
       const byNewest = (a: BackgroundJobRead, b: BackgroundJobRead): number => {
         const left = a.ok ? a.record.startedAtMs : Number.NEGATIVE_INFINITY;
         const right = b.ok ? b.record.startedAtMs : Number.NEGATIVE_INFINITY;
         return right - left;
       };
+
       return reads.sort(byNewest);
     },
 
@@ -325,28 +350,34 @@ export function createJobStore(options: JobStoreOptions): JobStore {
         // reporting a real exit. Its answer is better than ours, so we do nothing.
         return false;
       }
+
       const record: BackgroundJobRecord = {
         ...fresh.record,
         status: "lost",
         // `endedAtMs` and `exitCode` stay absent on purpose: we observed the
         // *absence of the process*, not an ending.
       };
+
       seq += 1;
+
       return publishAtomic(recordFile(options.home, id), `${JSON.stringify(record)}\n`, ownerPid, seq);
     },
 
     sweep(nowMs: number): number {
       let removed = 0;
+
       for (const entry of this.list()) {
         if (!entry.ok || !isTerminalProcessStatus(entry.record.status)) {
           // A running job is never swept, and an unreadable one is left where it is
           // so `bg ps` can still report that something is wrong with it.
           continue;
         }
+
         const ended = entry.record.endedAtMs ?? entry.record.startedAtMs;
         if (nowMs - ended <= retentionMs) {
           continue;
         }
+
         try {
           rmSync(jobDir(options.home, entry.record.id), { recursive: true, force: true });
           removed += 1;
@@ -355,6 +386,7 @@ export function createJobStore(options: JobStoreOptions): JobStore {
           // sweep that pretends it succeeded.
         }
       }
+
       return removed;
     },
   };
@@ -373,17 +405,21 @@ export function readLogTail(
   maxBytes: number = JOB_LOG_READ_MAX_BYTES,
 ): { readonly ok: true; readonly text: string; readonly truncatedFromStart: boolean } | { readonly ok: false; readonly detail: string } {
   let info;
+
   try {
     info = lstatSync(file);
   } catch (error: unknown) {
     return { ok: false, detail: `no output log at ${file}: ${String(error)}` };
   }
+
   if (!info.isFile()) {
     return { ok: false, detail: `${file} is not a regular file, so its output is not read` };
   }
+
   const size = info.size;
   const length = Math.min(size, maxBytes);
   let fd: number | undefined;
+
   try {
     fd = openSync(file, "r");
     const buffer = Buffer.allocUnsafe(length);

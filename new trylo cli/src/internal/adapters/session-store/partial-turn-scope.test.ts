@@ -13,10 +13,15 @@ test("a V2 suffix cannot borrow the same block id from another turn", () => {
       version: "2", kind: "assistant_text", blockId: "b", offset: 3, textDelta: "def" } },
   ];
   const valid = recover(records, false);
+
   assert.equal(valid.ok, true);
+
   if (valid.ok) assert.equal(valid.session.partials[0]?.text, "abcdef");
+
   const wrongTurn = recover([...records.slice(0, 2), { ...records[2]!, turnId: "b" }], false);
+
   assert.equal(wrongTurn.ok, false);
   const wrongOffset = recover([...records.slice(0, 2), { ...records[2]!, payload: { ...records[2]!.payload, offset: 9 } }], false);
+
   assert.equal(wrongOffset.ok, false);
 });

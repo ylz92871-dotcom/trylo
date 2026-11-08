@@ -75,6 +75,7 @@ export function createSessionView(view: SessionView): ProcessSessionRegistry {
           message: `no process session with id ${request.sessionId}; it may have finished and been reaped`,
         };
       }
+
       return await owner.write(request);
     },
 
@@ -87,6 +88,7 @@ export function createSessionView(view: SessionView): ProcessSessionRegistry {
           message: `no process session with id ${sessionId}; it may have finished and been reaped`,
         };
       }
+
       return await owner.stop(sessionId);
     },
 

@@ -68,6 +68,7 @@ async function readUntil(
   attempts = 25,
 ): Promise<string> {
   let output = "";
+
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const read = await registry.write({ sessionId, input: "", eof: false, yieldMs: 300 });
     if (read.ok) {
@@ -76,11 +77,13 @@ async function readUntil(
         return output;
       }
     }
+
     const current = registry.get(sessionId);
     if (current !== undefined && current.status !== "running") {
       break;
     }
   }
+
   return output;
 }
 
@@ -88,15 +91,18 @@ describe("pty sessions over a real ConPTY", { skip: canRun ? false : `no helper:
   it("starts a program in a terminal and returns its output and its own exit code", async () => {
     assert.ok(interpreter !== undefined, "this suite needs cmd.exe to have a program to run");
     const registry = createPtySessionRegistry();
+
     try {
       const session = await registry.start(
         { ...startOf([interpreter as string, "/d", "/c", "echo WP06-TERMINAL-OK"]), ownerId: "member-pty-task" },
       );
+
       assert.equal(session.ownerId, "member-pty-task");
       assert.equal(session.tty, true, "this path claims a terminal and must not quietly be a pipe");
       assert.equal(session.status, "running");
 
       const output = await readUntil(registry, session.id, "WP06-TERMINAL-OK");
+
       assert.match(
         output,
         /WP06-TERMINAL-OK/,
@@ -109,7 +115,9 @@ describe("pty sessions over a real ConPTY", { skip: canRun ? false : `no helper:
         }
         await sleep(200);
       }
+
       const final = registry.get(session.id);
+
       assert.equal(final?.status, "exited");
       assert.equal(final?.end?.kind, "exited");
       assert.equal(final?.exitCode, 0, "the child's own exit code, reported through the terminal");
@@ -123,9 +131,11 @@ describe("pty sessions over a real ConPTY", { skip: canRun ? false : `no helper:
   it("produces terminal output rather than pipe output", async () => {
     assert.ok(interpreter !== undefined);
     const registry = createPtySessionRegistry();
+
     try {
       const session = await registry.start(startOf([interpreter as string, "/d", "/c", "echo TTYCHECK"]));
       const output = await readUntil(registry, session.id, "TTYCHECK");
+
       // A pipe carries the program's bytes and nothing else. A terminal adds
       // cursor and mode sequences because it is a screen. This assertion is the
       // one that distinguishes the two paths — without it, a session that
@@ -143,21 +153,26 @@ describe("pty sessions over a real ConPTY", { skip: canRun ? false : `no helper:
   it("stops a running terminal program and reports an honest end", async () => {
     assert.ok(interpreter !== undefined);
     const registry = createPtySessionRegistry();
+
     try {
       // A command interpreter left at its prompt does not exit on its own, which
       // is exactly the case a "background terminal" is for.
       const session = await registry.start(startOf([interpreter as string]));
+
       await sleep(800);
       assert.equal(registry.get(session.id)?.status, "running");
 
       const stopped = await registry.stop(session.id);
+
       assert.equal(stopped.ok, true);
+
       if (stopped.ok) {
         assert.ok(
           stopped.end.kind === "exited" || stopped.end.kind === "lost",
           `unexpected end kind ${stopped.end.kind}`,
         );
       }
+
       assert.notEqual(registry.get(session.id)?.status, "running");
     } finally {
       registry.shutdown();
@@ -167,10 +182,13 @@ describe("pty sessions over a real ConPTY", { skip: canRun ? false : `no helper:
   it("lists a live terminal session with tty set, so it is distinguishable", async () => {
     assert.ok(interpreter !== undefined);
     const registry = createPtySessionRegistry();
+
     try {
       const session = await registry.start(startOf([interpreter as string]));
+
       await sleep(500);
       const listed = registry.list().sessions;
+
       assert.equal(listed.length, 1);
       assert.equal(listed[0]?.tty, true);
       assert.equal(listed[0]?.status, "running");
@@ -183,6 +201,7 @@ describe("pty sessions over a real ConPTY", { skip: canRun ? false : `no helper:
   it("refuses a program it cannot find, before the sidecar is asked", async () => {
     assert.ok(interpreter !== undefined);
     const registry = createPtySessionRegistry();
+
     try {
       // An absolute path to nothing. The refusal is expected to come from *this*
       // process rather than from the helper, and the distinction is the point:
@@ -210,12 +229,15 @@ describe("pty sessions over a real ConPTY", { skip: canRun ? false : `no helper:
   it("refuses a script that needs an interpreter rather than wrapping it differently", async () => {
     assert.ok(interpreter !== undefined);
     const registry = createPtySessionRegistry();
+
     try {
       // A .cmd cannot be CreateProcess'd. WP05 owns the wrapper that runs one,
       // and building a second here would mean a script behaves one way through
       // run_shell and another through a terminal session.
       const batch = path.join(process.cwd(), "wp06-needs-interpreter.cmd");
+
       writeFileSync(batch, "@echo off\r\n");
+
       try {
         await assert.rejects(
           () => registry.start(startOf([batch])),
@@ -233,24 +255,31 @@ describe("pty sessions over a real ConPTY", { skip: canRun ? false : `no helper:
   it("answers a poll on a finished terminal session and refuses input to it", async () => {
     assert.ok(interpreter !== undefined);
     const registry = createPtySessionRegistry();
+
     try {
       const session = await registry.start(
         startOf([interpreter as string, "/d", "/c", "echo LASTWORDS"]),
       );
+
       await readUntil(registry, session.id, "LASTWORDS");
+
       for (let attempt = 0; attempt < 25; attempt += 1) {
         if (registry.get(session.id)?.status !== "running") {
           break;
         }
         await sleep(200);
       }
+
       assert.equal(registry.get(session.id)?.status, "exited");
 
       const polled = await registry.write({ sessionId: session.id, input: "", eof: false, yieldMs: 200 });
+
       assert.equal(polled.ok, true, "the last words of a finished session are readable by polling it");
 
       const typed = await registry.write({ sessionId: session.id, input: "x", eof: false, yieldMs: 200 });
+
       assert.equal(typed.ok, false);
+
       if (!typed.ok) {
         assert.equal(typed.code, "session_finished");
       }
@@ -268,7 +297,9 @@ describe("pty sessions over a real ConPTY", { skip: canRun ? false : `no helper:
         eof: false,
         yieldMs: 100,
       });
+
       assert.equal(read.ok, false);
+
       if (!read.ok) {
         assert.equal(read.code, "session_not_found");
       }
@@ -280,8 +311,10 @@ describe("pty sessions over a real ConPTY", { skip: canRun ? false : `no helper:
   it("resizes a live terminal session and refuses one that is gone", async () => {
     assert.ok(interpreter !== undefined);
     const registry = createPtySessionRegistry();
+
     try {
       const session = await registry.start(startOf([interpreter as string]));
+
       await sleep(500);
       assert.equal(registry.resize(session.id, 40, 120), true, "a live session accepts a new window size");
       assert.equal(
@@ -298,14 +331,17 @@ describe("pty sessions over a real ConPTY", { skip: canRun ? false : `no helper:
   it("marks a session lost, not exited, when the helper disappears", async () => {
     assert.ok(interpreter !== undefined);
     const registry = createPtySessionRegistry();
+
     try {
       const session = await registry.start(startOf([interpreter as string]));
+
       await sleep(600);
       // Simulates the helper dying with a program still attached to a console.
       // Claiming an exit code here would be a statement about the user's
       // machine that nothing observed.
       registry.shutdown();
       const after = registry.get(session.id);
+
       assert.equal(after, undefined, "a shutdown clears the sessions it owned");
     } finally {
       registry.shutdown();

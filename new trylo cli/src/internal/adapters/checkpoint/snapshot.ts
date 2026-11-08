@@ -1,4 +1,6 @@
-import { copyFileSync, mkdirSync, readdirSync } from "node:fs";
+import { createReadStream, readdirSync } from "node:fs";
+import { copyFile, mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import {
   CHECKPOINT_FORMAT_VERSION,
@@ -8,16 +10,7 @@ import {
 } from "../../ports/checkpoint.js";
 import { sealManifest, serializeManifest, sortEntries } from "./manifest.js";
 import type { WalkedFile } from "./walk.js";
-import {
-  discard,
-  failureOf,
-  filesDirectory,
-  type StorePaths,
-  manifestPathOf,
-  nativeJoin,
-  sha256Of,
-  writeAtomic,
-} from "./support.js";
+import { failureOf, filesDirectory, type StorePaths, manifestPathOf, nativeJoin } from "./support.js";
 
 /**
  * Taking a snapshot.
@@ -27,21 +20,22 @@ import {
  * would be a directory of files nobody can verify or safely apply.
  */
 
-export function takeSnapshot(input: {
+export async function takeSnapshot(input: {
+  readonly signal?: AbortSignal;
   readonly paths: StorePaths;
-  readonly checkpointId: string;
   readonly label: string;
   readonly createdAt: string;
   readonly files: readonly WalkedFile[];
   readonly ignoredNames: readonly string[];
   readonly maxFiles: number;
   readonly maxTotalBytes: number;
-}): CheckpointResult<SnapshotOutcome> {
+}): Promise<CheckpointResult<SnapshotOutcome>> {
   const oversized = describeOverflow(input.files, input.maxFiles, input.maxTotalBytes);
   if (oversized !== undefined) {
     return failureOf("size_limit_exceeded", oversized);
   }
-  return writeSnapshot(input);
+  const reserved = await reserveCheckpoint(input.paths, input.label, input.signal);
+  return reserved.ok ? writeSnapshot({ ...input, checkpointId: reserved.value }) : reserved;
 }
 
 function describeOverflow(
@@ -50,61 +44,125 @@ function describeOverflow(
   maxTotalBytes: number,
 ): string | undefined {
   const totalBytes = files.reduce((sum, file) => sum + file.bytes, 0);
+
   if (files.length > maxFiles) {
     return `${files.length} files > ${maxFiles}`;
   }
+
   if (totalBytes > maxTotalBytes) {
     return `${totalBytes} bytes > ${maxTotalBytes}`;
   }
+
   return undefined;
 }
 
 /** Sequential and derived from what already exists: no clock, no randomness. */
 export function nextCheckpointId(storageRoot: string, label: string): string {
   let count = 0;
+
   try {
-    count = readdirSync(storageRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory())
-      .length;
+    for (const entry of readdirSync(storageRoot, { withFileTypes: true })) {
+      const number = entry.isDirectory() ? /^cp-(\d+)(?:-|$)/.exec(entry.name)?.[1] : undefined;
+      if (number !== undefined) count = Math.max(count, Number(number));
+    }
   } catch {
     count = 0;
   }
-  const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
+  const slug = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
   return `cp-${String(count + 1).padStart(4, "0")}${slug.length > 0 ? `-${slug}` : ""}`;
 }
 
-function writeSnapshot(input: {
+/** Claim the directory atomically; concurrent preparations never share a copy tree. */
+async function reserveCheckpoint(
+  paths: StorePaths,
+  label: string,
+  signal?: AbortSignal,
+): Promise<CheckpointResult<string>> {
+  while (!signal?.aborted) {
+    const checkpointId = nextCheckpointId(paths.storageRoot, label);
+    try {
+      await mkdir(paths.checkpointRoot(checkpointId));
+      return { ok: true, value: checkpointId };
+    } catch (error) {
+      // A competing writer made progress. Inspect that new directory and select the next id.
+      if (error instanceof Error && "code" in error && error.code === "EEXIST") continue;
+      return failureOf("storage_unavailable", String(error));
+    }
+  }
+  return failureOf("snapshot_cancelled", "checkpoint preparation cancelled");
+}
+
+async function writeSnapshot(input: {
+  readonly signal?: AbortSignal;
   readonly paths: StorePaths;
   readonly checkpointId: string;
   readonly label: string;
   readonly createdAt: string;
   readonly files: readonly WalkedFile[];
   readonly ignoredNames: readonly string[];
-}): CheckpointResult<SnapshotOutcome> {
+  readonly maxTotalBytes: number;
+}): Promise<CheckpointResult<SnapshotOutcome>> {
   const filesRoot = filesDirectory(input.paths, input.checkpointId);
+
   try {
-    mkdirSync(filesRoot, { recursive: true });
+    input.signal?.throwIfAborted();
+    await mkdir(filesRoot, { recursive: true });
   } catch (error) {
-    return failureOf("storage_unavailable", String(error));
+    await discardSnapshot(input.paths.checkpointRoot(input.checkpointId));
+    return failureOf(input.signal?.aborted ? "snapshot_cancelled" : "storage_unavailable", String(error));
   }
 
   const entries: CheckpointFileEntry[] = [];
+  let totalBytes = 0;
+
   for (const file of input.files) {
     const stored = nativeJoin(filesRoot, file.relativePath);
+
     try {
-      mkdirSync(path.dirname(stored), { recursive: true });
-      copyFileSync(file.absolutePath, stored);
+      input.signal?.throwIfAborted();
+      await mkdir(path.dirname(stored), { recursive: true });
+      await copyFile(file.absolutePath, stored);
+      input.signal?.throwIfAborted();
     } catch (error) {
-      discard(input.paths.checkpointRoot(input.checkpointId));
-      return failureOf("snapshot_interrupted", `${file.relativePath}: ${String(error)}`);
+      await discardSnapshot(input.paths.checkpointRoot(input.checkpointId));
+      return failureOf(
+        input.signal?.aborted ? "snapshot_cancelled" : "snapshot_interrupted",
+        `${file.relativePath}: ${String(error)}`,
+      );
     }
+
     let sha256: string;
+    let copiedBytes = 0;
+
     try {
-      sha256 = sha256Of(stored);
+      const hash = createHash("sha256");
+      for await (const chunk of createReadStream(stored, { signal: input.signal })) {
+        hash.update(chunk);
+        copiedBytes += Buffer.byteLength(chunk);
+      }
+      input.signal?.throwIfAborted();
+      sha256 = hash.digest("hex");
     } catch (error) {
-      discard(input.paths.checkpointRoot(input.checkpointId));
-      return failureOf("snapshot_interrupted", `${file.relativePath}: ${String(error)}`);
+      await discardSnapshot(input.paths.checkpointRoot(input.checkpointId));
+      return failureOf(
+        input.signal?.aborted ? "snapshot_cancelled" : "snapshot_interrupted",
+        `${file.relativePath}: ${String(error)}`,
+      );
     }
-    entries.push({ path: file.relativePath, bytes: file.bytes, sha256 });
+
+    totalBytes += copiedBytes;
+    if (totalBytes > input.maxTotalBytes) {
+      await discardSnapshot(input.paths.checkpointRoot(input.checkpointId));
+      return failureOf("size_limit_exceeded", `${totalBytes} copied bytes > ${input.maxTotalBytes}`);
+    }
+    // The copy can differ from the earlier enumeration while other tasks save.
+    // Count the exact same stored byte stream whose checksum restore will verify.
+    entries.push({ path: file.relativePath, bytes: copiedBytes, sha256 });
   }
 
   const manifest = sealManifest({
@@ -117,11 +175,26 @@ function writeSnapshot(input: {
     ignores: input.ignoredNames,
     files: sortEntries(entries),
   });
+
   try {
-    writeAtomic(manifestPathOf(input.paths, input.checkpointId), serializeManifest(manifest));
+    input.signal?.throwIfAborted();
+    const target = manifestPathOf(input.paths, input.checkpointId),
+      temporary = target + ".trylo-partial";
+    await writeFile(temporary, serializeManifest(manifest));
+    input.signal?.throwIfAborted();
+    await rename(temporary, target);
   } catch (error) {
-    discard(input.paths.checkpointRoot(input.checkpointId));
-    return failureOf("snapshot_interrupted", String(error));
+    await discardSnapshot(input.paths.checkpointRoot(input.checkpointId));
+    return failureOf(input.signal?.aborted ? "snapshot_cancelled" : "snapshot_interrupted", String(error));
   }
+
   return { ok: true, value: { checkpointId: input.checkpointId, manifest } };
+}
+
+async function discardSnapshot(target: string): Promise<void> {
+  try {
+    await rm(target, { recursive: true, force: true });
+  } catch {
+    /* The typed failure remains authoritative; an incomplete directory is not a valid checkpoint. */
+  }
 }

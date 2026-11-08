@@ -104,7 +104,10 @@ export function releaseLock(io: JournalIo): void {
 }
 
 function processStatus(pid: number): ProcessStatus {
-  try { process.kill(pid, 0); return "alive"; } catch (error) {
+  try {
+    process.kill(pid, 0);
+    return "alive";
+  } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "ESRCH") return "dead";
     return "unknown"; // Permission errors and reused live PIDs never authorize reclamation.
   }
@@ -123,22 +126,26 @@ export function journalPosition(io: JournalIo): { readonly sequence: number; rea
     const { lines, tornTail } = splitLines(readJournalRaw(io));
     io.position = { sequence: lines.length, size, modifiedMs, tornTail };
   }
+
   return io.position;
 }
 
 export function appendJournalLine(io: JournalIo, text: string): boolean {
   try {
     const handle = openSync(io.file, "a");
+
     try {
       writeSync(handle, text);
       fsyncSync(handle);
     } finally {
       closeSync(handle);
     }
+
     if (io.position !== undefined) {
       const current = statSync(io.file);
       io.position = { sequence: io.position.sequence + 1, size: current.size, modifiedMs: current.mtimeMs, tornTail: false };
     }
+
     return true;
   } catch {
     // A failed write may have left a partial tail; the next append must inspect it.
@@ -156,11 +163,13 @@ export function rewriteJournal(io: JournalIo, kept: string): boolean {
   try {
     writeFileSync(io.file, kept);
     const handle = openSync(io.file, "r+");
+
     try {
       fsyncSync(handle);
     } finally {
       closeSync(handle);
     }
+
     return true;
   } catch {
     return false;

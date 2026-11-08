@@ -60,19 +60,25 @@ export function createBoundedBuffer(maxBytes: number): BoundedBuffer {
     if (chunk.length === 0) {
       return;
     }
+
     held = held.length === 0 ? Buffer.from(chunk) : Buffer.concat([held, chunk]);
+
     if (held.length <= cap) {
       return;
     }
+
     // Drop from the front. The oldest bytes are the ones a late reader is
     // least likely to want and the ones that keep the buffer bounded.
     let excess = held.length - cap;
+
     while (excess < held.length && continuation(held[excess])) excess += 1;
+
     held = held.subarray(excess);
     cursor = 0;
     dropped = true;
   };
   let decoder = createUtf8OutputSink(append);
+
   return {
     write: chunk => decoder.write(chunk),
     end: () => decoder.end(),
@@ -82,12 +88,17 @@ export function createBoundedBuffer(maxBytes: number): BoundedBuffer {
       if (unread <= 0) {
         return { text: "", dropped, heldBack: 0 };
       }
+
       const take = Math.min(unread, limit);
       let end = cursor + take;
+
       while (end > cursor && end < held.length && continuation(held[end])) end -= 1;
+
       const text = held.subarray(cursor, end).toString("utf8");
+
       cursor = end;
       compact();
+
       return { text, dropped, heldBack: held.length - cursor };
     },
     get byteLength(): number {

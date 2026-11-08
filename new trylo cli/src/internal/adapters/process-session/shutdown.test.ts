@@ -11,6 +11,7 @@ test("shutdown attempts every live tree and reports a rejected termination", asy
     attempts++;
     return { ok: false, code: "tree_kill_rejected", message: "injected OS refusal" };
   } });
+
   try {
     for (let i = 0; i < 2; i++) await registry.start({ id: `ps_${String(i).padStart(24, "0")}`, argv: [process.execPath, "-e", "setInterval(()=>{},1000)"], cwd: process.cwd(), env: {}, tty: false, rows: 24, cols: 80, maxBufferBytes: 1024 });
     await assert.rejects(registry.shutdown(), /session_cleanup_failed/);

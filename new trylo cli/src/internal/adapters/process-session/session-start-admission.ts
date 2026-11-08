@@ -1,6 +1,7 @@
 export type SessionLifecycle = "open" | "closing" | "closed";
 
 type AdmissionCode = "session_start_cancelled" | "session_registry_closed";
+
 const messages: Readonly<Record<AdmissionCode, string>> = {
   session_start_cancelled: "The command start was cancelled before native dispatch",
   session_registry_closed: "This execution is closing or closed; create a new execution before starting commands",

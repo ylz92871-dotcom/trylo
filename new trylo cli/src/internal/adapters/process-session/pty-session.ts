@@ -153,6 +153,7 @@ export function createPtySessionRegistry(
     if (current === undefined) {
       return [];
     }
+
     return [...current.sessions.values()].filter(
       (record): record is PtySession => !isTerminalProcessStatus(record.status),
     );
@@ -165,12 +166,14 @@ export function createPtySessionRegistry(
         if (done) {
           return;
         }
+
         done = true;
         clearTimeout(timer);
         record.waiters.delete(finish);
         resolve();
       };
       const timer = setTimeout(finish, Math.max(0, yieldMs));
+
       record.waiters.add(finish);
     });
 
@@ -192,18 +195,23 @@ export function createPtySessionRegistry(
 
     async start(start: ProcessSessionStart, signal?: AbortSignal): Promise<ProcessSessionSnapshot> {
       assertSessionStartAllowed(lifecycle, signal);
+
       if (start.tty !== true) {
         throw new Error("the PTY registry only starts sessions that asked for a terminal");
       }
+
       if (liveSessions().length >= maxSessions) {
         throw new Error(
           `PTY session limit reached (${maxSessions}); stop one before starting another`,
         );
       }
+
       const [program, ...args] = start.argv;
+
       if (program === undefined || program.length === 0) {
         throw new Error("process session needs an executable");
       }
+
       if (!resolution.ok) {
         throw new Error(`${resolution.code}: ${resolution.message}`);
       }
@@ -224,6 +232,7 @@ export function createPtySessionRegistry(
         // sidecar would describe the sidecar's environment, not this machine's.
         throw new Error(`${resolved.code}: ${resolved.message}`);
       }
+
       if (resolved.needsShell) {
         // A .cmd/.bat is a script, and CreateProcess will not run it: it needs an
         // interpreter. The wrapper that does that is WP05's, and this package
@@ -237,6 +246,7 @@ export function createPtySessionRegistry(
 
       const id = isProcessSessionIdShape(start.id) ? start.id : newProcessSessionId();
       const current = await host.ready();
+
       assertSessionStartAllowed(lifecycle, signal);
       const buffer = createBoundedBuffer(start.maxBufferBytes || maxBufferBytes);
       const record: PtySession = {
@@ -251,6 +261,7 @@ export function createPtySessionRegistry(
         cols: start.cols,
         startedAtMs: now(),
       };
+
       current.sessions.set(id, record);
       host.send(
         encodeJsonFrame(PTY_OP.spawn, {
@@ -266,6 +277,7 @@ export function createPtySessionRegistry(
           cols: start.cols,
         }),
       );
+
       return snapshotOf(record);
     },
 
@@ -278,6 +290,7 @@ export function createPtySessionRegistry(
           message: `no PTY session with id ${request.sessionId}; it may have exited and been reaped`,
         };
       }
+
       if (isTerminalProcessStatus(record.status)) {
         // A poll still answers. "It finished, here is what it said" is the most
         // useful thing to hear after the fact, and refusing it would make the
@@ -292,6 +305,7 @@ export function createPtySessionRegistry(
           ...(record.end === undefined ? {} : { end: record.end }),
         };
       }
+
       if (Buffer.byteLength(request.input, "utf8") > MAX_WRITE_BYTES) {
         return {
           ok: false,
@@ -299,6 +313,7 @@ export function createPtySessionRegistry(
           message: `input exceeds the ${MAX_WRITE_BYTES} byte frame ceiling`,
         };
       }
+
       // Only a session the helper still owns can be written to. A retained
       // terminal record is readable but not writable, which is why this sends
       // through the live sidecar rather than through the record.
@@ -311,7 +326,9 @@ export function createPtySessionRegistry(
           ),
         );
       }
+
       await waitForChange(record, request.yieldMs);
+
       return { ok: true, read: readOf(record) };
     },
 
@@ -325,20 +342,24 @@ export function createPtySessionRegistry(
             message: `no PTY session with id ${sessionId}; it may have exited and been reaped`,
           };
         }
+
         if (isTerminalProcessStatus(record.status)) {
           return {
             ok: true,
             end: record.end ?? { kind: "lost", reason: "session was already terminal" },
           };
         }
+
         host.send(encodeJsonFrame(PTY_OP.kill, { id: sessionId }));
         // Injected clock, as on the pipes path: "did the ending arrive?" is a
         // question about the helper, and how long we are willing to wait for the
         // answer should not be a property of the machine running the test.
         const deadline = now() + STOP_GRACE_MS;
+
         while (!isTerminalProcessStatus(record.status) && now() < deadline) {
           await new Promise<void>((resolve) => setTimeout(resolve, 25));
         }
+
         if (!isTerminalProcessStatus(record.status)) {
           // The kill went out and nothing came back. `lost` rather than a guessed
           // exit code: the console may still hold a program this process cannot
@@ -350,6 +371,7 @@ export function createPtySessionRegistry(
             now,
           );
         }
+
         return {
           ok: true,
           end: record.end ?? { kind: "lost", reason: "stop requested, exit unobserved" },
@@ -371,6 +393,7 @@ export function createPtySessionRegistry(
       const live = host.current === undefined ? [] : [...host.current.sessions.values()];
       const seen = new Set(live.map((record) => record.id));
       const retired = host.terminalSessions().filter((record) => !seen.has(record.id));
+
       return {
         sessions: [...live, ...retired].map((record) => snapshotOf(record as PtySession)),
       };

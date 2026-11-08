@@ -53,15 +53,18 @@ export function resolveWorkspace(
   | { ok: false; code: "checkpoint_root_mismatch" | "workspace_missing"; detail: string } {
   let configured: string;
   let claimed: string;
+
   try {
     configured = realpathSync(configuredRoot);
     claimed = realpathSync(claimedRoot);
   } catch (error) {
     return { ok: false, code: "workspace_missing", detail: String(error) };
   }
+
   if (configured !== claimed) {
     return { ok: false, code: "checkpoint_root_mismatch", detail: `${claimed} != ${configured}` };
   }
+
   return { ok: true, path: configured };
 }
 
@@ -85,16 +88,20 @@ export function guardStorage(
   } catch (error) {
     return { ok: false, code: "storage_unavailable", detail: String(error) };
   }
+
   let resolved: string;
+
   try {
     resolved = realpathSync(storageRoot);
   } catch (error) {
     return { ok: false, code: "storage_unavailable", detail: String(error) };
   }
+
   const prefix = workspaceRoot.endsWith(path.sep) ? workspaceRoot : `${workspaceRoot}${path.sep}`;
   if (resolved === workspaceRoot || resolved.startsWith(prefix)) {
     return { ok: false, code: "storage_unavailable", detail: "storage inside workspace" };
   }
+
   return { ok: true };
 }
 

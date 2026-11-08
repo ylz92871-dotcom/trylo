@@ -50,9 +50,11 @@ function world(): World {
   const workspace = join(root, "workspace");
   const sessionPath = join(root, "sessions", "demo.ndjson");
   const storage = join(root, "checkpoints");
+
   mkdirSync(workspace, { recursive: true });
   mkdirSync(storage, { recursive: true });
   writeFileSync(join(workspace, "notes.txt"), "original", "utf8");
+
   return {
     root,
     workspace,
@@ -68,6 +70,7 @@ function noteFile(workspace: string): string {
 async function twoMessageSession(sessionPath: string) {
   const store = createNdjsonSessionStore({ path: sessionPath });
   const started = await store.start({ sessionId: "demo", createdAt: CREATED_AT, fingerprint: FINGERPRINT });
+
   assert.equal(started.ok, true);
   await store.append({
     type: "transcript_item",
@@ -83,6 +86,7 @@ async function twoMessageSession(sessionPath: string) {
     at: CREATED_AT,
     payload: { kind: "assistant_text", sequence: 1, blockId: "b1", text: "done" },
   });
+
   return store;
 }
 
@@ -95,24 +99,32 @@ test("rolling back the transcript leaves the workspace exactly as it was", async
       label: "before the turn",
       createdAt: CREATED_AT,
     });
+
     assert.equal(snapshot.ok, true);
     // Pretend the loop ran a writing tool, then the user rewound the conversation.
     writeFileSync(join(place.workspace, "notes.txt"), "edited by a tool", "utf8");
     writeFileSync(join(place.workspace, "scratch.txt"), "newly created", "utf8");
 
     const records = await store.readRecords();
+
     assert.equal(records.ok, true);
+
     if (!records.ok) {
       return;
     }
+
     const rollback = service.rollbackTranscript({ records: records.view.records, sequence: 1 });
+
     assert.equal(rollback.ok, true);
+
     if (rollback.ok) {
       const projected = service.projectForPrompt({
         records: records.view.records,
         horizonSequence: rollback.horizonSequence,
       });
+
       assert.equal(projected.ok, true);
+
       if (projected.ok) {
         assert.equal(projected.view.items.length, 1);
       }
@@ -136,26 +148,33 @@ test("restoring files leaves the journal exactly as it was", async () => {
       label: "before the turn",
       createdAt: CREATED_AT,
     });
+
     assert.equal(snapshot.ok, true);
+
     if (!snapshot.ok) {
       return;
     }
+
     writeFileSync(join(place.workspace, "notes.txt"), "edited by a tool", "utf8");
     writeFileSync(join(place.workspace, "scratch.txt"), "newly created", "utf8");
 
     const restored = await place.checkpoints.restore({ checkpointId: snapshot.value.checkpointId });
+
     assert.equal(restored.ok, true);
     assert.equal(noteFile(place.workspace), "original");
     assert.equal(existsSync(join(place.workspace, "scratch.txt")), false);
 
     const after = await store.readRecords();
+
     assert.equal(after.ok, true);
+
     if (after.ok) {
       // Same records, same order, same content: the transcript rail did not move.
       assert.equal(after.view.records.length, 3);
       assert.equal(listTranscript(after.view.records).length, 2);
       assert.equal(after.view.records[2]?.type, "transcript_item");
     }
+
     await store.release();
   } finally {
     rmSync(place.root, { recursive: true, force: true });
@@ -171,10 +190,13 @@ test("a refused restore leaves both rails untouched", async () => {
       label: "before tampering",
       createdAt: CREATED_AT,
     });
+
     assert.equal(snapshot.ok, true);
+
     if (!snapshot.ok) {
       return;
     }
+
     writeFileSync(join(place.workspace, "notes.txt"), "local work in progress", "utf8");
     writeFileSync(
       join(place.root, "checkpoints", snapshot.value.checkpointId, "files", "notes.txt"),
@@ -183,17 +205,23 @@ test("a refused restore leaves both rails untouched", async () => {
     );
 
     const restored = await place.checkpoints.restore({ checkpointId: snapshot.value.checkpointId });
+
     assert.equal(restored.ok, false);
+
     if (!restored.ok) {
       assert.equal(restored.code, "checksum_mismatch");
     }
+
     assert.equal(noteFile(place.workspace), "local work in progress");
 
     const after = await store.readRecords();
+
     assert.equal(after.ok, true);
+
     if (after.ok) {
       assert.equal(after.view.records.length, 3);
     }
+
     await store.release();
   } finally {
     rmSync(place.root, { recursive: true, force: true });
@@ -204,17 +232,24 @@ test("refusing to roll back further leaves the workspace untouched too", async (
   const place = world();
   try {
     const store = await twoMessageSession(place.sessionPath);
+
     writeFileSync(join(place.workspace, "notes.txt"), "untouched", "utf8");
     const records = await store.readRecords();
+
     assert.equal(records.ok, true);
+
     if (!records.ok) {
       return;
     }
+
     const rollback = service.rollbackTranscript({ records: records.view.records, sequence: 2 });
+
     assert.equal(rollback.ok, false);
+
     if (!rollback.ok) {
       assert.equal(rollback.code, "nothing_to_roll_back");
     }
+
     assert.equal(noteFile(place.workspace), "untouched");
     await store.release();
   } finally {
@@ -233,11 +268,14 @@ test("a checkpoint can be taken while the session write lock is held", async () 
       label: "while writing",
       createdAt: CREATED_AT,
     });
+
     assert.equal(snapshot.ok, true);
+
     if (snapshot.ok) {
       const restored = await place.checkpoints.restore({ checkpointId: snapshot.value.checkpointId });
       assert.equal(restored.ok, true);
     }
+
     const write = await store.append({
       type: "transcript_item",
       sessionId: "demo",
@@ -245,6 +283,7 @@ test("a checkpoint can be taken while the session write lock is held", async () 
       at: CREATED_AT,
       payload: { kind: "user", sequence: 2, text: "still writable afterwards" },
     });
+
     assert.equal(write.ok, true);
     await store.release();
   } finally {
@@ -261,51 +300,68 @@ test("a fake turn can compact, reload and still recover its files", async () => 
       label: "before compaction",
       createdAt: CREATED_AT,
     });
+
     assert.equal(snapshot.ok, true);
 
     writeFileSync(join(place.workspace, "notes.txt"), "edited during the turn", "utf8");
 
     const before = await store.readRecords();
+
     assert.equal(before.ok, true);
+
     if (!before.ok) {
       return;
     }
+
     const draft = service.compact({
       records: before.view.records,
       sessionId: "demo",
       at: CREATED_AT,
       summary: "read notes, replied briefly",
     });
+
     assert.equal(draft.ok, true);
+
     if (draft.ok) {
       const appended = await store.append(draft.record);
       assert.equal(appended.ok, true);
     }
+
     await store.release();
 
     const reopened = createNdjsonSessionStore({ path: place.sessionPath });
     const attached = await reopened.attach();
+
     assert.equal(attached.ok, true);
     const after = await reopened.readRecords();
+
     assert.equal(after.ok, true);
+
     if (after.ok) {
       const projected = service.projectForPrompt({ records: after.view.records });
+
       assert.equal(projected.ok, true);
+
       if (projected.ok) {
         assert.equal(projected.view.items.length, 0);
         assert.equal(projected.view.window?.summary, "read notes, replied briefly");
       }
+
       // Files are still where the turn left them: compaction is not undo.
       assert.equal(noteFile(place.workspace), "edited during the turn");
       const restored = await place.checkpoints.restore({ checkpointId: "cp-0001-before-compaction" });
+
       assert.equal(restored.ok, true);
       assert.equal(noteFile(place.workspace), "original");
       const stillThere = await reopened.readRecords();
+
       assert.equal(stillThere.ok, true);
+
       if (stillThere.ok) {
         assert.equal(stillThere.view.records.length, 4);
       }
     }
+
     await reopened.release();
   } finally {
     rmSync(place.root, { recursive: true, force: true });

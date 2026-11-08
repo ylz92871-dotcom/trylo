@@ -12,6 +12,7 @@ import { createBoundedBuffer } from "./output-buffer.js";
 describe("bounded output buffer", () => {
   it("returns only what arrived since the previous read", () => {
     const buffer = createBoundedBuffer(1024);
+
     buffer.write(Buffer.from("first\n", "utf8"));
     assert.equal(buffer.read(1024).text, "first\n");
     buffer.write(Buffer.from("second\n", "utf8"));
@@ -22,11 +23,14 @@ describe("bounded output buffer", () => {
 
   it("splits a read at the requested cap and keeps the remainder", () => {
     const buffer = createBoundedBuffer(1024);
+
     buffer.write(Buffer.from("abcdefghij", "utf8"));
     const first = buffer.read(4);
+
     assert.equal(first.text, "abcd");
     assert.equal(first.heldBack, 6);
     const second = buffer.read(1024);
+
     assert.equal(second.text, "efghij");
     assert.equal(second.heldBack, 0);
   });
@@ -54,10 +58,13 @@ describe("bounded output buffer", () => {
     // those two bytes. While the transport is open, the incomplete suffix waits.
     // Only a true end without the final byte renders a replacement character.
     const bytes = Buffer.from("中文", "utf8");
+
     assert.equal(bytes.byteLength, 6);
     const cut = createBoundedBuffer(1024);
+
     cut.write(bytes.subarray(0, 5));
     const partial = cut.read(1024).text;
+
     assert.ok(partial.startsWith("中"), "the complete character survives intact");
     assert.equal(partial, "中");
     cut.end();
@@ -66,6 +73,7 @@ describe("bounded output buffer", () => {
 
   it("keeps the exact text across read limits that cut Chinese and emoji", () => {
     const buffer = createBoundedBuffer(1024);
+
     buffer.write(Buffer.from("中文🙂"));
     assert.equal(buffer.read(5).text, "中");
     assert.equal(buffer.read(5).text, "文");

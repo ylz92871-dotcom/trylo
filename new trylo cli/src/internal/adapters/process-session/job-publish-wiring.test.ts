@@ -35,6 +35,7 @@ function wired() {
       cols: 80,
       maxBufferBytes: 8_192,
     });
+
   return { home, jobs, registry, start };
 }
 
@@ -54,10 +55,14 @@ test("a session started through the registry is a job record with a pid", async 
   const h = wired();
   const id = "ps_00000000000000000000000a";
   const snapshot = await h.start(id, "console.log('published')");
+
   assert.equal(typeof snapshot.pid, "number", "the snapshot must carry the pid bg needs");
   const found = h.jobs.read(id);
+
   assert.equal(found.ok, true, "no job record was published for a started session");
+
   if (!found.ok) return;
+
   assert.equal(found.record.pid, snapshot.pid);
   assert.equal(found.record.status, "running");
   await settled(h, id);
@@ -66,11 +71,15 @@ test("a session started through the registry is a job record with a pid", async 
 test("the output the model buffered is the same output a second process can read", async () => {
   const h = wired();
   const id = "ps_00000000000000000000000b";
+
   await h.start(id, "console.log('line one'); console.log('line two');");
   const record = await settled(h, id);
   const output = h.jobs.readOutput(id);
+
   assert.equal(output.ok, true);
+
   if (!output.ok) return;
+
   assert.match(output.text, /line one/);
   assert.match(output.text, /line two/);
   assert.ok(record.logBytes > 0, "the record must say how much it wrote, not leave it a guess");
@@ -98,6 +107,7 @@ test("with no table wired, the registry behaves exactly as it did before", async
     cols: 80,
     maxBufferBytes: 8_192,
   });
+
   assert.equal(snapshot.status, "running");
   assert.equal(typeof snapshot.pid, "number");
 });

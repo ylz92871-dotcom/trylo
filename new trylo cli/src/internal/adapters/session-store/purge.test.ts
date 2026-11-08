@@ -83,20 +83,25 @@ test("a journal that crashed after a tool call resumes without the unfinished re
         }),
       ),
     ];
+
     writeFileSync(fx.path, lines.join("\n") + "\n");
 
     const store = createNdjsonSessionStore({ path: fx.path });
     const attached = await store.attach();
+
     assert.equal(attached.ok, true);
     const recovered = await store.read();
+
     await store.release();
     assert.equal(recovered.ok, true);
+
     if (!recovered.ok) {
       return;
     }
 
     // The request is gone, and nothing was invented in its place.
     const kinds = recovered.session.transcript.map((entry) => entry.kind);
+
     assert.deepEqual(kinds, ["user", "assistant_text"]);
     assert.equal(
       recovered.session.transcript.some((entry) => entry.kind === "tool_result"),
@@ -119,19 +124,24 @@ test("the purge is read-time only: the stored journal keeps every byte", async (
         item(1, { kind: "tool_call", toolCallId: "call-torn", name: "read_file", arguments: {} }),
       ),
     ];
+
     writeFileSync(fx.path, lines.join("\n") + "\n");
     const before = lines.length;
 
     const store = createNdjsonSessionStore({ path: fx.path });
     const attached = await store.attach();
+
     assert.equal(attached.ok, true);
     await store.read();
     const records = await store.readRecords();
+
     await store.release();
     assert.equal(records.ok, true);
+
     if (!records.ok) {
       return;
     }
+
     assert.equal(records.view.records.length, before, "the journal is a record, not a projection");
   } finally {
     fx.cleanup();
@@ -164,20 +174,26 @@ test("a settled tool call survives the read", async () => {
         item(3, { kind: "tool_call", toolCallId: "call-torn", name: "write_file", arguments: {} }),
       ),
     ];
+
     writeFileSync(fx.path, lines.join("\n") + "\n");
 
     const store = createNdjsonSessionStore({ path: fx.path });
     const attached = await store.attach();
+
     assert.equal(attached.ok, true);
     const recovered = await store.read();
+
     await store.release();
     assert.equal(recovered.ok, true);
+
     if (!recovered.ok) {
       return;
     }
+
     const ids = recovered.session.transcript
       .filter((entry): entry is Extract<TranscriptItem, { kind: "tool_call" }> => entry.kind === "tool_call")
       .map((entry) => entry.toolCallId);
+
     assert.deepEqual(ids, ["call-ok"], "only the settled call is kept");
   } finally {
     fx.cleanup();
@@ -201,6 +217,7 @@ test("a cancelled result still settles its call: only a missing result is torn",
     }),
   ];
   const purged = purgeUnsettledToolCalls(transcript);
+
   assert.equal(purged, transcript, "a settled history is returned untouched");
 });
 
@@ -213,6 +230,7 @@ test("an unsettled call anywhere in the transcript is dropped, never answered", 
   ];
   const purged = purgeUnsettledToolCalls(transcript);
   const kinds = purged.map((entry) => entry.kind);
+
   assert.deepEqual(kinds, ["user", "assistant_text"]);
   assert.equal(
     purged.some((entry) => entry.kind === "tool_result"),

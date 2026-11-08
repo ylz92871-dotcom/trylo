@@ -9,7 +9,7 @@ import {
 } from "../../ports/checkpoint.js";
 import { parseManifest } from "./manifest.js";
 import { applyRestore } from "./restore.js";
-import { nextCheckpointId, takeSnapshot } from "./snapshot.js";
+import { takeSnapshot } from "./snapshot.js";
 import {
   failureOf,
   guardStorage,
@@ -18,7 +18,7 @@ import {
   resolveWorkspace,
   storePaths,
 } from "./support.js";
-import { ignoreSet, listWorkspaceFiles } from "./walk.js";
+import { ignoreSet, listSnapshotFiles } from "./walk.js";
 
 /**
  * Snapshot-style workspace checkpointing — the *file* rail of undo.
@@ -49,18 +49,22 @@ export function createFileCheckpointStore(options: CheckpointStoreOptions): Chec
       if (!root.ok) {
         return failureOf(root.code, root.detail);
       }
+
       const paths = storePaths(options.storageRoot);
       const guarded = guardStorage(root.path, paths.storageRoot);
       if (!guarded.ok) {
         return failureOf(guarded.code, guarded.detail);
       }
-      const walked = listWorkspaceFiles(root.path, ignores);
+
+      const walked = await listSnapshotFiles(root.path, ignores, input.signal);
       if (!walked.ok) {
-        return failureOf("workspace_missing", walked.detail);
+        return input.signal?.aborted ? failureOf("snapshot_cancelled", "checkpoint preparation cancelled")
+          : failureOf("workspace_missing", walked.detail);
       }
+
       return takeSnapshot({
         paths,
-        checkpointId: nextCheckpointId(paths.storageRoot, input.label),
+        ...(input.signal === undefined ? {} : { signal: input.signal }),
         label: input.label,
         createdAt: input.createdAt,
         files: walked.files,
@@ -75,6 +79,7 @@ export function createFileCheckpointStore(options: CheckpointStoreOptions): Chec
       if (!root.ok) {
         return failureOf(root.code, root.detail);
       }
+
       return applyRestore({
         paths: storePaths(options.storageRoot),
         workspaceRoot: root.path,
@@ -95,25 +100,32 @@ export function createFileCheckpointStore(options: CheckpointStoreOptions): Chec
  */
 function listSummaries(storageRoot: string): CheckpointResult<readonly CheckpointSummary[]> {
   let entries;
+
   try {
     entries = readdirSync(storageRoot, { withFileTypes: true });
   } catch (error) {
     return failureOf("storage_unavailable", String(error));
   }
+
   const summaries: CheckpointSummary[] = [];
+
   for (const entry of entries) {
     if (!entry.isDirectory()) {
       continue;
     }
+
     let parsed;
+
     try {
       parsed = parseManifest(readFileSync(manifestPathOf(storePaths(storageRoot), entry.name), "utf8"));
     } catch (error) {
       return failureOf("manifest_unreadable", String(error));
     }
+
     if (!parsed.ok) {
       return failureOf(parsed.code, parsed.detail);
     }
+
     summaries.push({
       checkpointId: parsed.manifest.checkpointId,
       label: parsed.manifest.label,
@@ -123,6 +135,8 @@ function listSummaries(storageRoot: string): CheckpointResult<readonly Checkpoin
       digest: parsed.manifest.digest,
     });
   }
+
   summaries.sort((left, right) => (left.checkpointId < right.checkpointId ? -1 : 1));
+
   return { ok: true, value: summaries };
 }

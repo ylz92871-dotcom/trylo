@@ -69,20 +69,26 @@ async function readAll(
 ): Promise<{ readonly output: string; readonly status: string }> {
   let output = "";
   let status = "running";
+
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const read = await registry.write({ sessionId, input: "", eof: false, yieldMs: 250 });
     if (read.ok) {
       output += read.read.output;
     }
+
     const current = registry.get(sessionId);
+
     status = current?.status ?? "gone";
+
     // A console child answers with mode-set sequences (ESC[?9001h and friends)
     // before it has produced a word, so "saw bytes" is not "finished".
     if (status !== "running") {
       break;
     }
+
     await sleep(150);
   }
+
   return { output, status };
 }
 
@@ -94,6 +100,7 @@ test(
   async () => {
     const { home, sessionId } = freshTarget();
     const registry = createPtySessionRegistry();
+
     try {
       const session = await registry.start({
         id: "",
@@ -105,9 +112,11 @@ test(
         cols: 100,
         maxBufferBytes: 65_536,
       });
+
       assert.equal(session.tty, true, "this path claims a terminal and must not quietly be a pipe");
 
       const { output, status } = await readAll(registry, session.id);
+
       // Recorded rather than asserted first: the failure this probe exists for
       // produced zero bytes and a dead session, and a bare `assert.match` on the
       // text would hide which of the two happened.
@@ -149,16 +158,20 @@ test(
         maxBufferBytes: 65_536,
       });
       const { output } = await readAll(registry, session.id);
+
       return visible(output);
     };
+
     try {
       // Two sessions, in sequence, in the same console family. This is the
       // property C41 exists for: the writer and the reader are different
       // processes and only share a path.
       const added = await run(["queue", "add", "--session", sessionId, "--message", message]);
+
       console.log(`TTY add=${JSON.stringify(added)}`);
       assert.match(added, new RegExp(`queued for session ${sessionId} as q-`));
       const listed = await run(["queue", "list", "--session", sessionId]);
+
       console.log(`TTY list=${JSON.stringify(listed)}`);
       assert.match(listed, new RegExp(message));
     } finally {

@@ -1,6 +1,7 @@
 import { isTranscriptItem, type TranscriptItem } from "../../protocol/transcript.js";
-import { isStreamPartial, latestPartials, partialKey, type StreamPartial } from "../../protocol/stream-partial.js";
+import { isStreamPartial, partialKey, type StreamPartial, type StreamPartialId } from "../../protocol/stream-partial.js";
 import { readPartialRecord } from "../../protocol/stream-partial-record.js";
+import { isExecutionExtensionMetadata } from "../../ports/execution-extension.js";
 import {
   isRuntimeFingerprint,
   type PendingEffect,
@@ -8,6 +9,21 @@ import {
   type RuntimeFingerprint,
   type SessionRecord,
 } from "../../ports/session.js";
+
+function completedPartial(item: TranscriptItem): StreamPartialId | undefined {
+  switch (item.kind) {
+    case "assistant_text":
+    case "assistant_reasoning":
+      return { kind: item.kind, blockId: item.blockId };
+    case "tool_call":
+    case "tool_result":
+      // Parsed calls and invalid-argument feedback both close their input.
+      return { kind: "tool_input", blockId: item.toolCallId };
+    case "system":
+    case "user":
+      return undefined;
+  }
+}
 
 /**
  * Folds validated records into the resumable projection.
@@ -30,7 +46,10 @@ import {
  */
 export function recover(records: readonly SessionRecord[], tornTail: boolean): RecoveryOutcome {
   const transcript: TranscriptItem[] = [];
-  const partials = new Map<string, StreamPartial>();
+  // Keep decoded snapshots for checked V2 suffixes; only the open map is shown
+  // on resume. Closing a block never changes or skips validation of old bytes.
+  const snapshots = new Map<string, StreamPartial>();
+  const openPartials = new Map<string, StreamPartial>();
   let fingerprint: RuntimeFingerprint | undefined;
   let sessionId = "";
   // Keyed by identity, valued by the journal sequence of the *issue*: the only
@@ -49,6 +68,7 @@ export function recover(records: readonly SessionRecord[], tornTail: boolean): R
             detail: "session_start payload is not a runtime fingerprint",
           };
         }
+
         fingerprint = record.payload.fingerprint;
         break;
       }
@@ -60,7 +80,11 @@ export function recover(records: readonly SessionRecord[], tornTail: boolean): R
             detail: `transcript_item payload at sequence ${record.sequence} is not a transcript item`,
           };
         }
+
         transcript.push(record.payload);
+        const completed = completedPartial(record.payload);
+        if (completed !== undefined) openPartials.delete(partialKey(completed, record.turnId));
+
         break;
       }
       case "stream_partial": {
@@ -68,8 +92,9 @@ export function recover(records: readonly SessionRecord[], tornTail: boolean): R
         if (!isStreamPartial(identity)) {
           return { ok: false, code: "mid_file_corruption", detail: `invalid stream_partial identity at sequence ${record.sequence}` };
         }
+
         const key = partialKey(identity, record.turnId);
-        const partial = readPartialRecord(record.payload, partials.get(key));
+        const partial = readPartialRecord(record.payload, snapshots.get(key));
         if (partial === undefined) {
           return {
             ok: false,
@@ -77,7 +102,20 @@ export function recover(records: readonly SessionRecord[], tornTail: boolean): R
             detail: `stream_partial payload at sequence ${record.sequence} is not a stream partial`,
           };
         }
-        partials.set(partialKey(partial, record.turnId), partial);
+
+        const continuesClosedBlock = record.payload.version === "2" && !openPartials.has(key);
+
+        snapshots.set(key, partial);
+
+        // A suffix extends its existing block; it cannot undo a canonical
+        // completion. Reused block ids start with a new full snapshot instead.
+        if (!continuesClosedBlock) openPartials.set(key, partial);
+
+        break;
+      }
+      case "execution_extension": {
+        if (!isExecutionExtensionMetadata(record.payload)) return { ok: false, code: "mid_file_corruption",
+          detail: `invalid execution_extension metadata at sequence ${record.sequence}` };
         break;
       }
       case "effect_issued":
@@ -88,9 +126,11 @@ export function recover(records: readonly SessionRecord[], tornTail: boolean): R
         if (typeof key !== "string" || key.length === 0) {
           return { ok: false, code: "mid_file_corruption", detail: `invalid effect identity at sequence ${record.sequence}` };
         }
+
         // v1 already carries turnId. Scope the fold without rewriting old bytes
         // or changing the diagnostic key exposed by RecoveredSession.
         const identity = JSON.stringify([record.turnId ?? null, key]);
+
         if (record.type === "effect_issued") {
           issued.set(identity, {
             ...(record.turnId === undefined ? {} : { turnId: record.turnId }),
@@ -104,6 +144,7 @@ export function recover(records: readonly SessionRecord[], tornTail: boolean): R
         } else {
           settled.add(identity);
         }
+
         break;
       }
       default:
@@ -114,8 +155,10 @@ export function recover(records: readonly SessionRecord[], tornTail: boolean): R
   if (fingerprint === undefined) {
     return { ok: false, code: "mid_file_corruption", detail: "missing session_start" };
   }
+
   const last = records[records.length - 1];
   const pendingEffects = [...issued].filter(([identity]) => !settled.has(identity)).map(([, effect]) => effect);
+
   return {
     ok: true,
     session: {
@@ -125,7 +168,7 @@ export function recover(records: readonly SessionRecord[], tornTail: boolean): R
       lastSequence: last?.sequence ?? 0,
       reconcileRequired: pendingEffects.map(effect => effect.key),
       pendingEffects,
-      partials: latestPartials([...partials.values()]),
+      partials: [...openPartials.values()],
       repairedTornTail: tornTail,
     },
   };

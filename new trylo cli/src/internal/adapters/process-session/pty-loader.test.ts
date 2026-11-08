@@ -51,9 +51,12 @@ describe("pty helper resolution", () => {
       moduleDir: repoModuleDir,
       exists: () => true,
     });
+
     assert.equal(win.ok, true);
+
     if (win.ok) {
       const parts = segmentsOf(win.helperPath);
+
       assert.ok(
         parts.includes("win-x64"),
         `win32 must resolve into the win-x64 directory, got ${win.helperPath}`,
@@ -71,7 +74,9 @@ describe("pty helper resolution", () => {
       moduleDir: repoModuleDir,
       exists: () => true,
     });
+
     assert.equal(linux.ok, true);
+
     if (linux.ok) {
       assert.ok(
         segmentsOf(linux.helperPath).includes("linux-x64"),
@@ -87,7 +92,9 @@ describe("pty helper resolution", () => {
       moduleDir: repoModuleDir,
       exists: () => true,
     });
+
     assert.equal(found.ok, true);
+
     if (found.ok) {
       assert.ok(segmentsOf(found.helperPath).includes("linux-x64"));
     }
@@ -100,11 +107,14 @@ describe("pty helper resolution", () => {
       moduleDir: installedModuleDir,
       exists: () => true,
     });
+
     assert.equal(found.ok, true);
+
     if (found.ok) {
       // An installed package has no vendor-bin/ and no repo root. A path that
       // reached into either would work for the author and nowhere else.
       const parts = segmentsOf(found.helperPath);
+
       assert.ok(parts.includes("installed"), `resolved inside the installed package: ${found.helperPath}`);
       assert.ok(parts.includes("vendor"), "through the staged vendor directory");
       assert.equal(parts.includes("vendor-bin"), false, "never through the source tree's vendor-bin");
@@ -128,7 +138,9 @@ describe("pty helper resolution", () => {
       moduleDir: installedModuleDir,
       exists: () => true,
     });
+
     assert.equal(found.ok, true);
+
     if (found.ok) {
       const expected = path.join(
         installedModuleDir,
@@ -162,8 +174,10 @@ describe("pty helper resolution", () => {
       "utf8",
     );
     const declared = /export const PTY_DIST_SUBDIR = "([^"]+)"/.exec(script);
+
     assert.ok(declared !== null, "the copy script must declare where it writes the artifact");
     const fromScript = declared[1]?.split("/").join(path.sep) ?? "";
+
     assert.equal(
       fromScript,
       DIST_SUBDIR,
@@ -178,7 +192,9 @@ describe("pty helper resolution", () => {
       moduleDir: repoModuleDir,
       exists: () => true,
     });
+
     assert.equal(found.ok, true);
+
     if (found.ok) {
       assert.equal(found.source, "package");
     }
@@ -191,7 +207,9 @@ describe("pty helper resolution", () => {
       moduleDir: repoModuleDir,
       exists: () => false,
     });
+
     assert.equal(missing.ok, false);
+
     if (!missing.ok) {
       assert.equal(missing.code, "pty_helper_not_built_for_platform");
       assert.match(missing.message, /linux-riscv64/);
@@ -206,7 +224,9 @@ describe("pty helper resolution", () => {
 
   it("verifies an override rather than trusting it", () => {
     const bad = resolvePtyHelper({ override: path.join("D:", "nope", "trylo-pty.exe") });
+
     assert.equal(bad.ok, false);
+
     if (!bad.ok) {
       assert.equal(bad.code, "pty_helper_override_invalid");
       assert.match(bad.message, /TRYLO_PTY_HELPER/);
@@ -215,7 +235,9 @@ describe("pty helper resolution", () => {
     // Proven by asking the question: a path that does not exist is refused,
     // which is the point of verifying rather than trusting.
     const good = resolvePtyHelper({ override: process.execPath, exists: () => true });
+
     assert.equal(good.ok, true);
+
     if (good.ok) {
       assert.equal(good.source, "override", "an override is labelled as one, not as packaged");
       assert.equal(good.helperPath, process.execPath);
@@ -230,7 +252,9 @@ describe("pty helper resolution", () => {
       moduleDir: repoModuleDir,
       exists: () => true,
     });
+
     assert.equal(found.ok, true);
+
     if (found.ok) {
       assert.equal(found.source, "package");
     }

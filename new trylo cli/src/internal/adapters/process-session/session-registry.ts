@@ -127,11 +127,14 @@ function finalize(
   if (isTerminalProcessStatus(record.status)) {
     return;
   }
+
   record.status = end.kind;
   record.end = end;
   record.endedAtMs = now();
   const waiters = [...record.waiters];
+
   record.waiters.clear();
+
   for (const wake of waiters) {
     wake();
   }
@@ -184,6 +187,7 @@ export function createProcessSessionRegistry(
         exitCode,
         ...(signal === null ? {} : { signal }),
       };
+
       finalize(record, end, now);
       publish.ended(record.id, end);
     });
@@ -206,12 +210,14 @@ export function createProcessSessionRegistry(
         if (done) {
           return;
         }
+
         done = true;
         clearTimeout(timer);
         record.waiters.delete(finish);
         resolve();
       };
       const timer = setTimeout(finish, Math.max(0, yieldMs));
+
       record.waiters.add(finish);
     });
 
@@ -232,15 +238,19 @@ export function createProcessSessionRegistry(
 
     async start(start: ProcessSessionStart, signal?: AbortSignal): Promise<ProcessSessionSnapshot> {
       assertSessionStartAllowed(lifecycle, signal);
+
       if (liveSessions().length >= maxSessions) {
         throw new Error(
           `process session limit reached (${maxSessions}); stop one before starting another`,
         );
       }
+
       const [program, ...args] = start.argv;
+
       if (program === undefined || program.length === 0) {
         throw new Error("process session needs an executable");
       }
+
       const id = isProcessSessionIdShape(start.id) ? start.id : newProcessSessionId();
       const buffer = createBoundedBuffer(start.maxBufferBytes || maxBufferBytes);
       const child = spawn(program, args, {
@@ -261,6 +271,7 @@ export function createProcessSessionRegistry(
         status: "running",
         waiters: new Set(),
       };
+
       sessions.set(id, record);
       attachSessionOutput(record, chunk => publish.output(record.id, chunk));
       publish.started({
@@ -271,6 +282,7 @@ export function createProcessSessionRegistry(
         startedAtMs: record.startedAtMs,
       });
       settleOnExit(record, child);
+
       // A spawn error arrives asynchronously, so the first read is what reports
       // it; returning a snapshot here would claim a session that never existed.
       return snapshotOf(record);
@@ -285,6 +297,7 @@ export function createProcessSessionRegistry(
           message: sessionNotFound(request.sessionId),
         };
       }
+
       if (isTerminalProcessStatus(record.status)) {
         // A poll still answers: "it finished, here is what it said" is the most
         // useful thing to hear after the fact, and refusing it would make the
@@ -299,6 +312,7 @@ export function createProcessSessionRegistry(
           ...(record.end === undefined ? {} : { end: record.end }),
         };
       }
+
       if (request.input.length > 0 || request.eof) {
         try {
           if (request.input.length > 0) {
@@ -316,7 +330,9 @@ export function createProcessSessionRegistry(
           };
         }
       }
+
       await waitForChange(record, request.yieldMs);
+
       return { ok: true, read: readOf(record) };
     },
 
@@ -326,13 +342,16 @@ export function createProcessSessionRegistry(
         if (record === undefined) {
           return { ok: false, code: "session_not_found", message: sessionNotFound(sessionId) };
         }
+
         if (isTerminalProcessStatus(record.status)) {
           return {
             ok: true,
             end: record.end ?? { kind: "exited", exitCode: record.child.exitCode ?? -1 },
           };
         }
+
         const terminated = await terminate(record.child);
+
         // A tree walk that failed is the one stop outcome the caller must see.
         // Reporting `ok: true` here would tell a user their server stopped while
         // a descendant of it is still holding the port — the exact false claim
@@ -340,14 +359,17 @@ export function createProcessSessionRegistry(
         if (!terminated.ok) {
           return { ok: false, code: "session_stop_failed", message: terminated.message };
         }
+
         // Give the OS a moment to deliver the kill before declaring an outcome.
         // The `exit` listener is the authority; this only bounds the wait. The
         // clock is the injected one so a test can decide how long "a moment" is,
         // rather than discovering the answer depends on the machine it runs on.
         const deadline = now() + STOP_GRACE_MS;
+
         while (!isTerminalProcessStatus(record.status) && now() < deadline) {
           await new Promise<void>((resolve) => setTimeout(resolve, 25));
         }
+
         if (!isTerminalProcessStatus(record.status)) {
           // `lost`, not `exited`: we stopped the process and never saw it end.
           finalize(
@@ -360,6 +382,7 @@ export function createProcessSessionRegistry(
             now,
           );
         }
+
         return {
           ok: true,
           end: record.end ?? { kind: "lost", reason: "stop requested, exit unobserved" },
@@ -378,8 +401,10 @@ export function createProcessSessionRegistry(
 
     async shutdown(): Promise<void> {
       if (lifecycle === "closed") return;
+
       lifecycle = "closing";
       const failures: Error[] = [];
+
       for (const record of liveSessions()) {
         // Teardown is best-effort by nature — the owner is going away — but the
         // attempt is still made through the tree walk, not a direct kill, so a
@@ -391,9 +416,12 @@ export function createProcessSessionRegistry(
           failures.push(error instanceof Error ? error : new Error(String(error)));
         }
       }
+
       if (failures.length > 0) throw new AggregateError(failures, "session_cleanup_failed: some process trees could not be stopped");
+
       lifecycle = "closed";
     },
   };
+
   return registry;
 }

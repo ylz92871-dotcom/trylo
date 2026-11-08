@@ -49,8 +49,11 @@ test("a well-formed sidecar round-trips through serialize", () => {
     },
   };
   const loaded = parseSessionMeta(serializeSessionMeta(meta));
+
   assert.equal(loaded.ok, true);
+
   if (!loaded.ok) return;
+
   assert.deepEqual(loaded.meta, meta);
 });
 
@@ -73,7 +76,10 @@ test("migrations survive the round-trip when present", () => {
     ],
   };
   const loaded = parseSessionMeta(serializeSessionMeta(meta));
+
   assert.equal(loaded.ok, true);
+
   if (!loaded.ok) return;
+
   assert.equal(loaded.meta.migrations?.length, 1);
 });

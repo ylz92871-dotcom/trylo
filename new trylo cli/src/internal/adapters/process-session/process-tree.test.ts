@@ -66,12 +66,14 @@ test("the direct child is NOT killed before the walk — taskkill walks from it"
   // left a grandchild running and acting while the stop reported success.
   let directKills = 0;
   const child = fakeChild({ pid: 777 });
+
   (child as { kill: () => boolean }).kill = () => {
     directKills += 1;
     return true;
   };
   const { deps } = recordingDeps("win32", 0);
   const outcome = await terminateProcessTree(child, deps);
+
   assert.equal(outcome.ok, true);
   assert.equal(directKills, 0, "the parent must stay alive for the tree walk to start from");
 });
@@ -79,15 +81,19 @@ test("the direct child is NOT killed before the walk — taskkill walks from it"
 test("a helper that cannot be launched still kills the direct child, and says so", async () => {
   let directKills = 0;
   const child = fakeChild({ pid: 777 });
+
   (child as { kill: () => boolean }).kill = () => {
     directKills += 1;
     return true;
   };
   const { deps } = recordingDeps("win32", undefined);
   const outcome = await terminateProcessTree(child, deps);
+
   assert.equal(directKills, 1, "the fallback exists for exactly this case");
   assert.equal(outcome.ok, false);
+
   if (outcome.ok) throw new Error("expected failure");
+
   assert.equal(outcome.code, "tree_kill_helper_missing");
 });
 
@@ -120,8 +126,11 @@ test("a helper that refuses is reported with its exit code", async () => {
 test("a platform with no walk says so instead of claiming the tree died", async () => {
   const { deps, calls } = recordingDeps("aix", 0);
   const outcome = await terminateProcessTree(fakeChild(), deps);
+
   assert.equal(outcome.ok, false);
+
   if (outcome.ok) throw new Error("expected failure");
+
   assert.equal(outcome.code, "tree_kill_unsupported_platform");
   assert.match(outcome.message, /aix/);
   assert.equal(calls.length, 0, "no helper may be launched on a platform with no walk");
@@ -142,6 +151,7 @@ test("stopping twice is idempotent: the second call is already_gone", async () =
     },
   };
   const child = fakeChild();
+
   assert.deepEqual(await terminateProcessTree(child, deps), { ok: true, how: "killed" });
   child.exitCode = 1; // the walk ended it
   assert.deepEqual(await terminateProcessTree(child, deps), { ok: true, how: "already_gone" });
@@ -166,6 +176,7 @@ type UnixDeps = {
 function unixDeps(alive: (pid: number) => boolean, graceMs = 2_000, settleMs = 1_000): UnixDeps {
   const signals: NodeJS.Signals[] = [];
   const waits: number[] = [];
+
   return {
     signals,
     waits,
@@ -194,6 +205,7 @@ test("a group that dies on the graceful signal never needs the force", async () 
     return gone;
   });
   const outcome = await terminateProcessTree(fakeChild({ pid: 555 }), deps);
+
   assert.deepEqual(outcome, { ok: true, how: "killed" });
   assert.deepEqual(signals, ["SIGTERM"], "SIGKILL must not be sent to a group that complied");
   assert.deepEqual(waits, [], "a group that dies immediately needs no grace window spent");
@@ -208,6 +220,7 @@ test("the graceful signal is actually given time before the force", async () => 
     return polls > 2;
   }, 2_000, 1_000);
   const outcome = await terminateProcessTree(fakeChild({ pid: 555 }), deps);
+
   assert.equal(outcome.ok, true);
   assert.deepEqual(signals, ["SIGTERM", "SIGKILL"], "escalate only after the window");
   assert.deepEqual(waits, [2_000, 1_000], "a real wait between graceful and force, and after it");
@@ -216,8 +229,11 @@ test("the graceful signal is actually given time before the force", async () => 
 test("a tree that outlives SIGKILL is reported, never declared killed", async () => {
   const { deps, signals } = unixDeps(() => false);
   const outcome = await terminateProcessTree(fakeChild({ pid: 555 }), deps);
+
   assert.equal(outcome.ok, false, "an unobservable kill must not read as success");
+
   if (outcome.ok) throw new Error("expected failure");
+
   assert.equal(outcome.code, "tree_kill_unconfirmed");
   assert.match(outcome.message, /descendants may survive/);
   assert.deepEqual(signals, ["SIGTERM", "SIGKILL"], "both were tried before giving up");

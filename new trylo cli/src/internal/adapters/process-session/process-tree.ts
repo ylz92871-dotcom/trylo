@@ -137,13 +137,16 @@ function defaultRun(
     execFile(file, [...args], { windowsHide: true, timeout: 10_000 }, (error, _stdout, stderr) => {
       if (error !== null) {
         const code = (error as { code?: unknown }).code;
+
         // A non-zero exit arrives as an error carrying a numeric code; that is a
         // result to report, not a failure to launch.
         if (typeof code === "number") {
           resolve(code);
           return;
         }
+
         resolve(undefined);
+
         return;
       }
       // Some platforms surface the helper's complaint only on stderr with a zero
@@ -168,8 +171,10 @@ export function defaultTreeKillDeps(): TreeKillDeps {
       try {
         process.kill(-pid, 0);
         return false;
-      } catch {
-        return true;
+      } catch (error) {
+        // Permission or observation failures do not prove that a group exited.
+        if (typeof error === "object" && error !== null && "code" in error && error.code === "ESRCH") return true;
+        throw error;
       }
     },
     graceMs: () => DEFAULT_GRACE_MS,
@@ -229,6 +234,7 @@ async function terminatePosixGroup(child: ProcessHandle, deps: TreeKillDeps): Pr
   if (pid === undefined) {
     return { ok: true, how: "already_gone" };
   }
+
   const signalGroup = deps.signalGroup;
   const groupGone = deps.groupGone;
   if (signalGroup === undefined || groupGone === undefined) {
@@ -243,6 +249,7 @@ async function terminatePosixGroup(child: ProcessHandle, deps: TreeKillDeps): Pr
       ),
     };
   }
+
   const wait = deps.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const grace = deps.graceMs?.() ?? DEFAULT_GRACE_MS;
   const settle = deps.settleMs?.() ?? DEFAULT_SETTLE_MS;
@@ -256,22 +263,36 @@ async function terminatePosixGroup(child: ProcessHandle, deps: TreeKillDeps): Pr
     }
   };
 
+  const observe = (): TreeTermination | undefined => {
+    try {
+      return groupGone(pid) ? { ok: true, how: "killed" } : undefined;
+    } catch (error) {
+      return {
+        ok: false,
+        code: "tree_kill_unobservable",
+        message: describeFailure("tree_kill_unobservable", error instanceof Error ? error.message : String(error)),
+      };
+    }
+  };
+
   // Graceful, one signal, then a real wait for the group to go.
   send(GRACEFUL_SIGNALS[0] ?? "SIGTERM");
-  if (groupGone(pid)) {
-    return { ok: true, how: "killed" };
-  }
+
+  const initial = observe();
+  if (initial !== undefined) return initial;
+
   await wait(grace);
-  if (groupGone(pid)) {
-    return { ok: true, how: "killed" };
-  }
+
+  const graceful = observe();
+  if (graceful !== undefined) return graceful;
 
   // Still alive after the grace window: force it, then wait again and look.
   send("SIGKILL");
   await wait(settle);
-  if (groupGone(pid)) {
-    return { ok: true, how: "killed" };
-  }
+
+  const forced = observe();
+  if (forced !== undefined) return forced;
+
   return {
     ok: false,
     code: "tree_kill_unconfirmed",
@@ -315,19 +336,27 @@ export type ProcessHandle = {
   kill(signal?: NodeJS.Signals | number): boolean;
 };
 
+function hasObservedExit(child: ProcessHandle): boolean {
+  return child.exitCode !== null || (child.signalCode ?? null) !== null;
+}
+
 export async function terminateWindowsTree(
   child: ProcessHandle,
   deps: TreeKillDeps,
 ): Promise<TreeTermination> {
-  if (child.exitCode !== null) {
+  if (hasObservedExit(child)) {
     return { ok: true, how: "already_gone" };
   }
+
   const pid = child.pid;
   if (pid === undefined) {
     return { ok: true, how: "already_gone" };
   }
+
   const args = ["/PID", String(pid), ...TASKKILL_ARGS.tree, ...TASKKILL_ARGS.force];
   const code = await deps.run(TASKKILL, args);
+  // The helper receipt may arrive after the child published its actual exit.
+  if (hasObservedExit(child)) return { ok: true, how: "already_gone" };
   if (code === undefined) {
     // The helper could not run at all. Killing just the child is still better
     // than doing nothing, and the return value keeps the survivors visible.
@@ -338,9 +367,11 @@ export async function terminateWindowsTree(
       message: describeFailure("tree_kill_helper_missing", `${TASKKILL} could not be launched`),
     };
   }
+
   if (code === 0 || code === TASKKILL_NOTHING_TO_KILL) {
     return { ok: true, how: code === 0 ? "killed" : "already_gone" };
   }
+
   return {
     ok: false,
     code: "tree_kill_rejected",
@@ -364,15 +395,18 @@ export async function terminateProcessTree(
   child: ProcessHandle,
   deps: TreeKillDeps = defaultTreeKillDeps(),
 ): Promise<TreeTermination> {
-  if (child.exitCode !== null || (child.signalCode ?? null) !== null) {
+  if (hasObservedExit(child)) {
     return { ok: true, how: "already_gone" };
   }
+
   if (deps.platform === "win32") {
     return await terminateWindowsTree(child, deps);
   }
+
   if (deps.platform === "linux" || deps.platform === "darwin" || deps.platform === "freebsd") {
     return await terminatePosixGroup(child, deps);
   }
+
   return {
     ok: false,
     code: "tree_kill_unsupported_platform",

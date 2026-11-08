@@ -37,7 +37,9 @@ async function startStore(dir: string) {
     createdAt: "2026-09-14T00:00:00.000Z",
     fingerprint: FINGERPRINT,
   });
+
   assert.equal(started.ok, true);
+
   return store;
 }
 
@@ -56,6 +58,7 @@ test("a session cannot be started twice without resuming it", async () => {
   const dir = tempDir();
   try {
     const store = await startStore(dir);
+
     await store.release();
     const again = createNdjsonSessionStore({ path: pathIn(dir) });
     const started = await again.start({
@@ -63,7 +66,9 @@ test("a session cannot be started twice without resuming it", async () => {
       createdAt: "2026-09-14T00:00:00.000Z",
       fingerprint: FINGERPRINT,
     });
+
     assert.equal(started.ok, false);
+
     if (!started.ok) {
       assert.equal(started.code, "session_exists");
     }
@@ -78,11 +83,15 @@ test("a second writer is refused instead of interleaving", async () => {
     const first = await startStore(dir);
     const second = createNdjsonSessionStore({ path: pathIn(dir) });
     const attached = await second.attach();
+
     assert.equal(attached.ok, false);
+
     if (!attached.ok) {
       assert.equal(attached.code, "lock_conflict");
     }
+
     const appended = await second.append(turnRecord());
+
     assert.equal(appended.ok, false);
     await first.release();
   } finally {
@@ -108,34 +117,46 @@ test("a torn tail is reported, blocks appends, and is only repaired explicitly",
   const dir = tempDir();
   try {
     const store = await startStore(dir);
+
     await store.append(turnRecord());
     appendFileSync(pathIn(dir), '{"sequence":2,"sum":"deadbeef","record":{"tr');
 
     const blocked = await store.append(turnRecord());
+
     assert.equal(blocked.ok, false);
+
     if (!blocked.ok) {
       assert.equal(blocked.code, "torn_tail_unrepaired");
     }
 
     const read = await store.read();
+
     assert.equal(read.ok, true);
+
     if (read.ok) {
       assert.equal(read.session.repairedTornTail, true);
       assert.equal(read.session.lastSequence, 1);
     }
 
     const repaired = await store.repairTornTail();
+
     assert.equal(repaired.ok, true);
+
     if (repaired.ok) {
       assert.equal(repaired.removedBytes > 0, true);
     }
+
     const appended = await store.append(turnRecord());
+
     assert.equal(appended.ok, true);
     const after = await store.read();
+
     assert.equal(after.ok, true);
+
     if (after.ok) {
       assert.equal(after.session.repairedTornTail, false);
     }
+
     await store.release();
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -146,12 +167,14 @@ test("corruption in the middle of the journal is never treated as a torn tail", 
   const dir = tempDir();
   try {
     const store = await startStore(dir);
+
     await store.append(turnRecord({ turnId: "t1" }));
     await store.append(turnRecord({ turnId: "t2" }));
     await store.append(turnRecord({ turnId: "t3" }));
     await store.release();
 
     const lines = readFileSync(pathIn(dir), "utf8").split("\n").filter((line) => line.length > 0);
+
     assert.equal(lines.length, 4);
     // Rewrite the second record so its checksum no longer matches.
     lines[1] = (lines[1] ?? "").replace('"payload":{}', '"payload":{"tampered":true}');
@@ -159,19 +182,27 @@ test("corruption in the middle of the journal is never treated as a torn tail", 
 
     const reopened = createNdjsonSessionStore({ path: pathIn(dir) });
     const read = await reopened.read();
+
     assert.equal(read.ok, false);
+
     if (!read.ok) {
       assert.equal(read.code, "checksum_mismatch");
     }
+
     const attached = await reopened.attach();
+
     assert.equal(attached.ok, true);
     const repaired = await reopened.repairTornTail();
+
     assert.equal(repaired.ok, true);
+
     if (repaired.ok) {
       // Nothing may be silently dropped: the file ends with a newline.
       assert.equal(repaired.removedBytes, 0);
     }
+
     const again = await reopened.read();
+
     assert.equal(again.ok, false);
     await reopened.release();
   } finally {
@@ -184,12 +215,16 @@ test("an unknown format version fails closed", async () => {
   try {
     const store = await startStore(dir);
     const raw = readFileSync(pathIn(dir), "utf8");
+
     writeFileSync(pathIn(dir), raw.replace(`"formatVersion":"${SESSION_FORMAT_VERSION}"`, '"formatVersion":"99"'));
     const read = await store.read();
+
     assert.equal(read.ok, false);
+
     if (!read.ok) {
       assert.equal(read.code, "unknown_format_version");
     }
+
     await store.release();
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -200,16 +235,21 @@ test("a sequence gap fails closed", async () => {
   const dir = tempDir();
   try {
     const store = await startStore(dir);
+
     await store.append(turnRecord());
     await store.release();
     const line = readFileSync(pathIn(dir), "utf8").split("\n").filter((l) => l.length > 0)[1];
+
     assert.notEqual(line, undefined);
     const parsed = JSON.parse(line ?? "{}") as { sequence: number; record: Record<string, unknown> };
+
     parsed.sequence = 7;
     parsed.record["sequence"] = 7;
     appendFileSync(pathIn(dir), `${JSON.stringify(parsed)}\n`);
     const read = await store.read();
+
     assert.equal(read.ok, false);
+
     if (!read.ok) {
       assert.equal(read.code, "sequence_gap");
     }
@@ -222,6 +262,7 @@ test("an effect issued without a commit is reported as needing reconciliation", 
   const dir = tempDir();
   try {
     const store = await startStore(dir);
+
     await store.append({
       type: "effect_issued",
       sessionId: "demo",
@@ -244,10 +285,13 @@ test("an effect issued without a commit is reported as needing reconciliation", 
       payload: { key: "tool:call-2" },
     });
     const read = await store.read();
+
     assert.equal(read.ok, true);
+
     if (read.ok) {
       assert.deepEqual([...read.session.reconcileRequired], ["tool:call-1"]);
     }
+
     await store.release();
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -258,6 +302,7 @@ test("transcript items survive a reload in order", async () => {
   const dir = tempDir();
   try {
     const store = await startStore(dir);
+
     await store.append({
       type: "transcript_item",
       sessionId: "demo",
@@ -273,13 +318,16 @@ test("transcript items survive a reload in order", async () => {
       payload: { kind: "assistant_text", sequence: 1, blockId: "b1", text: "world" },
     });
     const read = await store.read();
+
     assert.equal(read.ok, true);
+
     if (read.ok) {
       assert.deepEqual(
         read.session.transcript.map((item) => item.kind),
         ["user", "assistant_text"],
       );
     }
+
     await store.release();
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -292,7 +340,9 @@ test("a missing session file is not a fabricated empty session", async () => {
     assert.equal(existsSync(pathIn(dir)), false);
     const store = createNdjsonSessionStore({ path: pathIn(dir) });
     const read = await store.read();
+
     assert.equal(read.ok, false);
+
     if (!read.ok) {
       assert.equal(read.code, "missing_session");
     }
@@ -341,11 +391,14 @@ test("a transcript_item whose payload is not a transcript item fails closed", as
     ]);
     const store = createNdjsonSessionStore({ path: pathIn(dir) });
     const read = await store.read();
+
     assert.equal(read.ok, false);
+
     if (!read.ok) {
       assert.equal(read.code, "mid_file_corruption");
       assert.match(read.detail, /transcript_item/);
     }
+
     await store.release();
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -367,11 +420,14 @@ test("a session_start whose fingerprint is not a fingerprint fails closed", asyn
     ]);
     const store = createNdjsonSessionStore({ path: pathIn(dir) });
     const read = await store.read();
+
     assert.equal(read.ok, false);
+
     if (!read.ok) {
       assert.equal(read.code, "mid_file_corruption");
       assert.match(read.detail, /fingerprint/);
     }
+
     await store.release();
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -394,7 +450,9 @@ test("a well-formed transcript_item passes the payload check", async () => {
     ]);
     const store = createNdjsonSessionStore({ path: pathIn(dir) });
     const read = await store.read();
+
     assert.equal(read.ok, true);
+
     if (read.ok) {
       assert.equal(read.session.transcript.length, 1);
       const item = read.session.transcript[0];
@@ -403,6 +461,7 @@ test("a well-formed transcript_item passes the payload check", async () => {
         assert.equal(item.text, "hello");
       }
     }
+
     await store.release();
   } finally {
     rmSync(dir, { recursive: true, force: true });
