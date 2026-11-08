@@ -1,5 +1,6 @@
-import { runCliCommand, type CliCommandInput } from '../host-adapter/cli-command';
+import { runCliCommand, type CliCommandInput, type CliCommandRecoveryPort } from '../host-adapter/cli-command';
 import { record, text } from './wire';
+import { acquisitionProgress, copyAcquisitionProgress, type ToolAcquisitionProgress } from './acquisition-contract';
 
 export type ToolJobState = 'queued' | 'running' | 'waiting_approval' | 'waiting_evidence' | 'succeeded' | 'failed' | 'cancelled' | 'expired';
 export type ToolLearningJobView = {
@@ -10,13 +11,17 @@ export type ToolLearningJobView = {
   readonly createdAt: string;
   readonly action: string;
   readonly outcomeCode?: string;
+  readonly cleanupCode?: 'worker_retirement_unconfirmed' | 'allowance_release_failed' | 'cleanup_unconfirmed';
   readonly candidateVersionId?: string;
   readonly searchStatus?: 'complete' | 'partial' | 'failed';
   readonly discovered?: number;
+  readonly contractProposalId?: string;
+  readonly acquisition?: ToolAcquisitionProgress;
+  readonly recovery?: 'needs_inspection';
 };
 export type ToolLearningStatus = { readonly formatVersion: 1; readonly workspaceId: string; readonly jobs: readonly ToolLearningJobView[]; readonly totalJobs: number; readonly truncated: boolean };
 export type ToolLearningLoad = { readonly ok: true; readonly status: ToolLearningStatus } | { readonly ok: false; readonly reason: string };
-export type ToolLearningRuntime = Pick<CliCommandInput, 'process' | 'cliPath' | 'cwd' | 'nodeProgram'>;
+export type ToolLearningRuntime = Pick<CliCommandInput, 'process' | 'cliPath' | 'cwd' | 'nodeProgram' | 'lifecycle'> & { readonly recovery?: CliCommandRecoveryPort };
 const states = new Set(['queued', 'running', 'waiting_approval', 'waiting_evidence', 'succeeded', 'failed', 'cancelled', 'expired']);
 const searchStates = new Set(['complete', 'partial', 'failed']);
 
@@ -31,12 +36,16 @@ export function parseToolLearningStatus(stdout: string): ToolLearningLoad {
   for (const item of raw['jobs']) {
     if (!record(item) || !text(item['jobId'], 160) || !text(item['state'], 32) || !states.has(item['state'])
       || typeof item['attempt'] !== 'number' || !Number.isSafeInteger(item['attempt']) || item['attempt'] < 0 || item['attempt'] > 3
-      || !text(item['capability'], 512) || !text(item['createdAt'], 64) || !text(item['action'], 120)
+      || !text(item['capability'], 2048) || !text(item['createdAt'], 64) || !text(item['action'], 120)
       || (item['outcomeCode'] !== undefined && !text(item['outcomeCode'], 160))
+      || (item['cleanupCode'] !== undefined && !['worker_retirement_unconfirmed', 'allowance_release_failed', 'cleanup_unconfirmed'].includes(String(item['cleanupCode'])))
       || (item['candidateVersionId'] !== undefined && !text(item['candidateVersionId'], 160))
+      || (item['contractProposalId'] !== undefined && (typeof item['contractProposalId'] !== 'string' || !/^tool-contract-proposal_v1_[a-f0-9]{64}$/.test(item['contractProposalId'])))
+      || (item['acquisition'] !== undefined && !acquisitionProgress(item['acquisition']))
+      || (item['recovery'] !== undefined && (item['recovery'] !== 'needs_inspection' || item['state'] !== 'running'))
       || (item['searchStatus'] !== undefined && (!text(item['searchStatus'], 32) || !searchStates.has(item['searchStatus'])))
       || (item['discovered'] !== undefined && (typeof item['discovered'] !== 'number' || !Number.isSafeInteger(item['discovered']) || item['discovered'] < 0 || item['discovered'] > 20))) return { ok: false, reason: 'invalid_job' };
-    jobs.push(item as ToolLearningJobView);
+    jobs.push({ ...item, ...(acquisitionProgress(item['acquisition']) ? { acquisition: copyAcquisitionProgress(item['acquisition']) } : {}) } as ToolLearningJobView);
   }
   if (new Set(jobs.map(job => job.jobId)).size !== jobs.length) return { ok: false, reason: 'duplicate_job' };
   return { ok: true, status: { formatVersion: 1, workspaceId: raw['workspaceId'], jobs, totalJobs: raw['totalJobs'], truncated: raw['truncated'] } };

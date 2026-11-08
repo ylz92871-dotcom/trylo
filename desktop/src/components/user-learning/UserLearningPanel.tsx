@@ -12,16 +12,27 @@ import {
   BarChart3,
   Inbox,
   BookOpen,
+  ClipboardCheck,
   X,
   ShieldCheck,
   ChevronRight,
   Wrench,
+  Route,
+  Workflow,
+  UsersRound,
 } from 'lucide-react'
 import '../../styles/components/learning-center.css'
+import '../../styles/components/agent-learning-shell.css'
 import { Virtuoso } from 'react-virtuoso'
 import { CliMemoryRecords, type CliMemoryRecordsProps } from './CliMemoryRecords'
-import { ToolLearningRecords } from './ToolLearningRecords'
 import type { ToolLearningRuntime } from '../../tool-learning/cli-status'
+import type { DesktopCollaborationResources } from '../../collaboration-learning/desktop-resources'
+import { DesktopLibrariesPanel } from '../app-shell/DesktopLibrariesPanel'
+import { AgentLearningWorkspace } from './AgentLearningWorkspace'
+import {
+  sameLearningScope,
+  type SkillPendingReviewRequest,
+} from '../../agent-learning/skill-pending-review'
 import { cognitionMap, isWorkDimension } from '../../user-learning/cognition'
 import type {
   EnforcementMode,
@@ -36,11 +47,12 @@ import { POLICY_DIMENSIONS } from '../../user-learning/types'
 import { dimensionLabel, eventTypeLabel } from '../../user-learning/labels'
 import { inferDimension } from '../../user-learning/conclusion'
 import type { LearningPort } from '../../learning/learning-port'
+import type { ChatMessage } from '../chat/types'
+import type { SkillLearningSource } from './SkillLearningRequest'
 import { calculateLearningMetrics } from '../../user-learning/learning-metrics'
-import { PendingProposals } from './PendingProposals'
-import { ApprovedRecords } from './ApprovedRecords'
 import {
   type InspectorPrefs,
+  type AgentLearningSection,
   type SurfaceFilter,
   loadInspectorPrefs,
   saveInspectorPrefs,
@@ -67,6 +79,12 @@ export interface UserLearningPanelProps {
   readonly onDeleteUserData?: () => void
   readonly cliMemory?: CliMemoryRecordsProps
   readonly toolLearning?: ToolLearningRuntime
+  readonly resources?: DesktopCollaborationResources
+  readonly skillLearningSource?: SkillLearningSource
+  readonly skillReviewRequest?: SkillPendingReviewRequest
+  readonly libraryApprovals?: readonly ChatMessage[]
+  readonly onRespondLibraryApproval?: (id: string, allow: boolean) => void
+  readonly onRequestTemporaryExpert?: () => void
 }
 
 const MODE_LABELS = { shadow: '仅观察', enforced: '应用偏好', off: '停用偏好' }
@@ -82,8 +100,8 @@ const MODES: readonly EnforcementMode[] = ['shadow', 'enforced', 'off']
 /** Two top-level modules:
  *  - cognition: the desktop-side Evidence → Conclusion → User Model → Policy
  *    loop (the "learning shadow"), plus profile facts;
- *  - agent: the Hermes-side staged-write queue (memory/skills awaiting
- *    approval) and the committed records already written to Hermes. */
+ *  - agent: the workspace's learning domains, exact review requests and saved
+ *    results. Each subsystem keeps ownership of its existing actions. */
 
 const SURFACES: readonly SurfaceFilter[] = ['all', 'code', 'work']
 const CHANNELS: readonly string[] = ['all', 'work', 'interaction', 'cognition']
@@ -131,9 +149,35 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
       previous?.isConnected && previous.focus()
     }
   }, [props.open])
+
+  useEffect(() => {
+    if (!props.open || !props.skillReviewRequest) return
+    setPrefs((p) => ({ ...p, module: 'agent', agentTab: 'pending' }))
+    setLibraryFocus(null)
+  }, [props.open, props.skillReviewRequest])
   const [openModelId, setOpenModelId] = useState<string | null>(null)
-  const [pendingCount, setPendingCount] = useState(0)
-  const [approvedReloadKey, setApprovedReloadKey] = useState(0)
+  const [pendingCount, setPendingCount] = useState<number | undefined>()
+  const [libraryFocus, setLibraryFocus] = useState<{
+    owner: 'tool' | 'expert'
+    requestId?: string
+    scope?: string
+  } | null>(null)
+  const activeLibraryFocus = libraryFocus?.scope === props.resources?.scope ? libraryFocus : null
+  const [libraryRevision, setLibraryRevision] = useState(0)
+  const libraryBack = useRef<HTMLButtonElement>(null)
+  const libraryOpener = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    if (activeLibraryFocus !== null) libraryBack.current?.focus()
+  }, [activeLibraryFocus])
+  const previousLibraryScope = useRef(props.resources?.scope)
+  useEffect(() => {
+    if (previousLibraryScope.current === props.resources?.scope) return
+    previousLibraryScope.current = props.resources?.scope
+    if (libraryFocus !== null) dialog.current?.focus()
+    setLibraryFocus(null)
+    libraryOpener.current = null
+    setPendingCount(0)
+  }, [props.resources?.scope, libraryFocus])
 
   // When the panel opens after being closed, reset active tabs so a re-open
   // doesn't land somewhere surprising. State (module/filters) is kept.
@@ -141,6 +185,7 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
   useEffect(() => {
     if (props.open && !prevOpen.current) {
       setPrefs((p) => ({ ...p, cognitionTab: 'status', agentTab: 'pending' }))
+      setLibraryFocus(null)
     }
     prevOpen.current = props.open
   }, [props.open])
@@ -161,6 +206,17 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
     strengthFilter,
   } = prefs
   const set = (patch: Partial<InspectorPrefs>) => setPrefs((p) => ({ ...p, ...patch }))
+  const leaveLibrary = (restoreFocus = false) => {
+    if (activeLibraryFocus === null) return
+    setLibraryFocus(null)
+    setLibraryRevision((revision) => revision + 1)
+    if (restoreFocus) {
+      requestAnimationFrame(() => {
+        if (libraryOpener.current?.isConnected) libraryOpener.current.focus()
+        else dialog.current?.focus()
+      })
+    }
+  }
 
   const models = props.snapshot.userModels.filter((m) => m.status === 'active')
   const cognition = cognitionMap(props.snapshot)
@@ -228,6 +284,13 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
     ['profile', '个人资料', ContactRound],
     ['evidence', '学习依据', Fingerprint],
     ['decisions', '应用设置', Settings2],
+  ] as const
+  const agentNav = [
+    ['method', '方法学习', Route],
+    ['skill', '技能学习', BookOpen],
+    ['tool', '工具学习', Wrench],
+    ['workflow', '工作流学习', Workflow],
+    ['collaboration', '协作学习', UsersRound],
   ] as const
   const title =
     aux === 'data'
@@ -301,21 +364,25 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
               </button>
             ) : (
               <span className="learning-approval-note">
-                <ShieldCheck size={14} />
-                每项写入由你批准
+                当前工作区
+                {props.resources?.scope
+                  ? ` · ${props.resources.scope.split(/[\\/]/).filter(Boolean).at(-1)}`
+                  : ''}
               </span>
             )}
-            <button
-              type="button"
-              className="learning-icon-button"
-              aria-label="数据管理"
-              onClick={() => {
-                set({ module: 'cognition' })
-                setAux('data')
-              }}
-            >
-              <Settings2 size={18} />
-            </button>
+            {module === 'cognition' ? (
+              <button
+                type="button"
+                className="learning-icon-button"
+                aria-label="数据管理"
+                onClick={() => {
+                  set({ module: 'cognition' })
+                  setAux('data')
+                }}
+              >
+                <Settings2 size={18} />
+              </button>
+            ) : null}
             <button
               type="button"
               className="learning-icon-button"
@@ -346,14 +413,36 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
           >
             <BrainCircuit size={18} />
             <strong>智能体学习</strong>
-            <small>积累记忆与技能</small>
-            {pendingCount > 0 ? (
+            <small>记忆、技能与任务经验</small>
+            {(pendingCount ?? 0) > 0 ? (
               <em aria-label={`${pendingCount} 条待审批`}>{pendingCount}</em>
             ) : null}
           </button>
         </nav>
-        <div className="learning-center__layout">
+        <div
+          className={`learning-center__layout${module === 'agent' ? ' learning-center__layout--agent' : ''}`}
+        >
           <nav className="learning-center__sidebar" aria-label="学习分区">
+            {module === 'agent' ? (
+              <select
+                className="agent-learning-nav__mobile"
+                aria-label="智能体学习分区"
+                value={agentTab}
+                onChange={(event) => {
+                  leaveLibrary()
+                  set({ agentTab: event.target.value as AgentLearningSection })
+                }}
+              >
+                <option value="pending">待审批</option>
+                <option value="approved">已批准记录</option>
+                {agentNav.map(([id, label]) => (
+                  <option value={id} key={id}>
+                    {label}
+                  </option>
+                ))}
+                <option value="schedule">学习安排</option>
+              </select>
+            ) : null}
             <div>
               {module === 'cognition' ? (
                 userNav.map(([id, label, Icon]) => (
@@ -374,47 +463,103 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
                 <>
                   <button
                     type="button"
-                    aria-current={agentTab === 'pending' ? 'page' : undefined}
-                    onClick={() => set({ agentTab: 'pending' })}
+                    aria-current={
+                      !activeLibraryFocus && agentTab === 'pending' ? 'page' : undefined
+                    }
+                    onClick={() => {
+                      leaveLibrary()
+                      set({ agentTab: 'pending' })
+                    }}
                   >
-                    <Inbox size={16} />
+                    <Inbox
+                      className="agent-learning-nav__icon"
+                      size={16}
+                      strokeWidth={1.75}
+                      aria-hidden="true"
+                    />
                     待审批
+                    {(pendingCount ?? 0) > 0 ? (
+                      <span className="agent-learning-nav__count">{pendingCount}</span>
+                    ) : null}
                   </button>
                   <button
                     type="button"
-                    aria-current={agentTab === 'approved' ? 'page' : undefined}
-                    onClick={() => set({ agentTab: 'approved' })}
+                    aria-current={
+                      !activeLibraryFocus && agentTab === 'approved' ? 'page' : undefined
+                    }
+                    onClick={() => {
+                      leaveLibrary()
+                      set({ agentTab: 'approved' })
+                    }}
                   >
-                    <BookOpen size={16} />
+                    <ClipboardCheck
+                      className="agent-learning-nav__icon"
+                      size={16}
+                      strokeWidth={1.75}
+                      aria-hidden="true"
+                    />
                     已批准记录
                   </button>
-                  <button
-                    type="button"
-                    aria-current={agentTab === 'tools' ? 'page' : undefined}
-                    onClick={() => set({ agentTab: 'tools' })}
-                  >
-                    <Wrench size={16} />
-                    工具学习
-                  </button>
+                  <span className="agent-learning-nav__label">学习子模块</span>
+                  {agentNav.map(([id, label, Icon]) => (
+                    <button
+                      type="button"
+                      key={id}
+                      aria-current={!activeLibraryFocus && agentTab === id ? 'page' : undefined}
+                      onClick={() => {
+                        leaveLibrary()
+                        set({ agentTab: id })
+                      }}
+                    >
+                      <Icon
+                        className="agent-learning-nav__icon"
+                        size={16}
+                        strokeWidth={1.75}
+                        aria-hidden="true"
+                      />
+                      {label}
+                    </button>
+                  ))}
                 </>
               )}
             </div>
             <div>
-              <button
-                type="button"
-                aria-current={aux === 'data' ? 'page' : undefined}
-                onClick={() => {
-                  set({ module: 'cognition' })
-                  setAux('data')
-                }}
-              >
-                <Database size={16} />
-                数据管理
-              </button>
+              {module === 'agent' ? (
+                <button
+                  type="button"
+                  aria-current={!activeLibraryFocus && agentTab === 'schedule' ? 'page' : undefined}
+                  onClick={() => {
+                    leaveLibrary()
+                    set({ agentTab: 'schedule' })
+                  }}
+                >
+                  <SlidersHorizontal
+                    className="agent-learning-nav__icon"
+                    size={16}
+                    strokeWidth={1.75}
+                    aria-hidden="true"
+                  />
+                  学习安排
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  aria-current={aux === 'data' ? 'page' : undefined}
+                  onClick={() => {
+                    set({ module: 'cognition' })
+                    setAux('data')
+                  }}
+                >
+                  <Database size={16} />
+                  数据管理
+                </button>
+              )}
             </div>
           </nav>
           <main className="learning-center__main">
-            <div className={`learning-center__content${module === 'agent' && agentTab === 'tools' && !aux ? ' learning-center__content--tools' : ''}`}>
+            <div
+              className={`learning-center__content${module === 'agent' ? ' learning-center__content--agent' : ''}`}
+            >
               {module === 'cognition' ? (
                 <header className="learning-center__heading">
                   <div>
@@ -743,23 +888,78 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
               ) : null}
 
               {agentVisited || module === 'agent' ? (
-                <>
-                  {/* Kept mounted (hidden when inactive) so the badge reflects the
-                live queue count without an extra fetch on click. */}
-                  <div hidden={module !== 'agent' || agentTab !== 'pending'}>
-                    <PendingProposals
-                      port={props.learningPort}
-                      onCountChange={setPendingCount}
-                      onSettled={() => setApprovedReloadKey((k) => k + 1)}
+                <div hidden={module !== 'agent'}>
+                  {/* Retain the live queue while switching to user learning or a
+                    library, so its count and selected object stay continuous. */}
+                  <div hidden={activeLibraryFocus !== null}>
+                    {props.skillReviewRequest &&
+                    !sameLearningScope(
+                      props.skillReviewRequest.scope,
+                      props.toolLearning?.cwd ?? props.resources?.scope,
+                    ) ? (
+                      <p role="alert">
+                        此审阅请求属于其他工作区：{props.skillReviewRequest.scope}
+                        。请切换到原工作区后再打开请求。
+                      </p>
+                    ) : null}
+                    <AgentLearningWorkspace
+                      section={agentTab}
+                      learningPort={props.learningPort}
+                      skillLearningSource={props.skillLearningSource}
+                      runtime={props.toolLearning}
+                      resources={props.resources}
+                      skillReviewRequest={
+                        sameLearningScope(
+                          props.skillReviewRequest?.scope,
+                          props.toolLearning?.cwd ?? props.resources?.scope,
+                        )
+                          ? props.skillReviewRequest
+                          : undefined
+                      }
+                      refreshKey={libraryRevision}
+                      onPendingCountChange={setPendingCount}
+                      onOpenLibrary={(owner, requestId) => {
+                        libraryOpener.current = document.activeElement as HTMLElement | null
+                        setLibraryFocus({ owner, requestId, scope: props.resources?.scope })
+                      }}
                     />
                   </div>
-                  {module === 'agent' && agentTab === 'approved' ? (
-                    <ApprovedRecords port={props.learningPort} reloadKey={approvedReloadKey} />
+                  {activeLibraryFocus !== null ? (
+                    <section className="agent-learning-library" aria-label="工具与专家库">
+                      <button
+                        ref={libraryBack}
+                        type="button"
+                        className="agent-learning-library__back"
+                        onClick={() => leaveLibrary(true)}
+                      >
+                        <ChevronRight size={15} aria-hidden="true" />
+                        返回学习
+                      </button>
+                      <DesktopLibrariesPanel
+                        resources={props.resources}
+                        approvals={props.libraryApprovals}
+                        onRespondApproval={props.onRespondLibraryApproval}
+                        onRequestTemporaryExpert={
+                          props.onRequestTemporaryExpert
+                            ? () => {
+                                props.onClose()
+                                props.onRequestTemporaryExpert?.()
+                              }
+                            : undefined
+                        }
+                        initialOwner={activeLibraryFocus.owner}
+                        focus={
+                          activeLibraryFocus.requestId
+                            ? {
+                                owner: activeLibraryFocus.owner,
+                                requestId: activeLibraryFocus.requestId,
+                              }
+                            : undefined
+                        }
+                      />
+                    </section>
                   ) : null}
-                  {module === 'agent' && agentTab === 'tools' ? (
-                    <ToolLearningRecords {...(props.toolLearning === undefined ? {} : { runtime: props.toolLearning })} />
-                  ) : null}
-                </>
+                </div>
               ) : null}
 
               {module === 'cognition' && !aux && cognitionTab === 'decisions' ? (

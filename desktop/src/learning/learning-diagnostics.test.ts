@@ -19,10 +19,10 @@ describe('createLearningDiagnostics', () => {
 
   it('redacts absolute task output paths out of the JSON', () => {
     const { sink, exportJson } = createLearningDiagnostics();
-    const leaked = 'C:/work/demo-ws/.trylo/out/q3-deck.pptx';
+    const leaked = 'D:/CC/trylo/.trylo/out/q3-deck.pptx';
     sink.record({ type: 'learning.template_copy', path: redactWorkPath(leaked) ?? undefined });
     const json = exportJson();
-    expect(json).not.toContain('C:/work/demo-ws');
+    expect(json).not.toContain('D:/CC/trylo');
     expect(json).toContain('.trylo/out/q3-deck.pptx');
   });
 });

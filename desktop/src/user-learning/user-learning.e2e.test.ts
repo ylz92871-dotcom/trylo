@@ -11,15 +11,15 @@ describe('User Learning v0.1 e2e + isolation + failure matrix', () => {
       settings: { enabled: true, defaultMode: 'enforced', dimensionMode: {}, cognitionEnabled: true },
     });
     const t1 = runtime.openTrace({
-      sessionId: 'c1', turnId: 'u1', workspaceRoot: 'C:/work/demo-ws', product: 'code',
+      sessionId: 'c1', turnId: 'u1', workspaceRoot: 'D:/CC/trylo', product: 'code',
       prompt: '不要做重复审核，但核心 runtime 必须保留最终验证',
     });
     runtime.closeTrace(t1.id, 'completed', 'verification policy discussed');
     const ui = runtime.preparePrompt({
-      workspaceRoot: 'C:/work/demo-ws', product: 'code', prompt: '改 settings 按钮文案', baseSystemPrompt: 'You are Trylo Code.',
+      workspaceRoot: 'D:/CC/trylo', product: 'code', prompt: '改 settings 按钮文案', baseSystemPrompt: 'You are Trylo Code.',
     });
     const mig = runtime.preparePrompt({
-      workspaceRoot: 'C:/work/demo-ws', product: 'code', prompt: '修改持久状态迁移和核心 runtime', baseSystemPrompt: 'You are Trylo Code.',
+      workspaceRoot: 'D:/CC/trylo', product: 'code', prompt: '修改持久状态迁移和核心 runtime', baseSystemPrompt: 'You are Trylo Code.',
     });
     expect(ui.decision.injected).toBe(true);
     expect(injectionWasApplied(ui.systemPrompt)).toBe(true);
@@ -64,7 +64,7 @@ describe('User Learning v0.1 e2e + isolation + failure matrix', () => {
   it('Work product traces are first-class', () => {
     const runtime = createUserLearningRuntime({ store: createUserLearningStore({ memoryOnly: true }) });
     const t = runtime.openTrace({
-      sessionId: 'w1', turnId: 'tw', workspaceRoot: 'C:/work/demo-ws', product: 'work',
+      sessionId: 'w1', turnId: 'tw', workspaceRoot: 'D:/CC/trylo', product: 'work',
       prompt: '不要写那么长的过程叙述，给出产物和风险即可',
     });
     runtime.closeTrace(t.id, 'completed', 'wrote report');
@@ -77,7 +77,7 @@ describe('User Learning v0.1 e2e + isolation + failure matrix', () => {
     const session = runtime.startCognition({
       id: 'q', dimension: 'verification_audit', trigger: 'user_opened',
       prompt: '纠正', scopeHint: 'v',
-    }, 'C:/work/demo-ws');
+    }, 'D:/CC/trylo');
     runtime.answerCognition(session.id, '你理解错了，改成：减少的是重复审核，核心链路必须最终验证');
     const ev = runtime.snapshot().evidence.find((e) => e.origin.channel === 'cognition');
     expect(ev?.governance.level).toBeGreaterThanOrEqual(2);
@@ -90,7 +90,7 @@ describe('User Learning v0.1 e2e + isolation + failure matrix', () => {
     const store = createUserLearningStore({ memoryOnly: false });
     const runtime = createUserLearningRuntime({ store });
     const opened = runtime.openTrace({
-      sessionId: 's', turnId: 't', workspaceRoot: 'C:/work/demo-ws', product: 'code',
+      sessionId: 's', turnId: 't', workspaceRoot: 'D:/CC/trylo', product: 'code',
       prompt: '减少重复审核，核心 runtime 保留最终验证',
     });
     runtime.closeTrace(opened.id, 'completed', 'ok');

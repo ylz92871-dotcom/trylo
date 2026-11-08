@@ -78,16 +78,16 @@ describe('User Learning depth', () => {
       settings: { enabled: true, defaultMode: 'enforced', dimensionMode: {}, cognitionEnabled: true },
     });
     const t = runtime.openTrace({
-      sessionId: 's', turnId: 'u', workspaceRoot: 'C:/work/demo-ws', product: 'code',
+      sessionId: 's', turnId: 'u', workspaceRoot: 'D:/CC/trylo', product: 'code',
       prompt: '不要做重复审核，但核心 runtime 必须保留最终验证',
     });
     runtime.closeTrace(t.id, 'completed', 'ok');
     const first = runtime.preparePrompt({
-      workspaceRoot: 'C:/work/demo-ws', product: 'code',
+      workspaceRoot: 'D:/CC/trylo', product: 'code',
       prompt: '修改持久状态迁移和核心 runtime', baseSystemPrompt: '',
     });
     const second = runtime.preparePrompt({
-      workspaceRoot: 'C:/work/demo-ws', product: 'code',
+      workspaceRoot: 'D:/CC/trylo', product: 'code',
       prompt: '修改持久状态迁移和核心 runtime', baseSystemPrompt: '',
     });
     if (first.decision.impactCheck?.interruptUser) {

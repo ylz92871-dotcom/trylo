@@ -1,0 +1,15 @@
+.central-learning-status {
+  margin: 0 0 24px;
+  padding: 16px 0;
+  border-top: 1px solid var(--lc-line);
+  border-bottom: 1px solid var(--lc-line);
+}
+.central-learning-status header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.central-learning-status h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.central-learning-status p { margin: 12px 0; }
+.central-learning-status__resources { overflow-x: auto; }
+.central-learning-status table { width: 100%; min-width: 320px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.central-learning-status th, .central-learning-status td { padding: 7px 8px; text-align: right; border-bottom: 1px solid var(--lc-line); }
+.central-learning-status th:first-child { text-align: left; }
+.central-learning-status thead th, .central-learning-status__hint { color: var(--lc-muted); font-size: 12px; font-weight: 400; }
+.central-learning-status summary { cursor: var(--cursor-interaction, pointer); }

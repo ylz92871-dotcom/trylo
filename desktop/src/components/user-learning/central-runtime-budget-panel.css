@@ -1,0 +1,24 @@
+.central-runtime-budget-panel {
+  margin: 0 0 24px;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--lc-line);
+}
+.central-runtime-budget-panel header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.central-runtime-budget-panel h3 { margin: 0; color: var(--lc-ink); font-size: 15px; font-weight: 600; }
+.central-runtime-budget-panel header p, .central-runtime-budget-panel__hint { color: var(--lc-muted); font-size: 12px; }
+.central-runtime-budget-panel p { margin: 8px 0 12px; }
+.central-runtime-budget-panel__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.central-runtime-budget-panel form { margin-top: 16px; }
+.central-runtime-budget-panel table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.central-runtime-budget-panel th, .central-runtime-budget-panel td { padding: 7px 8px; text-align: right; border-bottom: 1px solid var(--lc-line); }
+.central-runtime-budget-panel th:first-child { text-align: left; }
+.central-runtime-budget-panel thead th { color: var(--lc-muted); font-size: 12px; font-weight: 400; }
+.central-runtime-budget-panel__remaining { font-weight: 600; color: var(--lc-ink); }
+.central-runtime-budget-panel__fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+.central-runtime-budget-panel label { display: grid; gap: 6px; color: var(--lc-muted); font-size: 12px; }
+.central-runtime-budget-panel input { width: 100%; min-width: 0; border: 1px solid var(--lc-line); border-radius: 5px; padding: 7px 8px; background: var(--lc-soft); color: var(--lc-ink); font: inherit; font-variant-numeric: tabular-nums; }
+.central-runtime-budget-panel .agent-workspace__primary:hover:not(:disabled) { background: var(--lc-ink); opacity: 0.9; }
+@media (max-width: 640px) {
+  .central-runtime-budget-panel header { flex-direction: column; }
+  .central-runtime-budget-panel__fields { grid-template-columns: 1fr; }
+}

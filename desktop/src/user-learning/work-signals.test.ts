@@ -93,7 +93,7 @@ describe('Work preference language', () => {
   it('Work traces close into snapshot Evidence', () => {
     const runtime = createUserLearningRuntime({ store: createUserLearningStore({ memoryOnly: true }) });
     const opened = runtime.openTrace({
-      sessionId: 'w1', turnId: 'tw', workspaceRoot: 'C:/work/demo-ws', product: 'work',
+      sessionId: 'w1', turnId: 'tw', workspaceRoot: 'D:/CC/trylo', product: 'work',
       prompt: '电脑低风险你自己点，账号路径先问我',
     });
     runtime.recordEvent(opened.id, eventFromArtifact({ action: 'promote', fileName: '报告.pptx' }));

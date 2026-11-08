@@ -4,6 +4,7 @@ const runtimeLabels: Record<ProductionSummary['profile'], string> = {
   confined_json_function_v1: '本地函数工具',
   confined_npm_cli_v1: '本地命令行工具',
   confined_npm_mcp_v1: '本地工具服务',
+  confined_npm_library_v1: '软件库适配工具',
 }
 export const toolRuntimeLabel = (profile: ProductionSummary['profile']): string =>
   runtimeLabels[profile]

@@ -1,0 +1,45 @@
+.library-reader-boundary {
+  --library-control: var(--border-strong, color-mix(in srgb, var(--fg, #30312e) 22%, var(--bg, #fff)));
+  --lc-paper: var(--bg, #fff);
+  --lc-soft: var(--bg-panel, #fafaf9);
+  --lc-line: var(--border, #eaeae7);
+  --lc-ink: var(--fg, #30312e);
+  --lc-muted: var(--fg-muted, #6e726b);
+  --lc-gold: var(--accent, #946d22);
+  --lc-selected: var(--bg-elevated, #f7f3e9);
+  --lc-button: var(--fg, #30312e);
+  color: var(--fg, #30312e);
+  position: relative;
+  min-height: 640px;
+}
+.library-reader-boundary:has(> .library-document-reader) > :not(.library-document-reader) { visibility: hidden; }
+.library-document-reader { position: absolute; inset: 0; z-index: 8; background: var(--lc-paper); }
+.library-document-reader .learning-reader { border-radius: 0; }
+.library-reader-boundary .library-document-reader button {
+  appearance: none;
+  font: inherit;
+  color: var(--lc-ink);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: none;
+}
+.library-reader-boundary .library-document-reader button:disabled { opacity: .45; cursor: default; }
+.library-reader-boundary .library-document-reader button:focus-visible { outline: 2px solid var(--lc-gold); outline-offset: 3px; }
+.library-reader-boundary .library-document-reader button:hover:not(:disabled) { color: var(--lc-gold); background: transparent; }
+.library-document-reader .learning-reader__header button { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; min-height: 32px; }
+.library-document-reader .learning-reader__header > button:last-child { min-width: 32px; justify-content: center; }
+.library-document-reader .learning-reader__toolbar button { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; color: var(--lc-muted); }
+.library-document-reader .learning-reader__toolbar nav button { padding: 5px 9px; border-radius: 5px; }
+.library-document-reader .learning-reader__toolbar nav button[aria-pressed='true'] { background: var(--lc-soft); color: var(--lc-ink); }
+.library-document-reader .learning-reader__footer button { padding: 7px 12px; font-size: 12px; }
+.library-document-reader .learning-reader__footer > div:first-child > button { padding-left: 0; color: var(--lc-muted); }
+.library-document-reader .learning-reader__outline button { display: block; width: 100%; padding: 8px; font-size: 12px; text-align: left; }
+.library-document-reader .learning-reader__metadata header button { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px; }
+.library-document-reader .learning-code > button { padding: 3px 6px; background: var(--lc-soft); color: var(--lc-muted); font-size: 11px; }
+@media (pointer: coarse) {
+  .library-document-reader .learning-reader button { min-height: 44px; }
+  .library-document-reader .learning-reader__header > button:last-child { min-width: 44px; }
+}

@@ -8,7 +8,7 @@ describe('Cognition mode conversation', () => {
     const runtime = createUserLearningRuntime({
       store: createUserLearningStore({ memoryOnly: true }),
     });
-    const first = await runtime.handleCognitionTurn('你好', 'C:/work/demo-ws');
+    const first = await runtime.handleCognitionTurn('你好', 'D:/CC/trylo');
     expect(first.reply).toMatch(/怎么跟我干活|工作习惯/);
     expect(first.promptSession?.status).toBe('open');
     expect(runtime.snapshot().cognitionSessions.some((s) => s.status === 'open')).toBe(true);
@@ -19,7 +19,7 @@ describe('Cognition mode conversation', () => {
     const runtime = createUserLearningRuntime({
       store: createUserLearningStore({ memoryOnly: true }),
     });
-    await runtime.handleCognitionTurn('普通功能直接做，核心架构先计划并保留最终验证。', 'C:/work/demo-ws');
+    await runtime.handleCognitionTurn('普通功能直接做，核心架构先计划并保留最终验证。', 'D:/CC/trylo');
     expect(runtime.snapshot().evidence.some((e) => e.origin.channel === 'cognition')).toBe(true);
     expect(runtime.snapshot().userModels.every((m) => m.derivedFrom.conclusionIds.length > 0)).toBe(true);
   });
@@ -59,7 +59,7 @@ describe('Cognition mode conversation', () => {
       trigger: 'high_value_gap',
       prompt: '验证偏好？',
       scopeHint: 'v',
-    }, 'C:/work/demo-ws');
+    }, 'D:/CC/trylo');
     const res = runtime.answerCognition(session.id, '低风险直接完成；核心路径仍要最终验证');
     expect(res.followUp).toBe('done');
     const live = runtime.snapshot().cognitionSessions.find((s) => s.id === session.id);
@@ -77,7 +77,7 @@ describe('Cognition mode conversation', () => {
     // in-task relevant (spec §3.2 / §2.2 — a filler or pure gap returns null;
     // a verification-correcting strong signal triggers).
     const first = runtime.maybeCognitionPrompt({ prompt: '改一下持久化迁移，以后不要每次都加独立审核' })!;
-    const session = runtime.startCognition(first, 'C:/work/demo-ws');
+    const session = runtime.startCognition(first, 'D:/CC/trylo');
     const res = runtime.answerCognition(session.id, '都直接做吧，不用再问我了，所有任务都是。');
     expect(res.followUp).toBe('confirm_scope');
 

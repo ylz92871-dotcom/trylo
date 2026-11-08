@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseToolLearningStatus, loadToolLearningStatus } from './cli-status';
 import type { FilePath } from '../host-adapter/types';
 import type { ProcessService } from '../host-adapter/process-service';
+import { acquisitionCandidateVersion, acquisitionContinuationJob, acquisitionFixture, acquisitionInstallation } from './acquisition-test-support';
 
 const job = { jobId: 'tool-learning_v1_example', state: 'waiting_evidence', attempt: 1, capability: '表格中的金额汇总', createdAt: '2026-10-30T00:00:00.000Z', action: 'replace_or_add',
   outcomeCode: 'verification_recipe_required', searchStatus: 'partial', discovered: 5 };
@@ -24,6 +25,19 @@ describe('tool learning status protocol', () => {
     }, stop: async () => {} };
     expect((await loadToolLearningStatus({ ...runtime, process })).ok).toBe(true);
     expect(calls[0]?.args.slice(-3)).toEqual(['tools', 'status', '--json']); expect(calls[0]?.cwd).toEqual(runtime.cwd);
+  });
+
+  it('keeps legacy status compatible and validates optional acquisition progress and contract-review identities', () => {
+    const acquisition = { approvalId: acquisitionFixture().approvalId, installationId: acquisitionInstallation.installationId, installed: true,
+      continuation: { jobId: acquisitionContinuationJob, state: 'waiting_approval', attempt: 1, versionId: acquisitionCandidateVersion } };
+    const contractProposalId = `tool-contract-proposal_v1_${'f'.repeat(64)}`;
+    const loaded = parseToolLearningStatus(payload([{ ...job, acquisition, contractProposalId }]));
+    expect(loaded.ok && loaded.status.jobs[0]?.acquisition?.continuation?.versionId).toBe(acquisitionCandidateVersion);
+    for (const change of [{ acquisition: { ...acquisition, approvalId: 'latest' } }, { contractProposalId: 'proposal-latest' },
+      { acquisition: { approvalId: acquisition.approvalId, installed: true } }, { recovery: 'needs_inspection' }]) {
+      expect(parseToolLearningStatus(payload([{ ...job, ...change }])).ok).toBe(false);
+    }
+    expect(parseToolLearningStatus(payload([{ ...job, state: 'running', recovery: 'needs_inspection' }])).ok).toBe(true);
   });
 
   it('rejects an old CLI exit or incomplete native pipe capture instead of showing an empty list', async () => {

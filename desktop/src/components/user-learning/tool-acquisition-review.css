@@ -1,0 +1,117 @@
+.tool-acquisition-review {
+  margin-top: 16px;
+  padding-block: 16px;
+  border-top: 1px solid var(--lc-line, #eaeae7);
+  min-width: 0;
+}
+.tool-acquisition-review h4 {
+  margin: 0;
+  color: var(--lc-ink, #30312e);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.tool-acquisition-review__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.tool-acquisition-review p {
+  margin: 8px 0;
+  color: var(--lc-ink, #30312e);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.tool-acquisition-review dl {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 8px;
+  margin: 12px 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.tool-acquisition-review dd {
+  margin: 0;
+  min-width: 0;
+}
+.tool-acquisition-review details {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.tool-acquisition-review summary {
+  cursor: pointer;
+}
+.tool-acquisition-review code {
+  font-family: var(--font-mono, monospace);
+  overflow-wrap: anywhere;
+}
+.tool-acquisition-review button {
+  padding: 7px 12px;
+  border: 1px solid var(--lc-line, #eaeae7);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--lc-ink, #30312e);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.tool-acquisition-review button:hover:not(:disabled) {
+  background: var(--lc-soft, #fafaf9);
+}
+.tool-acquisition-review button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.tool-acquisition-review button:focus-visible,
+.tool-acquisition-review summary:focus-visible {
+  outline: 2px solid var(--lc-gold, #946d22);
+  outline-offset: 3px;
+}
+.tool-acquisition-review dd,
+.tool-acquisition-review a,
+.tool-acquisition-review li {
+  overflow-wrap: anywhere;
+}
+.tool-acquisition-review a {
+  color: var(--lc-ink, #30312e);
+  text-underline-offset: 3px;
+}
+.tool-acquisition-review a:focus-visible {
+  outline: 2px solid var(--lc-gold, #946d22);
+  outline-offset: 3px;
+}
+.tool-acquisition-review .tool-acquisition-review__muted {
+  color: var(--lc-ink, #30312e);
+  font-size: 12px;
+}
+.tool-acquisition-review__progress {
+  margin-block: 16px;
+}
+.tool-acquisition-review__inquiry {
+  margin-block: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--lc-line, #eaeae7);
+}
+.tool-acquisition-review__inquiry h5 {
+  margin: 0;
+  color: var(--lc-ink, #30312e);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.tool-acquisition-review__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 12px;
+}
+@media (max-width: 600px) {
+  .tool-acquisition-review__header {
+    flex-wrap: wrap;
+  }
+  .tool-acquisition-review__actions button {
+    white-space: normal;
+    text-align: start;
+  }
+}

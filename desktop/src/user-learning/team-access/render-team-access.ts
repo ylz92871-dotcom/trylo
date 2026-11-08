@@ -6,7 +6,7 @@
 // translation tags but keeps the contract — the contract is a task
 // specification, not personalization. Block budget: 2800 tokens.
 import { estimateTokens, sourceHash } from '../ids';
-import { OVERLAY_FALLBACK_PROMPT_MAX_CHARS } from './profiles/profile-types';
+import type { ExpertSelection } from '../../../../new trylo cli/src/internal/subagent/experts/browser';
 import type { EnforcementMode } from '../types';
 import {
   CONTRACT_TAG,
@@ -124,7 +124,7 @@ export function renderTeamAccessBlock(input: {
 /**
  * Write-fail-only sibling tags (Foundation spec §8.4): appended AFTER
  * `</trylo_team_access>` by host-launch when profile.v1.json could not
- * be written. Prompt overlays truncate to 400 chars; these tags are NOT
+ * be written. The complete validated overlays are retained; these tags are NOT
  * part of the 2800 budget and the CLI extracts them before stripping.
  */
 export interface FrozenOverlayProfile extends FrozenRosterProfile {
@@ -138,6 +138,7 @@ export interface FrozenOverlayProfile extends FrozenRosterProfile {
       readonly disallowedTools?: readonly string[];
       readonly skills?: readonly string[];
       readonly systemPromptOverlay?: string;
+      readonly expert?: ExpertSelection;
     };
   }[];
 }
@@ -150,10 +151,8 @@ export function renderMemberOverlayFallbackTags(profile: FrozenOverlayProfile): 
         ...(member.overlay?.tools ? { tools: member.overlay.tools } : {}),
         ...(member.overlay?.disallowedTools ? { disallowedTools: member.overlay.disallowedTools } : {}),
         skills: member.overlay?.skills ?? [],
-        systemPromptOverlay: (member.overlay?.systemPromptOverlay ?? '').slice(
-          0,
-          OVERLAY_FALLBACK_PROMPT_MAX_CHARS,
-        ),
+        systemPromptOverlay: member.overlay?.systemPromptOverlay ?? '',
+        ...(member.overlay?.expert === undefined ? {} : { expert: member.overlay.expert }),
       };
       return `<trylo_member_overlay member_id="${member.memberId}">${JSON.stringify(compact)}</trylo_member_overlay>`;
     })

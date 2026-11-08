@@ -1,0 +1,244 @@
+.tool-library {
+  color: var(--text-primary);
+  min-width: 0;
+}
+.tool-library__header,
+.tool-library__filters,
+.tool-library__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.tool-library__header {
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.tool-library h3,
+.tool-library h4,
+.tool-library p {
+  margin: 0 0 10px;
+}
+.tool-library h3 {
+  font-size: 16px;
+}
+.tool-library button,
+.tool-library input,
+.tool-library select {
+  font: inherit;
+}
+.tool-library textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 80px;
+  margin: 8px 0;
+  border: 1px solid var(--border, #d7d7d2);
+  border-radius: 6px;
+  background: var(--bg, #fff);
+  color: inherit;
+  padding: 8px 10px;
+  font: inherit;
+  resize: vertical;
+}
+.tool-library button,
+.tool-library input:not([type='checkbox']),
+.tool-library select {
+  border: 1px solid var(--border, #d7d7d2);
+  background: var(--bg, #fff);
+  color: inherit;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.tool-library button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.tool-library button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.tool-library :focus-visible {
+  outline: 2px solid var(--focus-ring, #946d22);
+  outline-offset: 2px;
+}
+.tool-library__filters input,
+.tool-library__demand input {
+  flex: 1;
+  min-width: 180px;
+}
+.tool-library__meta,
+.tool-library__description {
+  display: block;
+  color: var(--text-secondary, #777a74);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.tool-library__filters {
+  margin-bottom: 12px;
+}
+.tool-library__workspace {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(200px, 0.7fr);
+  align-items: start;
+  gap: 24px;
+}
+.tool-library__workspace:not(:has(aside)) {
+  grid-template-columns: 1fr;
+}
+.tool-library__row {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border, #d7d7d2);
+}
+.tool-library__row label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.tool-library__row label > span {
+  min-width: 0;
+}
+.tool-library__row input {
+  margin-top: 4px;
+}
+.tool-library__row strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.tool-library__row-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.tool-library__identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.tool-library__detail .tool-library__identity h4 {
+  margin: 0;
+}
+.tool-library__availability {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
+}
+.tool-library__description {
+  max-width: 70ch;
+}
+.tool-library__detail {
+  position: sticky;
+  top: 0;
+  padding: 16px;
+  background: var(--bg-panel, #f6f6f3);
+  border-radius: 8px;
+}
+.tool-library__detail dl {
+  margin: 16px 0;
+  font-size: 12px;
+}
+.tool-library__detail dt {
+  color: var(--text-secondary, #777a74);
+  margin-top: 12px;
+}
+.tool-library__detail dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+.tool-library__actions {
+  margin-top: 16px;
+}
+.tool-library__demand,
+.tool-library__review {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border, #d7d7d2);
+}
+.tool-library__demand label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.tool-library__notice {
+  padding: 12px;
+  background: var(--bg-panel, #f6f6f3);
+  overflow-wrap: anywhere;
+}
+.tool-library__review summary {
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+@media (max-width: 680px) {
+  .tool-library__workspace {
+    grid-template-columns: 1fr;
+  }
+  .tool-library__detail {
+    position: static;
+  }
+}
+
+/* A working directory: comparison at left, the selected capability as a document. */
+.tool-library { font: 13px/1.65 var(--font-body, 'Segoe UI', 'Microsoft YaHei', sans-serif); }
+.tool-library__header { margin-bottom: 24px; }
+.tool-library__header h3 { font-size: 22px; font-weight: 600; margin-bottom: 5px; }
+.tool-library__header p { font-size: 12px; color: var(--fg-muted, #6e726b); margin: 0; }
+.tool-library__tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--border); margin-bottom: 22px; }
+.tool-library__tabs > button { background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 0 0 12px; color: var(--fg-muted); }
+.tool-library__tabs > button[aria-pressed='true'] { color: var(--fg); border-bottom-color: var(--accent, #946d22); }
+.tool-library__filters { margin-bottom: 9px; }
+.tool-library__workspace { grid-template-columns: minmax(220px, .85fr) minmax(280px, 1.15fr); gap: 28px; margin-top: 20px; }
+.tool-library__list { min-width: 0; }
+.tool-library__row { padding: 14px 8px; gap: 8px; }
+.tool-library__row[data-selected='true'] { background: var(--bg-elevated, #f7f3e9); }
+.tool-library__row label { gap: 9px; }
+.tool-library__row button { border: 0; padding: 4px; background: transparent; font-size: 12px; color: var(--accent, #946d22); }
+.tool-library__row .tool-library__description { margin: 4px 0; font-size: 12px; }
+.tool-library__row .tool-library__meta { font-size: 11px; }
+.tool-library__detail { background: transparent; border-radius: 0; border-left: 1px solid var(--border); padding: 0 0 0 25px; position: static; min-width: 0; }
+.tool-library__detail h4 { font-size: 18px; font-weight: 600; margin: 0 0 10px; }
+.tool-library__detail > p { font-size: 13px; line-height: 1.85; }
+.tool-library__detail h5 { margin: 24px 0 10px; font-size: 13px; font-weight: 600; }
+.tool-library__read { margin: 2px 0 0; font-size: 12px; }
+.tool-library__capabilities { margin: 0; padding-left: 18px; line-height: 1.95; }
+.tool-library__runtime { display: block; padding: 12px 14px; background: var(--bg-panel); font: 12px/1.9 var(--font-mono, Consolas, monospace); overflow-wrap: anywhere; }
+.tool-library__detail dl { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px 10px; border-top: 1px solid var(--border); padding-top: 19px; margin-top: 24px; }
+.tool-library__detail dt, .tool-library__detail dd { margin: 0; line-height: 1.85; }
+.tool-library__detail details { margin-top: 24px; border-top: 1px solid var(--border); padding-top: 15px; }
+.tool-library__detail summary, .tool-library__demand-section summary { font-size: 12px; cursor: pointer; color: var(--accent, #946d22); }
+.tool-library__detail details[open] > summary { margin-bottom: 15px; }
+.tool-library__actions { border-top: 1px solid var(--border); padding-top: 17px; margin-top: 23px; }
+.tool-library__demand-section { margin-top: 25px; padding-top: 17px; border-top: 1px solid var(--border); }
+.tool-library__demand { margin-top: 18px; border: 0; padding: 0; }
+.tool-library__review { border: 0; padding: 0; margin-top: 0; }
+.tool-library__notice { padding: 10px 0; background: transparent; }
+.tool-library .tool-library__mobile-back { display: none; }
+@media (max-width: 760px) {
+  .tool-library__workspace { grid-template-columns: 1fr; }
+  .tool-library__detail { padding: 20px 0 0; border-left: 0; border-top: 1px solid var(--border); }
+  .tool-library__filters input, .tool-library__demand input { min-width: 0; width: 100%; }
+  .tool-library input:not([type='checkbox']), .tool-library select { font-size: 16px; }
+  .tool-library[data-mobile-detail='false'] .tool-library__detail { display: none; }
+  .tool-library[data-mobile-detail='true'] .tool-library__list,
+  .tool-library[data-mobile-detail='true'] .tool-library__catalog-controls { display: none; }
+  .tool-library[data-mobile-detail='true'] .tool-library__workspace { margin-top: 0; }
+  .tool-library[data-mobile-detail='true'] .tool-library__detail { border-top: 0; padding-top: 0; }
+  .tool-library .tool-library__mobile-back { display: inline-flex; margin: 0 0 20px; padding-left: 0; border: 0; background: transparent; color: var(--fg-muted); font-size: 12px; }
+}
+@media (pointer: coarse) {
+  .tool-library button, .tool-library summary, .library-document-reader .learning-reader button { min-height: 44px; }
+  .tool-library__row { min-height: 68px; }
+  .library-document-reader .learning-reader__header > button:last-child { min-width: 44px; }
+}

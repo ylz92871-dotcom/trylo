@@ -251,7 +251,7 @@ describe('User Learning golden set', () => {
     const opened = runtime.openTrace({
       sessionId: 's',
       turnId: 'u1',
-      workspaceRoot: 'C:/work/demo-ws',
+      workspaceRoot: 'D:/CC/trylo',
       product: 'code',
       prompt: '不要做重复审核，但核心 runtime 必须保留最终验证',
       codeMode: 'agent',
@@ -263,7 +263,7 @@ describe('User Learning golden set', () => {
     expect(snap.conclusions.length).toBeGreaterThan(0);
     expect(snap.userModels.length).toBeGreaterThan(0);
     const prepared = runtime.preparePrompt({
-      workspaceRoot: 'C:/work/demo-ws',
+      workspaceRoot: 'D:/CC/trylo',
       product: 'code',
       prompt: '改 settings 按钮文案',
       baseSystemPrompt: '',

@@ -17,11 +17,20 @@ export const INSPECTOR_PREFS_KEY = 'trylo:learning:inspector:v1';
 
 export type InspectorModule = 'cognition' | 'agent';
 export type SurfaceFilter = 'all' | ProductSurface;
+export type AgentLearningSection =
+  | 'pending'
+  | 'approved'
+  | 'method'
+  | 'skill'
+  | 'tool'
+  | 'workflow'
+  | 'collaboration'
+  | 'schedule';
 
 export interface InspectorPrefs {
   readonly module: InspectorModule;
   readonly cognitionTab: 'status' | 'profile' | 'model' | 'evidence' | 'decisions';
-  readonly agentTab: 'pending' | 'approved' | 'tools';
+  readonly agentTab: AgentLearningSection;
   readonly surfaceFilter: SurfaceFilter;
   readonly channelFilter: 'all' | 'work' | 'interaction' | 'cognition';
   readonly dimensionFilter: 'all' | PolicyDimension;
@@ -50,7 +59,7 @@ export function loadInspectorPrefs(): InspectorPrefs {
         parsed.cognitionTab === 'profile' || parsed.cognitionTab === 'model' || parsed.cognitionTab === 'evidence' || parsed.cognitionTab === 'decisions'
           ? parsed.cognitionTab
           : 'status',
-      agentTab: parsed.agentTab === 'approved' || parsed.agentTab === 'tools' ? parsed.agentTab : 'pending',
+      agentTab: readAgentLearningSection(parsed.agentTab),
       surfaceFilter: parsed.surfaceFilter === 'code' || parsed.surfaceFilter === 'work' ? parsed.surfaceFilter : 'all',
       channelFilter:
         parsed.channelFilter === 'work' || parsed.channelFilter === 'interaction' || parsed.channelFilter === 'cognition'
@@ -64,6 +73,15 @@ export function loadInspectorPrefs(): InspectorPrefs {
   } catch {
     return DEFAULT_INSPECTOR_PREFS;
   }
+}
+
+/** Keep the former tools route usable without changing any user-learning prefs. */
+function readAgentLearningSection(value: unknown): AgentLearningSection {
+  if (value === 'tools') return 'tool';
+  return value === 'approved' || value === 'method' || value === 'skill' ||
+    value === 'tool' || value === 'workflow' || value === 'collaboration' || value === 'schedule'
+    ? value
+    : 'pending';
 }
 
 export function saveInspectorPrefs(prefs: InspectorPrefs): void {

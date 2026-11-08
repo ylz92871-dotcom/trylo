@@ -1,0 +1,78 @@
+/* Agent-only shell additions. User-learning geometry and controls keep their
+   established styles and data wiring. */
+.learning-center__layout--agent .agent-learning-nav__icon {
+  display: block;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  color: inherit;
+  opacity: 0.8;
+}
+.learning-center__layout--agent [aria-current='page'] .agent-learning-nav__icon {
+  opacity: 1;
+}
+.learning-center__layout--agent .agent-learning-nav__mobile {
+  display: none;
+}
+.learning-center__layout--agent .agent-learning-nav__label {
+  display: block;
+  margin: 16px 0 6px;
+  padding: 0 13px;
+  color: var(--lc-muted);
+  font-size: 11px;
+  line-height: 1.8;
+}
+.learning-center__layout--agent .agent-learning-nav__count {
+  margin-left: auto;
+  color: var(--lc-gold);
+  font-size: 11px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.learning-center__layout--agent .learning-center__content--agent {
+  max-width: none;
+  padding: 26px 28px 30px;
+}
+.learning-center__layout--agent .agent-learning-library__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 20px;
+  padding: 0;
+  color: var(--lc-muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.learning-center__layout--agent .agent-learning-library__back svg {
+  transform: rotate(180deg);
+}
+@media (max-width: 700px) {
+  .learning-center__layout--agent .learning-center__content--agent {
+    padding: 22px 20px 28px;
+  }
+  .learning-center__layout--agent .agent-learning-nav__label {
+    margin: 0;
+    padding: 0 8px;
+    align-self: center;
+  }
+}
+@media (pointer: coarse) {
+  .learning-center__layout--agent .agent-learning-library__back {
+    min-height: 44px;
+  }
+}
+@media (max-width: 540px) {
+  .learning-center__layout--agent .learning-center__sidebar > div {
+    display: none;
+  }
+  .learning-center__layout--agent .agent-learning-nav__mobile {
+    display: block;
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--lc-line);
+    border-radius: 5px;
+    color: var(--lc-ink);
+    background: var(--lc-paper);
+    font-size: 16px;
+  }
+}

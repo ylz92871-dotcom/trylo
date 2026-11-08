@@ -1,3 +1,4 @@
+import { ToolProductionSources } from './ToolProductionSources'
 import type { ProductionDetail } from '../../tool-learning/production-contract'
 const stages: Readonly<Record<string, string>> = {
   source_license_provenance: '来源与许可',
@@ -11,20 +12,6 @@ const stages: Readonly<Record<string, string>> = {
   baseline_regression: '变式与反例',
   independent_verdict: '独立检查结论',
 }
-function sourceHref(value: string): string | undefined {
-  try {
-    const url = new URL(value)
-    return url.protocol === 'https:' &&
-      url.hostname === 'github.com' &&
-      !url.username &&
-      !url.password
-      ? url.href
-      : undefined
-  } catch {
-    return undefined
-  }
-}
-
 export function ToolProductionEvidence({ detail }: { readonly detail: ProductionDetail }) {
   return (
     <>
@@ -81,76 +68,7 @@ export function ToolProductionEvidence({ detail }: { readonly detail: Production
           <p className="tool-production__meta">{detail.review.code}</p>
         )}
       </section>
-      <section>
-        <h4>来源与许可</h4>
-        <p>
-          {detail.source.length} 个来源记录。
-          {detail.profile === 'confined_json_function_v1'
-            ? '来自已归档生成候选。'
-            : 'npm 发布归档与许可摘要已冻结；来源修订为人工审阅记录。'}
-        </p>
-        <details>
-          <summary>查看完整来源记录</summary>
-          <ul className="tool-production__sources">
-            {detail.source.map((item, i) => (
-              <li key={i}>
-                <strong>
-                  {item.name}{' '}
-                  <span>
-                    {item.version} · {item.license}
-                  </span>
-                </strong>
-                {item.origin === 'reviewed_npm_archive' ? (
-                  <>
-                    <p>
-                      {sourceHref(item.upstreamUrl) ? (
-                        <a href={sourceHref(item.upstreamUrl)} target="_blank" rel="noreferrer">
-                          {item.upstreamUrl}
-                        </a>
-                      ) : (
-                        item.upstreamUrl
-                      )}
-                    </p>
-                    <dl>
-                      <dt>安装位置</dt>
-                      <dd>
-                        <code>{item.location}</code>
-                      </dd>
-                      <dt>来源修订</dt>
-                      <dd>
-                        <code>{item.sourceRevision}</code>
-                      </dd>
-                      <dt>归档 SHA256</dt>
-                      <dd>
-                        <code>{item.archiveSha256}</code>
-                      </dd>
-                      {item.licenses.map((license) => (
-                        <div className="tool-production__license" key={license.path}>
-                          <dt>{license.path}</dt>
-                          <dd>
-                            <code>{license.sha256}</code>
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </>
-                ) : (
-                  <dl>
-                    <dt>生成候选</dt>
-                    <dd>
-                      <code>{item.sourceVersionId}</code>
-                    </dd>
-                    <dt>内容摘要</dt>
-                    <dd>
-                      <code>{item.contentHash}</code>
-                    </dd>
-                  </dl>
-                )}
-              </li>
-            ))}
-          </ul>
-        </details>
-      </section>
+      <ToolProductionSources detail={detail} />
     </>
   )
 }

@@ -24,6 +24,7 @@ export function freezeProfile(profile: TeamProfile): TeamProfile {
         model: m.overlay.model,
         skills: [...m.overlay.skills],
         systemPromptOverlay: m.overlay.systemPromptOverlay,
+        ...(m.overlay.expert ? { expert: { ...m.overlay.expert } } : {}),
         ...(m.overlay.tools ? { tools: [...m.overlay.tools] } : {}),
         ...(m.overlay.disallowedTools
           ? { disallowedTools: [...m.overlay.disallowedTools] }

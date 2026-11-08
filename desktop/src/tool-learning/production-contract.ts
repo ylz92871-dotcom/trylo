@@ -1,11 +1,15 @@
-import { record, text, count, digest, productionVersion, wireJson } from './wire'
+import { record, text, count, productionVersion, wireJson } from './wire'
+import { productionSource, type ProductionSource } from './production-source-contract'
+import { productionAdaptation, type ProductionAdaptation } from './production-adaptation-contract'
+export type { ProductionSource } from './production-source-contract'
 
 export type ProductionSummary = {
   readonly versionId: string
   readonly identity: string
   readonly description: string
   readonly lifecycle: string
-  readonly profile: 'confined_json_function_v1' | 'confined_npm_cli_v1' | 'confined_npm_mcp_v1'
+  readonly profile: 'confined_json_function_v1' | 'confined_npm_cli_v1' | 'confined_npm_mcp_v1' | 'confined_npm_library_v1'
+  readonly adaptation?: ProductionAdaptation
   readonly packageName: string
   readonly packageVersion: string
   readonly license: string
@@ -24,25 +28,6 @@ export type ProductionSummary = {
     readonly quality: 'unverified'
   }
 }
-export type ProductionSource = {
-  readonly name: string
-  readonly version: string
-  readonly license: string
-} & (
-  | {
-      readonly origin: 'generated_candidate'
-      readonly sourceVersionId: string
-      readonly contentHash: string
-    }
-  | {
-      readonly origin: 'reviewed_npm_archive'
-      readonly location: string
-      readonly upstreamUrl: string
-      readonly sourceRevision: string
-      readonly archiveSha256: string
-      readonly licenses: readonly { readonly path: string; readonly sha256: string }[]
-    }
-)
 export type ProductionDetail = ProductionSummary & {
   readonly formatVersion: 1
   readonly workspaceId: string
@@ -109,6 +94,7 @@ const profiles = new Set([
   'confined_json_function_v1',
   'confined_npm_cli_v1',
   'confined_npm_mcp_v1',
+  'confined_npm_library_v1',
 ])
 const jobStates = new Set([
   'queued',
@@ -139,6 +125,7 @@ function summary(raw: unknown): raw is ProductionSummary & Record<string, unknow
     !text(raw['packageVersion'], 100) ||
     !text(raw['license'], 80) ||
     !count(raw['dependencyCount'], 127) ||
+    (raw['adaptation'] !== undefined && !productionAdaptation(raw['adaptation'])) ||
     !record(raw['uses']) ||
     !count(raw['uses']['total'], 4096) ||
     !count(raw['uses']['returned'], raw['uses']['total']) ||
@@ -159,31 +146,6 @@ function summary(raw: unknown): raw is ProductionSummary & Record<string, unknow
       pointers.has(current['pointer']) &&
       (current['previousVersionId'] === undefined ||
         productionVersion(current['previousVersionId'])))
-  )
-}
-function source(raw: unknown): raw is ProductionSource {
-  if (
-    !record(raw) ||
-    !text(raw['name'], 200) ||
-    !text(raw['version'], 100) ||
-    !text(raw['license'], 80)
-  )
-    return false
-  if (raw['origin'] === 'generated_candidate')
-    return text(raw['sourceVersionId'], 160) && digest(raw['contentHash'])
-  return (
-    raw['origin'] === 'reviewed_npm_archive' &&
-    text(raw['location'], 2048) &&
-    text(raw['upstreamUrl'], 2048) &&
-    typeof raw['sourceRevision'] === 'string' &&
-    /^[a-f0-9]{40}$/.test(raw['sourceRevision']) &&
-    digest(raw['archiveSha256']) &&
-    Array.isArray(raw['licenses']) &&
-    raw['licenses'].length > 0 &&
-    raw['licenses'].length <= 16 &&
-    raw['licenses'].every(
-      (item) => record(item) && text(item['path'], 1024) && digest(item['sha256']),
-    )
   )
 }
 function report(raw: unknown): boolean {
@@ -256,7 +218,7 @@ export function parseProductionDetail(
     raw['timeoutMs'] < 1 ||
     !Array.isArray(raw['source']) ||
     raw['source'].length !== raw.dependencyCount + 1 ||
-    !raw['source'].every(source) ||
+    !raw['source'].every(productionSource) ||
     !report(raw['report']) ||
     !record(raw['review'])
   )

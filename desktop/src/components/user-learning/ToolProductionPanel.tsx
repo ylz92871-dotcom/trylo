@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ToolLearningRuntime } from '../../tool-learning/cli-status'
 import { useToolProduction } from './use-tool-production'
 import { ToolProductionDetail, productionLabel } from './ToolProductionDetail'
 import './tool-production.css'
 import { toolPurposeLabel, toolRuntimeLabel } from './ToolPurpose'
 
-export function ToolProductionPanel({ runtime }: { readonly runtime?: ToolLearningRuntime }) {
+export function ToolProductionPanel({ runtime, initialVersionId }: { readonly runtime?: ToolLearningRuntime; readonly initialVersionId?: string }) {
   const state = useToolProduction(runtime),
     [filter, setFilter] = useState('all')
   const rows =
@@ -17,6 +17,9 @@ export function ToolProductionPanel({ runtime }: { readonly runtime?: ToolLearni
           : ['等待审核', '等待验证', '验证未通过', '验证未结束'].includes(productionLabel(item))),
     ) ?? []
   const selectedVisible = rows.some((item) => item.versionId === state.selected)
+  useEffect(() => {
+    if (initialVersionId && state.inventory?.items.some(item => item.versionId === initialVersionId)) state.select(initialVersionId)
+  }, [initialVersionId, state.inventory, state.select])
   return (
     <section
       className="tool-production"

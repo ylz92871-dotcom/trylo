@@ -80,7 +80,7 @@ function asText(value: unknown): string {
 /** Normalise one raw pending record. Items without an id and a known
  *  subsystem are skipped — the queue is shared infrastructure and we must
  *  not render an approve button for something we cannot address. */
-function normalize(raw: unknown): PendingProposalView | null {
+export function normalize(raw: unknown): PendingProposalView | null {
   const rec = asRecord(raw)
   if (!rec) return null
   const id = asText(rec.id).trim()
@@ -102,7 +102,7 @@ function normalize(raw: unknown): PendingProposalView | null {
 /** Pull the anti-swap hash out of a detail response. The official store
  *  names it explicitly; we also accept snake_case variants and fall back to
  *  any sha256-looking string under a hash-named key anywhere in the tree. */
-function extractHash(node: unknown, depth = 0): string | null {
+export function extractHash(node: unknown, depth = 0): string | null {
   if (depth > 6) return null
   const rec = asRecord(node)
   if (rec) {
@@ -165,7 +165,7 @@ let hermesHomeCache: string | null = null
  * A transport error is reported to diagnostics but NEVER fails the apply —
  * the Skill text was already committed.
  */
-async function copyAfterApply(
+export async function copyAfterApply(
   port: LearningPort,
   item: PendingProposalView,
   onCopyDiagnostic?: (event: { reasonCode: string; copied: boolean }) => void,

@@ -32,7 +32,7 @@ function runtime() {
 describe('per-conversation 6h in-task card cap (M4)', () => {
   it('resolve writes a conversation:<id> cooldown entry into the snapshot', () => {
     const rt = runtime();
-    const session = rt.startCognition(QUESTION, 'C:/work/demo-ws', 'code', 'conv-1');
+    const session = rt.startCognition(QUESTION, 'D:/CC/trylo', 'code', 'conv-1');
     rt.answerCognition(session.id, '低风险直接做，核心路径保留最终验证。');
     const cooldowns = rt.snapshot().cognitionCooldowns;
     const entry = cooldowns.find((c) => c.key === conversationCooldownKey('conv-1'));
@@ -44,7 +44,7 @@ describe('per-conversation 6h in-task card cap (M4)', () => {
 
   it('blocks a NEW card on the same conversation across dimensions for 6h', () => {
     const rt = runtime();
-    const session = rt.startCognition(QUESTION, 'C:/work/demo-ws', 'code', 'conv-1');
+    const session = rt.startCognition(QUESTION, 'D:/CC/trylo', 'code', 'conv-1');
     rt.answerCognition(session.id, '低风险直接做，核心路径保留最终验证。');
     // A different dimension's question must not insert into conv-1 now.
     expect(
@@ -56,7 +56,7 @@ describe('per-conversation 6h in-task card cap (M4)', () => {
 
   it('does NOT block other conversations (cross-conversation isolation)', () => {
     const rt = runtime();
-    const session = rt.startCognition(QUESTION, 'C:/work/demo-ws', 'code', 'conv-1');
+    const session = rt.startCognition(QUESTION, 'D:/CC/trylo', 'code', 'conv-1');
     rt.answerCognition(session.id, '低风险直接做，核心路径保留最终验证。');
     // Another conversation is untouched (cross-conversation isolation).
     expect(conversationCardCooling(rt.snapshot().cognitionCooldowns, 'conv-2', Date.now())).toBe(false);
@@ -73,7 +73,7 @@ describe('per-conversation 6h in-task card cap (M4)', () => {
   it('an open thread (confirm_scope follow-up) keeps the ask-time cap, then refreshes on resolve', () => {
     const rt = runtime();
     const first = rt.maybeCognitionPrompt({ prompt: '改一下持久化迁移，以后不要每次都加独立审核' })!;
-    const session = rt.startCognition(first, 'C:/work/demo-ws', 'code', 'conv-1');
+    const session = rt.startCognition(first, 'D:/CC/trylo', 'code', 'conv-1');
     const res = rt.answerCognition(session.id, '都直接做吧，不用再问我了，所有任务都是。');
     expect(res.followUp).toBe('confirm_scope');
     // Thread still open: the ask-time cap governs (a card WAS shown and is
@@ -89,14 +89,14 @@ describe('per-conversation 6h in-task card cap (M4)', () => {
 
   it('dismiss starts the 6h cap too', () => {
     const rt = runtime();
-    const session = rt.startCognition(QUESTION, 'C:/work/demo-ws', 'code', 'conv-3');
+    const session = rt.startCognition(QUESTION, 'D:/CC/trylo', 'code', 'conv-3');
     rt.dismissCognition(session.id, 'dismiss');
     expect(conversationCardCooling(rt.snapshot().cognitionCooldowns, 'conv-3', Date.now())).toBe(true);
   });
 
   it('the cap lives in the persisted snapshot shape (M4: 落 snapshot)', () => {
     const rt = runtime();
-    const session = rt.startCognition(QUESTION, 'C:/work/demo-ws', 'code', 'conv-4');
+    const session = rt.startCognition(QUESTION, 'D:/CC/trylo', 'code', 'conv-4');
     rt.answerCognition(session.id, '低风险直接做，核心路径保留最终验证。');
     const snap = rt.snapshot();
     // The entry is a plain CognitionCooldown in snapshot.cognitionCooldowns —
@@ -110,7 +110,7 @@ describe('per-conversation 6h in-task card cap (M4)', () => {
 
   it('asking itself writes both an asked cooldown and the conversation cap (P2-5)', () => {
     const rt = runtime();
-    rt.startCognition(QUESTION, 'C:/work/demo-ws', 'code', 'conv-5');
+    rt.startCognition(QUESTION, 'D:/CC/trylo', 'code', 'conv-5');
     const cooldowns = rt.snapshot().cognitionCooldowns;
     // Per-dimension 'asked' entry (reason was previously dead code).
     expect(cooldowns.some((c) => c.dimension === QUESTION.dimension && c.reason === 'asked')).toBe(true);
@@ -122,7 +122,7 @@ describe('per-conversation 6h in-task card cap (M4)', () => {
     const rt = runtime();
     // Ask once; the card is then ignored (conversation switched / app
     // restarted / card swept away — no resolve, no dismiss).
-    rt.startCognition(QUESTION, 'C:/work/demo-ws', 'code', 'conv-6');
+    rt.startCognition(QUESTION, 'D:/CC/trylo', 'code', 'conv-6');
     // A later send on the same conversation must not resurrect the question:
     // the transient live-message check sees no pending card, so the
     // cooldowns are the ONLY defense. The per-dimension 'asked' gap blocks
@@ -135,7 +135,7 @@ describe('per-conversation 6h in-task card cap (M4)', () => {
 
   it('resolve/dismiss overwrites the asked entries with the user signal', () => {
     const rt = runtime();
-    const session = rt.startCognition(QUESTION, 'C:/work/demo-ws', 'code', 'conv-7');
+    const session = rt.startCognition(QUESTION, 'D:/CC/trylo', 'code', 'conv-7');
     const askedAt = rt.snapshot().cognitionCooldowns.find(
       (c) => c.key === conversationCooldownKey('conv-7'),
     )!.until;
@@ -155,7 +155,7 @@ describe('per-conversation 6h in-task card cap (M4)', () => {
 
   it('asking without a conversation (fifth mode) writes only the dimension cooldown', () => {
     const rt = runtime();
-    const session = rt.startCognition(QUESTION, 'C:/work/demo-ws');
+    const session = rt.startCognition(QUESTION, 'D:/CC/trylo');
     expect(
       rt.snapshot().cognitionCooldowns.some((c) => c.dimension === QUESTION.dimension && c.reason === 'asked'),
     ).toBe(true);

@@ -30,20 +30,20 @@
 import type { CodeRunLifecycleObserver, CodeRunOutcome } from '../runtime/code-run-lifecycle';
 import type { RuntimeResultScope } from '../results/result-scope';
 import type { WorkResultProjector } from '../results/work-result-projector';
-import type { WorkArtifactScope, WorkRunOutcome } from '@trylo/work';
+import type { ArtifactRunScope, ArtifactRunOutcome } from '../results/artifact-types';
 import type { LoopEvent } from '../host-adapter/loop-events';
 
 /** Map the Code run outcome to the Work projector's narrower outcome set.
  *  `exited` (a process-exit terminal) is not a shape the Work store knows, so
  *  it degrades to `failed` — never `completed` (spec R9: no result ⇒ no review). */
-function toWorkOutcome(outcome: CodeRunOutcome): WorkRunOutcome {
+function toWorkOutcome(outcome: CodeRunOutcome): ArtifactRunOutcome {
   return outcome === 'exited' ? 'failed' : outcome;
 }
 
 /** Map the Code run scope to the Work artifact scope, IGNORING `scope.mode`
  *  — the controller writes `mode: 'code'` for every run (Work included), and
- *  `WorkArtifactScope` has no `mode` field. Never branch on `scope.mode`. */
-export function toWorkArtifactScope(scope: RuntimeResultScope): WorkArtifactScope {
+ *  `ArtifactRunScope` has no `mode` field. Never branch on `scope.mode`. */
+export function toWorkArtifactScope(scope: RuntimeResultScope): ArtifactRunScope {
   return {
     projectKey: scope.projectKey,
     projectRoot: scope.projectRoot,
@@ -160,7 +160,7 @@ export function createWorkLifecycleObserver(deps: WorkLifecycleObserverDeps): Co
  * Windows hardening (P2-4): tool summaries may carry backslash paths
  * (`D:\proj\.trylo\out\a.pptx` or relative `\.trylo\out\a.pptx`). The match
  * regex and the downstream validators (`isWorkDeliverablePath` /
- * `WorkArtifactStore.upsertEvent` → `isAllowlistedDeliverableRel`) all
+ * `ArtifactStore.upsertEvent` → `isAllowlistedDeliverableRel`) all
  * normalise `\`→`/`, so the extractor normalises BEFORE matching — otherwise
  * every Windows summary is dropped here, `known` stays empty, and the
  * recovery (fail-closed) path of `collectWorkFileHints` becomes the Windows

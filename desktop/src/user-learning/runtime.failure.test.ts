@@ -31,7 +31,7 @@ describe('User Learning failure fallback', () => {
     const opened = runtime.openTrace({
       sessionId: 's',
       turnId: 't',
-      workspaceRoot: 'C:/work/demo-ws',
+      workspaceRoot: 'D:/CC/trylo',
       product: 'code',
       prompt: '减少重复审核，核心 runtime 保留最终验证',
     });

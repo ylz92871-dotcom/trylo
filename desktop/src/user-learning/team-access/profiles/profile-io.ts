@@ -56,7 +56,8 @@ export function parseTeamProfilesFile(text: string): ParsedTeamProfiles {
 
   const profiles: TeamProfile[] = [];
   for (const raw of file['profiles']) {
-    const profile = parseProfile(raw);
+    let profile: TeamProfile | null;
+    try { profile = parseProfile(raw); } catch { return { ok: false, reason: 'malformed' }; }
     if (profile) profiles.push(profile);
   }
   // Builtins live in code; a same-id disk entry never overrides them.

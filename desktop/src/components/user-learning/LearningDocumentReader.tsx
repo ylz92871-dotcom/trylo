@@ -86,6 +86,7 @@ function CodeBlock({ children }: { children: ReactNode }): ReactElement {
 
 export interface LearningDocumentReaderProps {
   title: string
+  backLabel?: string
   document?: LearningDocument
   loading?: boolean
   error?: string | null
@@ -105,6 +106,11 @@ export function LearningDocumentReader(props: LearningDocumentReaderProps): Reac
   const positions = useRef<Record<string, number>>({})
   const [headings, setHeadings] = useState<{ text: string; index: number; level: string }[]>([])
   const close = useRef<HTMLButtonElement>(null)
+  const outlineToggle = useRef<HTMLButtonElement>(null)
+  const onClose = useRef(props.onClose)
+  const busy = useRef(props.busy)
+  onClose.current = props.onClose
+  busy.current = props.busy
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
     const siblings: { element: HTMLElement; inert: boolean }[] = []
@@ -119,7 +125,17 @@ export function LearningDocumentReader(props: LearningDocumentReaderProps): Reac
       current = current.parentElement
     }
     close.current?.focus()
+    // Directory items are transient controls. Keep Escape available if a browser
+    // or assistive technology leaves focus on the document between controls.
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || !root.current?.isConnected) return
+      event.preventDefault()
+      event.stopPropagation()
+      if (!busy.current) onClose.current()
+    }
+    document.addEventListener('keydown', escape)
     return () => {
+      document.removeEventListener('keydown', escape)
       siblings.forEach(({ element, inert }) => {
         element.inert = inert
       })
@@ -157,7 +173,7 @@ export function LearningDocumentReader(props: LearningDocumentReaderProps): Reac
       <header className="learning-reader__header">
         <button ref={close} type="button" disabled={props.busy} onClick={props.onClose}>
           <ArrowLeft size={16} />
-          智能体学习
+          {props.backLabel ?? '智能体学习'}
         </button>
         <span>{props.title}</span>
         <button type="button" aria-label="关闭文档" disabled={props.busy} onClick={props.onClose}>
@@ -203,6 +219,7 @@ export function LearningDocumentReader(props: LearningDocumentReaderProps): Reac
           </button>
         ) : null}
         <button
+          ref={outlineToggle}
           type="button"
           aria-expanded={outline}
           disabled={view !== 'read' || headings.length === 0}
@@ -225,6 +242,7 @@ export function LearningDocumentReader(props: LearningDocumentReaderProps): Reac
                   .item(h.index)
                   ?.scrollIntoView({ block: 'start' })
                 setOutline(false)
+                outlineToggle.current?.focus()
               }}
             >
               {h.text}

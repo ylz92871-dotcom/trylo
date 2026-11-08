@@ -72,7 +72,7 @@ describe('LLM skill path with fallback', () => {
       llm,
     });
     const opened = runtime.openTrace({
-      sessionId: 's', turnId: 't', workspaceRoot: 'C:/work/demo-ws', product: 'code',
+      sessionId: 's', turnId: 't', workspaceRoot: 'D:/CC/trylo', product: 'code',
       prompt: '不要加新 subsystem，复用现有 controller',
     });
     runtime.closeTrace(opened.id, 'completed', 'reused controller');
@@ -96,7 +96,7 @@ describe('LLM skill path with fallback', () => {
       llm,
     });
     const opened = runtime.openTrace({
-      sessionId: 's', turnId: 't', workspaceRoot: 'C:/work/demo-ws', product: 'code',
+      sessionId: 's', turnId: 't', workspaceRoot: 'D:/CC/trylo', product: 'code',
       prompt: '不要做重复审核，核心 runtime 必须保留最终验证',
     });
     runtime.closeTrace(opened.id, 'completed', 'ok');

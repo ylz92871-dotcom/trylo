@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { ToolLearningRecords } from './ToolLearningRecords';
 import type { ToolLearningRuntime } from '../../tool-learning/cli-status';
 import type { FilePath } from '../../host-adapter/types';
+import { acquisitionFixture, acquisitionTestOwner } from '../../tool-learning/acquisition-test-support';
 
 afterEach(cleanup);
 const status = { ok: true, formatVersion: 1, workspaceId: 'workspace:test', totalJobs: 1, truncated: false, jobs: [
@@ -34,4 +35,30 @@ it('unmount cancels the owned status query rather than accepting its late output
   const view = render(<ToolLearningRecords runtime={{ ...base, process: { ...base.process,
     spawn: async () => ({ id: 'owned', pid: 1, label: 'status', command: 'node' }), stop } }} />);
   view.unmount(); await waitFor(() => expect(stop).toHaveBeenCalledWith('owned'));
+});
+it('opens the real acquisition review from a pending job without sending an approval', async () => {
+  const review = acquisitionFixture(), recorded: string[][] = [];
+  const reply = { ...status, jobs: [{ ...status.jobs[0]!, jobId: review.jobId, candidateVersionId: undefined,
+    outcomeCode: 'acquisition_approval_required', acquisition: { approvalId: review.approvalId },
+    contractProposalId: `tool-contract-proposal_v1_${'f'.repeat(64)}` }] };
+  const value = runtime();
+  let pendingExit = () => {};
+  render(<ToolLearningRecords runtime={{ ...value, ...acquisitionTestOwner(), process: { ...value.process, spawn: async options => {
+    recorded.push([...options.args]);
+    if (!options.args.includes('--approve')) {
+      options.onOutput(JSON.stringify(options.args.includes('acquire-learning') ? { ok: true, ...review } : reply));
+      options.onExit?.({ id: 'owned', pid: 1, code: 0, signal: null });
+    } else pendingExit = () => { options.onExit?.({ id: 'owned', pid: 1, code: null, signal: null }); };
+    return { id: 'owned', pid: 1, label: options.label, command: options.command };
+  }, send: async () => { pendingExit(); } } }} />);
+  fireEvent.click(screen.getByRole('button', { name: '学习记录' }));
+  fireEvent.click(await screen.findByRole('button', { name: '审阅获取方案' }));
+  expect(await screen.findByRole('region', { name: '获取工具审阅' })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: '授权获取并准备适配' })).toBeTruthy();
+  expect(screen.getByText(/trylo tools contract-show tool-contract-proposal_v1_/)).toBeTruthy();
+  expect(recorded.some(args => args.includes('--approve'))).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: '授权获取并准备适配' }));
+  await waitFor(() => expect((screen.getByRole('button', { name: '刷新记录' }) as HTMLButtonElement).disabled).toBe(true));
+  expect((screen.getByRole('button', { name: '工具管理' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByRole('button', { name: '停止等待并确认进度' })).toBeTruthy();
 });

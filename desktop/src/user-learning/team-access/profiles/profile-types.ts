@@ -6,6 +6,8 @@
 // the CLI copies the overlay fields into `team-roster/overlay.ts`.
 // All three copies are field-locked by colocated tests (Pitfall 8).
 
+import type { ExpertSelection } from '../../../../../new trylo cli/src/internal/subagent/experts/browser';
+
 export type TeamProfileOrigin = 'builtin' | 'custom';
 export type TeamProfileSurface = 'code' | 'work';
 
@@ -43,6 +45,8 @@ export type TeamMemberId = string;
  * can never be here (spec §7.4 rule 7).
  */
 export interface TeamMemberOverlay {
+  /** A library selection for the next dispatch; never an adoption receipt. */
+  readonly expert?: ExpertSelection;
   /** 'inherit' (default) = the Personal Agent's current effective model
    *  (`poolModel || apiModel`). Otherwise a host-known model id string. */
   readonly model: 'inherit' | string;
@@ -94,8 +98,8 @@ export interface TeamProfilesFile {
 // ── Quantified budgets (spec §7.4 / §9.5) ──────────────────────────
 
 export const OVERLAY_PROMPT_MAX_CHARS = 2000;
-/** Write-fail sibling tag only (spec §8.4). */
-export const OVERLAY_FALLBACK_PROMPT_MAX_CHARS = 400;
+/** Compatibility export. Fallback now carries the complete validated overlay. */
+export const OVERLAY_FALLBACK_PROMPT_MAX_CHARS = OVERLAY_PROMPT_MAX_CHARS;
 export const MAX_MEMBERS_PER_PROFILE = 6;
 export const MAX_CUSTOM_PROFILES = 16;
 export const MAX_WORKERS_PER_PROFILE = 2;

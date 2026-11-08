@@ -44,7 +44,7 @@ describe('frequency layer (§3.2)', () => {
 
   it('non-proactive triggers (bootstrap) are NOT counted toward the proactive day cap', () => {
     const runtime = rt();
-    runtime.startCognitionConversation('C:/work/demo-ws', 'code');
+    runtime.startCognitionConversation('D:/CC/trylo', 'code');
     // user_opened entries never enter the ask log → caps untouched.
     expect(runtime.snapshot().cognitionAskLog.every((e) => !['user_opened'].includes(e.trigger))).toBe(true);
     expect(runtime.maybeCognitionPrompt({ prompt: STRONG_VERIFY, product: 'code' })).not.toBeNull();

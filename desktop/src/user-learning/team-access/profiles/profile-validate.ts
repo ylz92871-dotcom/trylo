@@ -13,6 +13,19 @@ import {
   type TeamMemberSpec,
   type TeamProfile,
 } from './profile-types';
+import type { ExpertSelection } from '../../../../../new trylo cli/src/internal/subagent/experts/browser';
+
+function expertSelection(value: unknown): ExpertSelection | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const ref = value as Record<string, unknown>;
+  const id = (item: unknown): item is string => typeof item === 'string' && item.trim().length > 0 && item.length <= 512;
+  if (id(ref.requestId) && ref.expertId === undefined && ref.version === undefined) return { requestId: ref.requestId };
+  if (id(ref.expertId) && ref.requestId === undefined
+    && (ref.version === undefined || (Number.isSafeInteger(ref.version) && Number(ref.version) > 0))) {
+    return { expertId: ref.expertId, ...(typeof ref.version === 'number' ? { version: ref.version } : {}) };
+  }
+  return undefined;
+}
 
 export interface ProfileValidationOptions {
   /** `review-only` lineups have no worker; composer passes true when the
@@ -92,6 +105,7 @@ export function validateProfile(
       errors.push(`显示名最多 ${DISPLAY_NAME_MAX_CHARS} 个字符：${m.displayName}`);
     }
     const overlay = m.overlay;
+    if (overlay.expert !== undefined && expertSelection(overlay.expert) === undefined) errors.push(`${m.displayName} 的专家版本引用无效`);
     if (overlay.systemPromptOverlay.length > OVERLAY_PROMPT_MAX_CHARS) {
       errors.push(`${m.displayName} 的提示 overlay 超过 ${OVERLAY_PROMPT_MAX_CHARS} 字`);
     }
@@ -133,13 +147,14 @@ export function sanitizeOverlay(value: unknown): TeamMemberOverlay {
     systemPromptOverlay: string;
     tools?: string[];
     disallowedTools?: string[];
+    expert?: ExpertSelection;
   } = { model: 'inherit', skills: [], systemPromptOverlay: '' };
   if (typeof raw['model'] === 'string' && raw['model'].length > 0) {
     overlay.model = raw['model'];
   }
   if (Array.isArray(raw['tools'])) {
     const tools = raw['tools'].filter((t): t is string => typeof t === 'string');
-    if (tools.length > 0) overlay.tools = tools;
+    overlay.tools = tools;
   }
   if (Array.isArray(raw['disallowedTools'])) {
     const denied = raw['disallowedTools'].filter((t): t is string => typeof t === 'string');
@@ -150,6 +165,11 @@ export function sanitizeOverlay(value: unknown): TeamMemberOverlay {
   }
   if (typeof raw['systemPromptOverlay'] === 'string') {
     overlay.systemPromptOverlay = raw['systemPromptOverlay'].slice(0, OVERLAY_PROMPT_MAX_CHARS);
+  }
+  if (raw.expert !== undefined) {
+    const selection = expertSelection(raw.expert);
+    if (selection === undefined) throw new Error('invalid_expert_selection');
+    overlay.expert = selection;
   }
   return overlay;
 }

@@ -89,4 +89,64 @@ describe('learning document review', () => {
     expect(opener.inert).toBeFalsy()
     opener.remove()
   })
+
+  it('returns directory focus to its toggle before removing a selected heading control', () => {
+    render(
+      <LearningDocumentReader
+        title="Skill"
+        document={{ name: 'SKILL.md', content: '# 起点\n\n## 末尾\n\n完整内容。', source: '' }}
+        onClose={vi.fn()}
+      />,
+    )
+    const heading = screen.getByRole('heading', { name: '末尾' })
+    heading.scrollIntoView = vi.fn()
+    const toggle = screen.getByRole('button', { name: '目录' })
+    fireEvent.click(toggle)
+    const destination = screen.getByRole('button', { name: '末尾' })
+    destination.focus()
+    fireEvent.click(destination)
+
+    expect(heading.scrollIntoView).toHaveBeenCalledWith({ block: 'start' })
+    expect(screen.queryByRole('navigation', { name: '文档目录' })).toBeNull()
+    expect(document.activeElement).toBe(toggle)
+  })
+
+  it('handles an unfocused document Escape only while mounted and honors the current busy state', () => {
+    const onClose = vi.fn()
+    const view = render(<LearningDocumentReader title="Skill" onClose={onClose} busy />)
+    ;(document.activeElement as HTMLElement).blur()
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+
+    view.rerender(<LearningDocumentReader title="Skill" onClose={onClose} />)
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledOnce()
+    view.unmount()
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('keeps independent reading, source and diff scroll positions', () => {
+    const { container } = render(
+      <LearningDocumentReader
+        title="Skill"
+        document={{ name: 'SKILL.md', content: '# 标题\n\n内容', source: '# 原文', diff: '-旧\n+新' }}
+        onClose={vi.fn()}
+      />,
+    )
+    const scroll = container.querySelector<HTMLElement>('.learning-reader__body')!
+    scroll.scrollTop = 120
+    fireEvent.click(screen.getByRole('button', { name: /源码/ }))
+    expect(scroll.scrollTop).toBe(0)
+    scroll.scrollTop = 45
+    fireEvent.click(screen.getByRole('button', { name: '差异' }))
+    expect(scroll.scrollTop).toBe(0)
+    scroll.scrollTop = 30
+    fireEvent.click(screen.getByRole('button', { name: '阅读' }))
+    expect(scroll.scrollTop).toBe(120)
+    fireEvent.click(screen.getByRole('button', { name: /源码/ }))
+    expect(scroll.scrollTop).toBe(45)
+    fireEvent.click(screen.getByRole('button', { name: '差异' }))
+    expect(scroll.scrollTop).toBe(30)
+  })
 })

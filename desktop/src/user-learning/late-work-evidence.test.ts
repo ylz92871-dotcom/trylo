@@ -18,7 +18,7 @@ function runtimeWithCompletedWorkTrace() {
   const opened = runtime.openTrace({
     sessionId: 'w1',
     turnId: 'tw1',
-    workspaceRoot: 'C:/work/demo-ws',
+    workspaceRoot: 'D:/CC/trylo',
     product: 'work',
     prompt: '帮我做一份周报',
   });

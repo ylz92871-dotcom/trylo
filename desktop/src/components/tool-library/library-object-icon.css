@@ -1,0 +1,23 @@
+.library-object-icon {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 5px;
+  background: var(--bg-panel);
+  color: var(--fg-muted);
+}
+
+.library-object-icon[data-detail='true'] {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  color: var(--fg);
+}
+
+.tool-library__row[data-selected='true'] .library-object-icon,
+.expert-library__list button[aria-pressed='true'] .library-object-icon {
+  color: var(--accent);
+}
