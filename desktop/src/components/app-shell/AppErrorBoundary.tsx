@@ -1,4 +1,5 @@
 import { Component, type ReactNode, type ErrorInfo } from 'react'
+import { dismissStartupScreenImmediately } from '../../runtime/startup-screen'
 
 /** Keep a recoverable screen when a renderer fails instead of leaving a white window. */
 export class AppErrorBoundary extends Component<
@@ -10,6 +11,7 @@ export class AppErrorBoundary extends Component<
     return { error }
   }
   override componentDidCatch(error: Error, info: ErrorInfo): void {
+    dismissStartupScreenImmediately()
     console.error('Trylo 页面加载失败', error, info.componentStack)
   }
   override render(): ReactNode {

@@ -1,16 +1,14 @@
 // Trylo Desktop — the shared virtualized conversation timeline.
 //
-// Code and Work share scrolling, edit controls and decision cards, but their
-// workflow presentation is intentionally separate:
-//   - Code projects atomic thinking/tool events into one chronological,
-//     lossless reasoning transcript per contiguous run segment.
-//   - Work projects run-level rail/narration/activity messages into one task
-//     board, while deliverables and decisions remain first-class panels.
+// Code and Work share scrolling, edit controls, decision cards and chronological
+// process phases. A phase's live tool/reasoning facts determine its presentation,
+// independently of the host capability. Task-specific rows remain typed messages.
 //
 // The projection is renderer-only. Persisted messages stay atomic so replay,
 // recovery and diagnostics do not depend on a UI component's local state.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { ConversationPresentation, isHostedApproval } from './ConversationPresentation';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { ArrowDown } from 'lucide-react';
 import { Message } from './Message';
@@ -23,6 +21,9 @@ import {
   shouldShowFollowPill,
 } from './follow-controller';
 import { VirtuosoItem } from './virtuoso-item';
+import { ConversationDisclosureProvider } from './conversation-disclosure';
+import { ConversationBookshelf } from './conversation-bookshelf/ConversationBookshelf';
+import { useConversationNavigation } from './conversation-bookshelf/use-conversation-navigation';
 // 2026-09-10 (applyWorkItem deletion面): WorkWorkflowCard deleted with the
 // WorkflowMessage chain (zero production producers). The linear rail /
 // narration / deliverable panels below are different kinds and stay.
@@ -45,8 +46,7 @@ export interface MessageListProps {
   readonly selectedSubagentId?: string | null;
   readonly onSelectSubagent?: (messageId: string) => void;
   readonly messages: readonly ChatMessage[];
-  /** Code and Work share one scroll/composer shell, but deliberately use
-   * different workflow projections inside it. */
+  /** Host capability label; identical message facts use the same projection. */
   readonly surface?: 'code' | 'work';
   /** v1.15.8.b: pass the active turn so we can render
    *  a streaming indicator at the bottom when the user
@@ -68,13 +68,13 @@ export interface MessageListProps {
   readonly onCancelEdit?: () => void;
   // v1.16.5+ (M3, Work): forwarded to Message for inline
   // ArtifactCard rendering. Unused by Code conversations.
-  readonly artifactHost?: import('@trylo/work').HostAdapter;
+  readonly artifactHost?: import('../../host-adapter/artifact-actions').ArtifactHost;
   readonly onOpenArtifact?: (path: string) => void;
   readonly workspacePath?: string;
   // M4-E (spec §6.7 Core "approval / input"): forwarded to
   // Message for the inline ApprovalCard / InputRequestCard
   // responders. Unused by Code conversations.
-  readonly onRespondApproval?: (approvalId: string, approved: boolean) => void;
+  readonly onRespondApproval?: import('./ApprovalCard').ApprovalCardProps['onRespond'];
   readonly onRespondInputRequest?: import('./InputRequestCard').InputRequestCardProps['onRespond'];
   // P3 (spec §3.3): open the right-side diff panel for a
   // pending approval's proposed change. The id is the
@@ -184,7 +184,9 @@ interface TurnMeta {
 }
 
 export function MessageList(props: MessageListProps): ReactElement {
+  const { hostedApprovals } = useContext(ConversationPresentation);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   // A single scroll driver follows measured layout while the reader stays at the tail.
   const followRef = useRef(createFollowController());
   // Mirror at-bottom in state so the "follow tail" pill can render (purely
@@ -281,11 +283,8 @@ export function MessageList(props: MessageListProps): ReactElement {
     return out;
   }, [props.messages, running]);
 
-  // Transport events are projected differently for the two products:
-  // Code becomes a chronological reasoning transcript; Work becomes a
-  // run-level task board. The scroll shell is shared, the workflow grammar is
-  // not. This is intentionally a view projection only — persisted messages
-  // remain lossless and independently replayable.
+  // This renderer-only projection is shared by both capabilities. Persisted
+  // messages remain lossless and independently replayable.
   const items = useMemo<readonly ListItem[]>(() => {
     const result: ListItem[] = [];
     let currentTurn: { turnId: string; msgs: ChatMessage[] } | null = null;
@@ -300,130 +299,58 @@ export function MessageList(props: MessageListProps): ReactElement {
       const turnMsgs = agents.length === 0 ? allTurnMsgs : allTurnMsgs.filter(message =>
         message.kind !== 'tool' || !orchestration.has(message.tool) || message.status === 'error' || message.status === 'interrupted');
       const appendMessage = (message: ChatMessage): void => {
+        if (isHostedApproval(message, hostedApprovals)) return;
         if (message.kind !== 'subagent') { result.push(message); return; }
         if (message === agents[0]) result.push({ kind: '__collaboration', id: `collaboration:${currentTurn!.turnId}`,
           turnId: currentTurn!.turnId, agents,
           active: turnMetaByTurnId.get(currentTurn!.turnId)?.isActive === true });
         result.push(message);
       };
-      if ((props.surface ?? 'code') === 'code') {
-        type PhaseGroup = {
-          firstIndex: number;
-          lastIndex: number;
-          phaseId: string;
-          entries: CodeProcessEntry[];
-        };
-        const phases: PhaseGroup[] = [];
-        const phaseAtIndex = new Map<number, PhaseGroup>();
-        let fallbackPhase = 0;
-        let previousProcess: PhaseGroup | undefined;
-        for (let index = 0; index < turnMsgs.length; index += 1) {
-          const message = turnMsgs[index];
-          if (!message || (message.kind !== 'thinking' && message.kind !== 'tool')) {
-            previousProcess = undefined;
-            continue;
-          }
-          const phaseId = message.phaseId ?? previousProcess?.phaseId ?? `legacy-${fallbackPhase}`;
-          let phase = previousProcess?.phaseId === phaseId ? previousProcess : undefined;
-          if (!phase) {
-            phase = { firstIndex: index, lastIndex: index, phaseId, entries: [] };
-            phases.push(phase);
-            phaseAtIndex.set(index, phase);
-            fallbackPhase += 1;
-          }
-          phase.lastIndex = index;
-          phase.entries.push(message);
-          previousProcess = phase;
+      type PhaseGroup = { phaseId: string; firstIndex: number; entries: CodeProcessEntry[] };
+      const phaseAtIndex = new Map<number, PhaseGroup>();
+      let previousProcess: PhaseGroup | undefined;
+      let fallbackPhase = 0;
+      for (let index = 0; index < turnMsgs.length; index += 1) {
+        const message = turnMsgs[index];
+        if (!message || (message.kind !== 'thinking' && message.kind !== 'tool')) {
+          previousProcess = undefined;
+          continue;
         }
-        const lastPhase = phases.at(-1);
-        // One reverse walk answers "is there assistant output after this
-        // phase" for every phase at once. The previous per-phase
-        // slice+scan made this projection O(n²) per streaming delta,
-        // which showed up as stutter on long workflow turns.
-        const assistantAfter = new Array<boolean>(turnMsgs.length + 1).fill(false);
-        for (let i = turnMsgs.length - 1; i >= 0; i -= 1) {
-          const m = turnMsgs[i];
-          assistantAfter[i] = assistantAfter[i + 1]! || (m?.kind === 'text' && m.role === 'assistant');
+        const phaseId = message.phaseId ?? previousProcess?.phaseId ?? `legacy-${fallbackPhase}`;
+        let phase = previousProcess?.phaseId === phaseId ? previousProcess : undefined;
+        if (!phase) {
+          phase = { phaseId, firstIndex: index, entries: [] };
+          phaseAtIndex.set(index, phase);
+          fallbackPhase += 1;
         }
-        for (let index = 0; index < turnMsgs.length; index += 1) {
-          const message = turnMsgs[index];
-          if (!message) continue;
-          const phase = phaseAtIndex.get(index);
-          if (phase) {
-            const isCurrentPhase = phase === lastPhase && !assistantAfter[phase.lastIndex + 1];
-            result.push({
-              kind: '__code_process',
-              // firstIndex disambiguates the SAME phaseId appearing as two
-              // non-contiguous runs within one turn (narration in between
-              // splits the grouping). Keys must be unique — Virtuoso uses
-              // them as React keys via computeItemKey — and stable: messages
-              // only ever append, so a group's first index never shifts.
-              key: `code-process:${currentTurn.turnId}:${phase.phaseId}:${phase.firstIndex}`,
-              turnId: currentTurn.turnId,
-              phaseId: phase.phaseId,
-              entries: phase.entries,
-              active: turnMetaByTurnId.get(currentTurn.turnId)?.isActive === true && isCurrentPhase,
-            });
-          }
-          if (message.kind !== 'thinking' && message.kind !== 'tool') {
-            appendMessage(message);
-          }
+        phase.entries.push(message);
+        previousProcess = phase;
+      }
+
+      const turnActive = turnMetaByTurnId.get(currentTurn.turnId)?.isActive === true;
+      for (let index = 0; index < turnMsgs.length; index += 1) {
+        const message = turnMsgs[index];
+        if (!message) continue;
+        const phase = phaseAtIndex.get(index);
+        if (phase) {
+          // Narration cannot settle a live tool; an active run cannot make a
+          // completed phase spin. Reasoning is live only at the current tail.
+          const hasActiveTool = phase.entries.some(entry =>
+            entry.kind === 'tool' && (entry.status === 'running' || entry.status === 'pending'));
+          const tail = phase.entries.at(-1);
+          const hasLiveReasoning = tail === turnMsgs.at(-1)
+            && tail?.kind === 'thinking' && tail.partial === true;
+          result.push({
+            kind: '__code_process',
+            // firstIndex separates non-contiguous uses of the same phase id.
+            key: `code-process:${currentTurn.turnId}:${phase.phaseId}:${phase.firstIndex}`,
+            turnId: currentTurn.turnId,
+            phaseId: phase.phaseId,
+            entries: phase.entries,
+            active: turnActive && (hasActiveTool || hasLiveReasoning),
+          });
         }
-      } else {
-        // Work turns: tool/thinking fold per phase (below). The linear
-        // kinds (work_rail / work_narration / the retired
-        // work_activity_group) pass through to <Message>, whose
-        // safety-net branches render history-revived rows (the board
-        // aggregation path was removed with WorkTaskBoard).
-        type WPhase = { phaseId: string; firstIndex: number; entries: import('./CodeReasoningTranscript').CodeProcessEntry[] };
-        const wPhases: WPhase[] = [];
-        const wPhaseAtIndex = new Map<number, WPhase>();
-        let prevProc: WPhase | undefined;
-        let fallbackW = 0;
-        for (let i = 0; i < turnMsgs.length; i += 1) {
-          const m = turnMsgs[i];
-          if (!m || (m.kind !== 'thinking' && m.kind !== 'tool')) { prevProc = undefined; continue; }
-          const phaseId = m.phaseId ?? prevProc?.phaseId ?? `legacy-${fallbackW}`;
-          let ph = prevProc && prevProc.phaseId === phaseId ? prevProc : undefined;
-          if (!ph) {
-            ph = { phaseId, firstIndex: i, entries: [] };
-            wPhases.push(ph);
-            wPhaseAtIndex.set(i, ph);
-            fallbackW += 1;
-          }
-          ph.entries.push(m);
-          prevProc = ph;
-        }
-        for (let index = 0; index < turnMsgs.length; index += 1) {
-          const message = turnMsgs[index];
-          if (!message) continue;
-          const wphase = wPhaseAtIndex.get(index);
-          if (wphase) {
-            // Keep the active Work reasoning or tool phase open. A phase
-            // with only thinking must stream before any tool is called. Once the phase's tools complete it collapses
-            // (green ✓) rather than staying expanded+spinning until the entire
-            // task finishes. Whole-task end (`running` false) also collapses it.
-            const phaseHasActiveTool = wphase.entries.some(
-              (e): boolean => e.kind === 'tool' && (e.status === 'running' || e.status === 'pending'),
-            );
-            const phaseTail = wphase.entries.at(-1);
-            const phaseHasLiveReasoning = phaseTail === turnMsgs.at(-1)
-              && phaseTail?.kind === 'thinking' && phaseTail.partial === true;
-            result.push({
-              kind: '__code_process',
-              // See the Code branch: firstIndex keeps keys unique when the
-              // same phaseId reappears as a second non-contiguous run.
-              key: `code-process:${currentTurn.turnId}:${wphase.phaseId}:${wphase.firstIndex}`,
-              turnId: currentTurn.turnId,
-              phaseId: wphase.phaseId,
-              entries: wphase.entries,
-              active: props.running === true && (phaseHasActiveTool || phaseHasLiveReasoning),
-            });
-            continue;
-          }
-          if (message.kind === 'tool' || message.kind === 'thinking') continue;
-          appendMessage(message);
-        }
+        if (message.kind !== 'thinking' && message.kind !== 'tool') appendMessage(message);
       }
       const user = turnMsgs.find((message): message is TextMessage =>
         message.kind === 'text' && message.role === 'user');
@@ -445,17 +372,15 @@ export function MessageList(props: MessageListProps): ReactElement {
       if (!currentTurn) {
         // Stray message before any user message — keep
         // as-is in its own implicit turn.
-        result.push(m);
+        if (!isHostedApproval(m, hostedApprovals)) result.push(m);
         continue;
       }
       currentTurn.msgs.push(m);
     }
     flushTurn();
     return result;
-    // props.running drives the Work branch's `active` flag on process
-    // blocks; without it here a turn ending without a message delta
-    // would leave the block expanded.
-  }, [props.messages, props.surface, props.running, turnMetaByTurnId]);
+    // A terminal without a message delta must still settle the active phase.
+  }, [props.messages, props.running, turnMetaByTurnId, hostedApprovals]);
 
   // Sending a new turn resumes follow. Reader input can pause it again.
 
@@ -569,6 +494,17 @@ export function MessageList(props: MessageListProps): ReactElement {
     followRef.current.pause();
     refreshFollowState(value => value + 1);
   }, []);
+  const pauseForNavigation = useCallback((): void => {
+    userScrollUntilRef.current = 0;
+    pauseFollow();
+  }, [pauseFollow]);
+  const navigation = useConversationNavigation({
+    messages: props.messages,
+    items,
+    scrollerRef: scrollerElRef,
+    virtuosoRef,
+    pauseFollow: pauseForNavigation,
+  });
   const handleWheel = useCallback((event: WheelEvent): void => {
     // A scrollable tool output owns its wheel until it reaches its top.
     for (const node of event.composedPath()) {
@@ -653,12 +589,14 @@ export function MessageList(props: MessageListProps): ReactElement {
   // All pins share the same intent gate, including asynchronous measurements.
 
   return (
-    <div className="message-list" data-message-list-root="" role="list" aria-label="Chat">
+    <ConversationDisclosureProvider messages={props.messages}>
+    <div ref={containerRef} className="message-list" data-message-list-root="" role="list" aria-label="Chat">
       <Virtuoso
         ref={virtuosoRef}
         tabIndex={0}
         style={{ height: '100%' }}
         scrollerRef={attachScroller}
+        rangeChanged={navigation.rangeChanged}
         data={items}
         itemContent={(_index, item) => {
           if (item.kind === '__collaboration') return <CollaborationGroup key={item.id} agents={item.agents}
@@ -780,6 +718,13 @@ export function MessageList(props: MessageListProps): ReactElement {
           Item: VirtuosoItem,
         }}
       />
+      <ConversationBookshelf
+        entries={navigation.entries}
+        activeId={navigation.activeId}
+        onNavigate={navigation.navigate}
+        containerRef={containerRef}
+        viewportRef={scrollerElRef}
+      />
       {showScrollBtn && (
         // Explicit return works during streaming and after completion.
         <button
@@ -798,5 +743,6 @@ export function MessageList(props: MessageListProps): ReactElement {
         </button>
       )}
     </div>
+    </ConversationDisclosureProvider>
   );
 }

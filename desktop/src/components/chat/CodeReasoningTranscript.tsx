@@ -9,6 +9,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { AlertCircle, Ban, ChevronRight, Clock3, FileEdit, FileText, Globe, Hand, Keyboard, Loader, MousePointer2, ScanEye, Search, Terminal, Wrench, type LucideIcon } from 'lucide-react';
 import { ToolCard } from './ToolCard';
+import { useConversationDisclosure } from './conversation-disclosure';
 import { FileChangeCards } from './FileChangeCard';
 import { EventReasoningNote } from './EventReasoningNote';
 import { toolEventVerb } from './tool-event-presentation';
@@ -147,27 +148,30 @@ function CodeReasoningTranscriptImpl(
   // One disclosure owns both raw reasoning and tools. Streaming opens by default;
   // completed history is compact, while a user's explicit choice always wins.
   const errorVisible = props.entries.some(entry => entry.kind === 'tool' && entry.status === 'error');
-  const [expanded, setExpanded] = useState(props.active || errorVisible);
+  const [autoExpanded, setAutoExpanded] = useState(props.active || errorVisible);
+  const [userExpanded, setUserExpanded] = useConversationDisclosure(props.entries[0]?.id ?? props.turnId, 'process');
+  const expanded = userExpanded ?? autoExpanded;
+  const everExpanded = useRef(expanded);
+  useEffect(() => { if (expanded) everExpanded.current = true; }, [expanded]);
   const wasActive = useRef(props.active);
-  const userExpanded = useRef<boolean | null>(null);
   useEffect(() => {
     if (errorVisible) {
-      if (userExpanded.current === null) setExpanded(true);
+      if (userExpanded === null) setAutoExpanded(true);
       return;
     }
     if (props.active) {
       wasActive.current = true;
-      if (userExpanded.current === null) setExpanded(true);
+      if (userExpanded === null) setAutoExpanded(true);
       return;
     }
     if (!wasActive.current) return;
     wasActive.current = false;
     // Give the terminal event time to settle before compacting the completed phase.
     const timer = window.setTimeout(() => {
-      if (userExpanded.current === null) setExpanded(false);
+      if (userExpanded === null) setAutoExpanded(false);
     }, 420);
     return () => window.clearTimeout(timer);
-  }, [props.active, errorVisible]);
+  }, [props.active, errorVisible, userExpanded]);
 
   const tools = props.entries.filter((entry): entry is ToolMessage => entry.kind === 'tool');
   const toolCount = tools.length;
@@ -193,7 +197,7 @@ function CodeReasoningTranscriptImpl(
       <button
         type="button"
         className="code-reasoning__head"
-        onClick={() => { userExpanded.current = !expanded; setExpanded(!expanded); }}
+        onClick={() => setUserExpanded(!expanded)}
         aria-expanded={expanded}
       >
         {(toolCount > 0 || props.active) && <span className="code-reasoning__state" aria-hidden="true">
@@ -225,7 +229,7 @@ function CodeReasoningTranscriptImpl(
       <div className={`disclosure${expanded ? ' disclosure--open' : ''}`} aria-hidden={!expanded}>
         <div className="disclosure__inner">
           <div className="code-reasoning__transcript" aria-label="按时间顺序的执行过程">
-            {props.entries.map((entry) => {
+            {(expanded || everExpanded.current) && props.entries.map((entry) => {
               if (entry.kind === 'tool') {
                 return (
                   <div key={entry.id} className="code-reasoning__tool">

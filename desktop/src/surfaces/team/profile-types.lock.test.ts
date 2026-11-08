@@ -22,7 +22,7 @@ const CLI_TOOLS = join(
   '../../../../new trylo cli/src/internal/surface/cli/team-profile-wiring.ts',
 );
 
-const OVERLAY_FIELDS = ['model', 'tools', 'disallowedTools', 'skills', 'systemPromptOverlay'];
+const OVERLAY_FIELDS = ['model', 'tools', 'disallowedTools', 'skills', 'systemPromptOverlay', 'expert'];
 const MEMBER_FIELDS = ['memberId', 'baseRole', 'displayName', 'overlay'];
 const PROFILE_FIELDS = [
   'schemaVersion', 'id', 'origin', 'surface', 'title', 'createdAt', 'updatedAt', 'members',

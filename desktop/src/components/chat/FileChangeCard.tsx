@@ -9,7 +9,8 @@
 //
 // Non-file tools still render through ToolCard.
 
-import { useState, type ReactElement } from 'react';
+import { type ReactElement } from 'react';
+import { useConversationDisclosure } from './conversation-disclosure';
 import {
   ChevronRight,
   Loader2,
@@ -90,8 +91,9 @@ export function FileChangeCards(props: FileChangeCardProps): ReactElement {
 export function FileChangeCard(props: FileChangeCardProps): ReactElement | null {
   const m = props.message;
   const change = props.change ?? computeFileChange(m.tool, m.input, m.outputContent);
-  const [userOverride, setUserOverride] = useState<boolean | null>(null);
-  const [showAll, setShowAll] = useState(false);
+  const [userOverride, setUserOverride] = useConversationDisclosure(m.id, `file:${change?.path ?? ''}`);
+  const [showAllChoice, setShowAll] = useConversationDisclosure(m.id, `file-lines:${change?.path ?? ''}`);
+  const showAll = showAllChoice ?? false;
   if (!change) return null;
 
   // Collapse after the edit finishes (same UX contract as ToolCard),

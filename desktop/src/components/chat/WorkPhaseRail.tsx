@@ -22,7 +22,7 @@ import {
   WORK_PHASE_LABELS,
   type WorkPhaseState,
   type WorkTurnProjection,
-} from '@trylo/work';
+} from '../../domain/history-presentation';
 import type { WorkRailMessage } from './types';
 
 export interface WorkPhaseRailProps {

@@ -1,12 +1,14 @@
 import { Logo } from '../brand/Logo';
 import { SessionRow } from './SessionRow';
+import { WorkspaceFolderIcon } from './WorkspaceFolderIcon';
 import { ProfileCard, ProfileAvatarView } from './ProfileCard';
-import { SquarePen, PanelLeft, Layers2, Blocks, Sparkles, RadioTower, Settings2, Folder, FolderPlus } from 'lucide-react';
+import { SquarePen, PanelLeft, Layers2, Blocks, Sparkles, RadioTower, Settings2 } from 'lucide-react';
 import {
   useEffect,
   useRef,
   useState,
   type ReactElement,
+  type Ref,
 } from 'react';
 import {
   Archive,
@@ -62,6 +64,9 @@ export interface LeftRailProps {
   readonly onUnarchiveSession: (id: string) => void;
   readonly onToggleCollapse: () => void;
   readonly onOpenActivity?: () => void;
+  readonly activityOpen?: boolean;
+  readonly activityPanelId?: string;
+  readonly activityTriggerRef?: Ref<HTMLButtonElement>;
   readonly activeRuns?: number;
   readonly onOpenTools?: () => void;
   readonly onOpenLearning?: () => void;
@@ -131,12 +136,12 @@ export function LeftRail(props: LeftRailProps): ReactElement | null {
       style={{ position: 'relative' }}
     >
       <div className="left-rail__header">
-        <div className="left-rail__brand"><Logo size={40} tone="cream" variant="solid" withBg decorative /><span>Trylo</span></div>
+        <div className="left-rail__brand" data-startup-logo><Logo size={40} tone="cream" variant="solid" withBg decorative /><span>Trylo</span></div>
         <button type="button" className="left-rail__collapse" onClick={props.onToggleCollapse} title="收起侧栏" aria-label="Collapse rail"><PanelLeft size={16} /></button>
       </div>
       <nav className="left-rail__navigation" aria-label="任务导航">
         <button type="button" className="left-rail__nav left-rail__new" onClick={props.onNewSession}><SquarePen size={16} /><span>新任务</span></button>
-        {props.onOpenActivity && <button type="button" className="left-rail__nav" onClick={props.onOpenActivity}><Layers2 size={16} /><span>后台任务</span>{(props.activeRuns ?? 0) > 0 && <span className="left-rail__count">{props.activeRuns}</span>}</button>}
+        {props.onOpenActivity && <button ref={props.activityTriggerRef} type="button" className="left-rail__nav" onClick={props.onOpenActivity} aria-haspopup="dialog" aria-expanded={props.activityOpen ?? false} aria-controls={props.activityOpen ? props.activityPanelId : undefined}><Layers2 size={16} /><span>运行中的任务</span>{(props.activeRuns ?? 0) > 0 && <span className="left-rail__count">{props.activeRuns}</span>}</button>}
         {props.onOpenTools && <button type="button" className="left-rail__nav" onClick={props.onOpenTools}><Blocks size={16} /><span>工具与技能</span></button>}
       </nav>
 
@@ -165,10 +170,7 @@ export function LeftRail(props: LeftRailProps): ReactElement | null {
                     aria-current={active ? 'true' : undefined}
                     aria-expanded={expanded}
                   >
-                    <span className="workspace-item__chev" aria-hidden="true">
-                      {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                    </span>
-                    <Folder size={16} aria-hidden="true" />
+                    <WorkspaceFolderIcon open={expanded} />
                     <span className="workspace-item__name">{ws.name}</span>
                   </button>
                   {active && (
@@ -293,15 +295,6 @@ export function LeftRail(props: LeftRailProps): ReactElement | null {
           })}
         </ul>
 
-        <button
-          type="button"
-          className="left-rail__add-workspace"
-          onClick={props.onOpenFolder}
-          title="Open a folder as a new workspace"
-        >
-          <FolderPlus size={16} aria-hidden="true" />
-          <span>打开项目</span>
-        </button>
       </section>
       <nav className="left-rail__footer" aria-label="应用设置">
         {props.onOpenLearning && <button type="button" className="left-rail__nav" onClick={props.onOpenLearning}><Sparkles size={16} /><span>学习与偏好</span></button>}

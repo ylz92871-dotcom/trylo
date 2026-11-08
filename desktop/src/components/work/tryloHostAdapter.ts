@@ -1,6 +1,4 @@
-// Trylo Desktop — Tauri implementation of the Work sub-app's
-// HostAdapter. See ../../../work/src/host-adapter/host-adapter.ts
-// for the interface this implements.
+// Trylo Desktop — project-root-bound artifact actions.
 //
 // The four host actions are dispatched to Tauri commands defined
 // in `src-tauri/src/commands/work_host.rs`. The Rust side is
@@ -28,9 +26,8 @@ import {
   artifactDenialText,
   isHttpArtifact,
   validateArtifactTarget,
-  type HostAdapter,
-  type OpenWithApp,
-} from "@trylo/work";
+} from "../../results/artifact-paths";
+import type { ArtifactHost, ExternalApplication } from '../../host-adapter/artifact-actions';
 
 async function call<T>(cmd: string, args: Record<string, unknown>): Promise<T> {
   return await invoke<T>(cmd, args);
@@ -54,7 +51,7 @@ function assertFileActionAllowed(filePath: string, allowedRoot: string): void {
 export function createTryloHostAdapter(
   allowedRoot: string,
   onActionError?: (message: string, filePath: string) => void,
-): HostAdapter {
+): ArtifactHost {
   const report = (err: unknown, filePath: string): never => {
     const message = err instanceof Error ? err.message : String(err);
     onActionError?.(message, filePath);
@@ -71,7 +68,7 @@ export function createTryloHostAdapter(
       }
     },
 
-    async openFileWithApp(filePath, app: OpenWithApp) {
+    async openFileWithApp(filePath, app: ExternalApplication) {
       try {
         assertFileActionAllowed(filePath, allowedRoot);
         await call<void>("work_host_open_file_with_app", {

@@ -69,7 +69,6 @@
   --top-bar-h: 64px;
   --bottom-strip-h: 28px;
   --input-bar-h: 116px;
-  --rail-left-w: 210px;
   --rail-left-w-collapsed: 40px;
   --rail-right-w: min(34%, 320px);
   --conversation-width: clamp(660px, 79cqw, 800px);
@@ -151,13 +150,12 @@
    * that covers every infinite animation in the app; a
    * phase then keeps only its static color / icon / text.
    * The listed selectors mirror the §7.5 coverage list:
-   * TurnProgress, StreamingIndicator, ProcessHeader dot,
+   * TurnProgress, StreamingIndicator,
    * Tool loader, EmptyState decorative loops, plus the
    * remaining loops (ContextRing, attachment
    * chip, TaskHeader) for completeness. */
   .turn-progress__logo--spin,
   .streaming-indicator__dot,
-  .process-header__dot--pulse,
   .tool__status-icon--spin,
   .empty-state__logo,
   .empty-state__logo > *,

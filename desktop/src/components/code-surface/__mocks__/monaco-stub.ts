@@ -1,12 +1,18 @@
-// Trylo Desktop — minimal monaco-editor stub for the test runner.
-// The real monaco-editor is ~50MB and not relevant to the
-// keyboard / ARIA / focus-return tests that import
-// GitDiffView. The component tolerates a no-op monaco surface —
-// the dynamic import resolves to this file in the test env and
-// the `.git-diff-view__monaco` container stays empty, which is
-// exactly what GitDiffView.test.tsx asserts on.
-
+// Lightweight API boundary for shell/focus tests. Browser QA uses real Monaco.
+export const languages = { register: () => {}, setMonarchTokensProvider: () => {} };
 export const editor = {
-  createModel: () => ({ dispose: () => {} }),
-  createDiffEditor: () => ({ setModel: () => {}, dispose: () => {} }),
+  defineTheme: () => {}, setTheme: () => {},
+  createModel: (initial = '') => {
+    let value = initial;
+    return { dispose: () => {}, getValue: () => value, setValue: (next: string) => { value = next; }, getLineCount: () => value.split('\n').length };
+  },
+  createDiffEditor: () => {
+    let model: { original: ReturnType<typeof editor.createModel>; modified: ReturnType<typeof editor.createModel> } | undefined;
+    let update = () => {};
+    return { setModel: (next: typeof model) => { model = next; update(); }, getModel: () => model,
+      updateOptions: () => {}, onDidUpdateDiff: (listener: () => void) => { update = listener; }, getLineChanges: () => [],
+      getModifiedEditor: () => ({ focus: () => {}, getAction: () => ({ run: () => {} }), getModel: () => model?.modified, setPosition: () => {}, revealLineInCenter: () => {} }),
+      dispose: () => {},
+    };
+  },
 };

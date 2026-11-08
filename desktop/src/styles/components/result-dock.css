@@ -239,66 +239,7 @@
 
 /* ── Git diff view (spec §9.6 / §7.7) ─────────────────────────────────── */
 
-.git-diff-view {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-width: 320px;
-  /* v1.17: the body is now a flex row, so pin the width. */
-  flex: 0 0 auto;
-  width: clamp(360px, 40vw, 560px);
-  border-left: 1px solid var(--border);
-  background: var(--bg, var(--bg-elevated));
-}
 
-.git-diff-view__head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--border);
-}
-
-.git-diff-view__path {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-mono, var(--font-body));
-  font-size: var(--text-sm);
-}
-
-.git-diff-view__close {
-  border: none;
-  background: transparent;
-  color: var(--fg-muted);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.git-diff-view__body {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  position: relative;
-}
-
-.git-diff-view__monaco {
-  flex: 1;
-  min-height: 0;
-}
-
-.git-diff-view__notice { flex: 0 0 auto; margin: 0; padding: 10px 14px; font-size: 12px; color: var(--fg-muted); border-bottom: 1px solid var(--border); }
-
-.git-diff-view__degraded {
-  margin: var(--space-3);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  color: var(--fg-muted);
-}
 
 /* ── Work result content (spec §8.6 / §9.4) ───────────────────────────── */
 
@@ -414,3 +355,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* File entry points stay visible above the composer when details close. */
+.artifact-preview-strip { display: flex; gap: 8px; overflow-x: auto; padding: 4px 12px 12px; }
+.artifact-preview-strip__file { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; min-width: 160px; max-width: 240px; min-height: 48px; padding: 10px 12px; color: var(--fg); background: var(--ink-surface); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; text-align: left; font-size: var(--text-sm); }
+.artifact-preview-strip__file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artifact-preview-strip__file svg { flex: 0 0 auto; color: var(--fg-muted); }
+.artifact-preview-strip__file:hover { background: var(--ink-hover); }
+.artifact-preview-strip__file:focus-visible { outline: 2px solid var(--brand-300); outline-offset: 2px; }
+.artifact-preview-strip__more { align-self: center; flex: 0 0 auto; color: var(--fg-muted); font-size: var(--text-xs); }

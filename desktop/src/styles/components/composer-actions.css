@@ -1,0 +1,35 @@
+.composer-actions {
+  position: fixed;
+  z-index: 60;
+  width: 232px;
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
+  padding: 5px;
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--fg);
+  box-shadow: 0 4px 22px #0000001c;
+}
+.composer-actions button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.composer-actions button > svg { flex-shrink: 0; color: var(--fg-muted); }
+.composer-actions button > span { flex: 1; }
+.composer-actions button:hover, .composer-actions button:focus-visible { background: var(--bg-elevated); }
+.composer-actions button:focus-visible { outline: 2px solid var(--border-strong); outline-offset: -2px; }
+.composer-actions small { color: var(--fg-muted); font-size: 11px; }
+.composer-actions__hint { margin: 4px 5px 0; padding: 9px 5px 5px; border-top: 1px solid var(--border); color: var(--fg-muted); font-size: 11px; }
+@media (pointer: coarse) { .composer-actions button { min-height: 44px; } }

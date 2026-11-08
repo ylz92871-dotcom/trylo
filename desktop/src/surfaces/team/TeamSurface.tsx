@@ -17,10 +17,13 @@ import { isTeamRunActive } from './team-store';
 import type { ModelChoice } from './composer/composer-store';
 import type { TeamProfile } from './team-profile-types';
 import type { TeamRun } from './team-types';
+import type { ExpertLibraryClient } from '../../experts';
+import type { HostedApprovalIdentity } from '../../components/chat/ConversationPresentation';
 
 export interface TeamSurfaceProps {
   readonly personView?: ReactNode;
   readonly approvals?: ReactNode;
+  readonly hostedApprovals?: readonly HostedApprovalIdentity[];
   readonly memberDrafts?: Map<string, string>;
   readonly onMemberInput?: import('../../host-adapter/subagent-contract').SendSubagentInput;
   /** Null = no run yet → idle. */
@@ -33,6 +36,7 @@ export interface TeamSurfaceProps {
   /** Saved custom profiles (App loads via the profiles cache). */
   readonly customProfiles?: readonly TeamProfile[];
   readonly modelChoices?: readonly ModelChoice[];
+  readonly expertClient?: ExpertLibraryClient;
   /** PR-7 wires the launch (startTeamTurn). Absent ⇒ 开始 stays gated. */
   readonly onStartTeam?: (goal: string) => void | Promise<void>;
   readonly onSaveProfileAs?: (name: string) => void;
@@ -109,6 +113,7 @@ export function TeamSurface(props: TeamSurfaceProps): ReactElement {
           <TeamRunView
             personView={props.personView}
             approvals={props.approvals}
+            hostedApprovals={props.hostedApprovals}
             memberDrafts={props.memberDrafts}
             onMemberInput={props.onMemberInput}
             run={run}
@@ -133,6 +138,7 @@ export function TeamSurface(props: TeamSurfaceProps): ReactElement {
           <TeamComposer
             draft={draft}
             modelChoices={props.modelChoices ?? []}
+            expertClient={props.expertClient}
             composerLive={props.composerLive === true}
             allowNoWorker={rosterAllowsNoWorker(draft.members)}
             inFlight={launching}

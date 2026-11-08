@@ -32,7 +32,7 @@ import type {
   StageAttachmentArgs,
   StagedAttachment,
 } from '../host-adapter/attachment-service';
-import type { WorkAttachmentDescriptor } from '@trylo/work';
+import type { StagedAttachmentDescriptor } from './attachment-message';
 
 export type AcquisitionSurface = 'code' | 'work';
 
@@ -101,7 +101,7 @@ export interface WorkAttachmentEntry {
  *  absolute paths). */
 export function toWorkDescriptor(
   entry: WorkAttachmentEntry,
-): WorkAttachmentDescriptor {
+): StagedAttachmentDescriptor {
   return {
     id: entry.id,
     name: entry.name,

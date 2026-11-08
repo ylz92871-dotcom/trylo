@@ -1,5 +1,11 @@
-import { TeamApprovalRequests } from './surfaces/team/run/TeamApprovalRequests';
-// Trylo Desktop — App entry. See spike-results/phase-2-ui-redesign.md.
+import { buildActivityItems, type ActivityNavigation } from './components/activity/activity-items'
+import {
+  createTeamApprovalPresentation,
+  TeamApprovalRequests,
+} from './surfaces/team/run/TeamApprovalRequests'
+import { createCollaborationIssuesClient } from './collaboration-learning/issues-cli'
+import { createDesktopLibraryClients } from './collaboration-learning/library-clients'
+// Trylo Desktop — App entry. See docs/spikes/phase-2-ui-redesign.md.
 //
 // v1.15.7: Cursor-style 3-section sidebar.
 //
@@ -34,7 +40,6 @@ import {
   useReducer,
   useRef,
   useState,
-  type CSSProperties,
   type ReactElement,
   useSyncExternalStore,
 } from 'react'
@@ -50,15 +55,21 @@ import type { FilePath, CodeMode, TopLevelMode } from './host-adapter/types'
 import {
   ConversationRunSupervisor,
   settingsForCodeRun,
+  settingsForCodeReplay,
   useConversationRunViewState,
 } from './runtime/conversation-run-supervisor'
 // P08 §WP6: where the CLI lives is resolved from the packaged resources
 // at startup, never hard-coded into a run.
 import { resolveCliRuntime } from './host-adapter/cli-runtime-path'
 import { canSendSubagentInput, sendSubagentInput } from './host-adapter/trylo-v1-subagent-control'
-import { setCliRuntimeResolution } from './runtime/cli-runtime-resolution'
+import { getCliRuntimeResolution, setCliRuntimeResolution } from './runtime/cli-runtime-resolution'
 import { yieldForSendFeedback } from './runtime/send-feedback'
-import { failTeamStart, mergeTeamProjection, routeTeamEvents, teamRunForContext } from './runtime/team-event-routing'
+import {
+  failTeamStart,
+  mergeTeamProjection,
+  routeTeamEvents,
+  teamRunForContext,
+} from './runtime/team-event-routing'
 // M4-C5: unified Code/Work run timing (spec §7.2). Created per send
 // in `onSend`; derived latencies let cold vs warm be measured without
 // any real-model cost (P1-3 — this is the production call site).
@@ -80,8 +91,13 @@ import {
   type AttachmentOwner,
 } from './attachments/conversation-attachment-store'
 import { useConversationAttachments } from './attachments/use-conversation-attachments'
-import { toWorkDescriptor } from './attachments/attachment-acquisition'
+import { toWorkDescriptor, type WorkAttachmentEntry } from './attachments/attachment-acquisition'
+import {
+  prepareWorkAttachmentRetry,
+  recoverWorkAttachmentHistory,
+} from './attachments/attachment-history'
 import { applyEvents, finalizeLatestTurnTimer } from './components/chat/events'
+import { lastUserIndex } from './components/chat/message-identity'
 // Round-3 P2: model-mentioned file links resolve a bare basename against
 // the files this conversation actually touched (no more root-join 404).
 import { resolveMentionPath, toolPathsOf } from './components/chat/artifact-mention'
@@ -89,7 +105,11 @@ import { resolveMentionPath, toolPathsOf } from './components/chat/artifact-ment
 // routes ordinary chat through the stable Code runtime, never the workd
 // task pipeline.
 import { sendWorkChat } from './work-chat/work-chat-adapter'
-import { AppShell } from './components/app-shell/AppShell'
+import {
+  AppShell,
+  DEFAULT_LEFT_RAIL_WIDTH,
+  DEFAULT_RIGHT_RAIL_WIDTH,
+} from './components/app-shell/AppShell'
 import { ChatPanel } from './components/chat/ChatPanel'
 import {
   beginConversationTurn,
@@ -115,12 +135,17 @@ import { buildApprovalPreview } from './approval/approval-preview'
 // repository + the Code projector own Git parsing and finalization, and the
 // shared ResultDock shell + Code content are the only UI surface.
 import { ConversationResultRepository } from './results/conversation-result-repository'
+import { normalizeStoredWorkResult } from './results/conversation-result-normalizer'
 import { CodeResultProjector } from './results/code-result-projector'
+import { desktopOutputOwnership } from './results/output-files/ownership'
 import type { StoredCodeRunResult } from './results/conversation-result-types'
 import type { ResultDockStatus } from './components/chat/ResultDock'
 import { ResultDock } from './components/chat/ResultDock'
-import { CodeResultContent } from './components/chat/CodeResultContent'
-import { WorkResultContent, latestRunArtifactCount } from './components/chat/WorkResultContent'
+import { codeReviewFiles, workReviewFiles } from './components/chat/result-preview-files'
+import { CodeReviewPanel } from './components/chat/CodeReviewPanel'
+import { codeReviewSummary } from './components/chat/code-review-summary'
+import { latestRunArtifactCount } from './components/chat/WorkResultContent'
+import { WorkReviewPanel } from './components/chat/WorkReviewPanel'
 // Round-3 (P1-9): the observer that leaves a closing record when a run is
 // stopped by hand. See src/components/chat/run-terminal-notice.ts.
 import { createTerminalNoticeObserver } from './components/chat/run-terminal-notice'
@@ -128,13 +153,14 @@ import { createTurnTimingObserver } from './components/chat/turn-timing-observer
 import { finalizeTurnTimer } from './components/chat/turn-timer'
 // Round-3 (P0-5): the interrupt outcome is reason-typed, not a boolean.
 // See src/runtime/steer-delivery.ts.
-import {
-  isSteerRetryable,
-  steerBubbleState,
-  steerOutcomeText,
-} from './runtime/steer-delivery'
+import { isSteerRetryable, steerBubbleState, steerOutcomeText } from './runtime/steer-delivery'
 import { resultDockPrefsStore, type ResultDockKey } from './result-dock/result-dock-prefs'
-import { useResultDockOpen } from './result-dock/use-result-dock-prefs'
+import { useResultReview } from './result-dock/use-result-review'
+import {
+  latestUserTurnId,
+  resultMatchesTurn,
+  workReviewForTurn,
+} from './result-dock/result-review-state'
 import { applyRecovery } from './recovery/persisted-state-recovery'
 // P2-1 (spec §5.1 / §8): the scoped Work result projection owns artifact
 // merge/version; App only orchestrates lifecycle + subscribes to the snapshot.
@@ -144,10 +170,12 @@ import { applyRecovery } from './recovery/persisted-state-recovery'
 // its connection status UI (「执行端启动失败」) and the registry-derived state
 // are gone.
 import { WorkResultProjector } from './results/work-result-projector'
-import { DiffRequestTracker, type DiffRequestIdentity } from './results/diff-request-tracker'
+import { useDiffPreview } from './result-dock/use-diff-preview'
 import type { StoredWorkResult } from './results/conversation-result-types'
 // 2026-09-04 (CLI 单核): workd ControlPlane imports retired with the daemon.
-import { buildWorkProfilePrompt, formatWorkMessage } from '@trylo/work'
+import { buildWorkProfilePrompt } from './work-chat/work-profile'
+import { workToolProfile } from './work-chat/work-tool-profile'
+import { formatAttachmentMessage } from './attachments/attachment-message'
 import { createTryloHostAdapter } from './components/work/tryloHostAdapter'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
@@ -159,6 +187,7 @@ import {
   type TryloSettings,
   type SettingsSaveIntent,
 } from './settings/settings-store'
+import { withoutSettingsNotice, type SettingsNotice } from './settings/settings-notices'
 import {
   effectiveModelForConversation,
   conversationModelsAfterSettingsSave,
@@ -181,15 +210,19 @@ import { mimeTypeForArtifactName, sanitizeArtifactRelPath } from './remote/remot
 // Hermes learning (migration spec §7, Phase 3): the port is the only way the
 // UI touches Hermes; the facade implements it over the Service Host.
 import { createNullLearningPort, type LearningPort } from './learning/learning-port'
-import { createLearningFacade, resolveHermesMcpArgs } from './learning/learning-facade'
-import { createToolingFacade, type ToolingFacade } from './tooling/tooling-facade'
+import { createLearningFacade } from './learning/learning-facade'
+import { createNativeSkillFacade } from './learning/native-skill-facade'
+import { agentLearningSettings } from './settings/agent-learning'
+import { createToolingFacade, createToolingRuntimeResolver, type ToolingFacade } from './tooling/tooling-facade'
 import type { ResolvedToolRuntime } from './services-host/methods'
 // P0-A (audit §3.3): the tool platform health state machine + the pre-send
 // capability gate (缺失不再静默 — §3.2).
-import { decideSendCapabilityGate, useToolPlatformState } from './tooling/use-tool-platform-state'
+import { useToolPlatformState } from './tooling/use-tool-platform-state'
 // The Desktop-owned native browser panel.
 import { useBrowserPreview } from './tooling/use-browser-preview'
 import { createToolRiskClassifier } from './tooling/tool-risk-classifier'
+import { modelPreviewClassifier } from './tooling/classifiers/model-preview-classifier'
+import { AgentModelPreviewWorkspace } from './components/preview/AgentModelPreviewWorkspace'
 import { officecliClassifier } from './tooling/classifiers/officecli-classifier'
 import {
   createPlaywrightClassifier,
@@ -222,7 +255,6 @@ import {
 import { PLAYWRIGHT_MANIFEST } from '../../desktop-services/src/tooling/manifests/playwright.mjs'
 import { createLearningMirrorObserver } from './learning/session-mirror'
 import { createLearningTriggerObserver } from './learning/learning-trigger'
-import { planPostTerminal } from './learning/learning-balance'
 import {
   cognitionPromptMessage,
   conversationTraceKey,
@@ -240,7 +272,14 @@ import {
   type UserLearningRuntime,
   LOCAL_USER_ID,
 } from './user-learning'
-import { deleteCliUserMemory, loadCliMemoryFacts, mutateCliMemory, snapshotToLegacyDocument, withCliFacts, type CliMemoryFact } from './user-learning/cli-memory'
+import {
+  deleteCliUserMemory,
+  loadCliMemoryFacts,
+  mutateCliMemory,
+  snapshotToLegacyDocument,
+  withCliFacts,
+  type CliMemoryFact,
+} from './user-learning/cli-memory'
 import { contractFilePath, serializeContractForDisk } from './user-learning/team-access/persist'
 import { teamPersonFeedback } from './runtime/team-person-feedback'
 import { contractSummaryFromContract } from './user-learning/team-access/contract-summary'
@@ -265,6 +304,11 @@ import type {
   LearningDirective,
 } from './user-learning/types'
 import { UserLearningPanel } from './components/user-learning/UserLearningPanel'
+import {
+  isSkillPendingReviewRequest,
+  SKILL_PENDING_REVIEW_EVENT,
+  type SkillPendingReviewRequest,
+} from './agent-learning/skill-pending-review'
 import { CognitionBadge } from './components/user-learning/CognitionBadge'
 import { LearningReceiptPill } from './components/user-learning/LearningReceiptPill'
 import { projectIdFromRoot, workspaceIdFromRoot } from './user-learning/ids'
@@ -302,7 +346,11 @@ import {
 import { startTeamTurn } from './user-learning/team-access/profiles/host-launch'
 import { watchRestoredTeamHistory } from './runtime/watch-restored-team-history'
 import { applyRecoveredChatEvents } from './runtime/recovered-chat-events'
-import { useCodeApprovals } from './components/chat/code-approval-messages'
+import { watchRestoredConversation } from './runtime/watch-restored-conversation'
+import { persistedConversationRecoveryRun } from './runtime/recovery-output-selection'
+import { isTeamRecoveryIdentity } from './host-adapter/process-recovery-identity'
+import { mergeCodeApprovals, useCodeApprovals } from './components/chat/code-approval-messages'
+import { reconcileCodePermissionOwners } from './runtime/code-permission-reconciliation'
 import { bindConversationPageLifecycle } from './runtime/conversation-page-lifecycle'
 import { useCollaborationSurface } from './surfaces/use-collaboration-surface'
 import type { LoopEvent } from './host-adapter/loop-events'
@@ -357,7 +405,7 @@ import {
   type WorkspaceIndex,
 } from './host-adapter/conversation-history'
 
-const DEFAULT_WORKSPACE_ROOT = 'C:/work/demo-ws' as const
+const DEFAULT_WORKSPACE_ROOT = 'D:/CC/trylo' as const
 const isTauriFn = isTauri
 const EMPTY_CHAT_MESSAGES: readonly ChatMessage[] = []
 
@@ -417,7 +465,9 @@ function feedTeamEvents(
     !events.some((e) => {
       if (!e || typeof e !== 'object') return false
       const type = (e as { type?: unknown }).type
-      return type === 'subagent' || type === 'tool_use' || type === 'tool_result' || type === 'loop_end'
+      return (
+        type === 'subagent' || type === 'tool_use' || type === 'tool_result' || type === 'loop_end'
+      )
     })
   ) {
     return
@@ -479,7 +529,7 @@ export interface Workspace {
   readonly name: string
 }
 
-/** Last path segment, e.g. `C:/work/demo-ws` → `trylo`. */
+/** Last path segment, e.g. `D:/CC/trylo` → `trylo`. */
 function basenameOf(p: string): string {
   const m = p.match(/[^/\\]+$/)
   return m ? m[0] : p
@@ -493,7 +543,7 @@ import { artifactCapabilityFor } from './work-artifact-dispatch'
 // FilePeek base capability: byte-backed kinds (image / pdf / office /
 // 3D) skip the text read — decoding binary as UTF-8 garbles the rail —
 // and each renderer loads bytes itself (see previewKindNeedsBytes).
-import { previewKindFor, previewKindNeedsBytes } from './components/preview/previewKind'
+import { loadPreviewFile } from './host-adapter/preview/read-file'
 
 /** Remote `mode` string → Code permission mode (spec §8.1: plan/chat, else
  *  agent). Pure mapping used by the remote sendTask authority. */
@@ -572,22 +622,6 @@ async function materializeRemoteAttachments(
   return created
 }
 
-// PR-7 (§4.1): the explicit Work capability switches pick the run's Work
-// Profile. 2026-09-06 办公基底 rev 2: desktop control (windows-mcp) is merged
-// into the `work.core.v1` base, so the old `work.computer.v1` profile is gone.
-// 浏览器调试 swaps Playwright for Chrome DevTools (`work.browser-debug.v1`);
-// the CAD/EDA adapter Profile is opt-in only. Otherwise undefined = the
-// surface default `work.core.v1`.
-function workProfileIdFor(workBrowserDebug: boolean, workCad: boolean): string | undefined {
-  if (workBrowserDebug && workCad) return 'work.cad-browser-debug.v1'
-  if (workBrowserDebug) return 'work.browser-debug.v1'
-  // TRYLO-CAD-EDA-TOOL-ADAPTER §4: the CAD/EDA adapter Profile — never a
-  // default; each missing host application degrades to an unavailable
-  // capability inside it (§4.4), so enabling the toggle is safe anywhere.
-  if (workCad) return 'work.cad.v1'
-  return undefined
-}
-
 /** Renderer-safe base64 (no Node Buffer in the Tauri process) for the remote
  *  artifact `read` authority. Chunked so `String.fromCharCode(...)` never hits
  *  the argument-spread limit on large deliverables. */
@@ -610,7 +644,11 @@ function kindForArtifactName(name: string): string {
   return 'file'
 }
 
-function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initialWorkspaceRoot?: FilePath }): ReactElement {
+function App({
+  initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT,
+}: {
+  readonly initialWorkspaceRoot?: FilePath
+}): ReactElement {
   // A small global index remembers which folders were open.
   // The actual conversations live under each project at
   // <workspace>/.trylo/conversations.v1.json.
@@ -619,7 +657,10 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     initialWorkspaceIndexRef.current = loadWorkspaceIndex({
       id: 'ws-default',
       root: initialWorkspaceRoot,
-      name: initialWorkspaceRoot === DEFAULT_WORKSPACE_ROOT ? basenameOf(initialWorkspaceRoot) : '本地工作区',
+      name:
+        initialWorkspaceRoot === DEFAULT_WORKSPACE_ROOT
+          ? basenameOf(initialWorkspaceRoot)
+          : '本地工作区',
     })
   }
   const initialWorkspaceIndex = initialWorkspaceIndexRef.current
@@ -787,9 +828,14 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     return teamRun
   }, [teamRun, currentActiveSession, currentWorkspace.id])
 
-  const [collaborationSurface, setCollaborationSurface] = useCollaborationSurface({
-    workspaceKey: currentWorkspaceKey, mode: topMode, conversationId: teamConversationId,
-  }, teamRunForCurrentSession !== null)
+  const [collaborationSurface, setCollaborationSurface] = useCollaborationSurface(
+    {
+      workspaceKey: currentWorkspaceKey,
+      mode: topMode,
+      conversationId: teamConversationId,
+    },
+    teamRunForCurrentSession !== null,
+  )
 
   // Foundation spec §10.10: the DEV "加载示例" fixture CTA is gone from
   // the UI main path. FIXTURE_TEAM_RUN stays in team-fixture.ts for unit
@@ -877,16 +923,6 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     [currentWorkspace.root, updateHistoryAt],
   )
 
-  // M4-D: Work empty-state starter pick. Writes the
-  // capability-neutral seed into the Work input. The
-  // user still reviews and sends manually.
-  const onPickWorkStarter = useCallback(
-    (seed: string, _starterId: string): void => {
-      setWorkInput(seed)
-    },
-    [setWorkInput],
-  )
-
   const [leftRailCollapsed, setLeftRailCollapsed] = useState(false)
   // v1.17: the file tree moved out of the left rail into a
   // toggleable right rail (Option A — keep the left rail
@@ -894,8 +930,8 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   const [rightRailOpen, setRightRailOpen] = useState(false)
   // v1.17.1: live rail widths (px), driven by the draggable
   // resizers so the user can stretch / shrink the panels.
-  const [leftWidth, setLeftWidth] = useState(210)
-  const [rightWidth, setRightWidth] = useState(360)
+  const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT_RAIL_WIDTH)
+  const [rightWidth, setRightWidth] = useState(DEFAULT_RIGHT_RAIL_WIDTH)
   const [peekExpanded, setPeekExpanded] = useState(false)
   // v1.16.3: inline-edit of past user messages. When
   // set, the corresponding <p> in Message.tsx swaps to a
@@ -964,12 +1000,19 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         text: string
         turnId: string
         learningDirective?: LearningDirective
+        attachments: readonly Attachment[]
       }>
     >
   >(new Map())
   // Latest onSend — the flush effect needs it without re-firing on every run.
   const onSendRefForFlush = useRef<
-    ((text: string, learningDirective?: LearningDirective) => void) | null
+    | ((
+        text: string,
+        learningDirective?: LearningDirective,
+        goalCommand?: import('./domain/goal').GoalCommand,
+        attachments?: readonly Attachment[],
+      ) => void)
+    | null
   >(null)
   // Re-render trigger when the queue length changes (the ref itself is not
   // reactive; the count is recomputed off the ref each render).
@@ -988,6 +1031,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         text: string
         turnId: string
         learningDirective?: LearningDirective
+        attachments: readonly WorkAttachmentEntry[]
       }>
     >
   >(new Map())
@@ -998,6 +1042,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           fromSuggestion?: boolean
           suggestionId?: string
           learningDirective?: LearningDirective
+          queuedAttachments?: readonly WorkAttachmentEntry[]
         },
       ) => void)
     | null
@@ -1077,9 +1122,9 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // In-memory only, zero network; the fork's metrics file sink is untouched.
   const dispatchMetricsRef = useRef<DesktopDispatchMetrics | null>(null)
   if (!dispatchMetricsRef.current) dispatchMetricsRef.current = new DesktopDispatchMetrics()
-  const wrongWindowWatcherRef = useRef<ReturnType<
-    typeof createWrongWindowDispatchWatcher
-  > | null>(null)
+  const wrongWindowWatcherRef = useRef<ReturnType<typeof createWrongWindowDispatchWatcher> | null>(
+    null,
+  )
   if (!wrongWindowWatcherRef.current) {
     wrongWindowWatcherRef.current = createWrongWindowDispatchWatcher(dispatchMetricsRef.current)
   }
@@ -1087,15 +1132,10 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   if (!supervisorRef.current) {
     supervisorRef.current = new ConversationRunSupervisor({
       sessionStore: isTauriFn() ? new CliSessionStore(hostAdapter.runtimeSessions) : undefined,
-      // Hermes MCP args are resolved per run, right before the CLI spawn
-      // (spec §7.3). The port is read through the ref because it is created
-      // further down, after the Service Manager exists. This is now the
-      // LEGACY path: it only runs when the Tool Platform has no answer.
-      resolveCodeCliArgs: () => resolveHermesMcpArgs(learningPortRef.current, 'normal'),
+      resolveHermesStorageRoot: async () => (await learningPortRef.current.health()).storageRoot,
       // Surface-aware resolver (spec §4.2): Code and Work pick their own
       // Profile. Work cannot inherit the Code `normal` argv (§4.3).
-      resolveToolRuntime: (request) =>
-        toolingFacadeRef.current?.resolveProfile(request) ?? Promise.resolve(null),
+      resolveToolRuntime: createToolingRuntimeResolver(() => toolingFacadeRef.current),
       // PR-2 (spec §6): the host risk classifier decides auto-allow /
       // deny / prompt for managed MCP tools BEFORE any approval is
       // projected. Deterministic and additive — without it every request
@@ -1109,6 +1149,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       // navigation decisions either way).
       riskClassifier: createToolRiskClassifier([
         officecliClassifier,
+        modelPreviewClassifier,
         createPlaywrightClassifier({
           leases: browserLeasesRef.current,
           allowedOrigins: [...(PLAYWRIGHT_MANIFEST.mcp.allowedOrigins ?? [])],
@@ -1161,13 +1202,22 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     })
   }
   const supervisor = supervisorRef.current
-  const reportStopFailure = useCallback((root: string, conversationId: string, error: unknown): void => {
-    const reason = error instanceof Error ? error.message : String(error)
-    updateMessagesAt(root, conversationId, (prev) => [...prev, {
-      id: `stop-error-${Date.now().toString(36)}`, kind: 'notice' as const, role: 'system' as const,
-      createdAt: Date.now(), text: `尚未确认任务已停止，请重试停止：${reason}`,
-    }])
-  }, [updateMessagesAt])
+  const reportStopFailure = useCallback(
+    (root: string, conversationId: string, error: unknown): void => {
+      const reason = error instanceof Error ? error.message : String(error)
+      updateMessagesAt(root, conversationId, (prev) => [
+        ...prev,
+        {
+          id: `stop-error-${Date.now().toString(36)}`,
+          kind: 'notice' as const,
+          role: 'system' as const,
+          createdAt: Date.now(),
+          text: `尚未确认任务已停止，请重试停止：${reason}`,
+        },
+      ])
+    },
+    [updateMessagesAt],
+  )
   const handleCancelTeamSeat = useCallback(
     (seatId: string) => {
       const requestedRunId = teamRunRef.current?.id
@@ -1200,7 +1250,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       if (!sessionId) return
       void supervisor.stopTask(currentWorkspaceKey, sessionId, seatId).then((accepted) => {
         if (!accepted) return
-        setTeamRun((run) => run && run.id === requestedRunId ? cancelTeamSeat(run, seatId) : run)
+        setTeamRun((run) => (run && run.id === requestedRunId ? cancelTeamSeat(run, seatId) : run))
       })
     },
     [currentActiveSession, currentWorkspaceKey, supervisor],
@@ -1214,20 +1264,34 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     const root = currentWorkspace.root
     // Stop the dispatcher as well: otherwise it may launch queued members
     // immediately after the visible children have been cancelled.
-    void supervisor.stopConversation(currentWorkspaceKey, run.personConversationId, (recovery) => {
-      const projected = routeTeamEvents({ workspaceId: root, personConversationId: recovery.process.conversationId,
-        teamRunId: recovery.process.identity.teamRunId }, recovery.events,
-      teamPersonFeedback(recovery.events, recovery.process.identity.teamRunId))
-      updateMessagesAt(root, recovery.process.conversationId,
-        (prev) => applyRecoveredChatEvents(prev, recovery.events, recovery.process.identity.turnId))
-      setTeamRun((current) => mergeTeamProjection(current, projected))
-      recovery.acknowledge()
-    }).then(() => {
-      const cancelled = routeTeamEvents({ workspaceId: root, personConversationId: run.personConversationId, teamRunId: run.id }, [
-        { type: 'loop_end', reason: 'cancelled', ts: Date.now() },
-      ])
-      setTeamRun((current) => mergeTeamProjection(current, cancelled))
-    }).catch((error: unknown) => reportStopFailure(root, run.personConversationId, error))
+    void supervisor
+      .stopConversation(currentWorkspaceKey, run.personConversationId, (recovery) => {
+        const identity = recovery.process.identity
+        const projected = isTeamRecoveryIdentity(identity)
+          ? routeTeamEvents(
+              {
+                workspaceId: root,
+                personConversationId: recovery.process.conversationId,
+                teamRunId: identity.teamRunId,
+              },
+              recovery.events,
+              teamPersonFeedback(recovery.events, identity.teamRunId),
+            )
+          : null
+        updateMessagesAt(root, recovery.process.conversationId, (prev) =>
+          applyRecoveredChatEvents(prev, recovery.events, recovery.process.identity.turnId),
+        )
+        if (projected) setTeamRun((current) => mergeTeamProjection(current, projected))
+        recovery.acknowledge()
+      })
+      .then(() => {
+        const cancelled = routeTeamEvents(
+          { workspaceId: root, personConversationId: run.personConversationId, teamRunId: run.id },
+          [{ type: 'loop_end', reason: 'cancelled', ts: Date.now() }],
+        )
+        setTeamRun((current) => mergeTeamProjection(current, cancelled))
+      })
+      .catch((error: unknown) => reportStopFailure(root, run.personConversationId, error))
   }, [currentWorkspaceKey, currentWorkspace.root, supervisor, reportStopFailure, updateMessagesAt])
 
   // Composer profile save-as / delete (Foundation spec PR-5). The draft
@@ -1290,6 +1354,63 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         })
       : undefined
   }, [teamRun])
+  useEffect(() => {
+    if (!historyReady) return
+    const root = currentWorkspace.root
+    const sessions = [
+      ...new Set([codeSessionId, workSessionId].filter((id): id is string => Boolean(id))),
+    ]
+    const detach = sessions.map((conversationId) =>
+      watchRestoredConversation({
+        projectKey: currentWorkspaceKey,
+        conversationId,
+        runtime: supervisor,
+        turnIds: () =>
+          (historiesRef.current[currentWorkspaceKey]?.conversations[conversationId]?.messages ?? [])
+            .filter(
+              (message) => message.kind === 'text' && message.role === 'user' && message.turnId,
+            )
+            .map((message) => message.turnId!),
+        expectedRun: () =>
+          persistedConversationRecoveryRun(
+            historiesRef.current[currentWorkspaceKey]?.conversations[conversationId]?.results,
+          ),
+        onRecovered: (receipt) =>
+          updateMessagesAt(root, conversationId, (previous) =>
+            applyRecoveredChatEvents(previous, receipt.events, receipt.process.identity.turnId),
+          ),
+        onError: (error) => {
+          const text =
+            '上一轮输出暂时无法恢复：' + (error instanceof Error ? error.message : String(error))
+          updateMessagesAt(root, conversationId, (previous) => {
+            const id = 'conversation-output-recovery:' + conversationId
+            const notice = {
+              id,
+              kind: 'notice' as const,
+              role: 'system' as const,
+              createdAt: Date.now(),
+              text,
+            }
+            return previous.some((message) => message.id === id)
+              ? previous.map((message) => (message.id === id ? notice : message))
+              : [...previous, notice]
+          })
+        },
+      }),
+    )
+    return () => {
+      for (const stop of detach) stop()
+    }
+  }, [
+    historyReady,
+    currentWorkspace.root,
+    currentWorkspaceKey,
+    codeSessionId,
+    workSessionId,
+    supervisor,
+    updateMessagesAt,
+  ])
+
   const codeView = useConversationRunViewState(supervisor, currentWorkspaceKey, codeSessionId)
   // P0 Work 单一发送: Work 每条消息都走 Code supervisor，因此 Work 会话
   // 复用 Code 的 ConversationRunViewState 派生运行态。workSessionId 为
@@ -1314,6 +1435,8 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // Approval visibility has its own registry subscription; a Work request
   // need not change the Code controller to appear or disappear.
   const codeApprovals = useCodeApprovals(supervisor, currentWorkspaceKey, codeSessionId)
+  const libraryConversationId = `library:${currentWorkspaceKey}`
+  const libraryApprovals = useCodeApprovals(supervisor, currentWorkspaceKey, libraryConversationId)
 
   // 2026-08-30 (intent-routing): a Work message routed to the Code runtime
   // raises Code permission requests whose conversationId is the WORK session,
@@ -1329,16 +1452,14 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // is the only source of truth for a live Code request, and the
   // merged messages are passed straight to the UI.
   const mergedMessages = useMemo<readonly ChatMessage[]>(() => {
-    if (codeApprovals.length === 0) return messages
-    return [...messages, ...codeApprovals]
+    return mergeCodeApprovals(messages, codeApprovals)
   }, [messages, codeApprovals])
 
   // 2026-08-30 (intent-routing): merge the Work-session Code approval
   // requests into the Work message stream so a Work message routed to the
   // Code runtime can be approved inline (not only via the pet).
   const workMergedMessages = useMemo<readonly ChatMessage[]>(() => {
-    if (workApprovals.length === 0) return workMessages
-    return [...workMessages, ...workApprovals]
+    return mergeCodeApprovals(workMessages, workApprovals)
   }, [workMessages, workApprovals])
 
   // P2-1 (spec §5.1 / §13.3): one ConversationResultRepository + one
@@ -1354,6 +1475,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   const codeProjectorRef = useRef<CodeResultProjector | null>(null)
   if (!codeProjectorRef.current) {
     codeProjectorRef.current = new CodeResultProjector({
+      outputOwnership: desktopOutputOwnership,
       store: {
         update: (projectKey, projectRoot, conversationId, code) => {
           resultRepo.update(projectKey, conversationId, (previous) => ({
@@ -1376,6 +1498,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   const workProjectorRef = useRef<WorkResultProjector | null>(null)
   if (!workProjectorRef.current) {
     workProjectorRef.current = new WorkResultProjector({
+      outputOwnership: desktopOutputOwnership,
       port: {
         update: (projectKey, projectRoot, conversationId, work) => {
           resultRepo.update(projectKey, conversationId, (previous) => ({
@@ -1487,16 +1610,29 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
 
   // Rust owns actual native close/exit cleanup. A WebView reload only loses
   // its display; stopping every conversation here would cancel unrelated work.
-  useEffect(() => bindConversationPageLifecycle({
-    host: isTauriFn() ? 'native' : 'browser', page: window,
-    stopAll: () => supervisor.stopAll(),
-    onStopError: (error) => {
-      // eslint-disable-next-line no-console
-      console.warn('[runtime] pagehide cleanup remains unconfirmed:', error)
-    },
-  }), [supervisor])
+  useEffect(
+    () =>
+      bindConversationPageLifecycle({
+        host: isTauriFn() ? 'native' : 'browser',
+        page: window,
+        stopAll: () => supervisor.stopAll(),
+        onStopError: (error) => {
+          // eslint-disable-next-line no-console
+          console.warn('[runtime] pagehide cleanup remains unconfirmed:', error)
+        },
+      }),
+    [supervisor],
+  )
   // Send anchors and settled totals belong to their user turns, never global state.
-  const [peekFile, setPeekFile] = useState<{ path: string; content: string } | null>(null)
+  const [peekFile, setPeekFile] = useState<{
+    path: string
+    content: string
+    resolvedKind?: import('./preview/formats').PreviewKind
+    loading?: boolean
+    error?: string
+    requestId?: number
+  } | null>(null)
+  const peekRequest = useRef(0)
   // v1.16.5: Phase 2.5 收口 — Work sub-app can request
   // the Settings modal (e.g. when the user has no API
   // key configured). Lifting the state out of AppShell
@@ -1560,6 +1696,18 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   } | null>(null)
   const loopResultsRef = useRef(new Map<string, string>())
   const [learningPanelOpen, setLearningPanelOpen] = useState(false)
+  const [skillReviewRequest, setSkillReviewRequest] = useState<SkillPendingReviewRequest>()
+  useEffect(() => {
+    const review = (event: Event) => {
+      const detail: unknown = (event as CustomEvent<unknown>).detail
+      if (!isSkillPendingReviewRequest(detail)) return
+      setSkillReviewRequest({ ...detail })
+      setSettingsOpen(false)
+      setLearningPanelOpen(true)
+    }
+    window.addEventListener(SKILL_PENDING_REVIEW_EVENT, review)
+    return () => window.removeEventListener(SKILL_PENDING_REVIEW_EVENT, review)
+  }, [])
   const [learningTick, setLearningTick] = useState(0)
   const [pendingCognitionByConversation, setPendingCognitionByConversation] = useState<
     Record<string, PendingCognitionView>
@@ -1574,11 +1722,56 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // untouched rather than blanking the panel.
   const [cliMemoryFacts, setCliMemoryFacts] = useState<readonly CliMemoryFact[]>([])
   const [cliMemoryError, setCliMemoryError] = useState<string>()
+  // Unrelated settings changes must not recreate clients and cancel both library reads.
+  const { cliPath: libraryCliPath, cliNodeProgram: libraryNodeProgram } = settingsForCodeRun(
+    settings,
+    currentWorkspace.root,
+  )
   const toolLearningRuntime = useMemo(() => {
-    const resolved = settingsForCodeRun(settings, currentWorkspace.root)
-    return { process: hostAdapter.process, cliPath: resolved.cliPath, cwd: currentWorkspace.root,
-      ...(resolved.cliNodeProgram === undefined ? {} : { nodeProgram: resolved.cliNodeProgram }) }
-  }, [settings, currentWorkspace.root])
+    return {
+      process: hostAdapter.process,
+      cliPath: libraryCliPath,
+      cwd: currentWorkspace.root,
+      ...(libraryNodeProgram === undefined ? {} : { nodeProgram: libraryNodeProgram }),
+    }
+  }, [libraryCliPath, libraryNodeProgram, currentWorkspace.root])
+  const libraryControl = useMemo(
+    () =>
+      supervisor.libraryApprovalPort({
+        projectKey: currentWorkspaceKey,
+        conversationId: libraryConversationId,
+        projectRoot: currentWorkspace.root,
+      }),
+    [supervisor, currentWorkspaceKey, libraryConversationId, currentWorkspace.root],
+  )
+  const libraryRecovery = useMemo(() => supervisor.libraryRecoveryPort(), [supervisor])
+  const managedToolLearningRuntime = useMemo(
+    () => ({ ...toolLearningRuntime, lifecycle: libraryControl, recovery: libraryRecovery }),
+    [toolLearningRuntime, libraryControl, libraryRecovery],
+  )
+  // Version panels use the retained lifecycle. Library clients attach their own
+  // per-action permission control, so their base runtime must not override it.
+  const collaborationResources = useMemo(
+    () => ({
+      scope: managedToolLearningRuntime.cwd,
+      runtime: managedToolLearningRuntime,
+      libraryRecovery,
+      issues: createCollaborationIssuesClient(
+        managedToolLearningRuntime,
+        undefined,
+        libraryControl,
+      ),
+      ...createDesktopLibraryClients(toolLearningRuntime, undefined, libraryControl),
+    }),
+    [managedToolLearningRuntime, toolLearningRuntime, libraryControl, libraryRecovery],
+  )
+  const requestTemporaryExpert = () => {
+    setCollaborationSurface('person')
+    const prompt =
+      '我想为当前任务申请临时专项专家。请结合目标、原安排、进展和阻塞，先查找已有可复用的专家；确有需要时，通过当前任务的申请流程处理，采用前说明安排与所需权限。我希望补充的专长是：'
+    if (topMode === 'work') setWorkInput(prompt)
+    else setText(prompt)
+  }
   useEffect(() => {
     if (!learningPanelOpen || settings.userLearning.enabled !== true) {
       setCliMemoryFacts([])
@@ -1598,7 +1791,9 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         setCliMemoryError(result.ok ? undefined : `用户记忆读取失败：${result.reason}`)
       }
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [learningPanelOpen, learningTick, settings, currentWorkspace.root])
   // Standalone User Cognition session (the "fifth mode"): when
   // `cognitionViewOpen` the Person surface's main column becomes the
@@ -1692,17 +1887,13 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         list: async () => {
           const root = remoteContextRef.current.currentWorkspace?.root
           if (!root) return []
-          const outDir = `${root.replace(/[\\/]+$/, '')}/.trylo/out`
+          if (!hostAdapter.fs.listRemoteArtifacts) return []
           try {
-            const { files } = await hostAdapter.fs.scanTree(outDir, {
-              maxFiles: 500,
-              maxDepth: 8,
-            })
+            const files = await hostAdapter.fs.listRemoteArtifacts(root)
             return files
-              .filter((file) => file.isFile)
+              .filter((file) => sanitizeArtifactRelPath(file.relativePath))
               .map((file) => {
-                const rel = file.path.replace(/\\/g, '/')
-                const short = rel.startsWith(`${outDir}/`) ? rel.slice(outDir.length + 1) : rel
+                const short = file.relativePath
                 return {
                   id: short,
                   name: short,
@@ -1719,8 +1910,9 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           const root = remoteContextRef.current.currentWorkspace?.root
           const rel = sanitizeArtifactRelPath(relativePath)
           if (!root || !rel) throw new Error('invalid artifact path')
-          const outDir = `${root.replace(/[\\/]+$/, '')}/.trylo/out`
-          const bytes = await hostAdapter.fs.readFileBytes(`${outDir}/${rel}`)
+          if (!hostAdapter.fs.readRemoteArtifact)
+            throw new Error('Secure remote file reader is unavailable')
+          const bytes = await hostAdapter.fs.readRemoteArtifact(root, rel)
           return {
             name: rel,
             mimeType: mimeTypeForArtifactName(rel),
@@ -1772,7 +1964,10 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           const record = history?.conversations[sessionId]
           if (!record) throw new Error('Remote conversation is unavailable')
           void forceFlushHistory(root)
-          historiesRef.current = { ...historiesRef.current, [workspaceKey(root)]: selectConversation(history!, sessionId) }
+          historiesRef.current = {
+            ...historiesRef.current,
+            [workspaceKey(root)]: selectConversation(history!, sessionId),
+          }
           remoteContextRef.current = { ...context, topMode: record.session.kind }
           updateHistoryAt(root, (h) => selectConversation(h, sessionId))
           setTopMode(record.session.kind)
@@ -1785,7 +1980,10 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           const context = remoteContextRef.current
           const root = context.currentWorkspace.root
           const history = historiesRef.current[workspaceKey(root)] ?? emptyWorkspaceHistory()
-          const created = createConversation(history, { kind: surface, codeMode: codeModeFromRemoteMode(settingsRef.current.permissionMode) })
+          const created = createConversation(history, {
+            kind: surface,
+            codeMode: codeModeFromRemoteMode(settingsRef.current.permissionMode),
+          })
           historiesRef.current = { ...historiesRef.current, [workspaceKey(root)]: created.history }
           remoteContextRef.current = { ...context, topMode: surface }
           setHistories((previous) => ({ ...previous, [workspaceKey(root)]: created.history }))
@@ -1793,7 +1991,15 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           return created.session.id
         },
       },
-      sendTask: async ({ projectKey, conversationId, mode, surface, text, requestId, attachments }) => {
+      sendTask: async ({
+        projectKey,
+        conversationId,
+        mode,
+        surface,
+        text,
+        requestId,
+        attachments,
+      }) => {
         // Explicit (projectKey, conversationId) from the mobile request —
         // never guessed from the current UI selection (spec §8.1).
         const current = settingsRef.current
@@ -1804,7 +2010,10 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         const key = workspaceKey(root)
         let history = historiesRef.current[key]
         if (!history) history = ensureConversation(emptyWorkspaceHistory(), surface, 'agent')
-        if (history.conversations[conversationId] && history.conversations[conversationId]?.session.kind !== surface) {
+        if (
+          history.conversations[conversationId] &&
+          history.conversations[conversationId]?.session.kind !== surface
+        ) {
           throw new Error('The selected conversation uses a different Desktop surface')
         }
         if (surface === 'work' && !history.conversations[conversationId]) {
@@ -1853,11 +2062,25 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         }
         const record = history.conversations[conversationId]
         const sendTurnId = `remote-${requestId}`
-        const userMessage = beginConversationTurn({ text, turnId: sendTurnId, now: Date.now(),
-          attachments: created.map((attachment) => ({ id: attachment.id, name: attachment.name, kind: attachment.kind, size: attachment.size })) })
+        const userMessage = beginConversationTurn({
+          text,
+          turnId: sendTurnId,
+          now: Date.now(),
+          attachments: created.map((attachment) => ({
+            id: attachment.id,
+            name: attachment.name,
+            kind: attachment.kind,
+            size: attachment.size,
+          })),
+        })
         const appendUser = (previous: readonly ChatMessage[]): readonly ChatMessage[] =>
-          previous.some((message) => message.id === sendTurnId) ? previous : [...previous, userMessage]
-        historiesRef.current = { ...historiesRef.current, [key]: updateConversationMessages(history, conversationId, appendUser) }
+          previous.some((message) => message.id === sendTurnId)
+            ? previous
+            : [...previous, userMessage]
+        historiesRef.current = {
+          ...historiesRef.current,
+          [key]: updateConversationMessages(history, conversationId, appendUser),
+        }
         updateMessagesAt(root, conversationId, appendUser)
         // Mirror the desktop code-send path: prepend the attachment context so
         // the agent knows to read the materialised files via its file tools.
@@ -1865,20 +2088,25 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         const prompt = attachmentCtx ? `${attachmentCtx}\n\n${text}` : text
         if (surface === 'work') {
           await sendWorkChat(supervisor, {
-            projectKey, conversationId, text: prompt,
-            settings: settingsForCodeRun(current, root), systemPrompt: buildWorkProfilePrompt(root),
-            codeMode: 'agent', permissionLevel: effectivePermission.level,
-            priorMessages: record?.messages ?? EMPTY_CHAT_MESSAGES, turnId: sendTurnId,
-            requestedProfileId: workProfileIdFor(current.workBrowserDebug, current.workCad),
-            computerUse: false,
+            projectKey,
+            conversationId,
+            text: prompt,
+            settings: settingsForCodeReplay(current, root),
+            systemPrompt: buildWorkProfilePrompt(root),
+            codeMode: 'agent',
+            permissionLevel: effectivePermission.level,
+            priorMessages: record?.messages ?? EMPTY_CHAT_MESSAGES,
+            turnId: sendTurnId,
+            ...workToolProfile(current),
             lifecycleObserver: codeLifecycleObserver,
-            onEvents: (events) => updateMessagesAt(root, conversationId, (prev) => applyEvents(prev, events)),
+            onEvents: (events) =>
+              updateMessagesAt(root, conversationId, (prev) => applyEvents(prev, events)),
           })
           return
         }
         await supervisor.runCode(projectKey, conversationId, {
           prompt,
-          settings: settingsForCodeRun(current, root),
+          settings: settingsForCodeReplay(current, root),
           codeMode: cliCodeMode(codeModeFromRemoteMode(mode)),
           // P2: remote / replayed sends use the current effective
           // level. The user cannot change the picker for a
@@ -1924,7 +2152,6 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       },
       conversationKind: () => remoteContextRef.current.topMode,
       codePermissions: () => supervisor.pendingCodePermissions(),
-      workApprovals: () => [],
       projectKey: () => workspaceKey(remoteContextRef.current.currentWorkspace.root),
       conversationId: () => {
         const context = remoteContextRef.current
@@ -1941,39 +2168,60 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   useEffect(() => {
     if (!isTauriFn()) return
     let active = true
-    void remoteController.loadConfiguration(settingsRef.current.remote).then(remote => {
-      if (!active) return
-      const next = { ...settingsRef.current, remote }
-      settingsRef.current = next
-      setSettings(next)
-      try { saveSettings(next) } catch { /* Native remote preferences remain durable. */ }
-      setRemoteConfigurationReady(true)
-    }).catch(error => {
-      if (!active) return
-      console.warn('[remote] could not restore connection preferences', error)
-      // A manual retry remains available without overwriting unreadable data.
-      setRemoteConfigurationReady(true)
-    })
-    return () => { active = false }
+    void remoteController
+      .loadConfiguration(settingsRef.current.remote)
+      .then((remote) => {
+        if (!active) return
+        const next = { ...settingsRef.current, remote }
+        settingsRef.current = next
+        setSettings(next)
+        try {
+          saveSettings(next)
+        } catch {
+          /* Native remote preferences remain durable. */
+        }
+        setRemoteConfigurationReady(true)
+      })
+      .catch((error) => {
+        if (!active) return
+        console.warn('[remote] could not restore connection preferences', error)
+        // A manual retry remains available without overwriting unreadable data.
+        setRemoteConfigurationReady(true)
+      })
+    return () => {
+      active = false
+    }
   }, [remoteController])
 
-  const handleRemoteConfigure = useCallback(async (remote: TryloSettings['remote']): Promise<void> => {
-    const saved = await remoteController.saveConfiguration(remote)
-    const next = { ...settingsRef.current, remote: saved }
-    settingsRef.current = next
-    try { saveSettings(next) } catch { /* The native copy remains authoritative. */ }
-    setSettings(next)
-    await remoteController.setEnabled(saved.enabled)
-  }, [remoteController])
+  const handleRemoteConfigure = useCallback(
+    async (remote: TryloSettings['remote']): Promise<void> => {
+      const saved = await remoteController.saveConfiguration(remote)
+      const next = { ...settingsRef.current, remote: saved }
+      settingsRef.current = next
+      try {
+        saveSettings(next)
+      } catch {
+        /* The native copy remains authoritative. */
+      }
+      setSettings(next)
+      await remoteController.setEnabled(saved.enabled)
+    },
+    [remoteController],
+  )
 
   // The Service Host belongs to Desktop, not to the optional pet domain.
-  // Start it once so Hermes remains available when the pet is disabled. A
-  // real page exit is still the single owner of the final stop below.
+  // Start it once so Hermes remains available when the pet is disabled.
+  // The native host owns final shutdown across renderer reloads.
   useEffect(() => {
     if (!isTauriFn()) return
     let active = true
     void serviceHostPathsRef.current!()
-      .then((paths) => (active ? serviceManager.ensureRunning(paths) : undefined))
+      .then(async (paths) => {
+        if (!active) return
+        // Preserve a reused host's Code/Work connections. The tool platform
+        // reports revision drift through its existing explicit reload action.
+        await serviceManager.ensureRunning(paths)
+      })
       .catch((err: unknown) => {
         if (active) console.warn('[trylo] Service Host startup failed; learning will degrade', err)
       })
@@ -1982,22 +2230,52 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     }
   }, [serviceManager])
 
-  // Hermes learning facade: the Service Host is the only transport, and it
-  // degrades to "unavailable" answers when the sidecar is down (spec §7.3).
-  // Bound once — the client instance is stable for the app's lifetime.
+  // The CLI owns skill assets and canonical experience; the Service Host retains Memory and session maintenance.
+  const skillUiRuntimeRef = useRef(toolLearningRuntime)
+  skillUiRuntimeRef.current = toolLearningRuntime
   const learningPortBoundRef = useRef(false)
   if (!learningPortBoundRef.current) {
     learningPortBoundRef.current = true
-    learningPortRef.current = createLearningFacade(serviceManager.client)
+    const skillSessions = new CliSessionStore(hostAdapter.runtimeSessions)
+    learningPortRef.current = createNativeSkillFacade(createLearningFacade(serviceManager.client), {
+      runtime: () => skillUiRuntimeRef.current,
+      explicitAllowance: () => {
+        const current = agentLearningSettings(settingsRef.current.agentLearning)
+        return { maxCalls: current.skillCalls, maxOutputTokens: current.skillOutputTokens }
+      },
+      centralAllowance: () => {
+        const current = agentLearningSettings(settingsRef.current.agentLearning)
+        return current.centralEnabled
+          ? {
+              schemaVersion: 2,
+              unit: 'total_model_tokens',
+              maxTokens: current.centralTokens,
+              maxCalls: current.centralCalls,
+              maxSteps: current.centralCalls,
+              maxPromptChars: 100000,
+            }
+          : undefined
+      },
+      source: async (params) => {
+        const lease = await skillSessions.open(params.workspaceRoot, params.sessionId)
+        return lease.binding.state === 'established'
+          ? { sessionId: lease.binding.sessionId }
+          : undefined
+      },
+    })
   }
 
-  // Tool Platform facade (tool-extension spec §12.1). Bound once with the
-  // same stable client; until the sidecar answers, the resolver returns null
-  // and every run keeps its legacy argv (§4.4 degrade contract).
+  // Bind the stable client once. User sends await the existing Host owner;
+  // whole-profile failures remain visible instead of silently dropping mounts.
   const toolingBoundRef = useRef(false)
   if (!toolingBoundRef.current) {
     toolingBoundRef.current = true
-    toolingFacadeRef.current = createToolingFacade(serviceManager.client)
+    toolingFacadeRef.current = createToolingFacade(serviceManager.client, {
+      ensureReady: async () => {
+        const paths = await serviceHostPathsRef.current!()
+        await serviceManager.ensureRunning(paths)
+      },
+    })
   }
 
   // P0-A (audit §3.3-1): the tool platform state machine. After the Service
@@ -2060,11 +2338,12 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       },
       config: (scope) => {
         const current = settingsRef.current
-        if (!current.cliPath) return null
+        const resolved = getCliRuntimeResolution()
+        if (!resolved?.cliScript) return null
         return {
           enabled: true,
           cli: {
-            cliPath: current.cliPath,
+            cliPath: getCliRuntimeResolution()?.cliScript ?? '',
             cwd: scope.projectRoot,
             apiKey: current.apiKey,
             apiHost: current.apiHost,
@@ -2076,21 +2355,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           },
         }
       },
-      allowReview: () => {
-        const pendingUserInterrupt = messagesRef.current.some(
-          (message) =>
-            (message.kind === 'cognition_prompt' || message.kind === 'learning_impact') &&
-            'status' in message &&
-            message.status === 'pending',
-        )
-        return planPostTerminal({
-          outcome: 'completed',
-          userLearningEnabled: settingsRef.current.userLearning.enabled,
-          hermesEnabled: true,
-          cognitionTurn: codeModeRef.current === 'cognition',
-          pendingUserInterrupt,
-        }).hermesReview
-      },
+      allowReview: () => false,
     })
   }
 
@@ -2132,7 +2397,10 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // at mount — an 11-minute run is often stopped after navigating elsewhere,
   // and a stale closure would write the record to whatever conversation was
   // active when React first rendered this hook.
-  const runTerminalTargetRef = useRef({ root: currentWorkspace.root, conversationId: codeSessionId })
+  const runTerminalTargetRef = useRef({
+    root: currentWorkspace.root,
+    conversationId: codeSessionId,
+  })
   useEffect(() => {
     runTerminalTargetRef.current = { root: currentWorkspace.root, conversationId: codeSessionId }
   }, [currentWorkspace.root, codeSessionId])
@@ -2202,7 +2470,17 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   useEffect(() => {
     if (!remoteConfigurationReady) return
     void remoteController.setEnabled(settings.remote?.enabled ?? false)
-  }, [remoteController, remoteConfigurationReady, settings.remote?.enabled, settings.remote?.connectionMode, settings.remote?.relayUrl, settings.remote?.port, settings.remote?.tunnelMode, settings.remote?.publicUrl, settings.remote?.cloudflaredPath])
+  }, [
+    remoteController,
+    remoteConfigurationReady,
+    settings.remote?.enabled,
+    settings.remote?.connectionMode,
+    settings.remote?.relayUrl,
+    settings.remote?.port,
+    settings.remote?.tunnelMode,
+    settings.remote?.publicUrl,
+    settings.remote?.cloudflaredPath,
+  ])
 
   // Real remote status for the settings UI (spec §8.1.4). The controller
   // pushes on every gateway `remote.status` event + service-host health
@@ -2220,32 +2498,54 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   const [petStatus, setPetStatus] = useState<PetStatusSnapshot>(() => companion.petStatus())
   useEffect(() => companion.onStatus(setPetStatus), [companion])
 
-  useEffect(() => {
-    // §6.5 exit sequence (pet.disable → servicehost_stop) belongs on the
-    // REAL exit/navigation signal — NOT on React unmount: StrictMode's
-    // dev double-mount would otherwise permanently dispose the controller
-    // before the second mount starts it again. The Rust shell repeats the
-    // teardown on CloseRequested.
-    const onPageHide = (): void => {
-      void companion.dispose()
-      void remoteController.dispose()
-    }
-    window.addEventListener('pagehide', onPageHide)
-    return () => window.removeEventListener('pagehide', onPageHide)
-  }, [companion, remoteController])
+  // Domains share the native-owned shutdown boundary with Code/Work runs.
+  // WebView reload must retain their shared Service Host and tool bridges.
+  useEffect(
+    () =>
+      bindConversationPageLifecycle({
+        host: isTauriFn() ? 'native' : 'browser',
+        page: window,
+        stopAll: async () => {
+          await Promise.all([companion.dispose(), remoteController.dispose()])
+        },
+        onStopError: (error) => {
+          console.warn('[runtime] pagehide service cleanup remains unconfirmed:', error)
+        },
+      }),
+    [companion, remoteController],
+  )
 
-  const handleSettingsSave = useCallback((next: TryloSettings, intent: SettingsSaveIntent = 'connection'): void => {
-    const conversationId = topMode === 'work' ? workSessionId : codeSessionId
-    const nextModels = conversationModelsAfterSettingsSave(settingsRef.current, next,
-      conversationModelsRef.current, currentWorkspaceKey, conversationId ?? '', intent)
-    if (nextModels !== conversationModelsRef.current) {
-      conversationModelsRef.current = nextModels
-      setConversationModels(nextModels)
-      saveConversationModels(nextModels)
+  const handleSettingsNoticeDismissed = useCallback((notice: SettingsNotice): void => {
+    const current = settingsRef.current
+    const next = {
+      ...current,
+      settingsNotices: withoutSettingsNotice(current.settingsNotices, notice),
     }
     settingsRef.current = next
     setSettings(next)
-  }, [currentWorkspaceKey, topMode, workSessionId, codeSessionId])
+  }, [])
+
+  const handleSettingsSave = useCallback(
+    (next: TryloSettings, intent: SettingsSaveIntent = 'connection'): void => {
+      const conversationId = topMode === 'work' ? workSessionId : codeSessionId
+      const nextModels = conversationModelsAfterSettingsSave(
+        settingsRef.current,
+        next,
+        conversationModelsRef.current,
+        currentWorkspaceKey,
+        conversationId ?? '',
+        intent,
+      )
+      if (nextModels !== conversationModelsRef.current) {
+        conversationModelsRef.current = nextModels
+        setConversationModels(nextModels)
+        saveConversationModels(nextModels)
+      }
+      settingsRef.current = next
+      setSettings(next)
+    },
+    [currentWorkspaceKey, topMode, workSessionId, codeSessionId],
+  )
 
   /** Remember the model source a conversation chose. Keyed by the ACTIVE
    *  conversation (Code/Work per `topMode`); persisted independently so each
@@ -2326,8 +2626,10 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // decision. The detailed configurator (port / tunnel /
   // pairing QR) still lives in Settings.
   const handleRemoteToggle = useCallback((): void => {
-    void handleRemoteConfigure({ ...settingsRef.current.remote, enabled: !settingsRef.current.remote.enabled })
-      .catch(error => console.warn('[remote] configuration save failed', error))
+    void handleRemoteConfigure({
+      ...settingsRef.current.remote,
+      enabled: !settingsRef.current.remote.enabled,
+    }).catch((error) => console.warn('[remote] configuration save failed', error))
   }, [handleRemoteConfigure])
 
   // P0 Work 单一发送: Work 会话的运行态由 Code supervisor 派生（不再创建
@@ -2358,7 +2660,10 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   const settingsDefault = settings.permissionLevel ?? DEFAULT_PERMISSION_LEVEL
   const effectivePermission = resolveEffectivePermission({
     settingsDefault,
-    conversationOverride: (topMode === 'work' ? workRecord : codeRecord)?.permissionLevel ?? activeOverride?.level ?? null,
+    conversationOverride:
+      (topMode === 'work' ? workRecord : codeRecord)?.permissionLevel ??
+      activeOverride?.level ??
+      null,
   })
   const permissionPendingNextTurn =
     activeOverride?.pendingForNextTurn === true && (topMode === 'work' ? workRunning : running)
@@ -2375,12 +2680,25 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         return next
       })
     },
-    [pickerSessionId, topMode, workRunning, running, updateHistoryAt, currentWorkspace.root, codeMode],
+    [
+      pickerSessionId,
+      topMode,
+      workRunning,
+      running,
+      updateHistoryAt,
+      currentWorkspace.root,
+      codeMode,
+    ],
   )
   // A queued choice has taken effect once the old turn stops. Do not show
   // "下轮生效" again on every later turn of this conversation.
   useEffect(() => {
-    if (!pickerSessionId || !activeOverride?.pendingForNextTurn || (topMode === 'work' ? workRunning : running)) return
+    if (
+      !pickerSessionId ||
+      !activeOverride?.pendingForNextTurn ||
+      (topMode === 'work' ? workRunning : running)
+    )
+      return
     setPermissionOverrides((previous) => {
       const next = new Map(previous)
       next.set(pickerSessionId, { level: activeOverride.level, pendingForNextTurn: false })
@@ -2398,80 +2716,38 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // P0 Work 单一发送: 单一发送无 isChat 区分，busy 即 Code 运行中。
   const workBusy = workCodeView.running
 
-  // M4-D: jump-to-conversation from the Activity Center.
-  // The callback switches the visible mode to the run's
-  // kind and activates the target conversation. The
-  // jump target is owned by the workspace; we do NOT
-  // switch workspace — that would lose context.
+  // Activity is projected across loaded workspace histories; callbacks retain App ownership.
   const onJumpToConversation = useCallback(
-    (kind: 'code' | 'work', conversationId: string): void => {
-      setTopMode(kind)
-      updateHistoryAt(currentWorkspace.root, (history) =>
-        selectConversation(history, conversationId),
-      )
+    ({ workspace, session }: ActivityNavigation): void => {
+      void forceFlushHistory(currentWorkspace.root)
+      setCurrentWorkspaceId(workspace.id)
+      setTopMode(session.kind)
+      if (session.kind === 'code' && session.codeMode) setCodeMode(session.codeMode)
+      updateHistoryAt(workspace.root, (history) => selectConversation(history, session.id))
     },
     [currentWorkspace.root, updateHistoryAt],
   )
-
-  // M4-D: stop a specific Code run via the supervisor.
-  // The supervisor targets the run by (projectKey,
-  // conversationId) — the same identity the controller
-  // uses. No global state, no race with the activity
-  // chip's count.
   const onStopCodeConversation = useCallback(
-    (projectKey: string, conversationId: string): void => {
-      void supervisor.stopConversation(projectKey, conversationId)
-        .catch((error: unknown) => reportStopFailure(projectKey, conversationId, error))
-    },
+    (projectKey: string, conversationId: string): Promise<void> =>
+      supervisor.stopConversation(projectKey, conversationId).catch((error: unknown) => {
+        reportStopFailure(projectKey, conversationId, error)
+        throw error
+      }),
     [supervisor, reportStopFailure],
   )
+  const activityItems = useMemo(
+    () =>
+      buildActivityItems({
+        runs: activeCodeRuns,
+        workspaces,
+        histories,
+        onStop: onStopCodeConversation,
+        onJump: onJumpToConversation,
+      }),
+    [activeCodeRuns, workspaces, histories, onStopCodeConversation, onJumpToConversation],
+  )
 
-  // M4-D: list of items rendered in the Activity Center.
-  // Code side uses the supervisor (global); Work side
-  // uses the current workspace's non-terminal tasks. The
-  // host keeps the mapping local — the popover just
-  // renders the list.
-  const activityItems = useMemo<
-    readonly import('./components/activity/BackgroundActivityCenter').ActivityItem[]
-  >(() => {
-    const out: import('./components/activity/BackgroundActivityCenter').ActivityItem[] = []
-    // Code side.
-    for (const r of activeCodeRuns) {
-      const conv = currentHistory.conversations[r.conversationId]
-      if (!conv) continue
-      out.push({
-        id: `code:${r.runId}`,
-        kind: 'code',
-        conversationId: r.conversationId,
-        workspaceLabel: currentWorkspace.name,
-        title: conv.session.title,
-        statusLabel:
-          r.bindingState === 'spawning'
-            ? 'Starting…'
-            : r.bindingState === 'ready'
-              ? 'Ready'
-              : r.bindingState === 'busy'
-                ? 'Running'
-                : r.bindingState === 'idle'
-                  ? 'Idle'
-                  : 'Exited',
-        startedAt: r.startedAt,
-        onStop: () => onStopCodeConversation(r.projectKey, r.conversationId),
-        onJump: () => onJumpToConversation('code', r.conversationId),
-      })
-    }
-    return out
-  }, [
-    activeCodeRuns,
-    currentHistory.conversations,
-    currentWorkspace.name,
-    onStopCodeConversation,
-    onJumpToConversation,
-  ])
-
-  // active. Code and Work have independent active pointers in the
-  // same history file, so switching the top mode never rewrites a
-  // conversation's identity.
+  // Code and Work keep independent active pointers in the same history file.
   useEffect(() => {
     if (histories[currentWorkspaceKey]) return
     const loadingRoots = loadingHistoryRootsRef.current
@@ -2504,7 +2780,16 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
                 conversationId: record.session.id,
               },
               currentWorkspace.root,
-              record.attachments,
+              record.attachments.filter(
+                (attachment) =>
+                  !record.messages.some(
+                    (message) =>
+                      message.kind === 'text' &&
+                      message.role === 'user' &&
+                      message.turnTiming?.outcome === 'completed' &&
+                      message.attachments?.some((sent) => sent.id === attachment.id),
+                  ),
+              ),
             )
           }
         }
@@ -2540,74 +2825,6 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   useEffect(() => {
     registerUnloadHistoryFlush()
   }, [])
-
-  // M4-C1 (P1-2): once workspace/settings/history are ready, prewarm the
-  // current Code conversation's idle CLI so the 50.8 MiB bundle cold-start
-  // is moved OUT of the first-send critical path. No prompt is written, so
-  // no model request and no history. Idempotent: the controller no-ops when
-  // a process / prewarm is already live.
-  useEffect(() => {
-    if (!historyReady || !codeSessionId) return
-    void supervisor.prewarmCode(
-      currentWorkspaceKey,
-      codeSessionId,
-      settingsForCodeRun(settings, currentWorkspace.root),
-      // §9: warm `code.core.v1` with the caller's own permission level, so
-      // adoption is an exact runtime-contract match instead of the old
-      // "argv is empty" guess (spec §1.4).
-      { surface: 'code', permissionLevel: effectivePermission.level },
-    )
-  }, [
-    historyReady,
-    currentWorkspaceKey,
-    codeSessionId,
-    currentWorkspace.root,
-    settings,
-    supervisor,
-    effectivePermission.level,
-  ])
-
-  // §9: warm the current Work conversation's `work.core.v1` runtime. The Work
-  // prewarm is a DIFFERENT Profile from Code's, so the two can never adopt
-  // each other's process — the fingerprint decides, not the caller. Work
-  // warming stays best-effort: a missing sidecar degrades to the legacy path.
-  // PR-6: with 电脑控制 enabled the prewarm matches the send contract
-  // (`work.computer.v1`); with it off both stay `work.core.v1`.
-  useEffect(() => {
-    if (!historyReady || !workSessionId || topMode !== 'work') return
-    // PR-6: with 电脑控制 enabled the prewarm matches the send contract
-    // (`work.computer.v1`); PR-7: 浏览器调试 warms `work.browser-debug.v1`
-    // the same way — the prewarm must match the send contract exactly or
-    // the fingerprint never adopts it (§9). Priority mirrors the send.
-    const profileId = workProfileIdFor(settings.workBrowserDebug, settings.workCad)
-    void supervisor.prewarmCode(
-      currentWorkspaceKey,
-      workSessionId,
-      settingsForCodeRun(settings, currentWorkspace.root),
-      {
-        surface: 'work',
-        ...(profileId ? { requestedProfileId: profileId } : {}),
-        permissionLevel: effectivePermission.level,
-      },
-    )
-  }, [
-    historyReady,
-    currentWorkspaceKey,
-    workSessionId,
-    topMode,
-    currentWorkspace.root,
-    settings,
-    supervisor,
-    effectivePermission.level,
-  ])
-
-  // M4-C1: start the idle-TTL reaper once and clean it up on unmount. It
-  // only ever reclaims IDLE runtimes past their TTL — busy ones are never
-  // touched, and navigation does not stop them.
-  useEffect(() => {
-    const stop = supervisor.startPrewarmReaper()
-    return () => stop()
-  }, [supervisor])
 
   // M4-C (P1-4): window blur is a hard stop point for a write-behind save.
   // Force-drain every pending workspace snapshot so blur never loses the
@@ -2648,29 +2865,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     }
   }, [workspaces, currentWorkspaceId, topMode])
 
-  // v1.16.5: Phase 2.5 收口 — connect to the coworker Control
-  // Plane on mount. The client auto-reconnects on close;
-  // status + event log surface in WorkDiagnostics. The URL is
-  // hardcoded for now; later we'll read it from
-  // `workd_status()` (the Tauri command we registered in
-  // Phase 1) so Diagnostics can show the same URL the
-  // daemon is actually listening on.
-  //
-  // Phase 2.5b: we hoist the client into a ref so the
-  // `onGenerate` handler below can call `client.send()`
-  // directly without forcing a state update on every
-  // status / event tick.
-  //
-  // 2026-09-04 (CLI 单核): the per-launch Control Plane token and the
-  // auto-spawn useEffect above are retired with the workd daemon.
-
-  // v1.16.5: Phase 2.5b — InputBar's onSend in Work mode
-  // calls this. We push the user's prompt into the chat
-  // as a `text` user message, then dispatch to the coworker
-  // daemon thread. The conversation is the same shape Code
-  // uses, so MessageList renders it without any Work-specific
-  // component.
-  //
+  // Work sends through the current CLI supervisor and shares its conversation lifecycle.
   // 2026-08-30 (P0 Work 单一发送): Work 彻底统一为单一发送 — 每条 Work
   // 消息都走 Code supervisor（sendWorkChat / codeMode 'agent'），删除
   // workd/task 分流、intent classifier、以及“任务=cowork”语义。存量 taskId
@@ -2686,9 +2881,13 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         fromSuggestion?: boolean
         suggestionId?: string
         learningDirective?: LearningDirective
+        goalCommand?: import('./domain/goal').GoalCommand
+        queuedAttachments?: readonly WorkAttachmentEntry[]
       },
     ) => {
       const fromSuggestion = opts?.fromSuggestion === true
+      const preserveComposer =
+        opts?.goalCommand !== undefined && opts.goalCommand.action !== 'create'
       const root = currentWorkspace.root
       const sessionId = workSessionId
       if (!sessionId) return
@@ -2702,15 +2901,25 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         const qkey = queueConversationKey(workspaceKey(root), sessionId)
         const q = pendingWorkQueueRef.current.get(qkey) ?? []
         const learningDirective = opts?.learningDirective ?? consumeNextLearningDirective('work')
-        q.push({ text, turnId, ...(learningDirective ? { learningDirective } : {}) })
+        const owner: AttachmentOwner = {
+          surface: 'work',
+          projectKey: workspaceKey(root),
+          conversationId: sessionId,
+        }
+        const attachments =
+          opts?.queuedAttachments ?? conversationAttachmentStore.snapshot(owner).workAttachments
+        q.push({ text, turnId, attachments, ...(learningDirective ? { learningDirective } : {}) })
         pendingWorkQueueRef.current.set(qkey, q)
+        conversationAttachmentStore.markSent(
+          owner,
+          attachments.map((entry) => entry.id),
+        )
         bumpQueueTick()
         setWorkInput('')
         return
       }
       // P0-A §3.3-5: non-blocking capability notice for THIS turn (set by the
       // gate below, appended right after the optimistic user bubble).
-      let gateNotice: string | null = null
       // 2026-08-30 (routing-fix step 6): frontend send idempotency.
       // A 10s window suppresses an EXACT duplicate (same session, same
       // text hash) so a double-click / accidental resend cannot feed the
@@ -2725,6 +2934,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       const nowAtSend = Date.now()
       if (
         !fromSuggestion &&
+        !preserveComposer &&
         lastSend &&
         lastSend.key === sendKey &&
         nowAtSend - lastSend.at < 10_000
@@ -2745,25 +2955,31 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       const turnId = `user-${now.toString(36)}`
       const preparation = supervisor.beginSend(workspaceKey(root), sessionId, turnId)
       if (!preparation) return
-      workSendIdempotencyRef.current = { key: sendKey, at: nowAtSend }
+      if (!preserveComposer) workSendIdempotencyRef.current = { key: sendKey, at: nowAtSend }
       const sendPermissionLevel = effectivePermission.level
-      const priorMessagesAtSend = workMessagesRef.current
-      const workAttachmentEntries = conversationAttachmentStore.snapshot({
-        surface: 'work',
-        projectKey: workspaceKey(root),
-        conversationId: sessionId,
-      }).workAttachments
-      const workAttachmentSnapshot = workAttachmentEntries.map(toWorkDescriptor)
+      let priorMessagesAtSend = workMessagesRef.current
+      let workAttachmentEntries: readonly WorkAttachmentEntry[] = preserveComposer
+        ? []
+        : (opts?.queuedAttachments ??
+          conversationAttachmentStore.snapshot({
+            surface: 'work',
+            projectKey: workspaceKey(root),
+            conversationId: sessionId,
+          }).workAttachments)
+      let workAttachmentSnapshot = workAttachmentEntries.map(toWorkDescriptor)
+      let workPromptText = text
       const workSentAttachments: readonly SentAttachment[] = workAttachmentEntries.map((entry) => ({
         id: entry.id,
         name: entry.name,
         kind: entry.kind,
+        relativePath: entry.relativePath,
+        mediaType: entry.mediaType,
         ...(entry.size !== undefined ? { size: entry.size } : {}),
         ...(entry.previewUrl !== undefined ? { previewUrl: entry.previewUrl } : {}),
       }))
       // Show the accepted input and preparing state before tool/service I/O.
       // Keep the prompt, attachments, permission and history bound to this click.
-      if (!fromSuggestion) {
+      if (!fromSuggestion && !preserveComposer) {
         updateMessagesAt(root, sessionId, (prev) => [
           ...prev,
           beginConversationTurn({ text, now, turnId, attachments: workSentAttachments }),
@@ -2771,36 +2987,32 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         updateHistoryAt(root, (history) => updateConversationDraft(history, sessionId, ''))
       }
       setCognitionSendTick((tick) => tick + 1)
-      // P0-A (audit §3.3-5): the pre-send capability gate. Resolve the SAME
-      // Profile the run will use, then:
-      //   - a request that explicitly needs a missing capability is BLOCKED
-      //     (阻止伪开工) with the install action surfaced (settings opens at
-      //     the Work 工具 section);
-      //   - otherwise a missing package degrades to a NON-BLOCKING capability
-      //    notice (§4.4: 能力声明和真实能力不得脱节);
-      //   - a healthy Profile sends unchanged.
-      // The resolved runtime is handed to sendWorkChat so the gate and the run
-      // can never disagree about what this turn sees.
+      // Profile preparation failures remain actionable here. Individual
+      // unavailable packages stay in the run context, without a chat banner.
       const gateSettings = loadSettings()
       setSettings(gateSettings)
       const currentSettings = settingsForConversation(
-        gateSettings, workspaceKey(root), sessionId, conversationModelsRef.current,
+        gateSettings,
+        workspaceKey(root),
+        sessionId,
+        conversationModelsRef.current,
       )
-      const gateProfileId = workProfileIdFor(gateSettings.workBrowserDebug, gateSettings.workCad)
+      const workToolProfileAtSend = workToolProfile(gateSettings)
       let gateRuntime: ResolvedToolRuntime | null = null
       try {
         await yieldForSendFeedback()
         if (!preparation.isCurrent()) return
-        gateRuntime =
-          (await toolingFacadeRef.current?.resolveProfile({
+        gateRuntime = await supervisor.resolveRuntimeFor(
+          {
             surface: 'work',
-            ...(gateProfileId ? { requestedProfileId: gateProfileId } : {}),
-            ...(gateSettings.workComputer === false ? { computerUse: false } : {}),
+            ...workToolProfileAtSend,
             projectKey: workspaceKey(root),
             projectRoot: root,
             conversationId: sessionId,
             permissionLevel: sendPermissionLevel,
-          }, { required: true })) ?? null
+          },
+          { signal: preparation.signal },
+        )
         if (!preparation.isCurrent()) return
         if (!gateRuntime) throw new Error('工具服务尚未就绪，请稍后重试。')
       } catch (error) {
@@ -2819,50 +3031,79 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         ])
         return
       }
-      if (gateRuntime) {
-        const decision = decideSendCapabilityGate(text, gateRuntime.unavailableCapabilities)
-        if (decision.behavior === 'block') {
-          preparation.finish()
-          workSendIdempotencyRef.current = null
-          updateMessagesAt(root, sessionId, (prev) => [
-            ...finalizeTurnTimer(prev, turnId, Date.now(), 'failed'),
-            {
-              id: `work-cap-${Date.now().toString(36)}`,
-              kind: 'notice',
-              role: 'system',
-              createdAt: Date.now(),
-              text: decision.notice,
-            },
-          ])
-          openSettings()
-          return
-        }
-        gateNotice = decision.behavior === 'degrade' ? decision.notice : null
-      }
       if (fromSuggestion) {
         const sid = opts?.suggestionId
         updateMessagesAt(root, sessionId, (prev) =>
           prev.filter((m) => (sid ? m.id !== sid : m.kind !== 'task_suggestion')),
         )
       }
-      const learningDirective = opts?.learningDirective ?? consumeNextLearningDirective('work')
-      // P0-A §3.3-5: the non-blocking capability notice lands AFTER the user
-      // bubble so the run still starts (§4.4: the agent can chat) while the
-      // missing capability is stated in the same turn.
-      if (gateNotice) {
-        updateMessagesAt(root, sessionId, (prev) => [
-          ...prev,
-          {
-            id: `work-cap-${Date.now().toString(36)}`,
-            kind: 'notice',
-            role: 'system',
-            createdAt: Date.now(),
-            text: gateNotice,
-          },
-        ])
-      }
+      const learningDirective = preserveComposer
+        ? undefined
+        : (opts?.learningDirective ?? consumeNextLearningDirective('work'))
       const startedAt = Date.now()
+      const acceptWorkAttachments = (): void => {
+        conversationAttachmentStore.markSent(
+          { surface: 'work', projectKey: workspaceKey(root), conversationId: sessionId },
+          workAttachmentEntries.map((entry) => entry.id),
+        )
+        updateMessagesAt(root, sessionId, (prev) =>
+          prev.map((message) =>
+            message.kind === 'text' && message.id === turnId
+              ? { ...message, attachmentsAccepted: true }
+              : message,
+          ),
+        )
+      }
       try {
+        const recovered = await recoverWorkAttachmentHistory({
+          messages: priorMessagesAtSend,
+          conversationId: sessionId,
+          workspaceRoot: root,
+          statFile: (path) => hostAdapter.fs.statFile(path),
+        })
+        if (!preparation.isCurrent()) return
+        priorMessagesAtSend = recovered.messages
+        const retry = !preserveComposer
+          ? prepareWorkAttachmentRetry({
+              text,
+              messages: priorMessagesAtSend,
+              attachments: workAttachmentEntries,
+              missingIds: recovered.missingIds,
+              workspaceRoot: root,
+            })
+          : undefined
+        if (retry) {
+          workAttachmentEntries = retry.attachments
+          workAttachmentSnapshot = workAttachmentEntries.map(toWorkDescriptor)
+          workPromptText = retry.text
+        }
+        const historyAttachments = new Map(
+          priorMessagesAtSend.flatMap((message) =>
+            message.kind === 'text' && message.role === 'user'
+              ? [[message.id, message.attachments] as const]
+              : [],
+          ),
+        )
+        updateMessagesAt(root, sessionId, (prev) =>
+          prev.map((message) => {
+            if (message.kind !== 'text' || message.role !== 'user') return message
+            if (message.id === turnId && retry)
+              return {
+                ...message,
+                attachments: workAttachmentEntries.map((entry) => ({
+                  id: entry.id,
+                  name: entry.name,
+                  kind: entry.kind,
+                  size: entry.size,
+                  previewUrl: entry.previewUrl,
+                  relativePath: entry.relativePath,
+                  mediaType: entry.mediaType,
+                })),
+              }
+            const files = historyAttachments.get(message.id)
+            return files ? { ...message, attachments: files } : message
+          }),
+        )
         // Use the settings captured at the click, just like the attachments
         // and permission. Changes during preparation apply to the next send.
         const effectiveLearningDirective =
@@ -2966,19 +3207,21 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
                   })
                   .catch(() => undefined)
                 void sendWorkChat(supervisor, {
+                  goalCommand: opts?.goalCommand,
                   projectKey: workspaceKey(root),
                   conversationId: sessionId,
-                  text: formatWorkMessage({ userText: text, attachments: workAttachmentSnapshot }),
+                  text: formatAttachmentMessage({
+                    userText: workPromptText,
+                    attachments: workAttachmentSnapshot,
+                  }),
+                  onPromptAccepted: acceptWorkAttachments,
                   settings: settingsForCodeRun(currentSettings, root, effectiveLearningDirective),
                   systemPrompt,
                   codeMode: 'agent',
                   permissionLevel: effectivePermission.level,
                   priorMessages: priorMessagesAtSend,
                   turnId,
-                  requestedProfileId: workProfileIdFor(
-                    currentSettings.workBrowserDebug,
-                    currentSettings.workCad,
-                  ),
+                  ...workToolProfileAtSend,
                   toolRuntime: gateRuntime,
                   lifecycleObserver: workLifecycleObserver,
                   onEvents: (events) => {
@@ -3038,14 +3281,29 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           startedAt,
         })
         if (!preparation.isCurrent()) {
-          await workProjector.onRunTerminal({ projectKey: workspaceKey(root), projectRoot: root,
-            conversationId: sessionId, taskId: '', runId: turnId, turnId, startedAt }, 'cancelled')
+          await workProjector.onRunTerminal(
+            {
+              projectKey: workspaceKey(root),
+              projectRoot: root,
+              conversationId: sessionId,
+              taskId: '',
+              runId: turnId,
+              turnId,
+              startedAt,
+            },
+            'cancelled',
+          )
           return
         }
         await sendWorkChat(supervisor, {
+          goalCommand: opts?.goalCommand,
           projectKey: workspaceKey(root),
           conversationId: sessionId,
-          text: formatWorkMessage({ userText: text, attachments: workAttachmentSnapshot }),
+          text: formatAttachmentMessage({
+            userText: workPromptText,
+            attachments: workAttachmentSnapshot,
+          }),
+          onPromptAccepted: acceptWorkAttachments,
           settings: settingsForCodeRun(currentSettings, root, effectiveLearningDirective),
           systemPrompt: workSystemPrompt,
           codeMode: 'agent',
@@ -3053,15 +3311,9 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           priorMessages: priorMessagesAtSend,
           turnId,
           sendPreparation: preparation,
-          // PR-6 (§4.1) / PR-7: 电脑控制 and 浏览器调试 are explicit
-          // capability switches. The default Work send never asks for an
-          // upgraded Profile, so the model cannot see the Windows desktop
-          // tools or the Chrome DevTools surface unless the user turned the
-          // corresponding switch on (§13 acceptance).
-          requestedProfileId: workProfileIdFor(
-            currentSettings.workBrowserDebug,
-            currentSettings.workCad,
-          ),
+          // The same settings snapshot chooses the optional browser/CAD
+          // profile and desktop-control selection for every Work user entry.
+          ...workToolProfileAtSend,
           // P0-A §3.3-5: the run uses the exact runtime the capability gate
           // resolved (single resolve — the gate and the run cannot disagree).
           toolRuntime: gateRuntime,
@@ -3103,8 +3355,18 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         )
       } catch (err) {
         if (preparation.signal.aborted) {
-          await workProjector.onRunTerminal({ projectKey: workspaceKey(root), projectRoot: root,
-            conversationId: sessionId, taskId: '', runId: turnId, turnId, startedAt }, 'cancelled')
+          await workProjector.onRunTerminal(
+            {
+              projectKey: workspaceKey(root),
+              projectRoot: root,
+              conversationId: sessionId,
+              taskId: '',
+              runId: turnId,
+              turnId,
+              startedAt,
+            },
+            'cancelled',
+          )
           return
         }
         await workProjector.onRunTerminal(
@@ -3174,6 +3436,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     bypassWorkQueueRef.current = true
     try {
       void handleWorkSend(first.text, {
+        queuedAttachments: first.attachments,
         ...(first.learningDirective ? { learningDirective: first.learningDirective } : {}),
       })
     } finally {
@@ -3193,6 +3456,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     pendingWorkQueueRef.current.set(key, rest)
     bumpQueueTick()
     onWorkSendRefForFlush.current?.(first.text, {
+      queuedAttachments: first.attachments,
       ...(first.learningDirective ? { learningDirective: first.learningDirective } : {}),
     })
   }, [workRunning, historyReady, currentWorkspaceKey, workSessionId])
@@ -3265,9 +3529,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // 直接停止 Code supervisor 上的 Work 会话运行。
   const handleWorkStop = useCallback(() => {
     if (!workSessionId) return
-    updateMessagesAt(currentWorkspace.root, workSessionId, (prev) =>
-      finalizeLatestTurnTimer(prev, Date.now(), 'cancelled'),
-    )
+    const turnId = workMessagesRef.current[lastUserIndex(workMessagesRef.current)]?.id ?? ''
     workSendIdempotencyRef.current = null
     try {
       const traceId = tracesByConversationRef.current.get(
@@ -3295,7 +3557,13 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     // escalation's job — forcing approvals for the remainder of the
     // interrupted run — is done; a NEW takeover re-records it).
     takeoverEscalationsRef.current?.revokeConversation(workSessionId)
-    void supervisor.stopConversation(workspaceKey(currentWorkspace.root), workSessionId)
+    void supervisor
+      .stopConversation(workspaceKey(currentWorkspace.root), workSessionId)
+      .then(() =>
+        updateMessagesAt(currentWorkspace.root, workSessionId, (prev) =>
+          finalizeTurnTimer(prev, turnId, Date.now(), 'cancelled'),
+        ),
+      )
       .catch((error: unknown) => reportStopFailure(currentWorkspace.root, workSessionId, error))
   }, [supervisor, workSessionId, currentWorkspace.root, updateMessagesAt, reportStopFailure])
 
@@ -3304,7 +3572,14 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // runtime.respondApproval fallback and the managed-work coordinator branch
   // retired with the daemon.
   const handleRespondApproval = useCallback(
-    (id: string, approved: boolean): void => {
+    async (id: string, approved: boolean): Promise<boolean | 'expired'> => {
+      try {
+        await reconcileCodePermissionOwners(supervisor)
+      } catch {
+        /* A failed lookup cannot prove expiry. */
+      }
+      if (!supervisor.pendingCodePermissions().some((request) => request.requestId === id))
+        return 'expired'
       try {
         const primaryId = topMode === 'work' ? workSessionId : codeSessionId
         const secondaryId = topMode === 'work' ? codeSessionId : workSessionId
@@ -3321,7 +3596,11 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       } catch {
         /* never block approval */
       }
-      void supervisor.respondCodePermission(id, approved)
+      const accepted = await supervisor.respondCodePermission(id, approved)
+      return !accepted &&
+        !supervisor.pendingCodePermissions().some((request) => request.requestId === id)
+        ? 'expired'
+        : accepted
     },
     [supervisor, currentWorkspaceKey, codeSessionId, workSessionId, topMode],
   )
@@ -3395,7 +3674,9 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       // so the Work preview has to fall back to the basic
       // summary built by the upstream payload. Real Work
       // previews are out of scope for the P3 first cut.
-      const findWork = workMessagesRef.current.find((m) => m.kind === 'approval' && m.approvalId === id)
+      const findWork = workMessagesRef.current.find(
+        (m) => m.kind === 'approval' && m.approvalId === id,
+      )
       if (findWork && findWork.kind === 'approval') {
         setRightRailOpen(true)
         setApprovalDiffState({
@@ -3419,7 +3700,13 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // 2026-09-04: moved into `latestContextTokens` — it now also
   // honors a compaction's `tokensAfter`, so the ring drops the
   // moment the CLI emits `compact` instead of lagging one turn.
-  const currentContextTokens = useMemo<number>(() => latestContextTokens(messages, { allowLegacyUsage: settings.cliRuntimeProtocol !== 'trylo-v1' }), [messages, settings.cliRuntimeProtocol])
+  const currentContextTokens = useMemo<number>(
+    () =>
+      latestContextTokens(messages, {
+        allowLegacyUsage: false,
+      }),
+    [messages],
+  )
 
   // v1.16.0: the model's context window. Driven by the effective
   // model (pool override || apiModel); defaults to 200k for unknown
@@ -3444,18 +3731,31 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     : settings.poolModel.trim()
       ? settings.poolModel
       : settings.apiModel
-  const activeContextSettings = settingsForConversation(settings, activeConversationKey.wsKey, activeConversationKey.convId, conversationModels)
+  const activeContextSettings = settingsForConversation(
+    settings,
+    activeConversationKey.wsKey,
+    activeConversationKey.convId,
+    conversationModels,
+  )
   const contextModels = usePlatformModels(!!activeContextSettings.poolModel.trim())
   const contextCapacity = activeContextSettings.poolModel.trim()
-    ? contextModels.models.find(item => item.id === activeContextSettings.poolModel)?.contextLength : undefined
+    ? contextModels.models.find((item) => item.id === activeContextSettings.poolModel)
+        ?.contextLength
+    : undefined
   const currentContextPreference = contextPreference(activeContextSettings)
-  const selectedContextWindow = resolveContextPreference(currentContextPreference, contextCapacity).effective
+  const selectedContextWindow = resolveContextPreference(
+    currentContextPreference,
+    contextCapacity,
+  ).effective
   const contextWindow = (topMode === 'work' ? workRunning : running)
-    ? latestContextWindow(topMode === 'work' ? workMessages : messages) ?? selectedContextWindow : selectedContextWindow
+    ? (latestContextWindow(topMode === 'work' ? workMessages : messages) ?? selectedContextWindow)
+    : selectedContextWindow
 
   // Only actual runtime start/result events own the compaction indicator.
   const compacting = useMemo<boolean>(() => {
-    return messages.some(message => message.kind === 'notice' && message.text.startsWith('Compacting context'))
+    return messages.some(
+      (message) => message.kind === 'notice' && message.text.startsWith('Compacting context'),
+    )
   }, [messages])
 
   // V1 reopens its durable session for maintenance after the agent process exits.
@@ -3653,8 +3953,12 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       const savedSettings = loadSettings()
       setSettings(savedSettings)
       // 不同对话不同模型: resolve THIS Code conversation's connection on resend too.
-      const current = settingsForConversation(savedSettings, currentWorkspaceKey, codeSessionId,
-        conversationModelsRef.current)
+      const current = settingsForConversation(
+        savedSettings,
+        currentWorkspaceKey,
+        codeSessionId,
+        conversationModelsRef.current,
+      )
       // 2) Resend through the supervisor. priorMessages is the
       //    truncated history (up to, but not including, the edited
       //    bubble — the bubble itself now carries the new text —
@@ -3667,7 +3971,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         // value to apply.
         await supervisor.runCode(projectKeyAtEdit, sessionIdAtEdit, {
           prompt: newText,
-          settings: settingsForCodeRun(current, workspaceRootAtEdit),
+          settings: settingsForCodeReplay(current, workspaceRootAtEdit),
           codeMode: cliCodeMode(codeMode),
           permissionLevel: effectivePermission.level,
           priorMessages: latestMessages.slice(0, idx),
@@ -3723,10 +4027,9 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // Stop settles this turn and terminates its conversation-owned child.
   const onStop = useCallback((): void => {
     // v1.16.6 (M4-A): scoped to the VISIBLE Code conversation only.
-    // Freeze the per-turn timer, then terminate THIS conversation's
-    // CLI — every other conversation's run keeps going. Pure
-    // navigation no longer routes through this.
-    setMessages((prev) => finalizeLatestTurnTimer(prev, Date.now(), 'cancelled'))
+    // Settle the originating turn only after confirmed stop. A rejected
+    // native stop must not be displayed as an already stopped task.
+    const turnId = messagesRef.current[lastUserIndex(messagesRef.current)]?.id ?? ''
     try {
       const traceId = tracesByConversationRef.current.get(
         conversationTraceKey(currentWorkspaceKey, codeSessionId ?? ''),
@@ -3740,10 +4043,19 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       /* never block stop */
     }
     if (codeSessionId) {
-      void supervisor.stopConversation(currentWorkspaceKey, codeSessionId)
+      void supervisor
+        .stopConversation(currentWorkspaceKey, codeSessionId)
+        .then(() => setMessages((prev) => finalizeTurnTimer(prev, turnId, Date.now(), 'cancelled')))
         .catch((error: unknown) => reportStopFailure(currentWorkspace.root, codeSessionId, error))
     }
-  }, [supervisor, currentWorkspaceKey, currentWorkspace.root, codeSessionId, setMessages, reportStopFailure])
+  }, [
+    supervisor,
+    currentWorkspaceKey,
+    currentWorkspace.root,
+    codeSessionId,
+    setMessages,
+    reportStopFailure,
+  ])
 
   // The context follows the current workspace. Recreating
   // on workspace switch is cheap (it's just an object).
@@ -3873,8 +4185,12 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       // The explicit "continue background / stop and close / cancel"
       // confirm flow (§2.6 / §5.4) is registered as M4-D debt — see
       // CODE-WORK-M4A-AUDIT-CORRECTION P1-3.
-      try { await supervisor.removeConversation(currentWorkspaceKey, id) }
-      catch (error) { reportStopFailure(currentWorkspace.root, id, error); return }
+      try {
+        await supervisor.removeConversation(currentWorkspaceKey, id)
+      } catch (error) {
+        reportStopFailure(currentWorkspace.root, id, error)
+        return
+      }
       // P2-1 Work Package B: destroy both surface partitions of the
       // deleted conversation; the Work staging directory is removed
       // through the Rust cleanup (fire-and-forget, idempotent).
@@ -3969,12 +4285,17 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       // Keep an unused draft in place; leave established chats/runs intact
       // and open a fresh target chat instead of restoring an old one.
       void forceFlushHistory(currentWorkspace.root)
-      const nextCodeMode = topMode === 'work' ? (workRecord?.session.codeMode ?? codeMode) : codeMode
+      const nextCodeMode =
+        topMode === 'work' ? (workRecord?.session.codeMode ?? codeMode) : codeMode
       updateHistoryAt(currentWorkspace.root, (history) => {
         const id = history.activeByKind[topMode]
-        const attachments = id ? conversationAttachmentStore.snapshot({
-          surface: topMode, projectKey: currentWorkspaceKey, conversationId: id,
-        }) : null
+        const attachments = id
+          ? conversationAttachmentStore.snapshot({
+              surface: topMode,
+              projectKey: currentWorkspaceKey,
+              conversationId: id,
+            })
+          : null
         const run = supervisor.getViewState(currentWorkspaceKey, id)
         return switchConversationKind(history, {
           from: topMode,
@@ -3982,15 +4303,27 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           codeMode: nextCodeMode,
           // An idle prewarm has no turn/context; runtime fingerprints keep
           // its Code/Work profiles separate when the first turn is sent.
-          canReuse: !run.running && !run.runId
-            && !attachments?.attachments.length && !attachments?.workAttachments.length
-            && !attachments?.readingCount && !attachments?.failed.length,
+          canReuse:
+            !run.running &&
+            !run.runId &&
+            !attachments?.attachments.length &&
+            !attachments?.workAttachments.length &&
+            !attachments?.readingCount &&
+            !attachments?.failed.length,
         })
       })
       if (m === 'code') setCodeMode(nextCodeMode)
       setTopMode(m)
     },
-    [topMode, codeMode, workRecord?.session.codeMode, currentWorkspace.root, currentWorkspaceKey, supervisor, updateHistoryAt],
+    [
+      topMode,
+      codeMode,
+      workRecord?.session.codeMode,
+      currentWorkspace.root,
+      currentWorkspaceKey,
+      supervisor,
+      updateHistoryAt,
+    ],
   )
 
   const onCodeModeChange = useCallback(
@@ -4301,8 +4634,11 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       if (payload.questions.length === 0) return
       const session = userLearning.enqueueTeamClarification({
         kind: 'team_clarification',
-        teamRunId: payload.teamRunId ?? (teamRunRef.current?.personConversationId === payload.personConversationId
-          ? teamRunRef.current.id : `team-${payload.personConversationId}`),
+        teamRunId:
+          payload.teamRunId ??
+          (teamRunRef.current?.personConversationId === payload.personConversationId
+            ? teamRunRef.current.id
+            : `team-${payload.personConversationId}`),
         questions: payload.questions,
         unknownItems: payload.unknown,
         blocking: true,
@@ -4329,37 +4665,74 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     void loadTeamRunsForWorkspace(currentWorkspace.root, currentWorkspace.id).then(() => {
       if (cancelled) return
       stopWatching = watchRestoredTeamHistory({
-        workspaceRoot: currentWorkspace.root, projectKey: currentWorkspaceKey, workspaceId: currentWorkspace.id,
-        conversationId: teamConversationId ?? '', runtime: supervisor, isCurrent: () => !cancelled,
+        workspaceRoot: currentWorkspace.root,
+        projectKey: currentWorkspaceKey,
+        workspaceId: currentWorkspace.id,
+        conversationId: teamConversationId ?? '',
+        runtime: supervisor,
+        isCurrent: () => !cancelled,
         onChecking: setTeamRun,
         onRecoveredEvents: (recovery, projected) => {
-          updateMessagesAt(currentWorkspace.root, recovery.process.conversationId,
-            (prev) => applyRecoveredChatEvents(prev, recovery.events, recovery.process.identity.turnId))
+          updateMessagesAt(currentWorkspace.root, recovery.process.conversationId, (prev) =>
+            applyRecoveredChatEvents(prev, recovery.events, recovery.process.identity.turnId),
+          )
           const feedback = teamPersonFeedback(recovery.events, projected.id)
-          if (feedback.questions.length > 0) handlePersonClarify({ personConversationId: projected.personConversationId,
-            teamRunId: projected.id, questions: feedback.questions, unknown: feedback.unknown })
-          const person = projected.seats.find(seat => seat.seat === 'person' && seat.status === 'waiting_approval')
+          if (feedback.questions.length > 0)
+            handlePersonClarify({
+              personConversationId: projected.personConversationId,
+              teamRunId: projected.id,
+              questions: feedback.questions,
+              unknown: feedback.unknown,
+            })
+          const person = projected.seats.find(
+            (seat) => seat.seat === 'person' && seat.status === 'waiting_approval',
+          )
           if (feedback.vetoActive && person && !vetoHandledSeatsRef.current.has(person.id)) {
             vetoHandledSeatsRef.current.add(person.id)
-            for (const seat of projected.seats) if (seat.seat === 'worker' && ['running', 'waiting_approval'].includes(seat.status)) {
-              void supervisor.stopTask(currentWorkspaceKey, projected.personConversationId, seat.id)
-                .then(accepted => { if (!accepted) reportStopFailure(currentWorkspace.root, projected.personConversationId,
-                  new Error('Person 否决后的成员停止尚未确认')) })
-            }
+            for (const seat of projected.seats)
+              if (seat.seat === 'worker' && ['running', 'waiting_approval'].includes(seat.status)) {
+                void supervisor
+                  .stopTask(currentWorkspaceKey, projected.personConversationId, seat.id)
+                  .then((accepted) => {
+                    if (!accepted)
+                      reportStopFailure(
+                        currentWorkspace.root,
+                        projected.personConversationId,
+                        new Error('Person 否决后的成员停止尚未确认'),
+                      )
+                  })
+              }
           }
         },
-        onRestored: (restored) => setTeamRun((current) => current && restored
-          && current.id === restored.id && current.workspaceId === restored.workspaceId
-          ? mergeTeamProjection(current, restored) : restored),
+        onRestored: (restored) =>
+          setTeamRun((current) =>
+            current &&
+            restored &&
+            current.id === restored.id &&
+            current.workspaceId === restored.workspaceId
+              ? mergeTeamProjection(current, restored)
+              : restored,
+          ),
         onError: (error) => {
           // eslint-disable-next-line no-console
           console.warn('[team-access] history observation failed:', error)
         },
       })
     })
-    return () => { cancelled = true; stopWatching?.() }
-  }, [currentWorkspace.root, currentWorkspace.id, currentWorkspaceKey, teamConversationId, supervisor, updateMessagesAt,
-    handlePersonClarify, reportStopFailure])
+    return () => {
+      cancelled = true
+      stopWatching?.()
+    }
+  }, [
+    currentWorkspace.root,
+    currentWorkspace.id,
+    currentWorkspaceKey,
+    teamConversationId,
+    supervisor,
+    updateMessagesAt,
+    handlePersonClarify,
+    reportStopFailure,
+  ])
 
   // ── Team composer launch (Foundation spec PR-7 / §7.6.2) ────────
   const lastPersonUserPrompt = useMemo(() => {
@@ -4420,10 +4793,16 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       const root = currentWorkspace.root
       const announceLaunchFailure = (message: string): void => {
         if (!sessionId) return
-        updateMessagesAt(root, sessionId, (prev) => [...prev, {
-          id: `team-launch-${Date.now().toString(36)}`, kind: 'notice' as const,
-          role: 'system' as const, createdAt: Date.now(), text: message,
-        }])
+        updateMessagesAt(root, sessionId, (prev) => [
+          ...prev,
+          {
+            id: `team-launch-${Date.now().toString(36)}`,
+            kind: 'notice' as const,
+            role: 'system' as const,
+            createdAt: Date.now(),
+            text: message,
+          },
+        ])
       }
       // Round-3 P0-10: this used to `return Promise.resolve()` silently — a
       // click on 开始 that vanished with no reason line, no notice, nothing.
@@ -4445,6 +4824,8 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         announceLaunchFailure(message)
         return Promise.resolve()
       }
+      const settingsAtTeamSend = loadSettings()
+      const toolProfileAtTeamSend = workToolProfile(settingsAtTeamSend)
       return (async () => {
         const result = await startTeamTurn({
           workspaceRoot: root,
@@ -4461,22 +4842,34 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           writeFile: (path, body) => hostAdapter.fs.writeFile(path, body),
         })
         const live = liveIdentityRef.current
-        const stillSelected = live.workspaceKey === workspaceKey(root)
-          && live.conversationId === sessionId && live.topMode === topMode
+        const stillSelected =
+          live.workspaceKey === workspaceKey(root) &&
+          live.conversationId === sessionId &&
+          live.topMode === topMode
         if (!result.ok) {
           if (stillSelected) setComposerLaunchError(result.message)
           announceLaunchFailure(result.message)
           return
         }
-        const teamContext = { workspaceId: root, personConversationId: sessionId, teamRunId: result.teamRunId }
+        const teamContext = {
+          workspaceId: root,
+          personConversationId: sessionId,
+          teamRunId: result.teamRunId,
+        }
         const closeCancelledStart = (): void => {
           // A cancelled preparation is not proof that an acquired native
           // process exited. Its controller still owns any failed Stop.
-          if (supervisor.controller(currentWorkspaceKey, sessionId).ownsNativeTurn(sendTurnId)) return
-          const events = routeTeamEvents(teamContext, [{ type: 'loop_end', reason: 'cancelled', ts: Date.now() }])
+          if (supervisor.controller(currentWorkspaceKey, sessionId).ownsNativeTurn(sendTurnId))
+            return
+          const events = routeTeamEvents(teamContext, [
+            { type: 'loop_end', reason: 'cancelled', ts: Date.now() },
+          ])
           setTeamRun((current) => mergeTeamProjection(current, events))
         }
-        if (!preparation.isCurrent()) { closeCancelledStart(); return }
+        if (!preparation.isCurrent()) {
+          closeCancelledStart()
+          return
+        }
         if (stillSelected) {
           clearDismissedTeamRun()
           setTeamRun({
@@ -4505,26 +4898,33 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         } else {
           // The existing goal bubble is also the durable boundary for output
           // recovery; bind it to this launch without adding a duplicate bubble.
-          updateMessagesAt(root, sessionId, (prev) => prev.map(message => message.id === lastUserText.id
-            ? { ...message, turnId: sendTurnId } : message))
+          updateMessagesAt(root, sessionId, (prev) =>
+            prev.map((message) =>
+              message.id === lastUserText.id ? { ...message, turnId: sendTurnId } : message,
+            ),
+          )
         }
         const onStartFailure = (err: unknown): void => {
-          if (preparation.signal.aborted) { closeCancelledStart(); return }
+          if (preparation.signal.aborted) {
+            closeCancelledStart()
+            return
+          }
           const reason = err instanceof Error ? err.message : String(err)
           const failed = failTeamStart(teamContext, reason, Date.now())
           setTeamRun((prev) => mergeTeamProjection(prev, failed))
-          updateMessagesAt(root, sessionId, (prev) => [...prev, {
-            id: `team-start-error-${Date.now().toString(36)}`, kind: 'notice' as const,
-            role: 'system' as const, createdAt: Date.now(), text: `团队未能启动：${reason}`,
-          }])
+          updateMessagesAt(root, sessionId, (prev) => [
+            ...prev,
+            {
+              id: `team-start-error-${Date.now().toString(36)}`,
+              kind: 'notice' as const,
+              role: 'system' as const,
+              createdAt: Date.now(),
+              text: `团队未能启动：${reason}`,
+            },
+          ])
         }
         const onEvents = (events: readonly LoopEvent[]): void => {
-          feedTeamEvents(
-            setTeamRun,
-            teamContext,
-            events,
-            { onClarify: handlePersonClarify },
-          )
+          feedTeamEvents(setTeamRun, teamContext, events, { onClarify: handlePersonClarify })
           updateMessagesAt(root, sessionId, (prev) => applyEvents(prev, events))
         }
         if (result.product === 'code') {
@@ -4534,7 +4934,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
               sendPreparation: preparation,
               prompt: result.goal,
               settings: settingsForCodeRun(
-                { ...loadSettings(), systemPrompt: result.systemPrompt },
+                { ...settingsAtTeamSend, systemPrompt: result.systemPrompt },
                 root,
               ),
               codeMode: 'agent',
@@ -4556,18 +4956,13 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
             projectKey: currentWorkspaceKey,
             conversationId: sessionId,
             text: result.goal,
-            settings: settingsForCodeRun(loadSettings(), root),
+            settings: settingsForCodeRun(settingsAtTeamSend, root),
             systemPrompt: result.systemPrompt,
             codeMode: 'agent',
             permissionLevel: effectivePermission.level,
             priorMessages: workMessages,
             turnId: sendTurnId,
-            requestedProfileId: workProfileIdFor(
-              loadSettings().workBrowserDebug,
-              loadSettings().workCad,
-            ),
-            ...(loadSettings().workComputer === false ? { computerUse: false } : {}),
-            toolRuntime: null,
+            ...toolProfileAtTeamSend,
             lifecycleObserver: userLearningLifecycle,
             onEvents,
           }).catch(onStartFailure)
@@ -4624,77 +5019,58 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   // P2-1 C-Core (audit P2-1): the async request identity lives in a small
   // dedicated tracker — path-only comparison let a stale response overwrite
   // the panel after a workspace/session switch or a newer diff request.
-  const diffTrackerRef = useRef<DiffRequestTracker | null>(null)
-  if (!diffTrackerRef.current) diffTrackerRef.current = new DiffRequestTracker()
-  const diffTracker = diffTrackerRef.current
-  const [gitDiffState, setGitDiffState] = useState<{
-    identity: DiffRequestIdentity
-    diff?: import('./components/code-surface/GitDiffView').GitFileDiffData
-    error?: string
-  } | null>(null)
-  const onSelectFile = useCallback(async (path: string, kind: 'file' | 'dir'): Promise<void> => {
-    if (kind === 'dir') return
+  const prepareDiffPreview = useCallback((): void => {
+    ++peekRequest.current
+    setPeekFile(null)
+    setPeekExpanded(false)
     setRightRailOpen(true)
-    diffTracker.invalidate()
-    setGitDiffState(null)
-    if (previewKindNeedsBytes(previewKindFor(path))) {
-      setPeekFile({ path, content: '' })
-      return
-    }
-    try {
-      const content = await hostAdapter.fs.readFile(path)
-      setPeekFile({ path, content })
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setPeekFile({ path, content: `Error reading ${path}\n\n${msg}` })
-    }
-  }, [diffTracker])
+  }, [])
+  const readDiff = useCallback(
+    (root: string, path: string, oldPath?: string) => hostAdapter.git.fileDiff(root, path, oldPath),
+    [],
+  )
+  const {
+    state: gitDiffState,
+    open: onOpenDiff,
+    close: onCloseGitDiff,
+  } = useDiffPreview({
+    projectId: currentWorkspaceId,
+    projectRoot: currentWorkspace.root,
+    conversationId: currentActiveSession?.id,
+    surface: topMode,
+    readDiff,
+    onOpen: prepareDiffPreview,
+  })
+  const onSelectFile = useCallback(
+    async (path: string, kind: 'file' | 'dir'): Promise<void> => {
+      if (kind === 'dir') return
+      const request = ++peekRequest.current
+      setRightRailOpen(true)
+      onCloseGitDiff()
+      setPeekFile({ path, content: '', loading: true, requestId: request })
+      try {
+        const loaded = await loadPreviewFile(path, currentWorkspace.root)
+        if (request === peekRequest.current) setPeekFile({ path, ...loaded, requestId: request })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (request === peekRequest.current)
+          setPeekFile({ path, content: '', error: msg, requestId: request })
+      }
+    },
+    [onCloseGitDiff, currentWorkspace.root],
+  )
 
   const onClosePeek = useCallback((): void => {
+    ++peekRequest.current
     setPeekFile(null)
     setPeekExpanded(false)
   }, [])
 
-  const onOpenDiff = useCallback(
-    (path: string, oldPath?: string): void => {
-      setPeekFile(null)
-      setPeekExpanded(false)
-      setRightRailOpen(true)
-      // Mint a NEW full identity (requestId + root + session + path + oldPath).
-      // A newer diff implicitly invalidates every older in-flight request.
-      const identity = diffTracker.begin(currentWorkspace.root, codeSessionId ?? '', path, oldPath)
-      setGitDiffState({ identity })
-      void hostAdapter.git
-        .fileDiff(currentWorkspace.root, path, oldPath)
-        .then((d) => {
-          // Stale guard: only the exact identity still owning the panel may
-          // land. Anything else (switched workspace/session, superseded by a
-          // newer diff, different rename origin) is dropped silently.
-          if (!diffTracker.isCurrent(identity)) return
-          setGitDiffState({
-            identity,
-            diff: {
-              original: d.original,
-              modified: d.modified,
-              binary: d.binary,
-              truncated: d.truncated,
-            },
-          })
-        })
-        .catch(() => {
-          if (!diffTracker.isCurrent(identity)) return
-          setGitDiffState({ identity, error: 'Could not load the Git diff for this change.' })
-        })
-    },
-    [currentWorkspace.root, codeSessionId, diffTracker],
-  )
-  // C-Core: workspace switch / session switch invalidate every in-flight
-  // diff request and clear the panel — a stale response can never land in
-  // another project's or conversation's surface.
   useEffect(() => {
-    diffTracker.invalidate()
-    setGitDiffState(null)
-  }, [currentWorkspaceId, codeSessionId, diffTracker])
+    ++peekRequest.current
+    setPeekFile(null)
+    setPeekExpanded(false)
+  }, [currentWorkspaceId, codeSessionId, workSessionId, topMode])
   const onOpenResultFile = useCallback(
     (relPath: string): void => {
       // Round-3 P2: a bare basename falls back to the newest same-name file
@@ -4710,11 +5086,6 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     },
     [currentWorkspace.root, onSelectFile],
   )
-  const onCloseGitDiff = useCallback((): void => {
-    diffTracker.invalidate()
-    setGitDiffState(null)
-  }, [diffTracker])
-
   const onToggleRightRail = useCallback((): void => {
     if (rightRailOpen) {
       onClosePeek()
@@ -4726,7 +5097,12 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
 
   // ── Send ──────────────────────────────────────────────────
   const onSend = useCallback(
-    async (message: string, queuedLearningDirective?: LearningDirective): Promise<void> => {
+    async (
+      message: string,
+      queuedLearningDirective?: LearningDirective,
+      goalCommand?: import('./domain/goal').GoalCommand,
+      queuedAttachments?: readonly Attachment[],
+    ): Promise<void> => {
       // Issue-1 diagnosability: if we bail before even adding the user bubble,
       // the composer looks dead — surface WHY every time.
       if (!historyReady || !codeSessionId) {
@@ -4753,8 +5129,24 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         const key = queueConversationKey(projectKeyAtSend, sessionIdAtSend)
         const queue = pendingCodeQueueRef.current.get(key) ?? []
         const learningDirective = queuedLearningDirective ?? consumeNextLearningDirective('code')
-        queue.push({ text: message, turnId, ...(learningDirective ? { learningDirective } : {}) })
+        const owner: AttachmentOwner = {
+          surface: 'code',
+          projectKey: projectKeyAtSend,
+          conversationId: sessionIdAtSend,
+        }
+        const attachments =
+          queuedAttachments ?? conversationAttachmentStore.snapshot(owner).attachments
+        queue.push({
+          text: message,
+          turnId,
+          attachments,
+          ...(learningDirective ? { learningDirective } : {}),
+        })
         pendingCodeQueueRef.current.set(key, queue)
+        conversationAttachmentStore.markSent(
+          owner,
+          attachments.map((entry) => entry.id),
+        )
         bumpQueueTick()
         return
       }
@@ -4781,14 +5173,21 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         console.warn('[trylo] onSend: not in Tauri, bailing')
         return
       }
-      const learningDirective = queuedLearningDirective ?? consumeNextLearningDirective('code')
-      setText('')
+      const preserveComposer = goalCommand !== undefined && goalCommand.action !== 'create'
+      const learningDirective = preserveComposer
+        ? undefined
+        : (queuedLearningDirective ?? consumeNextLearningDirective('code'))
+      if (!preserveComposer) setText('')
       const savedSettings = loadSettings()
       setSettings(savedSettings)
       // 不同对话不同模型: resolve THIS Code conversation's connection so the
       // run spawns with the conversation's chosen model (profile/pool/own).
-      const current = settingsForConversation(savedSettings, currentWorkspaceKey, codeSessionId,
-        conversationModelsRef.current)
+      const current = settingsForConversation(
+        savedSettings,
+        currentWorkspaceKey,
+        codeSessionId,
+        conversationModelsRef.current,
+      )
       const effectiveLearningDirective =
         current.userLearning.userLearningNoTraceMode === false ? undefined : learningDirective
       if (RUN_TELEMETRY_DEBUG) {
@@ -4797,7 +5196,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           apiHost: current.apiHost,
           apiKeySet: Boolean(current.apiKey),
           apiModel: current.apiModel,
-          cliPath: current.cliPath,
+          cliPath: getCliRuntimeResolution()?.cliScript ?? '',
         })
       }
       // Capture the ORIGINAL conversation so the run writes back to
@@ -4822,20 +5221,23 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         historyMessageCount: priorMessagesAtSend.length,
       })
       telemetry.mark('sendClickAt', sendStartedAt)
-      const attachmentViews = conversationAttachmentStore.snapshot({
-        surface: 'code',
-        projectKey: projectKeyAtSend,
-        conversationId: sessionIdAtSend,
-      }).attachments
+      const attachmentViews = preserveComposer
+        ? []
+        : (queuedAttachments ??
+          conversationAttachmentStore.snapshot({
+            surface: 'code',
+            projectKey: projectKeyAtSend,
+            conversationId: sessionIdAtSend,
+          }).attachments)
       const attachmentCtx = buildAttachmentPromptContext(attachmentViews)
       const cliPrompt = attachmentCtx ? `${attachmentCtx}\n\n${message}` : message
-      // v1.16.8: show what the user actually sent (image thumbnail / file
-      // chip) on the sent bubble. Display-only — the CLI still gets the
-      // prompt-context path block above.
+      // Keep stable file references with the sent bubble for future replay.
       const sentAttachments: readonly SentAttachment[] = attachmentViews.map((a) => ({
         id: a.id,
         name: a.name,
         kind: a.kind,
+        path: a.path,
+        mediaType: a.mediaType,
         ...(a.size !== undefined ? { size: a.size } : {}),
         ...(a.previewUrl !== undefined ? { previewUrl: a.previewUrl } : {}),
       }))
@@ -4844,17 +5246,31 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       const sendTurnId = `user-${sendStartedAt.toString(36)}`
       const preparation = supervisor.beginSend(projectKeyAtSend, sessionIdAtSend, sendTurnId)
       if (!preparation) return
+      const acceptCodeAttachments = (): void => {
+        conversationAttachmentStore.markSent(
+          { surface: 'code', projectKey: projectKeyAtSend, conversationId: sessionIdAtSend },
+          attachmentViews.map((entry) => entry.id),
+        )
+        updateMessagesAt(workspaceRootAtSend, sessionIdAtSend, (prev) =>
+          prev.map((entry) =>
+            entry.kind === 'text' && entry.id === sendTurnId
+              ? { ...entry, attachmentsAccepted: true }
+              : entry,
+          ),
+        )
+      }
       // The CLI doesn't echo the user prompt — add the bubble
       // ourselves so the user sees it immediately.
-      updateMessagesAt(workspaceRootAtSend, sessionIdAtSend, (prev) => [
-        ...prev,
-        beginConversationTurn({
-          text: message,
-          now: sendStartedAt,
-          turnId: sendTurnId,
-          attachments: sentAttachments,
-        }),
-      ])
+      if (!preserveComposer)
+        updateMessagesAt(workspaceRootAtSend, sessionIdAtSend, (prev) => [
+          ...prev,
+          beginConversationTurn({
+            text: message,
+            now: sendStartedAt,
+            turnId: sendTurnId,
+            attachments: sentAttachments,
+          }),
+        ])
       setCognitionSendTick((tick) => tick + 1)
       telemetry.mark('userMessageCommittedAt')
       await yieldForSendFeedback()
@@ -4949,8 +5365,14 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           void supervisor
             .runCode(projectKeyAtSend, sessionIdAtSend, {
               prompt: cliPrompt,
-              settings: settingsForCodeRun({ ...current, systemPrompt }, workspaceRootAtSend, effectiveLearningDirective),
-              codeMode: cliCodeMode(codeMode),
+              onPromptAccepted: acceptCodeAttachments,
+              goalCommand,
+              settings: settingsForCodeRun(
+                { ...current, systemPrompt },
+                workspaceRootAtSend,
+                effectiveLearningDirective,
+              ),
+              codeMode: cliCodeMode(goalCommand ? 'agent' : codeMode),
               permissionLevel: sendPermissionLevel,
               priorMessages: priorMessagesAtSend,
               turnId: sendTurnId,
@@ -5032,8 +5454,10 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       await supervisor
         .runCode(projectKeyAtSend, sessionIdAtSend, {
           prompt: cliPrompt,
+          onPromptAccepted: acceptCodeAttachments,
+          goalCommand,
           settings: runSettings,
-          codeMode: cliCodeMode(codeMode),
+          codeMode: cliCodeMode(goalCommand ? 'agent' : codeMode),
           permissionLevel: sendPermissionLevel,
           priorMessages: priorMessagesAtSend,
           turnId: sendTurnId,
@@ -5168,13 +5592,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       setNextLearningDirective('code', first.learningDirective)
     }
     const now = Date.now()
-    const attachmentCtx = buildAttachmentPromptContext(
-      conversationAttachmentStore.snapshot({
-        surface: 'code',
-        projectKey: projectKeyAtSend,
-        conversationId: sessionIdAtSend,
-      }).attachments,
-    )
+    const attachmentCtx = buildAttachmentPromptContext(first.attachments)
     const steerPrompt = attachmentCtx ? `${attachmentCtx}\n\n${first.text}` : first.text
     try {
       const traceId = tracesByConversationRef.current.get(
@@ -5198,57 +5616,62 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     // after the bubble inherits the bubble's id (events.ts → lastUserIndex),
     // so "the turnId migrated" proves nothing about the CLI. The only honest
     // success claim available is "the frame reached the running process".
-    void supervisor
-      .steerCode(projectKeyAtSend, sessionIdAtSend, steerPrompt)
-      .then((delivery) => {
-        const bubbleState = steerBubbleState(delivery)
-        if (bubbleState !== null) {
-          updateMessagesAt(currentWorkspace.root, sessionIdAtSend, (prev) => [
-            ...prev,
-            {
-              id: first.turnId,
-              role: 'user',
-              kind: 'text',
-              createdAt: now,
-              text: first.text,
-              // An intervention inside the running turn: visible, marked, and
-              // explicitly NOT a turn of its own (turn count + turn boundary).
-              steerState: bubbleState,
-            },
-          ])
-        }
-        if (bubbleState === 'delivered') return
-        const text = steerOutcomeText(delivery)
-        if (text === null) return
-        if (delivery.kind === 'unsupported') {
-          // Nothing was attempted, so nothing was lost: put the guidance back
-          // at the HEAD of the queue and it runs as the next real turn when
-          // this one ends. Retrying by hand cannot change what this runtime
-          // can do — that is why this is a notice, not a failure card.
-          const queue = pendingCodeQueueRef.current.get(key) ?? []
-          pendingCodeQueueRef.current.set(key, [first, ...queue])
-          bumpQueueTick()
-        }
+    void supervisor.steerCode(projectKeyAtSend, sessionIdAtSend, steerPrompt).then((delivery) => {
+      const bubbleState = steerBubbleState(delivery)
+      if (bubbleState !== null) {
         updateMessagesAt(currentWorkspace.root, sessionIdAtSend, (prev) => [
           ...prev,
-          isSteerRetryable(delivery)
-            ? {
-                id: `code-steer-error-${first.turnId}`,
-                kind: 'error',
-                role: 'system',
-                createdAt: Date.now(),
-                userMessage: text,
-                diagnosticId: `code-steer-${delivery.kind}:${first.turnId}`,
-              }
-            : {
-                id: `code-steer-notice-${first.turnId}`,
-                kind: 'notice',
-                role: 'system',
-                createdAt: Date.now(),
-                text,
-              },
+          {
+            id: first.turnId,
+            role: 'user',
+            kind: 'text',
+            createdAt: now,
+            text: first.text,
+            attachments: first.attachments.map(({ id, name, kind, size, previewUrl }) => ({
+              id,
+              name,
+              kind,
+              size,
+              previewUrl,
+            })),
+            // An intervention inside the running turn: visible, marked, and
+            // explicitly NOT a turn of its own (turn count + turn boundary).
+            steerState: bubbleState,
+          },
         ])
-      })
+      }
+      if (bubbleState === 'delivered') return
+      const text = steerOutcomeText(delivery)
+      if (text === null) return
+      if (delivery.kind === 'unsupported') {
+        // Nothing was attempted, so nothing was lost: put the guidance back
+        // at the HEAD of the queue and it runs as the next real turn when
+        // this one ends. Retrying by hand cannot change what this runtime
+        // can do — that is why this is a notice, not a failure card.
+        const queue = pendingCodeQueueRef.current.get(key) ?? []
+        pendingCodeQueueRef.current.set(key, [first, ...queue])
+        bumpQueueTick()
+      }
+      updateMessagesAt(currentWorkspace.root, sessionIdAtSend, (prev) => [
+        ...prev,
+        isSteerRetryable(delivery)
+          ? {
+              id: `code-steer-error-${first.turnId}`,
+              kind: 'error',
+              role: 'system',
+              createdAt: Date.now(),
+              userMessage: text,
+              diagnosticId: `code-steer-${delivery.kind}:${first.turnId}`,
+            }
+          : {
+              id: `code-steer-notice-${first.turnId}`,
+              kind: 'notice',
+              role: 'system',
+              createdAt: Date.now(),
+              text,
+            },
+      ])
+    })
   }, [codeSessionId, currentWorkspace.root, setNextLearningDirective, supervisor, updateMessagesAt])
 
   /** Flush: when a live turn returns to idle and this conversation has a
@@ -5263,7 +5686,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     if (!first) return
     pendingCodeQueueRef.current.set(key, rest)
     bumpQueueTick()
-    onSendRefForFlush.current?.(first.text, first.learningDirective)
+    onSendRefForFlush.current?.(first.text, first.learningDirective, undefined, first.attachments)
   }, [running, historyReady, currentWorkspaceKey, codeSessionId])
 
   // M3 closure §9.3 (M3-P1-11): artifact open/show/copy
@@ -5300,11 +5723,9 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   const onOpenWorkArtifact = useCallback(
     (path: string): void => {
       // Round-3 P2: same basename fallback as Code (see onOpenResultFile).
-      const resolvedPath = resolveMentionPath(
-        currentWorkspace.root,
-        path,
-        toolPathsOf(workMessagesRef.current),
-      ) ?? path
+      const resolvedPath =
+        resolveMentionPath(currentWorkspace.root, path, toolPathsOf(workMessagesRef.current)) ??
+        path
       const cap = artifactCapabilityFor(resolvedPath)
       if (
         cap.kind === 'text-preview' ||
@@ -5339,62 +5760,56 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     }),
     [codeSessionId, currentWorkspaceKey],
   )
-  const codeResultDockOpen = useResultDockOpen(codeResultDockKey, false)
+  const toggleResultRail = useCallback((open: boolean): void => {
+    setRightRailOpen(open)
+    if (open) setRightWidth((width) => Math.max(width, 480))
+  }, [])
+  const {
+    open: codeResultDockOpen,
+    select: selectCodeReview,
+    toggle: toggleCodeReview,
+  } = useResultReview(codeResultDockKey, rightRailOpen, toggleResultRail)
 
   // P2-1 (spec §9): the visible Code ResultDock. Built once per result from
   // the normalized latest-run; keyed by conversation so fold state stays
   // isolated per conversation (spec §9.3). C-Edge P2-4: the dock is fully
   // controlled by `resultDockPrefsStore`; collapse state survives
   // conversation / project / surface changes.
+  const codeReviewInfo = useMemo(
+    () => (codeResults ? codeReviewSummary(codeResults) : null),
+    [codeResults],
+  )
+  const currentCodeTurnId = useMemo(() => latestUserTurnId(messages), [messages])
+  const codeResultIsCurrent = Boolean(
+    currentCodeTurnId && resultMatchesTurn(codeResults?.meta, { turnId: currentCodeTurnId }),
+  )
   const codeResultDock = useMemo(() => {
-    if (!codeResults || !codeSessionId) return undefined
-    const meta = codeResults.meta
-    const count = codeResults.changeCountTotal
-    const checksPassed = codeResults.checks.filter((c) => c.status === 'passed').length
-    const degraded = meta.status === 'degraded'
-    const status: ResultDockStatus = degraded ? 'partial' : 'ready'
-    // WP-4: "3 files +128 −24 · 2 checks passed". Totals only render when a
-    // reliable stat exists; an incomplete/unknown count simply stays out of
-    // the summary (per-file `—` is handled inside CodeResultContent).
-    const statsText =
-      codeResults.additionsTotal !== undefined || codeResults.deletionsTotal !== undefined
-        ? `+${codeResults.additionsTotal ?? 0} −${codeResults.deletionsTotal ?? 0}`
-        : null
-    const parts = [`${count} 个文件`]
-    if (statsText) parts.push(statsText)
-    if (codeResults.checkCountTotal > 0) {
-      parts.push(`${checksPassed}/${codeResults.checkCountTotal} 项检查通过`)
-    }
-    const summary = count > 0 || codeResults.checkCountTotal > 0 ? parts.join(' · ') : undefined
+    if (!codeResults || !codeSessionId || !codeReviewInfo) return undefined
+    if (codeResults.attribution !== 'workspace_only' && !codeResultIsCurrent) return undefined
+    const status: ResultDockStatus = codeResults.meta.status === 'degraded' ? 'partial' : 'ready'
     return (
       <ResultDock
         key={`code-results-${codeSessionId}`}
         id={`code-results-${codeSessionId}`}
+        panelId={`code-review-${codeSessionId}`}
         mode="code"
         title="变更审查"
-        count={count}
+        count={codeReviewInfo.count}
         status={status}
-        summary={summary}
-        warning={meta.warning}
-        truncated={codeResults.truncated}
+        summary={codeReviewInfo.text}
+        warning={codeResults.meta.warning}
         open={codeResultDockOpen}
-        onOpenChange={(o) => resultDockPrefsStore.setOpen(codeResultDockKey, o)}
-        onToggle={() => resultDockPrefsStore.setOpen(codeResultDockKey, false)}
-      >
-        <CodeResultContent
-          result={codeResults}
-          onOpenDiff={onOpenDiff}
-          onOpenFile={onOpenResultFile}
-        />
-      </ResultDock>
+        onOpenChange={toggleCodeReview}
+        onToggle={() => toggleCodeReview(false)}
+      />
     )
   }, [
     codeResults,
     codeSessionId,
-    onOpenDiff,
-    onOpenResultFile,
-    codeResultDockKey,
+    codeReviewInfo,
     codeResultDockOpen,
+    codeResultIsCurrent,
+    toggleCodeReview,
   ])
 
   // P2-1 (spec §8 / §9): the current visible Work conversation's normalised
@@ -5402,20 +5817,20 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
   const workResults = useMemo<StoredWorkResult | undefined>(() => {
     if (!workSessionId) return undefined
     void resultVersion
-    return resultRepo.snapshot(currentWorkspaceKey, workSessionId)?.work
+    const stored = resultRepo.snapshot(currentWorkspaceKey, workSessionId)?.work
+    return stored ? normalizeStoredWorkResult(stored) : undefined
   }, [currentWorkspaceKey, workSessionId, resultRepo, resultVersion])
 
-  const currentWorkTurnId = useMemo(() => {
-    const currentUser = [...workMessages]
-      .reverse()
-      .find((message) => message.kind === 'text' && message.role === 'user')
-    return currentUser?.turnId ?? currentUser?.id
-  }, [workMessages])
+  const currentWorkTurnId = useMemo(() => latestUserTurnId(workMessages), [workMessages])
+  const workReviewResults = useMemo(
+    () => (workResults ? workReviewForTurn(workResults, currentWorkTurnId) : undefined),
+    [workResults, currentWorkTurnId],
+  )
   // P3: `work_rail` is no longer produced, so run attribution comes only
   // from the originating turn id — the old work_rail scan was dead code.
   // 2026-09-10 (applyWorkItem deletion面): work-item-mapper deleted (zero
   // production callers); the deliverable projection it once folded is now
-  // owned upstream (DeliverableWorkflowAdapter in @trylo/work).
+  // historical delivery snapshots are read-only; current artifacts belong to CLI runs.
   const currentWorkArtifactCount = useMemo(
     () =>
       latestRunArtifactCount(
@@ -5432,20 +5847,24 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
     }),
     [currentWorkspaceKey, workSessionId],
   )
-  const workResultDockOpen = useResultDockOpen(workResultDockKey, false)
+  const {
+    open: workResultDockOpen,
+    select: selectWorkReview,
+    toggle: toggleWorkReview,
+  } = useResultReview(workResultDockKey, rightRailOpen, toggleResultRail)
 
   // P2-1 (spec §9.4): Work ResultDock. Count is the REAL artifact total; the
   // summary mirrors the latest run's created/updated/discovered deltas.
   // C-Edge P2-4: collapse state is per (work, project, conversation).
   const workResultDock = useMemo(() => {
     if (!workResults || !workSessionId) return undefined
-    const latestRun = workResults.latestRun
+    const latestRun = workReviewResults?.latestRun
     // ResultDock is a result of THIS run, not a permanent conversation
     // inventory. A greeting/chat turn with no file delta must not resurrect
     // old artifacts below the answer (the screenshot regression). Historical
     // files remain persisted and reappear when a run actually touches output.
     const latestCount = currentWorkArtifactCount
-    if (!latestRun || latestCount === 0) return undefined
+    if (!latestRun || (latestCount === 0 && !latestRun.warning)) return undefined
     const count = latestCount
     const degraded = latestRun?.status === 'degraded'
     const status: ResultDockStatus = degraded ? 'partial' : 'ready'
@@ -5460,6 +5879,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       <ResultDock
         key={`work-results-${workSessionId}`}
         id={`work-results-${workSessionId}`}
+        panelId={`work-review-${workSessionId}`}
         mode="work"
         title="交付物"
         count={count}
@@ -5468,32 +5888,47 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         warning={latestRun?.warning}
         truncated={workResults.truncated}
         open={workResultDockOpen}
-        onOpenChange={(o) => resultDockPrefsStore.setOpen(workResultDockKey, o)}
-        onToggle={() => resultDockPrefsStore.setOpen(workResultDockKey, false)}
-      >
-        <WorkResultContent
-          result={workResults}
-          workspaceRoot={currentWorkspace.root}
-          host={workArtifactHost}
-          onPreviewArtifact={onOpenWorkArtifact}
-          onDiffArtifact={onOpenWorkDiff}
-        />
-      </ResultDock>
+        onOpenChange={toggleWorkReview}
+        onToggle={() => toggleWorkReview(false)}
+      />
     )
   }, [
     workResults,
+    workReviewResults,
     workSessionId,
     currentWorkArtifactCount,
-    currentWorkspace.root,
-    workArtifactHost,
-    onOpenWorkArtifact,
-    onOpenWorkDiff,
-    workResultDockKey,
+    toggleWorkReview,
     workResultDockOpen,
   ])
 
+  const teamApprovalPresentation = useMemo(
+    () =>
+      createTeamApprovalPresentation(
+        topMode === 'work' ? workMergedMessages : mergedMessages,
+        teamRunForCurrentSession?.id,
+        topMode === 'work' ? workApprovals : codeApprovals,
+      ),
+    [
+      topMode,
+      workMergedMessages,
+      mergedMessages,
+      workApprovals,
+      codeApprovals,
+      teamRunForCurrentSession?.id,
+    ],
+  )
+
   return (
     <AppShell
+      modelPreview={(onAvailable, shown) => (
+        <AgentModelPreviewWorkspace
+          manager={serviceManager}
+          projectRoot={currentWorkspace.root}
+          conversationId={topMode === 'code' ? codeSessionId : workSessionId}
+          onAvailable={onAvailable}
+          shown={shown}
+        />
+      )}
       workspaces={workspaces}
       currentWorkspaceId={currentWorkspaceId}
       sessions={currentSessions}
@@ -5504,21 +5939,54 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       teamMarks={teamMarks}
       fileTreeRoot={currentWorkspace.root}
       rightRailOpen={rightRailOpen}
-      onToggleRightRail={onToggleRightRail}
+      onToggleRightRail={() => {
+        if (rightRailOpen) (topMode === 'code' ? selectCodeReview : selectWorkReview)(false)
+        onToggleRightRail()
+      }}
+      resultReview={
+        topMode === 'code' &&
+        codeResults &&
+        codeSessionId &&
+        codeReviewInfo &&
+        (codeReviewInfo.count > 0 || codeReviewInfo.text || codeResults.meta.warning)
+          ? {
+              id: `code-review-${codeSessionId}`,
+              open: codeResultDockOpen,
+              onOpenChange: selectCodeReview,
+              content: (
+                <CodeReviewPanel
+                  result={codeResults}
+                  currentTurn={codeResultIsCurrent}
+                  onOpenDiff={onOpenDiff}
+                  onOpenFile={onOpenResultFile}
+                />
+              ),
+            }
+          : topMode === 'work' &&
+              workReviewResults &&
+              workSessionId &&
+              (workReviewResults.artifacts.length > 0 || workReviewResults.latestRun?.warning)
+            ? {
+                id: `work-review-${workSessionId}`,
+                label: '交付物',
+                open: workResultDockOpen,
+                onOpenChange: selectWorkReview,
+                content: (
+                  <WorkReviewPanel
+                    result={workReviewResults}
+                    workspaceRoot={currentWorkspace.root}
+                    host={workArtifactHost}
+                    onPreviewArtifact={onOpenWorkArtifact}
+                    onDiffArtifact={onOpenWorkDiff}
+                  />
+                ),
+              }
+            : undefined
+      }
       leftWidth={leftWidth}
       onLeftWidthChange={setLeftWidth}
       rightWidth={rightWidth}
       onRightWidthChange={setRightWidth}
-      style={
-        {
-          // Content-area edges (incl. the 5px draggable resizer that sits
-          // between a rail and the main column). 0 when the rail is
-          // collapsed/closed so the TopBar's mode selector can recentre on
-          // the *remaining* content area, never on the full window.
-          '--rail-left-w': `${leftWidth}px`,
-          '--rail-right-w': `${rightWidth}px`,
-        } as unknown as CSSProperties
-      }
       onSwitchWorkspace={onSwitchWorkspace}
       onOpenFolder={onOpenFolder}
       onCloseWorkspace={onCloseWorkspace}
@@ -5535,10 +6003,31 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       // mode. Owns `collaborationSurface` together with the main
       // column (SurfaceHost below).
       topBarCollaborationSwitch={
-        <CollaborationSwitch value={collaborationSurface} onChange={setCollaborationSurface}
-          onCompose={teamComposerLive && canSuggestTeam ? handleComposeTeamFromPerson : undefined} />
+        <CollaborationSwitch
+          value={collaborationSurface}
+          onChange={setCollaborationSurface}
+          onCompose={teamComposerLive && canSuggestTeam ? handleComposeTeamFromPerson : undefined}
+        />
       }
       peekFile={peekFile}
+      previewRoot={currentWorkspace.root}
+      previewFiles={(topMode === 'code'
+        ? codeResults
+          ? codeReviewFiles(codeResults)
+          : []
+        : workResults
+          ? workReviewFiles(workResults)
+          : []
+      ).map((file) => ({
+        ...file,
+        path: `${currentWorkspace.root.replace(/[\\/]+$/, '')}/${file.path}`,
+      }))}
+      onSelectPreviewFile={(path) => {
+        void onSelectFile(path, 'file')
+      }}
+      onReloadPeek={() => {
+        if (peekFile) void onSelectFile(peekFile.path, 'file')
+      }}
       onClosePeek={onClosePeek}
       peekExpanded={peekExpanded}
       onTogglePeekExpanded={() => setPeekExpanded((v) => !v)}
@@ -5575,12 +6064,24 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       settingsOpen={settingsOpen}
       onSettingsOpenChange={setSettingsOpen}
       onSettingsSave={handleSettingsSave}
+      onSettingsNoticeDismissed={handleSettingsNoticeDismissed}
       petStatus={petStatus}
       remoteStatus={remoteStatus}
       // P0-A (audit §3.3): the Work tool packages' health + install surface.
       toolPlatform={toolPlatform}
       // Hermes learning port for the Settings → Skills library modal.
       learningPort={learningPortRef.current}
+      collaborationLearningRuntime={toolLearningRuntime}
+      collaborationResources={collaborationResources}
+      libraryApprovals={libraryApprovals}
+      onRespondLibraryApproval={(id, allow) => supervisor.respondCodePermission(id, allow)}
+      onDiscussCollaborationIssue={(issueId) => {
+        setCollaborationSurface('person')
+        const prompt = `请讨论当前工作区的协作问题 ${issueId}，结合成员报告、原安排和最新进展判断下一步。`
+        if (topMode === 'work') setWorkInput(prompt)
+        else setText(prompt)
+      }}
+      onRequestTemporaryExpert={requestTemporaryExpert}
       onOpenLearningPending={() => {
         setSettingsOpen(false)
         setLearningPanelOpen(true)
@@ -5613,11 +6114,13 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       activityItems={activityItems}
       topBarRight={
         <>
-
           <button
             type="button"
             className={`top-bar__rail-toggle${rightRailOpen ? ' top-bar__rail-toggle--active' : ''}`}
-            onClick={() => { window.dispatchEvent(new Event('trylo:close-browser-preview')); onToggleRightRail(); }}
+            onClick={() => {
+              window.dispatchEvent(new Event('trylo:close-browser-preview'))
+              onToggleRightRail()
+            }}
             title="结果侧栏"
             aria-label="结果侧栏"
             aria-pressed={rightRailOpen}
@@ -5628,15 +6131,23 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       }
     >
       <SurfaceHost
-        teamApprovals={teamRunForCurrentSession ? <TeamApprovalRequests runId={teamRunForCurrentSession.id}
-          messages={topMode === 'code' ? codeApprovals : workApprovals}
-          onRespond={handleRespondApproval} onOpenPreview={onOpenApprovalPreview} /> : undefined}
+        hostedApprovals={teamApprovalPresentation.hostedApprovals}
+        teamApprovals={
+          teamRunForCurrentSession ? (
+            <TeamApprovalRequests
+              presentation={teamApprovalPresentation}
+              onRespond={handleRespondApproval}
+              onOpenPreview={onOpenApprovalPreview}
+            />
+          ) : undefined
+        }
         collaborationSurface={collaborationSurface}
         teamRun={teamRunForCurrentSession}
         composerLive={teamComposerLive}
         templateProfiles={builtinTeamTemplates}
         customProfiles={customTeamProfiles}
         modelChoices={teamChoices}
+        expertClient={collaborationResources.experts}
         onSaveProfileAs={handleSaveTeamProfileAs}
         onDeleteProfile={handleDeleteTeamProfile}
         onStartTeam={handleStartTeam}
@@ -5647,12 +6158,16 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         onSelectTeamSeat={handleSelectTeamSeat}
         onCancelTeamSeat={handleCancelTeamSeat}
         onStopTeamRun={handleStopTeamRun}
-        onTeamMemberInput={canSendSubagentInput(topMode === 'work' ? workCodeView.activeProcessId : activeProcessId)
-          ? (agentId, text, mode) => {
-            const processId = topMode === 'work' ? workCodeView.activeProcessId : activeProcessId
-            if (!processId) return Promise.reject(new Error('本轮已结束，无法发送补充要求。'))
-            return sendSubagentInput(processId, agentId, text, mode)
-          } : undefined}
+        onTeamMemberInput={
+          canSendSubagentInput(topMode === 'work' ? workCodeView.activeProcessId : activeProcessId)
+            ? (agentId, text, mode) => {
+                const processId =
+                  topMode === 'work' ? workCodeView.activeProcessId : activeProcessId
+                if (!processId) return Promise.reject(new Error('本轮已结束，无法发送补充要求。'))
+                return sendSubagentInput(processId, agentId, text, mode)
+              }
+            : undefined
+        }
         personView={
           cognitionViewOpen && cognitionSession && collaborationSurface !== 'team' ? (
             <CognitionSurface
@@ -5666,23 +6181,52 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
             />
           ) : (
             <ChatPanel
-              onSubagentInput={canSendSubagentInput(topMode === 'work' ? workCodeView.activeProcessId : activeProcessId)
-                ? (agentId, text, mode) => {
-                  const processId = topMode === 'work' ? workCodeView.activeProcessId : activeProcessId
-                  if (!processId) return Promise.reject(new Error('本轮已结束，无法发送补充要求。'))
-                  return sendSubagentInput(processId, agentId, text, mode)
-                } : undefined}
+              onSubagentInput={
+                canSendSubagentInput(
+                  topMode === 'work' ? workCodeView.activeProcessId : activeProcessId,
+                )
+                  ? (agentId, text, mode) => {
+                      const processId =
+                        topMode === 'work' ? workCodeView.activeProcessId : activeProcessId
+                      if (!processId)
+                        return Promise.reject(new Error('本轮已结束，无法发送补充要求。'))
+                      return sendSubagentInput(processId, agentId, text, mode)
+                    }
+                  : undefined
+              }
               workspaceRoot={currentWorkspace.root}
               context={context}
               activeSession={currentActiveSession}
               topMode={topMode}
-          onTopModeChange={onTopModeChange}
+              onTopModeChange={onTopModeChange}
               codeMode={codeMode}
               onCodeModeChange={onCodeModeChange}
               // v1.16.1: plan → agent transition handler.
               onApplyPlan={onApplyPlan}
               messages={mergedMessages}
               onSend={onSend}
+              onGoalAction={async (action) => {
+                const sessionId = topMode === 'work' ? workSessionId : codeSessionId
+                if (!sessionId) throw new Error('请先选择当前聊天。')
+                const busy = topMode === 'work' ? workBusy : running
+                if (busy) {
+                  if (action.action !== 'pause' && action.action !== 'cancel')
+                    throw new Error('请先暂停当前目标。')
+                  await supervisor.controlGoal(currentWorkspaceKey, sessionId, action.action)
+                  return
+                }
+                if (action.action === 'pause') throw new Error('目标当前未在运行。')
+                const prompt =
+                  action.action === 'create'
+                    ? action.objective
+                    : action.action === 'edit'
+                      ? '保存当前目标的修改。'
+                      : action.action === 'resume'
+                        ? '继续推进当前目标。'
+                        : '取消当前目标。'
+                if (topMode === 'work') await handleWorkSend(prompt, { goalCommand: action })
+                else await onSend(prompt, undefined, action)
+              }}
               text={text}
               onTextChange={setText}
               onOpenCodeArtifact={onOpenResultFile}
@@ -5692,7 +6236,9 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
               // M3 closure §9.3 (M3-P1-11): the root-bound
               // adapter every artifact action flows through.
               artifactHost={workArtifactHost}
-              hasApiKey={!!settings.apiKey.trim()}
+              hasApiKey={Boolean(
+                activeContextSettings.apiKey.trim() || activeContextSettings.poolModel.trim(),
+              )}
               onOpenSettings={openSettings}
               workMessages={workMergedMessages}
               // P2-1 (spec §9): the Work capability's shared ResultDock, built by
@@ -5710,14 +6256,17 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
               onRunTaskSuggestion={handleRunWorkAsTask}
               // PR-3 遗留收口: ToolCard runtime-artifact promote (Work only).
               onPromoteRuntimeArtifact={handlePromoteRuntimeArtifact}
-              onPickWorkStarter={onPickWorkStarter}
               workRunning={workRunning}
+              workError={workCodeView.error}
+              workRecoveryState={workCodeView.recoveryState}
               workComposerRunning={workBusy}
               onWorkStop={handleWorkStop}
               // M4-E (spec §6.7 Core "approval"): the inline ApprovalCard responder.
               // Both replies are routed to the originating CLI process by the supervisor.
               onRespondApproval={handleRespondApproval}
-              onRespondInputRequest={(id, status, answers) => supervisor.respondInputRequest(id, status, answers)}
+              onRespondInputRequest={(id, status, answers) =>
+                supervisor.respondInputRequest(id, status, answers)
+              }
               onCognitionAnswer={handleCognitionAnswer}
               onCognitionDismiss={handleCognitionDismiss}
               onLearningImpactResolve={handleLearningImpactResolve}
@@ -5829,6 +6378,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
               }
               running={running}
               error={error}
+              recoveryState={codeView.recoveryState}
               onStop={onStop}
               queuedCount={topMode === 'work' ? workQueuedCount : codeQueuedCount}
               onInterruptQueued={topMode === 'work' ? interruptWorkQueue : interruptCodeQueue}
@@ -5877,10 +6427,16 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
               // v1.16.2.1: ring is the compact trigger; the
               // popover inside the ring handles the action.
               onCompact={onCompact}
-              compactAvailable={!!codeSessionId && supervisor.canCompactCode(currentWorkspaceKey, codeSessionId)}
-              requestContextOnly={settings.cliRuntimeProtocol === 'trylo-v1'}
-              onWorkCompact={() => { if (workSessionId) void supervisor.compactCode(currentWorkspaceKey, workSessionId) }}
-              workCompactAvailable={!!workSessionId && supervisor.canCompactCode(currentWorkspaceKey, workSessionId)}
+              compactAvailable={
+                !!codeSessionId && supervisor.canCompactCode(currentWorkspaceKey, codeSessionId)
+              }
+              requestContextOnly={true}
+              onWorkCompact={() => {
+                if (workSessionId) void supervisor.compactCode(currentWorkspaceKey, workSessionId)
+              }}
+              workCompactAvailable={
+                !!workSessionId && supervisor.canCompactCode(currentWorkspaceKey, workSessionId)
+              }
               compacting={compacting}
               // v1.16.2.2: forwarded so the ring's popover can
               // show a "no live CLI" hint in dev mode.
@@ -5890,6 +6446,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
               // below the input; × on a chip removes it.
               attachments={codeAttachmentsState.attachments}
               onAddAttachment={codeAttachmentsState.actions.openPicker}
+              onPasteAttachments={codeAttachmentsState.actions.addFiles}
               onRemoveAttachment={codeAttachmentsState.actions.remove}
               // Reading-count placeholder ("Reading N file(s)…") — now
               // sourced from the partition store snapshot.
@@ -5904,6 +6461,7 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
               // Work partition.
               workAttachments={workAttachmentsState.workAttachments}
               onAddWorkAttachment={workAttachmentsState.actions.openPicker}
+              onPasteWorkAttachments={workAttachmentsState.actions.addFiles}
               onRemoveWorkAttachment={workAttachmentsState.actions.remove}
               workAttachmentLoading={workAttachmentsState.readingCount}
               workFailed={workAttachmentsState.failed}
@@ -5926,16 +6484,43 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
       <UserLearningPanel
         key={currentWorkspace.id}
         open={learningPanelOpen}
-        toolLearning={toolLearningRuntime}
+        skillReviewRequest={skillReviewRequest}
+        {...(currentActiveSession === null ||
+        (topMode === 'work' ? workCodeView.running : codeView.running)
+          ? {}
+          : {
+              skillLearningSource: {
+                workspaceRoot: currentWorkspace.root,
+                sessionId: currentActiveSession.id,
+              },
+            })}
+        toolLearning={managedToolLearningRuntime}
+        resources={collaborationResources}
+        libraryApprovals={libraryApprovals}
+        onRespondLibraryApproval={(id, allow) => supervisor.respondCodePermission(id, allow)}
+        onRequestTemporaryExpert={requestTemporaryExpert}
         snapshot={withCliFacts(userLearning.snapshot(), cliMemoryFacts, LOCAL_USER_ID)}
-        cliMemory={{ facts: cliMemoryFacts, ...(cliMemoryError === undefined ? {} : { error: cliMemoryError }),
+        cliMemory={{
+          facts: cliMemoryFacts,
+          ...(cliMemoryError === undefined ? {} : { error: cliMemoryError }),
           onChange: async (fact, statement) => {
             const resolved = settingsForCodeRun(settings, currentWorkspace.root)
-            const runtime = { process: hostAdapter.process, cliPath: resolved.cliPath, cwd: currentWorkspace.root,
-              ...(resolved.cliNodeProgram === undefined ? {} : { nodeProgram: resolved.cliNodeProgram }) }
-            const result = await mutateCliMemory({ ...runtime, action: statement === undefined ? 'retract' : 'correct',
-              recordId: fact.id, expectedVersion: fact.version, commandId: crypto.randomUUID(),
-              ...(statement === undefined ? {} : { statement }) })
+            const runtime = {
+              process: hostAdapter.process,
+              cliPath: resolved.cliPath,
+              cwd: currentWorkspace.root,
+              ...(resolved.cliNodeProgram === undefined
+                ? {}
+                : { nodeProgram: resolved.cliNodeProgram }),
+            }
+            const result = await mutateCliMemory({
+              ...runtime,
+              action: statement === undefined ? 'retract' : 'correct',
+              recordId: fact.id,
+              expectedVersion: fact.version,
+              commandId: crypto.randomUUID(),
+              ...(statement === undefined ? {} : { statement }),
+            })
             if (!result.ok) throw new Error(`记忆更新失败：${result.reason}`)
             const reload = await loadCliMemoryFacts(runtime)
             if (!reload.ok) throw new Error(`更新后读取失败：${reload.reason}`)
@@ -5946,7 +6531,10 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
         settings={userLearning.settings()}
         learningPort={learningPortRef.current}
         lastDecision={userLearning.snapshot().policyDecisions.at(-1)?.mode}
-        onClose={() => setLearningPanelOpen(false)}
+        onClose={() => {
+          setLearningPanelOpen(false)
+          setSkillReviewRequest(undefined)
+        }}
         onSettingsChange={(next) => {
           const merged = userLearning.setSettings(next)
           const updated = { ...settings, userLearning: merged }
@@ -5960,10 +6548,14 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           // WP-CL / B17: the panel backup also carries the narrow document the
           // CLI imports, so a migration never needs a second exporter.
           const backup = userLearning.exportForUser()
-          const payload = JSON.stringify({
-            ...(typeof backup === 'object' && backup !== null ? backup : {}),
-            cliImport: snapshotToLegacyDocument(userLearning.snapshot()),
-          }, null, 2)
+          const payload = JSON.stringify(
+            {
+              ...(typeof backup === 'object' && backup !== null ? backup : {}),
+              cliImport: snapshotToLegacyDocument(userLearning.snapshot()),
+            },
+            null,
+            2,
+          )
           const blob = new Blob([payload], { type: 'application/json' })
           const url = URL.createObjectURL(blob)
           const link = document.createElement('a')
@@ -5982,7 +6574,9 @@ function App({ initialWorkspaceRoot = DEFAULT_WORKSPACE_ROOT }: { readonly initi
           void deleteCliUserMemory({
             process: hostAdapter.process,
             cliPath: resolved.cliPath,
-            ...(resolved.cliNodeProgram === undefined ? {} : { nodeProgram: resolved.cliNodeProgram }),
+            ...(resolved.cliNodeProgram === undefined
+              ? {}
+              : { nodeProgram: resolved.cliNodeProgram }),
             cwd: currentWorkspace.root,
           }).then((result) => {
             if (!result.ok) {

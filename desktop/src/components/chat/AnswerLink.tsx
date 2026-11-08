@@ -1,15 +1,28 @@
 import { useState, type ReactNode } from 'react';
 import { isTauri } from '../../host-adapter/tauri-detect';
+import { InlineFileReference } from './InlineFileReference';
+import { fileReferenceName, localFileHref } from './file-references';
 
 export function AnswerLink(props: {
   readonly href?: string;
   readonly children: ReactNode;
   readonly onOpenArtifact?: (path: string) => void;
-  readonly artifactHost?: import('@trylo/work').HostAdapter;
+  readonly artifactHost?: import('../../host-adapter/artifact-actions').ArtifactHost;
+  readonly caption?: string;
+  readonly directory?: string;
 }): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const href = props.href ?? '';
   const external = /^https?:\/\//i.test(href);
+  const filePath = localFileHref(href);
+  if (filePath && props.onOpenArtifact) {
+    const caption = props.caption ?? (typeof props.children === 'string' ? props.children : undefined);
+    const compact = !caption || caption.replace(/\\/g, '/') === filePath.replace(/\\/g, '/')
+      || caption === fileReferenceName(filePath);
+    return <InlineFileReference path={filePath} href={href} directory={props.directory}
+      label={compact ? undefined : props.children} accessibleName={caption || filePath}
+      onOpen={() => props.onOpenArtifact?.(filePath)} />;
+  }
   return <>
     <a href={href} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined}
       onClick={(event) => {

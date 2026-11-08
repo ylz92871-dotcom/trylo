@@ -28,10 +28,11 @@ export function agentAvatarIndex(agent: Pick<SubagentMessage, 'id' | 'subagentId
 const AvatarIdentities = createContext<ReadonlyMap<string, number>>(new Map());
 
 /** Resolve hash collisions within the first twelve members, shared by both panes. */
-export function AgentAvatarScope({ identities, children }: { readonly identities: readonly string[]; readonly children: ReactNode }): ReactElement {
+export function AgentAvatarScope({ identities, children, inherit = false }: { readonly identities: readonly string[]; readonly children: ReactNode; readonly inherit?: boolean }): ReactElement {
+  const parent = useContext(AvatarIdentities);
   const signature = JSON.stringify(identities);
   const assignments = useMemo(() => {
-    const result = new Map<string, number>();
+    const result = new Map<string, number>(inherit ? parent : []);
     for (const id of JSON.parse(signature) as string[]) {
       if (result.has(id)) continue;
       let index = agentAvatarIndex({ id });
@@ -42,7 +43,7 @@ export function AgentAvatarScope({ identities, children }: { readonly identities
       result.set(id, index);
     }
     return result;
-  }, [signature]);
+  }, [signature, inherit, parent]);
   return <AvatarIdentities.Provider value={assignments}>{children}</AvatarIdentities.Provider>;
 }
 

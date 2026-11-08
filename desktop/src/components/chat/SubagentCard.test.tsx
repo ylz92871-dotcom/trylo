@@ -14,26 +14,33 @@ function makeMessage(overrides: Partial<SubagentMessage> = {}): SubagentMessage 
     role: 'system',
     createdAt: 1,
     status: 'running',
-    agentType: 'managed-work',
+    agentType: 'worker',
     ...overrides,
   };
 }
 
 describe('SubagentCard', () => {
+  it('marks a historical managed-work spawn as retired before it had a session id', () => {
+    render(<SubagentCard message={makeMessage({ agentType: 'managed-work' })} />);
+    expect(screen.getByText('历史任务')).toBeInTheDocument();
+    expect(screen.queryByText('运行中')).not.toBeInTheDocument();
+  });
+
   it('shows agent type, status label and the delegate prompt', () => {
     render(<SubagentCard message={makeMessage({ prompt: 'Produce a report' })} />);
-    expect(screen.getByText('managed-work')).toBeInTheDocument();
+    expect(screen.getByText('worker')).toBeInTheDocument();
     expect(screen.getByText('运行中')).toBeInTheDocument();
     expect(screen.getByText('Produce a report')).toBeInTheDocument();
   });
 
-  it('shows the background hint for a non-terminal managed-work session', () => {
+  it('keeps retired managed-work history readable without claiming it is running', () => {
     render(
       <SubagentCard
         message={makeMessage({ managedSessionId: 'sess-abc123', prompt: 'do work' })}
       />,
     );
-    expect(screen.getByText(/在后台继续/)).toBeInTheDocument();
+    expect(screen.getByText(/CoWork 执行器已退役/)).toBeInTheDocument();
+    expect(screen.queryByText('运行中')).not.toBeInTheDocument();
     expect(screen.getByText('#sess-abc')).toBeInTheDocument();
   });
 
@@ -44,7 +51,7 @@ describe('SubagentCard', () => {
       />,
     );
     expect(screen.queryByText(/在后台继续/)).not.toBeInTheDocument();
-    expect(screen.getByText('已完成')).toBeInTheDocument();
+    expect(screen.getByText('历史任务')).toBeInTheDocument();
   });
 
   it('expands the detail drawer with session/backing/artifacts', () => {
@@ -69,57 +76,9 @@ describe('SubagentCard', () => {
     expect(screen.queryByText('task-1')).not.toBeInTheDocument();
   });
 
-  it('renders 继续/取消 only for an active managed session with an action handler', () => {
-    const onAction = (sessionId: string, action: 'continue' | 'cancel', text?: string) => {
-      void sessionId;
-      void action;
-      void text;
-    };
-    render(
-      <SubagentCard
-        message={makeMessage({ managedSessionId: 'sess-1', status: 'running' })}
-        onManagedWorkAction={onAction}
-      />,
-    );
-    expect(screen.getByText('继续')).toBeInTheDocument();
-    expect(screen.getByText('取消')).toBeInTheDocument();
-  });
-
-  it('no action buttons for terminal managed sessions', () => {
-    render(
-      <SubagentCard
-        message={makeMessage({ managedSessionId: 'sess-1', status: 'done' })}
-        onManagedWorkAction={() => {}}
-      />,
-    );
-    expect(screen.queryByText('继续')).not.toBeInTheDocument();
-    expect(screen.queryByText('取消')).not.toBeInTheDocument();
-  });
-
-  it('calls onManagedWorkAction with the SAME session id for cancel', () => {
-    const calls: Array<{ sessionId: string; action: 'continue' | 'cancel'; text?: string }> = [];
-    render(
-      <SubagentCard
-        message={makeMessage({ managedSessionId: 'sess-cancel', status: 'running' })}
-        onManagedWorkAction={(sessionId, action, text) => calls.push({ sessionId, action, text })}
-      />,
-    );
-    fireEvent.click(screen.getByText('取消'));
-    expect(calls).toEqual([{ sessionId: 'sess-cancel', action: 'cancel' }]);
-  });
-
-  it('continuing opens an inline input and sends a follow-up to the SAME session', () => {
-    const calls: Array<{ sessionId: string; action: 'continue' | 'cancel'; text?: string }> = [];
-    render(
-      <SubagentCard
-        message={makeMessage({ managedSessionId: 'sess-cont', status: 'running' })}
-        onManagedWorkAction={(sessionId, action, text) => calls.push({ sessionId, action, text })}
-      />,
-    );
-    fireEvent.click(screen.getByText('继续'));
-    const input = screen.getByPlaceholderText('输入后续指令并回车…');
-    fireEvent.change(input, { target: { value: 'add risk section' } });
-    fireEvent.click(screen.getByText('发送'));
-    expect(calls).toEqual([{ sessionId: 'sess-cont', action: 'continue', text: 'add risk section' }]);
+  it('never offers execution actions for a retired managed session', () => {
+    render(<SubagentCard message={makeMessage({ managedSessionId: 'sess-1', status: 'running' })} />);
+    expect(screen.queryByRole('button', { name: '继续' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '取消' })).not.toBeInTheDocument();
   });
 });

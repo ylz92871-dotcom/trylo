@@ -130,7 +130,6 @@ describe('reduced-motion CSS fallback (spec §7.5)', () => {
     for (const sel of [
       '.turn-progress__logo--spin',
       '.streaming-indicator__dot',
-      '.process-header__dot--pulse',
       '.tool__status-icon--spin',
       '.empty-state__logo',
       '.empty-state__logo > *',

@@ -4,9 +4,12 @@ import type { CollaborationSurface } from './types';
 import type { TeamRun } from './team/team-types';
 import type { TeamProfile } from './team/team-profile-types';
 import type { ModelChoice } from './team/composer/composer-store';
+import type { ExpertLibraryClient } from '../experts';
+import type { HostedApprovalIdentity } from '../components/chat/ConversationPresentation';
 
 export interface SurfaceHostProps {
   readonly teamApprovals?: ReactNode;
+  readonly hostedApprovals?: readonly HostedApprovalIdentity[];
   readonly onTeamMemberInput?: import('../host-adapter/subagent-contract').SendSubagentInput;
   readonly collaborationSurface: CollaborationSurface;
   /** The current Person (Code/Work) view. Pass the existing ChatPanel
@@ -23,6 +26,7 @@ export interface SurfaceHostProps {
   readonly templateProfiles?: readonly TeamProfile[];
   readonly customProfiles?: readonly TeamProfile[];
   readonly modelChoices?: readonly ModelChoice[];
+  readonly expertClient?: ExpertLibraryClient;
   /** PR-7 wires the launch; PR-8 wires the suggest seeding. */
   readonly onStartTeam?: (goal: string) => void | Promise<void>;
   readonly onSaveProfileAs?: (name: string) => void;
@@ -54,6 +58,7 @@ export function SurfaceHost(props: SurfaceHostProps): ReactElement {
       <TeamSurface
         personView={props.personView}
         approvals={props.teamApprovals}
+        hostedApprovals={props.hostedApprovals}
         memberDrafts={memberDrafts.current}
         onMemberInput={props.onTeamMemberInput}
         run={props.teamRun}
@@ -62,6 +67,7 @@ export function SurfaceHost(props: SurfaceHostProps): ReactElement {
         templateProfiles={props.templateProfiles}
         customProfiles={props.customProfiles}
         modelChoices={props.modelChoices}
+        expertClient={props.expertClient}
         onSelectSeat={props.onSelectTeamSeat}
         {...(props.onCancelTeamSeat ? { onCancelSeat: props.onCancelTeamSeat } : {})}
         {...(props.onStopTeamRun ? { onStopRun: props.onStopTeamRun } : {})}

@@ -1,0 +1,87 @@
+.learned-skills {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.learned-skills__learning {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.learned-skills__authorization {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-base);
+}
+.learned-skills__authorization input {
+  margin-top: 4px;
+  accent-color: var(--brand);
+}
+.learned-skills__learning label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.learned-skills__learning input {
+  width: 116px;
+  min-height: 32px;
+  padding: 5px 8px;
+  color: var(--fg);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+.learned-skills__metadata {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 8px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.learned-skills__metadata dt {
+  color: var(--text-secondary);
+}
+.learned-skills__metadata dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.learned-skills details {
+  margin-bottom: 12px;
+}
+.learned-skills summary {
+  cursor: pointer;
+  padding-block: 6px;
+  font-size: 13px;
+}
+.learned-skills details ul {
+  padding-left: 20px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.learned-skills details li + li {
+  margin-top: 8px;
+}
+.learned-skills :is(input, button, summary):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.learned-skills button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.skills-modal__sources {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.skills-modal__sources [aria-pressed='true'] {
+  background: var(--bg-panel);
+  color: var(--fg);
+}

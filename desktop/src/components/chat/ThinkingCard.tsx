@@ -3,7 +3,7 @@
 // v1.9: the card title is the SHORT `summary` field from
 // the CC thinking event. The longer `preview` (up to 500
 // chars) shows only on expand. Per
-// C:/work/demo-ws/trylo cli/docs/THINKING_SUMMARIZATION.md,
+// D:/CC/trylo/trylo cli/docs/THINKING_SUMMARIZATION.md,
 // the summary heuristic is 3-strategy: regex match
 // (action phrases), first sentence, first 8 words.
 //
@@ -33,6 +33,7 @@
 import { memo, useState, type ReactElement } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { ThinkingMessage } from './types';
+import { useStreamedText } from './use-streamed-text';
 
 export interface ThinkingCardProps {
   readonly message: ThinkingMessage;
@@ -69,6 +70,7 @@ function ThinkingCardImpl(props: ThinkingCardProps): ReactElement {
   const [manuallyExpanded, setManuallyExpanded] = useState(false);
   const expanded = manuallyExpanded;
   const previewTrimmed = m.preview.trim();
+  const visiblePreview = useStreamedText(m.id, previewTrimmed, streaming && expanded);
   const isPlaceholder = !m.summary.trim();
   return (
     <div
@@ -120,7 +122,7 @@ function ThinkingCardImpl(props: ThinkingCardProps): ReactElement {
                   el.scrollTop = el.scrollHeight;
                 }
               }}
-            >{previewTrimmed}</pre>
+            >{visiblePreview}</pre>
             {m.fullLength > 500 && (
               <button
                 type="button"

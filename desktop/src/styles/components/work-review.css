@@ -1,0 +1,86 @@
+/* Work deliveries use the Code review's rail, typography and file-row rhythm. */
+.work-review .work-result {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  margin-top: 22px;
+}
+
+.work-review .work-result__section-title {
+  margin: 0;
+  padding: 0 8px 7px;
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.work-review .work-result__list { gap: 2px; }
+.work-review .work-result__notice,
+.work-review .work-result__empty,
+.work-review .work-result__verify-line { margin: 0 8px; }
+
+.artifact-card--row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  padding: 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+}
+.artifact-card--row:hover { background: var(--bg-elevated); }
+.artifact-card--row:active { border: 0; }
+
+.artifact-card__path {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  text-align: left;
+}
+.artifact-card__path > svg { flex: none; color: var(--fg-muted); }
+.artifact-card__path-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.artifact-card__filename,
+.artifact-card__directory { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artifact-card__filename { color: var(--fg); font-size: 13px; font-weight: 500; }
+.artifact-card__directory { color: var(--fg-muted); font-size: 11px; }
+.artifact-card__metadata { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; min-width: 0; }
+
+.work-result--review .work-result__badge,
+.work-result--review .work-result__verify,
+.work-result--review .work-result__version {
+  position: static;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.work-result--review .work-result__verify--failed { color: var(--danger); }
+
+.artifact-card--row .artifact-card__actions { gap: 2px; }
+.artifact-card--row .artifact-card__menu-btn,
+.work-result--review .work-result__diff {
+  position: static;
+  display: grid;
+  place-items: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 3px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 10px;
+}
+.artifact-card--row .artifact-card__menu-btn:hover,
+.work-result--review .work-result__diff:hover { color: var(--fg); background: var(--ink-hover); }
+.artifact-card__path:focus-visible,
+.artifact-card--row .artifact-card__menu-btn:focus-visible,
+.work-result--review .work-result__diff:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }

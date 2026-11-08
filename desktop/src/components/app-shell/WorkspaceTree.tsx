@@ -1,28 +1,11 @@
-// Trylo Desktop — WorkspaceTree.
-//
-// v1.15.6:
-//   - Root (workspace path) is now a clickable toggle:
-//     clicking it expands / collapses the whole tree.
-//   - Added a "Refresh" button so the user can re-fetch
-//     the listing when something looks stale (or after
-//     opening a new folder if the auto-reload didn't fire).
-//   - Errors from listDir are shown prominently, not
-//     silently swallowed. The previous v1.15 layout put
-//     errors in a tiny ink-mute line; the user couldn't
-//     tell why the tree was empty.
-//
-// v1.15.4: rewritten so sub-directories can actually be
-// expanded. v1.11 rendered the first level but made each
-// child node's onToggle a no-op.
-
-import { useEffect, useState, type ReactElement } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { useEffect, useState, type KeyboardEvent, type ReactElement } from 'react';
+import { ChevronRight, ChevronsDownUp, Folder, FolderOpen, LoaderCircle, RefreshCw } from 'lucide-react';
 import { hostAdapter } from '../../host-adapter';
 import type { FilePath } from '../../host-adapter/types';
+import { WorkspaceFileIcon } from './WorkspaceFileIcon';
 
 export interface WorkspaceTreeProps {
   readonly root: FilePath;
-  /** Called when the user clicks a file/folder. */
   readonly onSelect?: (path: FilePath, kind: 'file' | 'dir') => void;
 }
 
@@ -37,173 +20,147 @@ interface ListResult {
   readonly error: string | null;
 }
 
-async function listDir(path: FilePath): Promise<ListResult> {
-  try {
-    const entries = await hostAdapter.fs.listDir(path);
-    return {
-      entries: entries.map((e) => ({
-        name: e.name,
-        path: e.path as FilePath,
-        kind: e.isDirectory ? 'dir' : 'file',
-      })),
-      error: null,
-    };
-  } catch (err) {
-    return {
-      entries: [],
-      error: err instanceof Error ? err.message : String(err),
-    };
+const names = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' });
+
+function useDirectory(path: FilePath): {
+  result: ListResult | null; refresh: () => void;
+} {
+  const [result, setResult] = useState<ListResult | null>(null);
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    setResult(null);
+    hostAdapter.fs.listDir(path).then(entries => {
+      if (cancelled) return;
+      setResult({
+        entries: entries.map(e => ({ name: e.name, path: e.path as FilePath, kind: e.isDirectory ? 'dir' as const : 'file' as const }))
+          .sort((a, b) => Number(b.kind === 'dir') - Number(a.kind === 'dir') || names.compare(a.name, b.name)),
+        error: null,
+      });
+    }).catch((error: unknown) => {
+      if (!cancelled) setResult({ entries: [], error: error instanceof Error ? error.message : String(error) });
+    });
+    return () => { cancelled = true; };
+  }, [path, revision]);
+  return { result, refresh: () => setRevision(value => value + 1) };
+}
+
+function handleTreeKey(event: KeyboardEvent<HTMLUListElement>): void {
+  const target = event.target;
+  if (!(target instanceof HTMLButtonElement) || target.getAttribute('role') !== 'treeitem') return;
+  const rows = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="treeitem"]')]
+    .filter(row => !row.closest('[hidden]'));
+  const index = rows.indexOf(target);
+  const node = target.closest('.tree-node');
+  let next: HTMLButtonElement | undefined | null;
+  switch (event.key) {
+    case 'ArrowDown': next = rows[Math.min(index + 1, rows.length - 1)]; break;
+    case 'ArrowUp': next = rows[Math.max(index - 1, 0)]; break;
+    case 'Home': next = rows[0]; break;
+    case 'End': next = rows.at(-1); break;
+    case 'ArrowRight':
+      if (target.getAttribute('aria-expanded') === 'false') target.click();
+      else if (target.getAttribute('aria-expanded') === 'true') next = node?.querySelector<HTMLButtonElement>(':scope > .tree-node__children > .tree-node > .tree-node__row');
+      break;
+    case 'ArrowLeft':
+      if (target.getAttribute('aria-expanded') === 'true') target.click();
+      else next = node?.parentElement?.closest('.tree-node')?.querySelector<HTMLButtonElement>(':scope > .tree-node__row');
+      break;
+    default: return;
   }
+  event.preventDefault();
+  next?.focus();
+}
+
+interface TreeState {
+  readonly selected: FilePath | null;
+  readonly focused: FilePath | null;
+  readonly collapse: number;
+  readonly select: (entry: Entry) => void;
+  readonly focus: (path: FilePath) => void;
+}
+
+function DirectoryStatus({ result, refresh }: { readonly result: ListResult | null; readonly refresh: () => void }): ReactElement | null {
+  if (result === null) return <div className="workspace-tree__status" role="status"><LoaderCircle className="workspace-tree__spinner" size={13} aria-hidden="true" />正在加载…</div>;
+  if (result.error) return <div className="workspace-tree__error" role="alert"><span>无法读取文件夹</span><span className="workspace-tree__error-msg">{result.error}</span><button type="button" onClick={refresh}><RefreshCw size={12} aria-hidden="true" />重试</button></div>;
+  if (result.entries.length === 0) return <div className="workspace-tree__status">此文件夹为空</div>;
+  return null;
 }
 
 export function WorkspaceTree(props: WorkspaceTreeProps): ReactElement {
-  const [result, setResult] = useState<ListResult>({ entries: [], error: null });
-  // The root-toggle's expanded state is *not* persisted —
-  // it's purely a UI affordance. Collapsing it hides the
-  // children but doesn't unload them; expanding again
-  // re-shows the cached list.
-  const [rootCollapsed, setRootCollapsed] = useState(false);
-  // Bumped by the Refresh button to force a re-fetch even
-  // when props.root hasn't changed.
-  const [reloadNonce, setReloadNonce] = useState(0);
+  // Workspace changes discard only transient tree state, never host-owned files.
+  return <WorkspaceDirectory key={props.root} {...props} />;
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    setResult({ entries: [], error: null });
-    listDir(props.root).then((r) => {
-      if (!cancelled) setResult(r);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [props.root, reloadNonce]);
-
-  return (
-    <div className="workspace-tree" role="tree" aria-label="Workspace files">
-      <div className="workspace-tree__root">
-        <button
-          type="button"
-          className="workspace-tree__root-toggle"
-          onClick={() => setRootCollapsed((v) => !v)}
-          aria-expanded={!rootCollapsed}
-          title={props.root}
-        >
-          <span className="workspace-tree__root-chev" aria-hidden="true">
-            {rootCollapsed ? '▸' : '▾'}
-          </span>
-          <span className="workspace-tree__root-name">Files</span>
-        </button>
-        <button
-          type="button"
-          className="workspace-tree__refresh"
-          onClick={() => setReloadNonce((n) => n + 1)}
-          title="Re-fetch the directory listing"
-          aria-label="Refresh"
-        >
-          <RefreshCw size={12} strokeWidth={2.2} aria-hidden="true" />
-        </button>
+function WorkspaceDirectory({ root, onSelect }: WorkspaceTreeProps): ReactElement {
+  const { result, refresh } = useDirectory(root);
+  const [collapsed, setCollapsed] = useState(false);
+  const [collapse, setCollapse] = useState(0);
+  const [selected, setSelected] = useState<FilePath | null>(null);
+  const [focused, setFocused] = useState<FilePath | null>(null);
+  const rootName = root.replace(/[\\/]+$/, '').split(/[\\/]/).at(-1) || root;
+  const state: TreeState = {
+    selected, focused, collapse, focus: setFocused,
+    select: entry => {
+      setSelected(entry.path);
+      if (entry.kind === 'file') onSelect?.(entry.path, 'file');
+    },
+  };
+  return <div className="workspace-tree">
+    <div className="workspace-tree__root">
+      <button type="button" className="workspace-tree__root-toggle" onClick={() => setCollapsed(value => !value)} aria-expanded={!collapsed} aria-label={`项目文件：${rootName}`} title={root}>
+        <ChevronRight className="workspace-tree__root-chev" size={12} aria-hidden="true" />
+        <FolderOpen size={15} strokeWidth={1.5} aria-hidden="true" />
+        <span className="workspace-tree__root-name">{rootName}</span>
+      </button>
+      <div className="workspace-tree__actions">
+        <button type="button" className="workspace-tree__action" onClick={() => { setCollapse(value => value + 1); setFocused(null); }} aria-label="折叠所有文件夹" title="折叠所有文件夹"><ChevronsDownUp size={15} strokeWidth={1.6} aria-hidden="true" /></button>
+        <button type="button" className="workspace-tree__action" onClick={() => { setFocused(null); refresh(); }} disabled={result === null} aria-label="刷新文件" title="刷新文件"><RefreshCw className={result === null ? 'workspace-tree__spinner' : undefined} size={14} strokeWidth={1.6} aria-hidden="true" /></button>
       </div>
-
-      {result.error && (
-        <div className="workspace-tree__error" role="alert">
-          <strong>Cannot read folder:</strong>
-          <span className="workspace-tree__error-msg">{result.error}</span>
-          <span className="workspace-tree__error-path">path: {props.root}</span>
-        </div>
-      )}
-
-      {!result.error && !rootCollapsed && (
-        <>
-          {result.entries.length === 0 && (
-            <div className="workspace-tree__empty">(empty)</div>
-          )}
-          <ul className="workspace-tree__list">
-            {result.entries.map((e) => (
-              <TreeNode
-                key={e.path}
-                entry={e}
-                initialExpanded={false}
-                onSelect={props.onSelect}
-                onPathOpen={listDir}
-              />
-            ))}
-          </ul>
-        </>
-      )}
     </div>
-  );
+    <div hidden={collapsed}>
+      <DirectoryStatus result={result} refresh={refresh} />
+      <ul className="workspace-tree__list" role="tree" aria-label={`${rootName} 文件`} aria-busy={result === null} onKeyDown={handleTreeKey}>
+        {result?.entries.map((entry, index) => <TreeNode key={entry.path} entry={entry} depth={1} first={index === 0} state={state} />)}
+      </ul>
+    </div>
+  </div>;
 }
 
 interface TreeNodeProps {
   readonly entry: Entry;
-  readonly initialExpanded: boolean;
-  readonly onSelect?: (path: FilePath, kind: 'file' | 'dir') => void;
-  readonly onPathOpen: (path: FilePath) => Promise<ListResult>;
+  readonly depth: number;
+  readonly first?: boolean;
+  readonly state: TreeState;
 }
 
-function TreeNode(props: TreeNodeProps): ReactElement {
-  const { entry } = props;
-  const [expanded, setExpanded] = useState(props.initialExpanded);
-  const [children, setChildren] = useState<ListResult | null>(null);
-  const [loading, setLoading] = useState(false);
-
+function TreeNode({ entry, depth, first, state }: TreeNodeProps): ReactElement {
+  const [expanded, setExpanded] = useState(false);
+  const [opened, setOpened] = useState(false);
   const isDir = entry.kind === 'dir';
-
-  const handleClick = async (): Promise<void> => {
-    if (!isDir) {
-      props.onSelect?.(entry.path, 'file');
-      return;
-    }
-    const next = !expanded;
-    setExpanded(next);
-    if (next && children === null) {
-      setLoading(true);
-      const r = await props.onPathOpen(entry.path);
-      setChildren(r);
-      setLoading(false);
-    }
+  useEffect(() => { setExpanded(false); }, [state.collapse]);
+  const FolderIcon = expanded ? FolderOpen : Folder;
+  const activate = (): void => {
+    state.select(entry);
+    state.focus(entry.path);
+    if (isDir) { setExpanded(value => !value); setOpened(true); }
   };
+  return <li className="tree-node" role="none">
+    <button type="button" className="tree-node__row" role="treeitem" aria-level={depth} aria-expanded={isDir ? expanded : undefined} aria-selected={state.selected === entry.path}
+      tabIndex={state.focused === entry.path || state.focused === null && first ? 0 : -1}
+      data-hidden-file={entry.name.startsWith('.') || undefined} onClick={activate} onFocus={() => state.focus(entry.path)} title={entry.path}>
+      <span className="tree-node__chevron" aria-hidden="true">{isDir && <ChevronRight size={12} strokeWidth={1.8} />}</span>
+      {isDir ? <FolderIcon className="tree-node__icon tree-node__icon--dir" size={16} strokeWidth={1.5} aria-hidden="true" /> : <WorkspaceFileIcon name={entry.name} />}
+      <span className="tree-node__name">{entry.name}</span>
+    </button>
+    {isDir && opened && <DirectoryBranch path={entry.path} depth={depth + 1} expanded={expanded} state={state} />}
+  </li>;
+}
 
-  return (
-    <li
-      className="tree-node"
-      role="treeitem"
-      aria-expanded={isDir ? expanded : undefined}
-    >
-      <button
-        type="button"
-        className="tree-node__row"
-        onClick={handleClick}
-        title={entry.path}
-      >
-        <span className="tree-node__chevron" aria-hidden="true">
-          {isDir ? (expanded ? '▾' : '▸') : '·'}
-        </span>
-        <span className={`tree-node__icon tree-node__icon--${entry.kind}`}>
-          {isDir ? '◫' : '·'}
-        </span>
-        <span className="tree-node__name">{entry.name}</span>
-      </button>
-      {isDir && expanded && (
-        <ul className="tree-node__children" role="group">
-          {loading && <li className="tree-node__loading">…</li>}
-          {children?.error && (
-            <li className="tree-node__error" role="alert">{children.error}</li>
-          )}
-          {children?.entries.length === 0 && !loading && !children?.error && (
-            <li className="tree-node__empty">(empty)</li>
-          )}
-          {children?.entries.map((e) => (
-            <TreeNode
-              key={e.path}
-              entry={e}
-              initialExpanded={false}
-              onSelect={props.onSelect}
-              onPathOpen={props.onPathOpen}
-            />
-          ))}
-        </ul>
-      )}
-    </li>
-  );
+function DirectoryBranch({ path, depth, expanded, state }: { readonly path: FilePath; readonly depth: number; readonly expanded: boolean; readonly state: TreeState }): ReactElement {
+  const { result, refresh } = useDirectory(path);
+  return <ul className="tree-node__children" role="group" hidden={!expanded} aria-busy={result === null}>
+    {(result === null || result.error || result.entries.length === 0) && <li role="none"><DirectoryStatus result={result} refresh={refresh} /></li>}
+    {result?.entries.map(entry => <TreeNode key={entry.path} entry={entry} depth={depth} state={state} />)}
+  </ul>;
 }

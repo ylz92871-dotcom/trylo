@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { useCallback } from 'react';
+import { Users } from 'lucide-react';
 
 export interface IdleTemplateRow {
   readonly id: string;
@@ -47,6 +48,7 @@ export function TeamIdle(props: TeamIdleProps): ReactElement {
 
   return (
     <div className="team-idle">
+      <header className="team-idle__heading"><Users size={22} strokeWidth={1.5} aria-hidden="true" /><h1>组建团队</h1></header>
       <p className="team-idle__hint">
         {live
           ? (canContinue ? '用刚才的任务组一组，或选一个模板。' : '选一个模板，填好目标后开始。')

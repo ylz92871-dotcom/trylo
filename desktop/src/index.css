@@ -18,18 +18,25 @@
 @import './styles/components/chat-panel.css';
 @import './styles/components/cognition-badge.css';
 @import './styles/components/learning-receipt.css';
+@import './styles/components/workflow-receipt.css';
 @import './styles/components/browser-preview.css';
+@import './styles/components/agent-model-preview.css';
 @import './styles/components/input-bar.css';
+@import './styles/components/workspace-picker.css';
+@import './components/chat/goal-control.css';
 @import './styles/components/logo.css';
 @import './styles/components/fun-placeholder.css';
 @import './styles/components/message-list.css';
+@import './styles/components/conversation-bookshelf.css';
 @import './styles/components/message.css';
+@import './styles/components/inline-file-reference.css';
 @import './styles/components/landing-surface.css';
 @import './styles/components/left-rail.css';
 @import './styles/components/profile-card.css';
 @import './styles/components/right-rail.css';
 @import './styles/components/file-peek.css';
 @import './styles/components/preview.css';
+@import './styles/components/word-media.css';
 @import './styles/components/disclosure.css';
 @import './styles/components/tool-card.css';
 @import './styles/components/file-change-card.css';
@@ -43,7 +50,9 @@
 @import './styles/components/turn-divider.css';
 @import './styles/components/context-ring.css';
 @import './styles/components/attachment-list.css';
-@import './styles/components/process-header.css';
+@import './styles/components/composer-actions.css';
+@import './styles/components/runtime-notice.css';
+@import './styles/components/browser-navigation-error.css';
 @import './styles/components/task-header.css';
 @import './styles/components/streaming-indicator.css';
 @import './styles/components/spinner.css';
@@ -53,6 +62,9 @@
 @import './styles/components/remote-pairing-modal.css';
 @import './styles/components/error-card.css';
 @import './styles/components/result-dock.css';
+@import './styles/components/source-reader.css';
+@import './styles/components/code-review.css';
+@import './styles/scrollbars.css';
 @import './styles/components/work-task-menu.css';
 @import './styles/components/activity-center.css';
 @import './styles/components/approval-card.css';
@@ -75,15 +87,11 @@
 @import './styles/components/team-run.css';
 @import './styles/components/seat-detail.css';
 
-/* v1.16.5: Work sub-app CSS. Lives in
- * ../../work/src/renderer/ (sibling package, see
- * ../../../work/README.md). Imported via relative path
- * rather than the @trylo/work alias because Vite's prefix
- * alias for `@trylo/work/` doesn't resolve CSS files the
- * way the TypeScript `paths` mapping does — the package's
- * index.ts gets picked up as a "module" target instead.
- */
-@import '../../work/src/renderer/artifact-card.css';
-@import '../../work/src/renderer/work-capability.css';
+@import './styles/components/artifact-card.css';
+@import './styles/components/work-review.css';
+@import './styles/components/provider-setup-notice.css';
 @import './styles/components/event-flow.css';
 @import './styles/components/tool-preview.css';
+@import './styles/components/browser-tool-sidebar.css';
+@import './styles/components/browser-activity.css';
+@import './styles/components/browser-control.css';

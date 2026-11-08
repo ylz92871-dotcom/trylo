@@ -16,8 +16,9 @@
 // with the daemon. Both surfaces run on the CLI supervisor, so
 // the derivation only reads `running` / `error` / messages.
 
-import type { ChatMessage } from './types';
-import { motionPolicyFor } from './motion-policy';
+import type { ChatMessage } from './types'
+import type { CodeRunRecoveryState } from '../../runtime/runtime-types'
+import { motionPolicyFor } from './motion-policy'
 
 /** The unified visible run state (spec §5.3). */
 export type ConversationRunViewState =
@@ -33,14 +34,15 @@ export type ConversationRunViewState =
   | 'reconnecting'
   | 'completed'
   | 'failed'
-  | 'cancelled';
+  | 'cancelled'
 
 export interface DeriveRunViewStateInput {
-  readonly messages: readonly ChatMessage[];
+  readonly recoveryState?: CodeRunRecoveryState
+  readonly messages: readonly ChatMessage[]
   /** True while a Code CLI run is in flight. */
-  readonly running: boolean;
+  readonly running: boolean
   /** Code spawn error. */
-  readonly error?: boolean;
+  readonly error?: boolean
 }
 
 /** The tail of the message stream that indicates the run is
@@ -59,45 +61,65 @@ export interface DeriveRunViewStateInput {
  *  "正在准备" while the agent is actually blocked on the user —
  *  training users to distrust the heartbeat. */
 function activeRunState(messages: readonly ChatMessage[]): ConversationRunViewState {
-  let fallback: ConversationRunViewState = 'waiting_first_output';
+  let fallback: ConversationRunViewState = 'waiting_first_output'
   for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i];
-    if (!m) continue;
-    if (m.kind === 'text' && m.role === 'user') break;
-    if (m.kind === 'notice' && m.runtimeState === 'reconnecting') return 'reconnecting';
+    const m = messages[i]
+    if (!m) continue
+    if (m.kind === 'text' && m.role === 'user') break
+    if (m.kind === 'notice' && m.runtimeState === 'reconnecting') return 'reconnecting'
     if (m.kind === 'tool') {
-      if (m.status === 'running' || m.status === 'pending') return 'tool_running';
-      if (fallback === 'waiting_first_output') fallback = 'waiting_model';
+      if (m.status === 'running' || m.status === 'pending') return 'tool_running'
+      if (fallback === 'waiting_first_output') fallback = 'waiting_model'
     } else if (m.kind === 'thinking') {
-      if (m.partial) return 'thinking';
-      if (fallback === 'waiting_first_output') fallback = 'waiting_model';
+      if (m.partial) return 'thinking'
+      if (fallback === 'waiting_first_output') fallback = 'waiting_model'
     } else if (m.kind === 'text' && m.role === 'assistant') {
-      if (m.partial) return 'finalizing';
-      if (fallback === 'waiting_first_output') fallback = 'finalizing';
+      if (m.partial) return 'finalizing'
+      if (fallback === 'waiting_first_output') fallback = 'finalizing'
     } else if (m.kind === 'approval') {
-      if (m.status === 'pending') return 'awaiting_input';
+      if (m.status === 'pending') return 'awaiting_input'
     } else if (m.kind === 'input_request') {
-      if (m.status === 'pending') return 'awaiting_input';
+      if (m.status === 'pending') return 'awaiting_input'
     }
   }
-  return fallback;
+  return fallback
 }
 
 /** Single source of the visible run state (spec §5.3). */
 export function deriveConversationRunViewState(
   input: DeriveRunViewStateInput,
 ): ConversationRunViewState {
-  const { messages, running, error } = input;
+  const { messages, running, error, recoveryState } = input
+  if (recoveryState?.kind === 'unavailable') return 'failed'
+  if (recoveryState?.kind === 'reconnecting') return 'reconnecting'
+  if (recoveryState?.kind === 'streaming') {
+    const start = messages.findIndex(
+      (message) =>
+        message.kind === 'text' &&
+        message.role === 'user' &&
+        message.turnId === recoveryState.turnId,
+    )
+    if (start < 0) return 'reconnecting'
+    const later = messages.findIndex(
+      (message, index) =>
+        index > start &&
+        message.kind === 'text' &&
+        message.role === 'user' &&
+        message.steerState === undefined,
+    )
+    const state = activeRunState(messages.slice(start, later < 0 ? messages.length : later))
+    return state === 'waiting_first_output' ? 'waiting_model' : state
+  }
 
   // 1. Code spawn error → failed.
-  if (error === true) return 'failed';
+  if (error === true) return 'failed'
 
   // 2. Code run.
   if (running) {
-    return messages.length === 0 ? 'preparing' : activeRunState(messages);
+    return messages.length === 0 ? 'preparing' : activeRunState(messages)
   }
 
-  return 'idle';
+  return 'idle'
 }
 
 /**
@@ -113,46 +135,46 @@ export function deriveConversationRunViewState(
 export function viewStateLabel(state: ConversationRunViewState): string {
   switch (state) {
     case 'idle':
-      return '已就绪';
+      return '已就绪'
     case 'preparing':
     case 'waiting_first_output':
-      return '正在准备…';
+      return '正在准备…'
     case 'waiting_model':
-      return '等待模型响应…';
+      return '等待模型响应…'
     case 'thinking':
-      return '思考中…';
+      return '思考中…'
     case 'tool_running':
-      return '正在执行…';
+      return '正在执行…'
     case 'finalizing':
-      return '正在收尾…';
+      return '正在收尾…'
     case 'awaiting_input':
-      return '等待你的回复';
+      return '等待你的回复'
     case 'reconnecting':
-      return '正在重新连接…';
+      return '正在重新连接…'
     case 'completed':
-      return '已完成';
+      return '已完成'
     case 'failed':
-      return '失败';
+      return '失败'
     case 'cancelled':
-      return '已停止';
+      return '已停止'
   }
 }
 
 /** Header dot / status tone for a state: ready (green),
  *  running (amber pulse), error (red). */
-export type ViewStateTone = 'ready' | 'running' | 'error';
+export type ViewStateTone = 'ready' | 'running' | 'error'
 
 export function viewStateTone(state: ConversationRunViewState): ViewStateTone {
   switch (state) {
     case 'idle':
     case 'completed':
     case 'awaiting_input':
-      return 'ready';
+      return 'ready'
     case 'failed':
     case 'cancelled':
-      return 'error';
+      return 'error'
     default:
-      return 'running';
+      return 'running'
   }
 }
 
@@ -161,7 +183,7 @@ export function viewStateTone(state: ConversationRunViewState): ViewStateTone {
  *  the Tool loader takes over. Thin convenience over `motionPolicyFor` — the
  *  MotionPolicy (b2, spec §9.1) owns the table. */
 export function viewStateShowsFooterDots(state: ConversationRunViewState): boolean {
-  return motionPolicyFor(state).footerDots;
+  return motionPolicyFor(state).footerDots
 }
 
 /** Spec §7.2: the header dot pulses in every ACTIVE phase as the
@@ -169,5 +191,5 @@ export function viewStateShowsFooterDots(state: ConversationRunViewState): boole
  *  can all scroll out of view). Terminal and parked states stay
  *  static. Thin convenience over `motionPolicyFor`. */
 export function viewStateShowsHeaderPulse(state: ConversationRunViewState): boolean {
-  return motionPolicyFor(state).headerPulse;
+  return motionPolicyFor(state).headerPulse
 }

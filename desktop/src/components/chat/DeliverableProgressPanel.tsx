@@ -25,7 +25,7 @@ import {
   type DeliverableWorkflowDefinition,
   type PresentationOutline,
   type PresentationWorkflowProjection,
-} from '@trylo/work';
+} from '../../domain/history-deliverables';
 import type { DeliverableMessage } from './types';
 
 export interface DeliverableProgressPanelProps {

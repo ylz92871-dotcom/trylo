@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { joinRoot, resolveMentionPath, toolPathsOf } from './artifact-mention';
 
-const ROOT = 'C:/work/demo-ws';
+const ROOT = 'D:/CC/trylo';
 
 describe('artifact-mention (Round-3 P2: same-name files must not 404)', () => {
   it('resolves a clean relative path verbatim', () => {
@@ -40,8 +40,8 @@ describe('artifact-mention (Round-3 P2: same-name files must not 404)', () => {
 
   it('accepts absolute tool paths only under the workspace root', () => {
     expect(
-      resolveMentionPath(ROOT, 'report.md', ['C:/work/demo-ws/slides/report.md']),
-    ).toBe('C:/work/demo-ws/slides/report.md');
+      resolveMentionPath(ROOT, 'report.md', ['D:/CC/trylo/slides/report.md']),
+    ).toBe('D:/CC/trylo/slides/report.md');
     expect(resolveMentionPath(ROOT, 'report.md', ['D:/other/report.md'])).toBe(
       `${ROOT}/report.md`,
     );

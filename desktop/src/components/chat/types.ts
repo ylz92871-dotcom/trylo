@@ -7,6 +7,12 @@
 
 export type MessageRole = 'user' | 'assistant' | 'system';
 
+export interface GoalMessage extends MessageBase {
+  readonly kind: 'goal';
+  readonly role: 'system';
+  readonly goal: import('../../domain/goal').GoalSnapshot;
+}
+
 export interface StreamSource {
   readonly blockId?: string;
   readonly firstSeq: number;
@@ -62,14 +68,11 @@ export function isTurnTiming(value: unknown): value is TurnTiming {
 export interface TextMessage extends MessageBase {
   readonly kind: 'text';
   readonly text: string;
-  /** v1.16.8: display-only snapshot of the files/images the USER sent with
-   *  this message, so the sent bubble shows what actually went out (both
-   *  Code and Work) instead of a bare text line. `previewUrl` is a
-   *  session-scoped blob — it degrades to a plain file chip after reload.
-   *  This is NEVER used to build the CLI prompt: the host projects the real
-   *  attachment separately at send time (buildAttachmentPromptContext /
-   *  formatWorkMessage). */
+  /** Sent attachment receipt for display and history replay. File references
+   *  survive reload; previewUrl is only a session-scoped display blob. */
   readonly attachments?: readonly SentAttachment[];
+  /** Native prompt receipt, separate from whether the model later succeeded. */
+  readonly attachmentsAccepted?: boolean;
   /** v1.15.8: true while the assistant reply is still
    *  streaming. Used to show a typing cursor / dots. */
   readonly partial?: boolean;
@@ -106,6 +109,9 @@ export interface TextMessage extends MessageBase {
 }
 
 export interface NoticeMessage extends MessageBase {
+  readonly workflow?: import('../../domain/workflow-state').WorkflowState;
+  /** Display-only replay identities; execution remains owned by the CLI. */
+  readonly workflowSeenTraceIds?: readonly string[];
   readonly runtimeState?: 'reconnecting';
   readonly contextWindow?: number;
   /** Hidden measurement, distinct from cumulative billing on a turn. */
@@ -159,7 +165,7 @@ export interface ToolMessage extends MessageBase {
  * card title. The `preview` (up to 500 chars) is shown
  * only when expanded. The heuristic for the summary is
  * documented in
- * C:/work/demo-ws/trylo cli/docs/THINKING_SUMMARIZATION.md
+ * D:/CC/trylo/trylo cli/docs/THINKING_SUMMARIZATION.md
  * (3 strategies: pattern match → first sentence →
  * first 8 words).
  */
@@ -394,9 +400,9 @@ export interface ApprovalMessage extends MessageBase {
 export interface InputRequestMessage extends MessageBase {
   readonly kind: 'input_request';
   readonly requestId: string;
-  readonly questions: readonly import('@trylo/work').InputRequestQuestion[];
+  readonly questions: readonly import('../../host-adapter/input-request').InputRequestQuestion[];
   readonly status: 'pending' | 'submitted' | 'dismissed';
-  readonly answers?: Readonly<Record<string, import('@trylo/work').InputRequestAnswer>>;
+  readonly answers?: Readonly<Record<string, import('../../host-adapter/input-request').InputRequestAnswer>>;
 }
 
 // 2026-09-10 (applyWorkItem deletion面): WorkflowMessage / WorkflowPhase /
@@ -429,7 +435,7 @@ export interface InputRequestMessage extends MessageBase {
 export interface WorkRailMessage extends MessageBase {
   readonly kind: 'work_rail';
   readonly runId: string;
-  readonly projection: import('@trylo/work').WorkTurnProjection;
+  readonly projection: import('../../domain/history-presentation').WorkTurnProjection;
 }
 
 /** One white narration line (spec §5.3). Stable id
@@ -449,7 +455,7 @@ export interface WorkNarrationLine extends MessageBase {
 export interface DeliverableMessage extends MessageBase {
   readonly kind: 'deliverable';
   readonly deliverableId: string;
-  readonly projection: import('@trylo/work').PresentationWorkflowProjection;
+  readonly projection: import('../../domain/history-deliverables').PresentationWorkflowProjection;
 }
 
 export type ChatMessage =
@@ -469,7 +475,8 @@ export type ChatMessage =
   | WorkNarrationLine
   | DeliverableMessage
   | CognitionPromptMessage
-  | LearningImpactMessage;
+  | LearningImpactMessage
+  | GoalMessage;
 
 export interface CognitionPromptMessage extends MessageBase {
   readonly kind: 'cognition_prompt';
@@ -525,6 +532,9 @@ export interface SentAttachment {
   readonly name: string;
   readonly kind: string;
   readonly size?: number;
+  readonly relativePath?: string;
+  readonly path?: string;
+  readonly mediaType?: string;
   /** Session-scoped blob URL for an image thumbnail. Ephemeral — absent
    *  after reload, when the bubble falls back to a plain file chip. */
   readonly previewUrl?: string;

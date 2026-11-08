@@ -15,10 +15,23 @@ function relativePoint(x: number, y: number, space: 'screen' | 'normalized' | 'v
   return Number.isFinite(point.x) && Number.isFinite(point.y) && point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1 ? point : null
 }
 
-export function PreviewImage({ src, alt, empty, onInput, action, frameGeometry }: {
+export function PreviewImage({
+  src,
+  alt,
+  empty,
+  emptyDescription = '工具开始后自动显示操作画面',
+  toolbarPosition = 'top',
+  renderToolbar,
+  onInput,
+  action,
+  frameGeometry,
+}: {
   readonly src?: string
   readonly alt: string
   readonly empty: string
+  readonly emptyDescription?: string
+  readonly toolbarPosition?: 'top' | 'bottom'
+  readonly renderToolbar?: (toolbar: ReactElement) => ReactElement
   readonly onInput?: (params: ViewportInputParams) => Promise<void>
   readonly action?: PreviewAction
   readonly frameGeometry?: PreviewFrameGeometry
@@ -58,12 +71,16 @@ export function PreviewImage({ src, alt, empty, onInput, action, frameGeometry }
     if (inputAction === 'pressed') { event.currentTarget.focus(); event.currentTarget.setPointerCapture(event.pointerId) }
     void onInput({ kind: 'mouse', action: inputAction, x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)), y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)), button: event.button === 2 ? 'right' : 'left' })
   }
+  const toolbar = (
+    <div className="preview-image__toolbar">
+      <span>{src && size.width ? `${size.width} × ${size.height}` : '原始画面'}</span>
+      <PreviewZoom value={zoom} onChange={setZoom} />
+    </div>
+  )
+  const toolbarContent = renderToolbar ? renderToolbar(toolbar) : toolbar
   return (
     <div className="preview-image">
-      <div className="preview-image__toolbar">
-        <span>{src && size.width ? `${size.width} × ${size.height}` : '原始画面'}</span>
-        <PreviewZoom value={zoom} onChange={setZoom} />
-      </div>
+      {toolbarPosition === 'top' && toolbarContent}
       <div ref={viewportRef} className={`preview-image__viewport${zoom === 'fit' ? ' preview-image__viewport--fit' : ''}`}>
         {src ? <div className="preview-image__stage" style={size.width ? { width: imageWidth, height: imageHeight } : undefined}>
           <img src={src} alt={alt} draggable={false} tabIndex={onInput ? 0 : undefined}
@@ -81,8 +98,9 @@ export function PreviewImage({ src, alt, empty, onInput, action, frameGeometry }
           {end && point && <svg className="preview-image__drag" aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1={point.x * 100} y1={point.y * 100} x2={end.x * 100} y2={end.y * 100} /></svg>}
           {cursor && <span className="preview-image__cursor" aria-label="电脑指针位置" style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%` }}><svg width="17" height="21" viewBox="0 0 17 21" aria-hidden="true"><path d="M2 1v16l4-4 3 6 3-1-3-6h6Z" /></svg></span>}
           {point && <span key={`${action?.id}-${action?.startedAt}`} className="preview-image__target" title={action?.target || action?.title} data-click={action?.title.includes('点击')} aria-label={action?.point?.space === 'screen' ? '操作目标位置' : action?.title.includes('点击') ? '点击位置' : '操作位置'} style={{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }} />}
-        </div> : <div className="preview-image__empty"><ImageIcon size={28} strokeWidth={1} /><strong>{empty}</strong><p>工具开始后自动显示操作画面</p></div>}
+        </div> : <div className="preview-image__empty"><ImageIcon size={28} strokeWidth={1} /><strong>{empty}</strong><p>{emptyDescription}</p></div>}
       </div>
+      {toolbarPosition === 'bottom' && toolbarContent}
     </div>
   )
 }

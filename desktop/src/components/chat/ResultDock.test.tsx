@@ -13,6 +13,26 @@ import { ResultDock } from './ResultDock';
 afterEach(() => cleanup());
 
 describe('ResultDock (P2-1) — basic shell behaviour', () => {
+  it('uses a compact external-panel trigger without a preview strip or inline disclosure', () => {
+    const change = vi.fn();
+    const { container } = render(<ResultDock id="review" panelId="review-panel" mode="code"
+      title="变更审查" count={6} summary="6 个文件" status="ready" open={false} onOpenChange={change}
+      preview={<div>horizontal cards</div>}><div>inline details</div></ResultDock>);
+    const trigger = screen.getByRole('button', { name: '变更审查' });
+    expect(trigger.getAttribute('aria-controls')).toBe('review-panel');
+    expect(screen.getByText('6 个文件')).toBeTruthy();
+    expect(screen.queryByText('horizontal cards')).toBeNull();
+    expect(screen.queryByText('inline details')).toBeNull();
+    expect(container.querySelector('.disclosure')).toBeNull();
+    fireEvent.click(trigger);
+    expect(change).toHaveBeenCalledWith(true);
+  });
+
+  it('keeps a checks-only result reachable through the panel trigger', () => {
+    render(<ResultDock id="checks" panelId="review-panel" mode="code" title="变更审查"
+      count={0} summary="2 项检查" status="ready" open={false} onOpenChange={vi.fn()} />);
+    expect(screen.getByRole('button', { name: '变更审查' })).toBeTruthy();
+  });
   it('renders nothing when idle, ready, zero-count and no warning', () => {
     const { container } = render(
       <ResultDock

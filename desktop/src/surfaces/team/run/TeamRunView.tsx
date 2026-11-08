@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import { ArrowLeft, ChevronDown, ChevronRight, Network, MessagesSquare, Users } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ConversationPresentation, type ConversationTimelineEnvironment } from '../../../components/chat/ConversationPresentation';
+import { ConversationPresentation, type ConversationTimelineEnvironment, type HostedApprovalIdentity } from '../../../components/chat/ConversationPresentation';
 import { TEAM_STATUS_LABEL } from '../../shared/status';
 import { SeatDetail } from '../SeatDetail';
 import type { TeamRun } from '../team-types';
@@ -10,12 +10,14 @@ import { isTeamRunActive } from '../team-store';
 import type { SendSubagentInput } from '../../../host-adapter/subagent-contract';
 import { HandoffSummary, TeamEventFeed } from './TeamEventFeed';
 import { TeamMark } from './TeamMark';
+import { AgentAvatarScope } from '../../../components/chat/AgentAvatar';
 import { TeamGraph } from './TeamGraph';
 import { currentTask, findMember, handoffBody, handoffSender, handoffState, memberName, memberState, timeLabel } from './team-presentation';
 
 export interface TeamRunViewProps {
   readonly personView?: ReactNode;
   readonly approvals?: ReactNode;
+  readonly hostedApprovals?: readonly HostedApprovalIdentity[];
   readonly memberDrafts?: Map<string, string>;
   readonly onMemberInput?: SendSubagentInput;
   readonly run: TeamRun;
@@ -90,7 +92,7 @@ export function TeamRunView(props: TeamRunViewProps): ReactElement {
   const renderFeed = (messages?: readonly import('../../../components/chat/types').ChatMessage[], environment?: ConversationTimelineEnvironment): ReactElement =>
     <TeamEventFeed run={run} personMessages={messages} environment={environment} onSelectSeat={chooseMember} onOpenHandoff={openHandoff} />;
   const recoveryLabels = { checking: '核对中', detached: '未连接', unavailable: '待核实' };
-  return <div className="team-run" data-view={view} onKeyDown={event => {
+  return <AgentAvatarScope identities={run.seats.map(seat => seat.memberId ?? seat.id)}><div className="team-run" data-view={view} onKeyDown={event => {
     if (event.key !== 'Escape') return;
     if (event.currentTarget.querySelector('details.team-menu[open]')) { closeMenus(); event.preventDefault(); }
     else if (handoff || selected) { back(); event.preventDefault(); }
@@ -103,7 +105,7 @@ export function TeamRunView(props: TeamRunViewProps): ReactElement {
         <span className={`team-run__state team-run__state--${displayStatus}`}>{run.recovery ? recoveryLabels[run.recovery.kind] : TEAM_STATUS_LABEL[displayStatus]}</span>
         <details className="team-menu"><summary aria-label="查看所有成员及当前任务" title="成员与团队操作"><Users size={15} /><span>成员 {run.seats.length}</span><ChevronDown size={12} /></summary>
           <div className="team-menu__popup">{run.seats.map(seat => <button key={seat.id} className="team-roster-member" onClick={() => { closeMenus(); chooseMember(seat.id); }}>
-            <TeamMark role={seat.seat} size={21} /><span><strong>{memberName(seat)}</strong><small>{currentTask(seat)}</small></span><em>{memberState(seat)}</em></button>)}
+            <TeamMark role={seat.seat} identity={seat.memberId ?? seat.id} size={21} /><span><strong>{memberName(seat)}</strong><small>{currentTask(seat)}</small></span><em>{memberState(seat)}</em></button>)}
             {(props.onOpenPerson || (hasActive && props.onStopRun) || (!hasActive && props.onNewTeam)) && <div className="team-menu__actions">
               {props.onOpenPerson && <button onClick={() => { closeMenus(); props.onOpenPerson?.(); }}>打开完整 Person 对话</button>}
               {hasActive && props.onStopRun && <button onClick={() => { closeMenus(); props.onStopRun?.(); }}>停止</button>}
@@ -117,7 +119,9 @@ export function TeamRunView(props: TeamRunViewProps): ReactElement {
     {split && <div className="team-mobile-tabs" aria-label="查看区域"><button aria-pressed={mobilePane === 'person'} onClick={() => setMobilePane('person')}>{view === 'map' ? 'Person' : '事件流'}</button><button aria-pressed={mobilePane === 'team'} onClick={() => setMobilePane('team')}>团队</button></div>}
     <div className="team-workspace" ref={workspace} data-split={split} data-view={view} data-mobile-pane={mobilePane}
       style={{ '--team-left': leftWidth === undefined ? `${view === 'map' ? 36 : 48}%` : `${leftWidth}px` } as CSSProperties}>
-      <ConversationPresentation.Provider value={{ embedded: true, observeEnvironment, ...(view === 'feed' ? { timeline: renderFeed } : {}) }}>
+      <ConversationPresentation.Provider value={{ embedded: true, observeEnvironment,
+        ...(props.approvals ? { hostedApprovals: props.hostedApprovals } : {}),
+        ...(view === 'feed' ? { timeline: renderFeed } : {}) }}>
         <section className="team-workspace__person" ref={person} aria-label={view === 'map' ? '与 Person 的对话' : '团队汇报与 Person 输入'}>
           {view === 'map' && <div className="team-person-heading"><TeamMark role="personal" size={23} /><strong>Person</strong><span>与你协调这项任务</span></div>}
           {props.personView ?? <>{renderFeed()}{props.onOpenPerson && <button className="team-fallback-person" onClick={props.onOpenPerson}>回到 Person 继续对话 <ChevronRight size={14} /></button>}</>}
@@ -147,5 +151,5 @@ export function TeamRunView(props: TeamRunViewProps): ReactElement {
             {run.handoffs?.length ? <div className="team-graph-handoff"><HandoffSummary run={run} handoff={run.handoffs[run.handoffs.length - 1]!} onOpen={openHandoff} /></div> : null}</>}
       </section>}
     </div>
-  </div>;
+  </div></AgentAvatarScope>;
 }

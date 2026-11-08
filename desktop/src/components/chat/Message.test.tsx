@@ -3,6 +3,32 @@ import { describe, expect, it, vi } from 'vitest';
 import { Message } from './Message';
 import type { TurnMessage } from './types';
 
+describe('user message edit availability', () => {
+  const message = { id: 'edit-user', kind: 'text' as const, role: 'user' as const,
+    text: '原始问题', createdAt: 1 };
+
+  it('does not advertise editing without an actual host callback', () => {
+    const view = render(<Message message={message} />);
+    const bubble = view.container.querySelector<HTMLElement>('.message__bubble')!;
+    expect(bubble.getAttribute('title')).toBeNull();
+    expect(bubble.getAttribute('role')).not.toBe('button');
+    expect(bubble.getAttribute('tabindex')).toBeNull();
+    expect(bubble.style.cursor).toBe('');
+    view.unmount();
+  });
+
+  it('opens an available edit action with either Enter or Space', () => {
+    const edit = vi.fn();
+    const view = render(<Message message={message} onEditMessage={edit} />);
+    const bubble = view.getByRole('button', { name: '原始问题' });
+    expect(bubble.getAttribute('tabindex')).toBe('0');
+    fireEvent.keyDown(bubble, { key: 'Enter' });
+    fireEvent.keyDown(bubble, { key: ' ' });
+    expect(edit.mock.calls).toEqual([['edit-user'], ['edit-user']]);
+    view.unmount();
+  });
+});
+
 /** Round-3 (P1-11): a turn row, defaulted to a healthy finished turn. */
 function turnMessage(over: Partial<TurnMessage> = {}): TurnMessage {
   return { id: 'turn-1', kind: 'turn', role: 'assistant', createdAt: 10,
@@ -141,4 +167,11 @@ describe('P1-11 — the transcript shows 本轮未完成', () => {
     expect(row).toBeTruthy();
     expect(screen.getByText(/运行未成功结束/)).toBeTruthy();
   });
+});
+
+it('presents a mid-stream network failure as readable feedback with exact diagnostics', () => {
+  const raw = 'network - mid_stream:network - check connectivity and the endpoint, then retry - If this run was saved, continue in the same saved session from recorded tool results.';
+  const view = render(<Message message={{ id: 'network', role: 'system', kind: 'notice', createdAt: 1, text: raw }} />);
+  expect(screen.getByText('模型连接中断')).toBeTruthy();
+  expect(view.container.querySelector('details')?.textContent).toContain(raw);
 });

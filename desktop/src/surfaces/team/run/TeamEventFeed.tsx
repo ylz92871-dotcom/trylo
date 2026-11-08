@@ -1,11 +1,13 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { ArrowRightLeft, ChevronRight } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { AnswerLink } from '../../../components/chat/AnswerLink';
+import { compactionNoticePresentation } from '../../../components/chat/CompactionCard';
+import { AssistantAnswer } from '../../../components/chat/AssistantAnswer';
 import type { ConversationTimelineEnvironment } from '../../../components/chat/ConversationPresentation';
 import type { ChatMessage } from '../../../components/chat/types';
 import { createFollowController } from '../../../components/chat/follow-controller';
+import { ConversationBookshelf } from '../../../components/chat/conversation-bookshelf/ConversationBookshelf';
+import { conversationEntries } from '../../../components/chat/conversation-bookshelf/entries';
+import { useNativeQuestionReading } from '../../../components/chat/conversation-bookshelf/use-native-question-reading';
 import type { TeamHandoffRecord, TeamProgressReport } from '../../../domain/team-progress';
 import type { TeamRun } from '../team-types';
 import { reportHistory } from '../team-progress-projection';
@@ -26,7 +28,7 @@ export function HandoffSummary({ run, handoff, onOpen }: {
 function ReportBody({ text, environment }: { readonly text: string; readonly environment?: ConversationTimelineEnvironment }): ReactElement {
   const [expanded, setExpanded] = useState(false);
   const long = text.length > 900;
-  return <><div className={`team-report__body${long && !expanded ? ' team-report__body--collapsed' : ''}`}><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ href, children }) => <AnswerLink href={href} {...environment}>{children}</AnswerLink> }}>{text}</ReactMarkdown></div>
+  return <><div className={`team-report__body${long && !expanded ? ' team-report__body--collapsed' : ''}`}><AssistantAnswer text={text} gfm onOpenArtifact={environment?.onOpenArtifact} artifactHost={environment?.artifactHost} /></div>
     {long && <button className="team-text-action" onClick={() => setExpanded(value => !value)}>{expanded ? '收起汇报' : '展开完整汇报'}</button>}</>;
 }
 
@@ -47,12 +49,22 @@ export function TeamEventFeed({ run, personMessages = [], environment, onSelectS
       && message.createdAt >= run.createdAt) result.push({ kind: 'person', message, at: message.createdAt, key: `person:${message.id}` });
     // Actionable questions, errors and deliverables retain the personal
     // renderer and callbacks. Pending approvals remain in the existing rail.
-    for (const message of personMessages) if (['input_request', 'error', 'artifact', 'task_suggestion', 'cognition_prompt',
+    for (const message of personMessages) if ((['input_request', 'error', 'artifact', 'task_suggestion', 'cognition_prompt',
       'learning_impact', 'compaction', 'work_narration', 'deliverable'].includes(message.kind)
+      || (message.kind === 'notice' && compactionNoticePresentation(message.text) !== null))
       && message.createdAt >= run.createdAt) result.push({ kind: 'event', message, at: message.createdAt, key: `event:${message.id}` });
     return result.sort((a, b) => a.at === undefined || b.at === undefined ? 0 : a.at - b.at);
   }, [history, run.handoffs, personMessages, run.createdAt]);
+  const container = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
+  const questions = useMemo(() => {
+    const visible = new Set(items.flatMap(item =>
+      item.kind === 'person' && item.message.role === 'user' ? [item.message.id] : [],
+    ));
+    return conversationEntries(personMessages).filter(entry => visible.has(entry.id));
+  }, [items, personMessages]);
   const scroll = useRef<HTMLDivElement>(null);
+  const reading = useNativeQuestionReading(questions, scroll);
   const follow = useRef(createFollowController());
   const [away, setAway] = useState(false);
   const touch = useRef(0);
@@ -63,33 +75,56 @@ export function TeamEventFeed({ run, personMessages = [], environment, onSelectS
     follow.current.sync({ scrollTop: node.scrollTop, scrollHeight: node.scrollHeight, clientHeight: node.clientHeight });
   }, []);
   useLayoutEffect(() => { if (follow.current.isFollowing()) pin(); else setAway(true); }, [items, pin]);
-  return <div className="team-feed">
+  const locateQuestion = useCallback((id: string): void => {
+    const viewport = scroll.current;
+    const target = viewport && [...viewport.querySelectorAll<HTMLElement>('[data-conversation-question]')]
+      .find(row => row.dataset.conversationQuestion === id);
+    if (!viewport || !target) return;
+    follow.current.pause();
+    setAway(true);
+    viewport.scrollTo({
+      top: viewport.scrollTop + target.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 12,
+      behavior: 'auto',
+    });
+    follow.current.sync({
+      scrollTop: viewport.scrollTop,
+      scrollHeight: viewport.scrollHeight,
+      clientHeight: viewport.clientHeight,
+    });
+    target.focus({ preventScroll: true });
+    delete target.dataset.conversationLocated;
+    void target.offsetHeight;
+    target.dataset.conversationLocated = 'true';
+  }, []);
+  return <div className="team-feed" ref={container}>
     <div className="team-feed__scroll" ref={scroll} tabIndex={0} aria-label="团队事件流"
       onWheel={event => { if (event.deltaY < 0) follow.current.pause(); }}
       onTouchStart={event => { touch.current = event.touches[0]?.clientY ?? 0; }}
       onTouchMove={event => { const y = event.touches[0]?.clientY ?? touch.current; if (y > touch.current) follow.current.pause(); touch.current = y; }}
       onKeyDown={event => { if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) follow.current.pause(); }}
       onScroll={event => { const node = event.currentTarget; follow.current.observe({ scrollTop: node.scrollTop, scrollHeight: node.scrollHeight, clientHeight: node.clientHeight }); if (follow.current.isFollowing()) setAway(false); }}>
-      <div className="team-feed__content">
+      <div className="team-feed__content" ref={content}>
         {items.length === 0 && <p className="team-feed__empty">{run.lifecycle === 'closed' ? '这份历史没有独立的进展汇报。原始任务与完整答复保留在各成员会话中。' : '成员的进展汇报会在这里追加。点击下方成员，可以查看完整执行过程。'}</p>}
         {items.map(item => {
           if (item.kind === 'handoff') return <HandoffSummary key={item.key} run={run} handoff={item.handoff} onOpen={onOpenHandoff} />;
           if (item.kind === 'event') return <div className="team-feed__event" key={item.key}>{environment?.renderEvent?.(item.message)}</div>;
-          if (item.kind === 'person') return <article key={item.key} className={`team-report${item.message.role === 'user' ? ' team-report--user' : ''}`}>
+          if (item.kind === 'person') return <article key={item.key} data-conversation-question={item.message.role === 'user' ? item.message.id : undefined} tabIndex={item.message.role === 'user' ? -1 : undefined} className={`team-report${item.message.role === 'user' ? ' team-report--user' : ''}`}>
             {item.message.role !== 'user' && <TeamMark role="personal" />}<div><div className="team-report__meta"><strong>{item.message.role === 'user' ? '你' : 'Person'}</strong><time>{timeLabel(item.at)}</time></div><ReportBody text={item.message.text} environment={environment} /></div></article>;
           const { report } = item;
           const seat = findMember(run, report.seatId, report.memberId);
           const name = seat ? memberName(seat) : run.frozenProfile.members.find(member => member.memberId === report.memberId)?.displayName ?? '历史成员';
           return <article className={`team-report${report.kind === 'error' ? ' team-report--error' : ''}`} key={item.key} data-report-id={report.id}>
-            {seat ? <button className="team-avatar-button" onClick={() => onSelectSeat(seat.id)} aria-label={`查看${name}的当前工作`}><TeamMark role={seat.seat} /></button> : <span />}
+            {seat ? <button className="team-avatar-button" onClick={() => onSelectSeat(seat.id)} aria-label={`查看${name}的当前工作`}><TeamMark role={seat.seat} identity={seat.memberId ?? seat.id} /></button> : <span />}
             <div><div className="team-report__meta">{seat ? <button onClick={() => onSelectSeat(seat.id)} className="team-report__author" aria-label={`查看${name}的执行过程`}>{name}<ChevronRight size={12} /></button> : <strong>{name}</strong>}
-              {report.kind === 'blocked' && <span>遇到阻碍</span>}{report.kind === 'ready' && <span>待接续</span>}<time>{timeLabel(report.at)}</time></div>
+              {['error', 'blocked', 'ready'].includes(report.kind) && <span className="team-report__state" data-kind={report.kind}>{report.kind === 'error' ? '执行失败' : report.kind === 'blocked' ? '遇到阻碍' : '待接续'}</span>}<time>{timeLabel(report.at)}</time></div>
               <ReportBody text={report.text} environment={environment} />{report.streaming && <span className="team-report__streaming" role="status">正在汇报…</span>}
             </div></article>;
         })}
         {away && <button className="team-feed__latest" onClick={() => { follow.current.rearm(); pin(); setAway(false); }}>查看最新进展 ↓</button>}
       </div>
     </div>
+    <ConversationBookshelf key={run.id} entries={questions} activeId={reading}
+      onNavigate={locateQuestion} containerRef={container} viewportRef={scroll} contentRef={content} />
     <div className="team-feed__activity" aria-label="当前成员状态">{run.seats.slice(0, 6).map(seat => <button key={seat.id} onClick={() => onSelectSeat(seat.id)}>{memberName(seat)} · {memberState(seat)}</button>)}</div>
   </div>;
 }

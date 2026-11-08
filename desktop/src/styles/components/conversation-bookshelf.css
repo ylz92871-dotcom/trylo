@@ -1,0 +1,573 @@
+/* Approved bookshelf presentation; all feature selectors are scoped. */
+
+.team-feed:has(> .conversation-bookshelf) {
+  position: relative;
+}
+
+.conversation-bookshelf {
+  --shelf-row: 8px;
+  --shelf-row-preferred: 8px;
+  --shelf-capacity-row: 7px;
+  --max-books: 72;
+  --shelf-pager: 14px;
+  --page-width: 196px;
+  --page-preferred-height: 154px;
+  --page-height: 160px;
+  --pull-distance: 24px;
+  --motion-ms: 680;
+  --book-rest-ink: color-mix(in srgb, var(--fg-muted) 85%, var(--bg));
+  --case-edge: color-mix(in srgb, var(--bg) 70%, var(--fg));
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  z-index: 8;
+  width: 24px;
+  pointer-events: none;
+  outline: none;
+  isolation: isolate;
+}
+
+.conversation-bookshelf .shelf-launcher {
+  position: absolute;
+  z-index: 10;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 32px;
+  padding: 0;
+  border-radius: 6px;
+  color: var(--fg-muted);
+  pointer-events: auto;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+.conversation-bookshelf .shelf-launcher svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.conversation-bookshelf .shelf-launcher .launcher-close {
+  display: none;
+}
+.conversation-bookshelf .shelf-launcher:hover,
+.conversation-bookshelf .shelf-launcher:focus-visible {
+  color: var(--fg);
+  background: transparent;
+}
+.conversation-bookshelf[data-expanded='true'] .launcher-books {
+  display: none;
+}
+.conversation-bookshelf[data-expanded='true'] .launcher-close {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+.conversation-bookshelf .shelf-panel {
+  position: absolute;
+  left: 0;
+  width: 22px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-4px);
+  pointer-events: none;
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease,
+    visibility 150ms;
+}
+.conversation-bookshelf[data-expanded='true'] .shelf-panel {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.conversation-bookshelf[data-slow='true'] {
+  --motion-ms: 2200;
+}
+.conversation-bookshelf .shelf-books {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.conversation-bookshelf .shelf-frame {
+  position: absolute;
+  left: 0;
+  top: -4px;
+  width: 22px;
+  height: calc(100% + 8px);
+  overflow: visible;
+  pointer-events: none;
+}
+.conversation-bookshelf .case-rail {
+  fill: none;
+  stroke: var(--case-edge);
+  stroke-width: 0.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.75;
+}
+.conversation-bookshelf .case-back {
+  fill: none;
+  stroke: var(--case-edge);
+  stroke-width: 0.4;
+  stroke-linecap: round;
+  opacity: 0.35;
+}
+.conversation-bookshelf .shelf-book {
+  position: relative;
+  flex: none;
+  width: 22px;
+  height: var(--shelf-row);
+  color: var(--book-rest-ink);
+}
+.conversation-bookshelf .shelf-book[aria-current='location'] {
+  color: var(--brand);
+}
+.conversation-bookshelf .shelf-book[data-returning='true'] {
+  z-index: 2;
+}
+.conversation-bookshelf .shelf-book[data-open='true'] {
+  z-index: 3;
+  color: var(--fg);
+}
+.conversation-bookshelf .shelf-book[data-open='true'][aria-current='location'] {
+  color: var(--brand);
+}
+.conversation-bookshelf .book-trigger {
+  position: absolute;
+  inset: 0;
+  width: 22px;
+  height: var(--shelf-row);
+  padding: 0;
+  border-radius: 3px;
+}
+.conversation-bookshelf .book-trigger:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.conversation-bookshelf .book-viewport {
+  position: absolute;
+  left: 0;
+  top: calc(var(--shelf-row) / 2 - 4px - var(--page-height) - 20px);
+  width: calc(var(--page-width) + 28px);
+  height: calc(var(--page-height) + 44px);
+  clip-path: inset(0 0 0 4px);
+  pointer-events: none;
+}
+.conversation-bookshelf .book-pull {
+  position: absolute;
+  left: -8px;
+  top: calc(var(--page-height) + 20px);
+  width: 24px;
+  height: 8px;
+  transform: translateX(0);
+}
+.conversation-bookshelf .book-plan {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--book-width, 24px);
+  height: 8px;
+  transform-origin: 0 4px;
+  transform: scaleY(var(--book-thickness, 1));
+  pointer-events: none;
+  z-index: 2;
+}
+.conversation-bookshelf .shelf-book[data-open='true'] .book-plan {
+  color: var(--fg-muted);
+}
+.conversation-bookshelf .edge-paper {
+  position: absolute;
+  left: 0;
+  right: 3px;
+  top: -1.5px;
+  height: 11px;
+  background: var(--bg);
+}
+.conversation-bookshelf .edge-lines {
+  position: absolute;
+  left: 0;
+  top: -2px;
+  width: calc(100% - 7px);
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 0.6;
+}
+.conversation-bookshelf .edge-binding {
+  position: absolute;
+  right: 0;
+  top: -2px;
+  width: 8px;
+  height: 12px;
+  fill: var(--bg);
+  stroke: currentColor;
+  stroke-width: 0.6;
+}
+.conversation-bookshelf .book-profile {
+  position: absolute;
+  overflow: visible;
+  left: 0;
+  top: 0;
+  width: 24px;
+  height: 8px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 0.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 1;
+  transition: opacity 100ms ease;
+}
+.conversation-bookshelf .book-profile path,
+.conversation-bookshelf .edge-lines path {
+  vector-effect: non-scaling-stroke;
+}
+.conversation-bookshelf .book-complete {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+.conversation-bookshelf .shelf-book:is([data-open='true'], [data-returning='true']) .book-profile {
+  opacity: 0;
+}
+.conversation-bookshelf .shelf-book:is([data-open='true'], [data-returning='true']) .book-complete {
+  opacity: 1;
+}
+.conversation-bookshelf .edge-binding .inner-binding,
+.conversation-bookshelf .edge-lines .inner-paper {
+  fill: none;
+  stroke-width: 0.45;
+  opacity: 0.7;
+}
+.conversation-bookshelf .edge-fore {
+  position: absolute;
+  left: 1px;
+  top: -0.5px;
+  height: 9px;
+  width: 0.55px;
+  background: currentColor;
+  opacity: 0.8;
+}
+.conversation-bookshelf .book-page {
+  position: absolute;
+  left: 0;
+  bottom: 4px;
+  width: var(--page-width);
+  height: var(--leaf-height, var(--page-height));
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-bottom: 0;
+  border-radius: 3px 3px 0 0;
+  background: var(--bg);
+  color: var(--fg);
+  box-shadow: 0 4px 16px #00000009;
+  transform-origin: 0 100%;
+  transform: perspective(900px) rotateX(-90deg) scaleX(0.222222);
+  opacity: 0;
+  backface-visibility: hidden;
+  pointer-events: none;
+  text-align: left;
+  cursor: pointer;
+}
+.conversation-bookshelf .shelf-book[data-open='true'] .book-page {
+  pointer-events: auto;
+}
+.conversation-bookshelf .book-page:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.conversation-bookshelf .page-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 10px 12px 9px;
+  opacity: 0;
+  transform: translateY(2px);
+  overflow: hidden;
+}
+.conversation-bookshelf .page-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  color: var(--fg-muted);
+  font: 10px/1.3 var(--font-body);
+  font-variant-numeric: tabular-nums;
+}
+.conversation-bookshelf .page-question {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  flex: none;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--fg);
+  font: 500 12px/1.7 var(--font-body);
+}
+.conversation-bookshelf .page-answer {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  flex-shrink: 1;
+  min-height: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  margin-top: 7px;
+  padding-top: 0;
+  color: var(--fg-muted);
+  font: 12px/1.65 var(--font-body);
+}
+.conversation-bookshelf .page-action {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: auto;
+  padding-top: 6px;
+  flex: none;
+  color: var(--fg-muted);
+  font: 10px/1.4 var(--font-body);
+}
+.conversation-bookshelf .page-action svg {
+  width: 12px;
+  height: 12px;
+}
+.conversation-bookshelf[data-compact-page='true'] .page-answer {
+  display: none;
+}
+.conversation-bookshelf[data-compact-page='true'] .page-content {
+  padding-top: 10px;
+  padding-bottom: 9px;
+}
+.conversation-bookshelf .shelf-page {
+  width: 22px;
+  height: var(--shelf-pager);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--fg-muted);
+  opacity: 0;
+  transition: opacity 130ms ease;
+}
+.conversation-bookshelf .shelf-page svg {
+  width: 10px;
+  height: 10px;
+}
+.conversation-bookshelf:is(:hover, :focus-within) .shelf-page:not(:disabled) {
+  opacity: 0.8;
+}
+.conversation-bookshelf .shelf-page:disabled {
+  cursor: default;
+  opacity: 0;
+}
+.conversation-bookshelf .shelf-page:focus-visible {
+  opacity: 1;
+  outline: 1px solid var(--focus-ring);
+  outline-offset: 0;
+  border-radius: 3px;
+}
+:root[data-theme='dark'] .conversation-bookshelf .book-page {
+  box-shadow: 0 4px 18px #00000028;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-bookshelf *,
+  .conversation-bookshelf *:before,
+  .conversation-bookshelf *:after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* The rack lives inside the original 32px margin; it never reserves thread width. */
+.conversation-bookshelf[data-expanded='true'] .shelf-launcher {
+  top: var(--shelf-close-top);
+  height: 22px;
+  transform: none;
+}
+.conversation-bookshelf .shelf-launcher .launcher-books {
+  width: 14px;
+  height: 14px;
+}
+
+/* Resting motifs stay compact; the moving book keeps its current geometry. */
+
+/* Clear, immediate hover feedback without a filled row or wider resting books. */
+.conversation-bookshelf .book-profile {
+  translate: var(--peek-x, 0px) 0;
+}
+.conversation-bookshelf .shelf-book[data-pointed='true'] {
+  color: var(--fg);
+  --peek-x: 2px;
+}
+.conversation-bookshelf .shelf-book[data-pointed='true'][aria-current='location'] {
+  color: var(--brand);
+}
+.conversation-bookshelf .shelf-book[data-pointed='true'] .book-profile {
+  stroke-width: 1;
+}
+.conversation-bookshelf .shelf-book[data-pointed='true']::after {
+  content: '';
+  position: absolute;
+  left: 1px;
+  top: calc(50% - 1.5px);
+  width: 2px;
+  height: 3px;
+  border-radius: 1px;
+  background: currentColor;
+  pointer-events: none;
+}
+.conversation-bookshelf .shelf-book[data-direction='down'] .book-page {
+  top: 4px;
+  bottom: auto;
+  border-top: 0;
+  border-bottom: 1px solid var(--border-strong);
+  border-radius: 0 0 3px 3px;
+  transform-origin: 0 0;
+}
+
+/* A downward page needs the same uncropped space below its spine as above. */
+.conversation-bookshelf .shelf-book[data-direction='down'] .book-viewport {
+  height: calc(var(--page-height) * 2 + 44px);
+}
+
+/* The bookmark identifies the reading position instead of decorating every book. */
+/* Reading position projects activeId; temporary pointer focus stays separate. */
+.conversation-bookshelf .shelf-book[aria-current='location'] {
+  --peek-x: 2px;
+}
+.conversation-bookshelf .shelf-book[aria-current='location'] .book-profile {
+  stroke-width: 1.25;
+  fill: none;
+}
+.conversation-bookshelf .shelf-book[aria-current='location'] .book-plan {
+  color: var(--brand);
+}
+.conversation-bookshelf .shelf-book[aria-current='location']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: calc(50% - 3px);
+  width: 3px;
+  height: 6px;
+  background: var(--brand);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 72%, 0 100%);
+  pointer-events: none;
+}
+.conversation-bookshelf .shelf-book[aria-current='location'][data-pointed='true']::after {
+  display: none;
+}
+.conversation-bookshelf .current-reading-label {
+  display: none;
+}
+.conversation-bookshelf .shelf-book[aria-current='location'] .current-reading-label {
+  display: inline-flex;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+/* Ink is readable before the paper unfolds; it adds no second card surface. */
+.conversation-bookshelf .book-page .page-content {
+  visibility: hidden;
+}
+.conversation-bookshelf .shelf-ink {
+  position: absolute;
+  z-index: 5;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--fg);
+  text-align: left;
+  opacity: 1;
+  pointer-events: auto;
+}
+.conversation-bookshelf .shelf-ink .page-content {
+  height: 100%;
+  padding: 0;
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+}
+.conversation-bookshelf .shelf-ink[data-current='true'] .current-reading-label {
+  display: inline-flex;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 9px;
+  line-height: 1.2;
+}
+.conversation-bookshelf .shelf-ink:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: 4px;
+}
+
+.conversation-bookshelf button {
+  border: 0;
+  background: transparent;
+  font-family: var(--font-body);
+}
+.conversation-bookshelf [hidden] {
+  display: none !important;
+}
+/* The same page floats over prose only while deliberately previewing a book. */
+.conversation-bookshelf[data-presentation='overlay'] .shelf-ink {
+  background: var(--bg);
+  box-shadow: 0 0 0 8px var(--bg);
+}
+
+:is(.conversation-row, .team-report)[data-conversation-located='true'] {
+  position: relative;
+}
+:is(.conversation-row, .team-report)[data-conversation-located='true']::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 8px;
+  height: 20px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--brand);
+  animation: conversation-locate 1300ms ease both;
+  pointer-events: none;
+}
+@keyframes conversation-locate {
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.conversation-row, .team-report)[data-conversation-located='true']::before {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* Navigation focuses an article, not an editable control. Use the locate mark. */
+:is(.conversation-row, .team-report)[data-conversation-question]:focus {
+  outline: none;
+}

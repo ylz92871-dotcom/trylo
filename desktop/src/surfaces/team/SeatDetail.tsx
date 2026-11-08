@@ -14,7 +14,7 @@ import { assignmentText } from './team-progress-projection';
 export interface SeatDetailProps {
   readonly observing?: boolean;
   readonly onOpenArtifact?: (path: string) => void;
-  readonly artifactHost?: import('@trylo/work').HostAdapter;
+  readonly artifactHost?: import('../../host-adapter/artifact-actions').ArtifactHost;
   readonly workspacePath?: string;
   readonly embedded?: boolean;
   readonly conversationKey?: string;
@@ -44,13 +44,13 @@ export function SeatDetail(props: SeatDetailProps): ReactElement {
   const detailedAgent = { ...agent, observations };
 
   if (props.embedded) return <div className="team-member-pane">
-    <header className="team-member-head"><div className="team-member-head__identity"><TeamMark role={seat.seat} /><div><strong>{name}</strong><span title={currentTask(seat)}>{currentTask(seat)}</span></div></div>
+    <header className="team-member-head"><div className="team-member-head__identity"><TeamMark role={seat.seat} identity={seat.memberId ?? seat.id} /><div><strong>{name}</strong><span title={currentTask(seat)}>{currentTask(seat)}</span></div></div>
       <div className="team-member-head__actions"><small>{memberState(seat)}</small><details className="team-menu"><summary>职责</summary><div className="team-menu__popup">{TEAM_ROLE_DUTY[seat.seat]}{independent ? ' · 保留独立判断' : ''}{props.onOpenPerson && <button onClick={props.onOpenPerson}>整体调整交给 Person</button>}</div></details>
         {props.onCancel && canCancel && <button className="team-text-action" onClick={() => props.onCancel?.(seat.id)}>取消</button>}
         <button className="team-icon-button" aria-label="返回团队视图" onClick={props.onBack}><X size={17} /></button></div></header>
     {showConversation && props.drafts ? <SubagentConversation key={agent.id} agent={{ ...detailedAgent,
       prompt: agent.prompt === undefined ? undefined : assignmentText(agent.prompt),
-      conversation: agent.conversation?.map(round => ({ ...round, prompt: round.prompt === undefined ? undefined : assignmentText(round.prompt) })) }} variant="team" avatar={<TeamMark role={seat.seat} size={20} />}
+      conversation: agent.conversation?.map(round => ({ ...round, prompt: round.prompt === undefined ? undefined : assignmentText(round.prompt) })) }} variant="team" avatar={<TeamMark role={seat.seat} identity={seat.memberId ?? seat.id} size={20} />}
       onOpenArtifact={props.onOpenArtifact} artifactHost={props.artifactHost} workspacePath={props.workspacePath}
       observing={props.observing}
       drafts={props.drafts} onClose={props.onBack} onSend={props.onMemberInput} />

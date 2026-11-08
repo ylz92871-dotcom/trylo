@@ -1,8 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { AlertCircle, ChevronDown, Info } from 'lucide-react'
-import { Logo } from '../brand/Logo'
+import { AlertCircle, Info } from 'lucide-react'
 import { PreviewImage } from './PreviewImage'
-import { PreviewActions } from './PreviewActions'
+import { ComputerPreviewFooter } from './ComputerPreviewFooter'
 import { PreviewActivity, PreviewStreamBadge } from './PreviewActivity'
 import { useAppearance } from '../../settings/appearance-store'
 import {
@@ -61,7 +60,7 @@ export function ComputerPreviewWindow(): ReactElement {
         ...currentAction,
         title,
         status,
-        target: currentAction.target ? `『${currentAction.target}』` : '',
+        target: currentAction.target ?? '',
       }
     : undefined
   const history = (state.actions?.filter((action) => action.id !== currentAction?.id) ?? []).map(
@@ -90,8 +89,12 @@ export function ComputerPreviewWindow(): ReactElement {
   return (
     <main className="computer-preview-window" aria-label="电脑观察窗">
       <header>
-        <Logo size={18} decorative />
-        <span>电脑</span>
+        <PreviewActivity
+          action={activityAction}
+          title={title}
+          status={status}
+          detail={status === '失败' ? state.detail || '操作未完成，请查看目标窗口。' : undefined}
+        />
         <PreviewStreamBadge state={streamState} retained={Boolean(state.dataUrl)} />
         <details key={`details:${state.scope ?? ''}`} className="computer-preview-window__details">
           <summary aria-label="画面与操作详情" title="画面与操作详情">
@@ -118,6 +121,7 @@ export function ComputerPreviewWindow(): ReactElement {
                 </>
               )}
             </dl>
+            <p>这是观察窗口。关闭窗口不会停止任务。</p>
             <p>100% 查看原始细节，适应用于查看全局。</p>
             {state.streamDetail && <p>画面：{state.streamDetail}</p>}
             {status === '失败' && state.detail && <p>操作：{state.detail}</p>}
@@ -125,18 +129,12 @@ export function ComputerPreviewWindow(): ReactElement {
           </div>
         </details>
       </header>
-      <PreviewActivity
-        action={activityAction}
-        title={title}
-        status={status}
-        detail={status === '失败' ? state.detail || '操作未完成，请查看目标窗口。' : undefined}
-      />
       <div className="computer-preview-window__picture">
         {streamError && (
           <div className="computer-preview-window__notice" role="alert">
             <AlertCircle size={14} />
             <span>
-              画面：{streamError}
+              {streamError}
               {status === '执行中' ? ' 工具仍在执行。' : ''}
             </span>
           </div>
@@ -152,23 +150,21 @@ export function ComputerPreviewWindow(): ReactElement {
                 ? '电脑画面连接失败'
                 : '等待电脑操作'
           }
+          emptyDescription={
+            streamState === 'starting'
+              ? '工具已开始，收到画面后会自动显示。'
+              : streamState === 'error'
+                ? '连接恢复后会自动更新，工具状态见上方。'
+                : '工具开始操作电脑后，画面会在这里显示。'
+          }
+          toolbarPosition="bottom"
+          renderToolbar={toolbar => (
+            <ComputerPreviewFooter toolbar={toolbar} actions={history} />
+          )}
           action={currentAction ? { ...currentAction, status } : undefined}
           frameGeometry={state.frameGeometry}
         />
       </div>
-      <details key={`history:${state.scope ?? ''}`} className="computer-preview-window__history">
-        <summary>
-          <span>最近操作 · {history.length}</span>
-          <span className="computer-preview-window__history-toggle">
-            <span className="computer-preview-window__expand">展开</span>
-            <span className="computer-preview-window__collapse">收起</span>
-            <ChevronDown size={14} />
-          </span>
-        </summary>
-        <div className="computer-preview-window__history-panel">
-          {history.length ? <PreviewActions actions={history} /> : <p>还没有更早的操作</p>}
-        </div>
-      </details>
     </main>
   )
 }

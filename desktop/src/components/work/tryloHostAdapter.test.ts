@@ -17,14 +17,14 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 
 import { createTryloHostAdapter } from './tryloHostAdapter';
 
-const ROOT = 'C:/work/demo-ws';
+const ROOT = 'D:/CC/trylo';
 
 describe('createTryloHostAdapter (§9.3)', () => {
   it('forwards contained targets with the allowed root', async () => {
     const adapter = createTryloHostAdapter(ROOT);
-    await adapter.openFile('C:/work/demo-ws/.trylo/out/a.md');
+    await adapter.openFile('D:/CC/trylo/.trylo/out/a.md');
     expect(invokeMock).toHaveBeenCalledWith('work_host_open_file', {
-      filePath: 'C:/work/demo-ws/.trylo/out/a.md',
+      filePath: 'D:/CC/trylo/.trylo/out/a.md',
       allowedRoot: ROOT,
     });
   });
@@ -47,7 +47,7 @@ describe('createTryloHostAdapter (§9.3)', () => {
     invokeMock.mockClear();
     const adapter = createTryloHostAdapter(ROOT);
     await expect(
-      adapter.showInFolder('C:/work/demo-ws/../../secrets/key.pem'),
+      adapter.showInFolder('D:/CC/trylo/../../secrets/key.pem'),
     ).rejects.toThrow(/越级段/);
     expect(invokeMock).not.toHaveBeenCalled();
   });
@@ -65,12 +65,12 @@ describe('createTryloHostAdapter (§9.3)', () => {
   it('gates openFileWithApp the same way and forwards the app fields', async () => {
     invokeMock.mockClear();
     const adapter = createTryloHostAdapter(ROOT);
-    await adapter.openFileWithApp('C:/work/demo-ws/.trylo/out/a.docx', {
+    await adapter.openFileWithApp('D:/CC/trylo/.trylo/out/a.docx', {
       name: 'Microsoft Word',
       identifier: 'winword',
     });
     expect(invokeMock).toHaveBeenCalledWith('work_host_open_file_with_app', {
-      filePath: 'C:/work/demo-ws/.trylo/out/a.docx',
+      filePath: 'D:/CC/trylo/.trylo/out/a.docx',
       appIdentifier: 'winword',
       appName: 'Microsoft Word',
       allowedRoot: ROOT,
@@ -90,12 +90,12 @@ describe('createTryloHostAdapter (§9.3)', () => {
     invokeMock.mockRejectedValueOnce(new Error('目标不存在或不可访问'));
     const onActionError = vi.fn();
     const adapter = createTryloHostAdapter(ROOT, onActionError);
-    await expect(adapter.openFile('C:/work/demo-ws/.trylo/out/gone.md')).rejects.toThrow(
+    await expect(adapter.openFile('D:/CC/trylo/.trylo/out/gone.md')).rejects.toThrow(
       /目标不存在或不可访问/,
     );
     expect(onActionError).toHaveBeenCalledWith(
       '目标不存在或不可访问',
-      'C:/work/demo-ws/.trylo/out/gone.md',
+      'D:/CC/trylo/.trylo/out/gone.md',
     );
   });
 });

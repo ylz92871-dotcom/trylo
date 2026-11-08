@@ -32,7 +32,7 @@
 }
 
 .team-composer__back:hover {
-  background: var(--ink-hover);
+  background: var(--team-hover);
   color: var(--ink-paper);
 }
 
@@ -69,7 +69,7 @@
 }
 
 .team-composer__ghost:hover:not(:disabled) {
-  background: var(--ink-hover);
+  background: var(--team-hover);
   color: var(--ink-paper);
 }
 
@@ -91,8 +91,8 @@
 }
 
 .team-composer__start:hover:not(:disabled) {
-  border-color: var(--brand);
-  color: var(--brand);
+  border-color: var(--fg-muted);
+  color: var(--fg-muted);
 }
 
 .team-composer__start:disabled {
@@ -130,7 +130,7 @@
 
 .team-composer__goal-input:focus {
   outline: none;
-  border-color: var(--brand);
+  border-color: var(--fg-muted);
 }
 
 .team-composer__field-label {
@@ -174,7 +174,7 @@
 }
 
 .team-composer__member-row--selected {
-  background: var(--brand-soft);
+  background: var(--team-selected);
 }
 
 .team-composer__member-name {
@@ -215,7 +215,7 @@
 }
 
 .team-composer__member-remove:hover:not(:disabled) {
-  background: var(--ink-hover);
+  background: var(--team-hover);
   color: var(--danger);
 }
 
@@ -243,7 +243,7 @@
 }
 
 .team-composer__add-role:hover {
-  background: var(--ink-hover);
+  background: var(--team-hover);
   color: var(--ink-paper);
 }
 
@@ -295,7 +295,7 @@
 .team-composer__text-input:focus,
 .team-composer__select:focus {
   outline: none;
-  border-color: var(--brand);
+  border-color: var(--fg-muted);
 }
 
 .team-composer__textarea {
@@ -311,7 +311,7 @@
 
 .team-composer__textarea:focus {
   outline: none;
-  border-color: var(--brand);
+  border-color: var(--fg-muted);
 }
 
 .team-composer__char-count {
@@ -364,7 +364,7 @@
 }
 
 .team-composer__tool input[type='checkbox'] {
-  accent-color: var(--brand);
+  accent-color: var(--fg-muted);
 }
 
 .team-composer__locked-tag {
@@ -372,3 +372,14 @@
   font-size: 11px;
   color: var(--ink-mute);
 }
+
+.team-composer__title { font-size:16px; }
+.team-composer__head { padding-bottom:16px; }
+.team-composer__start { background:var(--fg); color:var(--bg); border-color:transparent; border-radius:7px; }
+.team-composer__start:hover:not(:disabled) { color:var(--bg); border-color:transparent; opacity:.85; }
+.team-composer__start:disabled { background:var(--team-hover); color:var(--fg-muted); opacity:1; }
+.team-composer__goal { margin-top:20px; }
+.team-composer__goal-input { height:38px; border-radius:7px; }
+.team-composer__member-row { min-height:44px; border-radius:7px; }
+.team-composer__member-name { padding:8px 12px; }
+.team-composer__body { margin-top:20px; }

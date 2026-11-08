@@ -5,6 +5,8 @@
 // here and `team-profile-types.lock.test.ts` keeps the two copies
 // field-identical (same pattern as seats / engineering-contract).
 
+import type { ExpertSelection } from '../../../../new trylo cli/src/internal/subagent/experts/browser';
+
 export type TeamProfileSurface = 'code' | 'work';
 export type TeamProfileOrigin = 'builtin' | 'custom';
 
@@ -20,6 +22,7 @@ export type TeamRoleId =
 export type TeamMemberId = string;
 
 export interface TeamMemberOverlay {
+  readonly expert?: ExpertSelection;
   readonly model: 'inherit' | string;
   readonly tools?: readonly string[];
   readonly disallowedTools?: readonly string[];

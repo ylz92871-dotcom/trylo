@@ -13,6 +13,7 @@ const selected = { computer: true, browserDebug: false, cad: false }
 function platform(overrides: Partial<ToolPlatformState> = {}): ToolPlatformState {
   const packages: ToolPackageHealth[] = catalog.packages.map((item) => ({
     ...item,
+    builtIn: ['officecli', 'playwright', 'chrome-devtools', 'windows-mcp'].includes(item.id),
     adoption: 'trial',
     serverName: item.id,
     state: 'not-installed',
@@ -55,6 +56,31 @@ it('the real settings tools category retains the catalogue when platform props a
   expect(screen.getByRole('region', { name: '工具目录' })).toBeVisible()
 })
 
+it('puts browser selection above the tool rows and switches it directly', () => {
+  render(<SettingsModal open initial={{ ...settingsDefaults, workBrowserDebug: true, workComputer: false }} initialTab="tools" onClose={vi.fn()} />)
+  const playwright = screen.getByRole('radio', { name: 'Playwright（网页浏览与操作）' })
+  const devtools = screen.getByRole('radio', { name: 'Chrome DevTools（网页调试与分析）' })
+  expect(devtools).toBeChecked()
+  fireEvent.click(playwright)
+  expect(playwright).toBeChecked()
+  expect(devtools).not.toBeChecked()
+  expect(within(screen.getByRole('article', { name: 'Playwright MCP' })).getByText('当前浏览器')).toBeVisible()
+  expect(within(screen.getByRole('article', { name: 'OfficeCLI' })).getByText('默认启用')).toBeVisible()
+  expect(within(screen.getByRole('article', { name: 'Windows-MCP' })).getByText('默认启用')).toBeVisible()
+  expect(screen.queryByRole('checkbox', { name: /启用电脑控制/ })).toBeNull()
+  expect(playwright.compareDocumentPosition(screen.getByRole('article', { name: 'OfficeCLI' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})
+
+it('offers a service reload for an old host instead of installing core tools', () => {
+  const reloadService = vi.fn(async () => {})
+  render(<WorkToolsSettings platform={platform({ needsServiceReload: true, reloadService })} selection={selected} />)
+  const row = within(screen.getByRole('article', { name: 'OfficeCLI' }))
+  expect(row.getByRole('status')).toHaveTextContent('工具服务需重载')
+  expect(row.queryByRole('button')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '重载工具服务' }))
+  expect(reloadService).toHaveBeenCalledOnce()
+})
+
 it('takes the user from the catalogue to the existing capability controls in one action', () => {
   render(<SettingsModal open initial={settingsDefaults} initialTab="tools" onClose={vi.fn()} />)
   const details = screen.getByText('能力选择').closest('details')!
@@ -62,7 +88,7 @@ it('takes the user from the catalogue to the existing capability controls in one
   details.scrollIntoView = vi.fn()
   fireEvent.click(screen.getByRole('button', { name: '选择任务能力' }))
   expect(details.open).toBe(true)
-  expect(screen.getByRole('checkbox', { name: /在 Work 中启用电脑控制/ })).toHaveFocus()
+  expect(screen.getByRole('checkbox', { name: /在 Work 中启用 CAD/ })).toHaveFocus()
 })
 
 it('searches operation definitions and clears an empty result', () => {
@@ -85,16 +111,15 @@ it('keeps CAD and browser debugging selected together and distinguishes selectio
       selection={{ computer: false, browserDebug: true, cad: true }}
     />,
   )
-  for (const name of ['Chrome DevTools MCP', 'AutoCAD 自动化']) {
-    const row = within(screen.getByRole('article', { name }))
-    expect(row.getByText('配置中已选用')).toBeVisible()
-    expect(row.getByRole('status')).toHaveTextContent('未安装')
-  }
+  const browser = within(screen.getByRole('article', { name: 'Chrome DevTools MCP' }))
+  expect(browser.getByText('当前浏览器')).toBeVisible()
+  expect(browser.getByRole('status')).toHaveTextContent('内置 · 不可用')
+  expect(within(screen.getByRole('article', { name: 'AutoCAD 自动化' })).getByText('扩展已启用')).toBeVisible()
   expect(
-    within(screen.getByRole('article', { name: 'Playwright MCP' })).getByText('配置中未选用'),
+    within(screen.getByRole('article', { name: 'Playwright MCP' })).getByText('备用浏览器'),
   ).toBeVisible()
   expect(
-    within(screen.getByRole('article', { name: 'Windows-MCP' })).getByText('配置中未选用'),
+    within(screen.getByRole('article', { name: 'Windows-MCP' })).getByText('默认启用'),
   ).toBeVisible()
   fireEvent.change(screen.getByRole('combobox', { name: '工具分类' }), {
     target: { value: 'CAD / EDA' },
@@ -109,6 +134,22 @@ it('routes installation and health refresh through existing actions', () => {
   expect(state.install).toHaveBeenCalledWith('autocad-mcp')
   fireEvent.click(screen.getByRole('button', { name: '重新检测' }))
   expect(state.refresh).toHaveBeenCalledOnce()
+})
+
+it('shows built-in tools without install or uninstall actions, including failed health', () => {
+  const state = platform()
+  const packages = state.packages.map(pkg => ['officecli', 'playwright', 'windows-mcp', 'chrome-devtools'].includes(pkg.id)
+    ? { ...pkg, builtIn: true, reportedVersion: pkg.id === 'officecli' ? '1.0.148' : null, available: pkg.id === 'officecli', state: pkg.id === 'officecli' ? 'installed' as const : 'not-installed' as const }
+    : pkg)
+  const view = render(<WorkToolsSettings platform={platform({ packages })} />)
+  for (const name of ['OfficeCLI', 'Playwright MCP', 'Windows-MCP', 'Chrome DevTools MCP']) {
+    const row = within(screen.getByRole('article', { name }))
+    expect(row.getByRole('status')).toHaveTextContent(name === 'OfficeCLI' ? '内置 · 可用' : '内置 · 不可用')
+    expect(row.queryByRole('button')).toBeNull()
+    if (name === 'OfficeCLI') expect(row.getByText(/检测版本/)).toHaveTextContent('1.0.148')
+  }
+  view.rerender(<WorkToolsSettings platform={platform({ serviceHealth: 'down', packages })} />)
+  expect(within(screen.getByRole('article', { name: 'OfficeCLI' })).getByRole('status')).toHaveTextContent('未检测')
 })
 
 it('does not offer browser installation for a missing CAD application bridge', () => {

@@ -57,7 +57,7 @@
 .tool--event .tool__body, .fchange--event .fchange__body {
   margin: 3px 0 11px 22px;
   padding: 12px 14px;
-  background: var(--bg-panel);
+  background: var(--tool-output-bg, var(--bg-panel));
   border: 0;
   border-radius: 8px;
   font-size: 11px;

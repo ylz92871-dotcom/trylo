@@ -7,12 +7,9 @@
 // applyTaskItem / applyItem / upsertThinking) had zero production callers
 // and was deleted with the WorkflowMessage chain.
 
-import {
-  detectArtifactKind,
-  type ArtifactKind,
-} from '@trylo/work';
+import { artifactCardKindFor, type ArtifactCardKind } from '../../preview/formats';
 
-const ARTIFACT_KINDS: readonly ArtifactKind[] = [
+const ARTIFACT_KINDS: readonly ArtifactCardKind[] = [
   'document', 'presentation', 'spreadsheet', 'web', 'file',
 ];
 
@@ -25,9 +22,9 @@ const ARTIFACT_KINDS: readonly ArtifactKind[] = [
 export function resolveArtifactKind(
   hint: string | undefined,
   filePath: string,
-): ArtifactKind {
+): ArtifactCardKind {
   if (hint !== undefined && (ARTIFACT_KINDS as readonly string[]).includes(hint)) {
-    return hint as ArtifactKind;
+    return hint as ArtifactCardKind;
   }
-  return detectArtifactKind(filePath);
+  return artifactCardKindFor(filePath);
 }

@@ -1,0 +1,25 @@
+.workflow-receipt { width: 100%; min-width: 0; color: var(--text-primary); font-size: 13px; }
+.workflow-receipt > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; cursor: pointer; padding: 7px 0; }
+.workflow-receipt__chevron { flex-shrink: 0; transition: transform var(--duration-fast) var(--ease-out); }
+.workflow-receipt[open] > summary .workflow-receipt__chevron { transform: rotate(90deg); }
+.workflow-receipt__version, .workflow-receipt__scope { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.workflow-receipt__version { font-family: var(--font-mono); font-size: 11px; margin-left: auto; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workflow-receipt__scope { margin: 4px 0 12px; }
+.workflow-receipt ol { margin: 0; padding-left: 20px; }
+.workflow-receipt li { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.workflow-receipt__node { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
+.workflow-receipt__node > span { flex-shrink: 0; }
+.workflow-receipt__node [data-status='failed'] { color: var(--danger); }
+.workflow-receipt__artifacts, .workflow-receipt__budget dl { margin: 6px 0; }
+.workflow-receipt__artifacts > div, .workflow-receipt__budget dl > div { display: grid; grid-template-columns: 82px minmax(0, 1fr); align-items: baseline; gap: 8px; padding: 2px 0; }
+.workflow-receipt dt { color: var(--text-secondary); }
+.workflow-receipt dd { margin: 0; min-width: 0; }
+.workflow-receipt__budget { padding: 4px 0 8px; border-bottom: 1px solid var(--border); }
+.workflow-receipt__budget dd { font-variant-numeric: tabular-nums; text-align: right; }
+.workflow-receipt code { overflow-wrap: anywhere; font-size: 13px; }
+.workflow-receipt__evidence { display: block; margin-top: 5px; color: var(--text-secondary); font-size: 12px; }
+.workflow-receipt details > summary { cursor: pointer; color: var(--text-secondary); }
+.workflow-receipt summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.workflow-receipt__more { display: inline-block; border: 0; background: transparent; color: var(--text-primary); padding: 8px 0; font: inherit; text-align: left; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.workflow-receipt__more:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .workflow-receipt__chevron { transition: none; } }

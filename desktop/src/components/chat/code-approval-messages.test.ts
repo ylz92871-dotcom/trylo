@@ -1,9 +1,10 @@
 import { expect, it } from 'vitest';
-import { codeApprovalMessages } from './code-approval-messages';
+import { codeApprovalMessages, mergeCodeApprovals } from './code-approval-messages';
 import type { CodePermissionRequest } from '../../runtime/code-permission-registry';
 import { createElement } from 'react';
 import { act, render, screen } from '@testing-library/react';
 import { useCodeApprovals } from './code-approval-messages';
+import { ApprovalCard } from './ApprovalCard';
 
 const request = (projectKey: string, requestId: string): CodePermissionRequest => ({
   requestId, processId: `root-${projectKey}`, projectKey, conversationId: 'same-conversation',
@@ -34,4 +35,30 @@ it('projects registry changes for Work without requiring a Code controller or a 
     act(() => update([]));
     expect(screen.getByTestId('work-approvals').textContent).toBe('');
   } finally { view.unmount(); }
+});
+
+it('expires a persisted pending card without live ownership, while a new approval remains actionable', () => {
+  const old = codeApprovalMessages([request('p', 'old')], 'p', 'same-conversation')[0]!;
+  const live = codeApprovalMessages([request('p', 'new')], 'p', 'same-conversation');
+  const messages = mergeCodeApprovals([old], live);
+  expect(messages).toHaveLength(2);
+  expect(messages[0]).toMatchObject({ approvalId: 'old', status: 'expired' });
+  expect(messages[0]).not.toHaveProperty('pendingRequest');
+  expect(messages[1]).toMatchObject({ approvalId: 'new', status: 'pending' });
+  expect(old).toMatchObject({ status: 'pending' });
+  const view = render(createElement('div', {}, messages.map(message => message.kind === 'approval'
+    ? createElement(ApprovalCard, { key: message.id, message, onRespond() {} }) : null)));
+  try {
+    expect(view.container.querySelector('[data-status="expired"] button')).toBeNull();
+    expect(screen.getAllByRole('button', { name: '批准并继续' })).toHaveLength(1);
+  } finally { view.unmount(); }
+});
+
+it('replaces a stored pending snapshot with its live owner once, and expires it after stop', () => {
+  const old = codeApprovalMessages([request('p', 'same')], 'p', 'same-conversation')[0]!;
+  const live = codeApprovalMessages([{ ...request('p', 'same'), processId: 'current-process' }], 'p', 'same-conversation');
+  const active = mergeCodeApprovals([old], live);
+  expect(active).toHaveLength(1);
+  expect(active[0]).toMatchObject({ status: 'pending', pendingRequest: { processId: 'current-process' } });
+  expect(mergeCodeApprovals(active, [])[0]).toMatchObject({ status: 'expired' });
 });

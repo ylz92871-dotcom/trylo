@@ -1,7 +1,7 @@
 // Trylo Desktop — WorkResultContent tests (P2-1, spec §12.2 / §8.6).
 
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { WorkResultContent, latestRunArtifactCount } from './WorkResultContent';
 import type { StoredWorkArtifact, StoredWorkResult } from '../../results/conversation-result-types';
 
@@ -262,5 +262,53 @@ describe('WorkResultContent — PR-5 verification badges (§11)', () => {
     })));
     expect(screen.getByText('未验证')).toBeTruthy();
     expect(container.querySelector('.work-result__verify--skipped')).not.toBeNull();
+  });
+});
+
+describe('WorkResultContent shared review presentation', () => {
+  it('keeps latest/history, versions and verification while delegating preview and diff', () => {
+    const onPreviewArtifact = vi.fn();
+    const onDiffArtifact = vi.fn();
+    const result = workResult({
+      artifacts: [artifact({
+        lastChange: 'updated', version: 4,
+        verification: { status: 'failed', checkedAt: 2, checks: [
+          { id: 'container-match', status: 'failed', detail: '不是 ZIP 容器' },
+        ] },
+      }), artifact({ id: 'history.pdf', displayName: 'history.pdf',
+        target: { kind: 'file', relativePath: '.trylo/out/history.pdf' }, version: 3,
+      })], artifactCountTotal: 2,
+      latestRun: { runId: 'r2', turnId: 't2', startedAt: 2, status: 'degraded',
+        createdIds: [], updatedIds: ['a.md'], discoveredIds: [],
+      },
+    });
+    render(<WorkResultContent result={result} workspaceRoot="D:/repo" host={host}
+      presentation="review" onPreviewArtifact={onPreviewArtifact} onDiffArtifact={onDiffArtifact} />);
+    const latest = screen.getByRole('region', { name: '本轮交付' });
+    expect(within(latest).getByText('已更新 · v4')).toBeTruthy();
+    expect(within(latest).getByText('验证失败').title).toContain('不是 ZIP 容器');
+    const history = screen.getByRole('region', { name: '此对话的历史产物' });
+    expect(within(history).getByText('v3')).toBeTruthy();
+    fireEvent.click(within(latest).getByRole('button', { name: '打开文件 .trylo/out/a.md' }));
+    expect(onPreviewArtifact).toHaveBeenCalledWith('D:/repo/.trylo/out/a.md');
+    fireEvent.click(within(latest).getByRole('button', { name: '查看 Git 变更 .trylo/out/a.md' }));
+    expect(onDiffArtifact).toHaveBeenCalledWith('.trylo/out/a.md');
+  });
+
+  it('preserves URL targets and refuses malformed persisted file targets in review rows', () => {
+    const onPreviewArtifact = vi.fn();
+    const onDiffArtifact = vi.fn();
+    const urlHost = { ...host, openFile: vi.fn().mockResolvedValue(undefined) };
+    const url = 'https://example.com/index.html';
+    render(<WorkResultContent result={workResult({ artifacts: [
+      artifact({ id: url, displayName: 'index.html', target: { kind: 'url', url }, artifactKind: 'web' }),
+      artifact({ id: 'unsafe', displayName: 'unsafe', target: { kind: 'file', relativePath: '../secret.pdf' } }),
+    ], artifactCountTotal: 2 })} workspaceRoot="D:/repo" host={urlHost} presentation="review"
+      onPreviewArtifact={onPreviewArtifact} onDiffArtifact={onDiffArtifact} />);
+    fireEvent.click(screen.getByRole('button', { name: `打开链接 ${url}` }));
+    expect(urlHost.openFile).toHaveBeenCalledWith(url);
+    expect(onPreviewArtifact).not.toHaveBeenCalled();
+    expect(screen.getByText('路径不可用')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /查看 Git 变更/ })).toBeNull();
   });
 });

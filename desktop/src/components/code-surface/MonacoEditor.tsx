@@ -19,6 +19,7 @@ import {
 import type * as monaco from 'monaco-editor';
 import { initMonaco } from '../../monaco-init';
 import { useAppearance } from '../../settings/appearance-store';
+import { editorReadingOptions, editorTheme, registerEditorAppearance } from './editorAppearance';
 import './MonacoEditor.css';
 
 export interface MonacoEditorProps {
@@ -118,10 +119,12 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, MonacoEditorProps>(
               ? pendingValueRef.current
               : props.value;
 
+          registerEditorAppearance(monacoNs);
           const editor = monacoNs.editor.create(containerRef.current, {
+            ...editorReadingOptions,
             value: initialValue,
             language: props.language,
-            theme: resolvedTheme,
+            theme: editorTheme(resolvedTheme === 'vs-dark' ? 'dark' : 'light'),
             automaticLayout: true,
             minimap: { enabled: false },
             fontSize: 13,
@@ -223,17 +226,17 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, MonacoEditorProps>(
       const theme = resolvedTheme;
       const editor = editorRef.current;
       if (!editor || !theme) return;
-      void import('monaco-editor').then((m) => m.editor.setTheme(theme));
-    }, [resolvedTheme]);
+      void import('monaco-editor').then((m) => m.editor.setTheme(editorTheme(theme === 'vs-dark' ? 'dark' : 'light')));
+    }, [resolvedTheme, status]);
 
     return (
       <div className="monaco-editor-wrap">
         {status !== 'ready' && (
-          <div className="monaco-editor-status">
-            {status === 'init' && 'Initializing Monaco…'}
+          <div className="monaco-editor-status" role="status">
+            {status === 'init' && <><span className="preview__spinner" />正在打开文件…</>}
             {status === 'error' && (
               <>
-                <strong>Monaco init failed.</strong>
+                <strong>编辑器未能加载。</strong>
                 <pre>{errorMsg ?? 'unknown error'}</pre>
               </>
             )}

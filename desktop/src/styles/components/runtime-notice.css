@@ -1,0 +1,9 @@
+.runtime-notice { display:flex; gap:10px; width:100%; min-width:0; margin:8px 0; padding:14px 16px; border:1px solid var(--border); border-radius:12px; background:var(--bg-app); color:var(--fg); font:13px/1.65 var(--font-body); }
+.runtime-notice__icon { flex:none; margin-top:3px; color:var(--ink-fog); }
+.runtime-notice[data-tone='error'] .runtime-notice__icon { color:var(--danger); }
+.runtime-notice__content { flex:1; min-width:0; }
+.runtime-notice strong { display:block; font-size:13px; font-weight:550; }
+.runtime-notice p { margin:4px 0 0; color:var(--ink-fog); overflow-wrap:anywhere; }
+.runtime-notice details { margin-top:10px; color:var(--ink-fog); font-size:12px; }
+.runtime-notice summary { cursor:pointer; width:fit-content; }
+.runtime-notice pre { margin:9px 0 0; max-height:180px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font:11px/1.7 var(--font-mono); color:var(--ink-fog); }

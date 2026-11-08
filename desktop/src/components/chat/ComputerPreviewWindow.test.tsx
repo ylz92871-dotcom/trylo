@@ -71,7 +71,7 @@ describe('computer observation window', () => {
     expect(container.querySelector('.preview-image__stage img')?.getAttribute('src')).toBe(
       `${FRAME}#second-frame`,
     )
-    expect(screen.getByRole('status').textContent).toContain('『保存』')
+    expect(screen.getByRole('status').textContent).toContain('保存')
   })
 
   it('completion retains the picture and gives a completed action label', () => {
@@ -97,13 +97,11 @@ describe('computer observation window', () => {
   })
 
   it('tool failure exposes its reason without opening history', () => {
-    const { container } = render(<ComputerPreviewWindow />)
+    render(<ComputerPreviewWindow />)
     publish(snapshot({ status: '失败', detail: '未找到保存按钮' }))
     expect(screen.getByRole('status').textContent).toContain('点击失败')
     expect(screen.getByRole('status').textContent).toContain('未找到保存按钮')
-    expect(container.querySelector('.computer-preview-window__history')?.hasAttribute('open')).toBe(
-      false,
-    )
+    expect(screen.getByRole('button', { name: '最近操作 · 1' }).getAttribute('aria-expanded')).toBe('false')
   })
 
   it('stopping overrides a stale running action and ends the activity animation', () => {
@@ -132,7 +130,9 @@ describe('computer observation window', () => {
     publish({ title: '电脑控制', status: '等待工具操作', detail: '', scope: 'b', actions: [] })
     expect(container.querySelector('.preview-image__stage img')).toBeNull()
     expect(container.querySelectorAll('details[open]').length).toBe(0)
+    expect(screen.queryByRole('list')).toBeNull()
     expect(screen.getByText('最近操作 · 0')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '最近操作 · 0' }).getAttribute('aria-expanded')).toBe('false')
   })
 
   it('unmount only unsubscribes this observer', async () => {

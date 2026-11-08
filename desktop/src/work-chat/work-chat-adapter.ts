@@ -15,6 +15,7 @@ import type { LoopEvent } from '../host-adapter/loop-events';
 import type { CodeRunLifecycleObserver } from '../runtime/code-run-lifecycle';
 
 export interface WorkChatSendOptions {
+  readonly goalCommand?: import('../domain/goal').GoalCommand;
   readonly teamMode?: boolean;
   readonly teamRunId?: string;
   readonly projectKey: string;
@@ -52,6 +53,7 @@ export interface WorkChatSendOptions {
    *  caller did not pre-resolve a `toolRuntime`). */
   readonly computerUse?: boolean;
   readonly onEvents: (events: readonly LoopEvent[]) => void;
+  readonly onPromptAccepted?: () => void;
   readonly lifecycleObserver?: CodeRunLifecycleObserver;
 }
 
@@ -62,6 +64,7 @@ export function sendWorkChat(
   const { settings, systemPrompt } = options;
   return supervisor.runCode(options.projectKey, options.conversationId, {
     prompt: options.text,
+    ...(options.goalCommand === undefined ? {} : { goalCommand: options.goalCommand }),
     settings: systemPrompt !== undefined
       ? { ...settings, systemPrompt }
       : settings,
@@ -82,6 +85,7 @@ export function sendWorkChat(
     ...(options.computerUse !== undefined ? { computerUse: options.computerUse } : {}),
     ...(options.toolRuntime !== undefined ? { toolRuntime: options.toolRuntime } : {}),
     onEvents: options.onEvents,
+    onPromptAccepted: options.onPromptAccepted,
     lifecycleObserver: options.lifecycleObserver,
   });
 }

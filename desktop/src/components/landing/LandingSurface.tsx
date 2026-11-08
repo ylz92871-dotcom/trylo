@@ -1,11 +1,5 @@
 import type { ReactElement } from 'react';
-export { LandingSuggestions } from './LandingSuggestions';
-
-export interface LandingSuggestion {
-  readonly label: string;
-  readonly value: string;
-  readonly id?: string;
-}
+import { Logo } from '../brand/Logo';
 
 export interface LandingSurfaceProps {
   readonly headline: string;
@@ -13,8 +7,11 @@ export interface LandingSurfaceProps {
 }
 
 export function LandingSurface(props: LandingSurfaceProps): ReactElement {
-  return <div className="landing-surface">
-    <h1 className="landing-surface__headline">{props.headline}</h1>
+  return <header className="landing-surface">
+    <div className="landing-surface__lockup">
+      <span className="landing-surface__mark" aria-hidden="true"><Logo size={44} withBg tone="cream" variant="solid" decorative /></span>
+      <h1 className="landing-surface__headline">{props.headline}</h1>
+    </div>
     {props.subtitle && <p className="landing-surface__subtitle">{props.subtitle}</p>}
-  </div>;
+  </header>;
 }

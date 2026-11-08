@@ -1,260 +1,108 @@
-/* Trylo Desktop — ApprovalCard (M4-E, spec §6.7 Core
- * "approval / input").
- *
- * Inline daemon permission request. Pending → gold accent
- * with Approve / Deny; approved / denied → quiet semantic
- * state tint (success / danger), never a mode color.
- * One stable identity per approvalId keeps the card in one
- * place across requested → granted/denied.
- */
-
+/* One decision surface for owner and member requests; colour marks state, not authority. */
 .approval-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  --approval-bg: #fff;
+  --approval-surface: #f7f8fa;
+  --approval-edge: #e4e6e9;
+  --approval-accent: #947333;
+  --approval-seal: #fbf7ed;
+  --approval-cta: #282b2b;
+  --approval-cta-ink: #fff;
+  position: relative;
+  width: 100%;
   max-width: 720px;
-  margin: var(--space-2) auto 0;
-  padding: var(--space-3) var(--space-4);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--mode-accent);
-  border-radius: var(--radius-md);
-}
-
-.approval-card__head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--mode-accent);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  font-weight: 500;
-}
-
-.approval-card__title {
-  letter-spacing: 0.01em;
-}
-
-.approval-card__state {
-  margin-left: auto;
-  font-size: var(--text-xs);
-  font-weight: 400;
-  color: var(--fg-muted);
-}
-
-.approval-card__body {
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  line-height: var(--leading-base);
-  color: var(--fg);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.approval-card__command {
   min-width: 0;
+  margin: 12px auto 0;
+  padding: 18px 20px 16px;
+  border: 1px solid var(--approval-edge);
+  border-radius: 14px;
+  background: var(--approval-bg);
   color: var(--fg);
-  font-size: var(--text-sm);
+  box-shadow: 0 2px 8px #20252b03;
+  font: 13px/1.6 var(--font-body);
 }
-
-.approval-card__command summary {
-  cursor: pointer;
-  padding: var(--space-1) 0;
+:root[data-theme='dark'] .approval-card {
+  --approval-bg: #242527;
+  --approval-surface: #1c1d1f;
+  --approval-edge: #393b3f;
+  --approval-accent: #d3bd86;
+  --approval-seal: #343027;
+  --approval-cta: #e0d3b2;
+  --approval-cta-ink: #28251f;
+  box-shadow: none;
 }
-
-.approval-card__command summary:focus-visible {
-  outline: 2px solid var(--mode-accent);
-  outline-offset: 2px;
+.approval-card::before { content: ''; position: absolute; top: -1px; left: 20px; width: 34px; height: 2px; border-radius: 2px; background: var(--approval-accent); }
+.approval-card__head { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.approval-card__seal { display: grid; place-items: center; flex: 0 0 34px; height: 36px; border: 1px solid color-mix(in srgb, var(--approval-accent) 22%, transparent); border-radius: 10px 10px 10px 4px; background: var(--approval-seal); color: var(--approval-accent); }
+.approval-card__heading { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 1px; }
+.approval-card__eyebrow { font-size: 10px; line-height: 1.4; letter-spacing: .06em; color: var(--fg-muted); }
+.approval-card__title { overflow-wrap: anywhere; font-size: 14px; font-weight: 600; letter-spacing: -.1px; }
+.approval-card__state { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; border: 1px solid var(--approval-edge); border-radius: 5px; padding: 2px 7px; color: var(--fg-muted); font-size: 11px; line-height: 1.6; }
+.approval-card:not(.approval-card--resolved) .approval-card__state::before { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--approval-accent); }
+.approval-card__content { display: flex; min-width: 0; flex-direction: column; gap: 12px; padding-top: 16px; }
+.approval-card__location { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; color: var(--fg-muted); font-size: 11px; }
+.approval-card__location > svg { flex-shrink: 0; }
+.approval-card__location > code { min-width: 0; color: var(--fg); overflow-wrap: anywhere; font: 11px/1.6 var(--font-mono); }
+.approval-card__command { min-width: 0; border: 1px solid var(--approval-edge); border-radius: 8px; background: var(--approval-surface); }
+.approval-card__command > summary { display: flex; align-items: center; gap: 7px; padding: 9px 12px; cursor: pointer; list-style: none; color: var(--fg-muted); font-size: 11px; }
+.approval-card__command > summary::-webkit-details-marker, .approval-card--resolved > summary::-webkit-details-marker { display: none; }
+.approval-card__command > summary > svg:last-child { margin-left: auto; transform: rotate(-90deg); }
+.approval-card__command[open] > summary > svg:last-child { transform: none; }
+.approval-card__command pre { max-height: 320px; overflow: auto; margin: 0; padding: 0 14px 13px; color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.85 'Cascadia Code', Consolas, var(--font-mono); tab-size: 2; }
+.approval-card__command pre code { font: inherit; color: inherit; }
+.approval-card__options { display: flex; flex-wrap: wrap; gap: 5px 10px; border-top: 1px solid var(--approval-edge); padding: 8px 12px; color: var(--fg-muted); font-size: 11px; }
+.approval-card__options > span { flex-shrink: 0; }
+.approval-card__options p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.approval-card__body { margin: 0; font: 12px/1.75 var(--font-body); color: var(--fg-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.approval-card__requester { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: var(--fg-muted); font-size: 11px; overflow-wrap: anywhere; }
+.approval-card__requester > svg { flex-shrink: 0; margin-top: 2px; }
+.approval-card__summary { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; min-width: 0; padding: 10px 12px; border: 1px solid var(--approval-edge); border-radius: 8px; background: var(--approval-surface); }
+.approval-card__summary > svg { flex-shrink: 0; margin-top: 2px; color: var(--fg-muted); }
+.approval-card__summary-target { flex: 1 1 140px; min-width: 0; overflow-wrap: anywhere; font: 12px/1.7 var(--font-mono); }
+.approval-card__summary-detail { min-width: 0; max-width: 100%; overflow-wrap: anywhere; color: var(--fg-muted); font: 11px/1.7 var(--font-body); }
+.approval-card__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--approval-edge); }
+.approval-card__decisions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.approval-card__btn { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 7px; min-height: 32px; padding: 5px 12px; border: 1px solid transparent; border-radius: 7px; font: 500 12px/1.5 var(--font-body); cursor: pointer; white-space: nowrap; transition: background-color 120ms ease, border-color 120ms ease; }
+.approval-card__btn:disabled { opacity: .45; cursor: default; }
+.approval-card__btn--approve { border-color: var(--approval-cta); background: var(--approval-cta); color: var(--approval-cta-ink); }
+.approval-card__btn--approve:enabled:hover { filter: brightness(1.12); }
+.approval-card__btn--deny { border-color: var(--approval-edge); background: transparent; color: var(--fg-muted); }
+.approval-card__btn--deny:enabled:hover { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
+.approval-card__btn--preview { padding-inline: 0; background: transparent; color: var(--fg-muted); }
+.approval-card__btn--preview:enabled:hover { color: var(--fg); }
+.approval-card :is(button,summary):focus-visible { outline: 2px solid var(--approval-accent); outline-offset: 3px; }
+.approval-card--resolved { padding-block: 12px; box-shadow: none; }
+.approval-card--resolved::before { display: none; }
+.approval-card--resolved > summary { cursor: pointer; list-style: none; }
+.approval-card--resolved .approval-card__seal { flex-basis: 28px; height: 30px; border: 0; border-radius: 8px; background: var(--approval-surface); }
+.approval-card--resolved .approval-card__eyebrow { display: none; }
+.approval-card--resolved .approval-card__title { font-size: 12px; font-weight: 500; }
+.approval-card__history-chevron { flex-shrink: 0; color: var(--fg-muted); }
+.approval-card--resolved[open] > summary .approval-card__history-chevron { transform: rotate(180deg); }
+.approval-card--approved .approval-card__seal, .approval-card--approved .approval-card__state { color: var(--success); }
+.approval-card--denied .approval-card__seal, .approval-card--denied .approval-card__state { color: var(--danger); }
+.approval-card--expired .approval-card__seal { color: var(--fg-muted); }
+.approval-card__desktop { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 13px; border: 1px solid var(--approval-edge); border-radius: 8px; background: var(--approval-surface); }
+.approval-card__desktop-screen { flex: 0 0 56px; width: 56px; height: 40px; }
+.approval-card__desktop-screen rect, .approval-card__desktop-screen line, .approval-card__desktop-screen circle { stroke: var(--approval-accent); stroke-width: 1.5; fill: none; }
+.approval-card__desktop-facts { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.approval-card__desktop-action { color: var(--fg); font-size: 12px; font-weight: 500; }
+.approval-card__desktop-target { color: var(--fg-muted); font-size: 11px; overflow-wrap: anywhere; }
+.approval-card__desktop-mask { color: var(--fg-muted); font-size: 11px; }
+@media (max-width: 440px) {
+  .approval-card { padding: 15px 14px 13px; border-radius: 12px; }
+  .approval-card::before { left: 14px; }
+  .approval-card__head { gap: 9px; }
+  .approval-card__title { font-size: 13px; }
+  .approval-card__state { padding-inline: 5px; font-size: 10px; }
+  .approval-card__location > code { flex-basis: 100%; padding-left: 20px; }
+  .approval-card__command pre { padding-inline: 11px; font-size: 11px; }
+  .approval-card__btn { padding-inline: 10px; }
+  .approval-card__btn--preview { padding-inline: 0; }
 }
-
-.approval-card__command pre {
-  max-height: 20rem;
-  overflow: auto;
-  margin: var(--space-1) 0 0;
-  padding: var(--space-2);
-  background: var(--bg);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  line-height: var(--leading-base);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.approval-card__actions {
-  display: flex;
-  flex-wrap: wrap; /* WP-5: at 200%/300% buttons wrap instead of overflowing */
-  gap: var(--space-2);
-  margin-top: var(--space-1);
-}
-
-.approval-card__btn {
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 6px 14px;
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 0.15s ease;
-}
-
-.approval-card__btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.approval-card__btn--approve {
-  background: var(--success);
-  color: #101210;
-}
-
-.approval-card__btn--deny {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-/* Resolved states — quiet semantic tint, never a mode
- * color, and never text-only (the icon + state label carry
- * the meaning). */
-.approval-card--approved {
-  border-left-color: var(--success);
-}
-
-.approval-card--approved .approval-card__head {
-  color: var(--success);
-}
-
-.approval-card--denied {
-  border-left-color: var(--danger);
-}
-
-.approval-card--denied .approval-card__head {
-  color: var(--danger);
-}
-
-/* P3 (spec §3.3): the card now hosts a safe summary line
- * (path / command / network URL) + a "查看变更" button that
- * opens the right-side diff panel. The card itself never
- * auto-approves; the buttons are independent. */
-.approval-card__summary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.04);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--fg-muted);
-  overflow: hidden;
-}
-
-.approval-card__summary-target {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--fg);
-}
-
-.approval-card__summary-detail {
-  margin-left: 4px;
-  white-space: nowrap;
-  color: var(--fg-muted);
-}
-
-.approval-card__actions-spacer {
-  flex: 1;
-}
-
-.approval-card__btn--preview {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--fg);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 5px 10px;
-}
-
-.approval-card__btn--preview:disabled {
-  background: rgba(255, 255, 255, 0.02);
-  color: var(--fg-muted);
-}
-
-/* P3: an expired / cancelled card stays visible (the
- * history must not silently drop the request) but the
- * buttons are gone — only the resolved status remains. */
-.approval-card--expired {
-  border-left-color: var(--fg-muted);
-  opacity: 0.75;
-}
-
-.approval-card--expired .approval-card__head {
-  color: var(--fg-muted);
-}
-
-/* ── Computer-use visual preview (2026-09-03, C02–C06 UX) ─────────────
- * A stylized screen + action facts, forked from Playwright Trace Viewer's
- * action-highlight language. The typed TEXT is never rendered (C06) —
- * only its character count. */
-
-.approval-card__desktop {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 8px 0 2px;
-  padding: 10px 12px;
-  border: 1px solid var(--ink-divider, rgba(255, 255, 255, 0.08));
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.approval-card__desktop-screen {
-  flex: none;
-  width: 56px;
-  height: 40px;
-}
-
-.approval-card__desktop-screen rect,
-.approval-card__desktop-screen line {
-  stroke: var(--fg-muted, #8b92a1);
-  stroke-width: 1.5;
-  fill: none;
-}
-
-.approval-card__desktop-screen circle,
-.approval-card__desktop-screen line {
-  stroke: var(--brand, #dbc97f);
-}
-
-.approval-card__desktop-facts {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
-.approval-card__desktop-action {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--fg, #eceef2);
-}
-
-.approval-card__desktop-target {
-  font-size: 11.5px;
-  color: var(--fg-muted, #8b92a1);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.approval-card__desktop-mask {
-  align-self: flex-start;
-  padding: 1px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--brand-500, #9f9054);
-  color: var(--brand, #dbc97f);
-  font-size: 10.5px;
+@media (prefers-reduced-motion: reduce) { .approval-card__btn { transition: none; } }
+@media (forced-colors: active) {
+  .approval-card { border-color: CanvasText; }
+  .approval-card::before { background: CanvasText; }
+  .approval-card__seal, .approval-card__state, .approval-card__command { border-color: CanvasText; }
+  .approval-card__btn--approve { background: Highlight; color: HighlightText; border-color: Highlight; }
 }

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it, vi } from 'vitest';
 import { AnswerLink } from './AnswerLink';
-import type { HostAdapter } from '@trylo/work';
+import type { ArtifactHost as HostAdapter } from '../../host-adapter/artifact-actions';
 
 vi.mock('../../host-adapter/tauri-detect', () => ({ isTauri: () => true }));
 function host(openFile: HostAdapter['openFile']): HostAdapter {

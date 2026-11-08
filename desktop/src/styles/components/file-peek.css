@@ -1,137 +1,29 @@
-/* Trylo Desktop — FilePeek.
- *
- * The right rail. 480px when open. The chat shrinks to the
- * remaining space via the AppShell grid. Default closed.
- */
+/* File reading surface: file identity, contextual actions, renderer. */
+.file-peek { --ink-hover:#f0f1f3; --ink-surface:#f6f7f8; display:flex; flex-direction:column; flex:0 0 auto; width:clamp(360px,40vw,560px); height:100%; min-height:0; min-width:0; overflow:hidden; background:var(--bg); border-left:1px solid var(--border); }
+.file-peek__header { display:flex; align-items:center; gap:5px; min-height:48px; padding:8px 12px; flex-shrink:0; border-bottom:1px solid var(--border-faint); }
+.file-peek__path { display:flex; align-items:center; gap:9px; flex:1; min-width:0; }
+.file-peek__path > svg { color:var(--fg-muted); flex-shrink:0; }
+.file-peek__path-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:500 13px/1.5 var(--font-body); color:var(--fg); }
+.file-peek__kind { flex-shrink:0; margin-right:6px; font:11px/1.5 var(--font-body); color:var(--fg-muted); }
+.file-peek__expand, .file-peek__close { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; flex:0 0 auto; border:0; border-radius:6px; background:transparent; color:var(--fg-muted); cursor:pointer; }
+.file-peek__expand:hover, .file-peek__close:hover { background:var(--ink-hover); color:var(--fg); }
+.file-peek__expand:disabled { opacity:.4; cursor:default; }
+.file-peek__actions { position:relative; }
+.file-peek__menu { position:absolute; top:34px; right:0; z-index:10; width:204px; padding:5px; border:1px solid var(--border); border-radius:10px; background:var(--bg); box-shadow:0 10px 32px #0002; }
+.file-peek__menu .file-peek__expand { justify-content:flex-start; gap:10px; width:100%; height:34px; padding:0 10px; font:12px var(--font-body); white-space:nowrap; }
+.file-peek--expanded { position:fixed; inset:0; z-index:80; width:auto; border:0; }
+.file-peek__viewer { display:flex; flex:1; flex-direction:column; min-width:0; min-height:0; overflow:hidden; }
+.file-peek__meta { padding:8px 14px; flex-shrink:0; color:var(--fg-muted); font:12px/1.5 var(--font-body); overflow-wrap:anywhere; }
+.file-peek__file-select { flex:1; width:0; min-width:0; height:30px; padding:0 3px; border:0; border-radius:4px; background:transparent; color:var(--fg); font:500 13px var(--font-body); text-overflow:ellipsis; cursor:pointer; }
+.file-peek__file-select:hover { background:var(--ink-hover); }
+.file-peek__file-select option { background:var(--bg); color:var(--fg); }
+.file-peek__menu-nav { padding-bottom:5px; margin-bottom:4px; border-bottom:1px solid var(--border-faint); }
+.file-peek__menu-nav button { display:flex; align-items:center; gap:10px; width:100%; height:32px; padding:0 10px; border:0; border-radius:5px; background:transparent; color:var(--fg-muted); font:12px var(--font-body); cursor:pointer; }
+.file-peek__menu-nav button:hover { background:var(--ink-hover); }
+.file-peek__menu-nav button:disabled { opacity:.4; cursor:default; }
+.file-peek :is(button,select):focus-visible { outline:2px solid var(--fg-muted); outline-offset:2px; }
 
-.file-peek {
-  display: grid;
-  grid-template-rows: auto auto 1fr;
-  height: 100%;
-  /* v1.17: the body is now a flex row (not a 3-col grid), so
-     this panel needs an explicit width of its own. */
-  flex: 0 0 auto;
-  width: clamp(360px, 40vw, 560px);
-  border-left: 1px solid var(--border);
-  background: var(--ink-surface);
-  border-left: 1px solid var(--border);
-  min-height: 0;
-  overflow: hidden;
-  animation: file-peek-in var(--duration-base) var(--ease-out);
-}
-
-@keyframes file-peek-in {
-  from { transform: translateX(40px); opacity: 0; }
-  to   { transform: translateX(0); opacity: 1; }
-}
-
-.file-peek__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--border);
-  min-height: 40px;
-}
-
-.file-peek__path {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.file-peek__icon {
-  color: var(--brand-300);
-  font-size: 14px;
-  flex: 0 0 auto;
-}
-
-.file-peek__path-text {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  color: var(--fg);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-
-.file-peek__close {
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-sm);
-  color: var(--fg-muted);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-}
-
-.file-peek__close:hover {
-  background: var(--ink-hover);
-  color: var(--fg);
-}
-
-.file-peek__expand {
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-sm);
-  color: var(--fg-muted);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-}
-
-.file-peek__expand:hover {
-  background: var(--ink-hover);
-  color: var(--fg);
-}
-
-/* Fullscreen preview: the rail leaves the flex row and covers the
- * whole webview (above content + browser drawer, below modals).
- * Renderers refit via their own ResizeObservers, so slides / tables
- * / pages use the full width on the next frame. */
-.file-peek--expanded {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  width: auto;
-  border-left: none;
-}
-
-.file-peek__meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-4) var(--space-2) var(--space-4);
-  color: var(--fg-muted);
-  font-size: var(--text-xs);
-  font-family: var(--font-mono);
-}
-
-.file-peek__sep {
-  color: var(--ink-mute);
-}
-
-.file-peek__body {
-  overflow: auto;
-  padding: var(--space-2) 0;
-  scrollbar-width: thin;
-  scrollbar-color: var(--ink-hover) transparent;
-}
-
+/* TextPreview also uses the shared numbered-line styles. */
 .file-peek__code {
   margin: 0;
   font-family: var(--font-mono);
@@ -162,3 +54,5 @@
   white-space: pre;
   overflow-x: auto;
 }
+
+[data-theme="dark"] .file-peek { --ink-hover:#303135; --ink-surface:#242629; }

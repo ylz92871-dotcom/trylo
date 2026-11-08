@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactElement, type MouseEvent as ReactMouseEvent } from 'react';
-import { Archive, ArchiveRestore, Briefcase, Code2, Pencil, X } from 'lucide-react';
+import { Archive, ArchiveRestore, PanelsTopLeft, Code2, Pencil, X } from 'lucide-react';
 import type { ConversationSession } from '../../host-adapter/conversation-history';
 
 // ── SessionRow ────────────────────────────────────────────────────────
@@ -35,7 +35,7 @@ interface SessionRowProps {
 export function SessionRow(props: SessionRowProps): ReactElement {
   const { session: s } = props;
   const hovered = props.hoverSessionId === s.id;
-  const KindIcon = s.kind === 'code' ? Code2 : Briefcase;
+  const KindIcon = s.kind === 'code' ? Code2 : PanelsTopLeft;
 
   const onRowClick = (): void => {
     if (props.isEditing) return;
@@ -91,7 +91,10 @@ export function SessionRow(props: SessionRowProps): ReactElement {
         </span>
       )}
       {props.isRunning && (
-        <span className="spinner spinner--xs" aria-hidden="true" />
+        <span className="session-row__running" role="status" aria-label="任务运行中" title="任务运行中">
+          <span className="spinner spinner--xs" aria-hidden="true" />
+          <span className="session-row__running-label" aria-hidden="true">运行中</span>
+        </span>
       )}
       {/* Action cluster — hover-revealed. Archived rows expose the
          archive-restore button only; live rows show delete + archive. */}

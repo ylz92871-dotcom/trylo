@@ -80,6 +80,8 @@ describe('approved event flow disclosure', () => {
       { ...thinking(), id: 'finding', summary: '复查时 Qoder 进程数为 0', preview: raw, fullLength: raw.length },
     ]} active={false} turnId="u1" phaseId="p1" />);
     expect(view.container.querySelector('.code-reasoning__summary')).toHaveTextContent('复查时 Qoder 进程数为 0');
+    expect(view.container.querySelector('.code-reasoning__passage-text')).toBeNull();
+    fireEvent.click(view.container.querySelector('.code-reasoning__head')!);
     expect(view.getByText(raw)).toBeInTheDocument();
     expect(view.container.querySelector('.code-reasoning__head')).not.toHaveTextContent('duration');
   });
@@ -258,7 +260,9 @@ describe('CodeReasoningTranscript memoization (round-2 audit)', () => {
       tool({ outputText: TAKEOVER_TEXT }),
     ];
     transcriptProbe.renders = 0;
-    const { rerender } = render(tree(base));
+    const { rerender, container } = render(tree(base));
+    expect(transcriptProbe.renders).toBe(0);
+    fireEvent.click(container.querySelector('.code-reasoning__head')!);
     const mounted = transcriptProbe.renders;
     expect(mounted).toBe(1);
 
@@ -275,7 +279,9 @@ describe('CodeReasoningTranscript memoization (round-2 audit)', () => {
   it('re-renders when an entry object is replaced (status flip / append)', () => {
     const base = [thinking(), tool({ outputText: TAKEOVER_TEXT, status: 'running' })];
     transcriptProbe.renders = 0;
-    const { rerender } = render(tree(base));
+    const { rerender, container } = render(tree(base));
+    expect(transcriptProbe.renders).toBe(0);
+    fireEvent.click(container.querySelector('.code-reasoning__head')!);
     const mounted = transcriptProbe.renders;
     expect(mounted).toBe(1);
 

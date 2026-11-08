@@ -20,7 +20,7 @@
 //     screen readers always know the dock is non-empty.
 
 import { type ReactElement, type ReactNode } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, PanelRightOpen } from 'lucide-react';
 
 export type ResultDockStatus = 'ready' | 'partial' | 'failed';
 
@@ -51,17 +51,22 @@ export interface ResultDockProps {
    */
   readonly onToggle?: () => void;
   readonly onRefresh?: () => void;
-  readonly children: ReactNode;
+  /** The shell can also control a panel owned by the shared results rail. */
+  readonly panelId?: string;
+  readonly children?: ReactNode;
+  readonly preview?: ReactNode;
 }
 
 export function ResultDock(props: ResultDockProps): ReactElement | null {
   const { open, onOpenChange, onToggle } = props;
+  const panel = props.panelId !== undefined;
 
   // §9.3: idle with no results and no warning → not rendered. The parent
   // decides that: a zero-count ready dock is still shown when warning or
   // children present.
   const hasBody = props.count > 0 || props.warning !== undefined || props.status === 'failed';
-  const shown = props.status === 'failed' || props.count > 0 || props.warning !== undefined;
+  const shown = props.status === 'failed' || props.count > 0 || props.warning !== undefined
+    || (panel && Boolean(props.summary));
 
   if (!shown) return null;
 
@@ -90,7 +95,7 @@ export function ResultDock(props: ResultDockProps): ReactElement | null {
 
   return (
     <div
-      className={`result-dock result-dock--${props.mode}`}
+      className={`result-dock result-dock--${props.mode}${panel ? ' result-dock--panel' : ''}`}
       data-mode={props.mode}
       data-status={props.status}
     >
@@ -100,28 +105,34 @@ export function ResultDock(props: ResultDockProps): ReactElement | null {
         onClick={handleToggle}
         onKeyDown={handleKeyDown}
         aria-expanded={open}
-        aria-controls={`${props.id}-body`}
+        aria-controls={props.panelId ?? `${props.id}-body`}
         aria-label={props.title}
+        aria-describedby={panel && props.summary ? `${props.id}-summary` : undefined}
       >
-        <span
+        {!panel && <span
           className={`result-dock__chevron disclosure-chevron${open ? ' disclosure-chevron--open' : ''}`}
           aria-hidden="true"
         >
           <ChevronRight size={12} strokeWidth={2.2} />
-        </span>
+        </span>}
         <span className="result-dock__title">{props.title}</span>
+        {panel && props.summary && <span id={`${props.id}-summary`} className="result-dock__inline-summary">{props.summary}</span>}
         {props.status === 'failed' ? (
           <span className="result-dock__fail-badge">失败</span>
         ) : (
-          <span className="result-dock__count" aria-hidden="true">
+          !panel && <span className="result-dock__count" aria-hidden="true">
             {props.count}
           </span>
         )}
+        {panel && <PanelRightOpen className="result-dock__panel-icon" size={15} aria-hidden="true" />}
       </button>
-      {hasBody && (
+      {!panel && props.preview}
+      {!panel && hasBody && (
         <div
           id={`${props.id}-body`}
           className={`disclosure${open ? ' disclosure--open' : ''}`}
+          aria-hidden={!open}
+          ref={(element) => { if (element) element.inert = !open; }}
         >
           <div className="disclosure__inner">
             {props.summary ? (

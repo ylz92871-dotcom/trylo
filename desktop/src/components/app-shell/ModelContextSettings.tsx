@@ -9,7 +9,11 @@ import {
   type ModelContextPreferences,
 } from '../../settings/context-window'
 import { ContextWindowFields } from './ContextWindowFields'
-import { amdReasoningChoices, amdReasoningLabel, type ModelReasoningPreferences } from '../../settings/model-reasoning'
+import {
+  amdReasoningChoices,
+  amdReasoningLabel,
+  type ModelReasoningPreferences,
+} from '../../settings/model-reasoning'
 import { parseReasoningEffort, REASONING_LABELS } from '../../settings/reasoning-effort'
 
 interface ContextTarget {
@@ -26,7 +30,11 @@ export interface ModelContextSettingsProps {
 }
 
 /** Configure model preferences without changing the active connection. */
-export function ModelContextSettings({ form, onChange, onReasoningChange }: ModelContextSettingsProps): JSX.Element {
+export function ModelContextSettings({
+  form,
+  onChange,
+  onReasoningChange,
+}: ModelContextSettingsProps): JSX.Element {
   const catalog = usePlatformModels(true)
   const reasoningId = useId()
   const [targetId, setTargetId] = useState(
@@ -69,7 +77,9 @@ export function ModelContextSettings({ form, onChange, onReasoningChange }: Mode
   return (
     <fieldset className="settings-modal__group model-run-settings">
       <legend className="settings-modal__legend">模型运行设置</legend>
-      <p className="settings-modal__desc">选择模型，调整它的上下文与思考方式。每个模型单独记住，保存后从下次请求生效。</p>
+      <p className="settings-modal__desc">
+        选择模型，调整它的上下文与思考方式。每个模型单独记住，保存后从下次请求生效。
+      </p>
       <label className="settings-modal__field">
         <span className="settings-modal__label">配置模型</span>
         <select
@@ -84,10 +94,18 @@ export function ModelContextSettings({ form, onChange, onReasoningChange }: Mode
           ))}
         </select>
       </label>
-      {isPool && <div className="model-run-settings__summary">
-        <span>Trylo 免费池</span>
-        <span>{target.capacity ? `AMD 容量 ${target.capacity.toLocaleString('en-US')} tokens` : catalog.loading ? '正在同步 AMD 容量…' : '暂未取得服务端容量'}</span>
-      </div>}
+      {isPool && (
+        <div className="model-run-settings__summary">
+          <span>Trylo 免费池</span>
+          <span>
+            {target.capacity
+              ? `AMD 容量 ${target.capacity.toLocaleString('en-US')} tokens`
+              : catalog.loading
+                ? '正在同步 AMD 容量…'
+                : '暂未取得服务端容量'}
+          </span>
+        </div>
+      )}
       <div className={isPool ? 'model-run-settings__controls' : undefined}>
         <ContextWindowFields
           key={key}
@@ -96,21 +114,54 @@ export function ModelContextSettings({ form, onChange, onReasoningChange }: Mode
           capacityEditable={!isPool}
           onChange={(preference) => onChange(withContextPreference(context, preference))}
         />
-        {isPool && <div className="settings-modal__field">
-          <label className="settings-modal__label" htmlFor={reasoningId}>思考强度</label>
-          <select id={reasoningId} aria-label="免费模型思考强度" className="settings-modal__input"
-            value={effort} disabled={form.cliRuntimeProtocol !== 'trylo-v1' || (!reasoning.levels.length && !unlisted) || !onReasoningChange}
-            aria-invalid={unlisted} aria-describedby={`${reasoningId}-hint`}
-            onChange={event => onReasoningChange?.({ ...form.modelReasoningPreferences, [key]: parseReasoningEffort(event.target.value) ?? 'default' })}>
-            <option value="default">跟随服务商</option>
-            {unlisted && <option value={effort} disabled>{REASONING_LABELS[effort]}（当前不支持）</option>}
-            {reasoning.levels.map(level => <option key={level} value={level}>{amdReasoningLabel(target.identity.poolModel ?? '', level)} · {level}</option>)}
-          </select>
-          <span id={`${reasoningId}-hint`} className="settings-modal__hint">{reasoning.hint}</span>
-          {unlisted && <span role="alert" className="settings-modal__hint">请选择该 AMD 模型支持的档位。</span>}
-        </div>}
+        {isPool && (
+          <div className="settings-modal__field">
+            <label className="settings-modal__label" htmlFor={reasoningId}>
+              思考强度
+            </label>
+            <select
+              id={reasoningId}
+              aria-label="免费模型思考强度"
+              className="settings-modal__input"
+              value={effort}
+              disabled={(!reasoning.levels.length && !unlisted) || !onReasoningChange}
+              aria-invalid={unlisted}
+              aria-describedby={`${reasoningId}-hint`}
+              onChange={(event) =>
+                onReasoningChange?.({
+                  ...form.modelReasoningPreferences,
+                  [key]: parseReasoningEffort(event.target.value) ?? 'default',
+                })
+              }
+            >
+              <option value="default">跟随服务商</option>
+              {unlisted && (
+                <option value={effort} disabled>
+                  {REASONING_LABELS[effort]}（当前不支持）
+                </option>
+              )}
+              {reasoning.levels.map((level) => (
+                <option key={level} value={level}>
+                  {amdReasoningLabel(target.identity.poolModel ?? '', level)} · {level}
+                </option>
+              ))}
+            </select>
+            <span id={`${reasoningId}-hint`} className="settings-modal__hint">
+              {reasoning.hint}
+            </span>
+            {unlisted && (
+              <span role="alert" className="settings-modal__hint">
+                请选择该 AMD 模型支持的档位。
+              </span>
+            )}
+          </div>
+        )}
       </div>
-      {isPool && !catalog.loading && catalog.message && <p role="status" className="settings-modal__hint">{catalog.message}</p>}
+      {isPool && !catalog.loading && catalog.message && (
+        <p role="status" className="settings-modal__hint">
+          {catalog.message}
+        </p>
+      )}
     </fieldset>
   )
 }

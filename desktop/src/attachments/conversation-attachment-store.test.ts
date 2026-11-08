@@ -8,8 +8,7 @@
 //   - Ownership isolation (Work→Code, Code→Work, project A→B,
 //     conversation A→B)
 //   - Picker + drop flow through the same pipeline
-//   - Conservative send semantics (the store exposes NO send-time
-//     mutation — snapshots survive repeated reads)
+//   - Draft retention before acceptance and scoped consumption after it
 //   - Deletion cleanup (conversation delete, project purge) + blob
 //     revocation
 //   - Work metadata persistence hook + restore-with-validation
@@ -84,6 +83,10 @@ function makeHarness(): Harness {
     revokeBlobUrl: (url) => { harness.revoked.push(url); },
     pickFiles: async () => harness.pickedPaths,
     stageAttachment: (args) => harness.stageBehavior(args),
+    stageBytes: async (args) => ({
+      name: args.name, size: args.bytes.length,
+      relativePath: `.trylo/attachments/${args.conversationId}/${args.attachmentId}/${args.name}`,
+    }),
   };
   harness.store = new ConversationAttachmentStore(deps);
   harness.store.setRuntimeProviders({
@@ -105,6 +108,39 @@ function matchOwner(owner: AttachmentOwner): LiveIdentity {
 }
 
 describe('ConversationAttachmentStore — partition isolation', () => {
+  it.each([CODE_A, WORK_A])('materializes pasted images for $surface and releases their preview on removal', async owner => {
+    const h = makeHarness();
+    h.live = matchOwner(owner);
+    await h.store.acquireFiles(owner, [new File(['image bytes'], '粘贴图片.png', { type: 'image/png' })]);
+    const snapshot = h.store.snapshot(owner);
+    const entries = owner.surface === 'code' ? snapshot.attachments : snapshot.workAttachments;
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ kind: 'image', name: '粘贴图片.png', size: 11, previewUrl: 'blob:test/1' });
+    if (owner.surface === 'code') expect(snapshot.attachments[0]?.path).toContain(`${ROOT_A}/.trylo/attachments/code-a/`);
+    else expect(h.workChanged).toHaveLength(1);
+    expect(snapshot.readingCount).toBe(0);
+    expect(h.store.snapshot(owner.surface === 'code' ? WORK_A : CODE_A).attachments).toHaveLength(0);
+    h.store.remove(owner, entries[0]!.id);
+    expect(h.revoked).toEqual(['blob:test/1']);
+  });
+  it('does not attach clipboard bytes after navigation, and reports missing workspace and capacity', async () => {
+    const h = makeHarness();
+    h.live = matchOwner(CODE_A);
+    const file = new File(['image'], 'shot.png', { type: 'image/png' });
+    const pending = h.store.acquireFiles(CODE_A, [file]);
+    h.live = matchOwner(CODE_B);
+    await pending;
+    expect(h.store.snapshot(CODE_A).attachments).toHaveLength(0);
+    expect(h.store.snapshot(CODE_B).attachments).toHaveLength(0);
+    h.live = matchOwner(CODE_A);
+    h.root = null;
+    await h.store.acquireFiles(CODE_A, [file]);
+    expect(h.store.snapshot(CODE_A).failed[0]?.reason).toContain('请先打开项目');
+    h.root = ROOT_A;
+    await h.store.acquireFiles(CODE_A, Array.from({ length: 7 }, () => file));
+    expect(h.store.snapshot(CODE_A).attachments).toHaveLength(6);
+    expect(h.store.snapshot(CODE_A).failed).toHaveLength(2);
+  });
   it('never leaks Work attachments into the Code partition of the same conversation', async () => {
     const h = makeHarness();
     h.live = matchOwner(WORK_A);
@@ -231,18 +267,45 @@ describe('ConversationAttachmentStore — acquisition entry points', () => {
   });
 });
 
-describe('ConversationAttachmentStore — conservative send semantics', () => {
-  it('keeps attachments across repeated snapshot reads (sending never clears)', async () => {
+describe('ConversationAttachmentStore — accepted send semantics', () => {
+  it('keeps attachments while a send is preparing or fails before acceptance', async () => {
     const h = makeHarness();
     h.live = matchOwner(WORK_A);
     await h.store.acquireByPaths(WORK_A, ['D:/ext/a.md']);
-    // A send consumes a snapshot; the store itself exposes no
-    // send-time mutation — the entries must survive intact.
     const first = h.store.snapshot(WORK_A).workAttachments;
     const second = h.store.snapshot(WORK_A).workAttachments;
     expect(first.length).toBe(1);
     expect(second.length).toBe(1);
     expect(second[0]!.id).toBe(first[0]!.id);
+  });
+
+  it.each([CODE_A, WORK_A])('consumes only accepted ids in $surface and retains sent previews', async owner => {
+    const h = makeHarness();
+    h.live = matchOwner(owner);
+    await h.store.acquireByPaths(owner, ['D:/ext/sent.png']);
+    const first = h.store.snapshot(owner);
+    const sent = [...first.attachments, ...first.workAttachments];
+    await h.store.acquireByPaths(owner, ['D:/ext/later.png']);
+    h.store.markSent(owner, sent.map(entry => entry.id));
+    const remaining = h.store.snapshot(owner);
+    expect([...remaining.attachments, ...remaining.workAttachments].map(entry => entry.name)).toEqual(['later.png']);
+    expect(h.revoked).toEqual([]);
+    if (owner.surface === 'work') expect(h.workChanged.at(-1)!.entries).toHaveLength(1);
+    h.store.clearConversation(owner);
+    expect(h.revoked.sort()).toEqual(['blob:test/1', 'blob:test/2']);
+  });
+
+  it('persists an empty Work draft and never clears another conversation', async () => {
+    const h = makeHarness();
+    h.live = matchOwner(WORK_A);
+    await h.store.acquireByPaths(WORK_A, ['D:/ext/sent.md']);
+    const ids = h.store.snapshot(WORK_A).workAttachments.map(entry => entry.id);
+    h.live = matchOwner(WORK_B);
+    await h.store.acquireByPaths(WORK_B, ['D:/ext/keep.md']);
+    h.store.markSent(WORK_A, ids);
+    expect(h.store.snapshot(WORK_A).workAttachments).toEqual([]);
+    expect(h.workChanged.at(-1)).toEqual({ owner: WORK_A, entries: [] });
+    expect(h.store.snapshot(WORK_B).workAttachments).toHaveLength(1);
   });
 });
 

@@ -1,9 +1,9 @@
 // Trylo Desktop — Trylo brand mark.
 //
-// The mark is a 4-stroke X (Z-up / S-down). One Trylo = one mark:
+// The mark is made from three bent strokes. One Trylo = one mark:
 // the geometry below is the SAME as the mobile launcher foreground
 // (`mobile-app/.../trylo_launcher_foreground.xml`) — path box
-// 449×367 units of the 1024 viewBox, stroke 60.
+// 378×367 units of the 1024 viewBox, stroke 60.
 //
 // 2026-10-14 unification: the desktop used to carry its own
 // coordinates (550-unit box, stroke 64) while the shipped mobile
@@ -16,15 +16,15 @@
 //   * `aurora` (default) — gold gradient stroke.
 //   * `ink` — paper-white stroke for dark canvases.
 //   * `cream` (#F3E3A6) — the mobile launcher's stroke colour;
-//     pairs with `withBg` for the left-rail brand (cream mark on
-//     the #111318 chip = the shipped app icon, shrunk).
+//     pairs with `withBg` for the left-rail brand: cream on #111318
+//     in both themes, as approved with the startup handoff.
 //
-// `withBg` paints the #111318 rounded chip (the app-icon tile).
-// Inside a chip the mark renders at 75% path-box coverage — the
-// shipped icon's ratio — which makes the SVG canvas larger than
+// `withBg` keeps a themed rounded chip's layout slot.
+// Inside that slot the mark renders at 82% ink-box coverage,
+// which makes the SVG canvas larger than
 // the chip; `logo.css` pins `flex-shrink: 0` so the flex chip
 // cannot squash it back down.
-import type { CSSProperties, ReactElement } from 'react';
+import { useId, type CSSProperties, type ReactElement } from 'react';
 
 export type LogoVariant = 'gradient' | 'solid';
 export type LogoTone = 'aurora' | 'ink' | 'cream';
@@ -40,7 +40,7 @@ export interface LogoProps {
   readonly tone?: LogoTone;
   /** Show a soft warm halo behind the mark. */
   readonly glow?: boolean;
-  /** Wrap the SVG in a rounded square chip background (#111318 app-icon tile). */
+  /** Keep the approved dark rounded chip in both themes. */
   readonly withBg?: boolean;
   /** Opacity of the SVG only (does not touch the chip background). */
   readonly opacity?: number;
@@ -71,16 +71,14 @@ const MARK_PATHS: readonly string[] = [
  *  is what shipped the mark 6% off-centre in the first icon pass:
  *  the real x range is 337..715.) */
 const MARK_INK_BOX = 438;
-/** Optical placement. Centring on the INK BBOX (not the ink centroid):
- *  the mark's ink sits low-left inside its box — two heavy chevrons
- *  carry ~65% of the mass below — so a centroid-centred mark reads
- *  as "pushed to the top" even though its centroid is dead-centre.
- *  The eye tracks the outline, so the outline is the baseline; then
- *  a small upward lift (industry-standard optical centring, 1-3% of
- *  the tile) keeps it from looking mechanically centred. */
+/** Placement starts from the ink-box centre. The user chose a small
+ *  right/up correction after comparing the mark inside its dark tile;
+ *  this is a visual adjustment, not full ink-centroid compensation.
+ *  Relative to translate(-14, 17.5), it moves 9 units right and 14 up. */
 const MARK_BBOX_CX = 526;
 const MARK_BBOX_CY = 491.5;
-const MARK_OPTICAL_LIFT = 3;
+const MARK_OPTICAL_SHIFT_X = 9;
+const MARK_OPTICAL_LIFT = 17;
 const MARK_STROKE = 60;
 
 /** Ink coverage of the chip when `withBg` — the owner's pick from the
@@ -89,11 +87,14 @@ const MARK_STROKE = 60;
 const CHIP_INK_RATIO = 0.82;
 
 export function Logo(props: LogoProps): ReactElement {
+  const instanceId = useId().replaceAll(':', '');
   const size = props.size ?? 48;
-  const titleId = props.decorative ? undefined : 'trilo-logo-title';
+  const titleId = props.decorative ? undefined : `trilo-logo-title-${instanceId}`;
   const variant = props.variant ?? 'gradient';
   const tone = props.tone ?? 'aurora';
-  const gradId = `trilo-aurora-${tone}`;
+  const themedChipInk = props.withBg && !props.glow && variant === 'solid' && tone === 'cream';
+  // SVG paint IDs are document-wide; instances may inherit different theme colours.
+  const gradId = `trilo-aurora-${tone}-${instanceId}`;
 
   // Inside a chip the mark's INK box covers CHIP_INK_RATIO of the
   // chip. Round caps already counted in MARK_INK_BOX, so this is a
@@ -137,7 +138,7 @@ export function Logo(props: LogoProps): ReactElement {
                 tone === 'ink'
                   ? SOLID_COLOR_INK
                   : tone === 'cream'
-                    ? SOLID_COLOR_CREAM
+                    ? themedChipInk ? `var(--logo-chip-ink, ${SOLID_COLOR_CREAM})` : SOLID_COLOR_CREAM
                     : SOLID_COLOR_AURORA
               }
             />
@@ -150,10 +151,7 @@ export function Logo(props: LogoProps): ReactElement {
         strokeLinecap="round"
         strokeLinejoin="round"
         fill="none"
-        // Optical centring: put the ink BBOX centre on the canvas
-        // centre, then lift by MARK_OPTICAL_LIFT units (SVG y grows
-        // downward, so the lift subtracts).
-        transform={`translate(${512 - MARK_BBOX_CX} ${512 - MARK_BBOX_CY - MARK_OPTICAL_LIFT})`}
+        transform={`translate(${512 - MARK_BBOX_CX + MARK_OPTICAL_SHIFT_X} ${512 - MARK_BBOX_CY - MARK_OPTICAL_LIFT})`}
       >
         {MARK_PATHS.map((d, i) => (
           <path key={i} d={d} />
@@ -203,7 +201,7 @@ export function Logo(props: LogoProps): ReactElement {
         width: size,
         height: size,
         borderRadius: Math.round(size * 0.275),
-        background: CHIP_COLOR,
+        background: `var(--logo-chip-bg, ${CHIP_COLOR})`,
       }}
     >
       {svg}

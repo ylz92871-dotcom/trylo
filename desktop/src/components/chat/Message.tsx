@@ -1,4 +1,4 @@
-// Trylo Desktop — Message. See spike-results/phase-2-ui-redesign.md.
+// Trylo Desktop — Message. See docs/spikes/phase-2-ui-redesign.md.
 //
 // v1.15.7: closer to cline. No more brand-tinted bubble
 // for the assistant — the reply is plain markdown-flavoured
@@ -17,7 +17,7 @@
 //                        expanded on click)
 //   notice / turn /   → dropped upstream in events.ts,
 //     subagent / …      this component never sees them
-//   compaction        → CompactionCard (small pill)
+//   compaction        → CompactionCard (context boundary)
 //
 // v1.16.3: inline-edit for past user messages. Click a
 // user message → the <p> swaps for a <textarea> + Save
@@ -31,15 +31,17 @@
 // Whole-turn duration is rendered by MessageList after the final turn content.
 
 import { memo, useEffect, useState, type ReactElement } from 'react';
-import { Rocket } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import { AnswerLink } from './AnswerLink';
+import { CircleAlert, Rocket } from 'lucide-react';
+import { RuntimeNotice } from './RuntimeNotice';
+import { WorkflowReceipt } from './WorkflowReceipt';
+import { isWorkflowState } from '../../domain/workflow-state';
+import { AssistantAnswer } from './AssistantAnswer';
 import type { ChatMessage } from './types';
 import { ToolCard } from './ToolCard';
 import { FileChangeCards } from './FileChangeCard';
 import { computeFileChanges } from './file-change';
 import { ThinkingCard } from './ThinkingCard';
-import { CompactionCard } from './CompactionCard';
+import { CompactionCard, compactionNoticePresentation } from './CompactionCard';
 import { ErrorCard } from './ErrorCard';
 // 2026-08-29 (Work workflow UI refactor, spec §3.1):
 // the WorkWorkflowCard was the hierarchy container for
@@ -57,7 +59,7 @@ import { DeliverableProgressPanel } from './DeliverableProgressPanel';
 // M4-E (spec §6.7 Core "approval / input"): inline
 // decision cards for daemon permission requests and
 // structured user-input question sets.
-import { ApprovalCard } from './ApprovalCard';
+import { ApprovalMessageRow } from './ApprovalMessageRow';
 import { InputRequestCard } from './InputRequestCard';
 import { CognitionPromptCard } from '../user-learning/CognitionPromptCard';
 import { LearningImpactCard } from '../user-learning/LearningImpactCard';
@@ -65,7 +67,9 @@ import { SubagentCard } from './SubagentCard';
 // v1.16.5+ (M3): Work capability renders inline through
 // the SAME card the Work sub-app ships — no second
 // artifact component.
-import { ArtifactCard, relativeArtifactPath, type HostAdapter } from '@trylo/work';
+import { ArtifactCard } from './ArtifactCard';
+import { relativeArtifactPath } from '../../results/artifact-paths';
+import type { ArtifactHost as HostAdapter } from '../../host-adapter/artifact-actions';
 import { resolveArtifactKind } from './artifact-kind';
 
 export interface MessageProps {
@@ -115,7 +119,7 @@ export interface MessageProps {
   // M4-E (spec §6.7 Core "approval"): the inline ApprovalCard responder.
   // 2026-09-04 (CLI 单核): the workd input-request responder retired with
   // the daemon; only the `approval` case reads this.
-  readonly onRespondApproval?: (approvalId: string, approved: boolean) => void;
+  readonly onRespondApproval?: import('./ApprovalCard').ApprovalCardProps['onRespond'];
   readonly onRespondInputRequest?: import('./InputRequestCard').InputRequestCardProps['onRespond'];
   // P3 (spec §3.3): open the right-side diff panel for a
   // pending approval's proposed change. The id is the stable
@@ -139,51 +143,12 @@ export interface MessageProps {
   ) => Promise<{ ok: boolean; error?: string }>;
 }
 
-const FILE_MENTION = /^(?:[a-z]:[\\/]|\.?\.?[\\/])?[^\n`<>]+\.(?:md|txt|json|ya?ml|toml|tsx?|jsx?|css|html?|py|rs|go|java|c|cpp|h|hpp|pptx?|xlsx?|docx?|pdf|csv|svg|png|jpe?g|webp|gif)$/i;
-
 /** Compact byte string for the sent-attachment file chips. */
 function formatSentBytes(n: number): string {
   if (n < 1024) return `${n}B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
   return `${(n / 1024 / 1024).toFixed(1)}MB`;
 }
-
-// Memoized: ReactMarkdown re-parses the full text on every render, so an
-// unchanged message must never re-run it (streaming deltas re-render the
-// timeline many times per second).
-const AssistantAnswer = memo(function AssistantAnswer(props: {
-  readonly text: string;
-  readonly onOpenArtifact?: (path: string) => void;
-  readonly artifactHost?: import('@trylo/work').HostAdapter;
-}): ReactElement {
-  return (
-    <div className="message__text message__text--markdown">
-      <ReactMarkdown
-        components={{
-          a: ({ href, children }) => <AnswerLink href={href} onOpenArtifact={props.onOpenArtifact} artifactHost={props.artifactHost}>{children}</AnswerLink>,
-          code: ({ children }) => {
-            const value = String(children).replace(/\n$/, '').trim();
-            if (props.onOpenArtifact && FILE_MENTION.test(value)) {
-              return (
-                <button
-                  type="button"
-                  className="message__artifact-link"
-                  onClick={() => props.onOpenArtifact?.(value.replace(/\\/g, '/'))}
-                  title={`在右侧打开 ${value}`}
-                >
-                  {value}
-                </button>
-              );
-            }
-            return <code>{children}</code>;
-          },
-        }}
-      >
-        {props.text}
-      </ReactMarkdown>
-    </div>
-  );
-});
 
 function MessageImpl(props: MessageProps): ReactElement {
   const m = props.message;
@@ -200,6 +165,7 @@ function MessageImpl(props: MessageProps): ReactElement {
     typeof props.onEditMessage === 'function' &&
     typeof props.onSaveEdit === 'function' &&
     typeof props.onCancelEdit === 'function';
+  const canEdit = isUser && !editing && typeof props.onEditMessage === 'function';
   // Local mirror so the user's typing isn't fighting a
   // parent re-render. We re-seed when editingMessageId
   // changes so the textarea picks up the new message.
@@ -240,12 +206,19 @@ function MessageImpl(props: MessageProps): ReactElement {
             <div
               className={`message__bubble${editing ? ' message__bubble--editing' : ''}`}
               onClick={
-                isUser && !editing && props.onEditMessage
+                canEdit
                   ? () => props.onEditMessage!(m.id)
                   : undefined
               }
-              style={isUser && !editing ? { cursor: 'text' } : undefined}
-              title={isUser && !editing ? 'Click to edit' : undefined}
+              onKeyDown={canEdit ? event => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                props.onEditMessage!(m.id);
+              } : undefined}
+              role={canEdit ? 'button' : undefined}
+              tabIndex={canEdit ? 0 : undefined}
+              style={canEdit ? { cursor: 'text' } : undefined}
+              title={canEdit ? '编辑消息' : undefined}
             >
               {editing ? (
                 <div className="message__edit">
@@ -387,6 +360,7 @@ function MessageImpl(props: MessageProps): ReactElement {
       return (
         <div className="message message--turn-incomplete" role="listitem">
           <span className="message__turn-incomplete" data-turn-incomplete="true">
+            <CircleAlert size={13} strokeWidth={1.7} aria-hidden="true" />
             {label}
             {m.stopReason === 'failed' ? ' · 运行未成功结束' : ''}
           </span>
@@ -456,16 +430,8 @@ function MessageImpl(props: MessageProps): ReactElement {
       );
     }
     case 'approval': {
-      return (
-        <div className="message message--approval" role="listitem">
-          <ApprovalCard
-            key={m.id}
-            message={m}
-            onRespond={props.onRespondApproval}
-            onOpenPreview={props.onOpenApprovalPreview}
-          />
-        </div>
-      );
+      return <ApprovalMessageRow key={m.id} message={m}
+        onRespond={props.onRespondApproval} onOpenPreview={props.onOpenApprovalPreview} />;
     }
     case 'input_request': {
       // Live requests route by their originating CLI id. Saved cards cannot answer a later run.
@@ -500,19 +466,20 @@ function MessageImpl(props: MessageProps): ReactElement {
         </div>
       );
     }
-    case 'notice':
+    case 'goal': return <></>; // The persistent goal is displayed beside the composer.
+    case 'notice': {
+      if (isWorkflowState(m.workflow)) return <div className="message message--notice" role="listitem"><WorkflowReceipt workflow={m.workflow} /></div>;
       if (!m.text.trim()) return <></>;
+      const compactNotice = compactionNoticePresentation(m.text);
+      if (compactNotice) return <CompactionCard {...compactNotice} />;
       // Bookkeeping events that events.ts still routes here
       // render as a small status line.
       return (
         <div className="message message--notice" role="listitem">
-          <span className="message__notice">
-            <span className="message__role">SYSTEM</span>
-            {' · '}
-            {m.text}
-          </span>
+          <RuntimeNotice text={m.text} />
         </div>
       );
+    }
     case 'subagent':
       // §8.1: subagent lifecycle (incl. managed-work children) gets a card
       // with status badge + expandable detail drawer.

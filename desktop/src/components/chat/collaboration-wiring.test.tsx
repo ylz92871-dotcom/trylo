@@ -25,6 +25,25 @@ function surface(messages: readonly ChatMessage[], send?: (id: string, text: str
 }
 
 describe('approved collaboration UI uses the production event chain', () => {
+  it('shows usage without inventing a budget for an unlimited task', () => {
+    const adapter = new TryloV1EventAdapter();
+    let messages: ChatMessage[] = [user];
+    const feed = (frame: object) => { messages = applyEvents(messages, adapter.feed(JSON.stringify(frame))); };
+    feed({ type: 'subagent', kind: 'spawn', id: 'unlimited', taskId: 'long-task', status: 'running', prompt: '完成任务' });
+    feed({ type: 'subagent', kind: 'end', id: 'unlimited', taskId: 'long-task', status: 'done',
+      result: '已保留进度', budget: { tokensUsed: 150000, timeoutMode: 'active' } });
+    const view = render(<SubagentConversation agent={messages[1] as SubagentMessage} drafts={new Map()} onClose={() => {}} />);
+    expect(screen.getByText(/已用 150000 token/)).toBeVisible();
+    expect(view.container.textContent).not.toMatch(/undefined|NaN/);
+  });
+  it('keeps a retired CoWork spawn without a session id read-only', () => {
+    const send = vi.fn(async () => {});
+    render(<SubagentConversation agent={child('old-managed', 'managed-work')} drafts={new Map()} onClose={() => {}} onSend={send} />);
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.getByText(/CoWork 执行器已退役/)).toBeVisible();
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it('keeps parked tasks and resumed executions in one conversation with budget visibility', () => {
     const adapter = new TryloV1EventAdapter();
     let messages: ChatMessage[] = [user];

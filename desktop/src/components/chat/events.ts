@@ -1,7 +1,7 @@
 // Trylo Desktop — event → message reducer.
 //
 // v1.14: the trylo CLI emits 28 typed events (per
-// C:/work/demo-ws/trylo cli/docs/EVENT_VOCABULARY.md). This
+// D:/CC/trylo/trylo cli/docs/EVENT_VOCABULARY.md). This
 // reducer maps each event to a typed ChatMessage. The
 // pure function is tested in events.test.ts against the
 // 39-event hand-crafted trylo-complex fixture (6 turns,
@@ -33,6 +33,7 @@ import { applyText, applyThinking } from './stream-message-reducer';
 import { finalizeLatestTurnTimer } from './turn-timer';
 import { applyCompact, applyCompactionTrigger } from './compaction-message-reducer';
 export { finalizeLatestTurnTimer } from './turn-timer';
+import { acceptsWorkflowUpdate, isWorkflowState, sameWorkflowReceipt, workflowReceiptIdentity, workflowStateLabel } from '../../domain/workflow-state';
 
 function toolSummary(e: ToolUseEvent): string {
   const input = e.input;
@@ -429,6 +430,26 @@ export function applyEvents(
 
 function applyOne(msgs: ChatMessage[], e: LoopEvent): ChatMessage[] {
   switch (e.type) {
+    case 'workflow_state': {
+      const workflow = e.workflow;
+      if (!isWorkflowState(workflow)) return msgs;
+      const old = msgs.find(message => message.kind === 'notice' && message.workflow && isWorkflowState(message.workflow) && sameWorkflowReceipt(message.workflow, workflow));
+      const seen = old?.kind === 'notice' && Array.isArray(old.workflowSeenTraceIds) ? old.workflowSeenTraceIds.filter(id => typeof id === 'string') : [];
+      if (old?.kind === 'notice' && old.workflow && (!acceptsWorkflowUpdate(old.workflow, workflow, seen)
+        || JSON.stringify(old.workflow) === JSON.stringify(workflow))) return msgs;
+      const id = old?.id ?? `workflow:${workflowReceiptIdentity(workflow)}`;
+      const message: NoticeMessage = { id, kind: 'notice', role: 'system', createdAt: old?.createdAt ?? e.ts,
+        turnId: old?.turnId ?? msgs[lastUserIndex(msgs)]?.id, text: workflowStateLabel(workflow), workflow,
+        workflowSeenTraceIds: [...new Set([...seen, ...(old?.kind === 'notice' && old.workflow ? [old.workflow.traceId] : []), workflow.traceId])].slice(-128) };
+      return old ? msgs.map(item => item.id === id ? message : item) : [...msgs, message];
+    }
+    case 'goal_state': {
+      const id = `goal:${e.goal.createdAtTurn}`;
+      const old = msgs.find(message => message.id === id);
+      const message: import('./types').GoalMessage = { id, kind: 'goal', role: 'system', goal: e.goal,
+        createdAt: old?.createdAt ?? e.ts, turnId: msgs[lastUserIndex(msgs)]?.id };
+      return old ? msgs.map(m => m.id === id ? message : m) : [...msgs, message];
+    }
     case 'input_request': {
       const id = `input_request:${e.requestId}`;
       const existing = msgs.findIndex(message => message.id === id);

@@ -1,5 +1,5 @@
 import { forwardRef, type ReactNode } from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatMessage, TextMessage } from './types';
@@ -37,6 +37,7 @@ vi.mock('./Message', () => ({
 import { MessageList } from './MessageList';
 import type { ListItem } from './MessageList';
 import { normalizeMessageIds } from './message-identity';
+import { ConversationPresentation } from './ConversationPresentation';
 
 function user(id: string, text: string, createdAt: number): TextMessage {
   return {
@@ -50,6 +51,49 @@ function user(id: string, text: string, createdAt: number): TextMessage {
 }
 
 describe('MessageList turn projection', () => {
+  it.each(['code', 'work'] as const)('%s excludes a hosted approval row without losing its waiting-for-input state', surface => {
+    const messages: ChatMessage[] = [user('approval-user', 'write', 1), {
+      id: 'approval-row', kind: 'approval', role: 'system', createdAt: 2,
+      authority: 'code', approvalId: 'request-1', status: 'pending', type: 'write_file', description: '写入文件',
+      pendingRequest: { requestId: 'request-1', projectKey: 'p', conversationId: 'c',
+        processId: 'process', toolName: 'write_file', input: { path: 'report.md' } },
+    }];
+    const view = render(<ConversationPresentation.Provider value={{ embedded: true,
+      hostedApprovals: [{ messageId: 'approval-row', approvalId: 'request-1', authority: 'code' }] }}>
+      <MessageList surface={surface} running messages={messages} />
+    </ConversationPresentation.Provider>);
+    const props = virtuoso.captured.at(-1)!;
+    expect((props.data as readonly ListItem[]).some(item => item.kind === 'approval')).toBe(false);
+    expect(props.context).toMatchObject({ viewState: 'awaiting_input' });
+    expect(messages[1]).toMatchObject({ status: 'pending', approvalId: 'request-1' });
+    view.unmount();
+  });
+
+  it.each(['code', 'work'] as const)('%s settles a completed tool phase while the run awaits its next response', surface => {
+    const view = render(<MessageList surface={surface} running messages={[
+      user('done-user', 'check', 1000),
+      { id: 'done-tool', kind: 'tool', role: 'assistant', createdAt: 1010,
+        tool: 'Read', status: 'done', summary: 'report.md', turnId: 'done-user' },
+    ]} />);
+    expect(view.getByLabelText('执行过程')).not.toHaveClass('code-reasoning--active');
+    view.unmount();
+  });
+
+  it.each([
+    ['code', 'running'], ['work', 'running'], ['code', 'pending'], ['work', 'pending'],
+  ] as const)('%s keeps a %s tool active when a later assistant comment arrives', (surface, status) => {
+    const view = render(<MessageList surface={surface} running messages={[
+      user('live-user', 'check', 1000),
+      { id: 'live-tool', kind: 'tool', role: 'assistant', createdAt: 1010,
+        tool: 'Read', status, summary: 'report.md', turnId: 'live-user' },
+      { id: 'live-comment', kind: 'text', role: 'assistant', createdAt: 1020,
+        text: '这项操作仍在进行。', turnId: 'live-user' },
+    ]} />);
+    expect(view.getByLabelText('执行过程')).toHaveClass('code-reasoning--active');
+    expect(view.getByLabelText('执行过程').textContent).not.toContain('操作尚未完成');
+    view.unmount();
+  });
+
   it('keeps live Work reasoning open before any tool call exists', () => {
     const view = render(<MessageList surface="work" running messages={[
       user('reasoning-user', 'continue', 1000),
@@ -96,6 +140,8 @@ describe('MessageList turn projection', () => {
       {...first,id:'tool-b',toolCallId:'call-b',status:'done'}];
     for (const surface of ['code','work'] as const) {
       const view=render(<MessageList messages={messages} surface={surface}/>);
+      expect(view.container.querySelectorAll('.tool--event')).toHaveLength(0);
+      fireEvent.click(view.container.querySelector('.code-reasoning__head')!);
       expect(view.container.querySelectorAll('.tool--event')).toHaveLength(2);
       view.unmount();
     }
@@ -166,7 +212,10 @@ describe('MessageList turn projection', () => {
 
     expect(screen.getByTestId('message-u1')).toHaveTextContent('question');
     expect(screen.getByTestId('message-turn-1')).toBeInTheDocument();
-    expect(screen.getByLabelText('执行过程')).toHaveTextContent('分析中');
+    const process = screen.getByLabelText('执行过程');
+    expect(process).toHaveTextContent('分析');
+    fireEvent.click(process.querySelector('.code-reasoning__head')!);
+    expect(process).toHaveTextContent('分析中');
     expect(screen.getByTestId('message-a1')).toHaveTextContent('answer');
   });
 
@@ -195,7 +244,7 @@ describe('MessageList turn projection', () => {
     expect(screen.getByLabelText('执行过程')).toHaveClass('code-reasoning--active');
   });
 
-  it('keeps successive reasoning and tool events in one readable Code transcript', () => {
+  it.each(['code', 'work'] as const)('keeps successive reasoning and tool events readable after a completed %s phase is reopened', surface => {
     const messages: ChatMessage[] = [
       user('u1', 'fix it', 100),
       {
@@ -214,13 +263,16 @@ describe('MessageList turn projection', () => {
       },
     ];
 
-    render(<MessageList surface="code" messages={messages} running />);
+    const view = render(<MessageList surface={surface} messages={messages} running />);
 
     expect(screen.getAllByLabelText('执行过程')).toHaveLength(1);
+    expect(screen.getByLabelText('执行过程')).not.toHaveClass('code-reasoning--active');
+    fireEvent.click(view.container.querySelector('.code-reasoning__head')!);
     const transcript = screen.getByLabelText('按时间顺序的执行过程');
     expect(transcript).toHaveTextContent('读取相关文件并确认状态');
     expect(transcript).toHaveTextContent('读取配置');
     expect(transcript).toHaveTextContent('问题来自缺少默认配置');
+    view.unmount();
   });
 
   it('renders explicit Code phases as separate independently settling blocks', () => {

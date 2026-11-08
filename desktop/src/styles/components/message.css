@@ -247,30 +247,6 @@
   white-space: inherit;
 }
 
-.message__artifact-link {
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
-  margin: 0 2px;
-  padding: 2px 7px;
-  border: 1px solid color-mix(in srgb, var(--brand) 16%, var(--border));
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--brand-soft) 13%, transparent);
-  color: color-mix(in srgb, var(--brand) 42%, var(--ink-paper));
-  font-family: var(--font-mono);
-  font-size: 0.88em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  vertical-align: baseline;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.message__artifact-link:hover {
-  border-color: color-mix(in srgb, var(--brand) 30%, var(--border));
-  background: color-mix(in srgb, var(--brand-soft) 21%, transparent);
-}
-
 /* v1.16.3: inline-edit UI. When a user message is
    being edited, the <p> swaps for a <textarea> +
    Save / Cancel buttons. Kept visually consistent with
@@ -378,19 +354,18 @@
  * (provider refusal, budget/limit cut) are both failures the user has to see,
  * not a neutral "skipped" state. */
 .message--turn-incomplete {
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .message__turn-incomplete {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: var(--radius-pill);
-  background: var(--danger-soft);
-  border: 1px solid var(--danger);
-  color: var(--danger);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  color: var(--ink-fog);
+  font: 12px/1.65 var(--font-body);
 }
+.message__turn-incomplete svg { color: var(--danger); flex: none; }
 
 /* M3 (Work): inline artifact row. The shared ArtifactCard
  * carries its own chrome; the row only provides width
@@ -430,8 +405,8 @@
 .message { margin-block: 12px; }
 .message--assistant .message__col { max-width: 100%; width: 100%; }
 .message--user .message__bubble { border-radius: 15px; padding: 10px 14px; }
-.message__text--markdown a, .message__artifact-link { color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
-.message__text--markdown a:hover, .message__artifact-link:hover { background: var(--link-soft); }
+.message__text--markdown a:not(.message__artifact-link) { color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
+.message__text--markdown a:not(.message__artifact-link):hover { background: var(--link-soft); }
 
 .message--user .message__col { max-width:90%; }
 .message--user .message__bubble { border-radius:16px; padding:13px 16px; background:var(--bg-panel); line-height:1.65; }

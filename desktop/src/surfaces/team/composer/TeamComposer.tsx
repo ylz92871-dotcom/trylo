@@ -9,10 +9,12 @@ import {
 import { MemberInspector } from './MemberInspector';
 import { MemberList } from './MemberList';
 import type { TeamMemberSpec, TeamRoleId } from '../team-profile-types';
+import { ExpertSelector, type ExpertLibraryClient } from '../../../experts';
 
 export interface TeamComposerProps {
   readonly draft: ComposerDraft;
   readonly modelChoices: readonly ModelChoice[];
+  readonly expertClient?: ExpertLibraryClient;
   readonly composerLive: boolean;
   readonly allowNoWorker: boolean;
   readonly inFlight?: boolean;
@@ -156,6 +158,16 @@ export function TeamComposer(props: TeamComposerProps): ReactElement {
         />
         {selectedMember ? (
           <div className="team-composer__selected">
+            {props.expertClient && <>
+              <p className="team-composer__group-hint">当前成员：{selectedMember.displayName}。所选专家会在启动时由原角色与权限边界检查并实例化。</p>
+              {selectedMember.overlay.expert && <p className="team-composer__group-hint">待派发专家：{'expertId' in selectedMember.overlay.expert
+                ? `${selectedMember.overlay.expert.expertId} · ${selectedMember.overlay.expert.version ?? '最新保存版本'}` : selectedMember.overlay.expert.requestId}
+                <button type="button" className="team-composer__ghost" disabled={props.inFlight} onClick={() => patchOverlayById(selectedMember.memberId, { expert: undefined })}>取消专家选择</button></p>}
+              <ExpertSelector client={props.expertClient} disabled={props.inFlight} targetRole={selectedMember.baseRole}
+                selected={selectedMember.overlay.expert && 'expertId' in selectedMember.overlay.expert && selectedMember.overlay.expert.version !== undefined
+                  ? [{ expertId: selectedMember.overlay.expert.expertId, version: selectedMember.overlay.expert.version }] : []}
+                onSelect={identity => patchOverlayById(selectedMember.memberId, { expert: { expertId: identity.expertId, version: identity.version } })} />
+            </>}
             <button
               type="button"
               className="team-composer__ghost"

@@ -1,15 +1,25 @@
 /* Trylo Desktop — Logo (Trylo mark).
  *
- * The mark's colours are set on the SVG via inline stopColor in
- * the React component (so the gradient can be themed by tokens).
- * The wrapper around the SVG is just for sizing — see Logo.tsx.
+ * The mark's colours are set on the SVG via inline stopColor.
+ * Cream chip marks inherit their theme paint from these variables;
+ * ordinary unbacked marks keep their existing tone colours.
  *
  * 2026-10-14: `withBg` (the left-rail brand) wraps the mark in a
- * #111318 chip whose SVG canvas is intentionally LARGER than the
- * chip — 75% path-box coverage plus round caps. A flex container
+ * themed chip whose SVG canvas is intentionally LARGER than the
+ * chip — 82% ink-box coverage. A flex container
  * would shrink that canvas back to the chip size and silently
  * flatten the mark; the rule below is the guard.
  */
+
+:root {
+  --logo-chip-bg: #111318;
+  --logo-chip-ink: #f3e3a6;
+}
+
+:root[data-theme='dark'] {
+  --logo-chip-bg: #111318;
+  --logo-chip-ink: #f3e3a6;
+}
 
 .logo-wrap {
   display: inline-flex;
@@ -22,3 +32,11 @@
 .trilo-mark--chip > svg {
   flex-shrink: 0;
 }
+
+/* The renderer uses monochrome identity in light mode; startup keeps its own palette. */
+:root[data-theme='light'] .app-shell {
+  --logo-chip-bg: transparent;
+  --logo-chip-ink: #202124;
+}
+
+:root[data-theme='dark'] .app-shell { --logo-chip-bg: transparent; }

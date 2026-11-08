@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, type ReactElement, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { BriefcaseBusiness, Check, Code2 } from 'lucide-react';
+import { PanelsTopLeft, Check, Code2 } from 'lucide-react';
 import type { CodeMode, TopLevelMode } from '../../host-adapter/types';
 
 const modes: readonly { value: CodeMode; label: string; hint: string }[] = [
@@ -79,7 +79,7 @@ export function ModePopover(props: ModePopoverProps): ReactElement {
     {props.onKindChange && <div className="mode-popover__kinds" role="group" aria-label="工作区域">
       {(['code', 'work'] as const).map((kind) => <button type="button" role="menuitemradio" key={kind}
         aria-checked={(props.kind ?? 'code') === kind} onClick={() => { props.onKindChange?.(kind); closeAndFocusTrigger(); }}>
-        {kind === 'code' ? <Code2 size={16} /> : <BriefcaseBusiness size={16} />}<span>{kind === 'code' ? 'Code · 编程' : 'Work · 工作'}</span>
+        {kind === 'code' ? <Code2 size={16} /> : <PanelsTopLeft size={16} />}<span>{kind === 'code' ? 'Code · 编程' : 'Work · 工作'}</span>
         {(props.kind ?? 'code') === kind && <Check size={14} />}
       </button>)}
     </div>}

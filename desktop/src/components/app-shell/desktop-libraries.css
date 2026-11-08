@@ -1,0 +1,24 @@
+.desktop-libraries {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 16px);
+  min-width: 0;
+}
+.desktop-libraries > h2 { margin: 0; font-size: var(--text-lg, 18px); }
+.desktop-libraries > p { margin: 0; max-width: 72ch; }
+.desktop-libraries__switch { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+.desktop-libraries > .approval-card { width: 100%; max-width: none; margin-inline: 0; box-sizing: border-box; }
+.desktop-library-recovery { box-sizing: border-box; min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-md, 10px); background: var(--bg-panel); color: var(--fg); font: 13px/1.6 var(--font-body, sans-serif); overflow-wrap: anywhere; }
+.desktop-library-recovery p { margin: 0 0 8px; }
+.desktop-library-recovery > section + section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.desktop-library-recovery__title { font-weight: 600; }
+.desktop-library-recovery__title > span, .desktop-library-recovery__workspace, .desktop-library-recovery__hint { color: var(--fg-muted); font-weight: 400; }
+.desktop-library-recovery section > :last-child { margin-bottom: 0; }
+.desktop-library-recovery summary { cursor: pointer; }
+.desktop-library-recovery code { display: block; margin-top: 8px; white-space: pre-wrap; font-size: 12px; }
+.desktop-library-recovery--floating { position: fixed; right: 24px; bottom: 24px; width: 360px; max-width: calc(100vw - 48px); max-height: calc(100dvh - 48px); overflow-y: auto; z-index: 100; }
+.desktop-libraries__switch { gap: 24px; border-bottom: 1px solid var(--border); }
+.desktop-libraries__switch > button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 4px 0 13px; font-size: 13px; background: transparent; color: var(--fg-muted); }
+.desktop-libraries__switch > button[aria-pressed='true'] { color: var(--fg); border-bottom-color: var(--accent, #946d22); }
+.desktop-libraries__switch > button:hover { background: transparent; color: var(--fg); }
+.desktop-libraries__switch > button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }

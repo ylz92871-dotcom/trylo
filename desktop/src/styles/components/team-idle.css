@@ -46,11 +46,11 @@
 }
 
 .team-idle__row:hover {
-  background: var(--ink-hover);
+  background: var(--team-hover);
 }
 
 .team-idle__row:focus-visible {
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--fg-muted);
   outline-offset: -2px;
 }
 
@@ -87,8 +87,8 @@
 }
 
 .team-idle__continue:hover {
-  border-color: var(--brand);
-  color: var(--brand);
+  border-color: var(--fg-muted);
+  color: var(--fg-muted);
 }
 
 .team-idle__row:disabled {
@@ -119,3 +119,10 @@
   cursor: pointer;
   padding: 0 10px;
 }
+
+.team-idle__heading { display:flex; align-items:center; gap:10px; margin-bottom:12px; color:var(--fg-muted); }
+.team-idle__heading h1 { margin:0; color:var(--fg); font-size:22px; line-height:1.4; font-weight:500; letter-spacing:-.4px; }
+.team-idle__row { min-height:50px; border-radius:7px; padding-inline:12px; }
+.team-idle__row-title { min-width:104px; }
+.team-idle__row--static { padding:0; }
+@container (max-width:480px) { .team-idle__row { align-items:flex-start; justify-content:center; flex-direction:column; gap:2px; padding-block:8px; }.team-idle__row-roster { width:100%; }.team-idle__row-title { min-width:0; } }

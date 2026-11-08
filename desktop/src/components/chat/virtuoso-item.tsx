@@ -23,7 +23,7 @@ export const VirtuosoItem = forwardRef<
   ItemProps<ListItem> & ContextProp<FooterContext>
 >(function VirtuosoItem(props, ref): ReactElement {
   const { item: _item, context: _context, ...rest } = props;
-  void _item;
+  const question = _item?.kind === 'text' && _item.role === 'user' ? _item.id : undefined;
   void _context;
-  return <div {...rest} ref={ref} className="conversation-row" style={{ ...props.style, display: 'flow-root' }} />;
+  return <div {...rest} data-conversation-question={question} tabIndex={question ? -1 : undefined} ref={ref} className="conversation-row" style={{ ...props.style, display: 'flow-root' }} />;
 });

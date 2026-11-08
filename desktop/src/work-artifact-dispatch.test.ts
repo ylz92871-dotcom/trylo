@@ -91,10 +91,10 @@ describe('artifactCapabilityFor (P2-1 A-Edge dispatch matrix)', () => {
     }
   });
 
-  it('routes legacy binary Office to host-open', () => {
+  it('routes legacy Office to the optional page converter', () => {
     for (const ext of ['.doc', '.ppt', '.rtf', '.odt']) {
       const cap = artifactCapabilityFor(`D:/repo/.trylo/out/file${ext}`);
-      expect(cap.kind, `expected ${ext} to be host-open`).toBe('host-open');
+      expect(cap, ext).toEqual({ kind: 'rich-preview', preview: 'office' });
     }
   });
 
@@ -121,21 +121,22 @@ describe('artifactCapabilityFor (P2-1 A-Edge dispatch matrix)', () => {
   });
 
   it('routes unsupported binary extensions to host-open', () => {
-    // The matrix lists the most common archive/compiled-binary
-    // extensions explicitly. Files with these extensions would garble
-    // the text peek, so the host adapter is the only safe handler.
-    for (const ext of ['.bin', '.zip', '.tar', '.gz', '.7z', '.rar', '.exe', '.dll', '.so', '.dylib']) {
+    // Compiled and opaque binaries retain the external-open fallback.
+    for (const ext of ['.bin', '.exe', '.dll', '.so', '.dylib']) {
       const cap = artifactCapabilityFor(`D:/repo/.trylo/out/artifact${ext}`);
       expect(cap.kind, `expected ${ext} to be host-open`).toBe('host-open');
     }
   });
 
-  it('routes paths with no extension to host-open', () => {
-    const cap = artifactCapabilityFor('D:/repo/.trylo/out/Makefile');
-    expect(cap.kind).toBe('host-open');
-    if (cap.kind === 'host-open') {
-      expect(cap.reason).toMatch(/no extension/i);
+  it('routes readable archives and package containers to their directory reader', () => {
+    for (const ext of ['.zip', '.tar', '.gz', '.tgz', '.bz2', '.xz', '.7z', '.rar', '.jar', '.war', '.whl', '.vsix']) {
+      expect(artifactCapabilityFor(`D:/repo/out/package${ext}`), ext).toEqual({ kind: 'rich-preview', preview: 'archive' });
     }
+  });
+
+  it('routes extensionless source/build files to in-app reading', () => {
+    const cap = artifactCapabilityFor('D:/repo/.trylo/out/Makefile');
+    expect(cap.kind).toBe('text-preview');
   });
 });
 
@@ -184,24 +185,24 @@ describe('onOpenWorkArtifact dispatch wiring (P2-1 A-Edge)', () => {
     expect(host.openFile).not.toHaveBeenCalled();
   });
 
-  it('routes legacy Office and binary to the artifact host (not the peek)', () => {
+  it('previews legacy Office while keeping unsupported binaries on the host', () => {
     const onSelectFile = vi.fn();
     const host = { openFile: vi.fn().mockResolvedValue(undefined) };
     dispatch('D:/repo/.trylo/out/legacy.doc', onSelectFile, host);
     dispatch('D:/repo/.trylo/out/legacy.ppt', onSelectFile, host);
     dispatch('D:/repo/.trylo/out/part.sldprt', onSelectFile, host);
     dispatch('D:/repo/.trylo/out/recording.bin', onSelectFile, host);
-    expect(onSelectFile).not.toHaveBeenCalled();
-    expect(host.openFile).toHaveBeenCalledTimes(4);
+    expect(onSelectFile).toHaveBeenCalledTimes(2);
+    expect(onSelectFile).toHaveBeenCalledWith('D:/repo/.trylo/out/legacy.doc', 'file');
+    expect(onSelectFile).toHaveBeenCalledWith('D:/repo/.trylo/out/legacy.ppt', 'file');
+    expect(host.openFile).toHaveBeenCalledTimes(2);
   });
 
-  it('routes a path with no extension to the host (never to text peek)', () => {
-    // Regression guard: the previous implementation read every Work
-    // artifact as text, which fails on extension-less binaries.
+  it('routes extensionless files through content detection instead of bypassing preview', () => {
     const onSelectFile = vi.fn();
     const host = { openFile: vi.fn() };
     dispatch('D:/repo/.trylo/out/Makefile', onSelectFile, host);
-    expect(onSelectFile).not.toHaveBeenCalled();
-    expect(host.openFile).toHaveBeenCalledWith('D:/repo/.trylo/out/Makefile');
+    expect(onSelectFile).toHaveBeenCalledWith('D:/repo/.trylo/out/Makefile', 'file');
+    expect(host.openFile).not.toHaveBeenCalled();
   });
 });

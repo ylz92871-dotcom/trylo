@@ -1,3 +1,11 @@
+/* Team surfaces inherit the same page palette as personal conversations. */
+.team-surface,.team-run {
+  --team-surface:color-mix(in srgb,var(--fg) 4%,var(--bg));
+  --team-hover:color-mix(in srgb,var(--fg) 7%,var(--bg));
+  --team-selected:color-mix(in srgb,var(--fg) 10%,var(--bg));
+  --team-accent:var(--fg-muted);
+  --team-node:var(--team-surface); --team-node-line:var(--border);
+}
 /* Trylo Desktop — Person/Team surface host.
  *
  * The Team surface takes the main column when
@@ -52,3 +60,7 @@
     padding: var(--space-6) var(--space-8);
   }
 }
+
+.team-surface__body:not(.team-surface__body--run)>:is(.team-idle,.team-composer) { width:100%; max-width:760px; margin:clamp(28px,8vh,80px) auto; }
+.team-surface__body { scrollbar-width:thin; scrollbar-color:var(--border-strong) transparent; }
+.team-surface :is(button,summary,input,textarea,select):focus-visible { outline-color:var(--fg-muted); }

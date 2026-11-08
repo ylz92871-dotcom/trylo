@@ -11,6 +11,7 @@ export interface WorkToolsSettingsProps {
   readonly platform?: ToolPlatformState | null
   readonly selection?: { computer: boolean; browserDebug: boolean; cad: boolean }
   readonly onConfigure?: () => void
+  readonly onSelectBrowser?: (debug: boolean) => void
 }
 
 const GROUPS = ['全部', '办公文档', '浏览器', '电脑控制', 'CAD / EDA', '其他工具'] as const
@@ -42,9 +43,7 @@ export function selectedWorkPackages(
     : selection.browserDebug
       ? 'work.browser-debug.v1'
       : 'work.core.v1'
-  return catalog.profiles[id].filter(
-    (packageId) => selection.computer || packageId !== 'windows-mcp',
-  )
+  return catalog.profiles[id]
 }
 
 function PackageRow({
@@ -62,9 +61,15 @@ function PackageRow({
   const actionState = platform?.actions[item.id]
   const view = connected && pkg ? derivePackageView(pkg, actionState) : null
   const checking = connected && platform.loading && !actionState
-  const notInstalled = view?.uiState === 'unusable' && pkg?.state === 'not-installed'
+  const core = ['officecli', 'playwright', 'windows-mcp', 'chrome-devtools'].includes(item.id)
+  const staleService = connected && core && platform?.needsServiceReload === true
+  const notInstalled = view?.uiState === 'unusable' && pkg?.state === 'not-installed' && !pkg.builtIn
   const label = checking
     ? '检测中…'
+    : staleService
+      ? '工具服务需重载'
+    : view && core
+      ? (pkg?.available ? '内置 · 可用' : '内置 · 不可用')
     : notInstalled
       ? '未安装'
       : view
@@ -74,7 +79,7 @@ function PackageRow({
     checking ||
     !view ||
     ['installing', 'verifying', 'installing-browser', 'checking'].includes(view.uiState)
-  const action = busy ? 'none' : view.action
+  const action = busy || core ? 'none' : view.action
   const actionLabel =
     action === 'install'
       ? '安装'
@@ -93,11 +98,15 @@ function PackageRow({
         <div className="work-tools__identity">
           <h4>{item.displayName}</h4>
           <span className="work-tools__selection">
-            {selected === undefined ? '' : selected ? '配置中已选用' : '配置中未选用'}
+            {['officecli', 'windows-mcp'].includes(item.id)
+              ? '默认启用'
+              : ['playwright', 'chrome-devtools'].includes(item.id)
+                ? (selected === undefined ? '浏览器工具' : selected ? '当前浏览器' : '备用浏览器')
+                : selected === undefined ? '' : selected ? '扩展已启用' : '扩展未启用'}
           </span>
         </div>
         <span
-          className={`work-tools__state work-tools__state--${!checking && view?.uiState === 'available' ? 'ok' : !checking && !notInstalled && view && ['unusable', 'install-failed'].includes(view.uiState) ? 'err' : 'pending'}`}
+          className={`work-tools__state work-tools__state--${!checking && !staleService && view?.uiState === 'available' ? 'ok' : !checking && !staleService && !notInstalled && view && ['unusable', 'install-failed'].includes(view.uiState) ? 'err' : 'pending'}`}
           role="status"
         >
           {label}
@@ -125,7 +134,9 @@ function PackageRow({
         <span>{info?.group ?? '其他工具'}</span>
         <span>
           {pkg && connected ? '检测版本' : '目录版本'}{' '}
-          {pkg && connected ? pkg.version : item.version}
+          {pkg && connected
+            ? (pkg.reportedVersion?.match(/\d+\.\d+\.\d+(?:[-+][\w.-]+)?/)?.[0] ?? pkg.version)
+            : item.version}
         </span>
       </div>
       {!checking && view && view.uiState !== 'available' && (
@@ -154,6 +165,7 @@ export function WorkToolsSettings({
   platform,
   selection,
   onConfigure,
+  onSelectBrowser,
 }: WorkToolsSettingsProps): ReactElement {
   const [query, setQuery] = useState('')
   const [group, setGroup] = useState<Group>('全部')
@@ -204,8 +216,31 @@ export function WorkToolsSettings({
         )}
       </div>
       <p className="settings-modal__desc">
-        查看支持的工具与安装状态。下方的能力开关决定 Work 任务选用哪些工具包，保存后用于后续任务。
+        办公文档、浏览器和电脑控制默认启用。Work 的浏览器方案可在这里切换，保存后用于后续任务；操作授权规则保持不变。
       </p>
+      {selection && onSelectBrowser && (
+        <fieldset className="settings-modal__group">
+          <legend className="settings-modal__legend">Work 浏览器工具</legend>
+          <label className="settings-modal__field settings-modal__field--inline">
+            <input type="radio" name="browser-tool" checked={!selection.browserDebug}
+              onChange={() => onSelectBrowser(false)} />
+            <span className="settings-modal__label">Playwright（网页浏览与操作）</span>
+          </label>
+          <label className="settings-modal__field settings-modal__field--inline">
+            <input type="radio" name="browser-tool" checked={selection.browserDebug}
+              onChange={() => onSelectBrowser(true)} />
+            <span className="settings-modal__label">Chrome DevTools（网页调试与分析）</span>
+          </label>
+          <p className="settings-modal__hint">始终启用一种浏览器工具。另一种显示为备用，不表示缺少浏览器能力。</p>
+        </fieldset>
+      )}
+      {platform?.needsServiceReload && (
+        <p className="work-tools__notice" role="status">
+          工具服务仍在使用旧版本。重载后检测内置工具。
+          <button type="button" className="settings-modal__btn settings-modal__btn--ghost"
+            disabled={platform.loading} onClick={() => void platform.reloadService?.()}>重载工具服务</button>
+        </p>
+      )}
       {!connected && (
         <p className="work-tools__notice" role="status">
           {platform?.transportError || '工具服务未连接，暂时无法检测安装与运行状态。'}{' '}

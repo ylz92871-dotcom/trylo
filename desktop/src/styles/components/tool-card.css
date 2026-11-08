@@ -215,7 +215,7 @@
 
 .tool__body {
   border-top: 1px solid var(--border);
-  background: var(--bg-elevated);
+  background: var(--tool-output-bg, var(--bg-elevated));
   padding: 12px 16px 14px 16px;
   display: flex;
   flex-direction: column;
@@ -489,4 +489,40 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+/* Routing evidence shares the existing tool row; IDs stay inside native details. */
+.tool__routing-receipt {
+  min-width: 0;
+  font-size: 12px;
+}
+
+.tool__routing-receipt summary {
+  cursor: pointer;
+  color: var(--ink-paper);
+}
+
+.tool__routing-receipt p {
+  margin: 8px 0;
+  color: var(--ink-mute);
+  line-height: 1.6;
+}
+
+.tool__routing-receipt dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 10px 0 0;
+  line-height: 1.6;
+}
+
+.tool__routing-receipt dt { color: var(--ink-mute); }
+.tool__routing-receipt dd { margin: 0; min-width: 0; }
+.tool__routing-receipt code { overflow-wrap: anywhere; }
+.tool__routing-receipt dd > code + code { display: block; }
+
+/* Neutral output surfaces keep error/status accents readable in the dark theme. */
+:root[data-theme='dark'] :is(.tool__body, .fchange--event .fchange__body) {
+  --tool-output-bg: #191b1e;
+  --ink-mute: #969ba4;
 }

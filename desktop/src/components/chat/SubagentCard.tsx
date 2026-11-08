@@ -1,21 +1,13 @@
 // Trylo Desktop — SubagentCard (P3 §8.1 + audit §4.4 B3).
 //
-// Renders a `subagent` ChatMessage (the CLI's subagent spawn/end lifecycle,
-// plus the managed-work fields). A compact card with a status badge, the
-// agent type, the delegate prompt, and — for managed-work — a "在后台继续"
-// hint when the durable session is still active. An expandable detail section
-// shows the managed session id, backing task id, summary and artifacts.
-//
-// P3-B3: for an active managed-work session the card exposes "继续" (targets
-// the SAME managedSessionId via an inline follow-up input) and "取消"
-// (managedSession.cancel) — routed through `onManagedWorkAction`. Closing the
-// parent conversation never auto-cancels; only this explicit button does.
-//
-// Styling uses the design-token custom properties only (no new colors).
+// Current CLI tasks and retired CoWork records share a read-only summary card.
+// Historical managed session identifiers are retained for evidence and artifacts;
+// they never expose a connection, continuation or cancellation action.
 
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { SubagentMessage } from './types';
+import { isRetiredManagedWork } from './retired-work';
 
 const STATUS_LABEL: Record<SubagentMessage['status'], string> = {
   running: '运行中',
@@ -78,28 +70,6 @@ const detailStyle: CSSProperties = {
   fontSize: 12,
 };
 
-const actionBtnStyle: CSSProperties = {
-  background: 'none',
-  border: '1px solid var(--ink-hover)',
-  borderRadius: 6,
-  padding: '3px 10px',
-  color: 'var(--ink-paper)',
-  fontSize: 12,
-  cursor: 'pointer',
-};
-
-const primaryBtnStyle: CSSProperties = {
-  ...actionBtnStyle,
-  borderColor: 'var(--brand)',
-  color: 'var(--brand)',
-};
-
-const dangerBtnStyle: CSSProperties = {
-  ...actionBtnStyle,
-  borderColor: 'var(--danger)',
-  color: 'var(--danger)',
-};
-
 function DetailRow({ label, value }: { label: string; value: string }): React.ReactElement {
   return (
     <div>
@@ -111,39 +81,19 @@ function DetailRow({ label, value }: { label: string; value: string }): React.Re
 
 export interface SubagentCardProps {
   readonly message: SubagentMessage;
-  /** P3-B3: continue (targets the SAME managedSessionId) / cancel. */
-  readonly onManagedWorkAction?: (sessionId: string, action: 'continue' | 'cancel', text?: string) => void;
+
 }
 
-export function SubagentCard({ message, onManagedWorkAction }: SubagentCardProps): React.ReactElement {
+export function SubagentCard({ message }: SubagentCardProps): React.ReactElement {
   const [expanded, setExpanded] = useState(false);
-  const [continuing, setContinuing] = useState(false);
-  const [followUp, setFollowUp] = useState('');
-  const [cancelling, setCancelling] = useState(false);
-  const terminal =
-    message.status === 'done' || message.status === 'failed' || message.status === 'cancelled';
-  const isManaged = Boolean(message.managedSessionId);
-
-  const submitContinue = (): void => {
-    const text = followUp.trim();
-    if (!text || !message.managedSessionId) return;
-    setContinuing(false);
-    setFollowUp('');
-    onManagedWorkAction?.(message.managedSessionId, 'continue', text);
-  };
-
-  const cancel = (): void => {
-    if (!message.managedSessionId || cancelling) return;
-    setCancelling(true);
-    onManagedWorkAction?.(message.managedSessionId, 'cancel');
-  };
+  const isManaged = isRetiredManagedWork(message);
 
   return (
     <div style={cardStyle} role="listitem">
       <div style={rowStyle}>
-        <span style={badgeStyle(STATUS_COLOR[message.status])} aria-hidden="true" />
+        <span style={badgeStyle(isManaged ? 'var(--ink-fog)' : STATUS_COLOR[message.status])} aria-hidden="true" />
         <span style={{ fontWeight: 600 }}>{message.agentType}</span>
-        <span style={{ color: STATUS_COLOR[message.status] }}>{STATUS_LABEL[message.status]}</span>
+        <span style={{ color: isManaged ? 'var(--ink-fog)' : STATUS_COLOR[message.status] }}>{isManaged ? '历史任务' : STATUS_LABEL[message.status]}</span>
         {message.managedSessionId ? (
           <span style={{ color: 'var(--ink-mute)' }}>#{message.managedSessionId.slice(0, 8)}</span>
         ) : null}
@@ -152,56 +102,9 @@ export function SubagentCard({ message, onManagedWorkAction }: SubagentCardProps
       {message.prompt ? <div style={dimStyle}>{truncate(message.prompt, 180)}</div> : null}
       {message.result && !expanded ? <div style={dimStyle}>{truncate(message.result, 220)}</div> : null}
 
-      {isManaged && !terminal ? (
-        <div style={{ color: 'var(--brand)', fontSize: 12 }}>在后台继续 · 可稍后查看结果</div>
-      ) : null}
+      {isManaged ? <div style={dimStyle}>CoWork 执行器已退役，历史答复与交付物仍可查看。</div> : null}
 
-      {/* P3-B3: continue / cancel for an active managed-work session. */}
-      {isManaged && !terminal && onManagedWorkAction ? (
-        <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
-          {continuing ? (
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flex: 1 }}>
-              <input
-                type="text"
-                value={followUp}
-                onChange={(e) => setFollowUp(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') submitContinue();
-                }}
-                placeholder="输入后续指令并回车…"
-                autoFocus
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  background: 'var(--ink-hover)',
-                  border: '1px solid var(--ink-mute)',
-                  borderRadius: 6,
-                  padding: '4px 8px',
-                  color: 'var(--ink-paper)',
-                  fontSize: 12,
-                }}
-              />
-              <button type="button" style={primaryBtnStyle} onClick={submitContinue}>
-                发送
-              </button>
-              <button type="button" style={actionBtnStyle} onClick={() => setContinuing(false)}>
-                取消
-              </button>
-            </div>
-          ) : (
-            <>
-              <button type="button" style={primaryBtnStyle} onClick={() => setContinuing(true)}>
-                继续
-              </button>
-              <button type="button" style={dangerBtnStyle} onClick={cancel} disabled={cancelling}>
-                {cancelling ? '取消中…' : '取消'}
-              </button>
-            </>
-          )}
-        </div>
-      ) : null}
-
-      {(message.managedSessionId || message.summary || message.artifacts?.length || message.durationMs != null) ? (
+      {(message.managedSessionId || message.summary || message.artifacts?.length || typeof message.durationMs === 'number') ? (
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
@@ -234,7 +137,7 @@ export function SubagentCard({ message, onManagedWorkAction }: SubagentCardProps
               </ul>
             </div>
           ) : null}
-          {message.durationMs != null ? (
+          {typeof message.durationMs === 'number' ? (
             <DetailRow label="耗时" value={`${Math.round(message.durationMs / 1000)}s`} />
           ) : null}
         </div>

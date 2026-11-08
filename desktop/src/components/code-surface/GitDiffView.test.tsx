@@ -13,8 +13,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 
+vi.mock('../../monaco-init', () => ({ initMonaco: async () => undefined }));
 import { GitDiffView, type GitFileDiffData } from './GitDiffView';
 
+vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
 afterEach(() => cleanup());
 
 describe('GitDiffView — ARIA shell', () => {
@@ -60,34 +62,28 @@ describe('GitDiffView — degraded states', () => {
       <GitDiffView path="src/foo.ts" error="boom" onClose={() => {}} />,
     );
     const status = screen.getByRole('status');
-    expect(status.textContent).toContain('Could not load');
+    expect(status.textContent).toContain('无法加载此文件的变更');
+    expect(status.textContent).toContain('boom');
   });
 
   it('shows a role=status message for binary files', () => {
     const diff: GitFileDiffData = { original: '', modified: '', binary: true, truncated: false };
     render(<GitDiffView path="src/foo.ts" diff={diff} onClose={() => {}} />);
     const status = screen.getByRole('status');
-    expect(status.textContent).toContain('Binary file');
+    expect(status.textContent).toContain('二进制文件无法显示文本差异');
   });
 
   it('shows a role=status message for truncated files', () => {
     const diff: GitFileDiffData = { original: '', modified: '', binary: false, truncated: true };
     render(<GitDiffView path="src/foo.ts" diff={diff} onClose={() => {}} />);
     const status = screen.getByRole('status');
-    expect(status.textContent).toContain('too large');
+    expect(status.textContent).toContain('文件过大，未提供完整差异');
   });
 
-  it('renders nothing in the body when diff is undefined (loading)', () => {
-    const { container } = render(
-      <GitDiffView path="src/foo.ts" onClose={() => {}} />,
-    );
-    // Undefined diff means "still loading". The current implementation
-    // treats undefined as "degraded" and so does not mount the monaco
-    // container; the audit note is that this state should be
-    // discriminated from "Git workspace, no changes" / "non-Git
-    // workspace" — for now we just pin the existing behaviour.
+  it('announces loading while content is unavailable instead of showing an empty editor', () => {
+    const { container } = render(<GitDiffView path="src/foo.ts" onClose={() => {}} />);
     expect(container.querySelector('.git-diff-view__monaco')).toBeNull();
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('status', { name: '加载变更' }).textContent).toContain('正在加载变更');
   });
 });
 
@@ -95,7 +91,7 @@ describe('GitDiffView — close + focus return', () => {
   it('shows an approval notice without hiding the proposed diff', () => {
     const { container } = render(<GitDiffView path="src/a.ts" notice="等待批准，查看不会自动批准"
       diff={{ original: 'before', modified: 'after', binary: false, truncated: false }} onClose={vi.fn()} />);
-    expect(screen.getByRole('status').textContent).toContain('等待批准');
+    expect(screen.getByRole('status', { name: '变更说明' }).textContent).toContain('等待批准');
     expect(container.querySelector('.git-diff-view__monaco')).not.toBeNull();
   });
   it('Escape triggers onClose', () => {
@@ -143,4 +139,12 @@ describe('GitDiffView — close + focus return', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(document.activeElement).toBe(opener);
   });
+});
+
+it('keeps close and focus return available before diff data finishes loading', () => {
+  const opener = document.createElement('button'); document.body.appendChild(opener); opener.focus();
+  const close = vi.fn();
+  render(<GitDiffView path="src/loading.ts" onClose={close} />);
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(close).toHaveBeenCalledTimes(1); expect(document.activeElement).toBe(opener); opener.remove();
 });

@@ -20,6 +20,9 @@
 // 就根本不知道他在干什么" complaint.
 
 import { memo, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
+import { useConversationDisclosure } from './conversation-disclosure'
+import { isRoutingReceipt, ROUTING_RECEIPT_SCHEMA } from '../../domain/routing-receipt'
+import { RoutingReceipt } from './RoutingReceipt'
 import {
   ChevronRight,
   Loader2,
@@ -40,7 +43,12 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { ToolMessage } from './types'
-import { toolEventStatus, toolEventTarget, toolEventTargetLabel, toolEventVerb } from './tool-event-presentation'
+import {
+  toolEventStatus,
+  toolEventTarget,
+  toolEventTargetLabel,
+  toolEventVerb,
+} from './tool-event-presentation'
 import type { BinaryRef, ToolResultContent } from '../../tooling/tool-result-content'
 import { openCachedToolResource, useBinaryRefObjectUrl } from '../../tooling/tool-result-store'
 import {
@@ -52,6 +60,10 @@ import type { TargetResultFacts } from '../../tooling/classifiers/windows-mcp-cl
 // WCC-P2-03: pinned provider routing display. Pure capability-table lookup —
 // no approval semantics ride on this row.
 import { providerRoutingLabelForTool } from '../../tooling/providers/provider-observation-watcher'
+import {
+  openSkillPendingReview,
+  readSkillPendingReview,
+} from '../../agent-learning/skill-pending-review'
 
 export interface ToolCardProps {
   readonly message: ToolMessage
@@ -179,7 +191,7 @@ function statusLabel(s: ToolMessage['status']): string {
 // informative — "Reading src/foo.ts…" is much clearer
 // than just "running". Keys match the PascalCase tool
 // names emitted by the events stream (per
-// C:/work/demo-ws/trylo cli/docs/EVENT_VOCABULARY.md).
+// D:/CC/trylo/trylo cli/docs/EVENT_VOCABULARY.md).
 const ACTIVITY_VERB: Record<string, string> = {
   Bash: 'Running',
   Read: 'Reading',
@@ -208,8 +220,9 @@ function ToolCardImpl(props: ToolCardProps): ReactElement {
   // for tools to "fold back" after they finish, so we
   // now derive `open` from status by default, and only
   // remember the user's manual click.
-  const [userOverride, setUserOverride] = useState<boolean | null>(null)
-  const open = userOverride ?? (m.status === 'running' || (props.variant === 'event' && m.status === 'error'))
+  const [userOverride, setUserOverride] = useConversationDisclosure(m.id, 'tool')
+  const open =
+    userOverride ?? (m.status === 'running' || (props.variant === 'event' && m.status === 'error'))
   // The body is the expensive part of a card — the full output text
   // lands in the DOM and the result goes through regex/JSON parsing.
   // A scrolling virtualized list mounts collapsed cards in bulk, so the
@@ -230,6 +243,10 @@ function ToolCardImpl(props: ToolCardProps): ReactElement {
   const StatusIcon = STATUS_ICON[m.status]
   const eventRow = props.variant === 'event'
   const target = toolEventTarget(m)
+  const skillReview =
+    m.tool === 'skill_proposals' && m.status === 'done' && !m.outputError
+      ? readSkillPendingReview(m.outputText)
+      : undefined
 
   return (
     <div
@@ -252,9 +269,14 @@ function ToolCardImpl(props: ToolCardProps): ReactElement {
           <meta.Icon size={14} strokeWidth={2.2} />
         </span>
         <span className="tool__name">{eventRow ? toolEventVerb(m.tool) : meta.label}</span>
-        <span className="tool__summary" title={target}>{eventRow ? toolEventTargetLabel(m) : m.summary || '…'}</span>
+        <span className="tool__summary" title={target}>
+          {eventRow ? toolEventTargetLabel(m) : m.summary || '…'}
+        </span>
         {m.durationMs !== undefined && (
-          <span className="tool__time">{(m.durationMs / 1000).toFixed(1)}{eventRow ? ' 秒' : 's'}</span>
+          <span className="tool__time">
+            {(m.durationMs / 1000).toFixed(1)}
+            {eventRow ? ' 秒' : 's'}
+          </span>
         )}
         <span className="tool__status">
           <StatusIcon
@@ -263,10 +285,24 @@ function ToolCardImpl(props: ToolCardProps): ReactElement {
             className={m.status === 'running' ? 'tool__status-icon--spin' : undefined}
           />
           <span>
-            {eventRow ? toolEventStatus(m.status) : m.status === 'running' ? `${activityLabel(m.tool)}…` : statusLabel(m.status)}
+            {eventRow
+              ? toolEventStatus(m.status)
+              : m.status === 'running'
+                ? `${activityLabel(m.tool)}…`
+                : statusLabel(m.status)}
           </span>
         </span>
       </button>
+      {skillReview ? (
+        <button
+          type="button"
+          className="tool__promote"
+          onClick={() => openSkillPendingReview(skillReview)}
+          title={`${skillReview.name} · ${skillReview.scope}`}
+        >
+          审阅此技能提案
+        </button>
+      ) : null}
       {/* v1.16.5+ (spec §7.4): body stays mounted once shown; the
           shared `.disclosure` grid row animates 0fr→1fr so
           running→expanded and done→collapsed are smooth
@@ -332,8 +368,21 @@ function ToolCardBody(props: { message: ToolMessage; card: ToolCardProps }): Rea
           .filter((line) => !line.startsWith(TARGET_RESULT_PREFIX))
           .join('\n')
       : undefined
+  const routingReceipts =
+    m.outputContent?.flatMap((block) =>
+      block.type === 'structured' &&
+      block.schema === ROUTING_RECEIPT_SCHEMA &&
+      isRoutingReceipt(block.value)
+        ? [block.value]
+        : [],
+    ) ?? []
   const visibleOutputContent = m.outputContent?.filter(
     (block) =>
+      !(
+        block.type === 'structured' &&
+        block.schema === ROUTING_RECEIPT_SCHEMA &&
+        isRoutingReceipt(block.value)
+      ) &&
       !(
         block.type === 'text' &&
         typeof block.text === 'string' &&
@@ -364,11 +413,18 @@ function ToolCardBody(props: { message: ToolMessage; card: ToolCardProps }): Rea
           <ToolDiff input={m.input as Record<string, string>} />
         </Field>
       )}
+      {routingReceipts.map((receipt, index) => (
+        <Field key={`${receipt.executionId}:${index}`} label="路由">
+          <RoutingReceipt receipt={receipt} />
+        </Field>
+      ))}
       {/* PR-4 (spec §7.2): rich content blocks when present — thumbnails,
           resources, structured summaries. The collapsed text view falls
           back to `outputText` (old sessions migrated on history load). */}
       {visibleOutputContent !== undefined && visibleOutputContent.length > 0 ? (
-        <Field label={eventRow ? (m.outputError ? '错误' : '输出') : m.outputError ? 'error' : 'output'}>
+        <Field
+          label={eventRow ? (m.outputError ? '错误' : '输出') : m.outputError ? 'error' : 'output'}
+        >
           <ToolResultBlocks
             blocks={visibleOutputContent}
             onOpen={props.card.onOpenCachedResource}
@@ -376,7 +432,11 @@ function ToolCardBody(props: { message: ToolMessage; card: ToolCardProps }): Rea
         </Field>
       ) : (
         (visibleOutputText !== undefined || m.outputError !== undefined) && (
-          <Field label={eventRow ? (m.outputError ? '错误' : '输出') : m.outputError ? 'error' : 'output'}>
+          <Field
+            label={
+              eventRow ? (m.outputError ? '错误' : '输出') : m.outputError ? 'error' : 'output'
+            }
+          >
             <pre className={`tool__code ${m.outputError ? 'tool__code--err' : ''}`}>
               {m.outputError ?? visibleOutputText ?? ''}
             </pre>

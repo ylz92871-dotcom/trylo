@@ -3,12 +3,14 @@
 // Mode-specific body of the shared ResultDock for the Work capability. It
 // renders the current conversation's accumulated artifacts (scoped store),
 // putting the latest run's created / updated / discovered items on top with a
-// one-shot badge. Each artifact is rendered through @trylo/work's ArtifactCard
+// one-shot badge. Each artifact is rendered through Desktop's ArtifactCard
 // so every open / open-with / show-in-folder / copy action keeps its existing
 // containment gate and host binding (spec §8.6). It never IPC's directly.
 
 import { type ReactElement } from 'react';
-import { ArtifactCard, type HostAdapter } from '@trylo/work';
+import { ArtifactCard } from './ArtifactCard';
+import { resultMatchesTurn } from '../../result-dock/result-review-state';
+import type { ArtifactHost as HostAdapter } from '../../host-adapter/artifact-actions';
 import { verificationSummary } from '../../tooling/office-validation';
 import type {
   OfficeVerificationStatus,
@@ -31,6 +33,8 @@ export interface WorkResultContentProps {
   readonly onDiffArtifact?: (relPath: string) => void;
   /** Missing-host notice when the Work runtime isn't available. */
   readonly canOpenArtifacts?: boolean;
+  /** The shared results rail uses file rows; existing inline cards stay compatible. */
+  readonly presentation?: 'cards' | 'review';
 }
 
 /** Number of artifacts attributable to the most recent run. Historical
@@ -42,18 +46,10 @@ export function latestRunArtifactCount(
   expected: { readonly turnId?: string; readonly runId?: string } = {},
 ): number {
   const latest = result.latestRun;
-  if (!latest) return 0;
   // A new user turn starts before the async terminal artifact scan can
   // replace `latestRun`. During that window the stored delta belongs to the
   // previous answer and must not be mounted below the new one.
-  if (expected.runId) {
-    if (latest.runId !== expected.runId) return 0;
-  } else if (expected.turnId) {
-    // Some reused Work runtimes do not provide a turn id on their result
-    // delta. Until the current run id is visible we hide that ambiguous delta;
-    // once run ids match, the artifact is safely attributable to this run.
-    if (!latest.turnId || latest.turnId !== expected.turnId) return 0;
-  }
+  if (!latest || !resultMatchesTurn(latest, expected)) return 0;
   return new Set([
     ...latest.createdIds,
     ...latest.updatedIds,
@@ -174,11 +170,11 @@ export function WorkResultContent(props: WorkResultContentProps): ReactElement {
   ];
 
   return (
-    <div className="work-result">
+    <div className={`work-result${props.presentation === 'review' ? ' work-result--review' : ''}`}>
       <VerificationSummaryLine artifacts={result.artifacts} />
       {props.canOpenArtifacts === false && (
         <p className="work-result__notice">
-          产物已记录；打开或在文件夹中显示需要 Work 运行时。
+          交付物已记录；文件操作暂不可用，请重新连接桌面端。
         </p>
       )}
       {ordered.length === 0 ? (
@@ -228,25 +224,33 @@ function renderItem(
   const filePath = absoluteTarget(artifact, props.workspaceRoot);
   const badge = badgeFor(artifact, latestRun);
   const diffRel = relTarget(artifact);
+  const review = props.presentation === 'review';
+  const metadata = <>
+    {badge ? <span className={`work-result__badge work-result__badge--${badge.kind}`} data-kind={badge.kind}>
+      {badge.label}
+    </span> : null}
+    {verificationBadge(artifact)}
+    {review && artifact.version > 1 && badge?.kind !== 'updated'
+      ? <span className="work-result__version">v{artifact.version}</span> : null}
+  </>;
+  const diffAction = props.onDiffArtifact && diffRel !== null ? <button
+    type="button" className="work-result__diff"
+    onClick={() => props.onDiffArtifact!(diffRel)}
+    title="查看 Git 变更" aria-label={`查看 Git 变更 ${diffRel}`}
+  >差异</button> : null;
+
   return (
     <li
       key={artifact.id}
       className="work-result__item"
       data-change={artifact.lastChange}
     >
-      {badge ? (
-        <span
-          className={`work-result__badge work-result__badge--${badge.kind}`}
-          data-kind={badge.kind}
-        >
-          {badge.label}
-        </span>
-      ) : null}
-      {verificationBadge(artifact)}
+      {!review && metadata}
       {filePath === null ? (
         <div className="work-result__unsafe" title={artifact.displayName}>
           <span className="work-result__unsafe-name">{artifact.displayName}</span>
           <span className="work-result__unsafe-note">路径不可用</span>
+          {review && <span className="artifact-card__metadata">{metadata}</span>}
         </div>
       ) : (
         <ArtifactCard
@@ -255,18 +259,12 @@ function renderItem(
           workspacePath={props.workspaceRoot}
           host={props.host}
           onOpenViewer={props.onPreviewArtifact}
+          layout={review ? 'row' : 'card'}
+          metadata={review ? metadata : undefined}
+          secondaryAction={review ? diffAction : undefined}
         />
       )}
-      {props.onDiffArtifact && diffRel !== null && (
-        <button
-          type="button"
-          className="work-result__diff"
-          onClick={() => props.onDiffArtifact!(diffRel)}
-          title="查看 Git 变更"
-        >
-          差异
-        </button>
-      )}
+      {!review && diffAction}
     </li>
   );
 }

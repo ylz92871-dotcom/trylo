@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactElement } from 'react';
+import { useContext, useCallback, useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent, type ReactElement } from 'react';
 import type { CodeMode, TopLevelMode } from '../../host-adapter/types';
 import type { ChatMessage } from './types';
 import type { Attachment, FailedAttachment } from '../../host-adapter/attachment-utils';
-import { ArrowUp, Plus, ChevronDown, Code2, BriefcaseBusiness, Folder, MoreHorizontal } from 'lucide-react';
+import { ArrowUp, Plus, ChevronDown, Code2, PanelsTopLeft, MoreHorizontal } from 'lucide-react';
+import { ComposerLayoutContext } from './composer-layout';
+import { WorkspacePicker } from './WorkspacePicker';
 import { ModePopover } from './ModePopover';
 import { ModelSelector, type ModelChoice } from './ModelSelector';
 import { PermissionLevelPicker } from './PermissionLevelPicker';
 import { ToolProfileChip } from './ToolProfileChip';
-import { ProcessHeader } from './ProcessHeader';
 import { StopRunButton } from './StopRunButton';
 import { LearningStatusChip, type LearningStatusChipProps } from '../user-learning/LearningStatusChip';
 import { LearningDirectiveMenu } from '../user-learning/LearningDirectiveMenu';
@@ -16,6 +17,9 @@ import { AttachmentList } from './AttachmentList';
 import { ContextRing } from '../app-shell/ContextRing';
 import type { ConversationRunViewState } from './view-state';
 import type { PermissionLevel } from '../../permission/permission-policy';
+import { GoalControl } from './GoalControl';
+import { ComposerActions } from './ComposerActions';
+import { isGoalSnapshot, type GoalControl as GoalAction } from '../../domain/goal';
 
 const CODE_LABEL: Record<CodeMode, string> = { agent: '执行', chat: '对话', plan: '计划', cognition: '偏好' };
 const CODE_PLACEHOLDER: Record<CodeMode, string> = {
@@ -24,6 +28,7 @@ const CODE_PLACEHOLDER: Record<CodeMode, string> = {
 };
 
 export interface InputBarProps {
+  readonly onGoalAction?: (action: GoalAction) => Promise<void>;
   /**
    * Code exposes the Chat / Plan / Agent selector. Work is a separate
    * conversation kind, so it gets a non-interactive marker instead of
@@ -129,6 +134,7 @@ export interface InputBarProps {
   // props, not from a hardcoded surface check.
   readonly attachments: readonly Attachment[];
   readonly onAddAttachment: () => void;
+  readonly onPasteAttachments?: (files: readonly File[]) => void;
   readonly onRemoveAttachment: (id: string) => void;
   // v1.16.2.6: 1.16.2.6: forwarded to AttachmentList so
   // it can render a "Reading N file(s)…" chip with a
@@ -174,73 +180,114 @@ export interface InputBarProps {
 }
 
 export function InputBar(props: InputBarProps): ReactElement {
+  const layout = useContext(ComposerLayoutContext);
+  const isStart = layout === 'start';
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const plusRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isWork = props.conversationKind === 'work';
-  const canSend = props.canSend !== false && props.text.trim().length > 0;
-  const showStop = props.running && props.onStop !== undefined;
+  const canSend = props.canSend !== false && props.text.trim().length > 0 && (props.attachmentLoading ?? 0) === 0;
+  const showStop = props.running && props.onStop !== undefined && props.text.trim().length === 0;
   const resize = useCallback((el: HTMLTextAreaElement | null) => {
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = `${Math.max(62, Math.min(el.scrollHeight, 160))}px`;
+    el.style.height = `${Math.max(26, Math.min(el.scrollHeight, 160))}px`;
     el.style.overflowY = el.scrollHeight > 160 ? 'auto' : 'hidden';
   }, []);
   useEffect(() => { resize(textareaRef.current); }, [props.text, resize]);
-  const send = (): void => { if (canSend) props.onSend(props.text.trim()); };
-  const submit = (event: FormEvent): void => { event.preventDefault(); send(); };
-  const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
+  const send = (openGoal?: () => void): void => {
+    if (!canSend) return;
+    if (openGoal && /^\/goal(?:\s|$)/.test(props.text.trim())) { openGoal(); return; }
+    props.onSend(props.text.trim());
+  };
+  const submit = (event: FormEvent, openGoal?: () => void): void => { event.preventDefault(); send(openGoal); };
+  const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>, openGoal?: () => void): void => {
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-      event.preventDefault(); send();
+      event.preventDefault(); send(openGoal);
     }
   };
-  const workspaceName = props.workspace?.replace(/\\/g, '/').replace(/\/$/, '').split('/').pop();
-  return <div className="input-bar-wrapper">
-    <form className={`input-bar${isWork ? ' input-bar--work' : ''}${props.isDragging ? ' input-bar--dragging' : ''}`} onSubmit={submit}>
+  const paste = (event: ClipboardEvent<HTMLTextAreaElement>): void => {
+    if (!props.onPasteAttachments) return;
+    // Some clipboard providers expose only items, others populate files too.
+    // Prefer files so a single image exposed in both lists is attached once.
+    const files = Array.from(event.clipboardData.files ?? []);
+    if (files.length === 0) {
+      for (const item of Array.from(event.clipboardData.items ?? [])) {
+        if (item.kind !== 'file') continue;
+        const file = item.getAsFile();
+        if (file) files.push(file);
+      }
+    }
+    if (files.length === 0) return;
+    event.preventDefault();
+    props.onPasteAttachments(files);
+    const text = event.clipboardData.getData('text/plain');
+    if (text) {
+      const input = event.currentTarget;
+      const start = input.selectionStart;
+      props.onTextChange(props.text.slice(0, start) + text + props.text.slice(input.selectionEnd));
+      requestAnimationFrame(() => input.setSelectionRange(start + text.length, start + text.length));
+    }
+  };
+  const modeControl = (
+    <div className="input-bar__mode-anchor">
+      <button ref={plusRef} type="button" className="input-bar__mode" aria-label={`任务类型: ${isWork ? 'Work' : 'Code'}`} aria-haspopup="menu" aria-expanded={popoverOpen} onClick={() => setPopoverOpen((open) => !open)}>
+        {isWork ? <PanelsTopLeft size={14} /> : <Code2 size={14} />}
+        <span>{isWork ? 'Work' : 'Code'}{!isWork && props.codeMode !== 'agent' ? ` · ${CODE_LABEL[props.codeMode]}` : ''}</span><ChevronDown size={12} />
+      </button>
+      {popoverOpen && <ModePopover current={props.codeMode} kind={isWork ? 'work' : 'code'} onKindChange={props.onTopModeChange} onSelect={props.onCodeModeChange} onClose={() => setPopoverOpen(false)} anchorRef={plusRef} />}
+    </div>
+  );
+  const modelControl = props.onSelectPool && <ModelSelector configuredModel={props.configuredModel ?? ''} poolModel={props.poolModel ?? ''}
+    savedProfiles={props.savedProfiles} activeProfileId={props.activeProfileId ?? ''} onSelectConfigured={props.onSelectConfigured ?? (() => undefined)}
+    onSelectPool={props.onSelectPool} onSelectProfile={props.onSelectProfile} />;
+  const permissionControl = <PermissionLevelPicker level={props.permissionLevel} source={props.permissionSource} pendingNextTurn={props.permissionPendingNextTurn} onChange={props.onPermissionLevelChange} />;
+  const workspaceLabel = <WorkspacePicker workspace={props.workspace} />;
+  const moreControl = (props.learning || props.onLearningDirectiveChange || (isWork && props.onOpenCognition)) && <button type="button" className="input-bar__more" title="学习与协作选项" aria-label="学习与协作选项" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((open) => !open)}><MoreHorizontal size={16} /></button>;
+  const composer = (openGoal?: () => void): ReactElement => <form className={`input-bar${isWork ? ' input-bar--work' : ''}${props.isDragging ? ' input-bar--dragging' : ''}`} onSubmit={event => submit(event, openGoal)}>
       <textarea ref={textareaRef} className="input-bar__input" value={props.text}
-        onChange={(event) => props.onTextChange(event.target.value)} onKeyDown={keyDown}
+        onChange={(event) => props.onTextChange(event.target.value)} onKeyDown={event => keyDown(event, openGoal)} onPaste={paste}
         placeholder={props.viewState === 'awaiting_input' ? '直接回复，任务会从这里继续…'
           : props.running ? '输入调整方向，Enter 发送后续消息…'
           : isWork ? '描述你想完成的工作，或添加资料…' : CODE_PLACEHOLDER[props.codeMode]}
-        rows={2} spellCheck={false} autoComplete="off" aria-label="Message" />
+        rows={1} spellCheck={false} autoComplete="off" aria-label="Message" />
       <AttachmentList attachments={props.attachments} onRemove={props.onRemoveAttachment}
         loading={props.attachmentLoading} failed={props.failed} onDismissFailed={props.onDismissFailed} onRetryFailed={props.onRetryFailed} />
       <div className="input-bar__toolbar">
-        <button type="button" className="input-bar__attach" onClick={props.onAddAttachment} title="添加文件或图片" aria-label="Attach files"><Plus size={18} /></button>
-        <div className="input-bar__mode-anchor">
-          <button ref={plusRef} type="button" className="input-bar__mode" aria-label={`任务类型: ${isWork ? 'Work' : 'Code'}`} aria-haspopup="menu" aria-expanded={popoverOpen} onClick={() => setPopoverOpen((open) => !open)}>
-            {isWork ? <BriefcaseBusiness size={14} /> : <Code2 size={14} />}
-            <span>{isWork ? 'Work' : 'Code'}{!isWork && props.codeMode !== 'agent' ? ` · ${CODE_LABEL[props.codeMode]}` : ''}</span><ChevronDown size={12} />
-          </button>
-          {popoverOpen && <ModePopover current={props.codeMode} kind={isWork ? 'work' : 'code'} onKindChange={props.onTopModeChange} onSelect={props.onCodeModeChange} onClose={() => setPopoverOpen(false)} anchorRef={plusRef} />}
-        </div>
-        {props.onSelectPool && <ModelSelector configuredModel={props.configuredModel ?? ''} poolModel={props.poolModel ?? ''}
-          savedProfiles={props.savedProfiles} activeProfileId={props.activeProfileId ?? ''} onSelectConfigured={props.onSelectConfigured ?? (() => undefined)}
-          onSelectPool={props.onSelectPool} onSelectProfile={props.onSelectProfile} />}
-        <div className="input-bar__actions-spare" />
+        {openGoal ? <ComposerActions onAdd={props.onAddAttachment} onGoal={openGoal} />
+          : <button type="button" className="input-bar__attach" onClick={props.onAddAttachment} title="添加文件或图片" aria-label="Attach files"><Plus size={18} /></button>}
+        {isStart ? permissionControl : modeControl}
+        {isStart && moreControl}
         {props.running && (props.queuedCount ?? 0) > 0 && <span className="input-bar__queued" role="status">
           {props.queuedCount} 条已排队{props.onInterruptQueued && <button type="button" onClick={props.onInterruptQueued}>立即打断</button>}
         </span>}
-        {(!showStop || props.text.trim().length > 0) && <button type="submit" className="input-bar__send" disabled={!canSend} title={props.running ? '发送（可排队或打断）' : '发送'} aria-label={props.running ? '发送（可排队或打断）' : '发送'}><ArrowUp size={18} strokeWidth={2.2} /></button>}
-        {showStop && <StopRunButton className="input-bar__stop" onStop={props.onStop!} />}
+        <div className="input-bar__trailing">
+          {modelControl}
+          {!showStop && <button type="button" onClick={() => send(openGoal)} className="input-bar__send" disabled={!canSend} title={props.running ? '发送（可排队或打断）' : '发送'} aria-label={props.running ? '发送（可排队或打断）' : '发送'}><ArrowUp size={18} strokeWidth={2.2} /></button>}
+          {showStop && <StopRunButton className="input-bar__stop" onStop={props.onStop!} />}
+        </div>
       </div>
-    </form>
-    <div className="input-bar__actions">
-      <PermissionLevelPicker level={props.permissionLevel} source={props.permissionSource} pendingNextTurn={props.permissionPendingNextTurn} onChange={props.onPermissionLevelChange} />
-      {workspaceName && <span className="input-bar__workspace" title={props.workspace}><Folder size={12} />{workspaceName}</span>}
+    </form>;
+  return <div className="input-bar-wrapper" data-layout={layout}>
+    {isStart && <div className="input-bar__context">{workspaceLabel}{modeControl}</div>}
+    {props.onGoalAction && (isWork || props.codeMode === 'agent') ? <GoalControl
+      key={props.messages.find(message => message.kind === 'goal')?.id ?? 'new-goal'}
+      goal={[...props.messages].reverse().find((message): message is import('./types').GoalMessage => message.kind === 'goal' && isGoalSnapshot(message.goal))?.goal}
+      draft={props.text} running={props.running} onAction={props.onGoalAction}>{openGoal => composer(openGoal)}</GoalControl> : composer()}
+    {(!isStart || (isWork && props.toolProfileId) || props.contextUsed > 0 || props.contextUnknown) && <div className="input-bar__actions">
+      {!isStart && <>{permissionControl}{workspaceLabel}</>}
       {isWork && props.toolProfileId && <ToolProfileChip profileId={props.toolProfileId} onOpenSettings={props.onOpenToolSettings} />}
-      {(props.learning || props.onLearningDirectiveChange || (isWork && props.onOpenCognition)) && <button type="button" className="input-bar__more" title="学习与协作选项" aria-label="学习与协作选项" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((open) => !open)}><MoreHorizontal size={16} /></button>}
+      {!isStart && moreControl}
       <div className="input-bar__actions-spare" />
-      <span className="input-bar__hint">Enter 发送</span>
+      {!isStart && <span className="input-bar__hint">Enter 发送</span>}
       {(props.contextUsed > 0 || props.contextUnknown) && <ContextRing used={props.contextUsed} total={props.contextWindow} onCompact={props.onCompact}
         busy={props.compacting} unknown={props.contextUnknown} disabled={props.running || props.compactAvailable === false} />}
-    </div>
+    </div>}
     {detailsOpen && <div className="input-bar__details">
       {props.learning && <LearningStatusChip {...props.learning} />}
       {props.onLearningDirectiveChange && <LearningDirectiveMenu value={props.learningDirective} onChange={props.onLearningDirectiveChange} />}
       {isWork && props.onOpenCognition && <button type="button" className="input-bar__cognition-entry" disabled={props.cognitionEnabled === false} onClick={props.onOpenCognition}>聊聊你怎么做报告</button>}
     </div>}
-    {(props.running || props.error || (props.viewState !== undefined && props.viewState !== 'idle')) && <ProcessHeader messages={props.messages} running={props.running} error={props.error} workspace={props.workspace} viewState={props.viewState} />}
   </div>;
 }

@@ -8,9 +8,10 @@
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { ArtifactCard, type HostAdapter } from '@trylo/work';
+import { ArtifactCard } from './ArtifactCard';
+import type { ArtifactHost as HostAdapter } from '../../host-adapter/artifact-actions';
 
-const ROOT = 'C:/work/demo-ws';
+const ROOT = 'D:/CC/trylo';
 
 function makeHost(overrides?: Partial<HostAdapter>): HostAdapter {
   return {
@@ -26,7 +27,7 @@ describe('ArtifactCard containment gate (§9.3)', () => {
   it('enables actions for a target inside the project root', () => {
     render(
       <ArtifactCard
-        filePath="C:/work/demo-ws/.trylo/out/report.docx"
+        filePath="D:/CC/trylo/.trylo/out/report.docx"
         kind="document"
         workspacePath={ROOT}
         host={makeHost()}
@@ -40,7 +41,7 @@ describe('ArtifactCard containment gate (§9.3)', () => {
   it('disables actions and explains why for a target OUTSIDE the root', () => {
     render(
       <ArtifactCard
-        filePath="C:/work/other-project/evil.docx"
+        filePath="D:/CC/other-project/evil.docx"
         kind="document"
         workspacePath={ROOT}
         host={makeHost()}
@@ -56,7 +57,7 @@ describe('ArtifactCard containment gate (§9.3)', () => {
   it('disables actions with a reason when no project root is available', () => {
     render(
       <ArtifactCard
-        filePath="C:/work/demo-ws/.trylo/out/report.docx"
+        filePath="D:/CC/trylo/.trylo/out/report.docx"
         kind="document"
         host={makeHost()}
       />,
@@ -70,7 +71,7 @@ describe('ArtifactCard containment gate (§9.3)', () => {
     const host = makeHost();
     render(
       <ArtifactCard
-        filePath="C:/work/demo-ws/../../windows/system32/cmd.exe"
+        filePath="D:/CC/trylo/../../windows/system32/cmd.exe"
         kind="document"
         workspacePath={ROOT}
         host={host}
@@ -99,6 +100,25 @@ describe('ArtifactCard containment gate (§9.3)', () => {
 });
 
 describe('ArtifactCard failure feedback (§9.3 step 5, §14.6)', () => {
+  it.each(['https://example.com/site/index.html', 'http://example.com/report.pdf'])(
+    'opens HTTP(S) artifact %s through its existing URL host, never the local viewer',
+    (filePath) => {
+      const host = makeHost();
+      const onOpenViewer = vi.fn();
+      render(<ArtifactCard filePath={filePath} kind="web" host={host} onOpenViewer={onOpenViewer} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+      expect(host.openFile).toHaveBeenCalledWith(filePath);
+      expect(onOpenViewer).not.toHaveBeenCalled();
+    },
+  );
+
+  it('delegates generic PDF preview to the desktop instead of opening the OS app', () => {
+    const host = makeHost(); const onOpenViewer = vi.fn();
+    render(<ArtifactCard filePath={`${ROOT}/.trylo/out/report.pdf`} kind="file" workspacePath={ROOT} host={host} onOpenViewer={onOpenViewer} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(onOpenViewer).toHaveBeenCalledWith(`${ROOT}/.trylo/out/report.pdf`);
+    expect(host.openFile).not.toHaveBeenCalled();
+  });
   it('shows a visible alert and calls onActionError when the host rejects', async () => {
     const host = makeHost({
       openFile: vi.fn().mockRejectedValue(new Error('目标不存在或不可访问')),
@@ -106,7 +126,7 @@ describe('ArtifactCard failure feedback (§9.3 step 5, §14.6)', () => {
     const onActionError = vi.fn();
     render(
       <ArtifactCard
-        filePath="C:/work/demo-ws/.trylo/out/report.docx"
+        filePath="D:/CC/trylo/.trylo/out/report.docx"
         kind="document"
         workspacePath={ROOT}
         host={host}
@@ -118,7 +138,7 @@ describe('ArtifactCard failure feedback (§9.3 step 5, §14.6)', () => {
     expect(alert.textContent).toContain('目标不存在或不可访问');
     expect(onActionError).toHaveBeenCalledWith(
       '目标不存在或不可访问',
-      'C:/work/demo-ws/.trylo/out/report.docx',
+      'D:/CC/trylo/.trylo/out/report.docx',
     );
   });
 
@@ -126,7 +146,7 @@ describe('ArtifactCard failure feedback (§9.3 step 5, §14.6)', () => {
     const host = makeHost();
     render(
       <ArtifactCard
-        filePath="C:/work/demo-ws/.trylo/out/report.docx"
+        filePath="D:/CC/trylo/.trylo/out/report.docx"
         kind="document"
         workspacePath={ROOT}
         host={host}
@@ -134,7 +154,136 @@ describe('ArtifactCard failure feedback (§9.3 step 5, §14.6)', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
     await Promise.resolve();
-    expect(host.openFile).toHaveBeenCalledWith('C:/work/demo-ws/.trylo/out/report.docx');
+    expect(host.openFile).toHaveBeenCalledWith('D:/CC/trylo/.trylo/out/report.docx');
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('ArtifactCard action menu', () => {
+  it('keeps the application choice and forwards the selected native opener', () => {
+    const host = makeHost();
+    const filePath = `${ROOT}/deck.pptx`;
+    render(<ArtifactCard filePath={filePath} kind="presentation" workspacePath={ROOT} host={host} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Microsoft PowerPoint' }));
+    expect(host.openFileWithApp).toHaveBeenCalledWith(filePath, { name: 'Microsoft PowerPoint', identifier: 'powerpnt' });
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('copies generic paths and reveals the contained file through the host', () => {
+    const host = makeHost();
+    const filePath = `${ROOT}/export.pdf`;
+    render(<ArtifactCard filePath={filePath} kind="file" workspacePath={ROOT} host={host} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy path' }));
+    expect(host.copyToClipboard).toHaveBeenCalledWith(filePath);
+    fireEvent.click(screen.getByRole('button', { name: 'Open options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Open in folder' }));
+    expect(host.showInFolder).toHaveBeenCalledWith(filePath);
+  });
+
+  it('keeps copying available for denied paths while file launch actions stay disabled', () => {
+    const host = makeHost();
+    render(<ArtifactCard filePath="C:/outside/secret.pdf" kind="file" workspacePath={ROOT} host={host} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open options' }));
+    expect((screen.getByRole('menuitem', { name: 'Open in folder' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy path' }));
+    expect(host.copyToClipboard).toHaveBeenCalledWith('C:/outside/secret.pdf');
+    expect(host.openFile).not.toHaveBeenCalled();
+    expect(host.showInFolder).not.toHaveBeenCalled();
+  });
+
+  it('closes with Escape or an outside pointer without invoking an action', () => {
+    const host = makeHost();
+    render(<ArtifactCard filePath={`${ROOT}/note.md`} kind="document" workspacePath={ROOT} host={host} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open options' }));
+    expect(screen.getByRole('menu')).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Open options' }));
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(host.openFile).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['document', 'report.docx'],
+    ['presentation', 'deck.ppt'],
+    ['spreadsheet', 'table.tsv'],
+    ['web', 'page.html'],
+  ] as const)('uses the desktop reader for supported %s files', (kind, file) => {
+    const host = makeHost();
+    const onOpenViewer = vi.fn();
+    const filePath = `${ROOT}/${file}`;
+    render(<ArtifactCard filePath={filePath} kind={kind} workspacePath={ROOT} host={host} onOpenViewer={onOpenViewer} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(onOpenViewer).toHaveBeenCalledWith(filePath);
+    expect(host.openFile).not.toHaveBeenCalled();
+  });
+
+  it('retains external opening for a native document without a desktop reader', () => {
+    const host = makeHost();
+    const onOpenViewer = vi.fn();
+    const filePath = `${ROOT}/report.pages`;
+    render(<ArtifactCard filePath={filePath} kind="document" workspacePath={ROOT} host={host} onOpenViewer={onOpenViewer} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(host.openFile).toHaveBeenCalledWith(filePath);
+    expect(onOpenViewer).not.toHaveBeenCalled();
+  });
+
+  it('reports clipboard failures using the same alert and callback as opening failures', async () => {
+    const host = makeHost({ copyToClipboard: vi.fn().mockRejectedValue(new Error('clipboard unavailable')) });
+    const onActionError = vi.fn();
+    const filePath = `${ROOT}/export.pdf`;
+    render(<ArtifactCard filePath={filePath} kind="file" workspacePath={ROOT} host={host} onActionError={onActionError} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy path' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('clipboard unavailable');
+    expect(onActionError).toHaveBeenCalledWith('clipboard unavailable', filePath);
+  });
+});
+
+describe('ArtifactCard shared review rows', () => {
+  it('uses the existing preview action and host menu from the file row', () => {
+    const host = makeHost();
+    const onOpenViewer = vi.fn();
+    const filePath = `${ROOT}/.trylo/out/report.pdf`;
+    render(<ArtifactCard filePath={filePath} kind="file" layout="row" workspacePath={ROOT}
+      host={host} onOpenViewer={onOpenViewer} metadata={<span>已验证</span>} />);
+    fireEvent.click(screen.getByRole('button', { name: '打开文件 .trylo/out/report.pdf' }));
+    expect(onOpenViewer).toHaveBeenCalledWith(filePath);
+    expect(screen.getByText('.trylo/out')).toBeTruthy();
+    expect(screen.getByText('已验证')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Open' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'report.pdf 的更多操作' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '在文件夹中显示' }));
+    expect(host.showInFolder).toHaveBeenCalledWith(filePath);
+  });
+
+  it('keeps a denied row disabled and retains its visible containment reason', () => {
+    const host = makeHost();
+    const onOpenViewer = vi.fn();
+    render(<ArtifactCard filePath="C:/outside/secret.pdf" kind="file" layout="row"
+      workspacePath={ROOT} host={host} onOpenViewer={onOpenViewer} />);
+    const open = screen.getByRole('button', { name: '打开文件 C:/outside/secret.pdf' }) as HTMLButtonElement;
+    expect(open.disabled).toBe(true);
+    fireEvent.click(open);
+    expect(screen.getByRole('note').textContent).toContain('不在当前项目根目录内');
+    expect(host.openFile).not.toHaveBeenCalled();
+    expect(onOpenViewer).not.toHaveBeenCalled();
+  });
+
+  it('keeps HTTP(S) row and browser-menu actions on the URL host', () => {
+    const host = makeHost();
+    const onOpenViewer = vi.fn();
+    const filePath = 'https://example.com/index.html';
+    render(<ArtifactCard filePath={filePath} kind="web" layout="row" host={host} onOpenViewer={onOpenViewer} />);
+    fireEvent.click(screen.getByRole('button', { name: `打开链接 ${filePath}` }));
+    fireEvent.click(screen.getByRole('button', { name: 'index.html 的更多操作' }));
+    expect(screen.queryByRole('menuitem', { name: '在文件夹中显示' })).toBeNull();
+    fireEvent.click(screen.getByRole('menuitem', { name: '在浏览器中打开' }));
+    expect(host.openFile).toHaveBeenCalledTimes(2);
+    expect(host.openFile).toHaveBeenLastCalledWith(filePath);
+    expect(onOpenViewer).not.toHaveBeenCalled();
   });
 });

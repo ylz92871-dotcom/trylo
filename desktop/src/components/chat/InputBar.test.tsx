@@ -31,6 +31,77 @@ function props(overrides: Partial<InputBarProps> = {}): InputBarProps {
 }
 
 describe('InputBar conversation kind', () => {
+  it('waits for pasted files before accepting Enter or a send click', () => {
+    const onSend = vi.fn();
+    render(<InputBar {...props({ text: '对比图片', attachmentLoading: 1, onSend })} />);
+    expect((screen.getByRole('button', { name: '发送' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Message' }), { key: 'Enter' });
+    expect(onSend).not.toHaveBeenCalled();
+  });
+  it.each(['code', 'work'] as const)('accepts clipboard images once in %s while preserving mixed text', conversationKind => {
+    const onPasteAttachments = vi.fn();
+    const onTextChange = vi.fn();
+    render(<InputBar {...props({ conversationKind, text: '前面后面', onPasteAttachments, onTextChange })} />);
+    const input = screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement;
+    input.setSelectionRange(2, 2);
+    const file = new File(['image'], '截图.png', { type: 'image/png' });
+    const defaultAllowed = fireEvent.paste(input, { clipboardData: {
+      files: [file], items: [{ kind: 'file', getAsFile: () => file }], getData: () => '说明',
+    } });
+    expect(defaultAllowed).toBe(false);
+    expect(onPasteAttachments).toHaveBeenCalledTimes(1);
+    expect(onPasteAttachments).toHaveBeenCalledWith([file]);
+    expect(onTextChange).toHaveBeenCalledWith('前面说明后面');
+  });
+  it('uses clipboard items when files is empty, and leaves ordinary text paste to the browser', () => {
+    const onPasteAttachments = vi.fn();
+    render(<InputBar {...props({ onPasteAttachments })} />);
+    const input = screen.getByRole('textbox', { name: 'Message' });
+    const file = new File(['image'], 'shot.png', { type: 'image/png' });
+    expect(fireEvent.paste(input, { clipboardData: {
+      files: [], items: [{ kind: 'file', getAsFile: () => file }], getData: () => '',
+    } })).toBe(false);
+    expect(onPasteAttachments).toHaveBeenCalledWith([file]);
+    expect(fireEvent.paste(input, { clipboardData: {
+      files: [], items: [{ kind: 'string' }], getData: () => '普通文本',
+    } })).toBe(true);
+    expect(onPasteAttachments).toHaveBeenCalledTimes(1);
+  });
+  it('routes a goal command from the send button to the same setup as Enter', () => {
+    const onSend = vi.fn();
+    render(<InputBar {...props({ conversationKind: 'work', text: '/goal 修复发送', onSend, onGoalAction: vi.fn() })} />);
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+    expect((screen.getByLabelText('目标') as HTMLTextAreaElement).value).toBe('修复发送');
+    expect(onSend).not.toHaveBeenCalled();
+  });
+  it.each(['work', 'code'] as const)('sends a fresh %s conversation exactly once by click', conversationKind => {
+    const onSend = vi.fn();
+    const view = render(<InputBar {...props({ conversationKind, onSend, onGoalAction: vi.fn() })} />);
+    expect((screen.getByRole('button', { name: '发送' }) as HTMLButtonElement).disabled).toBe(true);
+    view.rerender(<InputBar {...props({ conversationKind, text: '  你好  ', onSend, onGoalAction: vi.fn() })} />);
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+    expect(onSend).toHaveBeenCalledOnce();
+    expect(onSend).toHaveBeenCalledWith('你好');
+  });
+  it('routes the goal command to explicit setup instead of sending a model prompt', () => {
+    const onSend = vi.fn();
+    render(<InputBar {...props({ text: '/goal 完成当前验收', onSend, onGoalAction: vi.fn() })} />);
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Message' }), { key: 'Enter' });
+    expect((screen.getByLabelText('目标') as HTMLTextAreaElement).value).toBe('完成当前验收');
+    expect(onSend).not.toHaveBeenCalled();
+  });
+  it('opens goal setup from the add menu and preserves ordinary message sending', () => {
+    const onGoalAction = vi.fn().mockResolvedValue(undefined);
+    const onSend = vi.fn();
+    render(<InputBar {...props({ text: '当前聊天的草稿', onGoalAction, onSend })} />);
+    fireEvent.click(screen.getByRole('button', { name: '添加和设置' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /设置目标/ }));
+    expect((screen.getByLabelText('目标') as HTMLTextAreaElement).value).toBe('当前聊天的草稿');
+    fireEvent.click(screen.getByRole('button', { name: '关闭目标编辑' }));
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Message' }), { key: 'Enter' });
+    expect(onSend).toHaveBeenCalledWith('当前聊天的草稿');
+    expect(onGoalAction).not.toHaveBeenCalled();
+  });
   it('blocks both keyboard and form submission when sending is unavailable', () => {
     const onSend = vi.fn();
     const { container } = render(<InputBar {...props({ text: 'pending attachment', canSend: false, onSend })} />);
@@ -38,14 +109,21 @@ describe('InputBar conversation kind', () => {
     fireEvent.submit(container.querySelector('form')!);
     expect(onSend).not.toHaveBeenCalled();
   });
-  it('retains follow-up sending and one stop action during a run', () => {
+  it('replaces stop with send while typing during a run and restores it when cleared', () => {
     const onSend = vi.fn();
     const onStop = vi.fn();
-    render(<InputBar {...props({ text: 'change direction', running: true, onSend, onStop })} />);
+    const view = render(<InputBar {...props({ text: 'change direction', running: true, onSend, onStop })} />);
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+    expect(screen.getAllByRole('button', { name: /^发送/ })).toHaveLength(1);
     fireEvent.keyDown(screen.getByRole('textbox', { name: 'Message' }), { key: 'Enter' });
     expect(onSend).toHaveBeenCalledWith('change direction');
+    view.rerender(<InputBar {...props({ text: '  ', running: true, onSend, onStop })} />);
+    expect(screen.queryByRole('button', { name: '发送' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
     expect(onStop).toHaveBeenCalledOnce();
+    view.rerender(<InputBar {...props({ text: '', running: false, onSend, onStop })} />);
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+    expect(screen.getAllByRole('button', { name: '发送' })).toHaveLength(1);
   });
   it('puts one working stop control in the composer even when sending is blocked', () => {
     const onStop = vi.fn();
@@ -137,4 +215,10 @@ describe('InputBar conversation kind', () => {
     render(<InputBar {...props()} />);
     expect(screen.queryByRole('button', { name: /工具面/ })).toBeNull();
   });
+});
+
+it('keeps the composer stop control without the retired Turn/tools status row', () => {
+  const view = render(<InputBar {...props({ running: true, viewState: 'thinking', onStop: vi.fn(), activeProcessId: 'run' })} />);
+  expect(view.container.querySelector('.process-header')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
 });

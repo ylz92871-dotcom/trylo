@@ -1,106 +1,78 @@
-/* v1.16.2: attachment list + chip + 📎 button styles.
-   Mirrors Cline's thumbnail row (webview-ui/src/components/
-   chat/ChatTextArea.tsx) but in desktop's brand palette
-   (gold accent, no red/green). The chip strip sits
-   between the input row and the action row; the 📎
-   button sits to the left of the input. */
-
+/* A bounded strip: image dimensions never determine composer height. */
 .attachment-list {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px 0 12px;
-  /* Horizontal scroll if the user attaches many files
-     on a narrow window. Single-row, never wraps. */
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 8px 2px 4px;
   overflow-x: auto;
   overflow-y: hidden;
-  /* Hide the scrollbar (Cline does the same) — chips
-     are small enough that overflow is rare, and a
-     visible bar would feel noisy. */
-  scrollbar-width: none;
+  scrollbar-width: thin;
 }
-.attachment-list::-webkit-scrollbar {
-  display: none;
-}
-
 .attachment-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 6px 3px 8px;
-  border: 0;
-  border-radius: var(--radius-pill, 999px);
-  background: var(--bg-elevated, rgba(0, 0, 0, 0.18));
-  font-size: var(--text-xs, 12px);
-  color: var(--text-primary, rgba(255, 255, 255, 0.92));
-  white-space: nowrap;
-  flex-shrink: 0;
-  /* Subtle brand tint per kind. All kinds use the same
-     brand gold for the icon so the row reads as
-     "attachments" not "office vs image vs text" */
+  flex: 0 0 auto;
+  gap: 10px;
+  width: 224px;
+  max-width: 100%;
+  min-width: 0;
+  height: 60px;
+  box-sizing: border-box;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: var(--text-xs);
 }
-
-.attachment-chip__icon {
-  font-size: 13px;
-  line-height: 1;
-}
-
-.attachment-chip__name {
-  max-width: 180px;
+.attachment-chip__thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
   overflow: hidden;
-  text-overflow: ellipsis;
+  border-radius: 5px;
+  background: var(--bg-elevated);
+  color: var(--fg-muted);
 }
-
-.attachment-chip__size {
-  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
-  font-weight: 400;
+.attachment-chip__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
-
+.attachment-chip__meta { display: flex; flex: 1; flex-direction: column; gap: 3px; min-width: 0; }
+.attachment-chip__name, .attachment-chip__size { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-chip__name { font-weight: 500; line-height: 1.4; }
+.attachment-chip__size { color: var(--fg-muted); font-size: 11px; line-height: 1.4; font-variant-numeric: tabular-nums; }
 .attachment-chip__remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 28px;
   padding: 0;
   border: 0;
-  border-radius: 50%;
+  border-radius: 5px;
   background: transparent;
-  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
-  font-size: 14px;
-  line-height: 1;
+  color: var(--fg-muted);
   cursor: pointer;
   transition: background 120ms ease-out, color 120ms ease-out;
 }
-
-.attachment-chip__remove:hover {
-  background: var(--danger-soft, rgba(217, 102, 102, 0.18));
-  color: var(--danger, #D96666);
-}
-
-/* v1.16.2: 📎 attach button in the input row. Sits
-   between the + mode button and the text input. Same
-   shape as the mode button but icon-only. */
-.input-bar__attach {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
-  border-radius: var(--radius-sm, 4px);
-  background: transparent;
-  color: var(--fg-muted);
-  font-size: 14px;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 120ms ease-out, color 120ms ease-out,
-              border-color 120ms ease-out;
-}
-
-.input-bar__attach:hover {
-  background: var(--brand-soft, rgba(219, 201, 127, 0.10));
-  color: var(--brand-200, #E3D493);
-  border-color: var(--brand-500, #9F9054);
-}
+.attachment-chip__remove:hover { background: var(--danger-soft); color: var(--danger); }
+.attachment-chip__remove:focus-visible { outline: 2px solid var(--fg-muted); outline-offset: 1px; }
+.attachment-chip--failed { width: 280px; border-color: var(--danger); }
+.attachment-chip--failed .attachment-chip__thumb { color: var(--danger); background: var(--danger-soft); }
+.attachment-chip--failed .attachment-chip__size { color: var(--danger); }
+.attachment-chip--loading .attachment-chip__thumb { background: transparent; }
+.attachment-chip__spinner { width: 16px; height: 16px; border: 2px solid var(--border-strong); border-top-color: var(--fg-muted); border-radius: 50%; animation: attachment-spin .8s linear infinite; }
+@keyframes attachment-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .attachment-chip__spinner { animation: none; } }
+@media (pointer: coarse) { .attachment-chip__remove { flex-basis: 32px; width: 32px; height: 36px; } }

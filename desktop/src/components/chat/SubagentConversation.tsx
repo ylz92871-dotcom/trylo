@@ -3,6 +3,7 @@ import { ArrowUp, X } from 'lucide-react';
 import { agentLabel } from './CollaborationGroup';
 import { AgentAvatar } from './AgentAvatar';
 import type { SubagentMessage } from './types';
+import { isRetiredManagedWork } from './retired-work';
 import { MessageList } from './MessageList';
 import { memberTranscript } from './member-transcript';
 import type { SendSubagentInput, SubagentInputMode } from '../../host-adapter/subagent-contract';
@@ -12,7 +13,7 @@ export interface SubagentConversationProps {
   readonly avatar?: ReactNode;
   readonly onOpenArtifact?: (path: string) => void;
   readonly workspacePath?: string;
-  readonly artifactHost?: import('@trylo/work').HostAdapter;
+  readonly artifactHost?: import('../../host-adapter/artifact-actions').ArtifactHost;
   readonly observing?: boolean;
   readonly agent: SubagentMessage;
   readonly onClose: () => void;
@@ -33,7 +34,8 @@ export function SubagentConversation({ agent, onClose, drafts, onSend, variant =
     closeButton.current?.focus();
     return () => { mounted.current = false; };
   }, []);
-  const canSend = Boolean(onSend && agent.canReceiveInput && (agent.status === 'running' || agent.status === 'waiting' || (agent.status === 'done' && agent.parked)));
+  const retired = isRetiredManagedWork(agent);
+  const canSend = Boolean(!retired && onSend && agent.canReceiveInput && (agent.status === 'running' || agent.status === 'waiting' || (agent.status === 'done' && agent.parked)));
   const submit = async (): Promise<void> => {
     if (!canSend || pending || !text.trim()) return;
     const sent = text.trim();
@@ -61,8 +63,9 @@ export function SubagentConversation({ agent, onClose, drafts, onSend, variant =
       <MessageList surface="code" messages={messages} running={observing && agent.status === 'running'} onOpenArtifact={onOpenArtifact} workspacePath={workspacePath} artifactHost={artifactHost} />
     </div>
       {agent.budget && <p className="subagent-conversation__budget" role="status">
-        已用 {agent.budget.tokensUsed} / {agent.budget.tokenLimit} token，剩余 {agent.budget.tokensRemaining}；
-        {agent.budget.timeoutMode === 'active' ? '可执行时间' : '运行时间'}剩余 {Math.ceil(agent.budget.timeRemainingMs / 1000)} 秒（最近上报）
+        已用 {agent.budget.tokensUsed} token
+        {agent.budget.tokenLimit !== undefined && <> / {agent.budget.tokenLimit}，剩余 {agent.budget.tokensRemaining}</>}
+        {agent.budget.timeRemainingMs !== undefined && <>；{agent.budget.timeoutMode === 'active' ? '可执行时间' : '运行时间'}剩余 {Math.ceil(agent.budget.timeRemainingMs / 1000)} 秒（最近上报）</>}
       </p>}
       {agent.error && <p className="subagent-conversation__error" role="alert">{agent.error}</p>}
       {!agent.observations?.length && agent.status !== 'running' && <p className="subagent-conversation__history-note">这份历史只保存了任务与答复，未保留逐条执行记录。</p>}
@@ -77,7 +80,7 @@ export function SubagentConversation({ agent, onClose, drafts, onSend, variant =
           onKeyDown={event => { if (variant === 'team' && event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(); } }}
           placeholder={`向${agentLabel(agent)}补充要求…`} />
         <div className={variant === 'team' ? 'input-bar__toolbar' : undefined}>{variant === 'team' && modeControl}<span>{pending ? '正在发送…' : mode === 'restart' ? '停止当前执行，接着已记录进度继续' : mode === 'replace_queued' ? '替换尚未开始的要求' : variant === 'team' ? `${agentLabel(agent)} · 仅当前任务` : '沿用当前任务的工具授权'}</span><button className={variant === 'team' ? 'input-bar__send' : undefined} type="submit" disabled={pending || !text.trim()} aria-label="发送给该智能体"><ArrowUp size={17} /></button></div>
-      </form> : <p>{agent.managedSessionId ? '这是后台任务，已有答复与交付物会保留。' : '此任务当前不接收补充要求，可回到主对话继续指派。'}</p>}
+      </form> : <p>{retired ? 'CoWork 执行器已退役，历史答复与交付物仍可查看。' : '此任务当前不接收补充要求，可回到主对话继续指派。'}</p>}
       {error && <p role="alert" className="subagent-conversation__error">{error}</p>}
     </div>
   </aside>;

@@ -16,7 +16,7 @@
 
 import { useState, type ReactElement } from 'react';
 import { Check, ClipboardList, Minus } from 'lucide-react';
-import type { InputRequestAnswer, InputRequestQuestion } from '@trylo/work';
+import type { InputRequestAnswer, InputRequestQuestion } from '../../host-adapter/input-request';
 import type { InputRequestMessage } from './types';
 
 export interface InputRequestCardProps {

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { AgentConversationSurfaceProps } from './AgentConversationSurface';
 import { ApprovalCard } from './ApprovalCard';
 import { ChatPanel, type ChatPanelProps } from './ChatPanel';
@@ -37,15 +37,15 @@ function panel(topMode: 'code' | 'work', onRespondApproval = vi.fn(), onOpenAppr
   };
 }
 
-it.each(['code', 'work'] as const)('%s approvals can approve, deny and preview through the host callbacks', topMode => {
+it.each(['code', 'work'] as const)('%s approvals can approve, deny and preview through the host callbacks', async topMode => {
   const respond = vi.fn();
   const preview = vi.fn();
   render(<ChatPanel {...panel(topMode, respond, preview)} />);
   fireEvent.click(screen.getByRole('button', { name: '查看变更' }));
   expect(preview).toHaveBeenCalledWith('req-1');
   expect(respond).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: '批准并继续' }));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: '批准并继续' })));
   expect(respond).toHaveBeenCalledWith('req-1', true);
-  fireEvent.click(screen.getByRole('button', { name: '拒绝' }));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: '拒绝' })));
   expect(respond).toHaveBeenCalledWith('req-1', false);
 });

@@ -40,7 +40,7 @@ export function TeamGraph({ run, onSelect, onPerson }: { readonly run: TeamRun; 
       </button>
       {nodes.map(({ seat, x, y }) => <button className={`team-map-member team-map-member--${seat.status}`} key={seat.id}
         style={{ left: x, top: y }} onClick={() => onSelect(seat.id)} aria-label={`${memberName(seat)} ${memberState(seat)}`} title={currentTask(seat)}>
-        <span className="team-map-member__mark"><TeamMark role={seat.seat} size={28} /><i /></span>
+        <span className="team-map-member__mark"><TeamMark role={seat.seat} identity={seat.memberId ?? seat.id} size={28} /><i /></span>
         <strong>{memberName(seat)}</strong><small>{memberState(seat)}</small>
         <span className="team-map-member__task">{shortText(memberProgress(seat) || currentTask(seat), 72)}</span>
       </button>)}

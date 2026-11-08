@@ -21,6 +21,7 @@
 // this just renders the array.
 
 import type { ReactElement } from 'react';
+import { File, FileImage, FileText, RotateCw, TriangleAlert, X } from 'lucide-react';
 import type {
   Attachment,
   AttachmentKind,
@@ -51,10 +52,10 @@ export interface AttachmentListProps {
   readonly onRetryFailed?: (id: string) => void;
 }
 
-const KIND_ICON: Readonly<Record<AttachmentKind, string>> = {
-  office: '📄',
-  image: '🖼️',
-  text:   '📃',
+const KIND_ICON: Readonly<Record<AttachmentKind, typeof File>> = {
+  office: File,
+  image: FileImage,
+  text: FileText,
 };
 
 function formatSize(n: number): string {
@@ -68,6 +69,7 @@ function AttachmentChip(props: {
   readonly onRemove: (id: string) => void;
 }): ReactElement {
   const a = props.attachment;
+  const KindIcon = KIND_ICON[a.kind];
   // v1.16.2.6: image kind gets a real <img> preview if
   // previewUrl is set (App.tsx built the blob: URL after
   // readFileBytes). For everything else (office, text,
@@ -77,6 +79,7 @@ function AttachmentChip(props: {
   return (
     <span
       className={`attachment-chip attachment-chip--${a.kind}`}
+      role="listitem"
       title={a.path}
     >
       <span className="attachment-chip__thumb" aria-hidden="true">
@@ -85,9 +88,11 @@ function AttachmentChip(props: {
               className="attachment-chip__img"
               src={a.previewUrl}
               alt=""
+              width={44}
+              height={44}
               draggable={false}
             />
-          : KIND_ICON[a.kind]}
+          : <KindIcon size={20} strokeWidth={1.6} />}
       </span>
       <span className="attachment-chip__meta">
         <span className="attachment-chip__name">{a.name}</span>
@@ -100,7 +105,7 @@ function AttachmentChip(props: {
         aria-label={`Remove ${a.name}`}
         title="Remove attachment"
       >
-        ×
+        <X size={13} />
       </button>
     </span>
   );
@@ -138,7 +143,7 @@ function FailedChip(props: {
       role="alert"
       title={f.path}
     >
-      <span className="attachment-chip__thumb" aria-hidden="true">⚠</span>
+      <span className="attachment-chip__thumb" aria-hidden="true"><TriangleAlert size={20} /></span>
       <span className="attachment-chip__meta">
         <span className="attachment-chip__name">{f.name}</span>
         <span className="attachment-chip__size">{f.reason}</span>
@@ -151,7 +156,7 @@ function FailedChip(props: {
           aria-label={`Retry ${f.name}`}
           title="Retry"
         >
-          ↻
+          <RotateCw size={13} />
         </button>
       )}
       {props.onDismiss && (
@@ -162,7 +167,7 @@ function FailedChip(props: {
           aria-label={`Dismiss ${f.name}`}
           title="Dismiss"
         >
-          ×
+          <X size={13} />
         </button>
       )}
     </span>

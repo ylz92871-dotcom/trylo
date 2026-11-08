@@ -28,8 +28,8 @@ export interface TabsProps {
 
 function basename(path: FilePath): string {
   // Handle both forward and back slashes for the basename. On
-  // Windows paths look like "C:\work\demo-ws\README.md"; on
-  // posix-style it's "C:/work/demo-ws/README.md".
+  // Windows paths look like "D:\CC\trylo\README.md"; on
+  // posix-style it's "D:/CC/trylo/README.md".
   const m = path.match(/[^/\\]+$/);
   return m ? m[0] : path;
 }

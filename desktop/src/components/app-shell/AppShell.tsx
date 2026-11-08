@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactElement, ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactElement, ReactNode } from 'react';
 import { TopBar } from './TopBar';
 import { BrowserToolSidebar } from '../chat/BrowserToolSidebar';
-import { Globe, Monitor } from 'lucide-react';
+import { Box, Globe, Monitor } from 'lucide-react';
 import type { ChatMessage } from '../chat/types';
 import { toolPreviewState } from '../../tooling/tool-preview-state';
 import { useBrowserReplay } from '../../tooling/use-browser-replay';
@@ -10,19 +10,25 @@ import { useToolWorkbenchLifecycle } from '../../tooling/use-tool-workbench-life
 import type { ServiceManager } from '../../services-host/service-manager';
 import type { ToolingFacade } from '../../tooling/tooling-facade';
 import { LeftRail, type WorkspaceEntry } from './LeftRail';
-import { RightRail } from './RightRail';
+import { RightRail, type RightRailReview } from './RightRail';
 import { RailResizer } from './RailResizer';
+import { WorkspaceNavigationContext } from './WorkspaceNavigationContext';
 import { FilePeek } from './FilePeek';
 import { GitDiffView, type GitFileDiffData } from '../code-surface/GitDiffView';
 import { SettingsModal, type SettingsTab, type RelayAccountActions } from './SettingsModal';
+import type { CollaborationLearningRuntime } from '../../collaboration-learning/cli';
+import type { DesktopCollaborationResources } from '../../collaboration-learning/desktop-resources';
+import { LibraryProcessRecovery } from './LibraryProcessRecovery';
 import { RemotePairingModal } from './RemotePairingModal';
 import { useDesktopAccount } from '../../account/use-desktop-account';
 import type { FilePath, TopLevelMode } from '../../host-adapter/types';
 import type { ConversationSession } from '../../host-adapter/conversation-history';
 import type { SettingsSaveIntent, TryloSettings } from '../../settings/settings-store';
+import type { SettingsNotice } from '../../settings/settings-notices';
 import type { PetStatusSnapshot, RemotePairingInfoResult, RemoteStatusResult } from '../../services-host/methods';
 import type { ToolPlatformState } from '../../tooling/use-tool-platform-state';
 import type { LearningPort } from '../../learning/learning-port';
+import type { SkillLearningRuntime } from '../../skill-learning/cli';
 import type { BrowserPreviewController } from '../../tooling/use-browser-preview';
 import { useAppearance } from '../../settings/appearance-store';
 import {
@@ -30,7 +36,11 @@ import {
   type ActivityItem,
 } from '../activity/BackgroundActivityCenter';
 
+export const DEFAULT_LEFT_RAIL_WIDTH = 256;
+export const DEFAULT_RIGHT_RAIL_WIDTH = 480;
+
 export interface AppShellProps {
+  readonly resultReview?: RightRailReview;
   /** All workspaces the user has opened. */
   readonly workspaces: readonly WorkspaceEntry[];
   /** Which workspace the rail is currently showing. */
@@ -88,8 +98,14 @@ export interface AppShellProps {
   readonly activityItems?: readonly ActivityItem[];
   /** The main content (the chat panel). */
   readonly children: ReactNode;
+  /** Scene sessions own their lifecycle independently of the selected rail tab. */
+  readonly modelPreview?: (onAvailable: (key: number | null) => void, shown: boolean) => ReactNode;
   /** File currently being peeked. */
-  readonly peekFile?: { path: FilePath; content: string } | null;
+  readonly peekFile?: { path: FilePath; content: string; resolvedKind?: import('../../preview/formats').PreviewKind; loading?: boolean; error?: string; requestId?: number } | null;
+  readonly previewRoot?: string;
+  readonly previewFiles?: readonly { readonly path: string; readonly name?: string }[];
+  readonly onSelectPreviewFile?: (path: string) => void;
+  readonly onReloadPeek?: () => void;
   readonly onClosePeek?: () => void;
   /** One-click full preview: the rail goes wide until toggled off. */
   readonly peekExpanded?: boolean;
@@ -140,6 +156,7 @@ export interface AppShellProps {
   readonly settingsOpen: boolean;
   readonly onSettingsOpenChange: (open: boolean) => void;
   readonly onSettingsSave: (settings: TryloSettings, intent?: SettingsSaveIntent) => void;
+  readonly onSettingsNoticeDismissed?: (notice: SettingsNotice) => void;
   /** Real pet state, shown in the settings modal (audit §4.2 PET-P0-1). */
   readonly petStatus?: PetStatusSnapshot;
   /** Real remote-gateway state, shown in the settings modal (spec §8.1.4). */
@@ -150,6 +167,13 @@ export interface AppShellProps {
   /** Hermes learning port — forwarded to the Settings modal so the
    *  Skills library dialog can list/view installed skills. */
   readonly learningPort?: LearningPort | null;
+  readonly skillLearningRuntime?: SkillLearningRuntime;
+  readonly collaborationLearningRuntime?: CollaborationLearningRuntime;
+  readonly collaborationResources?: DesktopCollaborationResources;
+  readonly onDiscussCollaborationIssue?: (issueId: string) => void;
+  readonly onRequestTemporaryExpert?: () => void;
+  readonly libraryApprovals?: readonly ChatMessage[];
+  readonly onRespondLibraryApproval?: (id: string, allow: boolean) => void;
   /** Opens the Learning panel on the pending-approval tab. */
   readonly onOpenLearningPending?: () => void;
   /** Surface for on-demand remote pairing (QR). */
@@ -179,6 +203,8 @@ export interface AppShellProps {
 export function AppShell(props: AppShellProps): ReactElement {
   useAppearance();
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('connection');
+  const activityTrigger = useRef<HTMLButtonElement>(null);
+  const activityPanelId = useId();
   const [accountOpenRequest, setAccountOpenRequest] = useState(0);
   const account = useDesktopAccount(props.remoteController, {
     serverUrl: props.settings.remote.relayUrl || 'https://relay.trylocode.me',
@@ -192,6 +218,16 @@ export function AppShell(props: AppShellProps): ReactElement {
   // The embedded browser drawer: ONE shell-level entry, shared by
   // Code and Work. Closing the drawer keeps the browser alive.
   const [browserPreviewOpen, setBrowserPreviewOpen] = useState(false);
+  const [modelPreviewKey, setModelPreviewKey] = useState<number | null>(null);
+  const [modelPreviewOpen, setModelPreviewOpen] = useState(false);
+  const [modelPreviewWidth, setModelPreviewWidth] = useState(520);
+  useEffect(() => {
+    if (modelPreviewKey === null) { setModelPreviewOpen(false); return; }
+    setModelPreviewOpen(true); setBrowserPreviewOpen(false);
+    if (props.rightRailOpen && !props.approvalDiff) props.onToggleRightRail();
+    // A newly available scene may open the dock once. Later user navigation
+    // owns panel visibility, without closing the model's background session.
+  }, [modelPreviewKey]);
   const [browserWidth, setBrowserWidth] = useState(480);
   const [browserFullscreen, setBrowserFullscreen] = useState(false);
   const [bodyWidth, setBodyWidth] = useState(window.innerWidth);
@@ -219,13 +255,15 @@ export function AppShell(props: AppShellProps): ReactElement {
   useEffect(() => { setBrowserVisible?.(browserPreviewOpen); }, [browserPreviewOpen, setBrowserVisible]);
   const [previewError, setPreviewError] = useState('');
   const runActive = props.activeSessionId !== null && props.runningSessionIds.has(props.activeSessionId);
-  const browserState = toolPreviewState(props.toolMessages ?? [], 'browser', { running: runActive });
-  const computerState = toolPreviewState(props.toolMessages ?? [], 'computer', { running: runActive });
+  // Dragging a rail changes geometry, not tool history. Keep that projection
+  // off the resize path while retaining message/run changes as its inputs.
+  const browserState = useMemo(() => toolPreviewState(props.toolMessages ?? [], 'browser', { running: runActive }), [props.toolMessages, runActive]);
+  const computerState = useMemo(() => toolPreviewState(props.toolMessages ?? [], 'computer', { running: runActive }), [props.toolMessages, runActive]);
   const previewScope = `${props.currentWorkspaceId}:${props.activeSessionId}:${props.topMode}`;
   const browserReplay = useBrowserReplay(browserState, props.browserPreview, previewScope);
   const workbench = useToolWorkbenchLifecycle({ scope: previewScope, running: runActive,
     browser: browserState, computer: computerState, onError: setPreviewError,
-    showBrowser: () => { if (props.rightRailOpen) props.onToggleRightRail(); setBrowserPreviewOpen(true); } });
+    showBrowser: () => { setModelPreviewOpen(false); if (props.rightRailOpen) props.onToggleRightRail(); setBrowserPreviewOpen(true); } });
   useComputerPreview(computerState, previewScope, { manager: props.serviceManager, facade: props.toolingFacade,
     projectRoot: props.workspaces.find(workspace => workspace.id === props.currentWorkspaceId)?.root,
     conversationId: props.activeSessionId, turnId: computerState.turnId, display: computerState.display,
@@ -244,6 +282,7 @@ export function AppShell(props: AppShellProps): ReactElement {
   const { rightRailOpen, onToggleRightRail } = props;
   useEffect(() => {
     const onOpen = (): void => {
+      setModelPreviewOpen(false);
       if (rightRailOpen) onToggleRightRail();
       setBrowserPreviewOpen(true);
     };
@@ -251,21 +290,32 @@ export function AppShell(props: AppShellProps): ReactElement {
     return () => window.removeEventListener('trylo:open-browser-preview', onOpen as EventListener);
   }, [rightRailOpen, onToggleRightRail]);
 
+  const workspaceNavigation = useMemo(() => ({ workspaces: props.workspaces, currentWorkspaceId: props.currentWorkspaceId,
+    onSwitchWorkspace: props.onSwitchWorkspace, onOpenFolder: props.onOpenFolder }),
+  [props.workspaces, props.currentWorkspaceId, props.onSwitchWorkspace, props.onOpenFolder]);
+
   const preview = props.approvalDiff ? (
     <GitDiffView path={props.approvalDiff.path} diff={props.approvalDiff.diff}
       notice="待审批变更（Diff 仅展示拟修改内容，不会自动批准）" onClose={props.approvalDiff.onClose} />
   ) : props.peekFile && props.onClosePeek ? (
-    <FilePeek path={props.peekFile.path} content={props.peekFile.content}
-      expanded={props.peekExpanded ?? false} onToggleExpanded={props.peekExpanded ? props.onTogglePeekExpanded : undefined} onClose={props.onClosePeek} />
+    <FilePeek embedded path={props.peekFile.path} content={props.peekFile.content} resolvedKind={props.peekFile.resolvedKind}
+      key={`${props.peekFile.path}:${props.peekFile.requestId ?? ''}`} allowedRoot={props.previewRoot} loading={props.peekFile.loading} error={props.peekFile.error} onReload={props.onReloadPeek}
+      files={props.previewFiles} onSelectFile={props.onSelectPreviewFile}
+      expanded={props.peekExpanded ?? false} onToggleExpanded={props.onTogglePeekExpanded} onClose={props.onClosePeek} />
   ) : props.gitDiff ? (
     <GitDiffView path={props.gitDiff.path} diff={props.gitDiff.diff} error={props.gitDiff.error} onClose={props.gitDiff.onClose} />
   ) : null;
   const previewKey = props.approvalDiff ? `approval:${props.approvalDiff.id ?? props.approvalDiff.path}`
-    : props.peekFile ? `file:${props.peekFile.path}`
+    : props.peekFile ? `file:${props.peekFile.path}:${props.peekFile.requestId ?? ''}`
     : props.gitDiff ? `diff:${props.gitDiff.id ?? props.gitDiff.path}` : null;
 
   return (
-    <div className="app-shell" data-mode={props.topMode} style={props.style}>
+    <WorkspaceNavigationContext.Provider value={workspaceNavigation}>
+    <div className="app-shell" data-mode={props.topMode} style={{
+      '--rail-left-w': `${props.leftWidth}px`,
+      '--rail-right-w': `${Math.min(props.rightWidth, preview || props.resultReview ? browserMaxWidth : 520)}px`,
+      ...props.style,
+    } as CSSProperties}>
       <div
         className="app-shell__body"
         ref={bodyRef}
@@ -289,7 +339,10 @@ export function AppShell(props: AppShellProps): ReactElement {
           onArchiveSession={props.onArchiveSession}
           onUnarchiveSession={props.onUnarchiveSession}
           onToggleCollapse={props.onToggleLeftRail}
-          onOpenActivity={props.onOpenActivityCenter}
+          onOpenActivity={props.onOpenActivityCenter ? () => props.activityOpen ? props.onActivityOpenChange?.(false) : props.onOpenActivityCenter?.() : undefined}
+          activityTriggerRef={activityTrigger}
+          activityOpen={props.activityOpen}
+          activityPanelId={activityPanelId}
           activeRuns={props.activityItems?.length ?? props.activeCodeRuns}
           onOpenTools={() => { setSettingsTab('tools'); props.onSettingsOpenChange(true); }}
           onOpenLearning={props.onOpenLearningPending}
@@ -314,7 +367,12 @@ export function AppShell(props: AppShellProps): ReactElement {
             workspaceName={props.workspaces.find((ws) => ws.id === props.currentWorkspaceId)?.name ?? 'Trylo'}
             conversationTitle={props.sessions.find((session) => session.id === props.activeSessionId)?.title}
             right={<>
+              {modelPreviewKey !== null && <button type="button" className={`top-bar__rail-toggle${modelPreviewOpen ? ' top-bar__rail-toggle--active' : ''}`} aria-label="3D 工作区" title="3D 工作区" aria-pressed={modelPreviewOpen} onClick={() => {
+                if (!modelPreviewOpen) { setBrowserPreviewOpen(false); if (props.rightRailOpen) props.onToggleRightRail(); }
+                setModelPreviewOpen(open => !open);
+              }}><Box size={16} strokeWidth={1.65} aria-hidden="true" /></button>}
               <button type="button" className={`top-bar__rail-toggle${browserPreviewOpen ? ' top-bar__rail-toggle--active' : ''}`} aria-label="浏览器侧栏" title="浏览器侧栏" aria-pressed={browserPreviewOpen} onClick={() => {
+                setModelPreviewOpen(false);
                 if (!browserPreviewOpen && props.rightRailOpen) props.onToggleRightRail();
                 setBrowserPreviewOpen(open => !open);
               }}><Globe size={16} strokeWidth={1.65} aria-hidden="true" /></button>
@@ -327,12 +385,16 @@ export function AppShell(props: AppShellProps): ReactElement {
           />
           {props.children}
         </div>
+        {modelPreviewOpen && modelPreviewKey !== null && !props.rightRailOpen && !browserPreviewOpen && <RailResizer side="right" width={Math.min(modelPreviewWidth, browserMaxWidth)} min={320} max={browserMaxWidth} onChange={setModelPreviewWidth} />}
+        <div style={{ display:'contents', '--model-preview-width': `${Math.min(modelPreviewWidth, browserMaxWidth)}px` } as CSSProperties}>
+          {props.modelPreview?.(setModelPreviewKey, modelPreviewOpen && !props.rightRailOpen && !browserPreviewOpen && !props.settingsOpen && !props.approvalDiff)}
+        </div>
         {props.rightRailOpen && props.peekExpanded !== true && (
           <RailResizer
             side="right"
-            width={props.rightWidth}
-            min={200}
-            max={520}
+            width={Math.min(props.rightWidth, preview || props.resultReview ? browserMaxWidth : 520)}
+            min={props.resultReview ? 320 : 280}
+            max={preview || props.resultReview ? browserMaxWidth : 520}
             onChange={props.onRightWidthChange}
           />
         )}
@@ -344,6 +406,8 @@ export function AppShell(props: AppShellProps): ReactElement {
             onClose={() => setBrowserPreviewOpen(false)} />
         </>}
         <RightRail
+          review={props.resultReview}
+          maxWidth={preview || props.resultReview ? browserMaxWidth : undefined}
           open={props.rightRailOpen}
           preview={preview}
           previewKey={previewKey}
@@ -353,11 +417,14 @@ export function AppShell(props: AppShellProps): ReactElement {
           onSelectFile={props.onSelectFile}
         />
       </div>
+      {!props.settingsOpen && props.collaborationResources?.libraryRecovery
+        && <LibraryProcessRecovery port={props.collaborationResources.libraryRecovery} floating />}
       <SettingsModal
         open={props.settingsOpen}
         initial={props.settings}
         initialTab={settingsTab}
         onSave={props.onSettingsSave}
+        onNoticeDismissed={props.onSettingsNoticeDismissed}
         onClose={() => props.onSettingsOpenChange(false)}
         petStatus={props.petStatus}
         remoteStatus={props.remoteStatus}
@@ -365,6 +432,13 @@ export function AppShell(props: AppShellProps): ReactElement {
         onOpenRemote={() => { props.onSettingsOpenChange(false); props.onRemotePairingOpenChange(true); }}
         toolPlatform={props.toolPlatform}
         learningPort={props.learningPort}
+        skillLearningRuntime={props.skillLearningRuntime}
+        collaborationLearningRuntime={props.collaborationLearningRuntime}
+        collaborationResources={props.collaborationResources}
+        onDiscussCollaborationIssue={props.onDiscussCollaborationIssue}
+        onRequestTemporaryExpert={props.onRequestTemporaryExpert}
+        libraryApprovals={props.libraryApprovals}
+        onRespondLibraryApproval={props.onRespondLibraryApproval}
         onOpenLearningPending={props.onOpenLearningPending}
       />
       <RemotePairingModal
@@ -395,11 +469,14 @@ export function AppShell(props: AppShellProps): ReactElement {
           to the trigger. See spec §8.5. */}
       {props.activityOpen && (
         <BackgroundActivityCenter
+          id={activityPanelId}
+          anchor={activityTrigger.current}
           open={props.activityOpen}
           items={props.activityItems ?? []}
           onClose={() => props.onActivityOpenChange?.(false)}
         />
       )}
     </div>
+    </WorkspaceNavigationContext.Provider>
   );
 }

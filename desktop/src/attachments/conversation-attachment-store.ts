@@ -11,12 +11,9 @@
 // unit-testable with injected fakes. All host I/O goes through the
 // injected deps (HostAdapter functions) — never a raw invoke.
 //
-// Send semantics (conservative / recoverable): sending never locks or
-// removes attachments. A failed send keeps them; a successful send
-// keeps them too (later turns can still reference them). Only
-// conversation deletion (`clearConversation`) and workspace close
-// (`purgeProject`) destroy state, and those also trigger the Rust
-// staging cleanup through the caller.
+// Draft attachments are consumed only after the runtime accepts the prompt.
+// Sent previews and staged files remain available to the message history;
+// conversation deletion / workspace close own their eventual cleanup.
 //
 // Persistence: the store never writes conversation history itself.
 // Work partitions notify `onWorkAttachmentsChanged` after every commit
@@ -26,6 +23,7 @@
 
 import { hostAdapter } from '../host-adapter';
 import { pickFiles } from '../host-adapter/pick-files';
+import { acquireClipboardFiles } from './clipboard-attachments';
 import {
   MAX_ATTACHMENTS_PER_SESSION,
   attachmentFitsLimits,
@@ -35,6 +33,7 @@ import {
 } from '../host-adapter/attachment-utils';
 import type {
   StageAttachmentArgs,
+  StageAttachmentBytesArgs,
   StagedAttachment,
 } from '../host-adapter/attachment-service';
 import {
@@ -98,6 +97,7 @@ export interface AttachmentStoreDeps {
   readonly revokeBlobUrl: (url: string) => void;
   readonly pickFiles: () => Promise<readonly string[]>;
   readonly stageAttachment: (args: StageAttachmentArgs) => Promise<StagedAttachment>;
+  readonly stageBytes?: (args: StageAttachmentBytesArgs) => Promise<StagedAttachment>;
 }
 
 /** Render-time providers App.tsx installs once. The store asks for
@@ -121,6 +121,8 @@ interface Partition {
   workAttachments: WorkAttachmentEntry[];
   failed: FailedAttachment[];
   readingCount: number;
+  sentPreviews: Set<string>;
+  sentIds: Set<string>;
 }
 
 export class ConversationAttachmentStore {
@@ -169,6 +171,30 @@ export class ConversationAttachmentStore {
   }
 
   // ── Acquisition ──────────────────────────────────────────────────
+
+  async acquireFiles(owner: AttachmentOwner, files: readonly File[]): Promise<void> {
+    if (files.length === 0 || !this.isCurrentOwner(owner)) return;
+    const key = ownerKey(owner);
+    const partition = this.ensure(key, owner);
+    const count = owner.surface === 'code' ? partition.attachments.length : partition.workAttachments.length;
+    const { kept, overflow } = this.fitCap(count, files);
+    partition.failed.push(...this.overflowFailures(overflow));
+    partition.readingCount += kept.length;
+    this.emit(key);
+    const workspaceRoot = this.providers.getWorkspaceRoot();
+    try {
+      const result = await acquireClipboardFiles({
+        owner, workspaceRoot, files: kept,
+        isCurrent: () => this.isCurrentOwner(owner) && this.partitions.get(key) === partition,
+        stageBytes: this.deps.stageBytes ?? (() => Promise.reject(new Error('当前宿主不支持粘贴附件'))),
+        createBlobUrl: this.deps.createBlobUrl,
+      });
+      this.commit(owner, partition, result);
+    } finally {
+      partition.readingCount = Math.max(0, partition.readingCount - kept.length);
+      this.emit(key);
+    }
+  }
 
   /** Run the shared pipeline for explicit paths (drop handler or the
    *  browser fallback). Picker goes through `openPicker` which lands
@@ -238,6 +264,27 @@ export class ConversationAttachmentStore {
   }
 
   // ── Mutation ─────────────────────────────────────────────────────
+
+  /** Consume exactly the accepted send's ids. Attachments added while the
+   *  prompt was preparing stay in the draft. Preview ownership moves to
+   *  history, so clearing the composer cannot break the sent thumbnail. */
+  markSent(owner: AttachmentOwner, ids: readonly string[]): void {
+    const key = ownerKey(owner);
+    const partition = this.partitions.get(key);
+    if (!partition || ids.length === 0) return;
+    const sent = new Set(ids);
+    for (const id of sent) partition.sentIds.add(id);
+    const retain = <T extends { id: string; previewUrl?: string }>(entries: T[]): T[] =>
+      entries.filter(entry => {
+        if (!sent.has(entry.id)) return true;
+        if (entry.previewUrl) partition.sentPreviews.add(entry.previewUrl);
+        return false;
+      });
+    partition.attachments = retain(partition.attachments);
+    partition.workAttachments = retain(partition.workAttachments);
+    this.notifyWorkChanged(owner, partition);
+    this.emit(key);
+  }
 
   remove(owner: AttachmentOwner, id: string): void {
     const key = ownerKey(owner);
@@ -310,6 +357,7 @@ export class ConversationAttachmentStore {
     const partition = this.ensure(key, owner);
     const entries: WorkAttachmentEntry[] = [];
     for (const record of persisted) {
+      if (partition.sentIds.has(record.id)) continue;
       // Persistence is validation-only input, never an ownership source.
       // A record must point at the exact conversation/attachment directory
       // that staging created; otherwise a corrupted history file could make
@@ -343,7 +391,7 @@ export class ConversationAttachmentStore {
     // idempotent and never consumes the session cap with duplicate chips.
     const merged = new Map(partition.workAttachments.map((entry) => [entry.id, entry]));
     for (const entry of entries) {
-      if (!merged.has(entry.id)) merged.set(entry.id, entry);
+      if (!partition.sentIds.has(entry.id) && !merged.has(entry.id)) merged.set(entry.id, entry);
     }
     partition.workAttachments = [...merged.values()].slice(0, MAX_ATTACHMENTS_PER_SESSION);
     this.emit(key);
@@ -360,6 +408,8 @@ export class ConversationAttachmentStore {
         workAttachments: [],
         failed: [],
         readingCount: 0,
+        sentPreviews: new Set(),
+        sentIds: new Set(),
       };
       this.partitions.set(key, partition);
     }
@@ -382,7 +432,7 @@ export class ConversationAttachmentStore {
     // previews revoked) — never committed to a conversation the user
     // left. Failures still land in the owning partition: the reject
     // belongs to the conversation that attempted the attach.
-    const stillCurrent = this.isCurrentOwner(owner);
+    const stillCurrent = this.isCurrentOwner(owner) && this.partitions.get(key) === partition;
 
     if (stillCurrent) {
       if (owner.surface === 'code') {
@@ -462,6 +512,7 @@ export class ConversationAttachmentStore {
     if (partition) {
       for (const a of partition.attachments) this.revokePreview(a.previewUrl);
       for (const w of partition.workAttachments) this.revokePreview(w.previewUrl);
+      for (const url of partition.sentPreviews) this.revokePreview(url);
       this.partitions.delete(key);
     }
     this.snapshots.delete(key);
@@ -504,4 +555,5 @@ export const conversationAttachmentStore = new ConversationAttachmentStore({
   revokeBlobUrl: (url) => URL.revokeObjectURL(url),
   pickFiles: async () => (await pickFiles()).paths,
   stageAttachment: (args) => hostAdapter.attachments.stageAttachment(args),
+  stageBytes: (args) => hostAdapter.attachments.stageAttachmentBytes(args),
 });

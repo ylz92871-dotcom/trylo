@@ -1,0 +1,33 @@
+/* Early, dependency-free presentation of the approved v9 startup. */
+@font-face { font-family: TryloStartup; src: url('/startup/manrope.woff') format('woff'); font-display: swap; font-weight: 200 800; }
+:root { --startup-ground: #fff; --startup-ink: #292a27; --startup-muted: #62655e; --startup-gold: #946d22; --logo-chip-bg: #111318; --logo-chip-ink: #f3e3a6; }
+:root[data-theme='dark'] { --startup-ground: #202123; --startup-ink: #ebece8; --startup-muted: #afb1ab; --startup-gold: #ddc27f; }
+.startup-screen { position: fixed; inset: 0; z-index: 10000; overflow: hidden; isolation: isolate; color: var(--startup-ink); font-family: TryloStartup, 'Segoe UI', 'Microsoft YaHei', sans-serif; --startup-unit: calc(100vw / 1280); }
+.startup-screen__veil { position: absolute; inset: 0; background: var(--startup-ground); pointer-events: none; }
+.startup-screen__position { position: absolute; left: 50%; top: 42.5%; width: 31.25vw; height: 31.25vw; transform: translate(-50%,-50%); transform-origin: center; pointer-events: none; }
+.startup-screen__turn { position: absolute; inset: 0; opacity: 0; transform-origin: 50% 50%; }
+#trylo-startup-material { display: block; position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
+.startup-screen__identity { position: absolute; inset: 0; display: block; width: 100%; height: 100%; mask: url('/startup/approved-contour.png') center / 100% 100% no-repeat; mask-mode: luminance; }
+.startup-screen__signature { position: absolute; left: 0; top: calc(42.5% + 13.671875vw); width: 100%; text-align: center; pointer-events: none; }
+.startup-screen__lockup { display: grid; gap: calc(5 * var(--startup-unit)); width: max-content; margin: 0 auto; text-align: left; }
+.startup-screen__signature p { display: flex; align-items: baseline; gap: .28em; margin: 0; font-size: calc(23 * var(--startup-unit)); line-height: 1.35; font-weight: 400; letter-spacing: -.025em; white-space: nowrap; }
+.startup-screen__clip { display: block; overflow: hidden; padding-top: .08em; padding-bottom: .17em; margin-top: -.08em; margin-bottom: -.17em; }
+.startup-screen__word { display: block; opacity: 0; transform: translate3d(0,1.25em,0); transform-origin: 0 50%; }
+.startup-screen__lead { color: var(--startup-muted); font-weight: 400; }
+.startup-screen__key { color: var(--startup-ink); font-weight: 600; letter-spacing: -.03em; }
+.startup-screen__flat { position: absolute; left: 0; top: 0; color: #f3e3a6; opacity: 0; transform-origin: 50% 50%; pointer-events: none; }
+.startup-screen__tile { position: absolute; left: 0; top: 0; width: 40px; aspect-ratio: 1; border-radius: 27.5%; background: #111318; opacity: 0; pointer-events: none; }
+:root[data-startup-handoff] [data-startup-logo] .trilo-mark--chip { visibility: hidden; }
+.startup-screen__feedback { position: absolute; top: calc(42.5% + 20.3125vw); left: 50%; width: min(360px,calc(100vw - 48px)); transform: translateX(-50%); text-align: center; }
+.startup-screen__status { margin: 0; color: var(--startup-muted); font-size: 13px; line-height: 1.7; }
+.startup-screen[data-phase='loading']:not([data-slow]) .startup-screen__feedback { opacity: 0; }
+.startup-screen[data-motion='approved'][data-slow] .startup-screen__feedback, .startup-screen[data-phase='failed'] .startup-screen__feedback { opacity: 1; }
+.startup-screen__identity[hidden] { display: none; }
+.startup-screen__reload { margin-top: 20px; border: 1px solid var(--startup-muted); border-radius: 6px; padding: 8px 16px; background: var(--startup-ground); color: var(--startup-ink); font: inherit; font-size: 13px; cursor: pointer; }
+.startup-screen__reload[hidden] { display: none; }
+.startup-screen__reload:focus-visible { outline: 2px solid var(--startup-gold); outline-offset: 4px; }
+.startup-screen[data-phase='leaving'] { pointer-events: none; }
+.startup-screen[data-phase='leaving'] .startup-screen__feedback { display: none; }
+.startup-screen[data-phase='leaving']:not([data-motion='approved']) { animation: startup-exit 180ms ease-in both; }
+@keyframes startup-exit { to { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .startup-screen[data-phase='leaving'] { animation: none; } }

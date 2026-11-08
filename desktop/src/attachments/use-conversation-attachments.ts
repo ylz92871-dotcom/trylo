@@ -17,6 +17,7 @@ import {
 export interface ConversationAttachmentsActions {
   /** Acquire explicit paths (used by the drop handler). */
   readonly addByPaths: (paths: readonly string[]) => void;
+  readonly addFiles: (files: readonly File[]) => void;
   /** Open the native picker and acquire the selection. */
   readonly openPicker: () => void;
   readonly remove: (id: string) => void;
@@ -57,6 +58,10 @@ export function useConversationAttachments(
   const snapshot = useSyncExternalStore(subscribe, getSnapshot);
 
   const actions = useMemo<ConversationAttachmentsActions>(() => ({
+    addFiles: (files) => {
+      const o = ownerRef.current;
+      if (o !== null) void conversationAttachmentStore.acquireFiles(o, files);
+    },
     addByPaths: (paths) => {
       const o = ownerRef.current;
       if (o !== null) void conversationAttachmentStore.acquireByPaths(o, paths);

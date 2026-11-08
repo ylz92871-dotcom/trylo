@@ -17,5 +17,6 @@ export function AppearanceSettings(): JSX.Element {
         className="appearance__option" aria-pressed={preference === value}
         onClick={() => setAppearance(value as Appearance)}><Icon size={22} /><span>{label}</span></button>)}
     </div>
+    <p className="settings-modal__hint">开场标题使用 MiSans 字体（小米）。</p>
   </fieldset>;
 }

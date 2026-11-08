@@ -1,6 +1,104 @@
-.landing-surface { text-align: center; margin: 0 0 31px; padding-inline: 12px; }
-.landing-surface__headline { font-family: var(--font-body); font-size: 30px; font-weight: 500; letter-spacing: -0.9px; line-height: 1.3; margin: 0 0 12px; }
-.landing-surface__subtitle { margin: 0; color: var(--fg-muted); font-size: 13px; }
-.landing-suggestions { display: flex; justify-content: center; flex-wrap: wrap; gap: 9px; padding: 27px 20px 0; }
-.landing-suggestions button { display: flex; align-items: center; gap: 7px; padding: 6px 9px; border: 0; border-radius: 7px; color: var(--fg-muted); font-size: 12px; }
-.landing-suggestions button:hover { background: var(--bg-panel); color: var(--fg); }
+@font-face {
+  font-family: 'MiSans';
+  src: url('../../assets/fonts/MiSans-Medium.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+/* One task entry, centred as a group; the shared timeline keeps its existing layout. */
+.app-shell:has(.chat-panel[data-empty='true']) { box-shadow: none; }
+.app-shell__main:has(.chat-panel[data-empty='true']) {
+  --bg: #ffffff;
+  --bg-panel: #f2f3f4;
+  --bg-elevated: #e8eaec;
+  --fg: #25272b;
+  --fg-muted: #64686f;
+  --home-composer: #ffffff;
+  --home-placeholder: #757a82;
+  --home-edge: #e3e5e8;
+  --home-shadow: 0 4px 20px #1c20250a, 0 1px 3px #1c202505;
+  --home-focus: #9ba0a4;
+  --home-send: #202124;
+  --home-send-ink: #ffffff;
+  border-radius: 22px 0 0 0;
+}
+:root[data-theme='dark'] .app-shell__main:has(.chat-panel[data-empty='true']) {
+  --bg: #181919;
+  --bg-panel: #2b2c2c;
+  --bg-elevated: #363837;
+  --fg: #eeece6;
+  --fg-muted: #a8aaa5;
+  --home-composer: #2b2c2c;
+  --home-edge: transparent;
+  --home-shadow: none;
+  --home-placeholder: #969a95;
+  --home-focus: #706957;
+  --home-send: #e6d6a6;
+  --brand: #e6d6a6;
+  --home-send-ink: #28251e;
+}
+.app-shell__main:has(.chat-panel[data-empty='true']) .top-bar__breadcrumb > :is(span, svg) { visibility: hidden; }
+.chat-panel[data-empty='true'] .chat-panel__home { padding: 40px 48px 72px; scrollbar-gutter: stable both-edges; }
+.chat-panel__start { flex: 0 0 auto; width: 100%; max-width: 960px; margin: auto; }
+.landing-surface { display: flex; flex-direction: column; align-items: center; margin: 0 0 28px; padding-inline: 12px; text-align: center; }
+.landing-surface__lockup { display: flex; align-items: center; justify-content: center; gap: 12px; max-width: 100%; }
+.landing-surface__headline { min-width: 0; margin: 0; color: #4a4d52; font: 500 28px/1.35 'MiSans', var(--font-body); font-synthesis: none; letter-spacing: -.55px; text-align: left; }
+:root[data-theme='dark'] .landing-surface__headline { color: #d7d9d4; }
+.landing-surface__mark { --logo-chip-bg: transparent; --logo-chip-ink: var(--brand); display: inline-flex; flex-shrink: 0; margin: 0; }
+:root[data-theme='light'] .landing-surface__mark { --logo-chip-bg: transparent; --logo-chip-ink: #202124; }
+:root[data-theme='light'] .input-bar-wrapper[data-layout='start'] .input-bar__input { caret-color: #202124; }
+.landing-surface__subtitle { margin: 12px 0 0; color: var(--fg-muted); font: 400 13px/1.6 var(--font-body); }
+.chat-panel__home .input-bar-wrapper[data-layout='start'] { width: 100%; max-width: none; margin: 0; }
+.input-bar-wrapper[data-layout='start'] .input-bar__context { display: flex; align-items: center; gap: 22px; min-height: 30px; margin: 0 14px 7px; }
+.input-bar-wrapper[data-layout='start'] .input-bar__workspace { max-width: min(40%, 320px); gap: 7px; font-size: 14px; color: var(--fg); }
+.input-bar-wrapper[data-layout='start'] .input-bar__workspace > svg:first-child { width: 16px; height: 16px; flex-shrink: 0; }
+.input-bar-wrapper[data-layout='start'] .input-bar__mode { min-height: 30px; padding: 4px 6px; font-size: 14px; color: var(--fg); }
+.input-bar-wrapper[data-layout='start'] .input-bar__mode svg:first-child { width: 16px; height: 16px; }
+.input-bar-wrapper[data-layout='start'] .input-bar { padding: 12px 14px 10px; border: 1px solid var(--home-edge); border-radius: 22px; background: var(--home-composer); box-shadow: var(--home-shadow); }
+.input-bar-wrapper[data-layout='start'] .input-bar:focus-within { border-color: var(--home-focus); }
+.input-bar-wrapper[data-layout='start'] .input-bar--dragging { background: var(--home-composer); }
+.input-bar-wrapper[data-layout='start'] .input-bar__input { min-height: 48px; padding: 0; font-size: 15px; line-height: 1.65; }
+.input-bar-wrapper[data-layout='start'] .input-bar__input::placeholder { color: var(--home-placeholder); opacity: 1; }
+.input-bar-wrapper[data-layout='start'] .input-bar__toolbar { flex-wrap: nowrap; gap: 10px; margin-top: 8px; }
+.input-bar-wrapper[data-layout='start'] .input-bar__attach { width: 32px; height: 32px; flex-shrink: 0; border-radius: 8px; background: transparent; color: var(--fg-muted); }
+.input-bar-wrapper[data-layout='start'] .permission-picker__trigger { height: 32px; max-width: 170px; padding: 5px 6px; font-size: 13px; color: var(--fg); }
+.input-bar-wrapper[data-layout='start'] .permission-picker__trigger-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.input-bar-wrapper[data-layout='start'] .model-selector { flex: 0 1 auto; min-width: 0; max-width: 260px; }
+.input-bar-wrapper[data-layout='start'] .model-selector__chip { min-width: 0; max-width: 100%; padding: 6px 4px; font-size: 13px; color: var(--fg); }
+.input-bar-wrapper[data-layout='start'] .model-selector__chip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.input-bar-wrapper[data-layout='start'] .input-bar__send { width: 34px; height: 34px; margin-left: 8px; background: var(--home-send); color: var(--home-send-ink); }
+.input-bar-wrapper[data-layout='start'] .input-bar__send:disabled { background: var(--bg-elevated); color: var(--home-placeholder); opacity: 1; }
+.input-bar-wrapper[data-layout='start'] .input-bar__actions { min-height: 26px; padding: 7px 11px 0; gap: 12px; }
+.input-bar-wrapper[data-layout='start'] .input-bar__more { width: 26px; height: 26px; }
+.input-bar-wrapper[data-layout='start'] .input-bar__hint { font-size: 11px; }
+@container (max-width: 1000px) { .chat-panel[data-empty='true'] .chat-panel__home { padding-inline: 36px; } }
+@container (max-width: 600px) {
+  .chat-panel[data-empty='true'] .chat-panel__home { padding: 32px 20px 48px; }
+  .landing-surface { margin-bottom: 24px; }
+  .landing-surface__lockup { gap: 10px; }
+  .landing-surface__headline { font-size: 24px; }
+  .input-bar-wrapper[data-layout='start'] .input-bar__context { gap: 14px; margin-inline: 9px; }
+  .input-bar-wrapper[data-layout='start'] .input-bar { padding: 12px 12px 10px; border-radius: 18px; }
+  .input-bar-wrapper[data-layout='start'] .input-bar__toolbar { position: relative; gap: 5px; }
+  .input-bar-wrapper[data-layout='start'] .permission-picker { position: static; }
+  .input-bar-wrapper[data-layout='start'] .permission-picker__menu { min-width: 0; width: min(320px, 100%); max-width: 100%; }
+  .input-bar-wrapper[data-layout='start'] .model-selector { max-width: 180px; }
+  .input-bar-wrapper[data-layout='start'] .permission-picker__trigger { max-width: 108px; padding-inline: 3px; }
+  .input-bar-wrapper[data-layout='start'] .input-bar__send { margin-left: 3px; }
+}
+@container (max-width: 380px) {
+  .chat-panel[data-empty='true'] .chat-panel__home { padding-inline: 14px; }
+  .landing-surface { padding-inline: 0; }
+  .landing-surface__headline { font-size: 22px; }
+  .input-bar-wrapper[data-layout='start'] .input-bar__toolbar { gap: 3px; }
+  .input-bar-wrapper[data-layout='start'] .input-bar__send { width: 32px; height: 32px; }
+  .input-bar-wrapper[data-layout='start'] .permission-picker__trigger { max-width: 88px; font-size: 12px; }
+  .input-bar-wrapper[data-layout='start'] .model-selector__chip { font-size: 12px; }
+}
+@media (max-height: 520px) { .chat-panel[data-empty='true'] .chat-panel__home { padding-block: 24px; } }
+@media (forced-colors: active) {
+  .app-shell__main:has(.chat-panel[data-empty='true']) { --bg: Canvas; --fg: CanvasText; --fg-muted: CanvasText; --home-composer: Canvas; --home-edge: CanvasText; --home-focus: Highlight; }
+  .input-bar-wrapper[data-layout='start'] .input-bar__send { border: 1px solid ButtonText; }
+  :root[data-theme='light'] .landing-surface__mark { --logo-chip-ink: CanvasText; }
+}
