@@ -1,24 +1,8 @@
-// Trylo Desktop — the read-only CLI runtime probe (P08 §WP7.1 / §5.1).
-//
-// §5.1: "用户显式自定义路径时必须探测其协议，不得根据文件名猜测". Both CLI
-// families ship an entry whose name gives nothing away (`trylo cli/cli.js`
-// vs `new trylo cli/dist/cmd/trylo/main.js` — one is a Claude Code fork,
-// the other the new runtime), so the probe asks the binary.
-//
-// This is the ONLY file in the package that spawns anything. It is split
-// from `cli-runtime-resolution.ts` so the selection logic stays free of a
-// process bridge — a caller that only needs "which runtime did we choose?"
-// should not have to load one.
-//
-// Everything here is bounded and typed: no path throws, a timeout stops the
-// child, and "we could not find out" is never collapsed into "we know".
+// Read-only identity probe for the exact new CLI entry selected by native resolution.
+// A recognized retired binary is incompatible; an unanswered probe stays uncertain.
 
-import { hostAdapter } from './index';
-import type {
-  CliProbeFailureCode,
-  CliRuntimeKind,
-  CliRuntimeProbeResult,
-} from './cli-runtime-adapter';
+import { hostAdapter } from './index'
+import type { CliProbeFailureCode, CliRuntimeProbeResult } from './cli-runtime-probe-types'
 
 /**
  * The budget for EACH read-only probe run, sized for the TYPICAL case.
@@ -58,8 +42,7 @@ import type {
  * evidence/wp7-benchmark/01-probe-timing.txt; re-measure before changing
  * this constant.
  */
-export const DEFAULT_KIND_PROBE_TIMEOUT_MS = 15000;
-
+export const DEFAULT_KIND_PROBE_TIMEOUT_MS = 15000
 
 /**
  * Positive family markers.
@@ -79,22 +62,22 @@ export const DEFAULT_KIND_PROBE_TIMEOUT_MS = 15000;
  *   v1      `--help`    → `trylo - learning agent CLI`
  *   v1      `--version` → `0.0.0`   ← NOT used to decide the kind
  */
-const LEGACY_VERSION_MARKER = '(Claude Code)';
-const LEGACY_HELP_MARKER = 'Claude Code';
-const V1_HELP_MARKER = 'trylo - learning agent CLI';
+const LEGACY_VERSION_MARKER = '(Claude Code)'
+const LEGACY_HELP_MARKER = 'Claude Code'
+const V1_HELP_MARKER = 'trylo - learning agent CLI'
 
 /** Does this `--version` output identify the legacy runtime? */
 export function classifyLegacyVersion(banner: string): string | null {
-  const firstLine = banner.trim().split('\n')[0]?.trim() ?? '';
-  if (!firstLine.includes(LEGACY_VERSION_MARKER)) return null;
-  return firstLine.split(' ')[0] ?? firstLine;
+  const firstLine = banner.trim().split('\n')[0]?.trim() ?? ''
+  if (!firstLine.includes(LEGACY_VERSION_MARKER)) return null
+  return firstLine.split(' ')[0] ?? firstLine
 }
 
 /** Does this `--help` output identify either family? */
-export function classifyHelpBanner(help: string): CliRuntimeKind | null {
-  if (help.includes(V1_HELP_MARKER)) return 'trylo-v1';
-  if (help.includes(LEGACY_HELP_MARKER)) return 'legacy';
-  return null;
+export function classifyHelpBanner(help: string): 'trylo-v1' | 'retired' | null {
+  if (help.includes(V1_HELP_MARKER)) return 'trylo-v1'
+  if (help.includes(LEGACY_HELP_MARKER)) return 'retired'
+  return null
 }
 
 /**
@@ -109,9 +92,9 @@ export function classifyHelpBanner(help: string): CliRuntimeKind | null {
  * it, so the legacy path costs one spawn and the v1 path costs two.
  */
 export function probeResultOfBanners(args: {
-  readonly versionBanner: string;
+  readonly versionBanner: string
   /** Only consulted when `--version` did not already settle the family. */
-  readonly helpBanner?: string | null;
+  readonly helpBanner?: string | null
   /**
    * Exit code of the `--version` run — the only run guaranteed to have
    * happened by the time this is called. It is used solely to tell
@@ -119,50 +102,54 @@ export function probeResultOfBanners(args: {
    * from "it answered, and we do not recognise the answer"
    * (`unrecognized`); it never influences which kind is claimed.
    */
-  readonly exitCode: number | null;
+  readonly exitCode: number | null
 }): CliRuntimeProbeResult {
-  const legacyVersion = classifyLegacyVersion(args.versionBanner);
-  if (legacyVersion !== null) {
+  const legacyVersion = classifyLegacyVersion(args.versionBanner)
+  if (legacyVersion !== null)
     return {
-      ok: true,
-      kind: 'legacy',
-      version: legacyVersion,
-      evidence: `--version → ${legacyVersion}`,
-    };
-  }
-  const helpKind = classifyHelpBanner(args.helpBanner ?? '');
+      ok: false,
+      code: 'incompatible',
+      detail: 'The retired CLI is not supported by this application.',
+    }
+  const helpKind = classifyHelpBanner(args.helpBanner ?? '')
   if (helpKind === 'trylo-v1') {
-    const version = args.versionBanner.trim() === '' ? 'unknown' : args.versionBanner.trim();
+    const version = args.versionBanner.trim() === '' ? 'unknown' : args.versionBanner.trim()
     return {
       ok: true,
       kind: 'trylo-v1',
       version,
       evidence: `--help → ${V1_HELP_MARKER}`,
-      supportedFlags: [...new Set([...String(args.helpBanner).matchAll(/^\s{2,}(--[\w-]+)/gm)].map(match => match[1]!))],
-    };
+      supportedFlags: [
+        ...new Set(
+          [...String(args.helpBanner).matchAll(/^\s{2,}(--[\w-]+)/gm)].map((match) => match[1]!),
+        ),
+      ],
+    }
   }
-  if (helpKind === 'legacy') {
-    const version = args.versionBanner.trim() === '' ? 'unknown' : args.versionBanner.trim();
-    return { ok: true, kind: 'legacy', version, evidence: `--help → ${LEGACY_HELP_MARKER}` };
-  }
+  if (helpKind === 'retired')
+    return {
+      ok: false,
+      code: 'incompatible',
+      detail: 'The retired CLI is not supported by this application.',
+    }
   const saw = [args.versionBanner, args.helpBanner ?? '']
     .map((t) => t.trim().slice(0, 80))
     .filter((t) => t !== '')
-    .join(' | ');
+    .join(' | ')
   return {
     ok: false,
     code: args.exitCode !== 0 && saw === '' ? 'spawn_failed' : 'unrecognized',
     detail: `exit=${String(args.exitCode)} output=${saw === '' ? '<empty>' : saw}`,
-  };
+  }
 }
 
 export interface ProbeCliRuntimeKindArgs {
-  readonly entryScript: string;
+  readonly entryScript: string
   /** Selects the cheapest authoritative banner for a known protocol. It never
    * changes classification: an unexpected runtime still reports its real kind. */
-  readonly preferredProbe?: 'help' | 'version';
+  readonly preferredProbe?: 'help' | 'version'
   /** Pinned Node from the same resolution as the entry, when there is one. */
-  readonly nodeProgram?: string;
+  readonly nodeProgram?: string
   /**
    * Applies to EACH of the (at most two) read-only runs.
    *
@@ -173,16 +160,16 @@ export interface ProbeCliRuntimeKindArgs {
    * result per entry — the answer cannot change while the process runs.
    * See `OPEN-WP7-12`.
    */
-  readonly timeoutMs?: number;
-  readonly signal?: AbortSignal;
+  readonly timeoutMs?: number
+  readonly signal?: AbortSignal
 }
 
 /** Output kept per run: enough for a banner, never a whole help page. */
-const MAX_PROBE_OUTPUT_LINES = 200;
+const MAX_PROBE_OUTPUT_LINES = 200
 
 type ReadOnlyRun =
   | { readonly ok: true; readonly stdout: string; readonly exitCode: number | null }
-  | { readonly ok: false; readonly code: CliProbeFailureCode; readonly detail: string };
+  | { readonly ok: false; readonly code: CliProbeFailureCode; readonly detail: string }
 
 /**
  * One bounded, read-only CLI invocation: spawn, close stdin immediately,
@@ -195,50 +182,50 @@ async function runReadOnly(
   label: string,
   timeoutMs: number,
 ): Promise<ReadOnlyRun> {
-  let stdout = '';
-  let lines = 0;
-  let exitCode: number | null = null;
-  const gate: { resolve: (() => void) | null } = { resolve: null };
+  let stdout = ''
+  let lines = 0
+  let exitCode: number | null = null
+  const gate: { resolve: (() => void) | null } = { resolve: null }
   const done = new Promise<void>((resolve) => {
-    gate.resolve = resolve;
-  });
+    gate.resolve = resolve
+  })
 
-  let handle: { id: string } | null = null;
+  let handle: { id: string } | null = null
   try {
     handle = await hostAdapter.process.spawn({
       command,
       args: [...argv],
       label,
       onOutput: (line) => {
-        if (lines >= MAX_PROBE_OUTPUT_LINES) return;
-        lines += 1;
-        stdout = stdout === '' ? line : `${stdout}\n${line}`;
+        if (lines >= MAX_PROBE_OUTPUT_LINES) return
+        lines += 1
+        stdout = stdout === '' ? line : `${stdout}\n${line}`
       },
       onExit: (info) => {
-        exitCode = info.code;
-        gate.resolve?.();
+        exitCode = info.code
+        gate.resolve?.()
       },
-    });
-    await hostAdapter.process.closeInput(handle.id).catch(() => undefined);
+    })
+    await hostAdapter.process.closeInput(handle.id).catch(() => undefined)
   } catch (error) {
     return {
       ok: false,
       code: 'spawn_failed',
       detail: error instanceof Error ? error.message : String(error),
-    };
+    }
   }
 
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
   const timer = new Promise<void>((resolve) => {
-    timeoutId = setTimeout(resolve, timeoutMs);
-  });
-  await Promise.race([done, timer]);
-  clearTimeout(timeoutId);
+    timeoutId = setTimeout(resolve, timeoutMs)
+  })
+  await Promise.race([done, timer])
+  clearTimeout(timeoutId)
   if (exitCode === null) {
-    await hostAdapter.process.stop(handle.id).catch(() => undefined);
-    return { ok: false, code: 'timeout', detail: `no exit within ${timeoutMs}ms` };
+    await hostAdapter.process.stop(handle.id).catch(() => undefined)
+    return { ok: false, code: 'timeout', detail: `no exit within ${timeoutMs}ms` }
   }
-  return { ok: true, stdout, exitCode };
+  return { ok: true, stdout, exitCode }
 }
 
 /**
@@ -253,15 +240,15 @@ async function runReadOnly(
  */
 async function firstMissingPath(candidates: readonly string[]): Promise<string | null> {
   for (const candidate of candidates) {
-    const path = candidate.trim();
-    if (path === '' || !/[/\\]/.test(path)) continue;
+    const path = candidate.trim()
+    if (path === '' || !/[/\\]/.test(path)) continue
     try {
-      await hostAdapter.fs.statFile(path as never);
+      await hostAdapter.fs.statFile(path as never)
     } catch {
-      return path;
+      return path
     }
   }
-  return null;
+  return null
 }
 
 /**
@@ -274,18 +261,18 @@ async function firstMissingPath(candidates: readonly string[]): Promise<string |
 export async function probeCliRuntimeKind(
   args: ProbeCliRuntimeKindArgs,
 ): Promise<CliRuntimeProbeResult> {
-  const timeoutMs = args.timeoutMs ?? DEFAULT_KIND_PROBE_TIMEOUT_MS;
+  const timeoutMs = args.timeoutMs ?? DEFAULT_KIND_PROBE_TIMEOUT_MS
   if (args.signal?.aborted === true) {
-    return { ok: false, code: 'timeout', detail: 'the caller aborted before the probe started' };
+    return { ok: false, code: 'timeout', detail: 'the caller aborted before the probe started' }
   }
-  const entry = args.entryScript.trim();
+  const entry = args.entryScript.trim()
   if (entry === '') {
-    return { ok: false, code: 'not_found', detail: 'no entry path to probe' };
+    return { ok: false, code: 'not_found', detail: 'no entry path to probe' }
   }
-  const node = (args.nodeProgram ?? '').trim();
-  const isNodeEntry = /\.(m?js|cjs)$/i.test(entry);
-  const command = isNodeEntry ? (node !== '' ? node : 'node') : entry;
-  const prefix = isNodeEntry ? [entry] : [];
+  const node = (args.nodeProgram ?? '').trim()
+  const isNodeEntry = /\.(m?js|cjs)$/i.test(entry)
+  const command = isNodeEntry ? (node !== '' ? node : 'node') : entry
+  const prefix = isNodeEntry ? [entry] : []
 
   // Existence first, so "there is no file there" stays a distinct answer.
   //
@@ -296,27 +283,36 @@ export async function probeCliRuntimeKind(
   // dependency, so the check is a direct one instead. `not_found` is what the
   // caller's failure-code table maps to `entry_missing`, and until now
   // nothing on this path could produce it.
-  const missing = await firstMissingPath([command, entry]);
+  const missing = await firstMissingPath([command, entry])
   if (missing !== null) {
-    return { ok: false, code: 'not_found', detail: `no file at ${missing}` };
+    return { ok: false, code: 'not_found', detail: `no file at ${missing}` }
   }
 
-  const helpFirst = args.preferredProbe === 'help';
-  const first = await runReadOnly(command, [...prefix, helpFirst ? '--help' : '--version'],
-    'trylo-cli-kind-probe', timeoutMs);
-  if (!first.ok) return first;
+  const helpFirst = args.preferredProbe === 'help'
+  const first = await runReadOnly(
+    command,
+    [...prefix, helpFirst ? '--help' : '--version'],
+    'trylo-cli-kind-probe',
+    timeoutMs,
+  )
+  if (!first.ok) return first
   const initial = probeResultOfBanners({
     versionBanner: helpFirst ? '' : first.stdout,
-    ...(helpFirst ? { helpBanner: first.stdout } : {}), exitCode: first.exitCode,
-  });
-  if (initial.ok) return initial;
-  const second = await runReadOnly(command, [...prefix, helpFirst ? '--version' : '--help'],
-    'trylo-cli-kind-probe-fallback', timeoutMs);
+    ...(helpFirst ? { helpBanner: first.stdout } : {}),
+    exitCode: first.exitCode,
+  })
+  if (initial.ok) return initial
+  const second = await runReadOnly(
+    command,
+    [...prefix, helpFirst ? '--version' : '--help'],
+    'trylo-cli-kind-probe-fallback',
+    timeoutMs,
+  )
   // A failed fallback is unknown-state, never a successful classification.
-  if (!second.ok) return second;
+  if (!second.ok) return second
   return probeResultOfBanners({
     versionBanner: helpFirst ? second.stdout : first.stdout,
     helpBanner: helpFirst ? first.stdout : second.stdout,
     exitCode: helpFirst ? second.exitCode : first.exitCode,
-  });
+  })
 }

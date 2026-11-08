@@ -1,6 +1,6 @@
 // Trylo Desktop — Loop event types.
 //
-// The Trylo CLI (C:/trylo-cli/cli.js) emits a
+// The Trylo CLI (D:/CC/trylo/trylo cli/cli.js) emits a
 // high-fidelity JSONL stream of agent-loop transitions
 // to the file pointed to by CLAUDE_CODE_LOOP_EVENTS_FILE.
 // This module defines the types and the 28 event shapes
@@ -16,6 +16,8 @@ import type { AnyToolResultContent } from '../tooling/tool-result-content';
 // ── 28 event types ──────────────────────────────────────────
 
 export type LoopEventType =
+  | 'goal_state'
+  | 'workflow_state'
   // Session lifecycle (3)
   | 'session_start'
   | 'loop_start'
@@ -334,9 +336,9 @@ export interface RuntimeWarningEvent extends BaseEvent {
 export interface InputRequestEvent extends BaseEvent {
   readonly type: 'input_request';
   readonly requestId: string;
-  readonly questions: readonly import('@trylo/work').InputRequestQuestion[];
+  readonly questions: readonly import('./input-request').InputRequestQuestion[];
   readonly status: 'pending' | 'submitted' | 'dismissed';
-  readonly answers?: Readonly<Record<string, import('@trylo/work').InputRequestAnswer>>;
+  readonly answers?: Readonly<Record<string, import('./input-request').InputRequestAnswer>>;
 }
 
 export interface TodoUpdatedEvent extends BaseEvent {
@@ -353,6 +355,8 @@ export interface PlanModeTransitionEvent extends BaseEvent {
 // Strict variants (the 28 known shapes). Forward-compat
 // events land in `OtherLoopEvent` below.
 type StrictLoopEvent =
+  | (BaseEvent & { readonly type: 'workflow_state'; readonly workflow: import('../domain/workflow-state').WorkflowState })
+  | (BaseEvent & { readonly type: 'goal_state'; readonly goal: import('../domain/goal').GoalSnapshot })
   | SessionStartEvent
   | LoopStartEvent
   | SessionEndEvent

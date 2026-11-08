@@ -142,21 +142,34 @@ export class ServicesClient {
         reject,
         timer,
       });
-      this.deps
-        .invoke('servicehost_send', { frame: line })
-        .then(() => {
-          // Frame accepted by the shell; the response arrives via
-          // servicehost://frame. Send-level failure rejects below.
-        })
-        .catch((err: unknown) => {
-          const pending = this.pending.get(id);
-          if (!pending) return;
-          this.pending.delete(id);
-          clearTimeout(pending.timer);
-          const message = err instanceof Error ? err.message : String(err);
-          pending.reject(new ServiceRequestError('NOT_CONNECTED', message));
-          this.onConnectionError?.();
-        });
+      const failed = (err: unknown): void => {
+        const pending = this.pending.get(id);
+        if (!pending) return;
+        this.pending.delete(id);
+        clearTimeout(pending.timer);
+        const message = err instanceof Error ? err.message : String(err);
+        pending.reject(new ServiceRequestError('NOT_CONNECTED', message));
+        this.onConnectionError?.();
+      };
+      const send = (): void => {
+        // Stop and the existing request timeout both revoke unsent requests.
+        if (!this.pending.has(id)) return;
+        try {
+          void this.deps.invoke('servicehost_send', { frame: line }).catch(failed);
+        } catch (error) {
+          failed(error);
+        }
+      };
+      if (this.started) send();
+      else {
+        // A reused native host can reply before a new renderer's listener
+        // registers. Keep the request correlated while registration settles.
+        const listening = this.start();
+        const lifecycle = this.lifecycle;
+        void listening.then(() => {
+          if (this.lifecycle === lifecycle) send();
+        }, failed);
+      }
     });
   }
 

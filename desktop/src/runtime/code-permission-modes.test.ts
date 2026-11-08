@@ -34,6 +34,19 @@ it('fully automatic includes browser scripts and user-mounted MCP tools', async 
   }
 });
 
+it('fully automatic accepts the shipped Office argv and skill command forms', async () => {
+  for (const command of [['help', 'docx', 'equation'], ['create', '.trylo/out/报告.docx'], 'load_skill word']) {
+    const send = vi.fn(async () => true);
+    const registry = new CodePermissionRegistry({ onChange() {}, riskClassifier: createToolRiskClassifier(), send });
+    registry.handleControlFrame({ kind: 'permission', requestId: 'office-r', toolName: 'mcp__trylo-office__officecli', input: { command } },
+      { processId: 'p', projectKey: 'project', conversationId: 'c', projectRoot: 'D:/work/project',
+        permissionLevel: 'unrestricted', profileId: 'code.core.v1', managedPackageIds: ['officecli'] });
+    await vi.waitFor(() => expect(send).toHaveBeenCalledWith('p', expect.stringContaining('"behavior":"allow"')));
+    expect(registry.list()).toEqual([]);
+    expect(registry.recentAudits().at(-1)?.behavior).toBe('auto_allow');
+  }
+});
+
 it('fully automatic preserves hard URL denials', async () => {
   const h = setup('unrestricted'); h.issue('mcp__trylo-browser__browser_navigate', { url: 'javascript:alert(1)' });
   await vi.waitFor(() => expect(h.send).toHaveBeenCalledWith('p', expect.stringContaining('"reason":"policy_denied"')));

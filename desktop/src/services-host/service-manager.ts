@@ -142,6 +142,13 @@ export class ServiceManager {
 
   /** Stop the sidecar (idempotent on the Rust side) and tear down the
    *  frame client. */
+  async restart(): Promise<void> {
+    const options = this.spawnOptions;
+    if (!options) throw new Error('工具服务尚未启动。');
+    await this.stop();
+    await this.ensureRunning(options);
+  }
+
   async stop(): Promise<void> {
     if (this.stopInFlight) return this.stopInFlight;
     this.active = false;

@@ -1,145 +1,81 @@
-// Trylo Desktop — TauriChannelWorkspaceWatcher. See ARCHITECTURE.md
-// §2.6 (WorkspaceWatcher is an interface).
-//
-// Production impl for the spike / Phase 1. The actual OS-level
-// watching happens in Rust (`notify` crate, see
-// src-tauri/src/commands/watch.rs); this TS class wraps the Tauri
-// Channel that streams events back and exposes them via the
-// WorkspaceWatcher interface.
-//
-// Day 5 fix: the Channel and the per-path subscribers map live on
-// the instance, not inside watch(). The previous design created the
-// channel inside the first watch() call and stored it in a per-root
-// `this.handles` map; when App.tsx's useEffect re-ran (because
-// `dirty` is a dep), it called `handle.close()` which deleted the
-// handle from the map. The second watch() then saw an empty map and
-// created a fresh state + channel; the Rust `watch` command is
-// idempotent and kept the original Channel registered for events.
-// Result: events fired into a Channel whose onmessage closure
-// referenced a stale, empty subscribers map.
-//
-// Now: the Channel is created on the first watch() call, then
-// cached on the instance. Subsequent watch() calls return a fresh
-// WatchHandle that operates on the same channel and the same
-// subscribers map.
-//
-// Phase 1.0: per-handle refcount. The first `watch()` increments
-// the count, opens the Channel, and starts the Rust notify
-// watcher. Each `close()` decrements; when the count hits zero,
-// we `invoke('unwatch', { root })` to release the OS-level
-// notify handle. A subsequent `watch()` re-opens it via Rust's
-// `watch` command (which is idempotent at the JS level: it
-// returns "already watching" if the map still has the entry
-// — but we cleared it on close, so the second `watch` actually
-// starts a fresh notify watcher).
-
 import { Channel, invoke } from '@tauri-apps/api/core';
-import type {
-  WatchHandle,
-  WatchOptions,
-  WorkspaceWatcher,
-} from './workspace-watcher';
+import type { WatchHandle, WatchOptions, WorkspaceWatcher } from './workspace-watcher';
 import type { FileChangeEvent, FilePath } from './types';
 
-interface TauriEventDto {
-  kind: string;
-  path: string;
-  old_path?: string;
-}
+interface TauriEventDto { kind: FileChangeEvent['kind']; path: string; old_path?: string }
+type Subscriber = { path: string; callback: (events: readonly FileChangeEvent[]) => void };
+interface HandleState { subscribers: Set<Subscriber> }
+interface RootState { root: string; channel: Channel<TauriEventDto>; handles: Set<HandleState>; ready: Promise<void> }
+const normalized = (value: string): string => {
+  const path = value.replace(/\\/g, '/').replace(/^\/\/\?\/UNC\//i, '//').replace(/^\/\/\?\//, '').replace(/\/+$/, '');
+  return /^[a-z]:/i.test(path) || path.startsWith('//') ? path.toLowerCase() : path;
+};
+const contains = (root: string, path: string): boolean => path === root || path.startsWith(`${root}/`);
 
-function fromDto(dto: TauriEventDto): FileChangeEvent {
-  return {
-    kind: dto.kind as FileChangeEvent['kind'],
-    path: dto.path,
-    ...(dto.old_path !== undefined ? { oldPath: dto.old_path } : {}),
-  };
-}
-
-type Subscriber = (events: readonly FileChangeEvent[]) => void;
-
+/** One native channel per root; closing a subscriber cannot erase another
+ * window/run's listeners. Root teardown is serialized with a rapid re-watch. */
 export class TauriChannelWorkspaceWatcher implements WorkspaceWatcher {
-  private channel: Channel<TauriEventDto> | null = null;
-  private watchedRoot: FilePath | null = null;
-  /** Active handle count. When 0, we `unwatch` on the Rust side
-   *  to release the OS handle. Re-incrementing triggers a fresh
-   *  `watch`. */
-  private handleCount = 0;
-  private readonly subscribers = new Map<FilePath, Set<Subscriber>>();
-
-  private ensureChannel(root: FilePath): Channel<TauriEventDto> {
-    if (this.channel === null) {
-      this.channel = new Channel<TauriEventDto>();
-      this.watchedRoot = root;
-      this.channel.onmessage = (dto) => {
-        const event = fromDto(dto);
-        for (const cbs of this.subscribers.values()) {
-          for (const cb of cbs) {
-            cb([event]);
+  private readonly roots = new Map<string, RootState>();
+  private closing: Promise<void> = Promise.resolve();
+  watch(root: FilePath, _options?: WatchOptions): WatchHandle {
+    const key = normalized(root);
+    let state = this.roots.get(key);
+    if (!state) {
+      const channel = new Channel<TauriEventDto>();
+      state = { root, channel, handles: new Set(), ready: this.closing.then(() => invoke<void>('watch', { root, onEvent: channel })) };
+      const owner = state;
+      channel.onmessage = (dto) => {
+        const event: FileChangeEvent = { kind: dto.kind, path: dto.path, ...(dto.old_path ? { oldPath: dto.old_path } : {}) };
+        for (const handle of owner.handles) for (const subscriber of handle.subscribers) {
+          if (event.kind === 'rescan' || contains(subscriber.path, normalized(event.path)) || (event.oldPath && contains(subscriber.path, normalized(event.oldPath)))) {
+            try { subscriber.callback([event]); } catch { /* One consumer cannot break the remaining subscribers. */ }
           }
         }
       };
-      void invoke('watch', { root, onEvent: this.channel });
+      // Older callers do not await readiness. Keep their errors observed while
+      // exposing the rejection to callers that need an established baseline.
+      void state.ready.catch(() => {});
+      this.roots.set(key, state);
     }
-    return this.channel;
-  }
-
-  watch(root: FilePath, _options?: WatchOptions): WatchHandle {
-    this.ensureChannel(root);
-    this.handleCount += 1;
+    const owner = state;
+    const handle: HandleState = { subscribers: new Set() };
+    owner.handles.add(handle);
     let closed = false;
     return {
-      close: async () => {
-        if (closed) return;
-        closed = true;
-        // Phase 1.0: clear per-handle subscribers. The shared
-        // subscribers map and the Channel live across handles.
-        this.subscribers.clear();
-        this.handleCount -= 1;
-        if (this.handleCount <= 0 && this.watchedRoot !== null) {
-          // Last handle closed. Tell Rust to release the
-          // OS-level notify handle. We also drop the JS-side
-          // channel + state so a subsequent watch() starts
-          // fresh.
-          const root = this.watchedRoot;
-          this.watchedRoot = null;
-          this.channel = null;
-          try {
-            await invoke('unwatch', { root });
-          } catch {
-            // Best-effort. If unwatch fails (e.g. Rust side
-            // already gone), the OS handle will be released
-            // on app shutdown anyway.
-          }
-        }
+      ready: owner.ready,
+      onDidChangeFile: (path, callback) => {
+        if (closed) return () => {};
+        const subscriber = { path: normalized(path), callback };
+        handle.subscribers.add(subscriber);
+        return () => { handle.subscribers.delete(subscriber); };
       },
-      onDidChangeFile: (path, cb) => {
-        let cbs = this.subscribers.get(path);
-        if (cbs === undefined) {
-          cbs = new Set();
-          this.subscribers.set(path, cbs);
-        }
-        cbs.add(cb);
-        return () => {
-          cbs!.delete(cb);
-          if (cbs!.size === 0) this.subscribers.delete(path);
-        };
+      close: () => {
+        if (closed) return Promise.resolve();
+        closed = true; handle.subscribers.clear(); owner.handles.delete(handle);
+        if (owner.handles.size) return Promise.resolve();
+        owner.ready = owner.ready.catch(() => {}).then(async () => {
+          // A replacement handle may have arrived while startup was pending.
+          if (owner.handles.size) return;
+          try { await invoke('unwatch', { root: owner.root }); } catch { /* Already closed roots are harmless. */ }
+          if (owner.handles.size) await invoke<void>('watch', { root: owner.root, onEvent: owner.channel });
+          else if (this.roots.get(key) === owner) this.roots.delete(key);
+        });
+        void owner.ready.catch(() => {});
+        return owner.ready;
       },
     };
   }
-
-  async close(): Promise<void> {
-    // Force-release everything.
-    this.subscribers.clear();
-    this.handleCount = 0;
-    if (this.watchedRoot !== null) {
-      const root = this.watchedRoot;
-      this.watchedRoot = null;
-      this.channel = null;
-      try {
-        await invoke('unwatch', { root });
-      } catch {
-        // Best-effort.
-      }
-    }
+  close(): Promise<void> {
+    const roots = [...this.roots.values()];
+    this.roots.clear();
+    const previous = this.closing;
+    this.closing = previous.then(async () => {
+      await Promise.all(roots.map(async (state) => {
+        for (const handle of state.handles) handle.subscribers.clear();
+        state.handles.clear(); await state.ready.catch(() => {});
+        try { await invoke('unwatch', { root: state.root }); } catch { /* Native shutdown owns any surviving handle. */ }
+      }));
+    });
+    return this.closing;
   }
 }

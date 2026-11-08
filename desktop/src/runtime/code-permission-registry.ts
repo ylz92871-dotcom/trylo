@@ -110,8 +110,11 @@ const AUDIT_LIMIT = 64;
 const RESPONDED_REQUEST_LIMIT = 256;
 
 export class CodePermissionRegistry {
-  private readonly automatic = new Map<string, { processId: string }>();
+  private readonly automatic = new Map<string, Pick<CodePermissionScope, 'processId' | 'projectKey' | 'conversationId'>>();
   private readonly pending = new Map<string, CodePermissionRequest>();
+  // An explicitly stopped native handle cannot be reused. Recovery and late
+  // stdout may clear/rebuild visibility, but may never restore its authority.
+  private readonly revokedProcesses = new Set<string>();
   private readonly onChange: () => void;
   private readonly send: (processId: string, line: string) => Promise<boolean>;
   private readonly riskClassifier: ToolRiskRouter | null;
@@ -129,6 +132,7 @@ export class CodePermissionRegistry {
   /** Route a control frame from one process's stdout stream. */
   handleControlFrame(frame: ControlFrame, scope: CodePermissionScope): void {
     if (frame.kind === 'input') return; // User answers have no permission authority.
+    if (this.revokedProcesses.has(scope.processId)) return;
     if (frame.kind === 'cancel') {
       if (this.automatic.get(frame.requestId)?.processId === scope.processId) this.automatic.delete(frame.requestId);
       if (this.pending.get(frame.requestId)?.processId === scope.processId && this.pending.delete(frame.requestId)) this.notify();
@@ -142,7 +146,7 @@ export class CodePermissionRegistry {
       if (route.behavior === 'auto_allow' || route.behavior === 'deny') {
         // Fire-and-forget: the CLI blocks on the response; a failed write
         // degrades to a pending human decision inside autoRespond.
-        const delivery = { processId: scope.processId };
+        const delivery = { processId: scope.processId, projectKey: scope.projectKey, conversationId: scope.conversationId };
         this.automatic.set(frame.requestId, delivery);
         void this.autoRespond(frame, scope, route, delivery);
         return;
@@ -193,6 +197,22 @@ export class CodePermissionRegistry {
     if (changed) this.notify();
   }
 
+  /** Stop revokes the request, independently of whether a controller still
+   *  owns its process. Ordinary recovery disconnects use clearProcess instead. */
+  revokeProcess(processId: string): void {
+    this.revokedProcesses.add(processId);
+    this.clearProcess(processId);
+  }
+
+  revokeScope(projectKey?: string, conversationId?: string): void {
+    const ids = new Set<string>();
+    for (const request of [...this.pending.values(), ...this.automatic.values()]) {
+      if ((projectKey === undefined || request.projectKey === projectKey)
+        && (conversationId === undefined || request.conversationId === conversationId)) ids.add(request.processId);
+    }
+    for (const id of ids) this.revokeProcess(id);
+  }
+
   /** Snapshot of pending requests (newest last). */
   list(): readonly CodePermissionRequest[] {
     return [...this.pending.values()];
@@ -219,7 +239,7 @@ export class CodePermissionRegistry {
     const request = this.pending.get(requestId);
     if (!request) return false;
     const sent = await this.send(request.processId, buildControlResponse(requestId, allow, request.input));
-    if (!sent) return false;
+    if (!sent || this.pending.get(requestId) !== request || this.revokedProcesses.has(request.processId)) return false;
     if (allow && request.lease && !this.respondedRequestIds.has(requestId)) {
       this.respondedRequestIds.add(requestId);
       if (this.respondedRequestIds.size > RESPONDED_REQUEST_LIMIT) {
@@ -288,7 +308,7 @@ export class CodePermissionRegistry {
       allow,
       frame.input,
       route.behavior === 'deny' ? route.userMessage : undefined,
-      route.behavior === 'deny' ? 'policy_denied' : undefined,
+      route.behavior === 'deny' ? (route.failureCode ?? 'policy_denied') : undefined,
     );
     let sent = false;
     try {

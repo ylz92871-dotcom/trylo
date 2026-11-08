@@ -297,7 +297,6 @@ export interface LearningConfig {
 /** CLI connection used by the shadow (invisible) learning run. */
 export interface LearningCliConfig {
   readonly cliPath: string;
-  readonly nodeProgram?: string;
   readonly cwd: string;
   readonly apiKey?: string;
   readonly apiHost?: string;
@@ -331,6 +330,7 @@ export interface LearningReviewResult {
   readonly status?: string;
   readonly candidateId?: string;
   readonly pendingId?: string;
+  readonly pendingIds?: readonly string[];
   readonly reason?: string;
   readonly reasonCode?: string;
   readonly error?: string;
@@ -827,7 +827,8 @@ export type ToolUnavailableReasonCode =
   | 'input_runtime_low_integrity'
   | 'input_permission_probe_failed'
   | 'server_name_collision'
-  | 'hermes_unavailable';
+  | 'hermes_unavailable'
+  | 'model_preview_unavailable';
 
 /** Why a package is not contributing tools this run (§4.4). */
 export type ToolPackageState =
@@ -847,6 +848,7 @@ export interface ToolPackageCondition {
 }
 
 export interface ToolPackageHealth {
+  readonly builtIn?: boolean;
   readonly runtimeIdentity?: string;
   readonly reasonCode?: string;
   readonly inputAccess?: { readonly available: boolean; readonly integrityRid?: number; readonly uiAccess?: boolean; readonly reason?: string | null };
@@ -928,6 +930,7 @@ export interface ToolingHealthParams {
 }
 
 export interface ToolingHealthResult {
+  readonly coreToolsRevision?: number;
   readonly ok: boolean;
   readonly installRoot: string;
   readonly profilesRoot: string;
@@ -1335,6 +1338,9 @@ export interface ServiceEventMap {
   readonly 'tooling.viewportFrame': ViewportFrameEvent;
   readonly 'tooling.nativeBrowserState': NativeBrowserState;
   readonly 'tooling.nativeBrowserCommand': import('../host-adapter/native-browser').NativeBrowserCommand & { readonly id: string };
+  readonly 'tooling.modelPreviewCommand': import('../preview/agent-model-preview-types').AgentModelPreviewCommand;
+  readonly 'tooling.modelPreviewChanged': import('../preview/agent-model-preview-types').AgentModelPreviewChanged;
+  readonly 'tooling.modelPreviewCancelled': { readonly id: string; readonly bridgeId: string; readonly scope: string };
   readonly 'tooling.viewportStatus': ViewportStatusEvent;
   readonly 'tooling.viewportAction': ViewportActionEvent;
   readonly 'tooling.computerPreviewFrame': ComputerPreviewFrameEvent;
@@ -1344,6 +1350,7 @@ export interface ServiceEventMap {
 export type ServiceEventTopic = keyof ServiceEventMap;
 
 export interface NativeBrowserState {
+  readonly nativeLayout?: 'direct';
   readonly revision?: number;
   readonly ok: boolean;
   readonly scope: string;
@@ -1353,7 +1360,7 @@ export interface NativeBrowserState {
   readonly inFlight: number;
   readonly activeLabel: string;
   readonly viewport?: import('../host-adapter/native-browser').NativeBrowserViewport;
-  readonly tabs: readonly { readonly id: string; readonly label: string; readonly title: string; readonly url: string; readonly popup?: boolean }[];
+  readonly tabs: readonly { readonly id: string; readonly label: string; readonly title: string; readonly url: string; readonly popup?: boolean; readonly navigationError?: import('../host-adapter/native-browser').NativeBrowserNavigationError }[];
 }
 
 // ── method table (name → params/result) ──────────────────────────────
@@ -1434,9 +1441,13 @@ export interface ServiceMethodMap {
   readonly 'tooling.nativeBrowserControl': { params: { readonly scope: string; readonly heldByUser: boolean }; result: NativeBrowserState };
   readonly 'tooling.nativeBrowserSelect': { params: { readonly scope: string; readonly label: string }; result: NativeBrowserState };
   readonly 'tooling.nativeBrowserCreate': { params: { readonly scope: string }; result: NativeBrowserState };
-  readonly 'tooling.nativeBrowserLayout': { params: { readonly scope: string; readonly bounds?: import('../host-adapter/native-browser').NativeBrowserBounds; readonly visible: boolean }; result: NativeBrowserState };
+  readonly 'tooling.nativeBrowserLayout': { params: { readonly scope: string; readonly bounds?: import('../host-adapter/native-browser').NativeBrowserBounds; readonly visible: boolean; readonly nativeApplied?: boolean }; result: NativeBrowserState };
   readonly 'tooling.nativeBrowserViewport': { params: { readonly scope: string; readonly label: string; readonly viewport: import('../host-adapter/native-browser').NativeBrowserViewportRequest }; result: NativeBrowserState };
   readonly 'tooling.nativeBrowserCommandResult': { params: { readonly id: string; readonly result?: import('../host-adapter/native-browser').NativeBrowserRecord; readonly error?: string }; result: { readonly ok: boolean } };
+  readonly 'tooling.modelPreviewAttach': { params: Record<string, never>; result: { readonly bridgeId: string } };
+  readonly 'tooling.modelPreviewDetach': { params: { readonly bridgeId: string }; result: { readonly ok: boolean } };
+  readonly 'tooling.modelPreviewCommandResult': { params: { readonly id: string; readonly bridgeId: string; readonly result?: Readonly<Record<string, unknown>>; readonly error?: string }; result: { readonly ok: boolean } };
+  readonly 'tooling.modelPreviewClose': { params: { readonly scope: string }; result: { readonly ok: boolean } };
   readonly 'tooling.viewportResize': { params: ViewportResizeParams; result: ViewportResizeResult };
   readonly 'tooling.viewportNavigate': { params: { readonly url: string }; result: ViewportNavigateResult };
   readonly 'tooling.viewportInput': { params: ViewportInputParams; result: ViewportInputResult };

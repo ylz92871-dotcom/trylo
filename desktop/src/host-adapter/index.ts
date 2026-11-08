@@ -6,51 +6,47 @@
 // './host-adapter'`. Concrete impls (this file) are the only places
 // that know about @tauri-apps/api.
 
-import { tauriFsCommands } from './tauri-fs-commands';
-import { tauriAttachmentService } from './attachment-service';
-import { TauriChannelWorkspaceWatcher } from './tauri-workspace-watcher';
-import { StubWorkspaceWatcher } from './stub-workspace-watcher';
-import { tauriSearchService } from './tauri-search-service';
-import { tauriPtyService } from './tauri-pty-service';
-import { tauriGitService } from './tauri-git-service';
-import { TauriLspManager } from './tauri-lsp-manager';
-import { tauriSettingsService } from './tauri-settings-service';
-import { tauriProcessService } from './tauri-process-service';
-import { runtimeSessionsStorage } from './runtime-sessions-storage';
-import { teamRunsStorage } from './team-runs-storage';
+import { tauriFsCommands } from './tauri-fs-commands'
+import { tauriAttachmentService } from './attachment-service'
+import { TauriChannelWorkspaceWatcher } from './tauri-workspace-watcher'
+import { StubWorkspaceWatcher } from './stub-workspace-watcher'
+import { tauriSearchService } from './tauri-search-service'
+import { tauriPtyService } from './tauri-pty-service'
+import { tauriGitService } from './tauri-git-service'
+import { TauriLspManager } from './tauri-lsp-manager'
+import { tauriSettingsService } from './tauri-settings-service'
+import { tauriProcessService } from './tauri-process-service'
+import { runtimeSessionsStorage } from './runtime-sessions-storage'
+import { teamRunsStorage } from './team-runs-storage'
 
-export type { FsCommands, FsCommandsBackend } from './commands';
+export type { FsCommands, FsCommandsBackend } from './commands'
 // P2-1 Work Package B: the typed attachment staging surface
 // (Rust `attachment_staging` commands). React never invokes
 // Tauri directly for staging.
+export type { AttachmentService, StagedAttachment, StageAttachmentArgs } from './attachment-service'
 export type {
-  AttachmentService,
-  StagedAttachment,
-  StageAttachmentArgs,
-} from './attachment-service';
-export type { LspChannel, PtyChannel, StreamBackend, WatchChannel, WatchSubscription } from './channels';
+  LspChannel,
+  PtyChannel,
+  StreamBackend,
+  WatchChannel,
+  WatchSubscription,
+} from './channels'
+export type { WorkspaceWatcher, WatchOptions, WatchHandle } from './workspace-watcher'
+export type { LspManager, LspServerConfig, LspLanguageInfo } from './lsp-manager'
+export type { EditorBridge, ConflictEvent, ConflictKind } from './editor-bridge'
+export type { SearchService, SearchMatch } from './search-service'
+export type { PtyService, PtySpawnResult } from './pty-service'
 export type {
-  WorkspaceWatcher,
-  WatchOptions,
-  WatchHandle,
-} from './workspace-watcher';
-export type {
-  LspManager,
-  LspServerConfig,
-  LspLanguageInfo,
-} from './lsp-manager';
-export type {
-  EditorBridge,
-  ConflictEvent,
-  ConflictKind,
-} from './editor-bridge';
-export type { SearchService, SearchMatch } from './search-service';
-export type { PtyService, PtySpawnResult } from './pty-service';
-export type { GitService, GitSnapshotEntry, GitWorkspaceSnapshot, GitFileDiff, GitDiffStat } from './git-service';
-export type { SettingsService, AppSettings, Theme } from './settings-service';
-export { DEFAULT_SETTINGS } from './settings-service';
+  GitService,
+  GitSnapshotEntry,
+  GitWorkspaceSnapshot,
+  GitFileDiff,
+  GitDiffStat,
+} from './git-service'
+export type { SettingsService, AppSettings, Theme } from './settings-service'
+export { DEFAULT_SETTINGS } from './settings-service'
 // Phase 2 (Trylo Alpha): sidecar process bridge.
-export type { ProcessService, ProcessHandle, ProcessOutputEvent } from './process-service';
+export type { ProcessService, ProcessHandle, ProcessOutputEvent } from './process-service'
 export type {
   DirEntry,
   FileChangeEvent,
@@ -64,10 +60,10 @@ export type {
   PtyId,
   PtyStartRequest,
   SpawnRequest,
-} from './types';
+} from './types'
 // Phase 2 (Trylo Alpha, arch §3) — Trylo API for the legacy 4-mode
 // webview running in an iframe. See trylo-api.ts and the
-// spike-results/phase-2-plan.md.
+// docs/spikes/phase-2-plan.md.
 export type {
   TryloApi,
   TryloMode,
@@ -75,22 +71,17 @@ export type {
   TryloRequest,
   TryloResponse,
   TryloSession,
-} from './trylo-api';
-export {
-  handleTryloRequest,
-  type TryloHandlerContext,
-} from './trylo-message-types';
+} from './trylo-api'
+export { handleTryloRequest, type TryloHandlerContext } from './trylo-message-types'
 export {
   createTryloContext,
   getSessionStore,
   resetSessionStore,
   snapshotForWorkspace,
   persistForWorkspace,
-} from './trylo-context';
-export { startTrylo, stopTryloProcess, sendPromptToProcess, tailTryloEvents } from './trylo-runner';
-export type { StartTryloArgs, TailEventsArgs, TailHandle } from './trylo-runner';
-export { parseLoopEvent } from './loop-events';
-export type { LoopEvent, LoopEventType, OtherLoopEvent } from './loop-events';
+} from './trylo-context'
+export { parseLoopEvent } from './loop-events'
+export type { LoopEvent, LoopEventType, OtherLoopEvent } from './loop-events'
 
 export const hostAdapter = {
   runtimeSessions: runtimeSessionsStorage,
@@ -108,9 +99,8 @@ export const hostAdapter = {
   lsp: new TauriLspManager(),
   settings: tauriSettingsService,
   process: tauriProcessService,
-} as const;
+} as const
 
-export const stubWorkspaceWatcher = new StubWorkspaceWatcher();
+export const stubWorkspaceWatcher = new StubWorkspaceWatcher()
 
-
-export { createLspConnection } from './lsp-connection';
+export { createLspConnection } from './lsp-connection'

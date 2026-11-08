@@ -42,12 +42,21 @@ export interface StageAttachmentArgs {
   readonly sourcePath: FilePath;
 }
 
+export interface StageAttachmentBytesArgs {
+  readonly workspaceRoot: FilePath;
+  readonly conversationId: string;
+  readonly attachmentId: string;
+  readonly name: string;
+  readonly bytes: Uint8Array;
+}
+
 export interface AttachmentService {
   /** Copy one external file into the workspace-controlled
    *  staging area. Rejects directories, symlinks/reparse
    *  points, special files, oversized files, and invalid ids
    *  (see attachment_staging.rs for the full checklist). */
   stageAttachment(args: StageAttachmentArgs): Promise<StagedAttachment>;
+  stageAttachmentBytes(args: StageAttachmentBytesArgs): Promise<StagedAttachment>;
   /** Conversation-deletion cleanup: remove the conversation's
    *  staging directory. Idempotent. */
   removeConversationAttachments(
@@ -72,6 +81,9 @@ function basenameOf(p: string): string {
 const devStaged = new Map<string, StagedAttachment>();
 
 const devAttachmentService: AttachmentService = {
+  async stageAttachmentBytes() {
+    throw new Error('粘贴附件需要在 Trylo 桌面应用中使用');
+  },
   async stageAttachment(args) {
     const name = basenameOf(args.sourcePath) || 'attachment.bin';
     const relativePath =
@@ -93,6 +105,14 @@ const devAttachmentService: AttachmentService = {
 };
 
 export const tauriAttachmentService: AttachmentService = {
+  stageAttachmentBytes: async (args) => {
+    if (!isTauri()) return devAttachmentService.stageAttachmentBytes(args);
+    const raw = await invoke<RawStagedAttachment>('stage_attachment_bytes', {
+      workspaceRoot: args.workspaceRoot, conversationId: args.conversationId,
+      attachmentId: args.attachmentId, name: args.name, bytes: Array.from(args.bytes),
+    });
+    return { relativePath: raw.relative_path, name: raw.name, size: raw.size };
+  },
   stageAttachment: async (args) => {
     if (!isTauri()) return devAttachmentService.stageAttachment(args);
     // camelCase invoke args — Tauri maps them onto the Rust

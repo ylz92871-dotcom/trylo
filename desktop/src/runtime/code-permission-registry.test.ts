@@ -134,6 +134,31 @@ describe('CodePermissionRegistry', () => {
     registry.clearProcess('proc-a'); // no change → no extra notify
     expect(changes.length).toBe(3); // 2 registers + 1 clear
   });
+
+  it('revokes a stopped handle and ignores its late requests while accepting a fresh process', async () => {
+    const { registry, sent } = createRegistry();
+    registry.handleControlFrame(permissionFrame('old'), SCOPE_A);
+    registry.revokeScope(SCOPE_A.projectKey, SCOPE_A.conversationId);
+    expect(await registry.respond('old', true)).toBe(false);
+    registry.handleControlFrame(permissionFrame('late'), SCOPE_A);
+    expect(registry.list()).toEqual([]);
+    expect(sent).toEqual([]);
+    registry.handleControlFrame(permissionFrame('fresh'), { ...SCOPE_A, processId: 'fresh-process' });
+    expect(await registry.respond('fresh', true)).toBe(true);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.processId).toBe('fresh-process');
+  });
+
+  it('does not accept a late submit receipt after the request was stopped', async () => {
+    let complete!: (sent: boolean) => void;
+    const registry = new CodePermissionRegistry({ onChange() {}, send: () => new Promise(resolve => { complete = resolve; }) });
+    registry.handleControlFrame(permissionFrame('in-flight'), SCOPE_A);
+    const answer = registry.respond('in-flight', true);
+    registry.revokeScope(SCOPE_A.projectKey, SCOPE_A.conversationId);
+    complete(true);
+    expect(await answer).toBe(false);
+    expect(registry.list()).toEqual([]);
+  });
 });
 
 describe('supervisor integration surface', () => {

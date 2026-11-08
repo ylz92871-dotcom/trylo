@@ -2,9 +2,9 @@
 //
 // Lifecycle wiring that turns the Desktop into the pet's owner:
 //   - starts/stops the ServiceManager + CompanionPort (Windows only);
-//   - taps Code run lifecycle + Work item flow → companion projection →
+//   - taps the shared CLI run lifecycle → companion projection →
 //     pet.publish;
-//   - merges Code + Work pending permissions into one
+//   - projects the supervisor's pending CLI permissions into one
 //     permissionRequestState (requestIds always carried by the request
 //     itself — dual-workspace safe, spec §6.3);
 //   - answers host.permissionDecision through the ApprovalService;
@@ -15,9 +15,7 @@
 //
 // Framework-free: App only constructs it and flips setEnabled.
 
-import type { ConversationItem } from '@trylo/work';
-
-import { ApprovalService, type WorkApprovalAuthority } from '../approval/approval-service';
+import { ApprovalService } from '../approval/approval-service';
 import type { CodeRunLifecycleObserver, CodeRunOutcome } from '../runtime/code-run-lifecycle';
 import type { LoopEvent } from '../host-adapter/loop-events';
 import type { ConversationRunSupervisor } from '../runtime/conversation-run-supervisor';
@@ -37,8 +35,6 @@ import {
   projectCodeOutcome,
   projectLoopEventDetail,
   projectLoopEventToState,
-  projectToolUseToState,
-  workApprovalToPetRequest,
 } from './companion-projection';
 
 /** Desktop settings → pet chat LLM config. Field-for-field mirror of the
@@ -93,10 +89,6 @@ export interface CompanionControllerOptions {
   readonly port: ServicesCompanionPort;
   readonly supervisor: ConversationRunSupervisor;
   readonly settings: () => TryloSettings;
-  /** Legacy hook: resolved the workd runtime for approval.respond.
-   *  2026-09-04 (CLI 单核): the workd daemon is retired, so Work approvals
-   *  never pend here anymore — the option is kept optional for compat. */
-  readonly workRuntime?: () => { respondApproval(approvalId: string, approved: boolean): Promise<void> } | null;
   readonly isWindows?: () => boolean;
 }
 
@@ -105,21 +97,16 @@ export class CompanionController {
   private readonly port: ServicesCompanionPort;
   private readonly supervisor: ConversationRunSupervisor;
   private readonly settingsFn: () => TryloSettings;
-  private readonly workRuntimeFn: NonNullable<CompanionControllerOptions['workRuntime']>;
   private readonly isWindows: () => boolean;
 
   private readonly disposers: (() => void)[] = [];
-  private readonly pendingWorkApprovals = new Map<string, PetPermissionRequest>();
-  /** Whether a Work-surface task is currently running (tool item live,
-   *  not yet terminated by final/error/cancelled). Code runs are counted
-   *  from the supervisor; this covers the Work side. */
-  private workActive = false;
   private lastPublishedState = '';
   private lastPublishedPermissionKey = '';
   private started = false;
   private channelEnabled = false;
   private startupInFlight = false;
   private lifecycleGeneration = 0;
+  private channelTail: Promise<void> = Promise.resolve();
   private needsChannelReenable = false;
   private disposed = false;
   // Real pet status (audit §4.2 PET-P0-1): projected to the UI so a failed
@@ -134,19 +121,9 @@ export class CompanionController {
     this.port = options.port;
     this.supervisor = options.supervisor;
     this.settingsFn = options.settings;
-    this.workRuntimeFn = options.workRuntime ?? (() => null);
     this.isWindows = options.isWindows ?? (() => /win/i.test(typeof navigator !== 'undefined' ? navigator.userAgent : ''));
 
-    const workAuthority: WorkApprovalAuthority = {
-      isPending: (approvalId) => this.pendingWorkApprovals.has(approvalId),
-      respond: async (approvalId, approved) => {
-        const runtime = this.workRuntimeFn();
-        if (!runtime) throw new Error('Work runtime is not available');
-        await runtime.respondApproval(approvalId, approved);
-      },
-    };
     this.approvals = new ApprovalService({
-      work: workAuthority,
       code: {
         isPending: (requestId) =>
           this.supervisor.pendingCodePermissions().some((r) => r.requestId === requestId),
@@ -181,44 +158,6 @@ export class CompanionController {
       this.publish(projectCodeOutcome(outcome));
     },
   };
-
-  /** Work item tap — App forwards every accepted ConversationItem. */
-  onWorkItem(item: ConversationItem): void {
-    if (item.kind === 'approval') {
-      const request = workApprovalToPetRequest(item);
-      if (request) {
-        this.pendingWorkApprovals.set(request.requestId, request);
-        this.publishState(AGENT_STATES.stalled, request.title);
-      } else {
-        this.pendingWorkApprovals.delete(item.approvalId);
-      }
-      this.publishPermissions();
-      return;
-    }
-    if (item.kind === 'tool') {
-      if (item.status === 'running') {
-        this.workActive = true;
-        // summary carries the file/command the Work seat is on right now —
-        // the pet bubble shows it as the running task.
-        this.publishState(projectToolUseToState(item.tool), item.summary ?? '');
-      }
-      return;
-    }
-    if (item.kind === 'final') {
-      this.workActive = false;
-      this.publish({ type: 'assistant' });
-      return;
-    }
-    if (item.kind === 'error') {
-      this.workActive = false;
-      this.publish({ type: 'error', message: 'Work run failed' });
-      return;
-    }
-    if (item.kind === 'cancelled') {
-      this.workActive = false;
-      this.publish({ type: 'stopped' });
-    }
-  }
 
   /** Settings switch (§6.5). Non-Windows is a no-op that reports status. */
   async setEnabled(enabled: boolean): Promise<void> {
@@ -287,6 +226,14 @@ export class CompanionController {
     for (const listener of [...this.statusListeners]) listener(next);
   }
 
+  /** Keep enable/disable writes ordered without moving ownership to the UI. */
+  private sequenceChannel<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.channelTail.then(operation);
+    // Failure still reaches this operation's caller; the next operation can run.
+    this.channelTail = result.then(() => {}, () => {});
+    return result;
+  }
+
   private async startup(generation: number): Promise<void> {
     if (this.started) return;
     this.started = true;
@@ -314,18 +261,18 @@ export class CompanionController {
           if (!this.startupInFlight && this.needsChannelReenable) {
             this.needsChannelReenable = false;
             const reenableGeneration = this.lifecycleGeneration;
-            void this.port
-              .enableChannel()
+            void this.sequenceChannel(() => this.port.enableChannel())
               .then(async (status) => {
                 if (this.disposed || !this.started || reenableGeneration !== this.lifecycleGeneration) {
-                  await this.port.stop().catch(() => {});
-                  this.channelEnabled = false;
+                  if (this.disposed || !this.started)
+                    await this.sequenceChannel(() => this.port.stop()).catch(() => {});
                   return;
                 }
                 this.channelEnabled = true;
                 this.setPetStatus(normalizePetStatus(status));
               })
               .catch((error: unknown) => {
+                if (this.disposed || !this.started || reenableGeneration !== this.lifecycleGeneration) return;
                 this.channelEnabled = false;
                 this.needsChannelReenable = true;
                 this.setPetStatus(EMPTY_PET_STATUS);
@@ -354,15 +301,16 @@ export class CompanionController {
     );
     try {
       // `start()` now RETURNS the real post-enable status (PET-P0-1).
-      const status = normalizePetStatus(await this.port.start());
-      this.channelEnabled = true;
+      const status = normalizePetStatus(await this.sequenceChannel(() => this.port.start()));
       // Settings may have changed while path resolution / host readiness was
       // in flight. Do not let an obsolete startup resurrect the pet.
       if (this.disposed || generation !== this.lifecycleGeneration) {
-        await this.port.stop().catch(() => {});
-        this.channelEnabled = false;
+        // A newer enable owns this same channel. Its predecessor must not stop it.
+        if (this.disposed || !this.started)
+          await this.sequenceChannel(() => this.port.stop()).catch(() => {});
         return;
       }
+      this.channelEnabled = true;
       this.setPetStatus(status);
       this.needsChannelReenable = false;
       if (!this.petStatusValue.launched && this.petStatusValue.reasonCode) {
@@ -384,19 +332,19 @@ export class CompanionController {
   }
 
   private async shutdown(stopManager: boolean): Promise<void> {
-    if (this.channelEnabled) {
-      await this.port.stop().catch(() => {});
-    }
+    const stopChannel = this.channelEnabled;
+    // Retire the old generation before awaiting its receipt. A new enable can
+    // queue behind the stop instead of being mistaken for an already-open pet.
     this.started = false;
     this.channelEnabled = false;
     this.startupInFlight = false;
     this.needsChannelReenable = false;
     for (const dispose of this.disposers.splice(0)) dispose();
-    this.pendingWorkApprovals.clear();
     this.lastPublishedState = '';
     this.lastPublishedPermissionKey = '';
     this.setPetStatus(EMPTY_PET_STATUS);
-    if (stopManager) await this.manager.stop().catch(() => {});
+    if (stopChannel) await this.sequenceChannel(() => this.port.stop()).catch(() => {});
+    if (stopManager) await this.sequenceChannel(() => this.manager.stop()).catch(() => {});
   }
 
   /** Supervisor subscription (wired once by `watchSupervisor`, called by
@@ -458,15 +406,12 @@ export class CompanionController {
     void this.port.publish({ type: 'agentState', state, detail: effectiveDetail, level: 'info', meta: {} }).catch(() => {});
   }
 
-  /** Total tasks currently in flight across BOTH surfaces: Code runs that
-   *  are spawning/busy (from the supervisor) plus a live Work run. The pet
-   *  shows the most active one and a light "+N" hint for the rest. */
+  /** Both task surfaces execute through the supervisor. Count only its live runs. */
   private activeTaskCount(): number {
     let count = 0;
     for (const run of this.supervisor.activeCodeRuns()) {
       if (run.bindingState === 'busy' || run.bindingState === 'spawning') count += 1;
     }
-    if (this.workActive) count += 1;
     return count;
   }
 
@@ -486,7 +431,7 @@ export class CompanionController {
   }
 
   private publishPermissions(): void {
-    const requests: PetPermissionRequest[] = [...this.pendingWorkApprovals.values()];
+    const requests: PetPermissionRequest[] = [];
     for (const pending of this.supervisor.pendingCodePermissions()) {
       if (requests.some((r) => r.requestId === pending.requestId)) continue;
       requests.push({

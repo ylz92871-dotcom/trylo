@@ -18,6 +18,8 @@ export interface WatchOptions {
 }
 
 export interface WatchHandle {
+  /** Resolves when the OS watch has been established; absent on legacy stubs. */
+  readonly ready?: Promise<void>;
   /** Stop watching this specific root; releases native resources. */
   close(): Promise<void>;
   /**

@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useLayoutEffect, useState, type ReactElement } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { isTauri } from '../host-adapter/tauri-detect';
+import { dismissStartupScreen, updateStartupScreen } from './startup-screen';
 
 type StartupState =
   | { readonly kind: 'loading' }
@@ -14,6 +15,7 @@ export function NativeWorkspaceBootstrap({ children }: {
   const [state, setState] = useState<StartupState>(() => isTauri() ? { kind: 'loading' } : { kind: 'ready' });
   useEffect(() => {
     if (!isTauri()) return;
+    updateStartupScreen('正在准备本地工作区…');
     let cancelled = false;
     const timer = window.setTimeout(() => {
       cancelled = true;
@@ -29,6 +31,10 @@ export function NativeWorkspaceBootstrap({ children }: {
     }).finally(() => window.clearTimeout(timer));
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, []);
+  // After the real App has committed, release the early HTML screen. No minimum dwell.
+  useLayoutEffect(() => {
+    if (state.kind === 'ready') dismissStartupScreen();
+  }, [state.kind]);
   if (state.kind === 'failed') throw state.error; // Existing AppErrorBoundary provides recovery.
   if (state.kind === 'loading') {
     return <p role="status" aria-busy="true" style={{ padding: 32 }}>正在准备本地工作区…</p>;

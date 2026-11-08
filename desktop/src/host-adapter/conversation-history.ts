@@ -15,8 +15,9 @@ import { normalizePersistedToolResultContent } from '../tooling/tool-result-cont
 import { isTauri } from './tauri-detect';
 import { normalizeMessageIds } from '../components/chat/message-identity';
 import { parsePermissionLevel, type PermissionLevel } from '../permission/permission-policy';
-import { dedupeCapabilityNotices } from '../components/chat/capability-notice';
+import { omitOptionalCapabilityNotices } from '../components/chat/capability-notice';
 import { normalizeMemberObservations } from '../domain/member-observation';
+import { isWorkflowState } from '../domain/workflow-state';
 
 export type ConversationKind = TopLevelMode;
 
@@ -149,6 +150,11 @@ function safeMessages(value: unknown): readonly ChatMessage[] {
       && typeof message.role === 'string'
       && typeof message.createdAt === 'number';
   }).map(message => {
+    if (message.kind === 'notice' && message.workflow !== undefined) {
+      if (!isWorkflowState(message.workflow)) return { ...message, workflow: undefined, workflowSeenTraceIds: undefined, text: '流程记录无法验证，检查结果未知。' };
+      return { ...message, workflowSeenTraceIds: Array.isArray(message.workflowSeenTraceIds)
+        ? [...new Set(message.workflowSeenTraceIds.filter(id => typeof id === 'string' && id.length > 0 && id.length <= 4096))].slice(-128) : undefined };
+    }
     if (message.kind === 'subagent' && message.observations !== undefined) return { ...message, observations: normalizeMemberObservations(message.observations) };
     if (message.kind !== 'text' || message.turnTiming === undefined || isTurnTiming(message.turnTiming)) return message;
     return { ...message, turnTiming: undefined };
@@ -328,7 +334,7 @@ export function normalizeWorkspaceHistory(value: unknown): WorkspaceConversation
       conversations[session.id] = {
         session,
         ...(permissionLevel ? { permissionLevel } : {}),
-        messages: normalizeMessageIds(dedupeCapabilityNotices(dedupeCompactions(migrateToolMessages(safeMessages(record.messages))))),
+        messages: normalizeMessageIds(omitOptionalCapabilityNotices(dedupeCompactions(migrateToolMessages(safeMessages(record.messages))))),
         draft: typeof record.draft === 'string' ? record.draft : '',
         // P2-1: legacy top-level `history.artifacts` is ignored — it has no
         // conversation / run attribution and is not migrated (spec §2.5).
@@ -629,7 +635,7 @@ export function updateConversationMessages(
   if (!id) return history;
   const record = history.conversations[id];
   if (!record) return history;
-  const messages = normalizeMessageIds(dedupeCapabilityNotices(typeof updater === 'function' ? updater(record.messages) : updater));
+  const messages = normalizeMessageIds(omitOptionalCapabilityNotices(typeof updater === 'function' ? updater(record.messages) : updater));
   const session: ConversationSession = {
     ...record.session,
     title: sessionTitle(record.session.kind, messages),

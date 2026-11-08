@@ -178,4 +178,16 @@ describe('ServiceManager', () => {
     expect(h.invokes.some((i) => i.cmd === 'servicehost_stop')).toBe(true);
     expect(manager.currentHealth).toBe('stopped');
   });
+
+  it('explicit reload preserves the actual spawn settings and starts a fresh host', async () => {
+    const h = createHarness();
+    const manager = new ServiceManager(h.deps, FAST);
+    await manager.ensureRunning(SPAWN);
+    await manager.restart();
+    expect(h.invokes.filter(i => i.cmd === 'servicehost_stop')).toHaveLength(1);
+    const spawns = h.invokes.filter(i => i.cmd === 'servicehost_spawn');
+    expect(spawns).toHaveLength(2);
+    expect(spawns[1]?.args).toEqual(spawns[0]?.args);
+    expect(manager.currentHealth).toBe('ready');
+  });
 });

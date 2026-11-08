@@ -135,7 +135,7 @@ describe('TauriProcessService', () => {
       command: 'node',
       args: ['index.js'],
       label: 'trylo-core',
-      cwd: 'C:/work/demo-ws/runtime/trylo-core',
+      cwd: 'D:/CC/trylo/runtime/trylo-core',
       onOutput,
     });
     expect(handle.id).toBe('proc-trylo-1');
@@ -146,7 +146,7 @@ describe('TauriProcessService', () => {
         command: 'node',
         args: ['index.js'],
         label: 'trylo-core',
-        cwd: 'C:/work/demo-ws/runtime/trylo-core',
+        cwd: 'D:/CC/trylo/runtime/trylo-core',
       }),
     );
     // The Channel instance was created; we can simulate a stdout line.

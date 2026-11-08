@@ -159,6 +159,8 @@ export async function probeCliSessions(args: {
   readonly cliPath: FilePath;
   /** Pinned Node from the same resolution as cliPath. */
   readonly nodeProgram?: string;
+  /** Recover only this association; avoid parsing unrelated journals. */
+  readonly sessionId?: string;
   readonly timeoutMs?: number;
 }): Promise<CliSessionProbe> {
   const timeoutMs = args.timeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS;
@@ -177,7 +179,8 @@ export async function probeCliSessions(args: {
   try {
     handle = await hostAdapter.process.spawn({
       command,
-      args: [...prefix, 'session', 'list', '--json'],
+      args: [...prefix, 'session', 'list', '--json',
+        ...(args.sessionId ? ['--search', args.sessionId, '--all'] : [])],
       label: 'trylo-cli-session-probe',
       onOutput: (line) => {
         lines += 1;
@@ -198,10 +201,12 @@ export async function probeCliSessions(args: {
     };
   }
 
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   const timer = new Promise<void>((resolve) => {
-    setTimeout(resolve, timeoutMs);
+    timeout = setTimeout(resolve, timeoutMs);
   });
   await Promise.race([done, timer]);
+  clearTimeout(timeout);
   if (exitCode === null) {
     await hostAdapter.process.stop(handle.id).catch(() => undefined);
     return { ok: false, reason: 'timeout', detail: `no exit within ${timeoutMs}ms` };

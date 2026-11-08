@@ -8,10 +8,13 @@ import {
 import { IDLE_CODE_VIEW_STATE } from './runtime-types'
 import { yieldForSendFeedback } from './send-feedback'
 import { sendWorkChat } from '../work-chat/work-chat-adapter'
+import type { ResolvedToolRuntime } from '../services-host/methods'
 
 const h = vi.hoisted(() => ({ run: vi.fn(), stop: vi.fn() }))
 // This rendering/preparation fixture has no native conversation processes.
-vi.mock('../host-adapter/index', () => ({ hostAdapter: { process: { list: async () => [], stop: async () => {} } } }))
+vi.mock('../host-adapter/index', () => ({
+  hostAdapter: { process: { list: async () => [], stop: async () => {} } },
+}))
 vi.mock('./code-run-controller', () => ({
   CodeRunController: class {
     run = h.run
@@ -38,6 +41,12 @@ const request = {
   priorMessages: [],
   onEvents: () => {},
 }
+const preparedRuntime: ResolvedToolRuntime = {
+  profileId: 'code.core.v1', profileRevision: 'test', surface: 'code', mcpConfigPath: null,
+  mcpConfigHash: 'hash', permissionSettingsPath: null, permissionSettingsHash: 'hash', cliArgs: [],
+  spawnEnv: {}, serverNames: [], packageHealth: [], unavailableCapabilities: [],
+  strictMcpConfig: false, resolvedAt: 0,
+}
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
@@ -46,7 +55,7 @@ afterEach(() => {
 })
 
 it('shows the sent message and busy state while tool preparation is still pending', async () => {
-  const profile = deferred<null>()
+  const profile = deferred<ResolvedToolRuntime>()
   const supervisor = new ConversationRunSupervisor({ resolveToolRuntime: () => profile.promise })
   function Chat() {
     const [messages, setMessages] = useState<string[]>([])
@@ -73,7 +82,7 @@ it('shows the sent message and busy state while tool preparation is still pendin
   expect(h.run).not.toHaveBeenCalled()
   expect(supervisor.activeCodeRuns()).toMatchObject([{ conversationId: 'chat', runId: 'user-1' }])
   await act(async () => {
-    profile.resolve(null)
+    profile.resolve(preparedRuntime)
   })
   expect(h.run).toHaveBeenCalledOnce()
   expect(screen.getByText('Idle')).toBeTruthy()
@@ -141,16 +150,6 @@ it.each(['stopWorkspace', 'stopAll', 'removeConversation'] as const)(
     expect(supervisor.activeCodeRuns()).toEqual([])
   },
 )
-
-it('honors Stop during the legacy argument fallback as well as tool resolution', async () => {
-  const args = deferred<readonly string[]>()
-  const supervisor = new ConversationRunSupervisor({ resolveCodeCliArgs: () => args.promise })
-  const sent = supervisor.runCode('project', 'chat', request)
-  await supervisor.stopConversation('project', 'chat')
-  args.resolve([])
-  await sent
-  expect(h.run).not.toHaveBeenCalled()
-})
 
 it('releases preparing state when startup fails so the user can retry', async () => {
   h.run.mockRejectedValueOnce(new Error('spawn unavailable'))

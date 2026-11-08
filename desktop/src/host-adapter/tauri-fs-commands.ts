@@ -107,6 +107,16 @@ export const tauriFsCommands: FsCommands = {
     const raw = await invoke<number[]>('read_file_bytes', { path });
     return Uint8Array.from(raw);
   },
+  // Remote file reads use a dedicated native containment boundary.
+  readRemoteArtifact: async (workspaceRoot, relativePath) => {
+    if (!isTauri()) throw new Error('Remote artifact handle verification requires the native host');
+    const raw = await invoke<number[]>('read_remote_artifact', { workspaceRoot, relativePath });
+    return Uint8Array.from(raw);
+  },
+  listRemoteArtifacts: async (workspaceRoot) => {
+    if (!isTauri()) throw new Error('Remote artifact handle verification requires the native host');
+    return invoke<readonly import('./commands').RemoteArtifactFile[]>('list_remote_artifacts', { workspaceRoot });
+  },
   // v1.16.x: binary file write for remote (mobile) image attachments. The
   // phone sends a base64 data URL; we decode it in the renderer and hand the
   // raw bytes to the host, which writes them to disk. The browser dev backend
@@ -134,6 +144,8 @@ export const tauriFsCommands: FsCommands = {
       root: path,
       maxFiles: options?.maxFiles,
       maxDepth: options?.maxDepth,
+      excludeDirs: options?.excludeDirs,
+      extensions: options?.extensions,
     });
   },
 };
@@ -144,16 +156,20 @@ export const tauriFsCommands: FsCommands = {
  *  is authoritative and uses `symlink_metadata`). */
 async function devScanTree(
   root: FilePath,
-  options: { maxFiles?: number; maxDepth?: number } | undefined,
+  options: import('./commands').ScanTreeOptions | undefined,
 ): Promise<ScanTreeResult> {
   const maxFiles = Math.min(options?.maxFiles ?? 1000, 10_000);
   const maxDepth = Math.min(options?.maxDepth ?? 12, 32);
   const files: FileStat[] = [];
   const warnings: string[] = [];
   let truncated = false;
+  let visited = 0;
+  const excluded = new Set(options?.excludeDirs?.map((name) => name.toLowerCase()));
+  const extensions = options?.extensions && new Set(options.extensions);
 
   const walk = async (dir: FilePath, depth: number): Promise<void> => {
-    if (depth > maxDepth || truncated) return;
+    if (depth > maxDepth) { truncated = true; return; }
+    if (truncated) return;
     let entries: readonly DirEntry[];
     try {
       entries = await tauriFsCommands.listDir(dir);
@@ -162,10 +178,13 @@ async function devScanTree(
       return;
     }
     for (const entry of entries) {
+      if (++visited > 100_000) { truncated = true; return; }
       if (files.length >= maxFiles) { truncated = true; return; }
       if (entry.isDirectory) {
+        if (excluded.has(entry.name.toLowerCase())) continue;
         await walk(entry.path, depth + 1);
       } else {
+        if (extensions && !extensions.has(entry.path.toLowerCase().match(/\.[^./\\]+$/)?.[0] ?? '')) continue;
         try {
           const stat = await tauriFsCommands.statFile(entry.path);
           files.push(stat);

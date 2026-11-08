@@ -1,94 +1,66 @@
-import { describe, expect, it } from 'vitest';
-import {
-  resetCliRuntimeGuardForTests,
-  verifyCliRuntime,
-} from './cli-runtime-guard';
-import type { CliRuntimeProbeResult } from '../host-adapter/cli-runtime-adapter';
-
-const LEGACY_ENTRY = 'D:/tools/cli.js';
-const V1_ENTRY = 'D:/tools/new-cli.js';
-
-function probeOk(kind: 'legacy' | 'trylo-v1'): Extract<CliRuntimeProbeResult, { ok: true }> {
-  return { ok: true, kind, version: 'x', evidence: `--help → ${kind}` };
-}
-
-describe('cli-runtime-guard (Round-3 P1-10: ask the binary, not the filename)', () => {
-  it('blocks a positively identified old v1 build missing the requested context flags', async () => {
-    resetCliRuntimeGuardForTests();
-    const oldProbe=async():Promise<CliRuntimeProbeResult>=>({...probeOk('trylo-v1'),supportedFlags:['--model']});
-    expect(await verifyCliRuntime({protocol:'trylo-v1',entryScript:V1_ENTRY,nodeProgram:'node',probe:oldProbe})).toEqual({ok:true});
-    const verdict=await verifyCliRuntime({protocol:'trylo-v1',entryScript:V1_ENTRY,nodeProgram:'node',requiredFlags:['--context-window','--model-context-window'],probe:oldProbe});
-    expect(verdict.ok).toBe(false);if(!verdict.ok)expect(verdict.message).toMatch(/npm run build/);
-  });
-  it('passes when the binary announces the expected kind', async () => {
-    resetCliRuntimeGuardForTests();
-    const verdict = await verifyCliRuntime({
-      protocol: 'legacy-stream-json',
-      entryScript: LEGACY_ENTRY,
-      probe: async () => probeOk('legacy'),
-    });
-    expect(verdict).toEqual({ ok: true });
-  });
-
-  it('BLOCKS the audit-P0 shape: legacy protocol configured, new binary on disk', async () => {
-    resetCliRuntimeGuardForTests();
-    const verdict = await verifyCliRuntime({
-      protocol: 'legacy-stream-json',
-      entryScript: V1_ENTRY,
-      probe: async () => probeOk('trylo-v1'),
-    });
-    expect(verdict.ok).toBe(false);
-    if (!verdict.ok) {
-      expect(verdict.message).toMatch(/自检不通过/);
-      expect(verdict.message).toMatch(/legacy/);
-    }
-  });
-
-  it('BLOCKS a missing entry instead of spawning into a cryptic failure', async () => {
-    resetCliRuntimeGuardForTests();
-    const missing: CliRuntimeProbeResult = {
-      ok: false,
-      code: 'not_found',
-      detail: 'no file at D:/tools/gone.js',
-    };
-    const verdict = await verifyCliRuntime({
-      protocol: 'trylo-v1',
-      entryScript: 'D:/tools/gone.js',
-      probe: async () => missing,
-    });
-    expect(verdict.ok).toBe(false);
-  });
-
-  it('proceeds on doubt (timeout): the spawn stays the final arbiter', async () => {
-    resetCliRuntimeGuardForTests();
-    const timeout: CliRuntimeProbeResult = {
-      ok: false,
-      code: 'timeout',
-      detail: 'no exit within 8000ms',
-    };
-    const verdict = await verifyCliRuntime({
-      protocol: 'trylo-v1',
-      entryScript: V1_ENTRY,
-      probe: async () => timeout,
-    });
-    expect(verdict).toEqual({ ok: true });
-  });
-
-  it('memoizes per entry: the second send spawns no probe', async () => {
-    resetCliRuntimeGuardForTests();
-    let calls = 0;
-    const probe = async (): Promise<CliRuntimeProbeResult> => {
-      calls += 1;
-      return probeOk('legacy');
-    };
-    await verifyCliRuntime({ protocol: 'legacy-stream-json', entryScript: LEGACY_ENTRY, probe });
-    await verifyCliRuntime({ protocol: 'legacy-stream-json', entryScript: LEGACY_ENTRY, probe });
-    expect(calls).toBe(1);
-  });
-
-  it('rejects an empty cliPath with an actionable message', async () => {
-    resetCliRuntimeGuardForTests();
-    const verdict = await verifyCliRuntime({ protocol: 'legacy-stream-json', entryScript: '  ' });
-    expect(verdict.ok).toBe(false);
-  });
-});
+import { beforeEach, expect, it, vi } from 'vitest'
+import { resetCliRuntimeGuardForTests, verifyCliRuntime } from './cli-runtime-guard'
+import type { CliRuntimeProbeResult } from '../host-adapter/cli-runtime-probe-types'
+import { probeResultOfBanners } from '../host-adapter/cli-runtime-probe'
+beforeEach(resetCliRuntimeGuardForTests)
+const entryScript = 'D:/new/cli/main.js'
+const good: CliRuntimeProbeResult = { ok: true, kind: 'trylo-v1', version: '1', evidence: 'help' }
+it('rejects an absent entry without probing', async () => {
+  const probe = vi.fn()
+  expect((await verifyCliRuntime({ entryScript: '', probe })).ok).toBe(false)
+  expect(probe).not.toHaveBeenCalled()
+})
+it('memoizes the exact interpreter and entry', async () => {
+  const probe = vi.fn(async () => good)
+  for (let i = 0; i < 2; i++)
+    expect(await verifyCliRuntime({ entryScript, nodeProgram: 'a', probe })).toEqual({ ok: true })
+  expect(probe).toHaveBeenCalledOnce()
+  await verifyCliRuntime({ entryScript, nodeProgram: 'b', probe })
+  expect(probe).toHaveBeenCalledTimes(2)
+})
+it.each(['incompatible', 'not_found'] as const)('blocks proven %s', async (code) => {
+  expect(
+    (
+      await verifyCliRuntime({
+        entryScript,
+        probe: async () => ({ ok: false, code, detail: code }),
+      })
+    ).ok,
+  ).toBe(false)
+})
+it.each(['timeout', 'spawn_failed', 'unrecognized'] as const)(
+  'preserves uncertainty for %s',
+  async (code) => {
+    expect(
+      await verifyCliRuntime({
+        entryScript,
+        probe: async () => ({ ok: false, code, detail: code }),
+      }),
+    ).toEqual({ ok: true })
+  },
+)
+it('blocks a known build lacking requested flags', async () => {
+  const probe = async () => ({ ...good, supportedFlags: ['--model'] })
+  expect(
+    (await verifyCliRuntime({ entryScript, requiredFlags: ['--context-window'], probe })).ok,
+  ).toBe(false)
+  expect(await verifyCliRuntime({ entryScript, requiredFlags: ['--model'], probe })).toEqual({
+    ok: true,
+  })
+})
+it('recognizes the retired binary as incompatible', () => {
+  expect(
+    probeResultOfBanners({ versionBanner: '2.1.88-trylo (Claude Code)', exitCode: 0 }),
+  ).toMatchObject({ ok: false, code: 'incompatible' })
+  expect(
+    probeResultOfBanners({
+      versionBanner: '',
+      helpBanner: 'trylo - learning agent CLI',
+      exitCode: 0,
+    }),
+  ).toMatchObject({ ok: true, kind: 'trylo-v1' })
+  expect(probeResultOfBanners({ versionBanner: '1.2.3', exitCode: 0 })).toMatchObject({
+    ok: false,
+    code: 'unrecognized',
+  })
+})

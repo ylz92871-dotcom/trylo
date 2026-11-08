@@ -121,34 +121,6 @@ export function projectCodeOutcome(outcome: CodeRunOutcome): CompanionPublishPay
   }
 }
 
-// ── Work item flow (spec §6.3: Work item 状态 → 同一张映射表) ────────
-
-/** The approval item the Work event presenter emits (@trylo/work). */
-export interface WorkApprovalItemLike {
-  readonly kind: 'approval';
-  readonly approvalId: string;
-  readonly type?: string | undefined;
-  readonly description: string;
-  readonly status: 'pending' | 'approved' | 'denied';
-  readonly autoApproved?: boolean;
-}
-
-/** approval(pending) item → the pet permission request. `requestId` comes
- *  from the approval itself (the workd approvalId) — never from the UI's
- *  current selection (spec §6.3 双工作区红线). Returns null for resolved
- *  / auto-approved items. */
-export function workApprovalToPetRequest(item: WorkApprovalItemLike): PetPermissionRequest | null {
-  if (item.status !== 'pending' || item.autoApproved === true) return null;
-  return {
-    requestId: item.approvalId,
-    title: item.type || 'Permission required',
-    detail: item.description,
-    description: item.description,
-    category: 'edit',
-    approvalState: 'pending',
-  };
-}
-
 /** Build the permissionRequestState payload from the CURRENT pending set
  *  (bridge picks the first pending entry onto its UDP envelope). Publishing
  *  the (possibly empty) full set is also how approvals get cleared. */
@@ -158,12 +130,3 @@ export function permissionRequestStatePayload(
   return { type: 'permissionRequestState', requests };
 }
 
-/** Work tool item running → working animation. Commands run in a
- *  terminal; everything else reads as writing. */
-export function workToolItemToState(title: string): string {
-  const t = String(title || '').toLowerCase();
-  if (t.includes('command') || t.includes('terminal') || t.includes('bash') || t.includes('shell')) {
-    return AGENT_STATES.runningCommand;
-  }
-  return AGENT_STATES.writingFiles;
-}

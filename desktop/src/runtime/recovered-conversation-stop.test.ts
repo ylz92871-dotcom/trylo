@@ -6,6 +6,63 @@ import { RecoveredConversationStop } from './recovered-conversation-stop';
 const target: LiveProcessInfo = { id: 'old-root' as ProcessId, pid: 1, label: 'trylo-cli-v1', command: 'node',
   metadata: { projectKey: 'project', conversationId: 'conversation', runId: 'old-turn' } };
 
+it('keeps a read-only owner inspection invisible while retaining its internal send hold', async () => {
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const changed = vi.fn();
+  const owner = new RecoveredConversationStop(async () => ({
+    list: async () => { await pending; return []; }, stop: async () => {},
+  }), changed);
+  const checking = owner.inspect('project', 'conversation', new Set());
+  try {
+    expect(owner.isHeld('project', 'conversation')).toBe(true);
+    expect(owner.view('project', 'conversation')).toBeNull();
+  } finally {
+    release();
+    await checking;
+  }
+  expect(changed).not.toHaveBeenCalled();
+  expect(owner.isHeld('project', 'conversation')).toBe(false);
+});
+
+it('retains the proven failure during a reinspection and publishes only changed ownership facts', async () => {
+  let broken = true;
+  const changed = vi.fn();
+  const owner = new RecoveredConversationStop(async () => ({
+    list: async () => { if (broken) throw new Error('native read unavailable'); return []; },
+    stop: async () => {},
+  }), changed);
+  await expect(owner.inspect('project', 'conversation', new Set())).rejects.toThrow('native read unavailable');
+  expect(owner.view('project', 'conversation')).toMatchObject({ recoveryState: { kind: 'unavailable' } });
+  changed.mockClear();
+  const retry = owner.inspect('project', 'conversation', new Set());
+  const rejected = expect(retry).rejects.toThrow('native read unavailable');
+  expect(owner.view('project', 'conversation')).toMatchObject({ recoveryState: { kind: 'unavailable' } });
+  await rejected;
+  expect(changed).not.toHaveBeenCalled();
+  broken = false;
+  await expect(owner.inspect('project', 'conversation', new Set())).resolves.toBe('absent');
+  expect(changed).toHaveBeenCalledOnce();
+  expect(owner.view('project', 'conversation')).toBeNull();
+});
+
+it('does not let a silent conversation inspection hide an actual bulk Stop', async () => {
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const owner = new RecoveredConversationStop(async () => ({
+    list: async () => { await pending; return []; }, stop: async () => {},
+  }), () => {});
+  const stopping = owner.stopAll(new Set());
+  const checking = owner.inspect('project', 'conversation', new Set());
+  try {
+    expect(owner.view('project', 'conversation')).toMatchObject({ running: true, sendable: false });
+  } finally {
+    release();
+    await Promise.all([stopping, checking]);
+  }
+  expect(owner.view('project', 'conversation')).toBeNull();
+});
+
 it('refuses a peer team lease even when this shell lists no roots, and never pretends to stop that peer', async () => {
   const stop = vi.fn(async () => {}); let owned = true;
   const owner = new RecoveredConversationStop(async () => ({ list: async () => [], stop, hasTeamOwner: async () => owned }), () => {});

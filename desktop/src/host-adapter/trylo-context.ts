@@ -206,7 +206,7 @@ export function createTryloContext(opts: CreateContextOptions): TryloHandlerCont
       return {
         ok: true,
         message:
-          'Trylo Core not yet wired (Phase 2 stub). See spike-results/phase-2-plan.md §3 task 2.4.',
+          'Trylo Core not yet wired (Phase 2 stub). See docs/spikes/phase-2-plan.md §3 task 2.4.',
       };
     },
     async clearApiKey(): Promise<void> {

@@ -40,6 +40,7 @@ it('delivers later short reasoning through the real CLI before the HTTP stream f
     nodeSource: 'env',
   })
   let finishResponse: (() => void) | undefined
+  let sendReasoning: ((text: string) => void) | undefined
   let responseEnded = false
   const server = createServer((request, response) => {
     request.resume()
@@ -49,8 +50,10 @@ it('delivers later short reasoning through the real CLI before the HTTP stream f
         response.write(
           'data: ' + JSON.stringify({ choices: [{ delta, finish_reason: null }] }) + '\n\n',
         )
-      frame({ reasoning_content: 'first' })
-      frame({ reasoning_content: ' second' })
+      sendReasoning = (text) => {
+        frame({ reasoning_content: text })
+      }
+      sendReasoning('first')
       finishResponse = () => {
         if (responseEnded) return
         frame({ content: 'done' })
@@ -86,7 +89,6 @@ it('delivers later short reasoning through the real CLI before the HTTP stream f
         cwd,
         cliPath: entry,
         cliNodeProgram: process.execPath,
-        cliRuntimeProtocol: 'trylo-v1',
         apiFormat: 'openai',
         apiHost: `http://127.0.0.1:${address.port}/v1`,
         apiModel: 'cadence',
@@ -94,13 +96,34 @@ it('delivers later short reasoning through the real CLI before the HTTP stream f
       },
       onEvents: (batch) => events.push(...batch),
     })
+    await vi.waitFor(() => expect(finishResponse).toBeTypeOf('function'), { timeout: 45000 })
     await vi.waitFor(
       () =>
         expect(
-          events.some((event) => event.type === 'thinking' && event.preview === 'first second'),
+          events.some((event) => event.type === 'thinking' && event.preview === 'first'),
+          JSON.stringify({
+            state: controller.getViewState(),
+            events,
+            stderr: service.stderr,
+            wire: service.wire.filter((line) => line.startsWith('{')).slice(-8),
+          }),
         ).toBe(true),
-      { timeout: 10000 },
+      { timeout: 1000 },
     )
+    for (const fragment of [' second', ' third']) {
+      sendReasoning!(fragment)
+      const expected = fragment === ' second' ? 'first second' : 'first second third'
+      await vi.waitFor(
+        () =>
+          expect(
+            events.some(
+              (event) => event.type === 'thinking' && event.preview === expected && event.partial,
+            ),
+          ).toBe(true),
+        { timeout: 1000 },
+      )
+      expect(responseEnded).toBe(false)
+    }
     expect(responseEnded).toBe(false)
     expect(events.some((event) => event.type === 'loop_end')).toBe(false)
     finishResponse!()
@@ -119,4 +142,4 @@ it('delivers later short reasoning through the real CLI before the HTTP stream f
     server.closeAllConnections()
     await new Promise<void>((done) => server.close(() => done()))
   }
-}, 30000)
+}, 70000)

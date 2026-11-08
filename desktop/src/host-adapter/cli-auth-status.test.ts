@@ -75,7 +75,7 @@ const {
   readCliProviders,
 } = await import('./cli-auth-status');
 
-const CLI_PATH = 'C:/work/demo-ws/new trylo cli/dist/cmd/trylo/main.js' as never;
+const CLI_PATH = 'D:/CC/trylo/new trylo cli/dist/cmd/trylo/main.js' as never;
 
 /** Drive a status probe: spawn it, then finish it with the given output. */
 function withProbe<T>(

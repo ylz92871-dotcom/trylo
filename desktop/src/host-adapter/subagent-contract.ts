@@ -1,10 +1,10 @@
 /** Desktop's reading of additive CLI budget facts; no dependency on CLI code. */
 export interface SubagentBudget {
-  readonly tokenLimit: number;
+  readonly tokenLimit?: number;
   readonly tokensUsed: number;
-  readonly tokensRemaining: number;
-  readonly timeoutMs: number;
-  readonly timeRemainingMs: number;
+  readonly tokensRemaining?: number;
+  readonly timeoutMs?: number;
+  readonly timeRemainingMs?: number;
   readonly timeoutMode: 'wall' | 'active';
 }
 export type SubagentInputMode = 'append' | 'replace_queued' | 'restart';
@@ -25,7 +25,10 @@ export function isSubagentToolActivity(value: unknown): value is SubagentToolAct
 export function isSubagentBudget(value: unknown): value is SubagentBudget {
   if (value === null || typeof value !== 'object') return false;
   const budget = value as Record<string, unknown>;
-  return ['tokenLimit', 'tokensUsed', 'tokensRemaining', 'timeoutMs', 'timeRemainingMs']
-    .every(key => { const count = budget[key]; return typeof count === 'number' && Number.isFinite(count) && count >= 0; })
+  const count = (value: unknown): boolean => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+  return count(budget.tokensUsed)
+    && ['tokenLimit', 'tokensRemaining', 'timeoutMs', 'timeRemainingMs'].every(key => budget[key] === undefined || count(budget[key]))
+    && (budget.tokenLimit === undefined) === (budget.tokensRemaining === undefined)
+    && (budget.timeoutMs === undefined) === (budget.timeRemainingMs === undefined)
     && (budget.timeoutMode === 'active' || budget.timeoutMode === 'wall');
 }

@@ -27,6 +27,10 @@ export interface FsCommands {
   // returns a base64-encoded string (so the test suite
   // doesn't need a real FS).
   readFileBytes(path: FilePath): Promise<Uint8Array>;
+  /** Remote clients may read only verified regular files in workspace .trylo/out. */
+  readRemoteArtifact?(workspaceRoot: FilePath, relativePath: string): Promise<Uint8Array>;
+  /** Bounded, native-verified remote metadata; never falls back to generic scanning. */
+  listRemoteArtifacts?(workspaceRoot: FilePath): Promise<readonly RemoteArtifactFile[]>;
   /** Write raw bytes to `path` from a base64 string (e.g. a remote image
    *  attachment). The Tauri command decodes the base64 on the host; the
    *  browser dev backend is read-only and throws. */
@@ -36,9 +40,19 @@ export interface FsCommands {
   scanTree(path: FilePath, options?: ScanTreeOptions): Promise<ScanTreeResult>;
 }
 
+export interface RemoteArtifactFile {
+  readonly relativePath: string;
+  readonly size: number;
+  readonly modifiedMs: number;
+}
+
 export interface ScanTreeOptions {
   readonly maxFiles?: number;
   readonly maxDepth?: number;
+  /** Directory basenames to prune, case-insensitive; symlinks are never followed. */
+  readonly excludeDirs?: readonly string[];
+  /** Optional lower-case suffixes, including the dot. Filtering happens on the host. */
+  readonly extensions?: readonly string[];
 }
 
 // P2-1 (spec §7.3): the legacy `GitCommands` shape is fully replaced by the

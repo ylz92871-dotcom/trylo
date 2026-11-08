@@ -10,8 +10,6 @@ import {
   projectCodeOutcome,
   projectLoopEventToState,
   projectToolUseToState,
-  workApprovalToPetRequest,
-  type WorkApprovalItemLike,
 } from './companion-projection';
 
 describe('AGENT_STATES vocabulary', () => {
@@ -80,40 +78,13 @@ describe('projectCodeOutcome (table)', () => {
   });
 });
 
-describe('work approvals', () => {
-  const pending: WorkApprovalItemLike = {
-    kind: 'approval',
-    approvalId: 'ap-1',
-    type: 'bash',
-    description: 'wants to run npm test',
-    status: 'pending',
-  };
-
-  it('maps a pending approval to a pet request keyed by the approval id itself', () => {
-    expect(workApprovalToPetRequest(pending)).toEqual({
-      requestId: 'ap-1',
-      title: 'bash',
-      detail: 'wants to run npm test',
-      description: 'wants to run npm test',
-      category: 'edit',
-      approvalState: 'pending',
-    });
-  });
-
-  it('ignores resolved and auto-approved items', () => {
-    expect(workApprovalToPetRequest({ ...pending, status: 'approved' })).toBeNull();
-    expect(workApprovalToPetRequest({ ...pending, status: 'denied' })).toBeNull();
-    expect(workApprovalToPetRequest({ ...pending, autoApproved: true })).toBeNull();
-  });
-
-  it('permissionRequestStatePayload carries the full set (empty clears)', () => {
-    const requests = (workApprovalToPetRequest(pending) ? [workApprovalToPetRequest(pending)!] : []);
-    expect(permissionRequestStatePayload(requests)).toEqual({ type: 'permissionRequestState', requests });
+describe('permission state payload', () => {
+  it('an empty current permission set clears the companion', () => {
     expect(permissionRequestStatePayload([])).toEqual({ type: 'permissionRequestState', requests: [] });
   });
 });
 
-describe('workToolItemToState replaced by projectToolUseToState', () => {
+describe('CLI tool activity projection', () => {
   it('command-ish tools read as terminal, others as writing/thinking', () => {
     expect(projectToolUseToState('Bash')).toBe('running_command');
     expect(projectToolUseToState('Write')).toBe('writing_files');

@@ -114,8 +114,8 @@ vi.mock('./index', () => ({ hostAdapter: { process: h.service, fs: h.fs } }));
 
 const { probeCliRuntimeKind } = await import('./cli-runtime-probe');
 
-const V1_ENTRY = 'C:/work/demo-ws/new trylo cli/dist/cmd/trylo/main.js';
-const LEGACY_ENTRY = 'C:/trylo-cli/cli.js';
+const V1_ENTRY = 'D:/CC/trylo/new trylo cli/dist/cmd/trylo/main.js';
+const LEGACY_ENTRY = 'D:/CC/trylo/trylo cli/cli.js';
 
 const V1_HELP = ['trylo - learning agent CLI', '', 'Usage:', '  trylo   start the interactive REPL'];
 const LEGACY_HELP = ['Usage: claude [options] [command] [prompt]', '', 'Claude Code - starts an'];

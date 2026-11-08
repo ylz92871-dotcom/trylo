@@ -1,5 +1,5 @@
 // Trylo Desktop — Folder picker. See
-// spike-results/phase-2-ui-redesign.md §4.
+// docs/spikes/phase-2-ui-redesign.md §4.
 //
 // v1.10.1: reverts the v1.10 rfd-based Rust command. Tauri 2
 // has `dialogs: true` by default on the webview, so a
@@ -19,7 +19,7 @@ import type { FilePath } from './types';
 export async function pickFolder(): Promise<FilePath | null> {
   const picked = window.prompt(
     'Open folder — enter an absolute path:',
-    'C:/work/demo-ws',
+    'D:/CC/trylo',
   );
   return picked && picked.trim() !== '' ? (picked.trim() as FilePath) : null;
 }

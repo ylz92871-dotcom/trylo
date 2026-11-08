@@ -22,6 +22,16 @@ beforeEach(() => {
 });
 
 describe('tauriAttachmentService', () => {
+  it('materializes clipboard bytes using the native staging boundary', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({ relative_path: '.trylo/attachments/conv/att/shot.png', name: 'shot.png', size: 3 });
+    expect(await tauriAttachmentService.stageAttachmentBytes({
+      workspaceRoot: 'D:/proj', conversationId: 'conv', attachmentId: 'att',
+      name: 'shot.png', bytes: new Uint8Array([1, 2, 3]),
+    })).toEqual({ relativePath: '.trylo/attachments/conv/att/shot.png', name: 'shot.png', size: 3 });
+    expect(invoke).toHaveBeenCalledWith('stage_attachment_bytes', {
+      workspaceRoot: 'D:/proj', conversationId: 'conv', attachmentId: 'att', name: 'shot.png', bytes: [1, 2, 3],
+    });
+  });
   it('invokes stage_attachment with camelCase args and normalizes the result', async () => {
     (invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       relative_path: '.trylo/attachments/conv-1/att_1/spec.md',

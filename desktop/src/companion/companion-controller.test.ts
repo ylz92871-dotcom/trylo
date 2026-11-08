@@ -56,7 +56,6 @@ function createHarness(options?: {
   const supervisor = new ConversationRunSupervisor();
   const paths = vi.fn(options?.paths ?? (async () => ({ sidecarsDir: '/s', appDataDir: '/a' })));
   const port = new ServicesCompanionPort(manager, paths, () => '/ws');
-  const respondApproval = vi.fn().mockResolvedValue(undefined);
   const settings: TryloSettings = {
     ...settingsDefaults,
     apiHost: 'https://api.example.com',
@@ -69,10 +68,9 @@ function createHarness(options?: {
     port,
     supervisor,
     settings: () => settings,
-    workRuntime: () => ({ respondApproval }),
     isWindows: options?.isWindows ?? (() => true),
   });
-  return { controller, manager, supervisor, sent, invoke, frameHandler: () => frameHandler, respondApproval };
+  return { controller, manager, supervisor, port, sent, invoke, frameHandler: () => frameHandler };
 }
 
 function waitFor(fn: () => boolean, what: string): Promise<void> {
@@ -156,54 +154,23 @@ describe('CompanionController projection taps', () => {
     await waitFor(() => h.sent.some((s) => s.method === 'pet.publish' && (s.params as { type?: string }).type === 'assistant'), 'assistant publish');
   });
 
-  it('work approval items drive permissionRequestState (pending then cleared)', async () => {
+  it('host.permissionDecision reaches the originating CLI permission owner', async () => {
     const h = createHarness();
+    vi.spyOn(h.supervisor, 'pendingCodePermissions').mockReturnValue([{
+      requestId: 'cli-request-7', processId: 'origin-process', projectKey: 'p',
+      conversationId: 'c', toolName: 'Bash', input: {}, at: 1,
+    }]);
+    const respond = vi.spyOn(h.supervisor, 'respondCodePermission').mockResolvedValue(true);
     await h.controller.setEnabled(true);
-    const base = {
-      id: 'approval:r:ap-1',
-      at: 0,
-      conversationId: 'c',
-      approvalId: 'ap-1',
-      type: 'bash',
-      description: 'run tests',
-      runId: 'r',
-      taskId: 't',
-      turnId: undefined,
-    };
-    h.controller.onWorkItem({ kind: 'approval', ...base, status: 'pending' });
-    await waitFor(
-      () =>
-        h.sent.some(
-          (s) =>
-            s.method === 'pet.publish' &&
-            (s.params as { type?: string; requests?: { requestId: string }[] }).type === 'permissionRequestState' &&
-            ((s.params as { requests?: { requestId: string }[] }).requests ?? []).some((r) => r.requestId === 'ap-1'),
-        ),
-      'permissionRequestState with ap-1',
-    );
-    h.controller.onWorkItem({ kind: 'approval', ...base, status: 'approved' });
-    await waitFor(
-      () =>
-        h.sent.some(
-          (s) =>
-            s.method === 'pet.publish' &&
-            (s.params as { type?: string; requests?: unknown[] }).type === 'permissionRequestState' &&
-            ((s.params as { requests?: unknown[] }).requests ?? []).length === 0,
-        ),
-      'cleared permissionRequestState',
-    );
+    h.frameHandler()!({ payload: encodeFrame({ version: 1, type: 'event',
+      topic: 'host.permissionDecision', payload: { requestId: 'cli-request-7', decision: 'allow' } }) });
+    await waitFor(() => respond.mock.calls.length > 0, 'CLI permission response');
+    expect(respond).toHaveBeenCalledWith('cli-request-7', true);
   });
 
-  it('host.permissionDecision routes to the work runtime by approvalId', async () => {
-    const h = createHarness();
-    await h.controller.setEnabled(true);
-    h.controller.onWorkItem({ kind: 'approval', id: 'a', at: 0, conversationId: 'c', approvalId: 'ap-7', type: '', description: 'd', status: 'pending', runId: 'r', taskId: 't', turnId: undefined });
-    const handler = h.frameHandler();
-    expect(handler).toBeTruthy();
-    handler!({ payload: encodeFrame({ version: 1, type: 'event', topic: 'host.permissionDecision', payload: { requestId: 'ap-7', decision: 'allow' } }) });
-    await waitFor(() => h.respondApproval.mock.calls.length > 0, 'workd respondApproval');
-    expect(h.respondApproval).toHaveBeenCalledWith('ap-7', true);
-  });
+
+
+
 });
 
 describe('CompanionController pet status projection (audit PET-P0-1/P0-2)', () => {
@@ -310,5 +277,85 @@ describe('composeLifecycleObservers', () => {
     composed.onEvents(scope, []);
     await composed.onRunTerminal(scope, 'completed');
     expect(calls).toEqual(['a-start', 'b-start', 'a-events', 'b-events', 'a-terminal', 'b-terminal']);
+  });
+});
+
+
+describe('CompanionController saved-toggle ordering', () => {
+  const running: PetStatusSnapshot = {
+    enabled: true,
+    exeFound: true,
+    launchAttempted: true,
+    launched: true,
+    chatConnected: true,
+    exePath: 'TryloDesktopPet.exe',
+    reasonCode: '',
+  };
+
+  it('keeps the newest enable when an older startup settles after off/on', async () => {
+    const h = createHarness();
+    let live = false,
+      release!: () => void;
+    vi.spyOn(h.port, 'publish').mockResolvedValue();
+    vi.spyOn(h.port, 'stop').mockImplementation(async () => {
+      live = false;
+    });
+    vi.spyOn(h.port, 'start')
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            release = () => {
+              live = true;
+              resolve(running);
+            };
+          }),
+      )
+      .mockImplementation(async () => {
+        live = true;
+        return running;
+      });
+    const first = h.controller.setEnabled(true);
+    await waitFor(() => !!release, 'first startup');
+    await h.controller.setEnabled(false);
+    const newest = h.controller.setEnabled(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    release();
+    await Promise.all([first, newest]);
+    expect(live).toBe(true);
+    expect(h.controller.petStatus().enabled).toBe(true);
+    await h.controller.dispose();
+  });
+
+  it('honors enable while the previous disable receipt is still pending', async () => {
+    const h = createHarness();
+    let live = false,
+      release!: () => void;
+    vi.spyOn(h.port, 'publish').mockResolvedValue();
+    vi.spyOn(h.port, 'start').mockImplementation(async () => {
+      live = true;
+      return running;
+    });
+    const stop = vi.spyOn(h.port, 'stop').mockImplementation(async () => {
+      live = false;
+    });
+    await h.controller.setEnabled(true);
+    stop.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => {
+            live = false;
+            resolve();
+          };
+        }),
+    );
+    const disabling = h.controller.setEnabled(false);
+    await waitFor(() => !!release, 'pending disable');
+    const enabling = h.controller.setEnabled(true);
+    release();
+    await Promise.all([disabling, enabling]);
+    expect(live).toBe(true);
+    expect(h.controller.petStatus().enabled).toBe(true);
+    await h.controller.dispose();
   });
 });

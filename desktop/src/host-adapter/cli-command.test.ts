@@ -29,3 +29,13 @@ it('pre-cancelled queries never spawn and synchronous spawn exceptions remain ty
   expect(calls).toBe(0);
   expect(await runCliCommand({ ...paths, process, args: [] })).toEqual({ ok: false, reason: 'spawn_failed' });
 });
+it('a host-supplied native storage namespace reaches the owned CLI child unchanged', async () => {
+  const env = { TRYLO_HERMES_STORAGE_ROOT: 'D:/native-app-data/Trylo' };let observed: Readonly<Record<string, string>> | undefined;
+  const process: Pick<ProcessService, 'spawn' | 'stop'> = { async spawn(options) {
+    observed = options.env;options.onOutput('{"ok":true}');
+    options.onExit?.({ id: 'owned', pid: 1, code: 0, signal: null });
+    return { id: 'owned', pid: 1, label: options.label, command: options.command };
+  }, stop: async () => {} };
+  expect(await runCliCommand({ ...paths, process, env, args: ['learn', 'skill', 'native', 'pendingList', '-'] })).toEqual({ ok: true, stdout: '{"ok":true}' });
+  expect(observed).toEqual(env);
+});

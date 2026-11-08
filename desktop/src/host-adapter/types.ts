@@ -41,7 +41,7 @@ export interface DirEntry {
 
 // ── File watcher ───────────────────────────────────────────────────────────
 
-export type FileChangeKind = 'created' | 'modified' | 'deleted' | 'renamed';
+export type FileChangeKind = 'created' | 'modified' | 'deleted' | 'renamed' | 'rescan';
 
 export interface FileChangeEvent {
   readonly kind: FileChangeKind;

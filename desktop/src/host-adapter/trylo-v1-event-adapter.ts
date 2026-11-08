@@ -19,6 +19,7 @@
 
 import type { LoopEvent } from './loop-events';
 import { FILE_MUTATION_SCHEMA } from '../tooling/file-mutation-facts';
+import { ROUTING_RECEIPT_SCHEMA } from '../domain/routing-receipt';
 import { parseCliV1Event, type CliV1Event, type CliV1Rejected, type CliV1Usage } from './trylo-v1-protocol';
 import { desktopV1Tool } from './trylo-v1-tool';
 import { ThinkScrubber } from './think-scrubber';
@@ -211,6 +212,10 @@ export class TryloV1EventAdapter {
         if (event.kind === 'end') this.activeSubagents.delete(event.id);
         return [{ ...event, seq, ts, source: 'trylo-v1' }];
       }
+      case 'goal_state': return [{ type: 'goal_state', seq, ts, goal: event.goal }];
+      case 'workflow_state':
+        if (this.sessionId !== null && event.sessionId !== this.sessionId) return [this.warn('workflow_identity_mismatch', '流程进度与当前会话不一致，已忽略。')];
+        return [{ type: 'workflow_state', seq, ts, workflow: event }];
       case 'run_start':
         return this.onRunStart(event, seq, ts);
       case 'message_start':
@@ -393,6 +398,10 @@ export class TryloV1EventAdapter {
     this.toolStartMs.delete(event.toolCallId);
     const name = this.toolNames.get(event.toolCallId) ?? (event.name ? desktopV1Tool(event.name, undefined).name : '');
     this.toolNames.delete(event.toolCallId);
+    const content = [
+      ...(event.fileChanges === undefined ? [] : [{ type: 'structured' as const, schema: FILE_MUTATION_SCHEMA, value: event.fileChanges }]),
+      ...(event.routing === undefined ? [] : [{ type: 'structured' as const, schema: ROUTING_RECEIPT_SCHEMA, value: event.routing }]),
+    ];
     return [
       {
         type: 'tool_result', seq, ts, turn: 1, source: 'trylo-v1',
@@ -400,7 +409,7 @@ export class TryloV1EventAdapter {
         tool: name,
         ok,
         output: event.output,
-        ...(event.fileChanges === undefined ? {} : { content: [{ type: 'structured' as const, schema: FILE_MUTATION_SCHEMA, value: event.fileChanges }] }),
+        ...(content.length === 0 ? {} : { content }),
         truncated: event.truncated,
         ...(ok ? {} : { error: event.message || event.code || event.output || `tool failed (${event.status})` }),
         // Measured when we saw the matching tool_use; 0 when we didn't

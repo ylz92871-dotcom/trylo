@@ -77,7 +77,7 @@ const {
   sessionArgsFor,
 } = await import('./cli-session-binding');
 
-const CLI_PATH = 'C:/work/demo-ws/new trylo cli/dist/cmd/trylo/main.js' as never;
+const CLI_PATH = 'D:/CC/trylo/new trylo cli/dist/cmd/trylo/main.js' as never;
 
 beforeEach(() => {
   h.record.spawns.length = 0;
@@ -143,7 +143,7 @@ describe('binding state machine', () => {
 
 describe('probeCliSessions', () => {
   it('parses the real session list --json shape', async () => {
-    const promise = probeCliSessions({ cliPath: CLI_PATH });
+    const promise = probeCliSessions({ cliPath: CLI_PATH, sessionId: 'desktop-abc' });
     const id = await Promise.resolve().then(() => h.record.spawns[0]!.id);
     h.finish(
       id,
@@ -152,6 +152,7 @@ describe('probeCliSessions', () => {
     );
     const probe = await promise;
     expect(probe.ok).toBe(true);
+    expect(h.record.spawns[0]!.args).toEqual(expect.arrayContaining(['--search', 'desktop-abc', '--all']));
     if (!probe.ok) return;
     expect(isSessionResumable(probe, 'desktop-abc')).toBe(true);
     expect(isSessionResumable(probe, 'desktop-missing')).toBe(false);

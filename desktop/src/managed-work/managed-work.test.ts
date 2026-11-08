@@ -1,4 +1,4 @@
-// Trylo — managed-work binding + approval bridge unit tests (P3 §7.3/§7.4/§8.2).
+// Historical managed-session serialization and binding compatibility.
 // Run: npx vitest run src/managed-work/managed-work.test.ts
 
 import { describe, expect, it } from 'vitest';
@@ -17,13 +17,6 @@ import {
   type ManagedChildBindings,
 } from './managed-child-binding';
 import type { ManagedChildBinding } from './managedWorkTypes';
-import {
-  buildInputReceivedEvent,
-  isAlreadyDecided,
-  isSensitiveAction,
-  pendingActionFromFrame,
-} from './managed-approval-bridge';
-
 function makeBinding(overrides: Partial<ManagedChildBinding> = {}): ManagedChildBinding {
   return {
     childId: 'managed-sess-1',
@@ -151,56 +144,6 @@ describe('serialization (whitelist, backwards compatible)', () => {
   it('undefined / non-object → empty store', () => {
     expect(deserializeManagedChildBindings(undefined)).toEqual({});
     expect(deserializeManagedChildBindings([1, 2])).toEqual({});
-  });
-});
-
-describe('managed approval bridge (§7.4)', () => {
-  it('extracts a pending action from an input.requested event payload', () => {
-    const action = pendingActionFromFrame({
-      event: { type: 'input.requested', requestId: 'req-1', description: 'Write report.md' },
-    });
-    expect(action).toEqual({ type: 'input', requestId: 'req-1', description: 'Write report.md' });
-  });
-
-  it('marks sensitive actions as approval (never auto-approved)', () => {
-    const action = pendingActionFromFrame({
-      event: { type: 'input.requested', requestId: 'req-2', description: 'Delete file prod.db' },
-    });
-    expect(action?.type).toBe('approval');
-    expect(isSensitiveAction('delete file')).toBe(true);
-    expect(isSensitiveAction('write a report')).toBe(false);
-  });
-
-  it('extracts from an awaiting_input session object', () => {
-    const action = pendingActionFromFrame({
-      session: { status: 'awaiting_input', requestId: 'req-3' },
-    });
-    expect(action?.requestId).toBe('req-3');
-  });
-
-  it('returns null for unrelated payloads', () => {
-    expect(pendingActionFromFrame({ event: { type: 'status.changed' } })).toBeNull();
-    expect(pendingActionFromFrame(undefined)).toBeNull();
-  });
-
-  it('builds input.received for allow vs deny', () => {
-    expect(buildInputReceivedEvent('req-1', 'allow', { ok: true })).toEqual({
-      type: 'input.received',
-      requestId: 'req-1',
-      answers: { ok: true },
-      status: 'approved',
-    });
-    expect(buildInputReceivedEvent('req-1', 'deny')).toEqual({
-      type: 'input.received',
-      requestId: 'req-1',
-      status: 'denied',
-    });
-  });
-
-  it('a denied requestId is not re-surfaced as a fresh approval', () => {
-    const decided = new Set<string>(['req-denied']);
-    expect(isAlreadyDecided('req-denied', decided)).toBe(true);
-    expect(isAlreadyDecided('req-fresh', decided)).toBe(false);
   });
 });
 

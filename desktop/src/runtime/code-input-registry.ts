@@ -1,6 +1,6 @@
 import type { ControlFrame, ControlInputFrame } from '../host-adapter/control-protocol';
 import type { LoopEvent } from '../host-adapter/loop-events';
-import type { InputRequestAnswer } from '@trylo/work';
+import type { InputRequestAnswer } from '../host-adapter/input-request';
 
 type Pending = { frame: ControlInputFrame; processId: string; emit: (events: readonly LoopEvent[]) => void };
 /** Questions are input, never approvals. Every response stays bound to its originating process. */

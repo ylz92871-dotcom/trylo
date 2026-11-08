@@ -21,9 +21,14 @@ import { isFileMutationFacts, normalizeFileMutationFacts, type FileMutationFact 
 import { isSubagentBudget, isSubagentToolActivity, type SubagentBudget } from './subagent-contract';
 import { isMemberObservation } from '../domain/member-observation';
 import { isMemberDelivery } from '../domain/member-delivery';
+import { isGoalSnapshot, type GoalSnapshot } from '../domain/goal';
+import { isWorkflowState, type WorkflowState } from '../domain/workflow-state';
+import { isRoutingReceipt, type RoutingReceipt } from '../domain/routing-receipt';
 
 /** Additive V1 vocabulary; compact carries real maintenance/gap outcomes. */
 export const CLI_V1_EVENT_TYPES = [
+  'goal_state',
+  'workflow_state',
   'run_start',
   'message_start',
   'message_delta',
@@ -56,6 +61,8 @@ export interface CliV1Usage {
 export type CliV1RunStatus = 'completed' | 'failed' | 'cancelled' | 'unknown';
 
 export type CliV1Event =
+  | WorkflowState
+  | { readonly type: 'goal_state'; readonly version: 1; readonly goal: GoalSnapshot }
   | { readonly type: 'subagent'; readonly kind: 'spawn' | 'update' | 'end'; readonly id: string;
       readonly teamRunId?: string; readonly memberId?: string;
       readonly activity?: import('./subagent-contract').SubagentToolActivity;
@@ -93,6 +100,7 @@ export type CliV1Event =
       /** Elapsed time between the CLI's matching journal envelopes. */
       readonly durationMs?: number;
       readonly fileChanges?: readonly FileMutationFact[];
+      readonly routing?: RoutingReceipt;
     }
   | {
       readonly type: 'warning';
@@ -217,6 +225,8 @@ function isRunStatus(value: unknown): value is CliV1RunStatus {
 /** Field-level guard for one known event type. */
 function fieldsAreValid(type: CliV1EventType, raw: Record<string, unknown>): boolean {
   switch (type) {
+    case 'goal_state': return raw.version === 1 && isGoalSnapshot(raw.goal);
+    case 'workflow_state': return isWorkflowState(raw);
     case 'subagent':
       return isNonEmptyString(raw.id) && ['spawn', 'update', 'end'].includes(String(raw.kind))
         && ['running', 'waiting', 'done', 'failed', 'cancelled'].includes(String(raw.status))
@@ -265,7 +275,8 @@ function fieldsAreValid(type: CliV1EventType, raw: Record<string, unknown>): boo
         (raw.name === undefined || isNonEmptyString(raw.name)) &&
         (raw.code === undefined || isNonEmptyString(raw.code)) &&
         (raw.durationMs === undefined || isDuration(raw.durationMs)) &&
-        (raw.fileChanges === undefined || isFileMutationFacts(raw.fileChanges))
+        (raw.fileChanges === undefined || isFileMutationFacts(raw.fileChanges)) &&
+        (raw.routing === undefined || isRoutingReceipt(raw.routing))
       );
     case 'warning':
       // `message` may legitimately be empty — the captured golden traces
