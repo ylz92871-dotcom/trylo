@@ -44,6 +44,7 @@ function scriptedProvider(events: ReadonlyArray<ProviderEvent>): {
       }
     },
   };
+
   return { port, captured };
 }
 
@@ -65,7 +66,8 @@ test("summary authoring receives the turn's cancellation rather than an unrelate
 
 test("an already cancelled summary sends no provider request", async () => {
   const provider = scriptedProvider(textEvents("unused"));
-  const cancel = new AbortController(); cancel.abort();
+  const cancel = new AbortController();
+  cancel.abort();
   await createModelSummarizer({ provider: provider.port, model: "fixture" })(ITEMS, undefined, cancel.signal);
   assert.equal(provider.captured.length, 0);
 });
@@ -74,9 +76,11 @@ test("a valid model summary is handed through untouched, on a tool-free request"
   const { port, captured } = scriptedProvider(textEvents("the model said: session about pkg metadata"));
   const summarize = createModelSummarizer({ provider: port, model: "compact-model" });
   const result = await summarize(ITEMS);
+
   assert.equal(result, "the model said: session about pkg metadata");
   assert.equal(captured.length, 1);
   const request = captured[0]!.request;
+
   assert.equal(request.model, "compact-model");
   assert.deepEqual(request.tools, []);
   assert.equal(request.messages[0]!.role, "system");
@@ -138,6 +142,7 @@ test("cancellation between text and finish invalidates the authored summary", as
     cancel.abort();
     yield { type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false };
   } };
+
   assert.equal(await createModelSummarizer({ provider: port, model: "fixture" })(ITEMS, undefined, cancel.signal), summarizeTranscript(ITEMS));
 });
 
@@ -190,6 +195,7 @@ test("normal finish closes the stream without waiting for late usage or EOF", as
       consumedLateUsage = true;
     } finally { closed = true; }
   } };
+
   assert.equal(await createModelSummarizer({ provider: port, model: "fixture" })(ITEMS), "A complete safe summary.");
   assert.equal(closed, true);
   assert.equal(consumedLateUsage, false);
@@ -201,6 +207,7 @@ test("failed authoring retains the previous valid summary in its extractive fall
     { type: "error", class: "network", retryable: false, phase: "before_headers", message: "fixture failure" },
   ]);
   const summary = await createModelSummarizer({ provider: port, model: "fixture" })(ITEMS, previousSummary);
+
   assert.equal(summary, summarizeTranscript(ITEMS, { previousSummary }));
   assert.ok(summary.includes(previousSummary));
   assert.ok(captured[0]!.request.messages[1]!.content.includes(previousSummary));

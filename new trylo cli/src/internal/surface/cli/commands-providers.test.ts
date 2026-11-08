@@ -45,10 +45,12 @@ function recorded(files: Map<string, string> = new Map()): Recorded {
     readFile: (path) => files.get(path),
     isDirectory: () => true,
     readDir: () => [],
+
     writeFile: (path, text) => {
       files.set(path, text);
       return true;
     },
+
     readStdin: async () => "",
     readLine: async () => undefined,
     readSecret: async () => undefined,
@@ -57,6 +59,7 @@ function recorded(files: Map<string, string> = new Map()): Recorded {
     now: () => 0,
     newId: (prefix) => `${prefix}-1`,
   };
+
   return { ctx, out, err, files };
 }
 
@@ -97,11 +100,13 @@ test("list names the four shipped providers and marks the selected one", () => {
 
 test("list --json carries the whole matrix and no secret", () => {
   const rec = recorded(withLab());
+
   assert.equal(handleProvidersList(rec.ctx, { json: true }), EXIT_CODES.OK);
   const payload = JSON.parse(textOf(rec)) as {
     readonly selected: string;
     readonly providers: ReadonlyArray<{ readonly id: string; readonly auth: string }>;
   };
+
   assert.equal(payload.selected, "lab");
   assert.equal(payload.providers.length, 5);
   assert.equal(payload.providers.some((entry) => entry.id === "lab"), true);
@@ -111,11 +116,14 @@ test("list --json carries the whole matrix and no secret", () => {
 
 test("an undeclared model list is reported as undeclared, not as empty", () => {
   const rec = recorded();
+
   assert.equal(handleProvidersModels(rec.ctx, { id: "openai-compatible", json: false }), EXIT_CODES.OK);
   assert.match(textOf(rec), /not declared/);
   const jsonRec = recorded();
+
   handleProvidersModels(jsonRec.ctx, { id: "openai-compatible", json: true });
   const payload = JSON.parse(textOf(jsonRec)) as { readonly declared: boolean; readonly models: unknown[] };
+
   assert.equal(payload.declared, false);
   assert.deepEqual(payload.models, []);
 });
@@ -142,8 +150,10 @@ test("switch selects, and says so", () => {
 
 test("config resolves what a run would use", () => {
   const rec = recorded(withLab());
+
   assert.equal(handleProvidersConfig(rec.ctx, { json: false }), EXIT_CODES.OK);
   const text = textOf(rec);
+
   assert.match(text, /id\s+lab/);
   assert.match(text, /endpoint\s+https:\/\/lab\.example\/v1/);
   assert.match(text, /auth\s+api_key/);

@@ -14,11 +14,14 @@ import type { ShellEnvironment } from "../../adapters/sandbox/shell-detect.js";
 
 export function shellModeFor(requested: unknown, surface: ShellEnvironment): ShellModeResult {
   if (requested === "auto") return resolveShellMode(surface, undefined);
+
   if (requested === "none") return { ok: true, mode: { kind: "none" } };
+
   const kind = readShellSetting(requested);
   if (kind === undefined) {
     return { ok: true, mode: { kind: "none" } };
   }
+
   if (kind === null) {
     return {
       ok: false,
@@ -26,5 +29,6 @@ export function shellModeFor(requested: unknown, surface: ShellEnvironment): She
       message: `shell setting names no known shell: ${JSON.stringify(requested)}`,
     };
   }
+
   return resolveShellMode(surface, kind);
 }

@@ -3,11 +3,13 @@ import type { RunTurnResult } from "../../loop/runner.js";
 import type { CompactWindow } from "../../ports/compaction.js";
 import type { Transcript } from "../../protocol/transcript.js";
 import type { AddressedUserInput } from "../../domain/input-queue.js";
-import { exitCodeForResult, providerErrorClass, terminalStatusOf, UNREUSABLE_ERROR_CLASSES, usageToCli } from "./host-status.js";
+import { accountingToCli, exitCodeForResult, providerErrorClass, terminalStatusOf, UNREUSABLE_ERROR_CLASSES, usageToCli } from "./host-status.js";
 import type { TurnFailure, TurnHostInput } from "./host.js";
 import { persistTurnResult } from "./session-record.js";
 import type { TurnRenderer } from "./render.js";
 import type { TurnRecorder } from "./turn-recorder.js";
+import { ExecutionProgressError } from "../../ports/execution-progress.js";
+import { hostFailure } from "./host-failure.js";
 
 /**
  * Settling a turn that has already run.
@@ -106,9 +108,18 @@ export async function finishTurn(finish: TurnFinishInput): Promise<TurnOutcome |
       model: finish.model,
       iterations: result.iterations,
       durationMs,
+      accounting: accountingToCli(result),
     },
     { status, finishReason: result.state.finishReason },
   );
+
+  // The explanation is durable and visible, but a later REPL/TUI turn must not
+  // construct a fresh open recorder over this unresolved effect's writer lease.
+  if (finish.recorder !== undefined && Object.values(result.state.toolCalls).some(call => call.status === "unknown"
+    && result.issuedKeys.includes(`tool:${call.toolCallId}`))) {
+    const failure = await hostFailure(new ExecutionProgressError("settle", "effect_reconciliation_required"), input.session);
+    return status === "cancelled" ? { ...failure, exitCode: EXIT_CODES.CANCELLED } : failure;
+  }
 
   return {
     exitCode: exitCodeForResult(result) as ExitCode,

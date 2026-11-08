@@ -27,6 +27,7 @@ export function collectingSink(
         if (trimmed.length === 0) {
           continue;
         }
+
         const parsed = parseEventLine(trimmed);
         if (parsed === undefined) {
           notes.push(`unrecognized event line: ${trimmed.slice(0, 60)}`);
@@ -35,6 +36,7 @@ export function collectingSink(
         }
       }
     },
+
     stderr: (text) => {
       for (const line of text.split("\n")) {
         const trimmed = line.trim();
@@ -57,6 +59,7 @@ function parseEventLine(line: string): CliStreamEvent | undefined {
     ) {
       return value as CliStreamEvent;
     }
+
     return undefined;
   } catch {
     return undefined;

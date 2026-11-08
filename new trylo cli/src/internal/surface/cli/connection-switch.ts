@@ -1,4 +1,5 @@
 import type { CliContext } from "./context.js";
+import { sessionLearningOptions } from "./session-learning-options.js";
 import type { CliSink } from "./render.js";
 import { prepareRun, isRunFailure, type RunScaffold } from "./run-command.js";
 import { fail, type RunFailure } from "./run-failure.js";
@@ -46,7 +47,7 @@ export async function switchRunConnection(
             },
           }
         : {}),
-      ...(current.learning === undefined ? {} : { learning: current.learning }),
+      ...sessionLearningOptions(current),
       ...(current.maxIterations === undefined ? {} : { maxIterations: current.maxIterations }),
       ...(current.maxTokens === undefined ? {} : { maxTokens: current.maxTokens }),
       ...(sameProvider && current.contextTokenLimit !== undefined ? { contextTokenLimit: current.contextTokenLimit } : {}),
@@ -57,10 +58,12 @@ export async function switchRunConnection(
     },
   });
   if (isRunFailure(next)) return next;
+
   if (isKeyedProviderKind(next.providerKind) && next.apiKey === undefined && next.tokenManager === undefined) {
     await next.close();
     return fail(EXIT_CODES.AUTH, "The new connection has no credential; the current session is unchanged.", "connect a key or select an account first");
   }
+
   try {
     await current.close();
   } catch (error) {
@@ -68,6 +71,7 @@ export async function switchRunConnection(
     await next.close();
     throw error;
   }
+
   return next;
 }
 

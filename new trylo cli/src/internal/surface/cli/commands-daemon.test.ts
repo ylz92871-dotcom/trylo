@@ -23,9 +23,11 @@ import { daemonLaunchTarget, parseDaemon } from "./commands-daemon.js";
 test("`daemon start` launches a target that exists", () => {
   const launch = daemonLaunchTarget();
   const [target] = launch.args;
+
   if (target === undefined) {
     assert.fail("the launch config carries no script");
   }
+
   assert.ok(existsSync(launch.file), `the interpreter ${launch.file} is not real`);
   assert.ok(
     existsSync(target),

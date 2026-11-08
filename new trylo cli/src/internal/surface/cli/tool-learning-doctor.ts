@@ -1,5 +1,5 @@
 import path from "node:path";
-import { TOOL_LEDGER_FILE } from "../../integration/tool-learning/index.js";
+import { TOOL_LEDGER_FILE } from "../../learning/agent/subsystems/tool/runtime/index.js";
 import { toolLearningRoot } from "./tool-learning-config.js";
 import type { DoctorCheck, DoctorIo } from "./doctor.js";
 
@@ -37,6 +37,7 @@ export function toolLearningCheck(io: ToolLearningDoctorIo, switchValue: string)
       detail: `tool learning wired (${switchValue}); no ledger yet at ${root}`,
     };
   }
+
   return {
     id: "learning.tools",
     status: counts.unreadable > 0 ? "warn" : "ok",
@@ -60,17 +61,21 @@ function countRecords(raw: string): LedgerCounts {
   let observation = 0;
   let throttled = 0;
   let unreadable = 0;
+
   for (const line of raw.split("\n")) {
     if (line.trim().length === 0) {
       continue;
     }
+
     let parsed: unknown;
+
     try {
       parsed = JSON.parse(line) as unknown;
     } catch {
       unreadable += 1;
       continue;
     }
+
     const kind =
       typeof parsed === "object" && parsed !== null
         ? (parsed as Record<string, unknown>)["kind"]
@@ -85,5 +90,6 @@ function countRecords(raw: string): LedgerCounts {
       unreadable += 1;
     }
   }
+
   return { proposal, observation, throttled, unreadable };
 }

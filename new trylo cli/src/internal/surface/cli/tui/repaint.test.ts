@@ -55,8 +55,10 @@ test("A6: a paint moves up exactly the lines the previous paint wrote", () => {
   const painter = createPainter(io, 0);
 
   const first = pushSystemLine(emptyTuiState(FACTS), "one");
+
   painter.request(first);
   const second = pushSystemLine(first, "two");
+
   painter.request(second);
 
   // Paint 1 clears from the cursor down and writes "one" plus the status bar:
@@ -73,15 +75,19 @@ test("A6: settling leaves the content without a status bar and stops painting", 
   const painter = createPainter(io, 0);
 
   const first = pushSystemLine(emptyTuiState(FACTS), "one");
+
   painter.request(first);
   const settled = pushSystemLine(first, "two");
+
   painter.settle(settled);
 
   const lastBody = io.written[io.written.length - 1] ?? "";
+
   assert.equal(lastBody, "one\ntwo\n", "the settled paint must be the content alone");
   assert.equal(lastBody.includes("\x1b[2m"), false, "the status bar belongs to the prompt below, not to the turn");
 
   const before = io.written.length;
+
   painter.request(pushSystemLine(settled, "three"));
   assert.equal(io.written.length, before, "a settled painter must not draw again");
 });
@@ -92,8 +98,10 @@ test("A6: a deferred paint that never runs still loses no text", () => {
   const painter = createPainter({ ...io, schedule: (flush) => pending.push(flush) }, 0);
 
   const first = pushSystemLine(emptyTuiState(FACTS), "one");
+
   painter.request(first);
   const second = pushSystemLine(first, "two");
+
   painter.request(second);
 
   assert.equal(io.written.length, 0, "the paint is deferred, not skipped");
@@ -101,10 +109,12 @@ test("A6: a deferred paint that never runs still loses no text", () => {
   painter.settle(second);
 
   assert.deepEqual(io.written, ["\x1b[J", "one\ntwo\n"]);
+
   // The stale flush firing after settle must not draw over the settled screen.
   for (const flush of pending) {
     flush();
   }
+
   assert.deepEqual(io.written, ["\x1b[J", "one\ntwo\n"]);
 });
 
@@ -121,6 +131,7 @@ function scriptedCtx(stdinIsTty: boolean, lines: ReadonlyArray<string>): Scripte
   const root = mkdtempSync(join(tmpdir(), "trylo-paint-"));
   const home = join(root, "home");
   const cwd = join(root, "workspace");
+
   mkdirSync(cwd, { recursive: true });
   mkdirSync(join(home, ".trylo", "sessions"), { recursive: true });
   writeFileSync(join(home, ".trylo", "config.json"), JSON.stringify({ provider: "fixture" }));
@@ -137,6 +148,7 @@ function scriptedCtx(stdinIsTty: boolean, lines: ReadonlyArray<string>): Scripte
     readDir: () => [],
     writeFile: () => true,
     readStdin: async () => "",
+
     readLine: async () => {
       if (at >= lines.length) {
         return undefined;
@@ -145,12 +157,14 @@ function scriptedCtx(stdinIsTty: boolean, lines: ReadonlyArray<string>): Scripte
       at += 1;
       return line;
     },
+
     readSecret: async () => undefined,
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
     now: () => 0,
     newId: (prefix) => `${prefix}-${(ids += 1)}`,
   };
+
   return { ctx, out, err, root };
 }
 
@@ -174,6 +188,7 @@ function paintingRunner(): TuiTurnRunner {
     for (const make of TURN_EVENTS) {
       sink.stdout(`${JSON.stringify(make(scaffold))}\n`);
     }
+
     const result = {
       type: "run_result" as const,
       status: "completed" as const,
@@ -185,7 +200,9 @@ function paintingRunner(): TuiTurnRunner {
       durationMs: 4,
       lastMessage: "hello from the model",
     };
+
     sink.stdout(`${JSON.stringify(result)}\n`);
+
     return { exitCode: 0, result, transcript: [], view: undefined, warnings: [] };
   };
 }
@@ -198,23 +215,29 @@ test("A6: a turn in a terminal repaints in place, at least once", async () => {
       served += 1;
       return served === 1 ? "hi" : undefined;
     },
+
     // Driven by hand: the paint runs the moment it is asked for, so the whole
     // turn is one deterministic sequence of writes.
     schedule: (flush) => flush(),
   });
+
   try {
     const code = await handleTui(scripted.ctx, io, paintingRunner());
+
     assert.equal(code, 0);
 
     const flat = io.written.join("");
     const ups = flat.match(/\x1b\[\d+A/g) ?? [];
+
     assert.equal(ups.length >= 1, true, "the turn was never repainted: this is not a live region");
     assert.equal((flat.match(/\x1b\[J/g) ?? []).length >= 2, true);
+
     // Every move is immediately followed by the clear that makes it safe.
     for (let at = 0; at < ups.length; at += 1) {
       const index = flat.indexOf(ups[at] ?? "");
       assert.equal(flat.slice(index + (ups[at] ?? "").length).startsWith("\x1b[J"), true);
     }
+
     assert.match(flat, /hello from the model/);
   } finally {
     rmSync(scripted.root, { recursive: true, force: true });
@@ -228,8 +251,10 @@ test("A6: a piped session emits no cursor movement at all", async () => {
       stdout: scripted.ctx.stdout,
       stderr: scripted.ctx.stderr,
     });
+
     assert.equal(code, 0);
     const flat = [...scripted.out, ...scripted.err].join("");
+
     assert.equal(flat.includes("\x1b["), false, "a piped run must not carry terminal escapes");
     assert.match(flat, /-> read_file/);
   } finally {

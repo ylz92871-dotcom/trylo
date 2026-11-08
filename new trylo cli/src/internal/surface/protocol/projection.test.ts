@@ -59,9 +59,11 @@ function admitOrFail(raw: unknown): AdmittedEnvelope {
   if (!result.ok) {
     assert.fail(`应当通过校验，却返回 ${result.code}/${result.detail}`);
   }
+
   if (result.outcome !== "admitted") {
     assert.fail(`应当是已知 kind，却被忽略为 ${result.kind}`);
   }
+
   return result.admitted;
 }
 
@@ -95,6 +97,7 @@ test("27 条夹具逐行投影出 ACP 帧，策略字段与表完全一致", () 
     const kind = fixture.kind as EventKind;
     const row = ACP_ROWS[kind];
     const frame = acpFrameOf(fixture.envelope);
+
     assert.equal(frame.surface, "acp");
     assert.equal(frame.disposition, row.disposition, kind);
     assert.equal(frame.primitive, row.primitive, kind);
@@ -118,6 +121,7 @@ test("27 条夹具逐行投影出 ag-ui 帧，事件类型与表完全一致", (
     const kind = fixture.kind as EventKind;
     const row = AGUI_ROWS[kind];
     const frame = aguiFrameOf(fixture.envelope);
+
     assert.equal(frame.surface, "agui");
     assert.equal(frame.disposition, row.disposition, kind);
     assert.equal(frame.type, row.type, kind);
@@ -137,6 +141,7 @@ test("CUSTOM 帧不得为空：必须带名字、重建坐标与脱敏 payload �
       assert.deepEqual({ ...objectAt(custom.source, "custom.source") }, { ...acp.frame.source });
       assert.deepEqual(objectAt(custom.payload, "custom.payload"), admitted.envelope.payload);
     }
+
     const agui = projectAgui(admitted, createAguiState());
     if (agui.ok && agui.frame.disposition === "custom") {
       assert.equal(agui.frame.type, "CUSTOM");
@@ -164,10 +169,12 @@ test("终态：ag-ui 用 RUN_ERROR 区分失败，ACP 只给 StopReason 并把�
     const raw = rawEnvelope("terminal", { reason: item.reason }, { turnId: "trn-inline" });
     const acp = acpFrameOf(raw);
     const terminal = objectAt(acp.body.terminal, `${item.reason}.terminal`);
+
     assert.equal(terminal.stopReason, item.acp, item.reason);
     assert.equal(terminal.lossy, item.lossy, item.reason);
     assert.equal(String(terminal.detail).length > 0, true, item.reason);
     const agui = aguiFrameOf(raw);
+
     assert.equal(agui.type, item.agui, item.reason);
     assert.equal(agui.body.outcome, item.reason, item.reason);
   }
@@ -177,12 +184,15 @@ test("failed 的细值只来自 payload 已有字段（cause 优先于 finishRea
   const byCause = acpFrameOf(
     rawEnvelope("terminal", { reason: "failed", cause: "iterations_exhausted" }),
   );
+
   assert.equal(objectAt(byCause.body.terminal, "terminal").stopReason, "max_turn_requests");
   const byFinish = acpFrameOf(
     rawEnvelope("terminal", { reason: "failed", finishReason: "content_filter" }),
   );
+
   assert.equal(objectAt(byFinish.body.terminal, "terminal").stopReason, "refusal");
   const unknown = acpFrameOf(rawEnvelope("terminal", { reason: "failed", errorClass: "auth" }));
+
   assert.equal(objectAt(unknown.body.terminal, "terminal").stopReason, "other");
 });
 
@@ -192,21 +202,26 @@ test("终态词表仍是 4 值：本包没有把 failed 悄悄扩成五值", () 
 
 test("approval_requested 表示「阻塞于审批」：请求原语 + requires_action", () => {
   const frame = acpFrameOf(fixtureOf("approval_requested").envelope);
+
   assert.equal(frame.primitive, "request_permission");
   assert.equal(frame.agentState, "requires_action");
   assert.equal(frame.body.toolCallId, "call-p07-1");
   assert.equal(frame.body.ticketId, "tkt-p07-1");
   const blocked = Object.values(ACP_ROWS).filter((row) => row.agentState === "requires_action");
+
   assert.equal(blocked.length, 1, "requires_action 只允许由 permission_block 桥产生");
 });
 
 test("未知 kind：进场被忽略且保留坐标，绕过进场也被拒绝且不抛异常", () => {
   const raw = rawEnvelope("future_vendor_blob", { anything: 1 });
   const result = admit(raw);
+
   assert.equal(result.ok, true);
+
   if (!result.ok) {
     return;
   }
+
   assert.equal(result.outcome, "ignored_unknown_kind");
   assert.equal(result.kind, "future_vendor_blob");
 
@@ -223,20 +238,26 @@ test("未知 kind：进场被忽略且保留坐标，绕过进场也被拒绝且
     },
   } as unknown as AdmittedEnvelope;
   const acp = projectAcp(forged);
+
   assert.equal(acp.ok, false);
+
   if (acp.ok) {
     return;
   }
+
   assert.equal(acp.code, "unknown_kind");
   assert.equal(projectAgui(forged, createAguiState()).ok, false);
 });
 
 test("未过校验的 envelope 被拒绝，不进入投影", () => {
   const result = admit({ kind: "text" });
+
   assert.equal(result.ok, false);
+
   if (result.ok) {
     return;
   }
+
   assert.equal(result.code, "invalid_envelope");
   assert.equal(result.detail, "missing_event_id");
 });
@@ -244,10 +265,13 @@ test("未过校验的 envelope 被拒绝，不进入投影", () => {
 test("payload 缺必需字段 → 显式失败，不产出半成品帧", () => {
   const admitted = admitOrFail(rawEnvelope("tool_use", { toolCallId: "call-1" }));
   const acp = projectAcp(admitted);
+
   assert.equal(acp.ok, false);
+
   if (acp.ok) {
     return;
   }
+
   assert.equal(acp.code, "payload_contract_violation");
   assert.equal(acp.detail.includes("tool_use.name"), true);
   assert.equal(projectAgui(admitted, createAguiState()).ok, false);
@@ -265,8 +289,10 @@ test("帧与帧体都被冻结：订阅方改不动（replay 字节一致的前�
 test("缺血缘不得虚构 parent：帧体里不出现任何父谱系字段，只在 omitted 里登记", () => {
   for (const fixture of FIXTURES) {
     const acpBody = JSON.stringify(acpFrameOf(fixture.envelope).body);
+
     assert.equal(acpBody.includes("parentAgentId"), false, fixture.kind);
     const aguiBody = JSON.stringify(aguiFrameOf(fixture.envelope).body);
+
     for (const field of [
       "parentSubagentRunId",
       "parentToolCallId",
@@ -291,9 +317,11 @@ test("未知 payload 字段不 fail-closed：声明了 raw 的行照原样带上
     rawEnvelope("tool_result", { toolCallId: "call-1", status: "succeeded", vendorField: "v1" }),
   );
   const raw = objectAt(withExtra.body.raw, "tool_result.raw");
+
   assert.equal(raw.vendorField, "v1");
 
   const textFrame = acpFrameOf(rawEnvelope("text", { text: "hi", vendorField: "v1" }));
+
   assert.equal(JSON.stringify(textFrame.body).includes("vendorField"), false);
   assert.equal(textFrame.source.kind, "text");
   assert.equal(textFrame.source.eventId, "evt-text-inline");

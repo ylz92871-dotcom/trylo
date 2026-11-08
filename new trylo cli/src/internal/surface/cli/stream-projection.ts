@@ -1,11 +1,15 @@
 import type { Envelope, JsonObject, JsonValue } from "../../protocol/envelope.js";
 import type { CliStreamEvent, CliUsage } from "../../protocol/cli-stream.js";
+import { isSummaryRequestUsage, readSummaryAuthorReport, type SummaryAuthorReport } from "../../ports/compaction.js";
 import { isNativeContinuationDiagnostic } from "../../ports/provider.js";
 import { projectFileMutations } from "./file-mutation-projection.js";
 import { isSubagentBudgetSnapshot } from "../../protocol/subagent-budget.js";
 import { isSubagentToolActivity } from "../../protocol/subagent-activity.js";
 import { isSubagentObservation } from "../../protocol/subagent-observation.js";
+import { isSelectedPromptBudgetObservation } from "../../protocol/prompt-budget-observation.js";
 import { isSubagentDelivery } from "../../protocol/subagent-handoff.js";
+import { projectRoutingReceipt } from "../../protocol/routing-receipt.js";
+import { createPublicToolResultReader, PublicToolResultError } from "../../protocol/public-tool-result.js";
 
 /**
  * The envelope -> CLI event translator, kept as one bounded state machine.
@@ -55,12 +59,15 @@ function objectValue(value: JsonValue | undefined): value is JsonObject {
 function failureReason(payload: Record<string, unknown>): string {
   const code = text(payload, "code");
   const message = text(payload, "message");
+
   if (code === "") {
     return message;
   }
+
   if (message === "" || message.startsWith(`${code}:`)) {
     return message === "" ? code : message;
   }
+
   return `${code}:${message}`;
 }
 
@@ -69,7 +76,7 @@ function failureReason(payload: Record<string, unknown>): string {
  * guidance is too: the class decides what the user should actually do. Only
  * codes with a genuinely different next step appear here.
  */
-const CONTINUE_RECORDED_WORK = "Continue in the same saved session from recorded tool results. Check unfinished commands and partial effects before issuing new commands; do not repeat completed actions.";
+const CONTINUE_RECORDED_WORK = "If this run was saved, continue in the same saved session from recorded tool results. Unsaved runs cannot be resumed. Check unfinished commands and partial effects before issuing new commands; do not repeat completed actions.";
 
 const FAILURE_ACTIONS: Readonly<Record<string, string>> = {
   auth: "no credential, or the provider rejected it: `trylo login --provider <family> --account <id>` to store one; a key from another host fails here too (`trylo auth list` shows the accounts)",
@@ -87,6 +94,7 @@ const FAILURE_ACTIONS: Readonly<Record<string, string>> = {
   provider_throw: "the provider adapter threw; run `trylo doctor`",
   iterations_exhausted: "raise --max-iterations, or narrow the request",
   output_tokens_exhausted: "raise --max-tokens, or narrow the request",
+  auxiliary_usage_unavailable: "the provider did not report complete summary usage; no further request was sent under the explicit spending allowance",
   event_overflow: "this turn emitted more than 4096 events; split the task into smaller runs",
   context_limit: "shorten the conversation or start a new session",
   unsettled_tool_input: `the stream was cut mid tool call; ${CONTINUE_RECORDED_WORK}`,
@@ -97,6 +105,29 @@ const FAILURE_ACTIONS: Readonly<Record<string, string>> = {
   permission_denied: "the command did not run; check the permission decision details and current policy",
   expired: "the approval was never answered; re-run and answer the prompt",
   permission_unavailable: "the approval prompt could not be reached; pass --ask writes or --allow-tools <name>",
+  output_continuation_no_progress: "the continuation repeated the same output; inspect the recorded partial response and unfinished work before continuing",
+  effect_reconciliation_required: "inspect the recorded operation and workspace before deciding its result; do not repeat an operation whose outcome is unconfirmed",
+};
+
+/** These are system explanations of terminal facts, never model-authored replies. */
+const FAILURE_SUMMARIES: Readonly<Record<string, string>> = {
+  auth: "The provider could not provide a final response because authentication failed.",
+  rate_limit: "The provider could not provide a final response because requests are rate limited.",
+  quota: "The provider could not provide a final response because its usage allowance is exhausted.",
+  server: "The provider could not provide a final response because its service failed.",
+  network: "The provider could not provide a final response because its connection failed.",
+  timeout: "The provider could not provide a final response before its request timed out.",
+  protocol: "The provider could not provide a final response because its response or request preparation was invalid.",
+  invalid_request: "The provider could not provide a final response because it rejected the request.",
+  provider_throw: "The provider could not provide a final response because its adapter failed.",
+  provider_error: "The provider stopped without completing a final response.",
+  sent_unacked: "The provider connection ended before the response was confirmed complete.",
+  transport_fail: "The provider connection failed before a final response was completed.",
+  context_limit: "The turn stopped because its request does not fit the available model context.",
+  iterations_exhausted: "The turn stopped at the caller's explicit request allowance; unfinished work remains unfinished.",
+  output_tokens_exhausted: "The turn stopped at the caller's explicit output allowance; unfinished work remains unfinished.",
+  output_continuation_no_progress: "The continuation repeated its output without progress. The task remains unfinished.",
+  effect_reconciliation_required: "An operation's final result remains unconfirmed. Further actions stopped to avoid repeating it.",
 };
 
 /**
@@ -109,6 +140,7 @@ function terminalDiagnostic(payload: Record<string, unknown>): CliStreamEvent | 
   if (reason === "" || reason === "completed" || reason === "cancelled") {
     return undefined;
   }
+
   const errorClass = text(payload, "errorClass");
   const cause = text(payload, "cause");
   const message = text(payload, "message");
@@ -122,41 +154,58 @@ function terminalDiagnostic(payload: Record<string, unknown>): CliStreamEvent | 
   // as an action with no cause ("check --model…" and nothing else never says
   // WHAT failed, with which status). The code always leads, the provider
   // detail (`http_400`) follows when it adds something, the next step closes.
+  const summary = FAILURE_SUMMARIES[errorClass] ?? FAILURE_SUMMARIES[cause] ?? FAILURE_SUMMARIES[code];
   const segments = [code];
+
   if (detail !== "" && detail !== code && !detail.startsWith(`${code}:`)) segments.push(detail);
+
   if (action !== "" && action !== code && !segments.some((part) => action.startsWith(part))) segments.push(action);
+
+  if (summary !== undefined) segments.push(summary);
+
   if (reason === "unknown" && !action.includes(CONTINUE_RECORDED_WORK)) segments.push(CONTINUE_RECORDED_WORK);
+
   const parts = [segments.join(" - ")];
+
   if (cause === "output_tokens_exhausted" || cause === "iterations_exhausted") {
     if (typeof payload.budgetUsed === "number" && typeof payload.budgetLimit === "number") {
       parts.push(`used ${payload.budgetUsed} of ${payload.budgetLimit}`);
     }
+
     const sessionId = text(payload, "sessionId");
     if (sessionId !== "") {
       const flag = cause === "output_tokens_exhausted" ? "--max-tokens" : "--max-iterations";
-      parts.push(`continue saved work: trylo run --resume ${sessionId} ${flag} <larger-budget> "continue"`);
+      // Execution identity exists even without a journal. This projection has
+      // no persistence receipt, so it cannot promise that this id is resumable.
+      parts.push(`Only runs saved with --session support continuation: trylo run --resume <saved-session> ${flag} <larger-budget> "continue". Unsaved runs cannot be resumed; inspect existing files and partial effects before restarting.`);
     }
   }
+
   return { type: "warning", code, message: parts.join(" - ") };
 }
 
-/** The only state a turn carries: which blocks are still open. */
+/** Open blocks and author metadata awaiting an actual window outcome. */
 type BlockState = {
   messageOpen: boolean;
   /** Undefined when closed; otherwise the privacy state of the open block. */
   reasoningRedacted: boolean | undefined;
+  summaryAuthor: SummaryAuthorReport | undefined;
   readonly tools: Map<string, { readonly name: string; readonly timestamp: number }>;
+  readonly unknownToolResults: Map<string, { readonly code: string; readonly message: string }>;
 };
 
 function projectToolResult(state: BlockState, envelope: Envelope): CliStreamEvent {
   const toolCallId = text(envelope.payload, "toolCallId");
   const started = state.tools.get(toolCallId);
+
   state.tools.delete(toolCallId);
   const name = text(envelope.payload, "name") || started?.name || "";
   const code = text(envelope.payload, "code");
   const reason = failureReason(envelope.payload);
   const elapsed = started === undefined ? undefined : Date.parse(envelope.timestamp) - started.timestamp;
   const fileChanges = envelope.payload.status === "succeeded" ? projectFileMutations(name, envelope.payload.value) : undefined;
+  const routing = projectRoutingReceipt(name, envelope.payload.value);
+
   return {
     type: "tool_result", toolCallId,
     status: text(envelope.payload, "status"),
@@ -166,8 +215,34 @@ function projectToolResult(state: BlockState, envelope: Envelope): CliStreamEven
     ...(name === "" ? {} : { name }),
     ...(code === "" ? {} : { code }),
     ...(fileChanges === undefined ? {} : { fileChanges }),
+    ...(routing === undefined ? {} : { routing }),
     ...(elapsed === undefined || !Number.isFinite(elapsed) ? {} : { durationMs: Math.max(0, elapsed) }),
   };
+}
+
+/** Execution and its reducer publish the same unknown outcome in two facts.
+ * Settle the observed call once; other components and conflicting diagnostics
+ * remain warnings. This changes presentation, never the durable effect fence. */
+function projectUnknownToolObservation(state: BlockState, envelope: Envelope, events: CliStreamEvent[]): boolean {
+  const payload = envelope.payload;
+  const toolCallId = text(payload, "toolCallId");
+  if (payload.status !== "unknown" || toolCallId === ""
+    || (payload.component !== undefined && payload.component !== "tool_execute")) return false;
+
+  const code = text(payload, "code"), message = text(payload, "message");
+  const previous = state.unknownToolResults.get(toolCallId);
+  if (previous !== undefined) return previous.code === code && previous.message === message;
+  if (!state.tools.has(toolCallId)) return false;
+
+  state.unknownToolResults.set(toolCallId, { code, message });
+  events.push(projectToolResult(state, envelope));
+  return true;
+}
+
+function takeSummaryAuthor(state: BlockState): { readonly summaryAuthor?: SummaryAuthorReport } {
+  const report = state.summaryAuthor;
+  state.summaryAuthor = undefined;
+  return report === undefined ? {} : { summaryAuthor: report };
 }
 
 function closeBlocks(state: BlockState, events: CliStreamEvent[], which: "message" | "reasoning" | "all"): void {
@@ -192,6 +267,7 @@ function closeBlocks(state: BlockState, events: CliStreamEvent[], which: "messag
 function warningFor(payload: Record<string, unknown>, kind: string): CliStreamEvent {
   const code = text(payload, "code") || text(payload, "component") || kind;
   const permissionMessages: Readonly<Record<string, string>> = {
+    invalid_arguments: "工具参数无效，原调用未执行。请更正参数后重试。",
     permission_user_denied: "You declined this call; it did not run.",
     permission_policy_denied: "The current permission policy refuses this call; it did not run.",
     permission_remembered_denial: "This tool is disabled for the session; revoke that decision to ask again.",
@@ -199,10 +275,11 @@ function warningFor(payload: Record<string, unknown>, kind: string): CliStreamEv
     permission_user_cancelled: "You cancelled approval and the current turn; the command did not run.",
   };
   const diagnostic = payload["diagnostic"];
+
   return {
     type: "warning",
     code,
-    message: permissionMessages[code] ?? (text(payload, "message") || text(payload, "reason") || text(payload, "decision")),
+    message: text(payload, "message") || permissionMessages[code] || text(payload, "reason") || text(payload, "decision"),
     // Only a diagnosis this build can validate travels further. An unknown
     // shape is dropped rather than half-rendered, and `code`/`message` still
     // carry the warning.
@@ -223,6 +300,7 @@ function translateInto(state: BlockState, envelope: Envelope, events: CliStreamE
     case "thinking": {
       closeBlocks(state, events, "message");
       const redacted = envelope.payload.redacted === true;
+
       // A consumer learns privacy at reasoning_start, so a change needs a new
       // block rather than inheriting the preceding summary's visibility.
       if (state.reasoningRedacted !== redacted) {
@@ -230,8 +308,10 @@ function translateInto(state: BlockState, envelope: Envelope, events: CliStreamE
         events.push({ type: "reasoning_start", redacted });
         state.reasoningRedacted = redacted;
       }
+
       // Privacy applies to wire bytes as well as to the Desktop presentation.
       if (!redacted) events.push({ type: "reasoning_delta", text: text(envelope.payload, "text") });
+
       break;
     }
     case "tool_use":
@@ -264,13 +344,16 @@ function translateInto(state: BlockState, envelope: Envelope, events: CliStreamE
     case "subagent_end": {
       const payload = envelope.payload;
       if (payload.checkpointPart !== undefined) break;
+
       const id = text(payload, "subagentId");
       if (id === "") break;
+
       const kind = envelope.kind === "subagent_spawn" ? "spawn" : envelope.kind === "subagent_end" ? "end" : "update";
       const rawStatus = text(payload, "status");
       const status = kind === "spawn" ? "running" : rawStatus === "completed" ? "done"
         : rawStatus === "cancelled" ? "cancelled" : rawStatus === "waiting" ? "waiting"
         : rawStatus === "running" ? "running" : "failed";
+
       events.push({ type: "subagent", kind, id, status,
         ...(typeof payload.teamRunId === "string" ? { teamRunId: payload.teamRunId } : {}),
         ...(typeof payload.memberId === "string" ? { memberId: payload.memberId } : {}),
@@ -295,13 +378,31 @@ function translateInto(state: BlockState, envelope: Envelope, events: CliStreamE
     case "compact":
       events.push({ type: "compact", status: "completed", reason: "auto",
         ...(typeof envelope.payload.tokensBefore === "number" ? { tokensBefore: envelope.payload.tokensBefore } : {}),
-        ...(typeof envelope.payload.tokensAfter === "number" ? { tokensAfter: envelope.payload.tokensAfter } : {}) });
+        ...(typeof envelope.payload.tokensAfter === "number" ? { tokensAfter: envelope.payload.tokensAfter } : {}),
+        ...takeSummaryAuthor(state) });
       break;
     case "observation":
+      if (projectUnknownToolObservation(state, envelope, events)) break;
+      // Valid auxiliary bills are shown in terminal accounting, not warnings.
+      if (text(envelope.payload, "component") === "auxiliary_usage" && isSummaryRequestUsage(envelope.payload)) break;
+      // A selected prompt basis is ordinary journal evidence, not a warning or bill.
+      if (isSelectedPromptBudgetObservation(envelope)) break;
       if (text(envelope.payload, "component") === "compaction") {
-        events.push({ type: "compact", status: text(envelope.payload, "status") === "started" ? "started" : "failed",
+        const status = text(envelope.payload, "status");
+        if (status === "started") state.summaryAuthor = undefined;
+        else {
+          const report = readSummaryAuthorReport(envelope.payload.author, envelope.payload.reason);
+          if (report !== undefined) {
+            state.summaryAuthor = report;
+            break;
+          }
+          if (envelope.payload.author !== undefined && envelope.payload.degraded !== true) break;
+        }
+
+        events.push({ type: "compact", status: status === "started" ? "started" : "failed",
           reason: text(envelope.payload, "reason") || "auto",
-          ...(typeof envelope.payload.tokensBefore === "number" ? { tokensBefore: envelope.payload.tokensBefore } : {}) });
+          ...(typeof envelope.payload.tokensBefore === "number" ? { tokensBefore: envelope.payload.tokensBefore } : {}),
+          ...takeSummaryAuthor(state) });
         break;
       }
       // Remembering a successful approval is a fact, not a warning.
@@ -330,21 +431,42 @@ function translateInto(state: BlockState, envelope: Envelope, events: CliStreamE
 }
 
 export function createStreamTranslator(): StreamTranslator {
-  let state: BlockState | undefined = { messageOpen: false, reasoningRedacted: undefined, tools: new Map() };
+  let state: BlockState | undefined = { messageOpen: false, reasoningRedacted: undefined, summaryAuthor: undefined,
+    tools: new Map(), unknownToolResults: new Map() };
+  const publicResults = createPublicToolResultReader();
   let terminalSeen = false;
+
   return {
     push(envelope: Envelope): ReadonlyArray<CliStreamEvent> {
       if (state === undefined) return [];
+
       if (terminalSeen && !envelope.kind.startsWith("subagent_")) return [];
+
+      let resolved;
+
+      try { resolved = publicResults.push(envelope); }
+      catch (error) {
+        if (!(error instanceof PublicToolResultError)) throw error;
+        publicResults.close();
+        return [{ type: "warning", code: error.code, message: "The original public tool result could not be reassembled; no complete result was delivered." }];
+      }
+
+      if (resolved.kind === "part") return [];
+
       const events: CliStreamEvent[] = [];
-      translateInto(state, envelope, events);
+
+      translateInto(state, resolved.value, events);
+
       if (envelope.kind === "terminal") terminalSeen = true;
+
       return events;
     },
+
     finish(): ReadonlyArray<CliStreamEvent> {
       if (state === undefined) return [];
       const events: CliStreamEvent[] = [];
       closeBlocks(state, events, "all");
+      publicResults.close();
       state = undefined;
       return events;
     },
@@ -360,9 +482,12 @@ export function projectEnvelopeSequence(
 ): ReadonlyArray<CliStreamEvent> {
   const translator = createStreamTranslator();
   const events: CliStreamEvent[] = [];
+
   for (const envelope of envelopes) {
     events.push(...translator.push(envelope));
   }
+
   events.push(...translator.finish());
+
   return events;
 }

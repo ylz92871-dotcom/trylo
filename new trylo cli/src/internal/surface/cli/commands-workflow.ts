@@ -40,19 +40,23 @@ export function loadWorkflowsFor(ctx: CliContext): ReadonlyArray<Workflow> {
 
 export function handleWorkflowList(ctx: CliContext, options: WorkflowListOptions): ExitCode {
   const workflows = loadWorkflowsFor(ctx);
+
   if (options.json) {
     ctx.stdout(
       `${JSON.stringify({ workflows: workflows.map((item) => ({ name: item.name, description: item.description, source: item.source })) })}\n`,
     );
     return EXIT_CODES.OK;
   }
+
   if (workflows.length === 0) {
     ctx.stdout("no workflows installed\n");
     return EXIT_CODES.OK;
   }
+
   for (const item of workflows) {
     ctx.stdout(`${item.name}  [${item.source}]  ${item.description}\n`);
   }
+
   return EXIT_CODES.OK;
 }
 
@@ -65,17 +69,25 @@ export function handleWorkflowShow(ctx: CliContext, options: WorkflowShowOptions
       hint: "`trylo workflow list` shows the runnable ones",
     });
   }
+
   if (options.json) {
     ctx.stdout(
       `${JSON.stringify({ workflow: { name: found.name, description: found.description, source: found.source }, prompt: found.prompt })}\n`,
     );
     return EXIT_CODES.OK;
   }
+
   ctx.stdout(`${found.prompt}\n`);
+
   return EXIT_CODES.OK;
 }
 
 export async function handleWorkflowRun(ctx: CliContext, options: WorkflowRunOptions, sink: CliSink): Promise<ExitCode> {
+  if (options.name.startsWith("wfl_")) {
+    const { handleLearnedWorkflowRun } = await import("./commands-workflow-learned-run.js");
+    return handleLearnedWorkflowRun(ctx, options, sink);
+  }
+
   const found = findWorkflow(loadWorkflowsFor(ctx), options.name);
   if (found === undefined) {
     return reportFailure(ctx, {
@@ -84,10 +96,12 @@ export async function handleWorkflowRun(ctx: CliContext, options: WorkflowRunOpt
       hint: "`trylo workflow list` shows the runnable ones",
     });
   }
+
   // The run is loaded lazily for the same reason `commands.ts` loads it
   // lazily: `list` and `show` must never pay for — or be broken by — the
   // execution graph.
   const { handleRun } = await import("./run-command.js");
+
   return handleRun(
     ctx,
     {

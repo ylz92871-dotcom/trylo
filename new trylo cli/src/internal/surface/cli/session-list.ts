@@ -71,6 +71,7 @@ function describeOne(dir: string, id: string, bytes: number, modifiedAtMs: numbe
   if (!meta.ok) {
     return { ...base, metaCorrupt: true };
   }
+
   return {
     ...base,
     ...(meta.meta.displayName === undefined ? {} : { displayName: meta.meta.displayName }),
@@ -86,42 +87,57 @@ export async function enrichOne(dir: string, id: string, bytes: number, modified
     const health: SessionHealth = viewed.code === "missing_session" ? "missing" : `unreadable:${viewed.code}`;
     return { ...named, preview: undefined, health };
   }
+
   if (viewed.view.tornTail) {
     return { ...named, preview: undefined, health: "torn-tail" };
   }
+
   for (const record of viewed.view.records) {
     if (record.type === "transcript_item" && isTranscriptItem(record.payload) && record.payload.kind === "user") {
       return { ...named, preview: previewOf(record.payload.text), health: "ok" };
     }
   }
+
   return { ...named, preview: undefined, health: "ok" };
 }
 
 export async function enrichSessions(
-  ctx: CliContext,
+  ctx: Pick<CliContext, "readDir">,
   dir: string,
   budget: number = SESSION_PREVIEW_BUDGET,
+  search?: string,
 ): Promise<ReadonlyArray<EnrichedSession>> {
   // listSessions is newest-first, so the budget always covers the sessions a
   // person most likely means: --last, the text display, and recent resume.
   const files = listSessions({ readDir: ctx.readDir }, dir);
   const enriched: EnrichedSession[] = [];
+
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index];
     if (file === undefined) {
       continue;
     }
+
+    // Search uses only directory/sidecar facts. Reject unrelated sessions
+    // before reading their journals; Desktop recovery has a bounded probe.
+    if (search !== undefined && !matchesSearch(describeOne(dir, file.id, file.bytes, file.modifiedAtMs), search)) {
+      continue;
+    }
+
     if (index < budget) {
       enriched.push(await enrichOne(dir, file.id, file.bytes, file.modifiedAtMs));
       continue;
     }
+
     const named = describeOne(dir, file.id, file.bytes, file.modifiedAtMs);
+
     enriched.push({ ...named, preview: undefined, previewOmitted: true as const, health: "preview-omitted" });
   }
+
   return enriched;
 }
 
-function matchesSearch(session: EnrichedSession, search: string): boolean {
+function matchesSearch(session: Pick<SessionMeta, "id" | "displayName">, search: string): boolean {
   const needle = search.toLowerCase();
   return session.id.toLowerCase().includes(needle) ||
     (session.displayName ?? "").toLowerCase().includes(needle);
@@ -141,14 +157,16 @@ function rowText(session: EnrichedSession, now: number): ReadonlyArray<string> {
     session.preview ?? "—",
     [archived, health].filter(part => part.length > 0).join(" "),
   ];
+
   return parts;
 }
 
 export async function handleSessionList(ctx: CliContext, request: SessionListRequest): Promise<ExitCode> {
   const dir = sessionsDir(ctx.homeDir, ctx.env);
-  const enriched = await enrichSessions(ctx, dir);
+  const enriched = await enrichSessions(ctx, dir, SESSION_PREVIEW_BUDGET, request.search);
   const visible = enriched.filter(session => (request.all || !session.archived) &&
     (request.search === undefined || matchesSearch(session, request.search)));
+
   if (request.json) {
     ctx.stdout(`${JSON.stringify({
       sessions: visible.map(session => ({
@@ -165,24 +183,31 @@ export async function handleSessionList(ctx: CliContext, request: SessionListReq
     })}\n`);
     return EXIT_CODES.OK;
   }
+
   if (visible.length === 0) {
     if (request.search !== undefined) {
       ctx.stdout(`no sessions match "${request.search}"\n`);
       ctx.stdout(`run \`trylo session list [--all]\` to see every session\n`);
       return EXIT_CODES.OK;
     }
+
     ctx.stdout(`no sessions in ${dir}\n`);
     ctx.stdout(`start one with \`trylo run --session <id> "<message>"\`\n`);
+
     return EXIT_CODES.OK;
   }
+
   const { shown, hidden } = limited(visible, LIST_LIMIT);
   const now = ctx.now();
+
   for (const line of aligned(shown.map(session => rowText(session, now)))) {
     ctx.stdout(`${line}\n`);
   }
+
   if (hidden > 0) {
     ctx.stdout(`... ${hidden} older (--json lists them all)\n`);
   }
+
   return EXIT_CODES.OK;
 }
 
@@ -203,6 +228,7 @@ export async function resolveLastSession(ctx: CliContext): Promise<LastSessionOu
   // file and the order never changed.
   const files = listSessions({ readDir: ctx.readDir }, dir);
   let candidate: EnrichedSession | undefined;
+
   for (const file of files) {
     const enriched = await enrichOne(dir, file.id, file.bytes, file.modifiedAtMs);
     if (!enriched.archived) {
@@ -210,6 +236,7 @@ export async function resolveLastSession(ctx: CliContext): Promise<LastSessionOu
       break;
     }
   }
+
   if (candidate === undefined) {
     return {
       ok: false,
@@ -220,6 +247,7 @@ export async function resolveLastSession(ctx: CliContext): Promise<LastSessionOu
       },
     };
   }
+
   if (candidate.health !== "ok") {
     return {
       ok: false,
@@ -230,6 +258,7 @@ export async function resolveLastSession(ctx: CliContext): Promise<LastSessionOu
       },
     };
   }
+
   if (!isValidSessionId(candidate.id)) {
     return {
       ok: false,
@@ -240,6 +269,7 @@ export async function resolveLastSession(ctx: CliContext): Promise<LastSessionOu
       },
     };
   }
+
   return { ok: true, sessionId: candidate.id };
 }
 

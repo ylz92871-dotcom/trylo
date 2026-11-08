@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import type { MethodEventPayload, MethodEventSink } from "../../learning/method/port.js";
+import type { MethodEventPayload, MethodEventSink } from "../../learning/agent/subsystems/method/index.js";
 import { tryloHome } from "./session-paths.js";
 import type { MethodLearningInput } from "./wiring.js";
 
@@ -104,6 +104,7 @@ export function createMethodEventSink(
   const file = path.join(root, METHOD_EVENTS_FILE);
   let prepared = false;
   let warned = false;
+
   return (kind: string, payload: MethodEventPayload): void => {
     const line = `${JSON.stringify({ occurredAt: deps.now(), kind, payload })}\n`;
     try {
@@ -115,9 +116,11 @@ export function createMethodEventSink(
     } catch (error) {
       // 目录可能是建好之后又被删掉的，所以下一次事件还会再试一次建目录。
       prepared = false;
+
       if (warned) {
         return;
       }
+
       warned = true;
       deps.warn(`method_event_sink_failed:${messageOf(error)}`);
     }

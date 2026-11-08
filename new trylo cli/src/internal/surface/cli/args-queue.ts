@@ -74,18 +74,23 @@ export function parseQueue(argv: ReadonlyArray<string>): ParsedCommand {
   if (sub === "--help" || sub === "-h") {
     return familyHelpCommand("queue");
   }
+
   if (sub === undefined) {
     return usageError("queue requires a subcommand", LIST_HINT);
   }
+
   if (sub === "add") {
     return parseQueueAdd(argv.slice(1));
   }
+
   if (sub === "list") {
     return parseQueueList(argv.slice(1));
   }
+
   if (sub === "drop") {
     return parseQueueDrop(argv.slice(1));
   }
+
   return usageError(
     `unknown queue subcommand: ${sub}`,
     "try `trylo queue add|list|drop`",
@@ -97,47 +102,58 @@ function parseQueueAdd(argv: ReadonlyArray<string>): ParsedCommand {
   let text: string | undefined;
   let json = false;
   let index = 0;
+
   while (index < argv.length) {
     const token = argv[index] ?? "";
     if (token === "--help" || token === "-h") {
       return familyHelpCommand("queue");
     }
+
     if (token === "--json") {
       json = true;
       index += 1;
       continue;
     }
+
     const flag = flagToken(token);
     if (flag === undefined) {
       return usageError(`queue add does not accept ${token}`, ADD_HINT);
     }
+
     if (flag.name === "session") {
       const read = readValue(argv, index, flag.inlineValue);
       if (read.error !== undefined) {
         return usageError(`option --session ${read.error}`, ADD_HINT);
       }
+
       sessionId = read.value;
       index = read.next;
       continue;
     }
+
     if (flag.name === "message") {
       const read = readValue(argv, index, flag.inlineValue);
       if (read.error !== undefined) {
         return usageError(`option --message ${read.error}`, ADD_HINT);
       }
+
       text = read.value;
       index = read.next;
       continue;
     }
+
     return usageError(`queue add does not accept --${flag.name}`, ADD_HINT);
   }
+
   const target = requireSessionId(sessionId, ADD_HINT);
   if (typeof target !== "string") {
     return target;
   }
+
   if (text === undefined || text.trim().length === 0) {
     return usageError("queue add requires a non-empty --message", ADD_HINT);
   }
+
   return { kind: "queue_add", options: { sessionId: target, text, json } };
 }
 
@@ -146,45 +162,55 @@ function parseQueueList(argv: ReadonlyArray<string>): ParsedCommand {
   let json = false;
   let limit = DEFAULT_LIMIT;
   let index = 0;
+
   while (index < argv.length) {
     const token = argv[index] ?? "";
     if (token === "--help" || token === "-h") {
       return familyHelpCommand("queue");
     }
+
     if (token === "--json") {
       json = true;
       index += 1;
       continue;
     }
+
     const flag = flagToken(token);
     if (flag === undefined) {
       return usageError(`queue list does not accept ${token}`, LIST_HINT);
     }
+
     if (flag.name === "session") {
       const read = readValue(argv, index, flag.inlineValue);
       if (read.error !== undefined) {
         return usageError(`option --session ${read.error}`, LIST_HINT);
       }
+
       sessionId = read.value;
       index = read.next;
       continue;
     }
+
     if (flag.name === "limit") {
       const read = readValue(argv, index, flag.inlineValue);
       const parsed = read.error === undefined ? readWholeNumber(read.value) : undefined;
       if (parsed === undefined || parsed <= 0 || parsed > MAX_LIMIT) {
         return usageError(`option --limit must be a whole number from 1 to ${MAX_LIMIT}`, LIST_HINT);
       }
+
       limit = parsed;
       index = read.next;
       continue;
     }
+
     return usageError(`queue list does not accept --${flag.name}`, LIST_HINT);
   }
+
   const target = requireSessionId(sessionId, LIST_HINT);
   if (typeof target !== "string") {
     return target;
   }
+
   return { kind: "queue_list", options: { sessionId: target, json, limit } };
 }
 
@@ -193,47 +219,58 @@ function parseQueueDrop(argv: ReadonlyArray<string>): ParsedCommand {
   let id: string | undefined;
   let json = false;
   let index = 0;
+
   while (index < argv.length) {
     const token = argv[index] ?? "";
     if (token === "--help" || token === "-h") {
       return familyHelpCommand("queue");
     }
+
     if (token === "--json") {
       json = true;
       index += 1;
       continue;
     }
+
     const flag = flagToken(token);
     if (flag === undefined) {
       return usageError(`queue drop does not accept ${token}`, DROP_HINT);
     }
+
     if (flag.name === "session") {
       const read = readValue(argv, index, flag.inlineValue);
       if (read.error !== undefined) {
         return usageError(`option --session ${read.error}`, DROP_HINT);
       }
+
       sessionId = read.value;
       index = read.next;
       continue;
     }
+
     if (flag.name === "id") {
       const read = readValue(argv, index, flag.inlineValue);
       if (read.error !== undefined || (read.value ?? "").trim().length === 0) {
         return usageError(`option --id ${read.error ?? "requires a non-empty value"}`, DROP_HINT);
       }
+
       id = read.value;
       index = read.next;
       continue;
     }
+
     return usageError(`queue drop does not accept --${flag.name}`, DROP_HINT);
   }
+
   if (id === undefined) {
     return usageError("queue drop requires --id", DROP_HINT);
   }
+
   const target = requireSessionId(sessionId, DROP_HINT);
   if (typeof target !== "string") {
     return target;
   }
+
   return { kind: "queue_drop", options: { sessionId: target, id, json } };
 }
 
@@ -254,6 +291,7 @@ function requireSessionId(
   if (value === undefined) {
     return usageError("this command requires --session <id>", hint);
   }
+
   const trimmed = value.trim();
   if (!isValidSessionId(trimmed)) {
     return usageError(
@@ -261,5 +299,6 @@ function requireSessionId(
       "a session id is letters, digits, dot, dash or underscore, and never contains ..",
     );
   }
+
   return trimmed;
 }

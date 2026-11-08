@@ -14,10 +14,12 @@ test("cancelling a text approval settles promptly and a late yes cannot approve 
   });
   const ticket = await port.request({ toolCallId: "candidate-check", name: "run_shell", arguments: {}, pattern: permissionPattern("run_shell", {}) }, { signal: controller.signal });
   const pending = port.awaitDecision(ticket.ticketId);
+
   controller.abort();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<"still_waiting">(resolve => { timer = setTimeout(() => { resolve("still_waiting"); }, 200); });
   const result = await Promise.race([pending, timeout]);
+
   clearTimeout(timer);
   answer("y");
   assert.notEqual(result, "still_waiting", "abort must release the text approval without another input line");

@@ -45,10 +45,12 @@ function recorded(homeDir: string, files: Map<string, string> = new Map()): Reco
     readFile: (path) => files.get(path),
     isDirectory: () => true,
     readDir: () => [],
+
     writeFile: (path, text) => {
       files.set(path, text);
       return true;
     },
+
     readStdin: async () => "",
     readLine: async () => undefined,
     readSecret: async () => "seed-secret",
@@ -57,6 +59,7 @@ function recorded(homeDir: string, files: Map<string, string> = new Map()): Reco
     now: () => 0,
     newId: (prefix) => `${prefix}-1`,
   };
+
   return { ctx, out, err, files, home: homeDir };
 }
 
@@ -69,6 +72,7 @@ function tempHome(t: { after: (fn: () => void) => void }): string {
 
 test("add writes a declaration, and it reads back through the real decoder", async (t) => {
   const fx = recorded(tempHome(t));
+
   assert.equal(await handleLogin(fx.ctx, { provider: "openai-compatible", account: "work" }), EXIT_CODES.OK);
   const code = handleProvidersAdd(fx.ctx, {
     id: "amd",
@@ -77,18 +81,24 @@ test("add writes a declaration, and it reads back through the real decoder", asy
     model: "deepseek-v4",
     account: "work",
   });
+
   assert.equal(code, EXIT_CODES.OK);
   assert.equal(fx.out.join("").includes("declared provider amd"), true);
   assert.equal(fx.out.join("").includes("bound to account work"), true);
 
   const raw = fx.files.get(docPath(fx));
+
   assert.equal(typeof raw, "string");
   const decoded = decodeDocument(raw ?? "");
+
   assert.equal(decoded.ok, true);
+
   if (!decoded.ok) {
     return;
   }
+
   const declared = decoded.value.providers.find((entry) => entry.id === "amd");
+
   assert.equal(declared?.endpoint, "https://amd.example/api/v1/chat/completions");
   assert.equal(declared?.model, "deepseek-v4");
   assert.equal(declared?.accountId, "work");
@@ -99,6 +109,7 @@ test("add writes a declaration, and it reads back through the real decoder", asy
 
 test("add then switch selects it, and config reports the bound account", async (t) => {
   const fx = recorded(tempHome(t));
+
   assert.equal(await handleLogin(fx.ctx, { provider: "openai-compatible", account: "work" }), EXIT_CODES.OK);
   assert.equal(
     handleProvidersAdd(fx.ctx, {
@@ -114,6 +125,7 @@ test("add then switch selects it, and config reports the bound account", async (
   fx.out.length = 0;
   fx.err.length = 0;
   const code = handleProvidersConfig(fx.ctx, { id: "amd", json: true });
+
   assert.equal(code, EXIT_CODES.OK);
   const payload = JSON.parse(fx.out.join("")) as {
     id: string;
@@ -122,6 +134,7 @@ test("add then switch selects it, and config reports the bound account", async (
     origin: string;
     credential: { readonly account: string; readonly bound?: boolean; readonly loggedIn: boolean };
   };
+
   assert.equal(payload.id, "amd");
   assert.equal(payload.endpoint, "https://amd.example/api/v1/chat/completions");
   assert.equal(payload.model, "deepseek-v4");
@@ -141,6 +154,7 @@ test("a built-in id, a duplicate and a missing endpoint are all refused before a
     endpoint: "https://amd.example/api/v1/chat/completions",
     model: "deepseek-v4",
   };
+
   assert.equal(handleProvidersAdd(fx.ctx, first), EXIT_CODES.OK);
   const before = fx.files.get(docPath(fx));
   const cases: ReadonlyArray<[Parameters<typeof handleProvidersAdd>[1], string]> = [
@@ -150,17 +164,20 @@ test("a built-in id, a duplicate and a missing endpoint are all refused before a
     [{ ...first, id: "amd", endpoint: "" }, "--endpoint"],
     [{ ...first, id: "amd", model: "" }, "--model"],
   ];
+
   for (const [options, expected] of cases) {
     const code = handleProvidersAdd(fx.ctx, options);
     assert.equal(code, EXIT_CODES.USAGE, JSON.stringify(options));
     assert.equal(fx.err.join("").includes(expected), true, expected);
   }
+
   // Nothing was written by any refusal.
   assert.equal(fx.files.get(docPath(fx)), before);
 });
 
 test("a provider id that could not be typed back is refused, not normalised", (t) => {
   const fx = recorded(tempHome(t));
+
   for (const id of ["", "1abc", "has space", "a=b"]) {
     const code = handleProvidersAdd(fx.ctx, {
       id,
@@ -170,6 +187,7 @@ test("a provider id that could not be typed back is refused, not normalised", (t
     });
     assert.equal(code, EXIT_CODES.USAGE, id);
   }
+
   assert.equal(fx.files.get(docPath(fx)), undefined);
 });
 
@@ -185,10 +203,13 @@ test("the parser takes the id positionally and the rest as flags", () => {
     "--account",
     "work",
   ]);
+
   assert.equal(parsed.kind, "providers_add");
+
   if (parsed.kind !== "providers_add") {
     return;
   }
+
   assert.deepEqual(parsed.options, {
     id: "amd",
     kind: "openai-compatible",

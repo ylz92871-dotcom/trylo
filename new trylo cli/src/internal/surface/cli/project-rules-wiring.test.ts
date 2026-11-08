@@ -59,6 +59,7 @@ function recordingProvider(): { readonly port: ProviderPort; readonly seen: Prov
       yield stop;
     },
   };
+
   return { port, seen };
 }
 
@@ -107,11 +108,13 @@ function workspaceWith(
   files: Readonly<Record<string, string>>,
 ): { readonly root: string; readonly cleanup: () => void } {
   const root = mkdtempSync(join(os.tmpdir(), "trylo-b1e2e-"));
+
   for (const [relative, text] of Object.entries(files)) {
     const absolute = join(root, relative);
     mkdirSync(join(absolute, ".."), { recursive: true });
     writeFileSync(absolute, text);
   }
+
   return { root, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
@@ -121,9 +124,11 @@ test("a real AGENTS.md reaches the request the provider is handed", async () => 
   });
   try {
     const context = projectContextFor(contextFor(workspace.root), workspace.root);
+
     assert.ok(context, "the resolver must have found the rule file");
 
     const provider = recordingProvider();
+
     await runTurn(ports(provider.port), {
       sessionId: "ses-b1e2e",
       turnId: "trn-b1e2e",
@@ -134,6 +139,7 @@ test("a real AGENTS.md reaches the request the provider is handed", async () => 
 
     assert.equal(provider.seen.length, 1, "one request must have been sent");
     const sent = provider.seen[0];
+
     assert.ok(sent);
     assert.match(systemText(sent), /run `npm test` before claiming done/);
     assert.match(systemText(sent), /Project instructions from AGENTS\.md/);
@@ -148,8 +154,10 @@ test("the environment the run states is the real one, not a remembered one", asy
   });
   try {
     const context = projectContextFor(contextFor(workspace.root), workspace.root);
+
     assert.ok(context);
     const provider = recordingProvider();
+
     await runTurn(ports(provider.port), {
       sessionId: "ses-b1e2e",
       turnId: "trn-b1e2e",
@@ -159,8 +167,10 @@ test("the environment the run states is the real one, not a remembered one", asy
     });
 
     const sent = provider.seen[0];
+
     assert.ok(sent);
     const text = systemText(sent);
+
     // The workspace root the tools are confined to, named by the host that
     // confined them — not a path the model could have guessed or invented.
     assert.ok(
@@ -180,8 +190,10 @@ test("a project's own rules are never dressed as a learned profile", async () =>
   });
   try {
     const context = projectContextFor(contextFor(workspace.root), workspace.root);
+
     assert.ok(context);
     const provider = recordingProvider();
+
     await runTurn(ports(provider.port), {
       sessionId: "ses-b1e2e",
       turnId: "trn-b1e2e",
@@ -191,8 +203,10 @@ test("a project's own rules are never dressed as a learned profile", async () =>
     });
 
     const sent = provider.seen[0];
+
     assert.ok(sent);
     const text = systemText(sent);
+
     assert.match(text, /Do not edit files under data\//);
     // The three labels the Profile path would have worn. A rule wearing any of
     // them is a lie about where it came from, and its meaning changes the
@@ -215,8 +229,10 @@ test("a subdirectory rule reaches the request scoped to its own subtree", async 
     // Started in `src`, which is the case §3.1 calls out: a subdirectory run
     // still belongs to the root project.
     const context = projectContextFor(contextFor(join(workspace.root, "src")), workspace.root);
+
     assert.ok(context);
     const provider = recordingProvider();
+
     await runTurn(ports(provider.port), {
       sessionId: "ses-b1e2e",
       turnId: "trn-b1e2e",
@@ -226,8 +242,10 @@ test("a subdirectory rule reaches the request scoped to its own subtree", async 
     });
 
     const sent = provider.seen[0];
+
     assert.ok(sent);
     const text = systemText(sent);
+
     assert.match(text, /root rules/);
     assert.match(text, /needs a test beside it/);
     // And the scope is stated, so a model can tell which subtree a rule governs
@@ -246,6 +264,7 @@ test("the adopted source list names the file, its scope and its content hash", a
   });
   try {
     const context = projectContextFor(contextFor(join(workspace.root, "src")), workspace.root);
+
     assert.ok(context);
     assert.deepEqual(
       context.sources.map((source) => [source.relativePath, source.scopePath, source.scope]),
@@ -254,11 +273,13 @@ test("the adopted source list names the file, its scope and its content hash", a
         ["src/AGENTS.md", "src", "directory"],
       ],
     );
+
     // A hash per source: this is what a resume compares against to say the
     // rules changed without re-reading prose (WP §6).
     for (const source of context.sources) {
       assert.match(source.contentHash, /^[0-9a-f]{16}$/);
     }
+
     assert.notEqual(context.sources[0]?.contentHash, context.sources[1]?.contentHash);
     assert.deepEqual(context.problems, []);
   } finally {
@@ -275,11 +296,13 @@ test("a project with no rule file still receives environment facts without rule 
   const workspace = workspaceWith({ "src/index.ts": "export const x = 1;\n" });
   try {
     const context = projectContextFor(contextFor(workspace.root), workspace.root);
+
     assert.ok(context);
     assert.deepEqual(context.sources, []);
     assert.match(context.messages[0]?.content ?? "", /platform: linux/);
 
     const provider = recordingProvider();
+
     await runTurn(ports(provider.port), {
       sessionId: "ses-b1e2e",
       turnId: "trn-b1e2e",
@@ -287,6 +310,7 @@ test("a project with no rule file still receives environment facts without rule 
       text: "implement the flag parser",
     });
     const sent = provider.seen[0];
+
     assert.ok(sent);
     assert.doesNotMatch(systemText(sent), /Project instructions from/);
   } finally {

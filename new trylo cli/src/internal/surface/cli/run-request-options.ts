@@ -34,6 +34,7 @@ function readPromptFile(
   if (path === undefined) {
     return {};
   }
+
   const content = reader.readFile(path);
   if (content === undefined) {
     return fail(
@@ -42,6 +43,7 @@ function readPromptFile(
       "pass a readable file, or drop the flag",
     );
   }
+
   return { text: content };
 }
 
@@ -56,18 +58,22 @@ function resolveSystemPrompt(
       ...(carried.systemPromptAppend === undefined ? {} : { systemPromptAppend: carried.systemPromptAppend }),
     };
   }
+
   const replaceInline = options.systemPrompt;
   const replaceFile = readPromptFile(reader, options.systemPromptFile, "--system-prompt-file");
   if ("exitCode" in replaceFile) {
     return replaceFile;
   }
+
   const appendInline = options.appendSystemPrompt;
   const appendFile = readPromptFile(reader, options.appendSystemPromptFile, "--append-system-prompt-file");
   if ("exitCode" in appendFile) {
     return appendFile;
   }
+
   const replaceText = replaceInline ?? replaceFile.text;
   const appendText = appendInline ?? appendFile.text;
+
   return {
     ...(replaceText === undefined || replaceText.trim().length === 0
       ? {}
@@ -87,9 +93,11 @@ function resolveResponseSchema(
     const carried = options.resolvedRequest;
     return carried.responseSchema === undefined ? {} : { responseSchema: carried.responseSchema };
   }
+
   if (options.outputSchema === undefined) {
     return {};
   }
+
   const text = reader.readFile(options.outputSchema);
   if (text === undefined) {
     return fail(
@@ -98,6 +106,7 @@ function resolveResponseSchema(
       "pass a readable JSON Schema file, or drop the flag",
     );
   }
+
   const loaded = loadResponseSchema(text);
   if (!loaded.ok) {
     return fail(
@@ -106,6 +115,7 @@ function resolveResponseSchema(
       "pass a file holding a non-empty JSON Schema object",
     );
   }
+
   // Refuse before sending when the declaration positively says the model
   // cannot honour structure. Undeclared models pass through and the endpoint
   // decides; its 400 refusal surfaces as `invalid_request`, never as silent
@@ -118,6 +128,7 @@ function resolveResponseSchema(
       "pick a model that declares it, or drop the flag",
     );
   }
+
   return { responseSchema: loaded.schema };
 }
 
@@ -140,23 +151,29 @@ export function resolveRequestOptions(
         return fail(EXIT_CODES.USAGE, checked.detail, "pass a fallback model different from the run's model");
       }
     }
+
     return { ...carried };
   }
+
   const prompt = resolveSystemPrompt(reader, options);
   if ("exitCode" in prompt) {
     return prompt;
   }
+
   const schema = resolveResponseSchema(reader, options, selection);
   if ("exitCode" in schema) {
     return schema;
   }
+
   const fallback = options.fallbackModel;
   const reasoning = options.reasoningEffort === undefined ? {} : { reasoningEffort: options.reasoningEffort };
+
   if (fallback !== undefined) {
     const checked = validateFallback(selection.model, fallback);
     if (!checked.ok) {
       return fail(EXIT_CODES.USAGE, checked.detail, "pass a fallback model different from the run's model");
     }
+
     return {
       ...prompt,
       ...schema,
@@ -164,5 +181,6 @@ export function resolveRequestOptions(
       ...(checked.declaration.fallback === undefined ? {} : { fallbackModel: checked.declaration.fallback }),
     };
   }
+
   return { ...prompt, ...schema, ...reasoning };
 }

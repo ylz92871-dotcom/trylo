@@ -29,16 +29,22 @@ test("every command is reachable by its name and its aliases", () => {
 
 test("parseSlash separates a command from its argument", () => {
   const resume = parseSlash("/resume   ses-1 ");
+
   assert.equal(resume.kind, "known");
+
   if (resume.kind === "known") {
     assert.equal(resume.invocation.command.kind, "resume");
     assert.equal(resume.invocation.arg, "ses-1");
   }
+
   const bare = parseSlash("/resume");
+
   assert.equal(bare.kind, "known");
+
   if (bare.kind === "known") {
     assert.equal(bare.invocation.arg, "");
   }
+
   assert.equal(parseSlash("/exit").kind, "known");
   assert.equal(parseSlash("/quit").kind, "known");
 });
@@ -46,11 +52,13 @@ test("parseSlash separates a command from its argument", () => {
 test("attack #17: an unknown slash token is unknown, never a prompt", () => {
   for (const input of ["/nope", "/?", "/help me", "/re sume"]) {
     const parsed = parseSlash(input);
+
     // `/?` is a documented alias of /help; everything else here is unknown.
     if (input === "/?" || input.startsWith("/help")) {
       assert.equal(parsed.kind, "known", input);
       continue;
     }
+
     assert.equal(parsed.kind, "unknown", `${input} must not be treated as a command`);
   }
   // And it must not be reported as a prompt either.
@@ -67,7 +75,9 @@ test("a line that is not a slash command is a prompt", () => {
 
 test("help text is generated from the table, so the two cannot drift", () => {
   const help = slashHelpText();
+
   assert.equal(help.startsWith("commands:"), true);
+
   for (const command of SLASH_COMMANDS) {
     assert.equal(help.includes(command.name), true, `${command.name} missing from help`);
     if (command.arg !== undefined) {

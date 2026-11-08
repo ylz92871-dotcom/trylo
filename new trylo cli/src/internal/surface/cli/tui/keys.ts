@@ -54,7 +54,9 @@ export function createKeyDecoder(): KeyDecoder {
     push(chunk: string): ReadonlyArray<KeyEvent> {
       const events: KeyEvent[] = [];
       let source = held + chunk;
+
       held = "";
+
       while (source.length > 0) {
         const consumed = decodeOne(source, events);
         if (consumed === 0) {
@@ -62,11 +64,14 @@ export function createKeyDecoder(): KeyDecoder {
           held = source;
           break;
         }
+
         source = source.slice(consumed);
       }
+
       return events;
     },
   };
+
   return decoder;
 }
 
@@ -79,18 +84,22 @@ function decodeOne(source: string, events: KeyEvent[]): number {
   if (head === 0x1b) {
     return decodeEscape(source, events);
   }
+
   if (head === 0x0d || head === 0x0a) {
     events.push({ kind: "enter" });
     return 1;
   }
+
   if (head === 0x7f || head === 0x08) {
     events.push({ kind: "backspace" });
     return 1;
   }
+
   if (head === 0x09) {
     events.push({ kind: "tab" });
     return 1;
   }
+
   if (head < 0x20) {
     // Every C0 control from Ctrl-A through Ctrl-Z becomes a ctrl event, so a
     // user binding can reach any of them; the ones with line-editing meaning
@@ -99,13 +108,18 @@ function decodeOne(source: string, events: KeyEvent[]): number {
       events.push({ kind: "ctrl", name: String.fromCharCode(head + 96) });
       return 1;
     }
+
     events.push({ kind: "ignored" });
+
     return 1;
   }
+
   // One code point per event keeps the composer's cursor arithmetic honest:
   // a surrogate pair is two units but one key.
   const character = String.fromCodePoint(head);
+
   events.push({ kind: "char", text: character });
+
   return character.length;
 }
 
@@ -123,10 +137,14 @@ function decodeEscape(source: string, events: KeyEvent[]): number {
     if (end === -1) {
       return 0; // paste not finished arriving
     }
+
     const text = source.slice(6, end).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
     events.push({ kind: "paste", text });
+
     return end + 6;
   }
+
   const csi = /^((?:\x1b\[)?)([0-9;]*)([A-Za-z~])/.exec(source);
   if (csi !== null && csi[1] !== undefined && csi[1].length > 0) {
     const params = csi[2] ?? "";
@@ -135,6 +153,7 @@ function decodeEscape(source: string, events: KeyEvent[]): number {
     events.push(event);
     return csi[0].length;
   }
+
   // A lone ESC is the Esc key. An ESC starting an unknown sequence whose next
   // character has not arrived yet is held; anything else after ESC that is not
   // CSI is ignored whole (alt-combos this build does not bind).
@@ -142,11 +161,14 @@ function decodeEscape(source: string, events: KeyEvent[]): number {
     events.push({ kind: "escape" });
     return 1;
   }
+
   const next = source[1] ?? "";
   if (next === "[" || next === "O") {
     return 0; // incomplete CSI/SS3: hold for the rest
   }
+
   events.push({ kind: "ignored" });
+
   return 2;
 }
 

@@ -1,4 +1,5 @@
 import type { LearningSwitch } from "../args.js";
+import type { SessionLearningOptions } from "../session-learning-options.js";
 import { EXIT_CODES, type ExitCode } from "../../../protocol/cli-stream.js";
 import type { CliContext } from "../context.js";
 import { handleRepl } from "../repl.js";
@@ -59,10 +60,12 @@ export async function handleReplEntry(
   ctx: CliContext,
   sink: CliSink,
   learning?: LearningSwitch,
+  learningOptions: SessionLearningOptions = {},
 ): Promise<ExitCode> {
   if (!ctx.stdinIsTty) {
-    return handleRepl(ctx, sink, learning);
+    return handleRepl(ctx, sink, learning, learningOptions);
   }
+
   const painterRef: { current?: Painter | undefined } = {};
   const wired = wireComposer(ctx, painterRef);
 
@@ -79,6 +82,7 @@ export async function handleReplEntry(
     () => createMidRunInput(wired.composer === undefined ? { io: wired.io } : { io: wired.io, composer: wired.composer }),
     createIdleDispatch(wired.ctx),
     wired.hubRef,
+    learningOptions,
   );
 }
 
@@ -107,22 +111,28 @@ export async function handleTui(
    * composer's raw-mode Ctrl-C reaches the same machine a SIGINT would.
    */
   hubRef?: { current?: InterruptHub | undefined },
+  learningOptions: SessionLearningOptions = {},
 ): Promise<ExitCode> {
-  const options = newTuiSessionOptions(ctx.newId("repl"), learning);
+  const options = newTuiSessionOptions(ctx.newId("repl"), learning, learningOptions);
   const startup = await runConnectionStartup(ctx, io, options, (openOptions) =>
     openTuiSession(ctx, io, openOptions),
   );
   if (startup.kind === "stop") {
     return startup.exitCode;
   }
+
   const hub = interruptHubOf(io, ctx);
+
   if (hubRef !== undefined) {
     hubRef.current = hub;
   }
+
   const paint = paintFor(ctx);
+
   // Keep the opening compact; the prompt loop owns the live status beneath it.
   io.write(`${openingLines(startup.scaffold, io.size().columns, paint).join("\n")}\n`);
   let scaffold = startup.scaffold;
+
   try {
     const stop = await tuiLoop(ctx, io, runner, startup.scaffold, hub, paint, painterRef, midRun, idleDispatch);
     scaffold = stop.scaffold;
@@ -226,10 +236,12 @@ async function tuiLoop(
    * 让人得出相反的结论，沉默会让后者被当成前者。
    */
   let lastQueueProblem: string | undefined;
+
   for (;;) {
     if (hub.exitRequested) {
       return { exitCode: EXIT_CODES.CANCELLED, scaffold };
     }
+
     hub.phase = "idle";
     /**
      * Idle 派发（WP08 / C41）：只在真正空闲时问一次队首。
@@ -243,6 +255,7 @@ async function tuiLoop(
      * 在排队时就该把文件内容带上。
      */
     let queued: { readonly id: string; readonly text: string; readonly remaining: number } | undefined;
+
     if (idleDispatch !== undefined && pending.length === 0) {
       const dispatch = await idleDispatch(scaffold.sessionId);
       if (dispatch.kind === "turn") {
@@ -256,9 +269,11 @@ async function tuiLoop(
         lastQueueProblem = undefined;
       }
     }
+
     if (redrawBar) {
       io.write(`${statusBar(state, io.size().columns)}\n`);
     }
+
     // The prompt must come from the line reader, not from us: `rl.question("")`
     // refreshes its own line and erased a hand-written "> " before it was ever
     // seen. Continuation lines keep the old empty prompt.
@@ -273,43 +288,53 @@ async function tuiLoop(
               return io.readLine(prompt);
             })
           : await mid.takeLine()));
+
     if (queued === undefined) {
       pending = pending.slice(1);
     }
+
     redrawBar = true;
+
     if (line === undefined) {
       return { exitCode: EXIT_CODES.OK, scaffold };
     }
+
     const input = line.trim();
     if (input.length === 0) {
       redrawBar = false;
       continue;
     }
+
     /**
      * What the run host receives. Usually the prepared text (mentions expanded,
      * the file's contents inlined) and only that; a queued message is already
      * the words to say, so it goes as typed.
      */
     let turnText = input;
+
     if (queued === undefined) {
       const slash = parseSlash(input);
       if (slash.kind === "unknown") {
         io.write(`unknown command ${slash.token}; /help for the list\n`);
         continue;
       }
+
       if (slash.kind === "known") {
         const step = await tuiSlash(ctx, io, scaffold, state, slash.invocation, factsOf);
         if (step.kind === "stop") {
           return { exitCode: step.exitCode, scaffold };
         }
+
         if (step.kind === "retry") {
           reportFailure(ctx, step.failure);
           continue;
         }
+
         scaffold = step.scaffold;
         state = step.state;
         continue;
       }
+
       const prepared = prepareInput(input, {
         cwd: ctx.cwd,
         readFile: ctx.readFile,
@@ -322,9 +347,11 @@ async function tuiLoop(
         io.write(`${prepared.problem}\n`);
         continue;
       }
+
       if (prepared.note !== undefined) {
         io.write(`${prepared.note}\n`);
       }
+
       turnText = prepared.text;
     } else {
       // Said so the queue is not invisible: a person who queued a message wants
@@ -334,12 +361,15 @@ async function tuiLoop(
           (queued.remaining === 0 ? " (last one)\n" : ` (${queued.remaining} more waiting)\n`),
       );
     }
+
     state = pushUserLine(state, input);
     turnText = await answerQuestionInput(scaffold.questions, turnText, mid === undefined ? io.readLine : async prompt => {
       if (prompt !== undefined) io.write(prompt);
       return mid.takeLine();
     }, state.waiting?.kind === "question" ? state.waiting.requestId : undefined);
+
     if (turnText !== input && state.waiting?.kind === "question") state = { ...state, waiting: undefined };
+
     hub.phase = "running";
     const turn = await tuiTurn(
       io,
@@ -352,10 +382,13 @@ async function tuiLoop(
       painterRef,
       mid,
     );
+
     state = turn.state;
     scaffold = turn.scaffold;
     hub.phase = "idle";
+
     if (turn.kind === "stop") return { exitCode: turn.exitCode, scaffold };
+
     // What the turn never took, and what arrived too late for it, go back to the
     // prompt rather than nowhere: the person still hears them answered.
     pending = [...pending, ...turn.leftover];

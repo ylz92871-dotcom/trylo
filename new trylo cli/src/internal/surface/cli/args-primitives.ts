@@ -10,10 +10,14 @@
  */
 
 import type { CompletionShell } from "./completion.js";
-import type { RunExecutionOptions } from "./args-execution-types.js";
+import type { RunCommandOptions } from "./args-run-types.js";
+
+export type { RunCommandOptions } from "./args-run-types.js";
+
 import type { FamilyWord } from "./command-vocabulary.js";
-import type { SystemPromptDirective, ReasoningEffort } from "../../ports/provider.js";
-import type { JsonObject } from "../../protocol/envelope.js";
+
+export type { ResolvedRequestOptions } from "./args-request-types.js";
+
 import type { McpAddCommandOptions, McpTargetOptions } from "./args-mcp.js";
 import type { CheckpointListOptions, CheckpointRestoreOptions } from "./args-checkpoint.js";
 import type { CheckpointDiffOptions } from "./args-checkpoint.js";
@@ -41,9 +45,6 @@ import type { OutputStyleListOptions, OutputStyleShowOptions } from "./args-outp
 import type { MemoryDeleteOptions, MemoryImportOptions } from "./args-memory.js";
 import type { WorkflowListOptions, WorkflowRunOptions, WorkflowShowOptions } from "./args-workflow.js";
 import type { ContextOptions } from "./args-context.js";
-import {
-  type PermissionChoice,
-} from "./permission-plan.js";
 import {
   isLearningSwitch,
   LEARNING_SWITCH_VALUES,
@@ -106,9 +107,11 @@ export const PROVIDER_IDS = [
   "openai-compatible",
   "openai-responses",
 ] as const;
+
 export type ProviderId = (typeof PROVIDER_IDS)[number];
 
 export const OUTPUT_FORMATS = ["text", "stream-json"] as const;
+
 export type OutputFormat = (typeof OUTPUT_FORMATS)[number];
 
 export function isProviderId(value: string): value is ProviderId {
@@ -132,6 +135,7 @@ export { isLearningSwitch, LEARNING_SWITCH_VALUES };
 
 /** Closed set for `session export --format`: the transcript as data, or as readable text. */
 export const SESSION_EXPORT_FORMATS = ["json", "markdown"] as const;
+
 export type SessionExportFormat = (typeof SESSION_EXPORT_FORMATS)[number];
 
 export function isSessionExportFormat(value: string): value is SessionExportFormat {
@@ -139,8 +143,10 @@ export function isSessionExportFormat(value: string): value is SessionExportForm
 }
 
 /** Closed set for `run --migrate`: which fingerprint drift a resume may accept. */
-export const MIGRATION_SCOPES = ["model", "catalog"] as const;
+export const MIGRATION_SCOPES = ["provider", "model", "catalog"] as const;
+
 export type { MigrationScope } from "../../adapters/session-store/session-meta.js";
+
 import type { MigrationScope } from "../../adapters/session-store/session-meta.js";
 
 export function isMigrationScopeName(value: string): value is MigrationScope {
@@ -165,142 +171,12 @@ export { ASK_POLICIES, isAskPolicy } from "./permission-plan.js";
 // `--compact-summary` 的闭集住在它的写手旁边（`compact-model-summarizer.ts`），
 // 与 ask/learning 同一形态：枚举与判据只有一份，解析处借出来用。
 export { COMPACT_SUMMARY_MODES, isCompactSummaryMode } from "./compact-model-summarizer.js";
+
 import type { CompactSummaryMode } from "./compact-model-summarizer.js";
+
 export type { CompactSummaryMode };
 
-/**
- * A run's resolved caller-prompt/schema/fallback facts (WP18.2/18.3).
- *
- * Assembled once by `prepareRun` (or carried across a connection switch) and
- * then threaded untouched to the request: the runner states them, the adapter
- * sends them. Every field absent means the corresponding flags were never
- * passed, and the run is byte-identical to one that never heard of them.
- */
-export type ResolvedRequestOptions = {
-  readonly reasoningEffort?: ReasoningEffort;
-  readonly systemPrompt?: SystemPromptDirective;
-  readonly systemPromptAppend?: string;
-  readonly responseSchema?: JsonObject;
-  readonly fallbackModel?: string;
-};
 
-export type RunCommandOptions = PermissionChoice & RunExecutionOptions & {
-  readonly reasoningEffort?: ReasoningEffort;
-  /** Opt-in JSONL user/control input; stdin stays open until this turn ends. */
-  readonly permissionPromptTool?: "stdio";  /**
-   * Absent when not passed, so a config layer can still supply it. Any string
-   * is allowed here: a shipped id or one `providers add` declared — which id is
-   * real is decided against the profile at runtime, never by this type.
-   */
-  readonly provider?: string;
-  readonly format?: OutputFormat;
-  readonly message: ReadonlyArray<string>;
-  /** `-` or a piped stdin was requested: read the remaining prompt from stdin. */
-  readonly readStdin: boolean;
-  readonly model?: string;
-  /** Provider endpoint. Lets a gateway be pointed at without editing config. */
-  readonly endpoint?: string;
-  readonly session?: string;
-  readonly resume?: string;
-  /**
-   * `--last`: continue the newest non-archived session instead of naming one.
-   * Presence-only, and refused together with `--session`/`--resume`: "the last
-   * one" and "this specific one" cannot both decide.
-   */
-  readonly resumeLast?: boolean;
-  /**
-   * `--migrate model,catalog`: which runtime-fingerprint drift a resume may
-   * accept, each recorded in the session sidecar. Workspace and provider drift
-   * are never migratable — that history belongs to another place or account,
-   * and the way across is `session fork`, not a flag.
-   */
-  readonly migrateModel?: boolean;
-  readonly migrateCatalog?: boolean;
-  readonly outputLastMessage?: string;
-  /**
-   * `--output-schema <file>`: JSON Schema file the final answer must satisfy
-   * (WP18.3: C74, Codex `exec --output-schema`). A path here, resolved by
-   * `prepareRun`; absent means the provider decides its own shape.
-   */
-  readonly outputSchema?: string;
-  /** `--output-style <name>` (WP24.2/L48): absent is the built-in default; present appends the style prompt after the seeds, never touching permissions/tools/budgets. */
-  readonly outputStyle?: string;
-  /**
-   * Caller system prompt, legacy L67 quartet: `--system-prompt` /
-   * `--system-prompt-file` replace the assembled seeds, `--append-system-prompt` /
-   * `--append-system-prompt-file` add to them. Raw values only; mutual
-   * exclusion is refused at parse time, files are read by `prepareRun`.
-   */
-  readonly systemPrompt?: string;
-  readonly systemPromptFile?: string;
-  readonly appendSystemPrompt?: string;
-  readonly appendSystemPromptFile?: string;
-  /**
-   * `--fallback-model <model>`: the model a non-interactive run retries once
-   * on after a transient provider failure (WP18.2: L05, legacy `query.ts`
-   * fallback). Absent means the transient failure is the turn's failure.
-   */
-  readonly fallbackModel?: string;
-  /**
-   * Resolved carriers for `connection-switch`: the scaffold's already-resolved
-   * directive/schema survive a mid-session connection change without re-reading
-   * files. Parsing never sets this; only the switch does, and `prepareRun`
-   * prefers it over the raw flag paths.
-   */
-  readonly resolvedRequest?: ResolvedRequestOptions;
-  readonly workspace?: string;
-  readonly maxIterations?: number;
-  readonly maxTokens?: number;
-  readonly contextTokenLimit?: number;
-  readonly modelContextWindow?: number;
-  /**
-   * The dollar ceiling for this run (WP09.3/L07). A positive number of US
-   * dollars: the usage the run accumulates is priced by the configured pricing
-   * pair, and reaching this ceiling ends the run with an explicit
-   * `budget_usd_exhausted` instead of a silently larger bill.
-   */
-  readonly maxBudgetUsd?: number;
-  /** Exact mounted tool catalog for this run; does not grant permission. */
-  readonly toolSelection?: ReadonlyArray<string>;
-  /**
-   * The `--learning` switch. Absent — which is every default path — means no
-   * learning subsystem is constructed at all: no board, no `load()`, no
-   * directory, no ledger. It is a **total** switch over a closed set
-   * (`method` / `user` / `all`): one entry point, each subsystem takes its own
-   * half. Anything outside the set is a usage error rather than a silently
-   * different behaviour.
-   */
-  readonly learning?: LearningSwitch;
-  /**
-   * `--permission-ledger`：让这次运行由持久 Permission 账本背书。Absent —— 每一条
-   * 默认路径 —— 意味着不开文件、不建目录，运行与「从未听说过账本」逐字相同。
-   *
-   * 刻意**没有 settings 键**：一个能把持久授权账本打开的配置文件，正是
-   * `settings/schema.ts` 的闭集要挡住的「配置文件里偷渡 autoApprove」形态；仓库里
-   * 每一个权限类开关（`--allow-writes` / `--ask` / `--allow-tools` / `--deny-tools`）
-   * 也都只走命令行。
-   */
-  readonly permissionLedger?: boolean;
-  /**
-   * `--subagent`：把 `delegate_subagent` 挂进这次运行的工具表。Absent —— 每一条
-   * 默认路径 —— 意味着子代理运行时根本不构造，运行与「从未听说过子代理」逐字
-   * 相同（R1）。与权限类开关同一族：只走命令行，刻意没有 settings 键。
-   */
-  readonly subagent?: boolean;
-  /**
-   * `--allow-web`：把 `web_fetch` 挂进这次运行的工具表。Absent —— 每一条默认
-   * 路径 —— 意味着 web 工具口根本不构造，catalog 哈希逐字不变（R1）。挂载只决
-   * 定「看得见」；每一次抓取仍要过审批门（`--ask always` 或 `--allow-tools`），
-   * 与 `--subagent` 同族：只走命令行，刻意没有 settings 键。
-   */
-  readonly allowWeb?: boolean;
-  /**
-   * `--compact-summary`：compaction 摘要由谁写。Absent 与 `extractive` 逐字相同
-   * ——不调模型、不多发一个请求；`model` 只改变「摘要文本从哪来」，触发、落盘、
-   * 读时过滤一概不变。与 `--ask` 同族：闭集在解析处把关，只走命令行。
-   */
-  readonly compactSummary?: CompactSummaryMode;
-};
 
 /** Shared shape of the credential commands that can target the project ledger. */
 export type AuthScopeOptions = {
@@ -338,6 +214,8 @@ export type AuthSwitchOptions = AuthScopeOptions & {
 export type AuthDeleteOptions = AuthSwitchOptions;
 
 export type ParsedCommand =
+  | { readonly kind: "library"; readonly options: import("./args-library.js").LibraryCommandOptions }
+  | { readonly kind: "learn"; readonly options: import("./args-learn.js").LearnOptions }
   | { readonly kind: "help" }
   | { readonly kind: "version" }
   | { readonly kind: "run"; readonly options: RunCommandOptions }
@@ -353,7 +231,8 @@ export type ParsedCommand =
   | { readonly kind: "session_remove"; readonly options: SessionTargetOptions }
   /** A family verb (`schedule` / `daemon` / `bg`): the root recognises the word, the family parses `args`. */
   | { readonly kind: "family"; readonly word: FamilyWord; readonly args: ReadonlyArray<string> }
-  | { readonly kind: "repl"; readonly learning?: LearningSwitch }
+  | { readonly kind: "repl"; readonly learning?: LearningSwitch;
+      readonly learningOptions?: import("./session-learning-options.js").SessionLearningOptions }
   | { readonly kind: "completion"; readonly shell: CompletionShell }
   | { readonly kind: "update"; readonly options: UpdateOptions }
   | { readonly kind: "output_style_list"; readonly options: OutputStyleListOptions }
@@ -366,6 +245,7 @@ export type ParsedCommand =
   | { readonly kind: "workflow_list"; readonly options: WorkflowListOptions }
   | { readonly kind: "workflow_show"; readonly options: WorkflowShowOptions }
   | { readonly kind: "workflow_run"; readonly options: WorkflowRunOptions }
+  | { readonly kind: "workflow_learning"; readonly args: readonly string[] }
   | { readonly kind: "context"; readonly options: ContextOptions }
   | { readonly kind: "mcp_add"; readonly options: McpAddCommandOptions }
   | { readonly kind: "mcp_list"; readonly json: boolean }

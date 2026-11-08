@@ -82,6 +82,7 @@ export function parseReviewTarget(input: ReviewTargetInput): ReviewTargetOutcome
   if (title !== undefined && commit === undefined) {
     return fail("title_without_commit", "--title requires --commit");
   }
+
   const chosen = [
     input.uncommitted === true ? "--uncommitted" : undefined,
     base === undefined ? undefined : "--base",
@@ -91,18 +92,23 @@ export function parseReviewTarget(input: ReviewTargetInput): ReviewTargetOutcome
   if (chosen.length > 1) {
     return fail("target_conflict", `${chosen.join(", ")} cannot be used together: choose one review target`);
   }
+
   if (input.uncommitted === true) {
     return { ok: true, target: { kind: "uncommitted" } };
   }
+
   if (base !== undefined) {
     return { ok: true, target: { kind: "base", branch: base } };
   }
+
   if (commit !== undefined) {
     return { ok: true, target: title === undefined ? { kind: "commit", sha: commit } : { kind: "commit", sha: commit, title } };
   }
+
   if (prompt !== undefined) {
     return { ok: true, target: { kind: "custom", instructions: prompt } };
   }
+
   return fail("target_missing", "Specify --uncommitted, --base, --commit, or provide custom review instructions");
 }
 

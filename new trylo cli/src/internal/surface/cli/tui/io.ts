@@ -64,6 +64,7 @@ const DEFAULT_ROWS = 24;
 export function lineIoOf(ctx: CliContext): TuiIo {
   const interrupts = ctx.interrupts;
   const size = ctx.terminalSize;
+
   return {
     readLine: ctx.readLine,
     write: ctx.stderr,

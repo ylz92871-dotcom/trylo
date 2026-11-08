@@ -88,6 +88,7 @@ export function createActionDispatch(bindings: ReadonlyArray<Binding>, ops: Acti
     if (chord.length > 0 && atMs - chordAtMs > CHORD_TIMEOUT_MS) {
       chord = [];
     }
+
     const verdict = resolveAction(event, bindings, chord);
     if (verdict.kind === "chord") {
       const stroke = strokeOf(event);
@@ -97,11 +98,14 @@ export function createActionDispatch(bindings: ReadonlyArray<Binding>, ops: Acti
       }
       return;
     }
+
     chord = [];
+
     if (verdict.kind === "action") {
       dispatchAction(verdict.action);
       return;
     }
+
     ops.defaultKey(event);
   };
 }

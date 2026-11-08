@@ -25,6 +25,7 @@ test("fork_context uses the latest parent request and never a sibling child conv
     awaitDecision: async () => { throw new Error("unexpected approval"); } };
   const built = buildSubagentPorts({ parentTools: tools, workspaceTools: tools, childProvider: provider,
     model: "test-model", permission, callerMessages: [{ role: "system", content: "project guidance" }] });
+
   t.after(async () => { await built.runtime.cancelAll(); });
   const parentTurn = (text: string) => runTurn({ provider: built.provider, tools: built.tools, permission,
     profile: { load: async () => EMPTY_PROFILE } }, { sessionId: "parent", turnId: text, correlationId: "root", text, model: "test-model" });
@@ -32,17 +33,24 @@ test("fork_context uses the latest parent request and never a sibling child conv
   const spawn = async (message: string): Promise<void> => {
     const outcome = await built.tools.execute({ toolCallId: `spawn-${++sequence}`, name: "spawn_agent",
       arguments: { message, fork_context: true } }, new AbortController().signal);
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome !== "result") return;
+
     const id = String(outcome.value["agent_id"]);
     const ready = await built.tools.execute({ toolCallId: `wait-${sequence}`, name: "wait_agent",
       arguments: { targets: [id], timeout_ms: 1000 } }, new AbortController().signal);
+
     assert.equal(ready.outcome, "result");
+
     if (ready.outcome === "result") assert.equal((ready.value["results"] as JsonObject)[id] !== undefined, true);
   };
+
   await parentTurn("PARENT_FIRST_6721");
   await spawn("CHILD_PRIVATE_1928");
   const firstChild = requests.at(-1);
+
   assert.ok(firstChild?.messages.some(message => message.content === "PARENT_FIRST_6721"), "the current user message must reach the fork");
   assert.deepEqual(firstChild?.tools.map(tool => tool.name), ["report_progress"], "only the local reporting port is available to this tool-free child");
   assert.ok(!firstChild?.messages.some(message => message.role === "system" && message.content.startsWith("Available tools this run:")
@@ -52,6 +60,7 @@ test("fork_context uses the latest parent request and never a sibling child conv
     "forked history must be distinguished from the child's assignment");
   await spawn("sibling");
   const sibling = requests.at(-1);
+
   assert.ok(sibling?.messages.some(message => message.content === "PARENT_FIRST_6721"));
   assert.ok(!sibling?.messages.some(message => message.content === "CHILD_PRIVATE_1928"), "child requests cannot replace the parent's fork source");
   await parentTurn("PARENT_LATEST_8841");

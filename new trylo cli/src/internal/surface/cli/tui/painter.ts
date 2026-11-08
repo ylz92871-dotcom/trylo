@@ -64,10 +64,12 @@ export function createPainter(io: TuiIo, before: number, paint: TuiPaint = noPai
     const input = withStatus ? io.captureView?.() : undefined;
     const inputRows = input === undefined ? [] : renderComposer(input, width).rows.slice(-5);
     const room = Math.max(3, io.size().rows - inputRows.length - 3);
+
     if (painted > 0) {
       painted = previousRows.reduce((count, row) => count + Math.max(1, Math.ceil(displayWidth(stripAnsi(row)) / Math.max(1, width))), 0);
       io.write(`\x1b[${painted}A`);
     }
+
     io.write("\x1b[J");
     // Completed text can enter native scrollback. Open reasoning may still be
     // folded, and a streaming message may be reformatted, so neither is committed.
@@ -77,12 +79,14 @@ export function createPainter(io: TuiIo, before: number, paint: TuiPaint = noPai
       io.write(`${stable}\n`);
       from = stableEnd;
     }
+
     const turnBody = renderTurnBody(state, from, width, withStatus, paint, tick);
     const rows = turnBody.split("\n");
     const visible = withStatus && rows.length > room
       ? [fitText("… 正在生成，完成后保留完整内容", width - 1), ...rows.slice(-(room - 1))]
       : rows;
     const body = [...visible, ...inputRows].join("\n");
+
     io.write(`${body}\n`);
     painted = withStatus ? body.split("\n").length : 0;
     previousRows = withStatus ? body.split("\n") : [];
@@ -90,18 +94,26 @@ export function createPainter(io: TuiIo, before: number, paint: TuiPaint = noPai
 
   return {
     refresh() { if (!paused && !closed && latest !== undefined) draw(latest, true); },
-    dispose() { closed = true; if (heartbeat !== undefined) clearInterval(heartbeat); },
+
+    dispose() {
+      closed = true;
+      if (heartbeat !== undefined) clearInterval(heartbeat);
+    },
+
     request(state) {
       latest = state;
+
       if (io.schedule === undefined && heartbeat === undefined && state.running) {
         heartbeat = setInterval(() => {
           if (!paused && !closed && !pending && latest !== undefined) draw(latest, true);
         }, 120);
         heartbeat.unref();
       }
+
       if (paused || pending || closed) {
         return;
       }
+
       pending = true;
       schedule(() => {
         pending = false;
@@ -110,24 +122,33 @@ export function createPainter(io: TuiIo, before: number, paint: TuiPaint = noPai
         }
       }, PAINT_INTERVAL_MS);
     },
+
     settle(state) {
       closed = true;
+
       if (heartbeat !== undefined) clearInterval(heartbeat);
+
       pending = false;
+
       if (paused) {
         return;
       }
+
       draw(state, false);
     },
+
     pause() {
       paused = true;
       pending = false;
     },
+
     resume() {
       if (!paused) {
         return;
       }
+
       paused = false;
+
       if (!closed && latest !== undefined) {
         draw(latest, true);
       }

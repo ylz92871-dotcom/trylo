@@ -59,12 +59,14 @@ const SPECIFIER_PATTERN = /(?:from\s+|import\s*\(\s*|^\s*import\s+)['"]([^'"]+)[
 
 function importedSpecifiers(source: string): ReadonlyArray<string> {
   const specifiers: string[] = [];
+
   for (const match of source.matchAll(SPECIFIER_PATTERN)) {
     const specifier = match[1];
     if (specifier !== undefined) {
       specifiers.push(specifier);
     }
   }
+
   return specifiers;
 }
 
@@ -86,17 +88,21 @@ function bareImports(specifier: string): boolean {
 
 function violationsIn(source: string): ReadonlyArray<string> {
   const violations: string[] = [];
+
   for (const specifier of importedSpecifiers(source)) {
     for (const segment of segmentHits(specifier)) {
       violations.push(`forbidden-layer:${segment} via ${specifier}`);
     }
+
     for (const pkg of packageHits(specifier)) {
       violations.push(`forbidden-package:${pkg} via ${specifier}`);
     }
+
     if (bareImports(specifier)) {
       violations.push(`bare-package-import via ${specifier}`);
     }
   }
+
   return violations;
 }
 
@@ -107,6 +113,7 @@ function walkTs(dir: string, acc: string[] = []): string[] {
       walkTs(full, acc);
       continue;
     }
+
     if (full.endsWith(".ts") && !full.endsWith(".test.ts")) {
       acc.push(full);
     }
@@ -116,9 +123,11 @@ function walkTs(dir: string, acc: string[] = []): string[] {
 
 test("投影层生产文件不 import 任何越界层、也不 import 裸包", () => {
   const files = walkTs(surfaceProtocolDir);
+
   assert.equal(files.length >= 7, true, `投影层文件太少（${files.length}），先确认目录没走错`);
   let specifierCount = 0;
   const violations: string[] = [];
+
   for (const file of files) {
     const source = readFileSync(file, "utf8");
     specifierCount += importedSpecifiers(source).length;
@@ -126,6 +135,7 @@ test("投影层生产文件不 import 任何越界层、也不 import 裸包", (
       violations.push(`${relative(repoRoot, file).replaceAll("\\", "/")} ${violation}`);
     }
   }
+
   assert.equal(specifierCount >= 10, true, "扫描到的 import 说明符太少，检测器可能失效");
   assert.deepEqual(violations, []);
 });
@@ -145,6 +155,7 @@ test("检测器有判别力：两组违规夹具必须被命中", () => {
     "utf8",
   );
   const layerViolations = violationsIn(layerFixture);
+
   assert.equal(layerViolations.some((item) => item.startsWith("forbidden-layer:loop")), true);
   assert.equal(layerViolations.some((item) => item.startsWith("forbidden-layer:domain")), true);
 
@@ -153,6 +164,7 @@ test("检测器有判别力：两组违规夹具必须被命中", () => {
     "utf8",
   );
   const cliViolations = violationsIn(cliFixture);
+
   for (const layer of ["cli", "cmd", "adapters"]) {
     assert.equal(
       cliViolations.some((item) => item.startsWith(`forbidden-layer:${layer}`)),
@@ -163,6 +175,7 @@ test("检测器有判别力：两组违规夹具必须被命中", () => {
 
   const learningFixture = readFileSync(join(fixtureDir, "forbidden-import-learning.ts"), "utf8");
   const learningViolations = violationsIn(learningFixture);
+
   for (const layer of ["learning", "journal", "tooling", "knowledge"]) {
     assert.equal(
       learningViolations.some((item) => item.startsWith(`forbidden-layer:${layer}`)),
@@ -176,6 +189,7 @@ test("检测器有判别力：两组违规夹具必须被命中", () => {
     "utf8",
   );
   const packageViolations = violationsIn(packageFixture);
+
   for (const pkg of ["ws", "express", "better-sqlite3", "react"]) {
     assert.equal(
       packageViolations.some((item) => item.startsWith(`forbidden-package:${pkg}`)),
@@ -191,6 +205,7 @@ test("检测器不误报：合法依赖夹具必须零命中", () => {
     "utf8",
   );
   const specifiers = importedSpecifiers(source);
+
   assert.equal(specifiers.length, 4, "反向夹具自身必须能被解析出说明符");
   assert.deepEqual(violationsIn(source), []);
 });

@@ -21,6 +21,7 @@ export async function handleKill(
   if (!resolved.ok) {
     return refuseUnknownJob(ctx, resolved.reason);
   }
+
   const record = resolved.record;
   if (record.status !== "running") {
     // Already finished is not a failure to report as one; it is the state asked for.
@@ -31,21 +32,26 @@ export async function handleKill(
     );
     return EXIT_CODES.OK;
   }
+
   if (resolved.unverified) {
     return refuseUnverifiedKill(ctx, record.pid);
   }
+
   const killPid = deps.killPid ?? ((pid: number) => terminatePidTree(pid));
   const killed = await killPid(record.pid);
   if (!killed.ok) {
     ctx.stderr(`${killed.message}\n`);
     return EXIT_CODES.TEMPORARY;
   }
+
   const how = killed.how === "already_gone" ? "was already gone" : "asked to stop, and its process tree went with it";
+
   ctx.stdout(
     json
       ? `${JSON.stringify({ id: sessionId, pid: record.pid, outcome: killed.how })}\n`
       : `${sessionId} ${how}; \`trylo bg ps ${sessionId}\` will say how it ended\n`,
   );
+
   return EXIT_CODES.OK;
 }
 

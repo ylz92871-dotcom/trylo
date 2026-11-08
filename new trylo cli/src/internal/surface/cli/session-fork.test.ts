@@ -54,12 +54,17 @@ const BASE = {
 
 test("a settled journal forks whole, without session_start and under the child id", () => {
   const planned = planFork({ records: settledJournal(), tornTail: false, snapshot: { mode: "settled-prefix" }, ...BASE });
+
   assert.equal(planned.ok, true);
+
   if (!planned.ok) return;
+
   assert.equal(planned.records.length, 3);
+
   for (const copied of planned.records) {
     assert.equal(copied.sessionId, "child");
   }
+
   assert.deepEqual(planned.provenance, {
     parentSessionId: "parent",
     parentLastSequence: 3,
@@ -77,8 +82,11 @@ test("an unsettled effect refuses the default fork instead of crossing into the 
     record(4, "effect_issued", { key: "tool:write" }, { turnId: "t2" }),
   ];
   const planned = planFork({ records, tornTail: false, snapshot: { mode: "settled-prefix" }, ...BASE });
+
   assert.equal(planned.ok, false);
+
   if (planned.ok) return;
+
   assert.equal(planned.code, "unsettled_effects");
 });
 
@@ -88,8 +96,11 @@ test("stream debris does not refuse the default fork: it is dropped and counted"
     record(4, "stream_partial", { kind: "assistant_text", blockId: "p1", text: "half" }),
   ];
   const planned = planFork({ records, tornTail: false, snapshot: { mode: "settled-prefix" }, ...BASE });
+
   assert.equal(planned.ok, true);
+
   if (!planned.ok) return;
+
   assert.equal(planned.records.length, 3);
   assert.equal(planned.provenance.droppedPartials, 1);
   assert.equal(planned.provenance.droppedPending, 0);
@@ -102,8 +113,11 @@ test("--interrupted drops the unfinished suffix and records the drop", () => {
     record(5, "stream_partial", { kind: "assistant_text", blockId: "p1", text: "half" }),
   ];
   const planned = planFork({ records, tornTail: false, snapshot: { mode: "interrupted" }, ...BASE });
+
   assert.equal(planned.ok, true);
+
   if (!planned.ok) return;
+
   assert.equal(planned.records.length, 3);
   assert.equal(planned.provenance.droppedPending, 1);
   assert.equal(planned.provenance.droppedPartials, 1);
@@ -117,8 +131,11 @@ test("a settled effect pair crosses the fork: only the unknown is dropped", () =
     record(5, "effect_committed", { key: "tool:a" }, { turnId: "t2" }),
   ];
   const planned = planFork({ records, tornTail: false, snapshot: { mode: "interrupted" }, ...BASE });
+
   assert.equal(planned.ok, true);
+
   if (!planned.ok) return;
+
   assert.equal(planned.records.length, 5);
   assert.equal(planned.provenance.droppedPending, 0);
 });
@@ -130,8 +147,11 @@ test("before-user-message cuts strictly before the nth user message", () => {
     snapshot: { mode: "before-user-message", n: 2 },
     ...BASE,
   });
+
   assert.equal(planned.ok, true);
+
   if (!planned.ok) return;
+
   assert.equal(planned.records.length, 2);
   assert.equal(planned.provenance.snapshot, "before-user-message");
   assert.equal(planned.provenance.beforeUserMessage, 2);
@@ -144,8 +164,11 @@ test("an out-of-range message index refuses with the usable range", () => {
     snapshot: { mode: "before-user-message", n: 9 },
     ...BASE,
   });
+
   assert.equal(planned.ok, false);
+
   if (planned.ok) return;
+
   assert.equal(planned.code, "message_not_found");
   assert.match(planned.detail, /1-2/);
 });
@@ -164,7 +187,10 @@ test("a journal without session_start is not a fork source", () => {
     snapshot: { mode: "settled-prefix" },
     ...BASE,
   });
+
   assert.equal(planned.ok, false);
+
   if (planned.ok) return;
+
   assert.equal(planned.code, "parent_unreadable");
 });

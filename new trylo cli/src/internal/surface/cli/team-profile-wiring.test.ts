@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { teamProfileFor } from "./team-profile-wiring.js";
+import { bindTeamProfile, prepareTeamProfile, teamProfileFor } from "./team-profile-wiring.js";
 import type { SkillCatalogPort, SkillDescriptor } from "../../ports/skills.js";
 
 const members = ["person", "worker"].map(baseRole => ({ memberId: `m-${baseRole}`, baseRole,
@@ -12,10 +12,14 @@ const block = (runId = "team-test") => `<trylo_team_access>\ndecision: spawn_tea
 test("team loading consumes the frozen roster, instructions and denials without expanding tools", () => {
   const paths: string[] = [];
   const result = teamProfileFor({ workspaceRoot: "D:/project", systemPrompt: block(), readFile: path => {
-    paths.push(path); return JSON.stringify({ frozenProfile: { members } });
+    paths.push(path);
+    return JSON.stringify({ frozenProfile: { members } });
   } });
+
   assert.equal(result.ok, true);
+
   if (!result.ok) return;
+
   assert.deepEqual(result.team?.members.map(member => member.memberId), ["m-person", "m-worker"]);
   assert.deepEqual(result.team?.heldRoles, ["worker"]);
   assert.deepEqual(result.team?.members[0]?.role.disallowedTools, ["run_shell"]);
@@ -52,7 +56,9 @@ test("legacy composer tool names resolve to the production V1 catalog", () => {
     tools: ["Read", "Grep", "Glob", "LSP", "NotebookEdit", "TodoWrite", "Skill"] } }));
   const result = teamProfileFor({ workspaceRoot: "D:/project", systemPrompt: block(),
     readFile: () => JSON.stringify({ frozenProfile: { members: withTools } }) });
+
   assert.equal(result.ok, true);
+
   if (result.ok) assert.deepEqual(result.team?.members[1]?.role.allowedTools,
     ["read_file", "search_text", "glob_files", "lsp_navigate", "notebook_edit", "todo_write", "skill"]);
 });
@@ -70,8 +76,11 @@ const selectedMembers = () => members.map(member => ({ ...member, overlay: { ...
 test("selected worker skills enter the actual member prompt and attenuate tools; read-only seats drop them", () => {
   const result = teamProfileFor({ workspaceRoot: "D:/project", systemPrompt: block(), skills: skillCatalog(),
     readFile: () => JSON.stringify({ frozenProfile: { members: selectedMembers() } }) });
+
   assert.equal(result.ok, true);
+
   if (!result.ok) return;
+
   assert.ok(result.team?.members[1]?.role.prompt?.includes("SELECTED_SKILL_BODY"));
   assert.deepEqual(result.team?.members[1]?.role.allowedTools, ["read_file", "write_file"]);
   assert.deepEqual(result.team?.members[0]?.role.skills, []);
@@ -91,12 +100,78 @@ test("missing selected skills and nested fork skills fail explicitly instead of 
 test("the frozen Work surface carries a member-bound output policy and rejects conflicting prompt metadata", () => {
   const result = teamProfileFor({ workspaceRoot: "D:/project", systemPrompt: block(),
     readFile: () => JSON.stringify({ frozenProfile: { surface: "work", members } }) });
+
   assert.equal(result.ok, true);
+
   if (result.ok) {
     assert.equal(result.team?.surface, "work");
     assert.equal(typeof result.team?.constrainTool, "function");
   }
+
   const conflict = teamProfileFor({ workspaceRoot: "D:/project", systemPrompt: block().replace("decision: spawn_team", "decision: spawn_team\nsurface: code"),
     readFile: () => JSON.stringify({ frozenProfile: { surface: "work", members } }) });
+
   assert.equal(conflict.ok, false);
+});
+
+test("prepare freezes one profile before resource resolution and bind performs no profile IO", () => {
+  let reads = 0;
+  let raw = JSON.stringify({ frozenProfile: { id: "initial-profile", surface: "work", members: selectedMembers() } });
+  const prepared = prepareTeamProfile({ workspaceRoot: "D:/project", systemPrompt: block(), readFile: () => {
+    reads++;
+    return raw;
+  } });
+
+  assert.equal(prepared.ok, true);
+
+  if (!prepared.ok) return;
+
+  assert.deepEqual(prepared.prepared?.selectedWorkerSkills, [{ memberId: "m-worker", names: ["chosen"] }]);
+  raw = "{profile changed while native reads were pending";
+  const result = bindTeamProfile(prepared.prepared, skillCatalog());
+
+  assert.equal(result.ok, true);
+  assert.equal(reads, 1);
+
+  if (result.ok) {
+    assert.equal(result.team?.profileId, "initial-profile");
+    assert.equal(result.team?.surface, "work");
+    assert.deepEqual(result.team?.heldRoles, ["worker"]);
+    assert.deepEqual(result.team?.members[1]?.role.allowedTools, ["read_file", "write_file"]);
+    assert.deepEqual(result.team?.members[1]?.role.disallowedTools, ["run_shell"]);
+    assert.equal(result.team?.members[0]?.role.prompt?.includes("SELECTED_SKILL_BODY"), false);
+    assert.ok(result.team?.members[1]?.role.prompt?.includes("SELECTED_SKILL_BODY"));
+  }
+});
+
+test("a native descriptor without a Trylo tool policy preserves the explicit overlay ceiling", () => {
+  const { allowedTools: ignored, ...native } = selectedSkill;
+  assert.ok(ignored);
+  const result = teamProfileFor({ workspaceRoot: "D:/project", systemPrompt: block(), skills: skillCatalog({ ...native, source: "additional" }),
+    readFile: () => JSON.stringify({ frozenProfile: { members: selectedMembers() } }) });
+  assert.equal(result.ok, true);
+  if (result.ok) assert.deepEqual(result.team?.members[1]?.role.allowedTools, ["read_file", "write_file", "run_shell"]);
+});
+
+test("prepare preserves exact fallback, seat translation and explicit expert choice across asynchronous binding", () => {
+  const fallback = members.map(member => ({ ...member, overlay: { ...member.overlay,
+    expert: member.baseRole === "worker" ? { expertId: "native-reader", version: 2 } : { requestId: "person-request" } } }));
+  const prompt = block().replace("</trylo_team_access>", '<trylo_team_translation audience="seat:worker">WORKER_TRANSLATION</trylo_team_translation>\n</trylo_team_access>')
+    + fallback.map(member => `\n<trylo_member_overlay member_id="${member.memberId}">${JSON.stringify(member.overlay)}</trylo_member_overlay>`).join("");
+  const prepared = prepareTeamProfile({ workspaceRoot: "D:/project", systemPrompt: prompt, readFile: () => undefined });
+
+  assert.equal(prepared.ok, true);
+
+  if (!prepared.ok) return;
+
+  const result = bindTeamProfile(prepared.prepared);
+
+  assert.equal(result.ok, true);
+
+  if (result.ok) {
+    assert.deepEqual(result.team?.members[1]?.expert, { expertId: "native-reader", version: 2 });
+    assert.deepEqual(result.team?.members[0]?.expert, { requestId: "person-request" });
+    assert.ok(result.team?.members[1]?.role.prompt?.includes("WORKER_TRANSLATION"));
+    assert.equal(result.team?.members[0]?.role.prompt?.includes("WORKER_TRANSLATION"), false);
+  }
 });

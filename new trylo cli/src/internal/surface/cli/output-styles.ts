@@ -57,22 +57,27 @@ function stripQuotes(value: string): string {
       return trimmed.slice(1, -1);
     }
   }
+
   return trimmed;
 }
 
 function parseScalarMap(lines: ReadonlyArray<string>): Map<string, string> {
   const entries = new Map<string, string>();
+
   for (const line of lines) {
     const separator = line.indexOf(":");
     if (separator <= 0) {
       continue;
     }
+
     const key = line.slice(0, separator).trim().toLowerCase();
     if (key.length === 0 || entries.has(key)) {
       continue;
     }
+
     entries.set(key, stripQuotes(line.slice(separator + 1)));
   }
+
   return entries;
 }
 
@@ -81,10 +86,12 @@ function splitFrontmatter(text: string): { readonly fields: Map<string, string>;
   if (lines[0]?.trim() !== FRONTMATTER_DELIMITER) {
     return { fields: new Map(), body: text };
   }
+
   const closing = lines.findIndex((line, index) => index > 0 && line.trim() === FRONTMATTER_DELIMITER);
   if (closing < 0) {
     return { fields: new Map(), body: text };
   }
+
   return { fields: parseScalarMap(lines.slice(1, closing)), body: lines.slice(closing + 1).join("\n") };
 }
 
@@ -109,11 +116,13 @@ export function descriptionFromMarkdown(body: string, fallback: string): string 
     if (trimmed.length === 0) {
       continue;
     }
+
     const header = /^#+\s+(.+)$/.exec(trimmed);
     const text = (header?.[1] ?? trimmed).trim();
     if (text.length === 0) {
       continue;
     }
+
     return text.length > 100 ? `${text.slice(0, 97)}...` : text;
   }
   return fallback;
@@ -123,13 +132,16 @@ function parseKeepCodingInstructions(raw: string | undefined): boolean | undefin
   if (raw === undefined) {
     return undefined;
   }
+
   const normalized = raw.trim().toLowerCase();
   if (normalized === "true") {
     return true;
   }
+
   if (normalized === "false") {
     return false;
   }
+
   return undefined;
 }
 
@@ -138,16 +150,19 @@ export function parseStyleFile(filePath: string, text: string, source: OutputSty
   if (!isStyleName(stem)) {
     return undefined;
   }
+
   const { fields, body } = splitFrontmatter(text);
   const prompt = body.trim();
   if (prompt.length === 0) {
     return undefined;
   }
+
   const rawName = fields.get("name")?.trim() ?? "";
   const name = rawName.length > 0 && isStyleName(rawName) ? rawName : stem;
   const description =
     coerceDescription(fields.get("description")) ?? descriptionFromMarkdown(body, `Custom ${name} output style`);
   const keepCodingInstructions = parseKeepCodingInstructions(fields.get("keep-coding-instructions"));
+
   return {
     name,
     description,
@@ -160,31 +175,39 @@ export function parseStyleFile(filePath: string, text: string, source: OutputSty
 
 function stylesInDir(io: StyleIo, dir: string, source: OutputStyleSource): OutputStyle[] {
   let entries: ReadonlyArray<{ readonly name: string }>;
+
   try {
     entries = io.readDir(dir);
   } catch {
     return [];
   }
+
   const styles: OutputStyle[] = [];
+
   for (const entry of entries) {
     if (!entry.name.endsWith(".md")) {
       continue;
     }
+
     const filePath = `${dir}/${entry.name}`;
     let text: string | undefined;
+
     try {
       text = io.readFile(filePath);
     } catch {
       continue;
     }
+
     if (text === undefined) {
       continue;
     }
+
     const parsed = parseStyleFile(filePath, text, source);
     if (parsed !== undefined) {
       styles.push(parsed);
     }
   }
+
   return styles;
 }
 
@@ -203,6 +226,7 @@ export type StyleDirs = {
 export function loadOutputStyles(io: StyleIo, dirs: StyleDirs): ReadonlyArray<OutputStyle> {
   const seen = new Set<string>();
   const collected: OutputStyle[] = [];
+
   for (const style of [...stylesInDir(io, dirs.projectDir, "project"), ...stylesInDir(io, dirs.userDir, "user")]) {
     if (style.name === "default" || seen.has(style.name)) {
       continue;
@@ -210,6 +234,7 @@ export function loadOutputStyles(io: StyleIo, dirs: StyleDirs): ReadonlyArray<Ou
     seen.add(style.name);
     collected.push(style);
   }
+
   return collected.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
 }
 

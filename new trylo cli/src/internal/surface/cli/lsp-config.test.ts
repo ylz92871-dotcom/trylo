@@ -76,6 +76,7 @@ describe("loadLspServersFile", () => {
       reader({ "lsp.json": JSON.stringify({ servers: [{ name: "ts", command: "x", extensions: ["ts"], cmd: "y" }] }) }),
       "lsp.json",
     );
+
     assert.equal(unknown.ok, false);
     const duplicate = loadLspServersFile(
       reader({
@@ -88,6 +89,7 @@ describe("loadLspServersFile", () => {
       }),
       "lsp.json",
     );
+
     assert.equal(duplicate.ok, false);
     const shared = loadLspServersFile(
       reader({
@@ -100,7 +102,9 @@ describe("loadLspServersFile", () => {
       }),
       "lsp.json",
     );
+
     assert.equal(shared.ok, false);
+
     if (!shared.ok) {
       assert.match(shared.message, /\.ts/);
     }
@@ -109,13 +113,17 @@ describe("loadLspServersFile", () => {
   it("caps the list and validates the optional fields", () => {
     const many = Array.from({ length: 17 }, (_, index) => ({ name: `s${index}`, command: "x", extensions: [`e${index}`] }));
     const capped = loadLspServersFile(reader({ "lsp.json": JSON.stringify({ servers: many }) }), "lsp.json");
+
     assert.equal(capped.ok, false);
     const env = loadLspServersFile(
       reader({ "lsp.json": JSON.stringify({ servers: [{ name: "ts", command: "x", extensions: ["ts"], env: { A: "1" }, enabled: false, origin: "user file" }] }) }),
       "lsp.json",
     );
+
     assert.equal(env.ok, true);
+
     if (!env.ok) return;
+
     assert.deepEqual(env.servers[0], {
       serverName: "ts",
       command: "x",
@@ -129,6 +137,7 @@ describe("loadLspServersFile", () => {
       reader({ "lsp.json": JSON.stringify({ servers: [{ name: "ts", command: "x", extensions: ["ts"], env: { A: 1 } }] }) }),
       "lsp.json",
     );
+
     assert.equal(badEnv.ok, false);
   });
 });

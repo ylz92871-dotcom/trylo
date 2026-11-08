@@ -54,10 +54,12 @@ type Terminal = {
 function terminal(): Terminal {
   const input = new PassThrough();
   const output = new PassThrough();
+
   // The reader writes its prompt to `output`; nothing here displays it, but an
   // undrained stream would apply backpressure and stall the thing under test.
   output.resume();
   const rl = readline.createInterface({ input, output, terminal: false });
+
   return {
     io: {
       readLine: (prompt) =>
@@ -69,16 +71,19 @@ function terminal(): Terminal {
               resolve(value);
             }
           };
+
           rl.once("close", () => answer(undefined));
           rl.question(prompt ?? "", (line) => answer(line));
         }),
       write: () => {},
       size: () => ({ columns: 80, rows: 24 }),
     },
+
     type: async (line) => {
       input.write(`${line}\n`);
       await settle();
     },
+
     close: () => rl.close(),
   };
 }
@@ -95,6 +100,7 @@ async function withinDeadline<T>(promise: Promise<T>): Promise<T | "LATE"> {
   const expiry = new Promise<"LATE">((resolve) => {
     timer = setTimeout(() => resolve("LATE"), DEADLINE_MS);
   });
+
   try {
     return await Promise.race([promise, expiry]);
   } finally {
@@ -170,6 +176,7 @@ async function runTurn(
     return { exitCode: 0, message: "the turn failed", hint: "try again" };
   };
   const painterRef: { current?: Painter | undefined } = {};
+
   return tuiTurn(
     term.io,
     runner,
@@ -196,10 +203,12 @@ test("the prompt still reads after a turn ends, on a real line source", async ()
       const step = await runTurn(term, mid, `turn-${turn}`, asked, async () => {
         await term.type(`words during turn ${turn}`);
       });
+
       assert.deepEqual(step.leftover, [], `turn ${turn} delivered everything it was given`);
       // Typed with no turn in flight: this is the line the prompt is waiting for.
       await term.type(`at the prompt after turn ${turn}`);
       const line = await withinDeadline(mid.takeLine());
+
       assert.equal(
         line,
         `at the prompt after turn ${turn}`,
@@ -250,6 +259,7 @@ test("what a turn never took comes back, and the prompt keeps reading after it",
     // which is the shell's own read and nothing else's.
     await term.type("said at the prompt afterwards");
     const line = await withinDeadline(mid.takeLine());
+
     assert.equal(line, "said at the prompt afterwards");
   } finally {
     term.close();
@@ -269,6 +279,7 @@ test("words typed during a cancelled turn come back, and the next turn can take 
       async (_scaffold, _text, _sink, _cancel, pending) => {
         await term.type("stop, do not do that");
         asked.push(...(pending?.("turn-1") ?? []).map((i: AddressedUserInput) => i.text));
+
         return {
           exitCode: EXIT_CODES.CANCELLED,
           result: {
@@ -310,6 +321,7 @@ test("words typed during a cancelled turn come back, and the next turn can take 
     const resumed = await runTurn(term, mid, "turn-2", asked, async () => {
       await term.type("stop, do not do that");
     });
+
     assert.deepEqual(resumed.leftover, [], "the next turn delivered what it was handed");
     assert.deepEqual(
       asked,
@@ -325,12 +337,15 @@ test("end of input on a real line source reaches the prompt, and stays there", a
   const term = terminal();
   try {
     const mid = createMidRunInput({ io: term.io });
+
     // The interface closes under the reader: the read it was waiting on ends the
     // only way a terminal can end — with no more input.
     term.close();
     const first = await withinDeadline(mid.takeLine());
+
     assert.equal(first, undefined, "the prompt sees the end rather than hanging on it");
     const second = await withinDeadline(mid.takeLine());
+
     assert.equal(second, undefined, "and it does not start reading a stream that closed");
   } finally {
     term.close();

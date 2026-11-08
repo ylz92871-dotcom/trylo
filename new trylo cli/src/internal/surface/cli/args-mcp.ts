@@ -76,27 +76,35 @@ export function refusedFlag(name: string): string | undefined {
 export function parseMcp(argv: ReadonlyArray<string>): ParsedCommand {
   const sub = argv[0];
   if (sub === "--help" || sub === "-h") return familyHelpCommand("mcp");
+
   if (sub === undefined) {
     return usageError("mcp requires a subcommand", "try `trylo mcp list`");
   }
+
   if (sub === "add") {
     return parseMcpAdd(argv.slice(1));
   }
+
   if (sub === "list") {
     return parseMcpList(argv.slice(1));
   }
+
   if (sub === "status") {
     return parseMcpJsonOnly(argv.slice(1), "status");
   }
+
   if (sub === "remove") {
     return parseMcpTarget(argv.slice(1), "remove");
   }
+
   if (sub === "enable") {
     return parseMcpTarget(argv.slice(1), "enable", true);
   }
+
   if (sub === "disable") {
     return parseMcpTarget(argv.slice(1), "disable", false);
   }
+
   return usageError(
     `unknown mcp subcommand: ${sub}`,
     "try `trylo mcp add|list|remove|enable|disable`",
@@ -116,6 +124,7 @@ function parseMcpList(argv: ReadonlyArray<string>): ParsedCommand {
  */
 function parseMcpJsonOnly(argv: ReadonlyArray<string>, sub: "list" | "status"): ParsedCommand {
   let json = false;
+
   for (const token of argv) {
     if (token === "--help" || token === "-h") return familyHelpCommand("mcp");
     if (token === "--json") {
@@ -124,6 +133,7 @@ function parseMcpJsonOnly(argv: ReadonlyArray<string>, sub: "list" | "status"): 
     }
     return usageError(`mcp ${sub} does not accept ${token}`, `try \`trylo mcp ${sub} --json\``);
   }
+
   return sub === "status" ? { kind: "mcp_status", json } : { kind: "mcp_list", json };
 }
 
@@ -138,20 +148,24 @@ function parseMcpJsonOnly(argv: ReadonlyArray<string>, sub: "list" | "status"): 
 function parseMcpAdd(argv: ReadonlyArray<string>): ParsedCommand {
   const name = argv[0];
   if (name === "--help" || name === "-h") return familyHelpCommand("mcp");
+
   if (name === undefined || name.startsWith("--")) {
     return usageError("mcp add requires a server name", ADD_HINT);
   }
+
   if (!isMcpServerName(name)) {
     // Checked here as well as by the registry: a name that cannot be legal is a
     // typing mistake, and the parse layer is where a typing mistake belongs.
     return usageError(`server name must match [a-z0-9][a-z0-9_-]{0,63}; got ${JSON.stringify(name)}`, ADD_HINT);
   }
+
   const separator = argv.indexOf("--", 1);
   const flags: AddFlags = { scope: "user", enabled: true, env: {}, headers: {}, url: undefined, transport: undefined };
   const flagError = readAddFlags(argv, separator, flags);
   if (flagError !== undefined) {
     return flagError;
   }
+
   return assembleAdd(name, argv, separator, flags);
 }
 
@@ -173,22 +187,28 @@ function assembleAdd(
       ADD_HINT,
     );
   }
+
   if (!remote && separator < 0) {
     return usageError("mcp add requires `--` before the server command, or --url <url> for a remote server", ADD_HINT);
   }
+
   if (flags.transport !== undefined && remote !== (flags.transport !== "stdio")) {
     return usageError(
       `--transport ${flags.transport} conflicts with ${remote ? "--url" : "the command after `--`"}`,
       ADD_HINT,
     );
   }
+
   const transport: McpRegistryTransport = remote ? (flags.transport ?? "http") : "stdio";
+
   if (remote && Object.keys(flags.env).length > 0) {
     return usageError("--env only applies to stdio servers; remote servers take --header", ADD_HINT);
   }
+
   if (!remote && Object.keys(flags.headers).length > 0) {
     return usageError("--header only applies to remote servers; stdio servers take --env KEY=VALUE", ADD_HINT);
   }
+
   if (url !== undefined) {
     return {
       kind: "mcp_add",
@@ -205,11 +225,13 @@ function assembleAdd(
       },
     };
   }
+
   const commandTokens = argv.slice(separator + 1);
   const command = commandTokens[0];
   if (command === undefined) {
     return usageError("mcp add requires a command after `--`", ADD_HINT);
   }
+
   return {
     kind: "mcp_add",
     options: {
@@ -238,42 +260,53 @@ function parseMcpTarget(
 ): ParsedCommand {
   const name = argv[0];
   if (name === "--help" || name === "-h") return familyHelpCommand("mcp");
+
   if (name === undefined || name.startsWith("--")) {
     return usageError(`mcp ${sub} requires a server name`, TARGET_HINT);
   }
+
   if (!isMcpServerName(name)) {
     return usageError(
       `server name must match [a-z0-9][a-z0-9_-]{0,63}; got ${JSON.stringify(name)}`,
       TARGET_HINT,
     );
   }
+
   let scope: McpScope = "user";
   let index = 1;
+
   while (index < argv.length) {
     const token = argv[index];
     const flag = token === undefined ? undefined : flagToken(token);
     if (flag === undefined) {
       return usageError(`mcp ${sub} does not accept ${token ?? ""}`, TARGET_HINT);
     }
+
     const refusal = refusedFlag(flag.name);
     if (refusal !== undefined) {
       return usageError(refusal, TARGET_HINT);
     }
+
     if (flag.name !== "scope") {
       return usageError(`mcp ${sub} does not accept --${flag.name}`, TARGET_HINT);
     }
+
     const read = readValue(argv, index, flag.inlineValue);
     if (read.error !== undefined || read.value === undefined) {
       return usageError("--scope needs a value", TARGET_HINT);
     }
+
     if (!isMcpScope(read.value)) {
       return usageError(`--scope must be one of user, project; got ${read.value}`, TARGET_HINT);
     }
+
     scope = read.value;
     index = read.next;
   }
+
   if (enabled === undefined) {
     return { kind: "mcp_remove", options: { name, scope } };
   }
+
   return { kind: "mcp_set_enabled", options: { name, scope }, enabled };
 }

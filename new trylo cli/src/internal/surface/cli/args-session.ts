@@ -79,36 +79,47 @@ export function parseSession(argv: ReadonlyArray<string>): ParsedCommand {
   if (sub === "--help" || sub === "-h") {
     return familyHelpCommand("session");
   }
+
   if (sub === undefined) {
     return usageError("session requires a subcommand", "try `trylo session list` or `trylo session fork|info|rename|export|archive|remove|reconcile|review <id>`");
   }
+
   if (sub === "list") {
     return parseSessionList(argv.slice(1));
   }
+
   if (sub === "reconcile") {
     return parseSessionReconcile(argv.slice(1));
   }
+
   if (sub === "review") {
     return parseSessionReview(argv.slice(1));
   }
+
   if (sub === "info") {
     return parseSessionTarget(argv.slice(1), "info");
   }
+
   if (sub === "fork") {
     return parseSessionFork(argv.slice(1));
   }
+
   if (sub === "rename") {
     return parseSessionRename(argv.slice(1));
   }
+
   if (sub === "export") {
     return parseSessionExport(argv.slice(1));
   }
+
   if (sub === "archive" || sub === "unarchive") {
     return parseSessionArchive(argv.slice(1), sub === "archive");
   }
+
   if (sub === "remove") {
     return parseSessionTarget(argv.slice(1), "remove");
   }
+
   return usageError(
     `unknown session subcommand: ${sub}`,
     "try `trylo session list|info|fork|rename|export|archive|unarchive|remove|reconcile|review`",
@@ -119,31 +130,38 @@ function parseSessionList(argv: ReadonlyArray<string>): ParsedCommand {
   let json = false;
   let all = false;
   let search: string | undefined;
+
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index] ?? "";
     if (token === "--help" || token === "-h") {
       return familyHelpCommand("session");
     }
+
     if (token === "--json") {
       json = true;
       continue;
     }
+
     if (token === "--all") {
       all = true;
       continue;
     }
+
     const flag = flagToken(token);
     if (flag?.name === "search") {
       const read = readValue(argv, index, flag.inlineValue);
       if (read.error !== undefined || (read.value ?? "").trim().length === 0) {
         return usageError(`option --search ${read.error ?? "requires a non-empty value"}`, LIST_HINT);
       }
+
       search = read.value ?? "";
       index = read.next - 1;
       continue;
     }
+
     return usageError(`session list does not accept ${token}`, LIST_HINT);
   }
+
   return {
     kind: "session_list",
     json,
@@ -157,36 +175,45 @@ function parseSessionReconcile(argv: ReadonlyArray<string>): ParsedCommand {
   if (session === "--help" || session === "-h") {
     return familyHelpCommand("session");
   }
+
   if (session === undefined || session.startsWith("--")) {
     return usageError("session reconcile requires a session id", RECONCILE_HINT);
   }
+
   let json = false;
   const given = new Map<ReconcileVerdictFlag, string>();
+
   for (let index = 1; index < argv.length; index += 1) {
     const token = argv[index] ?? "";
     if (token === "--help" || token === "-h") {
       return familyHelpCommand("session");
     }
+
     if (token === "--json") {
       json = true;
       continue;
     }
+
     const flag = flagToken(token);
     if (flag === undefined || !(RECONCILE_VERDICT_FLAGS as readonly string[]).includes(flag.name)) {
       return usageError(`session reconcile does not accept ${token}`, RECONCILE_HINT);
     }
+
     const name = flag.name as ReconcileVerdictFlag;
     const read = readValue(argv, index, flag.inlineValue);
     if (read.error !== undefined) {
       return usageError(`option --${name} ${read.error}`, RECONCILE_HINT);
     }
+
     const value = read.value ?? "";
     if (value.trim().length === 0) {
       return usageError(`option --${name} requires a non-empty value`, RECONCILE_HINT);
     }
+
     given.set(name, value);
     index = read.next - 1;
   }
+
   const missing = RECONCILE_VERDICT_FLAGS.filter(flag => !given.has(flag));
   if (given.size > 0 && missing.length > 0) {
     return usageError(
@@ -194,10 +221,12 @@ function parseSessionReconcile(argv: ReadonlyArray<string>): ParsedCommand {
       RECONCILE_HINT,
     );
   }
+
   const turn = given.get("turn");
   const key = given.get("key");
   const outcome = given.get("outcome");
   const evidence = given.get("evidence");
+
   return {
     kind: "session_reconcile",
     options: {
@@ -220,7 +249,9 @@ function parseSessionTarget(argv: ReadonlyArray<string>, verb: "info" | "remove"
   if (typeof required !== "string") {
     return required;
   }
+
   let json = false;
+
   for (const token of argv.slice(1)) {
     if (token === "--json") {
       json = true;
@@ -228,6 +259,7 @@ function parseSessionTarget(argv: ReadonlyArray<string>, verb: "info" | "remove"
     }
     return usageError(`session ${verb} does not accept ${token}`, hint);
   }
+
   return { kind: verb === "info" ? "session_info" : "session_remove", options: { session: required, json } };
 }
 
@@ -237,28 +269,34 @@ function parseSessionFork(argv: ReadonlyArray<string>): ParsedCommand {
   if (typeof required !== "string") {
     return required;
   }
+
   let json = false;
   let interrupted = false;
   let newId: string | undefined;
   let beforeUserMessage: number | undefined;
+
   for (let index = 1; index < argv.length; index += 1) {
     const token = argv[index] ?? "";
     if (token === "--json") {
       json = true;
       continue;
     }
+
     if (token === "--interrupted") {
       interrupted = true;
       continue;
     }
+
     const flag = flagToken(token);
     if (flag === undefined) {
       return usageError(`session fork does not accept ${token}`, hint);
     }
+
     const read = readValue(argv, index, flag.inlineValue);
     if (read.error !== undefined) {
       return usageError(`option --${flag.name} ${read.error}`, hint);
     }
+
     if (flag.name === "new-id") {
       newId = read.value ?? "";
       if (newId.trim().length === 0) {
@@ -272,11 +310,14 @@ function parseSessionFork(argv: ReadonlyArray<string>): ParsedCommand {
     } else {
       return usageError(`session fork does not accept --${flag.name}`, hint);
     }
+
     index = read.next - 1;
   }
+
   if (interrupted && beforeUserMessage !== undefined) {
     return usageError("--before-user-message and --interrupted cannot be used together", hint);
   }
+
   return {
     kind: "session_fork",
     options: {
@@ -295,10 +336,12 @@ function parseSessionRename(argv: ReadonlyArray<string>): ParsedCommand {
   if (typeof required !== "string") {
     return required;
   }
+
   const name = argv.slice(1).join(" ");
   if (name.trim().length === 0) {
     return usageError("session rename requires a new name", hint);
   }
+
   return { kind: "session_rename", options: { session: required, name } };
 }
 
@@ -308,24 +351,30 @@ function parseSessionExport(argv: ReadonlyArray<string>): ParsedCommand {
   if (typeof required !== "string") {
     return required;
   }
+
   let format: SessionExportFormat = "json";
+
   for (let index = 1; index < argv.length; index += 1) {
     const token = argv[index] ?? "";
     const flag = flagToken(token);
     if (flag?.name !== "format") {
       return usageError(`session export does not accept ${token}`, hint);
     }
+
     const read = readValue(argv, index, flag.inlineValue);
     if (read.error !== undefined) {
       return usageError(`option --format ${read.error}`, hint);
     }
+
     const raw = read.value ?? "";
     if (!isSessionExportFormat(raw)) {
       return usageError(`unknown export format: ${raw}`, hint);
     }
+
     format = raw;
     index = read.next - 1;
   }
+
   return { kind: "session_export", options: { session: required, format } };
 }
 
@@ -336,8 +385,10 @@ function parseSessionArchive(argv: ReadonlyArray<string>, archived: boolean): Pa
   if (typeof required !== "string") {
     return required;
   }
+
   if (argv.length > 1) {
     return usageError(`session ${verb} does not accept ${argv[1] ?? ""}`, hint);
   }
+
   return { kind: "session_archive", options: { session: required, archived } };
 }

@@ -34,6 +34,7 @@ function lab(sessionId = "s-1"): Lab {
   const err: string[] = [];
   const root = mkdtempSync(join(tmpdir(), "trylo-queue-"));
   const home = join(root, "home");
+
   mkdirSync(join(home, ".trylo", "sessions"), { recursive: true });
   let ids = 0;
   let at = 1_700_000_000_000;
@@ -43,6 +44,7 @@ function lab(sessionId = "s-1"): Lab {
     cwd: root,
     nodeVersion: "v22.0.0",
     stdinIsTty: false,
+
     readFile: (absolutePath) => {
       try {
         return readFileSync(absolutePath, "utf8");
@@ -50,6 +52,7 @@ function lab(sessionId = "s-1"): Lab {
         return undefined;
       }
     },
+
     isDirectory: () => true,
     readDir: () => [],
     writeFile: () => true,
@@ -58,12 +61,15 @@ function lab(sessionId = "s-1"): Lab {
     readSecret: async () => undefined,
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
+
     now: () => {
       at += 1_000;
       return at;
     },
+
     newId: (prefix) => `${prefix}-${(ids += 1)}`,
   };
+
   return { ctx, out, err, root, queueFile: sessionQueuePath(home, {}, sessionId) };
 }
 
@@ -100,6 +106,7 @@ test("the queue file lands where session-paths says, and both faces agree", asyn
       clock: { now: l.ctx.now, newId: l.ctx.newId },
     });
     const page = await queue.list(0, 10);
+
     await queue.release();
     assert.equal(page.ok, true);
     assert.equal(page.ok && page.value.total, 1);
@@ -118,6 +125,7 @@ test("add --json answers with the whole record a later drop needs", async () => 
     // a moment that never happened.
     const stored = JSON.parse(readFileSync(l.queueFile, "utf8").trim()) as { enqueuedAtMs: number };
     const got = json(l);
+
     assert.equal(got["ok"], true);
     assert.equal(got["id"], "q-1");
     assert.equal(got["sessionId"], "s-1");
@@ -146,6 +154,7 @@ test("list reads as one line per message, oldest first", async () => {
     l.out.length = 0;
     await handleQueueList(l.ctx, { sessionId: "s-1", json: false, limit: 20 });
     const rows = text(l).trim().split("\n");
+
     assert.equal(rows.length, 2);
     assert.match(rows[0] ?? "", /q-1 .*first$/);
     // A message that spans lines is shown on one: a listing whose rows shift
@@ -162,9 +171,11 @@ test("a truncated listing says how much it left out", async () => {
     for (let i = 0; i < 5; i += 1) {
       await handleQueueAdd(l.ctx, { sessionId: "s-1", text: `m${i}`, json: false });
     }
+
     l.out.length = 0;
     await handleQueueList(l.ctx, { sessionId: "s-1", json: false, limit: 2 });
     const body = text(l);
+
     assert.match(body, /showing 2 of 5; --limit 4 for more/);
   } finally {
     rmSync(l.root, { recursive: true, force: true });
@@ -177,6 +188,7 @@ test("an unreadable queue is refused, never reported as an empty one", async () 
     mkdirSync(join(l.root, "home", ".trylo", "queue"), { recursive: true });
     writeFileSync(l.queueFile, "{ this is not json\n");
     const code = await handleQueueList(l.ctx, { sessionId: "s-1", json: false, limit: 20 });
+
     assert.equal(code, EXIT_CODES.USAGE);
     assert.doesNotMatch(text(l), /nothing queued/);
     assert.match(l.err.join(""), /could not be read/);
@@ -194,6 +206,7 @@ test("drop removes exactly the named message and says it will not be sent", asyn
     await handleQueueAdd(l.ctx, { sessionId: "s-1", text: "drop me", json: false });
     l.out.length = 0;
     const code = await handleQueueDrop(l.ctx, { sessionId: "s-1", id: "q-1", json: false });
+
     assert.equal(code, EXIT_CODES.OK);
     assert.match(text(l), /dropped q-1; it will not be sent/);
     l.out.length = 0;
@@ -225,12 +238,15 @@ test("a full queue is refused with the number, and the number is the shared cap"
       path: l.queueFile,
       clock: { now: l.ctx.now, newId: l.ctx.newId },
     });
+
     for (let i = 0; i < MAX_QUEUED_MESSAGES; i += 1) {
       const put = await queue.enqueue(`m${i}`);
       assert.equal(put.ok, true, `message ${i} should have been accepted`);
     }
+
     await queue.release();
     const code = await handleQueueAdd(l.ctx, { sessionId: "s-1", text: "one too many", json: false });
+
     assert.equal(code, EXIT_CODES.USAGE);
     assert.match(l.err.join(""), new RegExp(`full \\(${MAX_QUEUED_MESSAGES} messages\\)`));
     assert.match(l.err.join(""), /queue list --session <id>/);
@@ -247,6 +263,7 @@ test("a held lock is temporary and names the other writer instead of retrying", 
     // including one left by a process that died.
     writeFileSync(`${l.queueFile}.lock`, "999999");
     const code = await handleQueueAdd(l.ctx, { sessionId: "s-1", text: "hi", json: false });
+
     assert.equal(code, EXIT_CODES.TEMPORARY);
     assert.match(l.err.join(""), /another writer is holding/);
     // "Delete the lock" is advice with a precondition attached. Without the

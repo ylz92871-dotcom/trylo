@@ -31,10 +31,12 @@ function capturingSession(captured: Captured[]): SessionPort {
   return {
     start: async () => ({ ok: true }) as const,
     attach: async () => ({ ok: true }) as const,
+
     append: async (record) => {
       captured.push(record);
       return { ok: true, sequence: captured.length } as const;
     },
+
     repairTornTail: async () => ({ ok: true, removedBytes: 0 }) as const,
     read: async () => ({ ok: false, code: "missing_session", detail: "x" }) as const,
     readRecords: async () => ({ ok: true, view: { records: [], window: undefined, tornTail: false } }) as const,
@@ -61,8 +63,10 @@ test("D7: envelope records keep their emission time, brackets use turn bounds", 
     finishedAt: "2026-09-27T14:00:00.000Z",
     clock,
   });
+
   assert.deepEqual(warnings, []);
   const byType = (type: Captured["type"]): Captured[] => captured.filter((record) => record.type === type);
+
   assert.equal(byType("turn_start")[0]?.at, "2026-09-27T12:59:00.000Z");
   assert.deepEqual(
     byType("envelope").map((record) => record.at),
@@ -71,8 +75,10 @@ test("D7: envelope records keep their emission time, brackets use turn bounds", 
   assert.equal(byType("terminal")[0]?.at, "2026-09-27T14:00:00.000Z");
   // 不再是同一个 flush 时刻：时间线可单调读。
   const stamps = captured.map((record) => record.at);
+
   assert.equal(new Set(stamps).size > 1, true, "every record still shares one timestamp");
   const sorted = [...stamps].sort();
+
   assert.deepEqual(stamps, sorted);
 });
 
@@ -80,6 +86,7 @@ test("D7: non-envelope records are stamped per append, not from one value", asyn
   const captured: Captured[] = [];
   let tick = 0;
   const clock = (): string => `2026-09-27T14:00:00.${String(100 + tick++).padStart(3, "0")}Z`;
+
   await persistTurn(capturingSession(captured), {
     sessionId: "s",
     turnId: "t",
@@ -96,7 +103,9 @@ test("D7: non-envelope records are stamped per append, not from one value", asyn
     clock,
   });
   const middle = captured.filter((record) => record.type !== "turn_start" && record.type !== "terminal");
+
   assert.equal(middle.length > 0, true);
   const stamps = middle.map((record) => record.at);
+
   assert.equal(new Set(stamps).size, stamps.length, "records made at different appends share a stamp");
 });

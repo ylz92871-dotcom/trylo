@@ -39,6 +39,7 @@ function askCall(): TuiState {
       ],
     },
   });
+
   state = reduceTuiEvent(state, {
     type: "tool_result",
     toolCallId: "call-1",
@@ -46,12 +47,15 @@ function askCall(): TuiState {
     output: "question request ask-1 recorded:\n- [auth] Auth: Which auth method should we use? (OAuth / API key)\nawait the user's answer via answer_user_question; do not proceed as if answered",
     truncated: false,
   });
+
   return state;
 }
 
 test("a successful ask makes the shell wait on the person's answer", () => {
   const state = askCall();
+
   assert.equal(state.waiting?.kind, "question");
+
   if (state.waiting?.kind === "question") {
     assert.equal(state.waiting.requestId, "ask-1");
     assert.equal(state.waiting.questions.length, 1);
@@ -75,6 +79,7 @@ test("the status bar names the wait while a question is open", () => {
 
 test("a delivered answer clears the wait", () => {
   let state = askCall();
+
   state = reduceTuiEvent(state, {
     type: "tool_use",
     toolCallId: "call-2",
@@ -99,6 +104,7 @@ test("a failed ask waits on nothing and shows no panel", () => {
     name: "ask_user_question",
     input: { questions: [] },
   });
+
   state = reduceTuiEvent(state, {
     type: "tool_result",
     toolCallId: "call-1",
@@ -118,6 +124,7 @@ test("a submitted plan waits on approval and is shown", () => {
     name: "exit_plan_mode",
     input: { plan: "# The plan\n\n1. Read the file\n2. Edit it" },
   });
+
   state = reduceTuiEvent(state, {
     type: "tool_result",
     toolCallId: "call-1",
@@ -127,6 +134,7 @@ test("a submitted plan waits on approval and is shown", () => {
   });
   assert.equal(state.waiting?.kind, "plan");
   const text = state.lines.map((line) => line.text).join("\n");
+
   assert.match(text, /plan awaiting approval/);
   assert.match(text, /Read the file/);
   assert.match(text, /workspace edits stay blocked until then/);
@@ -139,6 +147,7 @@ test("a tool call in flight waits on that tool, and the next turn clears it", ()
     toolCallId: "call-1",
     name: "run_shell",
   });
+
   assert.deepEqual(state.waiting, { kind: "tool", names: ["run_shell"] });
   assert.match(statusBar(state, 120), /waiting on tool run_shell/);
   state = reduceTuiEvent(state, {
@@ -153,6 +162,7 @@ test("a tool call in flight waits on that tool, and the next turn clears it", ()
 
 test("a question outlives the turn that asked it", () => {
   let state = askCall();
+
   state = reduceTuiEvent(state, {
     type: "run_result",
     status: "completed",
@@ -189,6 +199,7 @@ test("a failure's body is quoted beyond its headline", () => {
     truncated: false,
   });
   const text = closed.lines.map((line) => line.text).join("\n");
+
   assert.match(text, /! hunk 2 did not match/);
   assert.match(text, /! found:    const a = 2;/);
   // Past the fold the body is not dropped, it is pointed at: the person knows

@@ -12,13 +12,16 @@ test("a fresh prompt remains visible after a slash command", async () => {
     keys: { start: handler => { feed = handler; }, suspend: () => {}, resume: () => {}, stop: () => {} },
   });
   const mid = createMidRunInput({ io, composer });
+
   try {
     const first = mid.takeLine();
+
     assert.ok(output.join("").includes("> "));
     feed("/status\r");
     assert.equal(await first, "/status");
     output.length = 0;
     const second = mid.takeLine();
+
     assert.ok(output.join("").includes("> "), "the next prompt must appear before typing");
     feed("/exit\r");
     assert.equal(await second, "/exit");

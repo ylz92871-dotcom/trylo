@@ -31,6 +31,7 @@ function lab(
   const err: string[] = [];
   const root = mkdtempSync(join(tmpdir(), "trylo-bg-"));
   const home = join(root, "home");
+
   mkdirSync(join(home, ".trylo", "sessions"), { recursive: true });
   const ctx: CliContext = {
     env: {},
@@ -38,6 +39,7 @@ function lab(
     cwd: root,
     nodeVersion: "v22.0.0",
     stdinIsTty: false,
+
     readFile: (absolutePath) => {
       try {
         return readFileSync(absolutePath, "utf8");
@@ -45,6 +47,7 @@ function lab(
         return undefined;
       }
     },
+
     isDirectory: () => false,
     readDir: () => [],
     writeFile: () => true,
@@ -72,11 +75,13 @@ function lab(
     jobs,
     liveness: async (record: BackgroundJobRecord): Promise<JobLiveness> =>
       typeof liveness === "function" ? liveness(record) : liveness,
+
     killPid: async (pid: number) => {
       killed.push(pid);
       return { ok: true as const, how: "killed" as const };
     },
   };
+
   return { ctx, out, err, jobs, deps, start, sessionId, killed, record: (id: string) => JSON.parse(readFileSync(join(home, ".trylo", "jobs", id, "job.json"), "utf8")) as BackgroundJobRecord };
 }
 
@@ -91,6 +96,7 @@ test("`ps` reads the disk: a job published by another process is listed", async 
   const h = lab();
   const { id, pid } = h.start();
   const code = await handleBackground(h.ctx, parseBackground(["ps"]), h.deps);
+
   assert.equal(code, EXIT_CODES.OK);
   assert.match(h.out.join(""), new RegExp(id));
   assert.match(h.out.join(""), new RegExp(`pid ${pid}`));
@@ -100,9 +106,11 @@ test("`ps` reads the disk: a job published by another process is listed", async 
 test("`ps` marks a gone job lost and still writes no exit code", async () => {
   const h = lab("gone");
   const { id } = h.start();
+
   await handleBackground(h.ctx, parseBackground(["ps"]), h.deps);
   assert.match(h.out.join(""), /lost \(no exit code was observed\)/);
   const record = h.record(id);
+
   assert.equal(record.status, "lost");
   assert.equal("exitCode" in record, false, "the reader did not see the ending");
   assert.equal("endedAtMs" in record, false);
@@ -126,8 +134,10 @@ test("a malformed id is refused with the shape, not a bare lookup failure", () =
 test("`logs` prints what the owner wrote", async () => {
   const h = lab();
   const { id } = h.start();
+
   h.jobs.append(id, Buffer.from("first line\nsecond line\n"));
   const code = await handleBackground(h.ctx, parseBackground(["logs", id]), h.deps);
+
   assert.equal(code, EXIT_CODES.OK);
   assert.match(h.out.join(""), /first line/);
   assert.match(h.out.join(""), /second line/);
@@ -144,10 +154,12 @@ test("`kill` signals the recorded pid and leaves the ending to the observer", as
   const h = lab();
   const { id, pid } = h.start();
   const code = await handleBackground(h.ctx, parseBackground(["kill", id]), h.deps);
+
   assert.equal(code, EXIT_CODES.OK);
   assert.deepEqual(h.killed, [pid]);
   // The killer never saw the child exit, so it must not write what it did not see.
   const record = h.record(id);
+
   assert.equal(record.status, "running");
   assert.equal("exitCode" in record, false);
 });
@@ -173,8 +185,10 @@ test("`kill` on a finished job is the state asked for, not a failure", async () 
 test("`attach` says it is watching and not taking over", async () => {
   const h = lab();
   const { id } = h.start();
+
   h.jobs.append(id, Buffer.from("output while nobody looked\n"));
   const code = await handleBackground(h.ctx, parseBackground(["attach", id]), h.deps);
+
   assert.equal(code, EXIT_CODES.OK);
   assert.match(h.out.join(""), /output while nobody looked/);
   assert.match(h.err.join(""), /watching only/);
@@ -187,8 +201,10 @@ test("`bg --help` states the attach limits in so many words", async () => {
   // takeover it cannot perform.
   const h = lab();
   const code = await handleBackground(h.ctx, parseBackground(["--help"]), h.deps);
+
   assert.equal(code, EXIT_CODES.OK);
   const text = h.out.join("");
+
   assert.match(text, /watch its output only \(no stdin, no resize, no owner transfer\)/);
   assert.match(text, /To type into a job, use the terminal that started it/);
 });
@@ -199,8 +215,10 @@ test("`attach --json` carries truncatedFromStart like `logs --json` does", async
   // a tail that starts mid-stream and looks complete.
   const h = lab();
   const { id } = h.start();
+
   h.jobs.append(id, Buffer.from("hello\n"));
   const code = await handleBackground(h.ctx, parseBackground(["attach", id, "--json"]), h.deps);
+
   assert.equal(code, EXIT_CODES.OK);
   const decoded = JSON.parse(h.out.join("")) as {
     readonly id: string;
@@ -208,6 +226,7 @@ test("`attach --json` carries truncatedFromStart like `logs --json` does", async
     readonly output: string;
     readonly truncatedFromStart: boolean;
   };
+
   assert.equal(decoded.id, id);
   assert.equal(decoded.output, "hello\n");
   assert.equal(decoded.truncatedFromStart, false);
@@ -219,13 +238,16 @@ test("`attach --json` says truncatedFromStart when the log exceeds the read cap"
   // only the tail.
   const h = lab("alive", { readMaxBytes: 8 });
   const { id } = h.start();
+
   h.jobs.append(id, Buffer.from("0123456789abcdef\n"));
   const code = await handleBackground(h.ctx, parseBackground(["attach", id, "--json"]), h.deps);
+
   assert.equal(code, EXIT_CODES.OK);
   const decoded = JSON.parse(h.out.join("")) as {
     readonly id: string;
     readonly output: string;
     readonly truncatedFromStart: boolean;
   };
+
   assert.equal(decoded.truncatedFromStart, true);
 });

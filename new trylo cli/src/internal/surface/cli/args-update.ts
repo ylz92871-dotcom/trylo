@@ -22,23 +22,29 @@ const HINT = "try `trylo update --check [--json]`";
 export function parseUpdate(argv: ReadonlyArray<string>): ParsedCommand {
   let check = false;
   let json = false;
+
   for (const token of argv) {
     if (token === "--help" || token === "-h") {
       return familyHelpCommand("update");
     }
+
     if (token === "--check") {
       check = true;
       continue;
     }
+
     if (token === "--json") {
       json = true;
       continue;
     }
+
     const flag = token.startsWith("--") ? flagToken(token) : undefined;
     if (flag !== undefined) {
       return usageError(`update does not accept --${flag.name}`, HINT);
     }
+
     return usageError(`update does not accept ${token}`, HINT);
   }
+
   return { kind: "update", options: { check, json } };
 }

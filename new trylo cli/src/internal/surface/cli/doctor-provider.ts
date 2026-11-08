@@ -48,6 +48,7 @@ export function resolveSelectedProvider(
   if (isDocumentFailure(registry)) {
     return undefined;
   }
+
   const requested = registry.selected ?? stringEntry(resolved, "provider");
   const resolvedProvider = resolveProvider({
     registry,
@@ -55,6 +56,7 @@ export function resolveSelectedProvider(
     endpoint: stringEntry(resolved, "endpoint") ?? "",
     model: stringEntry(resolved, "model") ?? "",
   });
+
   return resolvedProvider.ok ? resolvedProvider.value : undefined;
 }
 
@@ -86,9 +88,11 @@ export function declaredCapabilityCheck(io: DoctorIo): DoctorCheck | undefined {
       detail: `${PROVIDERS_FILE_NAME} unusable: ${registry.code}: ${registry.detail}`,
     };
   }
+
   if (!registry.declared) {
     return undefined;
   }
+
   const selected = selectProvider(registry);
   if (!selected.ok) {
     return {
@@ -97,6 +101,7 @@ export function declaredCapabilityCheck(io: DoctorIo): DoctorCheck | undefined {
       detail: `selected provider ${registry.selected ?? "(none)"} is not registered`,
     };
   }
+
   return {
     id: "provider.capability",
     status: "ok",
@@ -118,6 +123,7 @@ export function providerCheck(
   if (provider !== "openai-compatible") {
     return { id: "provider.selected", status: "ok", detail: `${provider} (model ${model})` };
   }
+
   // The endpoint a run would actually send to: a declaration's, or the config's.
   const endpoint = selection === undefined ? "" : selection.endpoint;
   if (endpoint.length === 0) {
@@ -131,6 +137,7 @@ export function providerCheck(
           : "openai-compatible has no endpoint; set `endpoint` in config",
     };
   }
+
   return { id: "provider.selected", status: "ok", detail: `openai-compatible -> ${endpoint}` };
 }
 
@@ -150,10 +157,12 @@ export function credentialCheck(
   if (!result.ok) {
     return { id, status: "fail", detail: `ledger unusable: ${result.code} (value never printed)` };
   }
+
   const row = result.value.find((entry) => entry.providerId === "openai-compatible");
   if (row === undefined) {
     return { id, status: "skip", detail: "not evaluated" };
   }
+
   if (selectedProvider !== "openai-compatible") {
     return {
       id,
@@ -161,9 +170,11 @@ export function credentialCheck(
       detail: `layer=${row.layer} logged_in=${row.loggedIn} (not selected)`,
     };
   }
+
   if (row.loggedIn) {
     const authTypePart = row.authType !== undefined ? ` auth=${row.authType}` : "";
     let expiryPart = "";
+
     if (row.expiresAt !== undefined) {
       // The clock is injected: a diagnostic that reads the wall clock itself
       // cannot be tested, and "is this token expired" is exactly the kind of
@@ -171,12 +182,14 @@ export function credentialCheck(
       const isExpired = nowMs() >= new Date(row.expiresAt).getTime();
       expiryPart = isExpired ? " token=expired" : " token=valid";
     }
+
     return {
       id,
       status: "ok",
       detail: `layer=${row.layer} account=${row.accountId}${authTypePart}${expiryPart}`,
     };
   }
+
   return {
     id,
     status: "fail",

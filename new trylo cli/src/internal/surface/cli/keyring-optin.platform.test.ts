@@ -50,6 +50,7 @@ function secretOf(port: CredentialPort, providerId: CredentialProviderId): strin
 function credentialManagerTargets(): readonly string[] {
   const result = spawnSync("cmdkey", ["/list"], { encoding: "utf8" });
   const text = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+
   return text
     .split(/\r?\n/)
     .filter((line) => /trylo:/i.test(line) && !/trylo:test:/i.test(line))
@@ -61,16 +62,21 @@ test("a real Credential Manager round trip through the opt-in wiring leaves no t
   if (!IS_WIN32) {
     return t.skip("win32 only");
   }
+
   const driver = createWindowsCredentialManagerDriver();
   if (!driver.probe().available) {
     return t.skip("no live Credential Manager on this machine");
   }
+
   const root = tempRoot();
+
   t.after(root.cleanup);
   const before = credentialManagerTargets();
   const located = keyringTarget("project", root.cwd);
+
   assert.equal(located.ok, true);
   const target = located.ok ? located.target : "";
+
   t.after(() => {
     try {
       driver.remove(target);
@@ -85,6 +91,7 @@ test("a real Credential Manager round trip through the opt-in wiring leaves no t
 
   assert.deepEqual(collected, [], "a live Credential Manager is not a degradation");
   const login = port.login({ providerId: "openai-compatible", scope: "project", accountId: "acct", secret: SECRET });
+
   assert.equal(login.ok, true, login.ok ? "" : `login failed: ${login.code}: ${login.detail}`);
   assert.equal(existsSync(ledgerFile(root, env)), false, "the file ledger must stay untouched");
   assert.equal(secretOf(port, "openai-compatible"), SECRET, "the secret must round-trip through Credential Manager");
@@ -95,6 +102,7 @@ test("a real Credential Manager round trip through the opt-in wiring leaves no t
     accountId: "acct-2",
     secret: OTHER_SECRET,
   });
+
   assert.equal(second.ok, true);
   assert.equal(secretOf(port, "openai-compatible"), OTHER_SECRET);
 

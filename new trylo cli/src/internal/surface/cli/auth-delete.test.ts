@@ -30,10 +30,12 @@ function recorded(homeDir: string) {
     readFile: (path) => files.get(path),
     isDirectory: () => true,
     readDir: () => [],
+
     writeFile: (path, text) => {
       files.set(path, text);
       return true;
     },
+
     readStdin: async () => "",
     readLine: async () => undefined,
     readSecret: async () => "seed-secret",
@@ -42,6 +44,7 @@ function recorded(homeDir: string) {
     now: () => 0,
     newId: (prefix) => `${prefix}-1`,
   };
+
   return { ctx, out, err };
 }
 
@@ -58,6 +61,7 @@ function ledgerOf(home: string): string {
 test("D6: auth delete removes the record and its secret from disk", async (t) => {
   const home = tempHome(t);
   const fx = recorded(home);
+
   assert.equal(await handleLogin(fx.ctx, { provider: "openai-compatible", account: "acc-a" }), EXIT_CODES.OK);
   assert.equal(await handleLogin(fx.ctx, { provider: "openai-compatible", account: "acc-b" }), EXIT_CODES.OK);
   assert.equal(ledgerOf(home).includes("seed-secret"), true);
@@ -77,6 +81,7 @@ test("D6: auth delete removes the record and its secret from disk", async (t) =>
 test("D6: auth delete refuses the current pointer and unknown accounts", async (t) => {
   const home = tempHome(t);
   const fx = recorded(home);
+
   assert.equal(await handleLogin(fx.ctx, { provider: "openai-compatible", account: "acc-a" }), EXIT_CODES.OK);
   assert.equal(handleAuthDelete(fx.ctx, { provider: "openai-compatible", account: "acc-a" }), EXIT_CODES.USAGE);
   assert.match(fx.err.join(""), /current/);
@@ -86,18 +91,24 @@ test("D6: auth delete refuses the current pointer and unknown accounts", async (
 
 test("D6: auth delete parses --account and logout refuses it", () => {
   const parsed = parseAuthDelete(["--provider", "openai-compatible", "--account", "acc-a"]);
+
   assert.equal(parsed.kind, "auth_delete");
+
   if (parsed.kind !== "auth_delete") {
     throw new Error("unreachable");
   }
+
   assert.equal(parsed.options.account, "acc-a");
   assert.equal(parseAuthDelete(["--provider", "openai-compatible"]).kind, "error");
 
   const logout = parseLogout(["--provider", "openai-compatible", "--account", "acc-a"]);
+
   assert.equal(logout.kind, "error");
+
   if (logout.kind !== "error") {
     throw new Error("unreachable");
   }
+
   assert.match(logout.message, /--account/);
 });
 

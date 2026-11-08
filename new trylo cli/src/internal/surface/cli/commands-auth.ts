@@ -56,12 +56,15 @@ function statusCells(row: CredentialStatusRow): ReadonlyArray<string> {
     `account=${shortenId(row.accountId || "-")}`,
     `logged_in=${row.loggedIn}`,
   ];
+
   if (row.authType !== undefined) {
     cells.push(`auth=${row.authType}`);
   }
+
   if (row.label !== undefined) {
     cells.push(`label=${row.label}`);
   }
+
   return cells;
 }
 
@@ -73,12 +76,15 @@ function entryCells(entry: CredentialPublicEntry): ReadonlyArray<string> {
     `scope=${entry.scope}`,
     `current=${entry.isCurrent}`,
   ];
+
   if (entry.authType !== undefined) {
     cells.push(`auth=${entry.authType}`);
   }
+
   if (entry.label !== undefined) {
     cells.push(`label=${entry.label}`);
   }
+
   return cells;
 }
 
@@ -172,9 +178,11 @@ export async function handleLogin(ctx: CliContext, options: LoginCommandOptions)
     if (!result.ok) {
       return credentialFailure(ctx, "login", result);
     }
+
     ctx.stdout(
       `logged in ${options.provider} account ${result.value.accountId} via oauth (scope ${scope})\n`,
     );
+
     return EXIT_CODES.OK;
   }
 
@@ -189,6 +197,7 @@ export async function handleLogin(ctx: CliContext, options: LoginCommandOptions)
   if ("exitCode" in secret) {
     return reportFailure(ctx, secret);
   }
+
   const result = storeCredential(ctx, {
     providerId: options.provider,
     scope,
@@ -200,9 +209,11 @@ export async function handleLogin(ctx: CliContext, options: LoginCommandOptions)
   if (!result.ok) {
     return credentialFailure(ctx, "login", result);
   }
+
   ctx.stdout(
     `logged in ${options.provider} account ${result.value.accountId} (scope ${scope})\n`,
   );
+
   return EXIT_CODES.OK;
 }
 
@@ -229,6 +240,7 @@ async function handleDeviceLogin(
       hint: "use `trylo login --oauth` on a machine with a browser, or configure the device endpoint first",
     });
   }
+
   const tokenEndpoint =
     ctx.env["TRYLO_OAUTH_TOKEN_URL"] ?? "https://auth.openai.com/oauth/token";
   const clientId = ctx.env["TRYLO_OAUTH_CLIENT_ID"] ?? "trylo-cli";
@@ -248,6 +260,7 @@ async function handleDeviceLogin(
       hint: "enter the code shown above on the verification page, then retry once it is approved",
     });
   }
+
   const result = storeCredential(ctx, {
     providerId: options.provider,
     scope,
@@ -265,9 +278,11 @@ async function handleDeviceLogin(
   if (!result.ok) {
     return credentialFailure(ctx, "login", result);
   }
+
   ctx.stdout(
     `logged in ${options.provider} account ${result.value.accountId} via device (scope ${scope})\n`,
   );
+
   return EXIT_CODES.OK;
 }
 
@@ -280,7 +295,9 @@ export function handleLogout(ctx: CliContext, options: LogoutCommandOptions): Ex
   if (!result.ok) {
     return credentialFailure(ctx, "logout", result);
   }
+
   ctx.stdout(`logged out ${options.provider} (scope ${scope})\n`);
+
   return EXIT_CODES.OK;
 }
 
@@ -289,13 +306,16 @@ export function handleAuthStatus(ctx: CliContext, json: boolean): ExitCode {
   if (!result.ok) {
     return credentialFailure(ctx, "status", result);
   }
+
   if (json) {
     ctx.stdout(`${JSON.stringify({ providers: result.value })}\n`);
     return EXIT_CODES.OK;
   }
+
   for (const line of aligned(result.value.map(statusCells))) {
     ctx.stdout(`${line}\n`);
   }
+
   return EXIT_CODES.OK;
 }
 
@@ -304,17 +324,21 @@ export function handleAuthList(ctx: CliContext, json: boolean, project: boolean)
   if (!result.ok) {
     return credentialFailure(ctx, "auth list", result);
   }
+
   if (json) {
     ctx.stdout(`${JSON.stringify({ entries: result.value })}\n`);
     return EXIT_CODES.OK;
   }
+
   if (result.value.length === 0) {
     ctx.stdout(`no stored accounts in scope ${project ? "project" : "user"}\n`);
     return EXIT_CODES.OK;
   }
+
   for (const line of aligned(result.value.map(entryCells))) {
     ctx.stdout(`${line}\n`);
   }
+
   return EXIT_CODES.OK;
 }
 
@@ -328,7 +352,9 @@ export function handleAuthSwitch(ctx: CliContext, options: AuthSwitchOptions): E
   if (!result.ok) {
     return credentialFailure(ctx, "auth switch", result);
   }
+
   ctx.stdout(`switched ${options.provider} to account ${options.account} (scope ${scope})\n`);
+
   return EXIT_CODES.OK;
 }
 
@@ -348,6 +374,8 @@ export function handleAuthDelete(ctx: CliContext, options: AuthDeleteOptions): E
   if (!result.ok) {
     return credentialFailure(ctx, "auth delete", result);
   }
+
   ctx.stdout(`deleted ${options.provider} account ${options.account} (scope ${scope})\n`);
+
   return EXIT_CODES.OK;
 }

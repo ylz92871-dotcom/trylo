@@ -69,10 +69,13 @@ test("an empty frame is the status bar, dimmed, and nothing else", () => {
 
 test("content lines render above the bar and hard-wrap at the width", () => {
   let state = emptyTuiState(FACTS);
+
   state = { ...state, lines: [{ tone: "assistant", text: "abcdefghij".repeat(10) }] };
   const frame = renderFrame(state, 20);
   const body = frame.split("\n").slice(0, 5);
+
   assert.equal(body.length, 5);
+
   for (const line of body) {
     assert.equal((line ?? "").length, 20);
   }
@@ -108,6 +111,7 @@ test("a status bar wider than the terminal drops the least useful field whole", 
     30,
   );
   const bar = barOf(narrow);
+
   assert.equal(bar.length <= 30, true, `${bar.length} columns in a 30-column terminal`);
   assert.equal(bar.includes("session"), false, "the session id was kept and something else dropped");
   assert.match(bar, /fixture\/default/, "the current model survived");
@@ -131,9 +135,11 @@ test("A4: fifty Chinese characters at width 80 are two lines, none wider than 80
   const body = bodyOf(renderFrame(state, 80));
 
   assert.equal(body.length, 2);
+
   for (const line of body) {
     assert.equal(displayWidth(line) <= 80, true, `${displayWidth(line)} columns on one line`);
   }
+
   assert.equal(body.map((line) => displayWidth(line)).reduce((a, b) => a + b, 0), 100);
 });
 
@@ -142,6 +148,7 @@ test("A4: an emoji is never cut in half", () => {
   const body = bodyOf(renderFrame(state, 21));
 
   assert.equal(body.length > 1, true);
+
   for (const line of body) {
     assert.equal(hasLoneSurrogate(line), false, "a surrogate pair was split across two lines");
     assert.equal(displayWidth(line) <= 21, true);
@@ -159,6 +166,7 @@ test("A4: a double-width status bar still ends inside the width", () => {
     ...emptyTuiState({ ...FACTS, sessionId: "中".repeat(40), model: "中".repeat(20) }),
   };
   const bar = barOf(renderFrame(state, 30));
+
   // Never wider than the terminal, and never wasteful either: a double-width
   // character can leave one column unused, which is the most a column-accurate
   // fit can be off.

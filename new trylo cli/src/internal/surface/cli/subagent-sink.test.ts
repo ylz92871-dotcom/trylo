@@ -39,8 +39,10 @@ function slowSession() {
     await gate.promise;
     records.push(record);
     active -= 1;
+
     return { ok: true, sequence: records.length };
   });
+
   return { session, records, started: started.promise, release: gate.resolve, peak: () => peak };
 }
 
@@ -66,23 +68,29 @@ for (const kind of ["text", "thinking"]) {
     const storage = slowSession();
     const sink = createSubagentJournalSink({ session: storage.session, sessionId: "session", turnId: "turn", now: () => 0 });
     const rendered: Envelope[] = [];
+
     sink.setRenderer({ onEnvelope: envelope => { rendered.push(envelope); } });
     sink.onEvent("subagent_update", observation("a", "x", kind), "root");
     await storage.started;
+
     for (let length = 2; length <= 1000; length += 1) {
       sink.onEvent("subagent_update", observation("a", "x".repeat(length), kind), "root");
     }
+
     sink.onEvent("subagent_end", { subagentId: "a", status: "completed" }, "root");
     let flushed = false;
     const flushing = sink.flush().then(() => { flushed = true; });
+
     await Promise.resolve();
     assert.equal(flushed, false, "flush must await the slow append and its queued successors");
     storage.release();
     await flushing;
     const observations = storage.records.map(persistedEnvelope).filter(envelope => envelope.kind === "subagent_update");
     const last = observations.at(-1)?.payload;
+
     assert.ok(isObject(last));
     const block = last.observation;
+
     assert.ok(isObject(block));
     assert.equal(block.text, "x".repeat(1000));
     assert.equal(persistedEnvelope(storage.records.at(-1)!).kind, "subagent_end");
@@ -95,6 +103,7 @@ test("interleaved members keep snapshot, tool, report, and lifecycle causality",
   const storage = slowSession();
   const sink = createSubagentJournalSink({ session: storage.session, sessionId: "session", turnId: "turn", now: () => 0 });
   const rendered: Envelope[] = [];
+
   sink.setRenderer({ onEnvelope: envelope => { rendered.push(envelope); } });
   sink.onEvent("subagent_spawn", { subagentId: "a" }, "root");
   await storage.started;
@@ -117,6 +126,7 @@ test("interleaved members keep snapshot, tool, report, and lifecycle causality",
   await sink.flush();
   const envelopes = storage.records.map(persistedEnvelope);
   const sequences = envelopes.map(envelope => envelope.sequence);
+
   assert.ok(sequences.every((sequence, index) => index === 0 || Number(sequence) > Number(sequences[index - 1])),
     "durable envelope sequences must strictly increase");
   const labels = envelopes.map(envelope => {
@@ -126,9 +136,11 @@ test("interleaved members keep snapshot, tool, report, and lifecycle causality",
     return isObject(event)
       ? `${payload.subagentId}:${event.text ?? event.kind}` : `${payload.subagentId}:${envelope.kind}`;
   });
+
   for (const label of ["a:A2", "b:B2", "a:tool", "a:A3", "b:report", "b:B4", "a:result", "a:A4", "a:subagent_end", "b:subagent_end"]) {
     assert.ok(labels.includes(label), `necessary event survives: ${label}`);
   }
+
   assert.ok(labels.indexOf("a:A2") < labels.indexOf("a:tool"));
   assert.ok(labels.indexOf("a:tool") < labels.indexOf("a:A3"));
   assert.ok(labels.indexOf("a:A3") < labels.indexOf("a:result"));
@@ -137,6 +149,7 @@ test("interleaved members keep snapshot, tool, report, and lifecycle causality",
     const block = envelope.payload.observation;
     return !isObject(block) || !["text", "thinking"].includes(String(block.kind));
   });
+
   assert.deepEqual(envelopes.filter(envelope => barriers.some(barrier => barrier.eventId === envelope.eventId)).map(envelope => envelope.eventId), barriers.map(envelope => envelope.eventId));
   assert.equal(storage.peak(), 1);
 });
@@ -144,13 +157,16 @@ test("interleaved members keep snapshot, tool, report, and lifecycle causality",
 test("member, round, observation id, kind, and root attempt isolate snapshot identities", async () => {
   const storage = slowSession();
   const sink = createSubagentJournalSink({ session: storage.session, sessionId: "session", turnId: "turn", now: () => 0 });
+
   sink.onEvent("subagent_spawn", { subagentId: "a" }, "root");
   await storage.started;
+
   for (const [member, text, kind, round, id, root] of [
     ["a", "text", "text", 1, "one", "root"], ["b", "member", "text", 1, "one", "root"],
     ["a", "round", "text", 2, "one", "root"], ["a", "id", "text", 1, "two", "root"],
     ["a", "thinking", "thinking", 1, "one", "root"], ["a", "attempt", "text", 1, "one", "other"],
   ] as const) sink.onEvent("subagent_update", observation(member, text, kind, round, id), root);
+
   storage.release();
   await sink.flush();
   assert.equal(storage.records.length, 7);
@@ -167,8 +183,12 @@ test("128 independent pending events still exhaust the bounded queue explicitly"
 
 test("append result failure remains an ExecutionProgressError and flush drains accepted events", async () => {
   let appends = 0;
-  const session = withAppend(async () => { appends += 1; return { ok: false, code: "disk_full" }; });
+  const session = withAppend(async () => {
+    appends += 1;
+    return { ok: false, code: "disk_full" };
+  });
   const sink = createSubagentJournalSink({ session, sessionId: "session", turnId: "turn", now: () => 0 });
+
   sink.onEvent("subagent_spawn", { subagentId: "a" }, "root");
   sink.onEvent("subagent_end", { subagentId: "a", status: "failed" }, "root");
   await assert.rejects(sink.flush(), error => expectFailure(error, "disk_full"));
@@ -179,7 +199,10 @@ test("append result failure remains an ExecutionProgressError and flush drains a
 test("real filesystem append rejection remains an explicit session_append_threw failure", async t => {
   const directory = await mkdtemp(join(tmpdir(), "trylo-subagent-sink-"));
   t.after(async () => { await rm(directory, { recursive: true, force: true }); });
-  const session = withAppend(async () => { await appendFile(directory, "cannot append to a directory"); return { ok: true, sequence: 1 }; });
+  const session = withAppend(async () => {
+    await appendFile(directory, "cannot append to a directory");
+    return { ok: true, sequence: 1 };
+  });
   const sink = createSubagentJournalSink({ session, sessionId: "session", turnId: "turn", now: () => 0 });
   sink.onEvent("subagent_end", { subagentId: "a", status: "failed" }, "root");
   await assert.rejects(sink.flush(), error => expectFailure(error, "session_append_threw"));
@@ -195,10 +218,16 @@ test("a synchronous append throw is captured for flush rather than escaping the 
 test("events arriving as a writer becomes idle are included in flush", async () => {
   for (let yields = 0; yields <= 8; yields += 1) {
     const records: AppendRecord[] = [];
-    const session = withAppend(async record => { records.push(record); return { ok: true, sequence: records.length }; });
+    const session = withAppend(async record => {
+      records.push(record);
+      return { ok: true, sequence: records.length };
+    });
     const sink = createSubagentJournalSink({ session, sessionId: "session", turnId: "turn", now: () => 0 });
+
     sink.onEvent("subagent_spawn", { subagentId: "a" }, "root");
+
     for (let index = 0; index < yields; index += 1) await Promise.resolve();
+
     sink.onEvent("subagent_end", { subagentId: "a", status: "completed" }, "root");
     await sink.flush();
     assert.equal(records.length, 2, `flush includes the event after ${yields} microtask yields`);

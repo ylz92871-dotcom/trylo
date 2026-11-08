@@ -9,10 +9,15 @@ test("a failed suffix ack does not advance the durable prefix and closed blocks 
   const stored: JsonObject[] = [];
   let fail = false;
   const preserve = createPartialRecorder(async payload => {
-    if (fail) { fail = false; return { ok: false, code: "disk_full" }; }
-    stored.push(payload); return { ok: true };
+    if (fail) {
+      fail = false;
+      return { ok: false, code: "disk_full" };
+    }
+    stored.push(payload);
+    return { ok: true };
   });
   const partial = (text: string): StreamPartial => ({ kind: "tool_input", blockId: "call", name: "write_file", text });
+
   assert.deepEqual(await preserve([partial("abc")]), { ok: true });
   fail = true;
   assert.deepEqual(await preserve([partial("abcdef")]), { ok: false, code: "disk_full" });
@@ -20,6 +25,7 @@ test("a failed suffix ack does not advance the durable prefix and closed blocks 
   assert.equal(stored[1]?.offset, 3);
   assert.equal(stored[1]?.textDelta, "defghi");
   const recovered = readPartialRecord(stored[1]!, readPartialRecord(stored[0]!));
+
   assert.equal(recovered?.text, "abcdefghi");
   await preserve([]);
   await preserve([partial("abcdefghi fresh")]);

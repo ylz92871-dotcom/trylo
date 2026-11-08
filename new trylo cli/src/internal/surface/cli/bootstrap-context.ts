@@ -41,18 +41,26 @@ export function parseBootstrapContext(value: unknown, source: "input" | "journal
     || value.messages.length === 0 || value.messages.length > BOOTSTRAP_CONTEXT_LIMITS.messages) {
     throw new BootstrapContextError(source, "invalid_bootstrap_context");
   }
+
   let total = 0;
   const messages: BootstrapContext["messages"][number][] = [];
+
   for (const message of value.messages) {
     if (!plainRecord(message) || !Object.hasOwn(message, "role") || (message.role !== "user" && message.role !== "assistant")
       || !Object.hasOwn(message, "content") || typeof message.content !== "string" || message.content.trim().length === 0
       || Object.keys(message).some(key => key !== "role" && key !== "content")) throw new BootstrapContextError(source, "invalid_bootstrap_context");
+
     const bytes = Buffer.byteLength(message.content, "utf8");
+
     total += bytes;
+
     if (bytes > BOOTSTRAP_CONTEXT_LIMITS.messageBytes || total > BOOTSTRAP_CONTEXT_LIMITS.totalBytes) throw new BootstrapContextError(source, "bootstrap_context_limit_exceeded");
+
     messages.push({ role: message.role, content: message.content });
   }
+
   if (Object.keys(value).some(key => key !== "version" && key !== "messages")) throw new BootstrapContextError(source, "invalid_bootstrap_context");
+
   return { version: 1, messages };
 }
 
@@ -66,18 +74,23 @@ type BootstrapInput = {
 
 export function bootstrapContextFor(input: BootstrapInput): BootstrapContext | undefined {
   let context: BootstrapContext | undefined;
+
   for (const record of input.resumeRecords ?? []) {
     if (record.type !== "turn_start" || !("bootstrapContext" in record.payload)) continue;
     if (context !== undefined) throw new BootstrapContextError("journal", "duplicate_bootstrap_context");
     context = parseBootstrapContext(record.payload["bootstrapContext"], "journal");
   }
+
   if (input.bootstrap === undefined) return context;
+
   if (!plainRecord(input.bootstrap) || !Object.hasOwn(input.bootstrap, "state") || !Object.hasOwn(input.bootstrap, "context")
     || Object.keys(input.bootstrap).some(key => key !== "state" && key !== "context")
     || (input.bootstrap.state !== "import_pending" && input.bootstrap.state !== "established_read_only")
     || (input.bootstrap.state === "established_read_only" && input.session !== undefined)) throw new BootstrapContextError("input", "invalid_bootstrap_context_state");
+
   if (context !== undefined || (input.bootstrap.state === "import_pending" && ((input.resumeTranscript?.length ?? 0) > 0
     || (input.resumeRecords ?? []).some(record => record.type === "transcript_item")))) throw new BootstrapContextError("input", "bootstrap_context_requires_new_history");
+
   return parseBootstrapContext(input.bootstrap.context);
 }
 
@@ -87,10 +100,14 @@ export async function bootstrapForFallback(input: BootstrapInput): Promise<{
 }> {
   const context = bootstrapContextFor(input);
   if (context === undefined) return {};
+
   if (input.session === undefined) return { bootstrap: { state: "established_read_only", context } };
+
   const read = await input.session.readRecords();
   if (!read.ok) throw new BootstrapContextError("journal", "bootstrap_context_read_failed");
+
   const restored = bootstrapContextFor({ resumeRecords: read.view.records });
   if (restored === undefined || JSON.stringify(restored) !== JSON.stringify(context)) throw new BootstrapContextError("journal", "bootstrap_context_missing_or_changed");
+
   return { resumeRecords: read.view.records };
 }

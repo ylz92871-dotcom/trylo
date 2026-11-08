@@ -18,6 +18,7 @@ export function runPermissionMode(io: TuiIo, permissions: SessionPermissions, ar
     io.write(`mode must be one of: ${MODES.join(", ")}\n`);
     return;
   }
+
   permissions.setMode(mode);
   io.write(`mode set to ${mode}\n`);
 }
@@ -28,16 +29,19 @@ export function runPermissionAllow(io: TuiIo, permissions: SessionPermissions, a
     io.write("usage: /allow <tool>\n");
     return;
   }
+
   if (!isApprovableToolName(name)) {
     io.write(`unknown tool ${name}; known tools: ${APPROVABLE_TOOL_NAMES.join(", ")}\n`);
     return;
   }
+
   try {
     permissions.allowTool(name);
   } catch (error) {
     io.write(`cannot allow ${name}: ${error instanceof Error ? error.message : String(error)}\n`);
     return;
   }
+
   io.write(`allowed ${name} for this session\n`);
 }
 
@@ -47,10 +51,12 @@ export function runPermissionDeny(io: TuiIo, permissions: SessionPermissions, ar
     io.write("usage: /deny <tool>\n");
     return;
   }
+
   if (!isApprovableToolName(name)) {
     io.write(`unknown tool ${name}; known tools: ${APPROVABLE_TOOL_NAMES.join(", ")}\n`);
     return;
   }
+
   permissions.denyTool(name);
   io.write(`denied ${name} for this session\n`);
 }
@@ -61,10 +67,12 @@ export function runPermissionRevoke(io: TuiIo, permissions: SessionPermissions, 
     io.write("usage: /revoke <tool>\n");
     return;
   }
+
   if (!isApprovableToolName(name)) {
     io.write(`unknown tool ${name}; known tools: ${APPROVABLE_TOOL_NAMES.join(", ")}\n`);
     return;
   }
+
   permissions.revokeTool(name);
   io.write(`revoked ${name}; it now follows the current mode\n`);
 }
@@ -77,18 +85,25 @@ export function runPermissionGrants(io: TuiIo, permissions: SessionPermissions, 
       io.write("usage: /grants revoke <pattern>\n");
       return;
     }
+
     permissions.grants.revoke(pattern);
     io.write(`revoked remembered call matching ${pattern}\n`);
+
     return;
   }
+
   const snapshot = permissions.snapshot();
+
   io.write(`mode: ${snapshot.mode}\n`);
+
   if (snapshot.allowTools.length > 0) {
     io.write(`allowed tools: ${snapshot.allowTools.join(", ")}\n`);
   }
+
   if (snapshot.denyTools.length > 0) {
     io.write(`denied tools: ${snapshot.denyTools.join(", ")}\n`);
   }
+
   const remembered = snapshot.grants;
   if (remembered.length > 0) {
     io.write(`remembered approvals (${remembered.length}):\n`);
@@ -96,6 +111,7 @@ export function runPermissionGrants(io: TuiIo, permissions: SessionPermissions, 
       io.write(`  ${grant.name}: ${grant.pattern}\n`);
     }
   }
+
   io.write(`effective: ${formatChoice(snapshot.effectiveChoice)}\n`);
 }
 
@@ -106,17 +122,22 @@ export function runPermissionGrants(io: TuiIo, permissions: SessionPermissions, 
  */
 function formatChoice(choice: PermissionChoice): string {
   const parts: string[] = [];
+
   if (choice.ask !== undefined) {
     parts.push(`ask=${choice.ask}`);
   }
+
   if (choice.allowWrites === true) {
     parts.push("allow-writes");
   }
+
   if (choice.allowTools !== undefined && choice.allowTools.length > 0) {
     parts.push(`allow=${choice.allowTools.join(",")}`);
   }
+
   if (choice.denyTools !== undefined && choice.denyTools.length > 0) {
     parts.push(`deny=${choice.denyTools.join(",")}`);
   }
+
   return parts.length === 0 ? "default (no explicit flags)" : parts.join(" ");
 }

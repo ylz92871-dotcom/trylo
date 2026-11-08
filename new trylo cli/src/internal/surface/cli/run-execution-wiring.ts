@@ -10,6 +10,8 @@ import { createImageReferenceRegistry } from "../../adapters/media/image-referen
 import { assertSessionStartAllowed, type SessionLifecycle } from "../../adapters/process-session/session-start-admission.js";
 
 export type RunExecution = {
+  /** Actual filesystem root witnessed by preparation; session/learning identity stays with the scaffold. */
+  readonly workspaceRoot?: string;
   readonly imageReferences?: ImageReferenceRegistry;
   readonly sessions: ProcessSessionRegistry;
   readonly spawner: ShellSpawner;
@@ -33,10 +35,13 @@ export function createRunExecution(workspaceRoot: string, options: {
   const boundary = platform === "win32" && options.shellIsolation !== "host"
     ? createWindowsShellBoundary(workspaceRoot, options.env ?? hostProcessEnvironment()) : undefined;
   const spawner = boundary === undefined ? createNodeSpawner() : boundary.spawner(createNodeSpawner(boundary.helperEnvironment));
+
   return {
+    workspaceRoot,
     ...(imageReferences === undefined ? {} : { imageReferences }),
     sessions: boundary === undefined ? sessions : {
       ...sessions,
+
       start: async (request, signal) => {
         assertSessionStartAllowed(lifecycle, signal);
         const argv = await (request.tty ? boundary.wrap(request.argv) : boundary.wrapPipeSession(request.argv));
@@ -45,10 +50,15 @@ export function createRunExecution(workspaceRoot: string, options: {
       },
     },
     spawner,
+
     close: async () => {
       lifecycle = "closing";
       // Do not revoke a live child's approved ACL before its tree is drained.
-      try { await sessions.shutdown(); await boundary?.close(); lifecycle = "closed"; }
+      try {
+        await sessions.shutdown();
+        await boundary?.close();
+        lifecycle = "closed";
+      }
       finally { imageReferences?.clear(); }
     },
   };

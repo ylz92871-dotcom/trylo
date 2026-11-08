@@ -27,25 +27,30 @@ export function parseContext(argv: ReadonlyArray<string>): ParsedCommand {
   let turn: string | undefined;
   let json = false;
   let index = 0;
+
   while (index < argv.length) {
     const token = argv[index] ?? "";
     if (token === "--help" || token === "-h") {
       return familyHelpCommand("context");
     }
+
     if (token === "--json") {
       json = true;
       index += 1;
       continue;
     }
+
     const flag = flagToken(token);
     if (flag === undefined) {
       return usageError(`context does not accept ${token}`, HINT);
     }
+
     if (flag.name === "session" || flag.name === "turn") {
       const read = readValue(argv, index, flag.inlineValue);
       if (read.error !== undefined || (read.value ?? "").trim().length === 0) {
         return usageError(`option --${flag.name} ${read.error ?? "requires a non-empty value"}`, HINT);
       }
+
       const value = (read.value ?? "").trim();
       if (flag.name === "session" && !isValidSessionId(value)) {
         return usageError(
@@ -53,18 +58,23 @@ export function parseContext(argv: ReadonlyArray<string>): ParsedCommand {
           "a session id is letters, digits, dot, dash or underscore, and never contains ..",
         );
       }
+
       if (flag.name === "session") {
         session = value;
       } else {
         turn = value;
       }
+
       index = read.next;
       continue;
     }
+
     return usageError(`context does not accept --${flag.name}`, HINT);
   }
+
   if (turn !== undefined && session === undefined) {
     return usageError("--turn needs --session", HINT);
   }
+
   return { kind: "context", options: { ...(session === undefined ? {} : { session }), ...(turn === undefined ? {} : { turn }), json } };
 }

@@ -30,6 +30,7 @@ type Lab = {
 function lab(sessionId = "s-1"): Lab {
   const root = mkdtempSync(join(tmpdir(), "trylo-dispatch-"));
   const home = join(root, "home");
+
   mkdirSync(join(home, ".trylo", "sessions"), { recursive: true });
   let ids = 0;
   const ctx: CliContext = {
@@ -38,6 +39,7 @@ function lab(sessionId = "s-1"): Lab {
     cwd: root,
     nodeVersion: "v22.0.0",
     stdinIsTty: false,
+
     readFile: (absolutePath) => {
       try {
         return readFileSync(absolutePath, "utf8");
@@ -45,6 +47,7 @@ function lab(sessionId = "s-1"): Lab {
         return undefined;
       }
     },
+
     isDirectory: () => true,
     readDir: () => [],
     writeFile: () => true,
@@ -56,6 +59,7 @@ function lab(sessionId = "s-1"): Lab {
     now: () => 1_700_000_000_000,
     newId: (prefix) => `${prefix}-${(ids += 1)}`,
   };
+
   return { ctx, root, queueFile: sessionQueuePath(home, {}, sessionId) };
 }
 
@@ -64,10 +68,12 @@ async function seed(l: Lab, texts: ReadonlyArray<string>): Promise<void> {
     path: l.queueFile,
     clock: { now: l.ctx.now, newId: l.ctx.newId },
   });
+
   for (const text of texts) {
     const put = await queue.enqueue(text);
     assert.equal(put.ok, true);
   }
+
   await queue.release();
 }
 
@@ -77,8 +83,10 @@ async function remainingIn(l: Lab): Promise<ReadonlyArray<string>> {
     clock: { now: l.ctx.now, newId: l.ctx.newId },
   });
   const page = await queue.list(0, 50);
+
   await queue.release();
   assert.equal(page.ok, true);
+
   return (page.ok ? page.value.items : []).map((item) => item.text);
 }
 
@@ -98,8 +106,11 @@ test("one call takes one message and leaves the rest queued", async () => {
     await seed(l, ["first", "second"]);
     const dispatch = createIdleDispatch(l.ctx);
     const got = await dispatch("s-1");
+
     assert.equal(got.kind, "turn");
+
     if (got.kind !== "turn") return;
+
     assert.equal(got.text, "first");
     assert.equal(got.id, "q-1");
     assert.equal(got.remaining, 1);
@@ -115,6 +126,7 @@ test("successive idle ticks drain the queue oldest first", async () => {
     await seed(l, ["a", "b", "c"]);
     const dispatch = createIdleDispatch(l.ctx);
     const taken: Array<string> = [];
+
     for (;;) {
       const got = await dispatch("s-1");
       if (got.kind !== "turn") {
@@ -123,6 +135,7 @@ test("successive idle ticks drain the queue oldest first", async () => {
       }
       taken.push(got.text);
     }
+
     assert.deepEqual(taken, ["a", "b", "c"]);
     assert.deepEqual(await remainingIn(l), []);
   } finally {
@@ -165,6 +178,7 @@ test("a second dispatcher over the same queue is refused, never served a second 
     const results = await Promise.all([one("s-1"), two("s-1")]);
     const started = results.filter((r) => r.kind === "turn");
     const refused = results.filter((r) => r.kind === "unknown");
+
     // The writer lock is a file, and existence is the whole predicate — so a
     // second dispatcher *in this process* is refused exactly as a second
     // process would be. That is the point: within one session there is one
@@ -220,6 +234,7 @@ test("queues are per session: another session's messages are not taken", async (
 test("TRYLO_HOME moves the queue, and both faces follow it", async () => {
   const l = lab();
   const alt = join(l.root, "elsewhere");
+
   try {
     // Both the path and the context move, because the writer resolves the queue
     // from the environment and so does the consumer. Checking one against a
@@ -229,12 +244,14 @@ test("TRYLO_HOME moves the queue, and both faces follow it", async () => {
       ctx: { ...l.ctx, env: { TRYLO_HOME: alt } },
       queueFile: sessionQueuePath(l.ctx.homeDir, { TRYLO_HOME: alt }, "s-1"),
     };
+
     await seed(moved, ["over here"]);
     assert.equal(existsSync(moved.queueFile), true);
     // The consumer resolves its own path from the same environment. If the
     // writer honoured TRYLO_HOME and the reader did not, this queue would fill
     // up forever and nothing would ever be answered.
     const got = await createIdleDispatch(moved.ctx)("s-1");
+
     assert.equal(got.kind === "turn" && got.text, "over here");
     assert.deepEqual(await remainingIn(moved), []);
   } finally {

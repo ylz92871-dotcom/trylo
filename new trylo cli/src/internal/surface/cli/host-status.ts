@@ -1,8 +1,17 @@
-import { EXIT_CODES, type CliRunStatus, type CliUsage, type ExitCode } from "../../protocol/cli-stream.js";
+import { EXIT_CODES, type CliUsageAccounting, type CliRunStatus, type CliUsage, type ExitCode } from "../../protocol/cli-stream.js";
 import type { Envelope } from "../../protocol/envelope.js";
 import type { ProviderUsage } from "../../ports/provider.js";
 import type { RunTurnResult } from "../../loop/runner.js";
 import type { TurnOutcome, TurnFailure } from "./host.js";
+import type { ParentUsageAccounting } from "../../loop/auxiliary-usage.js";
+
+export function accountingToCli(value: ParentUsageAccounting): CliUsageAccounting {
+  return { ...(value.mainUsage === undefined ? {} : { mainUsage: usageToCli(value.mainUsage) }),
+    ...(value.auxiliaryUsage === undefined ? {} : { auxiliaryUsage: usageToCli(value.auxiliaryUsage) }),
+    ...(value.auxiliaryRequests === undefined ? {} : { auxiliaryRequests: value.auxiliaryRequests }),
+    ...(value.auxiliaryUsageStatus === undefined ? {} : { auxiliaryUsageStatus: value.auxiliaryUsageStatus }),
+    ...(value.costUsd === undefined ? {} : { costUsd: value.costUsd }) };
+}
 
 /**
  * Reading a finished turn: what it used, how it ended, what that costs the
@@ -53,6 +62,7 @@ export function providerErrorClass(envelopes: ReadonlyArray<Envelope>): string |
     if (envelope === undefined || envelope.kind !== "terminal") {
       continue;
     }
+
     const value = envelope.payload.errorClass;
     if (typeof value === "string") {
       return value;
@@ -70,17 +80,21 @@ export function exitCodeForResult(result: RunTurnResult): ExitCode {
   if (result.state.phase !== "terminal") {
     return EXIT_CODES.TEMPORARY;
   }
+
   const status = terminalStatusOf(result);
   if (status === "completed") {
     return EXIT_CODES.OK;
   }
+
   if (status === "cancelled") {
     return EXIT_CODES.CANCELLED;
   }
+
   const errorClass = providerErrorClass(result.envelopes);
   if (errorClass === "auth") {
     return EXIT_CODES.AUTH;
   }
+
   if (
     errorClass === "rate_limit" ||
     errorClass === "quota" ||
@@ -90,5 +104,6 @@ export function exitCodeForResult(result: RunTurnResult): ExitCode {
   ) {
     return EXIT_CODES.TEMPORARY;
   }
+
   return EXIT_CODES.EXECUTION_FAILURE;
 }

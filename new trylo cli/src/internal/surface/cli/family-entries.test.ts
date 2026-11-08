@@ -28,6 +28,7 @@ function lab(): { ctx: CliContext; out: string[]; err: string[] } {
   const err: string[] = [];
   const root = mkdtempSync(join(tmpdir(), "trylo-family-"));
   const home = join(root, "home");
+
   mkdirSync(join(home, ".trylo", "sessions"), { recursive: true });
   const ctx: CliContext = {
     env: {},
@@ -35,6 +36,7 @@ function lab(): { ctx: CliContext; out: string[]; err: string[] } {
     cwd: root,
     nodeVersion: "v22.0.0",
     stdinIsTty: false,
+
     readFile: (absolutePath) => {
       try {
         return readFileSync(absolutePath, "utf8");
@@ -43,6 +45,7 @@ function lab(): { ctx: CliContext; out: string[]; err: string[] } {
         return undefined;
       }
     },
+
     isDirectory: () => false,
     readDir: () => [],
     writeFile: () => true,
@@ -54,6 +57,7 @@ function lab(): { ctx: CliContext; out: string[]; err: string[] } {
     now: () => 1_700_000_000_000,
     newId: (prefix) => `${prefix}_1`,
   };
+
   return { ctx, out, err };
 }
 
@@ -79,21 +83,27 @@ test("a global switch is refused before a family sees it", () => {
   // the schedule parser with the switch quietly dropped. Refusing is the same
   // answer the root gives for every other verb that cannot honour it.
   const parsed = parseArgs(["--learning", "method", "schedule", "list"]);
+
   assert.equal(parsed.kind, "error");
+
   if (parsed.kind !== "error") return;
+
   assert.match(parsed.message, /does not accept --learning/);
 });
 
 test("`schedule` and `daemon` and `bg` are reachable through the real entry point", async () => {
   const h = lab();
+
   assert.equal(await main(["schedule", "list"], h.ctx), EXIT_CODES.OK);
   assert.ok(h.out.join("").length > 0);
 
   const d = lab();
+
   assert.equal(await main(["daemon", "--help"], d.ctx), EXIT_CODES.OK);
   assert.match(d.out.join(""), /trylo daemon/);
 
   const b = lab();
+
   assert.equal(await main(["bg", "ps"], b.ctx), EXIT_CODES.OK);
   assert.match(b.out.join(""), /no background jobs/);
 });
@@ -111,8 +121,10 @@ test("`trylo --help` names the verbs the families own", async () => {
   const h = lab();
   const code = await main(["--help"], h.ctx);
   const text = h.out.join("");
+
   assert.equal(code, EXIT_CODES.OK);
   assert.match(text, /trylo session list/, "the root's own help must still be there");
+
   for (const word of FAMILY_COMMAND_WORDS) {
     assert.match(text, new RegExp(`trylo ${word}`), `help is missing ${word}`);
   }

@@ -14,6 +14,7 @@ test("production commands require a license, an exact activation review, and bou
   assert.equal(parseTools(["production-verify", "v", "--allow-tools", "run_shell"]).kind, "production-verify");
   assert.equal(parseTools(["production-show", "v", "--json"]).kind, "production-show");
   assert.equal(parseTools(["production-activate", "v", "--approve", "review"]).kind, "production-activate");
+
   for (const tokens of [["production-plan", "v", "checks.json"], ["production-plan", "v", "checks.json", "--license", "UNLICENSED"],
     ["production-activate", "v"], ["production-activate", "v", "--auto"], ["production-verify", "v", "--allow-tools", "all"],
     ["production-verify", "v", "--pass"], ["production-show", "v", "--receipt", "forged"]]) assert.equal(parseTools(tokens).kind, "error");

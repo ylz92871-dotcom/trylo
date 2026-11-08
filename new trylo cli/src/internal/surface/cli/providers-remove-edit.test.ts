@@ -51,10 +51,12 @@ function recorded(homeDir: string, files: Map<string, string> = new Map()): Reco
     readFile: (path) => files.get(path),
     isDirectory: () => true,
     readDir: () => [],
+
     writeFile: (path, text) => {
       files.set(path, text);
       return true;
     },
+
     readStdin: async () => "",
     readLine: async () => undefined,
     readSecret: async () => "seed-secret",
@@ -63,6 +65,7 @@ function recorded(homeDir: string, files: Map<string, string> = new Map()): Reco
     now: () => 0,
     newId: (prefix) => `${prefix}-1`,
   };
+
   return { ctx, out, err, files, home: homeDir };
 }
 
@@ -76,6 +79,7 @@ function tempHome(t: { after: (fn: () => void) => void }): string {
 /** 一条已声明、已选中、已绑账号的 provider：真实 add+switch 走出来的。 */
 async function withLab(home: string): Promise<Recorded> {
   const fx = recorded(home);
+
   assert.equal(await handleLogin(fx.ctx, { provider: "openai-compatible", account: "acc-old" }), EXIT_CODES.OK);
   assert.equal(await handleLogin(fx.ctx, { provider: "openai-compatible", account: "acc-new" }), EXIT_CODES.OK);
   assert.equal(
@@ -91,19 +95,26 @@ async function withLab(home: string): Promise<Recorded> {
   assert.equal(handleProvidersSwitch(fx.ctx, { id: "lab" }), EXIT_CODES.OK);
   fx.out.length = 0;
   fx.err.length = 0;
+
   return fx;
 }
 
 function declaredOf(fx: Recorded, id: string): { endpoint: string; model: string; accountId?: string } {
   const raw = fx.files.get(docPath(fx));
+
   assert.equal(typeof raw, "string", "expected the providers file to exist");
   const decoded = decodeDocument(raw ?? "");
+
   assert.equal(decoded.ok, true);
+
   if (!decoded.ok) {
     throw new Error("unreachable");
   }
+
   const found = decoded.value.providers.find((entry) => entry.id === id);
+
   assert.notEqual(found, undefined, `expected ${id} to be declared`);
+
   return { endpoint: found?.endpoint ?? "", model: found?.model ?? "", ...(found?.accountId === undefined ? {} : { accountId: found.accountId }) };
 }
 
@@ -118,10 +129,13 @@ test("remove parses to its own command", () => {
 
 test("edit parses flags, refuses an empty change and refuses --kind", () => {
   const parsed = parseProviders(["edit", "lab", "--model", "lab-70b"]);
+
   assert.equal(parsed.kind, "providers_edit");
+
   if (parsed.kind !== "providers_edit") {
     throw new Error("unreachable");
   }
+
   assert.deepEqual(parsed.options, { id: "lab", model: "lab-70b" });
   assert.equal(parseProviders(["edit", "lab"]).kind, "error");
   assert.equal(parseProviders(["edit", "lab", "--kind", "openai-compatible"]).kind, "error");
@@ -129,14 +143,18 @@ test("edit parses flags, refuses an empty change and refuses --kind", () => {
 
 test("remove deletes the declaration and clears it as the selection", async (t) => {
   const fx = await withLab(tempHome(t));
+
   assert.equal(handleProvidersRemove(fx.ctx, { id: "lab" }), EXIT_CODES.OK);
   assert.match(fx.out.join(""), /removed provider lab/);
   const raw = fx.files.get(docPath(fx));
   const decoded = decodeDocument(raw ?? "");
+
   assert.equal(decoded.ok, true);
+
   if (!decoded.ok) {
     return;
   }
+
   assert.equal(decoded.value.providers.some((entry) => entry.id === "lab"), false);
   assert.equal(decoded.value.selected, undefined);
 });
@@ -144,6 +162,7 @@ test("remove deletes the declaration and clears it as the selection", async (t) 
 test("remove refuses unknown and built-in ids, and writes nothing on refusal", async (t) => {
   const fx = await withLab(tempHome(t));
   const before = fx.files.get(docPath(fx));
+
   assert.equal(handleProvidersRemove(fx.ctx, { id: "nosuch" }), EXIT_CODES.USAGE);
   assert.match(fx.err.join(""), /unknown provider: nosuch/);
   assert.match(fx.err.join(""), /known providers:.*lab/);
@@ -154,11 +173,13 @@ test("remove refuses unknown and built-in ids, and writes nothing on refusal", a
 
 test("edit changes only the named fields and keeps the old account binding", async (t) => {
   const fx = await withLab(tempHome(t));
+
   assert.equal(
     handleProvidersEdit(fx.ctx, { id: "lab", endpoint: "https://new.example/v1" }),
     EXIT_CODES.OK,
   );
   const after = declaredOf(fx, "lab");
+
   assert.equal(after.endpoint, "https://new.example/v1");
   assert.equal(after.model, "lab-7b");
   // 关键：没给 --account 就必须保留 acc-old，而不是回落 family 当前（空账本里是
@@ -168,11 +189,13 @@ test("edit changes only the named fields and keeps the old account binding", asy
 
 test("edit rebinds only with an explicit --account, and refuses unknown ids", async (t) => {
   const fx = await withLab(tempHome(t));
+
   assert.equal(handleProvidersEdit(fx.ctx, { id: "lab", account: "acc-new" }), EXIT_CODES.OK);
   assert.equal(declaredOf(fx, "lab").accountId, "acc-new");
   assert.match(fx.out.join(""), /bound to account acc-new/);
 
   const before = fx.files.get(docPath(fx));
+
   assert.equal(handleProvidersEdit(fx.ctx, { id: "nosuch", model: "x" }), EXIT_CODES.USAGE);
   assert.match(fx.err.join(""), /unknown provider: nosuch/);
   assert.match(fx.err.join(""), /known providers:.*lab/);

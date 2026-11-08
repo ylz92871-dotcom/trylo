@@ -22,16 +22,19 @@ before(() => {
   workspace = mkdtempSync(path.join(tmpdir(), "trylo-skill-ws-"));
   home = mkdtempSync(path.join(tmpdir(), "trylo-skill-home-"));
   const projectSkill = path.join(workspace, ".trylo", "skills", "greet");
+
   mkdirSync(projectSkill, { recursive: true });
   writeFileSync(
     path.join(projectSkill, "SKILL.md"),
     "---\ndescription: greets someone\n---\nGreet $ARGUMENTS warmly.",
   );
   const userSkill = path.join(home, ".trylo", "skills", "home-skill");
+
   mkdirSync(userSkill, { recursive: true });
   writeFileSync(path.join(userSkill, "SKILL.md"), "---\ndescription: home skill\n---\nHome body.");
   // `disable-model-invocation` 的唯一用途是"只许用户触发"：用户 slash 必须调得动。
   const lockedSkill = path.join(workspace, ".trylo", "skills", "locked");
+
   mkdirSync(lockedSkill, { recursive: true });
   writeFileSync(
     path.join(lockedSkill, "SKILL.md"),
@@ -70,11 +73,15 @@ test("a prompt that merely starts with a word is not a slash invocation", () => 
 
 test("the project layer shadows the user layer for the same name", () => {
   const shadowed = path.join(workspace, ".trylo", "skills", "home-skill");
+
   mkdirSync(shadowed, { recursive: true });
   writeFileSync(path.join(shadowed, "SKILL.md"), "---\ndescription: project twin\n---\nProject body.");
   const expanded = expandSkillSlash("/home-skill", workspace, home, {});
+
   assert.notEqual(expanded, undefined);
+
   if (expanded === undefined) return;
+
   assert.match(expanded.text, /Project body\./);
 });
 

@@ -70,15 +70,19 @@ export function waitingAfterResult(
   if (result.status !== "success") {
     return waiting;
   }
+
   if (result.name === ANSWER_TOOL) {
     return undefined;
   }
+
   if (result.name === SYNC_ASK_TOOL || result.name === ASYNC_ASK_TOOL) {
     return { kind: "question", requestId: requestIdOf(result.output), questions: questionsOf(call) };
   }
+
   if (result.name === PLAN_EXIT_TOOL) {
     return { kind: "plan", plan: planOf(call) };
   }
+
   return waiting;
 }
 
@@ -94,17 +98,21 @@ function questionsOf(call: ToolCallFact | undefined): ReadonlyArray<AskUserQuest
   if (!Array.isArray(raw)) {
     return [];
   }
+
   const questions: AskUserQuestion[] = [];
+
   for (const item of raw) {
     if (typeof item !== "object" || item === null) {
       continue;
     }
+
     const record = item as Record<string, unknown>;
     const header = record["header"];
     const question = record["question"];
     if (typeof header !== "string" || typeof question !== "string") {
       continue;
     }
+
     questions.push({
       id: typeof record["id"] === "string" ? record["id"] : header,
       header,
@@ -113,6 +121,7 @@ function questionsOf(call: ToolCallFact | undefined): ReadonlyArray<AskUserQuest
       multiSelect: record["multiSelect"] === true,
     });
   }
+
   return questions;
 }
 
@@ -120,20 +129,25 @@ function optionsOf(raw: unknown): Array<{ label: string; description: string }> 
   if (!Array.isArray(raw)) {
     return [];
   }
+
   const options: Array<{ label: string; description: string }> = [];
+
   for (const item of raw) {
     if (typeof item !== "object" || item === null) {
       continue;
     }
+
     const record = item as Record<string, unknown>;
     if (typeof record["label"] !== "string") {
       continue;
     }
+
     options.push({
       label: record["label"],
       description: typeof record["description"] === "string" ? record["description"] : "",
     });
   }
+
   return options;
 }
 
@@ -161,12 +175,15 @@ export function panelLinesFor(result: ResultFact, call: ToolCallFact | undefined
   if (result.status !== "success") {
     return [];
   }
+
   if (result.name === SYNC_ASK_TOOL || result.name === ASYNC_ASK_TOOL) {
     return questionPanelLines(questionsOf(call));
   }
+
   if (result.name === PLAN_EXIT_TOOL) {
     return planPanelLines(planOf(call));
   }
+
   return [];
 }
 
@@ -175,9 +192,12 @@ function questionPanelLines(questions: ReadonlyArray<AskUserQuestion>): Readonly
   if (shown.length === 0) {
     return [];
   }
+
   const lines: TuiLine[] = [lineOf("tool", "? awaiting your answer")];
+
   for (const question of shown) {
     lines.push(lineOf("strong", `  [${question.header}] ${question.question}`));
+
     for (const [index, option] of question.options.entries()) {
       lines.push(
         lineOf(
@@ -186,11 +206,14 @@ function questionPanelLines(questions: ReadonlyArray<AskUserQuestion>): Readonly
         ),
       );
     }
+
     if (question.multiSelect) {
       lines.push(lineOf("system", "    (multiple choices allowed)"));
     }
   }
+
   lines.push(lineOf("system", "  type your answers; they are recorded for the model"));
+
   return lines;
 }
 
@@ -198,9 +221,11 @@ function planPanelLines(plan: string | undefined): ReadonlyArray<TuiLine> {
   if (plan === undefined) {
     return [];
   }
+
   const rendered = markdownLines(plan, DEFAULT_WIDTH);
   const shown = rendered.slice(0, MAX_PANEL_PLAN_LINES);
   const hidden = rendered.length - shown.length;
+
   return [
     lineOf("tool", "? plan awaiting approval:"),
     ...shown.map((line) => ({ tone: line.tone, text: `  ${line.text}` })),

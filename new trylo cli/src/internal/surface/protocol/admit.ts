@@ -52,6 +52,7 @@ export function admit(raw: unknown): AdmitResult {
   if (!parsed.ok) {
     return { ok: false, code: "invalid_envelope", detail: parsed.code };
   }
+
   const consumed = consume(parsed.envelope);
   if (consumed.status === "ignored_unknown_kind") {
     return {
@@ -62,6 +63,7 @@ export function admit(raw: unknown): AdmitResult {
       kind: consumed.kind,
     };
   }
+
   return {
     ok: true,
     outcome: "admitted",

@@ -61,6 +61,7 @@ test("child round answers and cleanup stay visible before the renderer closes", 
     ...translator.push(envelope("terminal", { reason: "completed" }, 3)),
     ...translator.push(envelope("subagent_end", { subagentId: "a", status: "cancelled" }, 4)),
   ];
+
   assert.deepEqual(events, [
     { type: "subagent", kind: "spawn", id: "a", status: "running", agentType: "worker", prompt: "完整任务", canReceiveInput: true },
     { type: "subagent", kind: "update", id: "a", status: "waiting", round: 1, result: "完整答复" },
@@ -85,6 +86,7 @@ test("accepted plain-language namespaces survive the warning projection", () => 
     envelope("error", { code: "permission_denied", message: "denied" }, 3),
   ]);
   const warnings = events.filter((event) => event.type === "warning");
+
   assert.deepEqual(warnings.map((event) => event.type === "warning" ? event.code : ""),
     ["auth", "native_continuation_unavailable", "permission_denied"]);
   assert.equal(warnings[0]?.type === "warning" ? warnings[0].diagnostic : "absent", undefined,
@@ -98,6 +100,7 @@ test("an unknown diagnostic shape is dropped, not half-rendered", () => {
       message: "x", diagnostic: { schemaVersion: 99, cause: "from_the_future" } }, 1),
   ]);
   const warning = events.find((event) => event.type === "warning");
+
   assert.equal(warning?.type === "warning" ? warning.diagnostic : "absent", undefined);
   assert.equal(warning?.type === "warning" ? warning.code : "", "native_continuation_unavailable",
     "the warning itself still reaches the user");
@@ -115,10 +118,13 @@ test("successful checkpoint observations stay in the journal and do not become w
 function drainIncrementally(envelopes: ReadonlyArray<Envelope>): ReadonlyArray<CliStreamEvent> {
   const translator = createStreamTranslator();
   const events: CliStreamEvent[] = [];
+
   for (const item of envelopes) {
     events.push(...translator.push(item));
   }
+
   events.push(...translator.finish());
+
   return events;
 }
 
@@ -130,6 +136,7 @@ test("a failed tool result carries why, and a successful one grows no new field"
   const failed = projectEnvelopeSequence([
     envelope("tool_result", { toolCallId: "t1", status: "failed", code: "shell_nonzero_exit", message: "shell_nonzero_exit:1\nboom" }, 1),
   ]);
+
   assert.deepEqual(failed, [
     {
       type: "tool_result",
@@ -145,6 +152,7 @@ test("a failed tool result carries why, and a successful one grows no new field"
   const succeeded = projectEnvelopeSequence([
     envelope("tool_result", { toolCallId: "t2", status: "succeeded", output: "v22", truncated: false }, 1),
   ]);
+
   assert.deepEqual(succeeded, [
     { type: "tool_result", toolCallId: "t2", status: "succeeded", output: "v22", truncated: false },
   ]);
@@ -161,11 +169,13 @@ test("an unknown envelope kind contributes nothing and changes no state", () => 
 
 test("finish closes what is open and is safe to call twice", () => {
   const translator = createStreamTranslator();
+
   translator.push(envelope("text", { text: "unterminated" }, 1));
   assert.deepEqual(translator.push(envelope("thinking", { text: "still open" }, 2)), [
     { type: "message_end" }, { type: "reasoning_start", redacted: false }, { type: "reasoning_delta", text: "still open" },
   ]);
   const closed = translator.finish();
+
   assert.deepEqual(closed, [{ type: "reasoning_end" }]);
   assert.deepEqual(translator.finish(), []);
 });
@@ -221,6 +231,7 @@ test("no terminal result is produced early: run_result is not this module's to e
 test("two translators do not share state", () => {
   const first = createStreamTranslator();
   const second = createStreamTranslator();
+
   first.push(envelope("text", { text: "one" }, 1));
   assert.deepEqual(second.push(envelope("text", { text: "two" }, 1)), [
     { type: "message_start" },
@@ -233,7 +244,9 @@ test("D7: an event_overflow terminal tells the user to split the task", () => {
     envelope("terminal", { reason: "failed", cause: "event_overflow", limit: 4096 }, 1),
   ]);
   const warning = events.find((event) => event.type === "warning");
+
   assert.notEqual(warning, undefined);
+
   if (warning !== undefined && warning.type === "warning") {
     assert.match(warning.message, /split/i);
   }
@@ -246,18 +259,23 @@ test("P0-6: a failed terminal always leads with the failure code, then detail, t
     envelope("terminal", { reason: "failed", errorClass: "invalid_request", message: "http_400" }, 1),
   ]);
   const invalidWarning = invalid.find((event) => event.type === "warning");
+
   assert.notEqual(invalidWarning, undefined);
+
   if (invalidWarning !== undefined && invalidWarning.type === "warning") {
     assert.equal(invalidWarning.code, "invalid_request");
     assert.match(invalidWarning.message, /^invalid_request - http_400 - /);
     assert.match(invalidWarning.message, /--model/);
   }
+
   // A bare class with no detail still gets its head: code - action.
   const bare = drainIncrementally([
     envelope("terminal", { reason: "failed", errorClass: "rate_limit", message: "rate_limit" }, 1),
   ]);
   const bareWarning = bare.find((event) => event.type === "warning");
+
   assert.notEqual(bareWarning, undefined);
+
   if (bareWarning !== undefined && bareWarning.type === "warning") {
     assert.equal(bareWarning.code, "rate_limit");
     assert.match(bareWarning.message, /^rate_limit - wait and retry/);

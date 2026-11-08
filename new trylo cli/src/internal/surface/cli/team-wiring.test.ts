@@ -30,6 +30,7 @@ test("a frozen team member consumes its own model, prompt and tool ceiling", asy
         allowedTools: ["read_file", "write_file"] } }] },
   };
   const built = buildSubagentPorts(options);
+
   t.after(async () => { await built.runtime.cancelAll(); });
   await t.test("anonymous delegation is absent and the late-bound skill exit refuses a team bypass", async () => {
     assert.equal(built.tools.snapshot().some(tool => tool.name === "delegate_subagent"), false);
@@ -40,9 +41,13 @@ test("a frozen team member consumes its own model, prompt and tool ceiling", asy
   });
   const spawn = await built.tools.execute({ name: "spawn_agent", toolCallId: "s", arguments: {
     agent_type: "reviewer", member_id: "m2", message: "review this" } }, new AbortController().signal);
+
   assert.equal(spawn.outcome, "result");
+
   if (spawn.outcome !== "result") return;
+
   const id = String(spawn.value["agent_id"]);
+
   await built.tools.execute({ name: "wait_agent", toolCallId: "w", arguments: { targets: [id], timeout_ms: 1000 } }, new AbortController().signal);
   assert.deepEqual(spawn.value["allowed_tools"], ["read_file"]);
   assert.equal(requests[0]?.model, "member-model");
@@ -50,8 +55,10 @@ test("a frozen team member consumes its own model, prompt and tool ceiling", asy
   assert.ok(events.some(event => event.teamRunId === "team-1" && event.memberId === "m2"));
   const duplicate = await built.tools.execute({ name: "spawn_agent", toolCallId: "s2", arguments: {
     agent_type: "reviewer", member_id: "m2", message: "duplicate" } }, new AbortController().signal);
+
   assert.equal(duplicate.outcome, "error");
   const mismatched = await built.tools.execute({ name: "spawn_agent", toolCallId: "s3", arguments: {
     agent_type: "worker", member_id: "m2", message: "wrong role" } }, new AbortController().signal);
+
   assert.equal(mismatched.outcome, "error");
 });

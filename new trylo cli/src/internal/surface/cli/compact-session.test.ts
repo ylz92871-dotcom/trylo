@@ -87,6 +87,7 @@ test("a journal that refuses the append is reported, not swallowed", async () =>
     }),
   } as unknown as SessionPort;
   const done = await compactSession(fakeCtx(), "s1", records, refusing);
+
   // Either it compressed and could not write, or it had nothing to compress —
   // both are answers. What matters is that neither is a silent success.
   if (done.ok) {
@@ -100,18 +101,35 @@ test("a non-reducing maintenance draft is refused before the journal append", as
   const records: readonly SessionRecord[] = [{ formatVersion: "1", sequence: 0, sessionId: "s1", type: "transcript_item",
     at: "2026-10-16T00:00:00Z", payload: { kind: "user", sequence: 0, text: "simple task" } }];
   let writes = 0, judged = false;
-  const writer: Pick<SessionPort, "append"> = { append: async () => { writes += 1; return { ok: true, sequence: 1 }; } };
-  const done = await compactSession(fakeCtx(), "s1", records, writer, { accept: () => { judged = true; return false; } });
-  assert.equal(judged, true); assert.equal(writes, 0);
+  const writer: Pick<SessionPort, "append"> = { append: async () => {
+    writes += 1;
+    return { ok: true, sequence: 1 };
+  } };
+  const done = await compactSession(fakeCtx(), "s1", records, writer, { accept: () => {
+    judged = true;
+    return false;
+  } });
+
+  assert.equal(judged, true);
+  assert.equal(writes, 0);
   assert.deepEqual(done, { ok: false, problem: "nothing_to_reduce" });
 });
 
 test("cancellation during authoring never commits the resulting draft", async () => {
   const records: readonly SessionRecord[] = [{ formatVersion: "1", sequence: 0, sessionId: "s1", type: "transcript_item",
     at: "2026-10-16T00:00:00Z", payload: { kind: "user", sequence: 0, text: "simple task" } }];
-  const cancel = new AbortController(); let writes = 0;
-  const writer: Pick<SessionPort, "append"> = { append: async () => { writes += 1; return { ok: true, sequence: 1 }; } };
-  const wiring = compactionWiring({ nowMs: 0, summarize: () => { cancel.abort(); return "safe summary"; } });
+  const cancel = new AbortController();
+  let writes = 0;
+  const writer: Pick<SessionPort, "append"> = { append: async () => {
+    writes += 1;
+    return { ok: true, sequence: 1 };
+  } };
+  const wiring = compactionWiring({ nowMs: 0, summarize: () => {
+    cancel.abort();
+    return "safe summary";
+  } });
   const done = await compactSession(fakeCtx(), "s1", records, writer, { wiring, signal: cancel.signal });
-  assert.deepEqual(done, { ok: false, problem: "cancelled" }); assert.equal(writes, 0);
+
+  assert.deepEqual(done, { ok: false, problem: "cancelled" });
+  assert.equal(writes, 0);
 });

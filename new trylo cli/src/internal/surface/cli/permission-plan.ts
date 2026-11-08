@@ -10,8 +10,9 @@ import { WORKSPACE_WRITE_TOOL_NAMES } from "../../adapters/tools/mutating/bindin
 import { WEB_FETCH_TOOL } from "../../adapters/tools/web/names.js";
 import { MEMORY_WRITE_TOOL_NAMES } from "../../adapters/tools/memory/write.js";
 import { isMcpQualifiedName } from "../../mcp/names.js";
-import { isCandidateToolName } from "../../learning/domains/tool/evolution/use.js";
+import { isCandidateToolName } from "../../learning/agent/subsystems/tool/domain/evolution/index.js";
 import { PATH_READ_TOOL_NAMES } from "../../adapters/tools/read-only/path-names.js";
+import { SKILL_TOOL_NAME } from "../../adapters/tools/skill/names.js";
 import { createInteractivePermission, type InteractivePermissionIo } from "./permission.js";
 
 /**
@@ -42,6 +43,7 @@ export function isAskPolicy(value: string): value is AskPolicy {
  * but an explicitly selected external scope requires per-call approval.
  */
 export const APPROVABLE_TOOL_NAMES: ReadonlyArray<string> = [
+  SKILL_TOOL_NAME,
   ...PATH_READ_TOOL_NAMES,
   WRITE_FILE_TOOL,
   EDIT_FILE_TOOL,
@@ -125,9 +127,11 @@ export function defaultAskPolicy(input: PermissionPlanInput): AskPolicy {
   if (input.ask !== undefined) {
     return input.ask;
   }
+
   if (input.allowWrites === true) {
     return "writes";
   }
+
   return input.interactive ? "always" : "never";
 }
 
@@ -153,17 +157,23 @@ export function decideForPlan(plan: PermissionPlan, action: PermissionAction): P
   if (plan.deny.has(action.name)) {
     return "denied";
   }
+
   if (plan.allow.has(action.name)) {
     return "approved";
   }
+
   const isWorkspaceWrite = WORKSPACE_WRITE_TOOLS.has(action.name);
+
   if (plan.ask === "never") {
     return "denied";
   }
+
   if (isWorkspaceWrite && plan.workspaceEdits === "auto") return "approved";
+
   if (plan.ask === "writes") {
     return isWorkspaceWrite ? "approved" : "denied";
   }
+
   return "ask";
 }
 
@@ -179,6 +189,7 @@ export function createPlannedPermission(plan: PermissionPlan, io: InteractivePer
     return workspaceWriteAllowed(action) ? "approved"
       : plan.ask === "always" && mayAskForRejectedWrite?.(action) === true ? "ask" : "denied";
   };
+
   return {
     ...(plan.ask !== "always" || asking.supportsMemberApproval === undefined ? {} : { supportsMemberApproval: asking.supportsMemberApproval }),
     isDenied: name => plan.deny.has(name),
@@ -187,16 +198,21 @@ export function createPlannedPermission(plan: PermissionPlan, io: InteractivePer
         || ((plan.ask === "writes" || plan.workspaceEdits === "auto") && WORKSPACE_WRITE_TOOLS.has(name))),
       decide: action => decision(automaticDecision(action) === "approved" ? "approved" : "denied", "once"),
     },
+
     async request(action: PermissionAction, context?: import("../../ports/permission.js").PermissionRequestContext): Promise<PermissionTicket> {
       const verdict = automaticDecision(action);
       if (verdict === "ask") {
         return await asking.request(action, context);
       }
+
       counter += 1;
       const ticketId = `plan-${counter}`;
+
       settled.set(ticketId, verdict);
+
       return { ticketId, toolCallId: action.toolCallId };
     },
+
     async awaitDecision(ticketId: string, context?: import("../../ports/permission.js").PermissionRequestContext): Promise<PermissionDecision> {
       const verdict = settled.get(ticketId);
       if (verdict === undefined) {

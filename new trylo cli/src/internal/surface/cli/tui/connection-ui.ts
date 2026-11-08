@@ -46,6 +46,7 @@ export async function runConnectionStartup(
       if (choice === undefined || choice === "q") return { kind: "stop", exitCode: status.failure.exitCode };
       continue;
     }
+
     if (status.kind === "ready") {
       const opened = await open(options);
       if (opened.kind === "failure") {
@@ -55,12 +56,15 @@ export async function runConnectionStartup(
         if (choice === undefined || choice === "q") return { kind: "stop", exitCode: opened.failure.exitCode };
         continue;
       }
+
       return { kind: "opened", scaffold: opened.scaffold };
     }
+
     if (status.kind === "needs_connection") {
       io.write("No provider is configured yet. Add one to use a real model.\n");
       const choice = await askChoice(io, "[a]dd connection  [o]ffline demo (fixture, not a model)  [q]uit", ["a", "o", "q"]);
       if (choice === undefined || choice === "q") return { kind: "stop", exitCode: EXIT_CODES.OK };
+
       if (choice === "o") {
         const opened = await open({ ...options, provider: "fixture" });
         if (opened.kind === "failure") {
@@ -68,22 +72,29 @@ export async function runConnectionStartup(
           io.write(`${opened.failure.hint}\n`);
           continue;
         }
+
         io.write("starting offline demo (fixture provider)\n");
+
         return { kind: "opened", scaffold: opened.scaffold };
       }
+
       const result = await runConnectForm(ctx, io, "add");
       if (result === undefined) continue;
+
       if (!result.ok) {
         reportSaveFailure(io, result);
         continue;
       }
+
       io.write(`saved connection ${result.id}${result.accountId !== undefined ? ` (account ${result.accountId})` : ""}\n`);
       continue;
     }
+
     // needs_credential
     io.write(`Connection ${status.provider.providerId}/${status.provider.model} is selected, but no credential is ready.\n`);
     const choice = await askChoice(io, "[a]dd or bind credential  [q]uit", ["a", "q"]);
     if (choice === undefined || choice === "q") return { kind: "stop", exitCode: EXIT_CODES.AUTH };
+
     const providers = listConnections(ctx);
     const existing = providers.ok
       ? providers.providers.find((p) => p.id === status.provider.providerId)
@@ -95,19 +106,23 @@ export async function runConnectionStartup(
       existing?.id,
     );
     if (result === undefined) continue;
+
     if (!result.ok) {
       reportSaveFailure(io, result);
       continue;
     }
+
     io.write(`saved connection ${result.id}${result.accountId !== undefined ? ` (account ${result.accountId})` : ""}\n`);
   }
 }
 
 function reportSaveFailure(io: TuiIo, result: Extract<ConnectionSaveResult, { ok: false }>): void {
   io.write(`save failed at stage ${result.stage}: ${result.code}: ${result.detail}\n`);
+
   if (result.committed.length > 0) {
     io.write(`already committed: ${result.committed.join(", ")}\n`);
   }
+
   if (result.accountId !== undefined) {
     io.write(`account id: ${result.accountId}\n`);
   }
@@ -131,15 +146,20 @@ export async function runConnectForm(
   io.write("输入 /cancel 可随时取消；草稿在保存前不会写入配置。\n");
 
   let id: string | undefined = operation === "edit" ? existingId : undefined;
+
   if (operation === "add") {
     const displayName = await askLine(io, "display name (used to generate the id)");
     if (displayName === undefined) return undefined;
+
     const generated = generateId(displayName);
+
     io.write(`suggested id: ${generated}\n`);
     const confirmed = await askLine(io, "id (press enter to keep the suggestion)");
     if (confirmed === undefined) return undefined;
+
     id = confirmed.trim().length === 0 ? generated : confirmed.trim();
   }
+
   if (id === undefined) return undefined;
 
   const defaultAddress = existing?.endpoint ?? "";
@@ -154,9 +174,11 @@ export async function runConnectForm(
 
   const kind = await askChoice(io, "address kind: [b]ase-url  [e]ndpoint", ["b", "e"]);
   if (kind === undefined) return undefined;
+
   const addressKind: "base-url" | "endpoint" = kind === "b" ? "base-url" : "endpoint";
 
   let normalized = normalizeChatEndpoint(address, addressKind);
+
   while (!normalized.ok) {
     io.write(`${normalized.code}: ${normalized.detail}\n`);
     address = await askLine(io, "服务地址（重新填写）", address);
@@ -177,7 +199,9 @@ export async function runConnectForm(
     contextDefault,
   );
   if (contextWindowInput === undefined) return undefined;
+
   let contextWindow = parseOptionalPositiveInt(contextWindowInput);
+
   while (contextWindowInput.trim().length > 0 && contextWindow === undefined) {
     io.write("context window must be a positive integer\n");
     contextWindowInput = await askLine(io, "上下文窗口（正整数；/cancel 取消）", contextDefault);
@@ -208,6 +232,7 @@ export async function runConnectForm(
 
   const probe = await askChoice(io, "verify the connection now? [y]es  [n]o", ["y", "n"]);
   if (probe === undefined) return undefined;
+
   if (probe === "y") {
     io.write("verifying...\n");
     const result = await probeConnection(ctx, draft);
@@ -230,6 +255,7 @@ async function askCredential(
 ): Promise<ConnectionCredential | undefined> {
   const kind = await askChoice(io, "credential: [s]ecret  [a]ccount  [e]nvironment", ["s", "a", "e"]);
   if (kind === undefined) return undefined;
+
   if (kind === "s") {
     const secret = await ctx.readSecret();
     if (secret === undefined) return undefined;
@@ -237,23 +263,28 @@ async function askCredential(
     if (label === undefined) return undefined;
     return { kind: "secret", secret, ...(label.trim().length === 0 ? {} : { label: label.trim() }) };
   }
+
   if (kind === "a") {
     if (accounts.length === 0) {
       io.write("no stored accounts; use `trylo login` first or choose a secret\n");
       return undefined;
     }
+
     accounts.forEach((account, index) => {
       io.write(`${index + 1}. ${account.accountId}${account.label !== undefined ? ` (${account.label})` : ""}\n`);
     });
     const input = await askLine(io, "select account by number or id");
     if (input === undefined) return undefined;
+
     const account = findAccount(accounts, input);
     if (account === undefined) {
       io.write("account not found\n");
       return undefined;
     }
+
     return { kind: "account", accountId: account.accountId };
   }
+
   return { kind: "environment" };
 }
 
@@ -277,6 +308,7 @@ function generateId(displayName: string): string {
     .toLowerCase();
   const trimmed = ascii.replace(/^-+|-+$/g, "");
   if (trimmed.length === 0) return "connection";
+
   return trimmed.slice(0, 63);
 }
 
@@ -295,8 +327,10 @@ async function askLine(io: TuiIo, prompt: string, defaultValue = ""): Promise<st
     io.write("\n");
     return undefined;
   }
+
   const trimmed = answer.trim();
   if (trimmed === "/cancel") return undefined;
+
   return trimmed.length === 0 ? defaultValue : trimmed;
 }
 
@@ -312,10 +346,14 @@ async function askChoice(
       io.write("\n");
       return undefined;
     }
+
     const normalized = answer.trim().toLowerCase();
     if (normalized === "/cancel") return undefined;
+
     if (normalized.length === 0) continue;
+
     if (valid.includes(normalized)) return normalized;
+
     io.write(`choose one of: ${valid.join(", ")}\n`);
   }
 }

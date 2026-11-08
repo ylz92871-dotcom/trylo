@@ -74,31 +74,41 @@ export function createInteractiveEscalation(io: EscalationIo): EscalationAuthori
       if (answer === undefined) {
         return CANCELLED;
       }
+
       const normalized = answer.trim().toLowerCase();
       if (normalized === "y" || normalized === "yes") {
         counter += 1;
         const ticketId = `escalate-${counter}`;
+
         issued.set(ticketId, {
           toolCallId: input.toolCallId,
           code: input.code,
           fingerprint: fingerprintOf(input),
         });
+
         return { ok: true, ticket: { ticketId } };
       }
+
       if (normalized === "c" || normalized === "cancel") {
         return CANCELLED;
       }
+
       return REFUSED;
     },
+
     redeem(ticket: EscalationTicket | undefined, input: EscalationInput): boolean {
       if (ticket === undefined) {
         return false;
       }
+
       const release = issued.get(ticket.ticketId);
+
       issued.delete(ticket.ticketId);
+
       if (release === undefined) {
         return false;
       }
+
       return (
         release.toolCallId === input.toolCallId &&
         release.code === input.code &&

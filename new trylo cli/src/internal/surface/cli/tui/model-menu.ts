@@ -29,11 +29,13 @@ export async function runModelMenu(
     io.write(`usage: /model <model-id> (current: ${scaffold.model})\n`);
     return undefined;
   }
+
   const connections = listConnections(ctx);
   if (!connections.ok) {
     io.write(`cannot list connections: ${connections.failure.code}: ${connections.failure.detail}\n`);
     return undefined;
   }
+
   if (connections.providers.length === 0) {
     io.write("no providers are declared; use `/connect` to add one first\n");
     return undefined;
@@ -46,6 +48,7 @@ export async function runModelMenu(
       detail: `${provider.id === scaffold.providerId ? "正在使用 · " : ""}${provider.id === connections.selected ? "默认 · " : ""}${provider.model || provider.kind}` })),
   });
   if (providerInput === undefined) return undefined;
+
   const provider = findProvider(connections.providers, providerInput);
   if (provider === undefined) {
     io.write("provider not found; pick a number or id from the list\n");
@@ -53,14 +56,17 @@ export async function runModelMenu(
   }
 
   let model = provider.id === scaffold.providerId && provider.model.length === 0 ? scaffold.model : provider.model;
+
   if (provider.models.length > 0 || provider.manualModel) {
     if (provider.models.length > 0 && io.choose === undefined) {
       io.write("models:\n");
       provider.models.forEach((model, index) => io.write(`  ${index + 1}. ${model}\n`));
     }
+
     if (provider.manualModel && io.choose === undefined) {
       io.write("  0. type a model id manually\n");
     }
+
     // Enter keeps the declared model. An empty answer used to fall through to
     // the manual-id branch and set the model to "", which is not a model id at
     // all; on a provider with no catalogue it is also the only way to say
@@ -72,6 +78,7 @@ export async function runModelMenu(
           ...(provider.id === scaffold.providerId && id === scaffold.model ? { detail: "正在使用" } : id === provider.model ? { detail: "声明的默认模型" } : {}) })),
           ...(provider.manualModel ? [{ id: "0", label: "手动输入模型 ID" }] : [])] });
     if (modelInput === undefined) return undefined;
+
     if (modelInput.trim().length === 0) {
       model = provider.model;
     } else if (provider.manualModel && modelInput.trim() === "0") {
@@ -103,12 +110,14 @@ export async function runModelMenu(
     const defaulted = setDefaultConnection(ctx, { providerId: provider.id, model });
     if (!defaulted.ok) {
       io.write(`default failed at stage ${defaulted.stage}: ${defaulted.code}: ${defaulted.detail}\n`);
+
       // The model write happens before the selection write, so a failure in
       // the selection step leaves the model saved; say so instead of implying
       // nothing was written.
       if (defaulted.stage === "selection") {
         io.write(`  the declared model for ${provider.id} may already be saved as ${model}\n`);
       }
+
       return undefined;
     }
   }
@@ -119,6 +128,7 @@ export async function runModelMenu(
     // are stated, so the person does not redo a write that already happened.
     io.write(`default saved: ${provider.id} / ${model}\n`);
   }
+
   return switched;
 }
 
@@ -150,5 +160,6 @@ async function askLine(io: TuiIo, prompt: string): Promise<string | undefined> {
     io.write("\n");
     return undefined;
   }
+
   return answer.trim() === "/cancel" ? undefined : answer.trim();
 }

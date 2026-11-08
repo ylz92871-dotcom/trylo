@@ -20,13 +20,17 @@ export function resolveConnectionSettings(ctx: CliContext, options: RunCommandOp
   if (!loaded.ok) {
     return fail(EXIT_CODES.CONFIG, `${loaded.failure.path ?? loaded.failure.layer} is not usable: ${loaded.failure.detail}`, "fix that configuration file; no silent fallback is applied");
   }
+
   const settings = resolveSettings(loaded.resolved);
   if ("exitCode" in settings) return settings;
+
   // Pricing belongs to connection validation, before any session acquires a writer.
   if (settings.maxBudgetUsd !== undefined && (settings.inputPricePerMTok === undefined || settings.outputPricePerMTok === undefined)) {
     return fail(EXIT_CODES.USAGE, "--max-budget-usd needs pricing: set inputPricePerMTok and outputPricePerMTok", "add both pricing keys to config (US dollars per million tokens) so the budget can be enforced");
   }
+
   const provider = selectForRun(ctx, { resolved: loaded.resolved, options, endpoint: settings.endpoint, model: settings.model });
   if ("exitCode" in provider) return provider;
+
   return { provider, settings, sources: loaded.sources, profileDir: io.profileDir };
 }

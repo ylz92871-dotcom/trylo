@@ -61,6 +61,7 @@ export function memoryPortFor(input: MemoryWiringInput): MemoryReadPort | undefi
   if (boardRoot === undefined && !hasProjectRecords && input.facts === undefined) {
     return undefined;
   }
+
   return createMemoryReadPort(documentsFrom(boardRoot, input.projectContext, input.facts));
 }
 
@@ -126,7 +127,9 @@ function priorUserTexts(
   current: { readonly turnId: string; readonly text: string },
 ): ReadonlyArray<{ readonly text: string; readonly eventId: string }> {
   if (records === undefined) return [];
+
   const unavailableTurns = new Set<string>();
+
   for (const record of records) {
     if (record.type !== "turn_start" || !Object.hasOwn(record.payload, "userSourceAvailable")) continue;
     if (record.payload["userSourceAvailable"] !== false || record.turnId === undefined) {
@@ -134,17 +137,24 @@ function priorUserTexts(
     }
     unavailableTurns.add(record.turnId);
   }
+
   const texts: Array<{ text: string; eventId: string }> = [];
+
   for (const record of records) {
     if (record.type !== "transcript_item") continue;
+
     const item = record.payload;
     if (item["kind"] !== "user" || typeof item["text"] !== "string" || record.turnId === undefined) continue;
+
     if (record.turnId === current.turnId && item["text"] === current.text) continue;
+
     // Keep its position as a barrier: removing an unavailable recent source
     // would make a generic confirmation silently refer to an older claim.
     const text = unavailableTurns.has(record.turnId) || isLegacyBootstrapText(item["text"]) ? "" : item["text"];
+
     texts.push({ text, eventId: `${record.sessionId}:${record.turnId}:user` });
   }
+
   return texts;
 }
 
@@ -161,6 +171,7 @@ export function memoryForTurn(input: MemoryTurnInput): {
     ...(input.projectContext === undefined ? {} : { projectContext: input.projectContext }),
     ...(write === undefined ? {} : { facts: () => write.visible() }),
   });
+
   return { ...(read === undefined ? {} : { read }), ...(write === undefined || input.userSourceAvailable === false ? {} : { write }) };
 }
 

@@ -63,10 +63,12 @@ export async function permissionLedgerRefusal(
   if (store === undefined || requested === undefined) {
     return undefined;
   }
+
   const failure = await ledgerFailure(store);
   if (failure === undefined) {
     return undefined;
   }
+
   return {
     // 52 = config：账本的位置来自配置（`TRYLO_HOME` + 开关），它的不可用是运行前
     // 就必须挡住的前提失败，而不是某次工具调用失败。

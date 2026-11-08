@@ -3,12 +3,15 @@ import { windowOnJournal } from "../../loop/compact-boundary.js";
 import type { RunTurnResult } from "../../loop/runner.js";
 import type { CompactWindow } from "../../ports/compaction.js";
 import type { SessionPort } from "../../ports/session.js";
-import type { CliRunStatus, CliUsage } from "../../protocol/cli-stream.js";
+import type { CliRunStatus, CliUsage, CliUsageAccounting } from "../../protocol/cli-stream.js";
 import type { Envelope, JsonObject } from "../../protocol/envelope.js";
 import type { Transcript, TranscriptItem } from "../../protocol/transcript.js";
 import { sessionPayload } from "./session-payload.js";
 import type { TurnRecorder } from "./turn-recorder.js";
 import { ExecutionProgressError } from "../../ports/execution-progress.js";
+import { accountingToCli } from "./host-status.js";
+import type { PromptInputCheckpoint } from "../../ports/prompt-input.js";
+import { promptInputCheckpointForCompletion } from "../../loop/prompt-input-records.js";
 
 /**
  * Turn result -> durable session records.
@@ -26,12 +29,14 @@ export type PersistTurnInput = {
   /** Items added by this turn only; resumed items are already on disk. */
   readonly newTranscript: Transcript;
   readonly envelopes: ReadonlyArray<Envelope>;
+  readonly promptInputCheckpoint?: PromptInputCheckpoint;
   readonly issuedKeys: ReadonlyArray<string>;
   readonly committedKeys: ReadonlyArray<string>;
   readonly terminalReason: string;
   readonly finishReason: string;
   readonly iterations: number;
   readonly usage: CliUsage;
+  readonly accounting?: CliUsageAccounting;
   /** The turn's own bounds: the journal brackets what happened between them. */
   readonly startedAt: string;
   readonly finishedAt: string;
@@ -66,11 +71,12 @@ async function appendOne(
   session: SessionPort,
   warnings: string[],
   record: Parameters<SessionPort["append"]>[0],
-): Promise<void> {
+): Promise<boolean> {
   const result = await session.append(record);
   if (!result.ok) {
     warnings.push(`session_append_failed:${record.type}:${result.code}`);
   }
+  return result.ok;
 }
 
 export async function persistTurn(
@@ -78,6 +84,7 @@ export async function persistTurn(
   input: PersistTurnInput,
 ): Promise<ReadonlyArray<string>> {
   const warnings: string[] = [];
+
   await appendOne(session, warnings, {
     type: "turn_start",
     sessionId: input.sessionId,
@@ -93,6 +100,7 @@ export async function persistTurn(
         : { projectInstructions: sessionPayload(input.projectInstructionSources) }),
     },
   });
+
   for (const item of input.newTranscript) {
     await appendOne(session, warnings, {
       type: "transcript_item",
@@ -102,16 +110,34 @@ export async function persistTurn(
       payload: itemPayload(item),
     });
   }
+
+  let streamIndex = 0, streamAttemptId: string | undefined, streamOpen = false;
+
   for (const envelope of input.envelopes) {
-    await appendOne(session, warnings, {
+    const measured = input.promptInputCheckpoint === undefined ? undefined
+      : promptInputCheckpointForCompletion(input.promptInputCheckpoint, envelope, {
+        sessionId: input.sessionId, turnId: input.turnId, attemptId: streamAttemptId, streamIndex, open: streamOpen,
+      });
+    const acknowledged = await appendOne(session, warnings, {
       type: "envelope",
       sessionId: input.sessionId,
       turnId: input.turnId,
       at: envelope.timestamp,
-      payload: { envelope: sessionPayload(envelope) },
+      payload: { envelope: sessionPayload(envelope),
+        ...(measured?.kind === "available" ? { promptInputCheckpoint: sessionPayload(measured.checkpoint) } : {}),
+      },
     });
+    if (acknowledged && envelope.kind === "api_call" && envelope.sessionId === input.sessionId && envelope.turnId === input.turnId) {
+      streamIndex += 1;
+      streamAttemptId = envelope.attemptId;
+      streamOpen = true;
+    }
+
+    if (acknowledged && envelope.kind === "stream_end") streamOpen = false;
   }
+
   const committed = new Set(input.committedKeys);
+
   for (const key of input.issuedKeys) {
     await appendOne(session, warnings, {
       type: "effect_issued",
@@ -130,6 +156,7 @@ export async function persistTurn(
       });
     }
   }
+
   await appendOne(session, warnings, {
     type: "terminal",
     sessionId: input.sessionId,
@@ -139,8 +166,10 @@ export async function persistTurn(
       reason: input.terminalReason,
       finishReason: input.finishReason,
       usage: sessionPayload(input.usage),
+      ...(input.accounting === undefined ? {} : { accounting: sessionPayload(input.accounting) }),
     },
   });
+
   return warnings;
 }
 
@@ -205,21 +234,26 @@ export async function persistTurnResult(
     // numbered in a journal that does not exist cannot be carried forward.
     return { warnings: [], view: undefined };
   }
+
   const resumed = host.resumeTranscript ?? [];
   const finishedAt = new Date(host.now()).toISOString();
   const clock = (): string => new Date(host.now()).toISOString();
+  const accounting = accountingToCli(result);
+  const details = Object.keys(accounting).length === 0 ? {} : { accounting };
   const warnings = host.recorder === undefined ? await persistTurn(session, {
     ...(host.toolCatalogHash === undefined ? {} : { toolCatalogHash: host.toolCatalogHash }),
     sessionId: host.sessionId,
     turnId: host.turnId,
     newTranscript: newTranscriptItems(result.transcript, resumed),
     envelopes: result.envelopes,
+    ...(result.promptInputCheckpoint === undefined ? {} : { promptInputCheckpoint: result.promptInputCheckpoint }),
     issuedKeys: result.issuedKeys,
     committedKeys: result.committedKeys,
     terminalReason: status,
     finishReason: result.state.finishReason,
     iterations: result.iterations,
     usage,
+    ...details,
     startedAt:
       host.startedAtMs === undefined ? finishedAt : new Date(host.startedAtMs).toISOString(),
     finishedAt,
@@ -228,12 +262,15 @@ export async function persistTurnResult(
       ? {}
       : { projectInstructionSources: host.projectContext.sources }),
   }) : [];
+
   if (host.recorder !== undefined) {
-    await host.recorder.finish({ status, finishReason: result.state.finishReason, usage });
+    await host.recorder.finish({ status, finishReason: result.state.finishReason, usage, ...details });
   }
+
   // A failed append is reported, never swallowed: a turn whose window never
   // reached disk must not read as a complete success.
   const stored = await storeCompactions(session, result, host.recorder === undefined ? "legacy" : "live");
+
   return {
     warnings: [...warnings, ...stored.warnings],
     // A window this turn decided but could not store is one no journal holds, so
@@ -261,13 +298,17 @@ async function storeCompactions(
 ): Promise<Persisted> {
   const drafts = result.compactions;
   const warnings: string[] = [];
+
   if (drafts.length === 0) {
     return { warnings, view: undefined };
   }
+
   const read = await session.readRecords();
   if (!read.ok && mode === "live") throw new ExecutionProgressError("compact_read", read.code);
+
   const records = read.ok ? read.view.records : [];
   let view: CompactWindow | undefined;
+
   for (const draft of drafts) {
     const payload = windowOnJournal(draft.payload, records, result.compactionSourceRecords);
     if (payload === undefined) {
@@ -275,6 +316,7 @@ async function storeCompactions(
       warnings.push(`session_append_failed:${draft.type}:window_not_on_journal`);
       continue;
     }
+
     const appended = await session.append({
       type: draft.type,
       sessionId: draft.sessionId,
@@ -286,7 +328,9 @@ async function storeCompactions(
       warnings.push(`session_append_failed:${draft.type}:${appended.code}`);
       continue;
     }
+
     view = payload;
   }
+
   return { warnings, view };
 }

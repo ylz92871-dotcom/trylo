@@ -18,6 +18,7 @@ import type { CliContext } from "./context.js";
 function ctx(): { readonly ctx: CliContext; readonly out: string[]; readonly err: string[] } {
   const out: string[] = [];
   const err: string[] = [];
+
   return {
     ctx: {
       env: {},
@@ -69,7 +70,9 @@ test("the parser takes only --check and --json", () => {
   assert.equal(parseUpdate(["--channel", "stable"]).kind, "error");
   assert.equal(parseUpdate(["extra"]).kind, "error");
   const parsed = parseUpdate([]);
+
   assert.equal(parsed.kind, "update");
+
   if (parsed.kind === "update") {
     assert.equal(parsed.options.check, false);
   }

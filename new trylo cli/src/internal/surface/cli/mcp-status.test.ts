@@ -26,6 +26,7 @@ function tempCtx(): { readonly ctx: CliContext; readonly out: string[]; readonly
   const root = mkdtempSync(join(tmpdir(), "trylo-mcp-status-"));
   const home = join(root, "home");
   const cwd = join(root, "workspace");
+
   // The pool spawns children with cwd set to the workspace, so both roots
   // must exist before any server is opened.
   mkdirSync(home, { recursive: true });
@@ -49,6 +50,7 @@ function tempCtx(): { readonly ctx: CliContext; readonly out: string[]; readonly
     now: () => 0,
     newId: (prefix) => `${prefix}-1`,
   };
+
   return { ctx, out, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
@@ -76,8 +78,10 @@ test("a live stdio server reports connected with its tool count", async () => {
       enabled: true,
       scope: "user",
     });
+
     assert.equal(added.ok, true);
     const code = await handleMcpStatus(ctx, false);
+
     assert.equal(code, EXIT_CODES.OK);
     assert.ok(out.some((line) => line.includes("fake connected tools=3")), JSON.stringify(out));
   } finally {
@@ -89,6 +93,7 @@ test("a disabled server is reported without being spawned, and a ghost as unavai
   const { ctx, out, cleanup } = tempCtx();
   try {
     const registry = createCliMcpRegistry(ctx);
+
     assert.equal(
       (
         await registry.add({
@@ -118,6 +123,7 @@ test("a disabled server is reported without being spawned, and a ghost as unavai
       true,
     );
     const code = await handleMcpStatus(ctx, false);
+
     assert.equal(code, EXIT_CODES.OK);
     assert.ok(out.some((line) => line.includes("off disabled")), JSON.stringify(out));
     // A missing binary surfaces as handshake_rejected today (the dead
@@ -138,6 +144,7 @@ test("header values never print: only key names, even for a server that needs au
   const { ctx, out, cleanup } = tempCtx();
   try {
     const registry = createCliMcpRegistry(ctx);
+
     assert.equal(
       (
         await registry.add({
@@ -155,8 +162,10 @@ test("header values never print: only key names, even for a server that needs au
       true,
     );
     const code = await handleMcpStatus(ctx, false);
+
     assert.equal(code, EXIT_CODES.OK);
     const text = out.join("");
+
     assert.ok(!text.includes("super-secret-token"), text);
     assert.ok(text.includes("remote headers=[Authorization]"), text);
     assert.ok(text.includes("remote unavailable:"), text);
@@ -169,6 +178,7 @@ test("json output parses and carries the same facts without secrets", async () =
   const { ctx, out, cleanup } = tempCtx();
   try {
     const registry = createCliMcpRegistry(ctx);
+
     assert.equal(
       (
         await registry.add({
@@ -184,11 +194,13 @@ test("json output parses and carries the same facts without secrets", async () =
       true,
     );
     const code = await handleMcpStatus(ctx, true);
+
     assert.equal(code, EXIT_CODES.OK);
     const parsed = JSON.parse(out.join("")) as {
       readonly connected: ReadonlyArray<{ readonly name: string; readonly tools: number }>;
       readonly failed: ReadonlyArray<{ readonly code: string }>;
     };
+
     assert.equal(parsed.connected.length, 1);
     assert.equal(parsed.connected[0]?.name, "fake");
     assert.equal(parsed.connected[0]?.tools, 3);

@@ -20,6 +20,7 @@ export async function scaffoldAfterTurn(scaffold: RunScaffold, outcome: TurnOutc
       continuation: "session_closed",
     };
   }
+
   return {
     ...scaffold,
     resumeTranscript: purgeUnsettledToolCalls(outcome.transcript),

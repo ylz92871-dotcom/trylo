@@ -136,23 +136,32 @@ export function createComposer(options: ComposerOptions): Composer {
     if (loans > 0 || stopped) {
       return;
     }
+
     if (panel !== undefined) {
       const rows = panel.model.rows(io.columns());
       screen.draw(rows, rows.length - 1, 0);
       return;
     }
-    if (!live()) { if (onCaptureLine !== undefined) options.onCaptureChange?.(); return; }
+
+    if (!live()) {
+      if (onCaptureLine !== undefined) options.onCaptureChange?.();
+      return;
+    }
+
     const view: ComposerView = { text: buf.text(), cursor: buf.cursor(), prompt, footer: hist.footer() };
     const composed = renderComposer(view, io.columns());
+
     screen.draw([...composed.rows, ...commandMenu.rows(buf.text(), io.columns())], composed.cursorRow, composed.cursorColumn);
   };
 
   const hist = createComposerHistory({
     bufferText: () => buf.text(),
+
     setBuffer: (text) => {
       buf.clear();
       buf.insert(text);
     },
+
     draw,
     submit: () => submit(),
   });
@@ -166,14 +175,19 @@ export function createComposer(options: ComposerOptions): Composer {
     commandMenu.hide(buf.text());
     draw();
     const expanded = buf.expandPlaceholders(buf.text()).replace(/\n$/, "");
+
     buf.clear();
     buf.clearPasted();
     hist.endSearch();
     hist.remember(expanded);
     const resolve = composing;
+
     composing = undefined;
+
     if (resolve !== undefined || onCaptureLine === undefined) io.write("\r\n");
+
     screen.reset();
+
     if (resolve !== undefined) {
       resolve(expanded);
     } else if (onCaptureLine !== undefined) {
@@ -204,9 +218,12 @@ export function createComposer(options: ComposerOptions): Composer {
     if (stopped || loans > 0) {
       return;
     }
+
     const atMs = now();
+
     cancelFlush?.();
     cancelFlush = undefined;
+
     for (const event of decoder.push(chunk)) {
       if (panel !== undefined) {
         const step = panel.model.key(event);
@@ -216,13 +233,16 @@ export function createComposer(options: ComposerOptions): Composer {
           screen.clear();
           resolve(step.id);
         }
+
         continue;
       }
+
       if (event.kind === "char" && hist.searching()) {
         // While searching, what the person types is the query, not the line.
         hist.key(event);
         continue;
       }
+
       if (event.kind === "char") {
         // Typed characters go through the burst machine: a fast run of them
         // that a terminal never announced is how a paste looks without
@@ -233,6 +253,7 @@ export function createComposer(options: ComposerOptions): Composer {
           hist.key(event);
           continue;
         }
+
         if (commands().length > 0) {
           applyBurstDecisions(burst.flush(), pasteOps);
           const selected = commandMenu.selected(buf.text());
@@ -244,28 +265,35 @@ export function createComposer(options: ComposerOptions): Composer {
             continue;
           }
         }
+
         applyBurstEnter(burst.enter(atMs), pasteOps);
       } else {
         // A control or navigation key ends any burst in progress first: the
         // chars it holds belong in the buffer before the key edits it — and
         // before Ctrl-C wipes it.
         applyBurstDecisions(burst.flush(), pasteOps);
+
         if (commands().length > 0 && (event.kind === "up" || event.kind === "down")) {
           commandMenu.move(buf.text(), event.kind === "up" ? -1 : 1);
           continue;
         }
+
         // Ctrl-C / Ctrl-D belong to the shell before the table.
         if (shellKey(event)) {
           continue;
         }
+
         if (hist.searching()) {
           hist.key(event);
           continue;
         }
+
         applyBound(event);
       }
     }
+
     draw();
+
     if (panel === undefined) {
       cancelFlush = schedule(() => {
         cancelFlush = undefined;
@@ -290,6 +318,7 @@ export function createComposer(options: ComposerOptions): Composer {
     if (edit === undefined) {
       return;
     }
+
     const edited = await borrowTerminalDuring(async () => {
       io.write("\r\n");
       return edit(buf.expandPlaceholders(buf.text()));
@@ -298,6 +327,7 @@ export function createComposer(options: ComposerOptions): Composer {
       buf.clear();
       buf.insert(edited.replace(/\n$/, ""));
     }
+
     draw();
   };
 
@@ -305,26 +335,33 @@ export function createComposer(options: ComposerOptions): Composer {
     captureView: () => onCaptureLine === undefined ? undefined : {
       text: buf.text(), cursor: buf.cursor(), prompt: "追加 › ", footer: "Enter 追加到本轮 · 未及时送达的消息会进入下一轮",
     },
+
     choose(request) {
       if (panel !== undefined || composing !== undefined) return Promise.reject(new Error("terminal_selector_busy"));
+
       cancelFlush?.();
       applyBurstDecisions(burst.flush(), pasteOps);
+
       return new Promise(resolve => {
         panel = { model: createChoice(request), resolve };
         draw();
       });
     },
+
     compose(nextPrompt) {
       prompt = nextPrompt ?? "";
+
       if (eof) {
         return Promise.resolve(undefined);
       }
+
       return new Promise<string | undefined>((resolve) => {
         composing = resolve;
         commandMenu.show();
         draw();
       });
     },
+
     beginCapture(next) {
       onCaptureLine = next;
     },
@@ -340,6 +377,7 @@ export function createComposer(options: ComposerOptions): Composer {
     async borrowTerminal(read) {
       return borrowTerminalDuring(read);
     },
+
     stop() {
       stopped = true;
       cancelFlush?.();
@@ -354,7 +392,9 @@ export function createComposer(options: ComposerOptions): Composer {
     cancelFlush?.();
     applyBurstDecisions(burst.flush(), pasteOps);
     loans++;
+
     if (loans === 1) keys.suspend();
+
     try {
       return await read();
     } finally {
@@ -374,10 +414,12 @@ export function createComposer(options: ComposerOptions): Composer {
     if (event.kind !== "ctrl") {
       return false;
     }
+
     if (event.name === "c") {
       controlInterrupt();
       return true;
     }
+
     if (event.name === "d") {
       if (buf.text().length === 0) {
         eof = true;
@@ -385,6 +427,7 @@ export function createComposer(options: ComposerOptions): Composer {
       }
       return true;
     }
+
     return false;
   }
 }

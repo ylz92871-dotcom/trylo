@@ -86,9 +86,11 @@ export function slashCompleter(line: string): [ReadonlyArray<string>, string] {
   if (!token.startsWith("/")) {
     return [[], line];
   }
+
   const names = SLASH_COMMANDS.map((command) => command.name).filter((name) =>
     name.startsWith(token),
   );
+
   // One hit and the shell would replace the whole line, so it is returned
   // alone; several and the shell shows the list instead.
   return [names, line];
@@ -123,6 +125,7 @@ export function parseSlash(input: string): SlashParse {
   if (!isSlashInput(input)) {
     return { kind: "not_a_command" };
   }
+
   const trimmed = input.trim();
   const firstSpace = /[\t ]/.exec(trimmed)?.index ?? trimmed.length;
   const token = trimmed.slice(0, firstSpace);
@@ -130,6 +133,7 @@ export function parseSlash(input: string): SlashParse {
   if (command === undefined) {
     return { kind: "unknown", token };
   }
+
   return { kind: "known", invocation: { command, arg: trimmed.slice(firstSpace).trim() } };
 }
 
@@ -165,5 +169,6 @@ export function slashHelpText(): string {
   // summary hard against the name.
   const wide = Math.max(...rows.map((row) => row.left.length));
   const lines = rows.map((row) => `${row.left.padEnd(wide)}  ${row.summary}`);
+
   return ["commands:", ...lines, "", "keys:", ...keyLines()].join("\n");
 }

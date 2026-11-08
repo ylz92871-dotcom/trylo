@@ -20,15 +20,18 @@ export function parseDoctor(
 ): ParsedCommand {
   let json = false;
   let learning = seed;
+
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index] ?? "";
     if (token === "--help" || token === "-h") {
       return { kind: "help" };
     }
+
     if (token === "--json") {
       json = true;
       continue;
     }
+
     const parsed = token.startsWith("--") ? flagToken(token) : undefined;
     if (parsed === undefined || parsed.name !== "learning") {
       return usageError(
@@ -36,12 +39,15 @@ export function parseDoctor(
         "run `trylo doctor --help` for accepted options",
       );
     }
+
     const got = readLearning(argv, index, parsed.inlineValue);
     if (got.error !== undefined) {
       return got.error;
     }
+
     learning = got.value;
     index = got.next - 1;
   }
+
   return { kind: "doctor", json, ...(learning === undefined ? {} : { learning }) };
 }

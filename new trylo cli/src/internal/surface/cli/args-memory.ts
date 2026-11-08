@@ -33,54 +33,79 @@ const DELETE_HINT = "try `trylo memory delete --all --yes [--json]`";
 export function parseMemory(argv: ReadonlyArray<string>): ParsedCommand {
   const sub = argv[0];
   if (sub === "--help" || sub === "-h") return familyHelpCommand("memory");
+
   if (sub === undefined) return usageError("memory requires a subcommand", "try `trylo memory list|import`");
+
   if (sub === "list" || sub === "compact") return parseList(argv.slice(1), sub);
+
   if (sub === "import") return parseImport(argv.slice(1));
+
   if (sub === "delete") return parseDelete(argv.slice(1));
+
   if (sub === "update" || sub === "retract") {
     if (argv.slice(1).some((token) => token !== "--json")) return usageError("memory update/retract reads one JSON request from stdin", "try `trylo memory update|retract --json`");
     return { kind: "memory_mutate", action: sub === "update" ? "correct" : "retract" };
   }
+
   return usageError(`unknown memory subcommand: ${sub}`, "try `trylo memory list|import|delete`");
 }
 
 function parseList(argv: ReadonlyArray<string>, action: "list" | "compact"): ParsedCommand {
   let json = false;
+
   for (const token of argv) {
-    if (token === "--json") { json = true; continue; }
+    if (token === "--json") {
+      json = true;
+      continue;
+    }
     if (token === "--help" || token === "-h") return familyHelpCommand("memory");
     const flag = flagToken(token);
     const hint = action === "list" ? LIST_HINT : "try `trylo memory compact [--json]`";
     if (flag !== undefined) return usageError(`memory ${action} does not accept --${flag.name}`, hint);
     return usageError(`memory ${action} does not accept ${token}`, hint);
   }
+
   return { kind: action === "list" ? "memory_list" : "memory_compact", options: { json } };
 }
 
 function parseImport(argv: ReadonlyArray<string>): ParsedCommand {
   let file: string | undefined, json = false;
+
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     if (token === undefined) break;
-    if (token === "--json") { json = true; continue; }
+
+    if (token === "--json") {
+      json = true;
+      continue;
+    }
+
     if (token === "--help" || token === "-h") return familyHelpCommand("memory");
+
     if (token === "--file") {
       const value = argv[index + 1];
       if (value === undefined || value.startsWith("--")) {
         return usageError("memory import --file needs a path", IMPORT_HINT);
       }
-      file = value; index += 1; continue;
+      file = value;
+      index += 1;
+      continue;
     }
+
     if (token.startsWith("--file=")) {
       file = token.slice("--file=".length);
       if (file.length === 0) return usageError("memory import --file needs a path", IMPORT_HINT);
       continue;
     }
+
     const flag = flagToken(token);
     if (flag !== undefined) return usageError(`memory import does not accept --${flag.name}`, IMPORT_HINT);
+
     return usageError(`memory import does not accept ${token}`, IMPORT_HINT);
   }
+
   if (file === undefined) return usageError("memory import requires --file <path>", IMPORT_HINT);
+
   return { kind: "memory_import", options: { file, json } };
 }
 
@@ -93,16 +118,34 @@ function parseImport(argv: ReadonlyArray<string>): ParsedCommand {
  */
 function parseDelete(argv: ReadonlyArray<string>): ParsedCommand {
   let all = false, yes = false, json = false;
+
   for (const token of argv) {
-    if (token === "--all") { all = true; continue; }
-    if (token === "--yes") { yes = true; continue; }
-    if (token === "--json") { json = true; continue; }
+    if (token === "--all") {
+      all = true;
+      continue;
+    }
+
+    if (token === "--yes") {
+      yes = true;
+      continue;
+    }
+
+    if (token === "--json") {
+      json = true;
+      continue;
+    }
+
     if (token === "--help" || token === "-h") return familyHelpCommand("memory");
+
     const flag = flagToken(token);
     if (flag !== undefined) return usageError(`memory delete does not accept --${flag.name}`, DELETE_HINT);
+
     return usageError(`memory delete does not accept ${token}`, DELETE_HINT);
   }
+
   if (!all) return usageError("memory delete needs --all (this deletes every saved user memory)", DELETE_HINT);
+
   if (!yes) return usageError("memory delete needs --yes (there is no undo)", DELETE_HINT);
+
   return { kind: "memory_delete", options: { all, json } };
 }

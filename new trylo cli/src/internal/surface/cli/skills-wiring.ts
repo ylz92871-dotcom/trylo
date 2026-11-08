@@ -2,6 +2,7 @@ import path from "node:path";
 import { createSkillCatalog } from "../../adapters/skills/catalog.js";
 import { createNodeSkillReader, discoverSkills, type SkillRoot } from "../../adapters/skills/discover.js";
 import type { SkillCatalogPort } from "../../ports/skills.js";
+import { learnedSkillCatalog, type LearnedSkillCatalogInput } from "../../integration/skill-learning/catalog.js";
 import { tryloHome } from "./session-paths.js";
 
 /**
@@ -24,14 +25,31 @@ export type SkillsWiring = {
   readonly problems: ReadonlyArray<string>;
 };
 
-export function skillsPortFor(homeDir: string, env: Readonly<Record<string, string | undefined>>, workspaceRoot: string): SkillsWiring {
+export function skillsPortFor(
+  homeDir: string,
+  env: Readonly<Record<string, string | undefined>>,
+  workspaceRoot: string,
+  learned?: Omit<LearnedSkillCatalogInput, "contentRoot">,
+): SkillsWiring {
   const roots: ReadonlyArray<SkillRoot> = [
     { source: "project", directory: path.join(workspaceRoot, ".trylo", "skills") },
     { source: "user", directory: path.join(tryloHome(homeDir, env), "skills") },
   ];
   const discovery = discoverSkills(roots, createNodeSkillReader());
-  if (discovery.skills.length === 0) {
-    return { catalog: undefined, problems: discovery.problems };
-  }
-  return { catalog: createSkillCatalog(discovery.skills), problems: discovery.problems };
+  const installed = createSkillCatalog(discovery.skills);
+  const learning = learned === undefined ? undefined : learnedSkillCatalog({ ...learned, contentRoot: workspaceRoot });
+  const learnedCatalog = learning?.catalog;
+  const descriptors = [...discovery.skills, ...(learnedCatalog?.list() ?? [])];
+  const problems = [...discovery.problems, ...(learning?.problems ?? [])];
+
+  if (descriptors.length === 0) return { catalog: undefined, problems };
+
+  return { problems, catalog: {
+    list: () => descriptors,
+
+    load(name, args) {
+      const result = installed.load(name, args);
+      return result.kind === "loaded" ? result : learnedCatalog?.load(name, args) ?? result;
+    },
+  } };
 }

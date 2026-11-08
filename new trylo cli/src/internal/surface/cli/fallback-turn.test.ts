@@ -24,24 +24,32 @@ function sseOk(text: string): string {
 
 test("a 429 on the primary falls back once to the fallback model", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "trylo-fallback-"));
+
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const models: string[] = [];
   const server = createServer(async (request, response) => {
     let body = "";
+
     for await (const chunk of request) body += String(chunk);
+
     const hit = models.length + 1;
+
     models.push((JSON.parse(body) as { model?: string }).model ?? "");
+
     if (hit <= 3) {
       response.writeHead(429, { "Content-Type": "application/json" });
       response.end(JSON.stringify({ error: "busy" }));
       return;
     }
+
     response.writeHead(200, { "Content-Type": "text/event-stream" });
     response.end(sseOk("recovered"));
   });
+
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
   const address = server.address();
+
   assert.ok(address !== null && typeof address !== "string");
   let id = 0;
   const ctx: CliContext = {
@@ -51,6 +59,7 @@ test("a 429 on the primary falls back once to the fallback model", async (t) => 
     platform: "win32",
     nodeVersion: "v24",
     stdinIsTty: false,
+
     readFile: (file) => {
       try {
         return readFileSync(file, "utf8");
@@ -58,6 +67,7 @@ test("a 429 on the primary falls back once to the fallback model", async (t) => 
         return undefined;
       }
     },
+
     isDirectory: (file) => statSync(file).isDirectory(),
     readDir: () => [],
     writeFile: () => false,
@@ -84,25 +94,33 @@ test("a 429 on the primary falls back once to the fallback model", async (t) => 
     sink,
     permissionMode: "non_interactive",
   });
+
   assert.equal(isRunFailure(scaffold), false);
+
   if (isRunFailure(scaffold)) {
     return;
   }
+
   t.after(scaffold.close);
   const outcome = await runOneTurn(ctx, scaffold, "hello", sink, "non_interactive", {});
+
   assert.ok("result" in outcome && outcome.exitCode === 0);
   assert.deepEqual(models, ["primary-7b", "primary-7b", "primary-7b", "fallback-70b"]);
+
   if ("warnings" in outcome) {
     assert.ok(outcome.warnings.some((warning) => warning.startsWith("model_fallback:")));
   }
+
   const frames = lines.map(line => JSON.parse(line) as Record<string, unknown>);
   const starts = frames.filter(frame => frame.type === "run_start");
   const results = frames.filter(frame => frame.type === "run_result");
+
   assert.equal(starts.length, 1, "fallback is one external run, not a second start");
   assert.equal(results.length, 1, "the failed primary must not terminate Desktop before fallback");
   assert.equal(results[0]?.status, "completed");
   assert.equal(results[0]?.turnId, starts[0]?.turnId);
   assert.equal(frames.at(-1)?.type, "run_result");
   assert.ok(frames.some(frame => frame.type === "warning" && frame.code === "model_fallback"));
+
   if ("result" in outcome) assert.equal(results[0]?.attemptTurnId, outcome.result.turnId);
 });

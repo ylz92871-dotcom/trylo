@@ -41,11 +41,13 @@ export function pathCompletions(
   if (partial.length === 0) {
     return [];
   }
+
   const cut = Math.max(partial.lastIndexOf("/"), partial.lastIndexOf("\\"));
   const dirPart = cut >= 0 ? partial.slice(0, cut + 1) : "";
   const prefix = cut >= 0 ? partial.slice(cut + 1) : partial;
   const absolute = dirPart.length === 0 ? cwd : join(cwd, dirPart);
   const entries = readDir(absolute);
+
   return entries
     .filter((entry) => entry.name.startsWith(prefix))
     .map((entry) => `${dirPart}${entry.name}${entry.isDirectory ? "/" : ""}`)

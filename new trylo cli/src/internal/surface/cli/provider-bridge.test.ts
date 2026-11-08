@@ -31,10 +31,12 @@ function ctxOf(files: Map<string, string>): CliContext {
     readFile: (path) => files.get(path),
     isDirectory: () => true,
     readDir: () => [],
+
     writeFile: (path, text) => {
       files.set(path, text);
       return true;
     },
+
     readStdin: async () => "",
     readLine: async () => undefined,
     readSecret: async () => undefined,
@@ -93,7 +95,9 @@ test("a keyed provider with nothing stored is reported as not logged in", () => 
 test("a ledger that cannot be trusted is reported, not smoothed over", () => {
   const files = new Map([["/home/user/.trylo/credentials.json", "{ broken"]]);
   const state = credentialStateOf(ctxOf(files), "openai-compatible");
+
   assert.equal(state.required, true);
+
   if (state.required && "unavailable" in state) {
     assert.match(state.unavailable, /ledger unusable/);
     assert.equal(state.unavailable.includes("sk-"), false);
@@ -106,6 +110,7 @@ test("the credential state never carries a secret", () => {
   ]);
   const state = credentialStateOf(ctxOf(files), "openai-compatible");
   const text = JSON.stringify(state);
+
   assert.equal(text.includes("secret"), false);
   assert.equal(text.includes("apiKey"), false);
 });
@@ -118,12 +123,14 @@ test("doctor on a machine with no declared providers says nothing new", () => {
 
 test("doctor names the selected provider's capabilities once one is declared", () => {
   const ids = doctorIds(new Map([[PATH, declared()]]));
+
   assert.equal(ids.includes("provider.capability"), true);
   const report = collectDoctor(ioOf(new Map([[PATH, declared()]])), {
     toolCatalogHash: "h",
     sessionsDir: "/s",
   });
   const row = report.checks.find((check) => check.id === "provider.capability");
+
   assert.equal(row?.status, "ok");
   assert.match(row?.detail ?? "", /lab: streaming\|tools\|cancellation/);
 });
@@ -139,6 +146,7 @@ test("a selection that names nothing registered is a failure, not a skip", () =>
     sessionsDir: "/s",
   });
   const row = report.checks.find((check) => check.id === "provider.capability");
+
   assert.equal(row?.status, "fail");
   assert.match(row?.detail ?? "", /not registered/);
 });
@@ -149,6 +157,7 @@ test("a providers file that cannot be read is a CONFIG failure in the doctor", (
     sessionsDir: "/s",
   });
   const row = report.checks.find((check) => check.id === "provider.capability");
+
   assert.equal(row?.status, "fail");
   assert.match(row?.detail ?? "", /not_json/);
   assert.equal(report.checks.some((check) => check.status === "fail"), true);

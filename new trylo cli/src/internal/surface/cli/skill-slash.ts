@@ -22,21 +22,26 @@ export function expandSkillSlash(input: string, workspaceRoot: string, homeDir: 
   if (!input.startsWith("/")) {
     return undefined;
   }
+
   const separator = input.indexOf(" ");
   const name = (separator === -1 ? input : input.slice(0, separator)).slice(1).trim();
   const args = separator === -1 ? undefined : input.slice(separator + 1).trim();
+
   if (name.length === 0) {
     return undefined;
   }
+
   const skills = skillsPortFor(homeDir, env, workspaceRoot);
   const descriptor = skills.catalog?.list().find((skill) => skill.name === name && skill.userInvocable);
   if (descriptor === undefined || skills.catalog === undefined) {
     return undefined;
   }
+
   const loaded = skills.catalog.load(name, args);
   if (loaded.kind !== "loaded") {
     return undefined;
   }
+
   return {
     name,
     text: `${loaded.skill.content}\n\n(The user invoked skill "${name}"${args === undefined ? "" : ` with: ${args}`}; the text above is the skill's instructions for this turn.)`,

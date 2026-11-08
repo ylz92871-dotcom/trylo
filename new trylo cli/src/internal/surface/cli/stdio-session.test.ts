@@ -8,6 +8,7 @@ import { buildPermissionAction } from "../../loop/permission-grants.js";
 const tick = () => new Promise<void>(resolve => setImmediate(resolve));
 const question = { id: "style", header: "样式", question: "选择方向", multiSelect: true,
   options: [{ label: "A", description: "a" }, { label: "B", description: "b" }] };
+
 function harness() {
   const lines: Array<string | undefined> = [];
   let waiter: ((line: string | undefined) => void) | undefined;
@@ -19,11 +20,21 @@ function harness() {
   });
   const feed = (value: object | undefined): void => {
     const line = value === undefined ? undefined : JSON.stringify(value);
-    if (waiter) { const current = waiter; waiter = undefined; current(line); } else lines.push(line);
+    if (waiter) {
+      const current = waiter;
+      waiter = undefined;
+      current(line);
+    } else lines.push(line);
   };
+
   channel.start();
-  return { channel, frames, feed, close: () => { channel.close(); feed(undefined); } };
+
+  return { channel, frames, feed, close: () => {
+    channel.close();
+    feed(undefined);
+  } };
 }
+
 const response = (requestId: string, body: object) => ({ type: "control_response", response: {
   subtype: "success", request_id: requestId, response: body,
 } });
@@ -37,12 +48,16 @@ test("member cancellation retracts only its owner approval and a late response c
     const first = h.channel.approval(buildPermissionAction("call-a", "write_file", { path: "a.txt" }), { signal: cancel.signal, requester });
     const second = h.channel.approval(buildPermissionAction("call-b", "write_file", { path: "b.txt" }));
     const requests = h.frames.filter(frame => frame.type === "control_request");
+
     assert.deepEqual((requests[0]?.request as Record<string, unknown>).requester, requester);
-    const firstId = String(requests[0]?.request_id); const secondId = String(requests[1]?.request_id);
+    const firstId = String(requests[0]?.request_id);
+    const secondId = String(requests[1]?.request_id);
+
     cancel.abort();
     assert.equal((await first).resolution, "cancelled");
     assert.deepEqual(h.frames.find(frame => frame.type === "control_cancel_request"), { type: "control_cancel_request", request_id: firstId });
-    h.feed(response(firstId, { behavior: "allow" })); await tick();
+    h.feed(response(firstId, { behavior: "allow" }));
+    await tick();
     assert.ok(h.frames.some(frame => frame.code === "stale_control_response"));
     assert.equal(h.frames.filter(frame => frame.type === "control_cancel_request").length, 1);
     h.feed(response(secondId, { behavior: "deny" }));
@@ -54,8 +69,13 @@ test("host cancellation closes exactly the addressed child and acknowledges the 
   const h = harness();
   try {
     const calls: unknown[] = [];
+
     h.channel.bindAgentTools({ snapshot: () => [{ name: "close_agent" } as never], cancel: async () => {},
-      execute: async call => { calls.push(call); return { outcome: "result", value: {}, output: "closed", truncated: false }; } });
+
+      execute: async call => {
+        calls.push(call);
+        return { outcome: "result", value: {}, output: "closed", truncated: false };
+      } });
     h.feed({ type: "subagent_input", requestId: "cancel-1", target: "agent-a", action: "cancel" });
     await tick();
     assert.deepEqual(calls, [{ name: "close_agent", toolCallId: "host-cancel-1", arguments: { target: "agent-a", force: true } }]);
@@ -69,8 +89,13 @@ test("host restart mode is preserved and invalid input modes never dispatch", as
   const h = harness();
   try {
     const calls: unknown[] = [];
+
     h.channel.bindAgentTools({ snapshot: () => [{ name: "send_input" } as never], cancel: async () => {},
-      execute: async call => { calls.push(call.arguments); return { outcome: "result", value: {}, output: "restarted", truncated: false }; } });
+
+      execute: async call => {
+        calls.push(call.arguments);
+        return { outcome: "result", value: {}, output: "restarted", truncated: false };
+      } });
     h.feed({ type: "subagent_input", requestId: "restart", target: "task-a", message: "new work", mode: "restart" });
     h.feed({ type: "subagent_input", requestId: "invalid", target: "task-a", message: "no effect", mode: "typo" });
     await tick();
@@ -84,8 +109,11 @@ test("host child input is targeted, acknowledged and never becomes parent guidan
   const h = harness();
   try {
     const calls: unknown[] = [];
+
     h.channel.bindAgentTools({ snapshot: () => [{ name: "send_input" } as never], cancel: async () => {},
-      execute: async call => { calls.push(call); return call.arguments.target === "closed"
+
+      execute: async call => { calls.push(call);
+      return call.arguments.target === "closed"
         ? { outcome: "error", code: "agent_closed", message: "agent_closed" }
         : { outcome: "result", value: {}, output: "queued", truncated: false }; } });
     h.feed({ type: "subagent_input", requestId: "host-1", target: "agent-a", message: "第二轮" });
@@ -100,7 +128,8 @@ test("host child input is targeted, acknowledged and never becomes parent guidan
     assert.equal(h.frames.find(frame => frame.requestId === "host-2")?.accepted, false);
     h.channel.bindAgentTools(undefined);
     h.feed({ type: "subagent_input", requestId: "host-3", target: "agent-a", message: "结束后" });
-    await tick(); assert.equal(calls.length, 2);
+    await tick();
+    assert.equal(calls.length, 2);
     assert.equal(h.frames.find(frame => frame.requestId === "host-3")?.accepted, false);
   } finally { h.close(); }
 });
@@ -111,6 +140,7 @@ test("one stdin reader routes a question, approval and guidance independently", 
     const owner = createAskUserTools({ surfaceAnswersOnly: true, nextRequestId: () => "question-1" });
     const asking = stdioQuestions(owner, h.channel).execute({ name: "ask_user_question", toolCallId: "q", arguments: { questions: [question] } }, new AbortController().signal);
     const approving = h.channel.approval({ name: "write_file", toolCallId: "w", arguments: { path: "proof.txt" }, pattern: "w" });
+
     await tick();
     h.feed({ type: "user", message: { role: "user", content: "new guidance" } });
     h.feed(response("question-1", { status: "submitted", answers: { style: "A, B" } }));
@@ -122,24 +152,32 @@ test("one stdin reader routes a question, approval and guidance independently", 
     assert.deepEqual(h.channel.pendingInput("turn"), []);
   } finally { h.close(); }
 });
+
 test("malformed and stale replies cannot deny or approve a pending tool", async () => {
   const h = harness();
   try {
     let settled = false;
-    const pending = h.channel.approval({ name: "write_file", toolCallId: "w", arguments: {}, pattern: "w" }).then(value => { settled = true; return value; });
+    const pending = h.channel.approval({ name: "write_file", toolCallId: "w", arguments: {}, pattern: "w" }).then(value => {
+      settled = true;
+      return value;
+    });
+
     h.feed(response("old-id", { behavior: "allow" }));
     h.feed(response("approval-1", { status: "submitted", answers: {} }));
-    await tick(); assert.equal(settled, false);
+    await tick();
+    assert.equal(settled, false);
     h.feed(response("approval-1", { behavior: "deny", reason: "policy_denied" }));
     assert.equal((await pending).reason, "policy_denied");
   } finally { h.close(); }
 });
+
 test("legacy interrupt command cancels pending user interaction without granting permission", async () => {
   const h = harness();
   try {
     const waiting = h.channel.approval({ name: "write_file", toolCallId: "w", arguments: {}, pattern: "w" });
     h.feed({ type: "control_request", request_id: "stop", request: { subtype: "interrupt" } });
-    assert.equal((await waiting).resolution, "cancelled"); assert.equal(h.channel.signal.aborted, true);
+    assert.equal((await waiting).resolution, "cancelled");
+    assert.equal(h.channel.signal.aborted, true);
   } finally { h.close(); }
 });
 
@@ -159,6 +197,7 @@ test("async user questions display immediately and put the eventual answer into 
   try {
     const owner = createAskUserTools({ surfaceAnswersOnly: true, nextRequestId: () => "async-q" });
     const result = await stdioQuestions(owner, h.channel).execute({ name: "request_user_input_async", toolCallId: "async", arguments: { questions: [question] } }, new AbortController().signal);
+
     assert.equal(result.outcome, "result");
     assert.equal(h.frames.some(frame => frame.request_id === "async-q"), true);
     h.feed(response("async-q", { status: "submitted", answers: { style: "A" } }));

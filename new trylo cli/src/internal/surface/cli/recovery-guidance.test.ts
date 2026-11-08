@@ -8,7 +8,10 @@ for (const cause of ["sent_unacked", "transport_fail", "disconnect"]) test(`${ca
     timestamp: "2026-10-23T00:00:00.000Z", kind: "terminal", producerId: "fixture", producerSequence: 1,
     payload: { reason: "unknown", cause, sessionId: "saved", message: "disconnect" } };
   const message = projectEnvelopes([event]).filter(item => item.type === "warning").map(item => item.message).join("\n");
+
   assert.match(message, /same saved session/i);
+  assert.match(message, /if this run was saved/i);
+  assert.match(message, /unsaved runs cannot be resumed/i);
   assert.match(message, /recorded tool results/i);
   assert.match(message, /do not repeat completed actions/i);
   assert.doesNotMatch(message, /retry the run/i);

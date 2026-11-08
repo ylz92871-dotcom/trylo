@@ -40,6 +40,7 @@ export function tableBlock(
   const aligns = alignsOf(separator, header.length);
   const body: string[][] = [];
   let index = start + 2;
+
   while (index < rows.length) {
     const row = rows[index] ?? "";
     if (row.trim().length === 0 || !row.includes("|")) {
@@ -48,7 +49,9 @@ export function tableBlock(
     body.push(cellsOf(row));
     index += 1;
   }
+
   out.push(...renderTable(header, body, aligns, columns));
+
   return index;
 }
 
@@ -57,6 +60,7 @@ function cellsOf(row: string): string[] {
   const trimmed = row.trim().replace(/^\|/, "").replace(/\|$/, "");
   const cells: string[] = [];
   let current = "";
+
   for (let i = 0; i < trimmed.length; i += 1) {
     const character = trimmed[i] ?? "";
     if (character === "\\" && trimmed[i + 1] === "|") {
@@ -64,14 +68,18 @@ function cellsOf(row: string): string[] {
       i += 1;
       continue;
     }
+
     if (character === "|") {
       cells.push(normalizeCell(current.trim()));
       current = "";
       continue;
     }
+
     current += character;
   }
+
   cells.push(normalizeCell(current.trim()));
+
   return cells;
 }
 
@@ -114,8 +122,10 @@ function renderTable(
   ].filter((cell) => cell.length > 0);
   const idealWidths: number[] = [];
   const minWidths: number[] = [];
+
   for (let i = 0; i < count; i += 1) {
     const cells = cellText(i);
+
     idealWidths.push(Math.max(...cells.map(displayWidth), MIN_COLUMN_WIDTH));
     minWidths.push(
       Math.max(
@@ -124,6 +134,7 @@ function renderTable(
       ),
     );
   }
+
   const borderOverhead = 1 + count * 3;
   const available = Math.max(
     columns - borderOverhead - TABLE_SAFETY_MARGIN,
@@ -132,6 +143,7 @@ function renderTable(
   const totalIdeal = idealWidths.reduce((sum, w) => sum + w, 0);
   const totalMin = minWidths.reduce((sum, w) => sum + w, 0);
   let widths: number[];
+
   if (totalIdeal <= available) {
     widths = idealWidths;
   } else if (totalMin <= available) {
@@ -149,6 +161,7 @@ function renderTable(
     const scale = available / totalMin;
     widths = minWidths.map((min) => Math.max(Math.floor(min * scale), 1));
   }
+
   const rowsOf = (cells: ReadonlyArray<string>): ReadonlyArray<string> =>
     wrapRow(cells, widths, aligns);
   const lines: MarkdownLine[] = [
@@ -167,6 +180,7 @@ function renderTable(
       })),
     ),
   ];
+
   return lines;
 }
 
@@ -179,12 +193,14 @@ function wrapRow(
   const wrapped = cells.map((cell, i) => fitCell(cell, widths[i] ?? MIN_COLUMN_WIDTH));
   const height = Math.max(...wrapped.map((rows) => rows.length), 1);
   const lines: string[] = [];
+
   for (let row = 0; row < height; row += 1) {
     const parts = wrapped.map((rows, i) =>
       padCell(rows[row] ?? "", widths[i] ?? MIN_COLUMN_WIDTH, aligns[i] ?? "left"),
     );
     lines.push(`│ ${parts.join(" │ ")} │`);
   }
+
   return lines;
 }
 
@@ -193,10 +209,13 @@ function fitCell(cell: string, width: number): ReadonlyArray<string> {
   if (cell.length === 0) {
     return [""];
   }
+
   const parts: string[] = [];
+
   for (const word of cell.split("\n")) {
     let line = "";
     let lineWidth = 0;
+
     for (const character of word) {
       const size = displayWidth(character);
       if (lineWidth + size > width && line.length > 0) {
@@ -204,11 +223,14 @@ function fitCell(cell: string, width: number): ReadonlyArray<string> {
         line = "";
         lineWidth = 0;
       }
+
       line += character;
       lineWidth += size;
     }
+
     parts.push(line);
   }
+
   return parts.length > 0 ? parts : [""];
 }
 
@@ -217,13 +239,16 @@ function padCell(text: string, width: number, align: "left" | "right" | "center"
   if (gap <= 0) {
     return text;
   }
+
   if (align === "right") {
     return `${" ".repeat(gap)}${text}`;
   }
+
   if (align === "center") {
     const left = Math.floor(gap / 2);
     return `${" ".repeat(left)}${text}${" ".repeat(gap - left)}`;
   }
+
   return `${text}${" ".repeat(gap)}`;
 }
 

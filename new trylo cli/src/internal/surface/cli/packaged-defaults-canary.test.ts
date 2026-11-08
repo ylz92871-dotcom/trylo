@@ -31,10 +31,13 @@ const bareIo = {
 
 test("every packaged default resolves at the packaged_default layer", () => {
   const loaded = loadConfig(bareIo, {});
+
   assert.equal(loaded.ok, true, JSON.stringify(loaded));
+
   if (!loaded.ok) {
     return;
   }
+
   for (const key of Object.keys(PACKAGED_DEFAULTS)) {
     const entry: SettingsEntry | undefined = loaded.resolved[key];
     assert.notEqual(entry, undefined, `${key} did not resolve at all`);
@@ -62,22 +65,28 @@ test("the CLI declares no second packaged default set", () => {
   // A canary against a regression, not a style rule: the moment `surface/cli`
   // grows its own defaults, the two engines can disagree again.
   const offenders: string[] = [];
+
   for (const name of ["config-load.ts", "commands.ts", "run-settings.ts", "doctor.ts"]) {
     const text = readFileSync(path.join(CLI_DIR, name), "utf8");
     if (/PACKAGED_DEFAULTS|DEFAULT_CONFIG|DEFAULT_VALUES/.test(text)) {
       offenders.push(name);
     }
   }
+
   assert.deepEqual(offenders, []);
 });
 
 test("a load with no files still reports every non-cli layer it looked at", () => {
   const loaded = loadConfig(bareIo, {});
+
   assert.equal(loaded.ok, true);
+
   if (!loaded.ok) {
     return;
   }
+
   const byLayer = new Map(loaded.sources.map((source) => [source.layer, source.status]));
+
   assert.equal(byLayer.get("packaged_default"), "packaged");
   assert.equal(byLayer.get("user"), "missing");
   assert.equal(byLayer.get("project"), "missing");

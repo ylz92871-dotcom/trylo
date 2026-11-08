@@ -4,8 +4,10 @@ import type { TuiIo } from "./io.js";
 /** Line-reader compatibility for scripted surfaces; real TUI uses raw keys. */
 export async function choose(io: TuiIo, request: ChoiceRequest): Promise<string | undefined> {
   if (io.choose !== undefined) return io.choose(request);
+
   io.write(`${request.title}\n`);
   request.items.forEach((item, index) => io.write(`  ${index + 1}. ${item.label}${item.detail === undefined ? "" : ` · ${item.detail}`}\n`));
+
   for (;;) {
     const answer = await io.readLine("输入编号或 ID（/cancel 返回）： ");
     if (answer === undefined || answer.trim() === "/cancel") return undefined;

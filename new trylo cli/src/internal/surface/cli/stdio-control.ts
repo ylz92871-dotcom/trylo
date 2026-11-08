@@ -2,9 +2,12 @@ import { decision, type PermissionAction, type PermissionDecision } from "../../
 import type { CliContext } from "./context.js";
 import { parseBootstrapContext, type BootstrapContext } from "./bootstrap-context.js";
 import { isLegacyBootstrapText } from "./user-input-source.js";
+import { parseGoalCommand, type GoalCommand } from "./goal-session.js";
 
 type RecordValue = Record<string, unknown>;
+
 type StdioControlIo = Pick<CliContext, "now" | "newId" | "stdout" | "readLine">;
+
 const APPROVAL_TTL_MS = 10 * 60 * 1000;
 
 function record(value: unknown): value is RecordValue {
@@ -33,22 +36,31 @@ export function stdioPrompt(line: string | undefined): string | undefined {
   return stdioUserPrompt(line)?.text;
 }
 
-export function stdioUserPrompt(line: string | undefined): { readonly text: string; readonly bootstrapContext?: BootstrapContext; readonly userSourceAvailable?: false } | undefined {
+export function stdioUserPrompt(line: string | undefined): { readonly text: string; readonly bootstrapContext?: BootstrapContext; readonly userSourceAvailable?: false; readonly goal?: GoalCommand } | undefined {
   if (line === undefined) return undefined;
+
   const frame = parse(line);
   if (!record(frame) || frame.type !== "user" || !record(frame.message) || frame.message.role !== "user") return undefined;
+
   const content = frame.message.content;
+  const goal = frame.goal === undefined ? {} : { goal: parseGoalCommand(frame.goal) };
   const bootstrapContext = "bootstrap_context" in frame ? parseBootstrapContext(frame.bootstrap_context) : undefined;
-  if (typeof content === "string") return content.trim() ? { text: content.trim(), ...(bootstrapContext === undefined ? {} : { bootstrapContext }),
+
+  if (typeof content === "string") return content.trim() ? { ...goal, text: content.trim(), ...(bootstrapContext === undefined ? {} : { bootstrapContext }),
     ...(isLegacyBootstrapText(content.trim()) ? { userSourceAvailable: false as const } : {}) } : undefined;
+
   if (!Array.isArray(content) || content.length === 0) return undefined;
+
   const parts: string[] = [];
+
   for (const block of content) {
     if (!record(block) || block.type !== "text" || typeof block.text !== "string") return undefined;
     parts.push(block.text);
   }
+
   const text = parts.join("\n").trim();
-  return text ? { text, ...(bootstrapContext === undefined ? {} : { bootstrapContext }),
+
+  return text ? { ...goal, text, ...(bootstrapContext === undefined ? {} : { bootstrapContext }),
     ...(isLegacyBootstrapText(text) ? { userSourceAvailable: false as const } : {}) } : undefined;
 }
 
@@ -56,7 +68,11 @@ export function stdioAnswer(line: string, requestId: string): PermissionDecision
   const reply = stdioResponse(line);
   if (reply?.requestId !== requestId) return undefined;
   if (reply.response.behavior === "allow") return decision("approved");
-  if (reply.response.behavior === "deny") return decision("denied", "once", reply.response.reason === "policy_denied" ? "policy_denied" : "user_denied");
+  if (reply.response.behavior === "deny") return {
+    ...decision("denied", "once", reply.response.reason === "invalid_arguments" ? "invalid_arguments"
+      : reply.response.reason === "policy_denied" ? "policy_denied" : "user_denied"),
+    ...(typeof reply.response.message === "string" ? { message: reply.response.message } : {}),
+  };
   return undefined;
 }
 
@@ -76,9 +92,16 @@ export function createStdioApproval(ctx: StdioControlIo, options: StdioApprovalO
   const sharedInput = { ...ctx, readLine: (): Promise<string | undefined> => {
     // A deadline cannot cancel the underlying input transport. Keep its one
     // outstanding read for the next request rather than starting a competing reader.
-    pendingLine ??= ctx.readLine().then(line => { pendingLine = undefined; return line; }, error => { pendingLine = undefined; throw error; });
+    pendingLine ??= ctx.readLine().then(line => {
+      pendingLine = undefined;
+      return line;
+    }, error => {
+      pendingLine = undefined;
+      throw error;
+    });
     return pendingLine;
   } };
+
   return action => {
     const result = tail.then(() => ask(sharedInput, action, options.scheduleExpiry ?? scheduleExpiry));
     // Release the queue on failure; the failed permission still propagates to the caller.
@@ -90,6 +113,7 @@ export function createStdioApproval(ctx: StdioControlIo, options: StdioApprovalO
 async function ask(ctx: StdioControlIo, action: PermissionAction, schedule: NonNullable<StdioApprovalOptions["scheduleExpiry"]>): Promise<PermissionDecision> {
   const requestId = ctx.newId("approval");
   const expiresAt = ctx.now() + APPROVAL_TTL_MS;
+
   ctx.stdout(`${JSON.stringify({ type: "control_request", request_id: requestId, expires_at: expiresAt, request: {
     subtype: "can_use_tool", tool_name: action.name, tool_use_id: action.toolCallId, input: action.arguments,
   } })}\n`);
@@ -97,6 +121,7 @@ async function ask(ctx: StdioControlIo, action: PermissionAction, schedule: NonN
   const deadline = new Promise<{ readonly kind: "expired" }>(resolve => {
     cancelExpiry = schedule(APPROVAL_TTL_MS, () => resolve({ kind: "expired" }));
   });
+
   try {
     // Stale or malformed replies cannot approve a different call. Bound their count.
     for (let rejected = 0; rejected < 32; rejected += 1) {
@@ -105,16 +130,21 @@ async function ask(ctx: StdioControlIo, action: PermissionAction, schedule: NonN
         ctx.stdout(`${JSON.stringify({ type: "control_cancel_request", request_id: requestId })}\n`);
         return decision("expired");
       }
+
       const line = read.line;
       if (line === undefined) {
         ctx.stdout(`${JSON.stringify({ type: "control_cancel_request", request_id: requestId })}\n`);
         return decision("cancelled", "once", "input_closed");
       }
+
       const answer = stdioAnswer(line, requestId);
       if (answer !== undefined) return answer;
+
       ctx.stdout(`${JSON.stringify({ type: "warning", code: "invalid_control_response", message: "Approval reply did not match the pending request; the call has not run." })}\n`);
     }
+
     ctx.stdout(`${JSON.stringify({ type: "control_cancel_request", request_id: requestId })}\n`);
+
     return decision("denied", "once", "policy_denied");
   } finally { cancelExpiry(); }
 }

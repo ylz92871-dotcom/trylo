@@ -41,6 +41,7 @@ export function readAddFlags(
 ): ParsedCommand | undefined {
   const limit = separator < 0 ? argv.length : separator;
   let index = 1;
+
   while (index < limit) {
     const token = argv[index];
     const flag = token === undefined ? undefined : flagToken(token);
@@ -55,9 +56,11 @@ export function readAddFlags(
       }
       return usageError(`mcp add does not accept ${token ?? ""}`, ADD_HINT);
     }
+
     if (flag.name === "inherit-env") {
       return usageError(REFUSED_FLAGS["inherit-env"] ?? "", ADD_HINT);
     }
+
     if (flag.name === "disable") {
       if (flag.inlineValue !== undefined) {
         return usageError("--disable takes no value", ADD_HINT);
@@ -66,16 +69,20 @@ export function readAddFlags(
       index += 1;
       continue;
     }
+
     const read = readValue(argv, index, flag.inlineValue);
     if (read.error !== undefined || read.value === undefined) {
       return usageError(`--${flag.name} needs a value`, ADD_HINT);
     }
+
     const applied = applyAddFlag(flags, flag.name, read.value);
     if (applied !== undefined) {
       return applied;
     }
+
     index = read.next;
   }
+
   return undefined;
 }
 
@@ -88,18 +95,23 @@ function applyAddFlag(flags: AddFlags, name: string, value: string): ParsedComma
     flags.scope = value;
     return undefined;
   }
+
   if (name === "env") {
     return applyEnvFlag(flags, value);
   }
+
   if (name === "url") {
     return applyUrlFlag(flags, value);
   }
+
   if (name === "transport") {
     return applyTransportFlag(flags, value);
   }
+
   if (name === "header" || name === "headers") {
     return applyHeaderFlag(flags, value);
   }
+
   return usageError(`mcp add does not accept --${name}`, ADD_HINT);
 }
 
@@ -115,15 +127,19 @@ function applyEnvFlag(flags: AddFlags, value: string): ParsedCommand | undefined
 /** URL syntax is checked here so a typo dies at parse time, not on dial. */
 function applyUrlFlag(flags: AddFlags, value: string): ParsedCommand | undefined {
   let parsed: URL;
+
   try {
     parsed = new URL(value);
   } catch {
     return usageError(`--url is not a valid URL: ${value}`, ADD_HINT);
   }
+
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
     return usageError(`--url must be http or https; got ${parsed.protocol}`, ADD_HINT);
   }
+
   flags.url = value;
+
   return undefined;
 }
 
@@ -134,7 +150,9 @@ function applyTransportFlag(flags: AddFlags, value: string): ParsedCommand | und
       ADD_HINT,
     );
   }
+
   flags.transport = value;
+
   return undefined;
 }
 
@@ -144,10 +162,13 @@ function applyHeaderFlag(flags: AddFlags, value: string): ParsedCommand | undefi
   if (colonAt <= 0) {
     return usageError('--header requires "Name: Value"', ADD_HINT);
   }
+
   const headerName = value.slice(0, colonAt).trim();
   if (headerName.length === 0) {
     return usageError('--header requires "Name: Value" with a non-empty name', ADD_HINT);
   }
+
   flags.headers[headerName] = value.slice(colonAt + 1).trim();
+
   return undefined;
 }

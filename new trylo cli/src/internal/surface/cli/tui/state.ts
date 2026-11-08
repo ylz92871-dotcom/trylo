@@ -1,5 +1,7 @@
 import type { CliStreamEvent } from "../../../protocol/cli-stream.js";
+
 export { MAX_TOOL_OUTPUT_LINES } from "../tool-output.js";
+
 import { DEFAULT_WIDTH } from "./frame.js";
 import { quotedOutput } from "./diff-view.js";
 import { markdownLines } from "./markdown.js";
@@ -230,6 +232,7 @@ export function reduceTuiEvent(
       };
       const closed = withoutInFlight(appendLines(state, toolResultLines(event)), event.toolCallId);
       const panelled = appendLines(closed, panelLinesFor(entry, call));
+
       return {
         ...panelled,
         toolResults: [...state.toolResults, entry],
@@ -308,6 +311,7 @@ function failureLines(message: string | undefined): ReadonlyArray<TuiLine> {
   if (message === undefined) {
     return [];
   }
+
   const rows = message
     .replaceAll("\r\n", "\n")
     .split("\n")
@@ -315,6 +319,7 @@ function failureLines(message: string | undefined): ReadonlyArray<TuiLine> {
     .filter((row) => row.trim().length > 0);
   const shown = rows.slice(0, MAX_FAILURE_LINES);
   const hidden = rows.length - shown.length;
+
   return [
     ...shown.map((row) => lineOf("warning", `   ! ${row}`)),
     ...(hidden > 0 ? [lineOf("warning", `   ! … ${hidden} more lines (/details for all)`)] : []),
@@ -340,8 +345,10 @@ function foldReasoning(state: TuiState): TuiState {
   if (open === undefined || open.rows <= MAX_REASONING_LINES) {
     return { ...state, reasoning: undefined };
   }
+
   const kept = state.lines.slice(open.from, open.from + KEPT_REASONING_LINES);
   const hidden = open.rows - KEPT_REASONING_LINES;
+
   return {
     ...state,
     lines: [
@@ -369,8 +376,10 @@ function withInFlight(state: TuiState, id: string, fact: ToolCallFact): TuiState
 
 function withoutInFlight(state: TuiState, id: string): TuiState {
   const tools = new Map(state.toolsInFlight);
+
   tools.delete(id);
   const names = [...tools.values()].map((tool) => tool.name);
+
   return {
     ...state,
     toolsInFlight: tools,

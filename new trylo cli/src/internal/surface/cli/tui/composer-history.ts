@@ -63,12 +63,14 @@ export function createComposerHistory(ops: HistoryOps): ComposerHistory {
     if (query.length === 0) {
       return history[from] ?? history[history.length - 1];
     }
+
     for (let index = Math.min(from, history.length - 1); index >= 0; index -= 1) {
       const candidate = history[index] ?? "";
       if (candidate.includes(query)) {
         return candidate;
       }
     }
+
     return undefined;
   };
 
@@ -84,6 +86,7 @@ export function createComposerHistory(ops: HistoryOps): ComposerHistory {
     if (history.length === 0) {
       return;
     }
+
     if (historyIndex === undefined) {
       draftBeforeHistory = ops.bufferText();
       historyIndex = history.length - 1;
@@ -92,6 +95,7 @@ export function createComposerHistory(ops: HistoryOps): ComposerHistory {
     } else {
       return;
     }
+
     ops.setBuffer(history[historyIndex] ?? "");
     ops.draw();
   };
@@ -100,7 +104,9 @@ export function createComposerHistory(ops: HistoryOps): ComposerHistory {
     if (historyIndex === undefined) {
       return;
     }
+
     historyIndex += 1;
+
     if (historyIndex >= history.length) {
       historyIndex = undefined;
       ops.setBuffer(draftBeforeHistory ?? "");
@@ -108,6 +114,7 @@ export function createComposerHistory(ops: HistoryOps): ComposerHistory {
     } else {
       ops.setBuffer(history[historyIndex] ?? "");
     }
+
     ops.draw();
   };
 
@@ -120,6 +127,7 @@ export function createComposerHistory(ops: HistoryOps): ComposerHistory {
     if (current === undefined) {
       return false;
     }
+
     switch (event.kind) {
       case "char":
         search = { query: current.query + event.text, index: current.index };
@@ -140,12 +148,16 @@ export function createComposerHistory(ops: HistoryOps): ComposerHistory {
         return false;
       case "enter": {
         const accepted = footer();
+
         endSearch();
+
         if (accepted !== undefined) {
           ops.setBuffer(accepted);
           ops.submit();
         }
+
         ops.draw();
+
         return true;
       }
       case "escape":

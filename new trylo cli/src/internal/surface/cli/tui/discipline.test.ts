@@ -28,19 +28,24 @@ test("the TUI directory was actually scanned", async () => {
 
 test("no second loop, no direct provider or permission, no process access", async () => {
   const offenders: string[] = [];
+
   for (const file of await productionSources()) {
     const code = stripComments(await readFile(file, "utf8"));
     const rel = path.relative(process.cwd(), file).replaceAll("\\", "/");
+
     if (/from "[^"]*(\/loop\/|\/adapters\/|ports\/permission)/.test(code)) {
       offenders.push(`${rel}: imports outside the sanctioned run host`);
     }
+
     if (/\b(wirePorts|executeTurn|runTurn|createProjection|projectRun|setRawMode)\b/.test(code)) {
       offenders.push(`${rel}: builds its own loop or projection`);
     }
+
     if (/\bprocess\b/.test(code)) {
       offenders.push(`${rel}: reaches for process`);
     }
   }
+
   assert.deepEqual(offenders, []);
 });
 
@@ -52,18 +57,20 @@ test("the non-TTY path is the line REPL itself, not a copy of it", async () => {
   // a reimplementation would not be identical by construction.
   assert.match(
     stripComments(entry),
-    /return handleRepl\(ctx, sink(?:, \w+)?\);/,
+    /return handleRepl\(ctx, sink(?:, \w+){0,2}\);/,
     "the non-TTY fallback must delegate to the real handleRepl so behavior is identical by construction",
   );
 });
 
 async function productionSources(): Promise<Array<string>> {
   const found: Array<string> = [];
+
   for (const entry of await readdir(tuiDir, { withFileTypes: true })) {
     if (entry.isFile() && entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
       found.push(path.join(tuiDir, entry.name));
     }
   }
+
   return found.sort();
 }
 

@@ -12,12 +12,16 @@ import type { ExecPolicyGuard } from "../../loop/tool-admission.js";
 
 test("the real loop consumes a configured command policy before an approved shell can spawn", async t => {
   const root = mkdtempSync(join(tmpdir(), "trylo-policy-runtime-"));
+
   t.after(() => rmSync(root, { recursive: true, force: true }));
   writeFileSync(join(root, "marker.cjs"), "require('node:fs').writeFileSync('must-not-exist.txt','started')");
   let starts = 0;
   const spawn = createNodeSpawner();
   const sandbox = createWorkspaceSandbox({ workspaceRoot: root });
-  const tools = createWorkspaceTools({ workspaceRoot: root, sandbox, spawner: spec => { starts += 1; return spawn(spec); } });
+  const tools = createWorkspaceTools({ workspaceRoot: root, sandbox, spawner: spec => {
+    starts += 1;
+    return spawn(spec);
+  } });
   const ports: LoopPorts & { readonly execPolicy: ExecPolicyGuard } = {
     provider: createFakeProvider([
       [{ type: "tool_call", toolCallId: "shell", name: "run_shell", arguments: { command: "node marker.cjs" } },
@@ -26,6 +30,7 @@ test("the real loop consumes a configured command policy before an approved shel
     ]), tools, sandbox, profile: emptyProfileLoader(), permission: createFakePermission("approved"),
     execPolicy: () => ({ kind: "denied", code: "exec_policy_forbidden", message: "this command is forbidden" }),
   };
+
   await runTurn(ports, { sessionId: "policy-audit", turnId: "turn", correlationId: "cor", text: "audit" });
   assert.deepEqual({ starts, markerExists: existsSync(join(root, "must-not-exist.txt")) }, { starts: 0, markerExists: false });
 });

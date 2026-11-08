@@ -18,8 +18,8 @@ import type { CliSink } from "./render.js";
  * The claim being tested is narrow and checkable: a surface that runs several
  * turns builds the provider **once**. It is tested at two levels because each
  * alone would be too weak — `wirePorts` shows the same object is handed back,
- * and `runOneTurn` shows a real turn sequence reaches that path instead of
- * building per turn.
+ * and `runOneTurn` shows a real turn sequence reuses its main and separately
+ * metered learning transports instead of rebuilding either policy per turn.
  *
  * The failure half matters just as much. A provider that failed is dropped, so
  * the next turn rebuilds rather than being handed a session that just broke.
@@ -34,6 +34,7 @@ function fixture(): Fixture {
   const root = mkdtempSync(join(tmpdir(), "trylo-warm-"));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
+
   mkdirSync(workspace, { recursive: true });
   mkdirSync(home, { recursive: true });
   writeFileSync(
@@ -49,6 +50,7 @@ function fixture(): Fixture {
     cwd: workspace,
     nodeVersion: "v22.0.0",
     stdinIsTty: false,
+
     readFile: (path) => {
       try {
         return readFileSync(path, "utf8");
@@ -56,6 +58,7 @@ function fixture(): Fixture {
         return undefined;
       }
     },
+
     isDirectory: () => true,
     readDir: () => [],
     writeFile: () => true,
@@ -67,6 +70,7 @@ function fixture(): Fixture {
     now: () => 0,
     newId: (prefix) => `${prefix}-1`,
   };
+
   return { ctx, root, out, err };
 }
 
@@ -112,27 +116,33 @@ test("two wirings in a row share one provider, and the numbers say so", () => {
   const input = wiringInput(fx.root, warm);
   const first = wirePorts(input);
   const second = wirePorts(input);
+
   assert.equal("ports" in first, true);
   assert.equal("ports" in second, true);
+
   if (!("ports" in first) || !("ports" in second)) {
     return;
   }
+
   assert.equal(first.ports.provider === second.ports.provider, true);
   assert.deepEqual(warm.stats(), { builds: 1, hits: 1, rebuilds: 0, evictions: 0 });
 });
 
-test("a run of three turns builds the provider once", async () => {
+test("three turns reuse one main transport and one funded-learning transport", async () => {
   const fx = fixture();
   const warm = createWarmRegistry({ now: () => 0 });
   const scaffold = scaffoldOf(fx.root, warm);
   const sink = sinkOf(fx.out, fx.err);
+
   for (let turn = 0; turn < 3; turn += 1) {
     const outcome = await runOneTurn(fx.ctx, scaffold, `turn ${turn}`, sink, "non_interactive", {});
     assert.equal("exitCode" in outcome && "hint" in outcome, false, "the turn must run, not fail");
   }
+
   const stats = warm.stats();
-  assert.equal(stats.builds, 1, "three turns, one provider constructed");
-  assert.equal(stats.hits, 2, "the second and third turns were served warm");
+
+  assert.equal(stats.builds, 2, "default PA wiring keeps one transport for each request policy");
+  assert.equal(stats.hits, 4, "the second and third turns reuse both policy entries");
   assert.equal(stats.rebuilds, 0);
 });
 
@@ -149,13 +159,15 @@ test("a provider that failed is not handed to the next turn", async () => {
   });
   const sink = sinkOf(fx.out, fx.err);
   const outcome = await runOneTurn(fx.ctx, broken, "hello", sink, "non_interactive", {});
+
   assert.equal("exitCode" in outcome ? outcome.exitCode : -1, EXIT_CODES.TEMPORARY);
   assert.equal(warm.size(), 0, "the failed session was dropped, not kept warm");
-  assert.equal(warm.stats().evictions, 1);
-  // And the next turn rebuilds rather than reusing what was dropped.
+  assert.equal(warm.stats().evictions, 2, "both transports for the failed selection are evicted");
+  // The next turn rebuilds both policies rather than reusing either failed entry.
   const again = await runOneTurn(fx.ctx, broken, "hello again", sink, "non_interactive", {});
+
   assert.equal("exitCode" in again ? again.exitCode : -1, EXIT_CODES.TEMPORARY);
-  assert.equal(warm.stats().builds, 2);
+  assert.equal(warm.stats().builds, 4);
 });
 
 test("the line REPL still runs several turns end to end", async () => {
@@ -167,9 +179,11 @@ test("the line REPL still runs several turns end to end", async () => {
     readLine: async () => lines[index++],
   };
   const code = await handleRepl(ctx, sinkOf(fx.out, fx.err), undefined);
+
   assert.equal(code, EXIT_CODES.OK);
   // Two prompts, two answers, one shell — the fixture answers by naming the
   // workspace's package, so counting those answers is counting the turns.
   const answers = fx.out.join("").split("The package name is").length - 1;
+
   assert.equal(answers, 2);
 });

@@ -119,6 +119,7 @@ export function createCliCredentialPortWithReport(
   if (!prefersKeyring(ctx.env)) {
     return createCliCredentialPort(ctx);
   }
+
   const selected = createCredentialPortPreferringKeyring({
     homeDir: tryloHome(ctx.homeDir, ctx.env),
     projectDir: ctx.cwd,
@@ -129,6 +130,7 @@ export function createCliCredentialPortWithReport(
   if (selected.report.backend === "file") {
     emit({ code: "keyring_unavailable_fallback", message: selected.report.reason });
   }
+
   return selected.port;
 }
 

@@ -19,9 +19,16 @@ test("an older Person answer cannot admit a Worker while newer queued input is u
   const provider: ProviderPort = { async *stream(request) {
     if (request.model === "person") {
       personRounds += 1;
-      if (personRounds === 1) { announceFirst(); await firstRelease; }
-      else { announceSecond(); await secondRelease; }
+      if (personRounds === 1) {
+        announceFirst();
+        await firstRelease;
+      }
+      else {
+        announceSecond();
+        await secondRelease;
+      }
     }
+
     yield { type: "text_start", blockId: "answer" };
     yield { type: "text_delta", blockId: "answer", text: "clear" };
     yield { type: "text_end", blockId: "answer" };
@@ -39,20 +46,31 @@ test("an older Person answer cannot admit a Worker while newer queued input is u
     }, team: { runId: "team-queued", inspectRepresentation: () => ({ ready: true }),
       members: ["person", "worker"].map(name => ({ memberId: `m-${name}`, baseRole: name, displayName: name,
         role: { name, model: name, description: name } })) } });
-  t.after(async () => { releaseFirst(); releaseSecond(); await built.runtime.cancelAll(); });
+
+  t.after(async () => {
+    releaseFirst();
+    releaseSecond();
+    await built.runtime.cancelAll();
+  });
   let sequence = 0;
+
   function call(name: string, args: JsonObject): Promise<ToolOutcome> {
     return built.tools.execute({ name, arguments: args, toolCallId: `parent-${++sequence}` }, new AbortController().signal);
   }
+
   const person = await call("spawn_agent", { agent_type: "person", member_id: "m-person", message: "original constraints" });
+
   assert.equal(person.outcome, "result");
+
   if (person.outcome !== "result") return;
+
   await firstStarted;
   assert.equal((await call("send_input", { target: person.value["task_id"] ?? "", message: "new constraints" })).outcome, "result");
   releaseFirst();
   await secondStarted;
   assert.ok(attempt);
   const refused = await attempt;
+
   assert.equal(refused.outcome === "error" ? refused.code : "", "team_representation_pending");
 });
 
@@ -78,27 +96,41 @@ for (const operation of ["person-restart", "worker-stop"] as const) {
           const name = id === "person" ? "person" : "worker";
           return { memberId: id, baseRole: name, displayName: id, role: { name, model: name, description: name } };
         }) } });
+
     t.after(async () => { await built.runtime.cancelAll(); });
     let sequence = 0;
+
     function call(name: string, args: JsonObject): Promise<ToolOutcome> {
       return built.tools.execute({ name, arguments: args, toolCallId: `parent-${++sequence}` }, new AbortController().signal);
     }
+
     const person = await call("spawn_agent", { agent_type: "person", member_id: "person", message: "original constraints" });
+
     assert.equal(person.outcome, "result");
+
     if (person.outcome !== "result") return;
+
     const personId = String(person.value["agent_id"]);
+
     cancelledId = personId;
     await call("wait_agent", { targets: [personId], timeout_ms: 1000 });
     const first = await call("spawn_agent", { agent_type: "worker", member_id: "worker-a", message: "original implementation" });
+
     assert.equal(first.outcome, "result");
+
     if (first.outcome !== "result") return;
+
     await call("wait_agent", { targets: [first.value["task_id"] ?? ""], timeout_ms: 1000 });
+
     if (operation === "worker-stop") cancelledId = String(first.value["agent_id"]);
+
     const closed = operation === "worker-stop" ? await call("close_agent", { target: cancelledId, force: true })
       : await call("send_input", { target: personId, message: "new constraints", mode: "restart" });
+
     assert.equal(closed.outcome, "result");
     assert.ok(attempt, "observe cancellation before cleanup settlement");
     const refused = await attempt;
+
     assert.equal(refused.outcome === "error" ? refused.code : "", operation === "worker-stop" ? "agent_cleanup_pending" : "team_representation_pending");
   });
 }

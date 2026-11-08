@@ -23,6 +23,7 @@ function ctxFor(dir: string): CliContext {
     nodeVersion: "v20.0.0",
     platform: "linux",
     stdinIsTty: false,
+
     readFile: (path) => {
       try {
         return readFileSync(path, "utf8");
@@ -30,7 +31,9 @@ function ctxFor(dir: string): CliContext {
         return undefined;
       }
     },
+
     isDirectory: () => true,
+
     readDir: (absolutePath: string) => {
       try {
         return readdirSync(absolutePath).map((name) => ({ name, bytes: 0, modifiedAtMs: 0 }));
@@ -38,6 +41,7 @@ function ctxFor(dir: string): CliContext {
         return [];
       }
     },
+
     writeFile: () => true,
     readStdin: async () => "",
     readLine: async () => undefined,
@@ -66,10 +70,13 @@ test("a known style resolves to its prompt; unknown and malformed refuse", () =>
     mkdirSync(join(dir, ".trylo", "output-styles"), { recursive: true });
     writeFileSync(join(dir, ".trylo", "output-styles", "terse.md"), "Answer briefly.\n");
     const ctx = ctxFor(dir);
+
     assert.deepEqual(resolveOutputStyleAppend(ctx, dir, "terse"), { append: "Answer briefly." });
     const missing = resolveOutputStyleAppend(ctx, dir, "nosuch");
+
     assert.equal("exitCode" in missing && missing.exitCode, EXIT_CODES.CONFIG);
     const malformed = resolveOutputStyleAppend(ctx, dir, "../escape");
+
     assert.equal("exitCode" in malformed && malformed.exitCode, EXIT_CODES.USAGE);
   } finally {
     rmSync(dir, { recursive: true, force: true });

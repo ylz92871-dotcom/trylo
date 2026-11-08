@@ -34,18 +34,24 @@ export function locateUserMessage(
   if (!Number.isInteger(n) || n < 1) {
     return { ok: false, code: "message_not_found", detail: `message index must be a positive integer, got ${String(n)}` };
   }
+
   let seen = 0;
+
   for (const record of records) {
     if (record.type !== "transcript_item") {
       continue;
     }
+
     if (!isTranscriptItem(record.payload)) {
       return { ok: false, code: "parent_unreadable", detail: `transcript payload at sequence ${record.sequence} is not a transcript item` };
     }
+
     if (record.payload.kind !== "user") {
       continue;
     }
+
     seen += 1;
+
     if (seen === n) {
       return {
         ok: true,
@@ -55,6 +61,7 @@ export function locateUserMessage(
       };
     }
   }
+
   return {
     ok: false,
     code: "message_not_found",

@@ -61,6 +61,7 @@ test("a usage without a duration leaves the duration out instead of saying zero"
 test("both commands align their labels", () => {
   const status = statusLines(FACTS, 1);
   const usage = usageLines({ inputTokens: 10, outputTokens: 20, totalTokens: 30 }, 1000);
+
   for (const group of [status, usage]) {
     // Where the value column starts: the label plus the padding after it.
     const at = group.map((line) => (line.match(/^\S+\s+/) ?? [""])[0]?.length ?? 0);
@@ -70,6 +71,7 @@ test("both commands align their labels", () => {
 
 test("switching model opens a *new* session, because a journal keeps its model", () => {
   const options = modelSwitchOptions("repl-new", "gpt-4o-mini");
+
   assert.equal(options.model, "gpt-4o-mini");
   assert.equal(options.session, "repl-new");
   // Not `resume`: resuming the current journal under a different model is
@@ -85,6 +87,7 @@ test("a model switch carries the learning switch through", () => {
 
 test("switching model opens a *new* session, because a journal keeps its model", () => {
   const options = modelSwitchOptions("repl-new", "gpt-4o-mini");
+
   assert.equal(options.model, "gpt-4o-mini");
   assert.equal(options.session, "repl-new");
   // Not `resume`: resuming the current journal under a different model is

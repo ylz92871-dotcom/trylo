@@ -37,11 +37,13 @@ async function handlePsOne(
   if (!resolved.ok) {
     return refuseUnknownJob(ctx, resolved.reason);
   }
+
   ctx.stdout(
     json
       ? `${JSON.stringify(resolved.record)}\n`
       : `${renderJobRow(resolved.record, ctx.now(), resolved.unverified)}\n`,
   );
+
   return EXIT_CODES.OK;
 }
 
@@ -67,6 +69,7 @@ async function collectPsRows(deps: BackgroundDeps): Promise<{ readonly rows: PsR
   );
   const rows: PsRow[] = [];
   const broken: string[] = [];
+
   for (const entry of entries) {
     if (entry.ok) {
       rows.push({ record: entry.record, unverified: entry.unverified });
@@ -74,6 +77,7 @@ async function collectPsRows(deps: BackgroundDeps): Promise<{ readonly rows: PsR
       broken.push(entry.reason);
     }
   }
+
   return { rows, broken };
 }
 
@@ -84,12 +88,15 @@ function emitPsList(ctx: CliContext, rows: PsRow[], broken: string[]): ExitCode 
     // is how a person concludes nothing is running.
     ctx.stderr(`${reason}\n`);
   }
+
   if (rows.length === 0 && broken.length === 0) {
     ctx.stdout("no background jobs on this machine\n");
     return EXIT_CODES.OK;
   }
+
   if (rows.length > 0) {
     ctx.stdout(`${rows.map((row) => renderJobRow(row.record, ctx.now(), row.unverified)).join("\n")}\n`);
   }
+
   return EXIT_CODES.OK;
 }

@@ -16,17 +16,20 @@ test("a run can explicitly request reasoning effort without changing its model",
 test("chat wire sends the requested effort and leaves the default body unchanged", async () => {
   const bodies: Record<string, unknown>[] = [];
   const config = { model: "model", endpoint: "https://example.test/chat/completions", apiKey: "fixture-key",
+
     fetchImpl: async (_url: string | URL | Request, init?: RequestInit) => {
       bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
       return new Response('data: {"choices":[{"index":0,"delta":{"content":"READY"},"finish_reason":"stop"}]}\n\n',
         { headers: { "Content-Type": "text/event-stream" } });
     } };
   const highConfig = { ...config, reasoningEffort: "high" as const };
+
   for (const provider of [createOpenAiCompatibleProvider(config), createOpenAiCompatibleProvider(highConfig)]) {
     for await (const event of provider.stream({ attemptId: "a", model: "model", messages: [{ role: "user", content: "hello" }], tools: [] }, new AbortController().signal)) {
       assert.notEqual(event.type, "error");
     }
   }
+
   assert.equal(Object.hasOwn(bodies[0]!, "reasoning_effort"), false);
   assert.equal(bodies[1]?.reasoning_effort, "high");
 });
@@ -45,6 +48,7 @@ test("warm adapters do not reuse a different reasoning effort", () => {
   const high = buildProvider(input);
   const noneInput = { ...input, reasoningEffort: "none" as const };
   const none = buildProvider(noneInput);
+
   assert.notEqual(high, none);
   assert.equal(warm.stats().builds, 2);
 });

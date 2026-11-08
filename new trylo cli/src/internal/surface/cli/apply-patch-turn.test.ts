@@ -50,6 +50,7 @@ function portsFor(root: string, storageRoot: string, decisions: ReadonlyArray<Pe
       return queue.shift() ?? { resolution: "denied", scope: "once" };
     },
   };
+
   return {
     provider: createFakeProvider([]),
     tools,
@@ -84,6 +85,7 @@ function finalStage(text: string): ReadonlyArray<ProviderEvent> {
 test("an approved multi-file patch lands with one journal fact per file", async () => {
   const root = tempRoot();
   const storage = join(tempRoot(), "checkpoints");
+
   try {
     writeFileSync(join(root, "keep.ts"), "old\n");
     const patch = [
@@ -97,6 +99,7 @@ test("an approved multi-file patch lands with one journal fact per file", async 
       "*** Delete File: gone-missing.txt",
       "*** End Patch",
     ].join("\n");
+
     // The delete target must exist: deleting a missing file is a partial failure.
     writeFileSync(join(root, "gone-missing.txt"), "bye\n");
     const ports = portsFor(root, storage, [{ resolution: "approved", scope: "once" }]);
@@ -104,11 +107,13 @@ test("an approved multi-file patch lands with one journal fact per file", async 
       { ...ports, provider: createFakeProvider([patchCall("call-1", patch), finalStage("done")]) },
       { sessionId: "s", turnId: "t", correlationId: "c", text: "apply the patch" },
     );
+
     assert.equal(result.state.phase, "terminal");
     assert.equal(result.state.terminalReason, "completed");
     assert.equal(readFileSync(join(root, "new.txt"), "utf8"), "hello\n");
     assert.equal(readFileSync(join(root, "keep.ts"), "utf8"), "new\n");
     const facts = result.envelopes.filter((envelope) => envelope.kind === "file_write");
+
     assert.deepEqual(
       facts.map((fact) => `${fact.payload.mode}:${fact.payload.path}`),
       ["created:new.txt", "patched:keep.ts", "deleted:gone-missing.txt"],
@@ -116,6 +121,7 @@ test("an approved multi-file patch lands with one journal fact per file", async 
     const snapshots = result.envelopes.filter(
       (envelope) => envelope.kind === "observation" && envelope.payload["component"] === "checkpoint",
     );
+
     assert.equal(snapshots.length, 1);
     assert.equal(snapshots[0]?.payload["status"], "ok");
     assert.equal(snapshots[0]?.payload["tool"], "apply_patch");
@@ -127,6 +133,7 @@ test("an approved multi-file patch lands with one journal fact per file", async 
 test("--ask writes approves the patch without asking and lands facts", async () => {
   const root = tempRoot();
   const storage = join(tempRoot(), "checkpoints");
+
   try {
     writeFileSync(join(root, "keep.ts"), "old\n");
     const patch = ["*** Begin Patch", "*** Update File: keep.ts", "@@", "-old", "+new", "*** End Patch"].join("\n");
@@ -142,6 +149,7 @@ test("--ask writes approves the patch without asking and lands facts", async () 
       { ...ports, provider: createFakeProvider([patchCall("call-1", patch), finalStage("done")]) },
       { sessionId: "s", turnId: "t", correlationId: "c", text: "apply the patch" },
     );
+
     assert.equal(result.state.terminalReason, "completed");
     assert.equal(readFileSync(join(root, "keep.ts"), "utf8"), "new\n");
     assert.deepEqual(prompted, []);
@@ -157,6 +165,7 @@ test("--ask writes approves the patch without asking and lands facts", async () 
 test("a denied patch runs nothing and leaves no file", async () => {
   const root = tempRoot();
   const storage = join(tempRoot(), "checkpoints");
+
   try {
     writeFileSync(join(root, "keep.ts"), "old\n");
     const patch = ["*** Begin Patch", "*** Add File: never.txt", "+x", "*** End Patch"].join("\n");
@@ -165,6 +174,7 @@ test("a denied patch runs nothing and leaves no file", async () => {
       { ...ports, provider: createFakeProvider([patchCall("call-1", patch)]) },
       { sessionId: "s", turnId: "t", correlationId: "c", text: "apply the patch" },
     );
+
     assert.equal(readFileSync(join(root, "keep.ts"), "utf8"), "old\n");
     assert.equal(
       result.envelopes.some((envelope) => envelope.kind === "file_write"),

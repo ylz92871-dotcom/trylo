@@ -108,24 +108,31 @@ export function isValidWatchId(value: string): boolean {
  */
 export function parseWatch(argv: ReadonlyArray<string>): WatchParse {
   const [verb, ...rest] = argv;
+
   if (verb === undefined || verb === "--help" || verb === "-h" || verb === "help") {
     return { verb: "help" };
   }
+
   if (verb === "add") {
     return parseAdd(rest);
   }
+
   if (verb === "list" || verb === "ls") {
     return parseList(rest);
   }
+
   if (verb === "cancel") {
     return parseIdVerb(rest, "cancel");
   }
+
   if (verb === "check") {
     return parseIdVerb(rest, "check");
   }
+
   if (verb === "forget") {
     return parseIdVerb(rest, "forget");
   }
+
   return {
     verb: "error",
     message: `unknown subcommand 'watch ${verb}'`,
@@ -138,14 +145,17 @@ function parseAdd(argv: ReadonlyArray<string>): WatchParse {
   if (message === undefined) {
     return { verb: "error", message: "watch add needs --message <text>", hint: "the text to hand the session when it fires" };
   }
+
   const session = valueOf(argv, "session");
   if (session === undefined) {
     return { verb: "error", message: "watch add needs --session <id>", hint: "the session the message goes to" };
   }
+
   const trigger = readTrigger(argv);
   if ("verb" in trigger) {
     return trigger;
   }
+
   return {
     verb: "add",
     options: {
@@ -162,6 +172,7 @@ function parseList(argv: ReadonlyArray<string>): WatchParse {
   let session: string | undefined;
   let json = false;
   let index = 0;
+
   while (index < argv.length) {
     const token = argv[index] ?? "";
     if (token === "--json") {
@@ -169,8 +180,10 @@ function parseList(argv: ReadonlyArray<string>): WatchParse {
       index += 1;
       continue;
     }
+
     if (token === "--session" || token.startsWith("--session=")) {
       const value = valueOf(argv.slice(index), "session");
+
       // valueOf on the suffix finds this occurrence; a bare --session with no
       // value is "not supplied" here and becomes "all sessions" — the store,
       // not the parser, owns the not_a_session refusal for `add`.
@@ -178,11 +191,14 @@ function parseList(argv: ReadonlyArray<string>): WatchParse {
       index += value === undefined ? 1 : (token.includes("=") ? 1 : 2);
       continue;
     }
+
     if (token.startsWith("--")) {
       return { verb: "error", message: `watch list does not accept ${token}`, hint: "try `trylo watch list [--session <id>] [--json]`" };
     }
+
     return { verb: "error", message: `watch list does not accept ${token}`, hint: "try `trylo watch list [--session <id>] [--json]`" };
   }
+
   return { verb: "list", options: { sessionId: session, json } };
 }
 
@@ -193,6 +209,7 @@ function parseIdVerb(argv: ReadonlyArray<string>, verb: "cancel" | "check" | "fo
   if (id === undefined) {
     return { verb: "error", message: `watch ${verb} needs a watch id`, hint: "run `trylo watch list` to see the ids" };
   }
+
   if (!isValidWatchId(id)) {
     return {
       verb: "error",
@@ -200,13 +217,17 @@ function parseIdVerb(argv: ReadonlyArray<string>, verb: "cancel" | "check" | "fo
       hint: "expected w_ followed by hex characters, as printed by `trylo watch list`",
     };
   }
+
   const json = hasFlag(argv, "json");
+
   if (verb === "cancel") {
     return { verb: "cancel", options: { watchId: id, json } };
   }
+
   if (verb === "check") {
     return { verb: "check", options: { watchId: id, json } };
   }
+
   return { verb: "forget", options: { watchId: id, json } };
 }
 
@@ -234,6 +255,7 @@ function readTrigger(argv: ReadonlyArray<string>): { readonly trigger: WatchAddT
       hint: "see `trylo watch`",
     };
   }
+
   if (picked > 1) {
     return {
       verb: "error",
@@ -241,21 +263,26 @@ function readTrigger(argv: ReadonlyArray<string>): { readonly trigger: WatchAddT
       hint: "pick one of --file-exists, --file-contains, --exit-code, --flag, --at, --in",
     };
   }
+
   if (fileExists !== undefined) {
     if (fileExists.trim().length === 0) {
       return { verb: "error", message: "--file-exists needs a path", hint: "pass the workspace-relative file to wait for" };
     }
     return { trigger: { kind: "file_exists", relativePath: fileExists } };
   }
+
   if (fileContains !== undefined) {
     if (fileContains.trim().length === 0) {
       return { verb: "error", message: "--file-contains needs a path", hint: "pass the workspace-relative file to wait on" };
     }
+
     if (needle === undefined || needle.length === 0) {
       return { verb: "error", message: "--file-contains needs --needle <text>", hint: "the string the file must contain" };
     }
+
     return { trigger: { kind: "file_contains", relativePath: fileContains, needle } };
   }
+
   if (exitCode !== undefined) {
     const parsed = Number.parseInt(exitCode, 10);
     if (!/^-?\d+$/.test(exitCode) || !Number.isInteger(parsed) || parsed < 0 || parsed > 255) {
@@ -263,15 +290,18 @@ function readTrigger(argv: ReadonlyArray<string>): { readonly trigger: WatchAddT
     }
     return { trigger: { kind: "command_exit", exitCode: parsed } };
   }
+
   if (flag !== undefined) {
     if (flag.trim().length === 0) {
       return { verb: "error", message: "--flag needs a name", hint: "the flag a session sets when the thing is true" };
     }
     return { trigger: { kind: "flag_set", flag } };
   }
+
   if (at !== undefined) {
     return { trigger: { kind: "deadline_at", atText: at } };
   }
+
   return { trigger: { kind: "deadline_in", inText: within as string } };
 }
 
@@ -294,6 +324,7 @@ function valueOf(argv: ReadonlyArray<string>, name: string): string | undefined 
       const next = argv[index + 1];
       return next !== undefined && !next.startsWith("--") ? next : undefined;
     }
+
     const prefix = `--${name}=`;
     if (token.startsWith(prefix)) {
       const inline = token.slice(prefix.length);
@@ -362,10 +393,12 @@ function parseInMs(text: string): number | undefined {
   if (match === null) {
     return undefined;
   }
+
   const amount = Number(match[1]);
   const unit = match[2] ?? "ms";
   const factor = unit === "ms" ? 1 : unit === "s" ? 1000 : unit === "m" ? 60000 : unit === "h" ? 3600000 : 86400000;
   const total = amount * factor;
+
   return Number.isFinite(total) && total > 0 ? total : undefined;
 }
 

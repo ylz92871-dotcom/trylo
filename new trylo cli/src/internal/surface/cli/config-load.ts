@@ -40,6 +40,7 @@ import { publicSettingsView } from "../../settings/view.js";
  */
 
 export type LayerSource = SettingsSourceRecord;
+
 export type LayerSourceStatus = SettingsSourceStatus;
 
 export type ConfigLoadIo = {
@@ -89,6 +90,7 @@ export function loadConfig(io: ConfigLoadIo, flagValues: SettingsValues): Loaded
   if (!detailed.ok) {
     return { ok: false, failure: detailed };
   }
+
   return { ok: true, resolved: detailed.value, sources: detailed.sources };
 }
 
@@ -106,6 +108,7 @@ export type ConfigValueEntry = {
 export function configValueView(resolved: ResolvedSettings): Readonly<Record<string, ConfigValueEntry>> {
   const view = publicSettingsView(resolved);
   const out: Record<string, ConfigValueEntry> = {};
+
   for (const key of Object.keys(view)) {
     const entry = view[key];
     if (entry === undefined) {
@@ -113,5 +116,6 @@ export function configValueView(resolved: ResolvedSettings): Readonly<Record<str
     }
     out[key] = { value: entry.value, sourceLayer: entry.layer };
   }
+
   return out;
 }

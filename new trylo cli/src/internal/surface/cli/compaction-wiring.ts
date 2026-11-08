@@ -2,12 +2,14 @@ import { createCompactionService } from "../../compaction/service.js";
 import { summarizeTranscript } from "../../compaction/summary.js";
 import {
   CHARS_PER_TOKEN,
+  boundMessagesTextTokens,
+  boundToolSpecsTextTokens,
   estimateMessagesTokens,
   estimateToolSpecsTokens,
 } from "../../compaction/token-estimate.js";
 import type { CompactionWiring } from "../../loop/compact-boundary.js";
 import type { CompactRecordDraft } from "../../ports/compaction.js";
-import type { ProviderMessage } from "../../ports/provider.js";
+import type { ProviderMessage, ProviderToolSpec } from "../../ports/provider.js";
 import type { ToolPort } from "../../ports/tools.js";
 import type { RunTurnResult } from "../../loop/runner.js";
 
@@ -33,21 +35,25 @@ import type { RunTurnResult } from "../../loop/runner.js";
 export { CHARS_PER_TOKEN };
 
 /**
- * A pure token estimate over the exact messages the next request would carry.
+ * A pure estimate of the textual part of the next request.
  *
- * The full request basis (WP09.1/C35): message text, tool-call argument JSON
- * and image attachment payloads all reach the wire and all count. The
+ * Message text and tool-call argument JSON count locally. Image encoding
+ * bytes are transport size, not a model's context-token formula: visual
+ * usage remains unknown until a provider measures it. The
  * mechanical rule lives in `compaction/token-estimate.ts`; this re-export
  * keeps the wiring the one place the loop reads the estimate from.
- * Deliberately not a tokenizer: a real one is a dependency and a table, and
- * the threshold it feeds only needs to be in the same units as
- * `budget.contextTokenLimit`. Counting bytes and dividing keeps that
- * relationship, is reproducible across runs, and can never read a file or a
- * clock to make up a difference.
+ * This legacy display estimate is not a tokenizer. Admission uses the
+ * separate byte-level text bound below, including for new text appended to
+ * a measured server prefix.
  */
 export function estimatePromptTokens(messages: ReadonlyArray<ProviderMessage>): number {
   return estimateMessagesTokens(messages);
 }
+
+/** Admission uses a byte-level text upper bound; display estimates keep their
+ * existing compression heuristic. Neither value includes unknown image or
+ * provider-template tokens. */
+export { boundMessagesTextTokens };
 
 /**
  * The token estimate for the tool table a request carries beside its messages
@@ -56,33 +62,43 @@ export function estimatePromptTokens(messages: ReadonlyArray<ProviderMessage>): 
  * conversation.
  */
 export function estimateToolTableTokens(tools: ToolPort): number {
+  return estimateToolSpecsTokens(toolTableText(tools));
+}
+
+export function boundToolTableTextTokens(tools: ToolPort): number {
+  return boundToolSpecsTextTokens(toolTableText(tools));
+}
+
+function toolTableText(tools: ToolPort): ReadonlyArray<ProviderToolSpec> {
   let bindings;
+
   try {
     bindings = tools.snapshot();
   } catch {
     // An unreadable catalog sends no table either (`toolSpecs` in request.ts
-    // fails closed the same way), so zero overhead is the consistent answer.
-    return 0;
+    // fails closed the same way), so empty material is the consistent answer.
+    return [];
   }
-  return estimateToolSpecsTokens(
-    bindings.map((binding) => ({
-      name: binding.name,
-      description: binding.description,
-      parameters: binding.parameters,
-    })),
-  );
+
+  return bindings.map((binding) => ({
+    name: binding.name,
+    description: binding.description,
+    parameters: binding.parameters,
+  }));
 }
 
 export type CompactionWiringInput = {
+  readonly estimateAccuracy?: CompactionWiring["estimateAccuracy"];
   /**
-   * The token basis. The shipped one is {@link estimatePromptTokens}: a pure
+   * The token basis. The shipped one is {@link boundMessagesTextTokens}: a pure
    * function of the messages the next request would carry. A test may pin a
    * constant to put the run on either side of the threshold.
    */
   readonly estimatePromptTokens?: (messages: ReadonlyArray<ProviderMessage>) => number;
+  readonly estimateTextPromptTokens?: (messages: ReadonlyArray<ProviderMessage>) => number;
   /**
    * The tool table's token cost, on top of the messages. Defaults to the
-   * shipped {@link estimateToolTableTokens} so the gap's threshold covers the
+   * shipped {@link boundToolTableTextTokens} so the gap's threshold covers the
    * whole request; a test may pin a constant.
    */
   readonly estimateOverheadTokens?: (tools: ToolPort) => number;
@@ -108,10 +124,16 @@ export type CompactionWiringInput = {
  * cannot disagree about it.
  */
 export function compactionWiring(input: CompactionWiringInput): CompactionWiring {
+  const estimateText = input.estimateTextPromptTokens ?? (input.estimatePromptTokens === undefined ? boundMessagesTextTokens : undefined);
+  const estimateAccuracy = input.estimateAccuracy ?? (input.estimatePromptTokens === undefined ? "text_upper_bound" : undefined);
+
   return {
     port: createCompactionService(),
-    estimatePromptTokens: input.estimatePromptTokens ?? estimatePromptTokens,
-    estimateOverheadTokens: input.estimateOverheadTokens ?? estimateToolTableTokens,
+    ...(estimateAccuracy === undefined ? {} : { estimateAccuracy }),
+    estimatePromptTokens: input.estimatePromptTokens ?? boundMessagesTextTokens,
+    ...(estimateText === undefined ? {} : { estimateTextPromptTokens: estimateText }),
+    estimateOverheadTokens: input.estimateOverheadTokens ?? boundToolTableTextTokens,
+    estimateRequestOverheadTokens: request => boundToolSpecsTextTokens(request.tools),
     summarize: input.summarize ?? ((items, previousSummary, _signal, requestTranscript) => summarizeTranscript(items, {
       ...(previousSummary === undefined ? {} : { previousSummary }),
       ...(requestTranscript === undefined ? {} : { requestTranscript }),

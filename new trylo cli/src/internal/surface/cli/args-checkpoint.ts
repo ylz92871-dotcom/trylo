@@ -43,18 +43,23 @@ export function parseCheckpoint(argv: ReadonlyArray<string>): ParsedCommand {
   if (sub === "--help" || sub === "-h") {
     return familyHelpCommand("checkpoint");
   }
+
   if (sub === undefined) {
     return usageError("checkpoint requires a subcommand", LIST_HINT);
   }
+
   if (sub === "list") {
     return parseCheckpointList(argv.slice(1));
   }
+
   if (sub === "restore") {
     return parseCheckpointRestore(argv.slice(1));
   }
+
   if (sub === "diff") {
     return parseCheckpointDiff(argv.slice(1));
   }
+
   return usageError(
     `unknown checkpoint subcommand: ${sub}`,
     "try `trylo checkpoint list|restore|diff`",
@@ -63,16 +68,20 @@ export function parseCheckpoint(argv: ReadonlyArray<string>): ParsedCommand {
 
 function parseCheckpointList(argv: ReadonlyArray<string>): ParsedCommand {
   let json = false;
+
   for (const token of argv) {
     if (token === "--help" || token === "-h") {
       return familyHelpCommand("checkpoint");
     }
+
     if (token === "--json") {
       json = true;
       continue;
     }
+
     return usageError(`checkpoint list does not accept ${token}`, LIST_HINT);
   }
+
   return { kind: "checkpoint_list", options: { json } };
 }
 
@@ -90,12 +99,15 @@ function parseCheckpointRestore(argv: ReadonlyArray<string>): ParsedCommand {
   if (id === "--help" || id === "-h") {
     return familyHelpCommand("checkpoint");
   }
+
   if (id === undefined || id.startsWith("--")) {
     return usageError("checkpoint restore requires a checkpoint id", RESTORE_HINT);
   }
+
   let json = false;
   const only: string[] = [];
   let index = 1;
+
   while (index < argv.length) {
     const token = argv[index] ?? "";
     if (token === "--json") {
@@ -103,17 +115,21 @@ function parseCheckpointRestore(argv: ReadonlyArray<string>): ParsedCommand {
       index += 1;
       continue;
     }
+
     const flag = flagToken(token);
     if (flag === undefined || flag.name !== "only") {
       return usageError(`checkpoint restore does not accept ${token}`, RESTORE_HINT);
     }
+
     const read = readValue(argv, index, flag.inlineValue);
     if (read.error !== undefined || (read.value ?? "").trim().length === 0) {
       return usageError(`option --only ${read.error ?? "requires a non-empty value"}`, RESTORE_HINT);
     }
+
     only.push(read.value ?? "");
     index = read.next;
   }
+
   return {
     kind: "checkpoint_restore",
     options: { checkpointId: id, ...(only.length === 0 ? {} : { only }), json },
@@ -132,10 +148,13 @@ function parseCheckpointDiff(argv: ReadonlyArray<string>): ParsedCommand {
   if (id === "--help" || id === "-h") {
     return familyHelpCommand("checkpoint");
   }
+
   if (id === undefined || id.startsWith("--")) {
     return usageError("checkpoint diff requires a checkpoint id", DIFF_HINT);
   }
+
   let json = false;
+
   for (const token of argv.slice(1)) {
     if (token === "--json") {
       json = true;
@@ -143,5 +162,6 @@ function parseCheckpointDiff(argv: ReadonlyArray<string>): ParsedCommand {
     }
     return usageError(`checkpoint diff does not accept ${token}`, DIFF_HINT);
   }
+
   return { kind: "checkpoint_diff", options: { checkpointId: id, json } };
 }

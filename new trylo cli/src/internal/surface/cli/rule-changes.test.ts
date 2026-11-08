@@ -99,6 +99,7 @@ test("an unchanged rule set produces no notice at all", () => {
     source("AGENTS.md", "aaaaaaaaaaaaaaa1"),
     source("src/AGENTS.md", "ccccccccccccccc3", "directory", "src"),
   ];
+
   assert.deepEqual(ruleChangesBetween(records, same), []);
   // `undefined`, not an empty string: the caller writes stderr only when there
   // is something to write, and an empty string would still be a blank line.
@@ -111,6 +112,7 @@ test("the last turn that recorded rules is the one compared", () => {
   // oldest would report a change on every resume of a project whose rules were
   // edited once, forever.
   const records = journalWith([source("AGENTS.md", "oldoldoldoldold1")]);
+
   records.push({
     formatVersion: "1",
     sequence: 3,
@@ -173,6 +175,7 @@ test("the notice names the files, says which run used what, and claims nothing m
     { kind: "added", relativePath: "src/AGENTS.md" },
     { kind: "removed", relativePath: "docs/AGENTS.md" },
   ]);
+
   assert.ok(notice);
   assert.match(notice, /AGENTS\.md \(edited\)/);
   assert.match(notice, /src\/AGENTS\.md \(new\)/);
@@ -187,6 +190,7 @@ test("the notice names the files, says which run used what, and claims nothing m
 
 test("a removed local rule is reported only when its subtree is read, once per turn", t => {
   const root = mkdtempSync(join(tmpdir(), "trylo-local-drift-"));
+
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, "src"));
   mkdirSync(join(root, "other"));
@@ -197,6 +201,7 @@ test("a removed local rule is reported only when its subtree is read, once per t
   };
   const warnings: string[] = [];
   const lookup = localRulesFor(root, undefined, message => warnings.push(message), [record]);
+
   lookup?.(join(root, "other", "file.ts"));
   assert.equal(warnings.length, 0);
   lookup?.(join(root, "src", "file.ts"));

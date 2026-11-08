@@ -62,9 +62,11 @@ export function permissionFor(
     if (permissionMode === "interactive") {
       return createInteractivePermission(permissionIo(ctx));
     }
+
     if (choice.allowWrites === true) {
       return createAllowToolsPermission(workspaceWriteToolNames(), action => workspaceWriteAllowed(workspaceRoot, action));
     }
+
     return createDenyAllPermission();
   }
   return createPlannedPermission(

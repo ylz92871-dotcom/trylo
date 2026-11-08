@@ -55,31 +55,39 @@ export function parseKeystroke(spec: string): Keystroke | undefined {
   if (parts.length === 0) {
     return undefined;
   }
+
   let ctrl = false;
   let alt = false;
   let shift = false;
   let key: string | undefined;
+
   for (const part of parts) {
     if (part === "ctrl" || part === "control") {
       ctrl = true;
       continue;
     }
+
     if (part === "alt" || part === "opt" || part === "option") {
       alt = true;
       continue;
     }
+
     if (part === "shift") {
       shift = true;
       continue;
     }
+
     if (key !== undefined) {
       return undefined;
     }
+
     key = ALIASES[part] ?? part;
   }
+
   if (key === undefined || key.length === 0) {
     return undefined;
   }
+
   return { key, ctrl, alt, shift };
 }
 
@@ -93,12 +101,14 @@ function parseBinding(entry: unknown): Binding | undefined {
   if (typeof entry !== "object" || entry === null) {
     return undefined;
   }
+
   const record = entry as Record<string, unknown>;
   const rawStroke = record["key"];
   const action = record["action"];
   if (typeof rawStroke !== "string" || typeof action !== "string") {
     return undefined;
   }
+
   const strokes = rawStroke
     .split(/\s+/)
     .filter((part) => part.length > 0)
@@ -106,9 +116,11 @@ function parseBinding(entry: unknown): Binding | undefined {
   if (strokes.length === 0 || strokes.some((stroke) => stroke === undefined)) {
     return undefined;
   }
+
   if (!isComposerAction(action)) {
     return undefined;
   }
+
   return { strokes: strokes as ReadonlyArray<Keystroke>, action };
 }
 
@@ -170,12 +182,15 @@ export function loadUserBindings(
   if (text === undefined) {
     return { bindings: [] };
   }
+
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(text);
   } catch {
     return { bindings: [], problem: "keybindings.json is not valid JSON; defaults are in use" };
   }
+
   const list = Array.isArray(parsed)
     ? parsed
     : typeof parsed === "object" && parsed !== null && Array.isArray((parsed as Record<string, unknown>)["bindings"])
@@ -184,13 +199,16 @@ export function loadUserBindings(
   if (list === undefined) {
     return { bindings: [], problem: "keybindings.json must be an array of {key, action}; defaults are in use" };
   }
+
   const bindings: Array<Binding> = [];
+
   for (const entry of list) {
     const parsed = parseBinding(entry);
     if (parsed !== undefined) {
       bindings.push(parsed);
     }
   }
+
   return { bindings };
 }
 
@@ -219,21 +237,27 @@ export function resolveAction(
   if (stroke === undefined) {
     return { kind: "none" };
   }
+
   const sequence = [...chord, stroke];
   let matchedChord = false;
+
   for (const entry of bindings) {
     if (entry.strokes.length < sequence.length) {
       continue;
     }
+
     const prefixMatch = sequence.every((stroke, index) => strokesEqual(stroke, entry.strokes[index] ?? stroke));
     if (!prefixMatch) {
       continue;
     }
+
     if (entry.strokes.length === sequence.length) {
       return { kind: "action", action: entry.action };
     }
+
     matchedChord = true;
   }
+
   return matchedChord ? { kind: "chord" } : { kind: "none" };
 }
 

@@ -46,6 +46,7 @@ test("a cancelled scope is never remembered", async () => {
     readLine: async () => "c",
   });
   const decision = await decideOnce(port, action("write_file", { path: "a.txt", content: "x" }));
+
   assert.deepEqual(decision, { resolution: "cancelled", scope: "once" });
   assert.equal(prompts.length, 1);
   // The prompt names the arguments, not just the tool.
@@ -58,11 +59,13 @@ test("a session approval is remembered and a plain approval is not", async () =>
     prompt: () => undefined,
     readLine: async () => "s",
   });
+
   assert.deepEqual(await decideOnce(port, action("edit_file")), { resolution: "approved", scope: "session" });
   const oneShot = createInteractivePermission({
     prompt: () => undefined,
     readLine: async () => "y",
   });
+
   assert.deepEqual(await decideOnce(oneShot, action("edit_file")), { resolution: "approved", scope: "once" });
 });
 
@@ -82,15 +85,20 @@ test("the non-interactive default denies absolutely everything", async () => {
  */
 test("--allow-writes covers workspace writes only and never the shell", async () => {
   const port = createAllowToolsPermission(new Set(WORKSPACE_WRITE_TOOL_NAMES));
+
   // WP13 adds notebook_edit (workspace_write cell edits); the derivation stays
   // "exactly the tools that declare workspace_write".
   assert.deepEqual(WORKSPACE_WRITE_TOOL_NAMES, ["write_file", "edit_file", "apply_patch", "notebook_edit"]);
+
   for (const name of WORKSPACE_WRITE_TOOL_NAMES) {
     const ticket = await port.request(action(name));
     assert.equal((await port.awaitDecision(ticket.ticketId)).resolution, "approved", name);
   }
+
   const shell = await port.request(action("run_shell", { command: "node -v" }));
+
   assert.equal((await port.awaitDecision(shell.ticketId)).resolution, "denied");
   const unknown = await port.request(action("read_file"));
+
   assert.equal((await port.awaitDecision(unknown.ticketId)).resolution, "denied");
 });

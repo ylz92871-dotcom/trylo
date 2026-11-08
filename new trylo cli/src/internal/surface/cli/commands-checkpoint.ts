@@ -65,10 +65,12 @@ export async function handleCheckpointList(
   if (!listed.ok) {
     return refuse(ctx, listed.code, listed.detail, "checkpoint storage could not be read");
   }
+
   if (options.json) {
     ctx.stdout(`${JSON.stringify(listed.value, null, 2)}\n`);
     return EXIT_CODES.OK;
   }
+
   if (listed.value.length === 0) {
     // Say what a checkpoint is for, not just that there are none: the command
     // is how a person discovers the snapshots exist at all.
@@ -76,6 +78,7 @@ export async function handleCheckpointList(
     ctx.stdout("one is taken automatically before a write, so there will be one after the next edit\n");
     return EXIT_CODES.OK;
   }
+
   const { shown, hidden } = limited(listed.value, LIST_LIMIT);
   const now = ctx.now();
   const lines = aligned(
@@ -87,10 +90,13 @@ export async function handleCheckpointList(
       relativeTime(Date.parse(entry.createdAt), now),
     ]),
   );
+
   ctx.stdout(`${lines.join("\n")}\n`);
+
   if (hidden > 0) {
     ctx.stdout(`... ${hidden} older (--json lists them all)\n`);
   }
+
   return EXIT_CODES.OK;
 }
 
@@ -101,6 +107,7 @@ export async function handleCheckpointRestore(
   if (options.only !== undefined && options.only.length > 0) {
     return handleScopedRestore(ctx, options.checkpointId, options.only, options.json);
   }
+
   const restored = await wiringOf(ctx).port.restore({ checkpointId: options.checkpointId });
   if (!restored.ok) {
     return refuse(
@@ -110,16 +117,19 @@ export async function handleCheckpointRestore(
       "`trylo checkpoint list` shows the ids this workspace can restore",
     );
   }
+
   const summary = {
     checkpointId: options.checkpointId,
     restoredFiles: restored.value.restoredFiles,
     removedFiles: restored.value.removedFiles,
   };
+
   ctx.stdout(
     options.json
       ? `${JSON.stringify(summary, null, 2)}\n`
       : `restored ${options.checkpointId}: ${restored.value.restoredFiles} file(s) restored, ${restored.value.removedFiles} removed\n`,
   );
+
   if (!options.json && restored.value.removedFiles > 0) {
     // The full restore removes files created after the snapshot (crash
     // recovery depends on exactly that). Say so where the person sees it:
@@ -129,6 +139,7 @@ export async function handleCheckpointRestore(
       "`trylo checkpoint diff <id>` previews this, `restore <id> --only <paths>` rewinds selected files\n",
     );
   }
+
   return EXIT_CODES.OK;
 }
 
@@ -153,10 +164,12 @@ async function handleScopedRestore(
       "`trylo checkpoint list` shows the ids this workspace can restore",
     );
   }
+
   const current = readCurrentRows(ctx.cwd, manifest.manifest.ignores);
   if (!current.ok) {
     return refuse(ctx, current.code, current.detail, "fix workspace access, then restore again");
   }
+
   const planned = planScopedRestore({ snapshot: manifestRows(manifest.manifest), current: current.rows, scope });
   if (!planned.ok) {
     return reportFailure(ctx, {
@@ -165,10 +178,12 @@ async function handleScopedRestore(
       hint: "`trylo checkpoint diff <id>` shows the paths a restore would touch",
     });
   }
+
   const applied = await applyScopedPlan(planned.plan, scopedPlanIo(storageRoot, checkpointId, ctx.cwd));
   if (!applied.ok) {
     return refuse(ctx, applied.code, applied.detail, "restoring again converges: completed files stay restored");
   }
+
   const summary = {
     checkpointId,
     scope: [...scope].sort(),
@@ -177,6 +192,7 @@ async function handleScopedRestore(
     alreadyCurrent: planned.plan.alreadyCurrent,
     keptOutsideScope: planned.plan.keptOutsideScope,
   };
+
   ctx.stdout(
     json
       ? `${JSON.stringify(summary, null, 2)}\n`
@@ -184,5 +200,6 @@ async function handleScopedRestore(
       `${applied.value.restoredFiles} file(s) restored, ${applied.value.removedFiles} removed, ` +
       `${planned.plan.alreadyCurrent.length} already current, ${planned.plan.keptOutsideScope.length} kept outside scope\n`,
   );
+
   return EXIT_CODES.OK;
 }

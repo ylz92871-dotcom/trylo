@@ -24,6 +24,7 @@ import { fitText, projectName } from "./text.js";
 
 /** Where a field sits in the rendered line, left to right. */
 type FieldOrder = number;
+
 /** How much a field matters; higher survives a narrower terminal. */
 type FieldPriority = number;
 
@@ -66,6 +67,7 @@ export function statusBar(state: TuiState, columns: number, tick = 0): string {
     ...(state.facts.workspaceRoot === undefined ? [] : [{ order: 8, priority: 3, text: projectName(state.facts.workspaceRoot) }]),
     ...(state.facts.permissionMode === undefined ? [] : [{ order: 9, priority: 3, text: state.facts.permissionMode }]),
   ];
+
   return fit(fields, columns);
 }
 
@@ -80,15 +82,18 @@ export function statusBar(state: TuiState, columns: number, tick = 0): string {
 function fit(fields: ReadonlyArray<Field>, columns: number): string {
   const kept: Field[] = [];
   let width = 0;
+
   for (const field of [...fields].sort((a, b) => b.priority - a.priority)) {
     const own = displayWidth(field.text);
     const grown = kept.length === 0 ? own : width + displayWidth(SEPARATOR) + own;
     if (kept.length > 0 && grown > columns) {
       continue;
     }
+
     kept.push(field);
     width = grown;
   }
+
   return kept
     .sort((a, b) => a.order - b.order)
     .map((field) => field.text)
@@ -127,12 +132,14 @@ function compact(count: number): string {
   if (count < 1000) {
     return String(count);
   }
+
   // One decimal while it still says something: 18.4k distinguishes two turns
   // that 18k does not, and a bar that only ever reports the same number is a
   // bar nobody reads. Past a hundred thousand the decimal is noise.
   if (count < 100_000) {
     return `${(count / 1000).toFixed(1)}k`;
   }
+
   return `${Math.round(count / 1000)}k`;
 }
 
@@ -141,19 +148,23 @@ function durationText(state: TuiState): string {
   if (ms === undefined) {
     return "";
   }
+
   if (ms < 1000) {
     return `${Math.round(ms)}ms`;
   }
+
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
 function phaseText(state: TuiState, tick: number): string {
   const waiting = waitingText(state.waiting);
+
   if (state.running) {
     return waiting === undefined
       ? `${spinnerOf(tick)} running`
       : `${spinnerOf(tick)} running · waiting on ${waiting}`;
   }
+
   return waiting === undefined
     ? state.lastStatus === undefined
       ? "idle"
@@ -173,12 +184,15 @@ function waitingText(waiting: WaitingReason | undefined): string | undefined {
   if (waiting === undefined) {
     return undefined;
   }
+
   if (waiting.kind === "tool") {
     return `tool ${waiting.names.join(",")}`;
   }
+
   if (waiting.kind === "question") {
     return `your answer${waiting.requestId === undefined ? "" : ` (${waiting.requestId})`}`;
   }
+
   return "your approval (plan)";
 }
 

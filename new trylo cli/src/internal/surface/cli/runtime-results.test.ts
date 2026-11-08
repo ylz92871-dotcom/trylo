@@ -51,14 +51,19 @@ test("executed tool output reaches the CLI wire and terminal frame", async () =>
   const turn = await result;
   const events = projectEnvelopeSequence(turn.envelopes);
   const output = events.find(event => event.type === "tool_result");
+
   assert.equal(output?.type, "tool_result");
+
   if (output?.type !== "tool_result") return;
+
   assert.equal(output.output, "tests 12\npass 12\nfail 0");
   const facts = { sessionId: "result-session", providerId: "fixture", model: "fixture", maxIterations: 3, contextTokenLimit: undefined };
   const state = events.reduce((acc, event) => reduceTuiEvent(acc, event), emptyTuiState(facts));
+
   assert.ok(state.lines.some(line => line.text.includes("pass 12")));
   const rendered: string[] = [];
   const projection = createProjection("text", { stdout: text => rendered.push(text), stderr: text => rendered.push(text) });
+
   events.forEach(projection.onEvent);
   assert.match(rendered.join(""), /pass 12/);
 });
@@ -67,10 +72,12 @@ test("usage after a batch of tools is accepted without an illegal transition", a
   const second: ProviderEvent = { ...call, toolCallId: "second" };
   const { result } = run([[call, second, usage(20), toolFinish], [finish]]);
   const turn = await result;
+
   assert.equal(turn.state.terminalReason, "completed");
   assert.equal(turn.usage.outputTokens, 20);
   assert.equal(turn.envelopes.filter(e => e.kind === "error" && e.payload.code === "illegal_transition").length, 0);
   const events = projectEnvelopeSequence(turn.envelopes);
+
   assert.ok(events.some(e => e.type === "usage" && e.usage.outputTokens === 20));
 });
 
@@ -81,15 +88,20 @@ test("a later provider request receives only the remaining turn output budget", 
   assert.deepEqual(provider.requests.map(r => r.maxOutputTokens), [50, 35]);
 });
 
-test("exhausted output budget reports consumption and a concrete resume command", async () => {
+test("exhausted output budget reports consumption and the saved-session requirement", async () => {
   const { result } = run([[call, usage(35), toolFinish], [usage(20), finish]], 50);
   const turn = await result;
+
   assert.equal(turn.state.terminalReason, "failed");
   const warning = projectEnvelopeSequence(turn.envelopes).find(e => e.type === "warning" && e.code === "output_tokens_exhausted");
+
   assert.equal(warning?.type, "warning");
+
   if (warning?.type !== "warning") return;
+
   assert.match(warning.message, /55.*50/);
-  assert.match(warning.message, /--resume result-session/);
+  assert.match(warning.message, /--resume <saved-session>/);
+  assert.match(warning.message, /Only runs saved with --session/);
 });
 
 test("context window uses one request's input, while billing still adds every request", async () => {

@@ -36,24 +36,31 @@ test("inline prompts compose replace-then-append; files are read", () => {
 
 test("an unreadable file refuses the run, it never silently drops the flag", () => {
   const resolved = resolveRequestOptions(reader, options({ systemPromptFile: "/missing.txt" }), SELECTION);
+
   assert.ok("exitCode" in resolved);
   const schema = resolveRequestOptions(reader, options({ outputSchema: "/missing.json" }), SELECTION);
+
   assert.ok("exitCode" in schema);
   const bad = resolveRequestOptions(
     { readFile: () => "{ broken" },
     options({ outputSchema: "/schema.json" }),
     SELECTION,
   );
+
   assert.ok("exitCode" in bad);
 });
 
 test("a schema file loads and a same-model fallback is refused", () => {
   const resolved = resolveRequestOptions(reader, options({ outputSchema: "/schema.json" }), SELECTION);
+
   assert.ok(!("exitCode" in resolved));
+
   if (!("exitCode" in resolved)) {
     assert.deepEqual(resolved.responseSchema, { type: "object" });
   }
+
   const refused = resolveRequestOptions(reader, options({ model: "lab-7b", fallbackModel: "lab-7b" }), SELECTION);
+
   assert.ok("exitCode" in refused);
   const carried = resolveRequestOptions(
     reader,
@@ -65,6 +72,7 @@ test("a schema file loads and a same-model fallback is refused", () => {
     }),
     SELECTION,
   );
+
   assert.deepEqual(carried, {
     systemPrompt: { mode: "append", text: "hi" },
     fallbackModel: "lab-70b",

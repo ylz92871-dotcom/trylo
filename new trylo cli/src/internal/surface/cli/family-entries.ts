@@ -59,6 +59,7 @@ async function jobLiveness(platform: string, record: BackgroundJobRecord): Promi
   if (verdict.verdict === "matching") {
     return "alive";
   }
+
   return verdict.verdict === "gone" ? "gone" : "unverifiable";
 }
 
@@ -73,6 +74,8 @@ export function runFamilyCommand(
   rest: ReadonlyArray<string>,
 ): Promise<ExitCode> {
   switch (word) {
+    case "skills":
+      return import("./commands-skill-learning.js").then(module => module.handleSkillLearning(ctx, rest));
     case "tools":
       return import("./commands-tools.js").then(module => module.handleTools(ctx, rest));
     case "schedule":

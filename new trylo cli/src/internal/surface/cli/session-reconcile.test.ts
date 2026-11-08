@@ -68,6 +68,7 @@ function ctxOf(root: string): { ctx: CliContext; out: string[]; err: string[] } 
     now: () => 0,
     newId: prefix => `${prefix}-1`,
   };
+
   return { ctx, out, err };
 }
 
@@ -94,9 +95,11 @@ function lostToolHost(): ToolPort {
 /** A real run whose one tool call crossed the line and never reported back. */
 async function buildUnknownSession(root: string, id: string, turnId = "t1"): Promise<void> {
   const session = createNdjsonSessionStore({ path: sessionFile(root, id) });
+
   await session.start({ sessionId: id, createdAt: AT, fingerprint: FINGERPRINT });
   const recorder = createTurnRecorder({ session, sessionId: id, turnId, now: () => 0 });
   if (recorder === undefined) throw new Error("recorder missing");
+
   await recorder.start({ startedAt: 0, toolCatalogHash: "h" });
   // `tool_call`, not fragments: a call closed by `tool_input_end` is the one
   // shape that reaches the reducer without ever becoming a transcript item, and
@@ -108,6 +111,7 @@ async function buildUnknownSession(root: string, id: string, turnId = "t1"): Pro
     // its acknowledgement, which is the effect reconciliation must recover.
     { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
   ];
+
   // The run stops the moment an unknown outcome is durable; that is the point.
   await runTurn({
     profile: emptyProfileLoader(),
@@ -122,6 +126,7 @@ async function buildUnknownSession(root: string, id: string, turnId = "t1"): Pro
 /** A journal stopped between issuing an action and hearing anything back. */
 async function buildDanglingSession(root: string, id: string): Promise<void> {
   const session = createNdjsonSessionStore({ path: sessionFile(root, id) });
+
   await session.start({ sessionId: id, createdAt: AT, fingerprint: FINGERPRINT });
   await session.append({ type: "turn_start", sessionId: id, turnId: "t9", at: AT, payload: { toolCatalogHash: "h" } });
   await session.append({
@@ -139,11 +144,16 @@ async function recordsOf(root: string, id: string) {
   const session = createNdjsonSessionStore({ path: sessionFile(root, id) });
   const attached = await session.attach();
   if (!attached.ok) throw new Error(`attach failed: ${attached.code}`);
+
   const view = await session.readRecords();
   const read = await session.read();
+
   await session.release();
+
   if (!view.ok) throw new Error(`readRecords failed: ${view.code}`);
+
   if (!read.ok) throw new Error(`read failed: ${read.code}`);
+
   return { records: view.view.records, session: read.session };
 }
 
@@ -154,6 +164,7 @@ test("listing names the action, its turn, its journal sequence and its arguments
     const file = sessionFile(root, "s1");
     const before = readFileSync(file, "utf8");
     const listed = await cli(root, ["session", "reconcile", "s1"]);
+
     assert.equal(listed.code, EXIT_CODES.CONFIG, "a session with unknowns stays blocked");
     assert.match(listed.out, /turn t1/);
     assert.match(listed.out, /tool:c1/);
@@ -172,6 +183,7 @@ test("--json carries the same facts for a script", async () => {
     await buildUnknownSession(root, "s1");
     const listed = await cli(root, ["session", "reconcile", "s1", "--json"]);
     const parsed = JSON.parse(listed.out) as { pending: Array<{ key: string; turn: string; tool: string }> };
+
     assert.equal(parsed.pending.length, 1);
     assert.equal(parsed.pending[0]?.key, "tool:c1");
     assert.equal(parsed.pending[0]?.turn, "t1");
@@ -191,9 +203,11 @@ test("a verdict records what the person determined, and who determined it", asyn
       "--outcome", "committed",
       "--evidence", "ls -l showed the file written at 10:04",
     ]);
+
     assert.equal(recorded.code, EXIT_CODES.OK, recorded.err);
     const { records, session } = await recordsOf(root, "s1");
     const committed = records.find(record => record.type === "effect_committed");
+
     assert.equal(committed?.payload["key"], "tool:c1");
     assert.equal(committed?.payload["verifiedBy"], "user-manual", "the record must say a person decided this");
     assert.equal(committed?.payload["evidence"], "ls -l showed the file written at 10:04");
@@ -214,18 +228,23 @@ test("repeating the same verdict is a no-op; contradicting it is refused", async
   try {
     await buildUnknownSession(root, "s1");
     const verdict = ["session", "reconcile", "s1", "--turn", "t1", "--key", "tool:c1", "--outcome", "committed", "--evidence", "checked the file"];
+
     assert.equal((await cli(root, verdict)).code, EXIT_CODES.OK);
     const after = await recordsOf(root, "s1");
     const again = await cli(root, verdict);
+
     assert.equal(again.code, EXIT_CODES.OK, "the same verdict repeated must be idempotent");
     assert.match(again.out, /already recorded/);
     const repeated = await recordsOf(root, "s1");
+
     assert.equal(repeated.records.length, after.records.length, "an idempotent verdict appends nothing");
 
     const conflict = await cli(root, ["session", "reconcile", "s1", "--turn", "t1", "--key", "tool:c1", "--outcome", "failed", "--evidence", "changed my mind"]);
+
     assert.equal(conflict.code, EXIT_CODES.CONFIG, "a second verdict may not overwrite the first");
     assert.match(conflict.err, /already recorded as committed/);
     const kept = await recordsOf(root, "s1");
+
     assert.equal(kept.records.length, after.records.length, "a refused verdict appends nothing");
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -239,8 +258,10 @@ test("a verdict without evidence, or with an outcome outside the set, is refused
     const file = sessionFile(root, "s1");
     const before = readFileSync(file, "utf8");
     const partial = await cli(root, ["session", "reconcile", "s1", "--turn", "t1", "--key", "tool:c1", "--outcome", "committed"]);
+
     assert.equal(partial.code, EXIT_CODES.USAGE, "a verdict must say what was checked");
     const bogus = await cli(root, ["session", "reconcile", "s1", "--turn", "t1", "--key", "tool:c1", "--outcome", "probably", "--evidence", "looked fine"]);
+
     assert.equal(bogus.code, EXIT_CODES.USAGE);
     assert.match(bogus.err, /unknown outcome/);
     assert.equal(readFileSync(file, "utf8"), before, "a refused verdict writes nothing");
@@ -254,6 +275,7 @@ test("a call torn by the journal's own repair is not answered with an invented r
   try {
     await buildDanglingSession(root, "s2");
     const listed = await cli(root, ["session", "reconcile", "s2"]);
+
     assert.equal(listed.code, EXIT_CODES.CONFIG);
     assert.match(listed.out, /only the issued intent survived/, "the unanswered request is torn before anyone reads it");
 
@@ -263,8 +285,10 @@ test("a call torn by the journal's own repair is not answered with an invented r
       "--outcome", "committed",
       "--evidence", "the file is there",
     ]);
+
     assert.equal(recorded.code, EXIT_CODES.OK, recorded.err);
     const { records, session } = await recordsOf(root, "s2");
+
     assert.equal(
       records.filter(record => record.type === "transcript_item" && record.payload["kind"] === "tool_result").length,
       0,
@@ -281,20 +305,26 @@ test("the same key in two turns: settling one turn leaves the other unresolved",
   const root = tempHome();
   try {
     const session = createNdjsonSessionStore({ path: sessionFile(root, "s3") });
+
     await session.start({ sessionId: "s3", createdAt: AT, fingerprint: FINGERPRINT });
+
     for (const turnId of ["t1", "t2"]) {
       await session.append({ type: "turn_start", sessionId: "s3", turnId, at: AT, payload: { toolCatalogHash: "h" } });
       await session.append({ type: "effect_issued", sessionId: "s3", turnId, at: AT, payload: { key: "tool:c1" } });
     }
+
     await session.release();
 
     const listed = await cli(root, ["session", "reconcile", "s3"]);
+
     assert.equal(listed.code, EXIT_CODES.CONFIG);
     assert.match(listed.out, /2 unresolved/);
 
     const one = await cli(root, ["session", "reconcile", "s3", "--turn", "t2", "--key", "tool:c1", "--outcome", "failed", "--evidence", "nothing was written"]);
+
     assert.equal(one.code, EXIT_CODES.OK, one.err);
     const { session: after } = await recordsOf(root, "s3");
+
     assert.equal(after.pendingEffects.length, 1, "the other turn's issue is untouched");
     assert.equal(after.pendingEffects[0]?.turnId, "t1");
     assert.equal(after.pendingEffects[0]?.key, "tool:c1");
@@ -310,13 +340,17 @@ test("a reconciled session opens for resume and the action is not repeated", asy
     const { ctx } = ctxOf(root);
     const options = { resume: "s1", message: [], readStdin: false };
     const blocked = await openSession(ctx, options, FINGERPRINT);
+
     assert.equal(blocked.kind, "failed", "an unproven action must block a resume");
 
     const recorded = await cli(root, ["session", "reconcile", "s1", "--turn", "t1", "--key", "tool:c1", "--outcome", "committed", "--evidence", "the file exists"]);
+
     assert.equal(recorded.code, EXIT_CODES.OK, recorded.err);
 
     const opened = await openSession(ctx, options, FINGERPRINT);
+
     assert.equal(opened.kind, "resume", "a reconciled session must resume");
+
     if (opened.kind === "resume") {
       const results = opened.transcript.filter(item => item.kind === "tool_result" && item.toolCallId === "c1");
       assert.equal(results.length, 1, "one answer, so the resumed request cannot ask the model to do it again");
@@ -331,10 +365,12 @@ test("a session with nothing unresolved lists clean and exits 0", async () => {
   const root = tempHome();
   try {
     const session = createNdjsonSessionStore({ path: sessionFile(root, "s4") });
+
     await session.start({ sessionId: "s4", createdAt: AT, fingerprint: FINGERPRINT });
     await session.append({ type: "turn_start", sessionId: "s4", turnId: "t1", at: AT, payload: { toolCatalogHash: "h" } });
     await session.release();
     const listed = await cli(root, ["session", "reconcile", "s4"]);
+
     assert.equal(listed.code, EXIT_CODES.OK);
     assert.match(listed.out, /nothing to reconcile/);
   } finally {
@@ -348,8 +384,10 @@ test("a session held by another process is not reconciled", async () => {
     await buildUnknownSession(root, "s1");
     const holder = createNdjsonSessionStore({ path: sessionFile(root, "s1") });
     const attached = await holder.attach();
+
     assert.equal(attached.ok, true, "the holder takes the single-writer lock");
     const busy = await cli(root, ["session", "reconcile", "s1"]);
+
     assert.equal(busy.code, EXIT_CODES.CONFIG);
     assert.match(busy.err, /lock/);
     await holder.release();

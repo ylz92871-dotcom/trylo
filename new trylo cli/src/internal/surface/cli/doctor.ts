@@ -79,12 +79,15 @@ function sourceCheck(layer: SettingsLayer, sources: ReadonlyArray<LayerSource>):
   if (source === undefined) {
     return { id: `config.${layer}`, status: "skip", detail: "not evaluated" };
   }
+
   if (source.status === "missing") {
     return { id: `config.${layer}`, status: "ok", detail: `${source.path ?? ""} not present (optional)` };
   }
+
   if (source.status === "invalid") {
     return { id: `config.${layer}`, status: "fail", detail: `${source.path ?? ""}: ${source.detail ?? "invalid"}` };
   }
+
   return { id: `config.${layer}`, status: "ok", detail: source.path ?? "packaged" };
 }
 
@@ -127,6 +130,7 @@ export function collectDoctor(io: DoctorIo, options: DoctorOptions): DoctorRepor
   const checks: DoctorCheck[] = [];
 
   const major = Number.parseInt(io.nodeVersion.replace(/^v/, "").split(".")[0] ?? "0", 10);
+
   checks.push({
     id: "runtime.node",
     status: major >= MINIMUM_NODE_MAJOR ? "ok" : "fail",
@@ -153,6 +157,7 @@ export function collectDoctor(io: DoctorIo, options: DoctorOptions): DoctorRepor
     for (const layer of REPORTED_LAYERS) {
       checks.push(sourceCheck(layer, loaded.sources));
     }
+
     checks.push({
       id: "provider.fixture",
       status: "ok",
@@ -165,11 +170,13 @@ export function collectDoctor(io: DoctorIo, options: DoctorOptions): DoctorRepor
     const selection = resolveSelectedProvider(io, loaded.resolved);
     const provider = selection === undefined ? "fixture" : selection.providerId;
     const model = selection === undefined ? "default" : selection.model;
+
     checks.push(providerCheck(provider, model, selection, loaded));
     const capability = declaredCapabilityCheck(io);
     if (capability !== undefined) {
       checks.push(capability);
     }
+
     checks.push(
       credentialCheck(
         createCliCredentialPortWithReport(io, options.warn ?? ((): void => {})),
@@ -180,6 +187,7 @@ export function collectDoctor(io: DoctorIo, options: DoctorOptions): DoctorRepor
   }
 
   checks.push(learningCheck(io, options.learning));
+
   // The user half of the switch, reported only when the switch named it. The
   // line above stays the same sentence in every other case — including
   // `--learning=method`, where it is still true *and* still the only learning
@@ -189,11 +197,13 @@ export function collectDoctor(io: DoctorIo, options: DoctorOptions): DoctorRepor
   if (options.learning !== undefined && switchEnablesUser(options.learning)) {
     checks.push(userLearningCheck(io, options.learning));
   }
+
   // The tool-learning half, on the same terms: it appears only when the switch
   // named it, and it reports counts rather than the model's own sentences.
   if (options.learning !== undefined && switchEnablesTool(options.learning)) {
     checks.push(toolLearningCheck(io, options.learning));
   }
+
   checks.push(mcpRegistryCheck(io));
   // Reported from the source list the run adopts, never from a fresh walk. A
   // `fail` here is `doctor` exiting 52, which is the right weight for "this
@@ -265,25 +275,31 @@ function mcpRegistryCheck(io: DoctorIo): DoctorCheck {
   const unreadable: string[] = [];
   let total = 0;
   let enabled = 0;
+
   for (const entry of scopes) {
     const raw = io.readFile(entry.file);
     if (raw === undefined) {
       continue;
     }
+
     const decoded = decodeDocument(raw, entry.file);
     if (!decoded.ok) {
       unreadable.push(`${entry.scope}:${decoded.code}`);
       continue;
     }
+
     total += decoded.value.servers.length;
     enabled += decoded.value.servers.filter((server) => server.enabled).length;
   }
+
   if (unreadable.length > 0) {
     return { id: "mcp.registry", status: "fail", detail: `unreadable (${unreadable.join(", ")})` };
   }
+
   if (total === 0) {
     return { id: "mcp.registry", status: "skip", detail: "no MCP servers registered" };
   }
+
   return {
     id: "mcp.registry",
     status: "ok",

@@ -77,6 +77,7 @@ test("a long tool output is folded to a few lines instead of flooding the screen
     { type: "tool_result", toolCallId: "c1", status: "ok", output, truncated: false },
   ]);
   const shown = plain(frame).split("\n").filter((line) => line.includes("line "));
+
   assert.equal(shown.length <= 6, true, `${shown.length} output lines were rendered`);
   assert.match(plain(frame), /more/i, "a folded output says how much is hidden");
 });
@@ -89,6 +90,7 @@ test("different tones render as different bytes", () => {
     return renderFrame(state, 80, colorPaint());
   };
   const assistant = drawn("assistant");
+
   assert.notEqual(drawn("user"), assistant, "a user line looks like an assistant line");
   assert.notEqual(drawn("reasoning"), assistant, "reasoning looks like an assistant line");
   assert.notEqual(drawn("tool"), assistant, "a tool line looks like an assistant line");
@@ -103,7 +105,9 @@ test("a frame drawn without colour is exactly what it always was", () => {
       { tone: "tool" as const, text: "-> run_shell" },
     ],
   };
+
   assert.equal(renderFrame(state, 80), renderFrame(state, 80, noPaint));
+
   for (const line of renderFrame(state, 80).split("\n").slice(0, 2)) {
     assert.equal(line.includes("\x1b["), false, "a content line carries a sequence");
   }
@@ -124,6 +128,7 @@ test("usage reaches the status bar", () => {
       usage: { inputTokens: 18422, outputTokens: 913, totalTokens: 19335 },
     },
   ]);
+
   assert.match(plain(frame), /18\.4k|18422/, "input tokens are not on the screen");
   assert.match(plain(frame), /913/, "output tokens are not on the screen");
 });
@@ -185,9 +190,11 @@ test("and falls back to the fixed width when there is no terminal to measure", (
 
 test("the startup mark carries the captions beside it when there is room", () => {
   const lines = banner(["trylo", "learning agent CLI"], 80).lines;
+
   assert.equal(lines.length, TRYLO_MARK.length);
   assert.match(lines[0] ?? "", /trylo/);
   assert.match(lines[1] ?? "", /learning agent CLI/);
+
   for (const line of lines) {
     assert.equal(displayWidth(line) <= 80, true, `${displayWidth(line)} columns`);
   }
@@ -240,10 +247,12 @@ test("the mark's colour stops at the mark: the caption stays its own tone", () =
 test("the mark keeps the artwork's proportions at a measured terminal cell", () => {
   assert.equal(TRYLO_MARK.length, 16);
   const widest = Math.max(...TRYLO_MARK.map((row) => displayWidth(row)));
+
   // The stroke weight is the part most easily lost: the artwork's stroke is
   // 13% of its width, and the grid has to carry it at 4-5 cells wide.
   assert.equal(widest >= 28, true, `only ${widest} columns — the mark would render thin`);
   const rendered = (widest * CELL_ASPECT) / TRYLO_MARK.length;
+
   assert.equal(
     Math.abs(rendered / ARTWORK_ASPECT - 1) < 0.03,
     true,
@@ -252,6 +261,7 @@ test("the mark keeps the artwork's proportions at a measured terminal cell", () 
       100
     ).toFixed(1)}%`,
   );
+
   // Every row must be printable without wrapping in the width the mark claims.
   for (const row of TRYLO_MARK) {
     assert.equal(row.includes("\n"), false);
@@ -264,6 +274,7 @@ test("a running turn shows it is alive", () => {
     const frame = renderFrame(running, 80, noPaint, tick);
     return plain(frame).split("\n").filter((line) => line.length > 0).at(-1) ?? "";
   };
+
   assert.match(bar(0), /running/);
   // The glyph must change: a screen that never changes reads as a hung
   // process, which is why people press ctrl-c on turns that are still working.
@@ -275,12 +286,15 @@ test("a running turn shows it is alive", () => {
 
 test("a long reasoning block is folded once it is finished", () => {
   let state = reduceTuiEvent(emptyTuiState(FACTS), { type: "reasoning_start", redacted: false });
+
   for (const at of [0, 1, 2, 3, 4, 5, 6]) {
     state = reduceTuiEvent(state, { type: "reasoning_delta", text: `思考第 ${at} 步` });
   }
+
   assert.equal(state.lines.length, 7, "thinking still streams while it happens");
   state = reduceTuiEvent(state, { type: "reasoning_end" });
   const texts = state.lines.map((line) => line.text);
+
   assert.equal(texts.length, 3, `folded to ${texts.length} lines`);
   assert.match(texts.at(-1) ?? "", /5 more lines/, "the hidden reasoning is counted, not dropped");
   assert.match(texts[0] ?? "", /思考第 0 步/);
@@ -305,6 +319,7 @@ test("a diff a tool printed is coloured by what it says", () => {
     toolCallId: "c1",
     name: "edit_file",
   });
+
   state = reduceTuiEvent(state, {
     type: "tool_result",
     toolCallId: "c1",
@@ -313,11 +328,13 @@ test("a diff a tool printed is coloured by what it says", () => {
     truncated: false,
   });
   const tones = state.lines.map((line) => line.tone);
+
   assert.equal(tones.includes("added"), true, "the added row is not marked");
   assert.equal(tones.includes("removed"), true, "the removed row is not marked");
   // The file headers are navigation, not change: painting them the colour of
   // the rows under them makes a header read as a whole file added.
   const headers = state.lines.filter((line) => /^\s+(---|\+\+\+)/.test(line.text));
+
   assert.equal(headers.length, 2);
   assert.deepEqual(headers.map((line) => line.tone), ["output", "output"]);
 });
@@ -328,6 +345,7 @@ test("a bulleted list a tool printed is not painted as a diff", () => {
     toolCallId: "c1",
     name: "run_shell",
   });
+
   state = reduceTuiEvent(state, {
     type: "tool_result",
     toolCallId: "c1",
@@ -336,12 +354,14 @@ test("a bulleted list a tool printed is not painted as a diff", () => {
     truncated: false,
   });
   const tones = new Set(state.lines.map((line) => line.tone));
+
   assert.equal(tones.has("added"), false, "a bullet was painted as an added row");
   assert.equal(tones.has("removed"), false, "a bullet was painted as a removed row");
 });
 
 test("a user line and a system line are told apart without colour too", () => {
   let state = pushUserLine(emptyTuiState(FACTS), "fix the retry bug");
+
   state = reduceTuiEvent(state, {
     type: "warning",
     code: "usage_unreported",
@@ -350,6 +370,7 @@ test("a user line and a system line are told apart without colour too", () => {
   const body = plain(renderFrame(state, 80)).split("\n");
   const user = body.find((line) => line.includes("fix the retry bug")) ?? "";
   const warning = body.find((line) => line.includes("usage_unreported")) ?? "";
+
   assert.match(user, /^>/, "the user's own line has no marker");
   assert.match(warning, /warning/i);
 });

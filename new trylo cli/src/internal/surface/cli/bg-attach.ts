@@ -24,16 +24,19 @@ export async function handleAttach(
   if (!resolved.ok) {
     return refuseUnknownJob(ctx, resolved.reason);
   }
+
   const output = deps.jobs.readOutput(sessionId);
   if (!output.ok) {
     return refuseUnreadableOutput(ctx, output.detail);
   }
+
   if (json) {
     ctx.stdout(
       `${JSON.stringify({ id: sessionId, status: resolved.record.status, output: output.text, truncatedFromStart: output.truncatedFromStart })}\n`,
     );
     return EXIT_CODES.OK;
   }
+
   return emitAttachHuman(ctx, sessionId, output.text, output.truncatedFromStart);
 }
 

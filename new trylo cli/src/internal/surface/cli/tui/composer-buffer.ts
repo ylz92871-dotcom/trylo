@@ -129,12 +129,14 @@ export function createComposerBuffer(): ComposerBuffer {
         this.insert(pastedText);
         return;
       }
+
       pasted.set(pastedCount, pastedText);
       this.insert(placeholder);
     },
 
     expandPlaceholders(line) {
       let expanded = line;
+
       for (const token of line.match(PLACEHOLDER_PATTERN) ?? []) {
         const id = pastePlaceholderId(token);
         const stored = id === undefined ? undefined : pasted.get(id);
@@ -142,6 +144,7 @@ export function createComposerBuffer(): ComposerBuffer {
           expanded = expanded.replace(token, stored);
         }
       }
+
       return expanded;
     },
 

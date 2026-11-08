@@ -1,9 +1,14 @@
 import path from "node:path";
-import { wireMethodLearning } from "../../integration/method/wiring.js";
+import { wireMethodLearning, createExperienceModel, createExperienceFunding, createExperienceTools, createMethodFocusedLearning } from "../../learning/agent/subsystems/method/adapters/index.js";
+import type { MethodBoard } from "../../learning/agent/subsystems/method/index.js";
+import type { ProviderPort } from "../../ports/provider.js";
+import type { ToolPort } from "../../ports/tools.js";
 import { methodSwitchFor } from "../../integration/user-learning/index.js";
-import type { LoopPorts } from "../../loop/runner.js";
 import type { MethodLearningInput } from "./wiring-optins.js";
+import type { ToolGapRuntime } from "../../learning/agent/subsystems/tool/runtime/index.js";
+import { composeAdditionalTools } from "./additional-tools.js";
 import { tryloHome } from "./session-paths.js";
+import { workspaceIdentity } from "./wiring-catalog.js";
 
 /**
  * The board, or nothing.
@@ -23,23 +28,49 @@ import { tryloHome } from "./session-paths.js";
  * does not enable the method half returns `undefined` *before* the board is
  * built, so `--learning=user` never creates a board directory.
  */
-export function methodPortOf(input: { readonly learning?: MethodLearningInput; readonly nowMs?: number }): MethodPort | undefined {
+export function methodPortOf(input: { readonly learning?: MethodLearningInput; readonly nowMs?: number;
+  readonly provider?: ProviderPort; readonly model?: string; readonly workspaceRoot?: string; readonly turnId?: string }): MethodBoard | undefined {
   const learning = input.learning;
   if (learning === undefined) {
     return undefined;
   }
+
   const methodSwitch = methodSwitchFor(learning.switch);
   if (methodSwitch === undefined) {
     return undefined;
   }
+
   const nowMs = input.nowMs ?? 0;
+  const now = () => new Date(nowMs).toISOString();
+  const boardRoot = path.join(tryloHome(learning.homeDir, learning.env), "learning", "board");
+  const model = learning.deferReviewToCentral === true || input.provider === undefined || input.model === undefined || input.turnId === undefined || input.workspaceRoot === undefined
+    ? undefined : createExperienceModel({ provider: input.provider, model: input.model, turnId: input.turnId,
+      fundingFor: request => createExperienceFunding({ boardRoot, workspaceId: workspaceIdentity(input.workspaceRoot!), centralScope: input.workspaceRoot!,
+        turnId: input.turnId!, now, request, enabled: () => methodSwitchFor(learning.switch) !== undefined,
+        ...(learning.reviewGrant === undefined ? {} : { binding: learning.reviewGrant }) }) });
+
   return wireMethodLearning({
     switch: methodSwitch,
-    boardRoot: path.join(tryloHome(learning.homeDir, learning.env), "learning", "board"),
-    now: () => new Date(nowMs).toISOString(),
+    boardRoot,
+    now,
     emit: learning.emit,
+    ...(model === undefined ? {} : { model }),
   });
 }
 
-/** What `wireMethodLearning` hands back: structurally the loop's method port. */
-type MethodPort = NonNullable<LoopPorts["method"]>;
+/** The mounted owner consumes existing method grants; the PA never borrows collaboration funding. */
+export function methodFocusedPortOf(input: { readonly learning?: MethodLearningInput; readonly nowMs?: number;
+  readonly provider: ProviderPort; readonly model?: string; readonly workspaceRoot: string; readonly turnId?: string; readonly method?: MethodBoard }) {
+  if (input.learning === undefined || methodSwitchFor(input.learning.switch) === undefined || input.model === undefined || input.turnId === undefined) return undefined;
+  return createMethodFocusedLearning({ boardRoot: path.join(tryloHome(input.learning.homeDir, input.learning.env), "learning", "board"),
+    workspaceId: workspaceIdentity(input.workspaceRoot), scope: input.workspaceRoot, turnId: input.turnId,
+    provider: input.provider, model: input.model, now: () => new Date(input.nowMs ?? 0).toISOString(), emit: input.learning.emit,
+    ...(input.method?.experience?.claimReview === undefined ? {} : { claimReview: () => input.method!.experience!.claimReview!() }) });
+}
+
+/** Thin host composition; each subsystem owns its hook and observation tool implementation. */
+export function learningToolsOf(method: MethodBoard | undefined, tool: ToolGapRuntime | undefined, taskId: string | undefined): ToolPort | undefined {
+  const methodTools = method?.experience === undefined || taskId === undefined ? undefined : createExperienceTools({ runtime: method.experience, taskId });
+  const reportTools = taskId === undefined ? undefined : tool?.toolsForTask?.(taskId);
+  return methodTools === undefined ? reportTools : reportTools === undefined ? methodTools : composeAdditionalTools(methodTools, reportTools);
+}

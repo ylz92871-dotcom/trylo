@@ -68,8 +68,10 @@ test("every family's sub-verbs complete in all three shells", () => {
       const lines = completionScript(shell)
         .split("\n")
         .filter((line) => line.includes(`${word})`) || line.includes(`subcommand_from ${word}`));
+
       assert.ok(lines.length > 0, `${shell} has no sub-command completion for ${word}`);
       const body = lines.join("\n");
+
       for (const verb of verbs) {
         assert.match(
           body,

@@ -55,6 +55,7 @@ function ctxOf(home: string, cwd: string): { readonly ctx: CliContext; readonly 
     now: () => 0,
     newId: (prefix) => `${prefix}-1`,
   };
+
   return { ctx, out, err };
 }
 
@@ -69,8 +70,11 @@ test("only `method` is accepted, and a misspelling is a usage error rather than 
     const bare = parseArgs([`--learning=${bad}`]);
     assert.equal(bare.kind, "error", `--learning=${bad} before the command must be refused`);
   }
+
   const good = parseArgs(["run", "--learning=method", "hi"]);
+
   assert.equal(good.kind, "run");
+
   if (good.kind === "run") {
     assert.equal(good.options.learning, "method");
   }
@@ -78,25 +82,34 @@ test("only `method` is accepted, and a misspelling is a usage error rather than 
 
 test("the switch is accepted in both placements and reaches the REPL", () => {
   const insideRun = parseArgs(["run", "--learning=method", "hi"]);
+
   assert.equal(insideRun.kind, "run");
+
   if (insideRun.kind === "run") {
     assert.equal(insideRun.options.learning, "method");
   }
 
   const beforeRun = parseArgs(["--learning", "method", "run", "hi"]);
+
   assert.equal(beforeRun.kind, "run");
+
   if (beforeRun.kind === "run") {
     assert.equal(beforeRun.options.learning, "method");
   }
 
   // The bare command is the REPL, and D1 says it takes the switch too.
   const repl = parseArgs(["--learning=method"]);
+
   assert.equal(repl.kind, "repl");
+
   if (repl.kind === "repl") {
     assert.equal(repl.learning, "method");
   }
+
   const bare = parseArgs([]);
+
   assert.equal(bare.kind, "repl");
+
   if (bare.kind === "repl") {
     assert.equal(bare.learning, undefined);
   }
@@ -141,11 +154,13 @@ test("doctor says the same thing by default and more only when asked", () => {
 
     const off = collectDoctor(io, base);
     const offCheck = off.checks.find((check) => check.id === "learning.isolation");
+
     assert.equal(offCheck?.detail, DEFAULT_LEARNING_DETAIL);
     assert.equal(offCheck?.status, "ok");
 
     const on = collectDoctor(io, { ...base, learning: "method" });
     const onCheck = on.checks.find((check) => check.id === "learning.isolation");
+
     assert.equal(onCheck?.status, "ok");
     assert.equal(onCheck?.detail, `method learning wired (board root: ${methodBoardRoot(home, ctx.env)})`);
 
@@ -177,6 +192,7 @@ test("the composition root builds the board only when the switch asked for it", 
     if ("code" in off) {
       assert.fail("expected a wiring");
     }
+
     assert.equal(off.ports.method, undefined);
 
     const on = wirePorts({
@@ -191,6 +207,7 @@ test("the composition root builds the board only when the switch asked for it", 
     if ("code" in on) {
       assert.fail("expected a wiring");
     }
+
     assert.notEqual(on.ports.method, undefined);
 
     // Nothing else about the port table moves: the switch adds `method` and
@@ -198,6 +215,7 @@ test("the composition root builds the board only when the switch asked for it", 
     // claim the work package made as contract #7.)
     const offKeys = Object.keys(off.ports).sort();
     const onKeys = Object.keys(on.ports).sort();
+
     assert.deepEqual(onKeys, [...offKeys, "method"].sort());
   } finally {
     cleanup();
@@ -208,6 +226,7 @@ test("a real run with the switch on reaches the board, and one without it touche
   const { home, cwd, cleanup } = temp();
   try {
     const { ctx } = ctxOf(home, cwd);
+
     // A corrupt board log makes the archive unreadable, which is the one thing
     // the board always reports: it turns "the board was constructed" into a
     // line on disk instead of a private fact inside the process.
@@ -220,13 +239,16 @@ test("a real run with the switch on reaches the board, and one without it touche
       stdout: ctx.stdout,
       stderr: ctx.stderr,
     });
+
     assert.equal(exit, 0, "a learning-side failure must not change the run's exit code");
     const logPath = join(methodLearningRoot(home, ctx.env), METHOD_EVENTS_FILE);
+
     assert.equal(existsSync(logPath), true, "the board's observation must reach the sink");
     const lines = readFileSync(logPath, "utf8").split("\n").filter((line) => line.length > 0);
     const degraded = lines
       .map((line) => JSON.parse(line) as { readonly payload?: { readonly component?: string } })
       .filter((record) => record.payload?.component === "method_archive");
+
     // One board, one load, one report.
     assert.equal(degraded.length, 1, `expected one archive observation, got ${degraded.length}`);
   } finally {
@@ -238,6 +260,7 @@ test("a genuine learning-side degradation names its component, not just `observa
   const { home, cwd, cleanup } = temp();
   try {
     const { ctx, err } = ctxOf(home, cwd);
+
     // A normal failed read retains its call metadata and does not degrade the
     // sensor. Then exercise a genuinely damaged legacy transcript separately.
     await handleRun(ctx, runOptions("method"), { stdout: ctx.stdout, stderr: ctx.stderr });
@@ -245,12 +268,15 @@ test("a genuine learning-side degradation names its component, not just `observa
     const wired = wirePorts({providerId:"fixture",model:"default",endpoint:"",apiKey:undefined,workspaceRoot:cwd,permission:createDenyAllPermission(),
       learning:{switch:"method",homeDir:home,env:ctx.env,emit:()=>undefined}});
     if ("code" in wired) assert.fail("expected a wiring");
+
     assert.ok(wired.ports.method);
     const renderer = createTurnRenderer("text",{stdout:ctx.stdout,stderr:ctx.stderr},{sessionId:"sensor-test",turnId:"sensor-turn",providerId:"fixture",model:"default"});
+
     await reportBeat({port:wired.ports.method,turnId:"sensor-turn",beat:1,tools:wired.ports.tools,take:undefined,
       transcript:[{kind:"tool_result",sequence:0,toolCallId:"missing-call",name:"read_file",output:"read_failed:missing",truncated:false,outcome:"failed"}],
       emit:(kind,payload)=>renderer.onEnvelope({protocolVersion:"0.0",eventId:"sensor-1",sequence:1,timestamp:"2026-10-13T00:00:00.000Z",kind,payload,producerId:"loop",producerSequence:1})});
     const printed = err.join("");
+
     assert.equal(
       printed.includes("warning observation"),
       false,
@@ -270,6 +296,7 @@ test("a run without the switch creates no learning directory at all", async () =
   const { home, cwd, cleanup } = temp();
   try {
     const { ctx } = ctxOf(home, cwd);
+
     await handleRun(ctx, runOptions(), { stdout: ctx.stdout, stderr: ctx.stderr });
     assert.equal(
       existsSync(methodLearningRoot(home, ctx.env)),

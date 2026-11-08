@@ -35,6 +35,7 @@ test("a style file with frontmatter parses name, description and prompt", () => 
     "---\nname: terse\ndescription: Short answers\nkeep-coding-instructions: true\n---\n\nAnswer briefly.\n",
     "project",
   );
+
   assert.equal(parsed?.name, "terse");
   assert.equal(parsed?.description, "Short answers");
   assert.equal(parsed?.prompt, "Answer briefly.");
@@ -62,6 +63,7 @@ test("project beats user, default cannot be shadowed, and lookup is exact", () =
     "/home/.trylo/output-styles/default.md": "Shadow attempt.\n",
   };
   const styles = loadOutputStyles(io(files), DIRS);
+
   assert.deepEqual(styles.map((style) => style.name), ["terse"]);
   assert.equal(styles[0]?.prompt, "Project terse.");
   assert.equal(styles[0]?.source, "project");

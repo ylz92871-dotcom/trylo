@@ -42,6 +42,7 @@ function scriptedCtx(lines: ReadonlyArray<string>, stdinIsTty: boolean): Scripte
   const root = mkdtempSync(join(tmpdir(), "trylo-tui-"));
   const home = join(root, "home");
   const cwd = join(root, "workspace");
+
   mkdirSync(cwd, { recursive: true });
   mkdirSync(join(home, ".trylo", "sessions"), { recursive: true });
   // Pick the fixture provider explicitly so the TUI startup page does not
@@ -55,6 +56,7 @@ function scriptedCtx(lines: ReadonlyArray<string>, stdinIsTty: boolean): Scripte
     cwd,
     nodeVersion: "v22.0.0",
     stdinIsTty,
+
     readFile: (absolutePath) => {
       try {
         return readFileSync(absolutePath, "utf8");
@@ -62,10 +64,12 @@ function scriptedCtx(lines: ReadonlyArray<string>, stdinIsTty: boolean): Scripte
         return undefined;
       }
     },
+
     isDirectory: () => true,
     readDir: () => [],
     writeFile: () => true,
     readStdin: async () => "",
+
     readLine: async () => {
       if (at >= lines.length) {
         return undefined;
@@ -74,12 +78,14 @@ function scriptedCtx(lines: ReadonlyArray<string>, stdinIsTty: boolean): Scripte
       at += 1;
       return line;
     },
+
     readSecret: async () => undefined,
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
     now: () => 0,
     newId: (prefix) => `${prefix}-${(ids += 1)}`,
   };
+
   return { ctx, out, err, root };
 }
 
@@ -95,7 +101,11 @@ test("TUI closes after a durable session failure and cannot dispatch the queued 
   const fx = scriptedCtx(["first", "second", "/exit"], true);
   let dispatched = 0;
   const failure = { exitCode: EXIT_CODES.CONFIG, message: "write failed", hint: "session closed", continuation: "session_closed" as const };
-  const runner: TuiTurnRunner = async () => { dispatched++; return failure; };
+  const runner: TuiTurnRunner = async () => {
+    dispatched++;
+    return failure;
+  };
+
   try {
     const result = await handleTui(fx.ctx, lineIoOf(fx.ctx), runner);
     assert.equal(result, EXIT_CODES.CONFIG);
@@ -109,9 +119,11 @@ test("non-TTY entry is the line REPL byte for byte, turns included", async () =>
   const script = ["/help", "/not-a-command", "hello fixture", "/exit"];
   const direct = scriptedCtx(script, false);
   const entered = scriptedCtx(script, false);
+
   try {
     const codeDirect = await handleRepl(direct.ctx, sinkOf(direct));
     const codeEntered = await handleReplEntry(entered.ctx, sinkOf(entered));
+
     assert.equal(codeEntered, codeDirect);
     // Each run builds its own temporary workspace, and a failed tool result now
     // names the path it failed on — the D3 fix that makes a failure actionable.
@@ -119,6 +131,7 @@ test("non-TTY entry is the line REPL byte for byte, turns included", async () =>
     // says about everything else.
     const withoutOwnRoot = (lines: ReadonlyArray<string>, root: string): ReadonlyArray<string> =>
       lines.map((line) => line.split(root).join("<root>"));
+
     assert.deepEqual(withoutOwnRoot(entered.out, entered.root), withoutOwnRoot(direct.out, direct.root));
     assert.deepEqual(withoutOwnRoot(entered.err, entered.root), withoutOwnRoot(direct.err, direct.root));
   } finally {
@@ -144,16 +157,21 @@ function renderScreen(writes: ReadonlyArray<string>, cols: number, rows: number)
   let x = 0;
   const put = (ch: string): void => {
     const row = grid[y] ?? [];
+
     grid[y] = row;
+
     while (row.length < x) row.push(" ");
+
     row[x] = ch;
     x += 1;
+
     if (x >= cols) {
       x = 0;
       y = Math.min(y + 1, rows - 1);
     }
   };
   const text = writes.join("");
+
   for (let i = 0; i < text.length; i += 1) {
     const c = text[i] ?? "";
     if (c === "\x1b") {
@@ -161,8 +179,10 @@ function renderScreen(writes: ReadonlyArray<string>, cols: number, rows: number)
       if (m === null) {
         continue;
       }
+
       i += m[0].length - 1;
       const n = (m[1] ?? "") === "" ? 1 : Number.parseInt(m[1] ?? "1", 10);
+
       if (m[2] === "A") {
         y = Math.max(0, y - n);
       } else if (m[2] === "B") {
@@ -177,22 +197,29 @@ function renderScreen(writes: ReadonlyArray<string>, cols: number, rows: number)
       } else if (m[2] === "K") {
         grid[y] = (grid[y] ?? []).slice(0, x);
       }
+
       continue;
     }
+
     if (c === "\r") {
       x = 0;
       continue;
     }
+
     if (c === "\n") {
       x = 0;
       y = Math.min(y + 1, rows - 1);
       continue;
     }
+
     put(c);
   }
+
   const out = grid.map((r) => r.join("").replace(/\s+$/, ""));
+
   return {
     rows: () => out,
+
     bottomLineOf: (needle: string) => {
       for (let r = out.length - 1; r >= 0; r -= 1) {
         if ((out[r] ?? "").includes(needle)) {
@@ -210,14 +237,17 @@ function fakeIo(lines: ReadonlyArray<string>, handlers?: Array<() => void>): Fak
   const written: string[] = [];
   const reads = { count: 0 };
   const prompts: string[] = [];
+
   return {
     written,
     reads,
     prompts,
+
     readLine: async (prompt?: string) => {
       prompts.push(prompt ?? "");
       return reads.count < lines.length ? (lines[reads.count++] ?? "") : undefined;
     },
+
     write: (text) => written.push(text),
     size: () => ({ columns: 80, rows: 24 }),
     ...(handlers === undefined ? {} : { onInterrupt: (handler: () => void) => handlers.push(handler) }),
@@ -258,9 +288,11 @@ function fakeRunner(
         lastMessage: "hello from the model",
       },
     ];
+
     for (const event of events) {
       sink.stdout(`${JSON.stringify(event)}\n`);
     }
+
     const outcome: TurnOutcome = {
       exitCode: 0,
       result: {
@@ -278,8 +310,10 @@ function fakeRunner(
       view: undefined,
       warnings: [],
     };
+
     return outcome;
   };
+
   return { runner, scaffolds };
 }
 
@@ -298,6 +332,7 @@ test("multiple question answers reuse the fallback pump's single reader", async 
   const received: string[] = [];
   const runner: TuiTurnRunner = async (scaffold, text, sink, signal) => {
     received.push(text);
+
     if (text === "ask") {
       assert(scaffold.questions);
       await scaffold.questions.execute({ name: "ask_user_question", toolCallId: "ask", arguments: { questions: [
@@ -305,8 +340,10 @@ test("multiple question answers reuse the fallback pump's single reader", async 
         { id: "second", header: "二", question: "第二种颜色？", options: [{ label: "蓝色", description: "蓝" }, { label: "红色", description: "红" }] },
       ] } }, new AbortController().signal);
     }
+
     return fakeRunner([]).runner(scaffold, text, sink, signal);
   };
+
   try {
     assert.equal(await handleTui(fx.ctx, singleReader, runner, undefined, {}, () => createMidRunInput({ io: singleReader })), 0);
     assert.equal(received.length, 2);
@@ -318,10 +355,13 @@ test("the TUI shell consumes the event stream and threads the transcript", async
   const scripted = scriptedCtx([], true);
   const { runner, scaffolds } = fakeRunner(THREADING_TRANSCRIPT);
   const io = fakeIo(["hi", "again", "/exit"]);
+
   try {
     const code = await handleTui(scripted.ctx, io, runner);
+
     assert.equal(code, 0);
     const flat = io.written.join("");
+
     assert.match(flat, /hello from the model/);
     assert.match(flat, /-> read_file/);
     // The status line shows the budget the run actually resolved, which is the
@@ -342,6 +382,7 @@ test("the idle prompt is handed to the line reader, not written by the shell", a
   const scripted = scriptedCtx([], true);
   const { runner } = fakeRunner(THREADING_TRANSCRIPT);
   const io = fakeIo(["", "/exit"]);
+
   try {
     await handleTui(scripted.ctx, io, runner);
     assert.equal(io.prompts[0], "> ", "the first read must carry the prompt");
@@ -361,6 +402,7 @@ test("empty input at the idle prompt does not stack another status bar", async (
   const scripted = scriptedCtx([], true);
   const { runner } = fakeRunner(THREADING_TRANSCRIPT);
   const io = fakeIo(["", "", "", "/exit"]);
+
   try {
     await handleTui(scripted.ctx, io, runner);
     const bars = io.written.filter((chunk) => chunk.includes("| idle")).length;
@@ -379,13 +421,16 @@ test("the start page is compact and puts project and model before commands", asy
   const scripted = scriptedCtx([], true);
   const { runner } = fakeRunner(THREADING_TRANSCRIPT);
   const io = fakeIo(["hi", "/exit"]);
+
   try {
     await handleTui(scripted.ctx, io, runner);
     const screen = renderScreen(io.written, 80, 24).rows();
+
     assert.match(screen[0] ?? "", /Trylo.*workspace.*fixture\/default/);
     assert.match(screen[1] ?? "", /\/settings/);
     const hint = screen.findIndex((r) => r.includes("/exit"));
     const bar = screen.findIndex((r) => r.includes("idle"));
+
     assert.ok(hint <= 3, "startup instructions must fit within four rows");
     assert.equal(screen.some(row => row.includes("█")), false);
     assert.ok(bar > hint, `status bar at ${bar} is drawn above the hint at ${hint}`);
@@ -420,23 +465,29 @@ test("TUI threads raw records after cancellation even without a compact window, 
   let turns = 0;
   const runner: TuiTurnRunner = async scaffold => {
     turns++;
+
     if (turns === 1) {
       const session = scaffold.session!;
+
       for (const payload of [
         { kind: "user", sequence: 0, text: "first" },
         { kind: "tool_call", sequence: 1, toolCallId: "not-issued", name: "read_file", arguments: {} },
       ]) {
         await session.append({ type: "transcript_item", sessionId: scaffold.sessionId, turnId: "t", at: "1970-01-01T00:00:00Z", payload });
       }
+
       return { ...outcomeWith(scaffold, "cancelled"), transcript: [
         { kind: "user", sequence: 0, text: "first" },
         { kind: "tool_call", sequence: 1, toolCallId: "not-issued", name: "read_file", arguments: {} },
       ] };
     }
+
     assert.ok(scaffold.resumeRecords?.some(record => record.type === "transcript_item" && record.payload.sequence === 1));
     assert.equal(scaffold.resumeTranscript?.some(item => item.kind === "tool_call"), false, "an unanswered request must not reach the next provider prompt");
+
     return outcomeWith(scaffold, "completed");
   };
+
   try {
     assert.equal(await handleTui(fx.ctx, lineIoOf(fx.ctx), runner), 0);
     assert.equal(turns, 2);
@@ -451,6 +502,7 @@ test("TUI stops when the settled journal cannot be read for the next turn", asyn
     scaffold.session!.readRecords = async () => ({ ok: false, code: "checksum_mismatch", detail: "injected" });
     return outcomeWith(scaffold, "completed");
   };
+
   try {
     assert.equal(await handleTui(fx.ctx, lineIoOf(fx.ctx), runner), EXIT_CODES.CONFIG);
     assert.equal(turns, 1);
@@ -473,9 +525,11 @@ test("a wired interrupt hub cancels in place once and exits on the second press"
   const runner: TuiTurnRunner = async (scaffold, _text, sink, cancel) => {
     turns += 1;
     signals.push(cancel);
+
     if (handlers[0] !== undefined) {
       handlers[0]();
     }
+
     sink.stdout(`${JSON.stringify({
       type: "run_result",
       status: "completed",
@@ -487,6 +541,7 @@ test("a wired interrupt hub cancels in place once and exits on the second press"
       durationMs: 0,
       lastMessage: "",
     })}\n`);
+
     return {
       exitCode: 0,
       result: {
@@ -505,11 +560,14 @@ test("a wired interrupt hub cancels in place once and exits on the second press"
       warnings: [],
     };
   };
+
   try {
     const code = await handleTui(scripted.ctx, io, runner);
+
     assert.equal(code, EXIT_CODES.CANCELLED);
     assert.equal(turns, 2);
     const flat = io.written.join("");
+
     // Turn 1: cancel requested, process alive. Turn 2: second press exits,
     // so the trailing "/exit" line is never read.
     assert.match(flat, /cancel was requested during the turn/);
@@ -549,6 +607,7 @@ test("the first interrupt cancels the turn in flight and the session keeps going
   const runner: TuiTurnRunner = async (scaffold, _text, sink, cancel) => {
     turns += 1;
     signals.push(cancel);
+
     if (turns === 1) {
       handlers[0]?.();
       // What the real host does with an aborted cancel signal: the turn ends
@@ -562,14 +621,18 @@ test("the first interrupt cancels the turn in flight and the session keeps going
         cancel.addEventListener("abort", () => resolve(), { once: true });
       });
     }
+
     return finishTurn(scaffold, sink, cancel.aborted ? "cancelled" : "completed");
   };
+
   try {
     const code = await handleTui(scripted.ctx, io, runner);
+
     assert.equal(code, EXIT_CODES.OK);
     assert.equal(turns, 2);
     assert.equal(io.reads.count, 3);
     const flat = io.written.join("");
+
     assert.match(flat, /turn cancelled/);
     assert.equal(flat.includes("finished before it could be stopped"), false);
     assert.equal(signals[0]?.aborted, true);
@@ -596,6 +659,7 @@ test("with the root's interrupt surface wired the second press leaves with 130",
     handled[0]?.();
     return finishTurn(scaffold, sink, "completed");
   };
+
   try {
     // The production path: `lineIoOf` is what `handleReplEntry` builds, and the
     // capability it passes through is the root's, not the test's.

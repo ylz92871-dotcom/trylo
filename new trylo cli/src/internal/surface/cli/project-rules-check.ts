@@ -71,6 +71,7 @@ export function projectRulesCheck(
       detail: `unusable rule files: ${failures.join(", ")}`,
     };
   }
+
   const adopted = sources ?? [];
   if (adopted.length === 0) {
     return {
@@ -79,10 +80,12 @@ export function projectRulesCheck(
       detail: "no AGENTS.md / CLAUDE.md / GEMINI.md in this workspace or its ancestors up to the root",
     };
   }
+
   const lines = adopted.map(
     (source) =>
       `  ${source.relativePath} (${scopeWording(source)}, ${source.contentHash.slice(0, SHORT_HASH)})`,
   );
+
   return {
     id: "project.rules",
     status: "ok",

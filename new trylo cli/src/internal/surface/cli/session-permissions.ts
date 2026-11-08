@@ -40,7 +40,9 @@ export function createSessionPermissions(initial: PermissionChoice = {}): Sessio
     // Startup flags are forwarded every turn; they must not undo a later
     // user mode switch, disable or revoke made in this open session.
     if (!selected) return Object.keys(explicit).length > 0 ? explicit : initial;
+
     if (mode === "read-only") return { ask: "never", denyTools: APPROVABLE_TOOL_NAMES.filter(name => !PATH_READ_TOOL_NAMES.includes(name)) };
+
     return {
       ...(ask === undefined ? {} : { ask }),
       ...(mode === "auto-edit" ? { workspaceEdits: "auto" as const } : {}),
@@ -48,9 +50,11 @@ export function createSessionPermissions(initial: PermissionChoice = {}): Sessio
       denyTools: [...denied],
     };
   };
+
   return {
     grants,
     snapshot: () => ({ mode, allowTools: [...allowed], denyTools: [...denied], grants: grants.entries(), effectiveChoice: choiceFor({}) }),
+
     setMode(next) {
       mode = next;
       ask = next === "read-only" ? "never" : "always";
@@ -59,6 +63,7 @@ export function createSessionPermissions(initial: PermissionChoice = {}): Sessio
       denied.clear();
       grants.clear();
     },
+
     allowTool(name) {
       if (!isApprovableToolName(name)) throw new Error(`unknown approvable tool: ${name}`);
       if (mode === "read-only") throw new Error("switch out of read-only mode before enabling a tool");
@@ -67,19 +72,23 @@ export function createSessionPermissions(initial: PermissionChoice = {}): Sessio
       allowed.add(name);
       forgetTool(name);
     },
+
     denyTool(name) {
       selected = true;
       allowed.delete(name);
       denied.add(name);
       forgetTool(name);
     },
+
     revokeTool(name) {
       selected = true;
       allowed.delete(name);
       denied.delete(name);
       forgetTool(name);
     },
+
     choice: choiceFor,
+
     close() {
       grants.clear();
       allowed.clear();

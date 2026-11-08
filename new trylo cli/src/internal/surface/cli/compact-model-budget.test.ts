@@ -4,10 +4,14 @@ import { summarizeTranscript, transcriptLines } from "../../compaction/summary.j
 import { estimateMessagesTokens } from "../../compaction/token-estimate.js";
 import type { ProviderPort, ProviderRequest } from "../../ports/provider.js";
 import type { TranscriptItem } from "../../protocol/transcript.js";
+import { SUMMARY_MAX_CHARS } from "../../ports/compaction.js";
 import { createModelSummarizer, SUMMARIZER_INSTRUCTION } from "./compact-model-summarizer.js";
 
 const SUMMARY = "The complete model summary.";
 const GOAL: TranscriptItem = { kind: "user", sequence: 0, text: "Preserve the original goal and verify the actual artifacts." };
+// A BMP code unit can occupy three UTF-8 bytes. This is the existing coarse
+// estimator's reservation for the persisted character contract, not an output cap.
+const reservedOutput = estimateMessagesTokens([{ role: "assistant", content: "中".repeat(SUMMARY_MAX_CHARS) }]);
 
 function provider(): { port: ProviderPort; requests: ProviderRequest[] } {
   const requests: ProviderRequest[] = [];
@@ -28,11 +32,12 @@ function promptTokens(items: readonly TranscriptItem[]): number {
 test("oversized summary material never bypasses the configured context ceiling", async () => {
   const fake = provider();
   const items: readonly TranscriptItem[] = [GOAL,
-    { kind: "assistant_reasoning", sequence: 1, blockId: "large", text: "x".repeat(300_000), redacted: false },
+    { kind: "assistant_text", sequence: 1, blockId: "large", text: "x".repeat(300_000) },
   ];
   const options = { provider: fake.port, model: "fixture", contextTokenLimit: 65_536 };
   const previousSummary = "Retain the verified checkpoint and the standing constraints.";
   const summary = await createModelSummarizer(options)(items, previousSummary);
+
   assert.equal(fake.requests.length, 0, "an over-limit auxiliary request must not be sent");
   assert.equal(summary, summarizeTranscript(items, { previousSummary }));
   assert.ok(summary.includes(previousSummary));
@@ -41,7 +46,7 @@ test("oversized summary material never bypasses the configured context ceiling",
 test("the output reservation is part of the summary request's context budget", async () => {
   const fake = provider();
   const items = [GOAL];
-  const options = { provider: fake.port, model: "fixture", contextTokenLimit: promptTokens(items) + 1023 };
+  const options = { provider: fake.port, model: "fixture", contextTokenLimit: promptTokens(items) + reservedOutput - 1 };
   assert.equal(await createModelSummarizer(options)(items), summarizeTranscript(items));
   assert.equal(fake.requests.length, 0);
 });
@@ -49,10 +54,10 @@ test("the output reservation is part of the summary request's context budget", a
 test("a summary whose prompt and reserved output fit exactly is authored normally", async () => {
   const fake = provider();
   const items = [GOAL];
-  const options = { provider: fake.port, model: "fixture", contextTokenLimit: promptTokens(items) + 1024 };
+  const options = { provider: fake.port, model: "fixture", contextTokenLimit: promptTokens(items) + reservedOutput };
   assert.equal(await createModelSummarizer(options)(items), SUMMARY);
   assert.equal(fake.requests.length, 1);
-  assert.equal(fake.requests[0]?.maxOutputTokens, 1024);
+  assert.equal(fake.requests[0]?.maxOutputTokens, undefined, "context reservation must never become a generated-token ceiling");
 });
 
 test("UTF-8 bytes and previous summary text both count toward the auxiliary ceiling", async () => {
@@ -60,8 +65,9 @@ test("UTF-8 bytes and previous summary text both count toward the auxiliary ceil
   const items: readonly TranscriptItem[] = [GOAL,
     { kind: "assistant_text", sequence: 1, blockId: "unicode", text: "验证🙂".repeat(1000) },
   ];
-  const options = { provider: fake.port, model: "fixture", contextTokenLimit: promptTokens(items) + 1024 };
+  const options = { provider: fake.port, model: "fixture", contextTokenLimit: promptTokens(items) + reservedOutput };
   const previousSummary = "Preserve the earlier user constraint. ".repeat(50);
+
   assert.equal(await createModelSummarizer(options)(items, previousSummary), summarizeTranscript(items, { previousSummary }));
   assert.equal(fake.requests.length, 0);
 });

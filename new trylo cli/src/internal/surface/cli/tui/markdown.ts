@@ -39,6 +39,7 @@ export function markdownLines(text: string, columns: number): ReadonlyArray<Mark
   const rows = text.replace(/\r\n/g, "\n").split("\n");
   const out: MarkdownLine[] = [];
   let index = 0;
+
   while (index < rows.length) {
     const row = rows[index] ?? "";
     const fence = fenceOf(row);
@@ -46,39 +47,47 @@ export function markdownLines(text: string, columns: number): ReadonlyArray<Mark
       index = fenceBlock(rows, index, fence, out);
       continue;
     }
+
     const heading = headingOf(row);
     if (heading !== undefined) {
       out.push({ tone: "strong", text: stripInline(heading) });
       index += 1;
       continue;
     }
+
     if (isRule(row)) {
       out.push({ tone: "output", text: "───" });
       index += 1;
       continue;
     }
+
     if (isTableAt(rows, index)) {
       index = tableBlock(rows, index, columns, out);
       continue;
     }
+
     const quote = quoteOf(row);
     if (quote !== undefined) {
       index = quoteBlock(rows, index, out);
       continue;
     }
+
     const item = listItemOf(row);
     if (item !== undefined) {
       index = listBlock(rows, index, out);
       continue;
     }
+
     if (row.trim().length === 0) {
       out.push({ tone: "assistant", text: "" });
       index += 1;
       continue;
     }
+
     out.push({ tone: "assistant", text: stripInline(row) });
     index += 1;
   }
+
   return out.length === 0 ? [{ tone: "assistant", text: "" }] : out;
 }
 
@@ -96,8 +105,10 @@ function fenceBlock(
   out: MarkdownLine[],
 ): number {
   const fenceCharacter = opening[0] ?? "`";
+
   out.push({ tone: "output", text: (rows[start] ?? "").trim() });
   let index = start + 1;
+
   while (index < rows.length) {
     const row = rows[index] ?? "";
     const closing = /^ {0,3}(`{3,}|~{3,})\s*$/.exec(row);
@@ -105,9 +116,11 @@ function fenceBlock(
       out.push({ tone: "output", text: row.trim() });
       return index + 1;
     }
+
     out.push({ tone: "output", text: row });
     index += 1;
   }
+
   // Unterminated fence: the body was consumed as code, which is what the
   // person typing it saw too — an unclosed fence renders as code to the end.
   return index;
@@ -130,6 +143,7 @@ function quoteOf(row: string): string | undefined {
 /** One blockquote's rows, joined with the marker carried in the text. */
 function quoteBlock(rows: ReadonlyArray<string>, start: number, out: MarkdownLine[]): number {
   let index = start;
+
   while (index < rows.length) {
     const quote = quoteOf(rows[index] ?? "");
     if (quote === undefined) {
@@ -138,6 +152,7 @@ function quoteBlock(rows: ReadonlyArray<string>, start: number, out: MarkdownLin
     out.push({ tone: "quote", text: `${BLOCKQUOTE_MARK}${stripInline(quote)}` });
     index += 1;
   }
+
   return index;
 }
 
@@ -148,7 +163,9 @@ function listItemOf(row: string): ListItem | undefined {
   if (match === null) {
     return undefined;
   }
+
   const [, spaces, marker, body] = match;
+
   return {
     indent: Math.floor(((spaces ?? "").length) / 2),
     marker: /^\d/.test(marker ?? "") ? `${parseInt(marker ?? "1", 10)}.` : "-",
@@ -159,6 +176,7 @@ function listItemOf(row: string): ListItem | undefined {
 /** A list run: items and the continuation rows that belong to the last one. */
 function listBlock(rows: ReadonlyArray<string>, start: number, out: MarkdownLine[]): number {
   let index = start;
+
   while (index < rows.length) {
     const item = listItemOf(rows[index] ?? "");
     if (item !== undefined) {
@@ -167,6 +185,7 @@ function listBlock(rows: ReadonlyArray<string>, start: number, out: MarkdownLine
       index += 1;
       continue;
     }
+
     // An indented row under an item continues it (a wrapped sentence or a
     // sub-paragraph); the text keeps its own indentation minus one level.
     const row = rows[index] ?? "";
@@ -176,8 +195,10 @@ function listBlock(rows: ReadonlyArray<string>, start: number, out: MarkdownLine
       index += 1;
       continue;
     }
+
     break;
   }
+
   return index;
 }
 

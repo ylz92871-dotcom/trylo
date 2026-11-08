@@ -25,25 +25,33 @@ export function renderTurnCompact(
   if (turn === undefined) {
     return [`no such turn: ${turnId}`];
   }
+
   const lines = [`turn ${turn.turnId} (records ${turn.firstSequence}-${turn.lastSequence})`];
+
   for (const text of turn.userTexts) {
     lines.push(`  user: ${text.split("\n")[0] ?? ""}`);
   }
+
   for (const call of turn.toolCalls) {
     lines.push(`  tool ${call.name} (${call.toolCallId}): ${call.outcome}`);
   }
+
   for (const file of turn.fileWrites) {
     lines.push(`  file ${file.mode} ${file.path} (${file.bytes} bytes)`);
   }
+
   for (const checkpoint of turn.checkpointIds) {
     lines.push(`  checkpoint ${checkpoint}`);
   }
+
   for (const problem of turn.problems) {
     lines.push(`  problem: ${problem}`);
   }
+
   if (turn.toolCalls.length === 0 && turn.fileWrites.length === 0) {
     lines.push("  (no tool calls, no file writes)");
   }
+
   return lines;
 }
 
@@ -69,6 +77,7 @@ export function rollbackAdvice(
   const forkSuffix = turn.userTexts.length > 0
     ? ` --before-user-message ${messageIndex === undefined ? "<n>" : String(messageIndex)}`
     : " --interrupted";
+
   return {
     forkCommand: `trylo session fork ${sessionId}${forkSuffix}`,
     checkpointId,
@@ -84,6 +93,7 @@ export function renderRollbackLines(
 ): ReadonlyArray<string> {
   const advice = rollbackAdvice(sessionId, turn, messageIndex);
   const lines = [`to roll the conversation back: \`${advice.forkCommand}\``];
+
   if (advice.checkpointDiffCommand !== undefined && advice.scopedRestoreCommand !== undefined) {
     lines.push(
       `to preview the files: \`${advice.checkpointDiffCommand}\``,
@@ -93,6 +103,7 @@ export function renderRollbackLines(
   } else {
     lines.push("to rewind the files: no checkpoint was taken this turn");
   }
+
   return lines;
 }
 
@@ -107,6 +118,7 @@ export async function handleSessionReview(
       hint: "use letters, digits, dot, dash and underscore, at most 128 characters",
     });
   }
+
   const store = createNdjsonSessionStore({ path: sessionPath(ctx.homeDir, ctx.env, options.session) });
   const viewed = await store.readRecords();
   if (!viewed.ok) {
@@ -123,9 +135,11 @@ export async function handleSessionReview(
       hint: "a session that cannot be proven intact is never partially shown",
     });
   }
+
   const records = viewed.view.records;
   const review = reviewSession(records);
   let turnId: string | undefined = options.turn;
+
   if (options.message !== undefined) {
     const located = locateTurnByUserMessage(records, options.message);
     if (!located.ok) {
@@ -135,9 +149,12 @@ export async function handleSessionReview(
         hint: "`trylo session export` shows the numbered messages",
       });
     }
+
     turnId = located.turnId;
   }
+
   turnId ??= review.turns[review.turns.length - 1]?.turnId;
+
   if (turnId === undefined) {
     const empty = options.json
       ? JSON.stringify({ session: options.session, turns: 0, note: "the journal holds no turns yet" })
@@ -145,6 +162,7 @@ export async function handleSessionReview(
     ctx.stdout(`${empty}\n`);
     return EXIT_CODES.OK;
   }
+
   const turn = review.turns.find((candidate) => candidate.turnId === turnId);
   if (turn === undefined) {
     return reportFailure(ctx, {
@@ -153,7 +171,9 @@ export async function handleSessionReview(
       hint: "`trylo session review` without --turn shows the latest turn",
     });
   }
+
   let horizon: { horizonSequence: number; visibleItems: number; hiddenItems: number } | undefined;
+
   if (options.asOfSequence !== undefined) {
     const preview = previewRollback(records, options.asOfSequence);
     if (!preview.ok) {
@@ -163,10 +183,13 @@ export async function handleSessionReview(
         hint: "sequences are journal positions; `session export` shows the records",
       });
     }
+
     horizon = { horizonSequence: preview.horizonSequence, visibleItems: preview.visibleItems, hiddenItems: preview.hiddenItems };
   }
+
   if (options.json) {
     const advice = rollbackAdvice(options.session, turn);
+
     ctx.stdout(`${JSON.stringify({
       session: options.session,
       turn,
@@ -185,26 +208,33 @@ export async function handleSessionReview(
           },
       },
     })}\n`);
+
     return EXIT_CODES.OK;
   }
+
   const lines = renderTurnCompact(review, turn.turnId);
+
   if (review.truncatedTurns > 0) {
     lines.push(
       `  note: showing the newest ${review.turns.length} of ${review.turns.length + review.truncatedTurns} turns (${review.truncatedTurns} oldest hidden)`,
     );
   }
+
   if (horizon !== undefined) {
     lines.push(
       `  horizon ${horizon.horizonSequence}: the model would see ${horizon.visibleItems} item(s), ${horizon.hiddenItems} hidden (journal unchanged)`,
     );
   }
+
   for (const adviceLine of renderRollbackLines(options.session, turn)) {
     lines.push(`  ${adviceLine}`);
   }
+
   lines.push(
     "",
     "a review changes nothing: the journal and the workspace are as they were.",
   );
   ctx.stdout(`${lines.join("\n")}\n`);
+
   return EXIT_CODES.OK;
 }

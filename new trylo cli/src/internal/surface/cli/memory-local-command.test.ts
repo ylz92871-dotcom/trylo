@@ -14,31 +14,46 @@ for (const decision of ["approved", "denied", "standing-denied"] as const) for (
 ]) test(`a memory-only user command has a truthful result (decision=${decision}, enabled=${enabled}, command=${command})`, async () => {
   const root = mkdtempSync(path.join(tmpdir(), "wpcl-command-")), workspace = path.join(root, "workspace");
   const { mkdirSync } = await import("node:fs");
+
   mkdirSync(workspace);
+
   try {
     const output: string[] = [];
     const permission = createFakePermission(decision === "denied" ? "denied" : "approved");
     const grants = createPermissionGrantCache();
+
     if (decision === "standing-denied") grants.record(buildPermissionAction("prior", "memory_remember", {}), "denied", "session");
+
     let requests = 0;
     const input: TurnHostInput = {
       text: command, sessionId: "s", turnId: "t", correlationId: "c",
       workspaceRoot: workspace, workspaceId: "ws", checkpointRoot: path.join(root, "undo"),
       providerId: "fixture", model: "m", endpoint: "", apiKey: undefined,
-      grants, permission: { ...permission, request(action) { requests += 1; return permission.request(action); } }, format: "stream-json", now: () => 100,
+      grants, permission: { ...permission, request(action) {
+        requests += 1;
+        return permission.request(action);
+      } }, format: "stream-json", now: () => 100,
       sink: { stdout: (line) => output.push(line), stderr: () => undefined },
       ...(enabled ? { userLearning: { homeDir: root, env: { TRYLO_HOME: root }, workspaceId: "ws", now: () => 100, warn: () => undefined } } : {}),
     };
     const outcome = await executeTurn(input);
+
     assert.equal(isTurnFailure(outcome), false);
+
     if (isTurnFailure(outcome)) return;
+
     const saved = enabled && decision === "approved";
+
     assert.match(outcome.result.lastMessage, saved ? /已保存到 Trylo 用户记忆/ : enabled ? /未完成|失败|未保存/u : /未保存.*未开启/u);
     const file = path.join(root, "learning", "user");
+
     assert.equal(existsSync(path.join(file, "facts.ndjson")), saved);
+
     if (saved) {
       const facts = createFileFactStore(file).read();
+
       assert.equal(facts.ok && facts.records.length, 1);
+
       for (const [index, question] of [
         "你知道我是谁吗？",
         "你是不是我开发的？请先查正式记忆，分别回答 Trylo 产品和基础模型。",
@@ -56,6 +71,7 @@ for (const decision of ["approved", "denied", "standing-denied"] as const) for (
         if (index >= 1) assert.match(reply.result.lastMessage, /基础模型.*(?:不能|无法)/u);
       }
     }
+
     assert.deepEqual(readdirSync(workspace), []);
     assert.equal(requests, enabled && decision !== "standing-denied" ? 1 : 0);
     assert.equal(output.filter((line) => line.includes('"type":"run_result"')).length, saved ? 8 : 1);

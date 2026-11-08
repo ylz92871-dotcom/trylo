@@ -37,18 +37,22 @@ export type ManifestRead =
 export function readManifest(storageRoot: string, checkpointId: string): ManifestRead {
   const manifestPath = manifestPathOf(storePaths(storageRoot), checkpointId);
   let text: string;
+
   try {
     text = readFileSync(manifestPath, "utf8");
   } catch {
     return { ok: false, code: "checkpoint_not_found", detail: checkpointId };
   }
+
   const parsed = parseManifest(text);
   if (!parsed.ok) {
     return parsed;
   }
+
   if (parsed.manifest.checkpointId !== checkpointId) {
     return { ok: false, code: "checkpoint_id_mismatch", detail: `${checkpointId} != ${parsed.manifest.checkpointId}` };
   }
+
   return { ok: true, manifest: parsed.manifest };
 }
 
@@ -66,8 +70,10 @@ export function readCurrentRows(workspaceRoot: string, ignores: ReadonlyArray<st
   if (!walked.ok) {
     return { ok: false, code: "workspace_missing", detail: walked.detail };
   }
+
   const rows: CurrentRow[] = [];
   const unreadable: string[] = [];
+
   for (const file of walked.files) {
     try {
       rows.push({ path: file.relativePath, sha256: sha256Of(file.absolutePath), bytes: file.bytes });
@@ -75,6 +81,7 @@ export function readCurrentRows(workspaceRoot: string, ignores: ReadonlyArray<st
       unreadable.push(file.relativePath);
     }
   }
+
   return { ok: true, rows, unreadable };
 }
 
@@ -90,11 +97,13 @@ export function scopedPlanIo(storageRoot: string, checkpointId: string, workspac
     async readSnapshot(relativePath: string): Promise<Uint8Array> {
       return readFileSync(nativeJoin(filesRoot, relativePath));
     },
+
     async writeFile(relativePath: string, data: Uint8Array): Promise<void> {
       const destination = nativeJoin(workspaceRoot, relativePath);
       mkdirSync(path.dirname(destination), { recursive: true });
       writeAtomic(destination, Buffer.from(data));
     },
+
     async removeFile(relativePath: string): Promise<void> {
       rmSync(nativeJoin(workspaceRoot, relativePath), { force: true });
     },

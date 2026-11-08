@@ -33,6 +33,7 @@ function scripted(lines: ReadonlyArray<string>): Scripted {
   const root = mkdtempSync(join(tmpdir(), "trylo-tui-queue-"));
   const home = join(root, "home");
   const cwd = join(root, "workspace");
+
   mkdirSync(cwd, { recursive: true });
   mkdirSync(join(home, ".trylo", "sessions"), { recursive: true });
   writeFileSync(join(home, ".trylo", "config.json"), JSON.stringify({ provider: "fixture" }));
@@ -44,6 +45,7 @@ function scripted(lines: ReadonlyArray<string>): Scripted {
     cwd,
     nodeVersion: "v22.0.0",
     stdinIsTty: true,
+
     readFile: (absolutePath) => {
       try {
         return readFileSync(absolutePath, "utf8");
@@ -51,10 +53,12 @@ function scripted(lines: ReadonlyArray<string>): Scripted {
         return undefined;
       }
     },
+
     isDirectory: () => true,
     readDir: () => [],
     writeFile: () => true,
     readStdin: async () => "",
+
     readLine: async () => {
       if (at >= lines.length) {
         return undefined;
@@ -63,6 +67,7 @@ function scripted(lines: ReadonlyArray<string>): Scripted {
       at += 1;
       return line;
     },
+
     readSecret: async () => undefined,
     stdout: () => undefined,
     stderr: () => undefined,
@@ -76,6 +81,7 @@ function scripted(lines: ReadonlyArray<string>): Scripted {
     write: (text) => written.push(text),
     size: () => ({ columns: 80, rows: 24 }),
   };
+
   return { ctx, root, io };
 }
 
@@ -129,6 +135,7 @@ function queueOf(texts: ReadonlyArray<string>) {
 test("a queued message starts a turn while the person is at the prompt", async () => {
   const s = scripted(["/exit"]);
   const { runner, seen } = recordingRunner();
+
   try {
     const code = await handleTui(s.ctx, s.io, runner, undefined, {}, undefined, queueOf(["from another terminal"]));
     assert.equal(code, 0);
@@ -144,6 +151,7 @@ test("a queued message starts a turn while the person is at the prompt", async (
 test("the queue drains at idle, one message per tick, before the prompt is served", async () => {
   const s = scripted(["typed later", "/exit"]);
   const { runner, seen } = recordingRunner();
+
   try {
     await handleTui(s.ctx, s.io, runner, undefined, {}, undefined, queueOf(["first", "from the queue"]));
     // The queue is asked at every idle tick, before the loop blocks on a read.
@@ -173,6 +181,7 @@ test("a word the last turn never answered outranks the queue", async () => {
   const runner: TuiTurnRunner = async (scaffold, text) => {
     seen.push(text);
     turns += 1;
+
     // Conditional spread, not `unconsumedInput: undefined`: under
     // `exactOptionalPropertyTypes` an explicit undefined is a different thing
     // from an absent key, and the runner's contract says absent.
@@ -183,6 +192,7 @@ test("a word the last turn never answered outranks the queue", async () => {
         : {}),
     };
   };
+
   try {
     await handleTui(s.ctx, s.io, runner, undefined, {}, undefined, queueOf(["older, on disk"]));
     assert.deepEqual(seen, ["older, on disk", "spoken during the turn"]);
@@ -194,6 +204,7 @@ test("a word the last turn never answered outranks the queue", async () => {
 test("a queued message does not reach the slash table", async () => {
   const s = scripted([]);
   const { runner, seen } = recordingRunner();
+
   try {
     // `/exit` from the queue must be answered as text, not obeyed as a command.
     // Otherwise a second terminal could end this session.
@@ -208,6 +219,7 @@ test("a queued message does not reach the slash table", async () => {
 test("a queued message does not reach the mention reader either", async () => {
   const s = scripted([]);
   const { runner, seen } = recordingRunner();
+
   try {
     // A mention is resolved against this process's cwd and files. Inheriting
     // that expansion from another terminal's text would let a queue message
@@ -222,6 +234,7 @@ test("a queued message does not reach the mention reader either", async () => {
 test("a queue that cannot be read says so once, not once per idle tick", async () => {
   const s = scripted(["a", "b", "c", "/exit"]);
   const { runner, seen } = recordingRunner();
+
   try {
     await handleTui(s.ctx, s.io, runner, undefined, {}, undefined, async () => ({
       kind: "unknown",
@@ -231,6 +244,7 @@ test("a queue that cannot be read says so once, not once per idle tick", async (
     // itself on every tick is worse than one that stays quiet, and the tick
     // that finally succeeds must clear the memory so a later failure speaks up.
     const complaints = s.io.written.join("").match(/cannot read this session's queued messages/g) ?? [];
+
     assert.equal(complaints.length, 1);
     // And the prompt kept working throughout.
     assert.deepEqual(seen, ["a", "b", "c"]);
@@ -244,6 +258,7 @@ test("a queue that recovers then fails again speaks the second time", async () =
   const codes: ReadonlyArray<"queue_locked" | "idle"> = ["queue_locked", "idle", "queue_locked"];
   let at = 0;
   const { runner } = recordingRunner();
+
   try {
     await handleTui(s.ctx, s.io, runner, undefined, {}, undefined, async () => {
       const code = codes[at] ?? "idle";
@@ -253,6 +268,7 @@ test("a queue that recovers then fails again speaks the second time", async () =
     // De-duplicating forever would be the other failure: the second outage is
     // a different event and the person has no other way to learn it happened.
     const complaints = s.io.written.join("").match(/cannot read this session's queued messages/g) ?? [];
+
     assert.equal(complaints.length, 2);
   } finally {
     rmSync(s.root, { recursive: true, force: true });
@@ -262,6 +278,7 @@ test("a queue that recovers then fails again speaks the second time", async () =
 test("no dispatcher means the loop never asks about a queue", async () => {
   const s = scripted(["hello", "/exit"]);
   const { runner, seen } = recordingRunner();
+
   try {
     // The absent-dispatcher path every existing caller and every other test
     // takes. It must stay byte-identical to the loop before this feature.
@@ -276,6 +293,7 @@ test("no dispatcher means the loop never asks about a queue", async () => {
 test("a locked queue is reported once and does not stop the prompt", async () => {
   const s = scripted(["still typing", "/exit"]);
   const { runner, seen } = recordingRunner();
+
   try {
     await handleTui(s.ctx, s.io, runner, undefined, {}, undefined, async () => ({
       kind: "unknown",
@@ -283,6 +301,7 @@ test("a locked queue is reported once and does not stop the prompt", async () =>
     }));
     assert.deepEqual(seen, ["still typing"]);
     const complaints = s.io.written.join("").match(/cannot read this session's queued messages/g) ?? [];
+
     assert.equal(complaints.length, 1);
     // And it names the code, because "cannot read" and "not locked" lead to
     // different next moves.
@@ -298,12 +317,14 @@ test("a queued message's paths are never resolved against this session", async (
   const inner = s.ctx.readFile;
   const ctx: CliContext = {
     ...s.ctx,
+
     readFile: (absolutePath) => {
       asked.push(absolutePath);
       return inner(absolutePath);
     },
   };
   const { runner } = recordingRunner();
+
   try {
     await handleTui(ctx, s.io, runner, undefined, {}, undefined, queueOf(["@README.md"]));
     // The startup page legitimately reads config and providers, so the claim is

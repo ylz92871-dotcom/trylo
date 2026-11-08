@@ -43,6 +43,7 @@ function hashBindings(bindings: ReadonlyArray<ToolBinding>, selection?: readonly
   // Keep the declared ceiling in the identity so two such selections never
   // collapse into the same empty base catalog. Default hashes remain intact.
   const identity = selection === undefined ? catalog : { catalog, selection: [...new Set(selection)].sort() };
+
   return createHash("sha256").update(JSON.stringify(identity)).digest("hex").slice(0, 32);
 }
 
@@ -53,6 +54,7 @@ export function b1CompatibleCatalogHashes(tools: ToolPort, selection?: readonly 
       : binding.name === "search_text" || binding.name === "glob_files" ? ["include", "exclude"] : [];
     const properties = binding.parameters.properties;
     if (removed.length === 0 || properties === null || typeof properties !== "object" || Array.isArray(properties)) return binding;
+
     return { ...binding, parameters: { ...binding.parameters,
       properties: Object.fromEntries(Object.entries(properties).filter(([name]) => !removed.includes(name))),
     } };
@@ -81,19 +83,39 @@ function isParameterObject(value: JsonValue | undefined): value is JsonObject {
 
 export function compatibleCatalogHashes(workspaceRoot: string, selection?: readonly string[]): ReadonlyArray<string> {
   const tools = catalogForHashing(workspaceRoot, selection);
-  // Only documentation changed: retain the exact previous parameter shape,
-  // bounds and permission contract. No old executable schema is admitted here.
+  // Adding a query over the existing Todo owner does not reinterpret old
+  // mutations or permissions. Accept exactly the catalog before that query.
+  const priorTodo: ToolPort = { ...tools, snapshot: () => tools.snapshot().filter(binding => binding.name !== "todo_read") };
+  return [toolCatalogHash(priorTodo, selection), ...executionCompatibleCatalogHashes(tools, selection),
+    ...executionCompatibleCatalogHashes(priorTodo, selection)];
+}
+
+function executionCompatibleCatalogHashes(tools: ToolPort, selection?: readonly string[]): ReadonlyArray<string> {
+  // Removing an implicit execution deadline preserves old calls and authority.
+  // Admit the exact former timeout schema as well as its documentation variant,
+  // so fixing the cap does not strand a saved conversation at fingerprinting.
+  const priorTimeout = { type: "number", minimum: 1, maximum: 120000,
+    description: "Optional foreground timeout in milliseconds. The tool description states the default; expiration terminates the command and does not undo partial effects. Use runInBackground for longer work." };
+  const priorSchema: ToolPort = { ...tools, snapshot: () => tools.snapshot().map(binding => {
+    const properties = binding.parameters.properties;
+    return binding.name !== "run_shell" || !isParameterObject(properties) ? binding
+      : { ...binding, parameters: { ...binding.parameters, properties: { ...properties, timeoutMs: priorTimeout } } };
+  }) };
   const previous: ToolPort = { ...tools, snapshot: () => tools.snapshot().map(binding => {
     const properties = binding.parameters.properties;
     if (binding.name !== "run_shell" || !isParameterObject(properties)) return binding;
+
     const command = properties.command, timeout = properties.timeoutMs;
     if (!isParameterObject(command) || !isParameterObject(timeout)) return binding;
+
     return { ...binding, parameters: { ...binding.parameters, properties: { ...properties,
       command: { ...command, description: "Command to run, without redirections. `a | b | c` pipelines are allowed." },
-      timeoutMs: { ...timeout, description: "Optional foreground timeout in milliseconds." },
+      timeoutMs: { ...priorTimeout, description: "Optional foreground timeout in milliseconds." },
     } } };
   }) };
-  return [hashBindings(previous.snapshot(), selection), ...b1CompatibleCatalogHashes(tools, selection), ...b1CompatibleCatalogHashes(previous, selection)];
+
+  return [hashBindings(previous.snapshot(), selection), hashBindings(priorSchema.snapshot(), selection),
+    ...b1CompatibleCatalogHashes(tools, selection), ...b1CompatibleCatalogHashes(previous, selection), ...b1CompatibleCatalogHashes(priorSchema, selection)];
 }
 
 /** Tools a non-interactive run may perform when writes are explicitly allowed. */
@@ -110,6 +132,4 @@ export function catalogHash(workspaceRoot: string, selection?: readonly string[]
 }
 
 /** Stable identity for a workspace path, used in the session fingerprint. */
-export function workspaceIdentity(workspaceRoot: string): string {
-  return createHash("sha256").update(workspaceRoot).digest("hex").slice(0, 16);
-}
+export { workspaceIdentity } from "./workspace-identity.js";

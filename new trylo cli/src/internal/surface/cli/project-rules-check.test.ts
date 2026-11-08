@@ -31,11 +31,13 @@ function workspaceWith(
   files: Readonly<Record<string, string>>,
 ): { readonly root: string; readonly cleanup: () => void } {
   const root = mkdtempSync(join(os.tmpdir(), "trylo-b1-diag-"));
+
   for (const [relative, text] of Object.entries(files)) {
     const absolute = join(root, relative);
     mkdirSync(join(absolute, ".."), { recursive: true });
     writeFileSync(absolute, text);
   }
+
   return { root, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
@@ -56,6 +58,7 @@ function contextFor(cwd: string): CliContext {
     nodeVersion: "v22.0.0",
     platform: "linux",
     stdinIsTty: false,
+
     readFile: (absolutePath) => {
       try {
         return readFileSync(absolutePath, "utf8");
@@ -63,6 +66,7 @@ function contextFor(cwd: string): CliContext {
         return undefined;
       }
     },
+
     isDirectory: () => true,
     readDir: () => [],
     writeFile: () => true,
@@ -104,6 +108,7 @@ test("an adopted rule file is reported with its scope and a short hash", () => {
   const workspace = workspaceWith({ "AGENTS.md": "house rules\n" });
   try {
     const context = projectContextFor(contextFor(workspace.root), workspace.root);
+
     assert.ok(context);
     const check = projectRulesCheck(context.sources, context.problems);
 
@@ -113,6 +118,7 @@ test("an adopted rule file is reported with its scope and a short hash", () => {
     // The hash a user compares against the previous run's, truncated to
     // something readable rather than a full sha256.
     const hash = context.sources[0]?.contentHash ?? "";
+
     assert.ok(hash.length === 16, "the resolver keeps a 16-char hash");
     assert.ok(check.detail.includes(hash.slice(0, 8)));
     assert.ok(!check.detail.includes(hash), "the diagnostic shows the short hash, not the full one");
@@ -124,8 +130,10 @@ test("an adopted rule file is reported with its scope and a short hash", () => {
 test("the rule text itself never reaches the diagnostic", () => {
   const secretish = "internal-host build01 deploy key sk-live-DO-NOT-LEAK";
   const workspace = workspaceWith({ "AGENTS.md": `${secretish}\n` });
+
   try {
     const context = projectContextFor(contextFor(workspace.root), workspace.root);
+
     assert.ok(context);
     const check = projectRulesCheck(context.sources, context.problems);
 
@@ -160,6 +168,7 @@ test("a workspace with no rule file reports skip, not a failure", () => {
   const workspace = workspaceWith({ "src/index.ts": "export const x = 1;\n" });
   try {
     const check = lineFor(workspace.root);
+
     assert.equal(check.status, "skip");
     // The message names what was looked for: a user who *believes* they have a
     // rules file needs to learn which three names were checked.
@@ -181,6 +190,7 @@ test("a workspace with no rule file reports skip, not a failure", () => {
  */
 test("a rule file that cannot be read fails the diagnostic and the exit code", () => {
   const check = projectRulesCheck([], ["project_instructions_oversized:AGENTS.md"]);
+
   assert.equal(check.status, "fail");
   assert.match(check.detail, /oversized:AGENTS\.md/);
 
@@ -188,6 +198,7 @@ test("a rule file that cannot be read fails the diagnostic and the exit code", (
     ...baseOptions("/tmp/nowhere"),
     projectRules: { sources: [], problems: ["project_instructions_unreadable:AGENTS.md"] },
   });
+
   assert.equal(doctorExitCode(report), 52, "a broken rule file is a config-class exit, not a warning");
 });
 
@@ -207,10 +218,12 @@ test("doctor and the run's resolver report the same files", () => {
   try {
     const ctx = contextFor(workspace.root);
     const runSees = projectContextFor(ctx, workspace.root);
+
     assert.ok(runSees);
 
     const run = runDoctor(ctx);
     const check = run.report.checks.find((entry) => entry.id === "project.rules");
+
     assert.ok(check);
     // Count first. Two resolvers pointed at the wrong root both report *no*
     // rules, and "both empty" compares equal — so a substring loop over an empty
@@ -218,6 +231,7 @@ test("doctor and the run's resolver report the same files", () => {
     // anything. Asserting the count is what gives the comparison teeth.
     assert.equal(runSees.sources.length, 1, "a run started at the root adopts exactly the root rule");
     assert.equal(check.status, "ok", "doctor must find what the run finds");
+
     for (const source of runSees.sources) {
       assert.ok(
         check.detail.includes(source.relativePath),
@@ -255,6 +269,7 @@ test("doctor in a subdirectory treats that directory as the project root", () =>
     const fromDocs = join(workspace.root, "docs");
     const ctx = contextFor(fromDocs);
     const runSees = projectContextFor(ctx, fromDocs);
+
     assert.ok(runSees);
     assert.deepEqual(
       runSees.sources.map((source) => [source.relativePath, source.scope]),
@@ -263,6 +278,7 @@ test("doctor in a subdirectory treats that directory as the project root", () =>
     );
 
     const check = runDoctor(ctx).report.checks.find((entry) => entry.id === "project.rules");
+
     assert.ok(check);
     assert.ok(check.detail.includes("AGENTS.md (whole workspace"), check.detail);
     // The parent's file is genuinely out of scope: the resolver is bounded by the
@@ -293,6 +309,7 @@ test("a caller that passes no rule report still gets a line, because it asked no
   // none". Reporting `skip` there would claim a fact the caller never checked.
   const report = collectDoctor(doctorIo("/tmp/nowhere"), baseOptions("/tmp/nowhere"));
   const check = report.checks.find((entry) => entry.id === "project.rules");
+
   assert.ok(check);
   assert.equal(check.status, "skip");
   assert.match(check.detail, /not evaluated|no AGENTS\.md/);

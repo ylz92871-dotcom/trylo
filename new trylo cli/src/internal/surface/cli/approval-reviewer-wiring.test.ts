@@ -44,12 +44,14 @@ function portsWith(
       asked += 1;
       return { ticketId: `p${asked}`, toolCallId: "call-1" };
     },
+
     async awaitDecision() {
       approvals += 1;
       return decision("approved", scope);
     },
   };
   const grants = createPermissionGrantCache();
+
   return {
     asked: () => asked,
     approvals: () => approvals,
@@ -84,8 +86,10 @@ test("a reviewer's approval is not a standing grant", async () => {
   // `once` throughout: the person's own approval is what may become a standing
   // grant, and these calls never reach them.
   const ports = portsWith(reviewer, {}, "once");
+
   assert.deepEqual(await admitToolCall(ports, CALL), { kind: "approved", source: "reviewed" });
   const second = await admitToolCall(ports, { ...CALL, toolCallId: "call-2" });
+
   assert.deepEqual(second, { kind: "approved", source: "reviewed" });
   assert.equal(ports.asked(), 0);
   assert.equal(
@@ -106,6 +110,7 @@ test("a reviewer that declines to decide is not a denial; the person still decid
 test("a reviewer's denial is reported as its own kind, carrying its own words", async () => {
   const ports = portsWith(answering("deny", "this rewrites a file outside the project"));
   const verdict = await admitToolCall(ports, CALL);
+
   assert.deepEqual(verdict, {
     kind: "review_rejected",
     reviewer: "risk-model",
@@ -128,6 +133,7 @@ test("a reviewer that breaks is not a denial and not an approval", async () => {
     },
   });
   const verdict = await admitToolCall(ports, CALL);
+
   assert.deepEqual(verdict, { kind: "approved", source: "prompt" });
   assert.equal(ports.asked(), 1);
 });
@@ -140,7 +146,7 @@ test("a sandbox refusal is never reviewed", async () => {
     policy: {
       mode: "workspace_write",
       network: "restricted",
-      workspaceRoot: "C:/work/demo-ws",
+      workspaceRoot: "D:/CC/trylo",
       maxWriteBytes: 1_000_000,
       allowAbsoluteExecutable: false,
     },
@@ -149,6 +155,7 @@ test("a sandbox refusal is never reviewed", async () => {
   const ports = portsWith(
     {
       name: "risk-model",
+
       async review() {
         reviewed += 1;
         return { answer: "allow" };
@@ -157,6 +164,7 @@ test("a sandbox refusal is never reviewed", async () => {
     { sandbox },
   );
   const verdict = await admitToolCall(ports, CALL);
+
   assert.equal(verdict.kind, "sandbox_rejected");
   assert.equal(reviewed, 0);
   assert.equal(ports.asked(), 0);
@@ -167,6 +175,7 @@ test("a written policy is never overridden by a reviewer", async () => {
   const ports = portsWith(
     {
       name: "risk-model",
+
       async review() {
         reviewed += 1;
         return { answer: "allow" };
@@ -175,6 +184,7 @@ test("a written policy is never overridden by a reviewer", async () => {
     { execPolicy: () => ({ kind: "denied", code: "policy_forbidden", message: "not on the list" }) },
   );
   const verdict = await admitToolCall(ports, CALL);
+
   assert.deepEqual(verdict, { kind: "policy_rejected", code: "policy_forbidden", message: "not on the list" });
   assert.equal(reviewed, 0);
 });
@@ -183,6 +193,7 @@ test("a remembered session grant is answered before the reviewer is asked", asyn
   let reviewed = 0;
   const ports = portsWith({
     name: "risk-model",
+
     async review() {
       reviewed += 1;
       // Declines to decide every time; what is under test is that once a person
@@ -190,10 +201,12 @@ test("a remembered session grant is answered before the reviewer is asked", asyn
       return { answer: "ask_user" };
     },
   });
+
   // The person approves the first call for the whole session.
   assert.deepEqual(await admitToolCall(ports, CALL), { kind: "approved", source: "prompt" });
   assert.equal(reviewed, 1, "the first call was reviewed, and the person still decided it");
   const second = await admitToolCall(ports, { ...CALL, toolCallId: "call-2" });
+
   assert.deepEqual(second, { kind: "approved", source: "remembered" });
   assert.equal(reviewed, 1, "a decision already made this session is not re-litigated");
 });
@@ -206,6 +219,7 @@ test("a reviewer's denial is terminal; the person is not asked over it", async (
   // to be able to say no without a second signature.
   const ports = portsWith(answering("deny", "outside the sanctioned paths"));
   const verdict = await admitToolCall(ports, CALL);
+
   assert.equal(verdict.kind, "review_rejected");
   assert.equal(ports.asked(), 0);
 });
@@ -217,6 +231,7 @@ test("a re-presented call is flagged to the reviewer as a retry", async () => {
   const ports = portsWith(
     {
       name: "risk-model",
+
       async review(input) {
         retries.push(input.retry);
         return { answer: "ask_user" };
@@ -225,6 +240,7 @@ test("a re-presented call is flagged to the reviewer as a retry", async () => {
     {},
     "once",
   );
+
   await admitToolCall(ports, CALL);
   await admitToolCall(ports, { ...CALL, toolCallId: "call-2", resume: { ticketId: "t1" } });
   assert.deepEqual(retries, [false, true]);

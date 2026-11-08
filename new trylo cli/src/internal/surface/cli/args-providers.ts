@@ -83,32 +83,39 @@ function parseWithId(
 ): ParsedCommand {
   let json = false;
   let id: string | undefined;
+
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index] ?? "";
     if (token === "--help" || token === "-h") {
       return familyHelpCommand("providers");
     }
+
     if (token === "--json") {
       json = true;
       continue;
     }
+
     if (token.startsWith("--")) {
       return usageError(`${name} does not accept ${token}`, `run \`trylo providers ${name} --help\``);
     }
+
     if (id !== undefined) {
       return usageError(
         `${name} takes one provider id, got a second one: ${token}`,
         `\`trylo providers ${name} <id>\``,
       );
     }
+
     id = token;
   }
+
   if (id === undefined || id.length === 0) {
     return usageError(
       `${name} needs a provider id`,
       `\`trylo providers ${name} <id>\`; \`trylo providers list\` shows the known ids`,
     );
   }
+
   return make(id, json);
 }
 
@@ -117,61 +124,77 @@ export function parseProviders(argv: ReadonlyArray<string>): ParsedCommand {
   if (sub === undefined) {
     return subcommandHelp();
   }
+
   if (sub === "--help" || sub === "-h") {
     return familyHelpCommand("providers");
   }
+
   const rest = argv.slice(1);
+
   if (sub === "list") {
     const listed = parseSimple(rest, (json) => ({ kind: "providers_list", json }), "providers list");
     return listed.kind === "help" ? familyHelpCommand("providers") : listed;
   }
+
   if (sub === "models") {
     return parseWithId(rest, (id, json) => ({ kind: "providers_models", options: { id, json } }), "providers models");
   }
+
   if (sub === "switch") {
     return parseWithId(rest, (id) => ({ kind: "providers_switch", options: { id } }), "providers switch");
   }
+
   if (sub === "config") {
     // The id is optional here, so `--json` has to be separable from a position:
     // every flag is consumed first and whatever remains is the id.
     let json = false;
     let id: string | undefined;
+
     for (const token of rest) {
       if (token === "--help" || token === "-h") {
         return familyHelpCommand("providers");
       }
+
       if (token === "--json") {
         json = true;
         continue;
       }
+
       if (token.startsWith("--")) {
         return usageError(
           `providers config does not accept ${token}`,
           "run `trylo providers config --help`",
         );
       }
+
       if (id !== undefined) {
         return usageError(
           `providers config takes one provider id, got a second one: ${token}`,
           "`trylo providers config [id]`",
         );
       }
+
       id = token;
     }
+
     return {
       kind: "providers_config",
       options: { ...(id === undefined ? {} : { id }), json },
     };
   }
+
   if (sub === "add") {
     return parseAdd(rest);
   }
+
   if (sub === "remove") {
     return parseWithId(rest, (id) => ({ kind: "providers_remove", options: { id } }), "providers remove");
   }
+
   if (sub === "edit") {
     return parseEdit(rest);
   }
+
   return usageError(
     `unknown providers subcommand: ${sub}`,
     `accepted subcommands are ${SUBCOMMANDS.join(", ")}`,
@@ -198,11 +221,13 @@ const EDIT_VALUE_FLAGS: ReadonlyArray<FlagSpec> = [
 function parseEdit(argv: ReadonlyArray<string>): ParsedCommand {
   let id: string | undefined;
   const values = new Map<string, string>();
+
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index] ?? "";
     if (token === "--help" || token === "-h") {
       return familyHelpCommand("providers");
     }
+
     if (!token.startsWith("--")) {
       if (id !== undefined) {
         return usageError(
@@ -210,19 +235,23 @@ function parseEdit(argv: ReadonlyArray<string>): ParsedCommand {
           "`trylo providers edit <id> --endpoint <u> --model <m> --account <a> --context-window <n>`",
         );
       }
+
       id = token;
       continue;
     }
+
     const parsed = flagToken(token);
     if (parsed === undefined || parsed.name.length === 0) {
       return usageError(`providers edit does not accept ${token}`, "run `trylo providers edit --help`");
     }
+
     if (parsed.name === "kind") {
       return usageError(
         "providers edit does not accept --kind",
         "changing the family is a new declaration: `trylo providers remove <id>` then `trylo providers add <id> --kind <k> …`",
       );
     }
+
     const spec = flagSpecFor(EDIT_VALUE_FLAGS, parsed.name);
     if (spec === undefined) {
       return usageError(
@@ -230,25 +259,30 @@ function parseEdit(argv: ReadonlyArray<string>): ParsedCommand {
         "accepted flags: --endpoint, --model, --account, --context-window",
       );
     }
+
     const read = readValue(argv, index, parsed.inlineValue);
     if (read.error !== undefined) {
       return usageError(`option --${parsed.name} ${read.error}`, `pass a value, for example --${parsed.name}=<value>`);
     }
+
     values.set(parsed.name, read.value ?? "");
     index = read.next - 1;
   }
+
   if (id === undefined || id.length === 0) {
     return usageError(
       "providers edit needs a provider id",
       "`trylo providers edit <id> --endpoint <u> --model <m> --account <a> --context-window <n>`",
     );
   }
+
   if (values.size === 0) {
     return usageError(
       "providers edit needs at least one of --endpoint, --model, --account, --context-window",
       "`trylo providers edit <id> --endpoint <u> --model <m> --account <a> --context-window <n>`",
     );
   }
+
   const endpoint = values.get("endpoint");
   const model = values.get("model");
   const account = values.get("account");
@@ -256,6 +290,7 @@ function parseEdit(argv: ReadonlyArray<string>): ParsedCommand {
   if ("error" in contextWindow) {
     return contextWindow.error;
   }
+
   return {
     kind: "providers_edit",
     options: {
@@ -267,6 +302,7 @@ function parseEdit(argv: ReadonlyArray<string>): ParsedCommand {
     },
   };
 }
+
 /** Reads `--context-window <n>` when present, refusing non-positive values. */
 function readContextWindow(
   values: ReadonlyMap<string, string>,
@@ -275,6 +311,7 @@ function readContextWindow(
   if (raw === undefined) {
     return {};
   }
+
   const parsed = parsePositiveInt(raw);
   if (parsed === undefined) {
     return {
@@ -284,8 +321,10 @@ function readContextWindow(
       ),
     };
   }
+
   return { value: parsed };
 }
+
 /** The value flags `providers add` takes. A secret is deliberately not one of them. */
 const ADD_VALUE_FLAGS: ReadonlyArray<FlagSpec> = [
   { name: "kind", takesValue: true },
@@ -305,11 +344,13 @@ const ADD_VALUE_FLAGS: ReadonlyArray<FlagSpec> = [
 function parseAdd(argv: ReadonlyArray<string>): ParsedCommand {
   let id: string | undefined;
   const values = new Map<string, string>();
+
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index] ?? "";
     if (token === "--help" || token === "-h") {
       return familyHelpCommand("providers");
     }
+
     if (!token.startsWith("--")) {
       if (id !== undefined) {
         return usageError(
@@ -317,13 +358,16 @@ function parseAdd(argv: ReadonlyArray<string>): ParsedCommand {
           "`trylo providers add <id> --kind <k> --endpoint <u> --model <m>`",
         );
       }
+
       id = token;
       continue;
     }
+
     const parsed = flagToken(token);
     if (parsed === undefined || parsed.name.length === 0) {
       return usageError(`providers add does not accept ${token}`, "run `trylo providers add --help`");
     }
+
     const spec = flagSpecFor(ADD_VALUE_FLAGS, parsed.name);
     if (spec === undefined) {
       return usageError(
@@ -331,19 +375,23 @@ function parseAdd(argv: ReadonlyArray<string>): ParsedCommand {
         "accepted flags: --kind, --endpoint, --model, --account, --context-window",
       );
     }
+
     const read = readValue(argv, index, parsed.inlineValue);
     if (read.error !== undefined) {
       return usageError(`option --${parsed.name} ${read.error}`, `pass a value, for example --${parsed.name}=<value>`);
     }
+
     values.set(parsed.name, read.value ?? "");
     index = read.next - 1;
   }
+
   if (id === undefined || id.length === 0) {
     return usageError(
       "providers add needs a provider id",
       "`trylo providers add <id> --kind <k> --endpoint <u> --model <m>`",
     );
   }
+
   const kind = values.get("kind") ?? "";
   if (!isProviderKind(kind)) {
     return usageError(
@@ -351,6 +399,7 @@ function parseAdd(argv: ReadonlyArray<string>): ParsedCommand {
       "kinds: openai-compatible (Chat Completions), openai-responses (Responses wire); `trylo providers list` shows the built-ins",
     );
   }
+
   const endpoint = values.get("endpoint") ?? "";
   const model = values.get("model") ?? "";
   const account = values.get("account");
@@ -358,6 +407,7 @@ function parseAdd(argv: ReadonlyArray<string>): ParsedCommand {
   if ("error" in contextWindow) {
     return contextWindow.error;
   }
+
   return {
     kind: "providers_add",
     options: {

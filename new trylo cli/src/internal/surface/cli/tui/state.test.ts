@@ -47,6 +47,7 @@ test("run_start opens the running phase and clears per-turn state", () => {
     reduceTuiEvent(emptyTuiState(FACTS), runResult(2)),
     runStart(),
   );
+
   assert.equal(state.running, true);
   assert.equal(state.iterations, 2);
   assert.equal(state.lastStatus, undefined);
@@ -55,6 +56,7 @@ test("run_start opens the running phase and clears per-turn state", () => {
 
 test("a streamed message becomes assistant lines only at message_end", () => {
   let state = reduceTuiEvent(emptyTuiState(FACTS), { type: "message_start" });
+
   assert.equal(state.lines.length, 0);
   state = reduceTuiEvent(state, { type: "message_delta", text: "Hel" });
   state = reduceTuiEvent(state, { type: "message_delta", text: "lo\nworld" });
@@ -79,6 +81,7 @@ test("tool_use opens an in-flight call and tool_result closes it", () => {
     toolCallId: "call-1",
     name: "read_file",
   });
+
   assert.deepEqual(state.toolsInFlight.get("call-1"), { name: "read_file", input: undefined });
   state = reduceTuiEvent(state, {
     type: "tool_result",
@@ -119,6 +122,7 @@ test("a failed tool quotes the reason, not just the status", () => {
     truncated: false,
     message: "shell_nonzero_exit: npm test exited 1",
   });
+
   assert.deepEqual(
     state.lines.map((line) => line.text),
     ["<- error", "   ! shell_nonzero_exit: npm test exited 1"],
@@ -135,6 +139,7 @@ test("a long output is folded and the hidden rest is counted", () => {
     truncated: false,
   });
   const texts = state.lines.map((line) => line.text);
+
   assert.deepEqual(texts.at(-1), "   ... 2 more lines");
   assert.equal(texts.length, MAX_TOOL_OUTPUT_LINES + 2);
 });
@@ -150,6 +155,7 @@ test("warnings render with or without a message", () => {
 
 test("run_result closes the turn and carries iterations, status and usage", () => {
   let state = reduceTuiEvent(emptyTuiState(FACTS), runStart());
+
   state = reduceTuiEvent(state, {
     type: "tool_use",
     toolCallId: "call-1",

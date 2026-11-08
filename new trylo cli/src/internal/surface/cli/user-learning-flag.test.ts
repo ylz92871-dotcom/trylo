@@ -57,6 +57,7 @@ function ctxOf(home: string, cwd: string): { readonly ctx: CliContext; readonly 
     now: () => 0,
     newId: (prefix) => `${prefix}-1`,
   };
+
   return { ctx, out, err };
 }
 
@@ -110,6 +111,7 @@ test("the composition root builds the user half only when the switch named it", 
     if ("code" in off) {
       assert.fail("expected a wiring");
     }
+
     assert.equal(off.ports.method, undefined);
 
     // `--learning=user` without a user runtime handed over: still nothing. The
@@ -121,6 +123,7 @@ test("the composition root builds the user half only when the switch named it", 
     if ("code" in userWithoutHost) {
       assert.fail("expected a wiring");
     }
+
     assert.equal(userWithoutHost.ports.method, undefined);
 
     // `--learning=method` builds the board half and nothing else.
@@ -131,6 +134,7 @@ test("the composition root builds the user half only when the switch named it", 
     if ("code" in methodOnly) {
       assert.fail("expected a wiring");
     }
+
     assert.notEqual(methodOnly.ports.method, undefined);
   } finally {
     cleanup();
@@ -142,13 +146,16 @@ test("a run with the switch on lands evidence in the ledger; method-only lands n
   try {
     const { ctx } = ctxOf(home, cwd);
     const exit = await handleRun(ctx, runOptions("user"), { stdout: ctx.stdout, stderr: ctx.stderr });
+
     assert.equal(exit, 0);
     const ledgerPath = join(userLearningRoot(home, ctx.env), USER_LEDGER_FILE);
+
     assert.equal(existsSync(ledgerPath), true, "the user half must have written its ledger");
     const lines = readFileSync(ledgerPath, "utf8")
       .split("\n")
       .filter((line) => line.length > 0)
       .map((line) => JSON.parse(line) as { readonly record?: string });
+
     assert.equal(lines.some((line) => line.record === "evidence"), true);
     assert.equal(lines.some((line) => line.record === "signal"), true);
     // The board's own directory is the method half's: `user` must not create it.
@@ -163,6 +170,7 @@ test("a method-only run never creates the user ledger", async () => {
   try {
     const { ctx } = ctxOf(home, cwd);
     const exit = await handleRun(ctx, runOptions("method"), { stdout: ctx.stdout, stderr: ctx.stderr });
+
     assert.equal(exit, 0);
     assert.equal(
       existsSync(userLearningRoot(home, ctx.env)),
@@ -182,6 +190,7 @@ test("doctor adds the user line only when the switch names the user half", () =>
     const base = { toolCatalogHash: "hash", sessionsDir: join(home, "sessions") };
 
     const off = collectDoctor(io, base);
+
     assert.equal(off.checks.some((check) => check.id === "learning.user_policy"), false);
     assert.equal(
       renderDoctorText(off).includes(`OK   learning.isolation  ${DEFAULT_LEARNING_DETAIL}`),
@@ -189,6 +198,7 @@ test("doctor adds the user line only when the switch names the user half", () =>
     );
 
     const method = collectDoctor(io, { ...base, learning: "method" });
+
     assert.equal(method.checks.some((check) => check.id === "learning.user_policy"), false);
     // And the method line is exactly the sentence it has always been.
     assert.equal(
@@ -211,6 +221,7 @@ test("doctor adds the user line only when the switch names the user half", () =>
 
     // `all` also keeps the method line, because it really did turn the board on.
     const all = collectDoctor(io, { ...base, learning: "all" });
+
     assert.equal(all.checks.find((check) => check.id === "learning.isolation")?.detail.startsWith("method learning wired"), true);
     assert.equal(all.checks.some((check) => check.id === "learning.user_policy"), true);
   } finally {
@@ -223,6 +234,7 @@ test("doctor counts the ledger and never prints a single character of policy tex
   try {
     const { ctx } = ctxOf(home, cwd);
     const ledgerDir = userLearningRoot(home, ctx.env);
+
     mkdirSync(ledgerDir, { recursive: true });
     const secret = "先给结论，再按需展开背景与依据";
     const lines = [
@@ -234,6 +246,7 @@ test("doctor counts the ledger and never prints a single character of policy tex
       "not json at all",
       "",
     ];
+
     writeFileSync(join(ledgerDir, USER_LEDGER_FILE), `${lines.join("\n")}\n`, "utf8");
 
     // Doctor reads through the injected `io`, so the io has to be one that can
@@ -252,6 +265,7 @@ test("doctor counts the ledger and never prints a single character of policy tex
       learning: "user",
     });
     const line = report.checks.find((check) => check.id === "learning.user_policy");
+
     assert.notEqual(line, undefined);
     assert.equal(line?.status, "warn", "one unreadable line is a warning, not a silent zero");
     assert.equal(line?.detail.includes("ceiling " + USER_POLICY_CEILING_CHARS), true, line?.detail);
@@ -262,6 +276,7 @@ test("doctor counts the ledger and never prints a single character of policy tex
     assert.equal(line?.detail.includes("policy text is never printed"), true);
 
     const rendered = renderDoctorText(report);
+
     assert.equal(rendered.includes(secret), false, "the instruction text must not leave the ledger file");
     assert.equal(rendered.includes("以后都先说结论"), false, "raw user text must not leave the ledger file");
     assert.equal(rendered.includes("pol_x"), false, "not even a rule id needs to be printed");

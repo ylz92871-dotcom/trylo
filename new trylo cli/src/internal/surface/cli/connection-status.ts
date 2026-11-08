@@ -12,11 +12,13 @@ export type ConnectionState = "needs_connection" | "needs_credential" | "ready";
 export function connectionStatus(ctx: CliContext, options: RunCommandOptions = { message: [], readStdin: false }) {
   const resolved = resolveConnectionSettings(ctx, options);
   if ("exitCode" in resolved) return { kind: "failed" as const, failure: resolved };
+
   const { provider } = resolved;
   const credential = credentialStateOf(ctx, provider.kind, provider.accountId);
   const kind: ConnectionState = provider.requestedBy === undefined && provider.kind.startsWith("fixture")
     ? "needs_connection"
     : credential.required && (!("loggedIn" in credential) || !credential.loggedIn) ? "needs_credential" : "ready";
+
   return { kind, ...resolved, credential, declarationPath: providersFilePath(ctx) };
 }
 
@@ -24,8 +26,10 @@ export function connectionStatus(ctx: CliContext, options: RunCommandOptions = {
 export function listConnections(ctx: CliContext) {
   const registry = readCliProviderRegistry(ctx);
   if (isDocumentFailure(registry)) return { ok: false as const, failure: registry };
+
   const accounts = createCliCredentialPortWithReport(ctx, credentialWarningTo(ctx)).list();
   if (!accounts.ok) return { ok: false as const, failure: accounts };
+
   return {
     ok: true as const,
     selected: registry.selected,

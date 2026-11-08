@@ -43,9 +43,11 @@ function admitOrFail(raw: unknown): AdmittedEnvelope {
   if (!result.ok) {
     assert.fail(`应当通过校验，却返回 ${result.detail}`);
   }
+
   if (result.outcome !== "admitted") {
     assert.fail(`应当是已知 kind，却被忽略为 ${result.kind}`);
   }
+
   return result.admitted;
 }
 
@@ -72,9 +74,11 @@ function serialized(frame: AcpFrame | AguiFrame): string {
 test("secret 不进 ACP / ag-ui 帧", () => {
   const raw = rawEnvelope("text", { text: `token is ${SECRET} ok`, role: "assistant" });
   const acp = acpFrame(raw);
+
   assert.equal(serialized(acp).includes(SECRET), false);
   assert.equal(serialized(acp).includes("[secret]"), true);
   const agui = aguiFrame(raw);
+
   assert.equal(serialized(agui).includes(SECRET), false);
   assert.equal(agui.body.delta, "token is [secret] ok");
 });
@@ -87,6 +91,7 @@ test("绝对路径不进帧（POSIX 与 Windows 两种形态）", () => {
   });
   const acp = acpFrame(raw);
   const text = serialized(acp);
+
   assert.equal(text.includes(POSIX_PATH), false);
   assert.equal(text.includes("prod.pem"), false);
   assert.equal(text.includes("[path]"), true);
@@ -96,26 +101,33 @@ test("frames 里出现的替换结果与唯一规则表逐字一致（没有第�
   const raw = rawEnvelope("text", { text: `${SECRET} at ${POSIX_PATH}` });
   const admitted = admitOrFail(raw);
   const expected = admitted.envelope.payload.text;
+
   assert.equal(expected, "[secret] at [path]");
   const content = acpFrame(raw).body.content as JsonObject | undefined;
+
   assert.notEqual(content, undefined);
+
   if (content === undefined) {
     return;
   }
+
   assert.equal(content.text, expected);
   assert.equal(aguiFrame(raw).body.delta, expected);
 });
 
 test("error 与 CUSTOM 载荷里的 secret 同样被清（CUSTOM 不是脱敏后门）", () => {
   const errorFrame = acpFrame(rawEnvelope("error", { message: `upstream said ${SECRET}` }));
+
   assert.equal(serialized(errorFrame).includes(SECRET), false);
   assert.equal(serialized(errorFrame).includes("[secret]"), true);
 
   const customRaw = rawEnvelope("user_correction", { text: `use ${POSIX_PATH} instead` });
   const customAcp = acpFrame(customRaw);
+
   assert.equal(customAcp.disposition, "custom");
   assert.equal(serialized(customAcp).includes(POSIX_PATH), false);
   const customAgui = aguiFrame(customRaw);
+
   assert.equal(serialized(customAgui).includes(POSIX_PATH), false);
   assert.equal(serialized(customAgui).includes("[path]"), true);
 });
@@ -123,12 +135,15 @@ test("error 与 CUSTOM 载荷里的 secret 同样被清（CUSTOM 不是脱敏后
 test("未声明未脱敏的推理内容整段不投影", () => {
   const secretReasoning = `internal plan: ${SECRET} at ${POSIX_PATH}`;
   const declaredRedacted = acpFrame(rawEnvelope("thinking", { text: secretReasoning, redacted: true }));
+
   assert.equal(declaredRedacted.body.content, undefined, "redacted=true 时不得投影内容");
 
   const undeclared = acpFrame(rawEnvelope("thinking", { text: "plan without a flag" }));
+
   assert.equal(undeclared.body.content, undefined, "未声明 redacted=false 时不得投影内容");
 
   const aguiUndeclared = aguiFrame(rawEnvelope("thinking", { text: "plan without a flag" }));
+
   assert.equal(aguiUndeclared.body.delta, undefined);
 });
 
@@ -137,10 +152,13 @@ test("显式声明未脱敏时推理内容才进帧，且仍然过脱敏", () =>
     rawEnvelope("thinking", { text: `see ${SECRET}`, redacted: false }),
   );
   const content = frame.body.content as JsonObject | undefined;
+
   assert.notEqual(content, undefined);
+
   if (content === undefined) {
     return;
   }
+
   assert.equal(content.type, "text");
   assert.equal(content.text, "see [secret]");
 });

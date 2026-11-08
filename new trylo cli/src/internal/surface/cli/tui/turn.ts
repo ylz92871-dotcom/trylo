@@ -79,6 +79,7 @@ export async function tuiTurn(
   const before = state.lines.length;
   const notes: string[] = [];
   const painter = createPainter(io, before, paint);
+
   painterRef.current = painter;
   // The state is advanced as the events arrive, not once the turn is over: the
   // painter draws this, so what is on screen during a turn is the turn's own
@@ -89,6 +90,7 @@ export async function tuiTurn(
   // that into the loop's own `cancel` transition. Nothing is killed — the turn
   // ends because it was told to.
   const cancelTurn = new AbortController();
+
   hub.cancelTurn = cancelTurn;
   /**
    * Lent the shell's one reader for this turn (WP08). Absent — a shell that
@@ -100,6 +102,7 @@ export async function tuiTurn(
       live = { ...live, pendingInputCount: count };
       painter.request(live);
     },
+
     onTaken: (texts) => {
       live = { ...live, pendingInputCount: mid?.waiting() ?? 0 };
       live = pushSystemLine(
@@ -110,6 +113,7 @@ export async function tuiTurn(
       );
       painter.request(live);
     },
+
     onRefused: (text, reason) => {
       live = pushSystemLine(live, `not taken (${reason}): ${text}`);
       painter.request(live);
@@ -127,6 +131,7 @@ export async function tuiTurn(
     return mid.end().map((item) => item.text);
   };
   let leftover: ReadonlyArray<string> = [];
+
   try {
     const outcome = await runner(
       scaffold,
@@ -138,24 +143,30 @@ export async function tuiTurn(
       cancelTurn.signal,
       mid?.pendingInput,
     );
+
     hub.cancelTurn = undefined;
     leftover = closeReader();
     live = { ...live, pendingInputCount: 0 };
+
     // Two ways a turn can owe words, and both are the shell's debt now: what the
     // reader was holding when the turn ended, and what the loop had taken from
     // it and never reached a boundary it could promote at (WP08.3).
     if (isTurnOutcome(outcome)) {
       leftover = [...leftover, ...(outcome.unconsumedInput ?? []).map((input) => input.text)];
     }
+
     let next = live;
+
     // Said before anything else, because it is the one thing a person can act
     // on: their words did not disappear, they simply were not answered yet.
     for (const text of leftover) {
       next = pushSystemLine(next, `not delivered (the turn ended first): ${text}`);
     }
+
     for (const note of notes) {
       next = pushSystemLine(next, note);
     }
+
     if (!isTurnOutcome(outcome)) {
       next = pushSystemLine(next, outcome.message);
       next = pushSystemLine(next, outcome.hint);
@@ -164,20 +175,25 @@ export async function tuiTurn(
         ? { kind: "stop", state: next, scaffold, leftover, exitCode: outcome.exitCode }
         : { kind: "continue", state: next, scaffold, leftover };
     }
+
     for (const warning of outcome.warnings) {
       next = pushSystemLine(next, `warning: ${warning}`);
     }
+
     if (hub.cancelRequested) {
       hub.cancelRequested = false;
       next = pushSystemLine(next, cancelNote(outcome.result.status));
     }
+
     const threaded = await scaffoldAfterTurn(scaffold, outcome);
     if (isRunFailure(threaded)) {
       next = pushSystemLine(pushSystemLine(next, threaded.message), threaded.hint);
       painter.settle(next);
       return { kind: "stop", state: next, scaffold, leftover, exitCode: threaded.exitCode };
     }
+
     painter.settle(next);
+
     return { kind: "continue", state: next, scaffold: threaded, leftover };
   } finally {
     // A runner that threw must not leave the turn holding the reader: ending

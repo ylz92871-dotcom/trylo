@@ -28,6 +28,7 @@ function user(turnId: string, sequence: number): SessionRecord {
 
 test("messages number the way a person counts", () => {
   const records = [user("t1", 0), user("t1", 1), user("t9", 2)];
+
   assert.deepEqual(locateUserMessage(records, 1), {
     ok: true,
     turnId: "t1",
@@ -45,11 +46,14 @@ test("messages number the way a person counts", () => {
 test("out-of-range and non-positive indexes are refused with fork-identical wording", () => {
   const records = [user("t1", 0)];
   const out = locateUserMessage(records, 9);
+
   assert.equal(out.ok, false);
+
   if (!out.ok) {
     assert.equal(out.code, "message_not_found");
     assert.equal(out.detail, "user message 9 out of range (this session has 1, numbered 1-1)");
   }
+
   assert.equal(locateUserMessage(records, 0).ok, false);
 });
 
@@ -67,7 +71,9 @@ test("corrupt payloads fail the location instead of skipping a neighbour", () =>
     } as SessionRecord,
   ];
   const located = locateUserMessage(records, 2);
+
   assert.equal(located.ok, false);
+
   if (!located.ok) {
     assert.equal(located.code, "parent_unreadable");
     assert.match(located.detail, /sequence 1/);

@@ -178,7 +178,9 @@ export function createTurnRenderer(
   const projection = createProjection(format, sink);
   const translator = createStreamTranslator();
   let closedResult: CliRunResult | undefined;
+
   projection.onEvent(projectRunStart(start));
+
   return {
     onEnvelope(envelope) {
       if (closedResult !== undefined) return;
@@ -186,14 +188,19 @@ export function createTurnRenderer(
         projection.onEvent(event);
       }
     },
+
     close(transcript, usage, meta, terminal) {
       if (closedResult !== undefined) return closedResult;
+
       for (const event of translator.finish()) {
         projection.onEvent(event);
       }
+
       const result = projectRunResult(transcript, usage, meta, terminal);
+
       closedResult = result;
       projection.onEvent(result);
+
       return result;
     },
   };

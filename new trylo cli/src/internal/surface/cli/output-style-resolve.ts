@@ -24,6 +24,7 @@ export function resolveOutputStyleAppend(
   if (styleName === undefined || styleName === "default") {
     return {};
   }
+
   if (!isStyleName(styleName)) {
     return fail(
       EXIT_CODES.USAGE,
@@ -31,6 +32,7 @@ export function resolveOutputStyleAppend(
       "pass a style name from `trylo output-style list`, or drop the flag",
     );
   }
+
   const styles = loadOutputStyles(
     {
       readDir: (dir) => ctx.readDir(dir).map((entry) => ({ name: entry.name })),
@@ -49,5 +51,6 @@ export function resolveOutputStyleAppend(
       "`trylo output-style list` shows what `run --output-style` accepts",
     );
   }
+
   return { append: found.prompt };
 }

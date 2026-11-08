@@ -141,6 +141,7 @@ export function untrackedDiffArgv(
 /** NUL-separated `filter.<driver>.clean|process` keys to bare driver names. */
 export function parseDriverNames(output: string): ReadonlyArray<string> {
   const drivers = new Set<string>();
+
   for (const key of output.split("\0")) {
     const base = key.endsWith(".clean")
       ? key.slice(0, -".clean".length)
@@ -151,6 +152,7 @@ export function parseDriverNames(output: string): ReadonlyArray<string> {
       drivers.add(base);
     }
   }
+
   return [...drivers].sort();
 }
 
@@ -162,6 +164,7 @@ export function parseDriverNames(output: string): ReadonlyArray<string> {
  */
 export function driverNeuterEnv(drivers: ReadonlyArray<string>): Readonly<Record<string, string>> {
   const env: Record<string, string> = { GIT_CONFIG_COUNT: String(drivers.length * 3) };
+
   drivers.forEach((driver, index) => {
     env[`GIT_CONFIG_KEY_${index * 3}`] = `${driver}.clean`;
     env[`GIT_CONFIG_VALUE_${index * 3}`] = "";
@@ -170,6 +173,7 @@ export function driverNeuterEnv(drivers: ReadonlyArray<string>): Readonly<Record
     env[`GIT_CONFIG_KEY_${index * 3 + 2}`] = `${driver}.required`;
     env[`GIT_CONFIG_VALUE_${index * 3 + 2}`] = "false";
   });
+
   return env;
 }
 
@@ -200,7 +204,9 @@ async function runGit(
   if (input.signal?.aborted === true) {
     return { ok: false, outcome: fail("cancelled", "the diff was cancelled before git ran") };
   }
+
   const env = envOf(input.baseEnv, neuter);
+
   try {
     const options = {
       ...(input.signal === undefined ? {} : { signal: input.signal }),
@@ -220,7 +226,9 @@ function envOf(
   if (base === undefined && neuter === undefined) {
     return undefined;
   }
+
   const merged: Record<string, string | undefined> = {};
+
   if (base !== undefined) {
     for (const [key, value] of Object.entries(base)) {
       if (value !== undefined) {
@@ -228,11 +236,13 @@ function envOf(
       }
     }
   }
+
   if (neuter !== undefined) {
     for (const [key, value] of Object.entries(neuter)) {
       merged[key] = value;
     }
   }
+
   return merged;
 }
 
@@ -250,43 +260,55 @@ export async function collectGitDiff(
   if (!probe.ok) {
     return probe.outcome;
   }
+
   if (probe.result.exit !== 0) {
     return { ok: true, value: { isGitRepo: false, diff: "" } };
   }
+
   const drivers = await runGit(runner, filterDriversArgv(input.platform), input.cwd, input);
   if (!drivers.ok) {
     return drivers.outcome;
   }
+
   if (drivers.result.exit !== 0 && drivers.result.exit !== 1) {
     return fail("diff_failed", describe(filterDriversArgv(input.platform), drivers.result.exit));
   }
+
   const env = driverNeuterEnv(parseDriverNames(drivers.result.stdout));
   const tracked = await runGit(runner, trackedDiffArgv(input.platform, color), input.cwd, input, env);
   if (!tracked.ok) {
     return tracked.outcome;
   }
+
   if (tracked.result.exit !== 0 && tracked.result.exit !== 1) {
     return fail("diff_failed", describe(trackedDiffArgv(input.platform, color), tracked.result.exit));
   }
+
   const listed = await runGit(runner, untrackedListArgv(input.platform), input.cwd, input, env);
   if (!listed.ok) {
     return listed.outcome;
   }
+
   if (listed.result.exit !== 0) {
     return fail("diff_failed", describe(untrackedListArgv(input.platform), listed.result.exit));
   }
+
   let untracked = "";
   const files = listed.result.stdout.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
+
   for (const file of files) {
     const argv = untrackedDiffArgv(input.platform, color, file);
     const rendered = await runGit(runner, argv, input.cwd, input, env);
     if (!rendered.ok) {
       return rendered.outcome;
     }
+
     if (rendered.result.exit !== 0 && rendered.result.exit !== 1) {
       return fail("diff_failed", describe(argv, rendered.result.exit));
     }
+
     untracked += rendered.result.stdout;
   }
+
   return { ok: true, value: { isGitRepo: true, diff: `${tracked.result.stdout}${untracked}` } };
 }

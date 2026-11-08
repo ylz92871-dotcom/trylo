@@ -63,12 +63,14 @@ test("D5: resuming a missing session points at `trylo session list`, not at a lo
 
 test("D5: a real lock conflict keeps the stale-lock hint", async (t) => {
   const home = mkdtempSync(join(tmpdir(), "trylo-resume-"));
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   mkdirSync(sessionsDir(home, {}), { recursive: true });
   // 先有 journal 再有锁：attach 越过 missing_session，倒在 acquireLock。
   writeFileSync(sessionPath(home, {}, "busy"), "{}\n");
   writeFileSync(`${sessionPath(home, {}, "busy")}.lock`, `${process.pid}\n`);
   const failure = failureOf(await openSession(ctxFor(home), { message: [], readStdin: false, resume: "busy" }, PRINT));
+
   assert.match(failure.message, /cannot resume session busy: lock_conflict/);
   assert.match(failure.hint, /\.lock/);
 });

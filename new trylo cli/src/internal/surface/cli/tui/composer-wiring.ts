@@ -42,7 +42,9 @@ export function wireComposer(ctx: CliContext, painterRef: { current?: Painter | 
     if (hub === undefined) {
       return { kind: "none" };
     }
+
     const action = hub.notify();
+
     return action.kind === "clear_input"
       ? { kind: "clear_input", note: action.note }
       : { kind: "none" };
@@ -68,9 +70,11 @@ export function wireComposer(ctx: CliContext, painterRef: { current?: Painter | 
     onInterrupt: forwardInterrupt,
     onCaptureChange: () => painterRef.current?.refresh?.(),
   });
+
   if (loadedBindings.problem !== undefined) {
     io0.write(`${loadedBindings.problem}\n`);
   }
+
   const borrowedReadLine = composer === undefined
     ? io0.readLine
     : (prompt?: string) => composer.borrowTerminal(() => io0.readLine(prompt));
@@ -84,5 +88,6 @@ export function wireComposer(ctx: CliContext, painterRef: { current?: Painter | 
     readSecret: borrowedReadSecret,
     approval: tuiApprovalCallbacks(io, painterRef),
   };
+
   return { io, ctx: wiredCtx, composer, hubRef };
 }

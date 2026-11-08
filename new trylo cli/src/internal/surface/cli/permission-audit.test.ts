@@ -23,8 +23,10 @@ test("a selected session mode overrides startup allowances still forwarded on su
 test("session tool disable and revoke remain effective in a run started with explicit allowances", () => {
   const startup = { allowTools: ["run_shell"] };
   const session = createSessionPermissions(startup);
+
   session.denyTool("run_shell");
   let plan = planPermissions({ ...session.choice(startup), interactive: true });
+
   assert.equal(decideForPlan(plan, buildPermissionAction(CALL.toolCallId, CALL.name, CALL.arguments)), "denied");
   session.revokeTool("run_shell");
   plan = planPermissions({ ...session.choice(startup), interactive: true });
@@ -34,14 +36,20 @@ test("session tool disable and revoke remain effective in a run started with exp
 test("a remembered tool-wide denial outranks an execution-policy allow and repeat detection", async () => {
   for (const usePolicy of [false, true]) {
     const grants = createPermissionGrantCache();
+
     grants.record(buildPermissionAction(CALL.toolCallId, CALL.name, CALL.arguments), "denied", "session");
     let prompts = 0;
     const permission: PermissionPort = {
-      async request(action) { prompts += 1; return { ticketId: "t", toolCallId: action.toolCallId }; },
+      async request(action) {
+        prompts += 1;
+        return { ticketId: "t", toolCallId: action.toolCallId };
+      },
+
       async awaitDecision() { return decision("approved"); },
     };
     const ports = { permission, grants, doom: createDoomLoopTracker(1), ...(usePolicy ? { execPolicy: () => ({ kind: "approved" as const }) } : {}) };
     const verdict = await admitToolCall(ports, CALL);
+
     assert.equal(verdict.kind, "denied", JSON.stringify(verdict));
     assert.equal(prompts, 0, "disabled tools must not be offered for reapproval");
   }
@@ -60,13 +68,18 @@ test("exec policy evaluates every sequential command and the explicit pipeTo rec
   const result = buildExecPolicyGuard({ workspaceRoot: "D:/CC/trylo", platform: "windows", ask: "always", allowAbsoluteExecutable: false }, {
     rules: [{ pattern: ["git", "status"], decision: "allow" }, { pattern: ["rm"], decision: "forbidden" }],
   });
+
   assert.equal(result.ok, true);
+
   if (!result.ok) return;
+
   for (const extra of [{ steps: ["rm victim"] }, { pipeTo: "rm victim" }]) {
     const verdict = result.guard({ ...CALL, arguments: { ...CALL.arguments, ...extra } });
     assert.equal(verdict?.kind, "denied", JSON.stringify(verdict));
   }
+
   const unmatched = result.guard({ ...CALL, arguments: { ...CALL.arguments, steps: ["node task.js"] } });
+
   assert.equal(unmatched, undefined, "an allowed head cannot authorize an uncovered later command");
 });
 
@@ -74,9 +87,14 @@ test("a configured command policy refuses opaque shell syntax instead of falling
   const result = buildExecPolicyGuard({ workspaceRoot: "D:/CC/trylo", platform: "windows", ask: "always", allowAbsoluteExecutable: false }, {
     rules: [{ pattern: ["git", "status"], decision: "allow" }, { pattern: ["rm"], decision: "forbidden" }],
   });
+
   assert.ok(result.ok);
+
   if (!result.ok) return;
+
   const verdict = result.guard({ ...CALL, arguments: { command: "git status; rm victim" } });
+
   assert.equal(verdict?.kind, "denied", JSON.stringify(verdict));
+
   if (verdict?.kind === "denied") assert.equal(verdict.code, "exec_policy_unverifiable");
 });

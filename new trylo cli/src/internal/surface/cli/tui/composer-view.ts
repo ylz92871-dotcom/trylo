@@ -39,28 +39,35 @@ export function renderComposer(view: ComposerView, columns: number): ComposedRow
   const cursorLine = beforeCursor.split("\n").length - 1;
   const cursorColumn = displayWidth(beforeCursor.split("\n")[cursorLine] ?? "");
   const rows: string[] = [];
+
   for (const [index, line] of lines.entries()) {
     const prefix = index === 0 ? view.prompt : "… ";
     const prefixWidth = displayWidth(prefix);
     const room = Math.max(width - prefixWidth, 1);
+
     if (index === cursorLine) {
       rows.push(`${prefix}${windowAround(line, cursorColumn, room)}`);
     } else {
       rows.push(`${prefix}${headOf(line, room)}`);
     }
   }
+
   let cursorRow = cursorLine;
   let cursorColumnDrawn = Math.min(cursorColumn + displayWidth(view.prompt), width - 1);
+
   if (view.footer !== undefined) {
     rows.push(fitText(view.footer, width - 1));
     cursorRow += 0;
   }
+
   // The cursor column is relative to the *window*, not the text: when a long
   // line scrolled, the cursor sits where the window put it.
   const line = lines[cursorLine] ?? "";
   const prefixWidth = displayWidth(cursorLine === 0 ? view.prompt : "… ");
   const window = windowFor(line, cursorColumn, Math.max(width - prefixWidth, 1));
+
   cursorColumnDrawn = Math.min(cursorColumn - window.startColumns + prefixWidth, width - 1);
+
   return { rows, cursorRow, cursorColumn: Math.max(cursorColumnDrawn, 0) };
 }
 
@@ -91,30 +98,36 @@ function windowFor(
   const target = Math.max(cursorColumn - room + 1, 0);
   let start = 0;
   let startColumns = 0;
+
   while (start < characters.length && startColumns + (widths[start] ?? 0) <= target) {
     startColumns += widths[start] ?? 0;
     start += 1;
   }
+
   let length = 0;
   let lengthColumns = 0;
   let at = start;
+
   while (at < characters.length && lengthColumns + (widths[at] ?? 0) <= room) {
     lengthColumns += widths[at] ?? 0;
     length += 1;
     at += 1;
   }
+
   return { start, startUnits: unitsOf(characters, start), startColumns, length };
 }
 
 /** The UTF-16 offset of the `n`-th code point of a pre-split character list. */
 function unitsOf(characters: ReadonlyArray<string>, n: number): number {
   let units = 0;
+
   for (const [index, character] of characters.entries()) {
     if (index >= n) {
       break;
     }
     units += character.length;
   }
+
   return units;
 }
 

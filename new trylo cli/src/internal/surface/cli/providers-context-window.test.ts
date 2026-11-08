@@ -32,10 +32,12 @@ function recorded(files: Map<string, string> = new Map()): Recorded {
     readFile: (path) => files.get(path),
     isDirectory: () => true,
     readDir: () => [],
+
     writeFile: (path, text) => {
       files.set(path, text);
       return true;
     },
+
     readStdin: async () => "",
     readLine: async () => undefined,
     readSecret: async () => undefined,
@@ -44,6 +46,7 @@ function recorded(files: Map<string, string> = new Map()): Recorded {
     now: () => 0,
     newId: (prefix) => `${prefix}-1`,
   };
+
   return { ctx, out, err, files };
 }
 
@@ -58,19 +61,25 @@ function configBudget(fx: Recorded): { declared?: number; effective?: number; ov
 
 test("D7: add/edit parse --context-window and refuse non-positive values", () => {
   const added = parseProviders([...ADD, "--context-window", "128000"]);
+
   assert.equal(added.kind, "providers_add");
+
   if (added.kind !== "providers_add") {
     throw new Error("unreachable");
   }
+
   assert.equal(added.options.contextWindow, 128000);
   assert.equal(parseProviders([...ADD, "--context-window", "0"]).kind, "error");
   assert.equal(parseProviders([...ADD, "--context-window", "abc"]).kind, "error");
 
   const edited = parseProviders(["edit", "lab", "--context-window", "64000"]);
+
   assert.equal(edited.kind, "providers_edit");
+
   if (edited.kind !== "providers_edit") {
     throw new Error("unreachable");
   }
+
   assert.equal(edited.options.contextWindow, 64000);
   assert.equal(parseProviders(["edit", "lab", "--context-window", "-5"]).kind, "error");
 });
@@ -78,12 +87,16 @@ test("D7: add/edit parse --context-window and refuse non-positive values", () =>
 test("D7: a declared window persists, shows, and becomes the ceiling", () => {
   const fx = recorded();
   const add = parseProviders([...ADD, "--context-window", "128000"]);
+
   assert.equal(add.kind, "providers_add");
+
   if (add.kind !== "providers_add") {
     throw new Error("unreachable");
   }
+
   assert.equal(handleProvidersAdd(fx.ctx, add.options), EXIT_CODES.OK);
   const budget = configBudget(fx);
+
   assert.equal(budget.declared, 128000);
   assert.equal(budget.effective, 128000);
   assert.equal(budget.overridden, false);
@@ -92,15 +105,19 @@ test("D7: a declared window persists, shows, and becomes the ceiling", () => {
 test("D7: edit changes the window, and absence keeps the old one", () => {
   const fx = recorded();
   const add = parseProviders([...ADD, "--context-window", "128000"]);
+
   assert.equal(add.kind, "providers_add");
+
   if (add.kind !== "providers_add") {
     throw new Error("unreachable");
   }
+
   assert.equal(handleProvidersAdd(fx.ctx, add.options), EXIT_CODES.OK);
   assert.equal(handleProvidersEdit(fx.ctx, { id: "lab", contextWindow: 64000 }), EXIT_CODES.OK);
   assert.equal(configBudget(fx).effective, 64000);
   assert.equal(handleProvidersEdit(fx.ctx, { id: "lab", model: "lab-70b" }), EXIT_CODES.OK);
   const budget = configBudget(fx);
+
   assert.equal(budget.effective, 64000);
   assert.equal(budget.declared, 64000);
 });

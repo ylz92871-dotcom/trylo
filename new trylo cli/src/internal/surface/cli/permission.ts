@@ -7,6 +7,7 @@ import type {
   PermissionRequestContext,
 } from "../../ports/permission.js";
 import { decision } from "../../ports/permission.js";
+
 export { decision } from "../../ports/permission.js";
 export type { PermissionAction, PermissionDecision } from "../../ports/permission.js";
 
@@ -31,6 +32,7 @@ export function createDenyAllPermission(): PermissionPort {
       counter += 1;
       return { ticketId: `deny-${counter}`, toolCallId: action.toolCallId };
     },
+
     async awaitDecision(_ticketId: string): Promise<PermissionDecision> {
       return decision("denied", "once", "policy_denied");
     },
@@ -46,17 +48,20 @@ export function createDenyAllPermission(): PermissionPort {
 export function createAllowToolsPermission(allowedNames: ReadonlySet<string>, actionAllowed: (action: PermissionAction) => boolean = () => true): PermissionPort {
   const pending = new Map<string, PermissionAction>();
   let counter = 0;
+
   return {
     inheritance: {
       canUseTool: name => allowedNames.has(name),
       decide: action => decision(allowedNames.has(action.name) && actionAllowed(action) ? "approved" : "denied", "once"),
     },
+
     async request(action: PermissionAction): Promise<PermissionTicket> {
       counter += 1;
       const ticketId = `allow-tools-${counter}`;
       pending.set(ticketId, action);
       return { ticketId, toolCallId: action.toolCallId };
     },
+
     async awaitDecision(ticketId: string): Promise<PermissionDecision> {
       const action = pending.get(ticketId);
       pending.delete(ticketId);
@@ -96,30 +101,38 @@ function decide(answer: string | undefined): InteractiveAnswer {
   if (answer === undefined) {
     return { resolution: "cancelled", scope: "once" };
   }
+
   const normalized = answer.trim().toLowerCase();
   if (normalized === "y" || normalized === "yes") {
     return { resolution: "approved", scope: "once" };
   }
+
   if (normalized === "s" || normalized === "session") {
     return { resolution: "approved", scope: "session" };
   }
+
   if (normalized === "d") {
     return { resolution: "denied", scope: "session" };
   }
+
   if (normalized === "c" || normalized === "cancel") {
     return { resolution: "cancelled", scope: "once" };
   }
+
   return { resolution: "denied", scope: "once" };
 }
 
 async function awaitCancellableApproval(answer: Promise<PermissionDecision>, signal?: AbortSignal): Promise<PermissionDecision> {
   if (signal === undefined) return answer;
+
   if (signal.aborted) return decision("cancelled");
+
   let abort!: () => void;
   const cancelled = new Promise<PermissionDecision>(resolve => {
     abort = () => { resolve(decision("cancelled")); };
     signal.addEventListener("abort", abort, { once: true });
   });
+
   try { return await Promise.race([answer, cancelled]); }
   finally { signal.removeEventListener("abort", abort); }
 }
@@ -131,21 +144,30 @@ export function resolveInteractiveAnswer(answer: string | undefined): Interactiv
 export function createInteractivePermission(io: InteractivePermissionIo): PermissionPort {
   const pending = new Map<string, { readonly action: PermissionAction; readonly context?: PermissionRequestContext }>();
   let counter = 0;
+
   return {
     ...(io.supportsMemberApproval === true && io.requestApproval !== undefined ? { supportsMemberApproval: true as const } : {}),
+
     async request(action: PermissionAction, context?: PermissionRequestContext): Promise<PermissionTicket> {
       counter += 1;
       const ticketId = `ask-${counter}`;
       pending.set(ticketId, { action, ...(context === undefined ? {} : { context }) });
       return { ticketId, toolCallId: action.toolCallId };
     },
+
     async awaitDecision(ticketId: string): Promise<PermissionDecision> {
       const waiting = pending.get(ticketId);
+
       pending.delete(ticketId);
+
       if (waiting === undefined) throw new Error(`unknown approval ticket: ${ticketId}`);
+
       const { action, context } = waiting;
+
       if (context?.signal?.aborted) return decision("cancelled");
+
       io.onApproval?.({ kind: "waiting", action });
+
       try {
         const answer = io.requestApproval === undefined
           ? readApproval(io, action, context?.signal)
@@ -188,17 +210,22 @@ async function readApproval(io: InteractivePermissionIo, action: PermissionActio
   for (;;) {
     io.prompt(`allow ${describeAction(action)}? [y]once [s]remember exact call [n]deny [d]disable tool [c]cancel: `);
     const answer = await io.readLine();
+
     // The process context closes its reader on command exit. A late line must
     // neither approve the released ticket nor reopen its prompt.
     if (signal?.aborted) return decision("cancelled");
+
     if (answer === undefined) return decision("cancelled", "once", "input_closed");
+
     const normalized = answer.trim().toLowerCase();
     if (!["y", "yes", "s", "session", "n", "no", "d", "c", "cancel"].includes(normalized)) {
       io.prompt("Choose y/s/n/d/c; the command has not run.\n");
       continue;
     }
+
     const resolved = decide(normalized);
     const reason = resolved.resolution === "denied" ? "user_denied" : resolved.resolution === "cancelled" ? "user_cancelled" : undefined;
+
     return decision(resolved.resolution, resolved.scope, reason);
   }
 }

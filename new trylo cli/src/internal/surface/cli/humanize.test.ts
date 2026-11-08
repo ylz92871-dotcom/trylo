@@ -55,7 +55,9 @@ test("columns line up so the eye does not re-find them every row", () => {
     ["a", "bb"],
     ["ccc", "d"],
   ]);
+
   assert.deepEqual(lines, ["a    bb", "ccc  d"]);
+
   for (const line of lines) {
     assert.equal(line.endsWith(" "), false, "trailing padding is trimmed");
   }

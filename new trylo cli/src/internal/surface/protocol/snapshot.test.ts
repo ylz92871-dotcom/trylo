@@ -47,15 +47,18 @@ function admitOrFail(raw: unknown): AdmittedEnvelope {
   if (!result.ok) {
     assert.fail(`应当通过校验，却返回 ${result.detail}`);
   }
+
   if (result.outcome !== "admitted") {
     assert.fail(`应当是已知 kind，却被忽略为 ${result.kind}`);
   }
+
   return result.admitted;
 }
 
 function projectStream(envelopes: ReadonlyArray<unknown>): ReadonlyArray<AguiFrame> {
   let state = createAguiState();
   const frames: AguiFrame[] = [];
+
   for (const envelope of envelopes) {
     const result = projectAgui(admitOrFail(envelope), state);
     if (!result.ok) {
@@ -64,6 +67,7 @@ function projectStream(envelopes: ReadonlyArray<unknown>): ReadonlyArray<AguiFra
     frames.push(result.frame);
     state = result.state;
   }
+
   return frames;
 }
 
@@ -75,27 +79,34 @@ function independentAggregate(envelopes: ReadonlyArray<Record<string, unknown>>)
   let toolCallCount = 0;
   let lastTerminalReason: JsonValue = null;
   let lastEventId: JsonValue = null;
+
   for (const envelope of envelopes) {
     const kind = String(envelope.kind);
+
     kindCounts[kind] = (Number(kindCounts[kind] ?? 0) + 1) as JsonValue;
     const payload = envelope.payload as Record<string, unknown>;
     if (kind === "text" && typeof payload.text === "string") {
       textChars += payload.text.length;
     }
+
     if (kind === "thinking" && typeof payload.text === "string") {
       thinkingChars += payload.text.length;
     }
+
     if (kind === "tool_use") {
       toolCallCount += 1;
     }
+
     if (kind === "terminal" && typeof payload.reason === "string") {
       const reason = payload.reason;
       if (reason === "completed" || reason === "failed" || reason === "cancelled" || reason === "unknown") {
         lastTerminalReason = reason;
       }
     }
+
     lastEventId = String(envelope.eventId);
   }
+
   return {
     eventCount: envelopes.length,
     kindCounts,
@@ -119,13 +130,17 @@ function snapshotOf(frame: AguiFrame): JsonObject {
 test("compact 帧的 snapshot 与独立重算的聚合对象逐字相等", () => {
   const envelopes = FIXTURES.map((item) => item.envelope);
   const compactIndex = FIXTURES.findIndex((item) => item.kind === "compact");
+
   assert.equal(compactIndex > 0, true, "夹具里必须有 compact 才能测 snapshot");
   const frames = projectStream(envelopes);
   const frame = frames[compactIndex];
+
   assert.notEqual(frame, undefined);
+
   if (frame === undefined) {
     return;
   }
+
   assert.deepEqual(
     { ...snapshotOf(frame) },
     independentAggregate(envelopes.slice(0, compactIndex + 1)),
@@ -139,13 +154,17 @@ test("连续 snapshot 单调可重建：后一个 snapshot 覆盖前一个的全
   ];
   const frames = projectStream(envelopes);
   const snapshots = frames.filter((frame) => frame.type === "STATE_SNAPSHOT").map(snapshotOf);
+
   assert.equal(snapshots.length, 2);
   const [first, second] = snapshots;
+
   assert.notEqual(first, undefined);
   assert.notEqual(second, undefined);
+
   if (first === undefined || second === undefined) {
     return;
   }
+
   assert.equal(Number(second.eventCount) > Number(first.eventCount), true);
   assert.deepEqual({ ...second }, independentAggregate(envelopes));
 });
@@ -153,10 +172,13 @@ test("连续 snapshot 单调可重建：后一个 snapshot 覆盖前一个的全
 test("snapshot 是有界标量集合：键集固定，不随会话增长", () => {
   const frames = projectStream(FIXTURES.map((item) => item.envelope));
   const frame = frames.find((item) => item.type === "STATE_SNAPSHOT");
+
   assert.notEqual(frame, undefined);
+
   if (frame === undefined) {
     return;
   }
+
   assert.deepEqual(Object.keys(snapshotOf(frame)).sort(), [
     "eventCount",
     "kindCounts",
@@ -171,17 +193,22 @@ test("snapshot 是有界标量集合：键集固定，不随会话增长", () =>
 test("snapshot 不携带正文：正文只出现在它自己的那个事件的帧里", () => {
   const frames = projectStream(FIXTURES.map((item) => item.envelope));
   const frame = frames.find((item) => item.type === "STATE_SNAPSHOT");
+
   assert.notEqual(frame, undefined);
+
   if (frame === undefined) {
     return;
   }
+
   const serialized = JSON.stringify(snapshotOf(frame));
+
   assert.equal(serialized.includes("the failing test is protocol.test.ts"), false);
   assert.equal(serialized.includes("check the assertion before the fixture"), false);
 });
 
 test("本包只做 SNAPSHOT：整条流里不出现 STATE_DELTA", () => {
   const frames = projectStream(FIXTURES.map((item) => item.envelope));
+
   assert.equal(frames.length, FIXTURES.length);
   assert.equal(
     frames.some((frame) => frame.type === "STATE_DELTA"),

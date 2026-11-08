@@ -87,21 +87,27 @@ export function isValidScheduleId(value: string): boolean {
  */
 export function parseSchedule(argv: ReadonlyArray<string>): ScheduleParse {
   const [verb, ...rest] = argv;
+
   if (verb === undefined || verb === "--help" || verb === "-h" || verb === "help") {
     return { verb: "help" };
   }
+
   if (verb === "add") {
     return parseAdd(rest);
   }
+
   if (verb === "list" || verb === "ls") {
     return { verb: "list", options: { json: hasFlag(rest, "json") } };
   }
+
   if (verb === "remove" || verb === "rm" || verb === "delete") {
     return parseRemove(rest);
   }
+
   if (verb === "run" || verb === "tick") {
     return { verb: "run", options: { json: hasFlag(rest, "json") } };
   }
+
   return {
     verb: "error",
     message: `unknown subcommand 'schedule ${verb}'`,
@@ -114,11 +120,14 @@ function parseAdd(argv: ReadonlyArray<string>): ScheduleParse {
   if (cron === undefined) {
     return { verb: "error", message: "schedule add needs --cron <expr>", hint: "see `trylo schedule`" };
   }
+
   const prompt = valueOf(argv, "prompt");
   if (prompt === undefined) {
     return { verb: "error", message: "schedule add needs --prompt <text>", hint: "the text to run when it fires" };
   }
+
   const session = valueOf(argv, "session");
+
   return {
     verb: "add",
     options: {
@@ -144,6 +153,7 @@ function parseRemove(argv: ReadonlyArray<string>): ScheduleParse {
   if (id === undefined) {
     return { verb: "error", message: "schedule remove needs a schedule id", hint: "run `trylo schedule list` to see the ids" };
   }
+
   if (!isValidScheduleId(id)) {
     // The id never reaches a lookup, so the person is told the real problem
     // rather than an `unknown_schedule` that reads like the schedule vanished.
@@ -153,6 +163,7 @@ function parseRemove(argv: ReadonlyArray<string>): ScheduleParse {
       hint: "expected sch_ followed by 8 hex characters, as printed by `trylo schedule list`",
     };
   }
+
   return { verb: "remove", options: { scheduleId: id, json: hasFlag(argv, "json") } };
 }
 
@@ -174,6 +185,7 @@ function valueOf(argv: ReadonlyArray<string>, name: string): string | undefined 
       const next = argv[index + 1];
       return next !== undefined && !next.startsWith("--") ? next : undefined;
     }
+
     const prefix = `--${name}=`;
     if (token.startsWith(prefix)) {
       const inline = token.slice(prefix.length);

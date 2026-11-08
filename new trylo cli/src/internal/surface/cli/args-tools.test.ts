@@ -8,6 +8,7 @@ test("pipeline commands keep automation opt-in and strict bounded work flags", (
   assert.equal(parseTools(["work", "--max-jobs", "3", "--allow-tools", "run_shell"]).kind, "work");
   assert.equal(parseTools(["jobs", "--json"]).kind, "jobs");
   assert.equal(parseTools(["queue", "double", "--scope", "project"]).kind, "queue");
+
   for (const argv of [["recipe", "x", "--auto", "--auto"], ["recipe", "x", "--allow-tools", "run_shell"],
     ["work", "--max-jobs", "4"], ["work", "--session", "named"], ["work", "--provider", "x", "--provider", "y"],
     ["queue", "double", "--scope"], ["jobs", "--provider", "x"], ["expire"], ["work", "--allow-tools", "*"]]) assert.equal(parseTools(argv).kind, "error");

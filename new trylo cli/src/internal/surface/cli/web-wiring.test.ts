@@ -71,10 +71,13 @@ test("a real run's web_fetch answers a prompt: the extractor is wired, not just 
       model: "default",
       apiKey: undefined,
     }));
+
     assert.equal("code" in wiring, false);
+
     if ("code" in wiring) {
       return;
     }
+
     assert.notEqual(webFetchBinding(wiring.ports.tools), undefined);
 
     // Asserting the schema advertises `prompt` would prove nothing: the binding
@@ -90,6 +93,7 @@ test("a real run's web_fetch answers a prompt: the extractor is wired, not just 
       },
       new AbortController().signal,
     );
+
     // The invariant is not "the extractor produced text" — that depends on what
     // the provider answers, and a fixture provider is entitled to say nothing.
     // It is "the call was not refused up front": with no extractor, `plan.ts`
@@ -99,6 +103,7 @@ test("a real run's web_fetch answers a prompt: the extractor is wired, not just 
     if (answer.outcome === "error") {
       assert.fail(`web_fetch refused an advertised prompt: ${answer.code} ${answer.message}`);
     }
+
     assert.equal(answer.outcome, "result");
   } finally {
     await site.close();
@@ -114,6 +119,7 @@ test("a real run has a cache: the clock is injected at the composition root", ()
     model: "default",
     apiKey: undefined,
   });
+
   assert.equal(typeof config.nowMs, "function");
   // A real clock, not a frozen one: the number it hands out is a real timestamp.
   assert.ok((config.nowMs?.() ?? 0) > 0, "a production clock is not the epoch");
@@ -130,6 +136,7 @@ test("the cache clock can be held still without patching a global", () => {
     apiKey: undefined,
     nowMs: () => now,
   });
+
   assert.equal(config.nowMs?.(), 1_000);
   now = 2_000;
   assert.equal(config.nowMs?.(), 2_000);
@@ -145,6 +152,7 @@ test("a provider that cannot search still gets a cache, and no web_search", () =
     model: "default",
     apiKey: undefined,
   });
+
   assert.equal(config.search, undefined);
   assert.equal(typeof config.nowMs, "function");
 });
@@ -160,11 +168,15 @@ test("no web config at all means no network tool and no extractor", () => {
     workspaceRoot: process.cwd(),
     permission: createDenyAllPermission(),
   });
+
   assert.equal("code" in wiring, false);
+
   if ("code" in wiring) {
     return;
   }
+
   const names = wiring.ports.tools.snapshot().map((binding) => binding.name);
+
   assert.equal(names.includes("web_fetch"), false);
   assert.equal(names.includes("web_search"), false);
 });

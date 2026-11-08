@@ -46,11 +46,15 @@ function coalesceSnapshot(pending: PendingSubagentEnvelope[], next: PendingSubag
   if (next.snapshotKey === undefined) return;
   for (let index = pending.length - 1; index >= 0; index -= 1) {
     const previous = pending[index];
+
     // A tool, report, lifecycle, or unknown event seals the preceding snapshots.
     if (previous?.snapshotKey === undefined) break;
+
     if (previous.snapshotKey !== next.snapshotKey) continue;
+
     // A1, B1, A2 becomes B1, A2: replacement keeps its actual producer sequence.
     pending.splice(index, 1);
+
     return;
   }
 }
@@ -65,12 +69,16 @@ class SubagentJournalAppender {
 
   enqueue(envelope: Envelope): void {
     if (this.failureCode !== undefined) return;
+
     const next = { envelope, snapshotKey: snapshotKey(envelope) };
+
     coalesceSnapshot(this.pending, next);
+
     if (this.pending.length + (this.inFlight === undefined ? 0 : 1) >= MAX_PENDING_SUBAGENT_APPENDS) {
       this.failureCode = "subagent_write_queue_full";
       return;
     }
+
     this.pending.push(next);
     this.startWriter();
   }
@@ -88,7 +96,9 @@ class SubagentJournalAppender {
     while (this.pending.length > 0) {
       const next = this.pending.shift();
       if (next === undefined) break;
+
       this.inFlight = next.envelope;
+
       try {
         const result = await this.session.append({ type: "envelope", sessionId: this.sessionId, turnId: this.turnId,
           at: next.envelope.timestamp, payload: { envelope: next.envelope as unknown as JsonObject } });
@@ -97,6 +107,7 @@ class SubagentJournalAppender {
         // Observer delivery cannot throw storage failures into the child runtime.
         this.failureCode ??= "session_append_threw";
       }
+
       this.inFlight = undefined;
       // Accepted facts still drain after failure; later observations are rejected.
     }

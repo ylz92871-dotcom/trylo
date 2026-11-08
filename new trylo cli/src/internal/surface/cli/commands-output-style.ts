@@ -46,17 +46,21 @@ function rowOf(style: OutputStyle): StyleRow {
 
 export function handleOutputStyleList(ctx: CliContext, options: OutputStyleListOptions): ExitCode {
   const styles = loadStylesFor(ctx);
+
   if (options.json) {
     ctx.stdout(`${JSON.stringify({ styles: styles.map(rowOf) })}\n`);
     return EXIT_CODES.OK;
   }
+
   if (styles.length === 0) {
     ctx.stdout("no output styles installed (built-in default applies)\n");
     return EXIT_CODES.OK;
   }
+
   for (const style of styles) {
     ctx.stdout(`${style.name}  [${style.source}]  ${style.description}\n`);
   }
+
   return EXIT_CODES.OK;
 }
 
@@ -73,10 +77,13 @@ export function handleOutputStyleShow(ctx: CliContext, options: OutputStyleShowO
       hint: "`trylo output-style list` shows what `run --output-style` accepts",
     });
   }
+
   if (options.json) {
     ctx.stdout(`${JSON.stringify({ style: rowOf(found), prompt: found.prompt })}\n`);
     return EXIT_CODES.OK;
   }
+
   ctx.stdout(`${found.prompt}\n`);
+
   return EXIT_CODES.OK;
 }

@@ -10,17 +10,27 @@ import { BootstrapContextError } from "./bootstrap-context.js";
 /** One turn, with a framed prompt and approvals on the still-open stdin. */
 export async function handleStdioRun(ctx: CliContext, options: RunCommandOptions, sink: CliSink): Promise<ExitCode> {
   let prompt: ReturnType<typeof stdioUserPrompt>;
+
   try { prompt = stdioUserPrompt(await ctx.readLine()); }
   catch (error) {
+    if (error instanceof Error && error.message === "invalid_goal_command") {
+      ctx.stderr("invalid_goal_command: no turn was run\n");
+      return EXIT_CODES.USAGE;
+    }
     if (!(error instanceof BootstrapContextError)) throw error;
-    ctx.stderr("invalid_bootstrap_context: prior context was rejected; no turn was run\n"); return EXIT_CODES.USAGE;
+    ctx.stderr("invalid_bootstrap_context: prior context was rejected; no turn was run\n");
+    return EXIT_CODES.USAGE;
   }
+
   if (prompt === undefined) {
     ctx.stderr("stdio input requires one non-empty user text frame\n");
     return EXIT_CODES.USAGE;
   }
-  const control = createStdioSession(ctx);
+
+  const control = createStdioSession(ctx, prompt.goal);
+
   control.start();
+
   try {
     return await handleRun({ ...ctx, ...(prompt.bootstrapContext === undefined ? {} : { bootstrapContext: prompt.bootstrapContext }),
       ...(prompt.userSourceAvailable === undefined ? {} : { userSourceAvailable: prompt.userSourceAvailable }),

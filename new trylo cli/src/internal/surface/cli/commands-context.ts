@@ -51,6 +51,7 @@ export async function handleContext(ctx: CliContext, options: ContextOptions): P
   if (options.session === undefined) {
     return handleWorkspaceContext(ctx, options.json);
   }
+
   const store = createNdjsonSessionStore({ path: sessionPath(ctx.homeDir, ctx.env, options.session) });
   const viewed = await store.readRecords();
   if (!viewed.ok) {
@@ -67,6 +68,7 @@ export async function handleContext(ctx: CliContext, options: ContextOptions): P
       hint: "a session that cannot be proven intact is never partially shown",
     });
   }
+
   const review = reviewSession(viewed.view.records);
   const turns = options.turn === undefined
     ? review.turns
@@ -78,8 +80,10 @@ export async function handleContext(ctx: CliContext, options: ContextOptions): P
       hint: "`trylo context --session <id>` lists the turn ids",
     });
   }
+
   const slices = turns.map(sliceOf);
   const estimatedTokens = slices.reduce((total, slice) => total + slice.estimatedTokens, 0);
+
   if (options.json) {
     ctx.stdout(
       `${JSON.stringify({
@@ -93,12 +97,15 @@ export async function handleContext(ctx: CliContext, options: ContextOptions): P
     );
     return EXIT_CODES.OK;
   }
+
   ctx.stdout(`session ${options.session}: ${slices.length} turn(s), ~${estimatedTokens} tokens (journal texts at chars/4)\n`);
+
   for (const slice of slices) {
     ctx.stdout(
       `  ${slice.turnId}: ${slice.userMessages} user, ${slice.assistantMessages} assistant, ${slice.toolCalls} tool calls, ${slice.fileWrites} writes, ~${slice.estimatedTokens} tokens\n`,
     );
   }
+
   return EXIT_CODES.OK;
 }
 
@@ -107,6 +114,7 @@ function handleWorkspaceContext(ctx: CliContext, json: boolean): ExitCode {
   const sources = assembled?.sources ?? [];
   const problems = assembled?.problems ?? [];
   const messages = assembled?.messages.length ?? 0;
+
   if (json) {
     ctx.stdout(
       `${JSON.stringify({
@@ -120,16 +128,21 @@ function handleWorkspaceContext(ctx: CliContext, json: boolean): ExitCode {
     );
     return EXIT_CODES.OK;
   }
+
   if (sources.length === 0) {
     ctx.stdout(`workspace ${ctx.cwd}: no project rules adopted\n`);
     return EXIT_CODES.OK;
   }
+
   ctx.stdout(`workspace ${ctx.cwd}: ${sources.length} rule source(s), ${messages} instruction message(s)\n`);
+
   for (const source of sources) {
     ctx.stdout(`  ${source.relativePath} [${source.scope}]\n`);
   }
+
   for (const problem of problems) {
     ctx.stdout(`  problem: ${problem}\n`);
   }
+
   return EXIT_CODES.OK;
 }

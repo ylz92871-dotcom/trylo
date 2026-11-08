@@ -25,18 +25,22 @@ export async function handleLogs(ctx: CliContext, options: LogsOptions, deps: Ba
     ctx.stderr("logs needs a session id\ntrylo bg ps lists the ids in use\n");
     return EXIT_CODES.USAGE;
   }
+
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((wake) => setTimeout(wake, ms)));
   const intervalMs = deps.followIntervalMs ?? DEFAULT_FOLLOW_INTERVAL_MS;
   let printedTo = 0;
+
   for (;;) {
     const resolved = await resolveJob(deps, id);
     if (!resolved.ok) {
       return refuseUnknownJob(ctx, resolved.reason);
     }
+
     const output = deps.jobs.readOutput(id);
     if (!output.ok) {
       return refuseUnreadableOutput(ctx, output.detail);
     }
+
     if (options.json) {
       ctx.stdout(
         `${JSON.stringify({ id, status: resolved.record.status, output: output.text, truncatedFromStart: output.truncatedFromStart })}\n`,
@@ -44,12 +48,15 @@ export async function handleLogs(ctx: CliContext, options: LogsOptions, deps: Ba
     } else if (output.text.length > printedTo) {
       printedTo = printLogFresh(ctx, output.text, printedTo, output.truncatedFromStart);
     }
+
     if (resolved.record.status !== "running" || !options.follow) {
       return EXIT_CODES.OK;
     }
+
     if (deps.shouldContinue !== undefined && !deps.shouldContinue()) {
       return EXIT_CODES.CANCELLED;
     }
+
     await sleep(intervalMs);
   }
 }

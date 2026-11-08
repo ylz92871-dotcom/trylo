@@ -48,6 +48,7 @@ function handleConfigShow(ctx: CliContext, json: boolean): ExitCode {
       hint: "fix or remove that config file; an unreadable config never falls back silently",
     });
   }
+
   if (json) {
     ctx.stdout(
       `${JSON.stringify({
@@ -57,7 +58,9 @@ function handleConfigShow(ctx: CliContext, json: boolean): ExitCode {
     );
     return EXIT_CODES.OK;
   }
+
   const view = configValueView(loaded.resolved);
+
   for (const key of Object.keys(view).sort()) {
     const entry = view[key];
     if (entry === undefined) {
@@ -65,6 +68,7 @@ function handleConfigShow(ctx: CliContext, json: boolean): ExitCode {
     }
     ctx.stdout(`${key} = ${JSON.stringify(entry.value)}  (from ${entry.sourceLayer})\n`);
   }
+
   return EXIT_CODES.OK;
 }
 
@@ -74,7 +78,12 @@ function handleSessionList(ctx: CliContext, json: boolean, search?: string, all 
 
 export async function dispatch(parsed: ParsedCommand, ctx: CliContext): Promise<ExitCode> {
   const sink = sinkFor(ctx);
+
+  // Select the command family before importing its runtime dependencies.
   switch (parsed.kind) {
+    case "library": return (await import("./commands-library.js")).handleLibraryCommand(ctx, parsed.options);
+    case "learn":
+      return (await import("./commands-learn.js")).handleLearn(ctx, parsed.options);
     case "help":
       ctx.stdout(`${USAGE}\n`);
       return EXIT_CODES.OK;
@@ -113,6 +122,7 @@ export async function dispatch(parsed: ParsedCommand, ctx: CliContext): Promise<
         ...(parsed.options.evidence === undefined ? {} : { evidence: parsed.options.evidence }),
         json: parsed.options.json,
       };
+
       return reportReconcile(ctx, request, await reconcile(request, ctx));
     }
     case "run": {
@@ -122,16 +132,21 @@ export async function dispatch(parsed: ParsedCommand, ctx: CliContext): Promise<
         const { handleStdioRun } = await import("./run-stdio.js");
         return handleStdioRun(ctx, parsed.options, sink);
       }
+
       if (parsed.options.resumeLast === true) {
         const last = await resolveLastSession(ctx);
         if (!last.ok) {
           return reportLastFailure(ctx, last);
         }
+
         const { resumeLast: _dropped, ...rest } = parsed.options;
         const { handleRun } = await import("./run-command.js");
+
         return handleRun(ctx, { ...rest, resume: last.sessionId }, sink);
       }
+
       const { handleRun } = await import("./run-command.js");
+
       return handleRun(ctx, parsed.options, sink);
     }
     case "login":
@@ -241,6 +256,10 @@ export async function dispatch(parsed: ParsedCommand, ctx: CliContext): Promise<
       const { handleOutputStyleShow } = await import("./commands-output-style.js");
       return handleOutputStyleShow(ctx, parsed.options);
     }
+    case "workflow_learning": {
+      const { handleWorkflowLearning } = await import("./commands-workflow-learning.js");
+      return handleWorkflowLearning(ctx, parsed.args);
+    }
     case "workflow_list": {
       const { handleWorkflowList } = await import("./commands-workflow.js");
       return handleWorkflowList(ctx, parsed.options);
@@ -262,7 +281,7 @@ export async function dispatch(parsed: ParsedCommand, ctx: CliContext): Promise<
       return (await import("./family-entries.js")).runFamilyCommand(parsed.word, ctx, parsed.args);
     case "repl": {
       const { handleReplEntry } = await import("./tui/entry.js");
-      return handleReplEntry(ctx, sink, parsed.learning);
+      return handleReplEntry(ctx, sink, parsed.learning, parsed.learningOptions);
     }
     case "error":
       return reportFailure(ctx, {

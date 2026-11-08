@@ -16,6 +16,7 @@ function context(homeDir: string): CliContext {
     stdout: () => {}, stderr: () => {}, now: () => 0, newId: prefix => prefix + "-fixed",
   };
 }
+
 const fingerprint = { schemaVersion: "1", workspaceId: "w", providerId: "fixture", model: "m", toolCatalogHash: "h" };
 
 for (const type of ["effect_issued", "compact"] as const) {
@@ -24,6 +25,7 @@ for (const type of ["effect_issued", "compact"] as const) {
     const ctx = context(root);
     const path = sessionPath(root, ctx.env, "s");
     const store = createNdjsonSessionStore({ path });
+
     try {
       await store.start({ sessionId: "s", createdAt: "1970-01-01T00:00:00Z", fingerprint });
       await store.append({ type, sessionId: "s", turnId: "t", at: "1970-01-01T00:00:01Z",
@@ -32,8 +34,11 @@ for (const type of ["effect_issued", "compact"] as const) {
       await store.release();
       const opened = await openSession(ctx, { resume: "s", message: [], readStdin: false }, fingerprint);
       if (opened.kind === "resume") await opened.session.release();
+
       assert.equal(opened.kind, "failed");
+
       if (opened.kind !== "failed") return;
+
       assert.equal(opened.failure.exitCode, 52);
       assert.match(opened.failure.message, type === "compact" ? /cannot be projected/ : /reconciliation/);
       assert.equal(existsSync(path + ".lock"), false);

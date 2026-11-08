@@ -45,6 +45,7 @@ const REQUEST = { sessionId: "s", turnId: "t", correlationId: "c", text: "use th
 
 function scriptedProvider(calls: number): ReturnType<typeof createFakeProvider> {
   const script: Array<ReadonlyArray<ProviderEvent>> = [];
+
   for (let index = 0; index < calls; index += 1) {
     const text: ReadonlyArray<ProviderEvent> =
       index === 0
@@ -60,7 +61,9 @@ function scriptedProvider(calls: number): ReturnType<typeof createFakeProvider> 
       { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
     ]);
   }
+
   script.push([{ type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false }]);
+
   return createFakeProvider(script);
 }
 
@@ -132,6 +135,7 @@ async function persistRun(
 ): Promise<ReadonlyArray<string>> {
   const warnings: string[] = [];
   const lastResumed = resumed.length === 0 ? -1 : (resumed[resumed.length - 1]?.sequence ?? -1);
+
   for (const item of result.transcript.filter((entry) => entry.sequence > lastResumed)) {
     const appended = await session.append({
       type: "transcript_item",
@@ -143,6 +147,7 @@ async function persistRun(
       warnings.push(`item:${appended.code}`);
     }
   }
+
   for (const draft of compactRecordsOf(result)) {
     const appended = await session.append({
       type: draft.type,
@@ -154,6 +159,7 @@ async function persistRun(
       warnings.push(`compact:${appended.code}`);
     }
   }
+
   return warnings;
 }
 
@@ -175,7 +181,9 @@ async function startedStore(path: string): Promise<SessionPort> {
       workspaceId: "ws",
     },
   });
+
   assert.equal(started.ok, true);
+
   return store;
 }
 
@@ -190,6 +198,7 @@ test("the shipped summarizer is what the CLI assembly carries", async () => {
   ];
   const wiring = compactionWiring({ estimatePromptTokens: () => 0, nowMs: 0 });
   const summary = await wiring.summarize(items);
+
   assert.equal(summary, summarizeTranscript(items));
   assert.equal(summary.includes("Users"), false);
   assert.equal(summary.includes("[path]"), true);
@@ -201,6 +210,7 @@ test("the wiring the host builds is left to default to the shipped summarizer", 
   // summarizer is the only author whose output `validateSummary` has already
   // been written against.
   const wiring = compactionWiring({ estimatePromptTokens, nowMs: 0 });
+
   assert.equal(await wiring.summarize([]), summarizeTranscript([]));
   // A caller-authored summary is *refused*, not rewritten: whatever a hostile
   // author hands in, no window is stored. This is the same refusal the loop
@@ -224,8 +234,10 @@ test("an over-limit turn hands back one window stamped with the budget's format"
     ...REQUEST,
     budget: { maxIterations: 4, contextTokenLimit: 8_000 },
   });
+
   assert.equal(result.state.terminalReason, "completed");
   const records = compactRecordsOf(result);
+
   assert.equal(records.length, 1);
   assert.equal(records[0]?.payload.windowId, "w1");
   assert.equal(records[0]?.payload.formatVersion, COMPACTION_FORMAT_VERSION);
@@ -245,6 +257,7 @@ test("an appended window survives a fresh read of the same session file", async 
       ...REQUEST,
       budget: { maxIterations: 4, contextTokenLimit: 8_000 },
     });
+
     assert.deepEqual(await persistRun(session, result, [], "1970-01-01T00:00:00.000Z"), []);
     await session.release();
 
@@ -252,11 +265,15 @@ test("an appended window survives a fresh read of the same session file", async 
     // the first store's memory.
     const reopened = createNdjsonSessionStore({ path });
     const records = await reopened.readRecords();
+
     assert.equal(records.ok, true);
+
     if (!records.ok) {
       return;
     }
+
     const compactRows = records.view.records.filter((record) => record.type === "compact");
+
     assert.equal(compactRows.length, 1);
     assert.equal(compactRows[0]?.payload["windowId"], "w1");
   } finally {
@@ -277,13 +294,17 @@ test("a hostile summary stores no window and leaves the original text on the rec
       }),
       { ...REQUEST, budget: { maxIterations: 5, contextTokenLimit: 8_000 } },
     );
+
     assert.equal(compactRecordsOf(result).length, 0);
     await persistRun(session, result, [], "1970-01-01T00:00:00.000Z");
     const records = await session.readRecords();
+
     assert.equal(records.ok, true);
+
     if (!records.ok) {
       return;
     }
+
     assert.equal(records.view.records.filter((record) => record.type === "compact").length, 0);
     assert.equal(JSON.stringify(records.view.records).includes(ORIGINAL), true);
     await session.release();
@@ -310,16 +331,22 @@ test("a resume over the stored window sends the summary and not the replaced tex
       ...REQUEST,
       budget: { maxIterations: 4, contextTokenLimit: 8_000 },
     });
+
     assert.equal(compactRecordsOf(first).length, 1);
     await persistRun(session, first, [], "1970-01-01T00:00:00.000Z");
     const loaded = await session.readRecords();
+
     assert.equal(loaded.ok, true);
+
     if (!loaded.ok) {
       return;
     }
+
     const stored = loaded.view.records;
     const window = windowOfService(stored);
+
     assert.notEqual(window, undefined);
+
     if (window === undefined) {
       return;
     }
@@ -343,6 +370,7 @@ test("a resume over the stored window sends the summary and not the replaced tex
         budget: { maxIterations: 4, contextTokenLimit: 8_000 },
       },
     );
+
     assert.equal(second.state.terminalReason, "completed");
     const messages = requests[0]?.messages ?? [];
     // The replaced history is gone as *transcript items*: the model sees one
@@ -351,6 +379,7 @@ test("a resume over the stored window sends the summary and not the replaced tex
     // digest legitimately carries some of the original words — what must not
     // survive is the items themselves.
     const digests = messages.filter((m) => m.content.includes("[compacted history "));
+
     assert.equal(digests.length, 1);
     assert.equal(digests[0]?.role, "system");
     // Original user instructions stay outside the digest. Historical assistant

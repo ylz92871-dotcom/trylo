@@ -1,16 +1,13 @@
 import path from "node:path";
 import {
   createFileRefinementStore,
-  createFileToolLedger,
-  createToolGapRuntime,
+  createToolGapSession,
   type ToolGapRuntime,
-} from "../../integration/tool-learning/index.js";
-import { overlayFor } from "../../learning/domains/tool/refine/index.js";
-import type { DescriptionOverlay } from "../../learning/domains/tool/refine/types.js";
+} from "../../learning/agent/subsystems/tool/runtime/index.js";
+import { overlayFor } from "../../learning/agent/subsystems/tool/domain/refine/index.js";
+import type { DescriptionOverlay } from "../../learning/agent/subsystems/tool/domain/refine/types.js";
 import { switchEnablesTool, type LearningSwitch } from "../../integration/user-learning/index.js";
 import { methodLearningRoot } from "./learning-sink.js";
-import { handoffPendingToolPlans } from "../../integration/tool-learning/outbox-handoff.js";
-import { ToolOutboxError } from "../../integration/tool-learning/outbox-reader.js";
 
 /**
  * 工具学习的宿主侧装配（P05 工具学习 TP-1 §12）。
@@ -40,6 +37,7 @@ export function toolLearningRoot(
 }
 
 export type ToolLearningHost = {
+  readonly sessionId?: string;
   readonly workspaceId?: string;
   readonly afterEnqueue?: (jobIds: readonly string[]) => Promise<void>;
   readonly homeDir: string;
@@ -51,6 +49,7 @@ export type ToolLearningHost = {
 
 /** 宿主交给组合根的那三样事实。 */
 export type ToolLearningFacts = {
+  readonly sessionId?: string;
   readonly workspaceId?: string;
   readonly afterEnqueue?: (jobIds: readonly string[]) => Promise<void>;
   readonly homeDir: string;
@@ -75,6 +74,7 @@ export function toolGapHostFor(
   }
   return {
     toolGap: {
+      ...(facts.sessionId === undefined ? {} : { sessionId: facts.sessionId }),
       homeDir: facts.homeDir,
       env: facts.env,
       now: facts.now,
@@ -86,32 +86,15 @@ export function toolGapHostFor(
 }
 
 export function createToolGapRuntimeFor(host: ToolLearningHost): ToolGapRuntime {
-  const ledger = createFileToolLedger(toolLearningRoot(host.homeDir, host.env));
-  const runtime = createToolGapRuntime({
-    ledger,
+  return createToolGapSession({
+    ...(host.sessionId === undefined ? {} : { sessionId: host.sessionId }),
+    ledgerRoot: toolLearningRoot(host.homeDir, host.env),
+    boardRoot: path.join(methodLearningRoot(host.homeDir, host.env), "board"),
     now: host.now,
     warn: host.warn,
-    ...(host.workspaceId === undefined ? {} : { pipelineScope: host.workspaceId }),
+    ...(host.workspaceId === undefined ? {} : { workspaceId: host.workspaceId }),
+    ...(host.afterEnqueue === undefined ? {} : { afterEnqueue: host.afterEnqueue }),
   });
-  let closing: Promise<void> | undefined;
-  return { ...runtime, close: () => closing ??= flushToolGapPlans(host, runtime, ledger) };
-}
-
-async function flushToolGapPlans(host: ToolLearningHost, runtime: ToolGapRuntime, ledger: ReturnType<typeof createFileToolLedger>): Promise<void> {
-  const details = runtime.proposalDetails();
-  await runtime.close();
-  if (host.workspaceId === undefined) {
-    if (details.length > 0) host.warn("tool learning: workspace identity missing; gap was not queued");
-    return;
-  }
-  try {
-    const jobIds = await handoffPendingToolPlans({ ledger, boardRoot: path.join(methodLearningRoot(host.homeDir, host.env), "board"),
-      scope: host.workspaceId, now: host.now, warn: host.warn });
-    await host.afterEnqueue?.(jobIds);
-  } catch (error) {
-    // The user's answer is already complete; do not replace it with learning I/O failure.
-    host.warn(`tool learning: post-turn work unavailable${error instanceof ToolOutboxError ? ` (${error.code})` : ""}; inspect tools jobs before retrying`);
-  }
 }
 
 /**

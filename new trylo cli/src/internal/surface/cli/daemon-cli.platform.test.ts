@@ -69,22 +69,27 @@ test("the daemon answers to the real CLI, and the command returns", () => {
       // A failed best-effort cleanup must not replace the real failure.
     }
   };
+
   try {
     const started = trylo(env, "daemon", "start");
+
     assert.equal(started.error, undefined, `daemon start did not return within ${DEADLINE_MS}ms: ${started.error?.message}`);
     assert.equal(started.status, 0, `stderr: ${started.stderr}`);
     const pid = /running as pid (\d+)/.exec(started.stdout)?.[1];
+
     assert.notEqual(pid, undefined, `start did not confirm a running pid; stdout: ${started.stdout} stderr: ${started.stderr}`);
 
     // The point of the first defect: a pid is not a daemon. `status` is how a
     // person finds out, so it has to say running for a daemon that really runs.
     let seen = statusOf(env);
+
     for (let tries = 0; tries < 30 && seen !== "running"; tries += 1) {
       // Bounded wait for the daemon's own discovery record; the failing case
       // still fails, it just fails after 30 tries.
       sleep(300);
       seen = statusOf(env);
     }
+
     assert.equal(seen, "running", "spawned a pid but nothing is running — the launch target is dead");
 
     stopBestEffort();

@@ -26,13 +26,16 @@ export function diffLines(output: string): ReadonlyArray<TuiLine> | undefined {
   if (!hasHunk) {
     return undefined;
   }
+
   const changed = rows.some((row) => /^(\+|-)/.test(row));
   if (!changed) {
     return undefined;
   }
+
   const lines: TuiLine[] = [];
   let oldRow = 0;
   let newRow = 0;
+
   for (const row of rows) {
     const hunk = HUNK.exec(row);
     if (hunk !== null) {
@@ -41,28 +44,34 @@ export function diffLines(output: string): ReadonlyArray<TuiLine> | undefined {
       lines.push({ tone: "tool", text: row });
       continue;
     }
+
     if (/^(\+\+\+|---) /.test(row)) {
       lines.push({ tone: "output", text: row });
       continue;
     }
+
     if (row.startsWith("+")) {
       lines.push(gutter("added", newRow, row.slice(1)));
       newRow += 1;
       continue;
     }
+
     if (row.startsWith("-")) {
       lines.push(gutter("removed", oldRow, row.slice(1)));
       oldRow += 1;
       continue;
     }
+
     if (row.startsWith(" ")) {
       lines.push(gutter("output", newRow, row.slice(1)));
       newRow += 1;
       oldRow += 1;
       continue;
     }
+
     lines.push({ tone: "output", text: row });
   }
+
   return lines;
 }
 
@@ -105,6 +114,7 @@ function foldDiff(diff: ReadonlyArray<TuiLine>): ReadonlyArray<TuiLine> {
     text: `   ${line.text.length <= MAX_OUTPUT_LINE_CHARS ? line.text : `${line.text.slice(0, MAX_OUTPUT_LINE_CHARS - 1)}…`}`,
   }));
   const hidden = diff.length - shown.length;
+
   return hidden > 0
     ? [...shown, lineTone("output", `   ... ${hidden} more lines`)]
     : shown;
@@ -127,15 +137,18 @@ export function toneOfDiffRow(row: string): TuiTone {
   if (/^\+\+\+/.test(row) || /^---/.test(row)) {
     return "output";
   }
+
   // The sign must be followed by something that is not a space: a unified
   // diff row is `-old line`, while a markdown bullet is `- item`. Without
   // this, every bulleted list a tool printed came out red.
   if (/^\+\S/.test(row)) {
     return "added";
   }
+
   if (/^-\S/.test(row)) {
     return "removed";
   }
+
   return "output";
 }
 

@@ -52,6 +52,7 @@ export function createSessionViewForRun(
   // report "no sessions" rather than pretending a terminal exists.
   const ptyResolution = resolvePtyHelper();
   const ptySessions = ptyResolution.ok ? createPtySessionRegistry() : undefined;
+
   // One view over both, so the session tools can see a terminal session they did
   // not start. Splitting them here would reproduce the defect this wiring exists
   // to remove: a session that exists and that no tool can name.

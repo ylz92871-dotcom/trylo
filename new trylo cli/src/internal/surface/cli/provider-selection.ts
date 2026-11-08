@@ -71,6 +71,8 @@ export type RunProviderQuery = {
   readonly model: string;
   readonly flagEndpoint?: string | undefined;
   readonly flagModel?: string | undefined;
+  /** Explicit paired project choice; it cannot select or rebind a provider. */
+  readonly projectModel?: { readonly providerId: string; readonly model: string };
 };
 
 function isRunFailure(value: RunProvider | RunFailure): value is RunFailure {
@@ -98,11 +100,20 @@ function configuredProviderOf(
 
 export type RunProviderQueryInput = {
   /** The merged config, before defaults: it is what tells "configured" from absent. */
-  readonly resolved: Readonly<Record<string, { readonly value: unknown }>>;
+  readonly resolved: Readonly<Record<string, { readonly value: unknown; readonly layer?: unknown }>>;
   readonly options: RunCommandOptions;
   readonly endpoint: string;
   readonly model: string;
 };
+
+/** Both winning values must be project-owned; never combine layers into an opt-in. */
+function projectModelOf(resolved: RunProviderQueryInput["resolved"]): RunProviderQuery["projectModel"] {
+  const provider = resolved["provider"], model = resolved["model"];
+  return provider?.layer === "project" && model?.layer === "project"
+    && typeof provider.value === "string" && provider.value.trim().length > 0
+    && typeof model.value === "string" && model.value.trim().length > 0
+    ? { providerId: provider.value, model: model.value } : undefined;
+}
 
 /**
  * The provider for a run prepared from argv plus merged config.
@@ -114,6 +125,8 @@ export type RunProviderQueryInput = {
  */
 export function selectForRun(ctx: CliContext, input: RunProviderQueryInput): RunProvider | RunFailure {
   const configured = configuredProviderOf(input.resolved);
+  const projectModel = projectModelOf(input.resolved);
+
   return selectRunProvider(ctx, {
     ...(input.options.provider === undefined ? {} : { flagProvider: input.options.provider }),
     ...(configured === undefined ? {} : { configuredProvider: configured }),
@@ -121,6 +134,7 @@ export function selectForRun(ctx: CliContext, input: RunProviderQueryInput): Run
     model: input.model,
     ...(input.options.endpoint === undefined ? {} : { flagEndpoint: input.options.endpoint }),
     ...(input.options.model === undefined ? {} : { flagModel: input.options.model }),
+    ...(projectModel === undefined ? {} : { projectModel }),
   });
 }
 
@@ -133,6 +147,7 @@ export function selectRunProvider(ctx: CliContext, query: RunProviderQuery): Run
       "fix or remove that file; a run never selects a provider from a file that cannot be trusted",
     );
   }
+
   const requested = query.flagProvider ?? registry.selected ?? query.configuredProvider;
   const requestedBy =
     query.flagProvider !== undefined
@@ -142,19 +157,21 @@ export function selectRunProvider(ctx: CliContext, query: RunProviderQuery): Run
         : query.configuredProvider !== undefined
           ? ("config" as const)
           : undefined;
+  const modelOverride = query.flagModel ?? (query.projectModel?.providerId === requested ? query.projectModel?.model : undefined);
   const resolved = resolveProvider({
     registry,
     ...(requested === undefined ? {} : { requested }),
     endpoint: query.endpoint,
     model: query.model,
     ...(query.flagEndpoint === undefined ? {} : { endpointOverride: query.flagEndpoint }),
-    ...(query.flagModel === undefined ? {} : { modelOverride: query.flagModel }),
+    ...(modelOverride === undefined ? {} : { modelOverride }),
   });
   if (!resolved.ok) {
     const failure = resolved.failure;
     if (failure.kind === "endpoint") {
       return fail(EXIT_CODES.CONFIG, failure.detail, "set `endpoint` in config, in the declaration, or pass --endpoint");
     }
+
     if (failure.kind === "provider") {
       return fail(
         EXIT_CODES.USAGE,
@@ -162,12 +179,14 @@ export function selectRunProvider(ctx: CliContext, query: RunProviderQuery): Run
         "`trylo run --provider <id>` uses one directly; `trylo providers list` shows them, `trylo providers switch <id>` selects one",
       );
     }
+
     return fail(
       EXIT_CODES.CONFIG,
       `${failure.denial.providerId} does not declare ${failure.denial.capability}`,
       "pick a provider that declares it, or declare the capability for your own endpoint",
     );
   }
+
   return {
     providerId: resolved.value.providerId,
     kind: resolved.value.kind,
@@ -209,6 +228,7 @@ export function runCredentialFor(
   if (!isKeyedProviderKind(kind)) {
     return {};
   }
+
   const port = createCliCredentialPortWithReport(ctx, credentialWarningTo(ctx));
   const resolved =
     accountId === undefined
@@ -231,6 +251,7 @@ export function runCredentialFor(
       "inspect the credentials ledger; a run never authenticates from a ledger that cannot be proven intact",
     );
   }
+
   return {
     ...(resolved.apiKey !== undefined ? { apiKey: resolved.apiKey } : {}),
     ...(resolved.tokenManager !== undefined ? { tokenManager: resolved.tokenManager } : {}),

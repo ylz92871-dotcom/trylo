@@ -7,12 +7,16 @@ export function createFallbackStream(target: CliSink): { readonly sink: CliSink;
   let first: { readonly sessionId: string; readonly turnId: string; readonly model: string } | undefined;
   let previous: CliRunResult | undefined;
   let pending: CliRunResult | undefined;
+
   return {
     sink: {
       stderr: target.stderr,
+
       stdout(line) {
         if (phase === "closed") return;
+
         let raw: unknown;
+
         try {
           raw = JSON.parse(line) as unknown;
         } catch {
@@ -20,10 +24,12 @@ export function createFallbackStream(target: CliSink): { readonly sink: CliSink;
           target.stdout(line);
           return;
         }
+
         if (isCliRunResult(raw)) {
           pending = raw;
           return;
         }
+
         if (isRecord(raw) && raw.type === "run_start" && typeof raw.sessionId === "string" &&
             typeof raw.turnId === "string" && typeof raw.model === "string") {
           if (first === undefined) {
@@ -36,15 +42,20 @@ export function createFallbackStream(target: CliSink): { readonly sink: CliSink;
             return;
           }
         }
+
         target.stdout(line);
       },
     },
+
     finish() {
       if (phase === "closed") return;
+
       phase = "closed";
       const result = pending ?? previous;
       if (result === undefined || first === undefined) return;
+
       const earlier = pending === undefined ? undefined : previous;
+
       target.stdout(`${JSON.stringify({
         ...result,
         sessionId: first.sessionId,

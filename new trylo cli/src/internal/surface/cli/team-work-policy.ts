@@ -18,14 +18,19 @@ function mayWriteDocument(role: string, target: string): boolean {
  */
 export function constrainWorkMemberTool(role: string, workspaceRoot: string, call: ToolCallRequest): SandboxVerdict {
   if (OTHER_MUTATIONS.includes(call.name)) return refuse();
+
   if (call.name === "write_file" || call.name === "edit_file") {
     if (typeof call.arguments["path"] !== "string") return refuse();
+
     const target = resolveWriteTarget(workspaceRoot, call.arguments["path"], "workspace");
     if (!target.ok) return refuse();
+
     const outputRoot = path.join(canonicalRoot(workspaceRoot), ".trylo", "out");
     const relative = path.relative(outputRoot, target.absolutePath);
     if (!relative || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return refuse();
+
     if (!mayWriteDocument(role, target.absolutePath)) return refuse();
   }
+
   return { ok: true };
 }

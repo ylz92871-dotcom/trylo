@@ -4,6 +4,9 @@ import {
   createFileLedgerPort,
   createUserLearningRuntime,
   createUserMemoryService,
+  createUserLearningPeer,
+  readPendingUserClarification,
+  type UserLearningPeerDeps,
   type UserLearningRuntime,
   type UserMemoryService,
   type UserMemoryTurn,
@@ -75,7 +78,21 @@ export function createUserLearningRuntimeFor(host: UserLearningHost): UserLearni
     workspaceId: host.workspaceId,
     now: host.now,
     warn: host.warn,
+    policyMode: "learned",
   });
+}
+
+/** Independent central composition uses the same private ledger as normal task capture. */
+export function createUserLearningPeerFor(host: UserLearningHost,
+  model: Pick<UserLearningPeerDeps, "provider" | "model" | "maxOutputTokens" | "funding" | "fundingOwnerId" | "enabled">) {
+  return createUserLearningPeer({ ...model, ledger: createFileLedgerPort(userLearningRoot(host.homeDir, host.env)),
+    userId: decideScopeV2({ workspaceId: host.workspaceId }).identity.userId,
+    workspaceId: host.workspaceId, now: host.now });
+}
+
+export function readUserLearningClarificationFor(host: UserLearningHost) {
+  return readPendingUserClarification({ ledger: createFileLedgerPort(userLearningRoot(host.homeDir, host.env)),
+    userId: decideScopeV2({ workspaceId: host.workspaceId }).identity.userId, workspaceId: host.workspaceId });
 }
 
 /**

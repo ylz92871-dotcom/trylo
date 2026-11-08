@@ -57,6 +57,7 @@ export function applyComposerKey(event: KeyEvent, ops: KeyOps): void {
         buf.insert(selected.name);
         menu.hide(buf.text());
       }
+
       return;
     }
     case "ctrl":

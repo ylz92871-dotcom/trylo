@@ -28,6 +28,7 @@ const REFUSAL: Pick<EscalationInput, "code" | "message"> = {
 function scriptedIo(answers: ReadonlyArray<string>): EscalationIo & { prompts: string[] } {
   const prompts: string[] = [];
   const queue = [...answers];
+
   return {
     prompts,
     prompt: (text) => prompts.push(text),
@@ -62,10 +63,12 @@ function portsFor(
       asked += 1;
       return { ticketId: `p${asked}`, toolCallId: "call-1" };
     },
+
     async awaitDecision() {
       return decision("approved", "once");
     },
   };
+
   return {
     asked: () => asked,
     permission,
@@ -97,9 +100,11 @@ test("releasing a boundary runs the call and shows what was released", async () 
   const io = scriptedIo(["y"]);
   const ports = portsFor(io, sandboxWith({ ok: false, ...REFUSAL }));
   const verdict = await admitToolCall(ports, writeCall(OUTSIDE));
+
   assert.deepEqual(verdict, { kind: "approved", source: "escalation" });
   assert.equal(ports.asked(), 0, "the ordinary approval path is not what released this");
   const prompt = io.prompts.join("\n");
+
   assert.match(prompt, /path_outside_workspace/);
   assert.match(prompt, /\.\.\/outside\.txt/, "the prompt names the value, not just the tool");
   assert.match(prompt, /nothing is remembered/);
@@ -120,6 +125,7 @@ test("declining and closing the input are different ends", async () => {
     portsFor(scriptedIo(["n"]), sandboxWith({ ok: false, ...REFUSAL })),
     writeCall(OUTSIDE),
   );
+
   assert.equal(declined.kind, "sandbox_rejected");
   assert.equal(declined.kind === "sandbox_rejected" ? declined.escalated : undefined, true);
 
@@ -127,16 +133,20 @@ test("declining and closing the input are different ends", async () => {
     portsFor(scriptedIo([]), sandboxWith({ ok: false, ...REFUSAL })),
     writeCall(OUTSIDE),
   );
+
   assert.equal(closed.kind, "cancelled");
 });
 
 test("a ticket is spent by the one call it was issued for", async () => {
   const authority = createInteractiveEscalation(scriptedIo(["y", "y"]));
   const first = await authority.request(escalationInput());
+
   assert.equal(first.ok, true);
+
   if (!first.ok) {
     return;
   }
+
   assert.equal(authority.redeem(first.ticket, escalationInput()), true);
   assert.equal(authority.redeem(first.ticket, escalationInput()), false, "and only once");
 });
@@ -150,20 +160,26 @@ test("a made-up ticket releases nothing", async () => {
 test("a ticket does not travel to another call or another value", async () => {
   const authority = createInteractiveEscalation(scriptedIo(["y", "y"]));
   const first = await authority.request(escalationInput());
+
   assert.equal(first.ok, true);
+
   if (!first.ok) {
     return;
   }
+
   assert.equal(
     authority.redeem(first.ticket, escalationInput({ toolCallId: "call-2" })),
     false,
     "somebody else's answer",
   );
   const second = await authority.request(escalationInput());
+
   assert.equal(second.ok, true);
+
   if (!second.ok) {
     return;
   }
+
   assert.equal(
     authority.redeem(
       second.ticket,
@@ -178,13 +194,18 @@ test("re-presenting a call with its ticket skips the refusal that was released",
   const io = scriptedIo(["y"]);
   const ports = portsFor(io, sandboxWith({ ok: false, ...REFUSAL }));
   const escalation = ports.escalation;
+
   assert.ok(escalation);
   const issued = await escalation.request(escalationInput());
+
   assert.equal(issued.ok, true);
+
   if (!issued.ok) {
     return;
   }
+
   const verdict = await admitToolCall(ports, { ...writeCall(OUTSIDE), resume: issued.ticket });
+
   assert.equal(verdict.kind, "approved");
   assert.equal(io.prompts.length, 1, "the ticket answered the question instead of asking it again");
 });

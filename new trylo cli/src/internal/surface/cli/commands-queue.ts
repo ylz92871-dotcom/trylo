@@ -106,7 +106,9 @@ export async function handleQueueAdd(ctx: CliContext, options: QueueAddOptions):
     if ("code" in got) {
       return refuse(ctx, got.code);
     }
+
     const queued = got.value;
+
     if (options.json) {
       ctx.stdout(`${JSON.stringify({ ok: true, id: queued.id, sessionId: options.sessionId, enqueuedAtMs: queued.enqueuedAtMs })}\n`);
     } else {
@@ -116,6 +118,7 @@ export async function handleQueueAdd(ctx: CliContext, options: QueueAddOptions):
         `queued for session ${options.sessionId} as ${queued.id} (${queued.text.length} chars, starts when it goes idle)\n`,
       );
     }
+
     return EXIT_CODES.OK;
   } finally {
     await queue.release();
@@ -129,26 +132,32 @@ export async function handleQueueList(ctx: CliContext, options: QueueListOptions
     if ("code" in got) {
       return refuse(ctx, got.code);
     }
+
     const page = got.value;
+
     if (options.json) {
       ctx.stdout(`${JSON.stringify({ ok: true, sessionId: options.sessionId, total: page.total, items: page.items })}\n`);
       return EXIT_CODES.OK;
     }
+
     if (page.total === 0) {
       // An empty queue here is a real, checkable state, and it is reported as
       // one: "0 queued" is what a person needs to hear to stop worrying.
       ctx.stdout(`nothing queued for session ${options.sessionId}\n`);
       return EXIT_CODES.OK;
     }
+
     for (const item of page.items) {
       const oneLine = item.text.replace(/\s+/g, " ").trim();
       ctx.stdout(`${item.id}  ${relativeTime(item.enqueuedAtMs, ctx.now())}  ${oneLine}\n`);
     }
+
     // The total is printed even when the page is full, so a truncated listing
     // cannot read as "that is all of them".
     if (page.total > page.items.length) {
       ctx.stdout(`showing ${page.items.length} of ${page.total}; --limit ${options.limit * 2} for more\n`);
     }
+
     return EXIT_CODES.OK;
   } finally {
     await queue.release();
@@ -162,11 +171,13 @@ export async function handleQueueDrop(ctx: CliContext, options: QueueDropOptions
     if ("code" in got) {
       return refuse(ctx, got.code);
     }
+
     if (options.json) {
       ctx.stdout(`${JSON.stringify({ ok: true, dropped: options.id, sessionId: options.sessionId })}\n`);
     } else {
       ctx.stdout(`dropped ${options.id}; it will not be sent\n`);
     }
+
     return EXIT_CODES.OK;
   } finally {
     await queue.release();

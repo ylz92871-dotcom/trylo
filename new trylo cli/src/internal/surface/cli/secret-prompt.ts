@@ -53,8 +53,10 @@ export function readSecretLine(terminal: SecretTerminal): Promise<string | undef
   if (setRawMode === undefined) {
     return Promise.resolve(undefined);
   }
+
   // Raw mode is a method on the stream, so `terminal` has to stay the receiver.
   const setEcho = (enabled: boolean) => setRawMode.call(terminal, enabled);
+
   return new Promise((resolve) => {
     const decoder = new StringDecoder("utf8");
     let typed = "";
@@ -63,6 +65,7 @@ export function readSecretLine(terminal: SecretTerminal): Promise<string | undef
       if (settled) {
         return;
       }
+
       settled = true;
       terminal.off("data", onData);
       terminal.off("end", onEnd);
@@ -79,20 +82,24 @@ export function readSecretLine(terminal: SecretTerminal): Promise<string | undef
           finish(typed);
           return;
         }
+
         if (character === "\u0003" || character === "\u0004") {
           finish(undefined);
           return;
         }
+
         if (character === "\u007f" || character === "\b") {
           typed = typed.slice(0, -1);
           continue;
         }
+
         if (character >= " ") {
           typed += character;
         }
       }
     };
     const onEnd = () => finish(undefined);
+
     setEcho(true);
     terminal.on("data", onData);
     terminal.on("end", onEnd);
@@ -125,12 +132,15 @@ export async function resolveLoginSecret(
   if (!providerRequiresSecret(request.provider)) {
     return {};
   }
+
   if (request.secretFile !== undefined) {
     return secretFromFile(io, request.secretFile);
   }
+
   if (io.stdinIsTty) {
     return secretFromTerminal(io, request.provider);
   }
+
   return fail(
     EXIT_CODES.USAGE,
     "no secret source for a keyed provider",
@@ -148,6 +158,7 @@ function secretFromFile(io: LoginSecretIo, secretFile: string): LoginSecret {
       "pass --secret-file <path> pointing at a readable file holding the key",
     );
   }
+
   // Measured on the file's own bytes and before any trimming: trimming first
   // would let an oversized file pass by ending in newlines.
   const bytes = Buffer.byteLength(text, "utf8");
@@ -158,6 +169,7 @@ function secretFromFile(io: LoginSecretIo, secretFile: string): LoginSecret {
       `put only the key in the file: --secret-file accepts at most ${MAX_SECRET_FILE_BYTES} bytes`,
     );
   }
+
   return { secret: withoutTrailingNewlines(text) };
 }
 
@@ -171,6 +183,7 @@ async function secretFromTerminal(io: LoginSecretIo, provider: string): Promise<
       "type the secret and press Enter, or pass --secret-file <path>",
     );
   }
+
   return { secret: withoutTrailingNewlines(typed) };
 }
 

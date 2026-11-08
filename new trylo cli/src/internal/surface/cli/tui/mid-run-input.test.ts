@@ -47,6 +47,7 @@ type LineSource = {
 function lineSource(sink: string[] = []): LineSource {
   const readers: Array<(line: string | undefined) => void> = [];
   let peak = 0;
+
   return {
     io: {
       readLine: () => {
@@ -55,9 +56,11 @@ function lineSource(sink: string[] = []): LineSource {
           readers.push(resolve);
         });
       },
+
       write: (text) => sink.push(text),
       size: () => ({ columns: 80, rows: 24 }),
     },
+
     say: async (line) => {
       const reader = readers.shift();
       assert.notEqual(reader, undefined, "nobody is reading; the shell has no outstanding read");
@@ -66,6 +69,7 @@ function lineSource(sink: string[] = []): LineSource {
       // was handed; the pump is deliberately not awaited by its owner.
       await new Promise((resolve) => setImmediate(resolve));
     },
+
     waiting: () => readers.length,
     peak: () => peak,
   };
@@ -119,6 +123,7 @@ function hooksOf(): {
 } {
   const taken: string[] = [];
   const refused: Array<{ readonly text: string; readonly reason: string }> = [];
+
   return {
     taken,
     refused,
@@ -133,10 +138,12 @@ test("a line typed while a turn runs is handed to that turn, once", async () => 
   const source = lineSource();
   const seen = hooksOf();
   const mid = createMidRunInput({ io: source.io });
+
   mid.begin(seen.hooks);
   assert.equal(source.waiting(), 1, "the reader is waiting from the moment it exists");
   await source.say("STOP: do not call that tool again");
   const first = mid.pendingInput("turn-1");
+
   assert.deepEqual(
     first.map((input) => input.text),
     ["STOP: do not call that tool again"],
@@ -150,6 +157,7 @@ test("a turn that is not the one the words were typed for is handed nothing", as
   const source = lineSource();
   const seen = hooksOf();
   const mid = createMidRunInput({ io: source.io });
+
   mid.begin(seen.hooks);
   await source.say("meant for turn-1");
   // The inbox is opened in the name of the turn that asks, so the words are
@@ -163,12 +171,15 @@ test("a blank line and an overflowing queue are refused with a reason, not dropp
   const source = lineSource();
   const seen = hooksOf();
   const mid = createMidRunInput({ io: source.io });
+
   mid.begin(seen.hooks);
   await source.say("   ");
   assert.deepEqual(seen.refused, [{ text: "   ", reason: "blank" }]);
+
   for (let index = 0; index <= MAX_PENDING_INPUT; index += 1) {
     await source.say(`line-${index}`);
   }
+
   assert.deepEqual(
     seen.refused.at(-1),
     { text: `line-${MAX_PENDING_INPUT}`, reason: "full" },
@@ -180,11 +191,13 @@ test("ending a turn hands back what was never taken, instead of discarding it", 
   const source = lineSource();
   const seen = hooksOf();
   const mid = createMidRunInput({ io: source.io });
+
   mid.begin(seen.hooks);
   await source.say("taken");
   mid.pendingInput("turn-1");
   await source.say("never taken");
   const back = mid.end();
+
   assert.deepEqual(
     back.map((input) => input.text),
     ["never taken"],
@@ -196,6 +209,7 @@ test("a line typed after the turn ended is kept for the prompt, not thrown away"
   const source = lineSource();
   const seen = hooksOf();
   const mid = createMidRunInput({ io: source.io });
+
   mid.begin(seen.hooks);
   await source.say("in the inbox when the turn ended");
   assert.deepEqual(
@@ -219,6 +233,7 @@ test("the shell never holds two reads at once, so the prompt can never starve", 
   const source = lineSource();
   const seen = hooksOf();
   const mid = createMidRunInput({ io: source.io });
+
   for (let turn = 0; turn < 3; turn += 1) {
     mid.begin(seen.hooks);
     await source.say(`during turn ${turn}`);
@@ -231,6 +246,7 @@ test("the shell never holds two reads at once, so the prompt can never starve", 
       "the prompt still hears lines after a turn has ended",
     );
   }
+
   assert.equal(source.waiting(), 1, "exactly one read is parked, never zero and never two");
   assert.ok(source.peak() <= 1, `no second read was ever opened (peak ${source.peak()})`);
 });
@@ -238,6 +254,7 @@ test("the shell never holds two reads at once, so the prompt can never starve", 
 test("end of input reaches the prompt, and stays end of input", async () => {
   const source = lineSource();
   const mid = createMidRunInput({ io: source.io });
+
   mid.begin(hooksOf().hooks);
   await source.say(undefined);
   assert.equal(await mid.takeLine(), undefined, "the prompt sees the same end of input");
@@ -286,6 +303,7 @@ async function runOneTurnWith(
     painterRef,
     createMidRunInput({ io: source.io }),
   );
+
   return { leftover: step.leftover, state: step.state };
 }
 
@@ -302,11 +320,13 @@ test("a turn run by the shell is handed what the person typed while it ran", asy
     await held.wait;
     taken = pending?.("turn-under-test").map((input) => input.text) ?? [];
   });
+
   // While the turn is in flight the shell keeps hearing: this is the whole
   // point, and it is what no surface did before this package.
   await source.say("only answer OK from here on");
   held.open();
   const step = await running;
+
   assert.deepEqual(taken, ["only answer OK from here on"]);
   assert.deepEqual(step.leftover, [], "and nothing was left unheard");
   assert.ok(
@@ -324,9 +344,11 @@ test("words a turn never took come back out for the prompt to run", async () => 
     assert.notEqual(pending, undefined);
     await held.wait;
   });
+
   await source.say("never asked for");
   held.open();
   const step = await running;
+
   assert.deepEqual(step.leftover, ["never asked for"]);
   assert.ok(
     said(step.state, "not delivered (the turn ended first): never asked for"),
@@ -376,6 +398,7 @@ test("what the loop took from the reader and never promoted comes back too", asy
     painterRef,
     createMidRunInput({ io: source.io }),
   );
+
   assert.deepEqual(step.leftover, ["taken by the loop, never promoted"]);
   assert.ok(
     said(step.state, "not delivered (the turn ended first): taken by the loop, never promoted"),
@@ -401,6 +424,7 @@ test("a shell that never opted in runs a turn with no second reader at all", asy
     noPaint,
     painterRef,
   );
+
   // Absent is off, not "on with an empty queue": every caller written before
   // this package gets no lender and no reader, and nothing is left over.
   assert.equal(handed, undefined);

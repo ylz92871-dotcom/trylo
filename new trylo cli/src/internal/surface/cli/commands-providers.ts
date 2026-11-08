@@ -101,6 +101,7 @@ function renderList(entries: ReadonlyArray<ProvidersListEntry>): string {
   // padded out to the width of a column nobody else fills.
   const body = aligned(cells);
   const lines = entries.map((entry, at) => `${entry.selected ? "*" : " "} ${body[at] ?? ""}`);
+
   return `${lines.join("\n")}\n`;
 }
 
@@ -110,12 +111,15 @@ export function handleProvidersList(ctx: CliContext, options: ProvidersListOptio
     ctx.stderr(`${documentFailureMessage(registry)}\n`);
     return documentFailureExit(registry);
   }
+
   const entries = registry.entries.map((entry) => listEntryOf(entry, registry.selected));
+
   ctx.stdout(
     options.json
       ? `${JSON.stringify({ selected: registry.selected ?? "fixture", providers: entries })}\n`
       : renderList(entries),
   );
+
   return EXIT_CODES.OK;
 }
 
@@ -125,28 +129,34 @@ export function handleProvidersModels(ctx: CliContext, options: ProvidersModelsO
     ctx.stderr(`${documentFailureMessage(registry)}\n`);
     return documentFailureExit(registry);
   }
+
   const found = requireProvider(registry, options.id);
   if (!found.ok) {
     ctx.stderr(`unknown provider ${options.id}; known providers: ${found.denial.known.join(", ")}\n`);
     return EXIT_CODES.USAGE;
   }
+
   const models = found.entry.capabilities.models;
   const declared = models.length > 0;
   const note = declared
     ? `${models.length} declared`
     : "not declared: this build does not ask the endpoint for its catalogue";
+
   if (options.json) {
     ctx.stdout(
       `${JSON.stringify({ id: found.entry.id, kind: found.entry.kind, declared, models, note })}\n`,
     );
     return EXIT_CODES.OK;
   }
+
   if (!declared) {
     ctx.stdout(`${found.entry.id}: ${note}\n`);
     return EXIT_CODES.OK;
   }
+
   ctx.stdout(`${models.map((model) => `${found.entry.id}  ${model}`).join("\n")}\n`);
   ctx.stdout(`(${note})\n`);
+
   return EXIT_CODES.OK;
 }
 
@@ -157,7 +167,9 @@ export function handleProvidersSwitch(ctx: CliContext, options: ProvidersSwitchO
     ctx.stderr(`${result.detail}.${known}\n`);
     return switchFailureExit(result);
   }
+
   ctx.stdout(`selected provider ${result.id}\n`);
+
   return EXIT_CODES.OK;
 }
 
@@ -180,6 +192,7 @@ export function handleProvidersAdd(ctx: CliContext, options: ProvidersAddOptions
   if (refused !== undefined) {
     return refused;
   }
+
   const bound = options.account ?? currentAccountIdOf(ctx);
   const result = addDeclaredProvider(ctx, {
     id: options.id,
@@ -194,6 +207,7 @@ export function handleProvidersAdd(ctx: CliContext, options: ProvidersAddOptions
     ctx.stderr(`${result.detail}.${known}\n`);
     return addFailureExit(result);
   }
+
   ctx.stdout(`declared provider ${result.id} (${options.kind})\n`);
   ctx.stdout(
     bound === undefined
@@ -203,6 +217,7 @@ export function handleProvidersAdd(ctx: CliContext, options: ProvidersAddOptions
         : `bound to account ${bound}\n`,
   );
   ctx.stdout(`next: trylo run --provider ${result.id} (or trylo providers switch ${result.id})\n`);
+
   return EXIT_CODES.OK;
 }
 
@@ -219,10 +234,13 @@ export function handleProvidersRemove(ctx: CliContext, options: ProvidersRemoveO
     ctx.stderr(`${result.detail}.${known}\n`);
     return removeEditFailureExit(result);
   }
+
   ctx.stdout(`removed provider ${result.id}\n`);
+
   if (result.clearedSelected) {
     ctx.stdout("no provider is selected now; `trylo providers switch <id>` selects one\n");
   }
+
   return EXIT_CODES.OK;
 }
 
@@ -243,6 +261,7 @@ export function handleProvidersEdit(ctx: CliContext, options: ProvidersEditOptio
       return refused;
     }
   }
+
   const result = editDeclaredProvider(ctx, {
     id: options.id,
     ...(options.endpoint === undefined ? {} : { endpoint: options.endpoint }),
@@ -255,10 +274,13 @@ export function handleProvidersEdit(ctx: CliContext, options: ProvidersEditOptio
     ctx.stderr(`${result.detail}.${known}\n`);
     return removeEditFailureExit(result);
   }
+
   ctx.stdout(`updated provider ${result.id} (${result.changed.join(", ")})\n`);
+
   if (result.accountId !== undefined) {
     ctx.stdout(`bound to account ${result.accountId}\n`);
   }
+
   return EXIT_CODES.OK;
 }
 
@@ -276,11 +298,13 @@ export function handleProvidersConfig(ctx: CliContext, options: ProvidersConfigO
     ctx.stderr(`${documentFailureMessage(registry)}\n`);
     return documentFailureExit(registry);
   }
+
   const resolved = resolveConnectionSettings(ctx, { message: [], readStdin: false, ...(options.id === undefined ? {} : { provider: options.id }) });
   if ("exitCode" in resolved) {
     ctx.stderr(`${resolved.message}\n`);
     return resolved.exitCode;
   }
+
   const { provider: value, settings } = resolved;
   const payload = {
     id: value.providerId,
@@ -294,7 +318,9 @@ export function handleProvidersConfig(ctx: CliContext, options: ProvidersConfigO
     credential: credentialStateOf(ctx, value.kind, value.accountId),
     budget: resolverForBudget({ ...value, builtin: registry.entries.find(entry => entry.id === value.providerId)?.builtin === true }, settings.contextTokenLimit, settings.modelContextWindow),
   };
+
   ctx.stdout(options.json ? `${JSON.stringify(payload)}\n` : renderConfig(payload));
+
   return EXIT_CODES.OK;
 }
 

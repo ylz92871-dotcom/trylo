@@ -52,25 +52,33 @@ export function localRulesFor(
     ...(onProblem === undefined ? {} : { onProblem }),
   });
   const reported = new Set<string>();
+
   return target => {
     const notes = lookup(target);
     const changes: RuleChange[] = [];
+
     for (const note of notes) {
       const before = previous.get(note.relativePath);
       if (before !== undefined && before.contentHash !== note.contentHash) {
         changes.push({ kind: "changed", relativePath: note.relativePath });
       }
     }
+
     const relativeTarget = path.relative(workspaceRoot, target).replaceAll("\\", "/");
     const present = new Set([...notes.map(note => note.relativePath), ...(projectContext?.sources.map(source => source.relativePath) ?? [])]);
+
     for (const source of previous.values()) {
       const applies = source.scopePath === "." || relativeTarget.startsWith(source.scopePath + "/");
       if (applies && !present.has(source.relativePath)) changes.push({ kind: "removed", relativePath: source.relativePath });
     }
+
     const unseen = changes.filter(change => !reported.has(change.relativePath));
+
     for (const change of unseen) reported.add(change.relativePath);
+
     const notice = ruleChangeNotice(unseen);
     if (notice !== undefined) onProblem?.(notice);
+
     return notes;
   };
 }

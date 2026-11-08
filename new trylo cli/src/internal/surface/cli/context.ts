@@ -18,10 +18,13 @@ export type DirEntryInfo = {
 };
 
 export type CliContext = {
+  readonly libraryHosts?: import("./library-command-ports.js").CliLibraryHostFactory;
   /** Lazy root-owned checker. Internal consumers cannot sign supplied records. */
   readonly toolProduction?: ToolProductionPort;
   readonly bootstrapContext?: BootstrapContext;
   readonly userSourceAvailable?: false;
+  /** Native identity resolved from the existing intent and actual filesystem. */
+  readonly workspaceIdentity?: import("./central-runtime-workspace-identity.js").CentralRuntimeWorkspaceIdentity;
   /** Structured UI approval and ownership lifecycle; absent keeps text approval. */
   readonly approval?: Pick<InteractivePermissionIo, "requestApproval" | "onApproval" | "supportsMemberApproval">;
   /** Actual run events and timestamps for phase timing; observer cannot grant authority. */
@@ -30,6 +33,8 @@ export type CliContext = {
   readonly homeDir: string;
   readonly cwd: string;
   readonly nodeVersion: string;
+  /** Actual interpreter selected by the host, including a bundled Desktop Node. */
+  readonly nodeExecutable?: string;
   /**
    * The platform token (`process.platform`), injected by the composition root
    * for the same reason as `nodeVersion`: a run states its real platform to the
@@ -42,6 +47,8 @@ export type CliContext = {
   readonly stdinIsTty: boolean;
   readonly readFile: (absolutePath: string) => string | undefined;
   readonly isDirectory: (absolutePath: string) => boolean;
+  /** Filesystem-proven physical path. Absent hosts can prove exact identities only. */
+  readonly realPath?: (absolutePath: string) => string | undefined;
   readonly readDir: (absolutePath: string) => ReadonlyArray<DirEntryInfo>;
   readonly writeFile: (absolutePath: string, text: string) => boolean;
   readonly readStdin: () => Promise<string>;

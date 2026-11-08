@@ -72,15 +72,19 @@ function consumeAuthToken(state: AuthState, argv: ReadonlyArray<string>, index: 
     unexpected(state, token);
     return argv.length;
   }
+
   const { name, inlineValue } = parsed;
+
   if (name.length === 0) {
     unexpected(state, token);
     return argv.length;
   }
+
   if (name === "help") {
     state.help = true;
     return index + 1;
   }
+
   if (SECRET_FLAG_NAMES.has(name)) {
     state.error = {
       message: `--${name} is not accepted: a secret on the command line leaks into shell history`,
@@ -88,6 +92,7 @@ function consumeAuthToken(state: AuthState, argv: ReadonlyArray<string>, index: 
     };
     return argv.length;
   }
+
   if (AUTH_BOOLEAN_FLAGS.has(name)) {
     if (inlineValue !== undefined) {
       state.error = {
@@ -96,9 +101,12 @@ function consumeAuthToken(state: AuthState, argv: ReadonlyArray<string>, index: 
       };
       return argv.length;
     }
+
     state.booleans.add(name);
+
     return index + 1;
   }
+
   if (flagSpecFor(AUTH_VALUE_FLAGS, name) === undefined) {
     state.error = {
       message: `unknown option --${name}`,
@@ -106,6 +114,7 @@ function consumeAuthToken(state: AuthState, argv: ReadonlyArray<string>, index: 
     };
     return argv.length;
   }
+
   const read = readValue(argv, index, inlineValue);
   if (read.error !== undefined) {
     state.error = {
@@ -114,22 +123,28 @@ function consumeAuthToken(state: AuthState, argv: ReadonlyArray<string>, index: 
     };
     return argv.length;
   }
+
   state.values.set(name, read.value ?? "");
+
   return read.next;
 }
 
 function parseAuthFlags(argv: ReadonlyArray<string>): AuthFlagsOrStop {
   const state: AuthState = { values: new Map(), booleans: new Set(), help: false };
   let index = 0;
+
   while (index < argv.length) {
     index = consumeAuthToken(state, argv, index);
   }
+
   if (state.error !== undefined) {
     return usageError(state.error.message, state.error.hint);
   }
+
   if (state.help) {
     return familyHelpCommand("auth");
   }
+
   return { values: state.values, booleans: state.booleans };
 }
 
@@ -144,12 +159,14 @@ function providerFlag(
       `use one of: ${CREDENTIAL_PROVIDER_IDS.join(", ")}`,
     );
   }
+
   if (!isCredentialProviderId(raw)) {
     return usageError(
       `unknown provider: ${raw}`,
       `use one of: ${CREDENTIAL_PROVIDER_IDS.join(", ")}`,
     );
   }
+
   return { provider: raw };
 }
 
@@ -165,6 +182,7 @@ export function parseLogin(argv: ReadonlyArray<string>): ParsedCommand {
   if (isStop(flags)) {
     return flags;
   }
+
   // `--oauth` (loopback callback) and `--device` (RFC 8628 poll) are two
   // spellings of one OAuth login; accepting both would need a precedence
   // nobody wrote down.
@@ -174,13 +192,16 @@ export function parseLogin(argv: ReadonlyArray<string>): ParsedCommand {
       "use --oauth on a machine with a browser, --device on a headless one",
     );
   }
+
   const provider = providerFlag(flags, "login");
   if ("kind" in provider) {
     return provider;
   }
+
   const account = flags.values.get("account");
   const label = flags.values.get("label");
   const secretFile = flags.values.get("secret-file");
+
   return {
     kind: "login",
     options: {
@@ -200,19 +221,23 @@ export function parseAuthAdd(argv: ReadonlyArray<string>): ParsedCommand {
   if (isStop(flags)) {
     return flags;
   }
+
   if (flags.booleans.has("oauth") && flags.booleans.has("device")) {
     return usageError(
       "login accepts only one of --oauth and --device",
       "use --oauth on a machine with a browser, --device on a headless one",
     );
   }
+
   const provider = providerFlag(flags, "auth add");
   if ("kind" in provider) {
     return provider;
   }
+
   const account = flags.values.get("account");
   const label = flags.values.get("label");
   const secretFile = flags.values.get("secret-file");
+
   return {
     kind: "login",
     options: {
@@ -232,10 +257,12 @@ export function parseLogout(argv: ReadonlyArray<string>): ParsedCommand {
   if (isStop(flags)) {
     return flags;
   }
+
   const provider = providerFlag(flags, "logout");
   if ("kind" in provider) {
     return provider;
   }
+
   // logout clears the family's current pointer and has no account to name:
   // an --account here used to vanish silently while reporting success (#15).
   const account = flags.values.get("account");
@@ -245,6 +272,7 @@ export function parseLogout(argv: ReadonlyArray<string>): ParsedCommand {
       "logout clears the current account; to remove a stored secret use `trylo auth delete --provider <id> --account <id>`",
     );
   }
+
   return {
     kind: "logout",
     options: {
@@ -263,6 +291,7 @@ export function parseAuthStatus(argv: ReadonlyArray<string>): ParsedCommand {
       "try `trylo status` or `trylo status --json`",
     );
   }
+
   return { kind: "auth_status", json: argv.includes("--json") };
 }
 
@@ -275,6 +304,7 @@ export function parseAuthList(argv: ReadonlyArray<string>): ParsedCommand {
       "try `trylo auth list` or `trylo auth list --project`",
     );
   }
+
   return { kind: "auth_list", json: argv.includes("--json"), project: argv.includes("--project") };
 }
 
@@ -283,10 +313,12 @@ export function parseAuthSwitch(argv: ReadonlyArray<string>): ParsedCommand {
   if (isStop(flags)) {
     return flags;
   }
+
   const provider = providerFlag(flags, "auth switch");
   if ("kind" in provider) {
     return provider;
   }
+
   const account = flags.values.get("account");
   if (account === undefined) {
     return usageError(
@@ -294,6 +326,7 @@ export function parseAuthSwitch(argv: ReadonlyArray<string>): ParsedCommand {
       "run `trylo auth list` to see the stored account ids",
     );
   }
+
   return {
     kind: "auth_switch",
     options: {
@@ -309,10 +342,12 @@ export function parseAuthDelete(argv: ReadonlyArray<string>): ParsedCommand {
   if (isStop(flags)) {
     return flags;
   }
+
   const provider = providerFlag(flags, "auth delete");
   if ("kind" in provider) {
     return provider;
   }
+
   const account = flags.values.get("account");
   if (account === undefined) {
     return usageError(
@@ -320,6 +355,7 @@ export function parseAuthDelete(argv: ReadonlyArray<string>): ParsedCommand {
       "run `trylo auth list` to see the stored account ids",
     );
   }
+
   return {
     kind: "auth_delete",
     options: {

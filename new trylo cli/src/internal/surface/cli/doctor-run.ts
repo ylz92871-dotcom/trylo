@@ -62,6 +62,7 @@ export function runDoctor(ctx: CliContext, learning?: LearningSwitch): DoctorRun
       ...(learning === undefined ? {} : { learning }),
     },
   );
+
   return { report, code: doctorExitCode(report) };
 }
 

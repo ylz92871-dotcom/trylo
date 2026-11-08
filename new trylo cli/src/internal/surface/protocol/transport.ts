@@ -40,12 +40,14 @@ export function createInProcessTransport(): TransportPort {
       }
       return stamped;
     },
+
     subscribe(listener: TransportListener) {
       listeners.add(listener);
       return () => {
         listeners.delete(listener);
       };
     },
+
     replay(request): ReplayResult {
       if (!Number.isInteger(request.sinceSequence) || request.sinceSequence < -1) {
         return {
@@ -62,6 +64,7 @@ export function createInProcessTransport(): TransportPort {
         latestSequence: log.length - 1,
       };
     },
+
     latestSequence() {
       return log.length - 1;
     },

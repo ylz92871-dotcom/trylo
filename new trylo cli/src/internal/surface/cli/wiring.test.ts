@@ -38,12 +38,16 @@ function fixtureWiring() {
 
 test("the real CLI composition root pins the packaged no_learning profile", async () => {
   const wiring = fixtureWiring();
+
   assert.equal("code" in wiring, false);
+
   if ("code" in wiring) {
     return;
   }
+
   assert.equal(wiring.ports.profile, NO_LEARNING_PROFILE);
   const snapshot = await wiring.ports.profile.load("task");
+
   assert.equal(snapshot.learningMode, "no_learning");
   assert.equal(snapshot.userRules.length, 0);
   assert.equal(snapshot.promptPatches.length, 0);
@@ -53,10 +57,13 @@ test("the durable permission ledger exists only when the switch asked for it", (
   // 「关闭」不是一个值为 undefined 的字段，而是**字段根本不存在**：调用方要判断
   // 有没有账本，只能问对象本身，不能相信某个哨兵值。
   const off = fixtureWiring();
+
   assert.equal("code" in off, false);
+
   if ("code" in off) {
     return;
   }
+
   assert.equal(Object.hasOwn(off, "permissionLedger"), false);
 
   const on = wirePorts({
@@ -68,10 +75,13 @@ test("the durable permission ledger exists only when the switch asked for it", (
     permission: createDenyAllPermission(),
     permissionLedger: { path: join(process.cwd(), "does-not-exist", "ledger.ndjson") },
   });
+
   assert.equal("code" in on, false);
+
   if ("code" in on) {
     return;
   }
+
   assert.equal(Object.hasOwn(on, "permissionLedger"), true);
 });
 
@@ -85,7 +95,9 @@ test("the wiring module never imports a learning package", () => {
   const specifiers = [...source.matchAll(/(?:from\s+|import\s*\(\s*)["']([^"']+)["']/g)].map(
     (match) => match[1] ?? "",
   );
+
   assert.equal(specifiers.length > 0, true);
+
   for (const specifier of specifiers) {
     for (const forbidden of ["internal/learning", "internal/knowledge", "verification-authority"]) {
       assert.equal(specifier.includes(forbidden), false, specifier);
@@ -102,7 +114,9 @@ test("openai-compatible requires an endpoint, and the key travels resolved, not 
     workspaceRoot: process.cwd(),
     permission: createDenyAllPermission(),
   });
+
   assert.equal("code" in missing, true);
+
   if ("code" in missing) {
     assert.equal(missing.code, "missing_endpoint");
   }
@@ -115,6 +129,7 @@ test("openai-compatible requires an endpoint, and the key travels resolved, not 
     workspaceRoot: process.cwd(),
     permission: createDenyAllPermission(),
   });
+
   assert.equal("code" in wired, false);
   // The wiring names no environment variable at all: the credential was already
   // resolved by `CredentialPort` before it got here.
@@ -122,6 +137,7 @@ test("openai-compatible requires an endpoint, and the key travels resolved, not 
     join(process.cwd(), "src", "internal", "surface", "cli", "wiring.ts"),
     "utf8",
   );
+
   assert.equal(source.includes("TRYLO_API_KEY"), false);
 });
 
@@ -142,10 +158,12 @@ test("interactive decisions distinguish denial, cancellation and blank input fol
     const ticket = await permission.request(actionForNN("call-1", "echo"));
     return permission.awaitDecision(ticket.ticketId);
   };
+
   assert.equal((await ask()).resolution, "approved");
   assert.equal((await ask()).resolution, "denied");
   assert.equal((await ask()).resolution, "cancelled");
   const ended = await ask();
+
   assert.equal(ended.resolution, "cancelled");
   assert.equal(ended.reason, "input_closed");
 });
@@ -170,11 +188,15 @@ test("the tool catalog hash is stable and workspace identity is path-derived", (
 test("language servers reach the catalog only through validated configuration", () => {
   const servers = [{ serverName: "ts", command: "does-not-exist-binary", args: [], extensions: ["ts"] }];
   const without = fixtureWiring();
+
   assert.equal("code" in without, false);
+
   if ("code" in without) {
     return;
   }
+
   const names = without.ports.tools.snapshot().map((binding) => binding.name);
+
   assert.equal(names.includes("lsp_navigate"), false);
 
   const configured = wirePorts({
@@ -186,11 +208,15 @@ test("language servers reach the catalog only through validated configuration", 
     permission: createDenyAllPermission(),
     languageServers: servers,
   });
+
   assert.equal("code" in configured, false);
+
   if ("code" in configured) {
     return;
   }
+
   const withNames = configured.ports.tools.snapshot().map((binding) => binding.name);
+
   assert.equal(withNames.includes("lsp_navigate"), true);
   // Mounting changes the catalog honestly: the hash moves, so an old session
   // cannot mistake today's table for yesterday's.
@@ -208,6 +234,7 @@ test("session ids that could escape the sessions directory are refused", () => {
 
 test("session paths stay under the trylo home", () => {
   const env = { TRYLO_HOME: "C:/trylo-home" };
+
   assert.equal(tryloHome("C:/users/x", env), "C:/trylo-home");
   assert.equal(tryloHome("C:/users/x", {}), "C:/users/x/.trylo");
   assert.equal(sessionsDir("C:/users/x", env), "C:/trylo-home/sessions");
@@ -224,7 +251,9 @@ test("argument parsing resolves commands and rejects malformed invocations", () 
   assert.equal(parseArgs(["doctor", "--json"]).kind, "doctor");
 
   const run = parseArgs(["run", "--provider", "fixture", "--format", "stream-json", "hi", "there"]);
+
   assert.equal(run.kind, "run");
+
   if (run.kind === "run") {
     assert.equal(run.options.provider, "fixture");
     assert.equal(run.options.format, "stream-json");

@@ -159,12 +159,14 @@ export function createMidRunInput(options: MidRunInputOptions): MidRunInput {
     if (line === undefined) {
       eof = true;
     }
+
     const waiter = waiters.shift();
     if (waiter !== undefined) {
       atPromptStart = true;
       waiter(line);
       return;
     }
+
     if (line !== undefined) {
       backlog.push(line);
     }
@@ -175,10 +177,12 @@ export function createMidRunInput(options: MidRunInputOptions): MidRunInput {
       hooks?.onRefused(text, "blank");
       return;
     }
+
     if (staged.length >= MAX_PENDING_INPUT) {
       hooks?.onRefused(text, "full");
       return;
     }
+
     staged = [...staged, text];
     hooks?.onQueued?.(staged.length + (inbox?.items.length ?? 0));
   };
@@ -196,6 +200,7 @@ export function createMidRunInput(options: MidRunInputOptions): MidRunInput {
   const pump = async (): Promise<void> => {
     for (;;) {
       let line: string | undefined;
+
       try {
         line = await readMultiLine(() => io.readLine(promptFor()));
       } catch {
@@ -206,17 +211,21 @@ export function createMidRunInput(options: MidRunInputOptions): MidRunInput {
         handToPrompt(undefined);
         return;
       }
+
       if (line === undefined) {
         handToPrompt(undefined);
         return;
       }
+
       if (live) {
         stage(line);
         continue;
       }
+
       handToPrompt(line);
     }
   };
+
   if (composer === undefined) {
     // Deliberately not awaited: the reader runs beside the shell, and nothing
     // it does is allowed to hold a turn up.
@@ -234,21 +243,27 @@ export function createMidRunInput(options: MidRunInputOptions): MidRunInput {
       // frame owns the screen, so the composer goes silent (WP23.2).
       composer?.beginCapture((line) => stage(line));
     },
+
     end: () => {
       live = false;
       atPromptStart = true;
       hooks = undefined;
       composer?.endCapture();
       const held = staged;
+
       staged = [];
       const current = inbox;
+
       inbox = undefined;
       const kept = held.map((text) => ({ text, mode }));
+
       if (current === undefined) {
         return kept;
       }
+
       return [...closeInbox(current).unconsumed, ...kept];
     },
+
     pendingInput: (turnId) => {
       // Opened in the name of the turn that asked, which is the first moment
       // anybody knows its name: words staged before then were typed during it,
@@ -256,11 +271,13 @@ export function createMidRunInput(options: MidRunInputOptions): MidRunInput {
       if (inbox === undefined) {
         inbox = openInbox(turnId);
       }
+
       if (inbox.turnId !== turnId) {
         // Words held for a turn that is not the one asking: none of them are
         // this turn's to take.
         return [];
       }
+
       for (const text of staged) {
         const verdict = admit(inbox, { text, mode, turnId });
         inbox = verdict.inbox;
@@ -268,14 +285,19 @@ export function createMidRunInput(options: MidRunInputOptions): MidRunInput {
           hooks?.onRefused(text, verdict.reason);
         }
       }
+
       staged = [];
       const drained = drainInbox(inbox);
+
       inbox = drained.inbox;
+
       if (drained.taken.length > 0) {
         hooks?.onTaken(drained.taken.map((input) => input.text));
       }
+
       return drained.taken;
     },
+
     takeLine: async () => {
       if (composer !== undefined) {
         // Typeahead from between the prompts comes first, then a fresh
@@ -284,25 +306,33 @@ export function createMidRunInput(options: MidRunInputOptions): MidRunInput {
         if (pending !== undefined) {
           return pending;
         }
+
         if (composer.isEof()) {
           return undefined;
         }
+
         const line = await composer.compose(promptFor());
+
         atPromptStart = true;
+
         return line;
       }
+
       const first = backlog.shift();
       if (first !== undefined) {
         atPromptStart = true;
         return first;
       }
+
       if (eof) {
         return undefined;
       }
+
       return new Promise<string | undefined>((resolve) => {
         waiters.push(resolve);
       });
     },
+
     waiting: () => staged.length + (inbox?.items.length ?? 0),
   };
 }

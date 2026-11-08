@@ -38,12 +38,17 @@ test("session fork accepts a snapshot selector, never both", () => {
 
 test("session rename/export/archive/remove parse their targets", () => {
   const rename = parseArgs(["session", "rename", "abc123", "New name"]);
+
   assert.equal(rename.kind, "session_rename");
   const exported = parseArgs(["session", "export", "abc123", "--format", "markdown"]);
+
   assert.equal(exported.kind, "session_export");
+
   if (exported.kind !== "session_export") return;
+
   assert.equal(exported.options.format, "markdown");
   const badFormat = parseArgs(["session", "export", "abc123", "--format", "pdf"]);
+
   assert.equal(badFormat.kind, "error");
   assert.equal(parseArgs(["session", "archive", "abc123"]).kind, "session_archive");
   assert.equal(parseArgs(["session", "unarchive", "abc123"]).kind, "session_archive");
@@ -61,8 +66,11 @@ test("run --last conflicts with explicit session selectors", () => {
 
 test("run --migrate is a closed set and needs --resume", () => {
   const migrated = parseArgs(["run", "--resume", "abc", "--migrate", "model,catalog", "hello"]);
+
   assert.equal(migrated.kind, "run");
+
   if (migrated.kind !== "run") return;
+
   assert.equal(migrated.options.migrateModel, true);
   assert.equal(migrated.options.migrateCatalog, true);
   assert.equal(parseArgs(["run", "--resume", "abc", "--migrate", "workspace"]).kind, "error");

@@ -43,6 +43,7 @@ export function updateStatus(): UpdateStatus {
 
 export function handleUpdate(ctx: CliContext, options: UpdateOptions): ExitCode {
   const status = updateStatus();
+
   if (options.check) {
     if (options.json) {
       ctx.stdout(`${JSON.stringify({ update: status })}\n`);
@@ -51,9 +52,11 @@ export function handleUpdate(ctx: CliContext, options: UpdateOptions): ExitCode 
     ctx.stdout(`trylo ${status.version}: ${status.detail}\n`);
     return EXIT_CODES.OK;
   }
+
   if (options.json) {
     ctx.stdout(`${JSON.stringify({ update: status })}\n`);
   }
+
   return reportFailure(ctx, {
     exitCode: EXIT_CODES.CONFIG,
     message: `cannot install an update: ${status.detail}`,

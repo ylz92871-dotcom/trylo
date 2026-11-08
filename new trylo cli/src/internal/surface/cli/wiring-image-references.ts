@@ -9,10 +9,13 @@ type ImageScope = { readonly read: ImageReferenceAccess; readonly record: Valida
 export function imageReferencesFor(input: { readonly execution?: RunExecution; readonly fileAccess?: FileAccessMode }): ImageScope | undefined {
   const lent = input.execution?.imageReferences;
   if (lent === undefined && (input.fileAccess === undefined || input.fileAccess === "workspace")) return undefined;
+
   const references = lent ?? createImageReferenceRegistry();
+
   return {
     read: { resolve: references.resolve },
     record: references.register,
+
     close() {
       // Borrowed snapshots belong to the prepared session, not this turn.
       if (lent === undefined) references.clear();

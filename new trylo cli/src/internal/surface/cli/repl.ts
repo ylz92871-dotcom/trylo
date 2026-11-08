@@ -12,6 +12,7 @@ import {
 } from "./run-command.js";
 import { parseSlash, slashHelpText, type SlashInvocation } from "./slash.js";
 import { expandSkillSlash } from "./skill-slash.js";
+import { sessionLearningOptions, replSessionOptions, type SessionLearningOptions } from "./session-learning-options.js";
 import { slashDiffText, slashReviewText, slashRollbackText } from "./review-slash.js";
 import { readMultiLine } from "./multiline.js";
 import { compactNote, compactSession } from "./compact-session.js";
@@ -62,15 +63,6 @@ async function openReplSession(
   return prepareRun(ctx, { options, sink, permissionMode: mode });
 }
 
-function newSessionOptions(sessionId: string, learning?: LearningSwitch): RunCommandOptions {
-  return {
-    message: [],
-    readStdin: false,
-    session: sessionId,
-    ...(learning === undefined ? {} : { learning }),
-  };
-}
-
 /** Slash outcomes distinguish a failed new session from a failed resume. */
 type SlashResult =
   | { readonly kind: "continue" }
@@ -96,6 +88,7 @@ type SlashDeps = {
 async function dispatchSlash(invocation: SlashInvocation, deps: SlashDeps): Promise<SlashResult> {
   const { ctx, sink, mode, scaffold } = deps;
   const { command, arg } = invocation;
+
   switch (command.kind) {
     case "help":
       ctx.stderr(`${slashHelpText()}\n`);
@@ -125,19 +118,23 @@ async function dispatchSlash(invocation: SlashInvocation, deps: SlashDeps): Prom
         if (next === undefined) {
           return { kind: "continue" };
         }
+
         if (isRunFailure(next)) {
           return { kind: "soft_failure", failure: next };
         }
+
         return {
           kind: "replaced",
           scaffold: next,
           note: `model ${next.model} (new session ${next.sessionId}; previous session ${scaffold.sessionId} stays resumable)`,
         };
       }
+
       const next = await switchRunConnection(ctx, scaffold, { model: arg }, sink, mode);
       if (isRunFailure(next)) {
         return { kind: "soft_failure", failure: next };
       }
+
       return { kind: "replaced", scaffold: next, note: `model ${arg} (new session ${next.sessionId}; previous session ${scaffold.sessionId} stays resumable)` };
     }
     case "settings":
@@ -147,6 +144,7 @@ async function dispatchSlash(invocation: SlashInvocation, deps: SlashDeps): Prom
       const trimmed = arg.trim();
       const operation = trimmed.toLowerCase().startsWith("edit ") ? "edit" : "add";
       let existingId: string | undefined;
+
       if (operation === "edit") {
         existingId = trimmed.slice("edit ".length).trim();
         if (existingId.length === 0) {
@@ -154,22 +152,29 @@ async function dispatchSlash(invocation: SlashInvocation, deps: SlashDeps): Prom
           return { kind: "continue" };
         }
       }
+
       const result = await runConnectForm(ctx, deps.io, operation, existingId);
       if (result === undefined) {
         return { kind: "continue" };
       }
+
       if (!result.ok) {
         ctx.stderr(`save failed at stage ${result.stage}: ${result.code}: ${result.detail}\n`);
+
         if (result.committed.length > 0) {
           ctx.stderr(`already committed: ${result.committed.join(", ")}\n`);
         }
+
         if (result.accountId !== undefined) {
           ctx.stderr(`account id: ${result.accountId}\n`);
         }
+
         return { kind: "continue" };
       }
+
       ctx.stderr(`saved connection ${result.id}${result.accountId !== undefined ? ` (account ${result.accountId})` : ""}\n`);
       ctx.stderr("this session still runs on the current connection; /model switches it\n");
+
       return { kind: "continue" };
     }
     case "mode":
@@ -236,7 +241,9 @@ async function dispatchSlash(invocation: SlashInvocation, deps: SlashDeps): Prom
         ctx.stderr(`${done.problem}\n`);
         return { kind: "continue" };
       }
+
       ctx.stderr(`${compactNote(done.window, done.wrote)}\n`);
+
       return {
         kind: "replaced",
         scaffold: {
@@ -261,11 +268,12 @@ async function dispatchSlash(invocation: SlashInvocation, deps: SlashDeps): Prom
         ctx,
         sink,
         mode,
-        newSessionOptions(ctx.newId("repl"), scaffold.learning),
+        replSessionOptions(ctx.newId("repl"), scaffold.learning, scaffold),
       );
       if (isRunFailure(next)) {
         return { kind: "fatal", failure: next };
       }
+
       return { kind: "replaced", scaffold: next, note: `new session ${next.sessionId}` };
     }
     case "resume": {
@@ -273,15 +281,19 @@ async function dispatchSlash(invocation: SlashInvocation, deps: SlashDeps): Prom
         ctx.stderr(`usage: ${command.name} ${command.arg ?? ""}\n`);
         return { kind: "continue" };
       }
+
       const next = await openReplSession(ctx, sink, mode, {
         message: [],
         readStdin: false,
         resume: arg,
+        ...sessionLearningOptions(scaffold),
       });
       if (isRunFailure(next)) {
         return { kind: "soft_failure", failure: next };
       }
+
       await scaffold.close();
+
       return { kind: "replaced", scaffold: next, note: `resumed session ${arg}` };
     }
     default: {
@@ -311,9 +323,11 @@ async function replTurn(
     ctx.stderr(`${prepared.problem}\n`);
     return scaffold;
   }
+
   if (prepared.note !== undefined) {
     ctx.stderr(`${prepared.note}\n`);
   }
+
   // The REPL asks per turn and never pre-approves anything: an empty choice
   // leaves every decision where it already was.
   const outcome = await runOneTurn(ctx, scaffold, prepared.text, sink, mode, {});
@@ -322,9 +336,11 @@ async function replTurn(
     if (outcome.continuation === "session_closed") return outcome;
     return scaffold;
   }
+
   for (const warning of outcome.warnings) {
     ctx.stderr(`warning: ${warning}\n`);
   }
+
   return await scaffoldAfterTurn(scaffold, outcome);
 }
 
@@ -332,19 +348,22 @@ export async function handleRepl(
   ctx: CliContext,
   sink: CliSink,
   learning?: LearningSwitch,
+  learningOptions: SessionLearningOptions = {},
 ): Promise<ExitCode> {
   const mode: Mode = ctx.stdinIsTty ? "interactive" : "non_interactive";
   let scaffold = await openReplSession(
     ctx,
     sink,
     mode,
-    newSessionOptions(ctx.newId("repl"), learning),
+    replSessionOptions(ctx.newId("repl"), learning, learningOptions),
   );
   if (isRunFailure(scaffold)) {
     return reportFailure(ctx, scaffold);
   }
+
   ctx.stderr(`trylo interactive session ${scaffold.sessionId}. /help for commands, /exit to leave.\n`);
   const io = lineIoOf(ctx);
+
   try {
     for (;;) {
       ctx.stderr("> ");
@@ -352,12 +371,15 @@ export async function handleRepl(
       if (line === undefined) {
         return EXIT_CODES.OK;
       }
+
       const input = line.trim();
       if (input.length === 0) {
         continue;
       }
+
       const slash = parseSlash(input);
       let turnInput = input;
+
       if (slash.kind === "unknown") {
         // Reported and dropped. A typo is not a prompt: sending it to the model
         // would put a string the user never meant to say into the transcript.
@@ -368,29 +390,37 @@ export async function handleRepl(
           ctx.stderr(`unknown command ${slash.token}; /help for the list\n`);
           continue;
         }
+
         ctx.stderr(`invoked skill ${expanded.name}\n`);
         turnInput = expanded.text;
       }
+
       if (slash.kind === "known") {
         const result = await dispatchSlash(slash.invocation, { ctx, sink, mode, scaffold, io });
         if (result.kind === "exit") {
           return EXIT_CODES.OK;
         }
+
         if (result.kind === "fatal") {
           return reportFailure(ctx, result.failure);
         }
+
         if (result.kind === "soft_failure") {
           reportFailure(ctx, result.failure);
           continue;
         }
+
         if (result.kind === "replaced") {
           scaffold = result.scaffold;
           ctx.stderr(`${result.note}\n`);
         }
+
         continue;
       }
+
       const next = await replTurn(ctx, sink, mode, scaffold, await answerQuestionInput(scaffold.questions, turnInput, ctx.readLine));
       if (isRunFailure(next)) return reportFailure(ctx, next);
+
       scaffold = next;
     }
   } finally {

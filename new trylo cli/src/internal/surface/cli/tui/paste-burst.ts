@@ -75,65 +75,82 @@ const idleFlush = (atMs: number): ReadonlyArray<BurstDecision> => {
     if (buffer === undefined || lastAtMs === undefined) {
       return [];
     }
+
     const idle = atMs - lastAtMs;
     const window = flushIdleMs;
     if (idle <= window) {
       return [];
     }
+
     const text = buffer;
+
     buffer = undefined;
     lastAtMs = undefined;
+
     return [{ kind: "flushed", text, isPaste: pasteLike(text) }];
   };
 
   return {
     char(text, atMs) {
       const decisions: BurstDecision[] = [];
+
       if (buffer !== undefined) {
         if (atMs - (lastAtMs ?? atMs) > PASTE_BURST_CHAR_INTERVAL_MS) {
           decisions.push(...idleFlush(atMs));
         }
       }
+
       if (buffer !== undefined) {
         buffer += text;
         lastAtMs = atMs;
         decisions.push({ kind: "buffered" });
         return decisions;
       }
+
       if (held === undefined) {
         held = text;
         lastAtMs = atMs;
         return [{ kind: "held" }];
       }
+
       if (atMs - (lastAtMs ?? atMs) <= PASTE_BURST_CHAR_INTERVAL_MS) {
         buffer = held + text;
         held = undefined;
         lastAtMs = atMs;
         return [...decisions, { kind: "buffered" }];
       }
+
       const released = held;
+
       held = text;
       lastAtMs = atMs;
+
       return [...decisions, { kind: "pass", text: released }];
     },
 
     enter(atMs) {
       const decisions: BurstDecision[] = [];
+
       if (held !== undefined) {
         decisions.push({ kind: "pass", text: held });
         held = undefined;
       }
+
       if (buffer !== undefined) {
         const text = buffer;
+
         buffer = undefined;
         lastAtMs = undefined;
         const paste = pasteLike(text);
         if (paste) {
           suppressEnterUntil = atMs + PASTE_ENTER_SUPPRESS_WINDOW_MS;
         }
+
         decisions.push({ kind: "flushed", text, isPaste: paste });
+
         return decisions;
       }
+
       if (atMs < suppressEnterUntil) {
         suppressEnterUntil = 0;
         // The Enter belonged to the paste that just flushed: it is the paste's
@@ -142,20 +159,25 @@ const idleFlush = (atMs: number): ReadonlyArray<BurstDecision> => {
         decisions.push({ kind: "flushed", text: "", isPaste: true });
         return decisions;
       }
+
       decisions.push({ kind: "submit" });
+
       return decisions;
     },
 
     flush() {
       const decisions: BurstDecision[] = [];
+
       if (held !== undefined) {
         decisions.push({ kind: "pass", text: held });
         held = undefined;
       }
+
       if (buffer !== undefined) {
         decisions.push({ kind: "flushed", text: buffer, isPaste: pasteLike(buffer) });
         buffer = undefined;
       }
+
       return decisions;
     },
   };

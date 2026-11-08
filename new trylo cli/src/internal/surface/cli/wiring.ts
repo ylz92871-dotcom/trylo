@@ -1,42 +1,40 @@
-import type { Message } from "../../contract/execution.js";
+import type { WiringInput } from "./wiring-input.js";
+
+export type { WiringInput, McpToolTable } from "./wiring-input.js";
+
 import { composeSandbox, composeTools } from "../../adapters/mcp-runtime/mount.js";
 import { createFixtureProvider, DEFAULT_FIXTURE_SCRIPT } from "../../adapters/provider/fixture.js";
-import type { TokenManagerLike } from "../../adapters/provider/openai-compatible.js";
-import type { WarmRegistry } from "../../adapters/provider/warm.js";
 import { buildProvider, kindOf } from "./provider-build.js";
+import { buildLearningProvider } from "./funded-learning-provider.js";
 import { SubagentRuntime } from "../../subagent/index.js";
 import { buildSubagentPorts } from "./wiring-subagent.js";
 import { createWorkspaceTools } from "../../adapters/tools/index.js";
 import { MEMORY_WRITE_TOOL_NAMES } from "../../adapters/tools/memory/write.js";
 import { mountedWebToolNames } from "./web-wiring.js";
 import { createWorkspaceSandbox } from "../../adapters/sandbox/index.js";
-import type { ExecPolicyGuard } from "../../loop/tool-admission.js";
 import { lspToolsPatch } from "./lsp-wiring.js";
 import { createRunExecution } from "./run-execution-wiring.js";
-import { composeLearningPorts } from "../../integration/user-learning/index.js";
-import { createPermissionGrantCache, type PermissionGrantCache } from "../../loop/permission-grants.js";
+import { composeLearningPorts, methodSwitchFor } from "../../integration/user-learning/index.js";
+import { createPermissionGrantCache } from "../../loop/permission-grants.js";
 import type { LoopPorts } from "../../loop/runner.js";
-import type { PermissionPort } from "../../ports/permission.js";
 import type { ToolPort } from "../../ports/tools.js";
-import type { SessionRecord } from "../../ports/session.js";
-import type { SkillCatalogPort } from "../../ports/skills.js";
 import { createSkillForkExecutor } from "../../adapters/tools/skill/index.js";
-import type { ProviderPort, ReasoningEffort } from "../../ports/provider.js";
-import type { ProviderKind } from "../../adapters/provider/providers-file.js";
+import type { ProviderPort } from "../../ports/provider.js";
 import { checkpointWiring } from "./checkpoint-wiring.js";
-import { createModelSummarizer } from "./compact-model-summarizer.js";
+import { createModelSummarizer, DEFAULT_COMPACT_SUMMARY_MODE } from "./compact-model-summarizer.js";
 import { createPageExtractor } from "./web-wiring.js";
-import { compactionWiring, estimatePromptTokens } from "./compaction-wiring.js";
-import { type WiringOptIns } from "./wiring-optins.js";
+import { boundMessagesTextTokens, compactionWiring } from "./compaction-wiring.js";
 import {
   openPermissionLedger,
   type FilePermissionStore,
 } from "./permission-ledger-wiring.js";
 import { selectToolPort } from "./tool-selection.js";
-import { methodPortOf } from "./wiring-method.js";
+import { methodPortOf, methodFocusedPortOf, learningToolsOf } from "./wiring-method.js";
 import { imageReferencesFor } from "./wiring-image-references.js";
 import { restrictDeniedTools } from "./permission-tool-access.js";
 import { composeAdditionalTools } from "./additional-tools.js";
+import { createPersonalAgentRuntime, type PersonalAgentRuntime } from "./collaboration-personal-agent-wiring.js";
+import type { CentralLearningTurnRuntime } from "./central-learning-turn.js";
 
 /**
  * The opt-in types moved to `wiring-optins.ts`; re-exported here because the
@@ -75,93 +73,15 @@ export type {
  * than re-derived here.
  */
 
-export type WiringInput = {
-  readonly additionalTools?: ToolPort;
-  readonly contextTokenLimit?: number;
-  readonly execPolicy?: ExecPolicyGuard;
-  readonly toolSelection?: readonly string[];
-  readonly workflowRecords?: readonly SessionRecord[];
-  readonly turnId?: string;
-  readonly callerMessages?: ReadonlyArray<Message>;
-  /** The selected id: a shipped one, or one declared in `providers.json`. */
-  readonly providerId: string;
-  /**
-   * The adapter family, when it is not the id. Absent — every caller that
-   * predates declared providers — means the id *is* the kind, which is true for
-   * all four shipped ones; present, it is what a declared provider is built
-   * from, so a provider named anything can still be the family it declares.
-   */
-  readonly providerKind?: ProviderKind;
-  /** Explicit Responses summary support resolved before adapter construction. */
-  readonly reasoningSummary?: "auto";
-  readonly reasoningEffort?: ReasoningEffort;
-  readonly model: string;
-  readonly endpoint: string;
-  /**
-   * The resolved credential, when one resolved. It arrives already read by
-   * `CredentialPort` (see `credentials-wiring.ts`); this file never reads an
-   * environment variable or a ledger itself.
-   */
-  readonly apiKey: string | undefined;
-  readonly tokenManager?: TokenManagerLike | undefined;
-  /**
-   * Which account the credential belongs to. It is part of a warm entry's
-   * identity, never a credential: a session built for one account is not handed
-   * to another.
-   */
-  readonly accountId?: string | undefined;
-  /**
-   * The warm layer, lent by a surface that runs more than one turn. Absent —
-   * `trylo run`, every single-turn caller — means the provider is built exactly
-   * as it always was and nothing is cached.
-   */
-  readonly warm?: WarmRegistry | undefined;
-  readonly workspaceRoot: string;
-  /**
-   * Where snapshots are stored; must sit outside `workspaceRoot`. Absent
-   * means a write runs with no undo, which is how every caller that never
-   * asked for a profile root behaves.
-   */
-  readonly checkpointRoot?: string;
-  readonly permission: PermissionPort;
-  readonly grants?: PermissionGrantCache;
-  /**
-   * Milliseconds since the epoch, so a stored window carries a real host time.
-   * Absent means the wiring is built without compaction, which is also what a
-   * caller that never configures a ceiling wants.
-   */
-  readonly nowMs?: number;
-  /**
-   * The already-open MCP half of the tool table. Absent — which is every caller
-   * that never asked for external tools — means the run is byte-identical to
-   * one that never heard of them (WP §4-D8): the composite is not built, the
-   * sandbox is the workspace's own, and the catalog hash is the same string.
-   *
-   * The sessions are opened by the caller because opening one is async and can
-   * take a real handshake; this file is synchronous by design, and a wiring
-   * that could block on a child process would be a wiring that can hang a CLI.
-   */
-  readonly mcp?: McpToolTable;
-  /**
-   * 按 WP14 冻结的技能目录（每轮由组合根重建）。Absent —— 工作区与用户层都
-   * 没有技能 —— wiring 根本不构造 skill 工具，catalog 哈希逐字不变（R1）。
-   */
-  readonly skills?: SkillCatalogPort;
-} & WiringOptIns;
-
-/** An open MCP runtime, reduced to the two things a tool table is built from. */
-export type McpToolTable = {
-  readonly tools: ToolPort;
-  /** Exactly the names that mounted; the composite sandbox admits only these. */
-  readonly toolNames: ReadonlySet<string>;
-};
-
 export type WiringFailure = {
   readonly code: "missing_endpoint" | "unknown_provider" | "unsupported_reasoning_effort" | "tool_name_conflict";
   readonly detail: string;
 };
 
 export type Wiring = {
+  readonly centralLearning?: CentralLearningTurnRuntime;
+  readonly collaboration?: PersonalAgentRuntime;
+  readonly capabilities?: import("./collaboration-capabilities.js").CollaborationCapabilities;
   /** Releases only resources this turn constructed; lent sessions remain with their owner. */
   readonly close: () => Promise<void>;
   readonly ports: LoopPorts;
@@ -197,8 +117,9 @@ function isFailure(value: ProviderPort | WiringFailure): value is WiringFailure 
 }
 
 export function wirePorts(input: WiringInput): Wiring | WiringFailure {
+  const workspaceRoot = input.execution?.workspaceRoot ?? input.workspaceRoot;
   const sandbox = createWorkspaceSandbox({
-    workspaceRoot: input.workspaceRoot,
+    workspaceRoot,
     ...(input.fileAccess === undefined ? {} : { fileAccess: input.fileAccess }),
     // Same mode the tools will plan with: approval and execution plan twice
     // so they agree, never so they can disagree.
@@ -207,8 +128,18 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
   const images = imageReferencesFor(input);
   const provider = buildProvider({ ...input, workspaceRoot: sandbox.policy.workspaceRoot }, images?.read);
   if (isFailure(provider)) return provider;
+
+  const needsLearningProvider = methodSwitchFor(input.learning?.switch) !== undefined
+    || input.centralLearning !== undefined || input.collaborationLearning !== undefined && input.collaborationLearning.choice !== "off";
+  const learningProvider = needsLearningProvider
+    ? buildLearningProvider({ ...input, workspaceRoot: sandbox.policy.workspaceRoot }, provider, images?.read) : provider;
+  if (isFailure(learningProvider)) return learningProvider;
+
   const grants = input.grants ?? createPermissionGrantCache();
-  const method = composeLearningPorts({ method: methodPortOf(input), user: input.userLearning });
+  const methodBase = methodPortOf({ ...input, provider: learningProvider,
+    ...(input.centralLearning === undefined || input.learning === undefined ? {} : { learning: { ...input.learning, deferReviewToCentral: true } }) });
+  const topicMethod = input.topics?.attach(methodBase) ?? methodBase;
+  const method = composeLearningPorts({ method: topicMethod, user: input.userLearning });
   // Both registries are built in session-view-wiring and nowhere else, so the
   // tools that observe a command and the processes they observe are the same
   // objects (see that module for why a second registry breaks sessions).
@@ -224,11 +155,15 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
     input.skills === undefined || !isSubagentEnabled
       ? undefined
       : createSkillForkExecutor({ delegate: () => subagentToolPort });
-  const workspaceTools = restrictDeniedTools(selectToolPort(createWorkspaceTools({
+  const effectiveToolSelection = input.toolSelection ?? input.configuredToolSelection;
+  const explicitToolCeiling = input.toolSelectionCeiling ?? input.toolSelection;
+  const mountedWorkspaceTools = createWorkspaceTools({
+    ...(input.readRouting === undefined ? {} : { readRouting: input.readRouting }),
     ...(input.workflowRecords === undefined ? {} : { workflowRecords: input.workflowRecords }),
+    ...(input.goal === undefined ? {} : { goalTools: input.goal.tools }),
     ...(input.turnId === undefined ? {} : { turnId: input.turnId }),
     ...(input.questions === undefined ? {} : { questions: input.questions }),
-    workspaceRoot: input.workspaceRoot,
+    workspaceRoot,
     sandbox,
     ...(images === undefined ? {} : { onImageValidated: images.record }),
     visibility: grants,
@@ -252,7 +187,8 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
     ...(input.localRules === undefined ? {} : { localRules: input.localRules }),
     ...lsp,
     ...(input.shellMode === undefined ? {} : { shellMode: input.shellMode }),
-  }), input.toolSelection), input.permission);
+  });
+  const workspaceTools = restrictDeniedTools(selectToolPort(mountedWorkspaceTools, effectiveToolSelection), input.permission);
   // The composites. Both are identity-shaped when nothing was mounted, so
   // "MCP off" is the old objects rather than equal-looking new ones — the
   // difference a hash or a `===` would otherwise have to be trusted about.
@@ -262,20 +198,68 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
   // change how a flag-off run answers a hallucinated `web_fetch` call.
   const mcp = input.mcp;
   const withMcp = mcp === undefined ? workspaceTools : composeTools(workspaceTools, mcp.tools);
-  const extra = input.additionalTools === undefined ? undefined : restrictDeniedTools(selectToolPort(input.additionalTools, input.toolSelection), input.permission);
+  const methodTools = learningToolsOf(methodBase, input.toolGap, input.turnId);
+  if (methodTools !== undefined && input.additionalTools?.snapshot().some(tool => methodTools.snapshot().some(item => item.name === tool.name))) return { code: "tool_name_conflict", detail: "method tool collides with an additional tool" };
+
+  const additional = methodTools === undefined ? input.additionalTools : input.additionalTools === undefined ? methodTools : composeAdditionalTools(input.additionalTools, methodTools);
+  const extra = additional === undefined ? undefined : restrictDeniedTools(selectToolPort(additional, effectiveToolSelection), input.permission);
   if (extra?.snapshot().some(binding => withMcp.snapshot().some(existing => existing.name === binding.name))) return { code: "tool_name_conflict", detail: "additional tool collides with an existing tool" };
-  const tools = restrictDeniedTools(extra === undefined ? withMcp : composeAdditionalTools(withMcp, extra), input.permission);
+
+  const tools = restrictDeniedTools(selectToolPort(extra === undefined ? withMcp : composeAdditionalTools(withMcp, extra), effectiveToolSelection), input.permission);
+  const fullWithMcp = mcp === undefined ? mountedWorkspaceTools : composeTools(mountedWorkspaceTools, mcp.tools);
+  const catalogTools = additional === undefined ? fullWithMcp : composeAdditionalTools(fullWithMcp, additional);
+  const dispatchTools = restrictDeniedTools(selectToolPort(catalogTools, explicitToolCeiling), input.permission);
+
+  if (input.turnId !== undefined) input.toolGap?.captureCatalog?.(input.turnId, dispatchTools.snapshot());
+
   const webNames = mountedWebToolNames(workspaceTools);
   const memoryNames = workspaceTools.snapshot().filter((tool) => MEMORY_WRITE_TOOL_NAMES.has(tool.name)).map((tool) => tool.name);
   const admitted =
     webNames.length > 0 || memoryNames.length > 0 || mcp !== undefined || extra !== undefined
       ? new Set([...(mcp === undefined ? [] : mcp.toolNames), ...webNames, ...memoryNames, ...(extra?.snapshot().map(tool => tool.name) ?? [])])
       : undefined;
-  const effectiveSandbox = admitted === undefined ? sandbox : composeSandbox(sandbox, admitted);
+  const baseSandbox = admitted === undefined ? sandbox : composeSandbox(sandbox,
+    () => new Set([...admitted, ...(mcp?.toolNames ?? [])]));
+  const methodFocused = methodBase === undefined ? undefined : methodFocusedPortOf({ ...input, provider: learningProvider, method: methodBase });
+  let centralLearning: CentralLearningTurnRuntime | undefined;
+  const collaboration = input.collaborationLearning === undefined ? undefined : createPersonalAgentRuntime({
+    ...input.collaborationLearning, provider, learningProvider, model: input.model, tools, workspaceTools: mountedWorkspaceTools, catalogTools,
+    ...(methodFocused === undefined ? {} : { focusedLearning: { ...input.collaborationLearning.focusedLearning, method: methodFocused } }),
+    ...(input.centralLearning === undefined ? {} : { centralLearning: {
+      focus: (request, signal) => centralLearning?.focus(request, signal) ?? Promise.resolve({ ok: false as const, reason: "central_learning_not_ready" }),
+      resume: signal => centralLearning?.resume(signal) ?? Promise.resolve({ ok: false as const, reason: "central_learning_not_ready" }),
+    }, beforeCentralInspect: async () => { await centralLearning?.beforeInspect(); },
+    readCentralLearningInstruction: () => centralLearning?.personalAgentInstruction }),
+    ...(input.goal === undefined ? {} : { taskGoal: input.goal.current().objective }),
+    ...(explicitToolCeiling === undefined ? {} : { toolSelectionCeiling: explicitToolCeiling }), permission: input.permission,
+    sandbox: baseSandbox, grants, ...(input.skills === undefined ? {} : { skills: input.skills }),
+    ...(input.execPolicy === undefined ? {} : { execPolicy: input.execPolicy }) });
+  if (input.centralLearning !== undefined && collaboration !== undefined) centralLearning = input.centralLearning({
+    provider: learningProvider, collaboration, ...(methodBase === undefined ? {} : { method: methodBase }),
+    ...(input.learning === undefined ? {} : { learning: input.learning }) });
+
+  const centralNames = centralLearning?.tools.snapshot().map(tool => tool.name) ?? [];
+  const effectiveSandbox = collaboration === undefined ? baseSandbox
+    : composeSandbox(baseSandbox, new Set([...collaboration.tools.snapshot().map(tool => tool.name), ...centralNames]));
 
   let subagentRuntime: SubagentRuntime | undefined;
-  let parentProvider = provider;
-  let finalTools = tools;
+  const presentationProvider = mcp?.wrapProvider?.(provider) ?? provider;
+  const personalAgentProvider = collaboration?.wrapProvider(presentationProvider) ?? presentationProvider;
+  let parentProvider = personalAgentProvider;
+  let finalTools = collaboration === undefined ? tools : composeAdditionalTools(collaboration.capabilities.configuredTools,
+    centralLearning?.wrapControlTools(collaboration.tools) ?? collaboration.tools);
+
+  if (centralLearning !== undefined) finalTools = composeAdditionalTools(finalTools, centralLearning.tools);
+
+  // This port joins only the parent's table. The child runtime below receives
+  // workspaceTools/dispatchTools, which do not contain the review boundary.
+  if (input.skillPending !== undefined) {
+    const pending = restrictDeniedTools(selectToolPort(input.skillPending.tools, explicitToolCeiling), input.permission);
+    if (pending.snapshot().some(tool => finalTools.snapshot().some(existing => existing.name === tool.name))) {
+      return { code: "tool_name_conflict", detail: "skill pending tool collides with an existing tool" };
+    }
+    finalTools = composeAdditionalTools(finalTools, pending);
+  }
 
   // 开关关闭时这里什么都不发生：不构造对象、不开文件、不建目录。构造本身是纯的
   // （`createFilePermissionStore` 只把路径与锁闭包记下来），真正的读取发生在
@@ -285,16 +269,27 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
 
   if (isSubagentEnabled) {
     const built = buildSubagentPorts({
+      ...(input.subagent?.onChildRequestDispatched === undefined ? {} : { onChildRequestDispatched: input.subagent.onChildRequestDispatched }),
+      ...((input.subagent?.onMemberCollaborationReport ?? collaboration?.onMemberCollaborationReport) === undefined ? {} : {
+        onMemberCollaborationReport: input.subagent?.onMemberCollaborationReport ?? collaboration!.onMemberCollaborationReport }),
+      ...((input.subagent?.memberConfigurations ?? collaboration?.memberConfigurations) === undefined ? {} : {
+        memberConfigurations: input.subagent?.memberConfigurations ?? collaboration!.memberConfigurations }),
+      ...((input.subagent?.teamProfileId ?? input.subagent?.team?.profileId) === undefined ? {} : {
+        teamProfileId: input.subagent?.teamProfileId ?? input.subagent!.team!.profileId! }),
+      ...(input.subagent?.routing === undefined ? {} : { routing: input.subagent.routing }),
+      ...((input.subagent?.collaboration ?? collaboration?.member) === undefined ? {} : { collaboration: input.subagent?.collaboration ?? collaboration!.member }),
+      ...(input.subagent?.onCollaborationFailure === undefined ? {} : { onCollaborationFailure: input.subagent.onCollaborationFailure }),
       ...(input.subagent?.checkpoints === undefined ? {} : { checkpoints: input.subagent.checkpoints }),
+      ...(input.subagent?.modelMigration === undefined ? {} : { modelMigration: input.subagent.modelMigration }),
       ...(input.subagent?.sessionId === undefined ? {} : { sessionId: input.subagent.sessionId }),
       sessions,
       parentTools: finalTools,
-      parentProvider: provider,
-      workspaceTools,
+      parentProvider: personalAgentProvider,
+      workspaceTools: collaboration === undefined ? workspaceTools : dispatchTools,
       childProvider:
         kindOf(input) === "fixture-subagent"
           ? createFixtureProvider(DEFAULT_FIXTURE_SCRIPT)
-          : provider,
+          : mcp?.wrapProvider?.(provider) ?? provider,
       model: input.model,
       permission: input.permission,
       ...(input.contextTokenLimit === undefined ? {} : { childBudget: { contextTokenLimit: input.contextTokenLimit } }),
@@ -312,34 +307,43 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
       ...(input.subagent?.roles === undefined ? {} : { roles: input.subagent.roles }),
       ...(input.subagent?.team === undefined ? {} : { team: input.subagent.team }),
     });
+
     subagentRuntime = built.runtime;
     parentProvider = built.provider;
     // WP14：晚绑定的 fork 委托出口在这里闭合——skill 工具执行时，子代理端口
     // 已经存在。挂在同一个端口上，血统/治理/取消只有一份实现（WP22）。
     subagentToolPort = built.toolPort;
-    finalTools = built.tools;
+    finalTools = collaboration?.wrapParentTools(built.tools) ?? built.tools;
   }
 
-  finalTools = selectToolPort(finalTools, input.toolSelection);
+  finalTools = selectToolPort(finalTools, explicitToolCeiling);
+  const parentSandbox = input.skillPending === undefined ? effectiveSandbox : composeSandbox(effectiveSandbox,
+    new Set(input.skillPending.tools.snapshot().filter(tool => finalTools.snapshot().some(item => item.name === tool.name)).map(tool => tool.name)));
 
   return {
+    ...(centralLearning === undefined ? {} : { centralLearning }),
+    ...(collaboration === undefined ? {} : { collaboration, capabilities: collaboration.capabilities }),
     ports: {
+      ...(input.goal === undefined ? {} : { goal: input.goal }),
       provider: parentProvider,
       tools: finalTools,
       permission: input.permission,
       profile: NO_LEARNING_PROFILE,
       ...(input.execPolicy === undefined ? {} : { execPolicy: input.execPolicy }),
-      sandbox: effectiveSandbox,
+      sandbox: parentSandbox,
       grants,
       // Opted in only when the host lends a clock. The loop estimates the next
       // request itself; this estimator exists so a caller that supplies one
       // uses the same pure basis rather than a second, drifting one.
       compaction: compactionWiring({
-        estimatePromptTokens: messages => estimatePromptTokens(messages) + (provider.continuation?.estimateOverheadTokens?.(messages) ?? 0),
+        estimateAccuracy: "text_upper_bound",
+        estimatePromptTokens: messages => boundMessagesTextTokens(messages) + (provider.continuation?.estimateOverheadTokens?.(messages) ?? 0),
+        estimateTextPromptTokens: boundMessagesTextTokens,
         nowMs: input.nowMs ?? 0,
         ...(input.nowMs === undefined ? { at: "1970-01-01T00:00:00.000Z" } : {}),
-        // Absent means the shipped extractive author, byte for byte as before.
-        ...(input.compactSummary === "model"
+        // The CLI has a provider, so its default can author a model summary;
+        // explicit extractive retains the provider-free primitive below.
+        ...((input.compactSummary ?? DEFAULT_COMPACT_SUMMARY_MODE) === "model"
           ? { summarize: createModelSummarizer({ provider, model: input.model,
             ...(input.contextTokenLimit === undefined ? {} : { contextTokenLimit: input.contextTokenLimit }),
           }) }
@@ -361,7 +365,7 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
         ? {}
         : {
             checkpoint: checkpointWiring({
-              workspaceRoot: input.workspaceRoot,
+              workspaceRoot,
               storageRoot: input.checkpointRoot,
               nowMs: input.nowMs ?? 0,
               ...(input.nowMs === undefined ? { at: "1970-01-01T00:00:00.000Z" } : {}),
@@ -369,18 +373,21 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
           }),
     },
     toolCatalogHash: toolCatalogHash(finalTools, input.toolSelection),
+
     close: async () => {
       try {
         await subagentRuntime?.cancelAll();
       } finally {
         try {
-          await lsp.languageServers?.closeAll();
+          try { try { await centralLearning?.close(); } finally { await collaboration?.close(); } }
+          finally { await lsp.languageServers?.closeAll(); }
         } finally {
           try { if (input.execution === undefined) await execution.close(); }
           finally { images?.close(); }
         }
       }
     },
+
     providerId: input.providerId,
     model: input.model,
     ...(subagentRuntime !== undefined ? { subagentRuntime } : {}),

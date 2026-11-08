@@ -6,6 +6,7 @@ import { doctorText, runDoctor } from "../doctor-run.js";
 import { journalRecordsOf, statusLines, usageLines } from "../session-info.js";
 import { switchRunConnection } from "../connection-switch.js";
 import { isRunFailure, prepareRun, reportFailure, type RunFailure } from "../run-command.js";
+import { sessionLearningOptions, type SessionLearningOptions } from "../session-learning-options.js";
 import type { RunScaffold } from "../run-command.js";
 import { slashHelpText, type SlashInvocation } from "../slash.js";
 import { slashDiffText, slashReviewText, slashRollbackText } from "../review-slash.js";
@@ -55,11 +56,13 @@ export type SlashStep =
 export function newTuiSessionOptions(
   sessionId: string,
   learning?: LearningSwitch,
+  options: SessionLearningOptions = {},
 ): RunCommandOptions {
   return {
     message: [],
     readStdin: false,
     session: sessionId,
+    ...sessionLearningOptions(options),
     ...(learning === undefined ? {} : { learning }),
   };
 }
@@ -97,12 +100,16 @@ export async function tuiSlash(
       return { kind: "continue", scaffold, state };
     case "settings": {
       io.write(settingsText(ctx, scaffold));
+
       if (io.choose === undefined) return { kind: "continue", scaffold, state };
+
       const action = await choose(io, { title: "设置", items: [
         { id: "model", label: "更换模型" }, { id: "connect", label: "添加或编辑连接" }, { id: "mode", label: "操作权限" },
       ] });
       if (action === undefined) return { kind: "continue", scaffold, state };
+
       const kind = action === "model" ? "model" : action === "connect" ? "connect" : "mode";
+
       return tuiSlash(ctx, io, scaffold, state, { command: { name: `/${kind}`, aliases: [], summary: "", kind }, arg: "" }, factsOf);
     }
     case "status":
@@ -127,7 +134,9 @@ export async function tuiSlash(
         io.write(`${done.problem}\n`);
         return { kind: "continue", scaffold, state };
       }
+
       io.write(`${compactNote(done.window, done.wrote)}\n`);
+
       return {
         kind: "continue",
         scaffold: { ...scaffold, resumeView: done.window },
@@ -143,21 +152,27 @@ export async function tuiSlash(
         if (next === undefined) {
           return { kind: "continue", scaffold, state };
         }
+
         if (isRunFailure(next)) {
           return { kind: "retry", scaffold, state, failure: next };
         }
+
         io.write(`model ${next.model} (new session ${next.sessionId}; previous session ${scaffold.sessionId} stays resumable)\n`);
+
         return {
           kind: "continue",
           scaffold: next,
           state: emptyTuiState(factsOf(next)),
         };
       }
+
       const next = await switchRunConnection(ctx, scaffold, { model: arg }, { stdout: io.write, stderr: io.write }, "interactive");
       if (isRunFailure(next)) {
         return { kind: "retry", scaffold, state, failure: next };
       }
+
       io.write(`model ${arg} (new session ${next.sessionId}; previous session ${scaffold.sessionId} stays resumable)\n`);
+
       return {
         kind: "continue",
         scaffold: next,
@@ -168,15 +183,20 @@ export async function tuiSlash(
       const trimmed = arg.trim();
       let operation: "add" | "edit" = trimmed.toLowerCase().startsWith("edit ") ? "edit" : "add";
       let existingId: string | undefined;
+
       if (trimmed.length === 0 && io.choose !== undefined) {
         const connections = listConnections(ctx);
         const editable = connections.ok ? connections.providers.filter(provider => !provider.builtin && provider.kind === "openai-compatible") : [];
         if (editable.length > 0) {
           const action = await choose(io, { title: "模型连接", items: [{ id: "add", label: "添加新连接" }, ...editable.map(provider => ({ id: provider.id, label: `编辑 ${provider.id}`, detail: provider.model }))] });
           if (action === undefined) return { kind: "continue", scaffold, state };
-          if (action !== "add") { operation = "edit"; existingId = action; }
+          if (action !== "add") {
+            operation = "edit";
+            existingId = action;
+          }
         }
       }
+
       if (operation === "edit") {
         existingId ??= trimmed.slice("edit ".length).trim();
         if (existingId.length === 0) {
@@ -184,31 +204,42 @@ export async function tuiSlash(
           return { kind: "continue", scaffold, state };
         }
       }
+
       const result = await runConnectForm(ctx, io, operation, existingId);
       if (result === undefined) {
         return { kind: "continue", scaffold, state };
       }
+
       if (!result.ok) {
         io.write(`save failed at stage ${result.stage}: ${result.code}: ${result.detail}\n`);
+
         if (result.committed.length > 0) {
           io.write(`already committed: ${result.committed.join(", ")}\n`);
         }
+
         if (result.accountId !== undefined) {
           io.write(`account id: ${result.accountId}\n`);
         }
+
         return { kind: "continue", scaffold, state };
       }
+
       io.write(`saved connection ${result.id}${result.accountId !== undefined ? ` (account ${result.accountId})` : ""}\n`);
+
       if (result.useNow === true) {
         const next = await switchRunConnection(ctx, scaffold, { providerId: result.id }, { stdout: io.write, stderr: io.write }, "interactive");
         if (isRunFailure(next)) {
           io.write("连接已保存为默认，但新会话打开失败；当前会话继续可用。\n");
           return { kind: "retry", scaffold, state, failure: next };
         }
+
         io.write(`已使用 ${next.providerId}/${next.model}；原会话 ${scaffold.sessionId} 可恢复。\n`);
+
         return { kind: "continue", scaffold: next, state: emptyTuiState(factsOf(next)) };
       }
+
       io.write("this session still runs on the current connection; /model switches it\n");
+
       return { kind: "continue", scaffold, state };
     }
     case "mode":
@@ -257,7 +288,9 @@ export async function tuiSlash(
         io.write("no matching tool result; /details last shows the newest\n");
         return { kind: "continue", scaffold, state };
       }
+
       io.write(formatToolResultDetails(entry));
+
       return { kind: "continue", scaffold, state };
     }
     case "diff": {
@@ -281,12 +314,14 @@ export async function tuiSlash(
       const next = await openTuiSession(
         ctx,
         io,
-        newTuiSessionOptions(ctx.newId("repl"), scaffold.learning),
+        newTuiSessionOptions(ctx.newId("repl"), scaffold.learning, scaffold),
       );
       if (next.kind === "failure") {
         return { kind: "stop", exitCode: reportFailure(ctx, next.failure) };
       }
+
       io.write(`new session ${next.scaffold.sessionId}\n`);
+
       return {
         kind: "continue",
         scaffold: next.scaffold,
@@ -296,12 +331,16 @@ export async function tuiSlash(
     case "resume": {
       const sessionId = arg.length === 0 ? await selectSession(ctx, io, scaffold.sessionId) : arg;
       if (sessionId === undefined) return { kind: "continue", scaffold, state };
-      const next = await openTuiSession(ctx, io, { message: [], readStdin: false, resume: sessionId });
+
+      // Keep the current session open until its replacement has been prepared successfully.
+      const next = await openTuiSession(ctx, io, { message: [], readStdin: false, resume: sessionId, ...sessionLearningOptions(scaffold) });
       if (next.kind === "failure") {
         return { kind: "retry", scaffold, state, failure: next.failure };
       }
+
       await scaffold.close();
       io.write(`resumed session ${sessionId}\n${restoredConversation(next.scaffold, io.size().columns)}`);
+
       return {
         kind: "continue",
         scaffold: next.scaffold,
@@ -321,10 +360,12 @@ function findToolResult(results: ReadonlyArray<ToolResultEntry>, arg: string): T
   if (trimmed.length === 0 || trimmed.toLowerCase() === "last") {
     return results.at(-1);
   }
+
   const index = Number(trimmed);
   if (!Number.isNaN(index) && index >= 1) {
     return results.at(-index);
   }
+
   return results.find((entry) => entry.toolCallId === trimmed);
 }
 
@@ -334,9 +375,11 @@ function formatToolResultDetails(entry: ToolResultEntry): string {
     `call id: ${entry.toolCallId}`,
     `status: ${entry.status}`,
   ];
+
   if (entry.message !== undefined && entry.message.trim().length > 0) {
     lines.push(...labelled("message", entry.message));
   }
+
   if (entry.output.length === 0) {
     lines.push("output: (empty)");
   } else {
@@ -344,6 +387,7 @@ function formatToolResultDetails(entry: ToolResultEntry): string {
     lines.push(`output (${count} lines${entry.truncated ? " (truncated)" : ""}):`);
     lines.push(entry.output);
   }
+
   return `${lines.join("\n")}\n`;
 }
 

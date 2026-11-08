@@ -1,4 +1,4 @@
-import type { CompactWindow, CompactRecordDraft } from "../../ports/compaction.js";
+import type { CompactWindow, CompactRecordDraft, SummaryAuthorReporter, SummaryAuthoringContext } from "../../ports/compaction.js";
 import type { CompactionWiring } from "../../loop/compact-boundary.js";
 import type { SessionPort, SessionRecord } from "../../ports/session.js";
 import type { CliContext } from "./context.js";
@@ -30,19 +30,24 @@ export async function compactSession(
   sessionId: string,
   records: ReadonlyArray<SessionRecord>,
   session: Pick<SessionPort, "append"> | undefined,
-  options?: { readonly wiring?: CompactionWiring; readonly signal?: AbortSignal; readonly accept?: (draft: CompactRecordDraft) => boolean },
+  options?: { readonly wiring?: CompactionWiring; readonly signal?: AbortSignal; readonly accept?: (draft: CompactRecordDraft) => boolean;
+    readonly reportSummary?: SummaryAuthorReporter; readonly authoring?: SummaryAuthoringContext },
 ): Promise<CompactResult> {
   if (options?.signal?.aborted) return { ok: false, problem: "cancelled" };
+
   if (records.length === 0) {
     return { ok: false, problem: "nothing to compact yet" };
   }
+
   const wiring = options?.wiring ?? compactionWiring({ nowMs: ctx.now() });
   const projected = wiring.port.projectForPrompt({ records });
   if (!projected.ok) {
     return { ok: false, problem: `${projected.code}: ${projected.detail}` };
   }
+
   const at = new Date(ctx.now()).toISOString();
-  const summary = await wiring.summarize(projected.view.items, projected.view.window?.summary, options?.signal, listTranscript(records));
+  const summary = await wiring.summarize(projected.view.items, projected.view.window?.summary, options?.signal,
+    listTranscript(records), options?.reportSummary, options?.authoring);
   const compacted = wiring.port.compact({ records, sessionId, at, summary });
   if (!compacted.ok) {
     // `nothing_to_compact` is the ordinary answer for a session whose history
@@ -51,18 +56,24 @@ export async function compactSession(
     // person stops trusting the command.
     return { ok: false, problem: `${compacted.code}: ${compacted.detail}` };
   }
+
   const window = compacted.record.payload;
+
   if (options?.signal?.aborted) return { ok: false, problem: "cancelled" };
+
   if (options?.accept && !options.accept(compacted.record)) return { ok: false, problem: "nothing_to_reduce" };
+
   if (session === undefined) {
     // The scaffold has no journal (a session opened without one). The window is
     // still returned, and the caller says it is for this process only.
     return { ok: true, window, wrote: false };
   }
+
   const appended = await session.append(compacted.record);
   if (!appended.ok) {
     return { ok: false, problem: `could not write the compaction: ${appended.code}` };
   }
+
   return { ok: true, window, wrote: true };
 }
 

@@ -52,20 +52,25 @@ export async function resolveJob(deps: BackgroundDeps, id: ProcessSessionId): Pr
   if (!found.ok) {
     return { ok: false, reason: `${found.detail} (looked for ${id})` };
   }
+
   if (found.record.status !== "running") {
     return { ok: true, record: found.record, unverified: false };
   }
+
   const live = await deps.liveness(found.record);
   if (live === "alive") {
     return { ok: true, record: found.record, unverified: false };
   }
+
   if (live === "unverifiable") {
     // "The machine would not tell me" is its own answer: not running-confirmed,
     // and not gone. Collapsing it into either is how a supervisor convinces itself.
     return { ok: true, record: found.record, unverified: true };
   }
+
   deps.jobs.markLost(id, found.raw);
   const again = deps.jobs.read(id);
+
   return again.ok
     ? { ok: true, record: again.record, unverified: false }
     : { ok: false, reason: `the record for ${id} changed while it was being marked lost` };
@@ -82,6 +87,7 @@ export function renderJobRow(record: BackgroundJobRecord, nowMs: number, unverif
         : record.status === "lost"
           ? "lost (no exit code was observed)"
           : `running as pid ${record.pid}${unverified ? " (identity unverifiable)" : ""}`;
+
   return `${record.id}  ${pad(record.status, 7)}  ${formatDuration(Math.max(0, took - record.startedAtMs)).padStart(7)}  ${outcome.padEnd(34)} ${record.command}${tail}`;
 }
 

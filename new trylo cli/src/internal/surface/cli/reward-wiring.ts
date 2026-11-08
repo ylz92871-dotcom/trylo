@@ -13,12 +13,21 @@ import { contentHashOf } from "../../learning/control/hash.js";
 export async function rewardObserverFor(input: TurnHostInput, catalogHash: string): Promise<ReturnType<typeof createRewardObserver> | undefined> {
   const host = input.learning;
   if (host === undefined || !isLearningSwitch(host.switch) || host.env.TRYLO_REWARD_FEEDBACK !== "1") return undefined;
+
   const warn = (reason: string) => input.sink.stderr(`warning: reward_degraded:${reason}\n`);
   const runtimeRevision = host.env.TRYLO_REWARD_RUNTIME_REVISION;
-  if (!identity(runtimeRevision)) { warn("reward_runtime_revision_required"); return undefined; }
+  if (!identity(runtimeRevision)) {
+    warn("reward_runtime_revision_required");
+    return undefined;
+  }
+
   const ledger = createRewardBoardPort(methodBoardRoot(host.homeDir, host.env));
   const basis = await ledger.read();
-  if (!basis.ok) { warn(basis.reason); return undefined; }
+  if (!basis.ok) {
+    warn(basis.reason);
+    return undefined;
+  }
+
   const telemetry = createMethodEventSink(methodLearningRoot(host.homeDir, host.env), {
     now: () => new Date(input.now()).toISOString(), warn,
   });
@@ -30,6 +39,7 @@ export async function rewardObserverFor(input: TurnHostInput, catalogHash: strin
         activeSignals: projection.signals.length });
     } },
   });
+
   return createRewardObserver({ input: gateway, degraded: warn, sensors: [createToolRewardSensor({
     scope: input.workspaceRoot, environment: contentHashOf([runtimeRevision, input.providerId, input.model, catalogHash]),
   }, basis.records.feedbacks.length)] });

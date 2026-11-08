@@ -93,11 +93,13 @@ type ToolCallFact = {
  */
 function transcriptCalls(transcript: Transcript): ReadonlyMap<string, ToolCallFact> {
   const calls = new Map<string, ToolCallFact>();
+
   for (const item of transcript) {
     if (item.kind === "tool_call") {
       calls.set(item.toolCallId, { name: item.name, arguments: item.arguments });
     }
   }
+
   return calls;
 }
 
@@ -126,9 +128,11 @@ function addressOf(
     const effect = matched[0];
     return effect === undefined ? { kind: "none" } : { kind: "one", effect };
   }
+
   if (matched.length > 1) {
     return { kind: "ambiguous", sequences: matched.map(effect => effect.issuedAtSequence) };
   }
+
   return { kind: "none" };
 }
 
@@ -148,6 +152,7 @@ function settlementOf(
   if (last === undefined) {
     return undefined;
   }
+
   return last.type === "effect_committed" ? "committed" : "failed";
 }
 
@@ -156,6 +161,7 @@ export async function reconcile(request: ReconcileRequest, ctx: CliContext): Pro
     return refuse(EXIT_CODES.USAGE, `invalid session id: ${request.session}`,
       "use letters, digits, dot, dash and underscore, at most 128 characters");
   }
+
   const verdict = request.outcome;
   const writing = verdict !== undefined;
   if (writing) {
@@ -180,13 +186,16 @@ export async function reconcile(request: ReconcileRequest, ctx: CliContext): Pro
         ? "no such session; `trylo session list` shows the resumable ones"
         : "another trylo process may hold the session lock; retry once it exits");
   }
+
   try {
     const read = await store.read();
     if (!read.ok) {
       return refuse(EXIT_CODES.CONFIG, `session ${request.session} is not readable: ${read.code}`,
         "a session that cannot be proven intact is never partially reconciled");
     }
+
     const pending = read.session.pendingEffects;
+
     if (!writing) {
       const calls = transcriptCalls(read.session.transcript);
       return {
@@ -203,6 +212,7 @@ export async function reconcile(request: ReconcileRequest, ctx: CliContext): Pro
         `${request.key} is unresolved more than once in turn ${request.turn}`,
         `issued at journal sequences ${addressed.sequences.join(", ")}; a verdict must name one`);
     }
+
     if (addressed.kind === "none") {
       // The effect may already be settled — by this command, or by a run that
       // later proved its own outcome. Repeating the same verdict is then a
@@ -212,11 +222,13 @@ export async function reconcile(request: ReconcileRequest, ctx: CliContext): Pro
       if (settled === outcome) {
         return { kind: "already_recorded", key: request.key ?? "", outcome };
       }
+
       if (settled !== undefined) {
         return refuse(EXIT_CODES.CONFIG,
           `${request.key} in turn ${request.turn} is already recorded as ${settled}`,
           "a second verdict cannot overwrite the first; the journal is append-only");
       }
+
       return refuse(EXIT_CODES.CONFIG,
         `no unresolved effect matches key ${request.key} in turn ${request.turn}`,
         pending.length === 0
@@ -230,6 +242,7 @@ export async function reconcile(request: ReconcileRequest, ctx: CliContext): Pro
       return refuse(EXIT_CODES.CONFIG, `could not record the verdict for ${target.key}`,
         "the session file rejected the append; nothing was changed");
     }
+
     return { kind: "recorded", key: target.key, outcome, sequence: appended };
   } finally {
     await store.release();
@@ -240,6 +253,7 @@ export async function reconcile(request: ReconcileRequest, ctx: CliContext): Pro
 function viewOf(effect: PendingEffect, calls: ReadonlyMap<string, ToolCallFact>): PendingView {
   const callId = toolCallIdOfEffectKey(effect.key);
   const call = callId === undefined ? undefined : calls.get(callId);
+
   return {
     turn: effect.turnId,
     key: effect.key,
@@ -301,19 +315,24 @@ export function reportReconcile(ctx: CliContext, request: ReconcileRequest, resu
   if (result.kind === "refused") {
     return reportFailure(ctx, { exitCode: result.exitCode, message: result.message, hint: result.hint });
   }
+
   if (result.kind === "listed") {
     if (request.json) {
       ctx.stdout(`${JSON.stringify({ pending: result.pending, openBlocks: result.openBlocks })}\n`);
       return result.pending.length === 0 ? EXIT_CODES.OK : EXIT_CODES.CONFIG;
     }
+
     if (result.pending.length === 0) {
       ctx.stdout(`session ${request.session} has nothing to reconcile\n`);
       return EXIT_CODES.OK;
     }
+
     ctx.stdout(`${result.pending.length} unresolved action(s) in ${request.session}:\n`);
+
     for (const pending of result.pending) {
       ctx.stdout(`  turn ${pending.turn ?? "-"}  key ${pending.key}  issued at journal sequence ${pending.issuedAtSequence}\n`);
       ctx.stdout(`    issued ${pending.issuedAt}\n`);
+
       if (pending.tool === undefined) {
         ctx.stdout("    the journal holds no call for this key: only the issued intent survived\n");
       } else {
@@ -321,19 +340,25 @@ export function reportReconcile(ctx: CliContext, request: ReconcileRequest, resu
         ctx.stdout(`    arguments ${JSON.stringify(pending.arguments ?? {})}\n`);
       }
     }
+
     if (result.openBlocks > 0) {
       ctx.stdout(`  ${result.openBlocks} block(s) were still open when the run stopped; they are shown on resume, never replayed\n`);
     }
+
     ctx.stdout("\nrecord one verdict with:\n");
     ctx.stdout(`  trylo session reconcile ${request.session} --turn <t> --key <k> --outcome committed|failed --evidence "<what you checked>"\n`);
+
     // Non-zero on purpose: a session with unknowns stays blocked, and this is
     // the same condition that refuses `trylo --resume`.
     return EXIT_CODES.CONFIG;
   }
+
   if (result.kind === "already_recorded") {
     ctx.stdout(`${result.key} is already recorded as ${result.outcome}; nothing changed\n`);
     return EXIT_CODES.OK;
   }
+
   ctx.stdout(`recorded ${result.outcome} for ${result.key} at journal sequence ${result.sequence}\n`);
+
   return EXIT_CODES.OK;
 }

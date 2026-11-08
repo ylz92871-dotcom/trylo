@@ -40,15 +40,18 @@ export function applyBurstDecisions(list: ReadonlyArray<BurstDecision>, ops: Pas
 /** The Enter key, once the burst machine has had its say. */
 export function applyBurstEnter(list: ReadonlyArray<BurstDecision>, ops: PasteOps): void {
   let submitRequested = false;
+
   for (const decision of list) {
     if (decision.kind === "pass") {
       ops.buffer.insert(decision.text);
       continue;
     }
+
     if (decision.kind === "submit") {
       submitRequested = true;
       continue;
     }
+
     if (decision.kind === "flushed") {
       if (decision.text.length > 0) {
         if (decision.isPaste) {
@@ -62,6 +65,7 @@ export function applyBurstEnter(list: ReadonlyArray<BurstDecision>, ops: PasteOp
       }
     }
   }
+
   if (submitRequested) {
     // The continuation convention the whole build shares (see `multiline.ts`):
     // a single trailing backslash asks for another line instead of a

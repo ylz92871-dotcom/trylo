@@ -48,6 +48,7 @@ function cutStream(events: ProviderEvent[]): ReturnType<typeof createFakeProvide
 function dyingProvider(prefix: ProviderEvent[]): ReturnType<typeof createFakeProvider> {
   return {
     ...createFakeProvider([prefix]),
+
     stream: async function* () {
       for (const event of prefix) yield event;
       throw new Error("connection reset");
@@ -58,9 +59,11 @@ function dyingProvider(prefix: ProviderEvent[]): ReturnType<typeof createFakePro
 test("a text block left open by a killed process is durable, not lost", async () => {
   const root = temp();
   const session = createNdjsonSessionStore({ path: join(root, "s.ndjson") });
+
   try {
     await session.start({ sessionId: "s", createdAt: "1970-01-01T00:00:00.000Z", fingerprint: FINGERPRINT });
     const recorder = createTurnRecorder({ session, sessionId: "s", turnId: "t", now: () => 0 })!;
+
     await recorder.start({ startedAt: 0, toolCatalogHash: "h" });
     const result = await runTurn({
       profile: emptyProfileLoader(),
@@ -74,11 +77,15 @@ test("a text block left open by a killed process is durable, not lost", async ()
       ]),
       tools: createFakeTools([], []),
     }, { sessionId: "s", turnId: "t", correlationId: "c", text: "go" });
+
     assert.equal(result.state.phase, "terminal", "a cut stream ends the turn");
 
     const recovered = await session.read();
+
     assert.equal(recovered.ok, true);
+
     if (!recovered.ok) return;
+
     assert.deepEqual(
       recovered.session.partials.map(p => p.text),
       ["I was in the middle of saying something when I died"],
@@ -99,14 +106,17 @@ test("a text block left open by a killed process is durable, not lost", async ()
 test("partial tool arguments are preserved but never become an executable call", async () => {
   const root = temp();
   const session = createNdjsonSessionStore({ path: join(root, "s.ndjson") });
+
   try {
     await session.start({ sessionId: "s", createdAt: "1970-01-01T00:00:00.000Z", fingerprint: FINGERPRINT });
     const recorder = createTurnRecorder({ session, sessionId: "s", turnId: "t", now: () => 0 })!;
+
     await recorder.start({ startedAt: 0, toolCatalogHash: "h" });
     const behaviors = [{
       outcome: "result" as const, value: {}, output: "SHOULD-NOT-RUN", truncated: false,
     }];
     const controller = new AbortController();
+
     void controller;
     const running = runTurn({
       profile: emptyProfileLoader(),
@@ -119,11 +129,15 @@ test("partial tool arguments are preserved but never become an executable call",
       ]),
       tools: createFakeTools([...behaviors], [echoBinding({ needsApproval: false })]),
     }, { sessionId: "s", turnId: "t", correlationId: "c", text: "go" });
+
     await running;
 
     const records = await session.readRecords();
+
     assert.equal(records.ok, true);
+
     if (!records.ok) return;
+
     // Nothing was executed: no intent was ever recorded for an unfinished call.
     assert.equal(
       records.view.records.filter(r => r.type === "effect_issued").length,
@@ -131,9 +145,13 @@ test("partial tool arguments are preserved but never become an executable call",
       "unclosed arguments must not be recorded as an issued action",
     );
     const recovered = await session.read();
+
     assert.equal(recovered.ok, true);
+
     if (!recovered.ok) return;
+
     const toolPartial = recovered.session.partials.find(p => p.kind === "tool_input");
+
     assert.equal(toolPartial?.text, '{"text":"half');
     assert.equal(toolPartial?.name, "echo");
     assert.deepEqual(recovered.session.reconcileRequired, [], "nothing crossed the execution boundary");
@@ -146,11 +164,14 @@ test("partial tool arguments are preserved but never become an executable call",
 test("the same fact submitted twice is skipped; a changed fact at the same ordinal is refused", async () => {
   const root = temp();
   const session = createNdjsonSessionStore({ path: join(root, "s.ndjson") });
+
   try {
     await session.start({ sessionId: "s", createdAt: "1970-01-01T00:00:00.000Z", fingerprint: FINGERPRINT });
     const recorder = createTurnRecorder({ session, sessionId: "s", turnId: "t", now: () => 0 })!;
+
     await recorder.start({ startedAt: 0, toolCatalogHash: "h" });
     const item = { kind: "user" as const, sequence: 0, text: "once" };
+
     assert.deepEqual(
       await recorder.progress.flush({ transcript: [item], envelopes: [] }),
       { ok: true },
@@ -163,15 +184,20 @@ test("the same fact submitted twice is skipped; a changed fact at the same ordin
       "a re-delivered identical fact must be skipped, not counted as a conflict",
     );
     const records = await session.readRecords();
+
     assert.equal(records.ok, true);
+
     if (!records.ok) return;
+
     assert.equal(records.view.records.filter(r => r.type === "transcript_item").length, 1);
 
     const conflict = await recorder.progress.flush({
       transcript: [{ kind: "user", sequence: 0, text: "DIFFERENT" }],
       envelopes: [],
     });
+
     assert.equal(conflict.ok, false);
+
     if (!conflict.ok) {
       assert.equal(conflict.code, "progress_sequence_conflict:transcript_item");
     }
@@ -184,20 +210,26 @@ test("the same fact submitted twice is skipped; a changed fact at the same ordin
 test("a resumed history re-submitted on the first flush is not a conflict", async () => {
   const root = temp();
   const session = createNdjsonSessionStore({ path: join(root, "s.ndjson") });
+
   try {
     await session.start({ sessionId: "s", createdAt: "1970-01-01T00:00:00.000Z", fingerprint: FINGERPRINT });
     const resumed = [{ kind: "user" as const, sequence: 0, text: "earlier" }];
     const recorder = createTurnRecorder({ session, sessionId: "s", turnId: "t2", resumeTranscript: resumed, now: () => 0 })!;
+
     await recorder.start({ startedAt: 0, toolCatalogHash: "h" });
     // The turn replays the whole history it resumed from, then adds its own.
     const flushed = await recorder.progress.flush({
       transcript: [...resumed, { kind: "user", sequence: 1, text: "now" }],
       envelopes: [],
     });
+
     assert.deepEqual(flushed, { ok: true }, "already-durable history must be recognised, not refused");
     const records = await session.readRecords();
+
     assert.equal(records.ok, true);
+
     if (!records.ok) return;
+
     assert.equal(records.view.records.filter(r => r.type === "transcript_item").length, 1, "only the new fact is written");
   } finally {
     await session.release();
@@ -208,6 +240,7 @@ test("a resumed history re-submitted on the first flush is not a conflict", asyn
 test("a stream_partial whose payload is not a partial fails closed on recovery", async () => {
   const root = temp();
   const session = createNdjsonSessionStore({ path: join(root, "s.ndjson") });
+
   try {
     await session.start({ sessionId: "s", createdAt: "1970-01-01T00:00:00.000Z", fingerprint: FINGERPRINT });
     const written = await session.append({
@@ -217,9 +250,12 @@ test("a stream_partial whose payload is not a partial fails closed on recovery",
       at: "1970-01-01T00:00:01.000Z",
       payload: { kind: "assistant_text", blockId: "b1" },
     });
+
     assert.equal(written.ok, true);
     const recovered = await session.read();
+
     assert.equal(recovered.ok, false);
+
     if (!recovered.ok) {
       assert.equal(recovered.code, "mid_file_corruption");
       assert.match(recovered.detail, /stream_partial/);
@@ -233,18 +269,24 @@ test("a stream_partial whose payload is not a partial fails closed on recovery",
 test("preserved text crosses the redaction boundary before it reaches disk", async () => {
   const root = temp();
   const session = createNdjsonSessionStore({ path: join(root, "s.ndjson") });
+
   try {
     await session.start({ sessionId: "s", createdAt: "1970-01-01T00:00:00.000Z", fingerprint: FINGERPRINT });
     const recorder = createTurnRecorder({ session, sessionId: "s", turnId: "t", now: () => 0 })!;
+
     await recorder.start({ startedAt: 0, toolCatalogHash: "h" });
     await recorder.progress.preserve?.([
       { kind: "assistant_text", blockId: "b1", text: "key is sk-abcdef1234567890 and file /home/x/secret.txt" },
     ]);
     const records = await session.readRecords();
+
     assert.equal(records.ok, true);
+
     if (!records.ok) return;
+
     const stored = records.view.records.find(r => r.type === "stream_partial");
     const text = typeof stored?.payload.text === "string" ? stored.payload.text : "";
+
     assert.equal(text.includes("sk-abcdef1234567890"), false);
     assert.match(text, /\[secret\]/);
   } finally {
@@ -256,16 +298,23 @@ test("preserved text crosses the redaction boundary before it reaches disk", asy
 test("the newest record for one block wins when a stream appends many", async () => {
   const root = temp();
   const session = createNdjsonSessionStore({ path: join(root, "s.ndjson") });
+
   try {
     await session.start({ sessionId: "s", createdAt: "1970-01-01T00:00:00.000Z", fingerprint: FINGERPRINT });
     const recorder = createTurnRecorder({ session, sessionId: "s", turnId: "t", now: () => 0 })!;
+
     await recorder.start({ startedAt: 0, toolCatalogHash: "h" });
+
     for (const text of ["a", "ab", "abc"]) {
       await recorder.progress.preserve?.([{ kind: "assistant_text", blockId: "b1", text }]);
     }
+
     const recovered = await session.read();
+
     assert.equal(recovered.ok, true);
+
     if (!recovered.ok) return;
+
     assert.deepEqual(recovered.session.partials.map(p => p.text), ["abc"]);
   } finally {
     await session.release();

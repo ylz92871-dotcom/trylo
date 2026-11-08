@@ -15,9 +15,12 @@ describe("buildLspPool", () => {
 
   it("authorizes exactly the configured commands", async () => {
     const authorize = lspAuthorizer([{ serverName: "ts", command: "tsserver", args: [], extensions: ["ts"] }]);
+
     assert.deepEqual(await authorize("tsserver", []), { ok: true });
     const refused = await authorize("tsserver.exe", []);
+
     assert.equal(refused.ok, false);
+
     if (!refused.ok) {
       assert.equal(refused.code, "lsp_start_denied");
     }

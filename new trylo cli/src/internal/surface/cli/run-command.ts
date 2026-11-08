@@ -1,24 +1,20 @@
-import path from "node:path";
+import { resolveWorkspaceRoot } from "./run-workspace.js";
+import type { RunScaffold } from "./run-scaffold.js";
 import { EXIT_CODES, type ExitCode } from "../../protocol/cli-stream.js";
-import type { TokenManagerLike } from "../../adapters/provider/openai-compatible.js";
-import type { SystemPromptDirective, ReasoningEffort } from "../../ports/provider.js";
-import type { JsonObject } from "../../protocol/envelope.js";
 import type { ToolPort } from "../../ports/tools.js";
 import { resolveRequestOptions } from "./run-request-options.js";
-import type { SessionPort } from "../../ports/session.js";
-import type { CompactWindow } from "../../ports/compaction.js";
-import type { SessionRecord } from "../../ports/session.js";
-import type { Transcript } from "../../protocol/transcript.js";
-import type { CompactSummaryMode, LearningSwitch, OutputFormat, RunCommandOptions } from "./args.js";
-import type { ProviderKind } from "../../adapters/provider/providers-file.js";
-import { createWarmRegistry, type WarmRegistry } from "../../adapters/provider/warm.js";
+import type { RunCommandOptions } from "./args.js";
+import { createWarmRegistry } from "../../adapters/provider/warm.js";
 import { resolveConnectionSettings } from "./connection-settings.js";
 import { reasoningSummaryOptions } from "./provider-build.js";
 import type { CliContext } from "./context.js";
+import { bindWorkflowImprovement } from "./workflow-turn-wiring.js";
 import { permissionChoice } from "./permission-for-run.js";
-import { createSessionPermissions, type SessionPermissions } from "./session-permissions.js";
-import type { TurnOutcome } from "./host.js";
-import type { ProjectContext } from "./host.js";
+import { createSessionPermissions } from "./session-permissions.js";
+import { writeLastMessage } from "./run-output.js";
+
+export { writeLastMessage } from "./run-output.js";
+
 import { projectContextFor } from "./project-rules.js";
 import { runOneTurn } from "./run-one-turn.js";
 import type { CliSink } from "./render.js";
@@ -28,146 +24,45 @@ import {
   FIXTURE_FIRST_RUN_GUIDANCE,
   runCredentialFor,
 } from "./provider-selection.js";
-import { permissionLedgerPath, tryloHome } from "./session-paths.js";
+import { isValidSessionId, permissionLedgerPath, tryloHome } from "./session-paths.js";
 import { webBackendsFor } from "./web-wiring.js";
-import type { WebToolsConfig } from "../../adapters/tools/web/index.js";
-import { catalogHash, workspaceIdentity } from "./wiring.js";
+import { catalogHash } from "./wiring.js";
 import { effectiveContextCeiling } from "./run-context-ceiling.js";
 import { compatibleCatalogHashes } from "./wiring-catalog.js";
 import { resolveOutputStyleAppend } from "./output-style-resolve.js";
 import { createRunExecution } from "./run-execution-wiring.js";
-import type { RunExecution } from "./run-execution-wiring.js";
 import { observeRunCancellation } from "./run-interrupt.js";
 import { closeRunResources } from "./run-resources.js";
-import { createAskUserTools, type AskUserSession } from "../../adapters/tools/ask-user/index.js";
+import { createAskUserTools } from "../../adapters/tools/ask-user/index.js";
 import { restoreQuestions } from "../../adapters/tools/ask-user/recovery.js";
 import { answerQuestionInput } from "./question-input.js";
 import { resolvePrompt } from "./run-prompt.js";
+
 export { resolvePrompt } from "./run-prompt.js";
+
 import { answerStdioInput, stdioQuestions } from "./stdio-questions.js";
 import type { StdioSession } from "./stdio-session.js";
+import { prepareGoalRun } from "./goal-run.js";
+import { openWorkflowRun } from "./workflow-run-wiring.js";
+import { composeAdditionalTools } from "./additional-tools.js";
+import { emitWorkflowSnapshot } from "./workflow-stream.js";
+import { createContentIssueContextReader } from "../../integration/learning-content/index.js";
+import { methodBoardRoot } from "./learning-sink.js";
+import { projectCentralDomainFeedback } from "./central-learning-sources.js";
+import { restoreCentralRuntimeRunOptions } from "./central-runtime-settings.js";
+import { resolveCentralRuntimeWorkspaceIdentity } from "./central-runtime-workspace-identity.js";
 
 export type { RunFailure } from "./run-failure.js";
 export { reportFailure } from "./run-failure.js";
 export { effectiveContextCeiling };
 
-/**
- * `runOneTurn` moved to `run-one-turn.ts`; re-exported because the REPL, the TUI
- * and the provider-warm tests have always reached it through this module.
- */
+/** Compatibility entry for REPL, TUI and provider-warm callers. */
 export { runOneTurn } from "./run-one-turn.js";
 
-/**
- * `trylo run` preparation and execution.
- *
- * Preparation is separated from execution because the REPL needs the same
- * scaffolding without re-parsing arguments. Neither path builds a loop: both
- * hand the prepared facts to the one run host. Session lifecycle lives in
- * `session-open.ts` and settings resolution in `run-settings.ts`.
- */
+/** Run and REPL share preparation. The host owns execution; session-open and
+ * run-settings keep their existing lifecycle and configuration ownership. */
 
-export type RunScaffold = {
-  readonly additionalTools?: ToolPort;
-  readonly bindAgentTools?: (tools: import("../../ports/tools.js").ToolPort | undefined) => void;
-  readonly questions?: AskUserSession;
-  readonly execution?: RunExecution;
-  /** Shared across turns; UI changes policy through this application controller. */
-  readonly permissions?: SessionPermissions;
-  /** The selected id: a shipped one, or one declared in `providers.json`. */
-  readonly providerId: string;
-  /** The adapter family. It is what the provider is actually built from. */
-  readonly providerKind: ProviderKind;
-  /** Responses summary opt-in derived from the selected provider's declaration. */
-  readonly reasoningSummary?: "auto";
-  readonly reasoningEffort?: ReasoningEffort;
-  readonly model: string;
-  readonly endpoint: string;
-  readonly format: OutputFormat;
-  /** The credential `CredentialPort` resolved, when one did. Never logged. */
-  readonly apiKey: string | undefined;
-  readonly tokenManager?: TokenManagerLike | undefined;
-  readonly accountId?: string | undefined;
-  readonly workspaceRoot: string;
-  readonly workspaceId: string;
-  /** Where undo lives: outside the workspace, so a snapshot never holds itself. */
-  readonly checkpointRoot: string;
-  readonly sessionId: string;
-  readonly session?: SessionPort;
-  readonly resumeTranscript?: Transcript;
-  /** The window a resumed journal projects under, so the model sees the short past. */
-  readonly resumeView?: CompactWindow;
-  /** The journal a resume was loaded from, so a compaction projects over it. */
-  readonly resumeRecords?: ReadonlyArray<SessionRecord>;
-  readonly maxIterations?: number;
-  readonly maxTokens?: number;
-  readonly toolSelection?: readonly string[];
-  /**
-   * Caller system prompt for every request this run builds (WP18.3: legacy
-   * L67 replace/append). Absent — every run that never passed the flags —
-   * means the seeds are exactly the ones the un-wired path assembles.
-   */
-  readonly systemPrompt?: SystemPromptDirective;
-  /** Text appended as a system message after the seeds; applied after `systemPrompt`. */
-  readonly systemPromptAppend?: string;
-  /**
-   * JSON Schema the final answer must satisfy (WP18.3: C74). Sent as the
-   * wire's own `response_format`; absent means the provider decides.
-   */
-  readonly responseSchema?: JsonObject;
-  /**
-   * Model a non-interactive run retries once on after a transient provider
-   * failure (WP18.2: L05). Absent means the transient failure is the turn's
-   * failure. Validated to differ from the primary model.
-   */
-  readonly fallbackModel?: string;
-  /** The context ceiling, carried through to the run's budget and compaction. */
-  readonly contextTokenLimit?: number;
-  /** The dollar ceiling and the pricing pair that makes it enforceable (L07). */
-  readonly maxBudgetUsd?: number;
-  readonly inputPricePerMTok?: number;
-  readonly outputPricePerMTok?: number;
-  /** `--learning`; absent means the method subsystem is never constructed. */
-  readonly learning?: LearningSwitch;
-  /** Path to the language-server file (WP12 L60); absent means no `lsp_navigate`. */
-  readonly lspConfigFile?: string;
-  /** The `shell` setting, unresolved (WP05 C06/C07); absent means the direct path. */
-  readonly shell?: string;
-  readonly fileAccess?: RunCommandOptions["fileAccess"];
-  /**
-   * `--permission-ledger`; absent means no durable Permission ledger is opened
-   * and the run is byte-identical to one that never heard of it.
-   */
-  readonly permissionLedger?: { readonly path: string };
-  /** `--subagent`; absent means the subagent runtime is never constructed. */
-  readonly subagentEnabled?: true;
-  /** `--allow-web`; absent means the web tool port is never constructed. */
-  readonly allowWeb?: true;
-  /**
-   * 网络工具的后端（WP20）。Absent —— 与 `allowWeb` 缺席同一批 —— 意味着
-   * `web_fetch` 只有出厂能力，且没有 `web_search`（R1）。
-   */
-  readonly web?: WebToolsConfig;
-  /** `--compact-summary`; absent means the shipped extractive summary author stays. */
-  readonly compactSummary?: CompactSummaryMode;
-  /** Releases the session lock. Safe to call more than once. */
-  readonly close: () => Promise<void>;
-  /**
-   * Initial context; runOneTurn reloads it at the turn boundary.
-   *
-   * Resolved through the same adapter so `trylo run`, the REPL and the TUI all
-   * answer "which rules is this run using" identically (WP-CLI-B1 §3.3). Absent
-   * only when the project has no rule file at all, in which case there is nothing
-   * to carry and the field stays absent rather than becoming an empty list.
-   */
-  readonly projectContext?: ProjectContext;
-  /**
-   * The warm layer, when the surface runs more than one turn. Absent on
-   * `trylo run`, which has nothing to reuse; present on the REPL and the TUI,
-   * where it is what makes the second turn warm instead of cold.
-   */
-  readonly warm?: WarmRegistry;
-  readonly warnings: ReadonlyArray<string>;
-};
+export type { RunScaffold } from "./run-scaffold.js";
 
 export type PrepareInput = {
   readonly options: RunCommandOptions;
@@ -179,29 +74,37 @@ export function isRunFailure(value: RunScaffold | RunFailure): value is RunFailu
   return !("workspaceRoot" in value);
 }
 
-function resolveWorkspaceRoot(ctx: CliContext, requested: string | undefined): string | RunFailure {
-  const root = requested === undefined ? ctx.cwd : path.resolve(ctx.cwd, requested);
-  if (!ctx.isDirectory(root)) {
-    return fail(
-      EXIT_CODES.USAGE,
-      `workspace is not a directory: ${root}`,
-      "pass --workspace <path> pointing at an existing directory",
-    );
-  }
-  return root;
-}
-
 export async function prepareRun(
   ctx: CliContext,
   input: PrepareInput,
 ): Promise<RunScaffold | RunFailure> {
-  const root = resolveWorkspaceRoot(ctx, input.options.workspace);
-  if (typeof root !== "string") {
-    return root;
+  const requestedRoot = resolveWorkspaceRoot(ctx, input.options.workspace);
+  if (typeof requestedRoot !== "string") {
+    return requestedRoot;
   }
+
+  input = { ...input, options: await restoreCentralRuntimeRunOptions(ctx, input.options, requestedRoot) };
+  const identity = await resolveCentralRuntimeWorkspaceIdentity(ctx, requestedRoot,
+    { allowBudgetLookup: input.options.centralLearning !== undefined,
+      ...(input.options.resume !== undefined && isValidSessionId(input.options.resume) ? { resumeSessionId: input.options.resume } : {}) });
+  if (!identity.ok) return fail(EXIT_CODES.CONFIG, identity.reason,
+    "inspect the original workspace path, runtime intent and budget; an ambiguous identity cannot open another authorization");
+
+  const nativeIdentity = identity.value;
+  const root = nativeIdentity.resumedSession?.workspaceRoot ?? nativeIdentity.workspaceRoot;
+
+  ctx = { ...ctx, workspaceIdentity: nativeIdentity };
+
+  if (input.options.centralLearning !== undefined && input.options.session === undefined
+    && input.options.resume === undefined && input.options.resumeLast !== true) {
+    input = { ...input, options: { ...input.options, session: ctx.newId("central-learning-session") } };
+  }
+
   const connection = resolveConnectionSettings(ctx, input.options);
   if ("exitCode" in connection) return connection;
+
   const { settings, provider: selection } = connection;
+
   if (selection.requestedBy === undefined && selection.kind.startsWith("fixture")) {
     // Not an error and not a refusal: the fixture is the documented default and
     // the development path depends on it. What is not acceptable is a fixed
@@ -212,6 +115,7 @@ export async function prepareRun(
 `);
     }
   }
+
   // Asked for by family, not by id: the ledger holds one credential per
   // *account*, and a declared endpoint is not an account. A declaration that
   // names one pins it, so this endpoint cannot inherit another host's key when
@@ -220,9 +124,11 @@ export async function prepareRun(
   if ("exitCode" in credential) {
     return credential;
   }
-  const hash = catalogHash(root, input.options.toolSelection);
-  const workspaceId = workspaceIdentity(root);
-  const projectContext = projectContextFor(ctx, root);
+
+  const toolSelection = input.options.toolSelection ?? settings.toolSelection;
+  const hash = catalogHash(root, toolSelection);
+  const workspaceId = nativeIdentity.resumedSession?.workspaceId ?? nativeIdentity.workspaceId;
+  const projectContext = projectContextFor({ ...ctx, cwd: nativeIdentity.physicalRoot }, nativeIdentity.physicalRoot);
   const sessionId = input.options.session ?? input.options.resume ?? ctx.newId("eph");
   const contextTokenLimit = effectiveContextCeiling(settings.contextTokenLimit, selection.contextWindow, settings.modelContextWindow);
   // WP18.2/18.3: caller prompt, schema and fallback resolve here — files are
@@ -235,6 +141,7 @@ export async function prepareRun(
   if ("exitCode" in requested) {
     return requested;
   }
+
   // WP24.2/L48: the style prompt joins the caller's own append in the
   // scaffold below. Resolution lives in `output-style-resolve.ts` (file-size
   // gate); absent means nothing was read and the request is byte-identical
@@ -243,18 +150,23 @@ export async function prepareRun(
   if ("exitCode" in style) {
     return style;
   }
+
   // Every rejecting configuration check precedes acquisition of the writer lease.
-  const opened = await openSession(ctx, input.options, fingerprint({ ...settings, providerId: selection.providerId, model: selection.model }, workspaceId, hash), compatibleCatalogHashes(root, input.options.toolSelection));
+  const opened = await openSession(ctx, input.options, fingerprint({ ...settings, providerId: selection.providerId, model: selection.model }, workspaceId, hash, root), compatibleCatalogHashes(root, toolSelection));
   if (opened.kind === "failed") return opened.failure;
+
   const permissions = createSessionPermissions(permissionChoice(input.options));
   const shell = input.options.shell ?? settings.shell;
-  const execution = createRunExecution(root, { homeDir: ctx.homeDir, env: ctx.env,
+  const execution = createRunExecution(nativeIdentity.physicalRoot, { homeDir: ctx.homeDir, env: ctx.env,
     ...(input.options.fileAccess === undefined ? {} : { fileAccess: input.options.fileAccess }),
     ...(input.options.shellIsolation === undefined ? {} : { shellIsolation: input.options.shellIsolation }) });
   const questions = createAskUserTools({ surfaceAnswersOnly: true, nextRequestId: () => ctx.newId("ask"), restored: opened.kind === "resume" ? restoreQuestions(opened.transcript) : [] });
+
   return {
     questions,
     ...(input.options.toolSelection === undefined ? {} : { toolSelection: input.options.toolSelection }),
+    ...(settings.toolSelection === undefined ? {} : { configuredToolSelection: settings.toolSelection }),
+    ...(input.options.toolSelection === undefined ? {} : { toolSelectionCeiling: input.options.toolSelection }),
     permissions,
     execution,
     // One warm layer per prepared run, so a surface that runs several turns
@@ -272,6 +184,7 @@ export async function prepareRun(
     ...(credential.accountId !== undefined ? { accountId: credential.accountId } : {}),
     workspaceRoot: root,
     workspaceId,
+    workspaceIdentity: nativeIdentity,
     checkpointRoot: `${tryloHome(ctx.homeDir, ctx.env)}/checkpoints`,
     sessionId,
     ...(opened.kind === "none" ? {} : { session: opened.session }),
@@ -300,11 +213,28 @@ export async function prepareRun(
             .filter((part) => part !== undefined && part.length > 0)
             .join("\n\n"),
         })),
+    ...(input.options.centralRuntimePolicy === undefined ? {} : { centralRuntimePolicy: input.options.centralRuntimePolicy }),
+    ...(input.options.centralLearningThoughtMaxTokens === undefined ? {} : { centralLearningThoughtMaxTokens: input.options.centralLearningThoughtMaxTokens }),
+    ...(input.options.centralLearning === undefined ? {} : { centralLearning: input.options.centralLearning,
+      centralLearningContextForIssue: createContentIssueContextReader({ boardRoot: methodBoardRoot(ctx.homeDir, ctx.env),
+        scope: root, maximumChars: Math.min(65536, input.options.centralLearning.maxPromptChars), enabled: () => true,
+        domainFeedback: (board, issueId) => projectCentralDomainFeedback(board, { scope: root, workspaceId, issueId }),
+        secrets: credential.apiKey === undefined ? [] : [credential.apiKey] }) }),
     ...(input.options.learning === undefined ? {} : { learning: input.options.learning }),
+    ...(input.options.skillLearningAllowance === undefined ? {} : { skillLearningAllowance: input.options.skillLearningAllowance }),
+    ...(input.options.workflowLearning === undefined ? {} : { workflowLearning: input.options.workflowLearning }),
+    ...(input.options.workflowLearningBudget === undefined ? {} : { workflowLearningBudget: input.options.workflowLearningBudget }),
+    ...(input.options.workflowLearning !== true ? {} : {
+      workflowLearningBudgetId: input.options.workflowLearningBudgetId ?? ctx.newId("workflow-learning-budget"),
+    }),
+    ...(input.options.checkLearning === true ? { checkLearning: true as const, checkLearningBudget: input.options.checkLearningBudget ?? 32768 } : {}),
+    ...(input.options.collaborationLearning === undefined ? {} : { collaborationLearning: input.options.collaborationLearning }),
     ...(input.options.permissionLedger === true
       ? { permissionLedger: { path: permissionLedgerPath(ctx.homeDir, ctx.env) } }
       : {}),
     ...(input.options.subagent === true ? { subagentEnabled: true as const } : {}),
+    ...(opened.kind === "resume" && input.options.migrateProvider === true && input.options.migrateModel === true
+      ? { subagentModelMigration: selection.model } : {}),
     ...(input.options.allowWeb === true
       ? {
           allowWeb: true as const,
@@ -333,60 +263,93 @@ export async function prepareRun(
   };
 }
 
-export function writeLastMessage(
-  ctx: CliContext,
-  target: string | undefined,
-  outcome: TurnOutcome,
-): ReadonlyArray<string> {
-  if (target === undefined) {
-    return [];
-  }
-  const absolute = path.resolve(ctx.cwd, target);
-  const ok = ctx.writeFile(absolute, outcome.result.lastMessage);
-  return ok ? [] : [`output_last_message_failed:${absolute}`];
-}
-
 export async function handleRun(ctx: CliContext, options: RunCommandOptions, sink: CliSink, control?: StdioSession,
   extension?: { open(scaffold: RunScaffold): Promise<ToolPort>; close(): Promise<void> }): Promise<ExitCode> {
+  if ((options.workflowVersion !== undefined || options.workflowLearning === true) && options.session === undefined && options.resume === undefined) {
+    options = { ...options, session: ctx.newId("workflow-run") };
+  }
+
   const permissionMode = ctx.stdinIsTty ? "interactive" : "non_interactive";
   const scaffold = await prepareRun(ctx, { options, sink, permissionMode });
   if (isRunFailure(scaffold)) {
     return reportFailure(ctx, scaffold);
   }
+
   const interrupts = observeRunCancellation(ctx);
+  let workflow: Exclude<Awaited<ReturnType<typeof openWorkflowRun>>, RunFailure> = undefined;
+  let automatic: import("./workflow-auto-wiring.js").AutomaticWorkflow | undefined;
+  let improvement: ReturnType<typeof import("./workflow-improvement-wiring.js").openWorkflowImprovement> = undefined;
+
   try {
-    const additionalTools = await extension?.open(scaffold);
-    const prepared = additionalTools === undefined ? scaffold : { ...scaffold, additionalTools };
+    const extensionTools = await extension?.open(scaffold);
+    const goalRun = await prepareGoalRun(scaffold, control, sink, ctx);
+    if (goalRun.kind === "updated") return EXIT_CODES.OK;
+
     const prompt = await resolvePrompt(ctx, options);
     if ("exitCode" in prompt) {
       return reportFailure(ctx, prompt);
     }
+
     const cancel = control === undefined ? interrupts.signal : AbortSignal.any([interrupts.signal, control.signal]);
+
+    if (options.workflowLearning === true && options.centralLearning === undefined && options.workflowCollection !== "disabled") {
+      automatic = await (await import("./workflow-auto-wiring.js")).openAutomaticWorkflow(ctx, options, scaffold, prompt.text, cancel, "normal_improvement");
+      improvement = (await import("./workflow-improvement-wiring.js")).openWorkflowImprovement(ctx, scaffold,
+        automatic.learningAllowanceRemaining ?? options.workflowLearningBudget ?? 16000, automatic.legacyContext);
+    }
+
+    const workflowResult = await openWorkflowRun(ctx, options, goalRun.scaffold, automatic?.nomination,
+      trace => emitWorkflowSnapshot(ctx, { ...options, format: scaffold.format }, trace));
+    if (workflowResult !== undefined && "message" in workflowResult) return reportFailure(ctx, workflowResult);
+
+    workflow = workflowResult;
+    const effective = workflow?.scaffold ?? goalRun.scaffold;
+    const extensionBase = extensionTools ?? effective.additionalTools;
+    const legacyTools = extensionBase === undefined ? workflow?.tools : workflow === undefined ? extensionBase : composeAdditionalTools(extensionBase, workflow.tools);
+    const preparedBase = { ...effective, ...(legacyTools === undefined ? {} : { additionalTools: legacyTools }) };
+    const prepared = improvement === undefined ? preparedBase : bindWorkflowImprovement(preparedBase, improvement);
+    const observed = workflow === undefined ? ctx : { ...ctx, onRunEnvelope: (envelope: import("../../protocol/envelope.js").Envelope) => {
+      workflow?.observe(envelope);
+      ctx.onRunEnvelope?.(envelope);
+    } };
     const promptText = prompt.text.trim() === "/compact" ? "/compact" : control === undefined ? await answerQuestionInput(scaffold.questions, prompt.text, ctx.readLine)
       : await answerStdioInput(scaffold.questions, control, prompt.text, cancel);
     const outcome = await runOneTurn(
-      ctx,
+      observed,
       control === undefined ? prepared : { ...prepared, bindAgentTools: control.bindAgentTools,
         ...(scaffold.questions === undefined ? {} : { questions: stdioQuestions(scaffold.questions, control) }) },
       promptText,
-      sink,
+      goalRun.sink,
       permissionMode,
       permissionChoice(options),
       cancel,
       control?.pendingInput,
     );
+
+    await goalRun.finish(outcome);
+
     if ("message" in outcome && "hint" in outcome) {
       return reportFailure(ctx, outcome);
     }
+
     for (const warning of [...scaffold.warnings, ...outcome.warnings]) {
       ctx.stderr(`warning: ${warning}\n`);
     }
+
     for (const warning of writeLastMessage(ctx, options.outputLastMessage, outcome)) {
       ctx.stderr(`warning: ${warning}\n`);
     }
-    return outcome.exitCode;
+
+    return workflow?.codeFor(outcome.exitCode) ?? outcome.exitCode;
   } finally {
     interrupts.close();
-    try { await extension?.close(); } finally { await scaffold.close(); }
+    try { await workflow?.finish(); } finally {
+      try {
+        await improvement?.close();
+        await automatic?.close?.();
+      } finally {
+        try { await extension?.close(); } finally { await scaffold.close(); }
+      }
+    }
   }
 }

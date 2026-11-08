@@ -7,6 +7,7 @@ import { createWorkspaceSandbox } from "../../adapters/sandbox/index.js";
 import { createWorkspaceTools } from "../../adapters/tools/index.js";
 import { APPLY_PATCH_TOOL, EDIT_FILE_TOOL, NOTEBOOK_EDIT_TOOL, RUN_SHELL_TOOL, WRITE_FILE_TOOL } from "../../adapters/tools/mutating/names.js";
 import { WEB_FETCH_TOOL } from "../../adapters/tools/web/names.js";
+import { SKILL_TOOL_NAME } from "../../adapters/tools/skill/names.js";
 import type { PermissionAction } from "../../ports/permission.js";
 import { createDenyAllPermission } from "./permission.js";
 import {
@@ -40,7 +41,15 @@ const APPROVING = [APPLY_PATCH_TOOL, EDIT_FILE_TOOL, NOTEBOOK_EDIT_TOOL, RUN_SHE
 // before its flag mounts it, so web_fetch is approvable-by-name while absent
 // from the default catalog above.
 const MEMORY_WRITERS = ["memory_remember", "memory_correct", "memory_forget"];
-const APPROVABLE_VOCAB = [...APPROVING, WEB_FETCH_TOOL, ...MEMORY_WRITERS].sort();
+const APPROVABLE_VOCAB = [...APPROVING, SKILL_TOOL_NAME, WEB_FETCH_TOOL, ...MEMORY_WRITERS].sort();
+
+test("skill approval is explicit and never inherited from --allow-writes", () => {
+  assert.equal(isApprovableToolName(SKILL_TOOL_NAME), true);
+  assert.equal(decisionFor(planPermissions({ interactive: false, allowWrites: true }), SKILL_TOOL_NAME), "denied");
+  assert.equal(decisionFor(planPermissions({ interactive: false, allowTools: [SKILL_TOOL_NAME] }), SKILL_TOOL_NAME), "approved");
+  assert.equal(decisionFor(planPermissions({ interactive: false, allowWrites: true,
+    allowTools: [SKILL_TOOL_NAME], denyTools: [SKILL_TOOL_NAME] }), SKILL_TOOL_NAME), "denied");
+});
 
 test("user memory writers accept explicit permission names without inheriting workspace grants", () => {
   for (const name of MEMORY_WRITERS) {
@@ -105,6 +114,7 @@ test("B4: a denial outranks an allowance, whichever order they were given", () =
     denyTools: [WRITE_FILE_TOOL],
     interactive: false,
   });
+
   assert.equal(decisionFor(both, WRITE_FILE_TOOL), "denied");
   assert.equal(decisionFor(both, RUN_SHELL_TOOL), "approved");
 
@@ -113,6 +123,7 @@ test("B4: a denial outranks an allowance, whichever order they were given", () =
     allowTools: [WRITE_FILE_TOOL],
     interactive: false,
   });
+
   assert.equal(decisionFor(reversed, WRITE_FILE_TOOL), "denied");
   assert.equal(decisionFor(planPermissions({ ask: "always", denyTools: [RUN_SHELL_TOOL], interactive: true }), RUN_SHELL_TOOL), "denied");
 });
@@ -128,6 +139,7 @@ test("B4: workspace readers stay approval-free; external path readers are approv
     const sandbox = createWorkspaceSandbox({ workspaceRoot: root });
     const bindings = createWorkspaceTools({ workspaceRoot: root, sandbox }).snapshot();
     const approving = bindings.filter((binding) => binding.needsApproval).map((binding) => binding.name).sort();
+
     assert.deepEqual(approving, APPROVING);
     assert.equal(
       bindings.some((binding) => !binding.needsApproval && binding.sideEffect === "read_only"),
@@ -164,6 +176,7 @@ test("D7: the default policy follows the terminal, not a guess", () => {
 
 test("B5: with no flags the plan decides exactly what deny-all decided", async () => {
   const plan = planPermissions({ interactive: false });
+
   assert.equal(plan.ask, "never");
   assert.equal(plan.allow.size, 0);
   assert.equal(plan.deny.size, 0);
@@ -171,6 +184,7 @@ test("B5: with no flags the plan decides exactly what deny-all decided", async (
   // Outside a terminal nothing can be asked, so every approving call must come
   // out denied — the same answer the port this replaced gave.
   const legacy = createDenyAllPermission();
+
   for (const name of APPROVABLE_TOOL_NAMES) {
     assert.equal(decisionFor(plan, name), "denied", `${name} was not denied by the default plan`);
     const ticket = await legacy.request(action(name));
@@ -181,20 +195,24 @@ test("B5: with no flags the plan decides exactly what deny-all decided", async (
 test("B5: an interactive plan with no flags asks about every approving tool", async () => {
   const asked: string[] = [];
   const port = planned(planPermissions({ interactive: true }), asked);
+
   for (const name of APPROVABLE_TOOL_NAMES) {
     const ticket = await port.request(action(name));
     assert.equal((await port.awaitDecision(ticket.ticketId)).resolution, "approved");
   }
+
   assert.deepEqual([...new Set(asked)].length, APPROVABLE_TOOL_NAMES.length);
 });
 
 test("D7: --ask never reaches a prompt even in a terminal", async () => {
   const asked: string[] = [];
   const port = planned(planPermissions({ ask: "never", interactive: true }), asked);
+
   for (const name of APPROVABLE_TOOL_NAMES) {
     const ticket = await port.request(action(name));
     assert.equal((await port.awaitDecision(ticket.ticketId)).resolution, "denied");
   }
+
   assert.deepEqual(asked, [], "a policy of never must not ask anybody anything");
 });
 

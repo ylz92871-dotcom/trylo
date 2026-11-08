@@ -44,10 +44,12 @@ export function projectAgui(
       detail: `kind ${envelope.kind} 不在 EVENT_KINDS 里，拒绝投影`,
     };
   }
+
   const contract = checkPayload(envelope.kind, envelope.payload);
   if (!contract.ok) {
     return { ok: false, code: contract.code, detail: contract.detail };
   }
+
   const row = AGUI_ROWS[envelope.kind];
   // snapshot 语义：**含**当前 envelope。这样 `snapshot + 其后的事件` 就是当前状态，
   // 消费方不必再猜「这个 snapshot 到底包不包含触发它的那个事件」。
@@ -61,6 +63,7 @@ export function projectAgui(
     source: { eventId: envelope.eventId, sequence: envelope.sequence, kind: envelope.kind },
     omitted: row.omitted,
   };
+
   return { ok: true, frame: freezeFrame(frame), state: nextState };
 }
 

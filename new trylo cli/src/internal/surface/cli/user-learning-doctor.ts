@@ -36,6 +36,7 @@ export function userLearningCheck(io: UserLearningDoctorIo, switchValue: string)
       detail: `user learning wired (${switchValue}); no ledger yet at ${root}`,
     };
   }
+
   return {
     id: "learning.user_policy",
     status: counts.unreadable > 0 ? "warn" : "ok",
@@ -60,17 +61,21 @@ function countRecords(raw: string): LedgerCounts {
   let signals = 0;
   let receipts = 0;
   let unreadable = 0;
+
   for (const line of raw.split("\n")) {
     if (line.trim().length === 0) {
       continue;
     }
+
     let parsed: unknown;
+
     try {
       parsed = JSON.parse(line) as unknown;
     } catch {
       unreadable += 1;
       continue;
     }
+
     const record =
       typeof parsed === "object" && parsed !== null
         ? (parsed as Record<string, unknown>)["record"]
@@ -85,5 +90,6 @@ function countRecords(raw: string): LedgerCounts {
       unreadable += 1;
     }
   }
+
   return { evidence, signals, receipts, unreadable };
 }

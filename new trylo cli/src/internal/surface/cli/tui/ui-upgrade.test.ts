@@ -13,6 +13,7 @@ test("the input prompt is visible before the first keystroke", () => {
     io: { write: text => output.push(text), columns: () => 80 },
     keys: { start: () => {}, suspend: () => {}, resume: () => {}, stop: () => {} },
   });
+
   void composer.compose("> ");
   assert.ok(output.join("").includes("> "));
   composer.stop();
@@ -25,6 +26,7 @@ test("Tab completes a command in the actual composer", async () => {
     keys: { start: handler => { feed = handler; }, suspend: () => {}, resume: () => {}, stop: () => {} },
   });
   const submitted = composer.compose("> ");
+
   feed("/comp");
   feed("\t");
   feed("\r");
@@ -56,9 +58,14 @@ test("stopping typing releases the last character through the idle scheduler", a
   const composer = createComposer({
     io: { write: text => output.push(text), columns: () => 80 },
     keys: { start: handler => { feed = handler; }, suspend: () => {}, resume: () => {}, stop: () => {} },
-    schedule: callback => { flush = callback; return () => {}; },
+
+    schedule: callback => {
+      flush = callback;
+      return () => {};
+    },
   });
   const submitted = composer.compose("> ");
+
   feed("中");
   flush();
   assert.ok(output.join("").includes("中"));
@@ -75,9 +82,11 @@ test("a selector filters, confirms and cancels without sending a message", async
   });
   const request = { title: "模型", items: [{ id: "a", label: "Alpha" }, { id: "b", label: "Beta" }] };
   const selection = composer.choose(request);
+
   feed("Bet\r");
   assert.equal(await selection, "b");
   const cancelled = composer.choose(request);
+
   feed("\x1b");
   assert.equal(await cancelled, undefined);
   assert.equal(composer.takePending(), undefined);
@@ -100,6 +109,7 @@ test("running input has a visible draft and delivers through capture", () => {
     keys: { start: handler => { feed = handler; }, suspend: () => {}, resume: () => {}, stop: () => {} },
     onCaptureChange: () => { changes += 1; },
   });
+
   composer.beginCapture(line => received.push(line));
   feed("\x1b[200~追加要求\x1b[201~");
   assert.equal(composer.captureView()?.text, "追加要求");

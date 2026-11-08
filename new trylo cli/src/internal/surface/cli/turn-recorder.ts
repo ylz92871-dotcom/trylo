@@ -1,17 +1,24 @@
 import { ExecutionProgressError, type ExecutionProgress, type ExecutionProgressPort, type ProgressWriteOutcome } from "../../ports/execution-progress.js";
 import type { SessionPort } from "../../ports/session.js";
 import type { BootstrapContext } from "./bootstrap-context.js";
-import type { CliRunStatus, CliUsage } from "../../protocol/cli-stream.js";
+import type { CliRunStatus, CliUsage, CliUsageAccounting } from "../../protocol/cli-stream.js";
 import { createPartialRecorder } from "./partial-recorder.js";
 import type { Transcript } from "../../protocol/transcript.js";
 import type { ProjectInstructionSource } from "./session-record.js";
 import { sessionPayload } from "./session-payload.js";
 import { serializeSessionWrites } from "./session-write-queue.js";
 import { providerContinuationScope, type ProviderContinuationPort } from "../../ports/provider.js";
+import type { Envelope } from "../../protocol/envelope.js";
+import { promptInputCheckpointForCompletion } from "../../loop/prompt-input-records.js";
+import { isNormalProviderReturnObservation, isProviderWaitObservation, providerReturnMatchesCapture,
+  type NormalProviderReturnObservation, type ProviderWaitObservation } from "../../learning/central/runtime/provider-positive.js";
 
 type RecordInput = Parameters<SessionPort["append"]>[0];
+
 type EffectState = "open" | "reconciliation_required";
+
 type AppendFact = (type: RecordInput["type"], payload: RecordInput["payload"], at?: string) => Promise<ProgressWriteOutcome>;
+
 type RecorderCursor = {
   /** Ordinal -> digest of everything known durable, resumed items included. */
   readonly items: Map<number, string>;
@@ -23,16 +30,25 @@ type RecorderCursor = {
   effectState: EffectState;
   readonly scope: string;
   continuation: ProviderContinuationPort | undefined;
+  readonly sessionId: string;
+  readonly turnId: string;
+  streamIndex: number;
+  streamAttemptId: string | undefined;
+  streamOpen: boolean;
 };
 
 export type TurnRecorder = {
   readonly session: SessionPort;
   readonly progress: ExecutionProgressPort;
   start(input: { readonly startedAt: number; readonly toolCatalogHash: string; readonly sources?: ReadonlyArray<ProjectInstructionSource>; readonly continuation?: ProviderContinuationPort; readonly bootstrapContext?: BootstrapContext; readonly userSourceAvailable?: false }): Promise<void>;
-  finish(input: { readonly status: CliRunStatus; readonly finishReason: string; readonly usage: CliUsage }): Promise<void>;
+  finish(input: { readonly status: CliRunStatus; readonly finishReason: string; readonly usage: CliUsage; readonly accounting?: CliUsageAccounting }): Promise<void>;
 };
 
 export type TurnRecorderInput = {
+  readonly providerWaitObservation?: ProviderWaitObservation;
+  readonly readProviderReturnObservation?: () => NormalProviderReturnObservation | undefined;
+  readonly onCommittedEnvelope?: (envelope: Envelope) => void;
+  readonly onCommittedEffect?: (key: string, outcome: "succeeded" | "failed" | "unknown" | "cancelled") => void;
   readonly session?: SessionPort;
   readonly sessionId: string;
   readonly turnId: string;
@@ -47,32 +63,55 @@ export type TurnRecorderInput = {
  */
 export function createTurnRecorder(input: TurnRecorderInput): TurnRecorder | undefined {
   if (input.session === undefined) return undefined;
+
   const session = serializeSessionWrites(input.session);
   const resumed = input.resumeTranscript ?? [];
-  const cursor = seedCursor(resumed, providerContinuationScope(input.sessionId, input.turnId));
+  const cursor = seedCursor(resumed, providerContinuationScope(input.sessionId, input.turnId), input.sessionId, input.turnId);
   const stamp = (): string => new Date(input.now()).toISOString();
+  const capture = providerObservationMetadata(() => input.providerWaitObservation, value =>
+    isProviderWaitObservation(value) && value.sessionId === input.sessionId && value.turnId === input.turnId);
   const append = async (type: RecordInput["type"], payload: RecordInput["payload"], at = stamp()): Promise<ProgressWriteOutcome> => {
     const result = await session.append({ type, sessionId: input.sessionId, turnId: input.turnId, at, payload });
     return result.ok ? { ok: true } : result;
   };
+
   return {
     session,
-    progress: progressPort(append, cursor),
+    progress: progressPort(append, cursor, input),
+
     async start(metadata) {
       cursor.continuation = metadata.continuation;
       await requireWrite("turn_start", append("turn_start", {
         toolCatalogHash: metadata.toolCatalogHash,
+        ...(capture === undefined ? {} : { providerWaitObservation: capture }),
         ...(metadata.bootstrapContext === undefined ? {} : { bootstrapContext: sessionPayload(metadata.bootstrapContext) }),
         ...(metadata.userSourceAvailable === undefined ? {} : { userSourceAvailable: metadata.userSourceAvailable }),
         ...(metadata.sources === undefined ? {} : { projectInstructions: sessionPayload(metadata.sources) }),
       }, new Date(metadata.startedAt).toISOString()));
     },
-    finish: terminal => requireWrite("terminal", append("terminal", {
-      reason: terminal.status,
-      finishReason: terminal.finishReason,
-      usage: sessionPayload(terminal.usage),
-    })),
+
+    finish: terminal => {
+      const returned = terminal.status !== "completed" || capture === undefined ? undefined
+        : providerObservationMetadata(input.readProviderReturnObservation, value =>
+          isNormalProviderReturnObservation(value) && isProviderWaitObservation(capture)
+          && providerReturnMatchesCapture(capture, value));
+      return requireWrite("terminal", append("terminal", {
+        reason: terminal.status,
+        finishReason: terminal.finishReason,
+        usage: sessionPayload(terminal.usage),
+        ...(terminal.accounting === undefined ? {} : { accounting: sessionPayload(terminal.accounting) }),
+        ...(returned === undefined ? {} : { providerReturnObservation: returned }),
+      }));
+    },
   };
+}
+
+/** Optional observation failure must never change a normal PA's recording outcome. */
+function providerObservationMetadata(read: (() => unknown) | undefined, valid: (value: unknown) => boolean): RecordInput["payload"] | undefined {
+  try {
+    const value = read?.();
+    return valid(value) ? sessionPayload(value) : undefined;
+  } catch { return undefined; }
 }
 
 async function requireWrite(stage: string, operation: Promise<ProgressWriteOutcome>): Promise<void> {
@@ -80,9 +119,9 @@ async function requireWrite(stage: string, operation: Promise<ProgressWriteOutco
   if (!result.ok) throw new ExecutionProgressError(stage, result.code);
 }
 
-function progressPort(append: AppendFact, cursor: RecorderCursor): ExecutionProgressPort {
+function progressPort(append: AppendFact, cursor: RecorderCursor, observers: Pick<TurnRecorderInput, "onCommittedEnvelope" | "onCommittedEffect">): ExecutionProgressPort {
   return {
-    flush: facts => appendNewFacts(append, cursor, facts),
+    flush: facts => appendNewFacts(append, cursor, facts, observers.onCommittedEnvelope),
     /**
      * Open blocks, appended as they grow.
      *
@@ -95,15 +134,19 @@ function progressPort(append: AppendFact, cursor: RecorderCursor): ExecutionProg
     issue: key => cursor.effectState === "reconciliation_required"
       ? Promise.resolve({ ok: false, code: "effect_reconciliation_required" })
       : append("effect_issued", { key }),
+
     async settle(key, outcome) {
       const type = outcome === "succeeded" ? "effect_committed" : outcome === "unknown" ? "effect_unknown" : "effect_failed";
       const result = await append(type, { key, outcome });
+      if (result.ok) notifyCommitted(() => observers.onCommittedEffect?.(key, outcome));
+
       if (result.ok && outcome === "unknown") {
         cursor.effectState = "reconciliation_required";
         // The fact is durable, but this lease cannot safely continue. Stop
         // through the same typed boundary the host closes on write failures.
         return { ok: false, code: "effect_reconciliation_required" };
       }
+
       return result;
     },
   };
@@ -129,14 +172,17 @@ function digestOf(value: unknown): string {
  * never wrote. Without them in the map, "an ordinal below the watermark I have
  * no digest for" would look exactly like a rewrite of durable history.
  */
-function seedCursor(resumed: Transcript, scope: string): RecorderCursor {
+function seedCursor(resumed: Transcript, scope: string, sessionId: string, turnId: string): RecorderCursor {
   const items = new Map<number, string>();
   let highItem = -1;
+
   for (const item of resumed) {
     items.set(item.sequence, digestOf(item));
     if (item.sequence > highItem) highItem = item.sequence;
   }
-  return { items, envelopes: new Map(), highItem, highEnvelope: -1, effectState: "open", scope, continuation: undefined };
+
+  return { items, envelopes: new Map(), highItem, highEnvelope: -1, effectState: "open", scope, continuation: undefined,
+    sessionId, turnId, streamIndex: 0, streamAttemptId: undefined, streamOpen: false };
 }
 
 /**
@@ -166,36 +212,69 @@ function classify(known: ReadonlyMap<number, string>, high: number, sequence: nu
   return sequence < high ? "conflict" : "write";
 }
 
-async function appendNewFacts(append: AppendFact, cursor: RecorderCursor, facts: ExecutionProgress): Promise<ProgressWriteOutcome> {
+async function appendNewFacts(append: AppendFact, cursor: RecorderCursor, facts: ExecutionProgress,
+  onCommittedEnvelope?: (envelope: Envelope) => void): Promise<ProgressWriteOutcome> {
   for (const item of facts.transcript) {
     const digest = digestOf(item);
     const verdict = classify(cursor.items, cursor.highItem, item.sequence, digest);
     if (verdict === "skip") continue;
+
     if (verdict === "conflict") return { ok: false, code: "progress_sequence_conflict:transcript_item" };
+
     const result = await append("transcript_item", sessionPayload(item));
     if (!result.ok) return result;
+
     cursor.items.set(item.sequence, digest);
+
     if (item.sequence > cursor.highItem) cursor.highItem = item.sequence;
   }
+
   for (const envelope of facts.envelopes) {
     const digest = digestOf(envelope);
     const verdict = classify(cursor.envelopes, cursor.highEnvelope, envelope.sequence, digest);
     if (verdict === "skip") continue;
+
     if (verdict === "conflict") return { ok: false, code: "progress_sequence_conflict:envelope" };
+
     // The private native checkpoint shares the completion fact's durable ack.
     // The public envelope itself is unchanged and cannot expose this payload.
     const checkpoint = envelope.kind === "stream_end" ? cursor.continuation?.capture(cursor.scope) : undefined;
+    const measured = facts.promptInputCheckpoint === undefined ? undefined
+      : promptInputCheckpointForCompletion(facts.promptInputCheckpoint, envelope, {
+        sessionId: cursor.sessionId, turnId: cursor.turnId, attemptId: cursor.streamAttemptId,
+        streamIndex: cursor.streamIndex, open: cursor.streamOpen,
+      });
     const result = await append("envelope", { envelope: sessionPayload(envelope),
       ...(checkpoint === undefined ? {} : { providerContinuation: checkpoint }),
+      ...(measured?.kind === "available" ? { promptInputCheckpoint: sessionPayload(measured.checkpoint) } : {}),
     }, envelope.timestamp);
     if (!result.ok) return result;
+
+    if (envelope.kind === "api_call" && envelope.sessionId === cursor.sessionId && envelope.turnId === cursor.turnId) {
+      cursor.streamIndex += 1;
+      cursor.streamAttemptId = envelope.attemptId;
+      cursor.streamOpen = true;
+    }
+
+    if (envelope.kind === "stream_end") cursor.streamOpen = false;
+
     if (envelope.kind === "observation" && envelope.payload["component"] === "provider") {
       const diagnostic = envelope.payload["diagnostic"];
       if (diagnostic !== null && typeof diagnostic === "object" && !Array.isArray(diagnostic)
         && "noticeId" in diagnostic && typeof diagnostic.noticeId === "string") cursor.continuation?.acknowledgeNotice?.(diagnostic.noticeId);
     }
+
     cursor.envelopes.set(envelope.sequence, digest);
+
     if (envelope.sequence > cursor.highEnvelope) cursor.highEnvelope = envelope.sequence;
+
+    notifyCommitted(() => onCommittedEnvelope?.(envelope));
   }
+
   return { ok: true };
+}
+
+function notifyCommitted(observe: () => void): void {
+  try { observe(); }
+  catch { /* A read-only observer cannot revoke a durable ack or own execution. */ }
 }

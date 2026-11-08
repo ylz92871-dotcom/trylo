@@ -23,6 +23,7 @@ export type RunResultMeta = {
   readonly model: string;
   readonly iterations: number;
   readonly durationMs: number;
+  readonly accounting?: Pick<CliRunResult, "mainUsage" | "auxiliaryUsage" | "auxiliaryRequests" | "auxiliaryUsageStatus" | "costUsd">;
 };
 
 /**
@@ -102,6 +103,7 @@ export function projectRunResult(
     usage,
     durationMs: meta.durationMs,
     lastMessage: lastMessageOf(transcript),
+    ...meta.accounting,
   };
 }
 

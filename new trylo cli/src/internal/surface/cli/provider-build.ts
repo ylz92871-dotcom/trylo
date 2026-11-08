@@ -10,6 +10,10 @@ import { withImageReferences } from "../../adapters/media/image-reference-provid
 import { workspaceIdentity } from "./wiring-catalog.js";
 import type { ImageReferenceAccess } from "../../ports/image-reference-access.js";
 
+/** Provider-only construction also serves independent learning; execution ports are optional and unused. */
+export type ProviderBuildInput = Pick<WiringInput, "providerId" | "model" | "endpoint" | "apiKey" | "workspaceRoot">
+  & Partial<WiringInput>;
+
 /**
  * Which adapter a run builds, and whether it may reuse one.
  *
@@ -27,7 +31,7 @@ import type { ImageReferenceAccess } from "../../ports/image-reference-access.js
  * resolution, never half-built here.
  */
 
-export function kindOf(input: WiringInput): ProviderKind | undefined {
+export function kindOf(input: ProviderBuildInput): ProviderKind | undefined {
   if (input.providerKind !== undefined) {
     return input.providerKind;
   }
@@ -52,10 +56,11 @@ export function reasoningSummaryOptions(provider: {
  * would hand the next turn an object that is not a provider, and the refusal has
  * to reach the person on the turn that asked.
  */
-function preflight(input: WiringInput, kind: ProviderKind): WiringFailure | undefined {
+function preflight(input: ProviderBuildInput, kind: ProviderKind): WiringFailure | undefined {
   if (input.reasoningEffort !== undefined && kind !== "openai-compatible" && kind !== "openai-responses") return {
     code: "unsupported_reasoning_effort", detail: "--reasoning-effort requires a Chat-compatible or Responses provider; this provider cannot apply it",
   };
+
   if (isKeyedProviderKind(kind) && input.endpoint.length === 0) {
     return {
       code: "missing_endpoint",
@@ -63,22 +68,27 @@ function preflight(input: WiringInput, kind: ProviderKind): WiringFailure | unde
         `provider ${kind} needs an endpoint; set \`endpoint\` in config or --endpoint`,
     };
   }
+
   return undefined;
 }
 
-function constructTransport(input: WiringInput, kind: ProviderKind): ProviderPort {
+function constructTransport(input: ProviderBuildInput, kind: ProviderKind): ProviderPort {
   if (input.providerId === "fixture-memory" && kind === "fixture") {
     return createMemoryFixtureProvider();
   }
+
   if (kind === "fixture") {
     return createFixtureProvider(DEFAULT_FIXTURE_SCRIPT);
   }
+
   if (kind === "fixture-write") {
     return createFixtureProvider(WRITE_FIXTURE_SCRIPT);
   }
+
   if (kind === "fixture-subagent") {
     return createFixtureProvider(SUBAGENT_FIXTURE_SCRIPT);
   }
+
   if (kind === "openai-responses") {
     return createResponsesProvider({
       endpoint: input.endpoint,
@@ -87,18 +97,36 @@ function constructTransport(input: WiringInput, kind: ProviderKind): ProviderPor
       ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort }),
       ...(input.apiKey === undefined ? {} : { apiKey: input.apiKey }),
       ...(input.tokenManager === undefined ? {} : { tokenManager: input.tokenManager }),
+      ...requestTransportPolicy(input),
     });
   }
+
   return createOpenAiCompatibleProvider({
     endpoint: input.endpoint,
     model: input.model,
     ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort }),
     ...(input.apiKey === undefined ? {} : { apiKey: input.apiKey }),
     ...(input.tokenManager === undefined ? {} : { tokenManager: input.tokenManager }),
+    ...requestTransportPolicy(input),
   });
 }
 
-function construct(input: WiringInput, kind: ProviderKind): ProviderPort {
+/** One funded call permits one model HTTP request. A retry needs a new reservation. */
+function requestTransportPolicy(input: ProviderBuildInput) {
+  if (input.requestAttemptPolicy !== "single_request") return {};
+
+  const tokens = input.tokenManager;
+  // Fetch follows 307/308 by replaying the POST even without an adapter retry.
+  // A redirect requires a new funded request; preserve the complete request init.
+  const fetchOnce: typeof globalThis.fetch = (resource, init) => globalThis.fetch(resource, { ...init, redirect: "manual" });
+
+  return { fetchImpl: fetchOnce, maxAttemptsBeforeHeaders: 1, ...(tokens === undefined ? {} : { tokenManager: {
+    ...(tokens.getValidAccessToken === undefined ? {} : { getValidAccessToken: () => tokens.getValidAccessToken!() }),
+    handleAuthError: async () => ({ refreshed: false, reason: "learning_grant_requires_new_request" }),
+  } }) };
+}
+
+function construct(input: ProviderBuildInput, kind: ProviderKind): ProviderPort {
   return withImageReferences(constructTransport(input, kind), input.workspaceRoot);
 }
 
@@ -115,7 +143,7 @@ function construct(input: WiringInput, kind: ProviderKind): ProviderPort {
  * construction, so what gets reused is the provider *this run resolved*, not
  * whatever happened to be lying around.
  */
-export function buildProvider(input: WiringInput, images?: ImageReferenceAccess): ProviderPort | WiringFailure {
+export function buildProvider(input: ProviderBuildInput, images?: ImageReferenceAccess): ProviderPort | WiringFailure {
   const kind = kindOf(input);
   if (kind === undefined) {
     return {
@@ -123,16 +151,21 @@ export function buildProvider(input: WiringInput, images?: ImageReferenceAccess)
       detail: `no adapter for provider ${input.providerId}; \`trylo providers list\` shows the known ones`,
     };
   }
+
   const refused = preflight(input, kind);
   if (refused !== undefined) {
     return refused;
   }
+
   const registry: WarmRegistry | undefined = input.warm;
   const create = () => images === undefined ? construct(input, kind) : constructTransport(input, kind);
+
   if (registry === undefined) {
     const provider = create();
-    return images === undefined ? provider : withImageReferences(provider, input.workspaceRoot, images);
+    const resolved = images === undefined ? provider : withImageReferences(provider, input.workspaceRoot, images);
+    return input.providerGuard?.(resolved) ?? resolved;
   }
+
   const acquired = registry.acquire(
     {
       providerId: input.providerId,
@@ -142,10 +175,13 @@ export function buildProvider(input: WiringInput, images?: ImageReferenceAccess)
       accountId: input.accountId ?? "",
       workspaceId: workspaceIdentity(input.workspaceRoot),
       ...(images === undefined ? {} : { imageReferenceScope: "transport" as const }),
+      ...(input.requestAttemptPolicy === undefined ? {} : { requestAttemptPolicy: input.requestAttemptPolicy }),
       ...(input.reasoningSummary === undefined ? {} : { reasoningSummary: input.reasoningSummary }),
       ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort }),
     },
     create,
   );
-  return images === undefined ? acquired.provider : withImageReferences(acquired.provider, input.workspaceRoot, images);
+  const resolved = images === undefined ? acquired.provider : withImageReferences(acquired.provider, input.workspaceRoot, images);
+
+  return input.providerGuard?.(resolved) ?? resolved;
 }

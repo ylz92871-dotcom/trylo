@@ -8,8 +8,20 @@ import {
 } from "./args-primitives.js";
 import { flagSpecFor, flagToken, readLearning, readValue, usageError, type FlagSpec } from "./args-tokens.js";
 import { buildRunOptions, consumePermissionFlag } from "./args-run-options.js";
+import { isRetiredRoutingFlag, retiredRoutingInput } from "./retired-routing.js";
 
 const RUN_FLAGS: ReadonlyArray<FlagSpec> = [
+  { name: "central-learning-budget", takesValue: true },
+  { name: "central-learning-calls", takesValue: true },
+  { name: "central-learning-prompt-chars", takesValue: true },
+  { name: "central-learning-thought-tokens", takesValue: true },
+  { name: "central-runtime-policy", takesValue: true },
+  { name: "workflow-version", takesValue: true },
+  { name: "workflow-task", takesValue: true },
+  { name: "workflow-learning-budget", takesValue: true },
+  { name: "workflow-refill-tokens", takesValue: true },
+  { name: "workflow-budget-grant", takesValue: true },
+  { name: "workflow-collection", takesValue: true },
   { name: "provider", takesValue: true },
   { name: "model", takesValue: true },
   { name: "endpoint", takesValue: true },
@@ -42,6 +54,10 @@ const RUN_FLAGS: ReadonlyArray<FlagSpec> = [
   { name: "tools", takesValue: true },
   { name: "reasoning-effort", takesValue: true },
   { name: "learning", takesValue: true },
+  { name: "skill-learning-budget", takesValue: true },
+  { name: "skill-learning-calls", takesValue: true },
+  { name: "check-learning-budget", takesValue: true },
+  { name: "collaboration-learning", takesValue: true },
   { name: "permission-ledger", takesValue: false },
   { name: "subagent", takesValue: false },
   { name: "allow-web", takesValue: false },
@@ -53,13 +69,15 @@ const RUN_FLAGS: ReadonlyArray<FlagSpec> = [
  * one boolean on the parse state. `defaultHint` is the second half of the
  * refusal shown when someone tries to pass a value.
  */
-type PresenceFlagKey = "allowWrites" | "permissionLedger" | "subagent" | "allowWeb" | "resumeLast";
+type PresenceFlagKey = "allowWrites" | "permissionLedger" | "subagent" | "allowWeb" | "resumeLast" | "workflowLearning" | "checkLearning";
 
 const PRESENCE_FLAGS: ReadonlyArray<{
   readonly flag: string;
   readonly key: PresenceFlagKey;
   readonly defaultHint: string;
 }> = [
+  { flag: "check-learning", key: "checkLearning", defaultHint: "checking is an independent opt-in and grants no execution permission" },
+  { flag: "workflow-learning", key: "workflowLearning", defaultHint: "workflow learning is an explicit opt-in" },
   {
     flag: "allow-writes",
     key: "allowWrites",
@@ -90,6 +108,8 @@ function presenceFlagFor(
 }
 
 export type RunParseState = {
+  checkLearning?: boolean;
+  workflowLearning?: boolean;
   values: Map<string, string>;
   message: string[];
   readStdin: boolean;
@@ -130,24 +150,35 @@ function consumeRunToken(
     }
     return argv.length;
   }
+
   if (token === "-") {
     state.readStdin = true;
     return index + 1;
   }
+
   if (!token.startsWith("--")) {
     state.message.push(token);
     return index + 1;
   }
+
   const parsed = flagToken(token);
   if (parsed === undefined) {
     state.message.push(token);
     return index + 1;
   }
+
   const { name, inlineValue } = parsed;
+
+  if (isRetiredRoutingFlag(name)) {
+    state.error = retiredRoutingInput();
+    return argv.length;
+  }
+
   if (name === "help") {
     state.help = true;
     return index + 1;
   }
+
   const presence = presenceFlagFor(name);
   if (presence !== undefined) {
     // 出现就是全部含义，所以 `--flag=false` 被拒绝而不是被读成「是」——一个
@@ -160,9 +191,12 @@ function consumeRunToken(
       );
       return argv.length;
     }
+
     state[presence.key] = true;
+
     return index + 1;
   }
+
   if (name === "learning") {
     // The closed set is checked here, not downstream: a misspelled switch must
     // be a usage error rather than a value that quietly means "off".
@@ -171,11 +205,14 @@ function consumeRunToken(
       state.error = got.error;
       return argv.length;
     }
+
     if (got.value !== undefined) {
       state.learning = got.value;
     }
+
     return got.next;
   }
+
   if (name === "compact-summary") {
     // 与 `--ask` / `--learning` 同一形态：值旗标 + 解析处的闭集把关。拼错的模式
     // 必须是用法错误，不能静默变成另一个模式。
@@ -187,6 +224,7 @@ function consumeRunToken(
       );
       return argv.length;
     }
+
     const raw = read.value ?? "";
     if (!isCompactSummaryMode(raw)) {
       state.error = usageError(
@@ -195,13 +233,17 @@ function consumeRunToken(
       );
       return argv.length;
     }
+
     state.compactSummary = raw;
+
     return read.next;
   }
+
   const permission = consumePermissionFlag(state, argv, index, name, inlineValue);
   if (permission !== undefined) {
     return permission;
   }
+
   const spec = flagSpecFor(RUN_FLAGS, name);
   if (spec === undefined) {
     state.error = usageError(
@@ -210,6 +252,7 @@ function consumeRunToken(
     );
     return argv.length;
   }
+
   const read = readValue(argv, index, inlineValue);
   if (read.error !== undefined) {
     state.error = usageError(
@@ -218,7 +261,14 @@ function consumeRunToken(
     );
     return argv.length;
   }
+
+  if (["collaboration-learning", "skill-learning-budget", "skill-learning-calls", "central-learning-thought-tokens"].includes(name) && state.values.has(name)) {
+    state.error = usageError(`duplicate --${name}`, "allocate one bounded allowance per task");
+    return argv.length;
+  }
+
   state.values.set(name, read.value ?? "");
+
   return read.next;
 }
 
@@ -241,14 +291,18 @@ export function parseRun(argv: ReadonlyArray<string>, seed?: LearningSwitch): Pa
     ...(seed === undefined ? {} : { learning: seed }),
   };
   let index = 0;
+
   while (index < argv.length) {
     index = consumeRunToken(state, argv, index);
   }
+
   if (state.error !== undefined) {
     return state.error;
   }
+
   if (state.help) {
     return { kind: "help" };
   }
+
   return buildRunOptions(state);
 }

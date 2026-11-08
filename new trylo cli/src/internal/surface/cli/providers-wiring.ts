@@ -136,6 +136,7 @@ export function switchSelected(ctx: ProvidersWiringContext, target: SwitchTarget
   if ("code" in document) {
     return { ok: false, code: document.code, detail: document.detail };
   }
+
   const registry = registryOfDocument(document);
   const found = requireProvider(registry, target.id);
   if (!found.ok) {
@@ -146,11 +147,13 @@ export function switchSelected(ctx: ProvidersWiringContext, target: SwitchTarget
       known: found.denial.known,
     };
   }
+
   const next = withSelected(document, found.entry.id);
   const path = providersFilePath(ctx);
   if (!ctx.writeFile(path, encodeDocument(next))) {
     return { ok: false, code: "write_failed", detail: `could not write ${path}` };
   }
+
   return { ok: true, id: found.entry.id, created: document.providers.length === 0 };
 }
 
@@ -159,9 +162,11 @@ export function switchFailureExit(result: Extract<SwitchResult, { ok: false }>):
   if (result.code === "unknown_provider") {
     return EXIT_CODES.USAGE;
   }
+
   if (result.code === "write_failed") {
     return EXIT_CODES.EXECUTION_FAILURE;
   }
+
   return DOCUMENT_EXIT_CODES[result.code];
 }
 
@@ -200,9 +205,11 @@ function invalidIdReason(id: string): string | undefined {
   if (id.length === 0) {
     return "a provider id is required";
   }
+
   if (!DECLARED_ID_PATTERN.test(id)) {
     return `provider id ${JSON.stringify(id)} is not usable: letters, digits, "-" and "_", starting with a letter`;
   }
+
   return undefined;
 }
 
@@ -210,11 +217,17 @@ function invalidIdReason(id: string): string | undefined {
 export function validateDeclaration(declaration: AddDeclaration): Extract<AddResult, { ok: false }> | undefined {
   const idReason = invalidIdReason(declaration.id);
   if (idReason !== undefined) return { ok: false, code: "invalid_id", detail: idReason };
+
   if (RESERVED_DECLARED_IDS.includes(declaration.id)) return { ok: false, code: "reserved_id", detail: `${declaration.id} is a built-in provider and cannot be redefined` };
+
   const missing: string[] = [];
+
   if (declaration.endpoint.trim().length === 0) missing.push("--endpoint");
+
   if (declaration.model.trim().length === 0) missing.push("--model");
+
   if (missing.length > 0) return { ok: false, code: "missing_field", detail: `${declaration.kind} needs ${missing.join(" and ")}` };
+
   return undefined;
 }
 
@@ -234,10 +247,12 @@ export function validateDeclaration(declaration: AddDeclaration): Extract<AddRes
 export function addDeclaredProvider(ctx: ProvidersWiringContext, declaration: AddDeclaration): AddResult {
   const invalid = validateDeclaration(declaration);
   if (invalid !== undefined) return invalid;
+
   const document = currentDocument(ctx);
   if ("code" in document) {
     return { ok: false, code: document.code, detail: document.detail };
   }
+
   if (document.providers.some((entry) => entry.id === declaration.id)) {
     return {
       ok: false,
@@ -245,6 +260,7 @@ export function addDeclaredProvider(ctx: ProvidersWiringContext, declaration: Ad
       detail: `provider ${declaration.id} already exists; remove it from ${PROVIDERS_FILE_NAME} first`,
     };
   }
+
   const next: ProvidersDocument = {
     ...document,
     providers: [
@@ -265,6 +281,7 @@ export function addDeclaredProvider(ctx: ProvidersWiringContext, declaration: Ad
   if (!ctx.writeFile(path, encodeDocument(next))) {
     return { ok: false, code: "write_failed", detail: `could not write ${path}` };
   }
+
   return { ok: true, id: declaration.id, created: document.providers.length === 0 };
 }
 
@@ -273,9 +290,11 @@ export function addFailureExit(result: Extract<AddResult, { ok: false }>): ExitC
   if (result.code === "invalid_id" || result.code === "reserved_id" || result.code === "duplicate_id" || result.code === "missing_field") {
     return EXIT_CODES.USAGE;
   }
+
   if (result.code === "write_failed") {
     return EXIT_CODES.EXECUTION_FAILURE;
   }
+
   return DOCUMENT_EXIT_CODES[result.code];
 }
 
@@ -314,14 +333,17 @@ export function removeDeclaredProvider(
   if ("code" in document) {
     return { ok: false, code: document.code, detail: document.detail };
   }
+
   const removed = removeDeclared(document, target.id);
   if (!removed.ok) {
     return { ok: false, code: removed.failure.code, detail: removed.failure.detail, ...(removed.failure.code === "unknown_provider" ? { known: removed.failure.known } : {}) };
   }
+
   const written = writeDocument(ctx, removed.value);
   if (!written.ok) {
     return { ok: false, code: "write_failed", detail: written.detail };
   }
+
   return { ok: true, id: target.id, clearedSelected: removed.clearedSelected, changed: [] };
 }
 
@@ -333,6 +355,7 @@ export function editDeclaredProvider(
   if ("code" in document) {
     return { ok: false, code: document.code, detail: document.detail };
   }
+
   const edited = editDeclared(document, target.id, {
     ...(target.endpoint === undefined ? {} : { endpoint: target.endpoint }),
     ...(target.model === undefined ? {} : { model: target.model }),
@@ -342,11 +365,14 @@ export function editDeclaredProvider(
   if (!edited.ok) {
     return { ok: false, code: edited.failure.code, detail: edited.failure.detail, ...(edited.failure.code === "unknown_provider" ? { known: edited.failure.known } : {}) };
   }
+
   const written = writeDocument(ctx, edited.value);
   if (!written.ok) {
     return { ok: false, code: "write_failed", detail: written.detail };
   }
+
   const entry = edited.value.providers.find((item) => item.id === target.id);
+
   return {
     ok: true,
     id: target.id,
@@ -361,9 +387,11 @@ export function removeEditFailureExit(result: Extract<RemoveEditResult, { ok: fa
   if (result.code === "reserved_id" || result.code === "unknown_provider" || result.code === "missing_field") {
     return EXIT_CODES.USAGE;
   }
+
   if (result.code === "write_failed") {
     return EXIT_CODES.EXECUTION_FAILURE;
   }
+
   return DOCUMENT_EXIT_CODES[result.code];
 }
 

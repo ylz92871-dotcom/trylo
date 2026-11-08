@@ -42,10 +42,12 @@ export function reduceInterrupt(
   if (input.type === "key") {
     return { state: { consecutive: 0 }, action: { kind: "none" } };
   }
+
   const consecutive = state.consecutive + 1;
   if (consecutive >= 2) {
     return { state: { consecutive }, action: { kind: "exit" } };
   }
+
   if (input.phase === "running") {
     return {
       state: { consecutive },
@@ -55,6 +57,7 @@ export function reduceInterrupt(
       },
     };
   }
+
   return {
     state: { consecutive },
     action: {

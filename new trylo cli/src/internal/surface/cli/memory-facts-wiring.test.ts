@@ -26,9 +26,11 @@ test("a saved fact is retrievable in the same run and names its origin", async (
       commandId: "call-1", subject: "YL Z", statement: "我是 YL Z，Trylo 的开发者，请记住",
       factKind: "identity_fact", scopeKind: "user",
     });
+
     assert.equal(saved.result, "saved");
 
     const port = memoryPortFor({ facts: () => service.visible() });
+
     assert.ok(port, "facts alone must be enough to build a memory port");
     const outcome = await port.search({
       queries: ["YL Z"], matchMode: "any", contextLines: 0, caseSensitive: true,
@@ -41,6 +43,7 @@ test("a saved fact is retrievable in the same run and names its origin", async (
 
     const read = await port.read({ documentId: "user-memory:" + (saved.result === "saved" ? saved.recordId : ""), lineOffset: 1 },
       new AbortController().signal);
+
     assert.equal(read.ok, true);
     assert.match(read.ok ? read.content : "", /YL Z/);
   } finally {

@@ -56,7 +56,9 @@ export function reportArmed(
     );
     return EXIT_CODES.OK;
   }
+
   ctx.stdout(`Armed ${row.id} — ${row.trigger.kind === "deadline" ? `fires at ${new Date(row.trigger.atMs).toISOString()}` : `waiting for ${describeCondition(row.trigger.condition)}`}.\n`);
+
   return EXIT_CODES.OK;
 }
 
@@ -103,12 +105,15 @@ export function describeHuman(row: { readonly id: string; readonly trigger: Watc
   if (state.state === "fired") {
     return `${row.id}  fired ${relativeTime(state.firedAtMs ?? nowMs, nowMs)}  (message ${state.messageId ?? "?"})`;
   }
+
   if (state.state === "cancelled") {
     return `${row.id}  cancelled ${relativeTime(state.cancelledAtMs ?? nowMs, nowMs)}  ${state.reason ?? ""}`.trimEnd();
   }
+
   if (row.trigger.kind === "deadline") {
     return `${row.id}  armed  until ${new Date(row.trigger.atMs).toISOString()}  ${row.text.slice(0, 60)}`;
   }
+
   return `${row.id}  armed  waiting for ${describeCondition(row.trigger.condition)}`;
 }
 
@@ -123,12 +128,15 @@ export function reportRefusal(ctx: CliContext, code: WatchFailureCode, message: 
 export function reportQueueRefusal(ctx: CliContext, code: string, json: boolean): ExitCode {
   const transient = code === "queue_locked" || code === "queue_unwritable";
   const hint = "the watch stays armed; fix the queue and fire again with `trylo watch check`";
+
   if (json) {
     ctx.stdout(`${JSON.stringify({ ok: false, code, message: `the message could not be queued: ${code}`, hint })}\n`);
     return transient ? EXIT_CODES.TEMPORARY : EXIT_CODES.USAGE;
   }
+
   ctx.stderr(`the message could not be queued: ${code}\n`);
   ctx.stderr("the watch stays armed; fix the queue and fire again with `trylo watch check`\n");
+
   return transient ? EXIT_CODES.TEMPORARY : EXIT_CODES.USAGE;
 }
 

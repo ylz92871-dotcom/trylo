@@ -41,14 +41,17 @@ function scripted(
   const root = mkdtempSync(join(tmpdir(), "trylo-tui-ux-"));
   const home = join(root, "home");
   const cwd = join(root, "workspace");
+
   mkdirSync(cwd, { recursive: true });
   mkdirSync(join(home, ".trylo", "sessions"), { recursive: true });
+
   // `configured: false` models a first run: nothing selected, so the startup
   // page has to appear. Otherwise the fixture provider is picked explicitly so
   // the shell opens straight into the session.
   if (options?.configured !== false) {
     writeFileSync(join(home, ".trylo", "config.json"), JSON.stringify({ provider: "fixture" }));
   }
+
   let at = 0;
   let ids = 0;
   const ctx: CliContext = {
@@ -57,6 +60,7 @@ function scripted(
     cwd,
     nodeVersion: "v22.0.0",
     stdinIsTty: true,
+
     readFile: (absolutePath) => {
       try {
         return readFileSync(absolutePath, "utf8");
@@ -64,14 +68,18 @@ function scripted(
         return undefined;
       }
     },
+
     isDirectory: () => true,
     readDir: () => [],
+
     writeFile: (absolutePath, text) => {
       mkdirSync(join(absolutePath, ".."), { recursive: true });
       writeFileSync(absolutePath, text);
       return true;
     },
+
     readStdin: async () => "",
+
     readLine: async () => {
       if (at >= lines.length) {
         return undefined;
@@ -80,6 +88,7 @@ function scripted(
       at += 1;
       return line;
     },
+
     readSecret: async () => options?.secret,
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
@@ -94,6 +103,7 @@ function scripted(
     write: (text) => written.push(text),
     size: () => ({ columns: 80, rows: 24 }),
   };
+
   return { ctx, out, err, root, io };
 }
 
@@ -130,6 +140,7 @@ function toolEvents(
   const events: CliStreamEvent[] = [
     { type: "run_start", sessionId: scaffold.sessionId, turnId: "turn-1", providerId: "fixture", model: "default" },
   ];
+
   for (const call of calls) {
     events.push({ type: "tool_use", toolCallId: call.id, name: call.name });
     events.push({
@@ -140,6 +151,7 @@ function toolEvents(
       truncated: false,
     });
   }
+
   events.push({
     type: "run_result",
     status: "completed",
@@ -151,6 +163,7 @@ function toolEvents(
     durationMs: 1,
     lastMessage: "done",
   });
+
   return events;
 }
 
@@ -165,10 +178,13 @@ test("/details prints the stored tool result in full, unfolded", async () => {
     }
     return outcomeOf(scaffold);
   };
+
   try {
     const code = await handleTui(session.ctx, session.io, runner);
+
     assert.equal(code, 0);
     const flat = session.io.written.join("");
+
     // The screen folded the tail away…
     assert.match(flat, /\.\.\. 4 more lines/);
     // …and the panel brought all nine rows back, with the count on the header.
@@ -193,20 +209,26 @@ test("/details selects by recency and by call id", async () => {
       ],
       scaffold,
     );
+
     for (const event of events) {
       sink.stdout(`${JSON.stringify(event)}\n`);
     }
+
     return outcomeOf(scaffold);
   };
+
   try {
     const code = await handleTui(session.ctx, session.io, runner);
+
     assert.equal(code, 0);
     const flat = session.io.written.join("");
     // `/details 1` is the newest result; the call id reaches the older one.
     const newest = flat.indexOf("output (1 lines):");
+
     assert.ok(newest >= 0);
     assert.match(flat.slice(newest), /newest payload/);
     const byId = flat.indexOf("call id: call-1");
+
     assert.ok(byId >= 0);
     assert.match(flat.slice(byId), /oldest payload/);
   } finally {
@@ -228,10 +250,13 @@ test("permission commands render the session controller and survive a refusal", 
     "/exit",
   ];
   const session = scripted(script);
+
   try {
     const code = await handleTui(session.ctx, session.io, unusedRunner());
+
     assert.equal(code, 0);
     const flat = session.io.written.join("");
+
     assert.match(flat, /mode set to confirm/);
     assert.match(flat, /allowed run_shell for this session/);
     assert.match(flat, /denied write_file for this session/);
@@ -252,9 +277,12 @@ test("an unknown permission tool is reported, not applied", async () => {
   const session = scripted(["/allow not_a_tool", "/grants", "/exit"]);
   try {
     const code = await handleTui(session.ctx, session.io, unusedRunner());
+
     assert.equal(code, 0);
     const written = session.io.written.join("");
+
     assert.match(written, /unknown tool not_a_tool/);
+
     // The list is derived from the vocabulary rather than spelled out here. The
     // behaviour under test is "an unknown name is refused and the real ones are
     // offered"; hard-coding the roster made that assertion break every time a
@@ -263,12 +291,14 @@ test("an unknown permission tool is reported, not applied", async () => {
     for (const name of APPROVABLE_TOOL_NAMES) {
       assert.ok(written.includes(name), `expected the offered tools to include ${name}`);
     }
+
     // "not applied" is the half that was untested. The grant ledger is the
     // product's own record, so a name appearing on the `allowed tools:` line
     // would mean the refusal is cosmetic. Slicing from the ledger line (not from
     // the word "grants", which never appears in the output) is what makes this
     // an assertion about state rather than about the echo above.
     const ledger = written.slice(written.indexOf("allowed tools:"));
+
     assert.notEqual(ledger, "", "expected the grant ledger to be rendered");
     assert.equal(ledger.includes("not_a_tool"), false, "a refused tool must leave no grant behind");
   } finally {
@@ -317,16 +347,20 @@ test("/connect saves a declared connection through the form", async () => {
     "/exit",
   ];
   const session = scripted(script, { secret: "sk-test" });
+
   try {
     const code = await handleTui(session.ctx, session.io, unusedRunner());
+
     assert.equal(code, 0);
     assert.match(session.io.written.join(""), /saved connection lab/);
     const providers = session.ctx.readFile(join(session.root, "home", ".trylo", "providers.json"));
+
     assert.ok(providers !== undefined);
     const parsed = JSON.parse(providers) as {
       selected: string;
       providers: ReadonlyArray<{ id: string; endpoint: string; model: string }>;
     };
+
     assert.equal(parsed.selected, "lab");
     assert.deepEqual(
       parsed.providers.map((entry) => entry.id),
@@ -345,8 +379,10 @@ test("the connection draft survives an invalid address and cancellation writes n
   const session = scripted(["Lab", "", "not-a-url", "b", "https://example.invalid/v1", "manual-model", "", "s", ""], { secret: "private-test-value" });
   try {
     const io: TuiIo = { ...session.io, choose: async () => undefined };
+
     assert.equal(await runConnectForm(session.ctx, io, "add"), undefined);
     const output = session.io.written.join("");
+
     assert.match(output, /invalid_endpoint/);
     assert.match(output, /manual-model/);
     assert.doesNotMatch(output, /private-test-value/);
@@ -359,11 +395,16 @@ test("saving a connection without using it leaves the default selection alone", 
   try {
     const io: TuiIo = { ...session.io, choose: async () => "save" };
     const result = await runConnectForm(session.ctx, io, "add");
+
     assert.equal(result?.ok, true);
+
     if (result?.ok) assert.equal(result.selected, false);
+
     const text = session.ctx.readFile(join(session.root, "home", ".trylo", "providers.json"));
+
     assert.ok(text);
     const parsed = JSON.parse(text) as { selected?: string; providers: Array<{ id: string }> };
+
     assert.equal(parsed.selected, undefined);
     assert.equal(parsed.providers[0]?.id, "lab");
   } finally { rmSync(session.root, { recursive: true, force: true }); }

@@ -28,16 +28,20 @@ function scripted(responses: ReadonlyArray<GitCommandResult & { argv?: string }>
 } {
   const calls: Array<{ argv: ReadonlyArray<string>; cwd: string }> = [];
   let index = 0;
+
   return {
     calls,
     runner: {
       async run(argv, cwd): Promise<GitCommandResult> {
         calls.push({ argv, cwd });
         const next = responses[index];
+
         index += 1;
+
         if (next === undefined) {
           throw new Error(`no scripted response for call ${calls.length}`);
         }
+
         return { exit: next.exit, stdout: next.stdout, stderr: next.stderr };
       },
     },
@@ -48,6 +52,7 @@ const OK_EMPTY: GitCommandResult = { exit: 0, stdout: "", stderr: "" };
 
 test("argv shapes carry the Codex hardening", () => {
   const tracked = trackedDiffArgv("posix", false).join(" ");
+
   assert.match(tracked, /safe\.bareRepository=explicit/);
   assert.match(tracked, /core\.fsmonitor=false/);
   assert.match(tracked, /core\.hooksPath=\/dev\/null/);
@@ -74,11 +79,14 @@ test("driver names dedupe and neuter as env", () => {
 test("outside a git repo succeeds with an empty diff", async () => {
   const { runner, calls } = scripted([{ exit: 128, stdout: "", stderr: "not a git repo" }]);
   const outcome = await collectGitDiff(runner, { cwd: "/work", platform: "posix" });
+
   assert.equal(outcome.ok, true);
+
   if (outcome.ok) {
     assert.equal(outcome.value.isGitRepo, false);
     assert.equal(outcome.value.diff, "");
   }
+
   assert.equal(calls.length, 1);
 });
 
@@ -91,11 +99,14 @@ test("tracked plus untracked diffs concatenate", async () => {
     { exit: 1, stdout: "--- a/new.ts\n", stderr: "" },
   ]);
   const outcome = await collectGitDiff(runner, { cwd: "/work", platform: "posix" });
+
   assert.equal(outcome.ok, true);
+
   if (outcome.ok) {
     assert.equal(outcome.value.isGitRepo, true);
     assert.equal(outcome.value.diff, "--- a/f.ts\n--- a/new.ts\n");
   }
+
   assert.equal(calls.length, 5);
   assert.ok(calls[4]?.argv.includes("--no-index"));
 });
@@ -103,7 +114,9 @@ test("tracked plus untracked diffs concatenate", async () => {
 test("unexpected diff exits fail visibly", async () => {
   const { runner } = scripted([OK_EMPTY, { exit: 1, stdout: "", stderr: "" }, { exit: 2, stdout: "", stderr: "boom" }]);
   const outcome = await collectGitDiff(runner, { cwd: "/work", platform: "posix" });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.code, "diff_failed");
     assert.match(outcome.detail, /status 2/);
@@ -117,15 +130,21 @@ test("spawn failures become git_unavailable, aborts become cancelled", async () 
     },
   };
   const missing = await collectGitDiff(throwing, { cwd: "/work", platform: "posix" });
+
   assert.equal(missing.ok, false);
+
   if (!missing.ok) {
     assert.equal(missing.code, "git_unavailable");
   }
+
   const controller = new AbortController();
+
   controller.abort();
   const { runner } = scripted([]);
   const cancelled = await collectGitDiff(runner, { cwd: "/work", platform: "posix", signal: controller.signal });
+
   assert.equal(cancelled.ok, false);
+
   if (!cancelled.ok) {
     assert.equal(cancelled.code, "cancelled");
   }

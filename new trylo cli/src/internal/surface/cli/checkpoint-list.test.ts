@@ -34,6 +34,7 @@ function scripted(): Recorded {
   const root = mkdtempSync(join(tmpdir(), "trylo-ckpt-list-"));
   const home = join(root, "home");
   const cwd = join(root, "workspace");
+
   mkdirSync(cwd, { recursive: true });
   mkdirSync(join(home, ".trylo", "sessions"), { recursive: true });
   const ctx: CliContext = {
@@ -54,6 +55,7 @@ function scripted(): Recorded {
     now: () => 0,
     newId: (prefix) => `${prefix}-1`,
   };
+
   return { ctx, out, err, home, root };
 }
 
@@ -61,8 +63,10 @@ test("C2: listing a store that was never created says so and leaves with 0", asy
   const run = scripted();
   try {
     const code = await handleCheckpointList(run.ctx, { json: false });
+
     assert.equal(code, EXIT_CODES.OK);
     const said = run.out.join("");
+
     assert.match(said, /^no checkpoints/, said);
     // Emptiness alone is a dead end: it should also say where they come from,
     // because this command is how a person learns snapshots exist.
@@ -88,11 +92,13 @@ test("C2: the JSON shape of an empty store is an empty list", async () => {
 test("C2: a store that exists but cannot be read is still a failure", async () => {
   const run = scripted();
   const store = join(run.home, ".trylo", "checkpoints");
+
   try {
     // A file where the directory should be: `existsSync` is true, so the
     // softening does not apply and the real storage fault must surface.
     writeFileSync(store, "not a directory\n");
     const code = await handleCheckpointList(run.ctx, { json: false });
+
     // 75, not 52: `storage_unavailable` is a transient code and was classified
     // that way before this package. What matters here is that it is a failure
     // at all — the softening must not have turned a real fault into "none".

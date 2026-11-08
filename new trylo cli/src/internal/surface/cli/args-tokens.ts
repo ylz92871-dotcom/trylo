@@ -40,10 +40,12 @@ export function readValue(
     }
     return { value: inlineValue, next: index + 1 };
   }
+
   const next = argv[index + 1];
   if (next === undefined) {
     return { next: index + 1, error: "missing value" };
   }
+
   return { value: next, next: index + 2 };
 }
 
@@ -69,6 +71,7 @@ export function readLearning(
       ),
     };
   }
+
   const value = read.value ?? "";
   if (!isLearningSwitch(value)) {
     return {
@@ -79,6 +82,7 @@ export function readLearning(
       ),
     };
   }
+
   return { value, next: read.next };
 }
 
@@ -95,11 +99,13 @@ export function flagToken(token: string): { readonly name: string; readonly inli
   if (!token.startsWith("--")) {
     return undefined;
   }
+
   const withoutPrefix = token.slice(2);
   const equalsAt = withoutPrefix.indexOf("=");
   if (equalsAt < 0) {
     return { name: withoutPrefix, inlineValue: undefined };
   }
+
   return { name: withoutPrefix.slice(0, equalsAt), inlineValue: withoutPrefix.slice(equalsAt + 1) };
 }
 
@@ -112,14 +118,17 @@ export function parseSimple(
   name: string,
 ): ParsedCommand {
   let json = false;
+
   for (const token of argv) {
     if (token === "--help" || token === "-h") {
       return { kind: "help" };
     }
+
     if (token === "--json") {
       json = true;
       continue;
     }
+
     if (!BOOLEAN_ONLY.has(token)) {
       return usageError(
         `${name} does not accept ${token}`,
@@ -127,5 +136,6 @@ export function parseSimple(
       );
     }
   }
+
   return make(json);
 }

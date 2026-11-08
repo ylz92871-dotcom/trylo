@@ -18,6 +18,7 @@ import { COMMAND_WORDS, FAMILY_SUBCOMMANDS } from "./command-vocabulary.js";
  */
 
 export const COMPLETION_SHELLS = ["bash", "zsh", "fish"] as const;
+
 export type CompletionShell = (typeof COMPLETION_SHELLS)[number];
 
 export function isCompletionShell(value: string): value is CompletionShell {
@@ -51,6 +52,8 @@ const BASH_SCRIPT = [
   "    auth)       COMPREPLY=( $(compgen -W \"list switch\" -- \"$cur\") ); return 0 ;;",
   "    output-style) COMPREPLY=( $(compgen -W \"list show\" -- \"$cur\") ); return 0 ;;",
   "    workflow)   COMPREPLY=( $(compgen -W \"list show run\" -- \"$cur\") ); return 0 ;;",
+  "    learn)      COMPREPLY=( $(compgen -W \"collaboration skill\" -- \"$cur\") ); return 0 ;;",
+  "    library)    COMPREPLY=( $(compgen -W \"tool expert\" -- \"$cur\") ); return 0 ;;",
   "    completion) COMPREPLY=( $(compgen -W \"bash zsh fish\" -- \"$cur\") ); return 0 ;;",
   ...Object.entries(FAMILY_SUBCOMMANDS).map(
     ([word, verbs]) =>
@@ -86,6 +89,8 @@ const ZSH_SCRIPT = [
   "        auth)       _values 'auth subcommand' 'list' 'switch' ;;",
   "        output-style) _values 'output-style subcommand' 'list' 'show' ;;",
   "        workflow)   _values 'workflow subcommand' 'list' 'show' 'run' ;;",
+  "        learn)      _values 'learning subsystem' 'collaboration' 'skill' ;;",
+  "        library)    _values 'library' 'tool' 'expert' ;;",
   "        completion) _values 'shell' 'bash' 'zsh' 'fish' ;;",
   ...Object.entries(FAMILY_SUBCOMMANDS).map(
     ([word, verbs]) =>
@@ -112,6 +117,8 @@ const FISH_SCRIPT = [
   "complete -c trylo -n '__fish_seen_subcommand_from auth' -a 'list switch'",
   "complete -c trylo -n '__fish_seen_subcommand_from output-style' -a 'list show'",
   "complete -c trylo -n '__fish_seen_subcommand_from workflow' -a 'list show run'",
+  "complete -c trylo -n '__fish_seen_subcommand_from learn' -a 'collaboration skill'",
+  "complete -c trylo -n '__fish_seen_subcommand_from library' -a 'tool expert'",
   "complete -c trylo -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'",
   ...Object.entries(FAMILY_SUBCOMMANDS).map(
     ([word, verbs]) =>
@@ -142,14 +149,17 @@ export function parseCompletion(argv: ReadonlyArray<string>): ParsedCommand {
   if (shell === undefined) {
     return usageError("completion requires a shell", "try `trylo completion bash|zsh|fish`");
   }
+
   if (!isCompletionShell(shell)) {
     return usageError(
       `unknown shell: ${shell}`,
       `completion supports ${COMPLETION_SHELLS.join(", ")} only`,
     );
   }
+
   if (argv.length > 1) {
     return usageError(`completion takes one argument; got ${argv.length}`, "try `trylo completion bash`");
   }
+
   return { kind: "completion", shell };
 }

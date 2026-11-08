@@ -21,12 +21,15 @@ export function humanBytes(bytes: number): string {
   if (bytes < 1024) {
     return `${bytes} B`;
   }
+
   if (bytes < 1024 * 1024) {
     return `${Math.round(bytes / 1024)} KB`;
   }
+
   if (bytes < 1024 * 1024 * 1024) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
+
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
@@ -44,18 +47,22 @@ export function relativeTime(atMs: number, nowMs: number): string {
   if (seconds < 60) {
     return "just now";
   }
+
   const minutes = Math.round(seconds / 60);
   if (minutes < 60) {
     return `${minutes} min ago`;
   }
+
   const hours = Math.round(minutes / 60);
   if (hours < 24) {
     return `${hours} hr ago`;
   }
+
   const days = Math.round(hours / 24);
   if (days < 7) {
     return `${days} d ago`;
   }
+
   return isoDate(atMs);
 }
 
@@ -75,6 +82,7 @@ export function aligned(rows: ReadonlyArray<ReadonlyArray<string>>, gap = "  "):
   if (rows.length === 0) {
     return [];
   }
+
   const width = Math.max(...rows.map((row) => row.length));
   const widths = Array.from({ length: width }, (_, at) =>
     Math.max(...rows.map((row) => (row[at] ?? "").length)),
@@ -83,6 +91,7 @@ export function aligned(rows: ReadonlyArray<ReadonlyArray<string>>, gap = "  "):
   // a cell empty because it had nothing to say (a provider kind equal to its
   // id, say) would otherwise get a run of spaces where a column was.
   const kept = widths.flatMap((wide, at) => (wide > 0 ? [at] : []));
+
   return rows.map((row) =>
     kept
       .map((at) => (row[at] ?? "").padEnd(widths[at] ?? 0))

@@ -50,9 +50,11 @@ test("/diff prints the collected diff", async () => {
         if (argv.includes("--others")) {
           return { exit: 0, stdout: "", stderr: "" };
         }
+
         if (argv.includes("rev-parse") || argv.includes("--get-regexp")) {
           return { exit: argv.includes("rev-parse") ? 0 : 1, stdout: "", stderr: "" };
         }
+
         return { exit: 1, stdout: "--- a/f.ts\n", stderr: "" };
       },
     },
@@ -63,8 +65,10 @@ test("/diff prints the collected diff", async () => {
 test("bare /review shows the latest turn; numeric args address user messages", () => {
   const records = [user("t1", "first", 0), user("t2", "second", 1)];
   const latest = slashReviewText(records, "");
+
   assert.match(latest, /turn t2/);
   const first = slashReviewText(records, "1");
+
   assert.match(first, /turn t1/);
   assert.match(first, /first/);
   assert.match(slashReviewText(records, "9"), /out of range/);
@@ -77,12 +81,14 @@ test("/rollback previews the horizon and names the fork", async () => {
   // The horizon sits strictly before the message (F8): rolling back to the
   // second message keeps the first one visible.
   const text = slashRollbackText(records, "s1", "2");
+
   assert.match(text, /horizon 0/);
   assert.match(text, /would see 1 item\(s\), 1 hidden/);
   assert.match(text, /trylo session fork s1 --before-user-message 2/);
   assert.match(text, /journal is unchanged/);
   // Rolling back to the very first message keeps no transcript items.
   const empty = slashRollbackText(records, "s1", "1");
+
   assert.match(empty, /nothing precedes it/);
   assert.match(empty, /--before-user-message 1/);
   assert.match(slashRollbackText(records, "s1", ""), /usage: \/rollback/);

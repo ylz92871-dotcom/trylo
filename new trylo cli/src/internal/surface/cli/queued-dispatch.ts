@@ -47,26 +47,33 @@ export function createIdleDispatch(ctx: CliContext): IdleDispatchSource {
     if (existing !== undefined) {
       return existing;
     }
+
     const created = createFileBackgroundQueue({
       path: sessionQueuePath(ctx.homeDir, ctx.env, sessionId),
       clock: { now: ctx.now, newId: ctx.newId },
     });
+
     queues.set(sessionId, created);
+
     return created;
   };
+
   return async (sessionId) => {
     const queue = queueFor(sessionId);
     const page = await queue.list(0, 2);
     if (!page.ok) {
       return { kind: "unknown", code: page.code };
     }
+
     const decision = dispatchDecision(page);
     if (decision.kind === "unknown") {
       return { kind: "unknown", code: decision.code };
     }
+
     if (decision.kind === "idle") {
       return { kind: "idle" };
     }
+
     const id = decision.message.id;
     const dropped = await queue.delete(id);
     if (!dropped.ok) {
@@ -75,6 +82,7 @@ export function createIdleDispatch(ctx: CliContext): IdleDispatchSource {
       // how one message gets answered twice.
       return { kind: "unknown", code: dropped.code };
     }
+
     return {
       kind: "turn",
       id,

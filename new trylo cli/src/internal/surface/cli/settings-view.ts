@@ -12,6 +12,7 @@ export function settingsText(ctx: CliContext, scaffold: RunScaffold): string {
     `请求地址：${scaffold.endpoint || "离线演示"}`, `账号：${account?.label ?? scaffold.accountId ?? "环境变量或无需凭据"}`,
     `权限：${scaffold.permissions?.snapshot().mode ?? "未提供"}`, `会话：${scaffold.sessionId}`,
     `用户配置：${tryloHome(ctx.homeDir, ctx.env)}`];
+
   if (status.kind === "failed") lines.push(`默认配置不可用：${status.failure.message}`);
   else {
     lines.push(`保存的选择：${status.provider.providerId}/${status.provider.model}`, `保存的请求地址：${status.provider.endpoint || "离线演示"}`);
@@ -20,5 +21,6 @@ export function settingsText(ctx: CliContext, scaffold: RunScaffold): string {
     }
     for (const source of status.sources) if (source.path !== undefined && source.status === "loaded") lines.push(`配置来源：${source.path}`);
   }
+
   return `${lines.join("\n")}\n`;
 }

@@ -52,16 +52,20 @@ export type SessionReviewOptions = {
 
 export function parseDiff(argv: ReadonlyArray<string>): ParsedCommand {
   let json = false;
+
   for (const token of argv) {
     if (token === "--help" || token === "-h") {
       return { kind: "help" };
     }
+
     if (token === "--json") {
       json = true;
       continue;
     }
+
     return usageError(`diff does not accept ${token}`, DIFF_HINT);
   }
+
   return { kind: "diff", options: { json } };
 }
 
@@ -72,31 +76,38 @@ export function parseReview(argv: ReadonlyArray<string>): ParsedCommand {
   let commit: string | undefined;
   let commitTitle: string | undefined;
   const positional: string[] = [];
+
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index] ?? "";
     if (token === "--help" || token === "-h") {
       return { kind: "help" };
     }
+
     if (token === "--json") {
       json = true;
       continue;
     }
+
     if (token === "--uncommitted") {
       uncommitted = true;
       continue;
     }
+
     const flag = flagToken(token);
     if (flag === undefined) {
       positional.push(token);
       continue;
     }
+
     if (flag.name !== "base" && flag.name !== "commit" && flag.name !== "title") {
       return usageError(`review does not accept --${flag.name}`, REVIEW_HINT);
     }
+
     const read = readValue(argv, index, flag.inlineValue);
     if (read.error !== undefined || (read.value ?? "").trim().length === 0) {
       return usageError(`option --${flag.name} ${read.error ?? "requires a non-empty value"}`, REVIEW_HINT);
     }
+
     if (flag.name === "base") {
       base = read.value ?? "";
     } else if (flag.name === "commit") {
@@ -104,13 +115,16 @@ export function parseReview(argv: ReadonlyArray<string>): ParsedCommand {
     } else {
       commitTitle = read.value ?? "";
     }
+
     index = read.next - 1;
   }
+
   // Codex parity: a lone `-` reads the custom prompt from stdin instead of
   // using the dash as instructions. Any other shape (including `-` with
   // company) is literal prompt text.
   const promptFromStdin = positional.length === 1 && positional[0] === "-";
   const prompt = promptFromStdin || positional.join(" ").trim() === "" ? undefined : positional.join(" ").trim();
+
   return {
     kind: "review",
     options: {
@@ -130,9 +144,11 @@ export function requireSessionId(argv: ReadonlyArray<string>, verb: string, hint
   if (session === "--help" || session === "-h") {
     return familyHelpCommand("session");
   }
+
   if (session === undefined || session.startsWith("--")) {
     return usageError(`session ${verb} requires a session id`, hint);
   }
+
   return session;
 }
 
@@ -150,25 +166,31 @@ export function parseSessionReview(argv: ReadonlyArray<string>): ParsedCommand {
   if (typeof required !== "string") {
     return required;
   }
+
   let json = false;
   let turn: string | undefined;
   let message: number | undefined;
   let asOfSequence: number | undefined;
+
   for (let index = 1; index < argv.length; index += 1) {
     const token = argv[index] ?? "";
     if (token === "--json") {
       json = true;
       continue;
     }
+
     const flag = flagToken(token);
     if (flag === undefined) {
       return usageError(`session review does not accept ${token}`, SESSION_REVIEW_HINT);
     }
+
     const read = readValue(argv, index, flag.inlineValue);
     if (read.error !== undefined) {
       return usageError(`option --${flag.name} ${read.error}`, SESSION_REVIEW_HINT);
     }
+
     const raw = read.value ?? "";
+
     if (flag.name === "turn") {
       if (raw.trim().length === 0) {
         return usageError("option --turn requires a non-empty value", SESSION_REVIEW_HINT);
@@ -187,11 +209,14 @@ export function parseSessionReview(argv: ReadonlyArray<string>): ParsedCommand {
     } else {
       return usageError(`session review does not accept --${flag.name}`, SESSION_REVIEW_HINT);
     }
+
     index = read.next - 1;
   }
+
   if (turn !== undefined && message !== undefined) {
     return usageError("--turn and --message cannot be used together", SESSION_REVIEW_HINT);
   }
+
   return {
     kind: "session_review",
     options: {

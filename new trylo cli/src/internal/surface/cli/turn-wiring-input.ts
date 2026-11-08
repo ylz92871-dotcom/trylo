@@ -1,7 +1,7 @@
 import type { LocalRuleLookup } from "../../adapters/project-instructions/appendix.js";
 import type { MemoryReadPort } from "../../ports/memory.js";
 import type { UserLearningRuntime, UserMemoryService } from "../../integration/user-learning/index.js";
-import type { ToolGapRuntime } from "../../integration/tool-learning/index.js";
+import type { ToolGapRuntime } from "../../learning/agent/subsystems/tool/runtime/index.js";
 import type { McpRuntime } from "../../adapters/mcp-runtime/index.js";
 import type { SubagentEventSink } from "../../subagent/index.js";
 import { createMethodLearningWiring } from "./learning-sink.js";
@@ -9,6 +9,10 @@ import type { TurnHostInput } from "./host.js";
 import type { WiringInput } from "./wiring.js";
 import { agentMessages } from "./agent-instructions.js";
 import type { SubagentCheckpointPort } from "../../subagent/checkpoint.js";
+import type { TopicLearningRuntime } from "../../integration/learning-topics/runtime.js";
+import type { ReadRoutingPort } from "../../ports/read-routing.js";
+import { sessionContentAddress } from "../../integration/learning-content/index.js";
+import { readUserLearningClarificationFor } from "./user-learning-config.js";
 
 /**
  * Everything `wirePorts` is told, assembled in one place.
@@ -32,11 +36,30 @@ export function turnWiringInput(
   memory?: MemoryReadPort | undefined,
   memoryWrite?: UserMemoryService | undefined,
   checkpoints?: SubagentCheckpointPort,
+  topics?: TopicLearningRuntime,
+  readRouting?: ReadRoutingPort,
 ): WiringInput {
+  const userHost = input.userLearning;
   return {
+    ...(input.centralLearning === undefined ? {} : { centralLearning: input.centralLearning }),
+    ...(input.collaborationLearning === undefined ? {} : { collaborationLearning: {
+      ...input.collaborationLearning, scope: input.workspaceRoot, ...(input.subagentTeam === undefined ? {} : { team: input.subagentTeam }),
+      taskId: input.subagentTeam?.runId ?? input.sessionId, turnId: input.turnId, now: input.now,
+      ...(input.centralLearning === undefined ? {} : { sourceAddress: sessionContentAddress({ sessionId: input.sessionId, turnId: input.turnId }) }),
+      ...(input.cancelSignal === undefined ? {} : { signal: input.cancelSignal }),
+      warn: reason => input.sink.stderr(`warning: ${reason}\n`),
+      ...(userHost === undefined ? {} : { readUserClarification: () => readUserLearningClarificationFor(userHost) }),
+      ...(input.skillPending === undefined ? {} : { readSkillPending: input.skillPending.readSkillPending }),
+    } }),
+    ...(readRouting === undefined ? {} : { readRouting }),
+    ...(topics === undefined ? {} : { topics }),
+    ...(input.goal === undefined ? {} : { goal: input.goal }),
     ...(input.additionalTools === undefined ? {} : { additionalTools: input.additionalTools }),
+    ...(input.skillPending === undefined ? {} : { skillPending: input.skillPending }),
     turnId: input.turnId,
     ...(input.toolSelection === undefined ? {} : { toolSelection: input.toolSelection }),
+    ...(input.configuredToolSelection === undefined ? {} : { configuredToolSelection: input.configuredToolSelection }),
+    ...(input.toolSelectionCeiling === undefined ? {} : { toolSelectionCeiling: input.toolSelectionCeiling }),
     ...(input.resumeRecords === undefined ? {} : { workflowRecords: input.resumeRecords }),
     ...(input.questions === undefined ? {} : { questions: input.questions }),
     ...(input.execution === undefined ? {} : { execution: input.execution }),
@@ -51,6 +74,8 @@ export function turnWiringInput(
     ...(input.tokenManager === undefined ? {} : { tokenManager: input.tokenManager }),
     ...(input.accountId === undefined ? {} : { accountId: input.accountId }),
     ...(input.warm === undefined ? {} : { warm: input.warm }),
+    ...(input.providerGuard === undefined ? {} : { providerGuard: input.providerGuard }),
+    ...(input.requestAttemptPolicy === undefined ? {} : { requestAttemptPolicy: input.requestAttemptPolicy }),
     workspaceRoot: input.workspaceRoot,
     ...(input.fileAccess === undefined ? {} : { fileAccess: input.fileAccess }),
     checkpointRoot: input.checkpointRoot,
@@ -58,7 +83,8 @@ export function turnWiringInput(
     ...(input.execPolicy === undefined ? {} : { execPolicy: input.execPolicy }),
     ...(input.grants === undefined ? {} : { grants: input.grants }),
     nowMs: input.now(),
-    ...(mcp === undefined ? {} : { mcp: { tools: mcp.tools, toolNames: mcp.toolNames } }),
+    ...(mcp === undefined ? {} : { mcp: { tools: mcp.tools, toolNames: mcp.toolNames,
+      ...(mcp.wrapProvider === undefined ? {} : { wrapProvider: mcp.wrapProvider }) } }),
     ...(userLearning === undefined ? {} : { userLearning }),
     ...(toolGap === undefined ? {} : { toolGap }),
     ...(input.permissionLedger === undefined ? {} : { permissionLedger: input.permissionLedger }),
@@ -82,7 +108,12 @@ export function turnWiringInput(
       ? {}
       : {
           subagent: {
+            ...(input.onChildRequestDispatched === undefined ? {} : { onChildRequestDispatched: input.onChildRequestDispatched }),
+            ...(input.subagentRouting === undefined ? {} : { routing: input.subagentRouting }),
+            ...(input.collaborationLearning === undefined ? {} : {
+              onCollaborationFailure: phase => input.sink.stderr(`warning: collaboration_observer_rejected:${phase}\n`) }),
             ...(checkpoints === undefined ? {} : { checkpoints, sessionId: input.sessionId }),
+            ...(input.subagentModelMigration === undefined ? {} : { modelMigration: input.subagentModelMigration }),
             // Two doors, one switch: the fixture provider is the offline test
             // path, `--subagent` is the opt-in for every real provider.
             enabled: input.providerId === "fixture-subagent" || input.subagentEnabled === true,

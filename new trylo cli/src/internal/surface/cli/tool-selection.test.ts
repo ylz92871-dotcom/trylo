@@ -46,6 +46,7 @@ test("selection fingerprints describe the selected catalog rather than the full 
     const full = wirePorts({ providerId: "fixture", model: "default", endpoint: "", apiKey: undefined,
       workspaceRoot: process.cwd(), permission: createDenyAllPermission() });
     if ("code" in full) throw new Error(full.detail);
+
     try {
       const expected = toolCatalogHash({ ...full.ports.tools,
         snapshot: () => full.ports.tools.snapshot().filter(binding => ["read_file", "todo_write"].includes(binding.name)),
@@ -66,6 +67,7 @@ test("unknown selected names refuse the real host before any provider response",
     sink: { stdout: (text: string) => output.push(text), stderr: (text: string) => output.push(text) },
     now: () => 1000, toolSelection: ["missing_tool"] };
   const result = await executeTurn(input);
+
   assert.equal(result.exitCode, 2);
   assert.deepEqual(output, []);
 });
@@ -76,13 +78,19 @@ test("the final selection also encloses mounted MCP tools and blocks hidden exec
     snapshot: () => ["mcp__fixture__one", "mcp__fixture__two"].map(name => ({ name, description: name,
       parameters: { type: "object", properties: {} }, sideEffect: "read_only", needsApproval: false,
       timeoutMs: 1000, outputLimits: { maxBytes: 1000, maxLines: 10 } })),
-    async execute(call) { executions.push(call.name); return { outcome: "result", value: {}, output: "ok", truncated: false }; },
+
+    async execute(call) {
+      executions.push(call.name);
+      return { outcome: "result", value: {}, output: "ok", truncated: false };
+    },
+
     async cancel() { /* Test port has no active resources. */ },
   };
   const wiring = wirePorts({ providerId: "fixture", model: "default", endpoint: "", apiKey: undefined,
     workspaceRoot: process.cwd(), permission: createDenyAllPermission(), toolSelection: ["todo_write", "mcp__fixture__one"],
     mcp: { tools: mcpTools, toolNames: new Set(mcpTools.snapshot().map(binding => binding.name)) } });
   if ("code" in wiring) throw new Error(wiring.detail);
+
   try {
     assert.deepEqual(wiring.ports.tools.snapshot().map(binding => binding.name).sort(), ["mcp__fixture__one", "todo_write"]);
     const outcome = await wiring.ports.tools.execute({ name: "mcp__fixture__two", toolCallId: "hidden", arguments: {} }, new AbortController().signal);

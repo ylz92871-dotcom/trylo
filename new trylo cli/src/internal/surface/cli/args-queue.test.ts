@@ -81,6 +81,7 @@ test("every verb refuses a missing session, in its own words", () => {
       `${sub} should refuse a missing session`,
     );
   }
+
   // And where the session is the only thing missing, all three say so.
   assert.match(errorMessage(parseQueue(["add", "--message", "x"])), /requires --session/);
   assert.match(errorMessage(parseQueue(["list"])), /requires --session/);

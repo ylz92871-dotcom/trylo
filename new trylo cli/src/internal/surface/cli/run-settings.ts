@@ -25,6 +25,7 @@ export type ResolvedSettings = {
   readonly format: OutputFormat;
   readonly maxIterations?: number;
   readonly maxTokens?: number;
+  readonly toolSelection?: readonly string[];
   /**
    * Optional working-window preference. Execution defaults it to 200K and
    * clamps it to every declared provider/model capacity.
@@ -99,6 +100,7 @@ export function resolveSettings(
       "set `format` to text or stream-json",
     );
   }
+
   const maxIterations = numberEntry(resolved, "maxIterations");
   const maxTokens = numberEntry(resolved, "maxTokens");
   const contextTokenLimit = numberEntry(resolved, "contextTokenLimit");
@@ -108,6 +110,8 @@ export function resolveSettings(
   const outputPricePerMTok = numberEntry(resolved, "outputPricePerMTok");
   const lspConfigFile = stringEntry(resolved, "lspConfigFile");
   const shell = stringEntry(resolved, "shell");
+  const toolSelection = resolved.toolSelection?.value;
+
   return {
     providerId: providerRaw,
     model: stringEntry(resolved, "model") ?? "default",
@@ -122,5 +126,6 @@ export function resolveSettings(
     ...(outputPricePerMTok === undefined ? {} : { outputPricePerMTok }),
     ...(lspConfigFile === undefined ? {} : { lspConfigFile }),
     ...(shell === undefined ? {} : { shell }),
+    ...(Array.isArray(toolSelection) && toolSelection.every((name): name is string => typeof name === "string") ? { toolSelection } : {}),
   };
 }

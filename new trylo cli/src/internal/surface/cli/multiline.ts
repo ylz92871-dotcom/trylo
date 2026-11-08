@@ -28,7 +28,9 @@ export async function readMultiLine(
   if (first === undefined) {
     return undefined;
   }
+
   let text = first;
+
   while (isContinuation(text)) {
     text = text.slice(0, -1);
     const next = await read();
@@ -37,5 +39,6 @@ export async function readMultiLine(
     }
     text += `\n${next}`;
   }
+
   return text;
 }

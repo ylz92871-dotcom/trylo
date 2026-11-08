@@ -111,6 +111,7 @@ export function createPageExtractor(input: {
     if (signal.aborted) {
       throw new Error("cancelled before the extraction request");
     }
+
     const request = {
       attemptId: "web-fetch-extract",
       model: input.model,
@@ -125,6 +126,7 @@ export function createPageExtractor(input: {
       maxOutputTokens: EXTRACTOR_MAX_OUTPUT_TOKENS,
     };
     let text = "";
+
     for await (const event of input.provider.stream(request, signal)) {
       if (event.type === "text_delta") {
         text += event.text;
@@ -134,6 +136,7 @@ export function createPageExtractor(input: {
         break;
       }
     }
+
     return text;
   };
 }

@@ -30,6 +30,7 @@ export function lspAuthorizer(servers: ReadonlyArray<LspServerConfig>): LspProce
       ? { ok: true }
       : { ok: false, code: "lsp_start_denied", message: `${command} is not a configured language server` };
 }
+
 /**
  * Undefined in, undefined out: no configured servers means no pool, no tool,
  * no process, and a byte-identical catalog. The host environment comes from
@@ -39,12 +40,14 @@ export function buildLspPool(servers: ReadonlyArray<LspServerConfig> | undefined
   if (servers === undefined) {
     return undefined;
   }
+
   const events: Array<LspLogEvent> = [];
   const pool = new LanguageServerPool({
     servers,
     deps: {
       authorize: lspAuthorizer(servers),
       hostEnv: hostProcessEnvironment(),
+
       log: (event) => {
         events.push(event);
         if (events.length > LSP_EVENT_RING_LIMIT) {
@@ -53,6 +56,7 @@ export function buildLspPool(servers: ReadonlyArray<LspServerConfig> | undefined
       },
     },
   });
+
   return { pool, events };
 }
 

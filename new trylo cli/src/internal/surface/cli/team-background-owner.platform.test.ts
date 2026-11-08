@@ -15,24 +15,34 @@ test("a recovered member controls its real background command while a sibling ca
   const sessions = createProcessSessionRegistry();
   const tools = createWorkspaceTools({ workspaceRoot: root, sandbox: createWorkspaceSandbox({ workspaceRoot: root }), sessions });
   const runtime = new SubagentRuntime({ tools });
-  t.after(async () => { await runtime.cancelAll(); await sessions.shutdown(); });
+
+  t.after(async () => {
+    await runtime.cancelAll();
+    await sessions.shutdown();
+  });
   const signal = new AbortController().signal;
   const call = { name: "run_shell", toolCallId: "call_1", arguments: {
     command: `node -e ${JSON.stringify("console.log('MEMBER_READY'); setInterval(()=>{},1000)")}`, runInBackground: true } };
   const grants = createPermissionGrantCache();
+
   grants.record(buildPermissionAction(call.toolCallId, call.name, call.arguments), "approved", "session");
   const first = runtime.spawn<ToolOutcome>({ name: "first", permissions: { allowedTools: ["run_shell"], inheritedGrants: grants },
     lineage: { parentAgentId: "parent", rootAttemptId: "member-start" }, worker: context => context.tools.execute(call, context.signal) });
   const started = await first.wait();
+
   assert.equal(started.status, "completed");
   assert.equal(started.output?.outcome, "result");
+
   if (started.output?.outcome !== "result") return;
+
   await runtime.waitForRetirement(first.subagentId, 1000, signal);
   const id = String(started.output.value.sessionId);
+
   assert.equal(sessions.get(id)?.ownerId, first.subagentId);
   const stranger = runtime.spawn<ToolOutcome>({ name: "sibling", permissions: { allowedTools: ["stop_process"] },
     lineage: { parentAgentId: "parent", rootAttemptId: "sibling-stop" }, worker: context => context.tools.execute({
       name: "stop_process", toolCallId: "call_1", arguments: { sessionId: id } }, context.signal) });
+
   assert.equal((await stranger.wait()).output?.outcome, "error");
   assert.equal(sessions.get(id)?.status, "running");
   const continued = runtime.spawn<ToolOutcome>({ name: "continued", permissions: { allowedTools: ["write_stdin", "stop_process"] },
@@ -44,6 +54,7 @@ test("a recovered member controls its real background command while a sibling ca
       return context.tools.execute({ name: "stop_process", toolCallId: "stop", arguments: { sessionId: id } }, context.signal);
     } });
   const finished = await continued.wait();
+
   assert.equal(finished.status, "completed");
   assert.equal(finished.output?.outcome, "result");
   assert.equal(sessions.get(id)?.status, "exited");

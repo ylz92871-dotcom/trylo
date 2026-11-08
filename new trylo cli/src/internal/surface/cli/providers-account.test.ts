@@ -39,10 +39,12 @@ function recorded(homeDir: string): Recorded {
     readFile: (path) => files.get(path),
     isDirectory: () => true,
     readDir: () => [],
+
     writeFile: (path, text) => {
       files.set(path, text);
       return true;
     },
+
     readStdin: async () => "",
     readLine: async () => undefined,
     readSecret: async () => "seed-secret",
@@ -51,6 +53,7 @@ function recorded(homeDir: string): Recorded {
     now: () => 0,
     newId: (prefix) => `${prefix}-1`,
   };
+
   return { ctx, out, err, files };
 }
 
@@ -63,9 +66,11 @@ const ADD = {
 
 test("D7: add with an unknown account is refused and writes nothing", async (t) => {
   const home = mkdtempSync(join(tmpdir(), "trylo-acct-"));
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const fx = recorded(home);
   const code = handleProvidersAdd(fx.ctx, { ...ADD, account: "nosuch" });
+
   assert.equal(code, EXIT_CODES.USAGE);
   assert.match(fx.err.join(""), /unknown account nosuch/);
   assert.match(fx.err.join(""), /auth list/);
@@ -74,13 +79,16 @@ test("D7: add with an unknown account is refused and writes nothing", async (t) 
 
 test("D7: a stored account passes, and edit to an unknown one is refused", async (t) => {
   const home = mkdtempSync(join(tmpdir(), "trylo-acct-"));
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const fx = recorded(home);
+
   assert.equal(await handleLogin(fx.ctx, { provider: "openai-compatible", account: "acc-old" }), EXIT_CODES.OK);
   assert.equal(handleProvidersAdd(fx.ctx, { ...ADD, account: "acc-old" }), EXIT_CODES.OK);
 
   const path = `${home}/.trylo/providers.json`;
   const before = fx.files.get(path);
+
   assert.equal(handleProvidersEdit(fx.ctx, { id: "lab", account: "nosuch" }), EXIT_CODES.USAGE);
   assert.match(fx.err.join(""), /unknown account nosuch/);
   assert.equal(fx.files.get(path), before);
@@ -88,13 +96,17 @@ test("D7: a stored account passes, and edit to an unknown one is refused", async
 
 test("D7: a run bound to a dangling account fails config, not auth", (t) => {
   const home = mkdtempSync(join(tmpdir(), "trylo-acct-"));
+
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const fx = recorded(home);
   const result = runCredentialFor(fx.ctx, "openai-compatible", "nosuch");
+
   assert.equal("exitCode" in result, true, "expected a failure, not a credential");
+
   if (!("exitCode" in result)) {
     throw new Error("unreachable");
   }
+
   assert.equal(result.exitCode, EXIT_CODES.CONFIG);
   assert.notEqual(result.exitCode, EXIT_CODES.AUTH);
   assert.match(result.message, /providers\.json/);

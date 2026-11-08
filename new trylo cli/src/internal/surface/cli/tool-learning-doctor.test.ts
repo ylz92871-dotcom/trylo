@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TOOL_LEDGER_FILE } from "../../integration/tool-learning/index.js";
+import { TOOL_LEDGER_FILE } from "../../learning/agent/subsystems/tool/runtime/index.js";
 import { toolLearningCheck, type ToolLearningDoctorIo } from "./tool-learning-doctor.js";
 import { toolLearningRoot } from "./tool-learning-config.js";
 
@@ -31,6 +31,7 @@ function memoryIo(files: Readonly<Record<string, string>>): {
     io: {
       homeDir: HOME,
       env: ENV,
+
       readFile: (absolutePath) => {
         // 归一化反斜杠：`path.join` 在 Windows 上给的是 `\`，而这张假表的键是 `/`。
         // 不归一化的话每条用例都会拿到 undefined，而症状看起来像「诊断读不到账」。
@@ -53,6 +54,7 @@ function line(kind: string, extra: Record<string, unknown> = {}): string {
 test("R1 没有账 → skip，并如实说「还没有账」，而不是把它当零", () => {
   const { io, asked } = memoryIo({});
   const check = toolLearningCheck(io, "tool");
+
   assert.equal(check.id, "learning.tools");
   assert.equal(check.status, "skip");
   assert.equal(check.detail.includes("no ledger yet"), true);
@@ -75,6 +77,7 @@ test("R2 三种记录各数各的，状态 ok", () => {
     ].join("\n"),
   });
   const check = toolLearningCheck(io, "all");
+
   assert.equal(check.status, "ok");
   assert.equal(check.detail.includes("proposals 1"), true);
   assert.equal(check.detail.includes("observations 1"), true);
@@ -87,6 +90,7 @@ test("R3 坏行算 unreadable 并让状态变 warn（不许把读不懂的当零
     [ledgerPath()]: [line("proposal", {}), "{ 这不是 JSON", '"一个字符串"'].join("\n"),
   });
   const check = toolLearningCheck(io, "tool");
+
   assert.equal(check.status, "warn");
   assert.equal(check.detail.includes("proposals 1"), true);
   assert.equal(check.detail.includes("unreadable 2"), true);
@@ -108,6 +112,7 @@ test("R5 只报条数：账里的 capability 文本一个字都不进诊断", ()
       .join("\n"),
   });
   const check = toolLearningCheck(io, "tool");
+
   assert.equal(check.detail.includes(secret), false, "诊断会被贴进 issue，那句话不该那样离开本机");
   assert.equal(check.detail.includes("capability text is never printed"), true);
 });

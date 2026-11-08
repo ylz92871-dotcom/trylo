@@ -146,6 +146,7 @@ async function runOccurrence(
         "Re-create it with --session <id>.",
     };
   }
+
   const enqueued = await queueOf(ctx, sessionId).enqueue(occurrence.prompt);
   if (enqueued.ok) {
     return {
@@ -157,6 +158,7 @@ async function runOccurrence(
       },
     };
   }
+
   return {
     outcome: "failed",
     code: enqueued.code,
@@ -169,19 +171,24 @@ export async function handleSchedule(ctx: CliContext, parsed: ScheduleParse): Pr
     ctx.stderr(`${parsed.message}\n${parsed.hint}\n`);
     return EXIT_CODES.USAGE;
   }
+
   if (parsed.verb === "help") {
     ctx.stdout(scheduleHelpText());
     return EXIT_CODES.OK;
   }
+
   if (parsed.verb === "add") {
     return handleAdd(ctx, parsed.options);
   }
+
   if (parsed.verb === "list") {
     return handleList(ctx, parsed.options);
   }
+
   if (parsed.verb === "remove") {
     return handleRemove(ctx, parsed.options);
   }
+
   return handleRun(ctx, parsed.options);
 }
 
@@ -200,20 +207,25 @@ async function handleAdd(ctx: CliContext, options: ScheduleAddOptions): Promise<
     reportRefusal(ctx, created.code, message, hint, options.json);
     return exitCodeFor(created.code);
   }
+
   const schedule = created.value;
+
   if (options.json) {
     ctx.stdout(`${JSON.stringify({ id: schedule.id, cron: schedule.cron, recurring: schedule.recurring, durable: schedule.durable, sessionId: schedule.sessionId ?? null })}\n`);
     return EXIT_CODES.OK;
   }
+
   ctx.stdout(`Scheduled ${schedule.id} — ${cronToHuman(schedule.cron)}.\n`);
   ctx.stdout(
     options.durable
       ? "It survives this process. `trylo schedule run` fires everything due now.\n"
       : "It lives in this session only; pass --durable to keep it.\n",
   );
+
   if (options.sessionId === undefined) {
     ctx.stdout("No --session given, so it cannot fire yet; re-create it with --session <id>.\n");
   }
+
   return EXIT_CODES.OK;
 }
 
@@ -225,16 +237,20 @@ async function handleList(ctx: CliContext, options: ScheduleListOptions): Promis
     reportRefusal(ctx, listed.code, message, hint, options.json);
     return exitCodeFor(listed.code);
   }
+
   const live = liveSchedules(listed.value);
   const nowMs = ctx.now();
+
   if (options.json) {
     ctx.stdout(`${JSON.stringify(live.map((schedule) => describe(schedule, nowMs)))}\n`);
     return EXIT_CODES.OK;
   }
+
   if (live.length === 0) {
     ctx.stdout("no schedules\n");
     return EXIT_CODES.OK;
   }
+
   ctx.stdout(
     live.map((schedule) => {
       const next = nextDueAtMs(schedule);
@@ -242,6 +258,7 @@ async function handleList(ctx: CliContext, options: ScheduleListOptions): Promis
       return `${schedule.id}  ${cronToHuman(schedule.cron).padEnd(24)}  next: ${when}  ${schedule.durable ? "durable" : "session"}`;
     }).join("\n") + "\n",
   );
+
   return EXIT_CODES.OK;
 }
 
@@ -253,6 +270,7 @@ async function handleRemove(ctx: CliContext, options: ScheduleRemoveOptions): Pr
     reportRefusal(ctx, removed.code, message, hint, options.json);
     return exitCodeFor(removed.code);
   }
+
   // State the part a boolean cannot: deleting stops *future* work and does not
   // recall anything already handed to a runner — and `unknown` (effect may or
   // may not have landed) counts as in flight, because deleting does not
@@ -263,21 +281,26 @@ async function handleRemove(ctx: CliContext, options: ScheduleRemoveOptions): Pr
   const hasRunner = states.ok && states.value.some((state) => state.state === "claimed" || state.state === "dispatched");
   const hasUnknown = states.ok && states.value.some((state) => state.state === "unknown");
   const inFlight = hasRunner || hasUnknown;
+
   if (options.json) {
     ctx.stdout(
       `${JSON.stringify({ id: options.scheduleId, removed: true, workInFlight: inFlight, unknownInFlight: hasUnknown })}\n`,
     );
     return EXIT_CODES.OK;
   }
+
   ctx.stdout(`Removed ${options.scheduleId}; it will not fire again.\n`);
+
   if (hasRunner) {
     ctx.stdout("One occurrence was already handed to a runner and will still complete.\n");
   }
+
   if (hasUnknown) {
     ctx.stdout(
       "One occurrence is in unknown state (its effect may or may not have landed); deleting does not resolve it — it needs reconciliation.\n",
     );
   }
+
   return EXIT_CODES.OK;
 }
 
@@ -294,6 +317,7 @@ async function handleRun(ctx: CliContext, options: ScheduleRunOptions): Promise<
     reportRefusal(ctx, took.code, message, hint, options.json);
     return exitCodeFor(took.code);
   }
+
   try {
     const nowMs = ctx.now();
     const claimed = await store.claimDue(nowMs, took.value);
@@ -302,23 +326,29 @@ async function handleRun(ctx: CliContext, options: ScheduleRunOptions): Promise<
       reportRefusal(ctx, claimed.code, message, hint, options.json);
       return exitCodeFor(claimed.code);
     }
+
     const settled: Array<{ readonly id: string; readonly outcome: string }> = [];
+
     for (const occurrence of claimed.value) {
       const outcome = await runOccurrence(ctx, occurrence);
       await store.settle(occurrence.id, outcome, took.value);
       settled.push({ id: occurrence.id, outcome: outcome.outcome });
     }
+
     if (options.json) {
       ctx.stdout(`${JSON.stringify({ dueAtMs: nowMs, fired: settled })}\n`);
       return EXIT_CODES.OK;
     }
+
     if (settled.length === 0) {
       ctx.stdout("nothing due\n");
       return EXIT_CODES.OK;
     }
+
     for (const entry of settled) {
       ctx.stdout(`${entry.id}  ${entry.outcome}\n`);
     }
+
     return EXIT_CODES.OK;
   } finally {
     // The lease goes back whatever happened above. Forgetting it would not lose

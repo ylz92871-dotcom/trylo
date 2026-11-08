@@ -87,6 +87,7 @@ function recordingProvider(script: FakeProviderScript): {
 } {
   const inner = createFakeProvider(script);
   const requests: ProviderRequest[] = [];
+
   return {
     port: {
       stream(request, signal) {
@@ -146,6 +147,7 @@ test("the whole method pipeline turns under the production wiring", async () => 
     if ("code" in wiring) {
       assert.fail("expected a wiring");
     }
+
     assert.notEqual(wiring.ports.method, undefined, "the switch must reach the composition root");
 
     const result = await runTurn(
@@ -160,14 +162,17 @@ test("the whole method pipeline turns under the production wiring", async () => 
 
     // ① 卡真的入档了：档是控制板的账本，`commit_asset` 是过门即入的那一笔。
     const boardLog = join(methodBoardRoot(home, env), "board-events.ndjson");
+
     assert.equal(existsSync(boardLog), true, "the board must have written its archive");
     const commands = readFileSync(boardLog, "utf8");
+
     assert.equal(commands.includes("commit_asset"), true, "the admitted card must be archived");
 
     // ② 放权发生在该发生的地方：拍二凑够两个样本，拍三才收到卡。
     const sinkPath = join(methodLearningRoot(home, env), METHOD_EVENTS_FILE);
     const records = sinkRecords(sinkPath);
     const components = records.map((record) => String(record.payload?.component));
+
     assert.equal(
       components.includes("method_scheduler"),
       true,
@@ -180,6 +185,7 @@ test("the whole method pipeline turns under the production wiring", async () => 
         (message) => message.role === "system" && message.content.includes("[method slot]"),
       ),
     );
+
     assert.equal(slotBeats.length >= 1, true, "the archived card must come back on stage");
     assert.equal(
       result.transcript.some((item) => JSON.stringify(item).includes(CARD_JSON)),
@@ -216,6 +222,7 @@ test("the fence body never reaches the event log", async () => {
     if ("code" in wiring) {
       assert.fail("expected a wiring");
     }
+
     await runTurn(
       {
         ...wiring.ports,
@@ -226,11 +233,13 @@ test("the fence body never reaches the event log", async () => {
       { sessionId: "s1", turnId: "t1", correlationId: "c1", text: "write the file", model: "default" },
     );
     const log = readFileSync(join(methodLearningRoot(home, env), METHOD_EVENTS_FILE), "utf8");
+
     // 板上报的是「它决定了什么」——放行、家族、卡的身份；不是模型写了什么。
     assert.equal(log.includes("trylo-learning"), false, "the fence marker must not be logged");
     assert.equal(log.includes("```"), false, "no fence body");
     assert.equal(log.includes("appliesWhen"), false, "the raw card JSON must not be logged");
     assert.equal(log.includes(CARD_JSON), false, "the card body must not be logged");
+
     // 家族与标签是板自己的词表维度，会（也应该）出现：那不是卡正文。
     for (const line of log.split("\n").filter((entry) => entry.length > 0)) {
       assert.doesNotThrow(() => JSON.parse(line), `every line must be valid JSON: ${line}`);
@@ -268,6 +277,7 @@ test("a board the switch never built leaves the run byte for byte the same", asy
       if ("code" in wiring) {
         assert.fail("expected a wiring");
       }
+
       await runTurn(
         {
           ...wiring.ports,
@@ -277,10 +287,12 @@ test("a board the switch never built leaves the run byte for byte the same", asy
         },
         { sessionId: "s1", turnId: "t1", correlationId: "c1", text: "write the file", model: "default" },
       );
+
       return provider.requests.map((request) => JSON.stringify(request));
     };
 
     const off = await runOnce(undefined);
+
     assert.equal(existsSync(methodBoardRoot(home, env)), false, "off must not create the board root");
     assert.equal(existsSync(join(methodLearningRoot(home, env), METHOD_EVENTS_FILE)), false);
     assert.equal(off.length > 0, true);
@@ -296,6 +308,7 @@ test("a board the switch never built leaves the run byte for byte the same", asy
         if (message.role !== "system") {
           continue;
         }
+
         assert.equal(
           message.content?.includes("[method slot]"),
           false,

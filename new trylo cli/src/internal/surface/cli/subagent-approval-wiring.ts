@@ -8,11 +8,15 @@ import { scopedToolCallId } from "../../subagent/scoped-tool-calls.js";
 export function parentActionApproval(permission: PermissionPort, grants?: PermissionGrantCache): ParentActionApproval {
   return async (action, requester, signal) => {
     if (signal.aborted) return decision("cancelled");
+
     const scoped = buildPermissionAction(scopedToolCallId(`subagent:${requester.executionId}`, action.toolCallId), action.name, action.arguments);
     const result = await awaitPermissionDecision(permission, scoped, { signal, requester });
     if (result.outcome === "failed") throw new Error(result.message);
+
     if (signal.aborted) return decision("cancelled");
+
     grants?.record(action, result.resolution, result.scope);
+
     return decision(result.resolution, result.scope, result.reason);
   };
 }

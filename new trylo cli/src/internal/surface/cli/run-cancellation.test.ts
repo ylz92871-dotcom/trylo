@@ -22,16 +22,22 @@ test("one-shot run observes interrupts and durably ends cancelled rather than co
     interrupts: { observe: handler => { interrupt = handler; }, exit: () => { throw new Error("second interrupt unused"); } },
     onRunEnvelope: () => interrupt?.(),
   };
+
   try {
     const parsed = parseArgs(["run", "--provider", "fixture", "--format", "stream-json", "--session", "wp28-cancel", "hello"]);
+
     assert.equal(parsed.kind, "run");
+
     if (parsed.kind !== "run") throw new Error("bad test arguments");
+
     const code = await handleRun(ctx, parsed.options, { stdout: ctx.stdout, stderr: ctx.stderr });
+
     assert.equal(code, 130);
     assert.ok(output.some(line => line.includes('"status":"cancelled"')));
     assert.ok(!output.some(line => line.includes('"status":"completed"')));
     const reopened = createNdjsonSessionStore({ path: join(root, "sessions", "wp28-cancel.ndjson") });
     const journal = await reopened.readRecords();
+
     assert(journal.ok);
     assert(journal.view.records.some(record => record.type === "terminal" && record.payload["reason"] === "cancelled"));
     assert.equal((await reopened.attach()).ok, true, "the cancelled run released its writer lock");
@@ -50,6 +56,7 @@ test("invalid request options refuse before creating a session writer", async ()
     readStdin: async () => "", readLine: async () => undefined, readSecret: async () => undefined,
     stdout: () => {}, stderr: () => {}, now: () => 0, newId: prefix => `${prefix}-refusal`,
   };
+
   try {
     const parsed = parseArgs(["run", "--provider", "fixture", "--session", "invalid-options", "--system-prompt-file", join(root, "missing.txt"), "hello"]);
     assert.equal(parsed.kind, "run");

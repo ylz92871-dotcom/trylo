@@ -10,9 +10,15 @@ export function observeRunCancellation(ctx: CliContext): { readonly signal: Abor
     if (controller.signal.aborted) ctx.interrupts?.exit(EXIT_CODES.CANCELLED);
     else controller.abort();
   };
+
   ctx.interrupts?.observe(handler);
+
   return {
     signal: controller.signal,
-    close: () => { active = false; ctx.interrupts?.unobserve?.(handler); },
+
+    close: () => {
+      active = false;
+      ctx.interrupts?.unobserve?.(handler);
+    },
   };
 }

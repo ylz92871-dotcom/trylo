@@ -31,6 +31,7 @@ function gitError(ctx: CliContext, outcome: Extract<GitDiffOutcome, { ok: false 
   if (outcome.code === "cancelled") {
     return reportFailure(ctx, { exitCode: EXIT_CODES.CANCELLED, message: outcome.detail, hint: "the diff was cancelled; nothing was read" });
   }
+
   if (outcome.code === "git_unavailable") {
     return reportFailure(ctx, {
       exitCode: EXIT_CODES.CONFIG,
@@ -38,6 +39,7 @@ function gitError(ctx: CliContext, outcome: Extract<GitDiffOutcome, { ok: false 
       hint: "install git and run `trylo doctor`; `checkpoint diff` and `session review` do not need git",
     });
   }
+
   return reportFailure(ctx, {
     exitCode: EXIT_CODES.EXECUTION_FAILURE,
     message: outcome.detail,
@@ -47,12 +49,15 @@ function gitError(ctx: CliContext, outcome: Extract<GitDiffOutcome, { ok: false 
 
 export function renderDiffText(outcome: Extract<GitDiffOutcome, { ok: true }>): string {
   const { isGitRepo, diff } = outcome.value;
+
   if (!isGitRepo) {
     return "not a git repository\n";
   }
+
   if (diff === "") {
     return "no changes\n";
   }
+
   return diff.endsWith("\n") ? diff : `${diff}\n`;
 }
 
@@ -69,11 +74,14 @@ export async function handleDiff(
   if (!outcome.ok) {
     return gitError(ctx, outcome);
   }
+
   if (options.json) {
     ctx.stdout(`${JSON.stringify(outcome.value)}\n`);
     return EXIT_CODES.OK;
   }
+
   ctx.stdout(renderDiffText(outcome));
+
   return EXIT_CODES.OK;
 }
 
@@ -108,6 +116,7 @@ export async function handleReview(
   deps?: { readonly runner?: GitCommandRunner },
 ): Promise<ExitCode> {
   let prompt = options.prompt;
+
   if (options.promptFromStdin === true) {
     const stdinText = (await ctx.readStdin()).trim();
     if (stdinText.length === 0) {
@@ -117,8 +126,10 @@ export async function handleReview(
         hint: "pipe instructions in, or pass them as an argument",
       });
     }
+
     prompt = stdinText;
   }
+
   const resolved = parseReviewTarget({
     uncommitted: options.uncommitted,
     ...(options.base === undefined ? {} : { base: options.base }),
@@ -129,6 +140,7 @@ export async function handleReview(
   if (!resolved.ok) {
     return reportFailure(ctx, { exitCode: EXIT_CODES.USAGE, message: resolved.detail, hint: "one target only: --uncommitted, --base, --commit, or a prompt" });
   }
+
   const runner = deps?.runner ?? createGitRunner();
   const mergeBase = resolved.target.kind === "base"
     ? await mergeBaseSha(runner, ctx, resolved.target.branch)
@@ -137,19 +149,23 @@ export async function handleReview(
   if (!prompted.ok) {
     return reportFailure(ctx, { exitCode: EXIT_CODES.USAGE, message: prompted.detail, hint: "give the review something to chew on" });
   }
+
   const hint = reviewHint(resolved.target);
   let diffText: string | undefined;
   let gitAdvice: string | undefined;
+
   if (resolved.target.kind === "uncommitted") {
     const outcome = await collectGitDiff(runner, { cwd: ctx.cwd, platform: platformOf(ctx), baseEnv: ctx.env });
     if (!outcome.ok) {
       return gitError(ctx, outcome);
     }
+
     if (outcome.value.isGitRepo && outcome.value.diff.length > REVIEW_DIFF_CHARS) {
       diffText = `${outcome.value.diff.slice(0, REVIEW_DIFF_CHARS)}\n... [review diff truncated] ...\n`;
     } else {
       diffText = outcome.value.isGitRepo ? outcome.value.diff : undefined;
     }
+
     if (!outcome.value.isGitRepo) {
       gitAdvice = "not a git repository: the review covers the prompt only, with no workspace diff attached";
     } else if (outcome.value.diff === "") {
@@ -162,6 +178,7 @@ export async function handleReview(
   } else if (resolved.target.kind === "commit") {
     gitAdvice = `inspect with \`git show ${resolved.target.sha}\``;
   }
+
   if (options.json) {
     ctx.stdout(`${JSON.stringify({
       target: resolved.target,
@@ -173,15 +190,20 @@ export async function handleReview(
     })}\n`);
     return EXIT_CODES.OK;
   }
+
   const lines = [`reviewing ${hint}`, "", prompted.prompt, ""];
+
   if (diffText !== undefined && diffText.length > 0) {
     lines.push("--- workspace diff ---", "", diffText.endsWith("\n") ? diffText.slice(0, -1) : diffText, "");
   }
+
   if (gitAdvice !== undefined) {
     lines.push(gitAdvice, "");
   }
+
   lines.push("a review is findings, not fixes: this command changed nothing.");
   ctx.stdout(`${lines.join("\n")}\n`);
+
   return EXIT_CODES.OK;
 }
 
@@ -205,6 +227,7 @@ export async function handleCheckpointDiff(
       hint,
     });
   }
+
   // The manifest's own ignore set (F12): previewing with a different set
   // than the snapshot was taken with would report excluded files as added.
   const current = readCurrentRows(ctx.cwd, manifest.manifest.ignores);
@@ -215,30 +238,39 @@ export async function handleCheckpointDiff(
       hint: "fix workspace access, then diff again",
     });
   }
+
   const diff = diffSnapshot(manifestRows(manifest.manifest), current.rows);
   const unreadable = current.unreadable;
+
   if (options.json) {
     ctx.stdout(`${JSON.stringify({ checkpointId: options.checkpointId, digest: manifest.manifest.digest, diff, unreadable })}\n`);
     return EXIT_CODES.OK;
   }
+
   const lines = [`checkpoint ${options.checkpointId} vs workspace`, ""];
+
   for (const row of diff.modified) {
     lines.push(`M ${row.path} (${row.beforeBytes} -> ${row.afterBytes} bytes)`);
   }
+
   for (const row of diff.added) {
     // A rows are the dangerous ones: a bare `restore` deletes them. Say so
     // on the row itself, not three screens further down.
     lines.push(`A ${row.path} (${row.bytes} bytes, created since the snapshot; a bare restore DELETES it)`);
   }
+
   for (const row of diff.removed) {
     lines.push(`D ${row.path} (${row.bytes} bytes in the snapshot, absent now)`);
   }
+
   if (diff.modified.length === 0 && diff.added.length === 0 && diff.removed.length === 0) {
     lines.push("identical: restoring this checkpoint would change nothing");
   }
+
   for (const path of unreadable) {
     lines.push(`? ${path} (unreadable, excluded from the comparison)`);
   }
+
   lines.push(
     "",
     "a diff changes nothing. Rewind selected files with",
@@ -246,5 +278,6 @@ export async function handleCheckpointDiff(
     "a bare `restore` also deletes everything marked A above.",
   );
   ctx.stdout(`${lines.join("\n")}\n`);
+
   return EXIT_CODES.OK;
 }

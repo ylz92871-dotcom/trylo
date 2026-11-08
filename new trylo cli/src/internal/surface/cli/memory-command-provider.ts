@@ -10,13 +10,19 @@ import type { Wiring, WiringFailure } from "./wiring.js";
  */
 export function memoryCommandWiring(wiring: Wiring | WiringFailure, input: TurnHostInput): Wiring | WiringFailure {
   if ("code" in wiring) return wiring;
+
   const previous = input.resumeTranscript?.filter((item) => item.kind === "user").at(-1);
   const plan = localMemoryPlan(input.text, previous?.kind === "user" ? previous.text : undefined);
   if (plan === undefined) return wiring;
+
   let nextStep = 0, pendingCallId: string | undefined, outcome: ToolOutcome | undefined;
   const provider: ProviderPort = {
     async *stream(request, signal): AsyncIterable<ProviderEvent> {
-      if (signal.aborted) { yield { type: "cancel_ack" }; return; }
+      if (signal.aborted) {
+        yield { type: "cancel_ack" };
+        return;
+      }
+
       yield { type: "stream_start", providerId: "trylo-memory-command", model: "local", warnings: [] };
       let step = plan.steps[nextStep];
       let refusal: string | undefined;
@@ -26,10 +32,12 @@ export function memoryCommandWiring(wiring: Wiring | WiringFailure, input: TurnH
         if (selected.kind === "ready") step = selected.step;
         else refusal = selected.message;
       }
+
       const canContinue = nextStep === 0 || outcome?.outcome === "result";
       if (step !== undefined && canContinue && input.userLearning !== undefined && request.tools.some((tool) => tool.name === step.name)) {
         pendingCallId = `memory-command:${input.turnId}:${nextStep++}`;
         outcome = undefined;
+
         if (step.name !== "memory_search") {
           // Permission denial is terminal in the execution loop, so no later
           // provider call can manufacture a receipt for an unexecuted tool.
@@ -38,22 +46,28 @@ export function memoryCommandWiring(wiring: Wiring | WiringFailure, input: TurnH
           yield { type: "text_delta", blockId: "memory-permission", text: `尚未${action}，正在核验本次正式记忆操作的权限。` };
           yield { type: "text_end", blockId: "memory-permission" };
         }
+
         yield { type: "tool_call", toolCallId: pendingCallId, name: step.name, arguments: step.arguments };
         yield { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true };
+
         return;
       }
+
       const saved = nextStep === (revision ? 2 : plan.steps.length) && outcome?.outcome === "result";
       const text = refusal ?? memoryCommandReply(plan, saved ? outcome : outcome?.outcome === "result" ? undefined : outcome, input.userLearning !== undefined);
+
       yield { type: "text_start", blockId: "memory-receipt" };
       yield { type: "text_delta", blockId: "memory-receipt", text };
       yield { type: "text_end", blockId: "memory-receipt" };
       yield { type: "usage", usage: emptyUsage() };
+
       if (!saved && input.userLearning !== undefined) {
         yield { type: "error", class: "invalid_request", retryable: false, phase: "after_stream_started", message: "memory_command_not_saved" };
       } else yield { type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false };
     },
   };
   const tools = wiring.ports.tools;
+
   return { ...wiring, providerId: "trylo-memory-command", model: "local", ports: { ...wiring.ports, provider,
     tools: { ...tools, async execute(call, signal) {
       const result = await tools.execute(call, signal);

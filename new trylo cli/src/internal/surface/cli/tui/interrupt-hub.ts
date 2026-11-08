@@ -50,16 +50,20 @@ export type InterruptHub = {
 export function interruptHubOf(io: TuiIo, ctx: CliContext): InterruptHub {
   const handle = (): InterruptAction => {
     const next = reduceInterrupt(hub.machine, { type: "interrupt", phase: hub.phase });
+
     hub.machine = next.state;
+
     if (next.action.kind === "cancel_turn") {
       hub.cancelRequested = true;
       hub.cancelTurn?.abort();
     }
+
     if (next.action.kind === "exit") {
       hub.exitRequested = true;
       hub.cancelTurn?.abort();
       ctx.interrupts?.exit(EXIT_CODES.CANCELLED);
     }
+
     return next.action;
   };
   const hub: InterruptHub = {
@@ -71,9 +75,11 @@ export function interruptHubOf(io: TuiIo, ctx: CliContext): InterruptHub {
     cancelTurn: undefined,
     notify: handle,
   };
+
   if (io.onInterrupt !== undefined) {
     io.onInterrupt(handle);
   }
+
   return hub;
 }
 

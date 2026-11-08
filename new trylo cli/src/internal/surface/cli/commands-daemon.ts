@@ -39,18 +39,23 @@ export type DaemonParse = DaemonVerb | { readonly verb: "help" };
 
 export function parseDaemon(argv: ReadonlyArray<string>): DaemonParse {
   const [verb, ...rest] = argv;
+
   if (verb === undefined || verb === "--help" || verb === "-h" || verb === "help") {
     return { verb: "help" };
   }
+
   if (verb === "status" || verb === "ps") {
     return { verb: "status", json: hasFlag(rest, "json") };
   }
+
   if (verb === "start") {
     return { verb: "start" };
   }
+
   if (verb === "stop" || verb === "kill") {
     return { verb: "stop", force: hasFlag(rest, "force") || hasFlag(rest, "now") };
   }
+
   return { verb: "help" };
 }
 
@@ -86,8 +91,10 @@ export async function handleDaemon(ctx: CliContext, parsed: DaemonParse): Promis
     ctx.stdout(daemonHelpText());
     return EXIT_CODES.OK;
   }
+
   const home = scheduleHome(ctx.homeDir, ctx.env);
   let probe;
+
   try {
     probe = createProcessIdentityProbe(ctx.platform ?? "win32");
   } catch (error: unknown) {
@@ -97,16 +104,19 @@ export async function handleDaemon(ctx: CliContext, parsed: DaemonParse): Promis
     ctx.stderr(`${error instanceof Error ? error.message : String(error)}\n`);
     return EXIT_CODES.TEMPORARY;
   }
+
   const daemon = createFileDaemon({
     home,
     clock: { now: ctx.now },
     launch: daemonLaunchTarget(),
     platform: ctx.platform ?? "win32",
     probe,
+
     kill: async (pid, options) => {
       ctx.stderr(options.force ? `killing pid ${pid}\n` : `stopping pid ${pid}\n`);
       process.kill(pid, options.force ? "SIGKILL" : "SIGTERM");
     },
+
     requestStop: async (pid) => {
       // A win32 daemon has no cooperative channel yet, so the polite path is a
       // TERM and the forceful path is what actually ends a wedged process. Saying
@@ -117,11 +127,13 @@ export async function handleDaemon(ctx: CliContext, parsed: DaemonParse): Promis
 
   if (parsed.verb === "status") {
     const state = await daemon.status();
+
     if (parsed.json) {
       ctx.stdout(`${JSON.stringify(state)}\n`);
     } else {
       ctx.stdout(`${describeDaemon(state)}\n`);
     }
+
     // `unhealthy` is a failure the person has to act on, so it is not exit 0.
     return state.status === "running" || state.status === "stopped" ? EXIT_CODES.OK : EXIT_CODES.TEMPORARY;
   }
@@ -132,12 +144,14 @@ export async function handleDaemon(ctx: CliContext, parsed: DaemonParse): Promis
       ctx.stderr(`${started.message}\n`);
       return exitCodeFor(started.code);
     }
+
     // `start` only answers ok once the daemon has written its own discovery
     // record with this pid, so this is a confirmed fact rather than a hope. The
     // old wording ("spawned as pid N, run status to see whether it took") was
     // honest about the limits of the claim and useless in practice: a wrong launch
     // target printed it happily while nothing was running.
     ctx.stdout(`the scheduler daemon is running as pid ${started.value.pid}\n`);
+
     return EXIT_CODES.OK;
   }
 
@@ -146,7 +160,9 @@ export async function handleDaemon(ctx: CliContext, parsed: DaemonParse): Promis
     ctx.stderr(`${stopped.message}\n`);
     return exitCodeFor(stopped.code);
   }
+
   ctx.stdout(parsed.force ? "force-stopped the scheduler daemon\n" : "asked the scheduler daemon to stop\n");
+
   return EXIT_CODES.OK;
 }
 

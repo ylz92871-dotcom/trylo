@@ -60,6 +60,7 @@ test("attack #13: completion is byte-identical with a broken config and no tty",
     writeFileSync(join(ws.dir, ".trylo", "config.json"), "{ not json");
     const first = run(["completion", "bash"], ws.dir);
     const second = run(["completion", "bash"], ws.dir);
+
     assert.equal(first.status, 0, first.stderr);
     assert.equal(second.status, 0, second.stderr);
     assert.equal(first.stdout, second.stdout);
@@ -74,10 +75,12 @@ test("an unknown shell is a usage error, never an empty stdout", () => {
   const ws = workspace();
   try {
     const result = run(["completion", "powershell"], ws.dir);
+
     assert.equal(result.status, 2);
     assert.equal(result.stdout, "");
     assert.match(result.stderr, /unknown shell/);
     const bare = run(["completion"], ws.dir);
+
     assert.equal(bare.status, 2);
     assert.match(bare.stderr, /requires a shell/);
   } finally {
@@ -93,6 +96,7 @@ test("the parser accepts each shell and refuses anything else", () => {
       assert.equal(parsed.shell, shell);
     }
   }
+
   assert.equal(isCompletionShell("bash"), true);
   assert.equal(isCompletionShell("csh"), false);
   assert.equal(parseCompletion(["bash", "zsh"]).kind, "error");

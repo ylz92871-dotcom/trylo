@@ -20,11 +20,13 @@ import type { CliContext } from "./context.js";
 
 function workspace(files: Readonly<Record<string, string>>): { readonly dir: string; readonly cleanup: () => void } {
   const dir = mkdtempSync(join(os.tmpdir(), "trylo-ctx-"));
+
   for (const [relative, text] of Object.entries(files)) {
     const absolute = join(dir, relative);
     mkdirSync(join(absolute, ".."), { recursive: true });
     writeFileSync(absolute, text);
   }
+
   return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
@@ -38,6 +40,7 @@ function ctxFor(dir: string): { readonly ctx: CliContext; readonly out: string[]
     nodeVersion: "v20.0.0",
     platform: "linux",
     stdinIsTty: false,
+
     readFile: (path) => {
       try {
         return readFileSync(path, "utf8");
@@ -45,6 +48,7 @@ function ctxFor(dir: string): { readonly ctx: CliContext; readonly out: string[]
         return undefined;
       }
     },
+
     isDirectory: (path) => {
       try {
         return statSync(path).isDirectory();
@@ -52,11 +56,13 @@ function ctxFor(dir: string): { readonly ctx: CliContext; readonly out: string[]
         return false;
       }
     },
+
     readDir: (absolutePath: string) => {
       try {
         return readdirSync(absolutePath).map((name) => {
           let bytes = 0;
           let modifiedAtMs = 0;
+
           try {
             const info = statSync(join(absolutePath, name));
             bytes = info.size;
@@ -64,12 +70,14 @@ function ctxFor(dir: string): { readonly ctx: CliContext; readonly out: string[]
           } catch {
             // Vanished between listing and stat: unsized, still listed.
           }
+
           return { name, bytes, modifiedAtMs };
         });
       } catch {
         return [];
       }
     },
+
     writeFile: () => true,
     readStdin: async () => "",
     readLine: async () => undefined,
@@ -83,6 +91,7 @@ function ctxFor(dir: string): { readonly ctx: CliContext; readonly out: string[]
     now: () => 0,
     newId: (prefix) => `${prefix}-test`,
   };
+
   return { ctx, out, err };
 }
 

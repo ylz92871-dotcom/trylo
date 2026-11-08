@@ -63,9 +63,11 @@ test("turns group transcript, files, checkpoints and problems", () => {
     user("t2", "next", 6),
   ];
   const review = reviewSession(records);
+
   assert.equal(review.turns.length, 2);
   assert.deepEqual(review.prologueSequences, [0]);
   const first = review.turns[0];
+
   assert.equal(first?.turnId, "t1");
   assert.deepEqual(first?.userTexts, ["fix the bug"]);
   assert.deepEqual(first?.fileWrites, [{ path: "a.ts", mode: "patched", bytes: 12 }]);
@@ -83,6 +85,7 @@ test("envelope turn ids win over record turn ids", () => {
   ];
   const review = reviewSession(records);
   const second = review.turns.find((turn) => turn.turnId === "t2");
+
   assert.deepEqual(second?.fileWrites, [{ path: "b.ts", mode: "created", bytes: 3 }]);
 });
 
@@ -93,6 +96,7 @@ test("malformed payloads are classified out, never guessed", () => {
     envelope("t1", "observation", { component: "checkpoint", status: "failed", code: "x" }, 2),
   ];
   const review = reviewSession(records);
+
   assert.equal(review.turns.length, 1);
   assert.deepEqual(review.turns[0]?.userTexts, []);
   assert.deepEqual(review.turns[0]?.fileWrites, []);
@@ -102,12 +106,15 @@ test("malformed payloads are classified out, never guessed", () => {
 test("rollback preview validates the horizon without touching the journal", () => {
   const records = [record({ type: "session_start", payload: {} }, 0), user("t1", "hi", 1), user("t2", "yo", 2)];
   const preview = previewRollback(records, 1);
+
   assert.equal(preview.ok, true);
+
   if (preview.ok) {
     assert.equal(preview.horizonSequence, 1);
     assert.equal(preview.journalUntouched, true);
     assert.equal(preview.visibleItems + preview.hiddenItems, 2);
   }
+
   assert.equal(previewRollback(records, 99).ok, false);
   assert.equal(previewRollback(records, -1).ok, false);
 });
@@ -115,20 +122,26 @@ test("rollback preview validates the horizon without touching the journal", () =
 test("turns locate by user message number", () => {
   const records = [user("t1", "first", 0), user("t1", "second", 1), user("t9", "third", 2)];
   const located = locateTurnByUserMessage(records, 3);
+
   assert.equal(located.ok, true);
+
   if (located.ok) {
     assert.equal(located.turnId, "t9");
   }
+
   assert.equal(locateTurnByUserMessage(records, 9).ok, false);
   assert.equal(locateTurnByUserMessage(records, 0).ok, false);
 });
 
 test("F7 the cap keeps the newest turns and reports the hidden oldest", () => {
   const records: SessionRecord[] = [];
+
   for (let index = 0; index < 205; index += 1) {
     records.push(user(`t${index}`, `message ${index}`, index));
   }
+
   const review = reviewSession(records);
+
   assert.equal(review.turns.length, 200);
   assert.equal(review.truncatedTurns, 5);
   assert.equal(review.turns[0]?.turnId, "t5");

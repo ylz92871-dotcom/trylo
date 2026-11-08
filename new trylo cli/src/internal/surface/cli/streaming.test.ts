@@ -162,14 +162,17 @@ test("A3: rendering during the turn is byte-identical to projecting after it", a
   for (const format of ["text", "stream-json"] as const) {
     const streamed = capture();
     const renderer = createTurnRenderer(format, streamed.sink, meta);
+
     for (const envelope of result.envelopes) {
       renderer.onEnvelope(envelope);
     }
+
     const streamedResult = renderer.close(result.transcript, usage, meta, terminal);
 
     const batched = capture();
     const projection = createProjection(format, batched.sink);
     const events = projectRun(result.envelopes, result.transcript, usage, meta, terminal);
+
     for (const event of events) {
       projection.onEvent(event);
     }
@@ -196,12 +199,15 @@ test("A3: the incremental path emits run_start first and run_result last, once e
         }
       }
     },
+
     stderr: captured.sink.stderr,
   };
   const renderer = createTurnRenderer("stream-json", counting, metaOf(result));
+
   for (const envelope of result.envelopes) {
     renderer.onEnvelope(envelope);
   }
+
   renderer.close(result.transcript, usageOf(result), metaOf(result), {
     status: "completed",
     finishReason: result.state.finishReason,

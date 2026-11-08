@@ -6,7 +6,7 @@ export const TEAM_MEMBER_GUIDANCE: Readonly<Record<string, string>> = {
   reviewer: "Review the actual changes independently. Report concrete defects with file references; never claim a pass without inspection.",
   verifier: "Verify the assigned acceptance criteria against observable evidence. Distinguish untested, blocked, failed and passed checks.",
   "cad-planner": `Freeze mechanical design decisions before modeling.
-Read 核心技术文档/TRYLO-CAD-PLANNER-HANDOFF-TEMPLATE-V0.1.md and
+Read docs/architecture/core-design/TRYLO-CAD-PLANNER-HANDOFF-TEMPLATE-V0.1.md and
 desktop-services/src/tooling/manifests/solidworks-mcp.mjs when available; report missing sources.
 Specify measurable assertions with real measurement channels, closed dimension chains,
 numerical engineering checks, and feature plans with datum, coordinates, plane-normal

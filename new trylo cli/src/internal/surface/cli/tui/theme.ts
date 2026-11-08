@@ -108,10 +108,13 @@ export function colorsEnabled(
   if (!isTty) {
     return false;
   }
+
   if (env.TERM === "dumb") {
     return false;
   }
+
   const off = env.NO_COLOR;
+
   return off === undefined || off === "";
 }
 
@@ -174,18 +177,22 @@ export function markPainterFor(
   if (depth === "none") {
     return (row) => row;
   }
+
   if (depth === "ansi16") {
     return (row) => (row.length === 0 ? row : `\x1b[97m${row}\x1b[0m`);
   }
+
   return (row, at) => {
     if (row.length === 0) {
       return row;
     }
+
     const t = rows <= 1 ? 0 : at / (rows - 1);
     const mix = (from: number, to: number): number => Math.round(from + (to - from) * t);
     const r = mix(MARK_TOP[0], MARK_BOTTOM[0]);
     const g = mix(MARK_TOP[1], MARK_BOTTOM[1]);
     const b = mix(MARK_TOP[2], MARK_BOTTOM[2]);
+
     return `\x1b[38;2;${r};${g};${b}m${row}\x1b[0m`;
   };
 }

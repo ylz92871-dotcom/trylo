@@ -47,12 +47,14 @@ export function frameContextOf(
 
 export function buildBody(specs: ReadonlyArray<FrameFieldSpec>, ctx: FrameContext): JsonObject {
   const body: { [key: string]: JsonValue } = {};
+
   for (const spec of specs) {
     const entry = evaluateSpec(spec, ctx);
     if (entry !== undefined) {
       body[entry.as] = entry.value;
     }
   }
+
   return body;
 }
 
@@ -73,10 +75,12 @@ function evaluateSpec(spec: FrameFieldSpec, ctx: FrameContext): Entry | undefine
       if (!guardAllows(spec.onlyWhenFalse, ctx)) {
         return undefined;
       }
+
       const text = ctx.payload[spec.from];
       if (typeof text !== "string") {
         return undefined;
       }
+
       return { as: spec.as, value: { type: "text", text } };
     }
     case "derived":
@@ -172,12 +176,15 @@ function outcomeOf(ctx: FrameContext): JsonValue {
  */
 function lineageOf(ctx: FrameContext): JsonObject {
   const lineage: { [key: string]: JsonValue } = {};
+
   if (ctx.sessionId !== undefined) {
     lineage.threadId = ctx.sessionId;
   }
+
   if (ctx.turnId !== undefined) {
     lineage.runId = ctx.turnId;
   }
+
   return lineage;
 }
 

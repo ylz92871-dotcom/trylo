@@ -8,9 +8,11 @@ export function createComposerScreen(io: ComposerIo) {
     io.write("\r\x1b[J");
     cursorRow = 0;
   };
+
   return {
     clear,
     reset: () => { cursorRow = 0; },
+
     draw(rows: ReadonlyArray<string>, row: number, column: number): void {
       clear();
       io.write(rows.join("\n"));

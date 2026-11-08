@@ -56,26 +56,32 @@ test("each board observation lands as one valid ndjson line", () => {
       now: () => "2026-09-16T00:00:00.000Z",
       warn: () => undefined,
     });
+
     sink("observation", ARCHIVE_DEGRADED);
     sink("observation", SCHEDULER_RELEASE);
     sink("observation", GATE_REFUSED);
 
     const lines = linesOf(join(root, "learning", METHOD_EVENTS_FILE));
+
     assert.equal(lines.length, 3);
     const components: string[] = [];
+
     for (const line of lines) {
       const parsed: unknown = JSON.parse(line);
+
       assert.equal(typeof parsed === "object" && parsed !== null, true);
       const record = parsed as {
         readonly occurredAt?: unknown;
         readonly kind?: unknown;
         readonly payload?: { readonly component?: unknown };
       };
+
       assert.equal(record.occurredAt, "2026-09-16T00:00:00.000Z");
       assert.equal(record.kind, "observation");
       assert.equal(typeof record.payload?.component, "string", line);
       components.push(String(record.payload?.component));
     }
+
     assert.deepEqual(components, ["method_archive", "method_scheduler", "method_gate"]);
   } finally {
     cleanup();
@@ -86,14 +92,17 @@ test("the log appends rather than rewrites", () => {
   const { root, cleanup } = temp();
   try {
     const dir = join(root, "learning");
+
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, METHOD_EVENTS_FILE), '{"earlier":true}\n', "utf8");
     const sink = createMethodEventSink(dir, {
       now: () => "2026-09-16T00:00:00.000Z",
       warn: () => undefined,
     });
+
     sink("observation", ARCHIVE_DEGRADED);
     const lines = linesOf(join(dir, METHOD_EVENTS_FILE));
+
     assert.equal(lines.length, 2);
     assert.deepEqual(JSON.parse(lines[0] ?? ""), { earlier: true });
   } finally {
@@ -118,12 +127,14 @@ test("a write failure is reported once and never thrown", () => {
     // A file where a directory is expected: `mkdirSync` fails, and no amount of
     // catching turns that into a writable path.
     const blocked = join(root, "a-file");
+
     writeFileSync(blocked, "not a directory", "utf8");
     const warnings: string[] = [];
     const sink = createMethodEventSink(join(blocked, "learning"), {
       now: () => "t",
       warn: (message) => warnings.push(message),
     });
+
     // Learning must not be able to break a user's turn, so neither of these may
     // throw — and the second one must not produce a second warning either.
     sink("observation", ARCHIVE_DEGRADED);
@@ -148,6 +159,7 @@ test("the wiring carries the switch and borrows a sink bound to the learning roo
       { switch: "method", homeDir: root, env: { TRYLO_HOME: join(root, "home") } },
       { now: () => "2026-09-16T00:00:00.000Z", warn: () => undefined },
     );
+
     assert.equal(wiring.switch, "method");
     assert.equal(wiring.homeDir, root);
     wiring.emit("observation", ARCHIVE_DEGRADED);

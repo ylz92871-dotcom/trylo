@@ -33,6 +33,7 @@ test("a CLI task with an automatic context ceiling can complete more than eight 
     sessionId: "s", turnId: "t", correlationId: "c", text: INPUT.text,
     budget: budgetOf({ ...INPUT, contextTokenLimit: 128_000 })!,
   });
+
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(requests, 10);
 });
@@ -41,6 +42,7 @@ test("the packaged defaults allow a workflow beyond sixty-five thousand output t
   let requests = 0;
   const maxIterations = PACKAGED_DEFAULTS["maxIterations"];
   const maxTokens = PACKAGED_DEFAULTS["maxTokens"];
+
   assert.equal(maxIterations, undefined);
   assert.equal(maxTokens, undefined);
   const result = await runTurn({
@@ -54,6 +56,7 @@ test("the packaged defaults allow a workflow beyond sixty-five thousand output t
     sessionId: "s", turnId: "t", correlationId: "c", text: INPUT.text,
     budget: budgetOf({ ...INPUT, contextTokenLimit: 128_000 })!,
   });
+
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(requests, 40);
   assert.equal(result.usage.outputTokens, 80_000);

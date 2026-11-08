@@ -80,14 +80,17 @@ export function sessionPath(
 export function listSessions(io: SessionDirIo, dir: string): ReadonlyArray<SessionFileInfo> {
   const entries = io.readDir(dir);
   const sessions: SessionFileInfo[] = [];
+
   for (const entry of entries) {
     if (!entry.name.endsWith(SESSION_FILE_SUFFIX)) {
       continue;
     }
+
     const id = entry.name.slice(0, -SESSION_FILE_SUFFIX.length);
     if (!isValidSessionId(id)) {
       continue;
     }
+
     sessions.push({
       id,
       path: `${dir}/${entry.name}`,
@@ -96,5 +99,6 @@ export function listSessions(io: SessionDirIo, dir: string): ReadonlyArray<Sessi
       formatVersion: SESSION_FORMAT_VERSION,
     });
   }
+
   return sessions.sort((left, right) => right.modifiedAtMs - left.modifiedAtMs);
 }

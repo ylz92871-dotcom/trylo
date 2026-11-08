@@ -82,7 +82,9 @@ test("a table renders header, rule and rows aligned by display width", () => {
 test("a CJK table aligns columns by terminal columns, not code units", () => {
   const lines = markdownLines("| 名前 | 値 |\n| --- | --- |\n| 中文很长 | x |", 80);
   const widths = lines.map((line) => displayWidth(line.text));
+
   assert.equal(new Set(widths).size, 1, `rows misaligned: ${lines.map(l => l.text).join(" / ")}`);
+
   // Every row must still fit the terminal the table was laid out for.
   for (const width of widths) {
     assert.ok(width <= 80, `row is ${width} columns wide`);
@@ -94,6 +96,7 @@ test("a table wider than the terminal shrinks to fit it", () => {
   const rows = "| 1 | 2 | 3 | 4 |";
   const source = `${header}\n| --- | --- | --- | --- |\n${rows}`;
   const lines = markdownLines(source, 24);
+
   for (const line of lines) {
     assert.ok(displayWidth(line.text) <= 24, `row overflows: ${line.text}`);
   }

@@ -76,8 +76,11 @@ test("D7: --ask accepts only the three policies, and says which", () => {
   for (const policy of ASK_POLICIES) {
     assert.equal(optionsOf(["run", "hi", "--ask", policy]).ask, policy);
   }
+
   const { message, hint } = errorOf(["run", "hi", "--ask", "sometimes"]);
+
   assert.match(message, /unknown --ask policy: sometimes/);
+
   for (const policy of ASK_POLICIES) {
     assert.equal(hint.includes(policy), true, `${policy} was not offered as a legal value`);
   }
@@ -93,6 +96,7 @@ test("D7: --allow-web is a presence flag with the same contract as --subagent", 
   assert.equal(optionsOf(["run", "hi", "--allow-web"]).allowWeb, true);
   assert.equal(optionsOf(["run", "hi"]).allowWeb, undefined);
   const { message, hint } = errorOf(["run", "hi", "--allow-web=false"]);
+
   assert.match(message, /--allow-web takes no value/);
   assert.match(hint, /the default is no web_fetch tool/);
   // `web_fetch` joined the approvable set, so naming it in --allow-tools parses.
@@ -105,6 +109,7 @@ test("D8-a: the help text describes the flags that exist, and refuses none that 
   for (const flag of ["--ask", "--allow-tools", "--deny-tools", "--allow-writes", "--allow-web"]) {
     assert.equal(USAGE.includes(flag), true, `${flag} is missing from the help text`);
   }
+
   // The help used to claim remote MCP was refused while `mcp add --url` worked.
   assert.equal(/--url[^\n]*refused/i.test(USAGE), false);
   assert.equal(USAGE.includes("--url <url>"), true);

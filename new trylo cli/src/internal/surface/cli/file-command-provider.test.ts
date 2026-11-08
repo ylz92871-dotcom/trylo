@@ -17,7 +17,9 @@ const execute: typeof executeTurn = baseline === undefined ? executeTurn
 
 async function scenario(body: (root: string, input: TurnHostInput) => Promise<void>): Promise<void> {
   const root = mkdtempSync(path.join(tmpdir(), "wpcl-literal-file-")), workspace = path.join(root, "workspace");
+
   mkdirSync(workspace);
+
   try {
     await body(root, { text: "", sessionId: "s", turnId: "t", correlationId: "c", workspaceRoot: workspace,
       workspaceId: "w", checkpointRoot: path.join(root, "undo"), providerId: "fixture", model: "m", endpoint: "", apiKey: undefined,
@@ -32,8 +34,11 @@ for (const file of ["MEMORY.md", "OTHER.txt", "nested/中文.txt"]) for (const e
     const result = await execute({ ...input, text: `请生成 ${file} 文件，内容只有“这是普通项目文档”，不要存用户记忆。`,
       ...(enabled ? { userLearning: { homeDir: root, env: { TRYLO_HOME: root }, workspaceId: "w", now: () => 100, warn: () => undefined } } : {}),
     });
+
     assert.equal(isTurnFailure(result), false);
+
     if (isTurnFailure(result)) return;
+
     assert.equal(result.result.status, "completed");
     assert.match(result.result.lastMessage, /已读回核对字面内容/);
     assert.equal(readFileSync(path.join(input.workspaceRoot, file), "utf8"), "这是普通项目文档");
@@ -75,6 +80,7 @@ for (const read of ["error", "mismatch", "truncated"] as const) {
     const base = wirePorts({ providerId: "fixture", model: "m", endpoint: "", apiKey: undefined,
       workspaceRoot: input.workspaceRoot, permission: input.permission });
     if ("code" in base) throw new Error(base.detail);
+
     const tools = base.ports.tools;
     const wiring = fileCommandWiring({ ...base, ports: { ...base.ports, tools: { ...tools, async execute(call, signal) {
       if (call.name !== "read_file") return tools.execute(call, signal);
@@ -82,6 +88,7 @@ for (const read of ["error", "mismatch", "truncated"] as const) {
         : { outcome: "result" as const, value: { path: "proof.txt", content: read === "mismatch" ? "other" : "data" }, output: "data", truncated: read === "truncated" };
     } } } }, input);
     if ("code" in wiring) throw new Error(wiring.detail);
+
     try {
       const result = await runRecordedTurn(wiring.ports, input, budgetOf(input), undefined, () => undefined);
       assert.equal(result.state.terminalReason, "failed");
@@ -95,8 +102,10 @@ test("only a complete single safe path with literal content becomes a command", 
   for (const file of ["../outside.txt", "/absolute.txt", "C:/drive.txt", "folder/../outside.txt", "NUL.txt", "aux/x", "COM¹.txt", "folder./x", "//server/share", "a\\b.txt"]) {
     assert.equal(literalFileCommand(`请创建 ${file} 文件，内容为“data”。`), undefined, file);
   }
+
   for (const text of ['如果可以，请创建 a.txt 文件，内容为“data”。', '请创建 a.txt 文件，内容为“data”，然后运行代码。', '“请创建 a.txt 文件，内容为 data”', '```请创建 a.txt 文件，内容为“data”。```', '请创建 a.txt 和 b.txt 文件，内容为“data”。']) {
     assert.equal(literalFileCommand(text), undefined, text);
   }
+
   assert.deepEqual(literalFileCommand('请创建 literal.txt 文件，内容为“然后运行代码”'), { path: "literal.txt", content: "然后运行代码" });
 });

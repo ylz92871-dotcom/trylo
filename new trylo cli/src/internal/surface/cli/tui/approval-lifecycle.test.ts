@@ -11,6 +11,7 @@ test("one failed overlapping approval cannot resume another waiting panel", () =
   const first: PermissionAction = { name: "write_file", toolCallId: "first", arguments: {}, pattern: "first" };
   // Independent providers may reuse the same tool call id.
   const second: PermissionAction = { ...first };
+
   callbacks.onApproval?.({ kind: "waiting", action: first });
   callbacks.onApproval?.({ kind: "waiting", action: second });
   callbacks.onApproval?.({ kind: "failed", action: second });

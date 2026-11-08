@@ -46,10 +46,13 @@ test("attack #2: a project file cannot overwrite a cli_flag value", () => {
     ),
     { maxIterations: 3 },
   );
+
   assert.equal(loaded.ok, true, JSON.stringify(loaded));
+
   if (!loaded.ok) {
     return;
   }
+
   assert.equal(loaded.resolved["maxIterations"]?.value, 3);
   assert.equal(loaded.resolved["maxIterations"]?.layer, "cli_flag");
 });
@@ -62,10 +65,13 @@ test("attack #2 (inverted): a lower layer never wins over a higher one", () => {
     }),
     {},
   );
+
   assert.equal(loaded.ok, true, JSON.stringify(loaded));
+
   if (!loaded.ok) {
     return;
   }
+
   assert.equal(loaded.resolved["maxTokens"]?.value, 222, "project must beat user");
   assert.equal(loaded.resolved["maxTokens"]?.layer, "project");
 });
@@ -82,10 +88,13 @@ test("the five-layer order holds end to end: system < user < project < cli_flag"
     ),
     { maxIterations: 44 },
   );
+
   assert.equal(loaded.ok, true, JSON.stringify(loaded));
+
   if (!loaded.ok) {
     return;
   }
+
   assert.equal(loaded.resolved["maxIterations"]?.value, 44, "cli_flag is highest");
   assert.equal(loaded.resolved["maxIterations"]?.layer, "cli_flag");
   assert.equal(loaded.resolved["maxTokens"]?.value, 22, "user survives where project is silent");
@@ -93,6 +102,7 @@ test("the five-layer order holds end to end: system < user < project < cli_flag"
   // The system layer contributed and was beaten; proving it was read at all is
   // what separates "five layers" from "four layers with a spare name".
   const systemSource = loaded.sources.find((source) => source.layer === "system");
+
   assert.equal(systemSource?.status, "loaded");
 });
 
@@ -112,6 +122,7 @@ test("attack #3: a concat key merges arrays instead of the high layer clobbering
     { layer: "user", values: { model: "low" } },
     { layer: "project", values: { model: "high" } },
   ]);
+
   assert.deepEqual(overridden["model"]?.value, "high");
   assert.equal(overridden["model"]?.layer, "project");
 });
@@ -120,16 +131,20 @@ test("attack #1: no CLI file can reach the old four-layer loader", () => {
   const specifierRe = /(?:from\s+|import\s*\(\s*)['"]([^'"]+)['"]/g;
   const offenders: string[] = [];
   let scanned = 0;
+
   for (const dir of [CLI_DIR, CMD_DIR]) {
     for (const entry of readdirSync(dir)) {
       const full = path.join(dir, entry);
+
       // Test sources are excluded on purpose: this test's own discriminating
       // fixture has to spell the forbidden specifier out, and a test that
       // *names* the old loader is not a command a user can run.
       if (!statSync(full).isFile() || !full.endsWith(".ts") || full.endsWith(".test.ts")) {
         continue;
       }
+
       const source = readFileSync(full, "utf8");
+
       for (const match of source.matchAll(specifierRe)) {
         scanned += 1;
         const specifier = match[1] ?? "";
@@ -139,6 +154,7 @@ test("attack #1: no CLI file can reach the old four-layer loader", () => {
       }
     }
   }
+
   assert.equal(scanned > 20, true, `too few specifiers scanned (${scanned}); detector may be broken`);
   assert.deepEqual(offenders, []);
 });
@@ -161,10 +177,13 @@ test("attack #4: the config loader cannot see the environment at all", () => {
 
 test("attack #5: a secret key is refused, never rendered, and never resolved", () => {
   const loaded = loadConfig(io({ [layerFile("/ws")]: '{"apiKey":"sk-FAKE-not-a-real-key"}' }), {});
+
   assert.equal(loaded.ok, false, "a config carrying a credential must fail closed");
+
   if (loaded.ok) {
     return;
   }
+
   assert.equal(loaded.failure.code, "secret_key");
   assert.equal(loaded.failure.layer, "project");
   assert.equal(loaded.failure.detail.includes("sk-FAKE-not-a-real-key"), false);
@@ -172,12 +191,16 @@ test("attack #5: a secret key is refused, never rendered, and never resolved", (
 
 test("attack #5: the public view cannot carry a secret-shaped key even if one were resolved", () => {
   const loaded = loadConfig(io({ [layerFile("/ws")]: '{"endpoint":"https://e.invalid/v1"}' }), {});
+
   assert.equal(loaded.ok, true, JSON.stringify(loaded));
+
   if (!loaded.ok) {
     return;
   }
+
   const view = configValueView(loaded.resolved);
   const serialized = JSON.stringify(view);
+
   assert.equal(serialized.includes("apiKey"), false);
   assert.equal(serialized.includes("authorization"), false);
   assert.equal(view["endpoint"]?.sourceLayer, "project");
@@ -186,10 +209,13 @@ test("attack #5: the public view cannot carry a secret-shaped key even if one we
 
 test("an invalid layer is never downgraded to 'missing'", () => {
   const loaded = loadConfig(io({ [layerFile("/ws")]: "{ not json" }), {});
+
   assert.equal(loaded.ok, false);
+
   if (loaded.ok) {
     return;
   }
+
   assert.equal(loaded.failure.code, "invalid_json");
   assert.equal(loaded.failure.path, layerFile("/ws"));
 });

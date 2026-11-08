@@ -95,6 +95,7 @@ export function freezeJsonValue(value: JsonValue): void {
   if (typeof value !== "object" || value === null) {
     return;
   }
+
   if (Array.isArray(value)) {
     for (const item of value) {
       freezeJsonValue(item);
@@ -102,12 +103,15 @@ export function freezeJsonValue(value: JsonValue): void {
     Object.freeze(value);
     return;
   }
+
   const record = value as JsonObject;
+
   for (const key of Object.keys(record)) {
     const child = record[key];
     if (child !== undefined) {
       freezeJsonValue(child);
     }
   }
+
   Object.freeze(record);
 }

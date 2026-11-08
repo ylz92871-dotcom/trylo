@@ -37,19 +37,26 @@ test("a Responses declaration resolves with its endpoint or is refused", () => {
       ],
     }),
   );
+
   assert.equal(decoded.ok, true);
+
   if (!decoded.ok) {
     return;
   }
+
   assert.equal(decoded.value.providers[0]?.capabilities.auth, "api_key");
   const registry = registryOfDocument(decoded.value);
   const resolved = resolveProvider({ registry, requested: "r1", endpoint: "", model: "cfg-model" });
+
   assert.equal(resolved.ok, true);
+
   if (resolved.ok) {
     assert.equal(resolved.value.kind, "openai-responses");
     assert.equal(resolved.value.endpoint, "https://lab.example/v1/responses");
     assert.equal(resolved.value.model, "lab-7b");
   }
+
   const missing = resolveProvider({ registry: builtinRegistry(), requested: "openai-responses", endpoint: "", model: "m" });
+
   assert.equal(missing.ok, false);
 });

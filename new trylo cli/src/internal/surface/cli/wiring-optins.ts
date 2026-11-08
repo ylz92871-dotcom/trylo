@@ -1,9 +1,11 @@
 import type { LocalRuleLookup } from "../../adapters/project-instructions/appendix.js";
+import type { ReadRoutingPort } from "../../ports/read-routing.js";
 import type { WebToolsConfig } from "../../adapters/tools/web/index.js";
 import type { MemoryReadPort } from "../../ports/memory.js";
-import type { ToolGapRuntime } from "../../integration/tool-learning/index.js";
+import type { ToolGapRuntime } from "../../learning/agent/subsystems/tool/runtime/index.js";
 import type { UserLearningRuntime, UserMemoryService } from "../../integration/user-learning/index.js";
-import type { MethodEventSink } from "../../learning/method/port.js";
+import type { MethodEventSink } from "../../learning/agent/subsystems/method/index.js";
+import type { TopicLearningRuntime } from "../../integration/learning-topics/runtime.js";
 import type {
   SubagentEventSink,
   SubagentGovernanceTracker,
@@ -39,6 +41,10 @@ import type { AskUserSession } from "../../adapters/tools/ask-user/index.js";
  */
 
 export type MethodLearningInput = {
+  /** Unified host reports pending sources and alone dispatches their paid reviews. */
+  readonly deferReviewToCentral?: true;
+  /** Optional externally funded prompt-domain claim; absent uses the bounded method opt-in allowance. */
+  readonly reviewGrant?: { readonly grantId: string; readonly claimId: string };
   /**
    * The switch's value. Anything but the single accepted word is off; the
    * vocabulary lives in the integration helper, not here, so there is no second
@@ -58,6 +64,14 @@ export type MethodLearningInput = {
 };
 
 export type SubagentWiringInput = {
+  readonly modelMigration?: string;
+  readonly onChildRequestDispatched?: import("../../subagent/request-dispatched.js").ChildRequestObservation;
+  readonly onMemberCollaborationReport?: import("../../protocol/member-collaboration-report.js").MemberCollaborationReportObserver;
+  readonly memberConfigurations?: import("../../subagent/member-configuration.js").SubagentMemberConfigurationPort;
+  readonly teamProfileId?: string;
+  readonly routing?: import("../../ports/subagent-routing.js").SubagentRoutingPort;
+  readonly collaboration?: import("../../subagent/collaboration.js").SubagentCollaborationPort;
+  readonly onCollaborationFailure?: (phase: import("../../subagent/collaboration.js").CollaborationObserverPhase) => void;
   readonly checkpoints?: import("../../subagent/checkpoint.js").SubagentCheckpointPort;
   readonly sessionId?: string;
   readonly team?: import("../../subagent/team.js").SubagentTeam;
@@ -74,6 +88,10 @@ export type SubagentWiringInput = {
 };
 
 export type WiringOptIns = {
+  readonly collaborationLearning?: import("./collaboration-personal-agent-wiring.js").PersonalAgentWiringInput;
+  readonly readRouting?: ReadRoutingPort;
+  /** Same per-turn topic instance as the journal observer; composed before the shared user-policy ceiling. */
+  readonly topics?: TopicLearningRuntime;
   readonly questions?: AskUserSession;
   /** Lent by the prepared session: background commands must survive turn boundaries. */
   readonly execution?: RunExecution;
@@ -121,10 +139,9 @@ export type WiringOptIns = {
    */
   readonly permissionLedger?: PermissionLedgerInput | undefined;
   /**
-   * `--compact-summary`：compaction 摘要的写手。Absent —— 每一条默认路径 ——
-   * 意味着 `compactionWiring` 继续携带出厂的 extractive 写手，与从前逐字相同
-   * （R1）。Present 且为 `model` 时，写手换成一次无工具的 provider 调用，失败
-   * 落回 extractive ——见 `compact-model-summarizer.ts` 的模块头。
+   * `--compact-summary`：CLI 默认用 model 作者，失败回退 extractive。
+   * 显式 extractive 保留 provider-free primitive；低层服务没有 provider 时不猜模型。
+   * 唯一默认值由 compact-model-summarizer.ts 持有。
    */
   readonly compactSummary?: CompactSummaryMode;
   /**

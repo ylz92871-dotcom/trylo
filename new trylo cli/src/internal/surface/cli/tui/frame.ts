@@ -111,9 +111,11 @@ export function renderTurnBody(
   const content = [...state.lines.slice(before), ...provisional(state.pending)].flatMap((line) =>
     paintedLines(line, columns, paint),
   );
+
   if (!withStatus) {
     return content.join("\n");
   }
+
   return [...content, dim(truncate(statusBar(state, columns, tick), columns))].join("\n");
 }
 
@@ -129,9 +131,11 @@ function columnsOf(width: number): number {
  */
 export function wrapLine(text: string, columns: number): ReadonlyArray<string> {
   const parts: string[] = [];
+
   for (const segment of text.split("\n")) {
     let line = "";
     let width = 0;
+
     for (const character of segment) {
       const size = widthOf(character);
       if (width + size > columns && line.length > 0) {
@@ -139,15 +143,18 @@ export function wrapLine(text: string, columns: number): ReadonlyArray<string> {
         line = "";
         width = 0;
       }
+
       line += character;
       width += size;
     }
+
     // An empty segment is a blank line worth keeping; a segment that exactly
     // filled the terminal is already pushed and must not push a second time.
     if (line.length > 0 || segment.length === 0) {
       parts.push(line);
     }
   }
+
   return parts.length === 0 ? [""] : parts;
 }
 
@@ -162,6 +169,7 @@ function truncate(text: string, columns: number): string {
 function fit(text: string, columns: number): string {
   let taken = "";
   let width = 0;
+
   for (const character of text) {
     const size = widthOf(character);
     if (width + size > columns) {
@@ -170,6 +178,7 @@ function fit(text: string, columns: number): string {
     taken += character;
     width += size;
   }
+
   return taken;
 }
 

@@ -19,7 +19,7 @@ import { RUN_SHELL_TOOL } from "../../adapters/tools/mutating/names.js";
 const CONFIG: ExecPolicyGuardConfig = {
   platform: "windows",
   ask: "always",
-  workspaceRoot: "C:/work/demo-ws",
+  workspaceRoot: "D:/CC/trylo",
   allowAbsoluteExecutable: false,
 };
 
@@ -27,10 +27,12 @@ function countingPermission(): PermissionPort & { asked(): number } {
   let asked = 0;
   return {
     asked: () => asked,
+
     async request() {
       asked += 1;
       return { ticketId: `t${asked}`, toolCallId: "call-1" };
     },
+
     async awaitDecision() {
       return decision("approved", "once");
     },
@@ -43,10 +45,13 @@ function call(command: string): ToolAdmissionRequest {
 
 async function decideWithGuard(command: string, rules: Parameters<typeof buildExecPolicyGuard>[1]) {
   const built = buildExecPolicyGuard(CONFIG, rules);
+
   assert.equal(built.ok, true, "the policy used by these tests must load");
+
   if (!built.ok) {
     throw new Error("policy did not load");
   }
+
   const permission = countingPermission();
   const ports: AdmissionPorts = {
     permission,
@@ -55,6 +60,7 @@ async function decideWithGuard(command: string, rules: Parameters<typeof buildEx
     execPolicy: built.guard,
   };
   const verdict = await admitToolCall(ports, call(command));
+
   return { verdict, permission };
 }
 
@@ -93,10 +99,13 @@ test("the policy stays silent about anything it does not cover", async () => {
 
 test("silence covers tools that carry no command at all", async () => {
   const built = buildExecPolicyGuard(CONFIG, SOURCE);
+
   assert.equal(built.ok, true);
+
   if (!built.ok) {
     return;
   }
+
   assert.equal(built.guard({ toolCallId: "c", name: "write_file", arguments: { path: "a.txt" } }), undefined);
   assert.equal(built.guard({ toolCallId: "c", name: RUN_SHELL_TOOL, arguments: {} }), undefined);
 });
@@ -124,9 +133,12 @@ test("a policy that does not load is refused rather than installed", () => {
   const built = buildExecPolicyGuard(CONFIG, {
     rules: [{ pattern: ["ls"], decision: "allow", match: [["cat", "missing"]] }],
   });
+
   assert.equal(built.ok, false);
+
   if (built.ok) {
     return;
   }
+
   assert.match(built.failures[0]?.message ?? "", /is not matched by this rule/);
 });

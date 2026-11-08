@@ -30,10 +30,12 @@ export function currentAccountIdOf(ctx: CliContext): string | undefined {
   if (!status.ok) {
     return undefined;
   }
+
   const row = status.value.find((entry) => entry.providerId === "openai-compatible");
   if (row === undefined || !row.loggedIn || row.accountId.length === 0) {
     return undefined;
   }
+
   return row.accountId;
 }
 
@@ -74,12 +76,15 @@ export function credentialStateOf(
   if (!isKeyedProviderKind(kind)) {
     return { required: false, note: `${kind} is offline and needs no credential` };
   }
+
   const port = createCliCredentialPortWithReport(ctx, credentialWarningTo(ctx));
+
   if (accountId !== undefined) {
     const resolved = port.getAccount({ providerId: "openai-compatible", accountId });
     if (!resolved.ok) {
       return { required: true, loggedIn: false, layer: "none", account: accountId, bound: true };
     }
+
     return {
       required: true,
       loggedIn: resolved.value.layer !== "none",
@@ -89,14 +94,17 @@ export function credentialStateOf(
       ...(resolved.value.authType === undefined ? {} : { authType: resolved.value.authType }),
     };
   }
+
   const status = port.status();
   if (!status.ok) {
     return { required: true, unavailable: `${status.code}: ledger unusable (value never printed)` };
   }
+
   const row = status.value.find((entry) => entry.providerId === "openai-compatible");
   if (row === undefined) {
     return { required: true, loggedIn: false, layer: "none", account: "" };
   }
+
   return {
     required: true,
     loggedIn: row.loggedIn,
@@ -110,11 +118,14 @@ export function renderCredential(state: CredentialState): string {
   if (!state.required) {
     return `cred     ${state.note}`;
   }
+
   if ("unavailable" in state) {
     return `cred     unavailable: ${state.unavailable}`;
   }
+
   const auth = state.authType === undefined ? "" : ` auth=${state.authType}`;
   const bound = state.bound === true ? " bound" : "";
+
   return `cred     logged_in=${state.loggedIn} layer=${state.layer} account=${state.account || "(none)"}${auth}${bound}`;
 }
 
@@ -137,9 +148,11 @@ export function checkAccountExists(ctx: CliContext, accountId: string): AccountC
   if (resolved.ok) {
     return { ok: true };
   }
+
   if (resolved.code === "unknown_account") {
     return { ok: false, code: "unknown_account", detail: resolved.detail };
   }
+
   return { ok: false, code: "unavailable", detail: `cannot read the credential ledger: ${resolved.code}: ${resolved.detail}` };
 }
 
@@ -158,14 +171,18 @@ export function refuseUnknownAccount(
   if (account === undefined || !isProviderKind(kind) || !isKeyedProviderKind(kind)) {
     return undefined;
   }
+
   const checked = checkAccountExists(ctx, account);
   if (checked.ok) {
     return undefined;
   }
+
   if (checked.code === "unknown_account") {
     ctx.stderr(`unknown account ${account}; ${checked.detail}. \`trylo auth list\` shows the stored accounts\n`);
     return EXIT_CODES.USAGE;
   }
+
   ctx.stderr(`${checked.detail}\n`);
+
   return EXIT_CODES.CONFIG;
 }

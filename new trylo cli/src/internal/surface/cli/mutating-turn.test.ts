@@ -58,6 +58,7 @@ function scenarioFor(
   let asked = 0;
   const tools: ToolPort = {
     snapshot: () => inner.snapshot(),
+
     async execute(call, signal): Promise<ToolOutcome> {
       const outcome = await inner.execute(call, signal);
       if (outcome.outcome === "result") {
@@ -65,6 +66,7 @@ function scenarioFor(
       }
       return outcome;
     },
+
     async cancel(toolCallId) {
       return inner.cancel(toolCallId);
     },
@@ -75,10 +77,12 @@ function scenarioFor(
       asked += 1;
       return { ticketId: `tkt-${asked}`, toolCallId: "call-1" };
     },
+
     async awaitDecision(): Promise<PermissionDecision> {
       return queue.shift() ?? { resolution: "denied", scope: "once" };
     },
   };
+
   return {
     root,
     ports: { provider: createFakeProvider([]), tools, permission, profile: PROFILE, sandbox, grants },
@@ -115,14 +119,18 @@ test("an approved write lands, and the journal says so in its own words", async 
       { ...scenario.ports, provider: createFakeProvider([writeCall("call-1", "out.txt", "written"), finalStage("done")]) },
       { sessionId: "s", turnId: "t", correlationId: "c", text: "write a file" },
     );
+
     assert.equal(result.state.phase, "terminal");
     assert.equal(result.state.terminalReason, "completed");
     assert.equal(readFileSync(join(root, "out.txt"), "utf8"), "written");
     const kinds = kindsOf(result.envelopes);
+
     for (const kind of ["tool_use", "approval_requested", "tool_result", "file_write"]) {
       assert.equal(kinds.includes(kind), true, kind);
     }
+
     const written = result.envelopes.find((envelope) => envelope.kind === "file_write");
+
     assert.deepEqual(written?.payload.path, "out.txt");
     assert.equal(written?.payload.bytes, 7);
     assert.equal(written?.payload.mode, "created");
@@ -139,9 +147,11 @@ test("a non-interactive run denies the write and leaves no file", async () => {
       { ...scenario.ports, provider: createFakeProvider([writeCall("call-1", "never.txt", "x")]) },
       { sessionId: "s", turnId: "t", correlationId: "c", text: "write a file" },
     );
+
     assert.equal(result.state.terminalReason, "failed");
     assert.equal(existsSync(join(root, "never.txt")), false);
     const kinds = kindsOf(result.envelopes);
+
     assert.equal(kinds.includes("permission_denied"), true);
     assert.equal(kinds.includes("file_write"), false);
   } finally {
@@ -160,9 +170,11 @@ test("a call the sandbox refuses never reaches the permission port", async () =>
       },
       { sessionId: "s", turnId: "t", correlationId: "c", text: "escape" },
     );
+
     assert.equal(scenario.asked(), 0);
     assert.equal(existsSync(join(parent, "escape.txt")), false);
     const refused = result.envelopes.find((envelope) => envelope.kind === "tool_result");
+
     assert.equal(refused?.payload.code, "path_outside_workspace");
     // The turn survives a refusal: it is a fact about one call, not the run.
     assert.equal(result.state.terminalReason, "completed");
@@ -196,6 +208,7 @@ test("a model repeating itself is stopped on the third call", async () => {
       },
       { sessionId: "s", turnId: "t", correlationId: "c", text: "loop" },
     );
+
     assert.equal(scenario.executed(), 2);
     assert.equal(scenario.asked(), 2);
     assert.equal(result.state.terminalReason, "failed");
@@ -221,6 +234,7 @@ test("a refused call reaches the model as a failed tool result", async () => {
       { sessionId: "s", turnId: "t", correlationId: "c", text: "escape" },
     );
     const results = result.transcript.filter((item) => item.kind === "tool_result");
+
     assert.equal(results.length, 1);
     assert.match(String(results[0]?.output ?? ""), /path_outside_workspace/);
     assert.equal(result.state.terminalReason, "completed");
@@ -234,12 +248,14 @@ test("a tool denied for the session disappears from the catalog", async () => {
   try {
     const scenario = scenarioFor(root, [{ resolution: "denied", scope: "session" }]);
     const namesBefore = scenario.ports.tools.snapshot().map((binding) => binding.name);
+
     assert.equal(namesBefore.includes("write_file"), true);
     await runTurn(
       { ...scenario.ports, provider: createFakeProvider([writeCall("call-1", "denied.txt", "x")]) },
       { sessionId: "s", turnId: "t", correlationId: "c", text: "deny this tool" },
     );
     const namesAfter = scenario.ports.tools.snapshot().map((binding) => binding.name);
+
     assert.equal(namesAfter.includes("write_file"), false);
     assert.equal(namesAfter.includes("read_file"), true);
     assert.equal(existsSync(join(root, "denied.txt")), false);
@@ -254,13 +270,16 @@ test("the catalog still declares which tools mutate and which only read", () => 
     const sandbox = createWorkspaceSandbox({ workspaceRoot: root });
     const tools = createWorkspaceTools({ workspaceRoot: root, sandbox });
     const byName = new Map(tools.snapshot().map((binding) => [binding.name, binding]));
+
     assert.equal(byName.get("write_file")?.sideEffect, "workspace_write");
     assert.equal(byName.get("edit_file")?.sideEffect, "workspace_write");
     assert.equal(byName.get("run_shell")?.sideEffect, "external");
     assert.equal(byName.get("read_file")?.sideEffect, "read_only");
+
     for (const name of ["write_file", "edit_file", "run_shell"]) {
       assert.equal(byName.get(name)?.needsApproval, true, name);
     }
+
     assert.equal(byName.get("read_file")?.needsApproval, false);
     assert.equal(echoBinding().name, "echo");
   } finally {

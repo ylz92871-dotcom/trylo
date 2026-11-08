@@ -27,10 +27,13 @@ function errorOf(argv: ReadonlyArray<string>): { message: string; hint: string }
 
 test("add parses the name, the command and its arguments across the `--`", () => {
   const parsed = parseMcp(["add", "demo", "--", "node", "server.js", "--flag", "1"]);
+
   assert.equal(parsed.kind, "mcp_add");
+
   if (parsed.kind !== "mcp_add") {
     return;
   }
+
   assert.equal(parsed.options.name, "demo");
   assert.equal(parsed.options.transport, "stdio");
   assert.equal(parsed.options.command, "node");
@@ -49,10 +52,13 @@ test("attack #6 (rewritten per ADR): --url together with a command is the mutual
 
 test("--url alone registers a remote entry, defaulting to the http transport", () => {
   const parsed = parseMcp(["add", "demo", "--url", "https://example.invalid/mcp"]);
+
   assert.equal(parsed.kind, "mcp_add");
+
   if (parsed.kind !== "mcp_add") {
     return;
   }
+
   assert.equal(parsed.options.transport, "http");
   assert.equal(parsed.options.url, "https://example.invalid/mcp");
   assert.equal(parsed.options.command, "");
@@ -62,10 +68,13 @@ test("--url alone registers a remote entry, defaulting to the http transport", (
 
 test("contract #2: --transport must agree with the registration path", () => {
   const withUrl = parseMcp(["add", "demo", "--transport", "sse", "--url", "https://x/sse"]);
+
   assert.equal(withUrl.kind, "mcp_add");
+
   if (withUrl.kind === "mcp_add") {
     assert.equal(withUrl.options.transport, "sse");
   }
+
   assert.match(
     errorOf(["add", "demo", "--transport", "stdio", "--url", "https://x"]).message,
     /conflicts with --url/,
@@ -80,10 +89,13 @@ test("contract #2: --transport must agree with the registration path", () => {
 test("status parses with and without --json, and refuses anything else", () => {
   assert.equal(kindOf(["status"]), "mcp_status");
   const parsed = parseMcp(["status", "--json"]);
+
   assert.equal(parsed.kind, "mcp_status");
+
   if (parsed.kind !== "mcp_status") {
     return;
   }
+
   assert.equal(parsed.json, true);
   assert.match(errorOf(["status", "--scope", "user"]).message, /does not accept/);
 });
@@ -116,10 +128,13 @@ test("--header is accepted for remote entries and accumulates", () => {
     "--header",
     "X-Api-Key: 123",
   ]);
+
   assert.equal(parsed.kind, "mcp_add");
+
   if (parsed.kind !== "mcp_add") {
     return;
   }
+
   assert.deepEqual(parsed.options.headers, { Authorization: "Bearer abc", "X-Api-Key": "123" });
 });
 
@@ -155,37 +170,52 @@ test("add requires a path: either the separator or --url", () => {
 
 test("--scope is validated, and --disable flips the entry off", () => {
   const scoped = parseMcp(["add", "demo", "--scope", "project", "--disable", "--", "node", "s.js"]);
+
   assert.equal(scoped.kind, "mcp_add");
+
   if (scoped.kind === "mcp_add") {
     assert.equal(scoped.options.scope, "project");
     assert.equal(scoped.options.enabled, false);
   }
+
   const remoteDisabled = parseMcp(["add", "demo", "--url", "https://x", "--disable"]);
+
   assert.equal(remoteDisabled.kind, "mcp_add");
+
   if (remoteDisabled.kind === "mcp_add") {
     assert.equal(remoteDisabled.options.enabled, false);
   }
+
   assert.match(errorOf(["add", "demo", "--scope", "org", "--", "node"]).message, /--scope must be/);
   assert.match(errorOf(["add", "demo", "--disable=true", "--", "node"]).message, /takes no value/);
 });
 
 test("remove, enable and disable parse a name plus an optional scope", () => {
   const removed = parseMcp(["remove", "demo", "--scope", "project"]);
+
   assert.equal(removed.kind, "mcp_remove");
+
   if (removed.kind === "mcp_remove") {
     assert.deepEqual(removed.options, { name: "demo", scope: "project" });
   }
+
   const enabled = parseMcp(["enable", "demo"]);
+
   assert.equal(enabled.kind, "mcp_set_enabled");
+
   if (enabled.kind === "mcp_set_enabled") {
     assert.equal(enabled.enabled, true);
     assert.equal(enabled.options.scope, "user");
   }
+
   const disabled = parseMcp(["disable", "demo", "--scope", "user"]);
+
   assert.equal(disabled.kind, "mcp_set_enabled");
+
   if (disabled.kind === "mcp_set_enabled") {
     assert.equal(disabled.enabled, false);
   }
+
   assert.match(errorOf(["remove"]).message, /requires a server name/);
   assert.match(errorOf(["remove", "demo", "--json"]).message, /does not accept/);
 });
@@ -201,10 +231,13 @@ test("the non-add verbs still refuse the transport flags, with the new wording",
 
 test("list takes --json and nothing else; an unknown subcommand is a usage error", () => {
   const listed = parseMcp(["list", "--json"]);
+
   assert.equal(listed.kind, "mcp_list");
+
   if (listed.kind === "mcp_list") {
     assert.equal(listed.json, true);
   }
+
   assert.equal(kindOf(["list"]), "mcp_list");
   assert.match(errorOf(["list", "--verbose"]).message, /does not accept/);
   assert.match(errorOf(["sync"]).message, /unknown mcp subcommand/);

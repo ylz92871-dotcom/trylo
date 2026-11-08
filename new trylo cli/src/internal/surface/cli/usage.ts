@@ -6,6 +6,7 @@
 import { EXIT_CODES, type ExitCode } from "../../protocol/cli-stream.js";
 import { TRYLO_VERSION } from "../../protocol/version.js";
 import type { ParsedCommand } from "./args-primitives.js";
+import { DEFAULT_COMPACT_SUMMARY_MODE } from "./compact-model-summarizer.js";
 
 export const VERSION = TRYLO_VERSION;
 
@@ -16,6 +17,7 @@ export const USAGE = [
   "  trylo                         start the interactive REPL",
   "  trylo run [options] [message] one-shot turn",
   "  trylo run -                   read the prompt from stdin",
+  "  trylo skills list|show|withdraw  inspect or withdraw legacy Board skill archives (JSON)",
   "  trylo exec [options] [message] the same one-shot turn under Codex's spelling (C72)",
   "  trylo help | --help           this list (`version`/`-v` print the version)",
   "  trylo login --provider <id>   store a credential (default scope: user)",
@@ -57,8 +59,33 @@ export const USAGE = [
   "  trylo memory update|retract --json    revise one record using a JSON request on stdin",
   "  trylo memory compact [--json]        atomically retain current versions and consumed command keys",
   "  trylo workflow list [--json]  installed workflow prompts (read-only)",
+  "  trylo learn skill --tokens N --calls N  invoke native Hermes skill learning; --tokens caps output tokens",
+  "  trylo learn central inspect -  read the workspace central pool/stages from JSON stdin; never starts learning",
+  "  trylo learn central skill -  explicitly learn from a saved task through current content/decision/managed-worker path",
+  "  trylo learn skill issues --json [--workspace ROOT] [--issue ID]  inspect workspace skill opportunities and central grants",
+  "  trylo learn skill focus - [--workspace ROOT]  read explicit SkillFocus JSON with a total_model_tokens v2 allowance from stdin",
+  "  trylo learn skill dispatch [--workspace ROOT] [--issue ID]  consume at most one existing funded skill job",
+  "  trylo learn inspect method|workflow|collaboration [version-id]  read saved learning records and complete exact-version content; no learning is started",
+  "  trylo learn feedback --session ID [--through N] [--delta 0.05]  read source/Board feedback explanations; no learning is started",
+  "  trylo learn collaboration --budget <0..256> [--prompt-chars <0..4000>]  independently learn from pending collaboration evidence; JSON result",
+  "  trylo learn collaboration --tokens <0..1000000> [--calls <0..16> --steps <0..64>]  autonomous persistent learning; JSON result",
+  "  trylo learn collaboration --resume  continue the interrupted learning grant without resetting its budget",
+  "  trylo learn collaboration status [--workspace ROOT] --json  inspect collaboration trials, costs and explicit corrections",
+  "  trylo learn collaboration issues [--workspace ROOT] --json  inspect Personal Agent issues and central learning work",
+  "  trylo learn collaboration coordinate [--workspace ROOT] -  explicitly resolve one issue using versioned JSON on stdin",
+  "  trylo library tool|expert [--workspace ROOT] -  use the ordinary library host and Permission path; command JSON on stdin",
+  "  trylo learn collaboration correct --family ID --action suspend|restore --scope workspace|class|once --evidence-ref user:reason [--replaces ID] --json",
+  "  trylo learn check --budget <0..32> --tokens <0..262144> --executions <0..256>  independently improve executable checks; JSON result",
+  "  trylo learn check --status | --recover  inspect or recover checks without calling a model",
   "  trylo workflow show <name> [--json]  print one workflow prompt (read-only)",
   "  trylo workflow run <name> [-- <run options>]  run the workflow prompt through the ordinary run pipeline",
+  "  trylo workflow learn <request.json>  nominate workflow learning with collection choice and bounded allowance",
+  "  trylo workflow learned [--json] | inspect <versionId> | feedback <versionId>  inspect Board experience and run evidence",
+  "  trylo workflow jobs [--scope <scope>] | job <id> | recover <id> --attempt n  inspect/recover durable learning jobs",
+  "  trylo workflow retry <id> --grant <new-id> --tokens n [--calls n]  explicitly fund an immutable retry",
+  "  trylo workflow work <id> [--prompt-file file] -- <provider flags>  consume the stored job grant without task tools",
+  "  trylo workflow learn-session <session-id> [--budget n] -- <provider flags>  learn from a committed execution journal",
+  "  trylo workflow run <versionId> --task <task.json> -- <run options>  reuse a learned path with observed checkpoints",
   "  trylo context [--session <id> [--turn <turn-id>]] [--json]  inspect run inputs or a session's token shape (read-only)",
   "  trylo review --uncommitted|--base <branch>|--commit <sha>|\"<instructions>\"|-  review target and prompt (findings only; changes nothing; - reads stdin)",
   "  trylo providers add <id>        declare a provider (endpoint, model, account, context-window)",
@@ -97,6 +124,11 @@ export const USAGE = [
   "  --url <url>                   register a remote server; http or https, and `--transport sse` for legacy HTTP+SSE",
   "  --transport stdio|http|sse    implied by the registration path: stdio with `--`, http with --url",
   "",
+  "interactive learning:",
+  "  trylo repl --learning=agent --workflow-learning --workflow-learning-budget N",
+  "             [--skill-learning-budget N --skill-learning-calls N] [--collaboration-learning=N]",
+  "  workflow allowance is shared by this interactive launch, including /new, /resume and model switches",
+  "",
   "run options:",
   "  --provider <fixture|fixture-write|openai-compatible|openai-responses>  default: fixture",
   "                                          openai-responses is the Responses wire, chosen per",
@@ -120,7 +152,7 @@ export const USAGE = [
   "  --session <id>                          start a durable session",
   "  --resume <id>                           continue a durable session",
   "  --last                                  continue the newest non-archived session",
-  "  --migrate model,catalog                 accept named config drift on resume (workspace/provider never migrate)",
+  "  --migrate provider,model,catalog        accept and record named connection drift on resume (workspace never migrates)",
   "  --output-last-message <file>            write the final assistant text",
   "  --output-schema <file>                JSON Schema file the final answer must satisfy;",
   "                                          sent as response_format (chat) or text.format (Responses)",
@@ -135,16 +167,24 @@ export const USAGE = [
   "                                          GEMINI.md are read from it and the directories below,",
   "                                          never from a parent. `trylo doctor` reports which were",
   "                                          adopted",
-  "  --max-iterations <n>                    optional provider request budget",
+  "  --max-iterations <n>                    optional main execution request budget (summaries are separate calls)",
   "  --context-window <tokens>               working context budget (default 200000)",
   "  --model-context-window <tokens>         declared model/service capacity; clamps the working budget",
   "  --max-tokens <n>                        optional total output token budget for this turn",
-  "                                          each request gets the remaining budget as max_tokens;",
+  "                                          main and summary requests share the remaining max_tokens;",
   "                                          exhausted or truncated runs can continue with --resume",
   "  --max-budget-usd <amount>               dollar ceiling for this run; usage is priced by the",
   "                                          inputPricePerMTok / outputPricePerMTok config keys and the",
-  "                                          run ends explicitly when the cost reaches the ceiling",
-  "  --learning method                       opt in to the method subsystem (default: off)",
+  "                                          main and summary usage share it; reaching it ends the run",
+  "  --learning method|user|tool|check|skill|agent|all  opt in (agent excludes user/check; default: off)",
+  "  --central-learning-budget N --central-learning-calls N  cumulative workspace pool for central, User and Agent learning",
+  "  --central-learning-prompt-chars N  full worker prompt envelope (default 100000); grants and Permission remain separate",
+  "  --central-learning-thought-tokens N  optional total-model token ceiling per central thought; absent uses the original pool token limit",
+  "  --skill-learning-budget N --skill-learning-calls N  explicit PA skill allowance in total model tokens",
+  "  --workflow-learning [--workflow-learning-budget <tokens>]  independently learn, select and revise workflows from actual execution",
+  "  --workflow-version <id> --workflow-task <json>  explicitly adopt a workflow; --resume restores unfinished progress and original allowance",
+  "  --workflow-refill-tokens <n> --workflow-budget-grant <id>  explicitly add tokens to an active resumed workflow; grant ids are idempotent",
+  "  --workflow-collection enabled|disabled  control new workflow learning collection while preserving execution recovery",
   "  --permission-ledger                     back this run with the durable permission ledger",
   "                                          (default: off; a ledger that cannot be read refuses the run)",
   "  --subagent                              mount the delegate_subagent tool for this run (default: off)",
@@ -154,7 +194,7 @@ export const USAGE = [
   "                                          (neither choice grants tool permission)",
   "  --allow-web                             mount the web_fetch tool for this run (default: off; each",
   "                                          fetch still needs approval)",
-  "  --compact-summary=<extractive|model>    who authors compaction summaries (default: extractive)",
+  `  --compact-summary=<extractive|model>    who authors compaction summaries (default: ${DEFAULT_COMPACT_SUMMARY_MODE}; model errors fall back to extractive)`,
   "  --help                                  show this help",
   "",
   "session options:",
@@ -193,6 +233,7 @@ export function familyHelpCommand(family: string): ParsedCommand {
 
 /** The command families with their own `--help` surface (D6 #19). */
 export const HELP_FAMILIES = [
+  "skills",
   "providers",
   "auth",
   "mcp",
@@ -204,6 +245,8 @@ export const HELP_FAMILIES = [
   "output-style",
   "memory",
   "workflow",
+  "learn",
+  "library",
   "context",
 ] as const;
 
@@ -211,6 +254,7 @@ export type HelpFamily = (typeof HELP_FAMILIES)[number];
 
 /** Which usage lines belong to a family: its verbs, plus its options block. */
 const FAMILY_VERB_PREFIXES: Readonly<Record<HelpFamily, ReadonlyArray<string>>> = {
+  skills: ["  trylo skills "],
   providers: ["  trylo providers "],
   auth: ["  trylo auth ", "  trylo login ", "  trylo logout ", "  trylo status "],
   mcp: ["  trylo mcp "],
@@ -222,10 +266,13 @@ const FAMILY_VERB_PREFIXES: Readonly<Record<HelpFamily, ReadonlyArray<string>>> 
   "output-style": ["  trylo output-style "],
   memory: ["  trylo memory "],
   workflow: ["  trylo workflow "],
+  learn: ["  trylo learn "],
+  library: ["  trylo library "],
   context: ["  trylo context "],
 };
 
 const FAMILY_OPTION_BLOCKS: Readonly<Record<HelpFamily, string | undefined>> = {
+  skills: undefined,
   providers: "providers options:",
   auth: "credential options:",
   mcp: "mcp options:",
@@ -237,6 +284,8 @@ const FAMILY_OPTION_BLOCKS: Readonly<Record<HelpFamily, string | undefined>> = {
   "output-style": undefined,
   memory: undefined,
   workflow: undefined,
+  learn: undefined,
+  library: undefined,
   context: undefined,
 };
 
@@ -249,6 +298,7 @@ export function familyHelp(family: string): string | undefined {
   if (!(HELP_FAMILIES as readonly string[]).includes(family)) {
     return undefined;
   }
+
   const lines = USAGE.split("\n");
   const verbs = lines.filter((line) =>
     FAMILY_VERB_PREFIXES[family as HelpFamily].some((prefix) => line.startsWith(prefix)),
@@ -256,11 +306,13 @@ export function familyHelp(family: string): string | undefined {
   if (verbs.length === 0) {
     return undefined;
   }
+
   const block = FAMILY_OPTION_BLOCKS[family as HelpFamily];
   const options =
     block === undefined
       ? []
       : ["", ...takeBlock(lines, block)];
+
   return [`trylo ${family} - commands`, "", ...verbs, ...options, "", "run `trylo --help` for the full surface"].join("\n");
 }
 
@@ -270,7 +322,9 @@ function takeBlock(lines: ReadonlyArray<string>, header: string): string[] {
   if (start < 0) {
     return [];
   }
+
   const taken = [lines[start] ?? header];
+
   for (let index = start + 1; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
     if (line === "") {
@@ -278,6 +332,7 @@ function takeBlock(lines: ReadonlyArray<string>, header: string): string[] {
     }
     taken.push(line);
   }
+
   return taken;
 }
 

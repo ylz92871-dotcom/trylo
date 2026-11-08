@@ -11,8 +11,10 @@ async function waitForAnswer(owner: AskUserSession, pending: AskUserRequest, cha
       owner.cancelRequest(pending.requestId);
       return { outcome: "error", code: "user_input_cancelled", message: "The user question was cancelled; no answer was supplied." };
     }
+
     const answers = reply.answers;
     if (typeof answers !== "object" || answers === null || Array.isArray(answers)) continue;
+
     const answered = owner.answerFromUser(pending.requestId, answers as JsonObject);
     if (answered.outcome === "result") return { ...answered,
       output: `User answer for request ${pending.requestId}: ${JSON.stringify(answers)}\n${answered.output}` };
@@ -34,18 +36,22 @@ export function stdioQuestions(owner: AskUserSession, channel: StdioSession): As
     ...owner,
     snapshot: () => owner.snapshot().map(binding => binding.name === "ask_user_question"
       ? { ...binding, timeoutMs: 10 * 60 * 1000, description: "Ask the user structured questions and wait for their actual answers. The host displays choices and free text; never answer on the user's behalf." } : binding),
+
     async execute(call, signal) {
       const issued = await owner.execute(call, signal);
       if (!["ask_user_question", "request_user_input_async"].includes(call.name) || issued.outcome !== "result") return issued;
+
       const requestId = issued.value?.["requestId"];
       const pending = owner.pending().find(item => item.requestId === requestId);
       if (!pending) return issued;
+
       if (call.name === "request_user_input_async") {
         void waitForAnswer(owner, pending, channel, channel.signal).then(answered => {
           if (answered.outcome === "result") channel.enqueue(answered.output);
         }).catch(() => { owner.cancelRequest(pending.requestId); });
         return issued;
       }
+
       return waitForAnswer(owner, pending, channel, signal);
     },
   };

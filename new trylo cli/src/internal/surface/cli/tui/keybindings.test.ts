@@ -51,6 +51,7 @@ test("reserved keys are refused from the user layer but stay at the shell", () =
   // ctrl+k was accepted; ctrl+c was refused, so nothing in the table carries
   // it and the shell's interrupt path keeps it.
   const claimsCtrlC = (entry: Binding): boolean => entry.strokes.some((s) => s.ctrl && s.key === "c");
+
   assert.equal(table.some(claimsCtrlC), false);
   assert.equal(table.some((entry) => entry.action === "end-of-line"), true);
 });
@@ -88,6 +89,7 @@ test("unknown actions and keys in the user file are dropped, not fatal", () => {
     ],
   ]);
   const { bindings } = loadUserBindings((path) => files.get(path), "/home");
+
   assert.deepEqual(bindings.map((entry) => entry.action), ["end-of-line"]);
 });
 
@@ -97,7 +99,9 @@ test("chords match as sequences", () => {
   ];
   const table = resolveBindings(user);
   const first = resolveAction({ kind: "ctrl", name: "x" }, table);
+
   assert.deepEqual(first, { kind: "chord" });
   const second = resolveAction({ kind: "ctrl", name: "e" }, table, [{ key: "x", ctrl: true, alt: false, shift: false }]);
+
   assert.deepEqual(second, { kind: "action", action: "external-editor" });
 });

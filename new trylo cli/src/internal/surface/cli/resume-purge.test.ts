@@ -96,15 +96,19 @@ test("the next request after a torn resume carries no unfinished tool call and n
   const dir = mkdtempSync(join(tmpdir(), "trylo-resume-purge-"));
   try {
     const path = join(dir, "sessions", `${SESSION_ID}.ndjson`);
+
     mkdirSync(join(path, ".."), { recursive: true });
     writeFileSync(path, tornJournal());
 
     const store = createNdjsonSessionStore({ path });
     const attached = await store.attach();
+
     assert.equal(attached.ok, true);
     const recovered = await store.read();
+
     await store.release();
     assert.equal(recovered.ok, true);
+
     if (!recovered.ok) {
       return;
     }
@@ -129,6 +133,7 @@ test("the next request after a torn resume carries no unfinished tool call and n
     assert.equal(requests.length, 1);
     const messages = requests[0]?.messages ?? [];
     const withToolCalls = messages.filter((message) => message.toolCalls !== undefined);
+
     assert.deepEqual(
       withToolCalls.map((message) => message.toolCalls?.map((call) => call.toolCallId)),
       [],

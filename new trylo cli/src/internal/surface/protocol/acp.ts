@@ -33,10 +33,12 @@ export function projectAcp(admitted: AdmittedEnvelope): ProjectionResult<AcpFram
       detail: `kind ${envelope.kind} 不在 EVENT_KINDS 里，拒绝投影`,
     };
   }
+
   const contract = checkPayload(envelope.kind, envelope.payload);
   if (!contract.ok) {
     return { ok: false, code: contract.code, detail: contract.detail };
   }
+
   const row = ACP_ROWS[envelope.kind];
   const frame: AcpFrame = {
     surface: "acp",
@@ -48,5 +50,6 @@ export function projectAcp(admitted: AdmittedEnvelope): ProjectionResult<AcpFram
     source: { eventId: envelope.eventId, sequence: envelope.sequence, kind: envelope.kind },
     omitted: row.omitted,
   };
+
   return { ok: true, frame: freezeFrame(frame) };
 }

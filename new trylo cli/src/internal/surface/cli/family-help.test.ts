@@ -26,10 +26,12 @@ function ctxOf(): { ctx: CliContext; out: string[]; err: string[] } {
     readFile: (path) => files.get(path),
     isDirectory: () => true,
     readDir: () => [],
+
     writeFile: (path, text) => {
       files.set(path, text);
       return true;
     },
+
     readStdin: async () => "",
     readLine: async () => undefined,
     readSecret: async () => undefined,
@@ -38,6 +40,7 @@ function ctxOf(): { ctx: CliContext; out: string[]; err: string[] } {
     now: () => 0,
     newId: (prefix) => `${prefix}-1`,
   };
+
   return { ctx, out, err };
 }
 
@@ -47,7 +50,9 @@ async function helpFor(argv: ReadonlyArray<string>): Promise<{ code: number; out
   if (parsed.kind !== "family_help") {
     throw new Error(`expected family_help for ${argv.join(" ")}, got ${parsed.kind}`);
   }
+
   const code = await dispatch(parsed, ctx);
+
   return { code, out: out.join("") };
 }
 
@@ -69,14 +74,17 @@ test("D6: every subcommand family answers --help with its own surface", async ()
 
 test("D6: verb-level --help stays inside the family, bare family stays an error", async () => {
   const { code, out } = await helpFor(["providers", "add", "--help"]);
+
   assert.equal(code, EXIT_CODES.OK);
   assert.ok(out.includes("providers add"));
   const login = await helpFor(["login", "--help"]);
+
   assert.equal(login.code, EXIT_CODES.OK);
   assert.ok(login.out.includes("auth list"));
 
   const { ctx, err } = ctxOf();
   const bare = parseArgs(["providers"]);
+
   assert.equal(bare.kind, "error");
   assert.equal(await dispatch(bare, ctx), EXIT_CODES.USAGE);
   assert.ok(err.join("").includes("subcommand"));

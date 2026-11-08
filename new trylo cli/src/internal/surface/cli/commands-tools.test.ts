@@ -8,10 +8,12 @@ import { parseArgs } from "./args.js";
 import { dispatch } from "./commands.js";
 import { handleTools } from "./commands-tools.js";
 import type { CliContext } from "./context.js";
+import { toolLearningContextFor } from "./tool-learning-context.js";
 
 function context(t: TestContext) {
   const prefix = path.resolve(tmpdir(), "trylo-tools-cli-");
   const root = mkdtempSync(prefix);
+
   assert.equal(path.resolve(root).startsWith(prefix), true);
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const home = path.join(root, "profile");
@@ -20,16 +22,31 @@ function context(t: TestContext) {
   let observed = 0, detached = 0, autoCancel = false;
   const ctx: CliContext = {
     cwd: root, homeDir: root, env: { TRYLO_HOME: home }, nodeVersion: "v24.14.1", platform: "win32", stdinIsTty: false,
-    readFile: file => { reads.push(path.normalize(file)); return files.get(path.normalize(file)); },
-    isDirectory: () => true, readDir: () => [], writeFile: (file, text) => { writes.push(file); files.set(path.normalize(file), text); return true; },
+
+    readFile: file => {
+      reads.push(path.normalize(file));
+      return files.get(path.normalize(file));
+    },
+
+    isDirectory: () => true, readDir: () => [], writeFile: (file, text) => {
+      writes.push(file);
+      files.set(path.normalize(file), text);
+      return true;
+    },
+
     readStdin: async () => "", readLine: async () => undefined, readSecret: async () => undefined,
     stdout: text => { out.push(text); }, stderr: text => { errors.push(text); }, now: () => 1_793_145_600_000, newId: name => `${name}-cli-test`,
     interrupts: {
-      observe: handler => { observed += 1; if (autoCancel) handler(); },
+      observe: handler => {
+        observed += 1;
+        if (autoCancel) handler();
+      },
+
       unobserve: () => { detached += 1; },
       exit: code => { throw new Error(`unexpected forced exit ${code}`); },
     },
   };
+
   return { ctx, root, home, out, errors, reads, writes, files,
     cancelAtStart: () => { autoCancel = true; }, observers: () => ({ observed, detached }) };
 }
@@ -44,24 +61,48 @@ const request = {
   ],
 };
 
+test("learning catalog distinguishes execution permission from tool selection and keeps the actual user contract", async t => {
+  const fx = context(t);
+  const supplement = await toolLearningContextFor(fx.ctx, { boardRoot: path.join(fx.home, "learning/board"), scope: "workspace:test",
+    run: { message: [], readStdin: false, allowTools: ["run_shell"] } }, {
+    type: "tool_learning_plan", schemaVersion: 1, scope: "workspace:test", capability: "read file sections efficiently",
+    createdAt: new Date(0).toISOString(), trigger: { runId: "user-task", proposalKey: "user", action: "user_requested", evidenceRefs: [] },
+  }, new AbortController().signal);
+
+  assert.ok(supplement.availableTools.some(tool => tool.toolId === "runtime:read_file"));
+  assert.equal(supplement.requirements[0]?.text, "read file sections efficiently");
+  assert.equal(fx.writes.length, 0, "catalog inspection does not configure tools or write user files");
+});
+
 test("caller recipe can bind explicitly to this workspace and inventories expose no activation", async t => {
   const fx = context(t), file = path.join(fx.ctx.cwd, "recipe.json");
+
   fx.files.set(path.normalize(file), JSON.stringify(request));
   assert.equal(await handleTools(fx.ctx, ["recipe", file, "--auto", "--workspace"]), EXIT_CODES.OK);
-  const registered = JSON.parse(fx.out.at(-1) ?? "{}"); assert.equal(registered.ok, true); assert.equal(registered.recipeScope, registered.workspaceId);
+  const registered = JSON.parse(fx.out.at(-1) ?? "{}");
+  assert.equal(registered.ok, true);
+  assert.equal(registered.recipeScope, registered.workspaceId);
   assert.equal(await handleTools(fx.ctx, ["recipes"]), EXIT_CODES.OK);
-  const inventory = JSON.parse(fx.out.at(-1) ?? "{}"); assert.equal(inventory.recipes.length, 1); assert.equal(inventory.recipes[0].automation, "after_turn");
+  const inventory = JSON.parse(fx.out.at(-1) ?? "{}");
+  assert.equal(inventory.recipes.length, 1);
+  assert.equal(inventory.recipes[0].automation, "after_turn");
   assert.equal(await handleTools(fx.ctx, ["queue", request.capability]), EXIT_CODES.OK);
   assert.equal(await handleTools(fx.ctx, ["jobs"]), EXIT_CODES.OK);
-  const jobs = JSON.parse(fx.out.at(-1) ?? "{}"); assert.equal(jobs.jobs.length, 1); assert.equal(jobs.jobs[0].state, "queued");
+  const jobs = JSON.parse(fx.out.at(-1) ?? "{}");
+  assert.equal(jobs.jobs.length, 1);
+  assert.equal(jobs.jobs[0].state, "queued");
   assert.equal(await handleTools(fx.ctx, ["status", "--json"]), EXIT_CODES.OK);
-  const status = JSON.parse(fx.out.at(-1) ?? "{}"); assert.equal(status.formatVersion, 1); assert.equal(status.totalJobs, 1);
-  assert.equal(JSON.stringify(status).includes('"evidence"'), false); assert.equal(status.jobs[0].capability, request.capability);
+  const status = JSON.parse(fx.out.at(-1) ?? "{}");
+  assert.equal(status.formatVersion, 1);
+  assert.equal(status.totalJobs, 1);
+  assert.equal(JSON.stringify(status).includes('"evidence"'), false);
+  assert.equal(status.jobs[0].capability, request.capability);
   assert.equal(fx.observers().observed, 0, "data commands open no provider/cancellation resources");
 });
 
 test("tools help and invalid input touch no profile, provider or cancellation resources", async t => {
   const fx = context(t);
+
   assert.equal(await handleTools(fx.ctx, ["--help"]), EXIT_CODES.OK);
   assert.equal(await handleTools(fx.ctx, ["activate", "candidate"]), EXIT_CODES.USAGE);
   assert.deepEqual(fx.reads, []);
@@ -70,12 +111,28 @@ test("tools help and invalid input touch no profile, provider or cancellation re
   assert.equal(existsSync(fx.home), false);
 });
 
+test("failed acquisition inquiry review stays read-only through the global CLI router", async t => {
+  const job = `tool-learning_v1_${"a".repeat(64)}`, failure = `tool-acquisition-failure_v1_${"b".repeat(64)}`;
+  for (const approval of [[], ["--approve", `tool-decision_v1_${"c".repeat(64)}`]]) {
+    const fx = context(t);
+    const command = parseArgs(["tools", "acquire-learning", job, "--reinvestigate-failure", failure, ...approval, "--json"]);
+
+    assert.equal(await dispatch(command, fx.ctx), EXIT_CODES.CONFIG, "an absent exact failure is not guessed or investigated");
+    assert.equal(JSON.parse(fx.out.at(-1) ?? "{}").ok, false);
+    assert.deepEqual(fx.reads, []);
+    assert.deepEqual(fx.writes, []);
+    assert.deepEqual(fx.observers(), { observed: 0, detached: 0 }, "review does not open a model session or mutation cancellation owner");
+    assert.equal(existsSync(fx.home), false, "a read-only review cannot create a Board, credentials or grant");
+  }
+});
+
 test("missing frozen candidate refuses trial and improvement before provider or native setup", async t => {
   for (const kind of ["trial", "improve"]) {
     const fx = context(t);
+
     fx.files.set(path.join(fx.root, "request.json"), JSON.stringify(request));
     assert.equal(await handleTools(fx.ctx, [kind, "absent-version", "request.json", "--json"]), EXIT_CODES.CONFIG);
-    assert.equal(JSON.parse(fx.out.join("")).code, "candidate_not_found");
+    assert.equal(JSON.parse(fx.out.join("")).code, kind === "improve" ? "learning_parent_unavailable" : "candidate_not_found");
     assert.equal(fx.reads.some(file => /credential|auth|providers\.json/i.test(file)), false);
     assert.equal(existsSync(fx.home), false);
     assert.deepEqual(fx.observers(), { observed: 1, detached: 1 });
@@ -92,6 +149,7 @@ test("trial history is a read-only view and missing versions create no profile",
 
 test("tools candidates is a read-only Board projection reachable through the global router", async t => {
   const fx = context(t);
+
   assert.equal(await dispatch(parseArgs(["tools", "candidates", "--json"]), fx.ctx), EXIT_CODES.OK);
   assert.deepEqual(JSON.parse(fx.out.join("")), { ok: true, candidates: [] });
   assert.deepEqual(fx.reads, []);
@@ -110,8 +168,10 @@ test("ordinary version dispatch does not construct the experimental tool profile
 
 test("unavailable PyPI search is reported honestly without querying a provider or writing a profile", async t => {
   const fx = context(t);
+
   assert.equal(await handleTools(fx.ctx, ["search", "parse a table", "--platform", "pypi", "--json"]), EXIT_CODES.TEMPORARY);
   const result = JSON.parse(fx.out.join(""));
+
   assert.equal(result.value.status, "failed");
   assert.equal(result.value.failures[0].code, "search_unsupported");
   assert.deepEqual(fx.reads, []);
@@ -132,7 +192,9 @@ test("cancelled discovery uses the cancellation exit contract rather than a temp
 test("evolve rejects unreadable, non-JSON and unauthorized request fields before selecting a provider", async t => {
   for (const raw of [undefined, "not json", JSON.stringify({ ...request, allowNetwork: true })]) {
     const fx = context(t);
+
     if (raw !== undefined) fx.files.set(path.join(fx.root, "request.json"), raw);
+
     assert.equal(await handleTools(fx.ctx, ["evolve", "request.json", "--json"]), EXIT_CODES.USAGE);
     assert.deepEqual(fx.reads, [path.join(fx.root, "request.json")]);
     assert.deepEqual(fx.writes, []);
@@ -143,6 +205,7 @@ test("evolve rejects unreadable, non-JSON and unauthorized request fields before
 
 test("an unknown explicit provider fails before workers, credential lookup or candidate writes", async t => {
   const fx = context(t);
+
   fx.files.set(path.join(fx.root, "request.json"), JSON.stringify(request));
   assert.equal(await handleTools(fx.ctx, ["evolve", "request.json", "--provider", "missing-provider", "--json"]), EXIT_CODES.USAGE);
   assert.match(fx.errors.join(""), /unknown provider missing-provider/);
@@ -153,6 +216,7 @@ test("an unknown explicit provider fails before workers, credential lookup or ca
 
 test("a declared provider keeps its named account binding and refuses a missing account", async t => {
   const fx = context(t);
+
   fx.files.set(path.join(fx.root, "request.json"), JSON.stringify(request));
   fx.files.set(path.join(fx.home, "providers.json"), JSON.stringify({ version: 1, selected: "lab", providers: [
     { id: "lab", kind: "openai-compatible", endpoint: "http://127.0.0.1:1/v1", model: "local-test-model", accountId: "missing-bound-account" },
@@ -166,9 +230,11 @@ test("a declared provider keeps its named account binding and refuses a missing 
 test("candidate inventory fails closed on a corrupt Board and does not repair it", async t => {
   const fx = context(t);
   const board = path.join(fx.home, "learning", "board");
+
   mkdirSync(board, { recursive: true });
   const file = path.join(board, "board-events.ndjson");
   const original = '{"unexpected":"invalid-board-record"}\n';
+
   writeFileSync(file, original);
   assert.equal(await handleTools(fx.ctx, ["candidates", "--json"]), EXIT_CODES.CONFIG);
   assert.equal(JSON.parse(fx.out.join("")).ok, false);

@@ -18,8 +18,10 @@ test("B1 compatibility projects exactly its optional arguments and preserves unr
     } };
   });
   const historical = toolCatalogHash(asTools(old));
+
   assert.ok(b1CompatibleCatalogHashes(tools).includes(historical));
   assert.notEqual(historical, toolCatalogHash(tools));
   const mcp: ToolBinding = { name: "mcp_changed", description: "external", sideEffect: "external", needsApproval: true, timeoutMs: 1, outputLimits: { maxBytes: 1, maxLines: 1 }, parameters: { type: "object", properties: { host: { type: "string" } } } };
+
   assert.equal(b1CompatibleCatalogHashes(asTools([...tools.snapshot(), mcp])).includes(historical), false);
 });

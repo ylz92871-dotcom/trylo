@@ -34,6 +34,7 @@ function ctxOf(files: Files, writable = true): ProvidersWiringContext & { readon
     homeDir: "/home/user",
     env: {},
     readFile: (path) => files.get(path),
+
     writeFile: (path, text) => {
       if (!writable) {
         return false;
@@ -68,10 +69,13 @@ test("the file sits in the profile, not in the workspace", () => {
 
 test("no file means the built-ins, and that is not an error", () => {
   const registry = readCliProviderRegistry(ctxOf(new Map()));
+
   assert.equal(isDocumentFailure(registry), false);
+
   if (isDocumentFailure(registry)) {
     return;
   }
+
   assert.equal(registry.declared, false);
   assert.equal(registry.entries.length, 4);
 });
@@ -79,10 +83,13 @@ test("no file means the built-ins, and that is not an error", () => {
 test("switching to an unknown provider writes nothing and leaves 2", () => {
   const ctx = ctxOf(new Map());
   const result = switchSelected(ctx, { id: "lab" });
+
   assert.equal(result.ok, false);
+
   if (result.ok) {
     return;
   }
+
   assert.equal(result.code, "unknown_provider");
   // The known ids are the registry's entries (the four built-ins on an empty
   // machine), not the kind vocabulary: `openai-responses` names a wire a
@@ -112,6 +119,7 @@ test("a declared Responses wire id switches like any declared id", () => {
     ]),
   );
   const result = switchSelected(ctx, { id: "r1" });
+
   assert.deepEqual(result, { ok: true, id: "r1", created: false });
 });
 
@@ -126,21 +134,28 @@ test("switching to a built-in provider creates the document once", () => {
 test("a switch is visible to the next read, as one complete document", () => {
   const ctx = ctxOf(new Map([[PATH, declaredFile()]]));
   const result = switchSelected(ctx, { id: "lab" });
+
   assert.deepEqual(result, { ok: true, id: "lab", created: false });
   const registry = readCliProviderRegistry(ctx);
+
   assert.equal(isDocumentFailure(registry), false);
+
   if (isDocumentFailure(registry)) {
     return;
   }
+
   assert.equal(registry.selected, "lab");
   assert.equal(registry.entries.length, 5);
   // The declaration survived the rewrite: the document was replaced whole, not
   // patched around.
   const resolved = resolveRunProvider(ctx, { endpoint: "", model: "default" });
+
   assert.equal(resolved.ok, true);
+
   if (!resolved.ok) {
     return;
   }
+
   assert.equal(resolved.value.providerId, "lab");
   assert.equal(resolved.value.endpoint, "https://lab.example/v1");
 });
@@ -150,22 +165,30 @@ test("an explicit request beats the stored selection", () => {
     { id: "lab", kind: "openai-compatible", endpoint: "https://lab.example/v1" },
   ] })}`]]));
   const resolved = resolveRunProvider(ctx, { requested: "fixture", endpoint: "", model: "default" });
+
   assert.equal(resolved.ok, true);
+
   if (!resolved.ok) {
     return;
   }
+
   assert.equal(resolved.value.providerId, "fixture");
 });
 
 test("a file that cannot be decoded is refused with CONFIG", () => {
   const ctx = ctxOf(new Map([[PATH, "{ not json"]]));
   const registry = readCliProviderRegistry(ctx);
+
   assert.equal(isDocumentFailure(registry), true);
+
   if (isDocumentFailure(registry)) {
     assert.equal(registry.code, "not_json");
   }
+
   const resolved = resolveRunProvider(ctx, { endpoint: "", model: "default" });
+
   assert.equal(resolved.ok, false);
+
   if (!resolved.ok && "code" in resolved.failure) {
     assert.equal(resolved.failure.code, "not_json");
   }
@@ -174,10 +197,13 @@ test("a file that cannot be decoded is refused with CONFIG", () => {
 test("a failed write is a failure, not a silent success", () => {
   const ctx = ctxOf(new Map(), false);
   const result = switchSelected(ctx, { id: "fixture" });
+
   assert.equal(result.ok, false);
+
   if (result.ok) {
     return;
   }
+
   assert.equal(result.code, "write_failed");
   assert.equal(switchFailureExit(result), EXIT_CODES.EXECUTION_FAILURE);
 });

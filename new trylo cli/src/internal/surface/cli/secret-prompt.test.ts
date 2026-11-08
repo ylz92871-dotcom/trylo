@@ -42,10 +42,12 @@ function fakeTerminal(options: { readonly rawModeAvailable?: boolean } = {}): Fa
         }),
     resume: () => undefined,
     pause: () => undefined,
+
     on: (event, listener) => {
       listeners.set(event, [...(listeners.get(event) ?? []), listener]);
       return terminal;
     },
+
     off: (event, listener) => {
       listeners.set(
         event,
@@ -53,6 +55,7 @@ function fakeTerminal(options: { readonly rawModeAvailable?: boolean } = {}): Fa
       );
       return terminal;
     },
+
     feed: (text) => {
       emit("data", Buffer.from(text, "utf8"));
     },
@@ -61,6 +64,7 @@ function fakeTerminal(options: { readonly rawModeAvailable?: boolean } = {}): Fa
     },
     modes,
   };
+
   return terminal;
 }
 
@@ -80,8 +84,10 @@ async function withOutputCapture<T>(
   };
   const stdoutWrite = process.stdout.write;
   const stderrWrite = process.stderr.write;
+
   process.stdout.write = capture as typeof process.stdout.write;
   process.stderr.write = capture as typeof process.stderr.write;
+
   try {
     return { value: await read(), output: captured.join("") };
   } finally {
@@ -98,6 +104,7 @@ test("a typed secret is returned and never written to the process output", async
     terminal.feed("\r");
     return pending;
   });
+
   assert.equal(value, "sk-typed-once");
   assert.equal(output.includes("sk-typed-once"), false);
   assert.deepEqual(terminal.modes, [true, false], "raw mode is entered, then restored");
@@ -111,6 +118,7 @@ test("Ctrl-C cancels the read and still restores the terminal", async () => {
     terminal.feed("\u0003");
     return pending;
   });
+
   assert.equal(value, undefined, "a cancelled prompt is not an empty secret");
   assert.equal(output.includes("half-a-secret"), false);
   assert.deepEqual(terminal.modes, [true, false]);
@@ -123,6 +131,7 @@ test("a terminal that cannot turn echo off is refused, not read in the clear", a
     terminal.feed("sk-should-never-be-read");
     return pending;
   });
+
   assert.equal(value, undefined);
   assert.deepEqual(terminal.modes, []);
 });
@@ -135,6 +144,7 @@ test("backspace edits the secret instead of printing it", async () => {
     terminal.feed("key\r");
     return pending;
   });
+
   assert.equal(value, "key");
   assert.equal(output.includes("wipe"), false);
   assert.deepEqual(terminal.modes, [true, false]);
@@ -147,6 +157,7 @@ test("end of input resolves as a refusal rather than blocking", async () => {
     terminal.close();
     return pending;
   });
+
   assert.equal(value, undefined);
   assert.deepEqual(terminal.modes, [true, false], "raw mode never stays on after a refusal");
 });

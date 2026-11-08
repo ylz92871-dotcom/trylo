@@ -45,12 +45,15 @@ export function createCliMcpRegistry(ctx: McpWiringContext): McpRegistryPort {
   const base = createMcpRegistry(mcpRegistryPaths(ctx));
   const file = ctx.env.TRYLO_MCP_RUNTIME_REGISTRY;
   if (!file) return base;
+
   const mode = ctx.env.TRYLO_MCP_RUNTIME_MODE ?? "overlay";
   if (mode !== "overlay" && mode !== "exclusive") {
     const failure = { ok: false as const, code: "invalid_document" as const, detail: "unknown runtime MCP registry mode" };
     return { ...base, names: async () => failure, resolve: async () => failure, list: async () => failure };
   }
+
   const runtime = createMcpRegistry({ userFile: file, projectFile: file, required: true });
+
   return withRuntimeRegistry(base, runtime, mode);
 }
 

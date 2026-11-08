@@ -7,19 +7,28 @@ test("closing the parent wiring cancels its children before releasing shared res
   const wired = wirePorts({ providerId: "fixture", model: "default", endpoint: "",
     apiKey: undefined, workspaceRoot: process.cwd(), permission: createDenyAllPermission(),
     subagent: { enabled: true } });
+
   assert.ok(!("code" in wired));
+
   if ("code" in wired) return;
+
   const runtime = wired.subagentRuntime;
+
   assert.ok(runtime);
   const child = runtime.spawn({ name: "parked", lineage: { parentAgentId: "main", rootAttemptId: "root", toolCallId: "call" },
     permissions: { allowedTools: [] },
+
     worker: async context => {
       await new Promise<void>(resolve => {
         if (context.signal.aborted) resolve();
         else context.signal.addEventListener("abort", () => resolve(), { once: true });
       });
     } });
-  t.after(async () => { await child.cancel(); await wired.close(); });
+
+  t.after(async () => {
+    await child.cancel();
+    await wired.close();
+  });
   await new Promise(resolve => setImmediate(resolve));
   await wired.close();
   assert.equal(child.status(), "cancelled");

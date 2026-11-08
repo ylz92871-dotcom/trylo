@@ -74,15 +74,19 @@ function nestedEnvelope(record: SessionRecord): NestedEnvelope | undefined {
   if (record.type !== "envelope") {
     return undefined;
   }
+
   const nested = (record.payload as Record<string, unknown>)["envelope"];
   if (typeof nested !== "object" || nested === null || Array.isArray(nested)) {
     return undefined;
   }
+
   const envelope = nested as Record<string, unknown>;
   if (typeof envelope["kind"] !== "string") {
     return undefined;
   }
+
   const payload = envelope["payload"];
+
   return {
     kind: envelope["kind"] as string,
     ...(typeof envelope["turnId"] === "string" ? { turnId: envelope["turnId"] as string } : {}),
@@ -100,9 +104,11 @@ function checkpointIdOf(envelope: NestedEnvelope): string | undefined {
   if (envelope.kind !== "observation") {
     return undefined;
   }
+
   if (envelope.payload["component"] !== "checkpoint" || envelope.payload["status"] !== "ok") {
     return undefined;
   }
+
   return textOf(envelope.payload["checkpointId"]);
 }
 
@@ -110,12 +116,14 @@ function fileWriteOf(envelope: NestedEnvelope): ReviewedFileWrite | undefined {
   if (envelope.kind !== "file_write") {
     return undefined;
   }
+
   const path = textOf(envelope.payload["path"]);
   const mode = textOf(envelope.payload["mode"]);
   const bytes = envelope.payload["bytes"];
   if (path === undefined || mode === undefined || typeof bytes !== "number") {
     return undefined;
   }
+
   return { path, mode, bytes };
 }
 
@@ -145,6 +153,7 @@ export function reviewSession(records: ReadonlyArray<SessionRecord>): SessionRev
       prologueSequences.push(sequence);
       return undefined;
     }
+
     let turn = turns.get(turnId);
     if (turn === undefined) {
       turn = {
@@ -160,12 +169,15 @@ export function reviewSession(records: ReadonlyArray<SessionRecord>): SessionRev
       };
       turns.set(turnId, turn);
     }
+
     if (sequence < turn.firstSequence) {
       turn.firstSequence = sequence;
     }
+
     if (sequence > turn.lastSequence) {
       turn.lastSequence = sequence;
     }
+
     return turn;
   }
 
@@ -174,10 +186,12 @@ export function reviewSession(records: ReadonlyArray<SessionRecord>): SessionRev
       if (!isTranscriptItem(record.payload)) {
         continue;
       }
+
       const turn = turnOf(record.turnId, record.sequence);
       if (turn === undefined) {
         continue;
       }
+
       const item = record.payload;
       if (item.kind === "user") {
         turn.userTexts.push(preview(item.text));
@@ -194,18 +208,22 @@ export function reviewSession(records: ReadonlyArray<SessionRecord>): SessionRev
         }
       } else if (item.kind === "tool_result") {
         const seen = turn.toolCalls.get(item.toolCallId);
+
         turn.toolCalls.set(item.toolCallId, {
           toolCallId: item.toolCallId,
           name: item.name,
           outcome: item.outcome,
           outputPreview: preview(item.output),
         });
+
         if ((seen === undefined || seen.outcome === "requested") && item.outcome !== "succeeded") {
           turn.problems.push(`tool ${item.name} (${item.toolCallId}) ended ${item.outcome}`);
         }
       }
+
       continue;
     }
+
     if (record.type === "effect_unknown") {
       const key = (record.payload as Record<string, unknown>)["key"];
       const turn = turnOf(record.turnId, record.sequence);
@@ -214,6 +232,7 @@ export function reviewSession(records: ReadonlyArray<SessionRecord>): SessionRev
       }
       continue;
     }
+
     if (record.type === "terminal") {
       const reason = (record.payload as Record<string, unknown>)["reason"];
       if (typeof reason === "string" && reason !== "completed") {
@@ -222,6 +241,7 @@ export function reviewSession(records: ReadonlyArray<SessionRecord>): SessionRev
       }
       continue;
     }
+
     const envelope = nestedEnvelope(record);
     if (envelope === undefined) {
       // Bookkeeping no turn branch consumes (session start, compact windows,
@@ -232,15 +252,18 @@ export function reviewSession(records: ReadonlyArray<SessionRecord>): SessionRev
       }
       continue;
     }
+
     const turn = turnOf(envelope.turnId ?? record.turnId, record.sequence);
     if (turn === undefined) {
       continue;
     }
+
     const written = fileWriteOf(envelope);
     if (written !== undefined && turn.fileWrites.length < MAX_FILES_PER_TURN) {
       turn.fileWrites.push(written);
       continue;
     }
+
     const checkpoint = checkpointIdOf(envelope);
     if (checkpoint !== undefined && !turn.checkpointIds.includes(checkpoint)) {
       turn.checkpointIds.push(checkpoint);
@@ -251,6 +274,7 @@ export function reviewSession(records: ReadonlyArray<SessionRecord>): SessionRev
   // Keep the newest turns: review shows the latest turn by default, and a cap
   // that silently kept the oldest would present turn 200 as "latest" (F7).
   const kept = ordered.slice(-MAX_TURNS);
+
   return {
     turns: kept.map((turn) => ({
       turnId: turn.turnId,
@@ -293,16 +317,20 @@ export function previewRollback(
   if (!horizon.ok) {
     return horizon;
   }
+
   const projected = service.projectForPrompt({ records, horizonSequence: horizon.horizonSequence });
   if (!projected.ok) {
     return { ok: false, code: "sequence_unknown", detail: projected.detail };
   }
+
   let total = 0;
+
   for (const record of records) {
     if (record.type === "transcript_item" && isTranscriptItem(record.payload)) {
       total += 1;
     }
   }
+
   return {
     ok: true,
     horizonSequence: horizon.horizonSequence,

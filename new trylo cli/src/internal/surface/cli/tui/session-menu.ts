@@ -9,7 +9,10 @@ import { wrapLine } from "./frame.js";
 
 export async function selectSession(ctx: CliContext, io: TuiIo, currentId: string): Promise<string | undefined> {
   const sessions = (await enrichSessions(ctx, sessionsDir(ctx.homeDir, ctx.env))).filter(session => !session.archived && session.id !== currentId);
-  if (sessions.length === 0) { io.write("没有其他可恢复的会话。\n"); return undefined; }
+  if (sessions.length === 0) {
+    io.write("没有其他可恢复的会话。\n");
+    return undefined;
+  }
   return choose(io, { title: "恢复会话 · 输入文字筛选", items: sessions.map(session => ({ id: session.id,
     label: session.displayName ?? session.preview ?? session.id,
     detail: `${relativeTime(session.modifiedAtMs, ctx.now())} · ${session.health} · ${session.id}` })) });
@@ -19,6 +22,7 @@ export async function selectSession(ctx: CliContext, io: TuiIo, currentId: strin
 export function restoredConversation(scaffold: RunScaffold, columns: number): string {
   const messages = (scaffold.resumeTranscript ?? []).filter(item => item.kind === "user" || item.kind === "assistant_text").slice(-4);
   if (messages.length === 0) return "";
+
   return ["最近对话", ...messages.flatMap(item => {
     if (item.kind !== "user" && item.kind !== "assistant_text") return [];
     const rows = wrapLine(item.text, Math.max(columns - 3, 10));

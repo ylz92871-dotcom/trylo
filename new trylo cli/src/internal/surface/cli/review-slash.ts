@@ -31,6 +31,7 @@ export async function slashDiffText(input: SlashDiffInput): Promise<string> {
   if (!outcome.ok) {
     return `diff failed: ${outcome.detail}\n`;
   }
+
   return renderDiffText(outcome);
 }
 
@@ -44,12 +45,15 @@ export function slashReviewText(
   if (records === undefined) {
     return "this session has no journal to review\n";
   }
+
   const review = reviewSession(records);
   if (review.turns.length === 0) {
     return "no turns yet\n";
   }
+
   const trimmed = arg.trim();
   let turnId: string | undefined;
+
   if (trimmed.length === 0) {
     turnId = review.turns[review.turns.length - 1]?.turnId;
   } else if (/^\d+$/.test(trimmed)) {
@@ -61,33 +65,43 @@ export function slashReviewText(
   } else {
     turnId = trimmed;
   }
+
   const turn = review.turns.find((candidate) => candidate.turnId === turnId);
   if (turn === undefined) {
     return `no such turn: ${turnId}\n`;
   }
+
   const lines = [`turn ${turn.turnId} (records ${turn.firstSequence}-${turn.lastSequence})`];
+
   for (const text of turn.userTexts) {
     lines.push(`user: ${text.split("\n")[0] ?? ""}`);
   }
+
   for (const call of turn.toolCalls) {
     lines.push(`tool ${call.name}: ${call.outcome}`);
   }
+
   for (const file of turn.fileWrites) {
     lines.push(`file ${file.mode} ${file.path}`);
   }
+
   for (const checkpoint of turn.checkpointIds) {
     lines.push(`checkpoint ${checkpoint}`);
   }
+
   for (const problem of turn.problems) {
     lines.push(`problem: ${problem}`);
   }
+
   if (lines.length === 1) {
     lines.push("(no user text, tool calls or file writes)");
   }
+
   const kept = lines.slice(0, SLASH_REVIEW_LINES);
   if (kept.length < lines.length) {
     kept.push(`... ${lines.length - kept.length} more row(s); \`session review\` shows them all ...`);
   }
+
   return `${kept.join("\n")}\n`;
 }
 
@@ -99,14 +113,17 @@ export function slashRollbackText(
   if (records === undefined) {
     return "this session has no journal to roll back\n";
   }
+
   const trimmed = arg.trim();
   if (!/^\d+$/.test(trimmed)) {
     return "usage: /rollback <n>, the nth user message to return to (as a person counts)\n";
   }
+
   const located = locateTurnByUserMessage(records, Number(trimmed));
   if (!located.ok) {
     return `${located.detail}\n`;
   }
+
   // The horizon sits strictly *before* the nth message (F8): the preview
   // shows the world the fork would keep, and `session fork
   // --before-user-message n` keeps exactly that prefix. Previewing the
@@ -119,10 +136,12 @@ export function slashRollbackText(
       "",
     ].join("\n");
   }
+
   const preview = previewRollback(records, horizonSequence);
   if (!preview.ok) {
     return `cannot preview that point: ${preview.detail}\n`;
   }
+
   const turn = reviewSession(records).turns.find((candidate) => candidate.turnId === located.turnId);
   const lines = [
     `rollback preview for user message ${located.userMessageIndex} (turn ${located.turnId}, horizon ${preview.horizonSequence})`,
@@ -134,5 +153,6 @@ export function slashRollbackText(
     }, located.userMessageIndex),
     "",
   ];
+
   return `${lines.join("\n")}\n`;
 }

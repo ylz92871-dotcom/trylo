@@ -47,10 +47,12 @@ function lastRecordedSources(
     if (record?.type !== "turn_start") {
       continue;
     }
+
     const raw = record.payload["projectInstructions"];
     if (!Array.isArray(raw)) {
       continue;
     }
+
     return raw.flatMap((entry) => (isSourceLike(entry) ? [entry] : []));
   }
   return undefined;
@@ -69,7 +71,9 @@ function isSourceLike(entry: unknown): entry is ProjectInstructionSource {
   if (typeof entry !== "object" || entry === null) {
     return false;
   }
+
   const candidate = entry as Record<string, unknown>;
+
   return (
     typeof candidate["relativePath"] === "string" &&
     typeof candidate["scopePath"] === "string" &&
@@ -81,16 +85,22 @@ function isSourceLike(entry: unknown): entry is ProjectInstructionSource {
 /** Local rules are facts on tool-result envelopes, discovered only when their target is read. */
 export function recordedLocalSources(records: ReadonlyArray<SessionRecord> | undefined): ReadonlyArray<ProjectInstructionSource> {
   const sources = new Map<string, ProjectInstructionSource>();
+
   for (const record of records ?? []) {
     if (record.type !== "envelope") continue;
+
     const envelope = record.payload.envelope;
     if (!isObject(envelope)) continue;
+
     const payload = envelope.payload;
     if (!isObject(payload)) continue;
+
     const value = payload.value;
     if (!isObject(value) || !Array.isArray(value.localRules)) continue;
+
     for (const source of value.localRules) if (isSourceLike(source)) sources.set(source.relativePath, source);
   }
+
   return [...sources.values()];
 }
 
@@ -110,13 +120,16 @@ export function ruleChangesBetween(
     // claiming a change would be inventing one.
     return [];
   }
+
   const recorded = lastRecordedSources(records);
   if (recorded === undefined || current === undefined) {
     return [];
   }
+
   const before = new Map(recorded.map((source) => [source.relativePath, source.contentHash]));
   const after = new Map(current.map((source) => [source.relativePath, source.contentHash]));
   const changes: RuleChange[] = [];
+
   for (const [relativePath, hash] of after) {
     const previous = before.get(relativePath);
     if (previous === undefined) {
@@ -125,11 +138,13 @@ export function ruleChangesBetween(
       changes.push({ kind: "changed", relativePath });
     }
   }
+
   for (const relativePath of before.keys()) {
     if (!after.has(relativePath)) {
       changes.push({ kind: "removed", relativePath });
     }
   }
+
   return changes;
 }
 
@@ -145,6 +160,7 @@ export function ruleChangeNotice(changes: ReadonlyArray<RuleChange>): string | u
   if (changes.length === 0) {
     return undefined;
   }
+
   const describe = (change: RuleChange): string => {
     switch (change.kind) {
       case "added":
@@ -155,12 +171,14 @@ export function ruleChangeNotice(changes: ReadonlyArray<RuleChange>): string | u
         return `${change.relativePath} (edited)`;
     }
   };
+
   return (
     `note: this session's project rules changed since the recorded run — ` +
     `${changes.map(describe).join(", ")}. This run uses the current files; ` +
     `the earlier turns used the versions in the journal.`
   );
 }
+
 /**
  * The one call a turn makes, so there is one place that decides to speak.
  *
