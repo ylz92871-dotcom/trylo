@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readdir, readFile } from "node:fs/promises";
+import { access, readdir, readFile, stat } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -44,6 +44,18 @@ const WRITER_FORBIDDEN_ROOTS = [
   join(srcInternal, "learning", "control"),
   join(srcInternal, "tooling"),
   join(srcInternal, "learning", "domains"),
+  // Preserve the restrictions of the original learning domains, integration
+  // and tooling owners after relocation. Acquisition/evolution effect adapters
+  // keep their original adapter ownership and are not promoted to issuers here.
+  join(srcInternal, "learning", "agent", "subsystems", "method"),
+  join(srcInternal, "learning", "agent", "subsystems", "tool", "domain"),
+  join(srcInternal, "learning", "agent", "subsystems", "tool", "assets"),
+  join(srcInternal, "learning", "agent", "subsystems", "tool", "runtime"),
+  join(srcInternal, "learning", "agent", "subsystems", "tool", "adapters", "board"),
+  join(srcInternal, "learning", "agent", "subsystems", "tool", "adapters", "events"),
+  join(srcInternal, "learning", "agent", "subsystems", "tool", "adapters", "quarantine"),
+  // This index loader was extracted from the original tooling discovery module.
+  join(srcInternal, "learning", "agent", "subsystems", "tool", "adapters", "acquisition", "discovery-index.ts"),
 ];
 
 /** 唯一允许看到写侧的目录：测试支撑需要一个真实持久 registry（组合根尚未存在）。 */
@@ -77,20 +89,24 @@ const CONCATENATED_LITERALS = /(["'])((?:\\.|(?!\1)[^\\])*)\1\s*\+\s*(["'])((?:\
 
 test("writer surface is unreachable from integration, board reducer and tooling", async () => {
   const violations: string[] = [];
+
   for (const root of WRITER_FORBIDDEN_ROOTS) {
     for (const file of await productionTs(root)) {
       if (WRITER_ALLOWED_PREFIXES.some((prefix) => file.startsWith(prefix))) {
         continue;
       }
+
       const source = await readFile(file, "utf8");
       // 在**拼接折叠后**的源码上匹配 token：`"Verification" + "AuthorityWriter"`
       // 这类字面量别名不能靠拆词绕过（外审 R3 §3 P3-4）。
       const collapsed = collapseStringConcatenation(source);
+
       for (const token of WRITER_TOKENS) {
         if (collapsed.includes(token)) {
           violations.push(`${rel(file)} reaches ${token}`);
         }
       }
+
       for (const specifier of importSpecifiers(source, file)) {
         if (!specifier.literal) {
           violations.push(`${rel(file)} has an unresolvable import specifier: ${specifier.text}`);
@@ -98,22 +114,26 @@ test("writer surface is unreachable from integration, board reducer and tooling"
       }
     }
   }
+
   assert.deepEqual(violations, []);
 });
 
 test("board reducer stays independent of the verification authority", async () => {
   const violations: string[] = [];
+
   for (const file of await productionTs(join(srcInternal, "learning", "control"))) {
     const source = await readFile(file, "utf8");
     if (source.includes("verification-authority")) {
       violations.push(rel(file));
     }
   }
+
   assert.deepEqual(violations, []);
 });
 
 test("verification authority contract layer owns no store, adapter or IO dependency", async () => {
   const violations: string[] = [];
+
   for (const file of await productionTs(CONTRACT_ROOT)) {
     const source = await readFile(file, "utf8");
     for (const specifier of importSpecifiers(source, file)) {
@@ -121,30 +141,37 @@ test("verification authority contract layer owns no store, adapter or IO depende
       if (target.includes("internal/adapters") || target.includes("adapters/")) {
         violations.push(`${rel(file)} imports adapter ${target}`);
       }
+
       if (target.includes("internal/integration") || target.includes("integration/")) {
         violations.push(`${rel(file)} imports integration ${target}`);
       }
+
       if (NODE_IO_PREFIXES.some((prefix) => target.startsWith(prefix))) {
         violations.push(`${rel(file)} imports IO module ${target}`);
       }
     }
   }
+
   assert.deepEqual(violations, []);
 });
 
 test("only the composition root and test support may construct a file registry", async () => {
   const violations: string[] = [];
+
   for (const file of await productionTs(srcInternal)) {
     if (file.startsWith(STORE_ROOT)) {
       continue;
     }
+
     if (WRITER_ALLOWED_PREFIXES.some((prefix) => file.startsWith(prefix))) {
       continue;
     }
+
     // 按 module 说明符判断，而不是子串：注释里提到路径不算可达面。
     // 说明符必须是**普通字符串字面量**：拼接、模板字面量、先赋变量再 import 一律报
     // 未解析（外审 R3 §3 P3-4：旧扫描器只截获 `"../../adapters/" + "..."` 的前半段）。
     const source = await readFile(file, "utf8");
+
     for (const specifier of importSpecifiers(source, file)) {
       if (!specifier.literal) {
         violations.push(`${rel(file)} has an unresolvable import specifier: ${specifier.text}`);
@@ -155,6 +182,7 @@ test("only the composition root and test support may construct a file registry",
       }
     }
   }
+
   assert.deepEqual(violations, []);
 });
 
@@ -162,6 +190,7 @@ test("the scan is not fooled by literal-concatenation aliases", () => {
   // 把扫描器自己的折叠函数与说明符解析用在**合成源码**上：这是「扫描器确实能抓住
   // 外审 R3 §3 P3-4 的两种绕过」的证据，而不是「当前仓库恰好没有字面量」。
   const writerAlias = 'const T = "Verification" + "AuthorityWriter";\n';
+
   assert.equal(
     collapseStringConcatenation(writerAlias).includes("VerificationAuthorityWriter"),
     true,
@@ -172,6 +201,7 @@ test("the scan is not fooled by literal-concatenation aliases", () => {
     'const target = "../../adapters/" + "verification-authority-store/index.js";\nvoid import(target);\n',
     "concatenated.ts",
   );
+
   assert.equal(concatenated.length, 1);
   assert.equal(concatenated[0]?.literal, false, "a specifier held in a variable must be unresolved");
   assert.equal(concatenated[0]?.text, "target");
@@ -180,6 +210,7 @@ test("the scan is not fooled by literal-concatenation aliases", () => {
     'void import("../../adapters/" + "verification-authority-store/index.js");\n',
     "inline.ts",
   );
+
   assert.equal(inlineConcatenation[0]?.literal, false, "an inline concatenation must be unresolved");
   // 旧扫描器在这里只截获到 `"../../adapters/"`，看不到拼接后的整条 store 路径。
   assert.match(inlineConcatenation[0]?.text ?? "", /\.\.\/\.\.\/adapters\/.*verification-authority-store/);
@@ -192,6 +223,7 @@ test("the scan is not fooled by literal-concatenation aliases", () => {
 
   // 反向对照：正常形态必须仍然解析成字面量，否则扫描会退化成「对所有人报错」。
   const named = importSpecifiers('import { a } from "./x.js";\n', "named.ts");
+
   assert.equal(named.length, 1);
   assert.equal(named[0]?.literal, true);
   assert.equal(named[0]?.text, "./x.js");
@@ -201,6 +233,7 @@ test("the scan is not fooled by literal-concatenation aliases", () => {
     '// 这条注释从 from "not/a/specifier.js" 里抄来的，还提到 import("x")\nconst label = "from \\"y\\"";\n',
     "prose.ts",
   );
+
   assert.deepEqual(prose, []);
 });
 
@@ -239,6 +272,7 @@ function importSpecifiers(source: string, fileName: string): ImportSpecifier[] {
         found.push({ text: specifier.text, literal: true });
       }
     }
+
     if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
       const argument = node.arguments[0];
       if (argument !== undefined && ts.isStringLiteral(argument)) {
@@ -247,9 +281,12 @@ function importSpecifiers(source: string, fileName: string): ImportSpecifier[] {
         found.push({ text: describeArgument(argument), literal: false });
       }
     }
+
     node.forEachChild(visit);
   };
+
   visit(file);
+
   return found;
 }
 
@@ -274,6 +311,7 @@ function describeArgument(argument: ts.Expression | undefined): string {
  */
 function collapseStringConcatenation(source: string): string {
   let current = source;
+
   for (let pass = 0; pass < 8; pass += 1) {
     const next = current.replace(CONCATENATED_LITERALS, (_match, quote, left, _other, right) =>
       `${quote}${left}${right}${quote}`,
@@ -281,20 +319,27 @@ function collapseStringConcatenation(source: string): string {
     if (next === current) {
       break;
     }
+
     current = next;
   }
+
   return current;
 }
 
 async function productionTs(root: string): Promise<string[]> {
+  if ((await stat(root)).isFile()) return [root];
+
   const files: string[] = [];
   const pending: string[] = [root];
+
   while (pending.length > 0) {
     const current = pending.pop();
     if (current === undefined) {
       break;
     }
+
     const entries = await readdir(current, { withFileTypes: true });
+
     for (const entry of entries) {
       const full = join(current, entry.name);
       if (entry.isDirectory()) {
@@ -304,6 +349,7 @@ async function productionTs(root: string): Promise<string[]> {
       }
     }
   }
+
   return files;
 }
 
@@ -317,6 +363,7 @@ function rel(file: string): string {
  */
 async function findRepoRoot(start: string): Promise<string> {
   let current = start;
+
   for (let depth = 0; depth < 8; depth += 1) {
     try {
       await access(join(current, "src", "internal"));
@@ -325,5 +372,6 @@ async function findRepoRoot(start: string): Promise<string> {
       current = dirname(current);
     }
   }
+
   throw new Error(`cannot locate repository root above ${start}`);
 }

@@ -25,18 +25,23 @@ export function checkValidationRecord(value: unknown): ValidationRecordCheck {
   if (!isPlainRecord(value)) {
     return { ok: false, detail: "validationRecord must be an object" };
   }
+
   if (!isNonEmptyString(value.validationId)) {
     return { ok: false, detail: "validationRecord.validationId is required" };
   }
+
   if (!isNonEmptyString(value.packageVersionId)) {
     return { ok: false, detail: "validationRecord.packageVersionId is required" };
   }
+
   if (value.actor !== "verifier") {
     return { ok: false, detail: "only a verifier actor may back independent evidence" };
   }
+
   if (value.verdict !== "pass" && value.verdict !== "fail") {
     return { ok: false, detail: "validationRecord.verdict must be pass or fail" };
   }
+
   const stages = value.stages;
   if (!Array.isArray(stages) || stages.length !== VALIDATION_STAGE_ORDER.length) {
     return {
@@ -44,28 +49,36 @@ export function checkValidationRecord(value: unknown): ValidationRecordCheck {
       detail: `validationRecord.stages must contain all ${String(VALIDATION_STAGE_ORDER.length)} stages in order`,
     };
   }
+
   const checkedStages: StageResult[] = [];
+
   for (let index = 0; index < stages.length; index += 1) {
     const stage: unknown = stages[index];
     const stageName = VALIDATION_STAGE_ORDER[index];
     if (!isPlainRecord(stage) || stageName === undefined) {
       return { ok: false, detail: `stage ${String(index)} is malformed` };
     }
+
     if (stage.stage !== stageName) {
       return { ok: false, detail: `stage ${String(index)} must be ${String(stageName)}` };
     }
+
     if (typeof stage.passed !== "boolean" || !isNonEmptyString(stage.detail)) {
       return { ok: false, detail: `stage ${String(stageName)} needs a boolean passed and a detail` };
     }
+
     checkedStages.push({ stage: stageName, passed: stage.passed, detail: stage.detail });
   }
+
   const allPassed = checkedStages.every((stage) => stage.passed);
   if (value.verdict === "pass" && !allPassed) {
     return { ok: false, detail: "a pass validation record cannot contain failed stages" };
   }
+
   if (value.verdict === "fail" && allPassed) {
     return { ok: false, detail: "a fail validation record cannot have all stages passed" };
   }
+
   return {
     ok: true,
     record: {

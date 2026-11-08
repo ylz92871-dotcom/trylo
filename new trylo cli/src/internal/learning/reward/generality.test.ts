@@ -8,16 +8,19 @@ import type { RewardExposureDraft, RewardFeedback, RewardMetric, RewardTarget } 
 
 const quality: RewardMetric = { id: "quality", version: "1", unit: "fraction", minimum: 0, maximum: 1, preference: "higher" };
 const latency: RewardMetric = { id: "latency", version: "1", unit: "ms", minimum: 0, maximum: 1000, preference: "lower" };
+
 function draft(kind: string, metric = quality, id = kind): RewardExposureDraft {
   return { schemaVersion: 1, id, context: { scope: "workspace", taskFamily: "coding", environment: "env1", metric },
     source: { sessionId: "s", turnId: "t", attemptId: "a", eventId: `use-${kind}` },
     targets: [{ kind, id: "asset", version: "v1" }], occurredAt: 1 };
 }
+
 function outcome(use: RewardExposureDraft, value: number): RewardFeedback {
   return { schemaVersion: 1, id: `feedback-${use.id}`, exposureId: use.id, source: { ...use.source, eventId: "same-result" },
     evidenceIds: ["same-result"], origin: "environment", outcome: { kind: "measured", value, confidence: 1, noiseVariance: 1 },
     attribution: { kind: "linked", shares: use.targets.map(target => ({ target, share: 1 / use.targets.length })) }, observedAt: 2 };
 }
+
 function register(state: BoardState, use: RewardExposureDraft): BoardState {
   const result = reduce(state, { type: "record_reward_exposure", commandId: use.id, issuedAt: "1", exposure: use });
   assert.ok(result.ok, result.ok ? "" : result.reason);
@@ -26,6 +29,7 @@ function register(state: BoardState, use: RewardExposureDraft): BoardState {
 
 test("reward generality: future object kinds and two metrics accept one shared observation without cross-credit", () => {
   let state = emptyBoardState();
+
   for (const kind of ["memory", "user_preference", "prompt", "skill", "workflow", "tool", "learning_strategy", "future.module"]) {
     for (const [metric, value] of [[quality, 0.8], [latency, 100]] as const) {
       const use = draft(kind, metric, `${kind}-${metric.id}`);
@@ -36,8 +40,11 @@ test("reward generality: future object kinds and two metrics accept one shared o
       state = result.state;
     }
   }
+
   const view = rewardView(rewardRecordsOf(state));
+
   assert.equal(view.estimates.size, 16);
+
   for (const signal of view.signals) {
     assert.ok(Math.abs(signal.normalizedValue! - (signal.context.metric.id === "quality" ? 0.6 : 0.8)) < 1e-12);
     assert.equal(signal.adjustments.length, 1);
@@ -68,10 +75,13 @@ test("reward attribution: partial credit is conserved across unlike objects; del
   const first = outcome(use, 0);
   const apply = (feedback: RewardFeedback) => {
     const result = reduce(state, { type: "record_reward_feedback", commandId: feedback.id, issuedAt: "2", feedback });
-    assert.ok(result.ok); state = result.state;
+    assert.ok(result.ok);
+    state = result.state;
   };
+
   apply(first);
   apply({ ...outcome(use, 1), id: "later-user", origin: "user", observedAt: 1_000_000 });
+
   for (const signal of rewardView(rewardRecordsOf(state)).signals) {
     assert.ok(signal.adjustments.reduce((n, item) => n + Math.abs(item.signedCredit), 0) <= 2);
     for (const item of signal.adjustments) assert.ok(item.after.mean >= -1 && item.after.mean <= 1);

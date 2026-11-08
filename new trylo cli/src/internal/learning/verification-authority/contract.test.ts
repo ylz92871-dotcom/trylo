@@ -72,7 +72,9 @@ const AGENT_EXPECTATION: ReceiptExpectation = {
 
 test("a canonical receipt parses, and every field is re-validated at runtime", () => {
   const parsed = parseVerificationReceipt(canonicalReceipt());
+
   assert.equal(parsed.ok, true);
+
   if (parsed.ok) {
     assert.equal(parsed.value.receiptId, "receipt:1");
     assert.equal(parsed.value.subject.subjectId, "pkg:1");
@@ -104,6 +106,7 @@ test("the parser refuses unknown keys, unknown versions and malformed fields", (
 
 test("binding refuses every single-field mismatch", () => {
   const receipt = receiptOf();
+
   assert.equal(checkReceiptBinding(receipt, AGENT_EXPECTATION).ok, true);
   const mismatches: ReadonlyArray<readonly [string, ReceiptExpectation]> = [
     ["domain", { ...AGENT_EXPECTATION, domain: "user_explicit" }],
@@ -112,6 +115,7 @@ test("binding refuses every single-field mismatch", () => {
     ["version", { ...AGENT_EXPECTATION, subjectVersion: "pkg:2" }],
     ["scope", { ...AGENT_EXPECTATION, scope: "other" }],
   ];
+
   for (const [label, expectation] of mismatches) {
     const check = checkReceiptBinding(receipt, expectation);
     assert.equal(check.ok, false, label);
@@ -123,7 +127,9 @@ test("a receipt whose verifier is its own generator is refused on the read path"
     receiptOf({ verifierId: "same-identity", generatorId: "same-identity" }),
     AGENT_EXPECTATION,
   );
+
   assert.equal(check.ok, false);
+
   if (!check.ok) {
     assert.equal(check.code, "receipt_identity_not_independent");
   }
@@ -138,6 +144,7 @@ test("identity independence compares normalized identities, never raw strings", 
     ["same\u00a0", "same"],
     ["cafe\u0301", "caf\u00e9"],
   ];
+
   for (const [verifierId, generatorId] of aliases) {
     const checked = checkIssuance({ ...agentInput(passRecord()), verifierId, generatorId });
     assert.equal(checked.ok, false, `issuance must refuse verifier=${JSON.stringify(verifierId)}`);
@@ -152,7 +159,9 @@ test("identity independence compares normalized identities, never raw strings", 
     receiptOf({ verifierId: "cafe\u0301", generatorId: "caf\u00e9" }),
     AGENT_EXPECTATION,
   );
+
   assert.equal(read.ok, false);
+
   if (!read.ok) {
     assert.equal(read.code, "receipt_identity_not_independent");
   }
@@ -179,7 +188,9 @@ test("the parser canonicalizes identity fields at the read boundary", () => {
     verifierId: "one-agent ",
     generatorId: "one-agent",
   });
+
   assert.equal(parsed.ok, true);
+
   if (parsed.ok) {
     assert.equal(parsed.value.verifierId, "one-agent");
     assert.equal(parsed.value.generatorId, "one-agent");
@@ -189,6 +200,7 @@ test("the parser canonicalizes identity fields at the read boundary", () => {
 test("issuance derives the verdict and digests instead of echoing the caller", () => {
   const record = passRecord();
   const draft = signAgentMethod(record);
+
   assert.equal(draft.domain, "agent_method");
   assert.equal(draft.verdict, "pass");
   assert.equal(draft.subject.subjectId, record.packageVersionId);
@@ -215,6 +227,7 @@ test("issuance refuses identity collapse, bad timestamps and mis-shaped domains"
       },
     ],
   ];
+
   for (const [label, input] of cases) {
     const checked = checkIssuance(input);
     assert.equal(checked.ok, false, label);
@@ -225,28 +238,35 @@ test("user_explicit issuance only accepts execution-bound or user-stated facts",
   const accepted = checkIssuance({
     ...userExplicitInput("execution:turn-1"),
   });
+
   assert.equal(accepted.ok, true);
   const stated = checkIssuance(userExplicitInput("user_explicit:fix-types"));
+
   assert.equal(stated.ok, true);
 
   for (const ref of ["independent_verifier:made-up", "validation:val-attacker", ""]) {
     const checked = checkIssuance(userExplicitInput(ref));
     assert.equal(checked.ok, false, ref);
   }
+
   const wrongKind = checkIssuance({
     ...userExplicitInput("execution:turn-1"),
     subject: { ...subject(), subjectKind: "tool_package_version" },
   });
+
   assert.equal(wrongKind.ok, false);
 });
 
 test("user_explicit digests are derived, so the registry never stores the raw fact ref", () => {
   const input = userExplicitInput("user_explicit:please-fix-typescript-1234");
   const checked = checkIssuance(input);
+
   assert.equal(checked.ok, true);
+
   if (!checked.ok) {
     return;
   }
+
   assert.equal(checked.draft.checksDigest.includes("please-fix-typescript-1234"), false);
   assert.equal(checked.draft.sourceDigest.includes("please-fix-typescript-1234"), false);
   assert.match(checked.draft.checksDigest, /^checks:[0-9a-f]{32}$/);
@@ -254,15 +274,20 @@ test("user_explicit digests are derived, so the registry never stores the raw fa
 
   // 同一事实引用 → 同一 sourceDigest（可做审计关联）；不同主体 → 不同 checksDigest。
   const again = checkIssuance(input);
+
   assert.equal(again.ok, true);
+
   if (again.ok) {
     assert.equal(again.draft.sourceDigest, checked.draft.sourceDigest);
   }
+
   const otherSubject = checkIssuance({
     ...input,
     subject: { ...contentSubject(), subjectId: "prop-2" },
   });
+
   assert.equal(otherSubject.ok, true);
+
   if (otherSubject.ok) {
     assert.notEqual(otherSubject.draft.checksDigest, checked.draft.checksDigest);
   }
@@ -278,19 +303,24 @@ test("digests are deterministic and insensitive to key order, but not to stage o
       stage: stage.stage,
     })),
   };
+
   assert.equal(deriveChecksDigest(sameKeysReordered), deriveChecksDigest(record));
 
   const first = record.stages[0];
   const second = record.stages[1];
+
   assert.notEqual(first, undefined);
   assert.notEqual(second, undefined);
+
   if (first === undefined || second === undefined) {
     return;
   }
+
   const reordered: ValidationRecord = {
     ...record,
     stages: [second, first, ...record.stages.slice(2)],
   };
+
   assert.notEqual(deriveChecksDigest(reordered), deriveChecksDigest(record));
 });
 

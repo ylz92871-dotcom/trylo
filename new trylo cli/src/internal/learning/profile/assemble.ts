@@ -41,14 +41,17 @@ export function assembleFromState(
   lastKnownGood?: ExecutionProfileSnapshot,
 ): AssembledLearningContext {
   const messages = turnInput.messages ?? [];
+
   if (turnInput.signal?.aborted) {
     return degrade(messages, lastKnownGood, "learning_timeout", "assemble aborted");
   }
+
   const instruction = messages.find((item) => item.role === "user")?.content;
   const snapshot = resolveProfile(state, {
     scope: "user",
     ...(instruction !== undefined ? { currentInstruction: instruction } : {}),
   });
+
   return {
     messages,
     systemFragments: fragmentsFrom(snapshot),
@@ -73,11 +76,13 @@ function degrade(
   code: ReasonCode,
   message: string,
 ): AssembledLearningContext {
+  // Preserve the caller's messages even when learning context is unavailable.
   const mode = lastKnownGood === undefined ? "no_learning" as const : "last_known_good" as const;
   const used: ExecutionProfileSnapshot =
     lastKnownGood === undefined
       ? emptySnapshot("user", 0, "no_learning", [{ code, message }])
       : { ...lastKnownGood, learningMode: mode, diagnostics: [{ code, message }] };
+
   return {
     messages,
     systemFragments: mode === "last_known_good" ? fragmentsFrom(used) : [],

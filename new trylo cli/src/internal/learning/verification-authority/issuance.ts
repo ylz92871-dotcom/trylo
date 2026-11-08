@@ -45,15 +45,18 @@ export function checkIssuance(input: unknown): IssuanceCheck {
   if (typeof input !== "object" || input === null) {
     return refusal("missing_issuance_field", "issuance input must be an object");
   }
+
   const candidate = input as Partial<ReceiptIssuanceInput> & Record<string, unknown>;
   const domain = candidate.domain;
   if (domain !== "agent_method" && domain !== "user_explicit") {
     return refusal("missing_issuance_field", `unknown issuance domain ${String(domain)}`);
   }
+
   const subject = candidate.subject;
   if (typeof subject !== "object" || subject === null) {
     return refusal("missing_issuance_field", "issuance subject is required");
   }
+
   const coordinates = subject as Record<string, unknown>;
   if (
     !isNonEmptyString(coordinates.subjectKind) ||
@@ -66,11 +69,13 @@ export function checkIssuance(input: unknown): IssuanceCheck {
       "subjectKind, subjectId, subjectVersion and scope must all be non-empty",
     );
   }
+
   const verifierRaw = candidate.verifierId;
   const generatorRaw = candidate.generatorId;
   if (!isNonEmptyString(verifierRaw) || !isNonEmptyString(generatorRaw)) {
     return refusal("missing_issuance_field", "verifierId and generatorId are required");
   }
+
   // 身份分离是必要条件（不是独立性证明）。比较必须在**归一化身份**上做，
   // 否则 `"one-agent "` 与 `"one-agent"` 会被记成两个不同身份（外审 R3 §3 P2-1）。
   // 归一化后的值一路写进收据，registry 里因此不会留下带别名的身份。
@@ -79,17 +84,21 @@ export function checkIssuance(input: unknown): IssuanceCheck {
   if (verifierId === generatorId) {
     return refusal("generator_is_verifier", "the verifier of a receipt cannot be its generator");
   }
+
   const issuedAt = candidate.issuedAt;
   if (!isNonEmptyString(issuedAt) || epochMs(issuedAt) === undefined) {
     return refusal("invalid_issuance_timestamp", "issuedAt must be a strict ISO-8601 timestamp");
   }
+
   const receiptId = candidate.receiptId;
   if (!isNonEmptyString(receiptId)) {
     return refusal("missing_issuance_field", "receiptId must be supplied by the authority");
   }
+
   if (domain === "agent_method") {
     return checkAgentMethod({ candidate, verifierId, generatorId, issuedAt, receiptId });
   }
+
   return checkUserExplicit({ candidate, verifierId, generatorId, issuedAt, receiptId });
 }
 
@@ -113,6 +122,7 @@ function checkAgentMethod(context: IssuanceContext): IssuanceCheck {
     // 结构不完整的记录不能变成收据；也就永远派生不出 pass。
     return refusal("verdict_not_bound_to_checks", checked.detail);
   }
+
   const record = checked.record;
   if (record.verdict !== "pass") {
     return refusal(
@@ -120,6 +130,7 @@ function checkAgentMethod(context: IssuanceContext): IssuanceCheck {
       "an agent_method receipt may only be issued for a passing validation record",
     );
   }
+
   const subject = candidate.subject as Record<string, unknown>;
   if (subject.subjectKind !== AGENT_METHOD_SUBJECT_KIND) {
     return refusal(
@@ -127,12 +138,14 @@ function checkAgentMethod(context: IssuanceContext): IssuanceCheck {
       `agent_method receipts must cover ${AGENT_METHOD_SUBJECT_KIND}`,
     );
   }
+
   if (subject.subjectId !== record.packageVersionId) {
     return refusal(
       "missing_issuance_field",
       "the receipt subject must be the package version the validation record covers",
     );
   }
+
   return {
     ok: true,
     draft: {
@@ -163,6 +176,7 @@ function checkUserExplicit(context: IssuanceContext): IssuanceCheck {
       "user_explicit receipts must cite an execution-bound or user-explicit fact reference",
     );
   }
+
   const prefixed = USER_EXPLICIT_SOURCE_PREFIXES.some((prefix) => sourceFactRef.startsWith(prefix));
   if (!prefixed) {
     return refusal(
@@ -170,6 +184,7 @@ function checkUserExplicit(context: IssuanceContext): IssuanceCheck {
       `user evidence sources must start with one of ${USER_EXPLICIT_SOURCE_PREFIXES.join("|")}`,
     );
   }
+
   const subject = candidate.subject as Record<string, unknown>;
   if (subject.subjectKind !== USER_EXPLICIT_SUBJECT_KIND) {
     return refusal(
@@ -177,12 +192,14 @@ function checkUserExplicit(context: IssuanceContext): IssuanceCheck {
       `user_explicit receipts must cover ${USER_EXPLICIT_SUBJECT_KIND}`,
     );
   }
+
   const narrowed = {
     subjectKind: USER_EXPLICIT_SUBJECT_KIND,
     subjectId: String(subject.subjectId),
     subjectVersion: String(subject.subjectVersion),
     scope: String(subject.scope),
   } as const;
+
   return {
     ok: true,
     draft: {

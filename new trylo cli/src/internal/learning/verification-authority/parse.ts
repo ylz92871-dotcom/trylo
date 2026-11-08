@@ -134,25 +134,32 @@ function parseReceiptFields(record: Record<string, unknown>): ReceiptParse<Recei
   const generatorId = record.generatorId;
   const issuedAt = record.issuedAt;
   const verdict = record.verdict;
+
   if (!isNonEmptyString(receiptId)) {
     return corrupt("receiptId must be a non-empty string");
   }
+
   if (!isNonEmptyString(checksDigest) || !isNonEmptyString(sourceDigest)) {
     return corrupt("checksDigest and sourceDigest are required");
   }
+
   if (!isNonEmptyString(verifierId) || !isNonEmptyString(generatorId)) {
     return corrupt("verifierId and generatorId are required");
   }
+
   if (!isVerificationVerdict(verdict)) {
     return corrupt(`unknown verdict ${String(verdict)}`);
   }
+
   if (!isNonEmptyString(issuedAt) || epochMs(issuedAt) === undefined) {
     return corrupt("issuedAt is not a strict ISO-8601 timestamp");
   }
+
   const sequence = record.sequence;
   if (typeof sequence !== "number" || !Number.isInteger(sequence) || sequence <= 0) {
     return corrupt("sequence must be a positive integer");
   }
+
   return {
     ok: true,
     value: { receiptId, checksDigest, sourceDigest, verifierId, generatorId, issuedAt, verdict, sequence },
@@ -167,23 +174,28 @@ export function parseVerificationReceipt(value: unknown): ReceiptParse<Verificat
   if (!isPlainRecord(value)) {
     return corrupt("receipt record is not an object");
   }
+
   if (value.formatVersion !== VERIFICATION_AUTHORITY_FORMAT_VERSION) {
     return corrupt(
       `unsupported receipt format version ${String(value.formatVersion)} (expected ${String(VERIFICATION_AUTHORITY_FORMAT_VERSION)})`,
     );
   }
+
   const extra = unknownKeys(value, RECEIPT_KEYS);
   if (extra.length > 0) {
     return corrupt(`receipt record carries unknown keys: ${extra.join(",")}`);
   }
+
   const subject = parseSubject(value);
   if (!subject.ok) {
     return subject;
   }
+
   const fields = parseReceiptFields(value);
   if (!fields.ok) {
     return fields;
   }
+
   return {
     ok: true,
     value: {
@@ -209,9 +221,11 @@ function parseSubject(record: Record<string, unknown>): ReceiptParse<Verificatio
   if (!isVerificationDomain(record.domain)) {
     return corrupt(`unknown verification domain ${String(record.domain)}`);
   }
+
   if (!isReceiptSubjectKind(record.subjectKind)) {
     return corrupt(`unknown receipt subject kind ${String(record.subjectKind)}`);
   }
+
   if (
     !isNonEmptyString(record.subjectId) ||
     !isNonEmptyString(record.subjectVersion) ||
@@ -219,6 +233,7 @@ function parseSubject(record: Record<string, unknown>): ReceiptParse<Verificatio
   ) {
     return corrupt("subjectId, subjectVersion and scope must be non-empty strings");
   }
+
   return {
     ok: true,
     value: {

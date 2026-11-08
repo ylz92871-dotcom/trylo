@@ -20,6 +20,7 @@ test("current instruction is recorded as higher precedence than assets", () => {
     scope: "user",
     currentInstruction: "this task: use pnpm only",
   });
+
   assert.equal(
     snapshot.diagnostics.some((item) => item.code === "current_instruction_precedes_assets"),
     true,
@@ -44,11 +45,15 @@ test("inferred shadow assets are not full-active profile members", () => {
     command("record_evidence", { evidence: passEvidence("inf") }),
     command("enter_shadow", { proposalId: "inf", versionId: "v-inf" }),
   ]);
+
   assert.equal(result.ok, true);
+
   if (!result.ok) {
     return;
   }
+
   const snapshot = resolveProfile(result.state, { scope: "project" });
+
   assert.equal(snapshot.promptPatches.length, 0);
   assert.equal(snapshot.userRules.length, 0);
 });
@@ -79,11 +84,15 @@ test("tool bindings do not become permission fields", () => {
     command("record_approval_decision", { approvalId: "ap", status: "granted" }),
     command("activate", { proposalId: "tb", versionId: "v-tb" }),
   ]);
+
   assert.equal(result.ok, true);
+
   if (!result.ok) {
     return;
   }
+
   const snapshot = resolveProfile(result.state, { scope: "project" });
+
   assert.equal(snapshot.toolBindings.length, 1);
   assert.equal("permission" in snapshot, false);
   assert.equal("allowNetwork" in snapshot, false);
@@ -97,6 +106,7 @@ test("assemble preserves caller messages on degrade", () => {
     "board_unavailable",
     "store corrupt",
   );
+
   assert.deepEqual(assembled.messages, messages);
   assert.deepEqual(assembled.systemFragments, []);
   assert.equal(assembled.verified, false);
@@ -110,6 +120,7 @@ test("aborted assemble keeps messages and uses timeout reason", () => {
     messages,
     signal: AbortSignal.abort(),
   });
+
   assert.deepEqual(assembled.messages, messages);
   assert.equal(assembled.degradedReason?.code, "learning_timeout");
 });
@@ -121,11 +132,15 @@ test("scoped user rule outranks project rule of the same kind", () => {
     ...fastLaneCommands(user, "v-user", "use pnpm"),
     ...fastLaneCommands(project, "v-proj", "use npm"),
   ]);
+
   assert.equal(result.ok, true);
+
   if (!result.ok) {
     return;
   }
+
   const snapshot = resolveProfile(result.state, { scope: "user" });
+
   assert.equal(snapshot.userRules.length, 1);
   assert.equal(snapshot.userRules[0]?.scope, "user");
   assert.equal(snapshot.userRules[0]?.text, "use pnpm");
@@ -139,11 +154,15 @@ test("same-rank conflicting rules are not silently concatenated", () => {
     ...fastLaneCommands(left, "v-a", "do A"),
     ...fastLaneCommands(right, "v-b", "do B"),
   ]);
+
   assert.equal(result.ok, true);
+
   if (!result.ok) {
     return;
   }
+
   const snapshot = resolveProfile(result.state, { scope: "alpha" });
+
   assert.equal(
     snapshot.diagnostics.some((item) => item.code === "conflict_unresolved"),
     true,
@@ -185,5 +204,6 @@ function fastLaneState(text: string) {
   if (!result.ok) {
     throw new Error(result.detail);
   }
+
   return result.state;
 }

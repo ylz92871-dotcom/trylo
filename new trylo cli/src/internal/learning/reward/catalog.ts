@@ -17,8 +17,10 @@ export function createRewardCatalog(input: {
       kinds.size !== input.objectKinds.length || !input.objectKinds.every(identity)) {
     throw new Error("invalid_reward_catalog");
   }
+
   const ids = new Set(metrics.map(metric => JSON.stringify([metric.id, metric.version])));
   if (ids.size !== metrics.length) throw new Error("duplicate_reward_metric");
+
   return { accepts: (metric, targets) => metrics.some(registered => sameMetricDefinition(registered, metric)) &&
     targets.every(target => kinds.has(target.kind)) };
 }

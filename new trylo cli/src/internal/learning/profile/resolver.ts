@@ -30,13 +30,17 @@ export function resolveProfile(
   input: ResolveInput,
 ): ExecutionProfileSnapshot {
   const diagnostics: ProfileDiagnostic[] = [];
+
   if (input.currentInstruction !== undefined) {
     diagnostics.push({
       code: "current_instruction_precedes_assets",
       message: "current explicit instruction outranks historical assets",
     });
   }
+
   const active = state.activations.filter((item) => item.pointer === "active");
+
+  // Resolve active pointers into one immutable view for the execution boundary.
   const userRules: ProfileRule[] = [];
   const promptPatches: ProfileRule[] = [];
   const skillRefs: ProfileRef[] = [];
@@ -45,12 +49,14 @@ export function resolveProfile(
   const assetVersions: Record<string, string> = {};
   let workflowRef: ExecutionProfileSnapshot["workflowRef"];
   const winners = selectWinners(active, diagnostics);
+
   for (const activation of winners) {
     const asset = state.assets.find((item) => item.versionId === activation.versionId);
     if (asset === undefined) {
       diagnostics.push({ code: "asset_missing", message: activation.versionId });
       continue;
     }
+
     assetVersions[`${activation.scope}:${activation.assetKind}`] = activation.versionId;
     assignAsset(asset, activation, {
       userRules,
@@ -63,6 +69,7 @@ export function resolveProfile(
       },
     });
   }
+
   return freezeSnapshot(state.sequence, input.scope, {
     userRules,
     promptPatches,
@@ -139,28 +146,36 @@ function selectWinners(
   diagnostics: ProfileDiagnostic[],
 ): ActivationRecord[] {
   const grouped = new Map<string, ActivationRecord[]>();
+
   for (const activation of active) {
     const group = grouped.get(activation.assetKind) ?? [];
     group.push(activation);
     grouped.set(activation.assetKind, group);
   }
+
   const winners: ActivationRecord[] = [];
+
   for (const [, group] of grouped) {
     const ranked = [...group].sort(compareActivation);
     const top = ranked[0];
     const rival = ranked[1];
+
     if (top === undefined) {
       continue;
     }
+
     if (rival !== undefined && scopeRank(rival.scope) === scopeRank(top.scope)) {
+      // Equal scope authority is a conflict; lexical ordering must not decide policy.
       diagnostics.push({
         code: "conflict_unresolved",
         message: `${top.assetKind} ${top.versionId} vs ${rival.versionId}`,
       });
       continue;
     }
+
     winners.push(top);
   }
+
   return winners;
 }
 
@@ -180,6 +195,7 @@ function textOf(asset: LearningAssetVersion): string {
   if (typeof asset.content === "string") {
     return asset.content;
   }
+
   if (
     typeof asset.content === "object" &&
     asset.content !== null &&
@@ -188,6 +204,7 @@ function textOf(asset: LearningAssetVersion): string {
   ) {
     return (asset.content as { text: string }).text;
   }
+
   return asset.versionId;
 }
 
@@ -219,7 +236,10 @@ function freezeSnapshot(
     diagnostics: parts.diagnostics,
     ...(parts.workflowRef !== undefined ? { workflowRef: parts.workflowRef } : {}),
   };
+
+  // Hash the complete view so its identity changes with any resolved asset.
   const snapshotHash = contentHashOf(body);
+
   return {
     ...body,
     snapshotId: `snap:${snapshotHash.slice(0, 16)}`,

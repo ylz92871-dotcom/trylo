@@ -8,34 +8,41 @@ import { estimateKey } from "./contracts.js";
 import type { RewardExposureDraft, RewardFeedback, RewardTarget } from "./contracts.js";
 
 const target: RewardTarget = { kind: "method", id: "parse-file", version: "v1" };
+
 function exposure(id = "e1", environment = "env1"): RewardExposureDraft {
   return { schemaVersion: 1, id, source: { sessionId: "s", turnId: "t", attemptId: "a", eventId: `used-${id}` },
     context: { scope: "ws", taskFamily: "parse", environment,
       metric: { id: "task.quality", version: "1", unit: "utility", minimum: -1, maximum: 1, preference: "higher" } },
     targets: [target], occurredAt: 1 };
 }
+
 function feedback(id = "f1", exposureId = "e1", value = 1): RewardFeedback {
   return { schemaVersion: 1, id, exposureId, source: { sessionId: "s", turnId: "t", attemptId: "a", eventId: `result-${id}` },
     origin: "environment", evidenceIds: [`result-${id}`], outcome: { kind: "measured", value, confidence: 1, noiseVariance: 1 },
     attribution: { kind: "linked", shares: [{ target, share: 1 }] }, observedAt: 2 };
 }
+
 function use(state: BoardState, draft = exposure()): BoardState {
   const result = reduce(state, { type: "record_reward_exposure", commandId: `use-${draft.id}`, issuedAt: "now", exposure: draft });
   assert.ok(result.ok, result.ok ? "" : result.reason);
   return result.state;
 }
+
 function observe(state: BoardState, item = feedback()): BoardState {
   const result = reduce(state, { type: "record_reward_feedback", commandId: `observe-${item.id}`, issuedAt: "now", feedback: item });
   assert.ok(result.ok, result.ok ? "" : result.reason);
   return result.state;
 }
+
 function view(state: BoardState) { return rewardView(rewardRecordsOf(state)); }
 
 test("reward: a use freezes its prior; a real outcome changes the next use prediction", () => {
   let state = use(emptyBoardState());
+
   assert.equal(state.rewardExposures![0]!.predictions[0]!.estimate.mean, 0);
   state = observe(state);
   const signal = view(state).signals[0]!;
+
   assert.equal(signal.adjustments[0]!.after.mean, 0.5);
   state = use(state, exposure("e2"));
   assert.equal(state.rewardExposures![1]!.predictions[0]!.estimate.mean, 0.5);
@@ -66,11 +73,13 @@ test("reward: source and noise reduce learning magnitude without changing raw re
 
 test("reward: corrections replace numeric influence, remain auditable, and survive re-projection", () => {
   let state = observe(use(emptyBoardState()), feedback("f1", "e1", -1));
+
   state = observe(state, { ...feedback("f2"), supersedes: "f1", observedAt: 3 });
   assert.equal(state.rewardFeedbacks!.length, 2);
   assert.equal(view(state).signals.length, 1);
   assert.equal(view(state).signals[0]!.adjustments[0]!.after.mean, 0.5);
   const restored = normalizeBoardState(JSON.parse(JSON.stringify(state)) as BoardState);
+
   assert.ok(restored);
   assert.deepEqual(view(restored), view(state));
 });
@@ -91,8 +100,11 @@ test("reward: feedback needs real use, matching source, legal shares and an expl
     { ...feedback(), attribution: { kind: "linked", shares: [{ target: { ...target, version: "missing" }, share: 1 }] } },
     { ...feedback(), outcome: { kind: "measured", value: Number.NaN, confidence: 1, noiseVariance: 1 } },
     { ...feedback(), attribution: { kind: "linked", shares: [{ target, share: 1.1 }] } }];
+
   for (const item of bad) assert.equal(reduce(state, { type: "record_reward_feedback", commandId: "bad", issuedAt: "now", feedback: item }).ok, false);
+
   const once = observe(state);
+
   assert.equal(reduce(once, { type: "record_reward_feedback", commandId: "new", issuedAt: "now", feedback: feedback("f2") }).ok, false);
 });
 
@@ -121,10 +133,12 @@ test("reward: numerical boundedness, noise monotonicity and precision closed for
 test("reward: delayed credit sign describes frozen expectation, independently of current estimate movement", () => {
   for (const sign of [-1, 1]) {
     let state = use(use(emptyBoardState(), exposure("early")), exposure("later"));
+
     state = observe(state, feedback("later-result", "later", sign));
     state = observe(state, feedback("early-result", "early", sign * 0.2));
     const signal = view(state).signals.find(item => item.feedbackId === "early-result")!;
     const adjustment = signal.adjustments[0]!;
+
     assert.equal(Math.sign(adjustment.signedCredit), sign);
     assert.equal(Math.sign(adjustment.innovation), -sign);
     assert.ok(Math.abs(adjustment.after.mean - sign * 0.4) < 1e-12);

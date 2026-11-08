@@ -27,18 +27,21 @@ export function checkReceiptBinding(
       `receipt ${receipt.receiptId} is in domain ${receipt.domain}, not ${expected.domain}`,
     );
   }
+
   if (receipt.subject.subjectKind !== expected.subjectKind) {
     return refusal(
       "receipt_subject_mismatch",
       `receipt covers ${receipt.subject.subjectKind}, not ${expected.subjectKind}`,
     );
   }
+
   if (receipt.subject.subjectId !== expected.subjectId) {
     return refusal(
       "receipt_subject_mismatch",
       "the receipt covers a different subject than this admission names",
     );
   }
+
   // 改写即 stale：版本不符必须重新验证，不能复用旧 pass。
   if (receipt.subject.subjectVersion !== expected.subjectVersion) {
     return refusal(
@@ -46,12 +49,14 @@ export function checkReceiptBinding(
       "a receipt cannot be replayed across subject versions; re-verification is required",
     );
   }
+
   if (receipt.subject.scope !== expected.scope) {
     return refusal(
       "receipt_scope_mismatch",
       "a receipt issued for one scope cannot authorize another",
     );
   }
+
   // generator === verifier 必须在这里再拒一次：签发侧已拒，读取侧不依赖签发侧行为。
   //
   // 比较落在**归一化后的身份**上（外审 R3 §3 P2-1）：`"one-agent "` 与 `"one-agent"`
@@ -66,6 +71,7 @@ export function checkReceiptBinding(
       "the receipt's verifier and generator are the same identity",
     );
   }
+
   return { ok: true };
 }
 
