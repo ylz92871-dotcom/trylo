@@ -88,7 +88,7 @@ fn is_plain_disk_path(path: &Path) -> bool {
 /// hand to a launcher. Rejects: missing root, missing target,
 /// device/UNC paths, and anything whose REAL location (after
 /// symlink resolution) is not strictly inside the root.
-fn validate_target(file_path: &str, allowed_root: &str) -> Result<PathBuf, CommandError> {
+pub(crate) fn validate_target(file_path: &str, allowed_root: &str) -> Result<PathBuf, CommandError> {
     let root = std::fs::canonicalize(allowed_root).map_err(|e| {
         gate_error(
             "(work_host)",

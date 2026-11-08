@@ -50,6 +50,14 @@ pub struct ProcessHandleDto {
 /// because it is only ever incremented.
 static NEXT_PROCESS_SEQ: AtomicU64 = AtomicU64::new(0);
 
+#[cfg(all(test, windows, feature = "preview-ipc-tests"))]
+#[path = "skill_learning_process_bridge_test.rs"]
+mod skill_learning_process_bridge_test;
+
+#[cfg(all(test, windows, feature = "preview-ipc-tests"))]
+#[path = "process_spawn_ordinary_recovery_test.rs"]
+mod process_spawn_ordinary_recovery_test;
+
 /// Log the env as `key=configured:true/false` ONLY — never the
 /// value (the value may be an API key / Authorization header,
 /// per spec §7.5).
@@ -131,7 +139,25 @@ pub async fn process_spawn(
     capture_stderr: Option<bool>,
     state: State<'_, ProcessState>,
 ) -> Result<ProcessHandleDto, CommandError> {
-    let team_owner = if recovery_identity.is_some() {
+    if let Some(identity) = recovery_identity.as_ref() {
+        if !identity.is_valid()
+            || project_key
+                .as_deref()
+                .is_none_or(|key| key.trim().is_empty())
+            || conversation_id
+                .as_deref()
+                .is_none_or(|id| id.trim().is_empty())
+        {
+            return Err(CommandError::Validation {
+                reason: "output recovery requires an immutable turn and conversation owner".into(),
+            });
+        }
+    }
+    // Recoverability does not grant team lease or Windows Job semantics.
+    let team_owner = if recovery_identity
+        .as_ref()
+        .is_some_and(RecoveryIdentity::is_team)
+    {
         Some(crate::commands::process_team_owner::acquire(
             cwd.as_deref().ok_or_else(|| CommandError::Validation {
                 reason: "team owner requires workspace cwd".into(),
@@ -515,10 +541,10 @@ mod tests {
             Some("proof-workspace".into()),
             Some("proof-chat".into()),
             Some("denied-runtime-owner".into()),
-            Some(RecoveryIdentity {
-                team_run_id: "blocked-team".into(),
-                turn_id: "blocked-turn".into(),
-            }),
+            Some(RecoveryIdentity::legacy_team(
+                "blocked-team",
+                "blocked-turn",
+            )),
             disconnected(),
             disconnected(),
             Some(true),
@@ -542,7 +568,7 @@ mod tests {
             node.to_string_lossy().into_owned(),
             vec!["-e".into(), "process.stdout.write('retained one\\nretained two\\n');process.stderr.write('retained diagnostic\\n');".into()],
             "retained-output-proof".into(), Some(workspace.to_string_lossy().into_owned()), None, Some("proof-workspace".into()), Some("proof-chat".into()),
-            Some("runtime-owner".into()), Some(RecoveryIdentity { team_run_id: "proof-team".into(), turn_id: "proof-turn".into() }),
+            Some("runtime-owner".into()), Some(RecoveryIdentity::legacy_team("proof-team", "proof-turn")),
             disconnected(), disconnected(), Some(true), app.state(),
         )).unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);

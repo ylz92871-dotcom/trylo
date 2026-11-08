@@ -75,7 +75,7 @@ fn join_error(path: &Path, err: &tokio::task::JoinError) -> CommandError {
 /// they get a strict whitelist instead of escaping attempts being
 /// detected after the fact: `[A-Za-z0-9_-]{1,128}`. This rejects
 /// `..`, `/`, `\`, NUL and every other separator outright.
-fn validate_segment(value: &str, what: &str) -> Result<(), CommandError> {
+pub(super) fn validate_segment(value: &str, what: &str) -> Result<(), CommandError> {
     let ok = !value.is_empty()
         && value.len() <= 128
         && value
@@ -104,7 +104,7 @@ fn is_office_ext(path: &Path) -> bool {
     )
 }
 
-fn size_limit_for(path: &Path) -> u64 {
+pub(super) fn size_limit_for(path: &Path) -> u64 {
     if is_office_ext(path) {
         MAX_OFFICE_BYTES
     } else {
@@ -141,7 +141,7 @@ fn is_windows_reserved_stem(stem: &str) -> bool {
 /// cap the stem length. Unicode characters are preserved — a
 /// `需求.docx` keeps its display name. An empty result falls
 /// back to `attachment.bin`.
-fn sanitize_basename(raw: &str) -> String {
+pub(super) fn sanitize_basename(raw: &str) -> String {
     // A path component can never contain a separator, but a
     // hostile caller controls `raw`; re-split defensively.
     let last = raw.rsplit(['/', '\\']).next().unwrap_or(raw);
@@ -169,7 +169,7 @@ fn sanitize_basename(raw: &str) -> String {
 /// `.gitignore` (works even in sub-repos) plus the repo's
 /// `.git/info/exclude` (leaves the working tree untouched).
 /// Failures here must never fail the stage itself.
-fn ensure_git_exclusion(anchor: &Path) {
+pub(super) fn ensure_git_exclusion(anchor: &Path) {
     let attachments_dir = anchor.join(".trylo").join("attachments");
     let ignore = attachments_dir.join(".gitignore");
     if !ignore.exists() {

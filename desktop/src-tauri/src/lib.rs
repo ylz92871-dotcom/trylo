@@ -9,6 +9,7 @@
 // each command lives in its own file under `src-tauri/src/commands/`.
 
 mod commands;
+mod preview;
 
 use tauri::Manager;
 
@@ -23,10 +24,13 @@ fn on_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
     let report = commands::shutdown::shutdown_all(window.app_handle());
     if !report.was_clean() {
         eprintln!(
-            "[trylo] window-close teardown: processes={} ptys={} lsps={} workd={}",
-            report.processes, report.ptys, report.lsps, report.workd
+            "[trylo] window-close teardown: processes={} ptys={} lsps={}",
+            report.processes, report.ptys, report.lsps
         );
     }
+    // Main-close owns application exit even when hidden native resources remain.
+    // Request the normal Tauri exit path after the existing child teardown.
+    window.app_handle().exit(0);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -34,6 +38,21 @@ fn on_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
 #[allow(clippy::missing_panics_doc)]
 pub fn run() {
     tauri::Builder::default()
+        .register_asynchronous_uri_scheme_protocol("trylo-preview", |context, request, responder| {
+            let app = context.app_handle().clone();
+            let label = context.webview_label().to_string();
+            tauri::async_runtime::spawn_blocking(move || {
+                let state = app.state::<preview::web::WebPreviewState>();
+                responder.respond(state.serve(&request, &label));
+            });
+        })
+        .register_asynchronous_uri_scheme_protocol("trylo-media", |context, request, responder| {
+            let app = context.app_handle().clone();
+            let label = context.webview_label().to_string();
+            tauri::async_runtime::spawn_blocking(move || {
+                responder.respond(app.state::<preview::media::MediaState>().serve(&request, &label));
+            });
+        })
         // v1.15.7: native folder picker via the official
         // tauri-plugin-dialog. The plugin must be
         // initialized before generate_handler!.
@@ -47,6 +66,7 @@ pub fn run() {
         .setup(|app| {
             app.manage(commands::computer_preview::PreviewState::default());
             app.manage(commands::native_browser::NativeBrowserState::default());
+            app.manage(preview::web::WebPreviewState::default());
             // Day 4: register the watcher state so the watch command
             // can stash live `RecommendedWatcher`s and keep them alive
             // for the lifetime of the app. The map is keyed by the
@@ -65,11 +85,18 @@ pub fn run() {
             // Trylo Core + CC CLI sidecars.
             app.manage(commands::process_state::ProcessState::default());
             app.manage(commands::runtime_sessions::RuntimeSessionsState::default());
-            // Work sub-app (trylo-workd Node sidecar). See
-            // ../../../work/README.md. The daemon is spawned
-            // lazily by the renderer via workd_spawn; this
-            // just registers the state slot.
-            app.manage(commands::workd_state::WorkdState::default());
+            let preview_cache = app.path().app_cache_dir()
+                .unwrap_or_else(|_| std::env::temp_dir())
+                .join("preview/office");
+            let office_engine = app.path().resource_dir()?.join("preview/office");
+            #[cfg(debug_assertions)]
+            let office_engine = std::env::var_os("TRYLO_PREVIEW_ENGINE_ROOT").map_or(office_engine, std::path::PathBuf::from);
+            app.manage(commands::preview::office::OfficePreviewState::bundled(preview_cache, office_engine));
+            let media_cache = app.path().app_cache_dir().unwrap_or_else(|_| std::env::temp_dir()).join("preview/media");
+            let media_engine = app.path().resource_dir()?.join("preview/media");
+            #[cfg(debug_assertions)]
+            let media_engine = std::env::var_os("TRYLO_MEDIA_ENGINE_ROOT").map_or(media_engine, std::path::PathBuf::from);
+            app.manage(preview::media::MediaState::new(media_cache, media_engine));
             // Desktop Services host (desktop-services Node sidecar).
             // NDJSON stdio; state slot only, spawned lazily by the
             // renderer via servicehost_spawn. See
@@ -98,6 +125,22 @@ pub fn run() {
                 commands::runtime_sessions::runtime_sessions_load,
                 commands::runtime_sessions::runtime_sessions_save,
                 commands::read_file_bytes::read_file_bytes,
+                commands::read_remote_artifact::read_remote_artifact,
+                commands::list_remote_artifacts::list_remote_artifacts,
+                commands::preview::office::preview_office,
+                commands::preview::office::preview_office_cancel,
+                commands::preview::resource::preview_resource,
+                commands::preview::resource::preview_media_path,
+                commands::preview::media::preview_media_open,
+                commands::preview::media::preview_media_close,
+                commands::preview::resource::preview_text,
+                commands::preview::resource::preview_head,
+                commands::preview::web::preview_web_open,
+                commands::preview::web::preview_web_layout,
+                commands::preview::web::preview_web_close,
+                commands::preview::web::preview_web_status,
+                commands::preview::resource::preview_binary,
+                commands::preview::codecs::preview_codec_paths,
                 commands::write_file::write_file,
                 commands::write_file_bytes::write_file_bytes,
                 commands::stat_file::stat_file,
@@ -137,17 +180,6 @@ pub fn run() {
                 commands::team_runs_storage::team_runs_save,
                 commands::test_connection::test_connection,
                 commands::pick_folder::pick_folder,
-                // Work sub-app sidecar (trylo-workd). See
-                // ../../../work/README.md for the daemon's
-                // protocol and STRUCTURE.md for the fork plan.
-                commands::workd::workd_spawn,
-                commands::workd::workd_stop,
-                commands::workd::workd_status,
-                commands::workd::workd_diagnostics,
-                // Work sub-app host commands. See
-                // commands/work_host.rs and
-                // ../../../work/src/host-adapter/host-adapter.ts
-                // for the contract.
                 commands::work_host::work_host_open_file,
                 commands::work_host::work_host_open_file_with_app,
                 commands::work_host::work_host_show_in_folder,
@@ -157,6 +189,7 @@ pub fn run() {
                 // .trylo/attachments area; the renderer only ever
                 // projects the workspace-relative descriptor path.
                 commands::attachment_staging::stage_attachment,
+                commands::attachment_bytes::stage_attachment_bytes,
                 commands::attachment_staging::remove_conversation_attachments,
                 commands::attachment_staging::remove_project_attachments,
                 // Desktop Services host (NDJSON stdio sidecar). See
@@ -190,8 +223,8 @@ fn on_run_event(app_handle: &tauri::AppHandle, event: &tauri::RunEvent) {
         let report = commands::shutdown::shutdown_all(app_handle);
         if !report.was_clean() {
             eprintln!(
-                "[trylo] exit teardown: processes={} ptys={} lsps={} workd={}",
-                report.processes, report.ptys, report.lsps, report.workd
+                "[trylo] exit teardown: processes={} ptys={} lsps={}",
+                report.processes, report.ptys, report.lsps
             );
         }
     }

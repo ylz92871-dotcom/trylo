@@ -4,12 +4,12 @@
 // ONE owner, ONE order. Before this module existed, teardown was a partial
 // loop inlined in `lib.rs`'s window-close hook: it killed `ProcessState`
 // children and the service host, and silently leaked every PTY, LSP server
-// and the workd daemon. The singleton WPF pet can serve several clients;
+// children. The singleton WPF pet can serve several clients;
 // its own idle timer, rather than one Desktop, owns its final exit.
 //
 // The contract:
 //   1. Children the shell spawned itself die first (Code/Work CLI, PTY, LSP,
-//      workd). CLI records remain until their reapers observe exit; accepted
+//      tools). CLI records remain until their reapers observe exit; accepted
 //      stop requests are deduplicated and refused requests remain retryable.
 //   2. The service host dies last among the sidecars: its graceful
 //      `pet.disable` frame detaches only this client. Its worker cleanup
@@ -27,7 +27,6 @@ use crate::commands::process_state::ProcessState;
 use crate::commands::pty::PtyState;
 use crate::commands::servicehost::servicehost_shutdown_now;
 use crate::commands::servicehost_state::ServiceHostState;
-use crate::commands::workd_state::WorkdState;
 
 /// Kill every registered Trylo CLI / CC CLI child. Returns how many were
 /// given a successful termination request; reapers release the table entries.
@@ -83,31 +82,17 @@ pub fn kill_all_lsps(state: &LspState) -> usize {
     killed
 }
 
-/// Stop the workd daemon: take the child, kill it, and reap it so the pid
-/// is not left a zombie. Returns true if a daemon was actually running.
-pub fn stop_workd(state: &WorkdState) -> bool {
-    let Ok(mut guard) = state.daemon.lock() else {
-        return false;
-    };
-    let Some(mut entry) = guard.take() else {
-        return false;
-    };
-    if let Some(mut child) = entry.child.take() {
-        let _ = child.kill();
-        let _ = child.wait();
-    }
-    true
-}
-
 /// The full teardown, in contract order. Safe to call more than once and
 /// safe to call from a sync context (window close, `RunEvent::Exit`).
 ///
 /// Returns the per-step counts so the caller can emit a diagnostic.
 pub fn shutdown_all(app: &AppHandle) -> ShutdownReport {
-    let processes = kill_all_processes(&app.state::<ProcessState>());
+    let previews = app.try_state::<crate::commands::preview::office::OfficePreviewState>()
+        .map_or(0, |state| crate::commands::preview::office::shutdown_office_previews(&state));
+    let media_previews = app.try_state::<crate::preview::media::MediaState>().map_or(0, |state| state.shutdown());
+    let processes = kill_all_processes(&app.state::<ProcessState>()) + previews + media_previews;
     let ptys = kill_all_ptys(&app.state::<PtyState>());
     let lsps = kill_all_lsps(&app.state::<LspState>());
-    let workd = stop_workd(&app.state::<WorkdState>());
     // Detach this client and stop owned workers. A shared companion exits
     // only after its last live client leaves (or expires after a crash).
     servicehost_shutdown_now(&app.state::<ServiceHostState>());
@@ -115,7 +100,6 @@ pub fn shutdown_all(app: &AppHandle) -> ShutdownReport {
         processes,
         ptys,
         lsps,
-        workd,
     }
 }
 
@@ -125,15 +109,13 @@ pub struct ShutdownReport {
     pub processes: usize,
     pub ptys: usize,
     pub lsps: usize,
-    /// Whether a workd daemon was running and was stopped.
-    pub workd: bool,
 }
 
 impl ShutdownReport {
     /// True when nothing needed killing — the clean-exit case.
     #[must_use]
     pub fn was_clean(&self) -> bool {
-        self.processes == 0 && self.ptys == 0 && self.lsps == 0 && !self.workd
+        self.processes == 0 && self.ptys == 0 && self.lsps == 0
     }
 }
 
@@ -241,14 +223,6 @@ mod tests {
     }
 
     #[test]
-    fn workd_stop_is_idempotent_and_reports_whether_it_ran() {
-        let state = WorkdState::default();
-        // No daemon: nothing to stop, and it must not panic.
-        assert!(!stop_workd(&state));
-        assert!(!stop_workd(&state));
-    }
-
-    #[test]
     fn a_poisoned_mutex_degrades_instead_of_panicking() {
         // A panic inside a killer would poison the table; shutdown must
         // still return rather than take the whole app down with it.
@@ -271,7 +245,6 @@ mod tests {
             processes: 0,
             ptys: 0,
             lsps: 0,
-            workd: false,
         };
         assert!(report.was_clean());
         let dirty = ShutdownReport {

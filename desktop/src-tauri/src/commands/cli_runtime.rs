@@ -25,8 +25,6 @@ pub struct CliRuntimeDto {
     /// found. Null is a REAL answer: the UI must say "CLI not found"
     /// instead of falling back to a guessed path.
     pub cli_script: Option<String>,
-    pub legacy_cli_script: Option<String>,
-    pub legacy_cli_source: Option<String>,
     /// `env` | `bundled` | `dev-checkout` | null.
     pub cli_source: Option<String>,
     /// Node interpreter to run the script with.
@@ -39,11 +37,8 @@ pub struct CliRuntimeDto {
 pub async fn resolve_cli_runtime(app: tauri::AppHandle) -> Result<CliRuntimeDto, CommandError> {
     let resource_dir = app.path().resource_dir().ok();
     let cli = node_runtime::resolve_cli_script(resource_dir.as_deref());
-    let legacy = node_runtime::resolve_legacy_cli_script(resource_dir.as_deref());
     let node = node_runtime::resolve_node(resource_dir.as_deref());
     Ok(CliRuntimeDto {
-        legacy_cli_script: legacy.as_ref().map(|r| r.program.to_string_lossy().to_string()),
-        legacy_cli_source: legacy.as_ref().map(|r| r.source.as_str().to_string()),
         cli_script: cli
             .as_ref()
             .map(|r| r.program.to_string_lossy().to_string()),

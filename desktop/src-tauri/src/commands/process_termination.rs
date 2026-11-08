@@ -52,12 +52,53 @@ impl OwnedTreeTerminator {
     }
 
     pub fn terminate(&self) -> io::Result<()> {
+        #[cfg(windows)]
+        if self.has_exited()? {
+            return Ok(());
+        }
         let mut command = termination_command(self.pid()?)?;
-        run_termination_helper(
+        let result = run_termination_helper(
             &mut command,
             std::time::Duration::from_secs(2),
             Some(self.clone()),
-        )
+        );
+        #[cfg(windows)]
+        let result = self.confirm_termination(result);
+        result
+    }
+
+    #[cfg(windows)]
+    fn has_exited(&self) -> io::Result<bool> {
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::Foundation::{WAIT_OBJECT_0, WAIT_TIMEOUT};
+        // Query the retained process object, never a possibly reused PID.
+        match unsafe {
+            windows_sys::Win32::System::Threading::WaitForSingleObject(
+                self.identity.as_raw_handle(),
+                0,
+            )
+        } {
+            WAIT_OBJECT_0 => Ok(true),
+            WAIT_TIMEOUT => Ok(false),
+            _ => Err(io::Error::last_os_error()),
+        }
+    }
+
+    #[cfg(windows)]
+    fn confirm_termination(&self, result: io::Result<()>) -> io::Result<()> {
+        match result {
+            Ok(()) => Ok(()),
+            // taskkill may report a vanished child after the root has exited.
+            // Actual OS exit wins even before the reaper publishes its receipt.
+            Err(error) => match self.has_exited() {
+                Ok(true) => Ok(()),
+                Ok(false) => Err(error),
+                Err(probe) => Err(io::Error::new(
+                    error.kind(),
+                    format!("{error}; exit confirmation failed: {probe}"),
+                )),
+            },
+        }
     }
 }
 
@@ -158,6 +199,41 @@ mod tests {
         assert!(error.to_string().len() < 1200);
     }
 
+    #[test]
+    #[cfg(windows)]
+    fn an_already_exited_owned_root_is_an_idempotent_stop() {
+        use std::os::windows::process::CommandExt;
+        let mut command = Command::new(fixed_node());
+        command.creation_flags(0x0800_0000);
+        command.args(["-e", "process.exit(0)"]);
+        let mut child = command.spawn().unwrap();
+        let terminator = OwnedTreeTerminator::capture(&child).unwrap();
+        child.wait().unwrap();
+        // Keep the original identity without relying on the reaper's state.
+        terminator.terminate().unwrap();
+        terminator.terminate().unwrap();
+    }
+    #[test]
+    #[cfg(windows)]
+    fn a_helper_failure_requires_the_original_roots_observed_exit() {
+        use std::os::windows::process::CommandExt;
+        let mut command = Command::new(fixed_node());
+        command.creation_flags(0x0800_0000);
+        command.args(["-e", "setInterval(()=>{},1000)"]);
+        let mut child = command.spawn().unwrap();
+        let terminator = OwnedTreeTerminator::capture(&child).unwrap();
+        let refused = || Err(io::Error::new(io::ErrorKind::PermissionDenied, "denied"));
+        let live_result = terminator.confirm_termination(refused());
+        // Always reap the fixture, including when the assertion below fails.
+        child.kill().unwrap();
+        child.wait().unwrap();
+        let exited_result = terminator.confirm_termination(refused());
+        assert_eq!(
+            live_result.unwrap_err().kind(),
+            io::ErrorKind::PermissionDenied
+        );
+        exited_result.unwrap();
+    }
     #[test]
     fn nonzero_helper_status_is_an_error_even_when_the_helper_started() {
         #[cfg(windows)]

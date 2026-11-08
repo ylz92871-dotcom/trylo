@@ -61,11 +61,29 @@ fn modified_ms(mtime: std::io::Result<SystemTime>) -> u128 {
 /// Pure, testable walk. Scans `root` depth-first up to `max_files` files and
 /// `max_depth` directory depth. Uses `symlink_metadata` so a symlink is listed
 /// as a file entry but never descended into.
+#[cfg(test)]
 pub fn scan_tree_files(
     root: &std::path::Path,
     max_files: usize,
     max_depth: usize,
 ) -> ScanTreeResult {
+    scan_tree_filtered(root, max_files, max_depth, &[], None)
+}
+
+pub fn scan_tree_filtered(
+    root: &std::path::Path,
+    max_files: usize,
+    max_depth: usize,
+    exclude_dirs: &[String],
+    extensions: Option<&[String]>,
+) -> ScanTreeResult {
+    struct Policy<'a> {
+        max_files: usize,
+        max_depth: usize,
+        exclude_dirs: &'a [String],
+        extensions: Option<&'a [String]>,
+    }
+    let policy = Policy { max_files, max_depth, exclude_dirs, extensions };
     // Local items first (clippy items_after_statements): the scalar-typed
     // recursion + warning helpers keep the walk testable without exposing the
     // recursive detail. Every nested call passes the same &mut state through.
@@ -79,14 +97,15 @@ pub fn scan_tree_files(
     fn walk(
         dir: &std::path::Path,
         depth: usize,
-        max_depth: usize,
-        max_files: usize,
+        policy: &Policy<'_>,
         files: &mut Vec<FileStat>,
         warnings: &mut Vec<String>,
         truncated: &mut bool,
+        visited: &mut usize,
     ) -> bool {
-        if depth > max_depth {
-            return true; // deeper levels are simply not scanned
+        if depth > policy.max_depth {
+            *truncated = true;
+            return true;
         }
         let read_dir = match std::fs::read_dir(dir) {
             Ok(rd) => rd,
@@ -96,7 +115,8 @@ pub fn scan_tree_files(
             }
         };
         for entry in read_dir {
-            if files.len() >= max_files {
+            *visited += 1;
+            if files.len() >= policy.max_files || *visited > 100_000 {
                 *truncated = true;
                 return false;
             }
@@ -111,20 +131,31 @@ pub fn scan_tree_files(
             // symlink_metadata does NOT follow symlinks / junctions.
             let meta = std::fs::symlink_metadata(&path);
             match meta {
-                Ok(m) if m.is_dir() => {
+                Ok(m) if m.is_dir() && !m.file_type().is_symlink() => {
+                    #[cfg(windows)]
+                    {
+                        use std::os::windows::fs::MetadataExt;
+                        if m.file_attributes() & 0x400 != 0 { continue; }
+                    }
+                    let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+                    if policy.exclude_dirs.iter().any(|excluded| excluded.eq_ignore_ascii_case(&name)) { continue; }
                     if !walk(
                         &path,
                         depth + 1,
-                        max_depth,
-                        max_files,
+                        policy,
                         files,
                         warnings,
                         truncated,
+                        visited,
                     ) {
                         return false;
                     }
                 }
                 Ok(m) => {
+                    if let Some(extensions) = policy.extensions {
+                        let ext = path.extension().and_then(|e| e.to_str()).map(|e| format!(".{}", e.to_ascii_lowercase())).unwrap_or_default();
+                        if !extensions.contains(&ext) { continue; }
+                    }
                     files.push(FileStat {
                         path: path.to_string_lossy().to_string(),
                         size: m.len(),
@@ -145,6 +176,7 @@ pub fn scan_tree_files(
     let mut files: Vec<FileStat> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
     let mut truncated = false;
+    let mut visited = 0;
 
     if !root.is_dir() {
         // Missing root = empty scan, not a failure (spec §8.4).
@@ -158,11 +190,11 @@ pub fn scan_tree_files(
     walk(
         root,
         0,
-        max_depth,
-        max_files,
+        &policy,
         &mut files,
         &mut warnings,
         &mut truncated,
+        &mut visited,
     );
     ScanTreeResult {
         files,
@@ -176,6 +208,8 @@ pub async fn scan_tree(
     root: String,
     max_files: Option<usize>,
     max_depth: Option<usize>,
+    exclude_dirs: Option<Vec<String>>,
+    extensions: Option<Vec<String>>,
 ) -> Result<ScanTreeResult, CommandError> {
     let p = PathBuf::from(&root);
     // Missing / non-directory root is an empty scan (spec §8.4), not an error.
@@ -188,7 +222,10 @@ pub async fn scan_tree(
     }
     let files = max_files.unwrap_or(1000).min(HARD_MAX_FILES);
     let depth = max_depth.unwrap_or(12).min(HARD_MAX_DEPTH);
-    Ok(scan_tree_files(&p, files, depth))
+    let excluded: Vec<String> = exclude_dirs.unwrap_or_default().into_iter().take(64).collect();
+    let extensions = extensions.map(|items| items.into_iter().take(128).map(|ext| ext.to_ascii_lowercase()).collect::<Vec<_>>());
+    tokio::task::spawn_blocking(move || scan_tree_filtered(&p, files, depth, &excluded, extensions.as_deref()))
+        .await.map_err(|error| CommandError::Validation { reason: format!("scan worker failed: {error}") })
 }
 
 #[cfg(test)]
@@ -247,6 +284,21 @@ mod tests {
     }
 
     #[test]
+    fn filters_on_host_without_dependency_files_consuming_output_limit() {
+        let root = tempdir("filtered");
+        fs::create_dir_all(root.join("node_modules/deep")).unwrap();
+        fs::create_dir_all(root.join("dist/reports")).unwrap();
+        for i in 0..20 { fs::write(root.join(format!("node_modules/deep/f{i}.pdf")), "dependency").unwrap(); }
+        fs::write(root.join("source.ts"), "source").unwrap();
+        fs::write(root.join("dist/reports/REPORT.PDF"), "output").unwrap();
+        let result = scan_tree_filtered(&root, 3, 12, &["node_modules".into()], Some(&[".pdf".into()]));
+        assert_eq!(result.files.len(), 1);
+        assert!(result.files[0].path.ends_with("REPORT.PDF"));
+        assert!(!result.truncated);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn respects_max_depth() {
         let root = tempdir("depth");
         fs::create_dir_all(root.join("l1/l2/l3/l4")).unwrap();
@@ -260,6 +312,7 @@ mod tests {
             .collect();
         assert!(paths.iter().any(|p| p.ends_with("shallow.txt")));
         assert!(!paths.iter().any(|p| p.ends_with("deep.txt")));
+        assert!(result.truncated);
         fs::remove_dir_all(&root).unwrap();
     }
 

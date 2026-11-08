@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
@@ -39,7 +39,16 @@ pub struct FileChangeEventDto {
 /// underlying OS handle is released and no more events fire.
 #[derive(Default)]
 pub struct WatchersState {
-    pub watchers: Mutex<HashMap<String, RecommendedWatcher>>,
+    pub watchers: Mutex<HashMap<String, WatchRegistration>>,
+}
+pub struct WatchRegistration {
+    _watcher: RecommendedWatcher,
+    channel: Arc<Mutex<tauri::ipc::Channel<FileChangeEventDto>>>,
+}
+
+fn root_key(root: &str) -> String {
+    let normalized = root.replace('\\', "/").trim_end_matches('/').to_string();
+    if cfg!(windows) { normalized.to_lowercase() } else { normalized }
 }
 
 /// Start a recursive watch on `root`. Events are streamed to the
@@ -63,28 +72,33 @@ pub async fn watch(
     // Idempotency: if we already have a watcher for this root, just
     // re-attach the channel and return. Cheap path during HMR +
     // StrictMode double-invoke in dev.
-    {
-        let state: State<'_, WatchersState> = app.state();
-        let watchers = state.watchers.lock().unwrap();
-        if watchers.contains_key(&root) {
-            eprintln!("[rust] watch: already watching {root}, no-op");
-            return Ok(());
-        }
+    let state: State<'_, WatchersState> = app.state();
+    let mut watchers = state.watchers.lock().map_err(|_| CommandError::Validation { reason: "watch state unavailable".into() })?;
+    let key = root_key(&root);
+    if let Some(existing) = watchers.get(&key) {
+        *existing.channel.lock().map_err(|_| CommandError::Validation { reason: "watch channel unavailable".into() })? = on_event;
+        return Ok(());
     }
 
     // Build the watcher. `notify::recommended_watcher` polls the OS
     // for the best backend (FSEvents on macOS, inotify on Linux,
     // ReadDirectoryChangesW on Windows).
-    let channel = on_event.clone();
+    let channel = Arc::new(Mutex::new(on_event));
+    let sender = Arc::clone(&channel);
+    let event_root = root.clone();
     let mut watcher: RecommendedWatcher =
         notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
             let event = match res {
                 Ok(e) => e,
                 Err(err) => {
                     eprintln!("[rust] watch: notify error: {err}");
+                    if let Ok(channel) = sender.lock() { let _ = channel.send(FileChangeEventDto { kind: "rescan".into(), path: event_root.clone(), old_path: None }); }
                     return;
                 }
             };
+            if event.need_rescan() {
+                if let Ok(channel) = sender.lock() { let _ = channel.send(FileChangeEventDto { kind: "rescan".into(), path: event_root.clone(), old_path: None }); }
+            }
             // Map notify's EventKind to our 3-bucket string. notify has
             // more granular kinds (ModifyData, ModifyMetadata, ...);
             // we collapse to "modified" until we have a use for the
@@ -96,12 +110,11 @@ pub async fn watch(
                 _ => return, // Access, Other, Any — skip for now
             };
             for path in &event.paths {
-                let _ = channel.send(FileChangeEventDto {
+                if let Ok(channel) = sender.lock() { let _ = channel.send(FileChangeEventDto {
                     kind: kind.to_string(),
                     path: path.to_string_lossy().to_string(),
                     old_path: None,
-                });
-                eprintln!("[rust] watch: {kind} {}", path.display());
+                }); }
             }
         })
         .map_err(|e| CommandError::Io {
@@ -118,11 +131,7 @@ pub async fn watch(
 
     // Stash the watcher so it lives as long as the app. Dropping it
     // would release the OS handle and silently stop the watch.
-    {
-        let state: State<'_, WatchersState> = app.state();
-        let mut watchers = state.watchers.lock().unwrap();
-        watchers.insert(root.clone(), watcher);
-    }
+    watchers.insert(key, WatchRegistration { _watcher: watcher, channel });
 
     eprintln!("[rust] watch: started on {root}");
     Ok(())
@@ -137,7 +146,7 @@ pub async fn watch(
 pub async fn unwatch(root: String, app: AppHandle) -> Result<(), CommandError> {
     let state: State<'_, WatchersState> = app.state();
     let mut watchers = state.watchers.lock().unwrap();
-    if watchers.remove(&root).is_some() {
+    if watchers.remove(&root_key(&root)).is_some() {
         eprintln!("[rust] unwatch: stopped {root}");
         Ok(())
     } else {

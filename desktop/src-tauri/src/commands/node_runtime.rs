@@ -1,8 +1,7 @@
 // Trylo Desktop — shared Node runtime + bundled-resource resolution.
 //
 // Audit doc `TRYLO-WORK-PHASE1-PHASE2-RUNTIME-AUDIT-AND-REMEDIATION-2026-08-28.md`
-// §2.3 Task W4 requires one resolver shared by `workd.rs` and
-// `servicehost.rs`:
+// §2.3 Task W4 requires one resolver for the Service Host and CLI:
 //
 //   - the installed app MUST NOT rely on `node` being on the system PATH;
 //   - the installed app MUST NOT fall back to the source repo;
@@ -11,7 +10,6 @@
 // Layout the resolver understands (relative to the bundled resource dir):
 //
 //   <resource_dir>/runtime/node/win-x64/node.exe   # pinned Node runtime
-//   <resource_dir>/work/bin/trylo-workd.mjs        # Work daemon wrapper
 //   <resource_dir>/desktop-services/dist/host.bundle.mjs
 //
 // Dev fallback mirrors the same names two levels above `src-tauri`
@@ -23,7 +21,7 @@ use std::path::{Path, PathBuf};
 /// "it works in dev, not installed" report can be triaged in one look.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeSource {
-    /// `TRYLO_NODE_BINARY` / `TRYLO_WORKD_SCRIPT` explicit override.
+    /// Explicit operator override for a runtime or script.
     Env,
     /// `app.path().resource_dir()` — the packaged, self-contained path.
     Bundled,
@@ -176,64 +174,13 @@ pub fn resolve_node(resource_dir: Option<&Path>) -> RuntimeResolution {
     }
 }
 
-/// Relative path of the Work daemon wrapper inside a resource dir / repo.
-const WORKD_SCRIPT_RELATIVE: &str = "work/bin/trylo-workd.mjs";
-
-/// Resolve `trylo-workd.mjs`. Priority:
-///   1. `TRYLO_WORKD_SCRIPT` (operator override / tests)
-///   2. bundled `<resource_dir>/work/bin/trylo-workd.mjs` ← installed app
-///   3. `<repo>/work/bin/trylo-workd.mjs`                 ← dev checkout
-///
-/// Returns `None` when nothing exists — the caller turns that into a stable
-/// `workd_script_missing` reason code instead of a raw spawn ENOENT.
-pub fn resolve_workd_script(resource_dir: Option<&Path>) -> Option<RuntimeResolution> {
-    resolve_workd_script_in(resource_dir, repo_root())
-}
-
-/// Same resolution, with the repo-root fallback injected. Production passes
-/// the real repo root; tests pass `None` to isolate packaging behaviour from
-/// wherever the checkout happens to live.
-pub fn resolve_workd_script_in(
-    resource_dir: Option<&Path>,
-    repo_root: Option<PathBuf>,
-) -> Option<RuntimeResolution> {
-    if let Ok(explicit) = std::env::var("TRYLO_WORKD_SCRIPT") {
-        let trimmed = explicit.trim();
-        if !trimmed.is_empty() {
-            return Some(RuntimeResolution {
-                program: PathBuf::from(trimmed),
-                source: RuntimeSource::Env,
-            });
-        }
-    }
-    if let Some(dir) = resource_dir {
-        let candidate = dir.join(WORKD_SCRIPT_RELATIVE);
-        if candidate.is_file() {
-            return Some(RuntimeResolution {
-                program: candidate,
-                source: RuntimeSource::Bundled,
-            });
-        }
-    }
-    if let Some(root) = repo_root {
-        let candidate = root.join(WORKD_SCRIPT_RELATIVE);
-        if candidate.is_file() {
-            return Some(RuntimeResolution {
-                program: candidate,
-                source: RuntimeSource::DevCheckout,
-            });
-        }
-    }
-    None
-}
-
 /// Relative path of the new Trylo CLI entry inside a resource dir / repo.
 ///
 /// P08 §WP6: the CLI must never be resolved from a developer's absolute
 /// path. `settings.cliPath` used to default to a hard-coded
 /// `C:/trylo-cli/cli.js` — a path that exists on exactly one
 /// machine. This resolver is the replacement, and it follows the same
-/// priority order as `resolve_node` / `resolve_workd_script`.
+/// priority order as `resolve_node`.
 const CLI_SCRIPT_RELATIVE: &str = "cli/dist/cmd/trylo/main.js";
 
 /// Development-checkout location, relative to the repo root.
@@ -241,8 +188,8 @@ const CLI_SCRIPT_DEV_RELATIVE: &str = "new trylo cli/dist/cmd/trylo/main.js";
 
 /// Resolve the new CLI entry script. Priority:
 ///   1. `TRYLO_CLI_SCRIPT` (operator override / tests)
-///   2. bundled `<resource_dir>/cli/dist/cmd/trylo/main.js` ← installed app
-///   3. `<repo>/new trylo cli/dist/cmd/trylo/main.js`       ← dev checkout
+///   2. `<repo>/new trylo cli/dist/cmd/trylo/main.js`       ← debug checkout
+///   3. bundled `<resource_dir>/cli/dist/cmd/trylo/main.js` ← installed app
 ///
 /// Returns `None` when nothing exists. The caller turns that into an
 /// explicit "CLI not found" state — it must NOT fall back to a guessed
@@ -267,15 +214,8 @@ pub fn resolve_cli_script_in(
             });
         }
     }
-    if let Some(dir) = resource_dir {
-        let candidate = dir.join(CLI_SCRIPT_RELATIVE);
-        if candidate.is_file() {
-            return Some(RuntimeResolution {
-                program: candidate,
-                source: RuntimeSource::Bundled,
-            });
-        }
-    }
+    // Release builds never supply a repo root. In a debug checkout the
+    // renderer and CLI must come from the same source, not an older bundle.
     if let Some(root) = repo_root {
         let candidate = root.join(CLI_SCRIPT_DEV_RELATIVE);
         if candidate.is_file() {
@@ -285,36 +225,13 @@ pub fn resolve_cli_script_in(
             });
         }
     }
-    None
-}
-
-/// Resolve the instrumented legacy Trylo entry, never the official runtime/cli.js.
-pub fn resolve_legacy_cli_script(resource_dir: Option<&Path>) -> Option<RuntimeResolution> {
-    resolve_legacy_cli_script_in(resource_dir, repo_root())
-}
-
-pub fn resolve_legacy_cli_script_in(
-    resource_dir: Option<&Path>,
-    repo_root: Option<PathBuf>,
-) -> Option<RuntimeResolution> {
-    if let Ok(explicit) = std::env::var("TRYLO_LEGACY_CLI_SCRIPT") {
-        if !explicit.trim().is_empty() {
-            return Some(RuntimeResolution {
-                program: PathBuf::from(explicit.trim()),
-                source: RuntimeSource::Env,
-            });
-        }
-    }
     if let Some(dir) = resource_dir {
-        let candidate = dir.join("cli-legacy/cli.cjs");
+        let candidate = dir.join(CLI_SCRIPT_RELATIVE);
         if candidate.is_file() {
-            return Some(RuntimeResolution { program: candidate, source: RuntimeSource::Bundled });
-        }
-    }
-    if let Some(root) = repo_root {
-        let candidate = root.join("trylo cli/cli.js");
-        if candidate.is_file() {
-            return Some(RuntimeResolution { program: candidate, source: RuntimeSource::DevCheckout });
+            return Some(RuntimeResolution {
+                program: candidate,
+                source: RuntimeSource::Bundled,
+            });
         }
     }
     None
@@ -378,19 +295,6 @@ mod tests {
         assert_eq!(node_script_argument(script), script);
     }
 
-    #[test]
-    fn legacy_bundle_is_independent_from_the_v1_entry() {
-        let root = std::env::temp_dir().join(format!("trylo-legacy-bundle-{}", std::process::id()));
-        std::fs::create_dir_all(root.join("cli/dist/cmd/trylo")).unwrap();
-        std::fs::write(root.join("cli/dist/cmd/trylo/main.js"), "// new").unwrap();
-        assert!(resolve_legacy_cli_script_in(Some(&root), None).is_none());
-        std::fs::create_dir_all(root.join("cli-legacy")).unwrap();
-        std::fs::write(root.join("cli-legacy/cli.cjs"), "// legacy").unwrap();
-        let resolved = resolve_legacy_cli_script_in(Some(&root), None).unwrap();
-        assert_eq!(resolved.program, root.join("cli-legacy/cli.cjs"));
-        assert_eq!(resolved.source, RuntimeSource::Bundled);
-        std::fs::remove_dir_all(root).unwrap();
-    }
 
     #[test]
     fn candidates_are_platform_specific() {
@@ -426,33 +330,6 @@ mod tests {
     }
 
     #[test]
-    fn missing_script_resolves_to_none_without_a_repo_fallback() {
-        let root =
-            std::env::temp_dir().join(format!("trylo-workd-missing-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-        // No script in the resources dir and no repo to fall back to: the
-        // caller must get `None`, which becomes `workd_script_missing`.
-        assert!(resolve_workd_script_in(Some(&root), None).is_none());
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn workd_script_prefers_the_resource_dir() {
-        let root = std::env::temp_dir().join(format!("trylo-workd-{}", std::process::id()));
-        let bundled = root.join("bundled");
-        let target = bundled.join(WORKD_SCRIPT_RELATIVE);
-        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
-        std::fs::write(&target, "// stub\n").unwrap();
-
-        let resolved = resolve_workd_script(Some(&bundled)).expect("script present");
-        assert_eq!(resolved.source, RuntimeSource::Bundled);
-        assert!(resolved.program.ends_with(WORKD_SCRIPT_RELATIVE));
-
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
     fn describe_never_leaks_the_absolute_path() {
         let resolution = RuntimeResolution {
             program: PathBuf::from("C:/secret/place/node.exe"),
@@ -467,7 +344,7 @@ mod tests {
     // ── P08 §WP6: the new CLI's resource resolution ──────────────────
 
     #[test]
-    fn cli_script_prefers_the_bundled_copy() {
+    fn cli_script_prefers_the_development_checkout_over_stale_bundle() {
         let root = std::env::temp_dir().join(format!("trylo-cli-script-{}", std::process::id()));
         let bundled = root.join("bundled");
         let dev = root.join("dev");
@@ -482,9 +359,14 @@ mod tests {
         std::fs::write(&dev_target, "// stub\n").unwrap();
 
         let resolved = resolve_cli_script_in(Some(&bundled), Some(dev))
-            .expect("bundled copy present");
-        assert_eq!(resolved.source, RuntimeSource::Bundled);
-        assert!(resolved.program.starts_with(&bundled));
+            .expect("development copy present");
+        assert_eq!(resolved.source, RuntimeSource::DevCheckout);
+        assert_eq!(resolved.program, dev_target);
+
+        let installed = resolve_cli_script_in(Some(&bundled), None)
+            .expect("installed copy present");
+        assert_eq!(installed.source, RuntimeSource::Bundled);
+        assert!(installed.program.starts_with(&bundled));
 
         let _ = std::fs::remove_dir_all(&root);
     }

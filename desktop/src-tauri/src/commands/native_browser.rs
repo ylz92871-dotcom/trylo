@@ -36,7 +36,7 @@ pub struct NativeSession {
 #[derive(Default)]
 pub struct NativeBrowserState(pub Mutex<HashMap<String, NativeSession>>);
 pub fn allows_application_ipc(label: &str) -> bool { !label.starts_with("browser-") }
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeCommand {
     pub scope: String, pub operation: String, pub label: Option<String>,
@@ -267,9 +267,17 @@ pub fn close_owned_popups(app: &tauri::AppHandle) {
     });
 }
 fn execute(app: &tauri::AppHandle, command: &NativeCommand) -> Result<NativeSession, String> {
-    if command.scope.is_empty() || command.scope.len() > 4096 { return Err("浏览器会话无效".into()); }
     let state = app.state::<NativeBrowserState>();
     let mut sessions = state.0.lock().map_err(|e| e.to_string())?;
+    execute_with_sessions(app, command, &mut sessions)
+}
+
+fn execute_with_sessions(
+    app: &tauri::AppHandle,
+    command: &NativeCommand,
+    sessions: &mut HashMap<String, NativeSession>,
+) -> Result<NativeSession, String> {
+    if command.scope.is_empty() || command.scope.len() > 4096 { return Err("浏览器会话无效".into()); }
     if !sessions.contains_key(&command.scope) {
         if command.operation != "ensure" { return Err("原生浏览器尚未创建".into()); }
         let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
@@ -341,6 +349,24 @@ fn execute(app: &tauri::AppHandle, command: &NativeCommand) -> Result<NativeSess
     Ok(session.clone())
 }
 
+// Ready-session geometry is UI work. Running bounds + acknowledgement in the
+// same dispatch removes two worker/UI round trips from every drag frame.
+// Never wait for the session lock on this thread: a tab-creation worker may
+// hold it while waiting for this very UI thread.
+#[cfg(windows)]
+fn try_layout_on_ui(app: &tauri::AppHandle, command: &NativeCommand) -> Option<Result<NativeSession, String>> {
+    let state = app.state::<NativeBrowserState>();
+    let mut sessions = match state.0.try_lock() {
+        Ok(sessions) => sessions,
+        Err(std::sync::TryLockError::WouldBlock) => return None,
+        Err(error) => return Some(Err(error.to_string())),
+    };
+    let session = sessions.get(&command.scope)?;
+    // Recovery may create a tab and must retain the existing worker path.
+    if !session.tabs.iter().any(|tab| app.get_webview(&tab.label).is_some()) { return None; }
+    Some(execute_with_sessions(app, command, &mut sessions))
+}
+
 #[tauri::command]
 pub async fn native_browser_command(webview: Webview, command: NativeCommand) -> Result<NativeSession, String> {
     if webview.label() != "main" { return Err("只有主界面可以控制原生浏览器".into()); }
@@ -349,6 +375,15 @@ pub async fn native_browser_command(webview: Webview, command: NativeCommand) ->
     #[cfg(windows)]
     {
         let app = webview.app_handle().clone();
+        if command.operation == "layout" {
+            let (send, receive) = tokio::sync::oneshot::channel();
+            let ui_app = app.clone();
+            let ui_command = command.clone();
+            app.run_on_main_thread(move || {
+                let _ = send.send(try_layout_on_ui(&ui_app, &ui_command));
+            }).map_err(|e| e.to_string())?;
+            if let Some(result) = receive.await.map_err(|e| e.to_string())? { return result; }
+        }
         tauri::async_runtime::spawn_blocking(move || execute(&app, &command)).await.map_err(|e| e.to_string())?
     }
 }

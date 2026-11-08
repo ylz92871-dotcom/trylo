@@ -2,7 +2,8 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
-use serde::{Deserialize, Serialize};
+pub use super::process_recovery_identity::RecoveryIdentity;
+use serde::Serialize;
 
 use super::error::{io_error, CommandError};
 
@@ -11,13 +12,6 @@ const OUTPUT_RECORDS: usize = 8192;
 const COMPLETED_BYTES: usize = 64 * 1024 * 1024;
 const COMPLETED_COUNT: usize = 32;
 const READ_RECORDS: usize = 512;
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RecoveryIdentity {
-    pub team_run_id: String,
-    pub turn_id: String,
-}
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -267,10 +261,7 @@ mod tests {
             pid: 1,
             project_key: "w".into(),
             conversation_id: "c".into(),
-            identity: RecoveryIdentity {
-                team_run_id: "team".into(),
-                turn_id: "turn".into(),
-            },
+            identity: RecoveryIdentity::legacy_team("team", "turn"),
         })
     }
     #[test]
