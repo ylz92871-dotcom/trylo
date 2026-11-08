@@ -14,14 +14,18 @@ test("append-only apply survives process reload", async () => {
   await withStore(async (dir, store) => {
     const draft = userRuleDraft({ proposalId: "p1" });
     const applied = await store.apply(command("submit_proposal", { proposal: draft, commandId: "c1" }));
+
     assert.equal(applied.ok, true);
     await store.close();
     const reopened = openStore(dir);
     const loaded = await reopened.load();
+
     assert.equal(loaded.ok, true);
+
     if (loaded.ok) {
       assert.equal(loaded.state.proposals[0]?.proposalId, "p1");
     }
+
     await reopened.close();
   });
 });
@@ -29,10 +33,13 @@ test("append-only apply survives process reload", async () => {
 test("torn tail record is discarded", async () => {
   await withStore(async (dir, store) => {
     const draft = userRuleDraft({ proposalId: "p1" });
+
     await store.apply(command("submit_proposal", { proposal: draft, commandId: "c1" }));
     appendFileSync(path.join(dir, "board-events.ndjson"), "abc incomplete", "utf8");
     const loaded = await store.load();
+
     assert.equal(loaded.ok, true);
+
     if (loaded.ok) {
       assert.equal(loaded.state.proposals.length, 1);
     }
@@ -42,6 +49,7 @@ test("torn tail record is discarded", async () => {
 test("checksum mismatch fail closed", async () => {
   await withStore(async (dir, store) => {
     const draft = userRuleDraft({ proposalId: "p1" });
+
     await store.apply(command("submit_proposal", { proposal: draft, commandId: "c1" }));
     appendFileSync(
       path.join(dir, "board-events.ndjson"),
@@ -49,7 +57,9 @@ test("checksum mismatch fail closed", async () => {
       "utf8",
     );
     const loaded = await store.load();
+
     assert.equal(loaded.ok, false);
+
     if (!loaded.ok) {
       assert.equal(loaded.reason, "checksum_mismatch");
     }
@@ -62,19 +72,25 @@ test("sequence gap fail closed", async () => {
     const applied = await store.apply(
       command("submit_proposal", { proposal: draft, commandId: "c1" }),
     );
+
     assert.equal(applied.ok, true);
+
     if (!applied.ok) {
       return;
     }
+
     const rogue = encodeRecord({
       sequence: 9,
       commandId: "c9",
       command: command("quarantine", { proposalId: "p1", commandId: "c9" }),
       events: [],
     });
+
     appendFileSync(path.join(dir, "board-events.ndjson"), rogue, "utf8");
     const loaded = await store.load();
+
     assert.equal(loaded.ok, false);
+
     if (!loaded.ok) {
       assert.equal(loaded.reason, "sequence_gap");
     }
@@ -95,15 +111,19 @@ test("duplicate command after reload is idempotent", async () => {
   await withStore(async (dir, store) => {
     const draft = userRuleDraft({ proposalId: "p1" });
     const submit = command("submit_proposal", { proposal: draft, commandId: "c1" });
+
     await store.apply(submit);
     await store.close();
     const reopened = openStore(dir);
     const again = await reopened.apply(submit);
+
     assert.equal(again.ok, true);
+
     if (again.ok) {
       assert.equal(again.idempotent, true);
       assert.equal(again.state.proposals.length, 1);
     }
+
     await reopened.close();
   });
 });
@@ -111,12 +131,16 @@ test("duplicate command after reload is idempotent", async () => {
 test("snapshot lag replays newer events", async () => {
   await withStore(async (_dir, store) => {
     const draft = userRuleDraft({ proposalId: "p1" });
+
     await store.apply(command("submit_proposal", { proposal: draft, commandId: "c1" }));
     const snapped = await store.snapshot(0);
+
     assert.equal(snapped.ok, true);
     await store.apply(command("fast_lane_validate", { proposalId: "p1", commandId: "c2" }));
     const loaded = await store.load();
+
     assert.equal(loaded.ok, true);
+
     if (loaded.ok) {
       assert.equal(loaded.state.proposals[0]?.lifecycle, "validated");
       assert.equal(loaded.state.sequence > 1, true);
@@ -127,14 +151,19 @@ test("snapshot lag replays newer events", async () => {
 test("compaction does not change replay result", async () => {
   await withStore(async (dir, store) => {
     const draft = userRuleDraft({ proposalId: "p1" });
+
     await store.apply(command("submit_proposal", { proposal: draft, commandId: "c1" }));
     await store.apply(command("fast_lane_validate", { proposalId: "p1", commandId: "c2" }));
     const before = await store.load();
+
     assert.equal(before.ok, true);
+
     if (!before.ok) {
       return;
     }
+
     const compacted = await store.compact(0);
+
     assert.equal(compacted.ok, true);
     await store.apply(
       command("commit_asset", {
@@ -146,13 +175,17 @@ test("compaction does not change replay result", async () => {
       }),
     );
     const after = await store.load();
+
     assert.equal(after.ok, true);
+
     if (after.ok && before.ok) {
       assert.equal(after.state.proposals[0]?.lifecycle, "validated");
       assert.equal(after.state.assets[0]?.versionId, "v1");
       assert.equal(after.state.sequence > before.state.sequence, true);
     }
+
     const log = await readFile(path.join(dir, "board-events.ndjson"), "utf8");
+
     assert.equal(log.includes("\"commandId\":\"c1\""), false);
   });
 });
@@ -160,14 +193,19 @@ test("compaction does not change replay result", async () => {
 test("snapshot state equals replay of the same commands", async () => {
   await withStore(async (_dir, store) => {
     const draft = userRuleDraft({ proposalId: "p1" });
+
     await store.apply(command("submit_proposal", { proposal: draft, commandId: "c1" }));
     await store.apply(command("fast_lane_validate", { proposalId: "p1", commandId: "c2" }));
     const before = await store.load();
+
     assert.equal(before.ok, true);
     const snapped = await store.snapshot(0);
+
     assert.equal(snapped.ok, true);
     const after = await store.load();
+
     assert.equal(after.ok, true);
+
     if (before.ok && after.ok) {
       assert.equal(before.state.sequence, after.state.sequence);
       assert.equal(before.state.proposals[0]?.lifecycle, after.state.proposals[0]?.lifecycle);
@@ -205,14 +243,18 @@ test("activate suspend rollback survive reload", async () => {
       command("suspend", { proposalId: "p2", breakerReason: "neg", commandId: "c10" }),
       command("rollback", { proposalId: "p2", reason: "restore", commandId: "c11" }),
     ];
+
     for (const step of steps) {
       const applied = await store.apply(step);
       assert.equal(applied.ok, true, step.commandId);
     }
+
     await store.close();
     const reopened = openStore(dir);
     const loaded = await reopened.load();
+
     assert.equal(loaded.ok, true);
+
     if (loaded.ok) {
       assert.equal(loaded.state.activations[0]?.versionId, "v1");
       assert.equal(loaded.state.activations[0]?.pointer, "active");
@@ -221,6 +263,7 @@ test("activate suspend rollback survive reload", async () => {
         "rolled_back",
       );
     }
+
     await reopened.close();
   });
 });
@@ -228,6 +271,7 @@ test("activate suspend rollback survive reload", async () => {
 test("corrupt snapshot is ignored in favor of the event log", async () => {
   await withStore(async (dir, store) => {
     const draft = userRuleDraft({ proposalId: "p1" });
+
     await store.apply(command("submit_proposal", { proposal: draft, commandId: "c1" }));
     await writeFile(
       path.join(dir, "board-snapshot.json"),
@@ -240,7 +284,9 @@ test("corrupt snapshot is ignored in favor of the event log", async () => {
       "utf8",
     );
     const loaded = await store.load();
+
     assert.equal(loaded.ok, true);
+
     if (loaded.ok) {
       assert.equal(loaded.state.proposals[0]?.proposalId, "p1");
       assert.notEqual(loaded.state.sequence, 99);
@@ -253,6 +299,7 @@ async function withStore(
 ): Promise<void> {
   const dir = await mkdtemp(path.join(os.tmpdir(), "trylo-board-"));
   const store = openStore(dir);
+
   try {
     await run(dir, store);
   } finally {
@@ -288,14 +335,18 @@ function isClosedFd(err: unknown): boolean {
 test("an unparseable record with a valid checksum fails closed", async () => {
   await withStore(async (dir, store) => {
     const draft = userRuleDraft({ proposalId: "p1" });
+
     await store.apply(command("submit_proposal", { proposal: draft, commandId: "c1" }));
     // Only a writer bug or a tamper that recomputed the checksum can produce
     // this line: the bytes match their checksum, but they are not JSON. The
     // read boundary must fail closed, never leak a raw SyntaxError upward.
     const payload = "not json at all";
+
     appendFileSync(path.join(dir, "board-events.ndjson"), `${sha256Hex(payload)} ${payload}\n`, "utf8");
     const loaded = await store.load();
+
     assert.equal(loaded.ok, false);
+
     if (!loaded.ok) {
       assert.equal(loaded.reason, "snapshot_corrupt");
     }
@@ -305,14 +356,18 @@ test("an unparseable record with a valid checksum fails closed", async () => {
 test("a foreign-shaped record with a valid checksum fails closed", async () => {
   await withStore(async (dir, store) => {
     const draft = userRuleDraft({ proposalId: "p1" });
+
     await store.apply(command("submit_proposal", { proposal: draft, commandId: "c1" }));
     // Checksum valid, sequence right, but no `command` and no `events`: the
     // shape no writer of this format produces. Guarding the structure is the
     // read boundary's job; the board reducer keeps the command semantics.
     const payload = JSON.stringify({ sequence: 2, commandId: "c2" });
+
     appendFileSync(path.join(dir, "board-events.ndjson"), `${sha256Hex(payload)} ${payload}\n`, "utf8");
     const loaded = await store.load();
+
     assert.equal(loaded.ok, false);
+
     if (!loaded.ok) {
       assert.equal(loaded.reason, "snapshot_corrupt");
     }
@@ -346,9 +401,12 @@ test("P1-4: a board root that cannot be created is a typed board_unavailable, no
     // on POSIX). Before P1-4 this escaped `createFileBoardStore` → `withBoardWriter` →
     // the write port → the loop and failed the user's task.
     const fileRoot = path.join(dir, "board-is-a-file");
+
     await writeFile(fileRoot, "not a directory", "utf8");
     const store = createFileBoardStore(fileRoot);
+
     assert.equal("ok" in store && store.ok === false, true, "create must fail closed, not throw");
+
     if ("ok" in store && store.ok === false) {
       assert.equal(store.reason, "board_unavailable");
       assert.equal(typeof store.detail, "string");
@@ -368,7 +426,9 @@ test("P1-4: a log path that is a directory degrades to board_unavailable on read
     // than leaking a raw filesystem error upward.
     await mkdir(path.join(dir, "board-events.ndjson"), { recursive: true });
     const loaded = await createBoardReader(dir).load();
+
     assert.equal(loaded.ok, false);
+
     if (!loaded.ok) {
       assert.equal(loaded.reason, "board_unavailable");
     }
@@ -387,14 +447,19 @@ test("P1-4: a throw out of the writer run is collected as board_unavailable and 
     const result = await withBoardWriter(dir, async () => {
       throw new Error("run body blew up");
     });
+
     assert.equal("ok" in result && result.ok === false, true, "a run-body throw must not propagate");
+
     if ("ok" in result && result.ok === false) {
       assert.equal(result.reason, "board_unavailable");
       assert.equal(result.detail, "run body blew up");
     }
+
     // The lock was released best-effort in `finally`: a fresh writer can take it.
     const reopened = createFileBoardStore(dir);
+
     assert.equal("apply" in reopened, true, "the lock must be released after a run-body throw");
+
     if ("apply" in reopened) {
       await reopened.close();
     }

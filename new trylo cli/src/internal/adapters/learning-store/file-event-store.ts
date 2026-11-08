@@ -1,30 +1,29 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, open, unlink, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, renameSync } from "node:fs";
 import type { BoardCommand } from "../../learning/control/commands.js";
-import { canonicalJson, sha256Hex } from "../../learning/control/hash.js";
 import { reduce } from "../../learning/control/reducer.js";
-import { recoverMethodCommandIdentities } from "../../learning/control/method-replay.js";
 import type { ReduceErr, ReduceOk } from "../../learning/control/result.js";
-import { emptyBoardState, normalizeBoardState, type BoardState } from "../../learning/control/state.js";
+import type { BoardState } from "../../learning/control/state.js";
 import type {
   BoardStore,
   StoreLoadErr,
   StoreLoadResult,
 } from "../../learning/control/store-port.js";
 import { decodeLog, encodeRecord, type LogRecord } from "./codec.js";
-import { releaseLock, tryAcquireLock, type LockErr, type LockHandle } from "./lock.js";
+import { lockToken, ownsLock, releaseLock, tryAcquireLock, type BoardLockOptions, type LockErr, type LockHandle } from "./lock.js";
+import { admitBoardWriter, type BoardWriterAdmissionOptions } from "./writer-admission.js";
+import { boardReplayMemo } from "./replay-memo.js";
+import { BOARD_LOG_FILE, readBoardLog, readVerifiedBoard, replayCheckpointStamp,
+  type BoardReplayReport, type VerifiedBoardLog, type VerifiedBoardRead } from "./board-replay.js";
+import { BOARD_SNAPSHOT_FILE, snapshotChecksum, snapshotVersion, type BoardSnapshotFile } from "./board-snapshot.js";
+import { checkpointDue, DEFAULT_REPLAY_CHECKPOINT_POLICY, encodeReplayCheckpoint, REPLAY_CHECKPOINT_FILE,
+  type ReplayCheckpointPolicy } from "./replay-checkpoint.js";
 
-const LOG_FILE = "board-events.ndjson";
-const SNAP_FILE = "board-snapshot.json";
+const LOG_FILE = BOARD_LOG_FILE;
+const SNAP_FILE = BOARD_SNAPSHOT_FILE;
 const LOCK_FILE = "board-writer.lock";
-
-type SnapshotFile = {
-  readonly generation: number;
-  readonly sequence: number;
-  readonly checksum: string;
-  readonly state: BoardState;
-};
 
 /**
  * 板日志追加的注入缝，签名与 `appendFileSync` 一致，缺省即真 `appendFileSync`。
@@ -45,16 +44,31 @@ export type LogAppender = (
 
 export type FileBoardStoreOptions = {
   readonly logAppender?: LogAppender;
+  readonly lockOptions?: BoardLockOptions;
+  /** Last synchronous admission at the durable boundary, after every asynchronous read. */
+  readonly commandGuard?: (command: BoardCommand) => boolean;
+  /** Disposable checkpoint maintenance, measured from its persisted prefix. */
+  readonly checkpointPolicy?: ReplayCheckpointPolicy;
+  /** Read-only counters; neither Board state nor log contents cross this seam. */
+  readonly observeReplay?: (report: BoardReplayReport) => void;
 };
+
+export type WithBoardWriterOptions = FileBoardStoreOptions & { readonly admission?: BoardWriterAdmissionOptions };
 
 export function createFileBoardStore(
   rootDir: string,
   options: FileBoardStoreOptions = {},
 ): BoardStore | StoreLoadErr {
+  const policy = options.checkpointPolicy ?? DEFAULT_REPLAY_CHECKPOINT_POLICY;
+  if (![policy.minimumBytes, policy.minimumRecords].every(value => Number.isSafeInteger(value) && value > 0)) {
+    throw new RangeError("Board checkpoint policy requires positive safe integers");
+  }
+
   let lock: LockHandle | LockErr;
+
   try {
     mkdirSync(rootDir, { recursive: true });
-    lock = tryAcquireLock(path.join(rootDir, LOCK_FILE));
+    lock = tryAcquireLock(path.join(rootDir, LOCK_FILE), options.lockOptions);
   } catch (error) {
     // Create/lock IO failed before a single command was applied — a
     // definitely-not-written fault. Collected here, at the adapter boundary, into a
@@ -65,26 +79,31 @@ export function createFileBoardStore(
     // reads as "run this turn on an empty archive, write nothing".
     return { ok: false, reason: "board_unavailable", detail: ioDetail(error) };
   }
+
   if ("ok" in lock) {
     return lock;
   }
+
   return new FileBoardStore(rootDir, lock, options);
 }
 
-export function createBoardReader(rootDir: string): Pick<BoardStore, "load"> {
-  return new FileBoardStore(rootDir, { path: "", fd: -1 }, {});
+export function createBoardReader(rootDir: string, options: Pick<FileBoardStoreOptions, "observeReplay"> = {}): Pick<BoardStore, "load"> {
+  return new FileBoardStore(rootDir, { path: "", fd: -1 }, options);
 }
 
 export async function withBoardWriter<T>(
   rootDir: string,
   run: (store: BoardStore) => Promise<T>,
-  options: FileBoardStoreOptions = {},
+  options: WithBoardWriterOptions = {},
 ): Promise<T | StoreLoadErr> {
-  const store = createFileBoardStore(rootDir, options);
-  if (!("apply" in store)) {
-    return store;
-  }
+  const admission = await admitBoardWriter(() => createFileBoardStore(rootDir, options), options.admission);
+  if ("ok" in admission) return admission;
+
+  const { store, beforeRun } = admission;
+
   try {
+    const stopped = beforeRun();
+    if (stopped !== undefined) return stopped;
     return await run(store);
   } catch (error) {
     // A throw out of the run body means the outcome is unknown: earlier commands in
@@ -107,6 +126,7 @@ export async function withBoardWriter<T>(
 
 class FileBoardStore implements BoardStore {
   private generation = 0;
+  private checkpointWriteSequence = 0;
 
   constructor(
     private readonly rootDir: string,
@@ -117,111 +137,137 @@ class FileBoardStore implements BoardStore {
   async apply(
     command: BoardCommand,
   ): Promise<ReduceOk | ReduceErr | StoreLoadErr> {
-    const loaded = await this.load();
+    const loaded = await this.loadVerified("append");
     if (!loaded.ok) {
       return loaded;
     }
+
     const reduced = reduce(loaded.state, command);
     if (!reduced.ok) {
       return reduced;
     }
+
     if (reduced.idempotent) {
       return reduced;
     }
+
     await mkdir(this.rootDir, { recursive: true });
+
+    if (loaded.log.tornTail) return this.tornTail();
+
     const record: LogRecord = {
-      sequence: nextLogSequence(await this.readLogRaw()),
+      sequence: loaded.log.physicalSequence + 1,
       commandId: command.commandId,
       command,
       events: reduced.events,
     };
-    this.append(encodeRecord(record));
+
+    if (this.options.commandGuard?.(command) === false) {
+      return { ok: false, reason: "collect_disabled", detail: "command rejected at durable write boundary" };
+    }
+
+    const encoded = encodeRecord(record);
+    if (!this.append(encoded)) return this.lockLost();
+
+    await this.maintainCheckpoint(loaded.log, reduced.state, encoded, command);
+
     return reduced;
   }
 
   /** 走注入缝（缺省真 `appendFileSync`），让部分写故障可注入。 */
-  private append(body: string): void {
+  private append(body: string): boolean {
+    if (!ownsLock(this.lock)) {
+      boardReplayMemo.forget(this.rootDir);
+      return false;
+    }
+
     const file = path.join(this.rootDir, LOG_FILE);
-    (this.options.logAppender ?? appendFileSync)(file, body, "utf8");
+
+    try {
+      (this.options.logAppender ?? appendFileSync)(file, body, "utf8");
+    } catch (error) {
+      // A throwing appender may already have written bytes. The next read must
+      // rebuild from the authority; preserve the original unknown-write throw.
+      boardReplayMemo.forget(this.rootDir);
+      throw error;
+    }
+
+    return true;
   }
 
   async load(): Promise<StoreLoadResult> {
+    const loaded = await this.loadVerified();
+    return loaded.ok ? { ok: true, state: loaded.state, generation: loaded.generation } : loaded;
+  }
+
+  private async loadVerified(purpose: "read" | "append" = "read"): Promise<VerifiedBoardRead> {
     try {
-      const snapshot = await this.readSnapshot();
-      if (snapshot !== undefined && !snapshot.ok) {
-        return snapshot;
+      const loaded = await readVerifiedBoard(this.rootDir, this.generation, purpose);
+      if (loaded.ok) {
+        this.generation = loaded.generation;
+        try { this.options.observeReplay?.(loaded.report); }
+        catch { /* Diagnostic observers cannot change authoritative read or write results. */ }
       }
-      const raw = await this.readLogRaw();
-      const parsed = decodeLog(raw);
-      if (!parsed.ok) {
-        return parsed;
-      }
-      // A damaged compacted checkpoint has no complete history to replay.
-      // Physical log sequence restarts after compaction; the first logical
-      // event must still be 1 to prove a complete replay from an empty Board.
-      const completeReplay = parsed.records[0]?.events[0]?.sequence === 1;
-      if (snapshot === undefined && !completeReplay && (existsSync(path.join(this.rootDir, SNAP_FILE)) || parsed.records.length > 0)) {
-        return { ok: false, reason: "snapshot_corrupt", detail: "checkpoint is unavailable and the retained log cannot rebuild the complete Board" };
-      }
-      // `readSnapshot` already decoded+guarded the snapshot state (P2-4), so it is a
-      // valid `BoardState` here; no second normalize. A dropped/corrupt snapshot is
-      // `undefined`, and we start from empty and let the log replay rebuild everything.
-      let state = snapshot !== undefined && snapshot.ok ? snapshot.state : emptyBoardState();
-      state = recoverMethodCommandIdentities(state, parsed.records.map(record => record.command));
-      for (const record of parsed.records) {
-        const reduced = reduce(state, record.command);
-        if (!reduced.ok) {
-          return { ok: false, reason: reduced.reason, detail: reduced.detail };
-        }
-        state = reduced.state;
-      }
-      return { ok: true, state, generation: this.generation };
+
+      return loaded;
     } catch (error) {
-      // Read-phase IO fault that survived the per-file handling below (e.g. the log
-      // is a directory, or an unreadable parent): fail closed as a typed result so
-      // the board degrades to an empty archive instead of throwing into the caller's
-      // task (audit P1-4). The log is authoritative, so nothing is fabricated here.
+      boardReplayMemo.forget(this.rootDir);
       return { ok: false, reason: "board_unavailable", detail: ioDetail(error) };
     }
   }
 
   async snapshot(expectedGeneration: number): Promise<StoreLoadResult> {
+    const loaded = await this.loadVerified();
+    if (!loaded.ok) return loaded;
+
+    // Reload before the CAS: a fresh store may first discover an existing generation here.
     if (expectedGeneration !== this.generation) {
-      return {
-        ok: false,
-        reason: "activation_cas_mismatch",
-        detail: `expected ${String(expectedGeneration)} got ${String(this.generation)}`,
-      };
+      return { ok: false, reason: "activation_cas_mismatch",
+        detail: `expected ${String(expectedGeneration)} got ${String(this.generation)}` };
     }
-    const loaded = await this.load();
-    if (!loaded.ok) {
-      return loaded;
-    }
+
+    if (loaded.log.tornTail) return this.tornTail();
+
     const generation = this.generation + 1;
-    const file: SnapshotFile = {
-      generation,
-      sequence: loaded.state.sequence,
-      checksum: "",
-      state: loaded.state,
-    };
-    const checksum = sha256Hex(
-      canonicalJson({ generation, sequence: file.sequence, state: file.state }),
-    );
-    await this.atomicWrite(SNAP_FILE, { ...file, checksum });
+    const file: BoardSnapshotFile = { ...snapshotVersion(loaded.state), generation,
+      sequence: loaded.state.sequence, checksum: "", state: loaded.state };
+    if (!await this.atomicWrite(SNAP_FILE, { ...file, checksum: snapshotChecksum(file) })) return this.lockLost();
+
     this.generation = generation;
+
     return { ok: true, state: loaded.state, generation };
   }
 
   async compact(expectedGeneration: number): Promise<StoreLoadResult> {
+    const archiveCheck = await this.load();
+    if (!archiveCheck.ok) return archiveCheck;
+
+    // Even root-only budgets change admission. Keep the new-action log barrier so an older reader cannot bypass it after compaction.
+    if ((archiveCheck.state.centralLearningBudgets?.length ?? 0) > 0) return this.snapshot(expectedGeneration);
+
+    if ((archiveCheck.state.collaborationV2Facts?.length ?? 0) > 0 || (archiveCheck.state.collaborationV2Archives?.length ?? 0) > 0) {
+      return { ok: false, reason: "collaboration_archive_preservation_required",
+        detail: "V2 collaboration history is retained in the canonical Board log; use snapshot or V2 hot-projection compaction without truncating that archive" };
+    }
+
+    // Keep the causal method log, including its explicit new-command barrier.
+    // A v1 reader discards the v2 snapshot and must fail on that command rather
+    // than see an empty post-compaction log and start a second history.
+    if ((archiveCheck.state.methodExperienceFacts?.length ?? 0) > 0) return this.snapshot(expectedGeneration);
+
     const snapped = await this.snapshot(expectedGeneration);
     if (!snapped.ok) {
       return snapped;
     }
+
     const raw = await this.readLogRaw();
     const parsed = decodeLog(raw);
     if (!parsed.ok) {
       return parsed;
     }
+
+    if (parsed.discardedTornTail) return this.tornTail();
+
     const kept = parsed.records.filter((record) => {
       const last =
         record.events.length > 0
@@ -230,7 +276,8 @@ class FileBoardStore implements BoardStore {
       return last > snapped.state.sequence;
     });
     const body = kept.map(encodeRecord).join("");
-    await this.atomicWrite(LOG_FILE, body, true);
+    if (!await this.atomicWrite(LOG_FILE, body, true)) return this.lockLost();
+
     return snapped;
   }
 
@@ -242,86 +289,98 @@ class FileBoardStore implements BoardStore {
   }
 
   private async readLogRaw(): Promise<string> {
-    const file = path.join(this.rootDir, LOG_FILE);
+    return (await readBoardLog(this.rootDir)).toString("utf8");
+  }
+
+  private async maintainCheckpoint(log: VerifiedBoardLog, state: BoardState, encoded: string, command: BoardCommand): Promise<void> {
+    // Pure legacy Boards retain their original write frequency. Only the new
+    // central/V2 learning histories opt into automatic sidecar maintenance.
+    const learningHistory = (state.centralLearningBudgets?.length ?? 0) > 0 || (state.rewardV2Facts?.length ?? 0) > 0
+      || (state.collaborationV2Facts?.length ?? 0) > 0 || (state.collaborationV2Archives?.length ?? 0) > 0;
+    if (!learningHistory) return;
+
+    const watermark = { byteLength: log.byteLength + Buffer.byteLength(encoded), physicalSequence: log.physicalSequence + 1 };
+    if (log.kind !== "append" || !log.checkpointAllowed || !checkpointDue(watermark, log.checkpoint,
+      this.options.checkpointPolicy ?? DEFAULT_REPLAY_CHECKPOINT_POLICY)) return;
+
     try {
-      return await readFile(file, "utf8");
-    } catch (err) {
-      if (isNotFound(err)) {
-        return "";
+      const admitted = () => this.options.commandGuard?.(command) !== false;
+      if (!admitted()) return;
+
+      const digest = log.digestPrefix?.digest.copy() ?? createHash("sha256");
+      const remainder = log.bytes.subarray(log.digestPrefix?.byteLength ?? 0);
+      const prefix = { ...watermark, logicalSequence: state.sequence, sha256: digest.update(remainder).update(encoded, "utf8").digest("hex") };
+      const body = encodeReplayCheckpoint(state, prefix, log.baseSnapshot);
+      if (await this.writeCheckpoint(body, admitted)) {
+        boardReplayMemo.checkpointWritten(this.rootDir, watermark, replayCheckpointStamp(this.rootDir));
       }
-      throw err;
+    } catch {
+      // The original append has definitely succeeded. A disposable index failure
+      // must not report that command as failed or induce a second paid action.
+      // Append errors never enter this maintenance-only catch.
+      boardReplayMemo.forget(this.rootDir);
     }
   }
 
-  private async readSnapshot(): Promise<StoreLoadResult | undefined> {
-    const file = path.join(this.rootDir, SNAP_FILE);
-    if (!existsSync(file)) {
-      return undefined;
-    }
-    let parsed: SnapshotFile;
+  private async writeCheckpoint(body: string, admitted: () => boolean): Promise<boolean> {
+    if (!admitted() || !ownsLock(this.lock)) return false;
+
+    const target = path.join(this.rootDir, REPLAY_CHECKPOINT_FILE);
+    const temporary = `${target}.tmp-${lockToken(this.lock)}-${++this.checkpointWriteSequence}`;
+    let phase: "not_created" | "created" | "published" = "not_created";
+
     try {
-      const raw = readFileSync(file, "utf8");
-      parsed = JSON.parse(raw) as SnapshotFile;
-    } catch {
-      // A snapshot we cannot read or parse is a dropped cache, not a fatal fault:
-      // return `undefined` so `load` replays the authoritative log and rebuilds the
-      // state. This is the same recovery as a checksum mismatch below — the snapshot
-      // is never the source of truth, so losing it costs a replay, not correctness.
-      return undefined;
+      const file = await open(temporary, "wx");
+      phase = "created";
+
+      try {
+        if (!admitted() || !ownsLock(this.lock)) return false;
+        await file.writeFile(body, "utf8");
+      } finally { await file.close(); }
+
+      if (!admitted() || !ownsLock(this.lock)) return false;
+
+      renameSync(temporary, target);
+      phase = "published";
+      return true;
+    } finally {
+      if (phase === "created") {
+        try { await unlink(temporary); }
+        catch { /* Best effort, only this attempt's exclusive temporary file; the original append result stays authoritative. */ }
+      }
     }
-    const checksum = sha256Hex(
-      canonicalJson({
-        generation: parsed.generation,
-        sequence: parsed.sequence,
-        state: parsed.state,
-      }),
-    );
-    if (checksum !== parsed.checksum) {
-      return undefined;
-    }
-    // P2-4: a snapshot whose fieldings/feedbacks elements fail the decode guards is
-    // corrupt exactly like a checksum mismatch — drop it and let `load` replay the
-    // authoritative log, which rebuilds both ledgers from real commands.
-    const normalized = normalizeBoardState(parsed.state);
-    if (normalized === undefined) {
-      return undefined;
-    }
-    this.generation = parsed.generation;
-    return { ok: true, state: normalized, generation: parsed.generation };
   }
 
   private async atomicWrite(
     name: string,
     value: unknown,
     raw = false,
-  ): Promise<void> {
+  ): Promise<boolean> {
+    boardReplayMemo.forget(this.rootDir);
     await mkdir(this.rootDir, { recursive: true });
+
+    if (!ownsLock(this.lock)) return false;
+
     const target = path.join(this.rootDir, name);
-    const tmp = `${target}.tmp`;
+    const tmp = `${target}.tmp-${lockToken(this.lock)}`;
     const body = raw ? String(value) : `${JSON.stringify(value)}\n`;
+
     await writeFile(tmp, body, "utf8");
-    await rename(tmp, target);
-  }
-}
 
-function nextLogSequence(raw: string): number {
-  const parsed = decodeLog(raw);
-  if (!parsed.ok) {
-    return 1;
-  }
-  if (parsed.records.length === 0) {
-    return 1;
-  }
-  return parsed.records[parsed.records.length - 1]!.sequence + 1;
-}
+    if (!ownsLock(this.lock)) return false;
 
-function isNotFound(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code: unknown }).code === "ENOENT"
-  );
+    renameSync(tmp, target);
+
+    return true;
+  }
+
+  private lockLost(): StoreLoadErr {
+    return { ok: false, reason: "multi_writer", detail: "Board writer ownership or recovery fence changed before durable write" };
+  }
+
+  private tornTail(): StoreLoadErr {
+    return { ok: false, reason: "torn_write", detail: "Board log has an incomplete tail; explicitly repair it before writing" };
+  }
 }
 
 /**
