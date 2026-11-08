@@ -47,6 +47,7 @@ test("a relative Location resolves against the current URL and is then judged", 
     status: 302,
     hops: 0,
   });
+
   assert.deepEqual(sameHost, { kind: "follow", url: "https://example.com/b" });
 
   // The dangerous case: `//evil.test/x` is scheme-relative, and joining it by
@@ -57,6 +58,7 @@ test("a relative Location resolves against the current URL and is then judged", 
     status: 302,
     hops: 0,
   });
+
   assert.equal(crossHost.kind, "report");
 });
 
@@ -67,7 +69,9 @@ test("a cross-host hop is reported with both URLs, never followed", () => {
     status: 301,
     hops: 0,
   });
+
   assert.equal(decision.kind, "report");
+
   if (decision.kind === "report") {
     assert.equal(decision.refusal.from, "https://example.com/a");
     assert.equal(decision.refusal.to, "https://evil.test/a");
@@ -82,7 +86,9 @@ test("a 3xx with no Location is reported as itself, not disguised as a hop limit
     status: 302,
     hops: 0,
   });
+
   assert.equal(decision.kind, "report");
+
   if (decision.kind === "report") {
     assert.equal(decision.refusal.status, 302);
   }
@@ -95,6 +101,7 @@ test("a redirect chain is capped, so a loop cannot hang the turn", () => {
     status: 302,
     hops: MAX_REDIRECT_HOPS - 1,
   });
+
   assert.equal(decision.kind, "follow");
   const exhausted = decideRedirect({
     current: "https://example.com/1",
@@ -102,6 +109,7 @@ test("a redirect chain is capped, so a loop cannot hang the turn", () => {
     status: 302,
     hops: MAX_REDIRECT_HOPS,
   });
+
   assert.deepEqual(exhausted, { kind: "exhausted", hops: MAX_REDIRECT_HOPS });
   void decision;
 });
@@ -119,6 +127,7 @@ test("a cache hit is served until its TTL, then misses — on the caller's clock
   let now = 1_000;
   const cache = createFetchCache({ nowMs: () => now, ttlMs: 100 });
   const entry = { body: "hello", contentType: "text/plain", finalUrl: "https://x.test/", status: 200, bytes: 5 };
+
   cache.set("https://x.test/", entry);
   assert.equal(cache.get("https://x.test/")?.body, "hello");
   now = 1_099;
@@ -130,6 +139,7 @@ test("a cache hit is served until its TTL, then misses — on the caller's clock
 
 test("a cached entry is never served stale, and an oversize entry is refused at the door", () => {
   const cache = createFetchCache({ nowMs: () => 0, maxBytes: 100 });
+
   cache.set("https://x.test/big", {
     body: "x".repeat(500),
     contentType: "text/plain",
@@ -146,6 +156,7 @@ test("the least recently used entry is evicted first", () => {
   const put = (name: string, bytes: number): void => {
     cache.set(name, { body: name, contentType: "text/plain", finalUrl: name, status: 200, bytes });
   };
+
   put("a", 40);
   put("b", 40);
   // Touching `a` makes `b` the least recently used, so `b` is what goes.

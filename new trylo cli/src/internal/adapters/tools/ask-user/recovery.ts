@@ -5,15 +5,19 @@ import type { Transcript, TranscriptItem } from "../../../protocol/transcript.js
 export function restoreQuestions(transcript: Transcript): ReadonlyArray<AskUserRequest> {
   const calls = new Map<string, Extract<TranscriptItem, { kind: "tool_call" }>>();
   const requests = new Map<string, AskUserRequest>();
+
   for (const item of transcript) {
     if (item.kind === "tool_call") calls.set(item.toolCallId, item);
+
     if (item.kind === "tool_result" && item.outcome === "succeeded" && ["ask_user_question", "request_user_input_async"].includes(item.name)) {
       const call = calls.get(item.toolCallId);
       const id = /^question request (\S+) recorded:/.exec(item.output)?.[1];
       const parsed = call === undefined ? undefined : validateAskUserInput(call.arguments);
       if (id !== undefined && parsed?.ok === true) requests.set(id, { requestId: id, questions: parsed.questions, status: "pending" });
     }
+
     if (item.kind !== "user") continue;
+
     const answer = /^User answer for request (\S+): ([^\n]+)\n/.exec(item.text);
     if (answer?.[1] !== undefined && answer[2] !== undefined) {
       try {
@@ -24,9 +28,11 @@ export function restoreQuestions(transcript: Transcript): ReadonlyArray<AskUserR
         }
       } catch { /* Ordinary user prose is never promoted into an answer fact. */ }
     }
+
     const cancelled = /^User cancelled request (\S+)$/.exec(item.text.replace(/: input closed$/, ""))?.[1];
     const request = cancelled === undefined ? undefined : requests.get(cancelled);
     if (request !== undefined) requests.set(request.requestId, { ...request, status: "cancelled" });
   }
+
   return [...requests.values()].filter(request => request.status === "pending").concat([...requests.values()].filter(request => request.status !== "pending").slice(-64));
 }

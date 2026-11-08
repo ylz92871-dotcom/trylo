@@ -3,8 +3,10 @@ import { cancelToolPorts } from "../../ports/tool-cancellation.js";
 import type { McpResource, McpResourceFailureCode, McpResourceTemplate } from "../../ports/mcp-client.js";
 import type { ToolBinding, ToolCallRequest, ToolOutcome, ToolPort } from "../../ports/tools.js";
 import { renderResourceContents } from "../../mcp/resources.js";
-import { DEFAULT_MCP_CALL_TIMEOUT_MS, MCP_OUTPUT_LIMITS } from "./mount.js";
+import { MCP_OUTPUT_LIMITS } from "./mount.js";
+import { DEFAULT_MCP_LIST_TIMEOUT_MS } from "../../ports/mcp-client.js";
 import type { McpResourceCall, McpRuntimeServer } from "./pool.js";
+import { brokerToolOutcome } from "./broker-errors.js";
 
 /**
  * MCP resources as model-callable tools.
@@ -75,7 +77,7 @@ function binding(name: string, description: string, parameters: JsonObject): Too
     sideEffect: "external",
     parameters,
     needsApproval: true,
-    timeoutMs: DEFAULT_MCP_CALL_TIMEOUT_MS,
+    ...(name === MCP_READ_RESOURCE_TOOL ? {} : { timeoutMs: DEFAULT_MCP_LIST_TIMEOUT_MS }),
     outputLimits: MCP_OUTPUT_LIMITS,
   };
 }
@@ -136,6 +138,7 @@ async function fetchPage(
     if (!result.ok) {
       return { ok: false, code: result.code, detail: result.detail };
     }
+
     return {
       ok: true,
       value: {
@@ -144,10 +147,12 @@ async function fetchPage(
       },
     };
   }
+
   const result = await server.listResourceTemplates(cursor, timeoutMs);
   if (!result.ok) {
     return { ok: false, code: result.code, detail: result.detail };
   }
+
   return {
     ok: true,
     value: {
@@ -167,15 +172,19 @@ function readListScope(args: JsonObject):
   | { readonly ok: false; readonly detail: string } {
   const server = readStringArgument(args, "server");
   const cursor = readStringArgument(args, "cursor");
+
   if ("server" in args && server === undefined) {
     return { ok: false, detail: "server must be a string when present" };
   }
+
   if ("cursor" in args && cursor === undefined) {
     return { ok: false, detail: "cursor must be a string when present" };
   }
+
   if (server === undefined && cursor !== undefined) {
     return { ok: false, detail: "cursor can only be used when a server is specified" };
   }
+
   return { ok: true, ...(server === undefined ? {} : { server }), ...(cursor === undefined ? {} : { cursor }) };
 }
 
@@ -195,15 +204,19 @@ function resourceEntryJson(
   uri: string,
 ): JsonObject {
   const fields: Record<string, JsonValue> = { server: serverId, uri, name: entry.name };
+
   if (entry.title !== undefined) {
     fields["title"] = entry.title;
   }
+
   if (entry.description !== undefined) {
     fields["description"] = entry.description;
   }
+
   if (entry.mimeType !== undefined) {
     fields["mimeType"] = entry.mimeType;
   }
+
   return fields;
 }
 
@@ -215,12 +228,15 @@ function toOutcome(code: string, detail: string): ToolOutcome {
   if (code === "cancelled") {
     return { outcome: "cancelled" };
   }
+
   if (code === "timeout") {
     return { outcome: "unknown", code: "mcp_timeout", message: detail };
   }
+
   if (code === "child_crashed") {
     return { outcome: "unknown", code: "mcp_child_crashed", message: detail };
   }
+
   return { outcome: "error", code: mcpResourceFailureCode(code), message: detail };
 }
 
@@ -236,9 +252,11 @@ export function createMcpResourcePort(servers: ReadonlyArray<McpRuntimeServer>):
     if (!scope.ok) {
       return invalidArguments(scope.detail);
     }
+
     if (signal.aborted) {
       return { outcome: "cancelled" };
     }
+
     const targets =
       scope.server === undefined
         ? servers
@@ -253,6 +271,7 @@ export function createMcpResourcePort(servers: ReadonlyArray<McpRuntimeServer>):
         message: `mcp_unknown_server:${scope.server ?? ""} is not connected`,
       };
     }
+
     if (targets.length === 0) {
       return {
         outcome: "error",
@@ -260,35 +279,45 @@ export function createMcpResourcePort(servers: ReadonlyArray<McpRuntimeServer>):
         message: "mcp_unknown_server:no MCP servers are connected",
       };
     }
+
     const controller = new AbortController();
     const onAbort = (): void => controller.abort();
+
     signal.addEventListener("abort", onAbort, { once: true });
+
     try {
       const listed: JsonObject[] = [];
       const failed: FailedServer[] = [];
       let nextCursor: string | undefined;
       let firstFailure: FailedServer | undefined;
+
       for (const server of targets) {
         if (controller.signal.aborted) {
           return { outcome: "cancelled" };
         }
-        const page = await fetchPage(server, kind, scope.cursor, DEFAULT_MCP_CALL_TIMEOUT_MS);
+
+        const page = await fetchPage(server, kind, scope.cursor, DEFAULT_MCP_LIST_TIMEOUT_MS);
         if (!page.ok) {
           if (page.code === "cancelled") {
             return { outcome: "cancelled" };
           }
+
           const failure: FailedServer = { server: server.serverId, code: mcpResourceFailureCode(page.code) };
+
           failed.push(failure);
           firstFailure ??= failure;
           continue;
         }
+
         for (const item of page.value.entries) {
           listed.push(resourceEntryJson(server.serverId, item.entry, item.uri));
         }
+
         if (scope.server !== undefined && page.value.nextCursor !== undefined) {
           nextCursor = page.value.nextCursor;
         }
       }
+
       if (listed.length === 0 && firstFailure !== undefined) {
         return {
           outcome: "error",
@@ -296,14 +325,19 @@ export function createMcpResourcePort(servers: ReadonlyArray<McpRuntimeServer>):
           message: `${firstFailure.code}:${firstFailure.server} failed to list ${kind}`,
         };
       }
+
       const failedValue: Record<string, JsonValue> = {};
+
       if (failed.length > 0) {
         failedValue["failed"] = failed.map((item) => ({ server: item.server, code: item.code }));
       }
+
       const cursorValue: Record<string, JsonValue> = {};
+
       if (nextCursor !== undefined) {
         cursorValue["nextCursor"] = nextCursor;
       }
+
       return {
         outcome: "result",
         value: {
@@ -319,15 +353,17 @@ export function createMcpResourcePort(servers: ReadonlyArray<McpRuntimeServer>):
     }
   }
 
-  async function read(args: JsonObject, timeoutMs: number, signal: AbortSignal): Promise<ToolOutcome> {
+  async function read(args: JsonObject, timeoutMs: number | undefined, signal: AbortSignal): Promise<ToolOutcome> {
     const serverId = readStringArgument(args, "server");
     const uri = readStringArgument(args, "uri");
     if (serverId === undefined || serverId.length === 0 || uri === undefined || uri.length === 0) {
       return invalidArguments("read needs a non-empty server and uri");
     }
+
     if (signal.aborted) {
       return { outcome: "cancelled" };
     }
+
     const server = findServer(servers, serverId);
     if (server === undefined) {
       return {
@@ -336,15 +372,20 @@ export function createMcpResourcePort(servers: ReadonlyArray<McpRuntimeServer>):
         message: `mcp_unknown_server:${serverId} is not connected`,
       };
     }
+
     const controller = new AbortController();
     const onAbort = (): void => controller.abort();
+
     signal.addEventListener("abort", onAbort, { once: true });
+
     try {
       const result = await server.readResource(uri, timeoutMs, controller.signal);
       if (!result.ok) {
         return toOutcome(result.code, result.detail);
       }
+
       const rendered = renderResourceContents(result.value.contents, MCP_OUTPUT_LIMITS.maxBytes);
+
       return {
         outcome: "result",
         value: { server: serverId, uri, parts: result.value.contents.length },
@@ -352,6 +393,8 @@ export function createMcpResourcePort(servers: ReadonlyArray<McpRuntimeServer>):
         truncated: rendered.truncated,
       };
     } catch (error) {
+      const transport = brokerToolOutcome(error);
+      if (transport !== undefined) return transport;
       const detail = error instanceof Error ? error.message : "mcp_adapter_exception";
       return { outcome: "unknown", code: "mcp_adapter_exception", message: detail };
     } finally {
@@ -370,21 +413,31 @@ export function createMcpResourcePort(servers: ReadonlyArray<McpRuntimeServer>):
           message: `mcp_unknown_tool:${call.name} is not a resource tool`,
         };
       }
+
       if (signal.aborted) {
         return { outcome: "cancelled" };
       }
+
       const controller = new AbortController();
       const onAbort = (): void => controller.abort();
+
       signal.addEventListener("abort", onAbort, { once: true });
       inFlight.set(call.toolCallId, controller);
+
       try {
         if (call.name === MCP_LIST_RESOURCES_TOOL) {
           return await list("resources", call.arguments, controller.signal);
         }
+
         if (call.name === MCP_LIST_RESOURCE_TEMPLATES_TOOL) {
           return await list("templates", call.arguments, controller.signal);
         }
-        return await read(call.arguments, DEFAULT_MCP_CALL_TIMEOUT_MS, controller.signal);
+
+        return await read(call.arguments, undefined, controller.signal);
+      } catch (error) {
+        const transport = brokerToolOutcome(error);
+        if (transport !== undefined) return transport;
+        throw error;
       } finally {
         inFlight.delete(call.toolCallId);
         signal.removeEventListener("abort", onAbort);

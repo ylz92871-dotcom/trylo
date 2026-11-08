@@ -97,6 +97,7 @@ export function linkedSignal(
     }
   };
   const sources: ReadonlyArray<AbortSignal> = [turnSignal, own];
+
   for (const source of sources) {
     if (source.aborted) {
       abort();
@@ -104,6 +105,7 @@ export function linkedSignal(
     }
     source.addEventListener("abort", abort, { once: true });
   }
+
   return {
     signal: controller.signal,
     release: () => {

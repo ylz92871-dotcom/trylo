@@ -45,16 +45,21 @@ export function scanSse(buffer: string, open: SseOpenState = freshSseOpen): SseS
   const events: SseEvent[] = [];
   let rest = buffer;
   let current = open;
+
   for (;;) {
     const newline = rest.indexOf("\n");
     if (newline === -1) {
       break;
     }
+
     let line = rest.slice(0, newline);
+
     rest = rest.slice(newline + 1);
+
     if (line.endsWith("\r")) {
       line = line.slice(0, -1);
     }
+
     if (line.length === 0) {
       const dispatched = dispatch(current);
       if (dispatched !== undefined) {
@@ -63,12 +68,15 @@ export function scanSse(buffer: string, open: SseOpenState = freshSseOpen): SseS
       current = freshSseOpen;
       continue;
     }
+
     if (line.startsWith(":")) {
       // A comment (often a keep-alive). Produces nothing.
       continue;
     }
+
     current = addField(current, line);
   }
+
   return { events, rest, open: current };
 }
 
@@ -93,11 +101,14 @@ function addField(open: SseOpenState, line: string): SseOpenState {
   if (value.startsWith(" ")) {
     value = value.slice(1);
   }
+
   if (field === "event") {
     return { event: value, dataLines: open.dataLines };
   }
+
   if (field === "data") {
     return { event: open.event, dataLines: [...open.dataLines, value] };
   }
+
   return open;
 }

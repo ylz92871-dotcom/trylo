@@ -52,6 +52,7 @@ test("ask_user_question validates shape before creating anything", async () => {
   const port = createAskUserTools();
   const signal = new AbortController().signal;
   const bad = await port.execute(call("t1", "ask_user_question", { questions: [] }), signal);
+
   assert.equal(bad.outcome, "error");
   const duplicate = await port.execute(
     call("t2", "ask_user_question", {
@@ -76,6 +77,7 @@ test("ask_user_question validates shape before creating anything", async () => {
     }),
     signal,
   );
+
   assert.equal(duplicate.outcome, "error");
 });
 
@@ -84,6 +86,7 @@ test("ask then answer drives the next step; late and duplicate answers are rejec
   const signal = new AbortController().signal;
   const asked = await port.execute(call("t1", "ask_user_question", questions()), signal);
   const requestId = resultValue(asked)["requestId"];
+
   assert.equal(typeof requestId, "string");
   assert.match(requestId as string, /^ask-/);
 
@@ -95,6 +98,7 @@ test("ask then answer drives the next step; late and duplicate answers are rejec
     signal,
   );
   const output = resultOutput(answered);
+
   assert.match(output, /Which auth method/);
   assert.match(output, /OAuth/);
 
@@ -105,22 +109,27 @@ test("ask then answer drives the next step; late and duplicate answers are rejec
     }),
     signal,
   );
+
   assert.equal(errorCode(late), "late_answer_rejected");
 
   const unknown = await port.execute(
     call("t4", "answer_user_question", { requestId: "ask-999", answers: { auth: "OAuth" } }),
     signal,
   );
+
   assert.equal(unknown.outcome, "error");
 });
 
 test("answers carry input only: bindings are read-only and approval-free", () => {
   const port = createAskUserTools();
+
   for (const binding of port.snapshot()) {
     assert.equal(binding.sideEffect, "read_only");
     assert.equal(binding.needsApproval, false);
   }
+
   const names = port.snapshot().map((binding) => binding.name);
+
   assert.ok(names.includes("ask_user_question"));
   assert.ok(names.includes("answer_user_question"));
   assert.ok(names.includes("request_user_input_async"));
@@ -144,5 +153,6 @@ test("async ask returns immediately with the same validation", async () => {
   };
   const asked = await port.execute(call("t1", "request_user_input_async", single), signal);
   const output = resultOutput(asked);
+
   assert.match(output, /continue working/);
 });

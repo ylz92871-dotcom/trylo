@@ -23,15 +23,20 @@ test("add, delete and update hunks parse in one patch, in order", () => {
   const parsed = parseApplyPatch(
     "*** Begin Patch\n*** Add File: one.txt\n+one\n*** Delete File: gone.txt\n*** Update File: src.ts\n@@\n-old\n+new\n*** End Patch",
   );
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   assert.equal(parsed.hunks.length, 3);
   assert.equal(parsed.hunks[0]?.kind, "add");
   assert.equal(parsed.hunks[1]?.kind, "delete");
   const update = parsed.hunks[2];
+
   assert.equal(update?.kind, "update");
+
   if (update?.kind === "update") {
     assert.equal(update.moveTo, undefined);
     assert.equal(update.chunks.length, 1);
@@ -44,12 +49,17 @@ test("a move destination is carried on the update hunk", () => {
   const parsed = parseApplyPatch(
     "*** Begin Patch\n*** Update File: src.txt\n*** Move to: dst.txt\n@@\n-old\n+new\n*** End Patch",
   );
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   const update = parsed.hunks[0];
+
   assert.equal(update?.kind, "update");
+
   if (update?.kind === "update") {
     assert.equal(update.path, "src.txt");
     assert.equal(update.moveTo, "dst.txt");
@@ -94,12 +104,17 @@ test("context lines keep their text on both sides of a chunk", () => {
   const parsed = parseApplyPatch(
     "*** Begin Patch\n*** Update File: f.py\n@@ def f():\n     pass\n+    return 1\n*** End Patch",
   );
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   const update = parsed.hunks[0];
+
   assert.equal(update?.kind, "update");
+
   if (update?.kind === "update") {
     assert.equal(update.chunks[0]?.changeContext, "def f():");
     assert.deepEqual(update.chunks[0]?.oldLines, ["    pass"]);
@@ -110,10 +125,13 @@ test("context lines keep their text on both sides of a chunk", () => {
 
 test("an end-of-file marker sticks to the last chunk", () => {
   const parsed = parseApplyPatch("*** Begin Patch\n*** Update File: f.txt\n@@\n+tail\n*** End of File\n*** End Patch");
+
   assert.equal(parsed.ok, true);
+
   if (!parsed.ok) {
     return;
   }
+
   const update = parsed.hunks[0];
   if (update?.kind === "update") {
     assert.equal(update.chunks[0]?.endOfFile, true);
@@ -142,7 +160,9 @@ test("a move marker after chunks started is refused, not silently kept", () => {
   const parsed = parseApplyPatch(
     "*** Begin Patch\n*** Update File: a.txt\n@@\n-x\n+y\n*** Move to: b.txt\n*** End Patch",
   );
+
   assert.equal(parsed.ok, false);
+
   if (!parsed.ok) {
     assert.equal(parsed.code, "invalid_hunk");
   }
@@ -167,9 +187,12 @@ test("an environment-id header is refused as unknown: no such routing exists her
 
 test("blank lines after the end marker are tolerated, content is not", () => {
   const trailing = parseApplyPatch("*** Begin Patch\n*** End Patch\n\n");
+
   assert.equal(trailing.ok, true);
   const dirty = parseApplyPatch("*** Begin Patch\n*** End Patch\nleftover\n");
+
   assert.equal(dirty.ok, false);
+
   if (!dirty.ok) {
     assert.equal(dirty.code, "invalid_patch");
   }

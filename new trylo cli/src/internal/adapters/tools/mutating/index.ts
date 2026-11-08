@@ -67,6 +67,7 @@ export function createMutatingTools(config: MutatingToolsConfig): ToolPort {
   const spawner = config.spawner ?? createNodeSpawner();
   const edits = { writeQueue: queue };
   const cancellations = createCallCancellationRegistry();
+
   return {
     snapshot() {
       const denied = config.visibility;
@@ -78,16 +79,20 @@ export function createMutatingTools(config: MutatingToolsConfig): ToolPort {
         if (!verdict.ok) {
           return { outcome: "error", code: verdict.code, message: verdict.message };
         }
+
         const planned = planMutation(config.sandbox.policy, call, config.shellMode);
         if (!planned.ok) {
           return { outcome: "error", code: planned.code, message: planned.message };
         }
+
         if (call.name === WRITE_FILE_TOOL) {
           return await executeWriteFile(edits, call, planned.plan, signal);
         }
+
         if (call.name === EDIT_FILE_TOOL) {
           return await executeEditFile(edits, call, planned.plan, signal);
         }
+
         if (call.name === NOTEBOOK_EDIT_TOOL) {
           // WP13 (L13): cell edits write through the same atomic queue.
           return await executeNotebookEdit(
@@ -100,9 +105,11 @@ export function createMutatingTools(config: MutatingToolsConfig): ToolPort {
             signal,
           );
         }
+
         if (call.name === APPLY_PATCH_TOOL) {
           return await executeApplyPatch({ writeQueue: queue, policy: config.sandbox.policy }, call, planned.plan, signal);
         }
+
         if (call.name === RUN_SHELL_TOOL) {
           // The only mutating tool that owns something stoppable: a process tree.
           // It runs under a signal that fires on either the turn's cancel or this
@@ -110,6 +117,7 @@ export function createMutatingTools(config: MutatingToolsConfig): ToolPort {
           // command instead of only the turn.
           const own = cancellations.begin(call.toolCallId);
           const link = linkedSignal(signal, own.signal);
+
           try {
             return await executeShell(
               {
@@ -127,6 +135,7 @@ export function createMutatingTools(config: MutatingToolsConfig): ToolPort {
             cancellations.end(call.toolCallId);
           }
         }
+
         return { outcome: "error", code: "unknown_tool", message: `unknown_tool:${call.name}` };
       } catch (error) {
         if (signal.aborted) return { outcome: "cancelled" };

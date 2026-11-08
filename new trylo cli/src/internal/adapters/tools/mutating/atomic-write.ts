@@ -35,6 +35,7 @@ export function createWriteQueue(): WriteQueue {
       const previous = chains.get(absolutePath) ?? Promise.resolve();
       const run = () => job();
       const next = previous.then(run, run);
+
       chains.set(
         absolutePath,
         next.then(
@@ -42,6 +43,7 @@ export function createWriteQueue(): WriteQueue {
           () => undefined,
         ),
       );
+
       return next;
     },
   };
@@ -74,6 +76,7 @@ export function writeFileAtomicallySync(absolutePath: string, content: string): 
   const bytes = Buffer.byteLength(content, "utf8");
   const mode = existsSync(absolutePath) ? "overwritten" : "created";
   const temporary = path.join(path.dirname(absolutePath), `.trylo-write-${randomUUID()}.tmp`);
+
   try {
     // `wx` rather than `w`: the temporary name is random, so an existing file
     // means something is wrong, and truncating someone else's file would be
@@ -84,6 +87,7 @@ export function writeFileAtomicallySync(absolutePath: string, content: string): 
     discard(temporary);
     throw err;
   }
+
   return { absolutePath, bytes, mode };
 }
 

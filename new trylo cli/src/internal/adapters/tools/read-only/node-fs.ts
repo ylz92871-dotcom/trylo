@@ -15,6 +15,7 @@ export function createNodeFileSystemReader(): FileSystemReader {
     async *readFileChunks(absolutePath, signal) {
       signal.throwIfAborted();
       const stream = createReadStream(absolutePath, { highWaterMark: 65_536, signal });
+
       try {
         for await (const chunk of stream) {
           signal.throwIfAborted();
@@ -42,16 +43,20 @@ export function createNodeFileSystemReader(): FileSystemReader {
     async readFileUtf8Bounded(absolutePath, maxBytes, signal) {
       signal.throwIfAborted();
       const file = await open(absolutePath, "r");
+
       try {
         const buffer = Buffer.alloc(maxBytes + 1);
         let used = 0;
+
         while (used < buffer.length) {
           signal.throwIfAborted();
           const { bytesRead } = await file.read(buffer, used, buffer.length - used, null);
           if (bytesRead === 0) break;
           used += bytesRead;
         }
+
         signal.throwIfAborted();
+
         return used > maxBytes ? undefined : buffer.toString("utf8", 0, used);
       } finally {
         await file.close();

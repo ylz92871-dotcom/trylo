@@ -49,6 +49,7 @@ test("a body read that drops mid-response is an unreachable failure, not a bare 
 test("a response whose body cannot be read is reported, not swallowed", async () => {
   const transport = createStreamableHttpTransport({ url: "https://example.test/mcp", headers: {} }, fetchWhoseBodyDrops());
   const failures: RemoteTransportFailure[] = [];
+
   transport.onFailure((failure) => failures.push(failure));
   transport.respond(errorResponse(1, -32601, "method not found"));
   await until(() => failures.length > 0);
@@ -65,8 +66,10 @@ async function startRefusingServer(status: number): Promise<{ readonly server: S
       res.end("{}");
     })();
   });
+
   await listen(server);
   const address = server.address() as AddressInfo;
+
   return { server, url: `http://127.0.0.1:${address.port}/mcp` };
 }
 
@@ -75,6 +78,7 @@ test("streamable notify and respond report a refused POST as write_failed", asyn
   try {
     const transport = createStreamableHttpTransport({ url, headers: {} }, fetch);
     const failures: RemoteTransportFailure[] = [];
+
     transport.onFailure((failure) => failures.push(failure));
     transport.notify(notificationMessage("initialized"));
     await until(() => failures.length > 0);
@@ -102,6 +106,7 @@ async function startRefusingSseServer(): Promise<{ readonly server: Server; read
         stream = res;
         return;
       }
+
       const body = JSON.parse(await readBody(req)) as { method?: string; id?: number | string };
       if (body.method === "initialize") {
         // The handshake reply travels on the stream and the POST itself is a
@@ -111,12 +116,15 @@ async function startRefusingSseServer(): Promise<{ readonly server: Server; read
         res.end("{}");
         return;
       }
+
       res.writeHead(500, { "content-type": "application/json" });
       res.end("{}");
     })();
   });
+
   await listen(server);
   const address = server.address() as AddressInfo;
+
   return { server, url: `http://127.0.0.1:${address.port}/sse` };
 }
 
@@ -125,6 +133,7 @@ test("legacy SSE notify and respond report a refused POST as write_failed", asyn
   try {
     const transport = createLegacySseTransport({ url, headers: {} }, fetch);
     const failures: RemoteTransportFailure[] = [];
+
     transport.onFailure((failure) => failures.push(failure));
     // The initialize request awaits the endpoint event, so both deliveries
     // below happen with a POST target in hand. Bounded the same way the rest
@@ -133,6 +142,7 @@ test("legacy SSE notify and respond report a refused POST as write_failed", asyn
       transport.request(requestMessage(1, "initialize")),
       rejectAfter<JsonRpcResponse>(2_000, "the initialize reply never arrived on the stream"),
     ]);
+
     assert.equal(reply.jsonrpc, "2.0");
     transport.notify(notificationMessage("initialized"));
     await until(() => failures.length > 0);

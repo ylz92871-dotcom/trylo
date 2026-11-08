@@ -1,13 +1,13 @@
 import type { ToolCallRequest, ToolOutcome } from "../../../ports/tools.js";
 import { ShellIsolationError } from "../../../ports/isolation.js";
 import { errorCodeOf } from "../../../contract/index.js";
-import { DEFAULT_MAX_SHELL_OUTPUT_BYTES, DEFAULT_MAX_SHELL_OUTPUT_LINES, DEFAULT_SHELL_TIMEOUT_MS } from "../../sandbox/policy.js";
+import { DEFAULT_MAX_SHELL_OUTPUT_BYTES, DEFAULT_MAX_SHELL_OUTPUT_LINES } from "../../sandbox/policy.js";
 import type { MutationPlan, ShellPlan, ShellStep } from "../../sandbox/planner.js";
 import { readRunInBackground, startBackgroundShell } from "./background-shell.js";
 import type { ShellSpawner } from "./shell-spawn.js";
 import type { ProcessSessionRegistry } from "../../process-session/session-registry.js";
 import { publishShellStdout, type StdoutFileWriter } from "./shell-stdout-file.js";
-import { MAX_TIMEOUT_MS, MIN_TIMEOUT_MS, timeoutRecoveryHelp } from "./shell-timeout-policy.js";
+import { MIN_TIMEOUT_MS, timeoutRecoveryHelp } from "./shell-timeout-policy.js";
 import { truncateOutput } from "./output-limits.js";
 
 /**
@@ -26,7 +26,7 @@ import { truncateOutput } from "./output-limits.js";
  * through the same tokenizer and the same refusal rules on the way in.
  */
 
-export { MAX_TIMEOUT_MS, MIN_TIMEOUT_MS } from "./shell-timeout-policy.js";
+export { MIN_TIMEOUT_MS } from "./shell-timeout-policy.js";
 
 export type ShellRunnerConfig = {
   readonly spawner: ShellSpawner;
@@ -80,10 +80,12 @@ export function readTimeoutArgument(request: ToolCallRequest): number | undefine
 function describeStep(step: ShellStep): string {
   const parts = [step.argv.join(" ")];
   let receiver = step.pipeTo;
+
   while (receiver !== undefined) {
     parts.push(receiver.argv.join(" "));
     receiver = receiver.pipeTo;
   }
+
   return parts.join(" | ");
 }
 
@@ -115,18 +117,22 @@ export async function executeShell(
   if (!isShellPlan(plan)) {
     return { outcome: "error", code: "invalid_arguments", message: "run_shell received a foreign plan" };
   }
+
   if (signal.aborted) {
     return { outcome: "cancelled" };
   }
+
   const requested = readTimeoutArgument(request);
-  if (requested !== undefined && (requested < MIN_TIMEOUT_MS || requested > MAX_TIMEOUT_MS)) {
+  if (request.arguments["timeoutMs"] !== undefined && (requested === undefined || !Number.isSafeInteger(requested) || requested < MIN_TIMEOUT_MS)) {
     return {
       outcome: "error",
       code: "invalid_arguments",
-      message: `run_shell timeoutMs must be between ${MIN_TIMEOUT_MS} and ${MAX_TIMEOUT_MS}`,
+      message: `run_shell timeoutMs must be a positive safe integer in milliseconds`,
     };
   }
-  const timeoutMs = requested ?? config.defaultTimeoutMs ?? DEFAULT_SHELL_TIMEOUT_MS;
+
+  const timeoutMs = requested ?? config.defaultTimeoutMs;
+
   if (readRunInBackground(request) === true) {
     // Checked after the plan and the abort, so a background command is still one
     // the sandbox approved and still refuses to start on an aborted turn.
@@ -140,16 +146,24 @@ export async function executeShell(
       signal,
     );
   }
+
   const steps = plan.steps.length > 0 ? plan.steps : [{ executable: plan.executable, argv: plan.argv, shape: plan.shape }];
+
   if (plan.stdoutFile === undefined) return runSteps(config, plan, steps, timeoutMs, signal);
+
   if (config.stdoutWriter === undefined) return { outcome: "error", code: "stdout_writer_unavailable", message: "stdoutFile writer is not mounted; no stdout file was published" };
+
   const outcome = await runSteps(config, plan, steps, timeoutMs, signal);
   if (outcome.outcome !== "result") return outcome;
+
   if (outcome.truncated) return { outcome: "error", code: "stdout_truncated", message: "stdoutFile was not published because command output was truncated; use a producer that writes its own file for large outputs" };
+
   const stdout = outcome.value["stdout"];
   if (typeof stdout !== "string") return { outcome: "error", code: "stdout_unavailable", message: "command did not return text stdout; no stdout file was published" };
+
   const written = await publishShellStdout(config.stdoutWriter, request.toolCallId, plan.stdoutFile, stdout, signal);
   if (written.outcome !== "result") return written;
+
   return { ...outcome, value: { ...outcome.value, ...written.value }, output: `${outcome.output}\n${written.output}` };
 }
 
@@ -157,10 +171,12 @@ export async function executeShell(
 function receiversOf(head: ShellStep): Array<{ readonly argv: ReadonlyArray<string>; readonly shape: ShellStep["shape"] }> {
   const receivers: Array<{ readonly argv: ReadonlyArray<string>; readonly shape: ShellStep["shape"] }> = [];
   let receiver: ShellStep | undefined = head;
+
   while (receiver !== undefined) {
     receivers.push({ argv: receiver.argv, shape: receiver.shape });
     receiver = receiver.pipeTo;
   }
+
   return receivers;
 }
 
@@ -168,7 +184,7 @@ async function runSteps(
   config: ShellRunnerConfig,
   plan: ShellPlan,
   steps: readonly ShellStep[],
-  timeoutMs: number,
+  timeoutMs: number | undefined,
   signal: AbortSignal,
 ): Promise<ToolOutcome> {
   const platform = config.platform ?? process.platform;
@@ -178,6 +194,7 @@ async function runSteps(
   let truncated = false;
   let completedSteps = 0;
   let result;
+
   for (const step of steps) {
     try {
       result = await config.spawner({
@@ -194,8 +211,10 @@ async function runSteps(
       if (signal.aborted) {
         return { outcome: "cancelled" };
       }
+
       const detail = err instanceof Error ? err.message : "spawn_error";
       const code = err instanceof ShellIsolationError ? err.code : "shell_spawn_failed";
+
       return {
         outcome: "error",
         code,
@@ -204,16 +223,20 @@ async function runSteps(
           buildOutput({ stdout, stderr, truncated }) + spawnFailureHelp(err, platform),
       };
     }
+
     if (result.aborted || signal.aborted) {
       return { outcome: "cancelled" };
     }
+
     // A sequence is one tool call. Earlier diagnostics and loss flags belong
     // to its result even when a later step succeeds or fails.
     const capturedStdout = truncateOutput(stdout + result.stdout, limits);
     const capturedStderr = truncateOutput(stderr + result.stderr, limits);
+
     stdout = capturedStdout.text;
     stderr = capturedStderr.text;
     truncated ||= result.truncated || capturedStdout.truncated || capturedStderr.truncated;
+
     if (result.timedOut) {
       // The clock killed it, not a person: a typed failure the model can act
       // on, carrying what the command managed to say
@@ -223,9 +246,10 @@ async function runSteps(
       return {
         outcome: "error",
         code: "shell_timeout",
-        message: `shell_timeout:${timeoutMs}ms exceeded by ${describeStep(step)}\n${stepFailureProgress(completedSteps, step)}\n${partial}\n${timeoutRecoveryHelp(timeoutMs)}`,
+        message: `shell_timeout:${timeoutMs === undefined ? "adapter deadline" : `${timeoutMs}ms`} exceeded by ${describeStep(step)}\n${stepFailureProgress(completedSteps, step)}\n${partial}\n${timeoutRecoveryHelp()}`,
       };
     }
+
     if (result.exitCode !== 0) {
       return {
         outcome: "error",
@@ -233,11 +257,14 @@ async function runSteps(
         message: `shell_nonzero_exit:${result.exitCode}\n${stepFailureProgress(completedSteps, step)}\n${buildOutput({ stdout, stderr, truncated })}\nThe command exited ${result.exitCode}: it failed. A command that failed is not the task being finished; inspect its output before deciding what to do next.`,
       };
     }
+
     completedSteps += 1;
   }
+
   if (result === undefined) {
     return { outcome: "error", code: "invalid_arguments", message: "run_shell requires a non-empty command" };
   }
+
   const value = {
     command: describePlan(plan),
     exitCode: result.exitCode,
@@ -246,5 +273,6 @@ async function runSteps(
     truncated,
   };
   const output = buildOutput(value);
+
   return { outcome: "result", value, output, truncated };
 }

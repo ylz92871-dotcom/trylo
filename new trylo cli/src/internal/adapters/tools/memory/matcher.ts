@@ -53,6 +53,7 @@ export function createMatcher(input: {
 }): Matcher {
   const prepare = prepareValue(input.caseSensitive, input.normalized);
   const prepared = input.queries.map(prepare);
+
   return {
     queries: input.queries,
     flagsFor(line) {
@@ -126,6 +127,7 @@ function collectWhere(
   matcher: Matcher,
 ): ReadonlyArray<RawHit> {
   const hits: RawHit[] = [];
+
   for (let index = 0; index < lineCount; index += 1) {
     if (matches(index)) {
       hits.push({
@@ -135,6 +137,7 @@ function collectWhere(
       });
     }
   }
+
   return hits;
 }
 
@@ -144,13 +147,16 @@ function withinLineHits(
   lineCount: number,
 ): ReadonlyArray<RawHit> {
   const found: RawHit[] = [];
+
   for (let start = 0; start < flags.length; start += 1) {
     if (!someTrue(flags[start] ?? [])) {
       continue;
     }
+
     const last = Math.min(start + lineCount - 1, flags.length - 1);
     const seen = (flags[start] ?? []).map(() => false);
     let end = -1;
+
     for (let index = start; index <= last; index += 1) {
       (flags[index] ?? []).forEach((flag, query) => {
         if (flag) {
@@ -162,21 +168,25 @@ function withinLineHits(
         break;
       }
     }
+
     if (end < 0) {
       continue;
     }
+
     // Shrink to the tightest range inside what we scanned: a hit reported from
     // its first line to `last` when the last query was on the second would drag
     // three lines of unrelated context into every result.
     while (end > start && !(flags[end] ?? []).some((flag) => flag)) {
       end -= 1;
     }
+
     found.push({
       matchStartIndex: start,
       matchEndIndex: end,
       matchedQueries: matcher.matchedQueries(seen),
     });
   }
+
   return found;
 }
 

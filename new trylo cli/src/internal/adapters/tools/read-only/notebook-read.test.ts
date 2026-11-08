@@ -59,7 +59,9 @@ test("cell-aware read: cell views in value, cell markup in output, no raw JSON s
   try {
     writeFileSync(join(root, "exp.ipynb"), sample());
     const outcome = await toolsFor(root).execute(callFor({ path: "exp.ipynb" }), SIGNAL);
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome === "result") {
       assert.equal(outcome.value.cellCount, 2);
       const cells = outcome.value.cells as ReadonlyArray<JsonObject>;
@@ -79,15 +81,20 @@ test("single-cell read by id; unknown ids refuse", async () => {
     writeFileSync(join(root, "exp.ipynb"), sample());
     const tools = toolsFor(root);
     const single = await tools.execute(callFor({ path: "exp.ipynb", cell_id: "m1" }), SIGNAL);
+
     assert.equal(single.outcome, "result");
+
     if (single.outcome === "result") {
       assert.equal(single.value.cellCount, 2);
       assert.equal((single.value.cells as ReadonlyArray<JsonObject>).length, 1);
       assert.ok(single.output.includes("# title"));
       assert.ok(!single.output.includes("x = 1"));
     }
+
     const missing = await tools.execute(callFor({ path: "exp.ipynb", cell_id: "zzz" }), SIGNAL);
+
     assert.equal(missing.outcome, "error");
+
     if (missing.outcome === "error") {
       assert.equal(missing.code, "cell_not_found");
     }
@@ -102,7 +109,9 @@ test("oversize notebooks refuse with a cell_id hint instead of a silent prefix",
     writeFileSync(join(root, "exp.ipynb"), sample());
     const tiny: ReadOnlyToolLimits = { ...DEFAULT_READ_ONLY_LIMITS, maxBytes: 10 };
     const outcome = await toolsFor(root, tiny).execute(callFor({ path: "exp.ipynb" }), SIGNAL);
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "notebook_too_large");
       assert.ok(outcome.message.includes("cell_id"));
@@ -118,10 +127,13 @@ test("corrupt notebooks refuse as invalid_notebook and stay byte-identical", asy
     writeFileSync(join(root, "bad.ipynb"), "{not json");
     const tools = toolsFor(root);
     const outcome = await tools.execute(callFor({ path: "bad.ipynb" }), SIGNAL);
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "invalid_notebook");
     }
+
     assert.equal(readFileSync(join(root, "bad.ipynb"), "utf8"), "{not json");
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -137,6 +149,7 @@ test("executor cancel branches, called directly: pre-aborted and abort-during-re
     writeFileSync(join(root, "exp.ipynb"), sample());
     const reader = createNodeFileSystemReader();
     const preAborted = new AbortController();
+
     preAborted.abort();
     assert.equal(
       (
@@ -157,6 +170,7 @@ test("executor cancel branches, called directly: pre-aborted and abort-during-re
         throw new Error("boom");
       },
     };
+
     assert.equal(
       (
         await executeReadNotebook(
@@ -179,24 +193,35 @@ test("non-ipynb paths, escapes, missing files, and cancellation refuse honestly"
     writeFileSync(join(root, "exp.ipynb"), sample());
     const tools = toolsFor(root);
     const notNotebook = await tools.execute(callFor({ path: "notes.txt" }), SIGNAL);
+
     assert.equal(notNotebook.outcome, "error");
+
     if (notNotebook.outcome === "error") {
       assert.equal(notNotebook.code, "invalid_arguments");
     }
+
     if (notNotebook.outcome === "error") {
       assert.equal(notNotebook.code, "invalid_arguments");
     }
+
     const outside = await tools.execute(callFor({ path: "../escape.ipynb" }), SIGNAL);
+
     assert.equal(outside.outcome, "error");
+
     if (outside.outcome === "error") {
       assert.equal(outside.code, "path_outside_workspace");
     }
+
     const missing = await tools.execute(callFor({ path: "gone.ipynb" }), SIGNAL);
+
     assert.equal(missing.outcome, "error");
+
     if (missing.outcome === "error") {
       assert.equal(missing.code, "read_failed");
     }
+
     const aborted = new AbortController();
+
     aborted.abort();
     assert.equal((await tools.execute(callFor({ path: "exp.ipynb" }), aborted.signal)).outcome, "cancelled");
   } finally {

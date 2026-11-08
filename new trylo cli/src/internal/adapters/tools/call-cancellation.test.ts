@@ -35,6 +35,7 @@ test("stopping twice is safe and stays true", () => {
 
 test("a settled call is forgotten and no longer answers to its id", () => {
   const registry = createCallCancellationRegistry();
+
   registry.begin("call-1");
   registry.end("call-1");
   assert.equal(registry.size, 0);
@@ -47,6 +48,7 @@ test("two concurrent calls are stopped independently", () => {
   const registry = createCallCancellationRegistry();
   const first = registry.begin("call-1");
   const second = registry.begin("call-2");
+
   assert.equal(registry.size, 2);
   registry.cancel("call-1");
   assert.equal(first.signal.aborted, true);
@@ -58,6 +60,7 @@ test("the linked signal fires when the turn is cancelled", () => {
   const turn = new AbortController();
   const own = registry.begin("call-1");
   const link = linkedSignal(turn.signal, own.signal);
+
   assert.equal(link.signal.aborted, false);
   turn.abort();
   assert.equal(link.signal.aborted, true);
@@ -69,6 +72,7 @@ test("the linked signal fires when only this call is stopped", () => {
   const turn = new AbortController();
   const own = registry.begin("call-1");
   const link = linkedSignal(turn.signal, own.signal);
+
   registry.cancel("call-1");
   assert.equal(link.signal.aborted, true);
   assert.equal(turn.signal.aborted, false, "stopping a call must not cancel the turn");
@@ -79,9 +83,11 @@ test("a turn signal already aborted when linked is honoured immediately", () => 
   // A cancel can land between the loop's check and the tool starting. Missing
   // it would leave the tool running with nobody left to stop it.
   const turn = new AbortController();
+
   turn.abort();
   const own = new AbortController();
   const link = linkedSignal(turn.signal, own.signal);
+
   assert.equal(link.signal.aborted, true);
   link.release();
 });
@@ -91,6 +97,7 @@ test("release detaches from both sources, leaving nothing behind on the turn", (
   const turn = new AbortController();
   const own = registry.begin("call-1");
   const link = linkedSignal(turn.signal, own.signal);
+
   link.release();
   // Neither source firing afterwards may reach the settled call's signal.
   assert.equal(link.signal.aborted, false);

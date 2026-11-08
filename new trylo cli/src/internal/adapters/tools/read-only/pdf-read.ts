@@ -86,12 +86,15 @@ export async function executeReadPdf(
   if (requested === undefined) {
     return fail("invalid_arguments", "read_pdf requires path");
   }
+
   if (!isPdfPath(requested)) {
     return fail("invalid_arguments", "read_pdf only reads .pdf files; use read_file for text");
   }
+
   // Parsed before the file is touched: a bad range must not cost a read.
   const pagesText = readStringArg(call.arguments, "pages");
   let range: PdfPageRange | undefined;
+
   if (pagesText !== undefined) {
     const parsed = parsePdfPageRange(pagesText);
     if (parsed === undefined) {
@@ -100,6 +103,7 @@ export async function executeReadPdf(
         `read_pdf: invalid pages ${JSON.stringify(pagesText)}; use "1-5", "3", or "3-"`,
       );
     }
+
     // Closed ranges are bounded before any file is touched. Open-ended ranges
     // ("3-") stay syntactic until the measured page count bounds them in
     // `readPageRange`; an unmeasurable count refuses there, never here.
@@ -109,20 +113,26 @@ export async function executeReadPdf(
         return fail("page_range_too_large", sized.message);
       }
     }
+
     range = parsed;
   }
+
   const verdict = resolveInsideWorkspace(config.workspaceRoot, requested, config.fileAccess, config.workspaceAlias);
   if (!verdict.ok) {
     return fail(verdict.code, verdict.code);
   }
+
   if (signal.aborted) {
     return { outcome: "cancelled" };
   }
+
   const readBytes = config.reader.readFileBytes;
   if (readBytes === undefined) {
     return fail("bytes_unavailable", "bytes_unavailable: this filesystem reader serves text only");
   }
+
   let bytes: Uint8Array;
+
   try {
     bytes = await readBytes(verdict.absolutePath, signal);
   } catch (error) {
@@ -132,23 +142,29 @@ export async function executeReadPdf(
     const detail = error instanceof Error ? error.message : "read_error";
     return fail("read_failed", `read_failed:${detail}`);
   }
+
   if (signal.aborted) {
     return { outcome: "cancelled" };
   }
+
   // Size before magic, mirroring legacy `readPDF`: an empty file is empty,
   // not "invalid", and an over-ceiling file refuses without a magic read.
   const sized = checkPdfSize(bytes.length);
   if (!sized.ok) {
     return fail(sized.code, sized.message);
   }
+
   const magic = checkPdfMagic(bytes);
   if (!magic.ok) {
     return fail(magic.code, magic.message);
   }
+
   const runner = config.runner ?? UNAVAILABLE_PDF_RUNNER;
+
   if (range === undefined) {
     return readWholeDocument(runner, requested, verdict.absolutePath, bytes, signal);
   }
+
   return readPageRange(runner, requested, verdict.absolutePath, bytes, range, signal);
 }
 
@@ -160,6 +176,7 @@ async function readWholeDocument(
   signal: AbortSignal,
 ): Promise<ToolOutcome> {
   let pageCount: number | null;
+
   try {
     pageCount = await runner.getPageCount(absolutePath);
   } catch (error) {
@@ -169,15 +186,18 @@ async function readWholeDocument(
     const detail = error instanceof Error ? error.message : "runner_error";
     return fail("page_count_failed", `page_count_failed:${detail}`);
   }
+
   if (signal.aborted) {
     return { outcome: "cancelled" };
   }
+
   if (pageCount !== null && pageCount > API_PDF_MAX_PAGES) {
     return fail(
       "pdf_too_many_pages",
       `pdf_too_many_pages: document has ${pageCount} pages (max ${API_PDF_MAX_PAGES}); read a page range with pages instead`,
     );
   }
+
   // The payload travels in the structured value for the provider wire to
   // attach (WP18聯验); the text stays a redacted summary so the transcript is
   // not taxed with megabytes of base64 every later turn. Same shape as
@@ -190,6 +210,7 @@ async function readWholeDocument(
     dataUrl: `data:application/pdf;base64,${Buffer.from(bytes).toString("base64")}`,
   };
   const summary = describePdfForLog({ path: requested, bytes: bytes.length, pageCount: pageCount ?? undefined });
+
   return { outcome: "result", value, output: `${summary} path=${JSON.stringify(requested)}`, truncated: false };
 }
 
@@ -202,6 +223,7 @@ async function readPageRange(
   signal: AbortSignal,
 ): Promise<ToolOutcome> {
   let pageCount: number | null;
+
   try {
     pageCount = await runner.getPageCount(absolutePath);
   } catch (error) {
@@ -211,9 +233,11 @@ async function readPageRange(
     const detail = error instanceof Error ? error.message : "runner_error";
     return fail("page_count_failed", `page_count_failed:${detail}`);
   }
+
   if (signal.aborted) {
     return { outcome: "cancelled" };
   }
+
   // An open-ended range without a measured count is unbounded work: refuse,
   // do not extract "whatever comes out".
   let lastPage: number;
@@ -228,12 +252,14 @@ async function readPageRange(
   } else {
     lastPage = pageCount === null ? range.lastPage : Math.min(range.lastPage, pageCount);
   }
+
   if (pageCount !== null && range.firstPage > pageCount) {
     return fail(
       "page_range_out_of_bounds",
       `page_range_out_of_bounds: pages start at ${range.firstPage} but the document has ${pageCount} pages`,
     );
   }
+
   const count = lastPage - range.firstPage + 1;
   if (count > PDF_MAX_PAGES_PER_READ) {
     return fail(
@@ -241,7 +267,9 @@ async function readPageRange(
       `page_range_too_large: ${count} pages exceed the ${PDF_MAX_PAGES_PER_READ} page ceiling per read after bounding to the document`,
     );
   }
+
   let extracted: PdfExtractResult;
+
   try {
     extracted = await runner.extractPages(absolutePath, { firstPage: range.firstPage, lastPage });
   } catch (error) {
@@ -251,12 +279,15 @@ async function readPageRange(
     const detail = error instanceof Error ? error.message : "runner_error";
     return fail("extraction_failed", `extraction_failed:${detail}`);
   }
+
   if (signal.aborted) {
     return { outcome: "cancelled" };
   }
+
   if (!extracted.ok) {
     return fail(extracted.code, extracted.message);
   }
+
   const parts: JsonValue[] = extracted.pages.map((page) => ({
     page: page.page,
     bytes: page.bytes,
@@ -271,6 +302,7 @@ async function readPageRange(
     parts,
   };
   const summary = describePdfForLog({ path: requested, bytes: bytes.length, pageCount: pageCount ?? undefined });
+
   return {
     outcome: "result",
     value,

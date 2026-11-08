@@ -52,20 +52,25 @@ test("one patch adds, updates, deletes and moves, and every file fact is reporte
       "*** End Patch",
     ].join("\n");
     const outcome = await applyPatch(toolsFor(root), patch);
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome !== "result") {
       return;
     }
+
     assert.equal(readFileSync(join(root, "new.txt"), "utf8"), "hello\n");
     assert.equal(readFileSync(join(root, "keep.ts"), "utf8"), "new\n");
     assert.equal(readFileSync(join(root, "dst.txt"), "utf8"), "line2\n");
     const value = outcome.value as { applied: Array<{ op: string; path: string }>; exact: boolean };
+
     assert.equal(value.exact, true);
     assert.deepEqual(
       value.applied.map((entry) => `${entry.op}:${entry.path}`),
       ["added:new.txt", "updated:keep.ts", "deleted:gone.txt", "moved:dst.txt"],
     );
     const facts = outcome.value["fileWrites"];
+
     assert.ok(Array.isArray(facts));
     assert.equal(facts.length, 4);
   } finally {
@@ -91,10 +96,13 @@ test("a later mismatch keeps the earlier file and names both sides", async () =>
       "*** End Patch",
     ].join("\n");
     const outcome = await applyPatch(toolsFor(root), patch);
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome !== "error") {
       return;
     }
+
     assert.equal(outcome.code, "patch_hunk_mismatch");
     assert.match(outcome.message, /first\.txt/);
     assert.match(outcome.message, /second\.txt/);
@@ -120,10 +128,13 @@ test("a path escape is refused before the first file is touched", async () => {
       "*** End Patch",
     ].join("\n");
     const outcome = await applyPatch(toolsFor(root), patch);
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome !== "error") {
       return;
     }
+
     assert.match(outcome.code, /path_outside_workspace|invalid_path/);
     assert.equal(readFileSync(join(root, "stay.txt"), "utf8"), "keep\n");
   } finally {
@@ -182,11 +193,14 @@ test("a cancel after the first commit keeps the delta instead of dropping it", a
       { toolCallId: "c-apply", name: APPLY_PATCH_TOOL, arguments: { patch } },
       controller.signal,
     );
+
     // Not cancelled-silently: the landed file must be named in the record.
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome !== "error") {
       return;
     }
+
     assert.equal(outcome.code, "apply_cancelled");
     assert.match(outcome.message, /a\.txt/);
     assert.match(outcome.message, /b\.txt/);
@@ -216,16 +230,21 @@ test("read_only and deny_all refuse the patch before anything is parsed", async 
   try {
     writeFileSync(join(root, "a.txt"), "a\n");
     const patch = ["*** Begin Patch", "*** Add File: new.txt", "+x", "*** End Patch"].join("\n");
+
     for (const mode of ["read_only", "deny_all"] as const) {
       const sandbox = createWorkspaceSandbox({ workspaceRoot: root, mode });
       const tools = createMutatingTools({ sandbox });
       const outcome = await applyPatch(tools, patch);
+
       assert.equal(outcome.outcome, "error");
+
       if (outcome.outcome !== "error") {
         continue;
       }
+
       assert.ok(outcome.code === "sandbox_read_only" || outcome.code === "sandbox_deny_all", outcome.code);
     }
+
     assert.equal(readFileSync(join(root, "a.txt"), "utf8"), "a\n");
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -257,14 +276,18 @@ test("concurrent patches to one file never lose an update silently", async () =>
     // commitText rather than the prepare-time match.
     const [left, right] = await Promise.all([applyPatch(tools, first), applyPatch(tools, second)]);
     const content = readFileSync(join(root, "race.txt"), "utf8");
+
     assert.ok(content === "first\n" || content === "second\n");
     const loser = content === "first\n" ? right : left;
     const winner = content === "first\n" ? left : right;
+
     assert.equal(winner.outcome, "result");
     assert.equal(loser.outcome, "error");
+
     if (loser.outcome !== "error") {
       return;
     }
+
     assert.equal(loser.code, "file_changed_since_read");
   } finally {
     rmSync(root, { recursive: true, force: true });

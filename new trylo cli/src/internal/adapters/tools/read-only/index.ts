@@ -1,4 +1,5 @@
 import type { FileAccessMode, ToolCallRequest, ToolOutcome, ToolPort } from "../../../ports/tools.js";
+import type { ReadRoutingPort } from "../../../ports/read-routing.js";
 import path from "node:path";
 import type { ValidatedImageReferenceSink } from "../../../ports/image-reference-access.js";
 import { directoryArgument } from "./args.js";
@@ -19,7 +20,9 @@ import { executeNavigationSearch } from "./search.js";
 import { executeFindFiles } from "./find-files.js";
 import { FileFinder } from "../file-finder/file-finder.js";
 import { createNavigationView, navigationRoot, DEFAULT_EXCLUDED_DIRECTORIES } from "./navigation-view.js";
+
 export { DEFAULT_EXCLUDED_DIRECTORIES };
+
 import { isInside, resolveInsideWorkspace } from "./workspace.js";
 
 /**
@@ -44,6 +47,8 @@ export {
 };
 
 export type ReadOnlyToolsConfig = {
+  readonly readRouting?: ReadRoutingPort;
+  readonly nowMs?: () => number;
   readonly onImageValidated?: ValidatedImageReferenceSink;
   readonly workspaceRoot: string;
   readonly fileAccess?: FileAccessMode;
@@ -90,6 +95,7 @@ export function createReadOnlyTools(input: ReadOnlyToolsConfig): ToolPort {
     priorityRoots: ["src"],
     ...(config.excludeDirectories === undefined ? {} : { excludeDirectories: config.excludeDirectories }),
   });
+
   return {
     snapshot() {
       return READ_ONLY_BINDINGS;
@@ -98,25 +104,32 @@ export function createReadOnlyTools(input: ReadOnlyToolsConfig): ToolPort {
       if (signal.aborted) {
         return { outcome: "cancelled" };
       }
+
       if (call.name === "read_file") {
         return executeReadFile(config, limits, call, signal);
       }
+
       if (call.name === "list_files") {
         return executeListFiles(config, limits, call, signal);
       }
+
       if (call.name === "search_text") {
         return executeNavigationSearch(config, limits, call, signal);
       }
+
       if (call.name === "glob_files") {
         return executeNavigationSearch(config, limits, call, signal);
       }
+
       if (call.name === "find_files") {
         return executeFindFiles({ finder, limits }, call, signal);
       }
+
       if (call.name === "view_image") {
         // WP19.1 (C25/L10): validated local images; see view-image.ts.
         return executeViewImage(config, call, signal);
       }
+
       if (call.name === READ_PDF_TOOL) {
         // WP13.1 (L11): validated PDF metadata and page ranges; see pdf-read.ts.
         return executeReadPdf(
@@ -128,6 +141,7 @@ export function createReadOnlyTools(input: ReadOnlyToolsConfig): ToolPort {
           signal,
         );
       }
+
       if (call.name === READ_NOTEBOOK_TOOL) {
         // WP13.2 (L12): cell-aware notebook reads; see notebook-read.ts.
         return executeReadNotebook(
@@ -137,6 +151,7 @@ export function createReadOnlyTools(input: ReadOnlyToolsConfig): ToolPort {
           signal,
         );
       }
+
       return { outcome: "error", code: "unknown_tool", message: `unknown_tool:${call.name}` };
     },
     async cancel(_toolCallId: string): Promise<void> {
@@ -166,7 +181,9 @@ async function executeListFiles(
   if (!verdict.ok) {
     return { outcome: "error", code: verdict.code, message: verdict.code };
   }
+
   let entries: ReadonlyArray<DirectoryEntry>;
+
   try {
     entries = await config.reader.readDir(verdict.absolutePath);
   } catch (err) {
@@ -176,13 +193,16 @@ async function executeListFiles(
     const detail = err instanceof Error ? err.message : "list_error";
     return { outcome: "error", code: "list_failed", message: `list_failed:${detail}` };
   }
+
   if (signal.aborted) {
     return { outcome: "cancelled" };
   }
+
   const excluded = new Set(config.excludeDirectories ?? DEFAULT_EXCLUDED_DIRECTORIES);
   const view = createNavigationView({ ...config, workspaceRoot: navigationRoot(config.workspaceRoot, verdict.absolutePath, config.fileAccess),
     ...(!isInside(config.workspaceRoot, verdict.absolutePath) ? { rulesRoot: verdict.absolutePath } : {}), filters: { include: [], exclude: [] } });
   const visible: DirectoryEntry[] = [];
+
   try {
     for (const entry of entries) {
       if (!excluded.has(entry.name) && await view.visible(`${verdict.absolutePath}/${entry.name}`, entry.isDirectory)) visible.push(entry);
@@ -190,12 +210,15 @@ async function executeListFiles(
   } catch (error) {
     return { outcome: "error", code: "list_failed", message: `list_failed:${error instanceof Error ? error.message : String(error)}` };
   }
+
   const hidden = entries.length - visible.length;
+
   visible.sort(compareDirectoryEntries);
   const cap = limits.maxListEntries ?? DEFAULT_MAX_LIST_ENTRIES;
   const kept = visible.slice(0, cap);
   const truncated = kept.length < visible.length;
   const paths = kept.map((entry) => `${view.relative(`${verdict.absolutePath}/${entry.name}`)}${entry.isDirectory ? "/" : ""}`);
+
   return {
     outcome: "result",
     value: {

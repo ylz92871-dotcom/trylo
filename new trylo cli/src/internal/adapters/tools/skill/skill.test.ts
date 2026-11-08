@@ -38,13 +38,16 @@ function catalogOf(...skills: SkillDescriptor[]): SkillCatalogPort {
       if (descriptor === undefined) {
         return { kind: "unknown_skill", name };
       }
+
       // No gate here on purpose: the loader only loads. Where the
       // disable-model-invocation line is enforced is exactly what these tests
       // pin — a fake that re-implemented the gate could only prove itself.
       const dir = descriptor.skillRoot.replaceAll("\\", "/");
       let content = `Base directory for this skill: ${dir}\n\n${descriptor.body}`;
+
       content = content.replaceAll("${TRYLO_SKILL_DIR}", dir).replaceAll("${CLAUDE_SKILL_DIR}", dir);
       content = content.replaceAll("$ARGUMENTS", args ?? "");
+
       return { kind: "loaded", skill: { descriptor, content } };
     },
   };
@@ -59,6 +62,7 @@ test("the binding is offered for approval and lists invocable skills", () => {
     catalogOf(descriptor(), descriptor({ name: "internal", disableModelInvocation: true })),
   );
   const [binding] = tools.snapshot();
+
   assert.equal(binding?.name, "skill");
   assert.equal(binding?.needsApproval, true);
   assert.equal(binding?.sideEffect, "read_only");
@@ -123,8 +127,11 @@ test("a fork skill delegates the loaded content through the executor", async () 
     },
   );
   const outcome = await tools.execute(call({ skill: "commit-helper", args: "x" }), new AbortController().signal);
+
   assert.equal(outcome.outcome, "result");
+
   if (outcome.outcome !== "result") return;
+
   assert.equal(outcome.output, "fork result");
   assert.equal(seen.length, 1);
   assert.equal(seen[0]?.name, "commit-helper");

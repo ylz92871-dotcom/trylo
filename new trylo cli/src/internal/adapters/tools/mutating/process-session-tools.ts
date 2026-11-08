@@ -169,12 +169,15 @@ function resolveYieldMs(call: ToolCallRequest, input: string): number | undefine
   if (asked === undefined) {
     return undefined;
   }
+
   if (!yieldMsWithinBounds(asked)) {
     return undefined;
   }
+
   if (input.length === 0) {
     return Math.max(asked, MIN_PROCESS_POLL_YIELD_MS);
   }
+
   return asked;
 }
 
@@ -188,9 +191,11 @@ export function createProcessSessionTools(
 ): ProcessSessionTools {
   async function execute(call: ToolCallRequest): Promise<ToolOutcome> {
     const visible = (session: ProcessSessionSnapshot): boolean => call.ownerId === undefined || session.ownerId === call.ownerId;
+
     if (call.name === LIST_PROCESSES_TOOL) {
       const problem = optionalArgumentProblem(call, "runningOnly", "boolean");
       if (problem !== undefined) return problem;
+
       const runningOnly = readBoolean(call, "runningOnly");
       const listed = sessions.list().sessions.filter(
         (session) => visible(session) && (!runningOnly || !isTerminalProcessStatus(session.status)),
@@ -215,6 +220,7 @@ export function createProcessSessionTools(
         (session) => `${session.id} ${session.status}${processEndSuffix(session.end)} ${session.command}`,
       );
       const empty = call.ownerId === undefined ? "No command sessions are being tracked." : "This member has no command sessions.";
+
       return {
         outcome: "result",
         value,
@@ -234,6 +240,7 @@ export function createProcessSessionTools(
         message: `${call.name} requires a sessionId`,
       };
     }
+
     if (call.ownerId !== undefined) {
       const target = sessions.list().sessions.find(session => session.id === sessionId);
       if (target === undefined || !visible(target)) {
@@ -247,7 +254,9 @@ export function createProcessSessionTools(
       if (!stopped.ok) {
         return { outcome: "error", code: stopped.code, message: stopped.message };
       }
+
       const end = stopped.end;
+
       return {
         outcome: "result",
         value: { sessionId, end: end.kind, ...processEndFields(end) },
@@ -259,6 +268,7 @@ export function createProcessSessionTools(
     if (call.name === WRITE_STDIN_TOOL) {
       const problem = optionalArgumentProblem(call, "chars", "string") ?? optionalArgumentProblem(call, "eof", "boolean");
       if (problem !== undefined) return problem;
+
       const input = readString(call, "chars") ?? "";
       const eof = readBoolean(call, "eof");
       const yieldMs = resolveYieldMs(call, input);
@@ -271,6 +281,7 @@ export function createProcessSessionTools(
             `a poll waits at least ${MIN_PROCESS_POLL_YIELD_MS}`,
         };
       }
+
       const result = await sessions.write({ sessionId, input, eof, yieldMs });
       if (!result.ok) {
         return {
@@ -282,12 +293,14 @@ export function createProcessSessionTools(
               : result.message,
         };
       }
+
       const read = result.read;
       const content =
         read.output.length === 0
           ? "No new output."
           : read.output;
       const body = `Session ${sessionId} is ${read.status}${processEndSuffix(read.end)}.\n${content}`;
+
       return {
         outcome: "result",
         value: {

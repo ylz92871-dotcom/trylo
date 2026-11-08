@@ -72,22 +72,27 @@ async function startStreamableServer(options: {
   const server = createServer((req, res) => {
     void (async () => {
       const body = JSON.parse(await readBody(req)) as JsonRpcBody;
+
       if (options.expectHeader === true && req.headers["x-trylo-header"] !== HEADER_CHECK["x-trylo-header"]) {
         json(res, 401, { error: "missing header" });
         return;
       }
+
       if (options.status !== undefined) {
         json(res, options.status, { error: "no" });
         return;
       }
+
       if (body.method === "initialize") {
         json(res, 200, { id: body.id, result: { ...initializeResult(), protocolVersion: options.protocolVersion ?? "2025-03-26" }, jsonrpc: "2.0" });
         return;
       }
+
       if (body.method === "tools/list") {
         json(res, 200, { id: body.id, result: TOOL_LIST_RESULT, jsonrpc: "2.0" });
         return;
       }
+
       if (body.method === "tools/call") {
         json(res, 200, {
           id: body.id,
@@ -96,6 +101,7 @@ async function startStreamableServer(options: {
         });
         return;
       }
+
       if (body.method === "resources/list") {
         if (options.hangList === true) {
           // Deliberately no reply: the listing deadline must fire here too.
@@ -104,10 +110,12 @@ async function startStreamableServer(options: {
         json(res, 200, { id: body.id, result: RESOURCE_LIST_RESULT, jsonrpc: "2.0" });
         return;
       }
+
       if (body.method === "resources/templates/list") {
         json(res, 200, { id: body.id, result: RESOURCE_TEMPLATES_RESULT, jsonrpc: "2.0" });
         return;
       }
+
       if (body.method === "resources/read") {
         json(res, 200, {
           id: body.id,
@@ -116,11 +124,14 @@ async function startStreamableServer(options: {
         });
         return;
       }
+
       json(res, 200, { id: body.id ?? null, error: { code: -32601, message: "method not found" }, jsonrpc: "2.0" });
     })();
   });
+
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;
+
   return { server, url: `http://127.0.0.1:${address.port}/mcp` };
 }
 
@@ -135,6 +146,7 @@ async function startLegacySseServer(): Promise<{ readonly server: Server; readon
         postResponse = res;
         return;
       }
+
       const body = JSON.parse(await readBody(req)) as JsonRpcBody;
       if (body.method === "initialize") {
         postResponse?.write(`event: message\ndata: ${JSON.stringify({ id: body.id, result: initializeResult(), jsonrpc: "2.0" })}\n\n`);
@@ -143,14 +155,17 @@ async function startLegacySseServer(): Promise<{ readonly server: Server; readon
       } else {
         postResponse?.write(`event: message\ndata: ${JSON.stringify({ id: body.id ?? null, error: { code: -32601, message: "no" }, jsonrpc: "2.0" })}\n\n`);
       }
+
       // The reply travels on the stream; the POST itself is a plain 202-style
       // acknowledgment and must end, or the client's `response.text()` hangs.
       res.writeHead(202, { "content-type": "application/json" });
       res.end("{}");
     })();
   });
+
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;
+
   return { server, url: `http://127.0.0.1:${address.port}/sse` };
 }
 
@@ -170,20 +185,26 @@ describe("streamable http transport", () => {
     try {
       const client = connect({ serverId: "remote", transport: "http", url });
       const connected = await client.connect();
+
       assert.equal(connected.ok, true);
+
       if (!connected.ok) {
         return;
       }
+
       assert.equal(connected.value.name, "fake-remote");
       assert.equal(connected.value.protocolVersion, "2025-03-26");
       const listed = await client.listTools();
+
       assert.equal(listed.ok, true);
+
       if (listed.ok) {
         assert.equal(listed.value.length, 1);
         assert.equal(listed.value[0]?.serverToolName, "echo");
         assert.equal(listed.value[0]?.qualifiedName, "mcp__remote__echo");
         assert.equal(listed.value[0]?.needsApproval, true);
       }
+
       await client.close();
       assert.equal(client.isConnected(), false);
     } finally {
@@ -196,17 +217,21 @@ describe("streamable http transport", () => {
     try {
       const client = connect({ serverId: "remote", transport: "http", url });
       const connected = await client.connect();
+
       assert.equal(connected.ok, true);
       const called = await client.callTool({
         qualifiedName: "mcp__remote__echo",
         arguments: { text: "hi" },
         timeoutMs: 2000,
       });
+
       assert.equal(called.ok, true);
+
       if (called.ok) {
         assert.equal(called.outcome.outcome, "result");
         assert.equal(called.outcome.outcome === "result" ? called.outcome.output : "", "echo!");
       }
+
       await client.close();
     } finally {
       await closeServer(server);
@@ -219,7 +244,9 @@ describe("streamable http transport", () => {
       // First: with the header, the server answers 401 anyway (status wins).
       const client = connect({ serverId: "remote", transport: "http", url, headers: HEADER_CHECK });
       const connected = await client.connect();
+
       assert.equal(connected.ok, false);
+
       if (!connected.ok) {
         // WP15.2 contract change: 401 maps to needs_auth so the caller can ask
         // the user to re-authenticate and retry, instead of reporting a dead
@@ -238,24 +265,34 @@ describe("streamable http transport", () => {
     try {
       const client = connect({ serverId: "remote", transport: "http", url });
       const connected = await client.connect();
+
       assert.equal(connected.ok, true);
       const listed = await client.listResources();
+
       assert.equal(listed.ok, true);
+
       if (listed.ok) {
         assert.equal(listed.value.resources.length, 1);
         assert.equal(listed.value.resources[0]?.uri, "file:///notes/today.md");
       }
+
       const templates = await client.listResourceTemplates();
+
       assert.equal(templates.ok, true);
+
       if (templates.ok) {
         assert.equal(templates.value.templates[0]?.uriTemplate, "file:///logs/{date}.log");
       }
+
       const read = await client.readResource({ uri: "file:///notes/today.md", timeoutMs: 2000 });
+
       assert.equal(read.ok, true);
+
       if (read.ok) {
         assert.equal(read.value.contents.length, 1);
         assert.equal(read.value.contents[0]?.kind, "text");
       }
+
       await client.close();
     } finally {
       await closeServer(server);
@@ -267,16 +304,22 @@ describe("streamable http transport", () => {
     try {
       const client = connect({ serverId: "remote", transport: "http", url });
       const beforeConnect = await client.listResources();
+
       assert.equal(beforeConnect.ok, false);
+
       if (!beforeConnect.ok) {
         assert.equal(beforeConnect.code, "not_initialized");
       }
+
       assert.equal((await client.connect()).ok, true);
       const empty = await client.readResource({ uri: "", timeoutMs: 2000 });
+
       assert.equal(empty.ok, false);
+
       if (!empty.ok) {
         assert.equal(empty.code, "invalid_arguments");
       }
+
       await client.close();
     } finally {
       await closeServer(server);
@@ -287,12 +330,16 @@ describe("streamable http transport", () => {
     const { server, url } = await startStreamableServer({ hangList: true });
     try {
       const client = connect({ serverId: "remote", transport: "http", url });
+
       assert.equal((await client.connect()).ok, true);
       const listed = await client.listResources(undefined, 200);
+
       assert.equal(listed.ok, false);
+
       if (!listed.ok) {
         assert.equal(listed.code, "timeout");
       }
+
       await client.close();
     } finally {
       await closeServer(server);
@@ -304,10 +351,13 @@ describe("streamable http transport", () => {
     try {
       const client = connect({ serverId: "remote", transport: "http", url });
       const connected = await client.connect();
+
       assert.equal(connected.ok, false);
+
       if (!connected.ok) {
         assert.equal(connected.code, "unsupported_protocol_version");
       }
+
       assert.equal(client.isConnected(), false);
     } finally {
       await closeServer(server);
@@ -318,8 +368,10 @@ describe("streamable http transport", () => {
     const server = createServer(() => {
       // Deliberately never responds.
     });
+
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const address = server.address() as AddressInfo;
+
     try {
       const client = connect({
         serverId: "remote",
@@ -328,7 +380,9 @@ describe("streamable http transport", () => {
         handshakeTimeoutMs: 150,
       });
       const connected = await client.connect();
+
       assert.equal(connected.ok, false);
+
       if (!connected.ok) {
         assert.equal(connected.code, "handshake_timeout");
       }
@@ -341,7 +395,9 @@ describe("streamable http transport", () => {
     // Port 1 is reserved; nothing listens there.
     const client = connect({ serverId: "remote", transport: "http", url: "http://127.0.0.1:1/mcp" });
     const connected = await client.connect();
+
     assert.equal(connected.ok, false);
+
     if (!connected.ok) {
       assert.equal(connected.code, "spawn_failed");
     }
@@ -354,15 +410,21 @@ describe("legacy sse transport", () => {
     try {
       const client = connect({ serverId: "remote", transport: "sse", url });
       const connected = await client.connect();
+
       assert.equal(connected.ok, true);
+
       if (!connected.ok) {
         return;
       }
+
       const listed = await client.listTools();
+
       assert.equal(listed.ok, true);
+
       if (listed.ok) {
         assert.equal(listed.value[0]?.serverToolName, "echo");
       }
+
       await client.close();
     } finally {
       await closeServer(server);
@@ -374,8 +436,10 @@ describe("legacy sse transport", () => {
       res.writeHead(200, { "content-type": "text/event-stream" });
       res.end(": nothing else\n");
     });
+
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const address = server.address() as AddressInfo;
+
     try {
       const client = connect({ serverId: "remote", transport: "sse", url: `http://127.0.0.1:${address.port}/sse` });
       const connected = await client.connect();
@@ -393,10 +457,13 @@ describe("client lifecycle", () => {
   it("calls before connect are refused, and stderr diagnostics exist and are empty", async () => {
     const client = connect({ serverId: "remote", transport: "http", url: "http://127.0.0.1:1/mcp" });
     const listed = await client.listTools();
+
     assert.equal(listed.ok, false);
+
     if (!listed.ok) {
       assert.equal(listed.code, "not_initialized");
     }
+
     assert.deepEqual(client.stderrDiagnostics(), { bytes: 0, truncated: false });
     assert.equal(client.isConnected(), false);
     await client.close();
@@ -406,12 +473,16 @@ describe("client lifecycle", () => {
     const { server, url } = await startStreamableServer({});
     try {
       const client = connect({ serverId: "remote", transport: "http", url });
+
       assert.equal((await client.connect()).ok, true);
       const second = await client.connect();
+
       assert.equal(second.ok, false);
+
       if (!second.ok) {
         assert.equal(second.code, "already_connected");
       }
+
       assert.equal(client.isConnected(), true);
       await client.close();
     } finally {
@@ -426,13 +497,17 @@ describe("client lifecycle", () => {
     const { server, url } = await startStreamableServer({});
     try {
       const client = connect({ serverId: "remote", transport: "http", url });
+
       assert.equal((await client.connect()).ok, true);
       await client.close();
       const again = await client.connect();
+
       assert.equal(again.ok, false);
+
       if (!again.ok) {
         assert.equal(again.code, "closed");
       }
+
       assert.equal(client.isConnected(), false);
     } finally {
       await closeServer(server);

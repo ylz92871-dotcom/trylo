@@ -18,6 +18,7 @@ function bindingFor(name: string, description: string, parameters: JsonObject): 
     outputLimits: { maxBytes: DEFAULT_READ_ONLY_LIMITS.maxBytes + (name === "read_file" ? 512 : 0), maxLines: DEFAULT_READ_ONLY_LIMITS.maxLines },
   };
 }
+
 const filters = {
   include: { type: "array", items: { type: "string" }, description: "Only consider these workspace-relative globs, e.g. src/**/*.ts. Nonmatching files do not spend the content scan budget." },
   exclude: { type: "array", items: { type: "string" }, description: "Exclude these workspace-relative globs." },
@@ -26,7 +27,8 @@ const filters = {
 export const READ_ONLY_BINDINGS: ReadonlyArray<ToolBinding> = [
   bindingFor("read_file",
     "Read UTF-8 text inside the workspace. Default: first 2000 lines within 64 KiB. offset is a 0-based index in LINES, limit is a line count. " +
-    "The output starts with positioning metadata, followed by exact source text and a separate local-rules appendix. content in the structured result stays pure source text. " +
+    "Structured results carry positioning metadata. Text output prefixes it for explicit offset/limit, a truncated source selection or an empty result; a complete nonempty default read has no positioning header. " +
+    "A separate local-rules appendix may follow, while structured content remains pure source text. " +
     "startLine/endLine are 1-based inclusive; zero denotes no returned lines. Pass nextOffset back unchanged as offset to continue, never add 1. " +
     "The legacy default may end with a partial line; the continuation rereads that line. Explicit ranges return complete ordinary lines. lineTooLong marks an incomplete oversized line with no byte paging.",
     { type: "object", properties: {

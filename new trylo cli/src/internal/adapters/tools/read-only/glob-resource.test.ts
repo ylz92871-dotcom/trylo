@@ -14,18 +14,24 @@ test("repeated glob wildcards cannot block a filename mismatch", async (t) => {
   const child = spawn(process.execPath, ["--input-type=module", "-e", script], {
     stdio: ["ignore", "ignore", "pipe", "ipc"], windowsHide: true,
   });
+
   t.after(() => { child.kill(); });
   const stderrStream = child.stderr;
+
   assert.ok(stderrStream);
   const outcome = await new Promise<{ code: number | null; failure: string | undefined; stderr: string }>((resolve) => {
     let failure: string | undefined;
     let stderr = "";
     let phase: "startup" | "matching" = "startup";
-    const expire = () => { failure = phase + " timeout"; child.kill(); };
+    const expire = () => {
+      failure = phase + " timeout";
+      child.kill();
+    };
     // Windows process startup/shutdown can itself consume two seconds. The
     // original algorithm budget begins only when the imported child is ready;
     // it still covers compilation, matching and the observed process exit.
     let timer = setTimeout(expire, 10_000);
+
     stderrStream.on("data", (chunk: Buffer) => { stderr = (stderr + chunk.toString("utf8")).slice(0, 2000); });
     child.once("error", (error) => { failure = error.message; });
     child.on("message", (message) => {
@@ -40,6 +46,7 @@ test("repeated glob wildcards cannot block a filename mismatch", async (t) => {
       resolve({ code, failure: failure ?? (phase === "startup" ? "child never became ready" : undefined), stderr });
     });
   });
+
   assert.equal(outcome.failure, undefined, "glob compilation/matching must finish inside the bounded child process");
   assert.equal(outcome.code, 0, outcome.stderr);
 });

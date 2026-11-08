@@ -46,24 +46,29 @@ test("absent offset and limit mean the top of the file and the existing ceiling"
 
 test("offset must be a non-negative integer, and says which way it was wrong", () => {
   const negative = readRangeRequest({ offset: -1 });
+
   assert.ok(isRangeProblem(negative));
   assert.equal(negative.reason, "offset_negative");
 
   const fractional = readRangeRequest({ offset: 1.5 });
+
   assert.ok(isRangeProblem(fractional));
   assert.equal(fractional.reason, "offset_not_integer");
 
   const text = readRangeRequest({ offset: "3" });
+
   assert.ok(isRangeProblem(text));
   assert.equal(text.reason, "offset_not_integer");
 });
 
 test("limit must be a positive integer; zero is a mistake worth reporting", () => {
   const zero = readRangeRequest({ limit: 0 });
+
   assert.ok(isRangeProblem(zero));
   assert.equal(zero.reason, "limit_not_positive");
 
   const negative = readRangeRequest({ limit: -5 });
+
   assert.ok(isRangeProblem(negative));
   assert.equal(negative.reason, "limit_not_positive");
 });
@@ -73,6 +78,7 @@ test("limit must be a positive integer; zero is a mistake worth reporting", () =
 test("the default read is the first 2000 lines, unchanged from before", () => {
   const source = lines(2600);
   const selection = selectRange(source, ask(0), LIMITS);
+
   assert.equal(selection.startLine, 1);
   assert.equal(selection.endLine, 2000);
   assert.equal(selection.truncated, true);
@@ -95,6 +101,7 @@ test("walking the whole file in ranges reproduces it byte for byte", () => {
   const source = lines(2600);
   const chunks: string[] = [];
   let request = ask(0);
+
   for (let guard = 0; guard < 10; guard += 1) {
     const selection = selectRange(source, request, LIMITS);
     chunks.push(selection.text);
@@ -103,12 +110,14 @@ test("walking the whole file in ranges reproduces it byte for byte", () => {
     }
     request = ask(selection.nextOffset);
   }
+
   assert.equal(chunks.join(""), source, "the ranges reassemble into the original file");
 });
 
 test("an explicit offset reads that region and points at the next one", () => {
   const source = lines(2600);
   const selection = selectRange(source, ask(2579, 80), LIMITS);
+
   assert.equal(selection.startLine, 2580);
   // 21 lines remain, not 80: the request is honoured up to the end of the file
   // rather than padded with lines that do not exist.
@@ -123,6 +132,7 @@ test("an explicit offset reads that region and points at the next one", () => {
   // A window in the middle is the case that matters: it stops where the model
   // asked and points at what comes next.
   const middle = selectRange(source, ask(100, 80), LIMITS);
+
   assert.equal(middle.startLine, 101);
   assert.equal(middle.endLine, 180);
   assert.equal(middle.truncated, true);
@@ -137,15 +147,20 @@ test("following nextOffset walks the file without repeating a line", () => {
   const source = lines(2600);
   const seen: string[] = [];
   let request = ask(0);
+
   for (let guard = 0; guard < 10; guard += 1) {
     const selection = selectRange(source, request, LIMITS);
     const chunk = selection.text === "" ? [] : selection.text.slice(0, -1).split("\n");
+
     seen.push(...chunk);
+
     if (selection.nextOffset === undefined) {
       break;
     }
+
     request = ask(selection.nextOffset);
   }
+
   assert.equal(seen.length, 2600);
   assert.equal(new Set(seen).size, 2600, "no line was returned twice");
   assert.equal(seen[0], "line 1");
@@ -161,6 +176,7 @@ test("the last chunk reports no nextOffset, so the model cannot loop forever", (
 
 test("an offset past the end returns nothing and does not pretend otherwise", () => {
   const selection = selectRange(lines(10), ask(9000), LIMITS);
+
   assert.equal(selection.text, "");
   assert.equal(selection.totalLines, 10);
   // Not line 1: a range that began at 9000 did not begin at line 1, and saying
@@ -176,12 +192,15 @@ test("an empty selection still reports a range, never an inverted one", () => {
   // selection whose end precedes its start is not a position any caller — least
   // of all a model computing its next `offset` from them — can make sense of.
   const past = selectRange(lines(10), ask(9000), LIMITS);
+
   assert.equal(past.endLine, past.startLine);
 
   const empty = selectRange("", ask(0), LIMITS);
+
   assert.equal(empty.startLine, empty.endLine);
 
   const atEnd = selectRange(lines(10), ask(10), LIMITS);
+
   assert.equal(atEnd.text, "");
   assert.equal(atEnd.startLine, 0);
   assert.equal(atEnd.endLine, 0);
@@ -212,16 +231,19 @@ test("CRLF line endings survive a range read byte for byte", () => {
   // inside the line as a stray character.
   const source = "one\r\ntwo\r\nthree\r\n";
   const selection = selectRange(source, ask(1, 1), LIMITS);
+
   assert.equal(selection.text, "two\r\n");
   assert.equal(selection.text.includes("two\r\r"), false);
   assert.equal(selection.startLine, 2);
   assert.equal(selection.endLine, 2);
 
   const whole = selectRange(source, ask(0), LIMITS);
+
   assert.equal(whole.text, "one\r\ntwo\r\nthree\r\n");
   assert.equal(whole.totalLines, 3);
   // Round trip: the ranges reassemble into the file they came from.
   const second = selectRange(source, ask(1), LIMITS);
+
   assert.equal(whole.text + second.text, source + "two\r\nthree\r\n");
 });
 
@@ -250,10 +272,13 @@ test("a Chinese file is cut on a character boundary, never mid-character", () =>
   // (18 bytes) and cannot fit a third.
   const source = `${"中文文\n".repeat(5)}`;
   const selection = selectRange(source, ask(0), { ...LIMITS, maxBytes: 20 });
+
   assert.equal(selection.text.includes("�"), false, "no replacement character may appear");
+
   for (const character of selection.text) {
     assert.ok(Buffer.byteLength(character, "utf8") <= 3);
   }
+
   assert.equal(Buffer.byteLength(selection.text, "utf8") <= 20, true);
 });
 
@@ -263,6 +288,7 @@ test("one line longer than the byte budget is reported, not paginated", () => {
   // budget, so no offset can ever produce it.
   const source = "short\n" + "x".repeat(5_000) + "\ntail\n";
   const selection = selectRange(source, ask(0), { ...LIMITS, maxBytes: 200 });
+
   assert.equal(selection.lineTooLong?.line, 2);
   assert.equal(selection.nextOffset, undefined, "no fake position inside a long line");
   // The length reported is the line's real length, not the remnant that survived
@@ -285,6 +311,7 @@ test("a single line larger than the whole budget is not read as an empty file", 
   // model cannot tell apart from a file that does not exist.
   const source = "c".repeat(60_000);
   const selection = selectRange(source, ask(0), { ...LIMITS, maxBytes: 49_150 });
+
   assert.equal(selection.totalLines, 1);
   assert.ok(selection.text.length > 30_000, `content was starved: ${selection.text.length}`);
   assert.equal(Buffer.byteLength(selection.text, "utf8") <= 49_150, true);
@@ -309,6 +336,7 @@ test("running out of budget mid-line still hands back a way forward", () => {
   const source = lines(100);
   const budget = { ...LIMITS, maxBytes: 200 };
   const first = selectRange(source, ask(0), budget);
+
   assert.equal(first.lineTooLong, undefined, "an 8 byte line is not too long for a 200 byte budget");
   assert.ok(first.nextOffset !== undefined, "the read must not dead-end here");
   assert.equal(first.nextOffset, first.endLine, "continuing means 'after the last line you got'");
@@ -318,6 +346,7 @@ test("running out of budget mid-line still hands back a way forward", () => {
   // dead-end would have broken.
   const chunks: string[] = [];
   let request = ask(0);
+
   for (let guard = 0; guard < 40; guard += 1) {
     const step = selectRange(source, request, budget);
     chunks.push(step.text);
@@ -326,6 +355,7 @@ test("running out of budget mid-line still hands back a way forward", () => {
     }
     request = ask(step.nextOffset);
   }
+
   assert.equal(chunks.join(""), source, "a tight byte budget must not make a file unreadable");
 });
 
@@ -336,6 +366,7 @@ test("a whole number of lines that overflows the budget keeps nextOffset", () =>
   // on a boundary and a 205 byte one does not.
   const source = lines(100);
   const selection = selectRange(source, ask(0), { ...LIMITS, maxBytes: 207 });
+
   assert.equal(selection.lineTooLong, undefined);
   assert.equal(selection.truncatedBytes, true);
   assert.equal(selection.text.endsWith("\n"), true, "the cut fell on a line boundary");

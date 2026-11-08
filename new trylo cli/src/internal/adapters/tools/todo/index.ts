@@ -2,7 +2,7 @@ import type { JsonObject } from "../../../protocol/envelope.js";
 import type { ToolBinding, ToolCallRequest, ToolOutcome, ToolPort } from "../../../ports/tools.js";
 
 /**
- * The `todo_write` tool: the model's own task list for a run.
+ * The model's own task list: whole-list replacement and a read-only query.
  *
  * Replace-the-list semantics, copied from the behaviour of the old CLI's
  * TodoWrite rather than from its code: every call hands over the *complete*
@@ -10,8 +10,8 @@ import type { ToolBinding, ToolCallRequest, ToolOutcome, ToolPort } from "../../
  * "update an entry that no longer exists" state to get into. The list lives in
  * this port's closure — the workspace is not touched, which is exactly why the
  * binding declares `read_only` and asks no approval. Across turns the model
- * recovers the list from the journal echo of its own last call, not from a
- * hidden store; a new run starts empty.
+ * restores the list through the workflow journal owner. `todo_read` exposes
+ * that same state even after its original echo has left the prompt window.
  *
  * Validation runs before any mutation: a refused call leaves the previous list
  * whole, because half a new list over half an old one is the worst kind of
@@ -21,6 +21,8 @@ import type { ToolBinding, ToolCallRequest, ToolOutcome, ToolPort } from "../../
 const MAX_TODOS = 50;
 const MAX_ITEM_CHARS = 500;
 const TODO_STATUSES = ["pending", "in_progress", "completed"] as const;
+export const TODO_TOOL_NAMES: ReadonlySet<string> = new Set(["todo_write", "todo_read"]);
+
 type TodoStatus = (typeof TODO_STATUSES)[number];
 
 type TodoItem = {
@@ -62,13 +64,34 @@ const BINDING: ToolBinding = {
   outputLimits: { maxBytes: 8_192, maxLines: 200 },
 };
 
+const READ_BINDING: ToolBinding = {
+  name: "todo_read",
+  description: "Read the current todo list and status counts without changing it. Use this to recover existing progress after continuation or context compaction; an empty list is reported as empty.",
+  sideEffect: "read_only",
+  parameters: { type: "object", properties: {}, additionalProperties: false },
+  needsApproval: false,
+  timeoutMs: 5_000,
+  // JSON can escape each valid code unit as six bytes; retain the whole
+  // existing schema's maximum list rather than truncating recovered progress.
+  outputLimits: { maxBytes: MAX_TODOS * (2 * MAX_ITEM_CHARS * 6 + 128) + 256, maxLines: 1 },
+};
+
 export function createTodoTools(): ToolPort {
   let todos: ReadonlyArray<TodoItem> = [];
   return {
     snapshot() {
-      return [BINDING];
+      return [BINDING, READ_BINDING];
     },
     async execute(call: ToolCallRequest, _signal: AbortSignal): Promise<ToolOutcome> {
+      if (call.name === "todo_read") {
+        if (Object.keys(call.arguments).length > 0) {
+          return { outcome: "error", code: "invalid_arguments", message: "todo_read takes no arguments and never changes the list" };
+        }
+        const value = { todos: todos.map(toJson), counts: countByStatus(todos) };
+        return { outcome: "result", value,
+          output: todos.length === 0 ? "todo list is empty" : JSON.stringify(value), truncated: false };
+      }
+
       if (call.name !== "todo_write") {
         return {
           outcome: "unknown",
@@ -76,12 +99,16 @@ export function createTodoTools(): ToolPort {
           message: `todo port does not have ${call.name}`,
         };
       }
+
       const parsed = parseTodos(call.arguments);
       if (!parsed.ok) {
         return { outcome: "error", code: "invalid_arguments", message: parsed.message };
       }
+
       const previousTotal = todos.length;
+
       todos = parsed.todos;
+
       return {
         outcome: "result",
         value: {
@@ -106,10 +133,13 @@ function parseTodos(argumentsValue: JsonObject): ParsedTodos {
   if (!Array.isArray(raw)) {
     return { ok: false, message: "todos must be an array of {content, status, activeForm?}" };
   }
+
   if (raw.length > MAX_TODOS) {
     return { ok: false, message: `todos holds ${raw.length} items; the limit is ${MAX_TODOS}` };
   }
+
   const items: TodoItem[] = [];
+
   for (const entry of raw) {
     const item = parseItem(entry);
     if (!item.ok) {
@@ -117,6 +147,7 @@ function parseTodos(argumentsValue: JsonObject): ParsedTodos {
     }
     items.push(item.todo);
   }
+
   return { ok: true, todos: items };
 }
 
@@ -124,14 +155,17 @@ function parseItem(entry: unknown): { readonly ok: true; readonly todo: TodoItem
   if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
     return { ok: false, message: "every todo must be an object with content and status" };
   }
+
   const record = entry as Record<string, unknown>;
   const content = record["content"];
   if (typeof content !== "string" || content.trim().length === 0) {
     return { ok: false, message: "every todo needs a non-empty content string" };
   }
+
   if (content.length > MAX_ITEM_CHARS) {
     return { ok: false, message: `content is ${content.length} characters; the limit is ${MAX_ITEM_CHARS}` };
   }
+
   const status = record["status"];
   if (typeof status !== "string" || !(TODO_STATUSES as readonly string[]).includes(status)) {
     return {
@@ -139,10 +173,12 @@ function parseItem(entry: unknown): { readonly ok: true; readonly todo: TodoItem
       message: `status must be one of: ${TODO_STATUSES.join(", ")}`,
     };
   }
+
   const activeForm = record["activeForm"];
   if (activeForm !== undefined && (typeof activeForm !== "string" || activeForm.length > MAX_ITEM_CHARS)) {
     return { ok: false, message: `activeForm must be a string of at most ${MAX_ITEM_CHARS} characters` };
   }
+
   return {
     ok: true,
     todo: {

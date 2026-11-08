@@ -8,8 +8,9 @@ import type {
   McpToolOutcome,
   McpToolSpec,
 } from "../../ports/mcp-client.js";
-import type { McpRegistryPort, McpServerEntry } from "../../ports/mcp-registry.js";
+import type { McpRegistryDiagnostic, McpRegistryPort, McpServerEntry } from "../../ports/mcp-registry.js";
 import { qualifyMcpToolName } from "../../mcp/names.js";
+import { registryDiagnosticWarning } from "../mcp-registry/diagnostics.js";
 import type { McpClientOpen } from "./factory.js";
 
 /**
@@ -44,15 +45,15 @@ export type McpRuntimeServer = {
   call(
     serverToolName: string,
     args: JsonObject,
-    timeoutMs: number,
+    timeoutMs: number | undefined,
     signal: AbortSignal,
   ): Promise<McpRuntimeCall>;
   /** `resources/list` under a finite deadline. Failures are values, never throws. */
   listResources(cursor?: string, timeoutMs?: number): Promise<McpResourceCall<McpResourceListResult>>;
   /** `resources/templates/list` under a finite deadline. */
   listResourceTemplates(cursor?: string, timeoutMs?: number): Promise<McpResourceCall<McpResourceTemplatesResult>>;
-  /** `resources/read` under a finite deadline. The URI travels verbatim. */
-  readResource(uri: string, timeoutMs: number, signal: AbortSignal): Promise<McpResourceCall<McpResourceReadResult>>;
+  /** `resources/read` with an optional caller deadline. The URI travels verbatim. */
+  readResource(uri: string, timeoutMs: number | undefined, signal: AbortSignal): Promise<McpResourceCall<McpResourceReadResult>>;
   close(): Promise<void>;
 };
 
@@ -60,6 +61,7 @@ export type McpOpenFailure = {
   readonly serverId: string;
   readonly code: string;
   readonly detail: string;
+  readonly registryDiagnostic?: McpRegistryDiagnostic;
 };
 
 export type McpSkippedServer = {
@@ -101,16 +103,49 @@ type PoolState = {
   readonly headerKeys: McpHeaderKeys[];
 };
 
+/** Bound child startup pressure while independent handshakes overlap. */
+const STARTUP_CONCURRENCY = 4;
+
+function emptyPoolState(): PoolState {
+  return { live: [], servers: [], failures: [], skipped: [], headerKeys: [] };
+}
+
 export async function openMcpPool(input: McpPoolInput): Promise<McpPool> {
-  const state: PoolState = { live: [], servers: [], failures: [], skipped: [], headerKeys: [] };
+  const state = emptyPoolState();
   const names = await input.registry.names();
   if (!names.ok) {
     state.failures.push({ serverId: "", code: names.code, detail: names.detail });
     return poolOf(state);
   }
-  for (const name of names.value) {
-    await openOne(input, state, name);
+
+  for (const diagnostic of names.diagnostics ?? []) {
+    state.failures.push({ serverId: "", code: diagnostic.code,
+      detail: registryDiagnosticWarning(diagnostic), registryDiagnostic: diagnostic });
   }
+
+  // Each server owns its result until all workers settle. Publication stays
+  // in registry order, so completion timing cannot change the tool catalog.
+  const pending = names.value.map(name => ({ name, state: emptyPoolState() }));
+  const queue = pending.values();
+  const worker = async (): Promise<void> => {
+    for (const item of queue) await openOne(input, item.state, item.name);
+  };
+  const outcomes = await Promise.allSettled(Array.from({ length: Math.min(STARTUP_CONCURRENCY, pending.length) }, worker));
+
+  for (const item of pending) {
+    state.live.push(...item.state.live);
+    state.servers.push(...item.state.servers);
+    state.failures.push(...item.state.failures);
+    state.skipped.push(...item.state.skipped);
+    state.headerKeys.push(...item.state.headerKeys);
+  }
+
+  const rejected = outcomes.find(outcome => outcome.status === "rejected");
+  if (rejected?.status === "rejected") {
+    await poolOf(state).closeAll();
+    throw rejected.reason;
+  }
+
   return poolOf(state);
 }
 
@@ -121,20 +156,24 @@ async function openOne(input: McpPoolInput, state: PoolState, name: string): Pro
     state.failures.push({ serverId: name, code: resolved.code, detail: resolved.detail });
     return;
   }
+
   const entry = resolved.value.entry;
   if (!entry.enabled) {
     state.skipped.push({ serverId: name, reason: "disabled" });
     return;
   }
+
   const headerKeys = Object.keys(entry.headers ?? {}).sort();
   if (headerKeys.length > 0) {
     state.headerKeys.push({ serverId: name, keys: headerKeys });
   }
+
   const opened = input.clientFor(entry, input.cwd);
   if (!opened.ok) {
     state.failures.push({ serverId: name, code: opened.code, detail: opened.detail });
     return;
   }
+
   const client = opened.client;
   const started = await startClient(client, entry);
   if (!started.ok) {
@@ -142,6 +181,7 @@ async function openOne(input: McpPoolInput, state: PoolState, name: string): Pro
     state.failures.push({ serverId: name, code: started.code, detail: started.detail });
     return;
   }
+
   state.live.push(client);
   state.servers.push(serverOf(entry, client, started.tools));
 }
@@ -163,10 +203,12 @@ async function startClient(client: McpStdioClient, entry: McpServerEntry): Promi
     if (!connected.ok) {
       return { ok: false, code: connected.code, detail: connected.detail };
     }
+
     const listed = await client.listTools();
     if (!listed.ok) {
       return { ok: false, code: listed.code, detail: listed.detail };
     }
+
     return { ok: true, tools: listed.value };
   } catch (error) {
     const detail = error instanceof Error ? error.message : "mcp_adapter_exception";
@@ -187,6 +229,7 @@ function serverOf(
       if (!qualified.ok) {
         return { ok: false, code: qualified.code, detail: qualified.detail };
       }
+
       try {
         const result = await client.callTool({
           qualifiedName: qualified.value,

@@ -8,6 +8,7 @@ import { createWorkspaceSandbox } from "../sandbox/index.js";
 test("a configured interpreter is advertised without changing schema or static approval", () => {
   const shellMode = { ok: true as const, mode: { kind: "shell" as const, shell: { kind: "powershell" as const, path: "C:/fixture/powershell.exe" } } };
   const binding = describeToolExecution(RUN_SHELL_BINDING, { shellMode });
+
   assert.match(binding.description, /powershell/);
   assert.match(binding.description, /redirections/);
   assert.equal(binding.parameters, RUN_SHELL_BINDING.parameters);

@@ -81,8 +81,11 @@ describe("lsp_navigate in the production catalog", () => {
       { toolCallId: "nav-1", name: LSP_TOOL, arguments: { operation: "hover", path: "src/a.ts", line: 0, character: 0 } },
       signal,
     );
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome !== "result") return;
+
     assert.equal(outcome.output, "from the real path");
   });
 
@@ -114,8 +117,11 @@ describe("lsp_navigate in the production catalog", () => {
       { toolCallId: "nav-2", name: LSP_TOOL, arguments: { operation: "definition", path: "src/a.ts", line: 1, character: 0 } },
       signal,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome !== "error") return;
+
     // The message a person needs: what to install, not "no results".
     assert.match(outcome.message, /not installed/);
   });
@@ -131,12 +137,14 @@ describe("lsp_navigate in the production catalog", () => {
 
   it("cancels through the catalog without reaching the server", async () => {
     const controller = new AbortController();
+
     controller.abort();
     const tools = createWorkspaceTools({ workspaceRoot: ROOT, sandbox, languageServers: pool(stubPort()) });
     const outcome = await tools.execute(
       { toolCallId: "nav-4", name: LSP_TOOL, arguments: { operation: "hover", path: "src/a.ts" } },
       controller.signal,
     );
+
     assert.equal(outcome.outcome, "cancelled");
     await tools.cancel("nav-4");
   });

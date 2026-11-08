@@ -73,6 +73,7 @@ function toolsWithSession() {
     sandbox: createWorkspaceSandbox({ workspaceRoot: process.cwd() }),
     sessions,
   });
+
   return { tools, sessions, ptyAvailable: pty !== undefined };
 }
 
@@ -80,6 +81,7 @@ describe("run_shell runInBackground, through the production catalog", () => {
   it("starts a background command and hands back a session id", async () => {
     const { tools, sessions } = toolsWithSession();
     const signal = controller().signal;
+
     try {
       const started = await tools.execute(
         call("run_shell", {
@@ -88,32 +90,42 @@ describe("run_shell runInBackground, through the production catalog", () => {
         }),
         signal,
       );
+
       assert.equal(started.outcome, "result", "a background start is a result, not a wait");
+
       if (started.outcome !== "result") {
         return;
       }
+
       const sessionId = started.value["sessionId"] as string;
+
       assert.equal(typeof sessionId, "string", "the result carries a session id");
       assert.match(String(sessionId), /^ps_[0-9a-f]{24}$/);
       assert.match(started.output, /write_stdin/, "the message says how to continue it");
 
       // The session is real: the child's own banner arrives through a poll.
       let output = "";
+
       for (let attempt = 0; attempt < 25 && !output.includes("BG-READY"); attempt += 1) {
         const read = await tools.execute(
           call("write_stdin", { sessionId, chars: "", yieldMs: 300 }),
           signal,
         );
+
         assert.equal(read.outcome, "result");
+
         if (read.outcome === "result") {
           output += String(read.value["output"] ?? "");
         }
       }
+
       assert.match(output, /BG-READY/, "the background process's output reaches the model");
 
       // And it is listed, which is the difference between "started" and "findable".
       const listed = await tools.execute(call("list_processes", {}), signal);
+
       assert.equal(listed.outcome, "result");
+
       if (listed.outcome === "result") {
         const sessions_ = listed.value["sessions"] as Array<Record<string, unknown>>;
         assert.ok(
@@ -130,6 +142,7 @@ describe("run_shell runInBackground, through the production catalog", () => {
     const { tools, sessions } = toolsWithSession();
     const signal = controller().signal;
     let sessionId = "";
+
     try {
       const started = await tools.execute(
         call("run_shell", {
@@ -138,10 +151,13 @@ describe("run_shell runInBackground, through the production catalog", () => {
         }),
         signal,
       );
+
       assert.equal(started.outcome, "result");
+
       if (started.outcome !== "result") {
         return;
       }
+
       sessionId = started.value["sessionId"] as string;
       // The child's banner is polled for rather than waited for, so the session
       // is known to have started reading stdin before anything is typed. A fixed
@@ -154,36 +170,47 @@ describe("run_shell runInBackground, through the production catalog", () => {
       // printed nothing: the loop simply ran out of attempts and the failure
       // surfaced later, somewhere else.
       let banner = "";
+
       for (let attempt = 0; attempt < 25; attempt += 1) {
         const ready = await tools.execute(
           call("write_stdin", { sessionId, chars: "", yieldMs: 300 }),
           signal,
         );
+
         assert.equal(ready.outcome, "result", "a poll on a live session always answers");
+
         if (ready.outcome !== "result") {
           return;
         }
+
         banner += String(ready.value["output"] ?? "");
+
         if (banner.includes("BG-READY")) {
           break;
         }
       }
+
       assert.match(banner, /BG-READY/, "the child reached its read loop before anything was typed");
 
       const typed = await tools.execute(
         call("write_stdin", { sessionId, chars: "ping\n", yieldMs: 1_500 }),
         signal,
       );
+
       assert.equal(typed.outcome, "result");
+
       if (typed.outcome === "result") {
         assert.match(String(typed.value["output"] ?? ""), /BG-ECHO:ping#1/);
       }
 
       const stopped = await tools.execute(call("stop_process", { sessionId }), signal);
+
       assert.equal(stopped.outcome, "result", "a live session can be stopped");
+
       if (stopped.outcome === "result") {
         assert.match(String(stopped.output), /stopped/);
       }
+
       await sleep(300);
       // An empty poll on a finished session still answers; input does not. Both
       // halves matter: the first is how the last words are read, the second is
@@ -192,14 +219,18 @@ describe("run_shell runInBackground, through the production catalog", () => {
         call("write_stdin", { sessionId, chars: "", yieldMs: 300 }),
         signal,
       );
+
       assert.equal(polled.outcome, "result", "a finished session is still readable");
+
       if (polled.outcome === "result") {
         assert.notEqual(polled.value["status"], "running", "and no longer claims to run");
       }
+
       const typedAfter = await tools.execute(
         call("write_stdin", { sessionId, chars: "x", yieldMs: 300 }),
         signal,
       );
+
       assert.equal(typedAfter.outcome, "error", "a stopped session takes no further input");
     } finally {
       await sessions.shutdown();
@@ -217,7 +248,9 @@ describe("run_shell runInBackground, through the production catalog", () => {
         }),
         controller().signal,
       );
+
       assert.equal(outcome.outcome, "error");
+
       if (outcome.outcome === "error") {
         assert.equal(outcome.code, "background_single_command_only");
         assert.match(outcome.message, /separate calls/);
@@ -242,7 +275,9 @@ describe("run_shell runInBackground, through the production catalog", () => {
       }),
       controller().signal,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "background_not_available");
       assert.match(outcome.message, /foreground/, "the message names the alternative");
@@ -259,7 +294,9 @@ describe("run_shell runInBackground, through the production catalog", () => {
         call("run_shell", { command: nodeRunning("process.stdout.write('FG-OK')") }),
         controller().signal,
       );
+
       assert.equal(outcome.outcome, "result");
+
       if (outcome.outcome === "result") {
         assert.match(String(outcome.value["stdout"] ?? ""), /FG-OK/);
         assert.equal(outcome.value["sessionId"], undefined, "a foreground run has no session");
@@ -273,7 +310,9 @@ describe("run_shell runInBackground, through the production catalog", () => {
     const { tools, sessions, ptyAvailable } = toolsWithSession();
     try {
       const listed = await tools.execute(call("list_processes", {}), controller().signal);
+
       assert.equal(listed.outcome, "result");
+
       if (listed.outcome === "result") {
         assert.equal(
           listed.value["supportsTty"],

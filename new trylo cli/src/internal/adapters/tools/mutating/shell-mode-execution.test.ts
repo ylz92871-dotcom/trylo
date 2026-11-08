@@ -54,6 +54,7 @@ function toolsFor(root: string, shellMode?: ShellModeResult, spawns: { count: nu
       return createNodeSpawner()(spec);
     },
   };
+
   return { tools: createMutatingTools({ sandbox, spawner: counting.spawner, ...(shellMode === undefined ? {} : { shellMode }) }), spawns: counting };
 }
 
@@ -74,8 +75,11 @@ test("a shell interprets operators the direct path refuses", async () => {
     const { tools } = toolsFor(root, mode);
     // `&&` is refused without a shell and runs with one, on cmd and on sh alike.
     const outcome = await tools.execute(shellCall("echo alpha && echo beta"), SIGNAL);
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome !== "result") return;
+
     assert.match(outcome.output, /alpha/);
     assert.match(outcome.output, /beta/);
   } finally {
@@ -93,8 +97,11 @@ test("a requested shell that is not installed fails the call and starts nothing"
       spawns,
     );
     const outcome = await tools.execute(shellCall("echo hi"), SIGNAL);
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome !== "error") return;
+
     assert.equal(outcome.code, "shell_not_installed");
     assert.equal(spawns.count, 0);
   } finally {
@@ -108,8 +115,11 @@ test("steps with a shell are refused before any process exists", async () => {
     const spawns = { count: 0 };
     const { tools } = toolsFor(root, resolveLive(), spawns);
     const outcome = await tools.execute(shellCall("echo a", { steps: ["echo b"] }), SIGNAL);
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome !== "error") return;
+
     assert.equal(outcome.code, "shell_mode_rejects_composition");
     assert.equal(spawns.count, 0);
   } finally {

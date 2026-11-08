@@ -46,6 +46,7 @@ export async function runLspQuery(
   if (signal.aborted) {
     return { outcome: "cancelled" };
   }
+
   const operation = readOperation(call.arguments["operation"]);
   if (operation === undefined) {
     return {
@@ -54,15 +55,18 @@ export async function runLspQuery(
       message: `operation must be one of ${LSP_OPERATIONS.join(", ")}`,
     };
   }
+
   const path = call.arguments["path"];
   if (typeof path !== "string" || path.trim().length === 0) {
     return { outcome: "error", code: "invalid_arguments", message: "lsp_navigate requires a path" };
   }
+
   const relative = path.trim();
   const line = readIndex(call.arguments["line"]);
   if (line === undefined) {
     return { outcome: "error", code: "invalid_arguments", message: "line must be a non-negative integer" };
   }
+
   const character = readIndex(call.arguments["character"]);
   if (character === undefined) {
     return { outcome: "error", code: "invalid_arguments", message: "character must be a non-negative integer" };
@@ -73,6 +77,7 @@ export async function runLspQuery(
   if (!resolved.ok) {
     return failure(resolved.code, resolved.message);
   }
+
   const port = resolved.port;
 
   // Documents are pushed on first use and refreshed when their text moved, so
@@ -89,10 +94,12 @@ export async function runLspQuery(
   if (signal.aborted) {
     return { outcome: "cancelled" };
   }
+
   const result = await port.query({ operation, path: relative, line, character }, signal);
   if (!result.ok) {
     return failure(result.code, result.message);
   }
+
   if (result.answer.status === "empty") {
     // Said plainly, because "the server looked and there is nothing" is a real
     // answer and a model that cannot tell it from a failure will guess.
@@ -109,6 +116,7 @@ export async function runLspQuery(
       truncated: false,
     };
   }
+
   return {
     outcome: "result",
     value: answerValue(operation, relative, line, result.answer),
@@ -124,9 +132,11 @@ function answerValue(
   answer: Exclude<LspAnswer, { status: "empty" }>,
 ): JsonObject {
   const base: JsonObject = { operation, path, line, found: true, status: answer.status };
+
   if (answer.status === "answered") {
     return { ...base, locations: answer.locations.map((location) => locationValue(location)) };
   }
+
   if (answer.status === "symbols") {
     return {
       ...base,
@@ -138,12 +148,14 @@ function answerValue(
       })),
     };
   }
+
   if (answer.status === "calls") {
     return {
       ...base,
       callers: answer.items.map((item) => ({ name: item.name, kind: item.kind, location: locationValue(item.location) })),
     };
   }
+
   return { ...base, markdown: answer.markdown };
 }
 
@@ -197,9 +209,11 @@ function readIndex(value: unknown): number | undefined {
   if (value === undefined) {
     return 0;
   }
+
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
     return undefined;
   }
+
   return value;
 }
 

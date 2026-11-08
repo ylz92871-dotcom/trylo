@@ -145,9 +145,11 @@ function factKindArgument(call: ToolCallRequest): MemoryFactKind | undefined {
 function outcomeOf(result: MemoryCommandResult, retracted = false): ToolOutcome {
   const receipt = retracted && (result.result === "saved" || result.result === "already_saved")
     ? `已撤回这条 Trylo 用户记忆（${result.recordId} v${result.version}），后续不再检索。` : memoryReceiptText(result);
+
   if (result.result === "saved" || result.result === "already_saved") {
     return { outcome: "result", value: { ...result, receipt }, output: receipt, truncated: false };
   }
+
   // Everything that is not a save is an error for the model: a failed or
   // disabled write must not look like a successful tool call, or the next
   // sentence is "记好了".
@@ -155,6 +157,7 @@ function outcomeOf(result: MemoryCommandResult, retracted = false): ToolOutcome 
     : result.result === "pending" ? "memory_pending"
       : result.result === "rejected" ? `memory_rejected:${result.reason}`
         : "memory_write_failed";
+
   return { outcome: "error", code, message: receipt };
 }
 
@@ -162,12 +165,14 @@ function runRemember(service: UserMemoryService, call: ToolCallRequest): ToolOut
   const subject = textArgument(call, "subject"), statement = textArgument(call, "statement");
   const factKind = factKindArgument(call);
   const scopeKind = call.arguments["scope"] === "project" ? "project" : "user";
+
   if (subject === undefined || statement === undefined || factKind === undefined) {
     return {
       outcome: "error", code: "invalid_arguments",
       message: "memory_remember needs subject, statement and a valid fact_kind",
     };
   }
+
   return outcomeOf(service.remember({ commandId: commandIdOf(call), subject, statement, factKind, scopeKind }));
 }
 
@@ -180,10 +185,12 @@ function runForget(service: UserMemoryService, call: ToolCallRequest): ToolOutco
       message: "memory_forget needs record_id and an integer expected_version",
     };
   }
+
   if (call.name === MEMORY_CORRECT_TOOL) {
     const statement = textArgument(call, "statement");
     if (statement === undefined) return { outcome: "error", code: "invalid_arguments", message: "memory_correct needs a non-empty statement" };
     return outcomeOf(service.correct({ commandId: commandIdOf(call), recordId, expectedVersion, statement }));
   }
+
   return outcomeOf(service.retract({ commandId: commandIdOf(call), recordId, expectedVersion }), true);
 }

@@ -4,7 +4,9 @@ import type { CommandShape } from "../../sandbox/executable.js";
 /** Mechanical argv spawning, shared by host pipes and the restricted Windows runner. */
 export function startShellChild(shape: CommandShape, cwd: string, stdio: readonly ["ignore" | "pipe", "pipe", "pipe"], env: Readonly<Record<string, string | undefined>>, platform: NodeJS.Platform): ChildProcess {
   const [file, ...args] = shape.argv;
+
   if (file === undefined) throw new Error("shell needs an executable");
+
   return spawn(file, args, {
     cwd, env, stdio: [...stdio], windowsHide: true,
     ...(platform === "win32" ? {} : { detached: true }),
@@ -21,12 +23,15 @@ export function startShellPipeline(shapes: readonly CommandShape[], start: (shap
       throw new Error("invalid_pipeline_argv");
     }
   }
+
   const children = shapes.map((shape, index) => start(shape, index > 0));
+
   for (let index = 0; index + 1 < children.length; index += 1) {
     const producer = children[index]?.stdout;
     const receiver = children[index + 1];
     const input = receiver?.stdin;
     if (producer === null || producer === undefined || receiver === undefined || input === null || input === undefined) continue;
+
     input.on("close", () => {
       // A finite producer must be able to finish after a receiver such as head
       // exits early. The discarded tail is not the final stage's stdout.
@@ -39,5 +44,6 @@ export function startShellPipeline(shapes: readonly CommandShape[], start: (shap
     });
     producer.pipe(input);
   }
+
   return children;
 }

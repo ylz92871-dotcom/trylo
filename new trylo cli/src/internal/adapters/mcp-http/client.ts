@@ -1,5 +1,7 @@
 import type { JsonObject } from "../../protocol/envelope.js";
+import { executionDeadline } from "../execution-deadline.js";
 import { TRYLO_VERSION } from "../../protocol/version.js";
+import { createWorkspaceRoots, type McpWorkspaceRoots } from "../../mcp/roots.js";
 import type {
   McpCallFailure,
   McpCallRequest,
@@ -54,7 +56,7 @@ import { createStreamableHttpTransport } from "./streamable-http.js";
  *
  * The lifecycle is the stdio client's lifecycle, deliberately: initialize
  * before anything else, tools listed before they are callable, every call
- * under a finite deadline. The type returned is `McpStdioClient` — the port's
+ * honors explicit deadlines and cancellation. The type returned is `McpStdioClient` — the port's
  * *shape* is "one MCP conversation", and only its name says stdio; a remote
  * client that satisfies it can sit behind the same composition root (see
  * `mcp/session.ts`) without a second port.
@@ -63,8 +65,8 @@ import { createStreamableHttpTransport } from "./streamable-http.js";
  *
  *  - **Version refusal.** A server answering `initialize` with an unsupported
  *    revision is disconnected before `initialized` is sent.
- *  - **Capability refusal.** `elicitation`, `sampling` and `roots` are answered
- *    with a JSON-RPC error and the session is closed (D3 §10.11).
+ *  - **Capability refusal.** `elicitation`, `sampling` and unconfigured roots
+ *    are answered with a JSON-RPC error and the session is closed (D3 §10.11).
  */
 
 export type McpHttpClientSpec = {
@@ -72,6 +74,8 @@ export type McpHttpClientSpec = {
   /** `"http"` = Streamable HTTP; `"sse"` = legacy HTTP+SSE. */
   readonly transport: "http" | "sse";
   readonly url: string;
+  /** Opt-in local workspace disclosure. Remote registry entries do not set this implicitly. */
+  readonly workspaceRoot?: string;
   /** Registry `headers`, sent on every request. Values stay client-side. */
   readonly headers?: Readonly<Record<string, string>>;
   /** How long the whole handshake may take. */
@@ -94,6 +98,7 @@ const UNSUPPORTED_SERVER_METHODS = new Set<string>([
 
 type ClientState = {
   readonly spec: McpHttpClientSpec;
+  readonly roots: McpWorkspaceRoots;
   readonly nextId: () => number;
   readonly transportFactory: (spec: RemoteWireSpec) => RemoteTransport;
   readonly droppedToolNames: string[];
@@ -111,6 +116,7 @@ const wireSpecOf = (spec: McpHttpClientSpec): RemoteWireSpec => ({
 export function createMcpHttpClient(spec: McpHttpClientSpec): McpStdioClient {
   const state: ClientState = {
     spec,
+    roots: createWorkspaceRoots(spec.workspaceRoot),
     nextId: createRequestIds(),
     transportFactory: (wire) =>
       spec.transport === "sse" ? createLegacySseTransport(wire, spec.fetchImpl ?? fetch) : createStreamableHttpTransport(wire, spec.fetchImpl ?? fetch),
@@ -149,10 +155,13 @@ async function connectClient(
   if (state.closed) {
     return failConnect("closed", "closed: the connection has been closed");
   }
+
   if (state.transport !== undefined) {
     return failConnect("already_connected", "this client already owns a connection");
   }
+
   const transport = state.transportFactory(wireSpecOf(state.spec));
+
   state.transport = transport;
   transport.onIncoming((message) => handleIncoming(state, transport, message));
 
@@ -161,11 +170,12 @@ async function connectClient(
     () => controller.abort(),
     state.spec.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS,
   );
+
   try {
     const response = await transport.request(
       requestMessage(state.nextId(), "initialize", {
         protocolVersion: state.spec.protocolVersion ?? DEFAULT_MCP_PROTOCOL_VERSION,
-        capabilities: { tools: {}, resources: {} },
+        capabilities: state.roots.capabilities,
         clientInfo: CLIENT_INFO,
       }),
       controller.signal,
@@ -175,8 +185,10 @@ async function connectClient(
       await closeClient(state);
       return info;
     }
+
     transport.notify(notificationMessage("initialized"));
     state.serverInfo = info.value;
+
     return { ok: true, value: info.value };
   } catch (error) {
     return await connectFailure(state, error, controller.signal.aborted);
@@ -192,16 +204,20 @@ async function connectFailure(
   aborted: boolean,
 ): Promise<McpConnectFailure> {
   await closeClient(state);
+
   if (aborted) {
     return failConnect("handshake_timeout", "the server did not answer initialize before the deadline");
   }
+
   if (error instanceof RemoteRequestError) {
     return wireFailureToConnect(error.failure);
   }
+
   const wireFailure = state.transport?.failure();
   if (wireFailure !== undefined) {
     return wireFailureToConnect(wireFailure);
   }
+
   return failConnect("framing", `unexpected handshake error: ${error instanceof Error ? error.message : String(error)}`);
 }
 
@@ -211,9 +227,11 @@ const ensureOpen = <T>(state: ClientState, failure: (detail: string) => T): Open
   if (state.closed) {
     return { failure: failure("closed: the connection has been closed") };
   }
+
   if (state.transport === undefined) {
     return { failure: failure("not_initialized: connect() has not been called") };
   }
+
   return undefined;
 };
 
@@ -224,17 +242,22 @@ async function listClientTools(
   if (notOpen !== undefined) {
     return notOpen.failure;
   }
+
   if (state.listCache !== undefined) {
     return { ok: true, value: state.listCache };
   }
+
   const transport = state.transport as RemoteTransport;
+
   try {
     const response = await transport.request(requestMessage(state.nextId(), "tools/list", {}));
     const parsed = interpretRemoteToolList(response, state.spec.serverId, state.droppedToolNames);
     if (!parsed.ok) {
       return parsed;
     }
+
     state.listCache = parsed.value;
+
     return { ok: true, value: state.listCache };
   } catch (error) {
     return listFailure(state, error);
@@ -245,10 +268,12 @@ function listFailure(state: ClientState, error: unknown): McpToolListFailure {
   if (error instanceof RemoteRequestError) {
     return wireFailureToToolList(error.failure);
   }
+
   const wireFailure = state.transport?.failure();
   if (wireFailure !== undefined) {
     return wireFailureToToolList(wireFailure);
   }
+
   return { ok: false, code: "framing", detail: `unexpected tools/list error: ${String(error)}` };
 }
 
@@ -262,21 +287,26 @@ async function resolveCallableTool(
   if (notOpen !== undefined) {
     return notOpen.failure;
   }
-  if (!Number.isFinite(request.timeoutMs) || request.timeoutMs <= 0) {
+
+  if (request.timeoutMs !== undefined && (!Number.isSafeInteger(request.timeoutMs) || request.timeoutMs <= 0)) {
     return refuseCall("invalid_arguments", "timeoutMs must be a finite positive number");
   }
+
   const split = splitQualified(request.qualifiedName);
   if (split === undefined || split.serverId !== state.spec.serverId) {
     return refuseCall("unknown_tool", `${request.qualifiedName} does not belong to server ${state.spec.serverId}`);
   }
+
   const list = await listClientTools(state);
   if (!list.ok) {
     return refuseCall("protocol_error", `tool list unavailable: ${list.detail}`);
   }
+
   const tool = list.value.find((item) => item.serverToolName === split.serverToolName);
   if (tool === undefined) {
     return refuseCall("unknown_tool", `${split.serverToolName} is not published by this server`);
   }
+
   return { ok: true, tool };
 }
 
@@ -288,20 +318,24 @@ async function callClientTool(
   if (!resolved.ok) {
     return resolved;
   }
+
   const transport = state.transport as RemoteTransport;
   const controller = new AbortController();
   const onAbort = (): void => controller.abort();
+
   if (request.signal !== undefined) {
     if (request.signal.aborted) {
       return { ok: true, outcome: { outcome: "cancelled" } };
     }
     request.signal.addEventListener("abort", onAbort, { once: true });
   }
+
   let timedOut = false;
-  const timer = setTimeout(() => {
+  const timer = executionDeadline(request.timeoutMs, () => {
     timedOut = true;
     controller.abort();
-  }, request.timeoutMs);
+  });
+
   try {
     const response = await transport.request(
       requestMessage(state.nextId(), "tools/call", {
@@ -310,17 +344,20 @@ async function callClientTool(
       }),
       controller.signal,
     );
+
     if (timedOut) {
       return { ok: true, outcome: remoteTimeoutOutcome() };
     }
+
     if (request.signal?.aborted === true) {
       return { ok: true, outcome: { outcome: "cancelled" } };
     }
+
     return { ok: true, outcome: interpretRemoteToolResult(response) };
   } catch (error) {
     return await callFailure(state, error, timedOut);
   } finally {
-    clearTimeout(timer);
+    timer?.cancel();
     if (request.signal !== undefined) {
       request.signal.removeEventListener("abort", onAbort);
     }
@@ -335,6 +372,7 @@ async function callFailure(
   if (timedOut) {
     return { ok: true, outcome: remoteTimeoutOutcome() };
   }
+
   if (error instanceof RemoteRequestError) {
     if (error.failure.code === "server_gone" || error.failure.code === "unreachable") {
       await closeClient(state);
@@ -342,6 +380,7 @@ async function callFailure(
     }
     return wireFailureToCall(error.failure);
   }
+
   return refuseCall("framing", `unexpected tools/call error: ${String(error)}`);
 }
 
@@ -364,10 +403,12 @@ async function listClientResources(
   if (notOpen !== undefined) {
     return notOpen.failure;
   }
+
   const deadline = timeoutMs ?? DEFAULT_MCP_LIST_TIMEOUT_MS;
   if (!Number.isFinite(deadline) || deadline <= 0) {
     return { ok: false, code: "invalid_arguments", detail: "timeoutMs must be a finite positive number" };
   }
+
   const transport = state.transport as RemoteTransport;
   const controller = new AbortController();
   let timedOut = false;
@@ -375,6 +416,7 @@ async function listClientResources(
     timedOut = true;
     controller.abort();
   }, deadline);
+
   try {
     const response = await transport.request(
       requestMessage(state.nextId(), "resources/list", {
@@ -382,9 +424,11 @@ async function listClientResources(
       }),
       controller.signal,
     );
+
     if (timedOut) {
       return { ok: false, code: "timeout", detail: "the server did not answer resources/list before the deadline" };
     }
+
     return interpretResourceList(response);
   } catch (error) {
     if (timedOut) {
@@ -405,17 +449,20 @@ async function listClientResourceTemplates(
   if (notOpen !== undefined) {
     return notOpen.failure;
   }
+
   const transport = state.transport as RemoteTransport;
   const deadline = timeoutMs ?? DEFAULT_MCP_LIST_TIMEOUT_MS;
   if (!Number.isFinite(deadline) || deadline <= 0) {
     return { ok: false, code: "invalid_arguments", detail: "timeoutMs must be a finite positive number" };
   }
+
   const controller = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort();
   }, deadline);
+
   try {
     const response = await transport.request(
       requestMessage(state.nextId(), "resources/templates/list", {
@@ -423,6 +470,7 @@ async function listClientResourceTemplates(
       }),
       controller.signal,
     );
+
     if (timedOut) {
       return {
         ok: false,
@@ -430,6 +478,7 @@ async function listClientResourceTemplates(
         detail: "the server did not answer resources/templates/list before the deadline",
       };
     }
+
     return interpretResourceTemplates(response);
   } catch (error) {
     if (timedOut) {
@@ -459,48 +508,59 @@ async function readClientResource(
   if (notOpen !== undefined) {
     return notOpen.failure;
   }
+
   if (request.uri.length === 0) {
     return refuseResource("invalid_arguments", "uri must be a non-empty string");
   }
-  if (!Number.isFinite(request.timeoutMs) || request.timeoutMs <= 0) {
+
+  if (request.timeoutMs !== undefined && (!Number.isSafeInteger(request.timeoutMs) || request.timeoutMs <= 0)) {
     return refuseResource("invalid_arguments", "timeoutMs must be a finite positive number");
   }
+
   const transport = state.transport as RemoteTransport;
   const controller = new AbortController();
   const onAbort = (): void => controller.abort();
+
   if (request.signal !== undefined) {
     if (request.signal.aborted) {
       return refuseResource("cancelled", "read cancelled before it was sent");
     }
     request.signal.addEventListener("abort", onAbort, { once: true });
   }
+
   let timedOut = false;
-  const timer = setTimeout(() => {
+  const timer = executionDeadline(request.timeoutMs, () => {
     timedOut = true;
     controller.abort();
-  }, request.timeoutMs);
+  });
+
   try {
     const response = await transport.request(
       requestMessage(state.nextId(), "resources/read", { uri: request.uri }),
       controller.signal,
     );
+
     if (timedOut) {
       return refuseResource("timeout", "the server did not answer resources/read before the deadline");
     }
+
     if (request.signal?.aborted === true) {
       return refuseResource("cancelled", "read cancelled while waiting for the server");
     }
+
     return interpretResourceRead(response);
   } catch (error) {
     if (timedOut) {
       return refuseResource("timeout", "the server did not answer resources/read before the deadline");
     }
+
     if (request.signal?.aborted === true) {
       return refuseResource("cancelled", "read cancelled while waiting for the server");
     }
+
     return resourceFailure(state, error);
   } finally {
-    clearTimeout(timer);
+    timer?.cancel();
     if (request.signal !== undefined) {
       request.signal.removeEventListener("abort", onAbort);
     }
@@ -511,10 +571,12 @@ function resourceFailure(state: ClientState, error: unknown): McpResourceFailure
   if (error instanceof RemoteRequestError) {
     return wireFailureToResource(error.failure);
   }
+
   const wireFailure = state.transport?.failure();
   if (wireFailure !== undefined) {
     return wireFailureToResource(wireFailure);
   }
+
   return { ok: false, code: "framing", detail: `unexpected resources error: ${String(error)}` };
 }
 
@@ -522,6 +584,7 @@ async function closeClient(state: ClientState): Promise<void> {
   if (state.closed) {
     return;
   }
+
   state.closed = true;
   state.listCache = undefined;
   state.serverInfo = undefined;
@@ -542,15 +605,24 @@ function handleIncoming(
   message: JsonRpcIncomingRequest | JsonRpcNotification,
 ): void {
   const isRequest = "id" in message;
+
+  if (isRequest && message.method === "roots/list" && state.roots.list !== undefined) {
+    transport.respond({ jsonrpc: "2.0", id: message.id, result: state.roots.list });
+    return;
+  }
+
   if (UNSUPPORTED_SERVER_METHODS.has(message.method)) {
     if (isRequest) {
       transport.respond(
         errorResponse(message.id, JSON_RPC_METHOD_NOT_FOUND, `unsupported capability: ${message.method}`),
       );
     }
+
     void closeClient(state);
+
     return;
   }
+
   if (isRequest) {
     transport.respond(
       errorResponse(message.id, JSON_RPC_METHOD_NOT_FOUND, `method not supported: ${message.method}`),

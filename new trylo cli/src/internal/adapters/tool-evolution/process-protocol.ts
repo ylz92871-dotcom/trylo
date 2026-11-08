@@ -58,19 +58,25 @@ export function readResult(stdout: string): unknown {
   const ready = lines.filter(line => line.startsWith(READY_MARKER));
   const results = lines.filter(line => line.startsWith(RESULT_MARKER));
   if (ready.length !== 1 || results.length !== 1) return undefined;
+
   const nonce = ready[0]?.slice(READY_MARKER.length);
   const line = results[0];
   if (nonce === undefined || !/^[a-f0-9]{48}$/.test(nonce) || line === undefined) return undefined;
+
   const prefix = `${RESULT_MARKER}${nonce}:`;
   if (!line.startsWith(prefix) || line.length > MAX_RESULT_CHARS + prefix.length
     || lines.indexOf(ready[0] as string) > lines.indexOf(line)) return undefined;
+
   try {
     const value: unknown = JSON.parse(line.slice(prefix.length));
     if (typeof value !== "object" || value === null || !("kind" in value)) return undefined;
+
     const keys = Object.keys(value).sort().join(",");
     if (value.kind === "value" && keys === "kind,value") return value;
+
     if (value.kind === "error" && keys === "code,kind" && "code" in value && typeof value.code === "string"
       && value.code.length > 0 && value.code.length <= 200) return value;
+
     return undefined;
   } catch {
     return undefined;

@@ -7,7 +7,9 @@ import { compileGlob } from "./glob-match.js";
 import type { FileSystemReader } from "./limits.js";
 
 export const DEFAULT_EXCLUDED_DIRECTORIES: ReadonlyArray<string> = [".git", "node_modules", "dist"];
+
 type GlobMatcher = { matches(value: string): boolean };
+
 type RuleSet = { readonly directory: string; readonly matcher: Ignore };
 
 /** External approved targets need their own relative namespace, never ../ in node-ignore. */
@@ -19,16 +21,20 @@ export function navigationFilters(args: JsonObject):
   | { readonly include: ReadonlyArray<GlobMatcher>; readonly exclude: ReadonlyArray<GlobMatcher> }
   | { readonly error: string } {
   const filters: { include: GlobMatcher[]; exclude: GlobMatcher[] } = { include: [], exclude: [] };
+
   for (const key of ["include", "exclude"] as const) {
     const patterns = args[key];
     if (patterns === undefined) continue;
+
     if (!Array.isArray(patterns) || !patterns.every(p => typeof p === "string")) return { error: `${key} must be an array of glob strings` };
+
     for (const pattern of patterns) {
       const compiled = compileGlob(String(pattern));
       if (!compiled.ok) return { error: `${key}: ${compiled.message}` };
       filters[key].push(compiled.matcher);
     }
   }
+
   return filters;
 }
 
@@ -43,6 +49,7 @@ export function createNavigationView(input: {
   const excludedNames = new Set(input.excludeDirectories ?? DEFAULT_EXCLUDED_DIRECTORIES);
   const memo = new Map<string, Promise<RuleSet | undefined>>();
   const relative = (absolute: string) => path.relative(input.workspaceRoot, absolute).replaceAll("\\", "/");
+
   function rules(directory: string): Promise<RuleSet | undefined> {
     let pending = memo.get(directory);
     if (pending === undefined) {
@@ -54,10 +61,13 @@ export function createNavigationView(input: {
       })();
       memo.set(directory, pending);
     }
+
     return pending;
   }
+
   async function visible(absolute: string, directory: boolean): Promise<boolean> {
     const segments = relative(absolute).split("/").filter(Boolean);
+
     // The nesting here is load-bearing and NOT an optimisation target.
     //
     // Each ancestor is tested on its own, and each `.gitignore` is consulted with
@@ -70,8 +80,10 @@ export function createNavigationView(input: {
     // it. Correctness wins; the enumeration cost is paid knowingly.
     for (let length = 1; length <= segments.length; length += 1) {
       if (excludedNames.has(segments[length - 1] ?? "")) return false;
+
       let parent = input.workspaceRoot;
       let ignored = false;
+
       for (let i = 0; i < length; i += 1) {
         const set = await rules(parent);
         if (set !== undefined) {
@@ -80,12 +92,16 @@ export function createNavigationView(input: {
           if (result.ignored) ignored = true;
           else if (result.unignored) ignored = false;
         }
+
         parent = path.join(parent, segments[i] ?? "");
       }
+
       if (ignored) return false;
     }
+
     return true;
   }
+
   return {
     relative, visible,
     accepts(absolute: string): boolean {

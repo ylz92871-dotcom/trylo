@@ -42,19 +42,23 @@ export async function executeViewImage(
   if (requested === undefined) {
     return { outcome: "error", code: "invalid_arguments", message: "view_image requires path" };
   }
+
   // Rejected before the file is touched: a bad `detail` must not cost a read,
   // the same rule `read_file` applies to a bad `offset`.
   const detail = checkImageDetail(readStringArg(call.arguments, "detail"));
   if (!detail.ok) {
     return { outcome: "error", code: "invalid_arguments", message: `view_image: ${detail.message}` };
   }
+
   if (signal.aborted) {
     return { outcome: "cancelled" };
   }
+
   const verdict = resolveInsideWorkspace(config.workspaceRoot, requested, config.fileAccess, config.workspaceAlias);
   if (!verdict.ok) {
     return { outcome: "error", code: verdict.code, message: verdict.code };
   }
+
   const readBytes = config.reader.readFileBytes;
   if (readBytes === undefined) {
     return {
@@ -63,7 +67,9 @@ export async function executeViewImage(
       message: "bytes_unavailable: this filesystem reader serves text only",
     };
   }
+
   let bytes: Uint8Array;
+
   try {
     bytes = await readBytes(verdict.absolutePath, signal);
   } catch (error) {
@@ -73,13 +79,16 @@ export async function executeViewImage(
     const detailMessage = error instanceof Error ? error.message : "read_error";
     return { outcome: "error", code: "read_failed", message: `read_failed:${detailMessage}` };
   }
+
   if (signal.aborted) {
     return { outcome: "cancelled" };
   }
+
   const validation = checkImageBytes({ bytes, path: requested });
   if (!validation.ok) {
     return { outcome: "error", code: validation.code, message: validation.message };
   }
+
   const attachment = { ...validation.attachment, detail: detail.detail };
   const summary = describeImageForLog(attachment);
   const value: JsonObject = {
@@ -94,7 +103,9 @@ export async function executeViewImage(
   // does not follow a retargeted workspace junction or reject its valid alias.
   const reference = { path: config.workspaceAlias === undefined ? requested : verdict.absolutePath,
     sha256: createHash("sha256").update(bytes).digest("hex"), bytes: bytes.length, detail: detail.detail };
+
   config.onImageValidated?.(reference, verdict.absolutePath);
+
   return {
     outcome: "result",
     value,

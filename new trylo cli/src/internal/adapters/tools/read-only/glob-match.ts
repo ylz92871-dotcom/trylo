@@ -37,18 +37,21 @@ class GlobSyntaxError extends Error {}
 /** Finds the `}` matching the `{` at `open`, honoring nesting. -1 when absent. */
 function matchingBrace(pattern: string, open: number): number {
   let depth = 0;
+
   for (let i = open; i < pattern.length; i += 1) {
     const char = pattern[i];
     if (char === "\\") {
       i += 1;
       continue;
     }
+
     if (char === "[") {
       const close = matchingBracket(pattern, i);
       if (close === -1) throw new GlobSyntaxError("unterminated character class");
       i = close;
       continue;
     }
+
     if (char === "{") {
       depth += 1;
     } else if (char === "}") {
@@ -58,6 +61,7 @@ function matchingBrace(pattern: string, open: number): number {
       }
     }
   }
+
   return -1;
 }
 
@@ -66,6 +70,7 @@ function splitAlternatives(body: string): Array<string> {
   const parts: string[] = [];
   let depth = 0;
   let current = "";
+
   for (let i = 0; i < body.length; i += 1) {
     const char = body[i];
     if (char === "\\") {
@@ -73,6 +78,7 @@ function splitAlternatives(body: string): Array<string> {
       i += 1;
       continue;
     }
+
     if (char === "[") {
       const close = matchingBracket(body, i);
       if (close === -1) throw new GlobSyntaxError("unterminated character class");
@@ -80,6 +86,7 @@ function splitAlternatives(body: string): Array<string> {
       i = close;
       continue;
     }
+
     if (char === "{") {
       depth += 1;
     } else if (char === "}") {
@@ -89,9 +96,12 @@ function splitAlternatives(body: string): Array<string> {
       current = "";
       continue;
     }
+
     current += char;
   }
+
   parts.push(current);
+
   return parts;
 }
 
@@ -103,6 +113,7 @@ function matchingBracket(pattern: string, open: number): number {
       i += 1;
       continue;
     }
+
     if (char === "]") {
       return i;
     }
@@ -117,9 +128,11 @@ function compileClassBody(body: string): string {
   if (rest.length === 0) {
     throw new GlobSyntaxError("empty character class");
   }
+
   // Inside a class only `\`, `]` and `[` need care; ranges pass through, and a
   // backslash escape keeps its regex meaning.
   const escaped = rest.replace(/[[\]]/g, "\\$&");
+
   // Like `?` and `*`, a class describes one character within a segment.
   // Negated classes would otherwise consume '/' and silently cross folders.
   return `(?!/)[${negated ? "^" : ""}${escaped}]`;
@@ -132,13 +145,16 @@ const literal = (value: string): GlobToken => ({ kind: "character", accepts: cha
 /** Parsing retains the existing syntax; the executor never backtracks. */
 function parseGlob(pattern: string, depth = 0): ReadonlyArray<GlobToken> {
   if (depth > 32) throw new GlobSyntaxError("brace nesting exceeds 32 levels");
+
   const tokens: GlobToken[] = [];
+
   for (let i = 0; i < pattern.length; i += 1) {
     const char = pattern.charAt(i);
     if (char === "\\") {
       const next = pattern[i + 1];
       if (next === undefined) throw new GlobSyntaxError("pattern ends with a backslash");
-      tokens.push(literal(next)); i += 1;
+      tokens.push(literal(next));
+      i += 1;
     } else if (char === "{") {
       const close = matchingBrace(pattern, i);
       if (close < 0) throw new GlobSyntaxError("unbalanced '{'");
@@ -167,6 +183,7 @@ function parseGlob(pattern: string, depth = 0): ReadonlyArray<GlobToken> {
       }
     } else tokens.push(char === "?" ? { kind: "character", accepts: withinSegment } : literal(char));
   }
+
   return tokens;
 }
 
@@ -185,6 +202,7 @@ function hasUnescapedSlash(pattern: string): boolean {
 
 export function compileGlob(pattern: string): GlobCompileResult {
   let matches: (text: string) => boolean;
+
   try {
     if (pattern.length > 4096) throw new GlobSyntaxError("pattern exceeds 4096 code units");
     matches = globProgram(parseGlob(pattern));
@@ -192,7 +210,9 @@ export function compileGlob(pattern: string): GlobCompileResult {
     const reason = error instanceof Error ? error.message : "invalid pattern";
     return { ok: false, code: "invalid_pattern", message: `invalid_pattern:${reason}` };
   }
+
   const basenameOnly = !hasUnescapedSlash(pattern);
+
   return {
     ok: true,
     matcher: {

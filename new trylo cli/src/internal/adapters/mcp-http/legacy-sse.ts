@@ -89,7 +89,9 @@ export function createLegacySseTransport(
     endpoint: undefined,
     failure: undefined,
   };
+
   openEventStream(state);
+
   return {
     request: (message, signal) => requestSse(state, message, signal),
     notify: (message) => {
@@ -129,6 +131,7 @@ function openEventStream(state: SseState): void {
       if (response.status < 200 || response.status >= 300 || response.body === null) {
         throw new RemoteRequestError(httpStatusFailure(response.status, "GET event stream"));
       }
+
       await pumpEventStream(state, response.body);
     } catch (error) {
       if (error instanceof RemoteRequestError) {
@@ -152,19 +155,24 @@ async function pumpEventStream(state: SseState, body: ReadableStream<Uint8Array>
   // The open event is threaded across reads: an event whose terminator lands
   // in a later chunk must survive the read boundary.
   let open = freshSseOpen;
+
   for (;;) {
     const next = await reader.read();
     if (next.done) {
       break;
     }
+
     buffered += decoder.decode(next.value, { stream: true });
     const scanned = scanSse(buffered, open);
+
     buffered = scanned.rest;
     open = scanned.open;
+
     for (const event of scanned.events) {
       handleStreamEvent(state, event);
     }
   }
+
   reportFailure(state, { code: "server_gone", detail: "the event stream closed" });
 }
 
@@ -177,6 +185,7 @@ function handleStreamEvent(state: SseState, event: { readonly event: string; rea
     }
     return;
   }
+
   const message = decodeWireMessage(event.data);
   if (isResponse(message)) {
     // A response with a null id is one the server could not attribute; it
@@ -190,6 +199,7 @@ function handleStreamEvent(state: SseState, event: { readonly event: string; rea
     }
     return;
   }
+
   state.deps.onIncoming(message);
 }
 
@@ -199,6 +209,7 @@ async function requestSse(
   signal?: AbortSignal,
 ): Promise<JsonRpcResponse> {
   let endpoint: string;
+
   try {
     endpoint = await state.endpointReady;
   } catch {
@@ -207,11 +218,13 @@ async function requestSse(
       state.failure ?? { code: "server_gone", detail: "the event stream never produced an endpoint" },
     );
   }
+
   // The pending resolver is armed *before* the POST: the reply travels on the
   // event stream, so it can arrive the moment the server sees the request —
   // before this caller has finished awaiting its own POST. Arming late is how
   // a reply is silently dropped and the request hangs forever.
   const reply = armPending(state, message.id, signal);
+
   try {
     const posted = await postJson(state.deps, { ...state.spec, url: endpoint }, message, signal);
     if (posted.status < 200 || posted.status >= 300) {
@@ -224,6 +237,7 @@ async function requestSse(
     dropPending(state, message.id);
     throw error;
   }
+
   return await reply;
 }
 
@@ -237,15 +251,19 @@ function armPending(state: SseState, id: JsonRpcId, signal?: AbortSignal): Promi
     const fail = (failure: RemoteTransportFailure): void => {
       reject(new RemoteRequestError(failure));
     };
+
     if (signal?.aborted === true) {
       fail({ code: "framing", detail: "aborted before the request was sent" });
       return;
     }
+
     if (state.failure !== undefined) {
       fail(state.failure);
       return;
     }
+
     let onAbort: (() => void) | undefined;
+
     if (signal !== undefined) {
       onAbort = () => {
         state.pending.delete(id);
@@ -253,6 +271,7 @@ function armPending(state: SseState, id: JsonRpcId, signal?: AbortSignal): Promi
       };
       signal.addEventListener("abort", onAbort, { once: true });
     }
+
     state.pending.set(id, {
       resolve: (response) => {
         if (onAbort !== undefined) {
@@ -314,11 +333,13 @@ function reportFailure(state: SseState, failure: RemoteTransportFailure): void {
     state.failure = failure;
     state.rejectEndpoint?.(failure);
   }
+
   // Every in-flight request fails with the wire failure, never with silence.
   for (const [id, pending] of [...state.pending]) {
     state.pending.delete(id);
     pending.reject(new RemoteRequestError(failure));
   }
+
   for (const listener of state.failureListeners) {
     listener(failure);
   }

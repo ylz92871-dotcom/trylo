@@ -94,36 +94,45 @@ function collectSources(body: HostedSearchResponse): ReadonlyArray<WebSearchSour
     if (!isRecord(value)) {
       return;
     }
+
     const url = value["url"];
     if (typeof url !== "string" || url.length === 0) {
       return;
     }
+
     const title = value["title"];
+
     found.set(url, { url, title: typeof title === "string" && title.length > 0 ? title : url });
   };
+
   if (Array.isArray(body.citations)) {
     for (const item of body.citations) {
       take(item);
     }
   }
+
   const output = body.output;
   if (Array.isArray(output)) {
     for (const item of output) {
       if (!isRecord(item)) {
         continue;
       }
+
       const content = item["content"];
       if (!Array.isArray(content)) {
         continue;
       }
+
       for (const block of content) {
         if (!isRecord(block)) {
           continue;
         }
+
         const annotations = block["annotations"];
         if (!Array.isArray(annotations)) {
           continue;
         }
+
         for (const annotation of annotations) {
           if (isRecord(annotation) && annotation["type"] === "url_citation") {
             take(annotation as CitationAnnotation);
@@ -132,6 +141,7 @@ function collectSources(body: HostedSearchResponse): ReadonlyArray<WebSearchSour
       }
     }
   }
+
   return [...found.values()];
 }
 
@@ -139,6 +149,7 @@ function answerText(body: HostedSearchResponse): string {
   if (typeof body.output_text === "string" && body.output_text.length > 0) {
     return body.output_text;
   }
+
   const chunks: string[] = [];
   const output = body.output;
   if (Array.isArray(output)) {
@@ -146,10 +157,12 @@ function answerText(body: HostedSearchResponse): string {
       if (!isRecord(item)) {
         continue;
       }
+
       const content = item["content"];
       if (!Array.isArray(content)) {
         continue;
       }
+
       for (const block of content) {
         if (isRecord(block) && typeof block["text"] === "string") {
           chunks.push(block["text"]);
@@ -157,6 +170,7 @@ function answerText(body: HostedSearchResponse): string {
       }
     }
   }
+
   return chunks.join("");
 }
 
@@ -173,12 +187,15 @@ function hostedTool(request: WebSearchRequest): Record<string, unknown> {
     type: "web_search",
     external_web_access: request.mode === "live",
   };
+
   if (request.allowedDomains !== undefined) {
     tool["filters"] = { allowed_domains: request.allowedDomains };
   }
+
   if (request.blockedDomains !== undefined) {
     tool["filters"] = { blocked_domains: request.blockedDomains };
   }
+
   return tool;
 }
 
@@ -190,6 +207,7 @@ export function createHostedSearchBackend(
     // Returning undefined makes "no search" a fact the tool table can see.
     return undefined;
   }
+
   const endpoint = config.endpoint;
   const providerId = config.providerId ?? "openai-responses";
   const doFetch = config.doFetch ?? globalThis.fetch;
@@ -201,6 +219,7 @@ export function createHostedSearchBackend(
       if (signal.aborted) {
         return webSearchFailure("network", "web_search was cancelled before the request");
       }
+
       if (request.mode === "live" && config.allowExternalWeb !== true) {
         // Refused by configuration rather than downgraded: a caller who asked
         // for live search and silently received an index answer is being told
@@ -210,6 +229,7 @@ export function createHostedSearchBackend(
           `${providerId} has not enabled live web access; run a cached search instead`,
         );
       }
+
       // The credential is resolved per call, not read once at construction: an
       // account whose access token has expired gets the same refresh the main
       // conversation path performs (`responses.ts`), instead of a 401 that only
@@ -217,6 +237,7 @@ export function createHostedSearchBackend(
       // stored key, which is the same order the Responses path uses.
       const apiKey = await resolveApiKey(config);
       let response: Response;
+
       try {
         response = await doFetch(endpoint, {
           method: "POST",
@@ -235,11 +256,14 @@ export function createHostedSearchBackend(
           `web_search could not reach ${providerId}: ${String(cause)}`,
         );
       }
+
       if (!response.ok) {
         await response.body?.cancel();
         return failureForStatus(providerId, response.status);
       }
+
       let parsed: unknown;
+
       try {
         parsed = await response.json();
       } catch (cause) {
@@ -248,9 +272,11 @@ export function createHostedSearchBackend(
           `web_search got a response from ${providerId} that is not JSON: ${String(cause)}`,
         );
       }
+
       if (!isRecord(parsed)) {
         return webSearchFailure("network", `web_search got a malformed body from ${providerId}`);
       }
+
       const body = parsed as HostedSearchResponse;
       const sources = collectSources(body);
       if (sources.length === 0) {
@@ -263,11 +289,14 @@ export function createHostedSearchBackend(
           `${providerId} answered without citing a source; there is nothing here to verify`,
         );
       }
+
       const answer = answerText(body);
       if (answer.length === 0) {
         return webSearchFailure("empty_result", `${providerId} returned sources but no answer text`);
       }
+
       const result: WebSearchResult = { answer, sources, searchedQueries: [request.query] };
+
       return { ok: true, result };
     },
   };
@@ -315,6 +344,7 @@ async function resolveApiKey(config: HostedSearchConfig): Promise<string | undef
   if (refresh === undefined) {
     return config.apiKey;
   }
+
   try {
     return await refresh.call(config.tokenManager);
   } catch {

@@ -51,12 +51,14 @@ test("an event split across many chunks still dispatches exactly once", () => {
   let open = freshSseOpen;
   const chunks = ["even", "t: endpoint\nda", "ta: /abc\n", "\n"];
   const events: Array<{ event: string; data: string }> = [];
+
   for (const chunk of chunks) {
     const scanned = scanSse(rest + chunk, open);
     events.push(...scanned.events);
     rest = scanned.rest;
     open = scanned.open;
   }
+
   assert.deepEqual(events, [{ event: "endpoint", data: "/abc" }]);
   assert.equal(rest, "");
 });
@@ -66,8 +68,10 @@ test("an event whose terminator lands in a later chunk is not truncated", () => 
   // completes in one chunk, the blank line arrives in the next. The pump
   // feeds `rest + chunk` with the carried open state, exactly as here.
   const first = scanSse("data: /abc\n");
+
   assert.deepEqual(first.events, []);
   const second = scanSse(first.rest + "\n", first.open);
+
   assert.deepEqual(second.events, [{ event: "message", data: "/abc" }]);
 });
 

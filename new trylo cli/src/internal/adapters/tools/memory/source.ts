@@ -70,10 +70,12 @@ function assetText(content: unknown): string | undefined {
   if (typeof content === "string") {
     return content;
   }
+
   if (typeof content === "object" && content !== null && "text" in content) {
     const text = (content as { text: unknown }).text;
     return typeof text === "string" ? text : undefined;
   }
+
   return undefined;
 }
 
@@ -92,18 +94,22 @@ function boardDocuments(state: BoardState): ReadonlyArray<MemoryDocument> {
   const liveProposals = new Set(
     state.proposals.filter((proposal) => proposal.lifecycle === "active").map((p) => p.proposalId),
   );
+
   for (const asset of state.assets) {
     if (asset.createdFromProposalId === undefined || !liveProposals.has(asset.createdFromProposalId)) {
       continue;
     }
+
     const activation = findActivation(state, asset.scope, asset.kind);
     if (activation?.pointer !== "active" || activation.versionId !== asset.versionId) {
       continue;
     }
+
     const text = assetText(asset.content);
     if (text === undefined || text.trim().length === 0) {
       continue;
     }
+
     documents.push({
       id: asset.versionId,
       path: BOARD_PATH,
@@ -111,6 +117,7 @@ function boardDocuments(state: BoardState): ReadonlyArray<MemoryDocument> {
       origin: `learning:${asset.kind}:${asset.scope}`,
     });
   }
+
   return documents;
 }
 
@@ -127,18 +134,22 @@ function boardDocuments(state: BoardState): ReadonlyArray<MemoryDocument> {
 function projectDocuments(context: MemoryProjectContext): ReadonlyArray<MemoryDocument> {
   const known = new Set(context.sources.map((source) => source.relativePath));
   const documents: MemoryDocument[] = [];
+
   for (const message of context.messages) {
     if (message.role !== "system") {
       continue;
     }
+
     const relativePath = leadingPathOf(message.content);
     if (relativePath === undefined || !known.has(relativePath)) {
       continue;
     }
+
     const body = message.content.split("\n").slice(1).join("\n");
     if (body.trim().length === 0) {
       continue;
     }
+
     documents.push({
       id: `project-rule:${relativePath}`,
       path: relativePath,
@@ -146,6 +157,7 @@ function projectDocuments(context: MemoryProjectContext): ReadonlyArray<MemoryDo
       origin: "project-rule",
     });
   }
+
   return documents;
 }
 

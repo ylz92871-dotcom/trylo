@@ -70,22 +70,33 @@ test("non-PDF paths, bad ranges, and over-ceiling ranges refuse before any read"
   try {
     const tools = toolsFor(root, stubRunner(10));
     const notPdf = await tools.execute(callFor(READ_PDF_TOOL, { path: "notes.txt" }), SIGNAL);
+
     assert.equal(notPdf.outcome, "error");
+
     if (notPdf.outcome === "error") {
       assert.equal(notPdf.code, "invalid_arguments");
     }
+
     const badRange = await tools.execute(callFor(READ_PDF_TOOL, { path: "a.pdf", pages: "5-2" }), SIGNAL);
+
     assert.equal(badRange.outcome, "error");
+
     if (badRange.outcome === "error") {
       assert.equal(badRange.code, "invalid_arguments");
     }
+
     const over = await tools.execute(callFor(READ_PDF_TOOL, { path: "a.pdf", pages: "1-21" }), SIGNAL);
+
     assert.equal(over.outcome, "error");
+
     if (over.outcome === "error") {
       assert.equal(over.code, "page_range_too_large");
     }
+
     const outside = await tools.execute(callFor(READ_PDF_TOOL, { path: "../escape.pdf" }), SIGNAL);
+
     assert.equal(outside.outcome, "error");
+
     if (outside.outcome === "error") {
       assert.equal(outside.code, "path_outside_workspace");
     }
@@ -101,13 +112,18 @@ test("renamed HTML refuses as invalid_pdf; empty refuses as empty_file", async (
     writeFileSync(join(root, "empty.pdf"), "");
     const tools = toolsFor(root, stubRunner(2));
     const fake = await tools.execute(callFor(READ_PDF_TOOL, { path: "fake.pdf" }), SIGNAL);
+
     assert.equal(fake.outcome, "error");
+
     if (fake.outcome === "error") {
       assert.equal(fake.code, "invalid_pdf");
     }
+
     assert.equal(readFileUnchanged(root, "fake.pdf"), "<html>not a pdf</html>");
     const empty = await tools.execute(callFor(READ_PDF_TOOL, { path: "empty.pdf" }), SIGNAL);
+
     assert.equal(empty.outcome, "error");
+
     if (empty.outcome === "error") {
       assert.equal(empty.code, "empty_file");
     }
@@ -126,11 +142,14 @@ test("whole-document read: facts in value, redacted summary in output", async ()
     writeFileSync(join(root, "spec.pdf"), MINIMAL_PDF);
     const tools = toolsFor(root, stubRunner(3));
     const outcome = await tools.execute(callFor(READ_PDF_TOOL, { path: "spec.pdf" }), SIGNAL);
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome === "result") {
       assert.equal(outcome.value.pageCount, 3);
       assert.equal(outcome.value.mediaType, "application/pdf");
       const dataUrl = outcome.value.dataUrl;
+
       assert.equal(typeof dataUrl, "string");
       assert.ok((dataUrl as string).startsWith("data:application/pdf;base64,"));
       assert.ok(!outcome.output.includes(dataUrl as string));
@@ -151,14 +170,19 @@ test("unknown page count stays unknown; too many pages refuse with a range hint"
       extractPages: () => Promise.resolve({ ok: false as const, code: "unavailable" as const, message: "unavailable" }),
     });
     const unknown = await unknownCount.execute(callFor(READ_PDF_TOOL, { path: "spec.pdf" }), SIGNAL);
+
     assert.equal(unknown.outcome, "result");
+
     if (unknown.outcome === "result") {
       assert.equal("pageCount" in unknown.value, false);
       assert.ok(unknown.output.includes("pages=unknown"));
     }
+
     const huge = toolsFor(root, stubRunner(150));
     const refused = await huge.execute(callFor(READ_PDF_TOOL, { path: "spec.pdf" }), SIGNAL);
+
     assert.equal(refused.outcome, "error");
+
     if (refused.outcome === "error") {
       assert.equal(refused.code, "pdf_too_many_pages");
     }
@@ -173,7 +197,9 @@ test("page ranges render through the runner; open-ended ranges bound to the coun
     writeFileSync(join(root, "spec.pdf"), MINIMAL_PDF);
     const tools = toolsFor(root, stubRunner(4));
     const ranged = await tools.execute(callFor(READ_PDF_TOOL, { path: "spec.pdf", pages: "1-2" }), SIGNAL);
+
     assert.equal(ranged.outcome, "result");
+
     if (ranged.outcome === "result") {
       const range = ranged.value.range as JsonObject;
       assert.equal(range["firstPage"], 1);
@@ -181,24 +207,33 @@ test("page ranges render through the runner; open-ended ranges bound to the coun
       assert.equal((ranged.value.parts as ReadonlyArray<unknown>).length, 2);
       assert.ok(ranged.output.includes("pages=1-2"));
     }
+
     const open = await tools.execute(callFor(READ_PDF_TOOL, { path: "spec.pdf", pages: "2-" }), SIGNAL);
+
     assert.equal(open.outcome, "result");
+
     if (open.outcome === "result") {
       const range = open.value.range as JsonObject;
       assert.equal(range["firstPage"], 2);
       assert.equal(range["lastPage"], 4);
     }
+
     // A closed range past the end clamps to the document instead of refusing.
     const clamped = await tools.execute(callFor(READ_PDF_TOOL, { path: "spec.pdf", pages: "3-10" }), SIGNAL);
+
     assert.equal(clamped.outcome, "result");
+
     if (clamped.outcome === "result") {
       const range = clamped.value.range as JsonObject;
       assert.equal(range["firstPage"], 3);
       assert.equal(range["lastPage"], 4);
       assert.equal((clamped.value.parts as ReadonlyArray<unknown>).length, 2);
     }
+
     const pastEnd = await tools.execute(callFor(READ_PDF_TOOL, { path: "spec.pdf", pages: "9-12" }), SIGNAL);
+
     assert.equal(pastEnd.outcome, "error");
+
     if (pastEnd.outcome === "error") {
       assert.equal(pastEnd.code, "page_range_out_of_bounds");
     }
@@ -220,10 +255,13 @@ test("an open-ended range without a measured count refuses instead of extracting
       },
     });
     const outcome = await tools.execute(callFor(READ_PDF_TOOL, { path: "spec.pdf", pages: "5-" }), SIGNAL);
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "page_count_unknown");
     }
+
     // Refused before the runner was touched: no unbounded work was started.
     assert.equal(extracted, false);
   } finally {
@@ -241,6 +279,7 @@ test("executor cancel branches, called directly: pre-aborted and abort-during-re
     writeFileSync(join(root, "spec.pdf"), MINIMAL_PDF);
     const config = { workspaceRoot: root, reader: createNodeFileSystemReader(), runner: stubRunner(3) };
     const preAborted = new AbortController();
+
     preAborted.abort();
     assert.equal(
       (await executeReadPdf(config, callFor(READ_PDF_TOOL, { path: "spec.pdf" }), preAborted.signal)).outcome,
@@ -257,6 +296,7 @@ test("executor cancel branches, called directly: pre-aborted and abort-during-re
         throw new Error("boom");
       },
     };
+
     assert.equal(
       (
         await executeReadPdf(
@@ -278,7 +318,9 @@ test("executor cancel branches, called directly: pre-aborted and abort-during-re
       callFor(READ_PDF_TOOL, { path: "spec.pdf" }),
       SIGNAL,
     );
+
     assert.equal(failed.outcome, "error");
+
     if (failed.outcome === "error") {
       assert.equal(failed.code, "read_failed");
     }
@@ -293,18 +335,26 @@ test("without a runner, ranges refuse as unavailable; cancellation wins", async 
     writeFileSync(join(root, "spec.pdf"), MINIMAL_PDF);
     const tools = toolsFor(root);
     const ranged = await tools.execute(callFor(READ_PDF_TOOL, { path: "spec.pdf", pages: "1-2" }), SIGNAL);
+
     assert.equal(ranged.outcome, "error");
+
     if (ranged.outcome === "error") {
       assert.equal(ranged.code, "unavailable");
     }
+
     const whole = await tools.execute(callFor(READ_PDF_TOOL, { path: "spec.pdf" }), SIGNAL);
+
     assert.equal(whole.outcome, "result");
     const aborted = new AbortController();
+
     aborted.abort();
     const cancelled = await tools.execute(callFor(READ_PDF_TOOL, { path: "spec.pdf" }), aborted.signal);
+
     assert.equal(cancelled.outcome, "cancelled");
     const missing = await tools.execute(callFor(READ_PDF_TOOL, { path: "gone.pdf" }), SIGNAL);
+
     assert.equal(missing.outcome, "error");
+
     if (missing.outcome === "error") {
       assert.equal(missing.code, "read_failed");
     }

@@ -29,12 +29,15 @@ function cellValue(cell: NotebookCellRecord): JsonObject {
     cellType: cell.cellType,
     source: cell.source,
   };
+
   if (cell.language !== undefined) {
     value["language"] = cell.language;
   }
+
   if (cell.executionCount !== undefined) {
     value["executionCount"] = cell.executionCount;
   }
+
   const views = cell.outputViews ?? [];
   if (views.length > 0) {
     value["outputs"] = views.map((view) => {
@@ -42,12 +45,15 @@ function cellValue(cell: NotebookCellRecord): JsonObject {
         output_type: view.output_type,
         text: view.text,
       };
+
       if (view.image !== undefined) {
         entry["image"] = { media_type: view.image.media_type, image_data: view.image.image_data };
       }
+
       return entry;
     });
   }
+
   return value;
 }
 
@@ -72,15 +78,19 @@ export async function executeReadNotebook(
   if (requested === undefined) {
     return fail("invalid_arguments", "read_notebook requires path");
   }
+
   if (!requested.toLowerCase().endsWith(".ipynb")) {
     return fail("invalid_arguments", "read_notebook only reads .ipynb files; use read_file for text");
   }
+
   const cellId = readStringArg(call.arguments, "cell_id");
   const verdict = resolveInsideWorkspace(config.workspaceRoot, requested, config.fileAccess, config.workspaceAlias);
   if (!verdict.ok) {
     return fail(verdict.code, verdict.code);
   }
+
   let raw: string;
+
   try {
     raw = await config.reader.readFileUtf8(verdict.absolutePath, signal);
   } catch (error) {
@@ -90,27 +100,33 @@ export async function executeReadNotebook(
     const detail = error instanceof Error ? error.message : "read_error";
     return fail("read_failed", `read_failed:${detail}`);
   }
+
   if (signal.aborted) {
     return { outcome: "cancelled" };
   }
+
   const parsed = parseNotebookDocument(raw);
   if (!parsed.ok) {
     return fail(parsed.code, parsed.message);
   }
+
   if (cellId !== undefined) {
     const index = parsed.document.cells.findIndex((cell) => cell.cellId === cellId);
     if (index === -1) {
       return fail("cell_not_found", `cell_not_found: no cell with ID "${cellId}"`);
     }
+
     const single = cellViewsForTool(parsed.document, { largeOutputs: true })[index];
     if (single === undefined) {
       return fail("cell_not_found", `cell_not_found: no cell with ID "${cellId}"`);
     }
+
     const value: JsonObject = {
       path: requested,
       cells: [cellValue(single)],
       cellCount: parsed.document.cells.length,
     };
+
     return {
       outcome: "result",
       value,
@@ -118,8 +134,10 @@ export async function executeReadNotebook(
       truncated: false,
     };
   }
+
   const views = cellViewsForTool(parsed.document);
   const text = serializeCellsForTool(views);
+
   // The ceiling is shared with `read_file`: a notebook that does not fit is a
   // refusal with a resume path, not a silent prefix.
   if (Buffer.byteLength(text, "utf8") > limits.maxBytes) {
@@ -128,10 +146,12 @@ export async function executeReadNotebook(
       `notebook_too_large: ${views.length} cells exceed the ${limits.maxBytes} byte ceiling; read one cell with cell_id`,
     );
   }
+
   const value: JsonObject = {
     path: requested,
     cells: views.map(cellValue),
     cellCount: views.length,
   };
+
   return { outcome: "result", value, output: text, truncated: false };
 }

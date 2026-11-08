@@ -12,16 +12,20 @@ export function readEditInput(args: JsonObject): EditInput {
   const oldString = args["old_string"];
   const newString = args["new_string"];
   const invalid = (message: string): EditInput => ({ kind: "invalid", code: "invalid_arguments", message });
+
   if (patch !== undefined) {
     if (oldString !== undefined || newString !== undefined) return invalid("edit_file accepts patch or old_string/new_string, never both. For patch mode omit old_string and new_string entirely, including empty placeholders; for replacement mode omit patch. No file was changed.");
     return typeof patch === "string" && patch.trim().length > 0
       ? { kind: "patch", patch }
       : invalid("edit_file requires a non-empty patch");
   }
+
   if (typeof oldString !== "string" || oldString.length === 0 || typeof newString !== "string") {
     return invalid("edit_file requires either patch or a non-empty old_string and a string new_string");
   }
+
   if (oldString === newString) return invalid("edit_file old_string and new_string are identical; no change was requested");
+
   return { kind: "replace", oldString, newString };
 }
 
@@ -36,7 +40,9 @@ export function replaceExactText(source: string, oldString: string, newString: s
     if (match.kind === "ambiguous") return ambiguousMatch();
     return { ok: false, code: "edit_match_not_found", message: "edit_match_not_found: old_string does not match, even after CRLF/LF normalization. Use the actual text from read_file or patch mode with surrounding context. No file was changed." };
   }
+
   if (source.indexOf(oldString, at + 1) >= 0) return ambiguousMatch();
+
   return { ok: true, content: source.slice(0, at) + newString + source.slice(at + oldString.length) };
 }
 

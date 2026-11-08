@@ -70,7 +70,9 @@ export async function fetchFollowingPolicy(
     if (deps.signal.aborted) {
       return { kind: "failed", code: "cancelled", message: "web_fetch was cancelled" };
     }
+
     let response: Response;
+
     try {
       response = await deps.doFetch(current, {
         redirect: "manual",
@@ -83,6 +85,7 @@ export async function fetchFollowingPolicy(
         message: `web_fetch could not reach ${hostOf(current)}: ${String(cause)}`,
       };
     }
+
     if (!isRedirect(response.status)) {
       // Drain the body of a refused response so the socket is released rather
       // than left half-read; the failure we report is ours, not the platform's.
@@ -102,16 +105,20 @@ export async function fetchFollowingPolicy(
         status: response.status,
       };
     }
+
     const decision = decide({
       current,
       location: response.headers.get("location") ?? undefined,
       status: response.status,
       hops,
     });
+
     await response.body?.cancel();
+
     if (decision.kind === "exhausted") {
       return { kind: "hop_limit", hops: decision.hops };
     }
+
     if (decision.kind === "report") {
       return {
         kind: "redirect",
@@ -120,6 +127,7 @@ export async function fetchFollowingPolicy(
         hops,
       };
     }
+
     current = decision.url;
   }
 }
@@ -147,27 +155,36 @@ export async function readCapped(
   if (reader === undefined) {
     return Buffer.alloc(0);
   }
+
   const chunks: Buffer[] = [];
   let total = 0;
+
   while (true) {
     const { done, value } = await reader.read();
+
     if (signal.aborted) {
       await reader.cancel();
       throw new Error("web_fetch aborted");
     }
+
     if (done) {
       break;
     }
+
     if (value === undefined) {
       continue;
     }
+
     total += value.byteLength;
+
     if (total > MAX_RESPONSE_BYTES) {
       await reader.cancel();
       return null;
     }
+
     chunks.push(Buffer.from(value));
   }
+
   return Buffer.concat(chunks);
 }
 

@@ -44,7 +44,9 @@ function recordingSpawner(
     specs,
     spawner: async (spec: ShellSpawnSpec) => {
       const decided = result(spec, specs.length);
+
       specs.push(spec);
+
       return {
         stdout: decided.stdout ?? "",
         stderr: decided.stderr ?? "",
@@ -80,9 +82,10 @@ test("cwd selects a directory inside the workspace", async () => {
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "node -v", cwd: "sub" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "result");
     assert.equal(recording.specs.length, 1);
-    assert.equal(recording.specs[0]?.cwd, realpathSync(path.join(root, "sub")));
+    assert.equal(recording.specs[0]?.cwd, realpathSync.native(path.join(root, "sub")));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -92,16 +95,20 @@ test("cwd cannot leave the workspace, absolutely or by climbing", async () => {
   const root = tempRoot();
   try {
     const recording = recordingSpawner(() => ({}));
+
     for (const cwd of ["..", "../outside", path.resolve("/")]) {
       const outcome = await toolsFor(root, recording.spawner).execute(
         { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "node -v", cwd } },
         SIGNAL,
       );
+
       assert.equal(outcome.outcome, "error", cwd);
+
       if (outcome.outcome === "error") {
         assert.equal(outcome.code, "path_outside_workspace", cwd);
       }
     }
+
     assert.equal(recording.specs.length, 0);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -117,10 +124,13 @@ test("cwd that is not a directory is refused", async () => {
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "node -v", cwd: "file.txt" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "cwd_not_directory");
     }
+
     assert.equal(recording.specs.length, 0);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -141,11 +151,14 @@ test("steps run in order and stop at the first failure", async () => {
       },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "shell_nonzero_exit");
       assert.match(outcome.message, /4/);
     }
+
     assert.deepEqual(
       recording.specs.map((spec) => spec.argv),
       [["one"], ["two"]],
@@ -163,6 +176,7 @@ test("every step is planned by the same refusal rules as the first", async () =>
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "one", steps: ["two | three"] } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "result");
     assert.deepEqual(
       recording.specs[1]?.pipeTo?.map((segment) => segment.argv),
@@ -173,7 +187,9 @@ test("every step is planned by the same refusal rules as the first", async () =>
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "one", steps: ["two && three"] } },
       SIGNAL,
     );
+
     assert.equal(denied.outcome, "error");
+
     if (denied.outcome === "error") {
       assert.equal(denied.code, "shell_operator_forbidden");
     }
@@ -194,11 +210,14 @@ test("steps and pipeTo are not combined, so the composition stays unambiguous", 
       },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "invalid_arguments");
       assert.match(outcome.message, /not both/);
     }
+
     assert.equal(recording.specs.length, 0);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -214,6 +233,7 @@ test("D7: an inline pipeline reaches the spawner as ordered receivers", async ()
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "produce | grep x | sort" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "result");
     assert.deepEqual(
       recording.specs[0]?.pipeTo?.map((segment) => segment.argv),
@@ -222,6 +242,7 @@ test("D7: an inline pipeline reaches the spawner as ordered receivers", async ()
         ["sort"],
       ],
     );
+
     if (outcome.outcome === "result") {
       assert.match(typeof outcome.value.command === "string" ? outcome.value.command : "", / \| .* \| /);
     }
@@ -245,7 +266,9 @@ test("D7: a real three-stage pipeline runs end to end with the last exit winning
       },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome === "result") {
       assert.equal(outcome.value.exitCode, 0);
       assert.match(typeof outcome.value.stdout === "string" ? outcome.value.stdout : "", /got:hello/);
@@ -263,12 +286,15 @@ test("pipeTo is handed to the spawner as a second argv, not as a shell string", 
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "produce", pipeTo: "grep x" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome === "result") {
       assert.equal(stdoutOf(outcome), "matched");
       const command = outcome.value.command;
       assert.match(typeof command === "string" ? command : "", / \| /);
     }
+
     assert.deepEqual(
       recording.specs[0]?.pipeTo?.map((segment) => segment.argv),
       [["grep", "x"]],
@@ -286,6 +312,7 @@ test("pipeTo is handed to the spawner as a second argv, not as a shell string", 
 test("a real Windows batch script runs end to end", { skip: !isWindows }, async () => {
   const root = tempRoot();
   const previousPath = process.env["PATH"];
+
   try {
     writeFileSync(path.join(root, "trylo-probe.cmd"), "@echo off\r\necho probe-ok %*\r\n", "utf8");
     process.env["PATH"] = `${root}${path.delimiter}${previousPath ?? ""}`;
@@ -295,7 +322,9 @@ test("a real Windows batch script runs end to end", { skip: !isWindows }, async 
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "trylo-probe hello", timeoutMs: 20_000 } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "result", JSON.stringify(outcome));
+
     if (outcome.outcome === "result") {
       assert.match(stdoutOf(outcome), /probe-ok/);
       assert.match(stdoutOf(outcome), /hello/);
@@ -319,7 +348,9 @@ test("run_shell can start npm, a .cmd, on Windows", { skip: !isWindows || lookup
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "npm --version", timeoutMs: 30_000 } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "result", JSON.stringify(outcome));
+
     if (outcome.outcome === "result") {
       assert.match(stdoutOf(outcome), /\d+\.\d+\.\d+/);
     }
@@ -337,9 +368,11 @@ test("no injection payload writes the sentinel file", { skip: !isWindows }, asyn
   const root = tempRoot();
   const previousPath = process.env["PATH"];
   const previousPayload = process.env["TRYLO_PAYLOAD"];
+
   try {
     writeFileSync(path.join(root, "trylo-probe.cmd"), "@echo off\r\necho probe %*\r\n", "utf8");
     const sentinel = path.join(root, "PWNED.txt");
+
     process.env["PATH"] = `${root}${path.delimiter}${previousPath ?? ""}`;
     // What cmd would expand this into if the word ever reached it unquoted.
     process.env["TRYLO_PAYLOAD"] = `x & echo pwned> "${sentinel}"`;
@@ -360,12 +393,15 @@ test("no injection payload writes the sentinel file", { skip: !isWindows }, asyn
       "trylo-probe \"quoted & still\"",
     ];
     const pipelinePayloads = ["trylo-probe | echo pwned"];
+
     for (const command of [...metacharacterPayloads, ...pipelinePayloads]) {
       const outcome = await tools.execute(
         { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command, timeoutMs: 20_000 } },
         SIGNAL,
       );
+
       assert.equal(existsSync(sentinel), false, `sentinel written by: ${command}`);
+
       // A payload that is refused is fine; one that runs must have stayed one
       // word. A pipeline is exempt because its second stage is meant to run.
       if (outcome.outcome === "result" && !pipelinePayloads.includes(command)) {
@@ -378,11 +414,13 @@ test("no injection payload writes the sentinel file", { skip: !isWindows }, asyn
     } else {
       process.env["PATH"] = previousPath;
     }
+
     if (previousPayload === undefined) {
       delete process.env["TRYLO_PAYLOAD"];
     } else {
       process.env["TRYLO_PAYLOAD"] = previousPayload;
     }
+
     rmSync(root, { recursive: true, force: true });
   }
 });

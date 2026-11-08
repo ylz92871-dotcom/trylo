@@ -27,20 +27,26 @@ export async function executeWriteFile(
   if (plan.tool !== "write_file") {
     return { outcome: "error", code: "invalid_arguments", message: "write_file received a foreign plan" };
   }
+
   if (signal.aborted) {
     return { outcome: "cancelled" };
   }
+
   const content = request.arguments["content"];
   if (typeof content !== "string") {
     return { outcome: "error", code: "invalid_arguments", message: "write_file requires content" };
   }
+
   const requestedPath = String(request.arguments["path"] ?? "");
+
   return config.writeQueue.exclusive(plan.absolutePath, async () => writePlannedFile(plan, content, requestedPath, signal));
 }
 
 function writePlannedFile(plan: WritePlan, content: string, requestedPath: string, signal: AbortSignal): ToolOutcome {
   if (signal.aborted) return { outcome: "cancelled" };
+
   const reportedPath = plan.absolutePath.slice(plan.absolutePath.length - requestedPath.length) === requestedPath ? plan.absolutePath : requestedPath;
+
   try {
     // The plan proved the target hangs inside the workspace; the parent chain
     // may still be missing, and creating it here is what makes a nested
@@ -65,6 +71,7 @@ function writePlannedFile(plan: WritePlan, content: string, requestedPath: strin
         ? { preview: renderPreview({ kind: "added", path: requestedPath, before: "", after: content, regions: [] }) }
         : {}),
     };
+
     return {
       outcome: "result",
       value,

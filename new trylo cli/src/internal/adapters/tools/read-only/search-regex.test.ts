@@ -40,10 +40,13 @@ test("the default mode stays literal: regex metacharacters are not special", asy
   try {
     setup(root);
     const outcome = await search(root, { pattern: "a.c" });
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome !== "result") {
       return;
     }
+
     // Only notes.txt contains the literal "a.c"; src/code.ts has "abc".
     assert.equal(outcome.value["matchCount"], 1);
     assert.ok(String(outcome.value["matches"]).includes("notes.txt"));
@@ -57,12 +60,16 @@ test("regex mode matches by pattern meaning, with line numbers", async () => {
   try {
     setup(root);
     const outcome = await search(root, { pattern: "a.c", mode: "regex" });
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome !== "result") {
       return;
     }
+
     assert.equal(outcome.value["matchCount"], 2);
     const matches = outcome.value["matches"] as ReadonlyArray<string>;
+
     assert.ok(matches.some((line) => line.includes("code.ts:1:")));
     assert.ok(matches.some((line) => line.includes("notes.txt:1:")));
   } finally {
@@ -75,10 +82,13 @@ test("alternation and anchors work in regex mode", async () => {
   try {
     setup(root);
     const outcome = await search(root, { pattern: "^ERROR:", mode: "regex" });
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome !== "result") {
       return;
     }
+
     assert.equal(outcome.value["matchCount"], 1);
     assert.ok(String(outcome.value["matches"]).includes("Failed login"));
   } finally {
@@ -91,13 +101,17 @@ test("ignoreCase applies to both regex and literal modes", async () => {
   try {
     setup(root);
     const regexOutcome = await search(root, { pattern: "failed", mode: "regex", ignoreCase: true });
+
     assert.equal(regexOutcome.outcome, "result");
+
     if (regexOutcome.outcome === "result") {
       assert.equal(regexOutcome.value["matchCount"], 1);
     }
 
     const literalOutcome = await search(root, { pattern: "LITERAL", ignoreCase: true });
+
     assert.equal(literalOutcome.outcome, "result");
+
     if (literalOutcome.outcome === "result") {
       assert.equal(literalOutcome.value["matchCount"], 1);
     }

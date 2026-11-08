@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { hashOf, overlayFor, promoteToEnforced } from "../../learning/domains/tool/refine/overlay.js";
-import type { RefinementEntry } from "../../learning/domains/tool/refine/types.js";
+import { hashOf, overlayFor, promoteToEnforced } from "../../learning/agent/subsystems/tool/domain/refine/overlay.js";
+import type { RefinementEntry } from "../../learning/agent/subsystems/tool/domain/refine/types.js";
 import type { McpToolSpec } from "../../ports/mcp-client.js";
 import type { ToolBinding, ToolCallRequest, ToolOutcome, ToolPort, ToolSandbox } from "../../ports/tools.js";
 import { MAX_MCP_DESCRIPTION_LENGTH } from "../../tooling/catalog/description-guard.js";
@@ -68,6 +68,7 @@ function bindingOf(item: ToolBinding | { readonly code: string }): ToolBinding {
 
 test("a mounted tool is external, always approval-gated, and named as the server named it", () => {
   const binding = bindingOf(bindingForSpec(spec("alpha", "echo")));
+
   assert.equal(binding.name, "mcp__alpha__echo");
   assert.equal(binding.sideEffect, "external");
   assert.equal(binding.needsApproval, true);
@@ -105,6 +106,7 @@ test("one refused tool never takes its server's other tools with it", () => {
       spec("alpha", "better"),
     ]),
   ]);
+
   assert.deepEqual(
     mount.mounted.map((item) => item.binding.name),
     ["mcp__alpha__good", "mcp__alpha__better"],
@@ -132,6 +134,7 @@ test("the composite routes by prefix and leaves workspace calls untouched", asyn
   });
   const composite = composeTools(stub("workspace"), stub("mcp"));
   const signal = new AbortController().signal;
+
   await composite.execute({ toolCallId: "1", name: "read_file", arguments: {} }, signal);
   await composite.execute({ toolCallId: "2", name: "mcp__alpha__echo", arguments: {} }, signal);
   assert.deepEqual(seen, ["workspace:read_file", "mcp:mcp__alpha__echo"]);
@@ -160,6 +163,7 @@ test("the composite routes a mounted resource name to the MCP port, never by pre
   });
   const composite = composeTools(stub("workspace", []), stub("mcp", ["mcp_list_resources"]));
   const signal = new AbortController().signal;
+
   // Single underscores: no server tool can spell this name, so prefix routing
   // would send it to the workspace. Membership must win instead.
   assert.equal(isMcpToolName("mcp_list_resources"), false);
@@ -186,6 +190,7 @@ test("the composite sandbox admits exactly the mounted names, not the prefix", (
   const mounted = mountedNameSet(mountServerTools([server("alpha", [spec("alpha", "echo")])]).mounted);
   const composite = composeSandbox(workspace, mounted);
   const call = (name: string): ToolCallRequest => ({ toolCallId: "1", name, arguments: {} });
+
   assert.equal(composite.evaluate(call("mcp__alpha__echo")).ok, true);
   // A lookalike that never mounted is still the workspace's refusal, and the
   // workspace sandbox is the one that answered it.
@@ -226,6 +231,7 @@ test("an enforced refinement replaces the description and nothing else", () => {
     bindingForSpec(spec("alpha", "echo"), DEFAULT_MCP_CALL_TIMEOUT_MS, overlayFor(store)),
   );
   const base = bindingOf(bindingForSpec(spec("alpha", "echo")));
+
   assert.equal(refined.description, "Echoes the given text back, verbatim.");
   assert.deepEqual({ ...refined, description: base.description }, base);
 });
@@ -254,6 +260,7 @@ test("an injecting refinement falls back to the original description", () => {
   const binding = bindingOf(
     bindingForSpec(spec("alpha", "echo"), DEFAULT_MCP_CALL_TIMEOUT_MS, overlayFor(store)),
   );
+
   assert.equal(binding.description, "does a thing");
 });
 
@@ -267,6 +274,7 @@ test("mounting a server routes the overlay to every tool it mounts", () => {
     overlayFor(store),
   );
   const byName = new Map(mount.mounted.map((item) => [item.binding.name, item.binding.description]));
+
   assert.equal(byName.get("mcp__alpha__echo"), "Echoes the given text back, verbatim.");
   assert.equal(byName.get("mcp__alpha__other"), "does a thing");
 });

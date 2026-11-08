@@ -77,13 +77,17 @@ function mcpTable(tools: ReadonlyArray<McpToolSpec>): {
 
 test("D8: a run that never asked for MCP is today's run, byte for byte", () => {
   const without = wirePorts(baseInput());
+
   assert.equal("code" in without, false);
+
   if ("code" in without) {
     return;
   }
+
   // The hash the CLI folds into a session fingerprint, unchanged.
   assert.equal(without.toolCatalogHash, catalogHash(process.cwd()));
   const names = without.ports.tools.snapshot().map((binding) => binding.name);
+
   assert.equal(names.includes("read_file"), true);
   assert.equal(names.some((name) => name.startsWith("mcp__")), false);
   // The sandbox still refuses an MCP-shaped name: nothing mounted it, so the
@@ -93,16 +97,20 @@ test("D8: a run that never asked for MCP is today's run, byte for byte", () => {
     name: "mcp__ghost__echo",
     arguments: {},
   });
+
   assert.equal(verdict?.ok, false);
 });
 
 test("D8: an empty MCP table changes nothing a hash or a snapshot can see", () => {
   const without = wirePorts(baseInput());
   const empty = wirePorts({ ...baseInput(), mcp: { tools: createMcpToolPort([]), toolNames: new Set() } });
+
   assert.equal("code" in empty, false);
+
   if ("code" in without || "code" in empty) {
     return;
   }
+
   assert.equal(empty.toolCatalogHash, without.toolCatalogHash);
   assert.deepEqual(empty.ports.tools.snapshot(), without.ports.tools.snapshot());
 });
@@ -112,14 +120,19 @@ test("D6: a mounted tool joins the table and moves the catalog hash", () => {
     ...baseInput(),
     mcp: mcpTable([spec("alpha", "echo")]),
   });
+
   assert.equal("code" in mounted, false);
+
   if ("code" in mounted) {
     return;
   }
+
   const names = mounted.ports.tools.snapshot().map((binding) => binding.name);
+
   assert.equal(names.includes("mcp__alpha__echo"), true);
   assert.notEqual(mounted.toolCatalogHash, catalogHash(process.cwd()));
   const binding = mounted.ports.tools.snapshot().find((item) => item.name === "mcp__alpha__echo");
+
   assert.ok(binding);
   assert.equal(binding.sideEffect, "external");
   assert.equal(binding.needsApproval, true);
@@ -127,11 +140,15 @@ test("D6: a mounted tool joins the table and moves the catalog hash", () => {
 
 test("D4: a mounted tool passes the sandbox, an unmounted MCP name does not", () => {
   const mounted = wirePorts({ ...baseInput(), mcp: mcpTable([spec("alpha", "echo")]) });
+
   assert.equal("code" in mounted, false);
+
   if ("code" in mounted) {
     return;
   }
+
   const sandbox = mounted.ports.sandbox;
+
   assert.ok(sandbox);
   assert.equal(sandbox.evaluate({ toolCallId: "c1", name: "mcp__alpha__echo", arguments: {} }).ok, true);
   assert.equal(sandbox.evaluate({ toolCallId: "c2", name: "mcp__ghost__echo", arguments: {} }).ok, false);
@@ -140,13 +157,18 @@ test("D4: a mounted tool passes the sandbox, an unmounted MCP name does not", ()
 
 test("D4: the composite sandbox is the workspace sandbox plus admissions, nothing else", () => {
   const mocked = wirePorts(baseInput());
+
   assert.equal("code" in mocked, false);
+
   if ("code" in mocked) {
     return;
   }
+
   const workspace = mocked.ports.sandbox;
+
   assert.ok(workspace);
   const composite = composeSandbox(workspace, new Set(["mcp__alpha__echo"]));
+
   assert.deepEqual(composite.policy, workspace.policy);
   assert.equal(composite.evaluate({ toolCallId: "c", name: "mcp__alpha__echo", arguments: {} }).ok, true);
 });
@@ -169,6 +191,7 @@ function doctorIo(overrides: Partial<DoctorIo> = {}): DoctorIo {
 test("doctor reports the MCP registry, and starts nothing", () => {
   const empty = collectDoctor(doctorIo(), { toolCatalogHash: "hash", sessionsDir: "/tmp/sessions" });
   const skipped = empty.checks.find((check) => check.id === "mcp.registry");
+
   assert.deepEqual(skipped, {
     id: "mcp.registry",
     status: "skip",
@@ -182,16 +205,20 @@ test("doctor names a broken registry as a failure rather than as empty", () => {
     { toolCatalogHash: "hash", sessionsDir: "/tmp/sessions" },
   );
   const check = report.checks.find((item) => item.id === "mcp.registry");
+
   assert.equal(check?.status, "fail");
   assert.match(check?.detail ?? "", /user:invalid_document/);
 });
 
 test("I1: the method subsystem stays unconstructed unless the switch asked for it", () => {
   const wiring = wirePorts(baseInput());
+
   assert.equal("code" in wiring, false);
+
   if ("code" in wiring) {
     return;
   }
+
   // Absent `learning`, nothing is built at all — so this package cannot have
   // made a learning path reachable by accident.
   assert.equal(wiring.ports.method, undefined);

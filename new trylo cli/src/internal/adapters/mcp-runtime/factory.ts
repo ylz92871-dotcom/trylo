@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import type { McpStdioClient } from "../../ports/mcp-client.js";
 import type { McpServerEntry } from "../../ports/mcp-registry.js";
 import { createMcpHttpClient, type McpHttpClientSpec } from "../mcp-http/client.js";
@@ -53,9 +54,11 @@ export function createClientForEntry(
         args: entry.args,
         env: entry.env,
         cwd,
+        workspaceRoot: resolve(cwd),
       }),
     };
   }
+
   const url = entry.url;
   if (url === undefined || url.length === 0) {
     return {
@@ -64,7 +67,9 @@ export function createClientForEntry(
       detail: `${entry.name} is registered as ${entry.transport} but carries no url`,
     };
   }
+
   const build = seams.remote ?? createMcpHttpClient;
+
   return {
     ok: true,
     client: build({

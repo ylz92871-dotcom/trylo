@@ -158,23 +158,29 @@ export function createAskUserTools(options: AskUserPortOptions = {}): AskUserSes
     if (validated.ok === false) {
       return { outcome: "error", code: "invalid_arguments", message: validated.message };
     }
+
     if ([...requests.values()].filter(request => request.status === "pending").length >= 64) {
       return { outcome: "error", code: "too_many_requests", message: "too many pending user questions; answer or cancel one first" };
     }
+
     const requestId = nextId();
     const request: AskUserRequest = { requestId, questions: validated.questions, status: "pending" };
+
     requests.set(requestId, request);
+
     // Retain bounded tombstones for duplicate/late refusal without starving new asks.
     for (const [id, prior] of requests) {
       if (requests.size <= 128) break;
       if (prior.status !== "pending") requests.delete(id);
     }
+
     const lines = validated.questions.map(
       (item) => `- [${item.id}] ${item.header}: ${item.question} (${item.options.map((option) => option.label).join(" / ")})${item.multiSelect ? " [multi]" : ""}`,
     );
     const hint = asyncRequest
       ? "async request recorded; continue working, the reply arrives later"
       : "await the user's answer via answer_user_question; do not proceed as if answered";
+
     return {
       outcome: "result",
       value: {
@@ -196,19 +202,24 @@ export function createAskUserTools(options: AskUserPortOptions = {}): AskUserSes
   function answer(call: ToolCallRequest): ToolOutcome {
     const rawId = call.arguments["requestId"];
     const rawAnswers = call.arguments["answers"];
+
     if (typeof rawId !== "string" || rawId.length === 0) {
       return { outcome: "error", code: "invalid_arguments", message: "requestId must be a non-empty string" };
     }
+
     if (isRecord(rawAnswers) === false) {
       return { outcome: "error", code: "invalid_arguments", message: "answers must be an object of question id to answer string" };
     }
+
     const answers: Record<string, string> = Object.create(null);
+
     for (const [key, value] of Object.entries(rawAnswers)) {
       if (typeof value !== "string") {
         return { outcome: "error", code: "invalid_arguments", message: `answer for "${key}" must be a string` };
       }
       answers[key] = value;
     }
+
     const admission = admitAnswer(requests, rawId, answers);
     if (admission.kind === "rejected") {
       const code = admission.reason === "already_settled" ? "late_answer_rejected"
@@ -216,10 +227,13 @@ export function createAskUserTools(options: AskUserPortOptions = {}): AskUserSes
         : "invalid_answer";
       return { outcome: "error", code, message: admission.message };
     }
+
     if (Object.keys(admission.request.answers ?? {}).length !== admission.request.questions.length) {
       return { outcome: "error", code: "invalid_answer", message: "answer every question before settling this request" };
     }
+
     requests.set(rawId, admission.request);
+
     return {
       outcome: "result",
       value: {
@@ -247,18 +261,22 @@ export function createAskUserTools(options: AskUserPortOptions = {}): AskUserSes
       if (call.name === "ask_user_question") {
         return ask(call, false);
       }
+
       if (call.name === "request_user_input_async") {
         return ask(call, true);
       }
+
       if (call.name === "answer_user_question") {
         if (options.surfaceAnswersOnly === true) return { outcome: "error", code: "user_answer_required", message: "only the terminal may submit an actual user's answer; wait for user input" };
         return answer(call);
       }
+
       if (call.name === "send_message_to_user_async") {
         const message = call.arguments["message"];
         if (typeof message !== "string" || message.trim().length === 0) {
           return { outcome: "error", code: "invalid_arguments", message: "message must be a non-empty string" };
         }
+
         return {
           outcome: "result",
           value: { delivered: true },
@@ -266,6 +284,7 @@ export function createAskUserTools(options: AskUserPortOptions = {}): AskUserSes
           truncated: message.length > 280,
         };
       }
+
       return { outcome: "unknown", code: "unknown_tool", message: `ask-user port does not have ${call.name}` };
     },
     async cancel(): Promise<void> {

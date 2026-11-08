@@ -1,4 +1,5 @@
 import type { ToolCallRequest, ToolOutcome, ToolPort, ToolSandbox } from "../../ports/tools.js";
+import type { ReadRoutingPort } from "../../ports/read-routing.js";
 import { cancelToolPorts } from "../../ports/tool-cancellation.js";
 import type { ShellSpawner } from "./mutating/shell-spawn.js";
 import { createMutatingTools, type ToolVisibility } from "./mutating/index.js";
@@ -23,6 +24,7 @@ import type { ShellModeResult } from "../sandbox/shell-mode.js";
 import { createAskUserTools, type AskUserSession } from "./ask-user/index.js";
 import { createPlanModeCell, createPlanTools } from "./plan/index.js";
 import { createWorkflowTools, WORKFLOW_TOOL_NAMES } from "./workflow-history.js";
+import { TODO_TOOL_NAMES } from "./todo/index.js";
 import type { SessionRecord } from "../../ports/session.js";
 import { WEB_TOOL_NAMES } from "./web/names.js";
 import { createWebTools, type WebToolsConfig } from "./web/index.js";
@@ -43,8 +45,10 @@ import type { SkillCatalogPort, SkillForkExecutor } from "../../ports/skills.js"
  */
 
 export type WorkspaceToolsConfig = {
+  readonly readRouting?: ReadRoutingPort;
   readonly onImageValidated?: ValidatedImageReferenceSink;
   readonly workflowRecords?: readonly SessionRecord[];
+  readonly goalTools?: ToolPort;
   readonly turnId?: string;
   readonly questions?: AskUserSession;
   readonly workspaceRoot: string;
@@ -153,6 +157,7 @@ export function createWorkspaceTools(config: WorkspaceToolsConfig): ToolPort {
   const policy = config.sandbox?.policy;
   const executionDescription = { ...config, ...(policy?.fileAccess === undefined ? {} : { fileAccess: policy.fileAccess }) };
   const readOnly = createReadOnlyTools({
+    ...(config.readRouting === undefined ? {} : { readRouting: config.readRouting }),
     ...(config.onImageValidated === undefined ? {} : { onImageValidated: config.onImageValidated }),
     workspaceRoot: policy?.workspaceRoot ?? config.workspaceRoot,
     ...(policy?.workspaceAlias === undefined ? {} : { workspaceAlias: policy.workspaceAlias }),
@@ -162,7 +167,7 @@ export function createWorkspaceTools(config: WorkspaceToolsConfig): ToolPort {
   });
   // The task list lives in this closure for the life of the catalog: no file,
   // no network, so it joins the read-only half and needs no sandbox to exist.
-  const workflow = createWorkflowTools(config.workflowRecords, config.turnId);
+  const workflow = createWorkflowTools(config.workflowRecords, config.turnId, config.goalTools);
   // WP21: user questions, plan mode, persistent tasks, and goals. All four
   // are read-only records (no workspace mutation, no network), so they ride
   // the read-only half like todo_write and need no sandbox to exist. The
@@ -238,14 +243,15 @@ export function createWorkspaceTools(config: WorkspaceToolsConfig): ToolPort {
             }
           },
         });
+
   return {
     snapshot() {
       const readOnlyCatalog = [
         ...readOnly.snapshot(),
-        ...workflow.snapshot().filter(binding => binding.name === "todo_write"),
+        ...workflow.snapshot().filter(binding => TODO_TOOL_NAMES.has(binding.name)),
         ...askUser.snapshot(),
         ...plan.snapshot(),
-        ...workflow.snapshot().filter(binding => binding.name !== "todo_write"),
+        ...workflow.snapshot().filter(binding => !TODO_TOOL_NAMES.has(binding.name)),
       ];
       const withMemory = memory === undefined ? readOnlyCatalog : [...readOnlyCatalog, ...memory.snapshot()];
       const withMemoryWrite = memoryWrite === undefined ? withMemory : [...withMemory, ...memoryWrite.snapshot()];
@@ -256,21 +262,27 @@ export function createWorkspaceTools(config: WorkspaceToolsConfig): ToolPort {
         sessionTools === undefined ? mounted : [...mounted, ...sessionTools.bindings];
       const withLsp = lsp === undefined ? withSessions : [...withSessions, ...lsp.snapshot()];
       const catalog = mutating === undefined ? withLsp : [...withLsp, ...mutating.snapshot()];
+
       return catalog.filter(binding => config.visibility?.isDenied(binding.name) !== true)
         .map(binding => describeToolExecution(binding, executionDescription));
     },
     async execute(call: ToolCallRequest, signal: AbortSignal): Promise<ToolOutcome> {
       if (policy?.mode === "deny_all") return { outcome: "error", code: "sandbox_deny_all", message: `${call.name} is refused by sandbox mode deny_all` };
+
       if (config.visibility?.isDenied(call.name) === true) return { outcome: "error", code: "permission_denied", message: `${call.name} is disabled for this session` };
+
       if (WORKFLOW_TOOL_NAMES.has(call.name)) {
         return workflow.execute(call, signal);
       }
+
       if (WP21_ASK_NAMES.has(call.name)) {
         return askUser.execute(call, signal);
       }
+
       if (WP21_PLAN_NAMES.has(call.name)) {
         return plan.execute(call, signal);
       }
+
       // Plan-mode gate (WP21.2/B2): while the plan cell is not `working`,
       // workspace mutation is refused with a named code before sandbox,
       // permission, or execution is ever consulted. Planning tools
@@ -283,30 +295,38 @@ export function createWorkspaceTools(config: WorkspaceToolsConfig): ToolPort {
           message: `plan mode is ${planCell.current.kind}; exit plan mode with user approval before mutating the workspace`,
         };
       }
+
       if (memory !== undefined && MEMORY_TOOL_NAMES.has(call.name)) {
         return memory.execute(call, signal);
       }
+
       if (memoryWrite !== undefined && MEMORY_WRITE_TOOL_NAMES.has(call.name)) {
         return memoryWrite.execute(call, signal);
       }
+
       if (skills !== undefined && SKILL_TOOL_NAMES.has(call.name)) {
         return skills.execute(call, signal);
       }
+
       // Dispatched by set rather than by one name: `web_search` is only in the
       // catalog when a backend was lent, and a name check written for one tool
       // would silently stop reaching the other.
       if (web !== undefined && WEB_TOOL_NAMES.has(call.name)) {
         return web.execute(call, signal);
       }
+
       if (sessionTools !== undefined && SESSION_TOOL_NAMES.has(call.name)) {
         return sessionTools.execute(call);
       }
+
       if (lsp !== undefined && call.name === LSP_TOOL) {
         return lsp.execute(call, signal);
       }
+
       if (mutating !== undefined && MUTATING_NAMES.has(call.name)) {
         return mutating.execute(call, signal);
       }
+
       return readOnly.execute(call, signal);
     },
     async cancel(toolCallId: string): Promise<void> {

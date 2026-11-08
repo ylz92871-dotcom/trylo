@@ -51,6 +51,7 @@ test("a command with spaces and non-ASCII text survives to a real file", async (
     const target = path.join(root, "空 格 文件.txt");
     const payload = "第一行 ascii with spaces 与第二行的等号 = 123";
     const outcome = await run(root, `${NODE} write-args.js "${target}" "${payload}"`);
+
     assert.equal(outcome.outcome, "result", JSON.stringify(outcome));
     assert.equal(existsSync(target), true, "the file the command named was not created");
     // Byte-for-byte, so a mojibake or a dropped space fails here.
@@ -72,8 +73,10 @@ test("multi-line content round-trips when it travels as a file, not as a command
     const source = path.join(root, "多行 source.txt");
     const target = path.join(root, "多行 target.txt");
     const body = "第一行 ascii with spaces\n第二行 中文与English混排 123\n第三行 back\\slash and \"quotes\"\n";
+
     writeFileSync(source, body, "utf8");
     const outcome = await run(root, `${NODE} copy.js "${source}" "${target}"`);
+
     assert.equal(outcome.outcome, "result", JSON.stringify(outcome));
     assert.equal(readFileSync(target, "utf8"), body);
   } finally {
@@ -131,6 +134,7 @@ test("cwd is the directory asked for, and a file written there lands there", asy
   const root = workspace();
   try {
     const nested = path.join(root, "nested dir");
+
     mkdirSync(nested, { recursive: true });
     writeFileSync(
       path.join(nested, "where.js"),
@@ -142,6 +146,7 @@ test("cwd is the directory asked for, and a file written there lands there", asy
       "utf8",
     );
     const outcome = await run(root, `${NODE} where.js`, { cwd: "nested dir" });
+
     assert.equal(outcome.outcome, "result", JSON.stringify(outcome));
     assert.equal(stdoutOf(outcome), nested);
     assert.equal(readFileSync(path.join(nested, "where.txt"), "utf8"), nested);
@@ -155,7 +160,9 @@ test("a non-zero exit is the tool's failure, with the code and the output", asyn
   const root = workspace({ "fail.js": "process.stderr.write('boom happened'); process.exit(17);\n" });
   try {
     const outcome = await run(root, `${NODE} fail.js`);
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "shell_nonzero_exit");
       assert.match(outcome.message, /17/);
@@ -177,7 +184,9 @@ test("stdout and stderr stay separate, and a pipeline reports its last stage", a
   });
   try {
     const outcome = await run(root, `${NODE} produce.js | ${NODE} consume.js`);
+
     assert.equal(outcome.outcome, "result", JSON.stringify(outcome));
+
     if (outcome.outcome === "result") {
       assert.equal(outcome.value.stdout, "got:payload");
       // stderr of every segment is merged, because a failure in any of them is

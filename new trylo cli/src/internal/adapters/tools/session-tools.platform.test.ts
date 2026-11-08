@@ -65,6 +65,7 @@ describe("process session tools through the production catalog", () => {
     // advertise tools that would answer "no such session" for everything.
     const tools = createWorkspaceTools({ workspaceRoot: process.cwd() });
     const names = tools.snapshot().map((binding) => binding.name);
+
     assert.equal(names.includes("write_stdin"), false);
     assert.equal(names.includes("list_processes"), false);
     assert.equal(names.includes("stop_process"), false);
@@ -73,16 +74,19 @@ describe("process session tools through the production catalog", () => {
   it("declares that the session tools cannot start anything", () => {
     const sessions = createProcessSessionRegistry();
     const tools = createWorkspaceTools({ workspaceRoot: process.cwd(), sessions });
+
     for (const name of ["write_stdin", "list_processes"]) {
       const binding = tools.snapshot().find((entry) => entry.name === name);
       assert.equal(binding?.sideEffect, "read_only", `${name} observes rather than acts on the machine`);
       assert.equal(binding?.needsApproval, false, `${name} needs no approval because it starts nothing`);
     }
+
     // stop_process ends something, and is still read-only: it can only address a
     // session this run started, by an id this run issued. There is no pid, so it
     // cannot reach a process that was not already approved to exist — which is
     // the same reason `write_stdin` needs no prompt.
     const stop = tools.snapshot().find((entry) => entry.name === "stop_process");
+
     assert.equal(stop?.sideEffect, "read_only");
     assert.equal(stop?.needsApproval, false);
     assert.doesNotMatch(
@@ -96,6 +100,7 @@ describe("process session tools through the production catalog", () => {
     const sessions = createProcessSessionRegistry();
     const tools = createWorkspaceTools({ workspaceRoot: process.cwd(), sessions });
     const binding = tools.snapshot().find((entry) => entry.name === "list_processes");
+
     assert.match(
       binding?.description ?? "",
       /lost/,
@@ -107,7 +112,9 @@ describe("process session tools through the production catalog", () => {
     const sessions = createProcessSessionRegistry();
     const tools = createWorkspaceTools({ workspaceRoot: process.cwd(), sessions });
     const outcome = await tools.execute(call("list_processes", {}), new AbortController().signal);
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome === "result") {
       assert.match(outcome.output, /No command sessions/);
       const listed = outcome.value["sessions"];
@@ -119,12 +126,15 @@ describe("process session tools through the production catalog", () => {
     const sessions = createProcessSessionRegistry();
     const tools = createWorkspaceTools({ workspaceRoot: process.cwd(), sessions });
     const controller = new AbortController();
+
     try {
       const session = await startSession(sessions);
 
       // list_processes sees a real running process
       const listed = await tools.execute(call("list_processes", {}), controller.signal);
+
       assert.equal(listed.outcome, "result");
+
       if (listed.outcome === "result") {
         const found = (listed.value["sessions"] as Array<Record<string, unknown>>).find(
           (entry) => entry["sessionId"] === session.id,
@@ -136,16 +146,20 @@ describe("process session tools through the production catalog", () => {
 
       // write_stdin polls until the child's banner arrives
       let output = "";
+
       for (let attempt = 0; attempt < 20 && !output.includes("READY"); attempt += 1) {
         const read = await tools.execute(
           call("write_stdin", { sessionId: session.id, chars: "", yieldMs: 300 }),
           controller.signal,
         );
+
         assert.equal(read.outcome, "result");
+
         if (read.outcome === "result") {
           output += String(read.value["output"] ?? "");
         }
       }
+
       assert.match(output, /READY/, "a poll returns the child's own output");
 
       // real input changes the child's behaviour
@@ -153,7 +167,9 @@ describe("process session tools through the production catalog", () => {
         call("write_stdin", { sessionId: session.id, chars: "ping\n", yieldMs: 1_500 }),
         controller.signal,
       );
+
       assert.equal(typed.outcome, "result");
+
       if (typed.outcome === "result") {
         assert.match(String(typed.value["output"] ?? ""), /ECHO:ping#1/);
       }
@@ -163,10 +179,13 @@ describe("process session tools through the production catalog", () => {
         call("stop_process", { sessionId: session.id }),
         controller.signal,
       );
+
       assert.equal(stopped.outcome, "result");
+
       if (stopped.outcome === "result") {
         assert.match(String(stopped.output), /stopped/);
       }
+
       await sleep(300);
       // A legal yield, and a poll rather than input. The first version of this
       // line used `yieldMs: 200`, which is below the 250 floor — the tool
@@ -177,11 +196,13 @@ describe("process session tools through the production catalog", () => {
         call("write_stdin", { sessionId: session.id, chars: "", yieldMs: 300 }),
         controller.signal,
       );
+
       assert.equal(
         afterStop.outcome,
         "result",
         "a finished session is still readable — that is how its last words are read",
       );
+
       if (afterStop.outcome === "result") {
         assert.notEqual(
           afterStop.value["status"],
@@ -189,11 +210,13 @@ describe("process session tools through the production catalog", () => {
           "and it reports a state that is no longer running",
         );
       }
+
       // Input is what actually distinguishes a finished session from a live one.
       const typedAfterStop = await tools.execute(
         call("write_stdin", { sessionId: session.id, chars: "x", yieldMs: 300 }),
         controller.signal,
       );
+
       assert.equal(
         typedAfterStop.outcome,
         "error",
@@ -211,7 +234,9 @@ describe("process session tools through the production catalog", () => {
       call("write_stdin", { sessionId: "ps_000000000000000000000000", chars: "", yieldMs: 300 }),
       new AbortController().signal,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "session_not_found");
       assert.match(outcome.message, /ps_000000000000000000000000/);
@@ -221,12 +246,15 @@ describe("process session tools through the production catalog", () => {
   it("refuses a yield outside the bounds instead of clamping it", async () => {
     const sessions = createProcessSessionRegistry();
     const tools = createWorkspaceTools({ workspaceRoot: process.cwd(), sessions });
+
     for (const yieldMs of [0, 5, 10 ** 9]) {
       const outcome = await tools.execute(
         call("write_stdin", { sessionId: "ps_000000000000000000000000", chars: "x", yieldMs }),
         new AbortController().signal,
       );
+
       assert.equal(outcome.outcome, "error", `yieldMs ${yieldMs} must be refused`);
+
       if (outcome.outcome === "error") {
         assert.equal(outcome.code, "invalid_arguments");
       }
@@ -236,6 +264,7 @@ describe("process session tools through the production catalog", () => {
   it("requires a sessionId rather than inventing one", async () => {
     const sessions = createProcessSessionRegistry();
     const tools = createWorkspaceTools({ workspaceRoot: process.cwd(), sessions });
+
     for (const name of ["write_stdin", "stop_process"]) {
       const outcome = await tools.execute(call(name, {}), new AbortController().signal);
       assert.equal(outcome.outcome, "error");
@@ -250,6 +279,7 @@ describe("process session tools through the production catalog", () => {
     const sessions = createProcessSessionRegistry();
     const tools = createWorkspaceTools({ workspaceRoot: process.cwd(), sessions });
     const controller = new AbortController();
+
     try {
       const finished = await sessions.start({
         id: "",
@@ -262,15 +292,19 @@ describe("process session tools through the production catalog", () => {
         maxBufferBytes: 1024,
       });
       const running = await startSession(sessions);
+
       await sleep(900);
 
       const all = await tools.execute(call("list_processes", {}), controller.signal);
       const onlyRunning = await tools.execute(call("list_processes", { runningOnly: true }), controller.signal);
+
       assert.equal(all.outcome, "result");
       assert.equal(onlyRunning.outcome, "result");
+
       if (all.outcome === "result" && onlyRunning.outcome === "result") {
         const everything = all.value["sessions"] as Array<Record<string, unknown>>;
         const live = onlyRunning.value["sessions"] as Array<Record<string, unknown>>;
+
         assert.ok(everything.length >= 2, "both sessions are listed without a filter");
         assert.ok(
           live.every((entry) => entry["status"] === "running"),
@@ -282,6 +316,7 @@ describe("process session tools through the production catalog", () => {
         );
         assert.ok(live.some((entry) => entry["sessionId"] === running.id));
       }
+
       await sessions.stop(running.id);
     } finally {
       await sessions.shutdown();

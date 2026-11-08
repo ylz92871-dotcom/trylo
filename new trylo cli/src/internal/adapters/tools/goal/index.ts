@@ -116,6 +116,7 @@ const ACCOUNT_BINDING: ToolBinding = {
 };
 
 export type GoalPortOptions = {
+  readonly managed?: true;
   readonly turnId?: string;
   /** Validated session projection; the journal remains the only durable writer. */
   readonly seed?: GoalRecord;
@@ -128,6 +129,7 @@ function renderGoal(goal: GoalRecord): string {
     `Status: ${goal.status}`,
     `Tokens used: ${goal.tokensUsed}${goal.tokenBudget === undefined ? "" : ` / ${goal.tokenBudget}`}${remaining === undefined ? "" : ` (remaining ${remaining})`}`,
   ];
+
   return lines.join("\n");
 }
 
@@ -138,16 +140,22 @@ function goalValue(goal: GoalRecord): JsonObject {
     status: goal.status,
     tokensUsed: goal.tokensUsed,
   };
+
   if (goal.tokenBudget !== undefined) {
     base["tokenBudget"] = goal.tokenBudget;
   }
+
   if (remaining !== undefined) {
     base["remaining"] = remaining;
   }
+
   return base;
 }
 
-export function createGoalTools(options: GoalPortOptions = {}): ToolPort {
+export function createGoalTools(options: GoalPortOptions = {}): ToolPort & {
+  current(): GoalRecord | undefined;
+  replaceFromHost(value: GoalRecord): void;
+} {
   let goal: GoalRecord | undefined = options.seed;
   const turnId = options.turnId ?? "turn-1";
   // Consecutive `update_goal{blocked}` reports observed by this adapter.
@@ -160,19 +168,28 @@ export function createGoalTools(options: GoalPortOptions = {}): ToolPort {
   }
 
   return {
+    current: () => goal,
+    replaceFromHost: value => { goal = value; },
     snapshot() {
-      return [CREATE_BINDING, GET_BINDING, UPDATE_BINDING, USER_ACTION_BINDING, ACCOUNT_BINDING];
+      return options.managed ? [GET_BINDING, UPDATE_BINDING] : [CREATE_BINDING, GET_BINDING, UPDATE_BINDING, USER_ACTION_BINDING, ACCOUNT_BINDING];
     },
     async execute(call: ToolCallRequest, _signal: AbortSignal): Promise<ToolOutcome> {
+      if (options.managed && ["create_goal", "goal_user_action", "goal_account_tokens"].includes(call.name)) {
+        return { outcome: "error", code: "host_owned_goal_control", message: "Goal creation, user actions and usage accounting belong to the host, not the model." };
+      }
+
       if (call.name === "create_goal") {
         const objective = call.arguments["objective"];
         const budget = call.arguments["token_budget"];
+
         if (typeof objective !== "string") {
           return { outcome: "error", code: "invalid_arguments", message: "objective must be a string" };
         }
+
         if (budget !== undefined && (typeof budget !== "number" || Number.isInteger(budget) === false)) {
           return { outcome: "error", code: "invalid_arguments", message: "token_budget must be a positive integer when present" };
         }
+
         const transition = createGoal(
           goal,
           objective,
@@ -182,30 +199,38 @@ export function createGoalTools(options: GoalPortOptions = {}): ToolPort {
         if (transition.ok === false) {
           return { outcome: "error", code: transition.code, message: transition.message };
         }
+
         goal = transition.goal;
         resetBlockedCounter();
+
         return { outcome: "result", value: goalValue(goal), output: renderGoal(goal), truncated: false };
       }
+
       if (call.name === "get_goal") {
         if (goal === undefined) {
           return { outcome: "result", value: { goal: null }, output: "no goal", truncated: false };
         }
         return { outcome: "result", value: { goal: goalValue(goal) }, output: renderGoal(goal), truncated: false };
       }
+
       if (call.name === "update_goal") {
         const status = call.arguments["status"];
         if (status !== "complete" && status !== "blocked") {
           return { outcome: "error", code: "invalid_arguments", message: "status must be complete or blocked" };
         }
+
         if (status === "complete") {
           resetBlockedCounter();
           const transition = updateGoalStatus(goal, status, turnId);
           if (transition.ok === false) {
             return { outcome: "error", code: transition.code, message: transition.message };
           }
+
           goal = transition.goal;
+
           return { outcome: "result", value: goalValue(goal), output: renderGoal(goal), truncated: false };
         }
+
         blockedReports += 1;
         const transition = updateGoalStatus(goal, status, turnId, { consecutiveBlockedTurns: blockedReports });
         if (transition.ok === false) {
@@ -215,36 +240,47 @@ export function createGoalTools(options: GoalPortOptions = {}): ToolPort {
             message: `${transition.message} (blocked report ${blockedReports}/3)`,
           };
         }
+
         goal = transition.goal;
         resetBlockedCounter();
+
         return { outcome: "result", value: goalValue(goal), output: renderGoal(goal), truncated: false };
       }
+
       if (call.name === "goal_user_action") {
         const action = call.arguments["action"];
         if (action !== "pause" && action !== "resume" && action !== "cancel") {
           return { outcome: "error", code: "invalid_arguments", message: "action must be pause, resume, or cancel" };
         }
+
         const transition = applyUserGoalAction(goal, action, turnId);
         if (transition.ok === false) {
           return { outcome: "error", code: transition.code, message: transition.message };
         }
+
         goal = transition.goal;
         resetBlockedCounter();
+
         return { outcome: "result", value: goalValue(goal), output: renderGoal(goal), truncated: false };
       }
+
       if (call.name === "goal_account_tokens") {
         const tokens = call.arguments["tokens"];
         if (typeof tokens !== "number") {
           return { outcome: "error", code: "invalid_arguments", message: "tokens must be a number" };
         }
+
         const transition = accountGoalTokens(goal, tokens, turnId);
         if (transition.ok === false) {
           return { outcome: "error", code: transition.code, message: transition.message };
         }
+
         goal = transition.goal;
         resetBlockedCounter();
+
         return { outcome: "result", value: goalValue(goal), output: renderGoal(goal), truncated: false };
       }
+
       return { outcome: "unknown", code: "unknown_tool", message: `goal port does not have ${call.name}` };
     },
     async cancel(): Promise<void> {

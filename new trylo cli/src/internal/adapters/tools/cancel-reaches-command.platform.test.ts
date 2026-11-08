@@ -52,6 +52,7 @@ test("cancel(toolCallId) ends a command that is genuinely running", async () => 
     call("run_shell", { command: nodeRunning("setInterval(()=>{},1000)"), timeoutMs: 60_000 }),
     new AbortController().signal,
   );
+
   // Let the spawn actually happen before asking for it to stop.
   await sleep(700);
   await tools.cancel("t-run_shell");
@@ -79,6 +80,7 @@ test("a command that finishes on its own is unaffected by a later cancel", async
     call("run_shell", { command: nodeRunning("console.log('done')"), timeoutMs: 30_000 }),
     new AbortController().signal,
   );
+
   assert.equal(outcome.outcome, "result");
   await tools.cancel("t-run_shell");
 });
@@ -88,6 +90,7 @@ test("the command's own descendants go with it, not just the command", async (t)
     t.skip("this assertion is about the Windows tree walk");
     return;
   }
+
   const tools = productionTools();
   // The child spawns a grandchild and reports its pid, so the test can look for
   // it after the cancel. `cmd.exe` is the middle layer because that is what the
@@ -103,10 +106,12 @@ test("the command's own descendants go with it, not just the command", async (t)
     call("run_shell", { command: nodeRunning(script), timeoutMs: 60_000 }),
     new AbortController().signal,
   );
+
   await sleep(1500);
 
   await tools.cancel("t-run_shell");
   const outcome = await running;
+
   assert.equal(outcome.outcome, "cancelled");
 
   // The command took its descendants with it: the tree walk in `shell-spawn` is

@@ -41,12 +41,15 @@ export function planWebFetch(
   if (typeof value !== "string" || value.length === 0) {
     return { ok: false, code: "invalid_arguments", message: "web_fetch requires a non-empty url string" };
   }
+
   let parsed: URL;
+
   try {
     parsed = new URL(value);
   } catch {
     return { ok: false, code: "invalid_arguments", message: `web_fetch url is not an absolute URL: ${value}` };
   }
+
   if (!ALLOWED_PROTOCOLS.has(parsed.protocol)) {
     return {
       ok: false,
@@ -54,6 +57,7 @@ export function planWebFetch(
       message: `web_fetch only speaks http and https, not ${parsed.protocol}`,
     };
   }
+
   const prompt = call.arguments["prompt"];
   if (prompt !== undefined) {
     if (typeof prompt !== "string" || prompt.trim().length === 0) {
@@ -63,6 +67,7 @@ export function planWebFetch(
         message: "web_fetch prompt must be a non-empty string when present",
       };
     }
+
     if (!options.canExtract) {
       // Refused, not ignored: silently dropping the question would hand back a
       // whole page to a model that asked for an answer, which is the failure
@@ -74,10 +79,12 @@ export function planWebFetch(
           "web_fetch cannot answer a prompt on this run: no page extractor is configured. Fetch without `prompt` to get the page itself.",
       };
     }
+
     return {
       ok: true,
       plan: { tool: "web_fetch", url: parsed.toString(), host: parsed.host, prompt },
     };
   }
+
   return { ok: true, plan: { tool: "web_fetch", url: parsed.toString(), host: parsed.host } };
 }

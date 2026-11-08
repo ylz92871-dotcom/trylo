@@ -87,10 +87,12 @@ export function createWebSearchTool(
           message: `web_search does not implement ${call.name}`,
         };
       }
+
       const planned = planWebSearch(call);
       if (!planned.ok) {
         return { outcome: "error", code: planned.code, message: planned.message };
       }
+
       const outcome = await backend.search(planned.plan, signal);
       if (!outcome.ok) {
         return {
@@ -99,6 +101,7 @@ export function createWebSearchTool(
           message: `web_search via ${backend.providerId}: ${outcome.message}`,
         };
       }
+
       return render(outcome.result, backend.providerId);
     },
 
@@ -124,6 +127,7 @@ function render(result: SearchResultShape, providerId: string): ToolOutcome {
     "",
     "Include these links in your answer to the user. If they do not support what you wrote above, say so.",
   ].join("\n");
+
   return {
     outcome: "result",
     value: {

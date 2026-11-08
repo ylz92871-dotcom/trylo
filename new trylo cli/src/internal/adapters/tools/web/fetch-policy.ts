@@ -32,24 +32,29 @@ export const MAX_REDIRECT_HOPS = 10;
 export function isPermittedRedirect(from: string, to: string): boolean {
   let source: URL;
   let target: URL;
+
   try {
     source = new URL(from);
     target = new URL(to);
   } catch {
     return false;
   }
+
   if (source.protocol !== target.protocol) {
     return false;
   }
+
   if (source.port !== target.port) {
     return false;
   }
+
   // Credentials in a redirect target are a phishing primitive, never a
   // convenience: `https://trusted.example@evil.test/` reads as trusted.example
   // in a status bar and goes to evil.test.
   if (target.username.length > 0 || target.password.length > 0) {
     return false;
   }
+
   return stripWww(source.hostname) === stripWww(target.hostname);
 }
 
@@ -85,6 +90,7 @@ export function decideRedirect(input: {
   if (input.hops >= MAX_REDIRECT_HOPS) {
     return { kind: "exhausted", hops: input.hops };
   }
+
   if (input.location === undefined || input.location.length === 0) {
     // A 3xx with no Location is a broken server, not a redirect. Reporting it
     // keeps the failure attributable instead of surfacing as "too many hops".
@@ -93,7 +99,9 @@ export function decideRedirect(input: {
       refusal: { from: input.current, to: input.current, status: input.status },
     };
   }
+
   let target: string;
+
   try {
     target = new URL(input.location, input.current).toString();
   } catch {
@@ -102,9 +110,11 @@ export function decideRedirect(input: {
       refusal: { from: input.current, to: input.location, status: input.status },
     };
   }
+
   if (!isPermittedRedirect(input.current, target)) {
     return { kind: "report", refusal: { from: input.current, to: target, status: input.status } };
   }
+
   return { kind: "follow", url: target };
 }
 
@@ -175,13 +185,16 @@ export function createFetchCache(options: FetchCacheOptions): FetchCache {
       if (entry === undefined) {
         return undefined;
       }
+
       if (entry.expiresAtMs <= now()) {
         entries.delete(url);
         sizeBytes -= entry.bytes;
         return undefined;
       }
+
       entries.delete(url);
       entries.set(url, entry);
+
       return entry;
     },
     set(url, entry) {
@@ -189,13 +202,16 @@ export function createFetchCache(options: FetchCacheOptions): FetchCache {
       if (existing !== undefined) {
         sizeBytes -= existing.bytes;
       }
+
       entries.delete(url);
+
       // An entry larger than the whole budget would evict everything and then
       // still not fit. Storing it would make every later `get` a miss on a cache
       // that had just been emptied, so it is refused at the door instead.
       if (entry.bytes > maxBytes) {
         return;
       }
+
       entries.set(url, { ...entry, expiresAtMs: now() + ttlMs });
       sizeBytes += entry.bytes;
       evict();

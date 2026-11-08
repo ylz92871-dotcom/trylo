@@ -28,12 +28,28 @@ function contextFor(controller = new AbortController()) {
     tools: TOOLS, signal: controller.signal, reportProgress: () => {},
     recordUsage: (input, output) => { usage.push([input, output]); },
   };
+
   return { context, usage, controller };
 }
 
 function failure(code: string) {
   return (error: unknown): boolean => error instanceof ToolEvolutionWorkerError && error.code === code;
 }
+
+test("omitted worker limits preserve a healthy long reasoning stream and output allowance omission", async () => {
+  let sent: ProviderRequest | undefined;
+  const body = "x".repeat(70000);
+  const provider: ProviderPort = { async *stream(request) {
+    sent = request;
+    for (let index = 0; index < 5000; index++) yield { type: "reasoning_delta", blockId: "reasoning", text: ".", redacted: false };
+    yield { type: "text_delta", blockId: "answer", text: body };
+    yield STOP;
+  } };
+  const worker = createToolEvolutionWorker({ provider, model: "model" });
+
+  assert.equal(await worker(TASK, contextFor().context), body);
+  assert.equal(sent?.maxOutputTokens, undefined);
+});
 
 test("tool evolution worker runs one isolated tool-free provider call through the real subagent runtime", async () => {
   const requests: ProviderRequest[] = [];
@@ -49,13 +65,18 @@ test("tool evolution worker runs one isolated tool-free provider call through th
     },
   };
   const parent: ProviderPort = {
-    fork: () => { forks += 1; return child; },
+    fork: () => {
+      forks += 1;
+      return child;
+    },
     stream: () => { throw new Error("parent provider state must stay isolated"); },
   };
   const runtime = new SubagentRuntime({ tools: TOOLS });
   const runner = new SubagentToolRunner(runtime, createToolEvolutionWorker({ provider: parent, model: "selected-model" }));
+
   await runner.submit(TASK);
   const result = await runner.wait(TASK.taskId);
+
   assert.equal(result.status, "completed");
   assert.equal(result.output, "candidate code");
   assert.deepEqual(result.usage, { inputTokens: 12, outputTokens: 8 });
@@ -70,11 +91,16 @@ test("tool evolution worker runs one isolated tool-free provider call through th
 
 test("tool evolution worker rejects missing or oversized prompts before a provider request", async () => {
   let requests = 0;
-  const provider: ProviderPort = { async *stream() { requests += 1; yield STOP; } };
+  const provider: ProviderPort = { async *stream() {
+    requests += 1;
+    yield STOP;
+  } };
   const worker = createToolEvolutionWorker({ provider, model: "model", maxPromptChars: 3 });
+
   for (const input of [{}, { prompt: "" }, { prompt: "four" }]) {
     await assert.rejects(worker({ ...TASK, input }, contextFor().context), failure("invalid_task_prompt"));
   }
+
   assert.equal(requests, 0);
 });
 
@@ -85,6 +111,7 @@ test("tool evolution worker refuses partial output after a provider error and st
     { type: "usage", usage: { ...emptyUsage(), inputTokens: 9, outputTokens: 4 } },
     { type: "error", class: "quota", phase: "after_stream_started", retryable: false, message: "private details" },
   ]);
+
   await assert.rejects(createToolEvolutionWorker({ provider, model: "model" })(TASK, context), failure("provider_error"));
   assert.deepEqual(usage, [[9, 4]]);
 });
@@ -141,6 +168,7 @@ test("tool evolution worker fails closed when a stateful provider cannot create 
 test("tool evolution worker classifies transport exceptions without leaking their private message", async () => {
   const provider: ProviderPort = { stream: () => { throw new Error("private endpoint or credential"); } };
   const { context, usage } = contextFor();
+
   await assert.rejects(createToolEvolutionWorker({ provider, model: "model" })(TASK, context), error => {
     assert.ok(failure("provider_error")(error));
     assert.equal(String(error).includes("private endpoint"), false);
@@ -158,12 +186,16 @@ test("tool evolution worker forwards cancellation to the provider and classifies
     async *stream(_request, signal) {
       started();
       await new Promise<void>((_resolve, reject) => {
-        signal.addEventListener("abort", () => { transportAborted = true; reject(new Error("aborted transport")); }, { once: true });
+        signal.addEventListener("abort", () => {
+          transportAborted = true;
+          reject(new Error("aborted transport"));
+        }, { once: true });
       });
       yield STOP;
     },
   };
   const result = createToolEvolutionWorker({ provider, model: "model" })(TASK, context);
+
   await ready;
   controller.abort();
   await assert.rejects(result, failure("cancelled"));

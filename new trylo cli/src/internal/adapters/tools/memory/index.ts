@@ -122,9 +122,11 @@ export function createMemoryTools(port: MemoryReadPort): ToolPort {
       if (call.name === MEMORY_SEARCH_TOOL) {
         return runSearch(port, call, signal);
       }
+
       if (call.name === MEMORY_READ_TOOL) {
         return runRead(port, call, signal);
       }
+
       return { outcome: "unknown", code: "unknown_tool", message: `memory tools do not implement ${call.name}` };
     },
 
@@ -182,6 +184,7 @@ async function runSearch(
       message: `memory_search match_mode must be one of ${MATCH_MODES.join(", ")}`,
     };
   }
+
   const cursor = stringArgument(args, "cursor");
   const documentId = stringArgument(args, "document_id");
   const recordKind = stringArgument(args, "record_kind");
@@ -202,6 +205,7 @@ async function runSearch(
   if (!outcome.ok) {
     return { outcome: "error", code: outcome.code, message: outcome.message };
   }
+
   const lines = outcome.matches.map(
     (match) =>
       match.origin === "user-memory"
@@ -211,6 +215,7 @@ async function runSearch(
   const footer = outcome.truncated
     ? `\n[more results exist; call memory_search again with cursor "${outcome.nextCursor ?? ""}"]`
     : "";
+
   return {
     outcome: "result",
     value: {
@@ -242,6 +247,7 @@ async function runRead(
   if (documentId === undefined) {
     return { outcome: "error", code: "invalid_arguments", message: "memory_read requires a document_id" };
   }
+
   const maxLines = numberArgument(args, "max_lines");
   const outcome = await port.read(
     {
@@ -254,6 +260,7 @@ async function runRead(
   if (!outcome.ok) {
     return { outcome: "error", code: outcome.code, message: outcome.message };
   }
+
   return {
     outcome: "result",
     value: {

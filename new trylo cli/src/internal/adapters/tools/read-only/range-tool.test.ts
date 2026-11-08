@@ -62,6 +62,7 @@ function replyOf(outcome: ToolOutcome): Reply {
     typeof candidate === "object" && candidate !== null && !Array.isArray(candidate)
       ? (candidate as JsonObject)
       : undefined;
+
   return {
     outcome,
     content: String(value.content ?? ""),
@@ -85,15 +86,20 @@ async function walkAll(root: string, relative: string, limits?: ReadOnlyToolLimi
   const signal = new AbortController().signal;
   const chunks: string[] = [];
   let args: JsonObject = { path: relative, offset: 0 };
+
   for (let guard = 0; guard < 50; guard += 1) {
     const reply = replyOf(await port.execute(read(args), signal));
+
     assert.equal(reply.outcome.outcome, "result", `reading ${JSON.stringify(args)} failed`);
     chunks.push(reply.content);
+
     if (reply.nextOffset === undefined) {
       break;
     }
+
     args = { path: relative, offset: reply.nextOffset };
   }
+
   return chunks.join("");
 }
 
@@ -103,6 +109,7 @@ test("a plain {path} read is byte for byte what it was before ranges existed", a
   const root = tempRoot();
   try {
     const source = lines(300);
+
     write(root, "small.ts", source);
     const reply = replyOf(await tools(root).execute(read({ path: "small.ts" }), new AbortController().signal));
 
@@ -122,6 +129,7 @@ test("a file longer than the line ceiling reports where to continue", async () =
   const root = tempRoot();
   try {
     const source = lines(2600);
+
     write(root, "long.ts", source);
     const reply = replyOf(await tools(root).execute(read({ path: "long.ts" }), new AbortController().signal));
 
@@ -153,6 +161,7 @@ test("an explicit offset reads the region it names and stops at the end", async 
   const root = tempRoot();
   try {
     const source = lines(2600);
+
     write(root, "long.ts", source);
     const reply = replyOf(
       await tools(root).execute(read({ path: "long.ts", offset: 2579, limit: 80 }), new AbortController().signal),
@@ -233,6 +242,7 @@ test("a line that cannot fit the budget is named, with its real length", async (
   const root = tempRoot();
   try {
     const source = "short\n" + "x".repeat(5000) + "\ntail\n";
+
     write(root, "wide.ts", source);
     const reply = replyOf(
       await tools(root, { ...DEFAULT_READ_ONLY_LIMITS, maxBytes: 200 }).execute(
@@ -257,8 +267,10 @@ test("the schema tells the model the unit, the base and how to continue", async 
   const root = tempRoot();
   try {
     const binding = tools(root).snapshot().find((entry) => entry.name === "read_file");
+
     assert.ok(binding, "read_file is offered");
     const description = binding.description;
+
     // WP §4: the description is not allowed to merely mention the parameters.
     assert.match(description, /LINES/);
     assert.match(description, /0-based/);
@@ -267,6 +279,7 @@ test("the schema tells the model the unit, the base and how to continue", async 
     assert.match(description, /unchanged/);
 
     const properties = binding.parameters.properties as JsonObject;
+
     assert.equal((properties.offset as JsonObject).type, "integer");
     assert.equal((properties.offset as JsonObject).minimum, 0);
     assert.equal((properties.limit as JsonObject).minimum, 1);

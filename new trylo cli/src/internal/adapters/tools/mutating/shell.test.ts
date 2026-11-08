@@ -41,6 +41,7 @@ function recordingSpawner(result: (spec: ShellSpawnSpec) => {
     spawner: async (spec: ShellSpawnSpec) => {
       specs.push(spec);
       const decided = result(spec);
+
       return {
         stdout: decided.stdout ?? "",
         stderr: decided.stderr ?? "",
@@ -51,6 +52,7 @@ function recordingSpawner(result: (spec: ShellSpawnSpec) => {
       };
     },
   };
+
   return recorder;
 }
 
@@ -69,10 +71,13 @@ test("a command that cannot be parsed never reaches a process", async () => {
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "echo 'unterminated" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "shell_parse_failed");
     }
+
     assert.equal(recording.specs.length, 0);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -83,6 +88,7 @@ test("shell operators are refused with no process to refuse them twice", async (
   const root = tempRoot();
   try {
     const recording = recordingSpawner(() => ({}));
+
     // D7 P2-③: `|` left this list — a pipeline plans and spawns once (see the
     // pipeline tests); everything else here is still refused before spawning.
     for (const command of ["echo hi > out.txt", "a && b", "cat $(secret)", "echo `id`", "line1\nline2"]) {
@@ -90,16 +96,20 @@ test("shell operators are refused with no process to refuse them twice", async (
         { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command } },
         SIGNAL,
       );
+
       assert.equal(outcome.outcome, "error", command);
+
       if (outcome.outcome === "error") {
         assert.equal(outcome.code, "shell_operator_forbidden", command);
       }
     }
+
     assert.equal(recording.specs.length, 0);
     const piped = await toolsFor(root, recording.spawner).execute(
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "cat a | grep b" } },
       SIGNAL,
     );
+
     assert.equal(piped.outcome, "result");
     assert.equal(recording.specs.length, 1);
   } finally {
@@ -115,18 +125,24 @@ test("cd and absolute executables are refused before spawning", async () => {
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "cd .." } },
       SIGNAL,
     );
+
     assert.equal(cd.outcome, "error");
+
     if (cd.outcome === "error") {
       assert.equal(cd.code, "cd_forbidden");
     }
+
     const absolute = await toolsFor(root, recording.spawner).execute(
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "C:/Windows/System32/cmd.exe /c dir" } },
       SIGNAL,
     );
+
     assert.equal(absolute.outcome, "error");
+
     if (absolute.outcome === "error") {
       assert.equal(absolute.code, "path_outside_workspace");
     }
+
     assert.equal(recording.specs.length, 0);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -141,13 +157,14 @@ test("an accepted command is spawned with the workspace as its working directory
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "node -v" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "result");
     assert.equal(recording.specs.length, 1);
     const spec = recording.specs[0];
     if (spec !== undefined) {
       assert.deepEqual(spec.argv, ["node", "-v"]);
-      assert.equal(spec.cwd, realpathSync(root));
-      assert.ok(spec.timeoutMs > 0);
+      assert.equal(spec.cwd, realpathSync.native(root));
+      assert.equal(spec.timeoutMs, undefined);
     }
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -161,10 +178,12 @@ test("D7: a timeout is a typed failure naming the budget, not a cancellation", a
   try {
     const recording = recordingSpawner(() => ({ timedOut: true, stdout: "partial" }));
     const outcome = await toolsFor(root, recording.spawner).execute(
-      { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "node -v" } },
+      { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "node -v", timeoutMs: 60_000 } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "shell_timeout");
       assert.match(outcome.message, /60000/);
@@ -185,7 +204,9 @@ test("a timeout is a cancellation, not a failure", async () => {
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "node -v" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "shell_timeout");
     }
@@ -199,11 +220,13 @@ test("an aborted signal cancels before and during execution", async () => {
   try {
     const recording = recordingSpawner(() => ({ aborted: true }));
     const aborted = new AbortController();
+
     aborted.abort();
     const outcome = await toolsFor(root, recording.spawner).execute(
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "node -v" } },
       aborted.signal,
     );
+
     assert.equal(outcome.outcome, "cancelled");
     assert.equal(recording.specs.length, 0);
   } finally {
@@ -219,7 +242,9 @@ test("a non-zero exit is reported with the code the process returned", async () 
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "node missing.js" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "shell_nonzero_exit");
       assert.match(outcome.message, /3/);
@@ -237,7 +262,9 @@ test("output truncation is reported rather than hidden", async () => {
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "node -v" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome === "result") {
       assert.equal(outcome.truncated, true);
       assert.match(outcome.output, /\[truncated\]/);
@@ -251,16 +278,20 @@ test("a requested timeout outside the allowed range is refused rather than clamp
   const root = tempRoot();
   try {
     const recording = recordingSpawner(() => ({}));
-    for (const timeoutMs of [0, -5, 1_000_000]) {
+
+    for (const timeoutMs of [0, -5, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
       const outcome = await toolsFor(root, recording.spawner).execute(
         { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "node -v", timeoutMs } },
         SIGNAL,
       );
+
       assert.equal(outcome.outcome, "error", String(timeoutMs));
+
       if (outcome.outcome === "error") {
         assert.equal(outcome.code, "invalid_arguments");
       }
     }
+
     assert.equal(recording.specs.length, 0);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -274,8 +305,10 @@ test("a requested timeout outside the allowed range is refused rather than clamp
 test("the child environment carries no secrets and no proxy configuration", () => {
   const previousKey = process.env.TRYLO_API_KEY;
   const previousProxy = process.env.HTTPS_PROXY;
+
   process.env.TRYLO_API_KEY = "sk-should-not-leak";
   process.env.HTTPS_PROXY = "http://proxy.invalid:8080";
+
   try {
     const env = childEnvironment();
     assert.equal(env.TRYLO_API_KEY, undefined);
@@ -324,7 +357,9 @@ test("a program this machine does not have names the replacement, not just the O
       },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "shell_spawn_failed");
       assert.match(outcome.message, new RegExp(missing), "the program that could not start is named");
@@ -352,11 +387,14 @@ test("a multi-line command is refused with the shape that would work", async () 
       },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "shell_operator_forbidden");
       assert.match(outcome.message, /write_file/, "moving the script into a file is named");
     }
+
     assert.equal(recording.specs.length, 0);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -371,12 +409,15 @@ test("a refused operator explains how to keep the word as one argument", async (
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "node -e console.log(1+(2))" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "shell_operator_forbidden");
       assert.match(outcome.message, /quot/i, "quoting so the word stays one argument is named");
       assert.match(outcome.message, /steps|pipeTo/, "structural composition is named for real composition");
     }
+
     assert.equal(recording.specs.length, 0);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -391,7 +432,9 @@ test("a failing command says it is a failure, not a finished task", async () => 
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "node --test" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "shell_nonzero_exit");
       assert.match(outcome.message, /tests 4 \/ pass 0 \/ fail 4/, "the output is still the evidence");
@@ -439,7 +482,9 @@ test("the platform named in that guidance comes from the injectable seam", async
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "cat -A src/invoice.js" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.match(outcome.message, /\(win32\)/, "the injected platform is the one reported");
       assert.match(outcome.message, /read_file/);
@@ -460,7 +505,9 @@ test("a spawn failure that is not ENOENT does not claim the program is missing",
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "cat -A src/invoice.js" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "shell_spawn_failed");
       assert.match(outcome.message, /EACCES/, "the real OS error is still the diagnosis");

@@ -84,7 +84,9 @@ test("replace rewrites one cell on disk and read_notebook sees the same cell", a
       },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome === "result") {
       const fileWrite = outcome.value.fileWrite as JsonObject;
       assert.equal(fileWrite["kind"], "file_write");
@@ -92,8 +94,10 @@ test("replace rewrites one cell on disk and read_notebook sees the same cell", a
       assert.equal(outcome.value["editMode"], "replace");
       assert.equal(outcome.value["appliedCellId"], "a1");
     }
+
     const onDisk = JSON.parse(readFileSync(join(root, "exp.ipynb"), "utf8")) as JsonObject;
     const cells = onDisk["cells"] as ReadonlyArray<JsonObject>;
+
     assert.equal((cells[0]?.["source"] as string), "x = 2");
     assert.equal(cells[0]?.["execution_count"], null);
     assert.deepEqual(cells[0]?.["outputs"], []);
@@ -102,7 +106,9 @@ test("replace rewrites one cell on disk and read_notebook sees the same cell", a
       { toolCallId: "c2", name: READ_NOTEBOOK_TOOL, arguments: { path: "exp.ipynb", cell_id: "a1" } },
       SIGNAL,
     );
+
     assert.equal(readBack.outcome, "result");
+
     if (readBack.outcome === "result") {
       assert.ok(readBack.output.includes("x = 2"));
       assert.ok(!readBack.output.includes("x = 1"));
@@ -127,11 +133,15 @@ test("insert and delete change the cell list; insert mints the injected id", asy
       },
       SIGNAL,
     );
+
     assert.equal(inserted.outcome, "result");
+
     if (inserted.outcome === "result") {
       assert.equal(inserted.value["appliedCellId"], "cell-injected-1");
     }
+
     let afterInsert = JSON.parse(readFileSync(join(root, "exp.ipynb"), "utf8")) as JsonObject;
+
     assert.equal((afterInsert["cells"] as ReadonlyArray<unknown>).length, 3);
     assert.equal(((afterInsert["cells"] as ReadonlyArray<JsonObject>)[1]?.["id"]), "cell-injected-1");
     const deleted = await tools.execute(
@@ -142,9 +152,11 @@ test("insert and delete change the cell list; insert mints the injected id", asy
       },
       SIGNAL,
     );
+
     assert.equal(deleted.outcome, "result");
     afterInsert = JSON.parse(readFileSync(join(root, "exp.ipynb"), "utf8")) as JsonObject;
     const cells = afterInsert["cells"] as ReadonlyArray<JsonObject>;
+
     assert.equal(cells.length, 2);
     assert.ok(!cells.some((cell) => cell["id"] === "m1"));
   } finally {
@@ -166,10 +178,13 @@ test("corrupt notebooks, unknown cells, and bad modes refuse with the file untou
       },
       SIGNAL,
     );
+
     assert.equal(corrupt.outcome, "error");
+
     if (corrupt.outcome === "error") {
       assert.equal(corrupt.code, "invalid_notebook");
     }
+
     assert.equal(readFileSync(join(root, "bad.ipynb"), "utf8"), "{not json");
     const before = readFileSync(join(root, "exp.ipynb"), "utf8");
     const unknown = await tools.execute(
@@ -180,10 +195,13 @@ test("corrupt notebooks, unknown cells, and bad modes refuse with the file untou
       },
       SIGNAL,
     );
+
     assert.equal(unknown.outcome, "error");
+
     if (unknown.outcome === "error") {
       assert.equal(unknown.code, "cell_not_found");
     }
+
     const badMode = await tools.execute(
       {
         toolCallId: "c3",
@@ -192,10 +210,13 @@ test("corrupt notebooks, unknown cells, and bad modes refuse with the file untou
       },
       SIGNAL,
     );
+
     assert.equal(badMode.outcome, "error");
+
     if (badMode.outcome === "error") {
       assert.equal(badMode.code, "invalid_arguments");
     }
+
     const noType = await tools.execute(
       {
         toolCallId: "c4",
@@ -204,10 +225,13 @@ test("corrupt notebooks, unknown cells, and bad modes refuse with the file untou
       },
       SIGNAL,
     );
+
     assert.equal(noType.outcome, "error");
+
     if (noType.outcome === "error") {
       assert.equal(noType.code, "missing_cell_type");
     }
+
     assert.equal(readFileSync(join(root, "exp.ipynb"), "utf8"), before);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -229,11 +253,14 @@ test("sandbox gates hold: escapes, missing files, and non-ipynb targets never re
       },
       SIGNAL,
     );
+
     assert.equal(outside.outcome, "error");
+
     if (outside.outcome === "error") {
       // No hedge: `..` escapes resolve outside the root deterministically.
       assert.equal(outside.code, "path_outside_workspace");
     }
+
     const missing = await tools.execute(
       {
         toolCallId: "c2",
@@ -242,10 +269,13 @@ test("sandbox gates hold: escapes, missing files, and non-ipynb targets never re
       },
       SIGNAL,
     );
+
     assert.equal(missing.outcome, "error");
+
     if (missing.outcome === "error") {
       assert.equal(missing.code, "file_missing");
     }
+
     const notNotebook = await tools.execute(
       {
         toolCallId: "c3",
@@ -254,11 +284,14 @@ test("sandbox gates hold: escapes, missing files, and non-ipynb targets never re
       },
       SIGNAL,
     );
+
     assert.equal(notNotebook.outcome, "error");
+
     if (notNotebook.outcome === "error") {
       // The planner's extension gate fires before existence is even checked.
       assert.equal(notNotebook.code, "invalid_arguments");
     }
+
     assert.equal(readFileSync(join(root, "exp.ipynb"), "utf8"), before);
     assert.equal(readFileSync(join(root, "notes.txt"), "utf8"), "plain");
   } finally {
@@ -272,6 +305,7 @@ test("an aborted call reports cancelled and leaves the file alone", async () => 
     writeFileSync(join(root, "exp.ipynb"), sample());
     const before = readFileSync(join(root, "exp.ipynb"), "utf8");
     const aborted = new AbortController();
+
     aborted.abort();
     const outcome = await toolsFor(root).execute(
       {
@@ -281,6 +315,7 @@ test("an aborted call reports cancelled and leaves the file alone", async () => 
       },
       aborted.signal,
     );
+
     assert.equal(outcome.outcome, "cancelled");
     assert.equal(readFileSync(join(root, "exp.ipynb"), "utf8"), before);
   } finally {

@@ -58,9 +58,12 @@ test("a real PNG validates: facts in value, summary in output, never the payload
     writeFileSync(join(root, "image.png"), PNG);
     const tools = createReadOnlyTools({ workspaceRoot: root, reader: createNodeFileSystemReader() });
     const outcome = await tools.execute(callFor({ path: "image.png" }), new AbortController().signal);
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome === "result") {
       const value = outcome.value as JsonObject;
+
       assert.equal(value.mediaType, "image/png");
       assert.equal(value.bytes, PNG.length);
       assert.equal(value.detail, "high");
@@ -85,22 +88,33 @@ test("text renamed to .png refuses as an image, and bad detail refuses before an
     const tools = createReadOnlyTools({ workspaceRoot: root, reader: createNodeFileSystemReader() });
     const signal = new AbortController().signal;
     const renamed = await tools.execute(callFor({ path: "notes.png" }), signal);
+
     assert.equal(renamed.outcome, "error");
+
     if (renamed.outcome === "error") {
       assert.equal(renamed.code, "invalid_image");
     }
+
     const detail = await tools.execute(callFor({ path: "notes.png", detail: "low" }), signal);
+
     assert.equal(detail.outcome, "error");
+
     if (detail.outcome === "error") {
       assert.equal(detail.code, "invalid_arguments");
     }
+
     const outside: ToolOutcome = await tools.execute(callFor({ path: "../escape.png" }), signal);
+
     assert.equal(outside.outcome, "error");
+
     if (outside.outcome === "error") {
       assert.equal(outside.code, "path_outside_workspace");
     }
+
     const missing: ToolOutcome = await tools.execute(callFor({}), signal);
+
     assert.equal(missing.outcome, "error");
+
     if (missing.outcome === "error") {
       assert.equal(missing.code, "invalid_arguments");
     }
@@ -126,7 +140,9 @@ test("a text-only reader fails closed instead of decoding text as an image", asy
     };
     const tools = createReadOnlyTools({ workspaceRoot: root, reader: textOnly });
     const outcome: ToolOutcome = await tools.execute(callFor({ path: "image.png" }), new AbortController().signal);
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "bytes_unavailable");
     }

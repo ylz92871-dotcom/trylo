@@ -74,21 +74,27 @@ export function acquireLock(io: RegistryIo, scope: McpScope): McpRegistryFailure
   if (io.held.has(scope)) {
     return { ok: false, code: "lock_conflict", detail: `${scope} registry is already locked by this writer` };
   }
+
   const lockPath = lockFor(io, scope);
+
   try {
     mkdirSync(path.dirname(lockPath), { recursive: true });
   } catch {
     return { ok: false, code: "directory_unavailable", detail: `cannot create ${path.dirname(lockPath)}` };
   }
+
   try {
     const handle = openSync(lockPath, "wx");
+
     try {
       writeFileSync(handle, `${process.pid}\n`);
       fsyncSync(handle);
     } finally {
       closeSync(handle);
     }
+
     io.held.add(scope);
+
     return undefined;
   } catch {
     return { ok: false, code: "lock_conflict", detail: `${fileFor(io, scope)} is locked by another writer` };
@@ -112,18 +118,23 @@ export function loadScope(io: RegistryIo, scope: McpScope): LoadedScope {
     if (io.config.required) return { ok: false, code: "read_failed", detail: `${file} does not exist` };
     return { ok: true, document: emptyDocument(), existed: false };
   }
+
   let raw: string;
+
   try {
     raw = readFileSync(file, "utf8");
   } catch {
     return { ok: false, code: "read_failed", detail: `${file} could not be read` };
   }
+
   if (raw.trim().length === 0) {
     // Zero bytes is a file somebody created and never finished, not a
     // registry with no servers.
     return { ok: false, code: "invalid_document", detail: `${file} is empty` };
   }
+
   const decoded = decodeDocument(raw, file);
+
   return decoded.ok ? { ok: true, document: decoded.value, existed: true } : decoded;
 }
 
@@ -141,6 +152,7 @@ export function storeScope(
 ): McpRegistryFailure | undefined {
   const file = fileFor(io, scope);
   const temporary = `${file}.${randomUUID()}.tmp`;
+
   try {
     // `wx`: the temporary name is fresh, so an existing file means something
     // is wrong and truncating it would be the wrong way to find out.
@@ -148,6 +160,7 @@ export function storeScope(
     // fsync the contents before the rename so the name never points at
     // bytes that have not reached disk.
     const handle = openSync(temporary, "r+");
+
     try {
       fsyncSync(handle);
     } finally {
@@ -157,12 +170,14 @@ export function storeScope(
     discard(temporary);
     return { ok: false, code: "write_failed", detail: `${file} could not be written` };
   }
+
   try {
     renameSyncOver(temporary, file);
   } catch {
     discard(temporary);
     return { ok: false, code: "write_failed", detail: `${file} could not be replaced` };
   }
+
   return undefined;
 }
 

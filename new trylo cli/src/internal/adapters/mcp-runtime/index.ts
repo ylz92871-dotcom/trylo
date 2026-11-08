@@ -1,7 +1,9 @@
 import type { McpRegistryPort, McpServerEntry } from "../../ports/mcp-registry.js";
 import type { ToolPort } from "../../ports/tools.js";
-import { noOverlay } from "../../learning/domains/tool/refine/overlay.js";
-import type { DescriptionOverlay } from "../../learning/domains/tool/refine/types.js";
+import type { ProviderPort } from "../../ports/provider.js";
+import { registryDiagnosticWarning } from "../mcp-registry/diagnostics.js";
+import { noOverlay } from "../../learning/agent/subsystems/tool/domain/refine/overlay.js";
+import type { DescriptionOverlay } from "../../learning/agent/subsystems/tool/domain/refine/types.js";
 import { createMcpToolPort } from "./execute.js";
 import { createClientForEntry, type McpClientOpen } from "./factory.js";
 import { mountServerTools, mountedNameSet, type McpMount } from "./mount.js";
@@ -47,6 +49,7 @@ export type McpRuntimeInput = {
 };
 
 export type McpRuntime = {
+  readonly wrapProvider?: (provider: ProviderPort) => ProviderPort;
   /** The MCP half of the composite tool table. */
   readonly tools: ToolPort;
   /** Exactly the names that mounted, for the composite sandbox's admission set. */
@@ -65,6 +68,7 @@ export async function openMcpRuntime(input: McpRuntimeInput): Promise<McpRuntime
   const mount = mountServerTools(pool.servers, input.descriptionOverlay ?? noOverlay);
   const tools = createMcpToolPort(mount.mounted, input.cwd);
   const resources = createMcpResourcePort(pool.servers);
+
   return {
     tools: combineMcpToolPorts(tools, resources),
     toolNames: new Set([...mountedNameSet(mount.mounted), ...resources.snapshot().map((binding) => binding.name)]),
@@ -81,25 +85,33 @@ export async function openMcpRuntime(input: McpRuntimeInput): Promise<McpRuntime
  */
 function warningsOf(pool: McpPool, mount: McpMount): ReadonlyArray<string> {
   const lines: string[] = [];
+
   for (const failure of pool.failures) {
     lines.push(
-      failure.serverId.length === 0
+      failure.registryDiagnostic
+        ? registryDiagnosticWarning(failure.registryDiagnostic)
+        : failure.serverId.length === 0
         ? `mcp_registry_unavailable:${failure.code}`
         : `mcp_server_unavailable:${failure.serverId}:${failure.code}`,
     );
   }
+
   for (const skipped of pool.skipped) {
     lines.push(`mcp_server_disabled:${skipped.serverId}`);
   }
+
   for (const refused of mount.refused) {
     lines.push(`mcp_tool_refused:${refused.qualifiedName}:${refused.code}`);
   }
+
   for (const entry of pool.headerKeys) {
     lines.push(`mcp_header_keys:${entry.serverId}:${entry.keys.join(",")}`);
   }
+
   if (pool.servers.length > 0) {
     lines.push(`mcp_servers_connected:${pool.servers.length}`);
   }
+
   return lines;
 }
 
@@ -107,7 +119,6 @@ export { createClientForEntry } from "./factory.js";
 export { createMcpToolPort, callTimeoutMs } from "./execute.js";
 export {
   DEFAULT_MCP_CALL_TIMEOUT_MS,
-  MAX_MCP_CALL_TIMEOUT_MS,
   MIN_MCP_CALL_TIMEOUT_MS,
   MCP_OUTPUT_LIMITS,
   bindingForSpec,

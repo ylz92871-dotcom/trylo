@@ -37,9 +37,11 @@ function domainList(value: unknown): ReadonlyArray<string> | undefined {
   if (value === undefined) {
     return undefined;
   }
+
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.length === 0)) {
     return [];
   }
+
   return (value as ReadonlyArray<string>).map((item) => item.trim().toLowerCase());
 }
 
@@ -52,6 +54,7 @@ export function planWebSearch(call: ToolCallRequest): WebSearchPlanResult {
       message: "web_search requires a query of at least two characters",
     };
   }
+
   const rawMode = call.arguments["mode"];
   const mode = rawMode === undefined ? "cached" : String(rawMode);
   if (!isWebSearchMode(mode)) {
@@ -61,14 +64,18 @@ export function planWebSearch(call: ToolCallRequest): WebSearchPlanResult {
       message: `web_search mode must be one of ${WEB_SEARCH_MODES.join(", ")}`,
     };
   }
+
   const allowedDomains = domainList(call.arguments["allowed_domains"]);
   const blockedDomains = domainList(call.arguments["blocked_domains"]);
+
   if (allowedDomains !== undefined && allowedDomains.length === 0) {
     return { ok: false, code: "invalid_arguments", message: "allowed_domains must be strings" };
   }
+
   if (blockedDomains !== undefined && blockedDomains.length === 0) {
     return { ok: false, code: "invalid_arguments", message: "blocked_domains must be strings" };
   }
+
   if (allowedDomains !== undefined && blockedDomains !== undefined) {
     return {
       ok: false,
@@ -77,6 +84,7 @@ export function planWebSearch(call: ToolCallRequest): WebSearchPlanResult {
         "web_search cannot take both allowed_domains and blocked_domains; send the allow list or the block list, not both",
     };
   }
+
   return {
     ok: true,
     plan: {

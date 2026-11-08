@@ -70,14 +70,17 @@ async function startHttpServer(): Promise<{ readonly server: Server; readonly ur
   const server = createServer((req, res) => {
     void (async () => {
       let body = "";
+
       for await (const chunk of req) {
         body += String(chunk);
       }
+
       const request = JSON.parse(body) as JsonRpcBody;
       const reply = (result: unknown): void => {
         res.writeHead(200, { "content-type": "application/json" });
         res.end(JSON.stringify({ id: request.id ?? null, result, jsonrpc: "2.0" }));
       };
+
       if (request.method === "initialize") {
         reply({
           protocolVersion: "2025-03-26",
@@ -86,6 +89,7 @@ async function startHttpServer(): Promise<{ readonly server: Server; readonly ur
         });
         return;
       }
+
       if (request.method === "tools/list") {
         reply({
           tools: [
@@ -103,16 +107,20 @@ async function startHttpServer(): Promise<{ readonly server: Server; readonly ur
         });
         return;
       }
+
       if (request.method === "tools/call") {
         reply({ content: [{ type: "text", text: "remote-ok" }], structuredContent: { echoed: true } });
         return;
       }
+
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ id: request.id ?? null, error: { code: -32601, message: "no" }, jsonrpc: "2.0" }));
     })();
   });
+
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;
+
   return { server, url: `http://127.0.0.1:${address.port}/mcp` };
 }
 
@@ -123,8 +131,10 @@ async function closeServer(server: Server): Promise<void> {
 
 test("a registered stdio server comes up as a callable tool, from a real registry file", async () => {
   const fixture = tempRegistry();
+
   await addStdioServer(fixture.registry, "fake", "ok");
   const runtime = await openMcpRuntime({ registry: fixture.registry, cwd: repoRoot });
+
   try {
     // WP15.2: a connected server also mounts the three resource tools, so the
     // table carries tools *and* resources from the same pool.
@@ -140,6 +150,7 @@ test("a registered stdio server comes up as a callable tool, from a real registr
       ],
     );
     const binding = runtime.tools.snapshot().find((item) => item.name === "mcp__fake__echo");
+
     assert.ok(binding);
     assert.equal(binding.sideEffect, "external");
     assert.equal(binding.needsApproval, true);
@@ -148,6 +159,7 @@ test("a registered stdio server comes up as a callable tool, from a real registr
       { toolCallId: "c1", name: "mcp__fake__echo", arguments: { text: "round-trip" } },
       new AbortController().signal,
     );
+
     assert.equal(outcome.outcome, "result");
     assert.equal(runtime.warnings.includes("mcp_servers_connected:1"), true);
 
@@ -156,12 +168,15 @@ test("a registered stdio server comes up as a callable tool, from a real registr
       { toolCallId: "c2", name: "mcp_list_resources", arguments: {} },
       new AbortController().signal,
     );
+
     assert.equal(listed.outcome, "result");
     const read = await runtime.tools.execute(
       { toolCallId: "c3", name: "mcp_read_resource", arguments: { server: "fake", uri: "file:///notes/today.md" } },
       new AbortController().signal,
     );
+
     assert.equal(read.outcome, "result");
+
     if (read.outcome === "result") {
       assert.ok(read.output.includes("shipped WP15"), read.output);
     }
@@ -185,9 +200,11 @@ test("a registered remote server comes up over a real socket, and its injected t
     url: remote.url,
     headers: { "x-secret": "s3cret-token" },
   });
+
   assert.equal(added.ok, true, JSON.stringify(added));
 
   const runtime = await openMcpRuntime({ registry: fixture.registry, cwd: repoRoot });
+
   try {
     assert.deepEqual(
       [...runtime.toolNames].sort(),
@@ -211,6 +228,7 @@ test("a registered remote server comes up over a real socket, and its injected t
       { toolCallId: "c1", name: "mcp__remote__echo", arguments: {} },
       new AbortController().signal,
     );
+
     assert.equal(outcome.outcome, "result");
   } finally {
     await runtime.close();
@@ -221,18 +239,19 @@ test("a registered remote server comes up over a real socket, and its injected t
 
 test("a hung server ends as a timeout outcome and never hangs the caller", async () => {
   const fixture = tempRegistry();
+
   await addStdioServer(fixture.registry, "slow", "timeout");
   const runtime = await openMcpRuntime({ registry: fixture.registry, cwd: repoRoot });
+
   try {
     const outcome = await runtime.tools.execute(
       { toolCallId: "c1", name: "mcp__slow__echo", arguments: { timeoutMs: 300 } },
       new AbortController().signal,
     );
+
     assert.equal(outcome.outcome, "unknown");
     assert.equal(outcome.outcome === "unknown" ? outcome.code : "", "mcp_timeout");
-    // The package's own default is the conservative 30s (WP §4-D2), asserted
-    // rather than waited for.
-    assert.equal(DEFAULT_MCP_CALL_TIMEOUT_MS, 30_000);
+    assert.equal(DEFAULT_MCP_CALL_TIMEOUT_MS, undefined);
   } finally {
     await runtime.close();
     cleanup(fixture);
@@ -250,10 +269,12 @@ test("a server that cannot be started is a warning, and the others still serve",
     enabled: true,
     scope: "user",
   });
+
   assert.equal(added.ok, true, JSON.stringify(added));
   await addStdioServer(fixture.registry, "fake", "ok");
 
   const runtime = await openMcpRuntime({ registry: fixture.registry, cwd: repoRoot });
+
   try {
     assert.equal(runtime.toolNames.has("mcp__fake__echo"), true);
     assert.equal(runtime.toolNames.has("mcp__ghost__echo"), false);
@@ -271,6 +292,7 @@ test("a server that cannot be started is a warning, and the others still serve",
 test("an empty registry yields an empty table and no warnings at all", async () => {
   const fixture = tempRegistry();
   const runtime = await openMcpRuntime({ registry: fixture.registry, cwd: repoRoot });
+
   try {
     assert.equal(runtime.tools.snapshot().length, 0);
     assert.equal(runtime.toolNames.size, 0);
@@ -292,8 +314,10 @@ test("a disabled server is skipped, reported, and never spawned", async () => {
     enabled: false,
     scope: "user",
   });
+
   assert.equal(added.ok, true, JSON.stringify(added));
   const runtime = await openMcpRuntime({ registry: fixture.registry, cwd: repoRoot });
+
   try {
     assert.equal(runtime.tools.snapshot().length, 0);
     assert.deepEqual(runtime.warnings, ["mcp_server_disabled:off"]);
@@ -305,8 +329,10 @@ test("a disabled server is skipped, reported, and never spawned", async () => {
 
 test("a broken registry file fails soft with one warning instead of no tools at all", async () => {
   const fixture = tempRegistry();
+
   writeFileSync(join(fixture.dir, "mcp-servers.json"), "{ this is not json", "utf8");
   const runtime = await openMcpRuntime({ registry: fixture.registry, cwd: repoRoot });
+
   try {
     assert.equal(runtime.tools.snapshot().length, 0);
     assert.equal(runtime.warnings.length, 1);
@@ -319,8 +345,10 @@ test("a broken registry file fails soft with one warning instead of no tools at 
 
 test("a tool whose name contains the server separator never becomes callable", async () => {
   const fixture = tempRegistry();
+
   await addStdioServer(fixture.registry, "sneaky", "bad-tool");
   const runtime = await openMcpRuntime({ registry: fixture.registry, cwd: repoRoot });
+
   try {
     // `mcp__sneaky__a__b` could be read as belonging to a different server, so
     // the client drops it and the mount list never sees it. The rest of the

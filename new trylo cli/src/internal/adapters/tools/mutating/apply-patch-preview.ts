@@ -38,12 +38,15 @@ function headerOf(input: PreviewInput): string[] {
   if (input.kind === "added") {
     return ["--- /dev/null", `+++ b/${input.path}`];
   }
+
   if (input.kind === "deleted") {
     return [`--- a/${input.path}`, "+++ /dev/null"];
   }
+
   if (input.kind === "moved") {
     return [`--- a/${input.from}`, `+++ b/${input.path}`];
   }
+
   return [`--- a/${input.path}`, `+++ b/${input.path}`];
 }
 
@@ -52,6 +55,7 @@ function regionsOf(input: PreviewInput): AppliedRegion[] {
   if (input.regions.length > 0) {
     return input.regions.map((region) => ({ ...region, ops: [...region.ops] }));
   }
+
   if (input.kind === "added") {
     return [
       {
@@ -61,6 +65,7 @@ function regionsOf(input: PreviewInput): AppliedRegion[] {
       },
     ];
   }
+
   if (input.kind === "deleted") {
     return [
       {
@@ -70,6 +75,7 @@ function regionsOf(input: PreviewInput): AppliedRegion[] {
       },
     ];
   }
+
   return [];
 }
 
@@ -77,6 +83,7 @@ function regionsOf(input: PreviewInput): AppliedRegion[] {
 function mergeNearby(regions: ReadonlyArray<AppliedRegion>): AppliedRegion[][] {
   const sorted = [...regions].sort((left, right) => left.oldStart - right.oldStart);
   const groups: AppliedRegion[][] = [];
+
   for (const region of sorted) {
     const tail = groups[groups.length - 1];
     const last = tail?.[tail.length - 1];
@@ -84,12 +91,15 @@ function mergeNearby(regions: ReadonlyArray<AppliedRegion>): AppliedRegion[][] {
       groups.push([region]);
       continue;
     }
+
     if (region.oldStart - (last.oldStart + oldSpanOf(last)) > CONTEXT_RADIUS * 2) {
       groups.push([region]);
       continue;
     }
+
     tail.push(region);
   }
+
   return groups;
 }
 
@@ -111,8 +121,10 @@ function buildSection(group: ReadonlyArray<AppliedRegion>, oldLines: ReadonlyArr
   if (first === undefined) {
     return { oldStart: 0, newStart: 0, ops: [] };
   }
+
   const ops: AppliedOp[] = [];
   let cursor = first.oldStart;
+
   for (const region of group) {
     for (const text of oldLines.slice(cursor, region.oldStart)) {
       ops.push({ kind: "context", text });
@@ -120,6 +132,7 @@ function buildSection(group: ReadonlyArray<AppliedRegion>, oldLines: ReadonlyArr
     ops.push(...region.ops);
     cursor = region.oldStart + oldSpanOf(region);
   }
+
   return { oldStart: first.oldStart, newStart: first.newStart, ops };
 }
 
@@ -132,6 +145,7 @@ function buildSection(group: ReadonlyArray<AppliedRegion>, oldLines: ReadonlyArr
 export function renderPreview(input: PreviewInput): string {
   const oldLines = splitLines(input.before);
   const out: string[] = headerOf(input);
+
   for (const group of mergeNearby(regionsOf(input))) {
     const section = buildSection(group, oldLines);
     const windowStart = Math.max(0, section.oldStart - CONTEXT_RADIUS);
@@ -142,12 +156,16 @@ export function renderPreview(input: PreviewInput): string {
     const oldCount = oldSpanOf(section) + leading.length + trailing.length;
     const newCount = newSpanOf(section) + leading.length + trailing.length;
     const newWindowStart = section.newStart - (section.oldStart - windowStart);
+
     out.push(`@@ -${windowStart + 1},${oldCount} +${newWindowStart + 1},${newCount} @@`);
     out.push(...leading, ...body, ...trailing);
   }
+
   if (out.length <= MAX_PREVIEW_LINES) {
     return `${out.join("\n")}\n`;
   }
+
   const kept = out.slice(0, MAX_PREVIEW_LINES);
+
   return `${kept.join("\n")}\n... [preview truncated: ${out.length - MAX_PREVIEW_LINES} more lines] ...\n`;
 }

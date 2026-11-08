@@ -98,16 +98,19 @@ export function createWebTools(config: WebToolsConfig = {}): ToolPort {
       if (search !== undefined && call.name === WEB_SEARCH_TOOL) {
         return search.execute(call, signal);
       }
+
       if (call.name !== WEB_FETCH_TOOL) {
         return {
-          outcome: "unknown",
+          outcome: "error",
           code: "unknown_tool",
           message: `web tools do not implement ${call.name}`,
         };
       }
+
       if (signal.aborted) {
         return { outcome: "cancelled" };
       }
+
       // Planned here so a malformed call is refused before the runner is built,
       // and so the `prompt` capability question is answered by the same place
       // that decides whether the argument was acceptable at all.
@@ -115,6 +118,7 @@ export function createWebTools(config: WebToolsConfig = {}): ToolPort {
       if (!planned.ok) {
         return refused(planned.code, planned.message);
       }
+
       return runFetch(
         planned.plan,
         {

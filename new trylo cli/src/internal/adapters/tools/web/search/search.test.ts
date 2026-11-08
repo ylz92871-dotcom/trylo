@@ -33,24 +33,30 @@ function startProvider(
   const captured: Captured[] = [];
   const server: Server = createServer((req, res) => {
     const chunks: Buffer[] = [];
+
     req.on("data", (chunk: Buffer) => chunks.push(chunk));
     req.on("end", () => {
       let body: Record<string, unknown> | undefined;
+
       try {
         body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
       } catch {
         body = undefined;
       }
+
       captured.push({ body, auth: req.headers.authorization });
       const answer = respond(body);
+
       res.writeHead(answer.status, { "content-type": "application/json" });
       res.end(JSON.stringify(answer.payload));
     });
   });
+
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
       const port = typeof address === "object" && address !== null ? address.port : 0;
+
       resolve({
         base: `http://127.0.0.1:${port}/responses`,
         captured,
@@ -85,7 +91,9 @@ function backendFor(base: string, allowExternalWeb = false): WebSearchPort {
     providerId: "openai-responses",
     allowExternalWeb,
   });
+
   assert.ok(created !== undefined, "an endpoint means a backend exists");
+
   return created;
 }
 
@@ -110,13 +118,17 @@ test("a real query returns the answer with its sources, and sends the query on t
   const server = await startProvider(() => ({ status: 200, payload: CITED }));
   try {
     const outcome = await backendFor(server.base).search(request(), new AbortController().signal);
+
     assert.equal(outcome.ok, true);
+
     if (outcome.ok) {
       assert.equal(outcome.result.sources.length, 1);
       assert.equal(outcome.result.sources[0]?.url, "https://nodejs.org/en/blog/release/v22.0.0");
       assert.match(outcome.result.answer, /fetch as stable/);
     }
+
     const sent = server.captured[0];
+
     assert.match(String(sent?.body?.["input"]), /node 22 fetch stable/);
     assert.equal(sent?.auth, "Bearer sk-test");
   } finally {
@@ -150,10 +162,13 @@ test("a live search is refused when live access is off, rather than silently dow
       request({ mode: "live" }),
       new AbortController().signal,
     );
+
     assert.equal(outcome.ok, false);
+
     if (!outcome.ok) {
       assert.equal(outcome.code, "unavailable");
     }
+
     assert.equal(server.captured.length, 0, "a refused mode must not reach the provider");
   } finally {
     await server.close();
@@ -167,8 +182,10 @@ test("a live search that is enabled says so on the wire", async () => {
       request({ mode: "live" }),
       new AbortController().signal,
     );
+
     assert.equal(outcome.ok, true);
     const tools = server.captured[0]?.body?.["tools"] as ReadonlyArray<Record<string, unknown>>;
+
     assert.equal(tools[0]?.["type"], "web_search");
     assert.equal(tools[0]?.["external_web_access"], true);
   } finally {
@@ -200,14 +217,17 @@ test("a domain filter reaches the wire, and the two lists never both do", async 
   const server = await startProvider(() => ({ status: 200, payload: CITED }));
   try {
     const port = createWebSearchTool(backendFor(server.base));
+
     await port.execute(call({ query: "node fetch", allowed_domains: ["nodejs.org"] }), new AbortController().signal);
     const tools = server.captured[0]?.body?.["tools"] as ReadonlyArray<Record<string, unknown>>;
+
     assert.deepEqual(tools[0]?.["filters"], { allowed_domains: ["nodejs.org"] });
 
     const both = await port.execute(
       call({ query: "node fetch", allowed_domains: ["a.test"], blocked_domains: ["b.test"] }),
       new AbortController().signal,
     );
+
     assert.equal(both.outcome, "error");
     assert.equal((both as { code: string }).code, "conflicting_filters");
     assert.equal(server.captured.length, 1, "the refused call never reached the provider");
@@ -220,11 +240,13 @@ test("a short query and a bad mode are refused before any request", async () => 
   const server = await startProvider(() => ({ status: 200, payload: CITED }));
   try {
     const port = createWebSearchTool(backendFor(server.base));
+
     for (const args of [{ query: "x" }, { query: "long enough", mode: "turbo" }, {}]) {
       const outcome = await port.execute(call(args), new AbortController().signal);
       assert.equal(outcome.outcome, "error", JSON.stringify(args));
       assert.equal((outcome as { code: string }).code, "invalid_arguments");
     }
+
     assert.equal(server.captured.length, 0);
   } finally {
     await server.close();
@@ -239,10 +261,12 @@ test("the tool renders sources as links and reports them in value too", async ()
       ToolOutcome,
       { outcome: "result" }
     >;
+
     assert.equal(outcome.outcome, "result");
     assert.match(outcome.output, /\[Node v22\.0\.0\]\(https:\/\/nodejs\.org/);
     assert.match(outcome.output, /Include these links/);
     const sources = outcome.value["sources"] as ReadonlyArray<{ url: string }>;
+
     assert.equal(sources[0]?.url, "https://nodejs.org/en/blog/release/v22.0.0");
     assert.equal(outcome.value["sourceCount"], 1);
   } finally {
@@ -279,6 +303,7 @@ test("planWebFetch-shaped validation: a query of two characters is the floor", (
   assert.equal(planWebSearch(call({ query: "ab" })).ok, true);
   assert.equal(planWebSearch(call({ query: "a" })).ok, false);
 });
+
 test("the account's refreshed token is the one sent, not the stored copy", async () => {
   // F5: within one run the conversation and `web_search` must not disagree about
   // credential freshness. If the conversation refreshed and the search request
@@ -297,6 +322,7 @@ test("the account's refreshed token is the one sent, not the stored copy", async
         handleAuthError: async () => ({ refreshed: false }),
       },
     });
+
     assert.ok(created !== undefined);
     await created.search(request(), new AbortController().signal);
     assert.equal(provider.captured[0]?.auth, "Bearer sk-fresh");
@@ -324,6 +350,7 @@ test("a token manager that fails falls back to the stored key rather than to no 
         handleAuthError: async () => ({ refreshed: false }),
       },
     });
+
     assert.ok(created !== undefined);
     await created.search(request(), new AbortController().signal);
     assert.equal(provider.captured[0]?.auth, "Bearer sk-stored");

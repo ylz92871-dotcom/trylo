@@ -27,11 +27,13 @@ export function validateArgs(value: unknown): McpRegistryFailure | undefined {
   if (!Array.isArray(value)) {
     return { ok: false, code: "invalid_args", detail: "args must be an array of strings" };
   }
+
   for (const item of value) {
     if (typeof item !== "string") {
       return { ok: false, code: "invalid_args", detail: "args must be an array of strings" };
     }
   }
+
   return undefined;
 }
 
@@ -44,11 +46,13 @@ export function validateEnv(value: unknown): McpRegistryFailure | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return { ok: false, code: "invalid_env", detail: "env must be an object of strings" };
   }
+
   for (const [key, item] of Object.entries(value)) {
     if (key.length === 0 || typeof item !== "string") {
       return { ok: false, code: "invalid_env", detail: "env must be an object of strings" };
     }
   }
+
   return undefined;
 }
 
@@ -57,11 +61,13 @@ export function validateHeaders(value: unknown): McpRegistryFailure | undefined 
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return { ok: false, code: "invalid_headers", detail: "headers must be an object of strings" };
   }
+
   for (const [key, item] of Object.entries(value)) {
     if (key.length === 0 || typeof item !== "string") {
       return { ok: false, code: "invalid_headers", detail: "headers must be an object of strings" };
     }
   }
+
   return undefined;
 }
 
@@ -92,12 +98,15 @@ export function validateRemoteUrl(value: unknown): McpRegistryFailure | undefine
   if (typeof value !== "string" || value.length === 0) {
     return { ok: false, code: "invalid_url", detail: "url must be a non-empty string" };
   }
+
   let parsed: URL;
+
   try {
     parsed = new URL(value);
   } catch {
     return { ok: false, code: "invalid_url", detail: `url is not a valid URL: ${JSON.stringify(value)}` };
   }
+
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
     return {
       ok: false,
@@ -105,6 +114,7 @@ export function validateRemoteUrl(value: unknown): McpRegistryFailure | undefine
       detail: `url must be http or https; got ${parsed.protocol}`,
     };
   }
+
   return undefined;
 }
 
@@ -119,20 +129,25 @@ function validateStdioShape(input: {
   if (input.url !== undefined) {
     return { ok: false, code: "invalid_url", detail: "url only applies to http/sse entries" };
   }
+
   if (input.headers !== undefined) {
     return { ok: false, code: "invalid_headers", detail: "headers only apply to http/sse entries" };
   }
+
   if (typeof input.command !== "string" || input.command.length === 0) {
     return { ok: false, code: "invalid_command", detail: "command must be a non-empty string" };
   }
+
   const argsFailure = validateArgs(input.args);
   if (argsFailure !== undefined) {
     return argsFailure;
   }
+
   const envFailure = validateEnv(input.env);
   if (envFailure !== undefined) {
     return envFailure;
   }
+
   return undefined;
 }
 
@@ -151,20 +166,25 @@ function validateRemoteShape(input: {
   if (input.command !== "") {
     return { ok: false, code: "invalid_command", detail: "command only applies to stdio entries" };
   }
+
   if (Array.isArray(input.args) && input.args.length > 0) {
     return { ok: false, code: "invalid_args", detail: "args only apply to stdio entries" };
   }
+
   if (typeof input.env === "object" && input.env !== null && Object.keys(input.env).length > 0) {
     return { ok: false, code: "invalid_env", detail: "env only applies to stdio entries" };
   }
+
   const urlFailure = validateRemoteUrl(input.url);
   if (urlFailure !== undefined) {
     return urlFailure;
   }
+
   const headersFailure = validateHeaders(input.headers ?? {});
   if (headersFailure !== undefined) {
     return headersFailure;
   }
+
   return undefined;
 }
 
@@ -186,18 +206,22 @@ export function validateEntryShape(input: {
   if (nameFailure !== undefined) {
     return nameFailure;
   }
+
   const transportFailure = inputTransport(input);
   if (transportFailure !== undefined) {
     return transportFailure;
   }
+
   const fieldFailure =
     input.transport === "stdio" ? validateStdioShape(input) : validateRemoteShape(input);
   if (fieldFailure !== undefined) {
     return fieldFailure;
   }
+
   if (typeof input.enabled !== "boolean") {
     return { ok: false, code: "invalid_enabled", detail: "enabled must be a boolean" };
   }
+
   return undefined;
 }
 

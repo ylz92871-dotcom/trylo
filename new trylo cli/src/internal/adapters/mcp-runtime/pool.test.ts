@@ -76,9 +76,11 @@ function fakeClient(behaviour: FakeBehaviour = {}) {
     },
     async callTool(request) {
       state.calls.push(request.qualifiedName);
+
       if (behaviour.callFails !== undefined) {
         return { ok: false, code: behaviour.callFails, detail: "call refused on purpose" };
       }
+
       return {
         ok: true,
         outcome: behaviour.outcome ?? { outcome: "result", value: {}, output: "ok", truncated: false },
@@ -99,6 +101,7 @@ function fakeClient(behaviour: FakeBehaviour = {}) {
     isConnected: () => !state.closed,
     stderrDiagnostics: () => ({ bytes: 0, truncated: false }),
   };
+
   return { client, state };
 }
 
@@ -108,6 +111,7 @@ function fakeRegistry(
 ): McpRegistryPort {
   const byName = new Map(entries.map((item) => [item.name, item]));
   const refused = { ok: false as const, code: "missing_entry" as const, detail: "not a registry operation" };
+
   return {
     async add() {
       return refused;
@@ -138,6 +142,82 @@ function fakeRegistry(
   };
 }
 
+test("startup overlaps independent servers with a fixed bound and keeps registry order", async () => {
+  const entries = Array.from({ length: 7 }, (_, index) => entry({ name: `s${index}` }));
+  const releases = new Map<string, () => void>();
+  let active = 0;
+  let peak = 0;
+  const clients = entries.map(() => fakeClient());
+  const opening = openMcpPool({ registry: fakeRegistry(entries), cwd: process.cwd(), clientFor(item) {
+    const index = Number(item.name.slice(1));
+    const client = clients[index]!.client;
+    const connect = client.connect;
+
+    client.connect = async () => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise<void>(resolve => releases.set(item.name, resolve));
+      active--;
+      return connect();
+    };
+
+    return { ok: true, client };
+  } });
+  // Flush microtasks only: no timing threshold or real child process.
+  const flush = async (): Promise<void> => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
+
+  try {
+    await flush();
+    assert.equal(releases.size, 4, "one stalled server must not serialize all startup");
+    releases.get("s3")?.();
+    await flush();
+    assert.equal(releases.has("s4"), true, "a freed slot starts the next server");
+
+    for (let round = 0; round < 7; round++) {
+      for (const release of releases.values()) release();
+      await flush();
+    }
+
+    const pool = await opening;
+
+    assert.equal(peak, 4);
+    assert.deepEqual(pool.servers.map(server => server.serverId), entries.map(item => item.name));
+    await pool.closeAll();
+    assert.ok(clients.every(client => client.state.closed));
+  } finally {
+    // Release pending gates even when proving the old sequential code red.
+    for (let round = 0; round < 7; round++) {
+      for (const release of releases.values()) release();
+      await flush();
+    }
+    await (await opening).closeAll();
+  }
+});
+
+test("a factory exception waits for active startup and closes acquired clients", async () => {
+  const healthy = fakeClient();
+  const connect = healthy.client.connect;
+  let release: (() => void) | undefined;
+
+  healthy.client.connect = async () => {
+    await new Promise<void>(resolve => { release = resolve; });
+    return connect();
+  };
+  const failure = new Error("factory failed");
+  const opening = openMcpPool({ registry: fakeRegistry([entry({ name: "a" }), entry({ name: "b" })]),
+    cwd: process.cwd(), clientFor(item) {
+      if (item.name === "b") throw failure;
+      return { ok: true, client: healthy.client };
+    } });
+  const outcome = opening.then(() => undefined, error => error);
+
+  for (let i = 0; i < 40; i++) await Promise.resolve();
+
+  release?.();
+  assert.equal(await outcome, failure);
+  assert.equal(healthy.state.closed, true);
+});
+
 test("every enabled server is opened before the run, and its tools are listed", async () => {
   const alpha = fakeClient({ tools: [spec("alpha", "echo")] });
   const beta = fakeClient({ tools: [spec("beta", "read"), spec("beta", "write")] });
@@ -146,6 +226,7 @@ test("every enabled server is opened before the run, and its tools are listed", 
     cwd: process.cwd(),
     clientFor: (item) => ({ ok: true, client: item.name === "alpha" ? alpha.client : beta.client }),
   });
+
   assert.deepEqual(
     pool.servers.map((server) => server.serverId),
     ["alpha", "beta"],
@@ -162,6 +243,7 @@ test("a server that will not start is a fact, not a failure of the run", async (
     cwd: process.cwd(),
     clientFor: (item) => ({ ok: true, client: item.name === "broken" ? broken.client : healthy.client }),
   });
+
   assert.deepEqual(
     pool.servers.map((server) => server.serverId),
     ["healthy"],
@@ -181,6 +263,7 @@ test("a server whose tool list fails is closed and reported, and the rest keep s
     cwd: process.cwd(),
     clientFor: (item) => ({ ok: true, client: item.name === "listing" ? listing.client : healthy.client }),
   });
+
   assert.equal(pool.servers.length, 1);
   assert.equal(pool.failures[0]?.code, "protocol_error");
   assert.equal(listing.state.closed, true);
@@ -193,6 +276,7 @@ test("a disabled server is skipped, and skipping is reported as its own fact", a
     cwd: process.cwd(),
     clientFor: () => ({ ok: true, client: skipped.client }),
   });
+
   assert.equal(pool.servers.length, 0);
   assert.equal(pool.failures.length, 0);
   assert.deepEqual(pool.skipped, [{ serverId: "off", reason: "disabled" }]);
@@ -224,6 +308,7 @@ test("the factory dispatches on transport, and refuses a remote entry with no ur
     process.cwd(),
     seams,
   );
+
   assert.deepEqual([locale.ok, http.ok, sse.ok], [true, true, true]);
   assert.deepEqual(seen, [
     "stdio:node",
@@ -237,6 +322,7 @@ test("the factory dispatches on transport, and refuses a remote entry with no ur
       throw new Error("a client must not be built for an entry with no url");
     },
   });
+
   assert.equal(missing.ok, false);
   assert.equal(missing.ok === false ? missing.code : "", "missing_url");
 });
@@ -249,6 +335,7 @@ test("a registry that cannot be read fails soft: empty pool, one reported failur
       throw new Error("no client should be built when the registry is unreadable");
     },
   });
+
   assert.equal(pool.servers.length, 0);
   assert.deepEqual(pool.failures, [
     { serverId: "", code: "read_failed", detail: "the file is not a registry" },
@@ -262,6 +349,7 @@ test("closeAll closes every open server, and is safe to call twice", async () =>
     cwd: process.cwd(),
     clientFor: () => ({ ok: true, client: alpha.client }),
   });
+
   await pool.closeAll();
   await pool.closeAll();
   assert.equal(alpha.state.closed, true);
@@ -275,8 +363,10 @@ test("a call reaches the server that published the tool, under its qualified nam
     clientFor: () => ({ ok: true, client: alpha.client }),
   });
   const server = pool.servers[0];
+
   assert.ok(server);
   const result = await server.call("echo", { text: "hi" }, 1_000, new AbortController().signal);
+
   assert.equal(result.ok, true);
   assert.deepEqual(alpha.state.calls, ["mcp__alpha__echo"]);
 });
@@ -295,6 +385,7 @@ test("header names are carried for the record, values are not", async () => {
     cwd: process.cwd(),
     clientFor: () => ({ ok: true, client: client.client }),
   });
+
   assert.deepEqual(pool.headerKeys, [{ serverId: "remote", keys: ["authorization", "x-tenant"] }]);
   assert.equal(JSON.stringify(pool.headerKeys).includes("secret-value"), false);
 });
@@ -313,6 +404,7 @@ test("header names are reported even for an entry that never came up", async () 
     cwd: process.cwd(),
     clientFor: () => ({ ok: true, client: down.client }),
   });
+
   assert.equal(pool.servers.length, 0);
   assert.deepEqual(pool.headerKeys, [{ serverId: "down", keys: ["authorization"] }]);
   assert.deepEqual(pool.failures.map((failure) => failure.code), ["spawn_failed"]);

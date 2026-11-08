@@ -61,9 +61,11 @@ test("an in-workspace path stays accepted", () => {
 test("a link that escapes the workspace is refused", (t) => {
   const root = tempRoot();
   const outside = tempRoot();
+
   try {
     writeFileSync(join(outside, "secret.txt"), "should not be readable");
     const link = join(root, "escape-link");
+
     try {
       symlinkSync(outside, link, process.platform === "win32" ? "junction" : "dir");
     } catch {
@@ -72,8 +74,11 @@ test("a link that escapes the workspace is refused", (t) => {
       t.skip("the platform refused to create the symlink, so this escape case cannot run here");
       return;
     }
+
     const verdict = resolveInsideWorkspace(root, "escape-link/secret.txt");
+
     assert.equal(verdict.ok, false);
+
     if (!verdict.ok) {
       assert.equal(verdict.code, "path_escapes_via_link");
     }
@@ -90,13 +95,16 @@ test("a missing file inside the workspace is a read error, not a link refusal", 
   const root = tempRoot();
   try {
     const verdict = resolveInsideWorkspace(root, "absent.txt");
+
     assert.equal(verdict.ok, true);
     const tools = createReadOnlyTools({ workspaceRoot: root, reader: createNodeFileSystemReader() });
     const outcome = await tools.execute(
       { toolCallId: "c1", name: "read_file", arguments: { path: "absent.txt" } },
       new AbortController().signal,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "read_failed");
     }
@@ -111,6 +119,7 @@ test("a link that cannot be resolved is refused rather than trusted lexically", 
   const root = tempRoot();
   try {
     const link = join(root, "loop");
+
     try {
       symlinkSync("loop", link, process.platform === "win32" ? "file" : undefined);
     } catch {
@@ -118,8 +127,11 @@ test("a link that cannot be resolved is refused rather than trusted lexically", 
       t.skip("the platform refused to create the symlink, so this escape case cannot run here");
       return;
     }
+
     const verdict = resolveInsideWorkspace(root, "loop");
+
     assert.equal(verdict.ok, false);
+
     if (!verdict.ok) {
       assert.equal(verdict.code, "path_unverifiable");
     }
@@ -131,22 +143,27 @@ test("a link that cannot be resolved is refused rather than trusted lexically", 
 test("read_file refuses an escaping link instead of following it", async (t) => {
   const root = tempRoot();
   const outside = tempRoot();
+
   try {
     mkdirSync(join(root, "sub"), { recursive: true });
     writeFileSync(join(outside, "secret.txt"), "should not be readable");
     const link = join(root, "sub", "escape");
+
     try {
       symlinkSync(outside, link, process.platform === "win32" ? "junction" : "dir");
     } catch {
       t.skip("the platform refused to create the symlink, so this escape case cannot run here");
       return;
     }
+
     const tools = createReadOnlyTools({ workspaceRoot: root, reader: createNodeFileSystemReader() });
     const outcome = await tools.execute(
       { toolCallId: "c1", name: "read_file", arguments: { path: "sub/escape/secret.txt" } },
       new AbortController().signal,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "path_escapes_via_link");
       assert.equal(outcome.message.includes("should not be readable"), false);
@@ -163,11 +180,13 @@ test("an aborted signal is a cancellation, never a tool failure", async () => {
     writeFileSync(join(root, "big.txt"), "x".repeat(1024));
     const tools = createReadOnlyTools({ workspaceRoot: root, reader: createNodeFileSystemReader() });
     const controller = new AbortController();
+
     controller.abort();
     const outcome = await tools.execute(
       { toolCallId: "c1", name: "read_file", arguments: { path: "big.txt" } },
       controller.signal,
     );
+
     assert.equal(outcome.outcome, "cancelled");
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -183,7 +202,9 @@ test("oversized output is truncated with metadata, not reported as a failure", a
       { toolCallId: "c1", name: "read_file", arguments: { path: "huge.txt" } },
       new AbortController().signal,
     );
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome === "result") {
       assert.equal(outcome.truncated, true);
       assert.equal(Buffer.byteLength(outcome.output, "utf8") <= 65_536, true);
@@ -205,7 +226,9 @@ test("search_text never descends into excluded vendored directories", async () =
       { toolCallId: "c1", name: "search_text", arguments: { pattern: "NEEDLE" } },
       new AbortController().signal,
     );
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome === "result") {
       const matches = outcome.value["matches"];
       assert.equal(Array.isArray(matches), true);

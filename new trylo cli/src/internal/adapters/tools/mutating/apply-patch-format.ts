@@ -109,13 +109,16 @@ function closeUpdateHunk(state: ParserState, line: number): ApplyPatchParseFailu
   if (last === undefined || last.kind !== "update") {
     return undefined;
   }
+
   if (last.chunks.length === 0) {
     return invalidHunk(`Update file hunk for path '${last.path}' is empty`, state.updateLine ?? line);
   }
+
   const tail = last.chunks[last.chunks.length - 1];
   if (tail !== undefined && tail.oldLines.length === 0 && tail.newLines.length === 0) {
     return invalidHunk("Update hunk does not contain any lines", line);
   }
+
   return undefined;
 }
 
@@ -125,31 +128,37 @@ function openHunk(state: ParserState, trimmed: string, line: number): ApplyPatch
   if (!isHeader) {
     return false;
   }
+
   if (state.hunks.length >= MAX_PATCH_HUNKS) {
     return invalidPatch(`more than ${MAX_PATCH_HUNKS} hunks`, line);
   }
+
   const failed = closeUpdateHunk(state, line);
   if (failed !== undefined) {
     return failed;
   }
+
   const add = trimmed.startsWith(ADD_FILE_MARKER) ? trimmed.slice(ADD_FILE_MARKER.length) : undefined;
   if (add !== undefined) {
     state.hunks.push({ kind: "add", path: add, contents: "" });
     state.updateLine = undefined;
     return true;
   }
+
   const remove = trimmed.startsWith(DELETE_FILE_MARKER) ? trimmed.slice(DELETE_FILE_MARKER.length) : undefined;
   if (remove !== undefined) {
     state.hunks.push({ kind: "delete", path: remove });
     state.updateLine = undefined;
     return true;
   }
+
   const update = trimmed.startsWith(UPDATE_FILE_MARKER) ? trimmed.slice(UPDATE_FILE_MARKER.length) : undefined;
   if (update !== undefined) {
     state.hunks.push({ kind: "update", path: update, moveTo: undefined, chunks: [] });
     state.updateLine = line;
     return true;
   }
+
   return false;
 }
 
@@ -170,12 +179,16 @@ function currentChunk(state: ParserState): MutableChunk {
   if (last === undefined || last.kind !== "update") {
     throw new Error("apply_patch parser reached update body without an update hunk");
   }
+
   const tail = last.chunks[last.chunks.length - 1];
   if (tail !== undefined) {
     return tail;
   }
+
   const chunk = blankChunk();
+
   last.chunks.push(chunk);
+
   return chunk;
 }
 
@@ -189,13 +202,16 @@ function readUpdateBody(
   if (handled === true) {
     return undefined;
   }
+
   if (handled !== false) {
     return handled;
   }
+
   const last = state.hunks[state.hunks.length - 1];
   if (last === undefined || last.kind !== "update") {
     return headerHint(updateLine, line);
   }
+
   const tail = last.chunks[last.chunks.length - 1];
   if (tail !== undefined && tail.endOfFile) {
     if (updateLine.length === 0) {
@@ -205,6 +221,7 @@ function readUpdateBody(
       return invalidHunk(`Expected update hunk to start with a @@ context marker, got: '${raw}'`, line);
     }
   }
+
   if (last.chunks.length === 0 && last.moveTo === undefined) {
     const moveTo = updateLine.startsWith(MOVE_TO_MARKER) ? updateLine.slice(MOVE_TO_MARKER.length) : undefined;
     if (moveTo !== undefined) {
@@ -212,6 +229,7 @@ function readUpdateBody(
       return undefined;
     }
   }
+
   if (
     (updateLine === EMPTY_CHANGE_CONTEXT_MARKER || updateLine.startsWith(CHANGE_CONTEXT_MARKER)) &&
     tail !== undefined &&
@@ -223,10 +241,12 @@ function readUpdateBody(
       line,
     );
   }
+
   if (updateLine === EMPTY_CHANGE_CONTEXT_MARKER) {
     last.chunks.push(blankChunk());
     return undefined;
   }
+
   if (updateLine.startsWith(CHANGE_CONTEXT_MARKER)) {
     last.chunks.push({
       ...blankChunk(),
@@ -234,6 +254,7 @@ function readUpdateBody(
     });
     return undefined;
   }
+
   if (updateLine === EOF_MARKER) {
     if (tail === undefined || (tail.oldLines.length === 0 && tail.newLines.length === 0)) {
       return invalidHunk("Update hunk does not contain any lines", line);
@@ -241,22 +262,27 @@ function readUpdateBody(
     tail.endOfFile = true;
     return undefined;
   }
+
   if (raw.length === 0) {
     pushContextLine(currentChunk(state), "");
     return undefined;
   }
+
   if (raw.startsWith(" ")) {
     pushContextLine(currentChunk(state), raw.slice(1));
     return undefined;
   }
+
   if (raw.startsWith("+")) {
     currentChunk(state).newLines.push(raw.slice(1));
     return undefined;
   }
+
   if (raw.startsWith("-")) {
     currentChunk(state).oldLines.push(raw.slice(1));
     return undefined;
   }
+
   return invalidHunk(
     `Unexpected line found in update hunk: '${raw}'. Every line should start with ' ' (context line), '+' (added line), or '-' (removed line)`,
     line,
@@ -277,9 +303,11 @@ function freezeHunk(hunk: MutableHunk): ApplyPatchHunk {
   if (hunk.kind === "add") {
     return { kind: "add", path: hunk.path, contents: hunk.contents };
   }
+
   if (hunk.kind === "delete") {
     return { kind: "delete", path: hunk.path };
   }
+
   return {
     kind: "update",
     path: hunk.path,
@@ -297,10 +325,13 @@ export function parseApplyPatch(patch: string): ApplyPatchParsed {
   if (lines.length > MAX_PATCH_LINES) {
     return { ok: false, code: "invalid_patch", message: `invalid_patch: ${lines.length} lines above ${MAX_PATCH_LINES}`, line: 0 };
   }
+
   const state: ParserState = { started: false, ended: false, hunks: [], updateLine: undefined };
+
   for (let index = 0; index < lines.length; index += 1) {
     const line = index + 1;
     const raw = lines[index] ?? "";
+
     if (!state.started) {
       if (raw.trim() === BEGIN_PATCH_MARKER) {
         state.started = true;
@@ -308,12 +339,14 @@ export function parseApplyPatch(patch: string): ApplyPatchParsed {
       }
       return invalidPatch("The first line of the patch must be '*** Begin Patch'", line);
     }
+
     if (state.ended) {
       if (raw.trim().length === 0) {
         continue;
       }
       return invalidPatch("The last line of the patch must be '*** End Patch'", line);
     }
+
     const last = state.hunks[state.hunks.length - 1];
     if (last !== undefined && last.kind === "update") {
       const failed = readUpdateBody(state, raw, raw.trimEnd(), line);
@@ -322,36 +355,46 @@ export function parseApplyPatch(patch: string): ApplyPatchParsed {
       }
       continue;
     }
+
     if (last !== undefined && last.kind === "add") {
       const trimmed = raw.trim();
       const handled = readHeader(state, trimmed, line);
       if (handled === true) {
         continue;
       }
+
       if (handled !== false) {
         return handled;
       }
+
       if (raw.startsWith("+")) {
         last.contents += `${raw.slice(1)}\n`;
         continue;
       }
+
       return headerHint(trimmed, line);
     }
+
     const trimmed = raw.trim();
     const handled = readHeader(state, trimmed, line);
     if (handled === true) {
       continue;
     }
+
     if (handled !== false) {
       return handled;
     }
+
     return headerHint(trimmed, line);
   }
+
   if (!state.started) {
     return invalidPatch("The first line of the patch must be '*** Begin Patch'", 0);
   }
+
   if (!state.ended) {
     return invalidPatch("The last line of the patch must be '*** End Patch'", lines.length);
   }
+
   return { ok: true, hunks: state.hunks.map(freezeHunk) };
 }

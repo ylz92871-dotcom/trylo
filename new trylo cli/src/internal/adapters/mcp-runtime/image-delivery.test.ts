@@ -36,6 +36,7 @@ test("stdio preserves the same image blocks as remote MCP replies", () => {
   const result = interpretToolResult({ jsonrpc: "2.0", id: 1, result: {
     content: [{ type: "image", mimeType: "image/png", data: PNG.toString("base64") }],
   } }, transport);
+
   assert.deepEqual(Reflect.get(result, "inlineImages"), [{ mimeType: "image/png", data: PNG.toString("base64") }]);
 });
 
@@ -47,31 +48,45 @@ test("screenshot bytes reach the provider without a shell copy or an additional 
       description: "Capture a screenshot", inputSchema: { type: "object" }, annotations: {}, annotationsTrust: "untrusted", needsApproval: true } as const;
     let calls = 0;
     const server: McpRuntimeServer = {
-      serverId: "computer", tools: [spec], async call() { calls++; return { ok: true, outcome: imageReply() }; },
+      serverId: "computer", tools: [spec], async call() {
+        calls++;
+        return { ok: true, outcome: imageReply() };
+      },
       async listResources() { return { ok: true, value: { resources: [] } }; },
       async listResourceTemplates() { return { ok: true, value: { templates: [] } }; },
       async readResource() { return { ok: true, value: { contents: [] } }; }, async close() {},
     };
-    const binding = bindingForSpec(spec); assert.ok("name" in binding);
+    const binding = bindingForSpec(spec);
+    assert.ok("name" in binding);
     const port = createMcpToolPort([{ binding, server, spec }], root);
     const result = await port.execute({ toolCallId: "capture", name: spec.qualifiedName, arguments: {} }, signal);
+
     assert.equal(calls, 1);
     assert.equal(result.outcome, "result");
+
     if (result.outcome !== "result") return;
+
     assert.equal(result.images?.length, 1);
     assert.equal(Reflect.has(result, "inlineImages"), false);
     assert.equal(JSON.stringify(result).includes(PNG.toString("base64")), false, "journal-facing result must never carry image bytes");
     const seen: ProviderRequest[] = [];
-    const provider: ProviderPort = { async *stream(request) { seen.push(request); yield { type: "text_delta", blockId: "b", text: "image delivered" }; } };
+    const provider: ProviderPort = { async *stream(request) {
+      seen.push(request);
+      yield { type: "text_delta", blockId: "b", text: "image delivered" };
+    } };
     const request: ProviderRequest = { attemptId: "a", model: "fixture", tools: [], messages: [
       { role: "tool", toolCallId: "capture", content: result.output, imageReferences: result.images },
     ] };
+
     for await (const _event of withImageReferences(provider, root).stream(request, signal)) { /* Consume delivery. */ }
+
     assert.equal(seen[0]?.messages[0]?.attachments?.[0]?.dataBase64, PNG.toString("base64"));
     assert.match(result.output, /no shell copy/);
     const reference = result.images![0]!;
+
     assert.deepEqual(readFileSync(join(root, reference.path)), PNG);
     const repeated = await deliverMcpImages(imageReply(), root, signal);
+
     assert.deepEqual(repeated.outcome === "result" ? repeated.images : [], result.images);
     writeFileSync(join(root, reference.path), "tampered");
     assert.equal((await deliverMcpImages(imageReply(), root, signal)).outcome, "error");
@@ -84,7 +99,10 @@ test("MCP images cannot follow a redirected workspace cache", async () => {
   try {
     symlinkSync(outside, join(root, ".trylo"), process.platform === "win32" ? "junction" : "dir");
     assert.equal((await deliverMcpImages(imageReply(), root, new AbortController().signal)).outcome, "error");
-  } finally { rmSync(root, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true }); }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
 });
 
 test("invalid image bytes and unavailable delivery are visible failures", async () => {
@@ -94,8 +112,10 @@ test("invalid image bytes and unavailable delivery are visible failures", async 
       const reply = { outcome: "result", value: {}, output: "capture", truncated: false, inlineImages } as const;
       assert.equal((await deliverMcpImages(reply, root, new AbortController().signal)).outcome, "error");
     }
+
     assert.equal((await deliverMcpImages(imageReply(), undefined, new AbortController().signal)).outcome, "error");
-    const controller = new AbortController(); controller.abort();
+    const controller = new AbortController();
+    controller.abort();
     assert.equal((await deliverMcpImages(imageReply(), root, controller.signal)).outcome, "cancelled");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

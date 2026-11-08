@@ -58,6 +58,7 @@ export type RemoteWireSpec = {
 /** Error carrier so `request` can reject with the failure, not a bare string. */
 export class RemoteRequestError extends Error {
   readonly failure: RemoteTransportFailure;
+
   constructor(failure: RemoteTransportFailure) {
     super(failure.detail);
     this.failure = failure;
@@ -111,6 +112,7 @@ export async function postJson(
 ): Promise<{ readonly status: number; readonly contentType: string; readonly text: string }> {
   let response: Response;
   let text: string;
+
   try {
     response = await deps.fetchImpl(spec.url, {
       method: "POST",
@@ -125,6 +127,7 @@ export async function postJson(
       detail: `POST to ${spec.url} failed: ${error instanceof Error ? error.message : String(error)}`,
     });
   }
+
   return { status: response.status, contentType: response.headers.get("content-type") ?? "", text };
 }
 
@@ -153,21 +156,26 @@ export function deliveryFailureOf(kind: "notification" | "response", error: unkn
  */
 export function decodeWireMessage(text: string): JsonRpcResponse | JsonRpcIncomingRequest | JsonRpcNotification {
   let parsed: JsonValue;
+
   try {
     parsed = JSON.parse(text) as JsonValue;
   } catch {
     throw new RemoteRequestError({ code: "framing", detail: "response body is not valid JSON" });
   }
+
   const decoded = decodeMessage(parsed);
   if (decoded.kind === "invalid") {
     throw new RemoteRequestError({ code: "framing", detail: decoded.detail });
   }
+
   if (decoded.kind === "response") {
     return decoded.response;
   }
+
   if (decoded.kind === "request") {
     return decoded.request;
   }
+
   return decoded.notification;
 }
 

@@ -136,6 +136,7 @@ function truncateMiddle(text: string, maxBytes: number): TruncationResult {
   // padding, shortening the marker changes the very loss it claims to report.
   const marker = markerFor(originalBytes - keptBytes - reserve, 0, String(originalBytes).length);
   const omittedBytes = originalBytes - Buffer.byteLength(`${head}${marker}${tail}`, "utf8");
+
   return {
     text: `${head}${marker}${tail}`,
     truncated: true,
@@ -173,18 +174,22 @@ export function truncateOutput(text: string, limits: TruncationLimits): Truncati
   if (maxLines === undefined) {
     return byBytes;
   }
+
   const lineCap = Math.max(0, Math.trunc(maxLines));
   const lines = byBytes.text.split("\n");
   if (byBytes.text.length === 0 || lines.length <= lineCap) {
     return byBytes;
   }
+
   if (lineCap === 0) return { text: "", truncated: true, originalBytes, omittedBytes: originalBytes };
+
   if (lineCap <= 2) {
     // With no room for separate head/marker/tail lines, prefer the actual ending.
     const last = lines.at(-1) === "" ? lines.at(-2) ?? "" : lines.at(-1) ?? "";
     const text = cutTailToBytes(last, maxBytes);
     return { text, truncated: true, originalBytes, omittedBytes: originalBytes - Buffer.byteLength(text, "utf8") };
   }
+
   // Keep the head of what survived and the original tail, so the outcome is
   // still visible; the middle is where the volume was.
   const keptHead = lines.slice(0, Math.floor((lineCap - 1) / 2));
@@ -195,6 +200,7 @@ export function truncateOutput(text: string, limits: TruncationLimits): Truncati
   // Inserting a line-loss marker must not spend bytes outside the byte budget.
   const text2 = Buffer.byteLength(withMarker, "utf8") <= maxBytes && Buffer.byteLength(withMarker, "utf8") <= originalBytes
     ? withMarker : [...keptHead, ...keptTail].join("\n");
+
   return {
     text: text2,
     truncated: true,

@@ -2,8 +2,8 @@ import type { JsonObject } from "../../protocol/envelope.js";
 import type { McpCallFailureCode } from "../../ports/mcp-client.js";
 import type { ToolCallRequest, ToolOutcome, ToolPort } from "../../ports/tools.js";
 import { deliverMcpImages } from "./image-delivery.js";
+import { brokerToolOutcome } from "./broker-errors.js";
 import {
-  MAX_MCP_CALL_TIMEOUT_MS,
   MIN_MCP_CALL_TIMEOUT_MS,
   type McpMountedTool,
 } from "./mount.js";
@@ -15,11 +15,9 @@ import {
  * call can only ever reach the server that owns the name. Everything else here
  * is the same three duties every tool adapter has, stated once:
  *
- *  - **A deadline.** Absent an argument the binding's `timeoutMs` applies;
- *    a value outside the bounds is a caller error, refused rather than
- *    silently clamped, because a clamped deadline hides a model that does not
- *    understand the tool it is calling. The client enforces the deadline by
- *    clock, not by trust.
+ *  - **An optional deadline.** An explicit caller/binding deadline is enforced;
+ *    omission runs until completion or cancellation. Invalid deadlines are
+ *    reported rather than silently clamped.
  *  - **A cancellation.** `ToolPort.cancel` has to reach the *in-flight* call,
  *    so every call keeps an `AbortController` of its own, keyed by the tool
  *    call id. A turn cancel that only stopped the next call would leave a child
@@ -62,21 +60,26 @@ export function createMcpToolPort(mounted: ReadonlyArray<McpMountedTool>, worksp
           message: `mcp_unknown_tool:${call.name} is not mounted`,
         };
       }
+
       if (signal.aborted) {
         return { outcome: "cancelled" };
       }
+
       const deadline = callTimeoutMs(call.arguments, route.binding.timeoutMs);
-      if (deadline === undefined) {
+      if (call.arguments["timeoutMs"] !== undefined && deadline === undefined) {
         return {
           outcome: "error",
           code: "mcp_invalid_arguments",
-          message: `mcp_invalid_arguments:timeoutMs must be between ${MIN_MCP_CALL_TIMEOUT_MS} and ${MAX_MCP_CALL_TIMEOUT_MS}`,
+          message: `mcp_invalid_arguments:timeoutMs must be a positive safe integer in milliseconds`,
         };
       }
+
       const controller = new AbortController();
       const onAbort = (): void => controller.abort();
+
       signal.addEventListener("abort", onAbort, { once: true });
       inFlight.set(call.toolCallId, controller);
+
       try {
         const result = await route.server.call(
           route.spec.serverToolName,
@@ -92,6 +95,8 @@ export function createMcpToolPort(mounted: ReadonlyArray<McpMountedTool>, worksp
               message: result.detail,
             };
       } catch (error) {
+        const transport = brokerToolOutcome(error);
+        if (transport !== undefined) return transport;
         const detail = error instanceof Error ? error.message : "mcp_adapter_exception";
         return { outcome: "unknown", code: "mcp_adapter_exception", message: detail };
       } finally {
@@ -125,18 +130,19 @@ export function mcpFailureCode(code: string): string {
  * the binding's own otherwise, and `undefined` — a refusal — when the argument
  * was present but unusable.
  */
-export function callTimeoutMs(args: JsonObject, fallback: number): number | undefined {
+export function callTimeoutMs(args: JsonObject, fallback: number | undefined): number | undefined {
   const value = args["timeoutMs"];
   if (value === undefined) {
     return fallback;
   }
+
   if (
     typeof value !== "number" ||
-    !Number.isFinite(value) ||
-    value < MIN_MCP_CALL_TIMEOUT_MS ||
-    value > MAX_MCP_CALL_TIMEOUT_MS
+    !Number.isSafeInteger(value) ||
+    value < MIN_MCP_CALL_TIMEOUT_MS
   ) {
     return undefined;
   }
+
   return value;
 }

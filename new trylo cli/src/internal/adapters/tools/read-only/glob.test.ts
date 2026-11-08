@@ -46,10 +46,13 @@ test("a slash-free pattern matches basenames at any depth, sorted", async () => 
     write(root, "src/c.js");
 
     const outcome = await glob(root, { pattern: "*.ts" });
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome !== "result") {
       return;
     }
+
     assert.equal(outcome.output.split("\n").slice(1).join("\n"), "a.ts\nsrc/deep/b.ts");
     assert.equal(outcome.value["matchCount"], 2);
     assert.equal(outcome.value["truncated"], false);
@@ -69,13 +72,17 @@ test("** crosses directories, ? matches one character, {a,b} alternates", async 
     write(root, "abc.md");
 
     const star = await glob(root, { pattern: "src/**/*.test.ts" });
+
     assert.equal(star.outcome, "result");
+
     if (star.outcome === "result") {
       assert.equal(star.output.split("\n").slice(1).join("\n"), "src/two.test.ts\nsrc/x/one.test.ts");
     }
 
     const question = await glob(root, { pattern: "a?.md" });
+
     assert.equal(question.outcome, "result");
+
     if (question.outcome === "result") {
       assert.equal(question.output.split("\n").slice(1).join("\n"), "a1.md\nab.md");
     }
@@ -91,7 +98,9 @@ test("the path argument narrows the walk and the matching base", async () => {
     write(root, "skip/other.ts");
 
     const outcome = await glob(root, { pattern: "**/*.ts", path: "keep" });
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome === "result") {
       // Relative to the search root, matching list_files' workspace-relative
       // style but rooted where the caller asked to look.
@@ -109,7 +118,9 @@ test("excluded directories are never descended into", async () => {
     write(root, "src/real.ts");
 
     const outcome = await glob(root, { pattern: "**/*.ts" });
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome === "result") {
       assert.equal(outcome.output.split("\n").slice(1).join("\n"), "src/real.ts");
     }
@@ -172,7 +183,9 @@ test("more matches than the entry cap reports truncated instead of ending quietl
       ...DEFAULT_READ_ONLY_LIMITS,
       maxListEntries: 2,
     });
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome === "result") {
       assert.equal(outcome.output.split("\n").slice(1).join("\n"), "a.txt\nb.txt");
       assert.equal(outcome.value["truncated"], true);
@@ -191,6 +204,7 @@ test("glob_files is advertised in the tool table as read-only, no approval", asy
       reader: createNodeFileSystemReader(),
     });
     const binding = tools.snapshot().find((entry) => entry.name === "glob_files");
+
     assert.ok(binding, "glob_files must be in the snapshot");
     assert.equal(binding.sideEffect, "read_only");
     assert.equal(binding.needsApproval, false);

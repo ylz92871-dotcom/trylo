@@ -110,9 +110,11 @@ async function requestStreamable(
       reportFailure(state, failure);
       throw new RemoteRequestError(failure);
     }
+
     if (isEventStream(posted.contentType)) {
       return await consumeEventText(state, message.id, posted.text);
     }
+
     return decodeWireMessage(posted.text) as JsonRpcResponse;
   } catch (error) {
     if (error instanceof RemoteRequestError && state.failure === undefined) {
@@ -156,11 +158,13 @@ async function consumeEventText(
   text: string,
 ): Promise<JsonRpcResponse> {
   const { events } = scanSse(text);
+
   for (const message of decodeEventPayloads(state, events)) {
     if (isResponse(message) && message.id === id) {
       return message;
     }
   }
+
   throw new RemoteRequestError({
     code: "framing",
     detail: "event stream ended without a response for this request",
@@ -173,6 +177,7 @@ function decodeEventPayloads(
   events: ReadonlyArray<{ readonly event: string; readonly data: string }>,
 ): ReadonlyArray<JsonRpcResponse> {
   const responses: JsonRpcResponse[] = [];
+
   for (const event of events) {
     const message = decodeWireMessage(event.data);
     if (isResponse(message)) {
@@ -181,5 +186,6 @@ function decodeEventPayloads(
     }
     dispatchIncoming(state, message);
   }
+
   return responses;
 }

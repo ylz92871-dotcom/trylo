@@ -32,6 +32,7 @@ function readerFor(files: Readonly<Record<string, string>>): FileSystemReader {
     async readDir(absolutePath: string): Promise<ReadonlyArray<DirectoryEntry>> {
       const prefix = normalise(absolutePath).endsWith("/") ? normalise(absolutePath) : `${normalise(absolutePath)}/`;
       const names = new Map<string, boolean>();
+
       for (const key of store.keys()) {
         if (!key.startsWith(prefix)) continue;
         const rest = key.slice(prefix.length);
@@ -39,6 +40,7 @@ function readerFor(files: Readonly<Record<string, string>>): FileSystemReader {
         if (slash < 0) names.set(rest, false);
         else names.set(rest.slice(0, slash), true);
       }
+
       return [...names].map(([name, isDirectory]) => ({ name, isDirectory }));
     },
     async statBytes(): Promise<number> {
@@ -69,6 +71,7 @@ describe("FileFinder", () => {
       [`${ROOT}/README.md`]: "# hi",
     });
     const found = await finder.find("mention", 5, never);
+
     assert.deepEqual(found.matches.map((m) => m.path), ["src/internal/surface/cli/mention.ts"]);
   });
 
@@ -91,9 +94,12 @@ describe("FileFinder", () => {
 
   it("says the index is incomplete when a ceiling was hit", async () => {
     const files: Record<string, string> = { [`${ROOT}/keep.ts`]: "" };
+
     for (let i = 0; i < 30; i += 1) files[`${ROOT}/f${i}.ts`] = "";
+
     const finder = finderFor(files, 5);
     const found = await finder.find("zzzznothing", 5, never);
+
     // The distinction the whole contract exists for: an empty answer must not be
     // able to masquerade as "this project has no such file".
     assert.deepEqual(found.matches, []);
@@ -116,8 +122,10 @@ describe("FileFinder", () => {
       [`${ROOT}/visible.ts`]: "ok",
     });
     const found = await finder.find("secret", 5, never);
+
     assert.deepEqual(found.matches, []);
     const visible = await finder.find("visible", 5, never);
+
     assert.deepEqual(visible.matches.map((m) => m.path), ["visible.ts"]);
   });
 
@@ -137,6 +145,7 @@ describe("FileFinder", () => {
       [`${ROOT}/src/index.ts`]: "",
     });
     const found = await finder.find("index", 10, never);
+
     assert.deepEqual(found.matches.map((m) => m.path), ["src/index.ts"]);
   });
 
@@ -151,8 +160,10 @@ describe("FileFinder", () => {
       },
     };
     const finder = new FileFinder({ workspaceRoot: ROOT, reader: counting });
+
     await finder.find("a", 5, never);
     const afterFirst = reads;
+
     await finder.find("b", 5, never);
     // A finder re-enumerating per keystroke is the reason fuzzy search feels slow.
     assert.equal(reads, afterFirst);

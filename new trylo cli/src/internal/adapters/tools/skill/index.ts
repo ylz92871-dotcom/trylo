@@ -34,20 +34,24 @@ export function createSkillTools(catalog: SkillCatalogPort, fork?: SkillForkExec
       if (call.name !== SKILL_TOOL_NAME) {
         return { outcome: "unknown", code: "unknown_tool", message: `skill tool does not implement ${call.name}` };
       }
+
       const requested = call.arguments["skill"];
       if (typeof requested !== "string" || requested.trim().length === 0) {
         return { outcome: "error", code: "invalid_arguments", message: "skill requires a non-empty skill name" };
       }
+
       const args = call.arguments["args"];
       if (args !== undefined && typeof args !== "string") {
         return { outcome: "error", code: "invalid_arguments", message: "skill args must be a string" };
       }
+
       // A model that reaches for the slash spelling still names the skill.
       const name = requested.trim().replace(/^\//, "");
       const loaded = catalog.load(name, args);
       if (loaded.kind === "unknown_skill") {
         return { outcome: "error", code: "unknown_skill", message: `no installed skill named '${name}'` };
       }
+
       // The model-side gate lives here, on the model-facing tool — not in the
       // shared loader, whose other consumer is the user's slash (F1/复核): the
       // field means "user-only", so it must never lock the user out.
@@ -58,6 +62,7 @@ export function createSkillTools(catalog: SkillCatalogPort, fork?: SkillForkExec
           message: `skill '${name}' sets disable-model-invocation and cannot be invoked by the model`,
         };
       }
+
       if (loaded.skill.descriptor.forkExecution) {
         if (fork === undefined) {
           return forkUnavailable(name);
@@ -70,6 +75,7 @@ export function createSkillTools(catalog: SkillCatalogPort, fork?: SkillForkExec
           signal,
         });
       }
+
       return {
         outcome: "result",
         value: {
@@ -100,6 +106,7 @@ function binding(skills: ReadonlyArray<{ name: string; description: string; when
   });
   const overflow = invocable.length - listed.length;
   const suffix = overflow > 0 ? `\n(${overflow} more not listed.)` : "";
+
   return {
     name: SKILL_TOOL_NAME,
     description:
@@ -142,6 +149,7 @@ export function createSkillForkExecutor(input: { readonly delegate: () => ToolPo
     if (port === undefined) {
       return forkUnavailable(request.name);
     }
+
     return port.execute(
       {
         toolCallId: request.toolCallId,

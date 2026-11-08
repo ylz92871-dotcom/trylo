@@ -52,9 +52,11 @@ export function readRunInBackground(request: ToolCallRequest): boolean | undefin
   if (value === undefined || value === null) {
     return undefined;
   }
+
   if (typeof value !== "boolean") {
     return undefined;
   }
+
   return value;
 }
 
@@ -72,6 +74,7 @@ export async function startBackgroundShell(
   signal?: AbortSignal,
 ): Promise<ToolOutcome> {
   if (signal?.aborted) return { outcome: "cancelled" };
+
   const registry = config.sessions;
   if (registry === undefined) {
     // Refused rather than run in the foreground. A caller that asked for a
@@ -109,6 +112,7 @@ export async function startBackgroundShell(
   }
 
   let session;
+
   try {
     session = await registry.start({
       ...(config.ownerId === undefined ? {} : { ownerId: config.ownerId }),
@@ -127,13 +131,16 @@ export async function startBackgroundShell(
     }, signal);
   } catch (err) {
     if (signal?.aborted) return { outcome: "cancelled" };
+
     const detail = err instanceof Error ? err.message : "spawn_failed";
+
     return {
       outcome: "error",
       code: "background_start_failed",
       message: `background_start_failed:${detail}`,
     };
   }
+
   // Admission may have completed just before a cancel won the await. That
   // command exists, so only an observed stop permits a cancelled outcome.
   if (signal?.aborted) return cancelStartedCommand(registry, session.id);
@@ -144,6 +151,7 @@ export async function startBackgroundShell(
     status: session.status,
     tty: false,
   };
+
   return {
     outcome: "result",
     value,

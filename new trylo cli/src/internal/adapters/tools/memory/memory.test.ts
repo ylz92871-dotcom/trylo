@@ -59,14 +59,18 @@ test("user-memory lists advance their cursor and category filtering precedes pag
   const port = portOver(documents);
   const first = await port.search(searchArgs({ queries: [] }), signal);
   const next = await port.search(searchArgs({ queries: [], cursor: "20" }), signal);
+
   assert.equal(first.ok && first.matches.length, 20);
   assert.equal(next.ok && next.matches[0]?.documentId, "user-memory:10");
   assert.equal(next.ok && next.truncated, false);
+
   for (const cursor of ["20junk", "-1", "25", "1.2"]) {
     const result = await port.search(searchArgs({ queries: [], cursor }), signal);
     assert.equal(result.ok, false, cursor);
   }
+
   const identity = await port.search(searchArgs({ queries: [], recordKind: "identity_fact" }), signal);
+
   assert.equal(identity.ok && identity.matches[0]?.content, "我是 Last-Person");
   assert.equal(identity.ok && identity.matches.length, 2);
 });
@@ -75,14 +79,19 @@ test("`any` matches each query independently and reports which query hit", async
   // `read` is on line 3 only; `gate` is on lines 1, 4 and 5. Four hits, and the
   // one on line 3 says which of the two queries produced it.
   const outcome = await portOver([DOC]).search(searchArgs({ queries: ["read", "gate"] }), signal);
+
   assert.equal(outcome.ok, true);
+
   if (!outcome.ok) {
     return;
   }
+
   assert.equal(outcome.matches.length, 4);
   const hit = outcome.matches.find((match) => match.matchLineNumber === 3);
+
   assert.deepEqual(hit?.matchedQueries, ["read"]);
   const gateHit = outcome.matches.find((match) => match.matchLineNumber === 1);
+
   assert.deepEqual(gateHit?.matchedQueries, ["gate"]);
 });
 
@@ -91,7 +100,9 @@ test("`all_on_same_line` requires the queries to be together, not merely present
     searchArgs({ queries: ["read", "gate"], matchMode: "all_on_same_line" }),
     signal,
   );
+
   assert.equal(outcome.ok, true);
+
   if (outcome.ok) {
     assert.equal(outcome.matches.length, 0, "no line holds both queries");
   }
@@ -105,6 +116,7 @@ test("`all_within_lines` finds each minimal window, not every window containing 
     normalized: false,
   });
   const hits = hitsInDocument(DOC.lines, matcher, { kind: "all_within_lines", lineCount: 5 });
+
   // Two distinct windows over 1-indexed lines 1–3 and 3–4. The second shrinks to
   // end at the last line that actually matched, so `The gate is eleven steps`
   // does not ride along in every hit. Reporting every overlapping range instead
@@ -121,6 +133,7 @@ test("normalisation makes separators irrelevant but never invents a hit", () => 
     caseSensitive: true,
     normalized: true,
   });
+
   assert.equal(hitsInDocument(DOC.lines, matcher, { kind: "any" }).length, 1);
   const absent = createMatcher({
     queries: ["nonexistent-token"],
@@ -128,6 +141,7 @@ test("normalisation makes separators irrelevant but never invents a hit", () => 
     caseSensitive: true,
     normalized: true,
   });
+
   assert.equal(hitsInDocument(DOC.lines, absent, { kind: "any" }).length, 0);
 });
 
@@ -138,6 +152,7 @@ test("case folding is opt-in, and the default is exact", () => {
     caseSensitive: true,
     normalized: false,
   });
+
   assert.equal(hitsInDocument(DOC.lines, sensitive, { kind: "any" }).length, 0);
   const insensitive = createMatcher({
     queries: ["READ"],
@@ -145,6 +160,7 @@ test("case folding is opt-in, and the default is exact", () => {
     caseSensitive: false,
     normalized: false,
   });
+
   assert.equal(hitsInDocument(DOC.lines, insensitive, { kind: "any" }).length, 1);
 });
 
@@ -153,7 +169,9 @@ test("context lines widen a hit without moving where it matched", async () => {
     searchArgs({ queries: ["thresholds"], contextLines: 1 }),
     signal,
   );
+
   assert.equal(outcome.ok, true);
+
   if (outcome.ok) {
     const only = outcome.matches[0];
     assert.equal(only?.matchLineNumber, 4, "the hit stays on the line that matched");
@@ -167,13 +185,18 @@ test("a record written after the port was built is visible to the next search", 
   let documents: ReadonlyArray<MemoryDocument> = [];
   const port = createMemoryReadPort(async () => ({ documents }));
   const before = await port.search(searchArgs({ queries: ["telemetry"] }), signal);
+
   assert.equal(before.ok, true);
+
   if (before.ok) {
     assert.equal(before.matches.length, 0);
   }
+
   documents = [{ ...DOC, id: "asset-2", lines: ["Ship telemetry for every new tool."] }];
   const after = await port.search(searchArgs({ queries: ["telemetry"] }), signal);
+
   assert.equal(after.ok, true);
+
   if (after.ok) {
     assert.equal(after.matches.length, 1);
     assert.equal(after.matches[0]?.documentId, "asset-2");
@@ -187,10 +210,13 @@ test("pagination issues a cursor only when more matches remain, and a stale curs
   };
   const port = portOver([many]);
   const first = await port.search(searchArgs({ queries: ["read"], maxResults: 10 }), signal);
+
   assert.equal(first.ok, true);
+
   if (!first.ok) {
     return;
   }
+
   assert.equal(first.matches.length, 10);
   assert.equal(first.truncated, true);
   assert.equal(first.nextCursor, "10");
@@ -199,14 +225,18 @@ test("pagination issues a cursor only when more matches remain, and a stale curs
     searchArgs({ queries: ["read"], maxResults: 10, cursor: first.nextCursor }),
     signal,
   );
+
   assert.equal(second.ok, true);
+
   if (second.ok) {
     assert.equal(second.matches[0]?.matchLineNumber, 11);
     assert.equal(second.truncated, true);
   }
 
   const beyond = await port.search(searchArgs({ queries: ["read"], cursor: "9999" }), signal);
+
   assert.equal(beyond.ok, false);
+
   if (!beyond.ok) {
     assert.equal(beyond.code, "invalid_cursor", "a stale cursor is a refusal, not an empty page");
   }
@@ -215,12 +245,17 @@ test("pagination issues a cursor only when more matches remain, and a stale curs
 test("an unknown document is refused distinctly from an empty corpus", async () => {
   const port = portOver([DOC]);
   const missing = await port.search(searchArgs({ documentId: "nope" }), signal);
+
   assert.equal(missing.ok, false);
+
   if (!missing.ok) {
     assert.equal(missing.code, "unknown_document");
   }
+
   const empty = await port.search(searchArgs({ queries: ["nothing-matches-this"] }), signal);
+
   assert.equal(empty.ok, true);
+
   if (empty.ok) {
     assert.equal(empty.matches.length, 0, "an empty result is a result, not a failure");
   }
@@ -237,15 +272,20 @@ test("an empty query is refused rather than matching everything", async () => {
 test("read returns a 1-indexed window and says whether more remains", async () => {
   const port = portOver([DOC]);
   const outcome = await port.read({ documentId: DOC.id, lineOffset: 2, maxLines: 2 }, signal);
+
   assert.equal(outcome.ok, true);
+
   if (outcome.ok) {
     assert.equal(outcome.startLineNumber, 2);
     assert.equal(outcome.totalLines, 5);
     assert.equal(outcome.truncated, true);
     assert.match(outcome.content, /^Prefer edit_file/);
   }
+
   const past = await port.read({ documentId: DOC.id, lineOffset: 99 }, signal);
+
   assert.equal(past.ok, false);
+
   if (!past.ok) {
     assert.equal(past.code, "invalid_line_offset");
   }

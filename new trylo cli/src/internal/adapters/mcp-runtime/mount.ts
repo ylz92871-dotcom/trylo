@@ -3,8 +3,8 @@ import { cancelToolPorts } from "../../ports/tool-cancellation.js";
 import {
   guardRefinedText,
   noOverlay,
-} from "../../learning/domains/tool/refine/overlay.js";
-import type { DescriptionOverlay } from "../../learning/domains/tool/refine/types.js";
+} from "../../learning/agent/subsystems/tool/domain/refine/overlay.js";
+import type { DescriptionOverlay } from "../../learning/agent/subsystems/tool/domain/refine/types.js";
 import type { McpToolSpec } from "../../ports/mcp-client.js";
 import type {
   SandboxVerdict,
@@ -46,9 +46,8 @@ import type { McpRuntimeServer } from "./pool.js";
  * would only give the two a way to disagree.
  */
 
-export const DEFAULT_MCP_CALL_TIMEOUT_MS = 30_000;
+export const DEFAULT_MCP_CALL_TIMEOUT_MS: number | undefined = undefined;
 export const MIN_MCP_CALL_TIMEOUT_MS = 1;
-export const MAX_MCP_CALL_TIMEOUT_MS = 120_000;
 
 export const MCP_OUTPUT_LIMITS = {
   maxBytes: DEFAULT_MAX_SHELL_OUTPUT_BYTES,
@@ -78,6 +77,7 @@ export function mountServerTools(
 ): McpMount {
   const mounted: McpMountedTool[] = [];
   const refused: McpRefusedTool[] = [];
+
   for (const server of servers) {
     for (const spec of server.tools) {
       const binding = bindingForSpec(spec, DEFAULT_MCP_CALL_TIMEOUT_MS, overlay);
@@ -88,6 +88,7 @@ export function mountServerTools(
       mounted.push({ binding, server, spec });
     }
   }
+
   return { mounted, refused };
 }
 
@@ -115,16 +116,18 @@ export function mountServerTools(
  */
 export function bindingForSpec(
   spec: McpToolSpec,
-  timeoutMs: number = DEFAULT_MCP_CALL_TIMEOUT_MS,
+  timeoutMs: number | undefined = DEFAULT_MCP_CALL_TIMEOUT_MS,
   overlay: DescriptionOverlay = noOverlay,
 ): ToolBinding | McpRefusedTool {
   const guarded = sanitizeToolDescription(spec.description);
   if (!guarded.ok) {
     return { qualifiedName: spec.qualifiedName, code: guarded.code };
   }
+
   const refined = overlay.descriptionFor(spec.qualifiedName, guarded.text);
   const description =
     refined === undefined ? guarded.text : guardRefinedText({ refined, original: guarded.text }).text;
+
   return {
     name: spec.qualifiedName,
     description,
@@ -179,14 +182,14 @@ export function composeTools(workspace: ToolPort, mcp: ToolPort): ToolPort {
  */
 export function composeSandbox(
   workspace: ToolSandbox,
-  mountedNames: ReadonlySet<string>,
+  mountedNames: ReadonlySet<string> | (() => ReadonlySet<string>),
 ): ToolSandbox {
   const requiresApproval = workspace.requiresApproval;
   return {
     policy: workspace.policy,
     ...(requiresApproval === undefined ? {} : { requiresApproval }),
     evaluate: (call: ToolCallRequest): SandboxVerdict =>
-      mountedNames.has(call.name) ? { ok: true } : workspace.evaluate(call),
+      (typeof mountedNames === "function" ? mountedNames() : mountedNames).has(call.name) ? { ok: true } : workspace.evaluate(call),
   };
 }
 

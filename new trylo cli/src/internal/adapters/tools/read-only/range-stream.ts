@@ -20,35 +20,44 @@ class WindowScan {
 
   write(text: string): void {
     if (text.length === 0) return;
+
     this.seenText = true;
     this.lastWasNewline = text.endsWith("\n");
     this.totalBytes += Buffer.byteLength(text, "utf8");
     let cursor = 0;
+
     while (cursor < text.length) {
       const newline = text.indexOf("\n", cursor);
       const end = newline < 0 ? text.length : newline + 1;
       const part = text.slice(cursor, end);
       const bytes = Buffer.byteLength(part, "utf8");
+
       this.currentBytes += bytes;
+
       if (this.newlineCount >= this.offset && this.newlineCount - this.offset < this.count) {
         this.windowBytes += bytes;
         this.keep(part, bytes);
       }
+
       if (newline >= 0) {
         this.finishLine();
         this.newlineCount += 1;
         this.currentBytes = 0;
       }
+
       cursor = end;
     }
   }
 
   private keep(part: string, bytes: number): void {
     if (this.prefixClosed) return;
+
     const remaining = this.maxBytes - this.retainedBytes;
     const kept = bytes <= remaining ? part : cutToBytes(part, remaining);
     if (kept.length > 0) this.parts.push(kept);
+
     this.retainedBytes += Buffer.byteLength(kept, "utf8");
+
     // Once a code point does not fit, later ASCII cannot jump over it.
     if (bytes > remaining) this.prefixClosed = true;
   }
@@ -68,18 +77,22 @@ class WindowScan {
   private range(prefix: string, totalLines: number): RangeSelection {
     if (this.offset >= totalLines) return { text: "", startLine: 0, endLine: 0, totalLines,
       nextOffset: undefined, truncated: false, truncatedLines: false, truncatedBytes: false };
+
     const count = Math.min(this.count, totalLines - this.offset);
+
     if (this.windowBytes <= this.maxBytes) {
       const next = this.offset + count;
       const more = next < totalLines;
       return { text: prefix, startLine: this.offset + 1, endLine: next, totalLines,
         nextOffset: more ? next : undefined, truncated: more, truncatedLines: more, truncatedBytes: false };
     }
+
     const complete = prefix.split("\n").length - 1;
     const next = this.offset + complete;
     const bytes = this.lineSizes[complete] ?? 0;
     const oversized = !prefix.endsWith("\n") && bytes > this.maxBytes;
     const text = oversized ? prefix : prefix.slice(0, prefix.lastIndexOf("\n") + 1);
+
     return { text, startLine: text.length === 0 ? 0 : this.offset + 1,
       endLine: text.length === 0 ? 0 : next + (oversized ? 1 : 0), totalLines,
       nextOffset: !oversized && next > this.offset ? next : undefined,
@@ -98,6 +111,7 @@ class WindowScan {
     const next = partial ? Math.max(0, returned - 1) : returned;
     const bytes = this.lineSizes[next] ?? 0;
     const tooLong = partial && bytes > this.maxBytes;
+
     return { text, startLine: totalLines === 0 ? 0 : 1, endLine: returned, totalLines,
       truncated, truncatedBytes, truncatedLines,
       nextOffset: truncated && !tooLong && next < totalLines ? next : undefined,
@@ -112,13 +126,17 @@ export async function selectStreamRange(
 ): Promise<RangeSelection> {
   const scan = new WindowScan(legacy ? 0 : request.offset,
     legacy ? limits.maxLines : Math.min(request.limit ?? limits.maxLines, limits.maxLines), limits.maxBytes);
+  // File chunks may split a UTF-8 code point; decode before counting or retaining text.
   const decoder = new StringDecoder("utf8");
+
   for await (const chunk of chunks) {
     signal.throwIfAborted();
     scan.write(decoder.write(chunk));
   }
+
   signal.throwIfAborted();
   scan.write(decoder.end());
+
   return scan.finish(legacy);
 }
 

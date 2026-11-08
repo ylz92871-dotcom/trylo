@@ -32,6 +32,7 @@ export async function executeFindFiles(config: Config, call: ToolCallRequest, si
   if (signal.aborted) {
     return { outcome: "cancelled" };
   }
+
   const query = readStringArg(call.arguments, "query");
   if (query === undefined || query.trim().length === 0) {
     // An empty query is refused rather than answered with an arbitrary listing:
@@ -39,18 +40,22 @@ export async function executeFindFiles(config: Config, call: ToolCallRequest, si
     // list of 200 paths invites the model to pick one at random.
     return { outcome: "error", code: "invalid_arguments", message: "find_files requires a non-empty query" };
   }
+
   const rawLimit = call.arguments["limit"];
   if (rawLimit !== undefined && (typeof rawLimit !== "number" || !Number.isInteger(rawLimit) || rawLimit < 1)) {
     return { outcome: "error", code: "invalid_arguments", message: "limit must be a positive integer" };
   }
+
   const requested = typeof rawLimit === "number" ? rawLimit : DEFAULT_LIMIT;
   const limit = Math.min(requested, MAX_LIMIT);
 
   try {
     const found = await config.finder.find(query, limit, signal);
+
     if (signal.aborted) {
       return { outcome: "cancelled" };
     }
+
     const paths = found.matches.map((match) => match.path);
     const value: JsonObject = {
       query,
@@ -68,6 +73,7 @@ export async function executeFindFiles(config: Config, call: ToolCallRequest, si
       // paths, never contents.
       matchedBy: "file_name_only",
     };
+
     return {
       outcome: "result",
       value,

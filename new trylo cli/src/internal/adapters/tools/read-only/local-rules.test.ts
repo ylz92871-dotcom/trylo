@@ -79,6 +79,7 @@ function toolsFor(
     },
     reader,
   );
+
   return {
     tools: createReadOnlyTools({
       workspaceRoot: root,
@@ -181,6 +182,7 @@ test("a rule file is read once per turn however many targets need it", async () 
     };
 
     const { tools } = toolsFor(root, { reader: counting });
+
     await tools.execute(call("src/a.ts"), new AbortController().signal);
     const afterFirst = probes.length;
 
@@ -217,6 +219,7 @@ test("a rule edited mid-turn does not change under the model mid-answer", async 
     const { tools } = toolsFor(root);
 
     const first = resultOf(await tools.execute(call("src/a.ts"), new AbortController().signal));
+
     write(root, "src/AGENTS.md", "second version");
     const second = resultOf(await tools.execute(call("src/b.ts"), new AbortController().signal));
 
@@ -227,6 +230,7 @@ test("a rule edited mid-turn does not change under the model mid-answer", async 
     // A fresh lookup — the next turn — sees the current file.
     const next = toolsFor(root);
     const after = resultOf(await next.tools.execute(call("src/b.ts"), new AbortController().signal));
+
     assert.match(after.output, /second version/);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -297,6 +301,7 @@ test("a rule body cut by the budget never ends in half a character", async () =>
     // The whole output must round-trip: decode it and count what a correct cut
     // leaves, which is a whole number of three-byte characters.
     const kept = /content [0-9a-f]{16}\):\n\n([\s\S]*?)\n\[rule body cut here/.exec(result.output);
+
     assert.ok(kept !== null, "the appendix must carry a body and a cut notice");
     assert.equal(Buffer.byteLength(kept[1] ?? "", "utf8") % 3, 0);
     assert.doesNotMatch(kept[1] ?? "", /�/);

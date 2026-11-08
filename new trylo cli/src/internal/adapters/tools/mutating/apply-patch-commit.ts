@@ -119,12 +119,15 @@ export function summarizeLines(applied: ReadonlyArray<AppliedFileChange>): strin
     if (entry.op === "added") {
       return `A ${entry.path}`;
     }
+
     if (entry.op === "deleted") {
       return `D ${entry.path}`;
     }
+
     if (entry.op === "moved") {
       return `R ${entry.from} -> ${entry.path}`;
     }
+
     return `M ${entry.path}`;
   });
 }
@@ -166,7 +169,9 @@ export function abortOutcome(context: CommitContext): ToolOutcome {
   if (context.accumulator.changes.length === 0) {
     return { outcome: "cancelled" };
   }
+
   const applied = summarize(context.accumulator.changes);
+
   return fail(
     "apply_cancelled",
     `apply_cancelled: user cancel stopped the patch after ${context.accumulator.changes.length} file(s). Applied: ${applied}. Not applied: ${pendingPaths(context.targets, context.atIndex)}. Earlier files remain applied; no rollback was performed.`,
@@ -178,7 +183,9 @@ function oversizedFailure(config: ApplyPatchConfig, content: string, display: st
   if (bytes <= config.policy.maxWriteBytes) {
     return undefined;
   }
+
   const applied = summarize(context.accumulator.changes);
+
   return fail(
     "write_too_large",
     `write_too_large: apply_patch refuses ${display} at ${bytes} bytes above the ${config.policy.maxWriteBytes} byte ceiling; it is never silently truncated. Applied before failure${applied.length === 0 ? ": none" : `: ${applied}`}. Not applied: ${pendingPaths(context.targets, context.atIndex)}.`,
@@ -198,11 +205,14 @@ async function commitText(
     if ("failed" in current) {
       throw new Error(current.failed);
     }
+
     if ((current.found ? current.content : undefined) !== expected) {
       return { committed: false as const };
     }
+
     mkdirSync(path.dirname(absolutePath), { recursive: true });
     const written = writeFileAtomicallySync(absolutePath, content);
+
     return { committed: true as const, bytes: written.bytes, created: written.mode === "created" };
   });
 }
@@ -224,15 +234,19 @@ export async function commitAdd(context: CommitContext, target: AddTarget, displ
   if (isDirectory(target.absolutePath)) {
     return partialFailure("path_is_directory", "target is a directory", display, context);
   }
+
   const known = readOptional(target.absolutePath);
   if ("failed" in known) {
     return partialFailure("read_failed", known.failed, display, context);
   }
+
   const tooLarge = oversizedFailure(context.config, target.hunk.contents, display, context);
   if (tooLarge !== undefined) {
     return tooLarge;
   }
+
   let committed;
+
   try {
     committed = await commitText(context.config, target.absolutePath, known.found ? known.content : undefined, target.hunk.contents, context.signal);
   } catch (error) {
@@ -241,9 +255,11 @@ export async function commitAdd(context: CommitContext, target: AddTarget, displ
     }
     return writeFailedFailure(error instanceof Error ? error.message : "write_error", display, context);
   }
+
   if (!committed.committed) {
     return changedFailure(display, context);
   }
+
   context.accumulator.changes.push({
     op: "added",
     path: display,
@@ -251,9 +267,11 @@ export async function commitAdd(context: CommitContext, target: AddTarget, displ
     mode: committed.created ? "created" : "overwritten",
     preview: renderPreview({ kind: "added", path: display, before: "", after: target.hunk.contents, regions: [] }),
   });
+
   if (context.signal.aborted) {
     return abortOutcome(context);
   }
+
   return undefined;
 }
 
@@ -262,12 +280,15 @@ export async function commitDelete(context: CommitContext, target: DeleteTarget,
   if ("failed" in known) {
     return partialFailure("read_failed", known.failed, display, context);
   }
+
   if (!known.found) {
     return partialFailure("file_missing", "delete target does not exist", display, context);
   }
+
   if (isDirectory(target.absolutePath)) {
     return partialFailure("path_is_directory", "delete target is a directory", display, context);
   }
+
   try {
     await context.config.writeQueue.exclusive(target.absolutePath, async () => {
       context.signal.throwIfAborted();
@@ -275,33 +296,41 @@ export async function commitDelete(context: CommitContext, target: DeleteTarget,
       if ("failed" in current) {
         throw new Error(current.failed);
       }
+
       if (!current.found || current.content !== known.content) {
         throw new Error("changed");
       }
+
       rmSync(target.absolutePath);
     });
   } catch (error) {
     if (context.signal.aborted) {
       return abortOutcome(context);
     }
+
     if (error instanceof Error && error.message === "changed") {
       return changedFailure(display, context);
     }
+
     const stillThere = readOptional(target.absolutePath);
     if (!(!("failed" in stillThere) && !stillThere.found)) {
       context.accumulator.exact = false;
     }
+
     return partialFailure("remove_failed", `remove_failed:${error instanceof Error ? error.message : "remove_error"}`, display, context);
   }
+
   context.accumulator.changes.push({
     op: "deleted",
     path: display,
     bytes: 0,
     preview: renderPreview({ kind: "deleted", path: display, before: known.content, after: "", regions: [] }),
   });
+
   if (context.signal.aborted) {
     return abortOutcome(context);
   }
+
   return undefined;
 }
 
@@ -310,22 +339,28 @@ export async function commitUpdate(context: CommitContext, target: UpdateTarget,
   if ("failed" in known) {
     return partialFailure("read_failed", known.failed, display, context);
   }
+
   if (!known.found) {
     return partialFailure("file_missing", "update target does not exist", display, context);
   }
+
   if (isDirectory(target.absolutePath)) {
     return partialFailure("path_is_directory", "update target is a directory", display, context);
   }
+
   const applied = applyUpdateChunks(prepareSource(known.content), target.hunk.chunks, display);
   if (!applied.ok) {
     return partialFailure(applied.code, applied.message, display, context);
   }
+
   const tooLarge = oversizedFailure(context.config, applied.content, display, context);
   if (tooLarge !== undefined) {
     return tooLarge;
   }
+
   if (target.moveAbsolute === undefined) {
     let committed;
+
     try {
       committed = await commitText(context.config, target.absolutePath, known.content, applied.content, context.signal);
     } catch (error) {
@@ -334,20 +369,25 @@ export async function commitUpdate(context: CommitContext, target: UpdateTarget,
       }
       return writeFailedFailure(error instanceof Error ? error.message : "write_error", display, context);
     }
+
     if (!committed.committed) {
       return changedFailure(display, context);
     }
+
     context.accumulator.changes.push({
       op: "updated",
       path: display,
       bytes: committed.bytes,
       preview: renderPreview({ kind: "updated", path: display, before: known.content, after: applied.content, regions: applied.regions }),
     });
+
     if (context.signal.aborted) {
       return abortOutcome(context);
     }
+
     return undefined;
   }
+
   return commitMove(context, target, target.moveAbsolute, display, known.content, applied.content, applied.regions);
 }
 
@@ -365,11 +405,14 @@ async function commitMove(
   if (tooLarge !== undefined) {
     return tooLarge;
   }
+
   const knownDest = readOptional(moveAbsolute);
   if ("failed" in knownDest) {
     return partialFailure("read_failed", knownDest.failed, destination, context);
   }
+
   let committed;
+
   try {
     committed = await commitText(context.config, moveAbsolute, knownDest.found ? knownDest.content : undefined, newContent, context.signal);
   } catch (error) {
@@ -378,6 +421,7 @@ async function commitMove(
     }
     return writeFailedFailure(error instanceof Error ? error.message : "write_error", destination, context);
   }
+
   if (!committed.committed) {
     return partialFailure(
       "file_changed_since_read",
@@ -386,6 +430,7 @@ async function commitMove(
       context,
     );
   }
+
   const landed: AppliedFileChange = {
     op: "added",
     path: destination,
@@ -393,11 +438,13 @@ async function commitMove(
     mode: committed.created ? "created" : "overwritten",
     preview: renderPreview({ kind: "moved", path: destination, from: display, before: sourceContent, after: newContent, regions }),
   };
+
   if (context.signal.aborted) {
     // The destination already landed: record it before reporting the stop.
     context.accumulator.changes.push(landed);
     return abortOutcome(context);
   }
+
   try {
     await context.config.writeQueue.exclusive(target.absolutePath, async () => {
       context.signal.throwIfAborted();
@@ -405,9 +452,11 @@ async function commitMove(
       if ("failed" in current) {
         throw new Error(current.failed);
       }
+
       if (!current.found || current.content !== sourceContent) {
         throw new Error("changed");
       }
+
       rmSync(target.absolutePath);
     });
   } catch (error) {
@@ -415,14 +464,17 @@ async function commitMove(
     // write first, exactly like Codex keeps the committed destination delta
     // on a failed move. Exactness depends on whether the source is intact.
     context.accumulator.changes.push(landed);
+
     if (context.signal.aborted) {
       return abortOutcome(context);
     }
+
     const stillThere = readOptional(target.absolutePath);
     const intact = !("failed" in stillThere) && stillThere.found && stillThere.content === sourceContent;
     if (!intact) {
       context.accumulator.exact = false;
     }
+
     if (error instanceof Error && error.message === "changed") {
       return partialFailure(
         "file_changed_since_read",
@@ -431,6 +483,7 @@ async function commitMove(
         context,
       );
     }
+
     return partialFailure(
       "remove_failed",
       `remove_failed:${error instanceof Error ? error.message : "remove_error"} after the destination was written; destination '${destination}' holds the new content${intact ? " and the source is intact" : " but the source state is uncertain"}`,
@@ -438,6 +491,7 @@ async function commitMove(
       context,
     );
   }
+
   context.accumulator.changes.push({
     op: "moved",
     from: display,
@@ -446,8 +500,10 @@ async function commitMove(
     preview: renderPreview({ kind: "moved", path: destination, from: display, before: sourceContent, after: newContent, regions }),
     ...(knownDest.found ? { overwrote: true } : {}),
   });
+
   if (context.signal.aborted) {
     return abortOutcome(context);
   }
+
   return undefined;
 }

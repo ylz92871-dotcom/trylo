@@ -14,9 +14,12 @@ function editContent(raw: string, input: Exclude<EditInput, { kind: "invalid" }>
     const result = replaceExactText(raw, input.oldString, input.newString);
     return result.ok ? { ...result, facts: { replacementsApplied: 1 }, summary: "1 exact match" } : result;
   }
+
   const parsed = parseUnifiedPatch(input.patch);
   if (!parsed.ok) return parsed;
+
   const result = applyPatch(prepareSource(raw), parsed.hunks);
+
   return result.ok ? { ...result, facts: { hunksApplied: result.hunksApplied }, summary: `${result.hunksApplied} hunks` } : result;
 }
 
@@ -42,11 +45,14 @@ export async function executeEditFile(
   if (plan.tool !== "edit_file") {
     return { outcome: "error", code: "invalid_arguments", message: "edit_file received a foreign plan" };
   }
+
   if (signal.aborted) {
     return { outcome: "cancelled" };
   }
+
   const input = readEditInput(request.arguments);
   if (input.kind === "invalid") return { outcome: "error", code: input.code, message: input.message };
+
   // Own the read-compare-write transaction, not only its final rename. Other
   // edits must read the preceding commit; queued cancellation must not commit.
   return config.writeQueue.exclusive(plan.absolutePath, async () => applyPlannedEdit(request, plan, input, signal));
@@ -54,8 +60,10 @@ export async function executeEditFile(
 
 function applyPlannedEdit(request: ToolCallRequest, plan: EditPlan, input: Exclude<EditInput, { kind: "invalid" }>, signal: AbortSignal): ToolOutcome {
   if (signal.aborted) return { outcome: "cancelled" };
+
   const requestedPath = String(request.arguments["path"] ?? "");
   let source;
+
   try {
     source = readFileUtf8(plan.absolutePath);
   } catch (err) {
@@ -65,13 +73,16 @@ function applyPlannedEdit(request: ToolCallRequest, plan: EditPlan, input: Exclu
     const detail = err instanceof Error ? err.message : "read_error";
     return { outcome: "error", code: "read_failed", message: `read_failed:${detail}` };
   }
+
   const applied = editContent(source, input);
   if (!applied.ok) {
     return { outcome: "error", code: applied.code, message: applied.message };
   }
+
   if (plan.maxWriteBytes !== undefined && Buffer.byteLength(applied.content, "utf8") > plan.maxWriteBytes) {
     return { outcome: "error", code: "write_too_large", message: `edit_file result exceeds the ${plan.maxWriteBytes} byte ceiling; no file was changed` };
   }
+
   try {
     const written = writeFileAtomicallySync(plan.absolutePath, applied.content);
     const value = {
@@ -86,6 +97,7 @@ function applyPlannedEdit(request: ToolCallRequest, plan: EditPlan, input: Exclu
       mode: "patched" as const,
       ...applied.facts,
     };
+
     return {
       outcome: "result",
       value,

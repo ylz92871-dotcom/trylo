@@ -20,18 +20,25 @@ function fixture(t: TestContext, options: { readonly maxReadBytes?: number } = {
   const tools = createWorkspaceTools({ workspaceRoot: root, sessions, sandbox: createWorkspaceSandbox({ workspaceRoot: root }) });
   let id = 0;
   const use = (name: string, args: JsonObject) => tools.execute({ toolCallId: `user-${++id}`, name, arguments: args }, new AbortController().signal);
-  t.after(async () => { await sessions.shutdown(); rmSync(root, { recursive: true, force: true }); });
+
+  t.after(async () => {
+    await sessions.shutdown();
+    rmSync(root, { recursive: true, force: true });
+  });
+
   function script(name: string, content: string): string {
     mkdirSync(join(root, "任务 空间"), { recursive: true });
     writeFileSync(join(root, "任务 空间", name), content);
     return `node "任务 空间/${name}"`;
   }
+
   async function background(content: string): Promise<string> {
     const started = await use("run_shell", { command: script(`child-${id}.mjs`, content), runInBackground: true });
     assert.equal(started.outcome, "result", JSON.stringify(started));
     if (started.outcome !== "result") throw new Error("background did not start");
     return String(started.value.sessionId);
   }
+
   return { root, tools, sessions, use, script, background };
 }
 
@@ -43,11 +50,13 @@ function result(outcome: ToolOutcome): Extract<ToolOutcome, { outcome: "result" 
 
 async function finished(use: ReturnType<typeof fixture>["use"], sessionId: string) {
   let output = "";
+
   for (let attempt = 0; attempt < 20; attempt++) {
     const read = result(await use("write_stdin", { sessionId, yieldMs: 1000 }));
     output += String(read.value.output ?? "");
     if (read.value.status !== "running") return { read, output };
   }
+
   throw new Error("real child did not reach an observable terminal state");
 }
 
@@ -103,6 +112,7 @@ for (const end of [
       write: async () => ({ ok: true, read: { id: "ps_test", output: "partial output", status: end.kind, end, truncated: false, bufferedBytes: 0 } }),
     });
     const read = result(await port.execute({ toolCallId: "terminal", name: "write_stdin", arguments: { sessionId: "ps_test", yieldMs: 1000 } }));
+
     assert.match(read.output, new RegExp(end.kind));
     assert.ok(read.output.includes(end.kind === "failed" ? end.message : end.reason));
     assert.equal(read.value.exitCode, undefined, "loss or spawn failure must never invent an exit code");
@@ -114,10 +124,13 @@ test("a later spawn failure retains earlier workflow output and acknowledges wor
   const first = f.script("prepare.mjs", "import { writeFileSync } from 'node:fs'; writeFileSync('prepared.txt', 'done'); console.log('PREPARED-REAL-DATA');");
   const last = f.script("forbidden.mjs", "import { writeFileSync } from 'node:fs'; writeFileSync('must-not-run.txt', 'bad');");
   const outcome = await f.use("run_shell", { command: first, steps: ["trylo_missing_executable_90210", last] });
+
   assert.equal(existsSync(join(f.root, "prepared.txt")), true);
   assert.equal(existsSync(join(f.root, "must-not-run.txt")), false);
   assert.equal(outcome.outcome, "error");
+
   if (outcome.outcome !== "error") return;
+
   assert.equal(outcome.code, "shell_spawn_failed");
   assert.match(outcome.message, /PREPARED-REAL-DATA/);
   assert.match(outcome.message, /1.*(?:completed|already ran)/i);
@@ -125,14 +138,18 @@ test("a later spawn failure retains earlier workflow output and acknowledges wor
 
 test("control: user discovers, reads, edits and generates an artifact with quoted multilingual paths", async t => {
   const f = fixture(t);
+
   writeFileSync(join(f.root, "配置 示例.txt"), "enabled=false\r\nlabel=中文\r\n");
   const found = result(await f.use("glob_files", { pattern: "*.txt" }));
+
   assert.match(found.output, /配置 示例.txt/);
   const read = result(await f.use("read_file", { path: "配置 示例.txt", offset: 0, limit: 1 }));
+
   assert.match(String(read.value.content), /enabled=false/);
   result(await f.use("edit_file", { path: "配置 示例.txt", old_string: "enabled=false", new_string: "enabled=true" }));
   assert.equal(readFileSync(join(f.root, "配置 示例.txt"), "utf8"), "enabled=true\r\nlabel=中文\r\n");
   const producer = f.script("report.mjs", "console.log(JSON.stringify({ actual: 42, label: '真实输出' }));");
+
   result(await f.use("run_shell", { command: producer, stdoutFile: "报告 结果.json" }));
   assert.deepEqual(JSON.parse(readFileSync(join(f.root, "报告 结果.json"), "utf8")), { actual: 42, label: "真实输出" });
 });
@@ -151,9 +168,13 @@ for (const args of [{ chars: 123 }, { eof: "true" }] satisfies JsonObject[]) {
     const f = fixture(t);
     const sessionId = await f.background("process.stdin.on('data', () => console.log('UNEXPECTED-INPUT'));");
     const rejected = await f.use("write_stdin", { sessionId, yieldMs: 1000, ...args });
+
     assert.equal(rejected.outcome, "error", JSON.stringify(rejected));
+
     if (rejected.outcome === "error") assert.match(rejected.message, new RegExp(Object.keys(args)[0] ?? ""));
+
     const poll = result(await f.use("write_stdin", { sessionId, yieldMs: 1000 }));
+
     assert.equal(poll.value.status, "running");
     assert.doesNotMatch(String(poll.value.output), /UNEXPECTED-INPUT/);
   });
@@ -169,9 +190,12 @@ test("a mistyped runningOnly does not silently return a differently filtered lis
 test("writing after a failed process ended reports its actual exit code in the recovery error", async t => {
   const f = fixture(t);
   const sessionId = await f.background("process.exitCode = 7;");
+
   await finished(f.use, sessionId);
   const rejected = await f.use("write_stdin", { sessionId, chars: "retry\n", yieldMs: 250 });
+
   assert.equal(rejected.outcome, "error");
+
   if (rejected.outcome === "error") {
     assert.equal(rejected.code, "session_finished");
     assert.match(rejected.message, /exit code:? 7/i);
@@ -183,11 +207,13 @@ test("user can reassemble Chinese and emoji logs across capped background polls"
   const expected = "中文🙂测试".repeat(20);
   const sessionId = await f.background(`process.stdout.write(${JSON.stringify(expected)});`);
   let output = "";
+
   for (let attempt = 0; attempt < 100; attempt++) {
     const read = result(await f.use("write_stdin", { sessionId, yieldMs: 1000 }));
     output += String(read.value.output);
     if (read.value.status !== "running" && read.value.bufferedBytes === 0) break;
   }
+
   assert.equal(output, expected);
 });
 
@@ -195,9 +221,11 @@ test("a UTF-8 character split across real stdout packets survives interleaved st
   const f = fixture(t);
   const sessionId = await f.background("const bytes = Buffer.from('中文🙂'); process.stdout.write(bytes.subarray(0, 1)); process.stderr.write('BETWEEN\\n'); process.stdin.once('data', () => { process.stdout.write(bytes.subarray(1)); process.stdin.destroy(); });");
   let output = "";
+
   for (let attempt = 0; attempt < 20 && !output.includes("BETWEEN"); attempt++) {
     output += String(result(await f.use("write_stdin", { sessionId, yieldMs: 1000 })).value.output);
   }
+
   assert.match(output, /BETWEEN/);
   assert.doesNotMatch(output, /�/, "an incomplete live packet must wait for its continuation");
   output += String(result(await f.use("write_stdin", { sessionId, chars: "continue\n", yieldMs: 250 })).value.output);

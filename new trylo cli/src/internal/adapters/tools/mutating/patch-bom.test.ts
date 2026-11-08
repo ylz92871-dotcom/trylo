@@ -13,11 +13,17 @@ test("a first-line edit matches UTF-8 BOM text and preserves the BOM and line en
 
 test("encoding tolerance does not relax mismatched source or remove an untouched BOM", () => {
   const patch = parseUnifiedPatch("@@\n-two\n+changed\n");
+
   assert.equal(patch.ok, true);
+
   if (!patch.ok) return;
+
   const source = prepareSource("\uFEFFone\ntwo\n");
   const changed = applyPatch(source, patch.hunks);
+
   assert.equal(changed.ok, true);
+
   if (changed.ok) assert.equal(changed.content, "\uFEFFone\nchanged\n");
+
   assert.equal(applyPatch(prepareSource("\uFEFFone\nother\n"), patch.hunks).ok, false);
 });

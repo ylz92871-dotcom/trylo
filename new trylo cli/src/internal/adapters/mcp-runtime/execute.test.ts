@@ -5,11 +5,11 @@ import type { ToolBinding } from "../../ports/tools.js";
 import { callTimeoutMs, createMcpToolPort, mcpFailureCode } from "./execute.js";
 import {
   DEFAULT_MCP_CALL_TIMEOUT_MS,
-  MAX_MCP_CALL_TIMEOUT_MS,
   bindingForSpec,
   type McpMountedTool,
 } from "./mount.js";
 import type { McpRuntimeCall, McpRuntimeServer } from "./pool.js";
+import { brokerRequestError } from "./broker-errors.js";
 
 /**
  * Execute contracts: routing, the deadline, cancellation and the failure table.
@@ -34,7 +34,7 @@ function spec(serverId: string, tool: string): McpToolSpec {
 }
 
 type Recorded = {
-  readonly calls: Array<{ readonly tool: string; readonly timeoutMs: number }>;
+  readonly calls: Array<{ readonly tool: string; readonly timeoutMs: number | undefined }>;
 };
 
 function mounted(
@@ -48,7 +48,7 @@ function mounted(
 function stubServer(
   serverId: string,
   tools: ReadonlyArray<McpToolSpec>,
-  call: (tool: McpToolSpec, timeoutMs: number, signal: AbortSignal) => Promise<McpRuntimeCall>,
+  call: (tool: McpToolSpec, timeoutMs: number | undefined, signal: AbortSignal) => Promise<McpRuntimeCall>,
   recorded: Recorded,
 ): McpRuntimeServer {
   return {
@@ -82,6 +82,7 @@ test("a call for a name that never mounted fails closed", async () => {
     { toolCallId: "c1", name: "mcp__ghost__echo", arguments: {} },
     new AbortController().signal,
   );
+
   assert.equal(outcome.outcome, "error");
   assert.equal(recorded.calls.length, 0);
   assert.match(outcome.outcome === "error" ? outcome.code : "", /^mcp_unknown_tool$/);
@@ -95,6 +96,7 @@ test("the binding's deadline applies when the model supplies none", async () => 
     outcome: { outcome: "result", value: {}, output: "ok", truncated: false },
   }), recorded);
   const port = createMcpToolPort([mounted(server, tool)]);
+
   await port.execute({ toolCallId: "c1", name: tool.qualifiedName, arguments: {} }, new AbortController().signal);
   assert.equal(recorded.calls[0]?.timeoutMs, DEFAULT_MCP_CALL_TIMEOUT_MS);
 });
@@ -108,6 +110,7 @@ test("a usable timeout argument overrides the binding, an unusable one is refuse
   }), recorded);
   const port = createMcpToolPort([mounted(server, tool)]);
   const signal = new AbortController().signal;
+
   await port.execute(
     { toolCallId: "c1", name: tool.qualifiedName, arguments: { timeoutMs: 250 } },
     signal,
@@ -115,9 +118,10 @@ test("a usable timeout argument overrides the binding, an unusable one is refuse
   assert.equal(recorded.calls[0]?.timeoutMs, 250);
 
   const refused = await port.execute(
-    { toolCallId: "c2", name: tool.qualifiedName, arguments: { timeoutMs: MAX_MCP_CALL_TIMEOUT_MS + 1 } },
+    { toolCallId: "c2", name: tool.qualifiedName, arguments: { timeoutMs: -1 } },
     signal,
   );
+
   assert.equal(refused.outcome, "error");
   assert.equal(refused.outcome === "error" ? refused.code : "", "mcp_invalid_arguments");
   assert.equal(recorded.calls.length, 1);
@@ -146,8 +150,10 @@ test("a turn cancel reaches the call that is already running", async () => {
     { toolCallId: "c1", name: tool.qualifiedName, arguments: {} },
     outer.signal,
   );
+
   await port.cancel("c1");
   const outcome = await pending;
+
   assert.equal(sawAbort, true);
   assert.equal(outcome.outcome, "cancelled");
 });
@@ -161,11 +167,13 @@ test("a turn already cancelled never spends a round trip", async () => {
   }), recorded);
   const port = createMcpToolPort([mounted(server, tool)]);
   const controller = new AbortController();
+
   controller.abort();
   const outcome = await port.execute(
     { toolCallId: "c1", name: tool.qualifiedName, arguments: {} },
     controller.signal,
   );
+
   assert.equal(outcome.outcome, "cancelled");
   assert.equal(recorded.calls.length, 0);
 });
@@ -182,9 +190,11 @@ test("every MCP failure code maps to this adapter's own vocabulary", () => {
     ["capability_unsupported", "mcp_capability_unsupported"],
     ["stderr_overflow", "mcp_stderr_overflow"],
   ];
+
   for (const [from, to] of table) {
     assert.equal(mcpFailureCode(from), to, from);
   }
+
   // A code from outside the port's closed set passes through instead of being
   // flattened into a code nobody can act on.
   assert.equal(mcpFailureCode("adapter_exception"), "adapter_exception");
@@ -203,6 +213,7 @@ test("a failed call is an error outcome carrying the mapped code", async () => {
     { toolCallId: "c1", name: tool.qualifiedName, arguments: {} },
     new AbortController().signal,
   );
+
   assert.equal(outcome.outcome, "error");
   assert.equal(outcome.outcome === "error" ? outcome.code : "", "mcp_timeout");
   assert.equal(outcome.outcome === "error" ? outcome.message : "", "the server did not answer before the deadline");
@@ -219,8 +230,60 @@ test("a server that throws becomes an unknown outcome, never a rejected promise"
     { toolCallId: "c1", name: tool.qualifiedName, arguments: {} },
     new AbortController().signal,
   );
+
   assert.equal(outcome.outcome, "unknown");
   assert.equal(outcome.outcome === "unknown" ? outcome.code : "", "mcp_adapter_exception");
+});
+
+test("a confirmed undispatched broker call is a normal tool error without replay", async () => {
+  const recorded: Recorded = { calls: [] };
+  const tool = spec("office", "officecli");
+  const server = stubServer("office", [tool], async () => {
+    throw brokerRequestError(new TypeError("fetch failed", {
+      cause: Object.assign(new Error("connection refused"), { code: "ECONNREFUSED", syscall: "connect" }),
+    }));
+  }, recorded);
+  const outcome = await createMcpToolPort([mounted(server, tool)]).execute(
+    { toolCallId: "help", name: tool.qualifiedName, arguments: { command: "help docx equation" } },
+    new AbortController().signal,
+  );
+  assert.equal(outcome.outcome, "error");
+  assert.equal(outcome.outcome === "error" ? outcome.code : "", "mcp_broker_unavailable");
+  assert.match(outcome.outcome === "error" ? outcome.message : "", /did not execute/u);
+  assert.equal(recorded.calls.length, 1);
+});
+
+test("a broker response lost after dispatch keeps the unknown effect protection", async () => {
+  const recorded: Recorded = { calls: [] };
+  const tool = spec("office", "officecli");
+  const server = stubServer("office", [tool], async () => {
+    throw brokerRequestError(new TypeError("fetch failed", {
+      cause: Object.assign(new Error("connection reset"), { code: "ECONNRESET", syscall: "read" }),
+    }));
+  }, recorded);
+  const outcome = await createMcpToolPort([mounted(server, tool)]).execute(
+    { toolCallId: "write", name: tool.qualifiedName, arguments: { command: "create report.docx" } },
+    new AbortController().signal,
+  );
+  assert.equal(outcome.outcome, "unknown");
+  assert.equal(outcome.outcome === "unknown" ? outcome.code : "", "mcp_broker_delivery_unknown");
+  assert.match(outcome.outcome === "unknown" ? outcome.message : "", /do not repeat/u);
+  assert.equal(recorded.calls.length, 1);
+});
+
+test("a server cannot self-report an undispatched transport failure with a plain object", async () => {
+  const recorded: Recorded = { calls: [] };
+  const tool = spec("office", "officecli");
+  const server = stubServer("office", [tool], async () => {
+    throw { delivery: "not_dispatched", code: "mcp_broker_unavailable", message: "trust me" };
+  }, recorded);
+  const outcome = await createMcpToolPort([mounted(server, tool)]).execute(
+    { toolCallId: "write", name: tool.qualifiedName, arguments: { command: "create report.docx" } },
+    new AbortController().signal,
+  );
+  assert.equal(outcome.outcome, "unknown");
+  assert.equal(outcome.outcome === "unknown" ? outcome.code : "", "mcp_adapter_exception");
+  assert.equal(recorded.calls.length, 1);
 });
 
 test("a successful result is returned in the loop's own outcome shape", async () => {
@@ -238,6 +301,7 @@ test("a successful result is returned in the loop's own outcome shape", async ()
     { toolCallId: "c1", name: tool.qualifiedName, arguments: {} },
     new AbortController().signal,
   );
+
   assert.deepEqual(outcome, rich);
   assert.deepEqual(
     port.snapshot().map((binding) => binding.name),

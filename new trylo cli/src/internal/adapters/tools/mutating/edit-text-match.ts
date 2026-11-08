@@ -7,10 +7,13 @@ export function lineEndingMatch(source: string, oldString: string, newString: st
   const needle = oldString.replace(/\r\n/g, "\n");
   const at = normalized.indexOf(needle);
   if (at < 0) return { kind: "missing" };
+
   if (normalized.indexOf(needle, at + 1) >= 0) return { kind: "ambiguous" };
+
   const start = sourceOffset(source, at), end = sourceOffset(source, at + needle.length);
   const ending = source.slice(start, end).includes("\r\n") ? "\r\n" : "\n";
   const replacement = newString.replace(/\r\n/g, "\n").replace(/\n/g, ending);
+
   return { kind: "matched", content: source.slice(0, start) + replacement + source.slice(end) };
 }
 

@@ -45,11 +45,14 @@ const deps = {
 describe("lsp_navigate tool", () => {
   it("advertises itself with the closed operation set", () => {
     const snapshot = createLspTools(poolWith(stubPort()), deps).snapshot();
+
     assert.equal(snapshot.length, 1);
     const binding = snapshot[0];
+
     assert.equal(binding?.name, LSP_TOOL);
     assert.equal(binding?.sideEffect, "read_only");
     const operations = (binding?.parameters as { properties?: { operation?: { enum?: string[] } } }).properties?.operation?.enum;
+
     assert.deepEqual(operations, ["definition", "references", "hover", "document_symbols", "implementation", "call_hierarchy"]);
   });
 
@@ -64,6 +67,7 @@ describe("lsp_navigate tool", () => {
       },
     })), deps);
     const outcome = await tools.execute(call({ operation: "hover", path: "src/a.ts", line: 0, character: 0 }), signal);
+
     assert.equal(outcome.outcome, "result");
     assert.deepEqual(seen, ["src/a.ts"]);
   });
@@ -76,6 +80,7 @@ describe("lsp_navigate tool", () => {
         return { ok: true };
       },
     }), [{ serverName: "stub", command: "stub", args: [], extensions: ["ts", "tsx"] }]), deps);
+
     await tools.execute(call({ operation: "hover", path: "src/a.tsx" }), signal);
     // `typescriptreact`, not `tsx` and not `typescript`: sending the wrong id is
     // how a server ends up parsing TSX as plain TypeScript and choking on JSX.
@@ -87,8 +92,11 @@ describe("lsp_navigate tool", () => {
       query: async (q) => ({ ok: true, operation: q.operation, answer: { status: "empty" }, truncated: false }),
     })), deps);
     const outcome = await tools.execute(call({ operation: "definition", path: "src/a.ts", line: 3 }), signal);
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome !== "result") return;
+
     assert.equal(outcome.value["found"], false);
     // The distinction the whole tool exists for.
     assert.notEqual(outcome.value["found"], undefined);
@@ -101,8 +109,11 @@ describe("lsp_navigate tool", () => {
       query: async (): Promise<LspQueryResult> => ({ ok: false, code: "lsp_server_exited", message: "exited" }),
     })), deps);
     const outcome = await tools.execute(call({ operation: "definition", path: "src/a.ts" }), signal);
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome !== "error") return;
+
     assert.equal(outcome.code, "lsp_server_exited");
   });
 
@@ -128,6 +139,7 @@ describe("lsp_navigate tool", () => {
         return { ok: true, operation: q.operation, answer: { status: "hover", markdown: "x" }, truncated: false };
       },
     })), deps);
+
     await tools.execute(call({ operation: "hover", path: "src/a.ts" }), signal);
     assert.equal(askedAt, 0);
   });
@@ -150,9 +162,13 @@ describe("lsp_navigate tool", () => {
       }),
     })), deps);
     const outcome = await tools.execute(call({ operation: "definition", path: "src/a.ts" }), signal);
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome !== "result") return;
+
     const locations = outcome.value["locations"] as ReadonlyArray<{ readable?: string }>;
+
     assert.equal(locations[0]?.readable, "src/b.ts:42");
     assert.equal(outcome.output, "src/b.ts:42");
   });
@@ -184,6 +200,7 @@ describe("lsp_navigate tool", () => {
         return "x";
       },
     });
+
     await tools.execute(call({ operation: "hover", path: "src/a.unknownext" }), signal);
     assert.equal(reads, 0);
   });
@@ -202,6 +219,7 @@ describe("LanguageServerPool", () => {
         return stubPort();
       },
     });
+
     await pool.connectionFor(WORKSPACE, "src/a.ts");
     await pool.connectionFor(WORKSPACE, "src/b.ts");
     assert.equal(created, 1);
@@ -220,6 +238,7 @@ describe("LanguageServerPool", () => {
         return stubPort();
       },
     });
+
     await pool.connectionFor("/w", "src/a.ts");
     await pool.connectionFor("/other", "src/a.ts");
     assert.equal(created, 2);
@@ -232,8 +251,11 @@ describe("LanguageServerPool", () => {
       deps: { authorize: async () => ({ ok: true }), hostEnv: {}, log: () => undefined },
     });
     const outcome = await pool.connectionFor(WORKSPACE, "src/a.ts");
+
     assert.equal(outcome.ok, false);
+
     if (outcome.ok) return;
+
     assert.equal(outcome.code, "lsp_not_configured");
     assert.match(outcome.message, /claim \.ts/);
   });
@@ -245,10 +267,14 @@ describe("LanguageServerPool", () => {
       deps: { authorize: async () => ({ ok: true }), hostEnv: {}, log: () => undefined },
       createServer: () => stubPort(),
     });
+
     await pool.connectionFor("/w", "a.ts");
     const second = await pool.connectionFor("/other", "a.ts");
+
     assert.equal(second.ok, false);
+
     if (second.ok) return;
+
     assert.equal(second.code, "lsp_limit_exceeded");
     await pool.closeAll();
   });
@@ -264,6 +290,7 @@ describe("LanguageServerPool", () => {
         },
       }),
     });
+
     await pool.connectionFor("/w", "a.ts");
     await pool.connectionFor("/other", "a.ts");
     await pool.closeAll();
@@ -281,8 +308,11 @@ describe("LanguageServerPool", () => {
       createServer: () => stubPort(),
     });
     const resolved = pool.resolveForFile("a.ts");
+
     assert.equal(resolved.ok, true);
+
     if (!resolved.ok) return;
+
     // The spec carries the program, not an environment: the host environment is
     // a property of the connection, applied where the process is spawned.
     assert.equal("hostEnv" in resolved.spec, false);

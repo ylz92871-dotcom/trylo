@@ -43,10 +43,13 @@ test("one level, directories first, workspace-relative, excluded names counted",
     writeFileSync(join(root, "m2.txt"), "x");
 
     const outcome = await list(root, {});
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome !== "result") {
       return;
     }
+
     assert.equal(outcome.output, "alpha/\nzulu/\nm1.txt\nm2.txt");
     assert.equal(outcome.value["hiddenByDefault"], 1);
     assert.equal(outcome.value["truncated"], false);
@@ -82,10 +85,13 @@ test("a nested directory is listed with its own prefix, ready for read_file", as
     writeFileSync(join(root, "alpha", "inner.txt"), "x");
 
     const outcome = await list(root, { path: "alpha" });
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome !== "result") {
       return;
     }
+
     assert.equal(outcome.output, "alpha/inner.txt");
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -98,6 +104,7 @@ test("a listing past its cap says it was cut instead of ending quietly", async (
     for (const name of ["a.txt", "b.txt", "c.txt", "d.txt"]) {
       writeFileSync(join(root, name), "x");
     }
+
     const tools = createReadOnlyTools({
       workspaceRoot: root,
       reader: createNodeFileSystemReader(),
@@ -114,10 +121,13 @@ test("a listing past its cap says it was cut instead of ending quietly", async (
       { toolCallId: "c1", name: "list_files", arguments: {} },
       new AbortController().signal,
     );
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome !== "result") {
       return;
     }
+
     assert.equal(outcome.output, "a.txt\nb.txt");
     assert.equal(outcome.value["truncated"], true);
     assert.equal(outcome.truncated, true);
@@ -143,9 +153,11 @@ test("a directory that is not there is a list error, not an empty listing", asyn
   const root = tempRoot();
   try {
     const outcome = await list(root, { path: "nope" });
+
     // An empty listing would read as "the project has nothing here", which is a
     // different answer from "that directory does not exist".
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "list_failed");
     }

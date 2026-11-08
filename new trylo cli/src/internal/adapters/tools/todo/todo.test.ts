@@ -67,6 +67,7 @@ test("a valid list is stored, echoed with checkboxes and counts, and replaced wh
       ],
     }),
   );
+
   assert.match(first.output, /\[x\] plan the fix/);
   assert.match(first.output, /\[~\] writing the test/);
   assert.match(first.output, /\[ \] run verify/);
@@ -76,6 +77,7 @@ test("a valid list is stored, echoed with checkboxes and counts, and replaced wh
   const second = asResult(
     await write(port, { todos: [{ content: "ship it", status: "pending" }] }),
   );
+
   assert.equal(second.output.includes("write the test"), false);
   assert.match(second.output, /\[ \] ship it/);
 });
@@ -90,6 +92,7 @@ test("an empty list is a legal clear, echoed as such", async () => {
 test("bad arguments refuse the call and keep the previous list intact", async () => {
   const port = createTodoTools();
   const good = await write(port, { todos: [{ content: "keep me", status: "pending" }] });
+
   assert.equal(good.outcome, "result");
 
   const refusals: ReadonlyArray<JsonObject> = [
@@ -100,22 +103,25 @@ test("bad arguments refuse the call and keep the previous list intact", async ()
     {}, // 缺 todos
     { todos: Array.from({ length: 51 }, (_unused, i) => ({ content: `t${i}`, status: "pending" })) }, // 超上限
   ];
+
   for (const args of refusals) {
     const bad = await write(port, args);
     assert.equal(bad.outcome, "error", JSON.stringify(args));
     const error = bad as { outcome: "error"; code: string };
     assert.equal(error.code, "invalid_arguments", JSON.stringify(args));
   }
+
   // 校验先于替换：被拒的调用没碰过存储——下一次成功调用回声的 previousTotal
   // 仍是第一笔合法写入的那 1 条。
   const echo = asResult(await write(port, { todos: [{ content: "keep me", status: "pending" }] }));
+
   assert.equal(echo.value["previousTotal"], 1, "refused calls must not touch the stored list");
 });
 
 test("an unknown tool name on the todo port is unknown, never a silent no-op", async () => {
   const port = createTodoTools();
   const outcome = await port.execute(
-    { toolCallId: "x", name: "todo_read", arguments: {} },
+    { toolCallId: "x", name: "todo_unknown", arguments: {} },
     new AbortController().signal,
   );
   assert.equal(outcome.outcome, "unknown");

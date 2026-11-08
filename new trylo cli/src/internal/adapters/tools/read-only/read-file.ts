@@ -1,5 +1,6 @@
 import type { JsonObject, JsonValue } from "../../../protocol/envelope.js";
 import type { FileAccessMode, ToolCallRequest, ToolOutcome } from "../../../ports/tools.js";
+import type { ReadRoutingPort } from "../../../ports/read-routing.js";
 import {
   localRuleAppendix,
   MAX_LOCAL_RULE_BYTES,
@@ -8,8 +9,9 @@ import {
 } from "../../project-instructions/appendix.js";
 import { readStringArg } from "./args.js";
 import type { FileSystemReader, ReadOnlyToolLimits } from "./limits.js";
-import { isRangeProblem, readRangeRequest, selectRange, type RangeRequest, type RangeSelection } from "./range.js";
-import { selectStreamRange, selectTextRange } from "./range-stream.js";
+import { isRangeProblem, readRangeRequest, type RangeSelection } from "./range.js";
+import { selectTextRange } from "./range-stream.js";
+import { selectReadFile } from "./read-selection.js";
 import { resolveInsideWorkspace } from "./workspace.js";
 
 export function applyLimits(text: string, limits: ReadOnlyToolLimits): {
@@ -52,6 +54,8 @@ export async function executeReadFile(
     readonly workspaceAlias?: string;
     readonly reader: FileSystemReader;
     readonly localRules?: LocalRuleLookup | undefined;
+    readonly readRouting?: ReadRoutingPort;
+    readonly nowMs?: () => number;
   },
   limits: ReadOnlyToolLimits,
   call: ToolCallRequest,
@@ -61,6 +65,7 @@ export async function executeReadFile(
   if (requested === undefined) {
     return { outcome: "error", code: "invalid_arguments", message: "read_file requires path" };
   }
+
   // Parsed before the file is touched: a bad `offset` should not cost a read, and
   // the model gets told which of the two arguments was wrong rather than being
   // handed a generic failure and left guessing.
@@ -68,10 +73,12 @@ export async function executeReadFile(
   if (isRangeProblem(request)) {
     return { outcome: "error", code: "invalid_arguments", message: `read_file: ${request.message}` };
   }
+
   const verdict = resolveInsideWorkspace(config.workspaceRoot, requested, config.fileAccess, config.workspaceAlias);
   if (!verdict.ok) {
     return { outcome: "error", code: verdict.code, message: verdict.code };
   }
+
   try {
     const rules = config.localRules?.(verdict.absolutePath) ?? [];
     const ruleBudget = Math.min(MAX_LOCAL_RULE_BYTES, Math.floor(limits.maxBytes / 2));
@@ -83,10 +90,12 @@ export async function executeReadFile(
     // line that was cut is a position it can come back to.
     const sourceLimits = { ...limits, maxBytes: limits.maxBytes - appendixBytes };
     const legacy = call.arguments.offset === undefined && call.arguments.limit === undefined;
-    const selection = config.reader.readFileChunks === undefined
-      ? await selectWholeFile(config.reader, verdict.absolutePath, signal, request, sourceLimits, legacy)
-      : await selectStreamRange(config.reader.readFileChunks(verdict.absolutePath, signal), request, sourceLimits, signal, legacy);
+    const { selection, routing } = await selectReadFile(config, {
+      absolutePath: verdict.absolutePath, executionId: call.toolCallId, request, limits: sourceLimits, legacy, signal,
+    });
+
     if (signal.aborted) return { outcome: "cancelled" };
+
     const value: JsonObject = {
       path: requested,
       content: selection.text,
@@ -94,8 +103,10 @@ export async function executeReadFile(
       truncatedBytes: selection.truncatedBytes,
       truncatedLines: selection.truncatedLines,
       ...rangeFields(selection),
+      ...(routing === undefined ? {} : { routing }),
       ...(appendix.sources.length === 0 ? {} : { localRules: sourceArray(appendix.sources) }),
     };
+
     return {
       outcome: "result",
       value,
@@ -113,14 +124,6 @@ export async function executeReadFile(
     const detail = err instanceof Error ? err.message : "read_error";
     return { outcome: "error", code: "read_failed", message: `read_failed:${detail}` };
   }
-}
-
-/** Compatibility for injected text-only readers; the production Node reader always streams. */
-async function selectWholeFile(reader: FileSystemReader, absolutePath: string, signal: AbortSignal,
-  request: RangeRequest, limits: ReadOnlyToolLimits, legacy: boolean): Promise<RangeSelection> {
-  const raw = await reader.readFileUtf8(absolutePath, signal);
-  signal.throwIfAborted();
-  return legacy ? selectTextRange(raw, request, limits, true) : selectRange(raw, request, limits);
 }
 
 /**

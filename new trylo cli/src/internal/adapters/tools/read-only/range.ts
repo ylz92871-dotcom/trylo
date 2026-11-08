@@ -49,25 +49,32 @@ export type RangeSelection = {
 export function readRangeRequest(args: Readonly<Record<string, unknown>>): RangeRequest | RangeProblem {
   const rawOffset = args["offset"];
   let offset = 0;
+
   if (rawOffset !== undefined && rawOffset !== null) {
     if (typeof rawOffset !== "number" || !Number.isInteger(rawOffset)) {
       return { reason: "offset_not_integer", message: "offset must be an integer line number, 0-based" };
     }
+
     if (rawOffset < 0) {
       return { reason: "offset_negative", message: `offset must be 0 or greater, got ${rawOffset}` };
     }
+
     offset = rawOffset;
   }
+
   const rawLimit = args["limit"];
   if (rawLimit === undefined || rawLimit === null) {
     return { offset, limit: undefined };
   }
+
   if (typeof rawLimit !== "number" || !Number.isInteger(rawLimit)) {
     return { reason: "limit_not_integer", message: "limit must be an integer line count" };
   }
+
   if (rawLimit <= 0) {
     return { reason: "limit_not_positive", message: `limit must be 1 or more, got ${rawLimit}` };
   }
+
   return { offset, limit: rawLimit };
 }
 

@@ -28,7 +28,9 @@ const fsServer: McpServerEntry = {
 test("encode then decode round-trips the same entries", () => {
   const raw = encodeDocument([fsServer]);
   const decoded = decodeDocument(raw, "test.json");
+
   assert.equal(decoded.ok, true);
+
   if (decoded.ok) {
     assert.deepEqual(decoded.value.servers, [fsServer]);
     assert.equal(decoded.value.formatVersion, 1);
@@ -60,7 +62,9 @@ test("adversarial #1: a url key inside an entry is refused as unsupported transp
     servers: [{ name: "fs", transport: "stdio", command: "npx", args: [], env: {}, enabled: true, url: "http://x" }],
   });
   const decoded = decodeDocument(doc, "test.json");
+
   assert.equal(decoded.ok, false);
+
   if (!decoded.ok) {
     assert.equal(decoded.code, "unsupported_transport");
   }
@@ -73,7 +77,9 @@ test("an unknown key inside an entry is refused", () => {
     servers: [{ name: "fs", transport: "stdio", command: "npx", args: [], env: {}, enabled: true, inheritEnv: true }],
   });
   const decoded = decodeDocument(doc, "test.json");
+
   assert.equal(decoded.ok, false);
+
   if (!decoded.ok) {
     assert.equal(decoded.code, "unsupported_transport");
   }
@@ -82,9 +88,12 @@ test("an unknown key inside an entry is refused", () => {
 test("adversarial #2: a checksum that does not match the entries is refused", () => {
   const good = encodeDocument([fsServer]);
   const parsed = JSON.parse(good) as { checksum: string };
+
   parsed.checksum = "0".repeat(64);
   const decoded = decodeDocument(JSON.stringify(parsed), "test.json");
+
   assert.equal(decoded.ok, false);
+
   if (!decoded.ok) {
     assert.equal(decoded.code, "checksum_mismatch");
   }
@@ -129,10 +138,13 @@ const remoteServer: McpServerEntry = {
 test("T1: a remote entry round-trips without the stdio fields", () => {
   const raw = encodeDocument([remoteServer]);
   const parsed = JSON.parse(raw) as { servers: Array<Record<string, unknown>> };
+
   // The on-disk shape stores only remote fields; no command/args/env keys.
   assert.deepEqual(Object.keys(parsed.servers[0] ?? {}).sort(), ["enabled", "headers", "name", "transport", "url"]);
   const decoded = decodeDocument(raw, "test.json");
+
   assert.equal(decoded.ok, true);
+
   if (decoded.ok) {
     assert.deepEqual(decoded.value.servers, [remoteServer]);
   }
@@ -144,7 +156,9 @@ test("T1: a remote entry with empty headers round-trips to headers-absent", () =
   const { headers: _dropped, ...bare } = remoteServer;
   const raw = encodeDocument([bare]);
   const decoded = decodeDocument(raw, "test.json");
+
   assert.equal(decoded.ok, true);
+
   if (decoded.ok) {
     assert.equal(decoded.value.servers[0]?.headers, undefined);
   }
@@ -157,7 +171,9 @@ test("T1: a remote entry without a url is invalid_url, not a server", () => {
     servers: [{ name: "remote", transport: "http", enabled: true }],
   });
   const decoded = decodeDocument(doc, "test.json");
+
   assert.equal(decoded.ok, false);
+
   if (!decoded.ok) {
     assert.equal(decoded.code, "invalid_url");
   }
@@ -170,7 +186,9 @@ test("T1: a remote entry with a non-http url is invalid_url", () => {
     servers: [{ name: "remote", transport: "sse", url: "ftp://x", enabled: true }],
   });
   const decoded = decodeDocument(doc, "test.json");
+
   assert.equal(decoded.ok, false);
+
   if (!decoded.ok) {
     assert.equal(decoded.code, "invalid_url");
   }
@@ -183,17 +201,22 @@ test("T1: a remote entry carrying stdio fields is refused by field name", () => 
     servers: [{ name: "remote", transport: "http", url: "https://x", command: "node", enabled: true }],
   });
   const decoded = decodeDocument(doc, "test.json");
+
   assert.equal(decoded.ok, false);
+
   if (!decoded.ok) {
     assert.equal(decoded.code, "invalid_command");
   }
+
   const withEnv = JSON.stringify({
     formatVersion: 1,
     checksum: "x",
     servers: [{ name: "remote", transport: "http", url: "https://x", env: { A: "1" }, enabled: true }],
   });
   const decodedEnv = decodeDocument(withEnv, "test.json");
+
   assert.equal(decodedEnv.ok, false);
+
   if (!decodedEnv.ok) {
     assert.equal(decodedEnv.code, "invalid_env");
   }
@@ -215,7 +238,9 @@ test("T1: a headers value is a string map or invalid_headers", () => {
     servers: [{ name: "remote", transport: "http", url: "https://x", headers: { A: 3 }, enabled: true }],
   });
   const decoded = decodeDocument(doc, "test.json");
+
   assert.equal(decoded.ok, false);
+
   if (!decoded.ok) {
     assert.equal(decoded.code, "invalid_headers");
   }

@@ -73,10 +73,13 @@ export function canonicalJson(value: JsonValue): string {
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value ?? null);
   }
+
   if (Array.isArray(value)) {
     return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
   }
+
   const entries = Object.entries(value).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+
   return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(",")}}`;
 }
 
@@ -98,7 +101,9 @@ function entryToJson(entry: McpServerEntry): JsonValue {
       enabled: entry.enabled,
     };
   }
+
   const hasHeaders = entry.headers !== undefined && Object.keys(entry.headers).length > 0;
+
   return {
     name: entry.name,
     transport: entry.transport,
@@ -140,14 +145,17 @@ export function decodeDocument(
   source: string,
 ): { readonly ok: true; readonly value: RegistryDocument } | McpRegistryFailure {
   let parsed: JsonValue;
+
   try {
     parsed = JSON.parse(raw) as JsonValue;
   } catch {
     return decodeFailure("invalid_document", `${source}: not valid JSON`);
   }
+
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return decodeFailure("invalid_document", `${source}: document is not an object`);
   }
+
   const document = parsed as Readonly<Record<string, JsonValue>>;
 
   for (const key of Object.keys(document)) {
@@ -160,6 +168,7 @@ export function decodeDocument(
   if (typeof version !== "number" || !Number.isInteger(version)) {
     return decodeFailure("invalid_document", `${source}: formatVersion must be an integer`);
   }
+
   if (version !== MCP_REGISTRY_FORMAT_VERSION) {
     return decodeFailure(
       "unknown_format_version",
@@ -173,6 +182,7 @@ export function decodeDocument(
   }
 
   const servers: McpServerEntry[] = [];
+
   for (let index = 0; index < rawServers.length; index += 1) {
     const entry = decodeEntry(rawServers[index], source, index);
     if (!entry.ok) {
@@ -185,6 +195,7 @@ export function decodeDocument(
   if (typeof checksum !== "string") {
     return decodeFailure("invalid_document", `${source}: checksum must be a string`);
   }
+
   if (checksum !== checksumFor(servers)) {
     return decodeFailure(
       "checksum_mismatch",
@@ -201,10 +212,13 @@ function decodeEntry(
   index: number,
 ): { readonly ok: true; readonly value: McpServerEntry } | McpRegistryFailure {
   const at = `${source}: servers[${index}]`;
+
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return decodeFailure("invalid_document", `${at} is not an object`);
   }
+
   const entry = raw as Readonly<Record<string, JsonValue>>;
+
   for (const key of Object.keys(entry)) {
     // Keys that are never legal in any shape this build can represent.
     if (MCP_FORBIDDEN_ENTRY_KEYS.has(key)) {
@@ -248,22 +262,27 @@ function decodeStdioEntry(
       `${at}: url/headers are not valid on a stdio entry`,
     );
   }
+
   const argsFailure = validateArgs(entry["args"]);
   if (argsFailure !== undefined) {
     return decodeFailure(argsFailure.code, `${at}: ${argsFailure.detail}`);
   }
+
   const envFailure = validateEnv(entry["env"]);
   if (envFailure !== undefined) {
     return decodeFailure(envFailure.code, `${at}: ${envFailure.detail}`);
   }
+
   const command = entry["command"];
   if (typeof command !== "string" || command.length === 0) {
     return decodeFailure("invalid_command", `${at}: command must be a non-empty string`);
   }
+
   const enabled = entry["enabled"];
   if (typeof enabled !== "boolean") {
     return decodeFailure("invalid_enabled", `${at}: enabled must be a boolean`);
   }
+
   return {
     ok: true,
     value: {
@@ -291,26 +310,33 @@ function decodeRemoteEntry(
   if ("command" in entry) {
     return decodeFailure("invalid_command", `${at}: command only applies to stdio entries`);
   }
+
   if ("args" in entry) {
     return decodeFailure("invalid_args", `${at}: args only apply to stdio entries`);
   }
+
   if ("env" in entry) {
     return decodeFailure("invalid_env", `${at}: env only applies to stdio entries`);
   }
+
   const urlFailure = validateRemoteUrl(entry["url"]);
   if (urlFailure !== undefined) {
     return decodeFailure(urlFailure.code, `${at}: ${urlFailure.detail}`);
   }
+
   const headers = entry["headers"] ?? {};
   const headersFailure = validateHeaders(headers);
   if (headersFailure !== undefined) {
     return decodeFailure(headersFailure.code, `${at}: ${headersFailure.detail}`);
   }
+
   const enabled = entry["enabled"];
   if (typeof enabled !== "boolean") {
     return decodeFailure("invalid_enabled", `${at}: enabled must be a boolean`);
   }
+
   const headerRecord = headers as Readonly<Record<string, string>>;
+
   return {
     ok: true,
     value: {

@@ -21,6 +21,7 @@ test("an update renders one hunk with context and changed lines", () => {
     after: "one\ndeux\nthree\nfour\nfive\n",
     regions: [region([{ kind: "context", text: "one" }, { kind: "removed", text: "two" }, { kind: "added", text: "deux" }], 0, 0)],
   });
+
   assert.ok(preview.includes("--- a/f.txt"));
   assert.ok(preview.includes("+++ b/f.txt"));
   assert.ok(preview.includes("@@ -1,5 +1,5 @@"));
@@ -38,6 +39,7 @@ test("an addition renders against /dev/null", () => {
     after: "hello\n",
     regions: [],
   });
+
   assert.ok(preview.includes("--- /dev/null"));
   assert.ok(preview.includes("+++ b/new.txt"));
   assert.ok(preview.includes("+hello"));
@@ -51,6 +53,7 @@ test("a deletion renders the removed lines", () => {
     after: "",
     regions: [],
   });
+
   assert.ok(preview.includes("--- a/gone.txt"));
   assert.ok(preview.includes("+++ /dev/null"));
   assert.ok(preview.includes("-bye"));
@@ -65,6 +68,7 @@ test("a move names both ends of the rename", () => {
     after: "new\n",
     regions: [region([{ kind: "removed", text: "old" }, { kind: "added", text: "new" }], 0, 0)],
   });
+
   assert.ok(preview.includes("--- a/src.txt"));
   assert.ok(preview.includes("+++ b/dst.txt"));
 });
@@ -82,6 +86,7 @@ test("adjacent changes merge into one hunk with the gap kept as context", () => 
   const first = region([{ kind: "removed", text: "line0" }, { kind: "added", text: "X" }], 0, 0);
   const second = region([{ kind: "removed", text: "line2" }, { kind: "added", text: "Z" }], 2, 2);
   const preview = renderPreview({ kind: "updated", path: "f.txt", before, after: before, regions: [first, second] });
+
   assert.equal(preview.match(/^@@/gm)?.length, 1);
   // The gap line survives on both sides; nothing is skipped or misaligned.
   assert.ok(preview.includes(" line1"));
@@ -98,6 +103,7 @@ test("every rendered hunk header agrees with its body", () => {
   const second = region([{ kind: "removed", text: "row3" }, { kind: "added", text: "ROW3" }], 3, 3);
   const third = region([{ kind: "removed", text: "row11" }, { kind: "added", text: "ROW11" }], 11, 11);
   const preview = renderPreview({ kind: "updated", path: "f.txt", before, after: before, regions: [first, second, third] });
+
   assert.equal(preview.match(/^@@/gm)?.length, 2);
   assertHunkSelfConsistent(preview);
 });
@@ -114,6 +120,7 @@ function assertHunkSelfConsistent(preview: string): void {
       assert.equal(newSeen, Number(header[2]), `new count for ${header[0]}`);
     }
   };
+
   for (const line of lines) {
     const opened = line.match(/^@@ -\d+,(\d+) \+\d+,(\d+) @@/);
     if (opened !== null) {
@@ -123,12 +130,15 @@ function assertHunkSelfConsistent(preview: string): void {
       newSeen = 0;
       continue;
     }
+
     if (line.startsWith("---") || line.startsWith("+++") || line.startsWith("... [preview")) {
       continue;
     }
+
     if (line.length === 0) {
       continue;
     }
+
     if (line.startsWith(" ")) {
       oldSeen += 1;
       newSeen += 1;
@@ -138,6 +148,7 @@ function assertHunkSelfConsistent(preview: string): void {
       newSeen += 1;
     }
   }
+
   check();
 }
 

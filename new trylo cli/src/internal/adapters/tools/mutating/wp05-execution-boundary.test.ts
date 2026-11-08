@@ -36,6 +36,7 @@ type Counting = { readonly spawner: ShellSpawner; readonly count: () => number }
 function countingSpawner(): Counting {
   let started = 0;
   const real = createNodeSpawner();
+
   return {
     spawner: (spec) => {
       started += 1;
@@ -88,6 +89,7 @@ test("the sandbox's evaluate is asked before anything plans, let alone spawns", 
     };
     const counting = countingSpawner();
     const tools = createMutatingTools({ sandbox: recording, spawner: counting.spawner });
+
     await tools.execute(
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "trylo-nope-4b7a", timeoutMs: 5_000 } },
       SIGNAL,
@@ -120,6 +122,7 @@ test("a denied command never reaches the spawner, whatever it names", async () =
         counting.spawner,
         command,
       );
+
       assert.equal(outcome.outcome, "error", `${label}: expected a refusal, got ${JSON.stringify(outcome)}`);
       assert.equal(counting.count(), 0, `${label}: the spawner was reached`);
     } finally {
@@ -148,10 +151,13 @@ test("a bare device name is a missing program, not an opened device", async () =
       counting.spawner,
       "NUL",
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "shell_spawn_failed", "the refusal came from the wrong layer");
     }
+
     assert.equal(counting.count(), 1, "a bare name has to reach PATH resolution to be found missing");
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -177,7 +183,9 @@ test("the compatibility shapes do not widen what may be launched", async () => {
         countingSpawner().spawner,
         command,
       );
+
       assert.equal(outcome.outcome, "error", command);
+
       if (outcome.outcome === "error") {
         assert.notEqual(outcome.code, "shell_spawn_failed", `${command}: refused by the wrong layer`);
       }
@@ -196,10 +204,12 @@ test("the spawner is the only place a process is created", async () => {
   const { readdirSync, readFileSync } = await import("node:fs");
   const dir = path.join(process.cwd(), "src", "internal", "adapters", "tools", "mutating");
   const offenders: string[] = [];
+
   for (const name of readdirSync(dir)) {
     if (!name.endsWith(".ts") || name.endsWith(".test.ts")) {
       continue;
     }
+
     const body = readFileSync(path.join(dir, name), "utf8");
     const runtime = body.replace(/^\s*import\s+type[\s\S]*?;\s*/gm, "");
     const spawns = /from "node:child_process"|require\("node:child_process"\)/.test(runtime);
@@ -207,10 +217,12 @@ test("the spawner is the only place a process is created", async () => {
       offenders.push(name);
     }
   }
+
   assert.deepEqual(offenders, [], "another module in this package can start a process");
   // The single mechanical owner is shared by the host and restricted runner.
   // Renaming the owner must not allow a second runtime child_process import.
   const spawner = readFileSync(path.join(dir, "shell-child-processes.ts"), "utf8");
+
   assert.match(spawner, /from "node:child_process"/);
   assert.match(spawner, /\bspawn\(/);
   assert.match(readFileSync(path.join(dir, "shell-spawn.ts"), "utf8"), /from "\.\/shell-child-processes\.js"/);
@@ -232,6 +244,7 @@ test("a cancelled signal is checked before the launch, not only after it", async
       { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command: "trylo-nope-4b7a", timeoutMs: 5_000 } },
       AbortSignal.abort(),
     );
+
     assert.equal(outcome.outcome, "cancelled");
     assert.equal(counting.count(), 0, "an already-aborted signal still started a process");
   } finally {
@@ -248,6 +261,7 @@ test("a launcher inside the workspace runs with the restricted environment", asy
   const root = workspace();
   const secret = "TRYLO_WP053_SECRET";
   const previous = process.env[secret];
+
   try {
     writeFileSync(
       path.join(root, "env.js"),
@@ -260,7 +274,9 @@ test("a launcher inside the workspace runs with the restricted environment", asy
       createNodeSpawner(),
       "node env.js",
     );
+
     assert.equal(outcome.outcome, "result", JSON.stringify(outcome));
+
     if (outcome.outcome === "result") {
       assert.equal(
         (outcome.value as { readonly stdout: string }).stdout.trim(),

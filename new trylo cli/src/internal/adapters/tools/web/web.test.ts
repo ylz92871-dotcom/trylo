@@ -44,21 +44,25 @@ function startPageServer(): Promise<PageServer> {
       res.end("boom");
       return;
     }
+
     if (path === "/binary") {
       res.writeHead(200, { "content-type": "application/zip" });
       res.end(Buffer.alloc(1024, 7));
       return;
     }
+
     if (path === "/huge") {
       res.writeHead(200, { "content-type": "text/plain" });
       res.end("x".repeat(1_100_000));
       return;
     }
+
     if (path === "/json") {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ answer: 42 }));
       return;
     }
+
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     res.end(
       [
@@ -70,10 +74,12 @@ function startPageServer(): Promise<PageServer> {
       ].join(""),
     );
   });
+
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
       const port = typeof address === "object" && address !== null ? address.port : 0;
+
       resolve({
         base: `http://127.0.0.1:${port}`,
         hits: () => hits,
@@ -97,13 +103,16 @@ function freshSignal(): AbortSignal {
 test("the binding is external, needs approval, and is never mounted by default", async () => {
   const port = createWebTools();
   const binding = port.snapshot().find((entry) => entry.name === WEB_FETCH_TOOL);
+
   assert.ok(binding !== undefined);
   assert.equal(binding.sideEffect, "external");
   assert.equal(binding.needsApproval, true);
 
   const root = mkdtempSync(join(os.tmpdir(), "trylo-web-catalog-"));
+
   try {
     const without = createWorkspaceTools({ workspaceRoot: root, sandbox: createWorkspaceSandbox({ workspaceRoot: root }) });
+
     assert.equal(
       without
         .snapshot()
@@ -117,6 +126,7 @@ test("the binding is external, needs approval, and is never mounted by default",
       sandbox: createWorkspaceSandbox({ workspaceRoot: root }),
       allowWeb: true,
     });
+
     assert.equal(
       withWeb
         .snapshot()
@@ -140,15 +150,19 @@ test("bad urls are refused by the plan before any socket opens", async () => {
       { url: "file:///etc/passwd" },
       { url: "ftp://example.com/pub" },
     ];
+
     for (const args of misses) {
       const outcome = await port.execute(webCall(args), freshSignal());
+
       assert.equal(outcome.outcome, "error", JSON.stringify(args));
       const error = outcome as { code: string };
+
       assert.ok(
         error.code === "invalid_arguments" || error.code === "unsupported_scheme",
         JSON.stringify({ args, code: error.code }),
       );
     }
+
     assert.equal(server.hits(), 0, "a refused url must never reach the network");
   } finally {
     await server.close();
@@ -163,15 +177,20 @@ test("sandbox admission of web_fetch is mount-scoped, not a global planner branc
     // refusal — the planner has no web branch, so nothing about a default
     // run's sandbox changed (R1).
     const off = sandbox.evaluate(webCall({ url: "https://example.com/page" }));
+
     assert.equal(off.ok, false);
+
     if (!off.ok) {
       assert.equal(off.code, "unknown_tool", JSON.stringify(off));
     }
+
     // Mounted: the composite admits the *name*; the URL is still checked by
     // the same pure plan the tool re-runs before any socket opens.
     const mounted = composeSandbox(sandbox, new Set([WEB_FETCH_TOOL]));
+
     assert.equal(mounted.evaluate(webCall({ url: "https://example.com/page" })).ok, true);
     const stillRefused = mounted.evaluate(webCall({ url: "https://x.test" }, "made_up_tool"));
+
     assert.equal(stillRefused.ok, false, "an unmounted name is still refused");
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -195,6 +214,7 @@ test("an html page comes back as prose: scripts gone, entities decoded", async (
       ToolOutcome,
       { outcome: "result" }
     >;
+
     assert.equal(outcome.outcome, "result");
     assert.match(outcome.output, /Fetched & clean/);
     assert.match(outcome.output, /The quick brown fox\./);
@@ -216,6 +236,7 @@ test("json passes through untouched", async () => {
       ToolOutcome,
       { outcome: "result" }
     >;
+
     assert.equal(outcome.outcome, "result");
     assert.equal(outcome.output, '{"answer":42}');
   } finally {
@@ -232,6 +253,7 @@ test("server errors, binary bodies and oversized pages each get their own refusa
       ["/binary", "unsupported_content"],
       ["/huge", "response_too_large"],
     ];
+
     for (const [path, code] of cases) {
       const outcome = await port.execute(webCall({ url: `${server.base}${path}` }), freshSignal());
       assert.equal(outcome.outcome, "error", path);

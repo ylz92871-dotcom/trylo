@@ -73,22 +73,27 @@ export async function runFetch(
   if (outcome.kind === "failed") {
     return refused(outcome.code, outcome.message);
   }
+
   if (outcome.kind === "hop_limit") {
     return refused(
       "too_many_redirects",
       `web_fetch stopped after ${outcome.hops} redirects rather than following a loop`,
     );
   }
+
   if (outcome.kind === "redirect") {
     return redirectReport(plan, outcome.to, outcome.status);
   }
+
   if (outcome.status >= 400) {
     return refused("http_status", `web_fetch got status ${outcome.status} from ${outcome.finalUrl}`);
   }
+
   const body = await readTextualBody(outcome.response, outcome.finalUrl, signal);
   if (body.kind === "refusal") {
     return body.outcome;
   }
+
   const provenance = fetchProvenance({
     finalUrl: outcome.finalUrl,
     status: outcome.status,
@@ -97,6 +102,7 @@ export async function runFetch(
     fromCache: false,
     redirects: 0,
   });
+
   deps.cache?.set(plan.url, {
     body: body.prose,
     contentType: body.contentType,
@@ -104,6 +110,7 @@ export async function runFetch(
     status: outcome.status,
     bytes: body.bytes,
   });
+
   return present(body.prose, body.contentType, provenance, plan, deps, signal);
 }
 
@@ -129,7 +136,9 @@ async function readTextualBody(
       ),
     };
   }
+
   let body: Buffer | null;
+
   try {
     body = await readCapped(response, signal);
   } catch (cause) {
@@ -138,6 +147,7 @@ async function readTextualBody(
       outcome: refused("fetch_failed", `web_fetch stopped early reading ${url}: ${String(cause)}`),
     };
   }
+
   if (body === null) {
     return {
       kind: "refusal",
@@ -147,7 +157,9 @@ async function readTextualBody(
       ),
     };
   }
+
   const raw = body.toString("utf8");
+
   return {
     kind: "body",
     prose: contentType.includes("html") ? htmlToText(raw) : raw,
@@ -188,6 +200,7 @@ async function present(
   if (plan.prompt === undefined || deps.extractor === undefined) {
     return outcome(prose, provenance, { contentType });
   }
+
   const extracted = await extractWithPrompt({
     extractor: deps.extractor,
     page: prose,
@@ -200,6 +213,7 @@ async function present(
     // never mistaken for a summary of it.
     return outcome(prose, provenance, { contentType, extracted: false, extractionNote: extracted.message });
   }
+
   return outcome(extracted.text, provenance, {
     contentType,
     extracted: true,

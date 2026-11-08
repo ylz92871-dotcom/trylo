@@ -10,9 +10,14 @@ import { createMutatingTools } from "./index.js";
 for (const kind of ["write_file", "edit_file", "apply_patch"] as const) {
   test(`queued ${kind} refuses a parent replaced by an outside junction`, async t => {
     const base = mkdtempSync(join(tmpdir(), "trylo-path-race-"));
+
     t.after(() => rmSync(base, { recursive: true, force: true }));
-    const root = join(base, "workspace"); const outside = join(base, "outside"); const parent = join(root, "folder");
-    mkdirSync(parent, { recursive: true }); mkdirSync(outside);
+    const root = join(base, "workspace");
+    const outside = join(base, "outside");
+    const parent = join(root, "folder");
+
+    mkdirSync(parent, { recursive: true });
+    mkdirSync(outside);
     writeFileSync(join(parent, "target.txt"), "old\n");
     writeFileSync(join(outside, "target.txt"), "old\n");
     const queue = createWriteQueue();
@@ -30,6 +35,7 @@ for (const kind of ["write_file", "edit_file", "apply_patch"] as const) {
       : kind === "edit_file" ? { path: "folder/target.txt", old_string: "old", new_string: "new" }
       : { patch: "*** Begin Patch\n*** Delete File: folder/target.txt\n*** End Patch" };
     const result = await tools.execute({ name: kind, toolCallId: kind, arguments: args }, new AbortController().signal);
+
     assert.equal(result.outcome, "error", JSON.stringify(result));
     assert.equal(existsSync(join(outside, "target.txt")), true);
     assert.equal(readFileSync(join(outside, "target.txt"), "utf8"), "old\n");

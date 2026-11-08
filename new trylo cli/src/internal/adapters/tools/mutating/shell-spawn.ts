@@ -3,6 +3,7 @@ import { terminateProcessTree } from "../../process-session/process-tree.js";
 import type { CommandShape } from "../../sandbox/executable.js";
 import { OutputCapture } from "./output-capture.js";
 import { startShellChild, startShellPipeline } from "./shell-child-processes.js";
+import { shellDeadline } from "./shell-timeout-policy.js";
 
 /**
  * The one place a process is actually created.
@@ -25,7 +26,7 @@ export type ShellSegment = {
 export type ShellSpawnSpec = {
   readonly argv: readonly string[];
   readonly cwd: string;
-  readonly timeoutMs: number;
+  readonly timeoutMs: number | undefined;
   readonly signal: AbortSignal;
   readonly maxOutputBytes: number;
   readonly maxOutputLines: number;
@@ -72,12 +73,14 @@ const INHERITED_ENVIRONMENT = [
 export function childEnvironment(options: { env?: Readonly<Record<string, string | undefined>> } = {}): Readonly<Record<string, string>> {
   const source = options.env ?? process.env;
   const env: Record<string, string> = {};
+
   for (const key of INHERITED_ENVIRONMENT) {
     const value = source[key];
     if (typeof value === "string") {
       env[key] = value;
     }
   }
+
   return env;
 }
 
@@ -143,21 +146,25 @@ function runSingle(spec: ShellSpawnSpec, shape: CommandShape, env: Readonly<Reco
     const capturedStderr = new OutputCapture(spec.maxOutputBytes);
     let settled = false;
     let timedOut = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timer: ReturnType<typeof shellDeadline>;
     const finish = (result: ShellSpawnResult): void => {
       if (settled) {
         return;
       }
+
       settled = true;
+
       if (timer !== undefined) {
-        clearTimeout(timer);
+        timer.cancel();
       }
+
       spec.signal.removeEventListener("abort", onAbort);
       resolve(result);
     };
     const report = (): ShellSpawnResult => {
       const stdout = capturedStdout.read(spec.maxOutputLines);
       const stderr = capturedStderr.read(spec.maxOutputLines);
+
       return {
         stdout: stdout.text,
         stderr: stderr.text,
@@ -167,22 +174,29 @@ function runSingle(spec: ShellSpawnSpec, shape: CommandShape, env: Readonly<Reco
         truncated: stdout.truncated || stderr.truncated,
       };
     };
+
     function onAbort(): void {
       void endChildTree(child);
     }
+
     const child = startChild(shape, spec.cwd, ["ignore", "pipe", "pipe"], env);
+
     collect(child, capturedStdout, capturedStderr);
-    timer = setTimeout(() => {
+    timer = shellDeadline(spec.timeoutMs, () => {
       timedOut = true;
       void endChildTree(child);
-    }, spec.timeoutMs);
+    });
     spec.signal.addEventListener("abort", onAbort);
+
     if (spec.signal.aborted) onAbort();
+
     child.on("error", (err) => {
       if (timer !== undefined) {
-        clearTimeout(timer);
+        timer.cancel();
       }
+
       spec.signal.removeEventListener("abort", onAbort);
+
       if (!settled) {
         settled = true;
         reject(err);
@@ -215,6 +229,7 @@ function pipeReport(
   const last = children[children.length - 1];
   const stdout = capturedStdout.read(spec.maxOutputLines);
   const stderr = capturedStderr.read(spec.maxOutputLines);
+
   return {
     stdout: stdout.text,
     stderr: stderr.text,
@@ -237,13 +252,14 @@ function runPipeline(
     const children = startShellPipeline([source, ...receivers.map(receiver => receiver.shape)], (shape, receiver) => startChild(shape, spec.cwd, [receiver ? "pipe" : "ignore", "pipe", "pipe"], env));
     const capturedStdout = new OutputCapture(spec.maxOutputBytes);
     const capturedStderr = new OutputCapture(spec.maxOutputBytes);
+
     children.forEach((child, index) => {
       // Intermediate stdout flows only to the next process, never into a second log copy.
       collect(child, index === children.length - 1 ? capturedStdout : undefined, capturedStderr);
     });
     let settled = false;
     let timedOut = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timer: ReturnType<typeof shellDeadline>;
     const killAll = (): void => {
       for (const child of children) {
         void endChildTree(child);
@@ -251,39 +267,48 @@ function runPipeline(
     };
     const stop = (): void => {
       if (timer !== undefined) {
-        clearTimeout(timer);
+        timer.cancel();
       }
       spec.signal.removeEventListener("abort", onAbort);
     };
+
     function onAbort(): void {
       killAll();
     }
-    timer = setTimeout(() => {
+
+    timer = shellDeadline(spec.timeoutMs, () => {
       timedOut = true;
       killAll();
-    }, spec.timeoutMs);
+    });
     spec.signal.addEventListener("abort", onAbort);
+
     if (spec.signal.aborted) onAbort();
+
     let failure: { readonly error: unknown } | undefined;
     let closed = 0;
     const failed = (err: unknown): void => {
       if (failure !== undefined) {
         return;
       }
+
       failure = { error: err };
       // A failed receiver still has running producers. Returning here leaves
       // them holding the workspace (EPERM on Windows) after the tool has ended.
       killAll();
     };
+
     for (const child of children) {
       child.on("error", failed);
       child.on("close", () => {
         closed += 1;
+
         if (settled || closed !== children.length) {
           return;
         }
+
         stop();
         settled = true;
+
         if (failure !== undefined) {
           reject(failure.error);
         } else {
@@ -297,13 +322,18 @@ function runPipeline(
 /** Trusted execution adapters can supply their broker environment; tool arguments cannot. */
 export const createNodeSpawner = (environment: () => Readonly<Record<string, string>> = childEnvironment): ShellSpawner => async (spec) => {
   const cancelled: ShellSpawnResult = { stdout: "", stderr: "", exitCode: -1, timedOut: false, aborted: true, truncated: false };
+
   if (spec.signal.aborted) return cancelled;
+
   const env = environment();
+
   if (spec.signal.aborted) return cancelled;
+
   const shape = spec.shape ?? { kind: "direct", argv: spec.argv };
   const receivers = spec.pipeTo ?? [];
   if (receivers.length === 0) {
     return await runSingle(spec, shape, env);
   }
+
   return await runPipeline(spec, shape, receivers, env);
 };

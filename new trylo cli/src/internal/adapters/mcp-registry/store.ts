@@ -65,15 +65,18 @@ async function addEntry(
   if (shapeFailure !== undefined) {
     return shapeFailure;
   }
+
   const lockFailure = acquireLock(io, input.scope);
   if (lockFailure !== undefined) {
     return lockFailure;
   }
+
   try {
     const loaded = loadScope(io, input.scope);
     if (!loaded.ok) {
       return loaded;
     }
+
     if (findEntry(loaded.document.servers, input.name) !== undefined) {
       // Refused rather than overwritten: making a user remove a server
       // explicitly is a small cost against silently repointing one.
@@ -83,6 +86,7 @@ async function addEntry(
         detail: `${input.name} already exists in the ${input.scope} registry`,
       };
     }
+
     const entry: McpServerEntry = {
       name: input.name,
       transport: input.transport,
@@ -98,6 +102,7 @@ async function addEntry(
     if (writeFailure !== undefined) {
       return writeFailure;
     }
+
     return { ok: true, value: entry };
   } finally {
     releaseLock(io, input.scope);
@@ -112,11 +117,13 @@ async function removeEntry(
   if (lockFailure !== undefined) {
     return lockFailure;
   }
+
   try {
     const loaded = loadScope(io, location.scope);
     if (!loaded.ok) {
       return loaded;
     }
+
     const existing = findEntry(loaded.document.servers, location.name);
     if (existing === undefined) {
       return {
@@ -125,11 +132,13 @@ async function removeEntry(
         detail: `${location.name} is not in the ${location.scope} registry`,
       };
     }
+
     const servers = loaded.document.servers.filter((entry) => entry.name !== location.name);
     const writeFailure = storeScope(io, location.scope, servers);
     if (writeFailure !== undefined) {
       return writeFailure;
     }
+
     return { ok: true, value: existing };
   } finally {
     releaseLock(io, location.scope);
@@ -145,11 +154,13 @@ async function setEntryEnabled(
   if (lockFailure !== undefined) {
     return lockFailure;
   }
+
   try {
     const loaded = loadScope(io, location.scope);
     if (!loaded.ok) {
       return loaded;
     }
+
     const existing = findEntry(loaded.document.servers, location.name);
     if (existing === undefined) {
       return {
@@ -158,11 +169,13 @@ async function setEntryEnabled(
         detail: `${location.name} is not in the ${location.scope} registry`,
       };
     }
+
     const next: McpServerEntry = { ...existing, enabled };
     const writeFailure = storeScope(io, location.scope, replaceEntry(loaded.document.servers, next));
     if (writeFailure !== undefined) {
       return writeFailure;
     }
+
     return { ok: true, value: next };
   } finally {
     releaseLock(io, location.scope);
@@ -177,6 +190,7 @@ async function listScopeView(
   if (!loaded.ok) {
     return loaded;
   }
+
   return {
     ok: true,
     value: {
@@ -192,6 +206,7 @@ async function listMergedView(io: RegistryIo): Promise<McpRegistryResult<McpRegi
   if (!merged.ok) {
     return merged;
   }
+
   return {
     ok: true,
     value: {
@@ -209,10 +224,12 @@ async function resolveEntry(
   if (!merged.ok) {
     return merged;
   }
+
   const found = merged.value.find((item) => item.entry.name === name);
   if (found === undefined) {
     return { ok: false, code: "missing_entry", detail: `${name} is not registered in any scope` };
   }
+
   return {
     ok: true,
     value: {
@@ -268,7 +285,9 @@ function mergeScopes(
     const failure = !project.ok ? project : user;
     return failure as McpRegistryFailure;
   }
+
   const byName = new Map<string, { entry: McpServerEntry; scopeOfOrigin: McpScope; scopes: McpScope[] }>();
+
   for (const scope of ["user", "project"] as const) {
     const source = scope === "user" ? user.document : project.document;
     for (const entry of source.servers) {
@@ -277,7 +296,9 @@ function mergeScopes(
         byName.set(entry.name, { entry, scopeOfOrigin: scope, scopes: [scope] });
         continue;
       }
+
       existing.scopes.push(scope);
+
       if (SCOPE_PRECEDENCE[scope] > SCOPE_PRECEDENCE[existing.scopeOfOrigin]) {
         // The whole entry is replaced, never merged field by field: a server
         // assembled from two files is a server neither file describes.
@@ -286,12 +307,15 @@ function mergeScopes(
       }
     }
   }
+
   const merged: MergedEntry[] = [];
+
   for (const name of [...byName.keys()].sort()) {
     const item = byName.get(name);
     if (item === undefined) {
       continue;
     }
+
     merged.push({
       entry: item.entry,
       scopeOfOrigin: item.scopeOfOrigin,
@@ -299,5 +323,6 @@ function mergeScopes(
       shadowedScopes: item.scopes.filter((scope) => scope !== item.scopeOfOrigin),
     });
   }
+
   return { ok: true, value: merged };
 }

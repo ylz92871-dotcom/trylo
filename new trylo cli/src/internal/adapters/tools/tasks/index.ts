@@ -123,7 +123,9 @@ export function createPersistentTaskTools(seed: PersistentTaskSeed = {}): ToolPo
         if (validated.ok === false) {
           return { outcome: "error", code: "invalid_arguments", message: validated.message };
         }
+
         const next = nextTaskId({ tasks, highWaterMark });
+
         highWaterMark = next.highWaterMark;
         const task: PersistentTask = {
           id: next.id,
@@ -134,7 +136,9 @@ export function createPersistentTaskTools(seed: PersistentTaskSeed = {}): ToolPo
           blockedBy: [],
           ...(validated.input.activeForm === undefined ? {} : { activeForm: validated.input.activeForm }),
         };
+
         tasks = [...tasks, task];
+
         return {
           outcome: "result",
           value: { task: { id: task.id, subject: task.subject } },
@@ -142,15 +146,18 @@ export function createPersistentTaskTools(seed: PersistentTaskSeed = {}): ToolPo
           truncated: false,
         };
       }
+
       if (call.name === "task_get") {
         const taskId = call.arguments["taskId"];
         if (typeof taskId !== "string" || taskId.length === 0) {
           return { outcome: "error", code: "invalid_arguments", message: "taskId must be a non-empty string" };
         }
+
         const task = find(taskId);
         if (task === undefined) {
           return { outcome: "result", value: { task: null }, output: "Task not found", truncated: false };
         }
+
         return {
           outcome: "result",
           value: {
@@ -168,15 +175,18 @@ export function createPersistentTaskTools(seed: PersistentTaskSeed = {}): ToolPo
           truncated: false,
         };
       }
+
       if (call.name === "task_update") {
         const taskId = call.arguments["taskId"];
         if (typeof taskId !== "string" || taskId.length === 0) {
           return { outcome: "error", code: "invalid_arguments", message: "taskId must be a non-empty string" };
         }
+
         const existing = find(taskId);
         if (existing === undefined) {
           return { outcome: "error", code: "task_not_found", message: `task ${taskId} does not exist` };
         }
+
         let current: PersistentTask = existing;
         const status = call.arguments["status"];
         if (status !== undefined) {
@@ -185,6 +195,7 @@ export function createPersistentTaskTools(seed: PersistentTaskSeed = {}): ToolPo
           }
           current = { ...current, status };
         }
+
         const description = call.arguments["description"];
         if (description !== undefined) {
           if (typeof description !== "string" || description.trim().length === 0) {
@@ -192,12 +203,14 @@ export function createPersistentTaskTools(seed: PersistentTaskSeed = {}): ToolPo
           }
           current = { ...current, description };
         }
+
         const owner = call.arguments["owner"];
         const claim = call.arguments["claim"];
         if (claim === true) {
           if (typeof owner !== "string" || owner.length === 0) {
             return { outcome: "error", code: "invalid_arguments", message: "claim needs an owner string" };
           }
+
           // Single focus is always on: the busy check runs atomically with
           // the claim, so an agent holding an open task cannot take a second
           // one without finishing or releasing the first. The verdict names
@@ -208,10 +221,12 @@ export function createPersistentTaskTools(seed: PersistentTaskSeed = {}): ToolPo
           if (verdict.ok === false) {
             return { outcome: "error", code: verdict.reason, message: verdict.message };
           }
+
           current = verdict.task;
         } else if (typeof owner === "string") {
           current = { ...current, owner };
         }
+
         const candidateTasks = tasks.map(task => task.id === current.id ? current : task);
         const blocks = call.arguments["blocks"];
         const blockedBy = call.arguments["blockedBy"];
@@ -222,6 +237,7 @@ export function createPersistentTaskTools(seed: PersistentTaskSeed = {}): ToolPo
           if (linked.ok === false) {
             return { outcome: "error", code: "invalid_dependency", message: linked.message };
           }
+
           tasks = [...linked.tasks];
           const refreshed = find(taskId);
           if (refreshed !== undefined) {
@@ -230,6 +246,7 @@ export function createPersistentTaskTools(seed: PersistentTaskSeed = {}): ToolPo
         } else {
           replace(current);
         }
+
         return {
           outcome: "result",
           value: { task: { id: current.id, status: current.status } },
@@ -237,6 +254,7 @@ export function createPersistentTaskTools(seed: PersistentTaskSeed = {}): ToolPo
           truncated: false,
         };
       }
+
       if (call.name === "task_list") {
         const lines = tasks.length === 0 ? ["no persistent tasks"] : tasks.map(renderTask);
         return {
@@ -255,6 +273,7 @@ export function createPersistentTaskTools(seed: PersistentTaskSeed = {}): ToolPo
           truncated: false,
         };
       }
+
       return { outcome: "unknown", code: "unknown_tool", message: `task port does not have ${call.name}` };
     },
     async cancel(): Promise<void> {

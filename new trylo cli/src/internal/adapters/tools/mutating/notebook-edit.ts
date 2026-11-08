@@ -51,36 +51,45 @@ export async function executeNotebookEdit(
   if (plan.tool !== NOTEBOOK_EDIT_TOOL) {
     return fail("invalid_arguments", "notebook_edit received a foreign plan");
   }
+
   if (signal.aborted) {
     return { outcome: "cancelled" };
   }
+
   const sourceValue = request.arguments["new_source"];
   if (typeof sourceValue !== "string") {
     return fail("invalid_arguments", "notebook_edit requires new_source to be a string");
   }
+
   const cellIdValue = request.arguments["cell_id"];
   if (cellIdValue !== undefined && typeof cellIdValue !== "string") {
     return fail("invalid_arguments", "notebook_edit cell_id must be a string when present");
   }
+
   const cellType = readCellType(request.arguments["cell_type"]);
   if (cellType === "invalid") {
     return fail("invalid_arguments", "notebook_edit cell_type must be code, markdown, or raw");
   }
+
   const editMode = readEditMode(request.arguments["edit_mode"]);
   if (editMode === "invalid") {
     return fail("invalid_arguments", "notebook_edit edit_mode must be replace, insert, or delete");
   }
+
   const requestedValue = request.arguments["path"];
   const requestedPath = typeof requestedValue === "string" ? requestedValue : "";
   // One exclusivity section for the whole read-modify-write: the queue makes
   // same-file edits serial, so the bytes parsed are the bytes replaced. A new
   // cell id is minted once per call; deterministic under test injection.
   const generateId = config.idGenerator ?? ((): string => Math.random().toString(36).slice(2, 12));
+
   return config.writeQueue.exclusive(plan.absolutePath, () => {
     if (signal.aborted) {
       return Promise.resolve({ outcome: "cancelled" as const });
     }
+
     let current: string;
+
     try {
       current = readFileUtf8(plan.absolutePath);
     } catch (error) {
@@ -90,11 +99,13 @@ export async function executeNotebookEdit(
       const detail = error instanceof Error ? error.message : "read_error";
       return Promise.resolve(fail("read_failed", `read_failed:${detail}`));
     }
+
     const parsed = parseNotebookDocument(current);
     if (!parsed.ok) {
       // Untouched by construction: nothing has been written in this section.
       return Promise.resolve(fail(parsed.code, parsed.message));
     }
+
     const applied = applyNotebookEdit(parsed.document.cells, {
       ...(cellIdValue === undefined ? {} : { cell_id: cellIdValue }),
       new_source: sourceValue,
@@ -105,13 +116,16 @@ export async function executeNotebookEdit(
     if (!applied.ok) {
       return Promise.resolve(fail(applied.code, applied.message));
     }
+
     if (signal.aborted) {
       return Promise.resolve({ outcome: "cancelled" as const });
     }
+
     const updated = serializeNotebook(parsed.document.raw, applied.cells);
     if (plan.maxWriteBytes !== undefined && Buffer.byteLength(updated, "utf8") > plan.maxWriteBytes) {
       return Promise.resolve(fail("write_too_large", `notebook_edit result exceeds the ${plan.maxWriteBytes} byte ceiling; no file was changed`));
     }
+
     try {
       const written = writeFileAtomicallySync(plan.absolutePath, updated);
       const value = {
@@ -127,6 +141,7 @@ export async function executeNotebookEdit(
         editMode: applied.editMode,
         ...(applied.appliedCellId === undefined ? {} : { appliedCellId: applied.appliedCellId }),
       };
+
       return Promise.resolve({
         outcome: "result" as const,
         value,
@@ -139,7 +154,9 @@ export async function executeNotebookEdit(
       if (signal.aborted) {
         return Promise.resolve({ outcome: "cancelled" as const });
       }
+
       const detail = error instanceof Error ? error.message : "write_error";
+
       return Promise.resolve(fail("write_failed", `write_failed:${detail}`));
     }
   });

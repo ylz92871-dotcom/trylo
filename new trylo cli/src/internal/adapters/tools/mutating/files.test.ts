@@ -36,10 +36,13 @@ test("write_file creates missing parent directories and writes the nested file",
       { toolCallId: "c2", name: WRITE_FILE_TOOL, arguments: { path: "notes/deep/a.txt", content: "hello" } },
       SIGNAL,
     );
+
     assert.equal(created.outcome, "result");
+
     if (created.outcome === "result") {
       assert.equal(created.value.mode, "created");
     }
+
     assert.equal(readFileSync(join(root, "notes", "deep", "a.txt"), "utf8"), "hello");
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -49,6 +52,7 @@ test("write_file creates missing parent directories and writes the nested file",
 test("creating parents never follows a symlinked directory out of the workspace", async (t) => {
   const root = tempRoot();
   const outside = tempRoot();
+
   try {
     try {
       symlinkSync(outside, join(root, "link"), "dir");
@@ -56,14 +60,18 @@ test("creating parents never follows a symlinked directory out of the workspace"
       t.skip("the platform refused to create the symlink, so this escape case cannot run here");
       return;
     }
+
     const outcome = await toolsFor(root).execute(
       { toolCallId: "c", name: WRITE_FILE_TOOL, arguments: { path: "link/sub/x.txt", content: "x" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "path_escapes_via_link");
     }
+
     assert.deepEqual(readdirSync(root), ["link"]);
     assert.deepEqual(readdirSync(outside), []);
   } finally {
@@ -76,16 +84,20 @@ test("a second write reports itself as an overwrite rather than a creation", asy
   const root = tempRoot();
   try {
     const tools = toolsFor(root);
+
     writeFileSync(join(root, "a.txt"), "old");
     const outcome = await tools.execute(
       { toolCallId: "c1", name: WRITE_FILE_TOOL, arguments: { path: "a.txt", content: "brand new" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome === "result") {
       assert.equal(outcome.value.mode, "overwritten");
       assert.equal(outcome.value.bytes, 9);
     }
+
     assert.equal(readFileSync(join(root, "a.txt"), "utf8"), "brand new");
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -95,6 +107,7 @@ test("a second write reports itself as an overwrite rather than a creation", asy
 test("a refused write leaves the filesystem exactly as it was", async () => {
   const root = tempRoot();
   const outside = tempRoot();
+
   try {
     writeFileSync(join(outside, "target.txt"), "outside content");
     const tools = toolsFor(root);
@@ -105,10 +118,12 @@ test("a refused write leaves the filesystem exactly as it was", async () => {
       { path: "NUL", content: "x" },
       { path: "has\0inside.txt", content: "x" },
     ];
+
     for (const args of attempts) {
       const outcome = await tools.execute({ toolCallId: "c", name: WRITE_FILE_TOOL, arguments: args }, SIGNAL);
       assert.equal(outcome.outcome, "error", JSON.stringify(args));
     }
+
     assert.deepEqual(readdirSync(root), []);
     assert.deepEqual(readdirSync(outside), ["target.txt"]);
     assert.equal(readFileSync(join(outside, "target.txt"), "utf8"), "outside content");
@@ -121,26 +136,33 @@ test("a refused write leaves the filesystem exactly as it was", async () => {
 test("writing through a link that leaves the workspace never reaches the target", async (t) => {
   const root = tempRoot();
   const outside = tempRoot();
+
   try {
     writeFileSync(join(outside, "target.txt"), "original");
     let linked = true;
+
     try {
       symlinkSync(join(outside, "target.txt"), join(root, "alias.txt"), "file");
     } catch {
       linked = false;
     }
+
     if (linked === false) {
       t.skip("the platform refused to create the symlink, so this escape case cannot run here");
       return;
     }
+
     const outcome = await toolsFor(root).execute(
       { toolCallId: "c", name: WRITE_FILE_TOOL, arguments: { path: "alias.txt", content: "hijacked" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "path_escapes_via_link");
     }
+
     assert.equal(readFileSync(join(outside, "target.txt"), "utf8"), "original");
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -156,10 +178,13 @@ test("an oversized write is refused, not truncated into a shorter file", async (
       { toolCallId: "c", name: WRITE_FILE_TOOL, arguments: { path: "big.txt", content: "x".repeat(9) } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "write_too_large");
     }
+
     assert.deepEqual(readdirSync(root), []);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -176,10 +201,12 @@ test("two writers to one path never interleave half frames", async () => {
       tools.execute({ toolCallId: "c1", name: WRITE_FILE_TOOL, arguments: { path: "race.txt", content: first } }, SIGNAL),
       tools.execute({ toolCallId: "c2", name: WRITE_FILE_TOOL, arguments: { path: "race.txt", content: second } }, SIGNAL),
     ]);
+
     assert.equal(left.outcome, "result");
     assert.equal(right.outcome, "result");
     const content = readFileSync(join(root, "race.txt"), "utf8");
     const whole = content === first || content === second;
+
     assert.equal(whole, true, `content length ${content.length}`);
     assert.deepEqual(readdirSync(root).sort(), ["race.txt"]);
   } finally {
@@ -203,10 +230,13 @@ test("edit_file replaces exactly what the hunk describes", async () => {
       },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome === "result") {
       assert.equal(outcome.value.hunksApplied, 1);
     }
+
     assert.equal(readFileSync(join(root, "poem.txt"), "utf8"), "one\ndeux\nthree\n");
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -217,6 +247,7 @@ test("a hunk that does not match restores the file byte for byte", async () => {
   const root = tempRoot();
   try {
     const before = "alpha\nbeta\ngamma\n";
+
     writeFileSync(join(root, "words.txt"), before);
     const tools = toolsFor(root);
     const outcome = await tools.execute(
@@ -230,11 +261,14 @@ test("a hunk that does not match restores the file byte for byte", async () => {
       },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "patch_hunk_mismatch");
       assert.match(outcome.message, /hunk 0/);
     }
+
     assert.equal(readFileSync(join(root, "words.txt"), "utf8"), before);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -245,6 +279,7 @@ test("a patch describing a second file is refused before the first is touched", 
   const root = tempRoot();
   try {
     const before = "keep\n";
+
     writeFileSync(join(root, "stay.txt"), before);
     const tools = toolsFor(root);
     const outcome = await tools.execute(
@@ -258,10 +293,13 @@ test("a patch describing a second file is refused before the first is touched", 
       },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "patch_parse_failed");
     }
+
     assert.equal(readFileSync(join(root, "stay.txt"), "utf8"), before);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -271,6 +309,7 @@ test("a patch describing a second file is refused before the first is touched", 
 test("edit_file refuses a target outside the workspace and does not create it", async () => {
   const root = tempRoot();
   const outside = tempRoot();
+
   try {
     const outcome = await toolsFor(root).execute(
       {
@@ -280,10 +319,13 @@ test("edit_file refuses a target outside the workspace and does not create it", 
       },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "path_outside_workspace");
     }
+
     assert.deepEqual(readdirSync(outside), []);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -298,7 +340,9 @@ test("a successful mutation carries the file_write effect the journal records", 
       { toolCallId: "c", name: WRITE_FILE_TOOL, arguments: { path: "effect.txt", content: "abc" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome === "result") {
       const effect = outcome.value.fileWrite;
       assert.deepEqual(effect, { kind: "file_write", path: "effect.txt", bytes: 3, mode: "created" });
@@ -332,7 +376,9 @@ test("read-only tools still work through the shared workspace resolver", async (
       { toolCallId: "c", name: "read_file", arguments: { path: "seen.txt" } },
       SIGNAL,
     );
+
     assert.equal(outcome.outcome, "result");
+
     if (outcome.outcome === "result") {
       assert.equal(outcome.value.content, "still readable");
     }

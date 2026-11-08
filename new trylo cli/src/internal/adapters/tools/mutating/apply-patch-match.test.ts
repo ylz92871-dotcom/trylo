@@ -27,10 +27,13 @@ test("an exact block is replaced and the trailing newline is preserved", () => {
     [chunk({ oldLines: ["two"], newLines: ["deux"] })],
     "f.txt",
   );
+
   assert.equal(applied.ok, true);
+
   if (!applied.ok) {
     return;
   }
+
   assert.equal(applied.content, "one\ndeux\nthree\n");
   assert.equal(applied.regions.length, 1);
 });
@@ -41,10 +44,13 @@ test("trailing whitespace differences still match, file bytes win", () => {
     [chunk({ oldLines: ["foo"], newLines: ["FOO"] })],
     "f.txt",
   );
+
   assert.equal(applied.ok, true);
+
   if (!applied.ok) {
     return;
   }
+
   assert.equal(applied.content, "FOO\nbar\n");
 });
 
@@ -54,10 +60,13 @@ test("leading whitespace differences still match", () => {
     [chunk({ oldLines: ["indented"], newLines: ["flat"] })],
     "f.txt",
   );
+
   assert.equal(applied.ok, true);
+
   if (!applied.ok) {
     return;
   }
+
   assert.equal(applied.content, "flat\nnext\n");
 });
 
@@ -67,10 +76,13 @@ test("typographic dashes in the file match ASCII dashes in the patch", () => {
     [chunk({ oldLines: ["local import - avoids dep"], newLines: ["changed"] })],
     "f.txt",
   );
+
   assert.equal(applied.ok, true);
+
   if (!applied.ok) {
     return;
   }
+
   assert.equal(applied.content, "changed\nkeep\n");
 });
 
@@ -80,7 +92,9 @@ test("a missing block is a mismatch naming the file, never a guess", () => {
     [chunk({ oldLines: ["absent"], newLines: ["new"] })],
     "f.txt",
   );
+
   assert.equal(applied.ok, false);
+
   if (!applied.ok) {
     assert.equal(applied.code, "patch_hunk_mismatch");
     assert.match(applied.message, /f\.txt/);
@@ -93,10 +107,13 @@ test("a change context anchors the search after its first occurrence", () => {
     [chunk({ changeContext: "fn run()", oldLines: ["old"], newLines: ["new"] })],
     "f.txt",
   );
+
   assert.equal(applied.ok, true);
+
   if (!applied.ok) {
     return;
   }
+
   assert.equal(applied.content, "fn run()\nnew\nfn run()\nold\n");
 });
 
@@ -109,10 +126,13 @@ test("two chunks apply in file order and report two regions", () => {
     ],
     "f.txt",
   );
+
   assert.equal(applied.ok, true);
+
   if (!applied.ok) {
     return;
   }
+
   assert.equal(applied.content, "a\nB\nC\nd\n");
   assert.equal(applied.regions.length, 2);
 });
@@ -126,7 +146,9 @@ test("a chunk that only reaches backwards is refused instead of overlapping", ()
     ],
     "f.txt",
   );
+
   assert.equal(applied.ok, false);
+
   if (!applied.ok) {
     assert.equal(applied.code, "patch_hunk_mismatch");
   }
@@ -138,10 +160,13 @@ test("an LF patch applies to a CRLF file and the file stays CRLF", () => {
     [chunk({ oldLines: ["two"], newLines: ["deux"] })],
     "f.txt",
   );
+
   assert.equal(applied.ok, true);
+
   if (!applied.ok) {
     return;
   }
+
   assert.equal(applied.content, "one\r\ndeux\r\nthree\r\n");
 });
 
@@ -151,10 +176,13 @@ test("a file without trailing newline keeps it that way", () => {
     [chunk({ oldLines: ["one"], newLines: ["ONE"] })],
     "f.txt",
   );
+
   assert.equal(applied.ok, true);
+
   if (!applied.ok) {
     return;
   }
+
   assert.equal(applied.content, "ONE\ntwo");
 });
 
@@ -164,10 +192,13 @@ test("an end-of-file chunk lands at the end", () => {
     [chunk({ oldLines: ["tail"], newLines: ["TAIL"], endOfFile: true })],
     "f.txt",
   );
+
   assert.equal(applied.ok, true);
+
   if (!applied.ok) {
     return;
   }
+
   assert.equal(applied.content, "head\nTAIL\n");
 });
 
@@ -177,10 +208,13 @@ test("pure insertion appends with the file's own line style", () => {
     [chunk({ oldLines: [], newLines: ["three"] })],
     "f.txt",
   );
+
   assert.equal(applied.ok, true);
+
   if (!applied.ok) {
     return;
   }
+
   assert.equal(applied.content, "one\r\ntwo\r\nthree\r\n");
 });
 

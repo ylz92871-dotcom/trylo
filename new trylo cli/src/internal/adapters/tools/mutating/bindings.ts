@@ -1,10 +1,9 @@
 import type { ToolBinding } from "../../../ports/tools.js";
-import { MAX_TIMEOUT_MS, MIN_TIMEOUT_MS } from "./shell-timeout-policy.js";
+import { MIN_TIMEOUT_MS } from "./shell-timeout-policy.js";
 import { shellToolDescription } from "../execution-description.js";
 import {
   DEFAULT_MAX_SHELL_OUTPUT_BYTES,
   DEFAULT_MAX_SHELL_OUTPUT_LINES,
-  DEFAULT_SHELL_TIMEOUT_MS,
   DEFAULT_MAX_WRITE_BYTES,
 } from "../../sandbox/policy.js";
 import { APPLY_PATCH_TOOL, EDIT_FILE_TOOL, NOTEBOOK_EDIT_TOOL, RUN_SHELL_TOOL, WRITE_FILE_TOOL } from "./names.js";
@@ -93,7 +92,7 @@ export const RUN_SHELL_BINDING: ToolBinding = {
     type: "object",
     properties: {
       command: { type: "string", description: "Command to run in the execution mode stated in this tool's description." },
-      timeoutMs: { type: "number", minimum: MIN_TIMEOUT_MS, maximum: MAX_TIMEOUT_MS, description: "Optional foreground timeout in milliseconds. The tool description states the default; expiration terminates the command and does not undo partial effects. Use runInBackground for longer work." },
+      timeoutMs: { type: "integer", minimum: MIN_TIMEOUT_MS, description: "Optional execution deadline in milliseconds. Omit it to run until completion or cancellation. An explicit deadline terminates the command without undoing partial effects." },
       cwd: {
         type: "string",
         description:
@@ -121,7 +120,6 @@ export const RUN_SHELL_BINDING: ToolBinding = {
     additionalProperties: false,
   },
   needsApproval: true,
-  timeoutMs: DEFAULT_SHELL_TIMEOUT_MS,
   outputLimits: OUTPUT_LIMITS,
 };
 

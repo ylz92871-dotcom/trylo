@@ -37,7 +37,9 @@ test("a batch script runs end to end, and a spaced argument stays one argument",
   if (process.platform !== "win32") {
     return;
   }
+
   const root = bareWorkspace();
+
   try {
     writeFileSync(
       path.join(root, "trylo-c09.cmd"),
@@ -45,6 +47,7 @@ test("a batch script runs end to end, and a spaced argument stays one argument",
       "utf8",
     );
     const outcome = await run(root, `trylo-c09.cmd "a b" c`);
+
     assert.equal(outcome.outcome, "result", JSON.stringify(outcome));
     // %~1 is the unquoted argument: "a b" as ONE word, and the second is "c".
     assert.match(stdoutOf(outcome), /IDX=\[a b\]\[c\]/);
@@ -77,11 +80,15 @@ test("a program the OS cannot start fails with the platform's own reason", async
   if (process.platform !== "win32") {
     return;
   }
+
   const root = workspace({ "not-a-program.js": "// nothing executable here\n" });
+
   try {
     assert.equal(existsSync(path.join(root, "not-a-program.js")), true);
     const outcome = await run(root, "not-a-program.js");
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "shell_spawn_failed");
       assert.match(outcome.message, /not-a-program\.js/);
@@ -96,7 +103,9 @@ test("a command that does not exist fails with the program named", async () => {
   const root = bareWorkspace();
   try {
     const outcome = await run(root, "trylo-no-such-program-9f2a");
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       assert.equal(outcome.code, "shell_spawn_failed");
       // The guidance is part of the contract: the model has to be told that this
@@ -130,13 +139,16 @@ test("the child environment is an allowlist: no credential, still a usable one",
     ].join("\n"),
   });
   const previous = process.env[secretName];
+
   try {
     process.env[secretName] = "must-not-reach-a-command";
     const outcome = await run(root, `${NODE} env.js`);
+
     assert.equal(outcome.outcome, "result", JSON.stringify(outcome));
     const seen = JSON.parse(stdoutOf(outcome)) as {
       secret: string; path: boolean; home: boolean; tmp: boolean;
     };
+
     assert.equal(seen.secret, "absent", "the parent credential reached the command");
     // Absent would be safe but useless: a command with no PATH cannot find
     // anything, and the whole point of the allowlist is that a command runs.
@@ -172,7 +184,9 @@ test("a timeout is the clock's failure, and the partial output survives", async 
   });
   try {
     const outcome = await run(root, `${NODE} hang.js`, { timeoutMs: 1_500 });
+
     assert.equal(outcome.outcome, "error");
+
     if (outcome.outcome === "error") {
       // Not `cancelled`: nobody pressed anything, and reporting a clock as a
       // person reads exactly like the user stopping the run.

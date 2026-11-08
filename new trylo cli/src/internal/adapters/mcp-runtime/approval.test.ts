@@ -101,12 +101,15 @@ function repeatingProvider(toolName: string, args: JsonObject, times: number): R
         yield { type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false };
         return;
       }
+
       state.asked += 1;
       // A fresh id per ask: two asks for the same call are two calls, and the
       // reducer is entitled to say so.
       const toolCallId = `call-${settled + 1}`;
+
       yield { type: "tool_input_start", toolCallId, name: toolName };
       const raw = JSON.stringify(args);
+
       for (const chunk of raw.match(/.{1,8}/gs) ?? []) {
         if (signal.aborted) {
           yield { type: "cancel_ack" };
@@ -114,11 +117,13 @@ function repeatingProvider(toolName: string, args: JsonObject, times: number): R
         }
         yield { type: "tool_input_delta", toolCallId, argumentsText: chunk };
       }
+
       yield { type: "tool_input_end", toolCallId };
       yield { type: "usage", usage: emptyUsage("snapshot") };
       yield { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true };
     },
   };
+
   return { port, state };
 }
 
@@ -130,6 +135,7 @@ type Recording = {
 function recordingPermission(): Recording {
   const requests: PermissionAction[] = [];
   let counter = 0;
+
   return {
     requests,
     port: {
@@ -159,10 +165,13 @@ function portsFor(
     permission,
     mcp: { tools: createMcpToolPort(mounted), toolNames: mountedNameSet(mounted) },
   });
+
   assert.equal("code" in wiring, false);
+
   if ("code" in wiring) {
     throw new Error("wiring failed");
   }
+
   return { ...wiring.ports, provider };
 }
 
@@ -193,16 +202,41 @@ test("an MCP tool is approved by a person before it runs, annotations and all", 
 test("a denied question means the server is never called at all", async () => {
   const spec = toolSpec("alpha", "echo");
   const counting = countingServer("alpha", [spec]);
-  const provider = repeatingProvider(spec.qualifiedName, { text: "hi" }, 1);
+  const requests: ProviderRequest[] = [];
+  const provider: ProviderPort = {
+    async *stream(request) {
+      requests.push(request);
+      yield { type: "stream_start", providerId: "fixture", model: request.model, warnings: [] };
+      if (requests.length === 1) {
+        yield { type: "tool_call", toolCallId: "denied", name: spec.qualifiedName, arguments: { text: "hi" } };
+        yield { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true };
+        return;
+      }
+
+      const denied = request.messages.filter(message => message.role === "tool" && message.toolCallId === "denied");
+      assert.equal(denied.length, 1);
+      assert.match(denied[0]!.content, /permission_denied/);
+      assert.match(denied[0]!.content, /did not run/);
+      yield { type: "text_start", blockId: "denial" };
+      yield { type: "text_delta", blockId: "denial", text: "This MCP call was denied and did not run." };
+      yield { type: "text_end", blockId: "denial" };
+      yield { type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false };
+    },
+  };
   const result = await runTurn(
-    portsFor([mountOf(counting.server, spec)], provider.port, createDenyAllPermission()),
+    portsFor([mountOf(counting.server, spec)], provider, createDenyAllPermission()),
     { sessionId: "s1", turnId: "t1", correlationId: "c1", text: "go" },
   );
+
   assert.deepEqual(counting.calls, []);
-  assert.notEqual(result.state.terminalReason, "completed");
+  assert.equal(requests.length, 2);
+  assert.equal(result.state.terminalReason, "completed");
+  assert.equal(result.state.toolCalls.denied?.status, "denied");
+  assert.equal(result.transcript.some(item => item.kind === "tool_result" && item.toolCallId === "denied" && item.outcome === "failed"), true);
+  assert.equal(result.transcript.some(item => item.kind === "assistant_text" && item.text === "This MCP call was denied and did not run."), true);
 });
 
-test("three identical MCP calls fall out of the remembered decision", async () => {
+test("repeated authorized MCP calls keep the user's standing decision", async () => {
   const spec = toolSpec("alpha", "echo");
   const counting = countingServer("alpha", [spec]);
   const provider = repeatingProvider(spec.qualifiedName, { text: "same" }, 3);
@@ -212,10 +246,9 @@ test("three identical MCP calls fall out of the remembered decision", async () =
     { sessionId: "s1", turnId: "t1", correlationId: "c1", text: "go" },
   );
 
-  // Three executions, two questions: the second call was covered by the first
-  // answer, the third — the doom-loop threshold — was not.
+  // Repetition alone is not a revocation of a standing user decision.
   assert.deepEqual(counting.calls, ["echo", "echo", "echo"]);
-  assert.equal(permission.requests.length, 2);
+  assert.equal(permission.requests.length, 1);
   assert.equal(new Set(permission.requests.map((action) => action.pattern)).size, 1);
   assert.equal(result.state.terminalReason, "completed");
 });
@@ -225,11 +258,13 @@ test("a different argument is a different call, so it asks again", async () => {
   const counting = countingServer("alpha", [spec]);
   const permission = recordingPermission();
   const ports = portsFor([mountOf(counting.server, spec)], repeatingProvider(spec.qualifiedName, { text: "a" }, 1).port, permission.port);
+
   await runTurn(ports, { sessionId: "s1", turnId: "t1", correlationId: "c1", text: "go" });
   const second = await runTurn(
     { ...ports, provider: repeatingProvider(spec.qualifiedName, { text: "b" }, 1).port },
     { sessionId: "s1", turnId: "t2", correlationId: "c2", text: "go again" },
   );
+
   assert.equal(permission.requests.length, 2);
   assert.notEqual(permission.requests[0]?.pattern, permission.requests[1]?.pattern);
   assert.equal(second.state.terminalReason, "completed");
@@ -244,10 +279,13 @@ test("a giant payload is capped by the loop's own envelope, never streamed throu
     { sessionId: "s1", turnId: "t1", correlationId: "c1", text: "go" },
   );
   const item = result.transcript.find((entry) => entry.kind === "tool_result");
+
   assert.equal(item?.kind, "tool_result");
+
   if (item?.kind !== "tool_result") {
     return;
   }
+
   // The MCP adapter hands the text over whole; the bound lives in the loop, and
   // this is the end-to-end proof that it fires. The model is told it was cut.
   assert.equal(item.truncated, true);

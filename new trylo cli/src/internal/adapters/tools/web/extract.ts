@@ -27,9 +27,11 @@ const ENTITIES: ReadonlyArray<[RegExp, string]> = [
 
 export function htmlToText(html: string): string {
   let text = html.replace(BLOCK_TAGS, " ").replace(TAGS, " ");
+
   for (const [pattern, replacement] of ENTITIES) {
     text = text.replace(pattern, replacement);
   }
+
   return text
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")

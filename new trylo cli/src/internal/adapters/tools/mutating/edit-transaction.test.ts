@@ -15,6 +15,7 @@ test("concurrent exact edits to one file retain both successful changes", async 
     const outcomes = await Promise.all(([["one", "first"], ["two", "second"]] as const).map(([old_string, new_string], index) => tools.execute({
       toolCallId: String(index), name: "edit_file", arguments: { path: "source.txt", old_string, new_string },
     }, new AbortController().signal)));
+
     assert.ok(outcomes.every(outcome => outcome.outcome === "result"));
     assert.equal(readFileSync(join(root, "source.txt"), "utf8"), "first\nsecond\n");
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -31,7 +32,10 @@ test("an edit cancelled while waiting for a preceding write never commits", asyn
     const controller = new AbortController();
     const tools = createMutatingTools({ sandbox: createWorkspaceSandbox({ workspaceRoot: root }), writeQueue: queue });
     const editing = tools.execute({toolCallId:"edit",name:"edit_file",arguments:{path:"source.txt",old_string:"one",new_string:"two"}},controller.signal);
-    controller.abort(); release(); await preceding;
+
+    controller.abort();
+    release();
+    await preceding;
     assert.equal((await editing).outcome, "cancelled");
     assert.equal(readFileSync(join(root, "source.txt"), "utf8"), "one\n");
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -48,7 +52,10 @@ test("a whole-file write cancelled while queued never commits", async () => {
     const controller = new AbortController();
     const tools = createMutatingTools({ sandbox: createWorkspaceSandbox({ workspaceRoot: root }), writeQueue: queue });
     const writing = tools.execute({toolCallId:"write",name:"write_file",arguments:{path:"source.txt",content:"two\n"}},controller.signal);
-    controller.abort(); release(); await preceding;
+
+    controller.abort();
+    release();
+    await preceding;
     assert.equal((await writing).outcome, "cancelled");
     assert.equal(readFileSync(join(root, "source.txt"), "utf8"), "one\n");
   } finally { rmSync(root, { recursive: true, force: true }); }

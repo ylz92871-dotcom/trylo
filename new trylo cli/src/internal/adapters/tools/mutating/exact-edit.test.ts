@@ -21,8 +21,10 @@ test("ambiguous and missing exact strings leave the original bytes unchanged", a
   const root = mkdtempSync(join(tmpdir(), "trylo-exact-refuse-"));
   try {
     const initial = "same\nsame\n";
+
     writeFileSync(join(root, "source.txt"), initial);
     const tools = createMutatingTools({ sandbox: createWorkspaceSandbox({ workspaceRoot: root }) });
+
     for (const [old_string, code] of [["same", "edit_match_ambiguous"], ["absent", "edit_match_not_found"]] as const) {
       const result = await tools.execute({ toolCallId: "c", name: "edit_file", arguments: { path: "source.txt", old_string, new_string: "changed" } }, new AbortController().signal);
       assert.equal(result.outcome, "error");
@@ -38,14 +40,21 @@ test("exact edits keep the workspace containment and declared write size boundar
     writeFileSync(join(root, "source.txt"), "one");
     const tools = createMutatingTools({ sandbox: createWorkspaceSandbox({ workspaceRoot: root, maxWriteBytes: 4 }) });
     const result = await tools.execute({ toolCallId: "c", name: "edit_file", arguments: { path: "source.txt", old_string: "one", new_string: "larger" } }, new AbortController().signal);
+
     assert.equal(result.outcome, "error");
+
     if (result.outcome === "error") assert.equal(result.code, "write_too_large");
+
     assert.equal(readFileSync(join(root, "source.txt"), "utf8"), "one");
     const grown = await tools.execute({ toolCallId: "c", name: "edit_file", arguments: { path: "source.txt", old_string: "o", new_string: "more" } }, new AbortController().signal);
+
     assert.equal(grown.outcome, "error");
+
     if (grown.outcome === "error") assert.equal(grown.code, "write_too_large");
+
     assert.equal(readFileSync(join(root, "source.txt"), "utf8"), "one");
     const escaped = await tools.execute({ toolCallId: "c", name: "edit_file", arguments: { path: "../outside.txt", old_string: "one", new_string: "two" } }, new AbortController().signal);
+
     assert.equal(escaped.outcome, "error");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

@@ -147,7 +147,9 @@ export function createPlanTools(options: PlanPortOptions = {}): ToolPort {
         if (transition.ok === false) {
           return { outcome: "error", code: transition.code, message: transition.message };
         }
+
         cell.current = transition.state;
+
         return {
           outcome: "result",
           value: { mode: "plan" },
@@ -155,16 +157,20 @@ export function createPlanTools(options: PlanPortOptions = {}): ToolPort {
           truncated: false,
         };
       }
+
       if (call.name === "exit_plan_mode") {
         const plan = call.arguments["plan"];
         if (typeof plan !== "string") {
           return { outcome: "error", code: "invalid_arguments", message: "plan must be the complete plan text" };
         }
+
         const transition = submitPlanForApproval(cell.current, plan);
         if (transition.ok === false) {
           return { outcome: "error", code: transition.code, message: transition.message };
         }
+
         cell.current = transition.state;
+
         return {
           outcome: "result",
           value: { mode: "awaiting_approval" },
@@ -172,14 +178,17 @@ export function createPlanTools(options: PlanPortOptions = {}): ToolPort {
           truncated: false,
         };
       }
+
       if (call.name === "update_plan") {
         if (mayUpdatePlan(cell.current) === false) {
           return { outcome: "error", code: "not_allowed_in_plan_mode", message: "update_plan is a working checklist and is not allowed in plan mode" };
         }
+
         const validated = validatePlanChecklist(call.arguments as Record<string, unknown>);
         if (validated.ok === false) {
           return { outcome: "error", code: "invalid_arguments", message: validated.message };
         }
+
         checklist = validated.steps;
         const counts = {
           total: checklist.length,
@@ -187,6 +196,7 @@ export function createPlanTools(options: PlanPortOptions = {}): ToolPort {
           inProgress: checklist.filter((item) => item.status === "in_progress").length,
           pending: checklist.filter((item) => item.status === "pending").length,
         };
+
         return {
           outcome: "result",
           value: { steps: checklist.map((item) => ({ step: item.step, status: item.status })), counts },
@@ -194,6 +204,7 @@ export function createPlanTools(options: PlanPortOptions = {}): ToolPort {
           truncated: false,
         };
       }
+
       return { outcome: "unknown", code: "unknown_tool", message: `plan port does not have ${call.name}` };
     },
     async cancel(): Promise<void> {

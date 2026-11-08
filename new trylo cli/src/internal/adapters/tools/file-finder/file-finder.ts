@@ -89,19 +89,24 @@ export class FileFinder {
    */
   async find(query: string, limit: number, signal: AbortSignal): Promise<FileSearchOutcome> {
     const trimmed = query.trim();
+
     // An empty query is not "everything": a picker with no query yet should offer
     // nothing rather than an arbitrary 200 paths the person then has to scroll.
     if (trimmed.length === 0 || limit <= 0) {
       return { matches: [], indexTruncated: this.indexReasons.length > 0, filesIndexed: this.indexedCount, reasons: this.indexReasons };
     }
+
     await this.ensureIndexed(signal);
+
     if (signal.aborted) {
       return { matches: [], indexTruncated: true, filesIndexed: this.indexedCount, reasons: [...this.indexReasons, "cancelled"] };
     }
+
     const index = this.index;
     if (index === undefined) {
       return { matches: [], indexTruncated: true, filesIndexed: 0, reasons: [...this.indexReasons, "index_unavailable"] };
     }
+
     return {
       matches: index.search(trimmed, limit).map((hit) => ({ path: hit.path })),
       indexTruncated: this.indexReasons.length > 0,
@@ -126,12 +131,15 @@ export class FileFinder {
     if (this.index !== undefined) {
       return;
     }
+
     if (this.building !== undefined) {
       return this.building;
     }
+
     this.building = this.build(signal).finally(() => {
       this.building = undefined;
     });
+
     return this.building;
   }
 
@@ -148,10 +156,13 @@ export class FileFinder {
       filters: { include: [], exclude: [] },
     });
     const stats = await collectPaths(this.config, view.visible, signal, paths);
+
     if (signal.aborted) {
       return;
     }
+
     const index = new FileIndex();
+
     index.loadFromFileList(paths);
     this.index = index;
     this.indexedCount = paths.length;
@@ -197,8 +208,10 @@ async function collectPaths(
         if (seen.has(relative)) {
           return true;
         }
+
         seen.add(relative);
         sink.push(relative);
+
         return true;
       },
     });
@@ -211,8 +224,10 @@ async function collectPaths(
     if (signal.aborted) break;
     await walkRoot(`${config.workspaceRoot}/${priority}`, priority);
   }
+
   if (!signal.aborted && seen.size < (config.maxIndexedFiles ?? DEFAULT_MAX_INDEXED_FILES)) {
     await walkRoot(config.workspaceRoot, "");
   }
+
   return [...reasons];
 }

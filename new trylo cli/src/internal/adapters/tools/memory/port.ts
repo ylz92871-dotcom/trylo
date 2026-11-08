@@ -61,30 +61,38 @@ async function search(
   signal: AbortSignal,
 ): Promise<MemoryOutcome<MemorySearchResult>> {
   const queries = request.queries.map((query) => query.trim()).filter((query) => query.length > 0);
+
   // Whitespace-only entries are a mistake even in list mode: they mean the model
   // wanted to match something and lost the text.
   if (queries.length !== request.queries.length && request.queries.length > 0) {
     return memoryFailure("empty_query", "memory_search query strings must be non-empty when any are given");
   }
+
   const window = windowFor(request.matchMode);
   if (request.matchMode === "all_within_lines" && window.kind === "all_within_lines" && window.lineCount < 1) {
     return memoryFailure("invalid_match_window", "all_within_lines needs a positive line count");
   }
+
   if (signal.aborted) {
     return memoryFailure("cancelled", "memory_search was cancelled");
   }
+
   const loading = await loadSource(source);
   if (!loading.ok) return loading;
+
   const loaded = loading.value;
+
   if (signal.aborted) {
     return memoryFailure("cancelled", "memory_search was cancelled while reading records");
   }
+
   const selectedDocuments = request.documentId === undefined
     ? loaded.documents
     : loaded.documents.filter((document) => document.id === request.documentId);
   if (request.documentId !== undefined && selectedDocuments.length === 0) {
     return memoryFailure("unknown_document", `no record named ${request.documentId}`);
   }
+
   const corpus = request.recordKind === undefined ? selectedDocuments
     : selectedDocuments.filter((document) => document.recordKind === request.recordKind);
 
@@ -109,6 +117,7 @@ async function search(
       })));
     return paginateMatches(listed, queries, request);
   }
+
   const matcher = createMatcher({
     queries,
     window,
@@ -116,6 +125,7 @@ async function search(
     normalized: request.normalized,
   });
   const matches = collectMatches(corpus, matcher, window, request.contextLines);
+
   // Sorted by document then line so a cursor means the same thing across two
   // identical searches, which is what makes the offset above re-enterable.
   matches.sort((left, right) =>
@@ -125,6 +135,7 @@ async function search(
         ? -1
         : 1,
   );
+
   return paginateMatches(matches, queries, request);
 }
 
@@ -133,6 +144,7 @@ function paginateMatches(matches: ReadonlyArray<MemoryMatch>, queries: ReadonlyA
   if (start === undefined) {
     return memoryFailure("invalid_cursor", `cursor ${request.cursor ?? ""} does not name a position in these results`);
   }
+
   const maxResults = clamp(request.maxResults, DEFAULT_SEARCH_MAX_RESULTS, MAX_SEARCH_MAX_RESULTS);
   const end = Math.min(start + maxResults, matches.length);
   const hasMore = end < matches.length;
@@ -142,6 +154,7 @@ function paginateMatches(matches: ReadonlyArray<MemoryMatch>, queries: ReadonlyA
     truncated: hasMore,
     ...(hasMore ? { nextCursor: String(end) } : {}),
   };
+
   return { ok: true, ...result };
 }
 
@@ -150,10 +163,12 @@ function parseCursor(cursor: string | undefined, total: number): number | undefi
   if (cursor === undefined) {
     return 0;
   }
+
   const parsed = /^(?:0|[1-9]\d*)$/u.test(cursor) ? Number(cursor) : Number.NaN;
   if (!Number.isSafeInteger(parsed) || parsed < 0) {
     return undefined;
   }
+
   return parsed <= total ? parsed : undefined;
 }
 
@@ -164,6 +179,7 @@ function collectMatches(
   contextLines: number,
 ): MemoryMatch[] {
   const matches: MemoryMatch[] = [];
+
   for (const document of documents) {
     for (const hit of hitsInDocument(document.lines, matcher, window)) {
       matches.push({
@@ -183,6 +199,7 @@ function collectMatches(
       });
     }
   }
+
   return matches;
 }
 
@@ -194,25 +211,32 @@ async function read(
   if (!Number.isInteger(request.lineOffset) || request.lineOffset < 1) {
     return memoryFailure("invalid_line_offset", "line_offset is a 1-indexed line number");
   }
+
   if (signal.aborted) {
     return memoryFailure("cancelled", "memory_read was cancelled");
   }
+
   const loading = await loadSource(source);
   if (!loading.ok) return loading;
+
   const loaded = loading.value;
+
   if (signal.aborted) {
     return memoryFailure("cancelled", "memory_read was cancelled while reading records");
   }
+
   const document = loaded.documents.find((entry) => entry.id === request.documentId);
   if (document === undefined) {
     return memoryFailure("unknown_document", `no record named ${request.documentId}`);
   }
+
   if (request.lineOffset > document.lines.length) {
     return memoryFailure(
       "invalid_line_offset",
       `${request.documentId} has ${document.lines.length} lines; line_offset ${request.lineOffset} is past the end`,
     );
   }
+
   const maxLines = clamp(request.maxLines, DEFAULT_READ_MAX_LINES, MAX_READ_MAX_LINES);
   const slice = document.lines.slice(request.lineOffset - 1, request.lineOffset - 1 + maxLines);
   const result: MemoryReadResult = {
@@ -224,5 +248,6 @@ async function read(
     totalLines: document.lines.length,
     truncated: request.lineOffset - 1 + slice.length < document.lines.length,
   };
+
   return { ok: true, ...result };
 }

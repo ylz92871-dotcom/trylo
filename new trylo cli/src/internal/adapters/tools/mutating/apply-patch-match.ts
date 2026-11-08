@@ -64,12 +64,15 @@ function passMatches(lines: ReadonlyArray<string>, pattern: ReadonlyArray<string
     if (pass === 0 && line !== wanted) {
       return false;
     }
+
     if (pass === 1 && line.trimEnd() !== wanted.trimEnd()) {
       return false;
     }
+
     if (pass === 2 && line.trim() !== wanted.trim()) {
       return false;
     }
+
     if (pass === 3 && normaliseLine(line) !== normaliseLine(wanted)) {
       return false;
     }
@@ -90,10 +93,13 @@ export function seekSequence(
   if (pattern.length === 0) {
     return start;
   }
+
   if (pattern.length > lines.length) {
     return undefined;
   }
+
   const searchStart = eof ? Math.max(lines.length - pattern.length, start) : start;
+
   for (let pass = 0; pass < 4; pass += 1) {
     for (let at = searchStart; at + pattern.length <= lines.length; at += 1) {
       if (passMatches(lines, pattern, at, pass)) {
@@ -101,6 +107,7 @@ export function seekSequence(
       }
     }
   }
+
   return undefined;
 }
 
@@ -109,28 +116,35 @@ function expandChunk(chunk: ApplyPatchUpdateChunk): ReadonlyArray<AppliedOp> {
   const pairs = chunk.contextPairs;
   let oldIndex = 0;
   let newIndex = 0;
+
   for (const pair of pairs) {
     const [contextOld, contextNew] = pair;
+
     while (oldIndex < contextOld) {
       ops.push({ kind: "removed", text: chunk.oldLines[oldIndex] ?? "" });
       oldIndex += 1;
     }
+
     while (newIndex < contextNew) {
       ops.push({ kind: "added", text: chunk.newLines[newIndex] ?? "" });
       newIndex += 1;
     }
+
     ops.push({ kind: "context", text: chunk.oldLines[oldIndex] ?? "" });
     oldIndex += 1;
     newIndex += 1;
   }
+
   while (oldIndex < chunk.oldLines.length) {
     ops.push({ kind: "removed", text: chunk.oldLines[oldIndex] ?? "" });
     oldIndex += 1;
   }
+
   while (newIndex < chunk.newLines.length) {
     ops.push({ kind: "added", text: chunk.newLines[newIndex] ?? "" });
     newIndex += 1;
   }
+
   return ops;
 }
 
@@ -143,20 +157,26 @@ function replacementsOf(
   const out: Replacement[] = [];
   let oldFrom = 0;
   let newFrom = 0;
+
   for (const pair of pairs) {
     const [contextOld, contextNew] = pair;
+
     if (contextOld >= oldCount || contextNew >= newLines.length) {
       break;
     }
+
     if (oldFrom !== contextOld || newFrom !== contextNew) {
       out.push({ start: start + oldFrom, oldLen: contextOld - oldFrom, newLines: newLines.slice(newFrom, contextNew) });
     }
+
     oldFrom = contextOld + 1;
     newFrom = contextNew + 1;
   }
+
   if (oldFrom !== oldCount || newFrom !== newLines.length) {
     out.push({ start: start + oldFrom, oldLen: oldCount - oldFrom, newLines: newLines.slice(newFrom) });
   }
+
   return out;
 }
 
@@ -176,11 +196,13 @@ export function applyUpdateChunks(
   const replacements: Replacement[] = [];
   const located: Array<{ at: number; ops: ReadonlyArray<AppliedOp> }> = [];
   let cursor = 0;
+
   for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {
     const chunk = chunks[chunkIndex];
     if (chunk === undefined) {
       continue;
     }
+
     if (chunk.changeContext !== undefined) {
       const anchored = seekSequence(source.lines, [chunk.changeContext], cursor, false);
       if (anchored === undefined) {
@@ -190,13 +212,16 @@ export function applyUpdateChunks(
           message: `patch_hunk_mismatch: chunk ${chunkIndex} failed to find context '${chunk.changeContext}' in ${path}`,
         };
       }
+
       cursor = anchored + 1;
     }
+
     if (chunk.oldLines.length === 0) {
       located.push({ at: source.lines.length, ops: expandChunk(chunk) });
       replacements.push({ start: source.lines.length, oldLen: 0, newLines: [...chunk.newLines] });
       continue;
     }
+
     let pattern: ReadonlyArray<string> = chunk.oldLines;
     let fresh: ReadonlyArray<string> = chunk.newLines;
     let at = seekSequence(source.lines, pattern, cursor, chunk.endOfFile);
@@ -205,6 +230,7 @@ export function applyUpdateChunks(
       fresh = fresh.length > 0 && fresh[fresh.length - 1] === "" ? fresh.slice(0, -1) : fresh;
       at = seekSequence(source.lines, pattern, cursor, chunk.endOfFile);
     }
+
     if (at === undefined) {
       const wanted = chunk.oldLines[0] ?? "";
       return {
@@ -213,6 +239,7 @@ export function applyUpdateChunks(
         message: `patch_hunk_mismatch: chunk ${chunkIndex} expected ${JSON.stringify(wanted.slice(0, 100))} in ${path}. Copy exact text and keep one diff-space plus original indentation on context lines.`,
       };
     }
+
     if (at < cursor) {
       return {
         ok: false,
@@ -220,17 +247,21 @@ export function applyUpdateChunks(
         message: `patch_hunk_mismatch: chunk ${chunkIndex} overlaps the previous chunk in ${path}`,
       };
     }
+
     for (const replacement of replacementsOf(at, pattern.length, fresh, chunk.contextPairs)) {
       replacements.push(replacement);
     }
+
     located.push({ at, ops: expandChunk(chunk) });
     cursor = at + pattern.length;
   }
+
   replacements.sort((left, right) => left.start - right.start);
   const woven = weave(source, replacements);
   if (!woven.ok) {
     return woven;
   }
+
   return { ok: true, content: woven.content, regions: locateRegions(replacements, located) };
 }
 
@@ -246,11 +277,13 @@ function locateRegions(
 ): ReadonlyArray<AppliedRegion> {
   return located.map((entry) => {
     let shift = 0;
+
     for (const replacement of replacements) {
       if (replacement.start < entry.at) {
         shift += replacement.newLines.length - replacement.oldLen;
       }
     }
+
     return { oldStart: entry.at, newStart: entry.at + shift, ops: entry.ops };
   });
 }
@@ -264,6 +297,7 @@ function weave(
   const style: "\r\n" | "\n" = crlf > lf ? "\r\n" : "\n";
   const out: Array<{ text: string; ending: string }> = [];
   let cursor = 0;
+
   for (const replacement of replacements) {
     if (replacement.start < cursor) {
       return {
@@ -272,20 +306,27 @@ function weave(
         message: "patch_hunk_mismatch: replacements overlap; refusing rather than interleaving",
       };
     }
+
     for (let index = cursor; index < replacement.start; index += 1) {
       out.push({ text: source.lines[index] ?? "", ending: source.endings[index] ?? "\n" });
     }
+
     const freed: string[] = [];
+
     for (let index = replacement.start; index < replacement.start + replacement.oldLen; index += 1) {
       freed.push(source.endings[index] ?? style);
     }
+
     for (const text of replacement.newLines) {
       out.push({ text, ending: freed.shift() ?? style });
     }
+
     cursor = replacement.start + replacement.oldLen;
   }
+
   for (let index = cursor; index < source.lines.length; index += 1) {
     out.push({ text: source.lines[index] ?? "", ending: source.endings[index] ?? "\n" });
   }
+
   return { ok: true, content: out.map((line) => `${line.text}${line.ending}`).join("") };
 }

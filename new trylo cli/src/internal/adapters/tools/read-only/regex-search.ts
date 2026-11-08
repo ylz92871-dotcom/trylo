@@ -1,19 +1,26 @@
 import { Worker } from "node:worker_threads";
 
 export type RegexHit = { readonly line: number; readonly index: number };
+
 type Reply = { readonly kind: "ready" } | { readonly kind: "matches"; readonly hits: ReadonlyArray<RegexHit> };
+
 export class RegexSearchError extends Error {
   constructor(readonly code: "invalid_pattern" | "regex_timeout" | "regex_worker_failed", message: string) { super(message); }
 }
 
 function readReply(value: unknown): Reply {
   if (typeof value !== "object" || value === null || !("kind" in value)) throw new Error("invalid_regex_reply");
+
   if (value.kind === "invalid_pattern" && "message" in value && typeof value.message === "string") {
     throw new RegexSearchError("invalid_pattern", value.message);
   }
+
   if (value.kind === "ready") return { kind: "ready" };
+
   if (value.kind !== "matches" || !("hits" in value) || !Array.isArray(value.hits)) throw new Error("invalid_regex_reply");
+
   const hits: RegexHit[] = [];
+
   for (const hit of value.hits) {
     if (typeof hit !== "object" || hit === null || !("line" in hit) || !("index" in hit) ||
         !Number.isSafeInteger(hit.line) || !Number.isSafeInteger(hit.index) || hit.line < 0 || hit.index < 0) {
@@ -21,6 +28,7 @@ function readReply(value: unknown): Reply {
     }
     hits.push({ line: hit.line, index: hit.index });
   }
+
   return { kind: "matches", hits };
 }
 
@@ -71,7 +79,10 @@ export class RegexSearch {
         this.worker.off("error", failed);
         this.worker.off("exit", exited);
       };
-      const stop = (error: Error): void => { cleanup(); reject(error); };
+      const stop = (error: Error): void => {
+        cleanup();
+        reject(error);
+      };
       const aborted = (): void => stop(new Error("aborted"));
       const failed = (error: Error): void => stop(new RegexSearchError("regex_worker_failed", error.message));
       const exited = (code: number): void => stop(new RegexSearchError("regex_worker_failed", `regex_worker_exited:${code}`));
@@ -81,10 +92,12 @@ export class RegexSearch {
       };
       const timer = setTimeout(() => stop(new RegexSearchError("regex_timeout",
         "Regex exceeded its execution budget; narrow the file scope, simplify the pattern, or use literal mode.")), timeoutMs);
+
       this.worker.once("message", message);
       this.worker.once("error", failed);
       this.worker.once("exit", exited);
       this.signal.addEventListener("abort", aborted, { once: true });
+
       if (this.signal.aborted) aborted();
     });
   }

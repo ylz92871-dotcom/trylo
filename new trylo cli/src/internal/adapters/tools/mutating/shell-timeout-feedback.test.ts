@@ -8,16 +8,16 @@ import { createWorkspaceSandbox } from "../../sandbox/index.js";
 import { createFakePermission, emptyProfileLoader } from "../../../loop/fakes.js";
 import { runTurn } from "../../../loop/runner.js";
 import { createMutatingTools } from "./index.js";
-import { MAX_TIMEOUT_MS, MIN_TIMEOUT_MS } from "./shell-tool.js";
+import { MIN_TIMEOUT_MS } from "./shell-tool.js";
 import { RUN_SHELL_BINDING } from "./bindings.js";
 
 type Wire = { readonly messages: ReadonlyArray<{ readonly role: string; readonly content: string; readonly tool_call_id?: string }> };
 
-for (const timeoutMs of [1_000, MAX_TIMEOUT_MS]) {
+for (const timeoutMs of [1_000, 600_000]) {
   test(`shell timeout at ${timeoutMs}ms carries feasible recovery advice through the next Chat request`, async () => {
     const root = mkdtempSync(join(os.tmpdir(), "trylo-timeout-feedback-"));
     const wires: Wire[] = [];
-    const spawned: number[] = [];
+      const spawned: (number | undefined)[] = [];
     const tools = createMutatingTools({ sandbox: createWorkspaceSandbox({ workspaceRoot: root }),
       spawner: async spec => {
         spawned.push(spec.timeoutMs);
@@ -34,24 +34,21 @@ for (const timeoutMs of [1_000, MAX_TIMEOUT_MS]) {
         return new Response(`data: ${JSON.stringify({ choices: [choice] })}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
       },
     });
+
     try {
       const result = await runTurn({ tools, provider, permission: createFakePermission("approved"), profile: emptyProfileLoader() },
         { sessionId: "timeout-feedback", turnId: "turn1", correlationId: "corr", model: "DeepSeek-V4-Flash-Vision-Exp", text: "Run and inspect verification." });
+
       assert.equal(wires.length, 2);
       assert.deepEqual(spawned, [timeoutMs], "feedback must not initiate an automatic retry");
       const feedback = wires[1]?.messages.find(message => message.role === "tool" && message.tool_call_id === "timed-out")?.content;
+
       assert.ok(feedback);
       assert.match(feedback, /shell_timeout/);
       assert.match(feedback, /PASS first 14 checks/);
       assert.match(feedback, /inspect|check/i);
-      if (timeoutMs === MAX_TIMEOUT_MS) {
-        assert.doesNotMatch(feedback, /pass a larger timeoutMs/i, "no larger legal timeout exists at the cap");
-        assert.match(feedback, /limit/);
-        assert.match(feedback, /fix|split/i);
-      } else {
-        assert.match(feedback, /timeoutMs/);
-        assert.match(feedback, /120000/);
-      }
+      assert.match(feedback, /omit timeoutMs|longer explicit deadline/i);
+      assert.doesNotMatch(feedback, /larger timeoutMs is not allowed/);
       assert.equal(result.transcript.filter(item => item.kind === "tool_result" && item.outcome === "failed").length, 1);
       assert.equal(result.state.verification.status, "unset");
       assert.equal(result.state.terminalReason, "completed", "lifecycle completion must remain separate from validation");
@@ -70,8 +67,10 @@ test("Chat advertises the same timeout bounds that the shell executor enforces",
       return new Response('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n');
     },
   });
+
   for await (const event of provider.stream({ attemptId: "schema", model: "fixture", messages: [], tools: [RUN_SHELL_BINDING] }, new AbortController().signal)) {
     assert.notEqual(event.type, "error");
   }
-  assert.deepEqual({ minimum: timeoutSchema?.minimum, maximum: timeoutSchema?.maximum }, { minimum: MIN_TIMEOUT_MS, maximum: MAX_TIMEOUT_MS });
+
+  assert.deepEqual({ minimum: timeoutSchema?.minimum, maximum: timeoutSchema?.maximum }, { minimum: MIN_TIMEOUT_MS, maximum: undefined });
 });

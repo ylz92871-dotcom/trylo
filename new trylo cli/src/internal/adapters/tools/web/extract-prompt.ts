@@ -53,13 +53,17 @@ export async function extractWithPrompt(input: {
   if (input.signal.aborted) {
     return { kind: "unavailable", message: "web_fetch was cancelled before extraction" };
   }
+
   const truncated = input.page.length > MAX_PROMPT_INPUT_CHARS;
   const page = truncated ? input.page.slice(0, MAX_PROMPT_INPUT_CHARS) : input.page;
+
   try {
     const text = await input.extractor(page, input.prompt, input.signal);
+
     if (input.signal.aborted) {
       return { kind: "unavailable", message: "web_fetch was cancelled during extraction" };
     }
+
     const trimmed = text.trim();
     if (trimmed.length === 0) {
       // An empty answer is not an answer. Reporting "unavailable" here is what
@@ -67,6 +71,7 @@ export async function extractWithPrompt(input: {
       // result with nothing in it.
       return { kind: "unavailable", message: "the extractor returned no text for this page" };
     }
+
     return { kind: "extracted", text: trimmed, truncated };
   } catch (cause) {
     return {

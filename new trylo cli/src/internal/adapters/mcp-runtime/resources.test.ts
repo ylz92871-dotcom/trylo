@@ -7,7 +7,8 @@ import type {
   McpResourceTemplatesResult,
 } from "../../ports/mcp-client.js";
 import type { ToolCallRequest, ToolOutcome, ToolPort } from "../../ports/tools.js";
-import { DEFAULT_MCP_CALL_TIMEOUT_MS } from "./mount.js";
+import { DEFAULT_MCP_LIST_TIMEOUT_MS } from "../../ports/mcp-client.js";
+import { brokerRequestError } from "./broker-errors.js";
 import type { McpRuntimeServer } from "./pool.js";
 import {
   combineMcpToolPorts,
@@ -38,6 +39,7 @@ type ResourceBehaviour = {
 function stubServer(serverId: string, behaviour: ResourceBehaviour = {}): McpRuntimeServer & { close(): Promise<void>; closed(): boolean } {
   let closed = false;
   const refused = (verb: string): McpResourceFailure => ({ ok: false, code: "not_initialized", detail: `${verb}: closed` });
+
   return {
     serverId,
     tools: [],
@@ -48,30 +50,37 @@ function stubServer(serverId: string, behaviour: ResourceBehaviour = {}): McpRun
       if (closed) {
         return refused("listResources");
       }
+
       if (behaviour.failure !== undefined) {
         return { ok: false, code: behaviour.failure, detail: "refused on purpose" };
       }
+
       return { ok: true, value: behaviour.resources ?? { resources: [] } };
     },
     async listResourceTemplates() {
       if (closed) {
         return refused("listResourceTemplates");
       }
+
       if (behaviour.failure !== undefined) {
         return { ok: false, code: behaviour.failure, detail: "refused on purpose" };
       }
+
       return { ok: true, value: behaviour.templates ?? { templates: [] } };
     },
     async readResource(uri) {
       if (closed) {
         return refused("readResource");
       }
+
       if (behaviour.failure !== undefined) {
         return { ok: false, code: behaviour.failure, detail: "refused on purpose" };
       }
+
       const value: McpResourceReadResult = behaviour.read ?? {
         contents: [{ kind: "text", uri, text: `content of ${uri}` }],
       };
+
       return { ok: true, value };
     },
     async close() {
@@ -87,11 +96,36 @@ function call(name: string, args: ToolCallRequest["arguments"]): ToolCallRequest
 
 const liveSignal = (): AbortSignal => new AbortController().signal;
 
+for (const name of [MCP_LIST_RESOURCES_TOOL, "mcp_list_resource_templates", MCP_READ_RESOURCE_TOOL]) {
+  for (const [code, syscall, expected, expectedCode] of [
+    ["ECONNREFUSED", "connect", "error", "mcp_broker_unavailable"],
+    ["ECONNRESET", "read", "unknown", "mcp_broker_delivery_unknown"],
+  ] as const) {
+    test(`${name} preserves trusted broker ${expected} delivery classification`, async () => {
+      const error = brokerRequestError(new TypeError("fetch failed", {
+        cause: Object.assign(new Error("native transport error"), { code, syscall }),
+      }));
+      const server: McpRuntimeServer = { ...stubServer("alpha"),
+        async listResources() { throw error; },
+        async listResourceTemplates() { throw error; },
+        async readResource() { throw error; },
+      };
+      const outcome = await createMcpResourcePort([server]).execute(call(name,
+        name === MCP_READ_RESOURCE_TOOL ? { server: "alpha", uri: "test://resource" } : { server: "alpha" }), liveSignal());
+      assert.equal(outcome.outcome, expected);
+      assert.ok("code" in outcome);
+      assert.equal(outcome.code, expectedCode);
+    });
+  }
+}
+
 test("with no servers there are no resource tools; with servers there are exactly three", () => {
   assert.deepEqual(createMcpResourcePort([]).snapshot(), []);
   const port = createMcpResourcePort([stubServer("alpha")]);
   const names = port.snapshot().map((binding) => binding.name).sort();
+
   assert.deepEqual(names, ["mcp_list_resource_templates", "mcp_list_resources", "mcp_read_resource"]);
+
   for (const binding of port.snapshot()) {
     assert.equal(binding.sideEffect, "external");
     assert.equal(binding.needsApproval, true);
@@ -111,11 +145,15 @@ test("listing fans out across servers and tags each entry with its server", asyn
     stubServer("beta", { resources: { resources: [{ uri: "file:///b", name: "b", annotations: {}, annotationsTrust: "untrusted" }] } }),
   ]);
   const outcome = await port.execute(call(MCP_LIST_RESOURCES_TOOL, {}), liveSignal());
+
   assert.equal(outcome.outcome, "result");
+
   if (outcome.outcome !== "result") {
     return;
   }
+
   const entries = outcome.value["entries"];
+
   assert.ok(Array.isArray(entries) && entries.length === 2);
   assert.ok(outcome.output.includes("2 resources listed"));
 });
@@ -123,12 +161,17 @@ test("listing fans out across servers and tags each entry with its server", asyn
 test("a cursor without a server is refused, and an unknown server is not guessed", async () => {
   const port = createMcpResourcePort([stubServer("alpha")]);
   const cursorOnly = await port.execute(call(MCP_LIST_RESOURCES_TOOL, { cursor: "page-2" }), liveSignal());
+
   assert.equal(cursorOnly.outcome, "error");
+
   if (cursorOnly.outcome === "error") {
     assert.equal(cursorOnly.code, "mcp_invalid_arguments");
   }
+
   const ghost = await port.execute(call(MCP_LIST_RESOURCES_TOOL, { server: "ghost" }), liveSignal());
+
   assert.equal(ghost.outcome, "error");
+
   if (ghost.outcome === "error") {
     assert.equal(ghost.code, "mcp_unknown_server");
   }
@@ -140,14 +183,19 @@ test("one failing server shrinks the answer; all failing fails the call", async 
     stubServer("broken", { failure: "protocol_error" }),
   ]);
   const shrunk = await partial.execute(call(MCP_LIST_RESOURCES_TOOL, {}), liveSignal());
+
   assert.equal(shrunk.outcome, "result");
+
   if (shrunk.outcome === "result") {
     const failed = shrunk.value["failed"];
     assert.ok(Array.isArray(failed) && failed.length === 1);
   }
+
   const allBroken = createMcpResourcePort([stubServer("broken", { failure: "protocol_error" })]);
   const failedCall = await allBroken.execute(call(MCP_LIST_RESOURCES_TOOL, {}), liveSignal());
+
   assert.equal(failedCall.outcome, "error");
+
   if (failedCall.outcome === "error") {
     assert.equal(failedCall.code, "mcp_protocol_error");
   }
@@ -159,7 +207,9 @@ test("a 401 at the server becomes mcp_needs_auth, never a silent empty answer", 
     call(MCP_READ_RESOURCE_TOOL, { server: "guarded", uri: "file:///secret.md" }),
     liveSignal(),
   );
+
   assert.equal(outcome.outcome, "error");
+
   if (outcome.outcome === "error") {
     assert.equal(outcome.code, "mcp_needs_auth");
   }
@@ -171,13 +221,18 @@ test("reading returns the server's text, and refuses an empty server or URI", as
     call(MCP_READ_RESOURCE_TOOL, { server: "alpha", uri: "file:///notes/today.md" }),
     liveSignal(),
   );
+
   assert.equal(outcome.outcome, "result");
+
   if (outcome.outcome === "result") {
     assert.ok(outcome.output.includes("content of file:///notes/today.md"));
     assert.equal(outcome.truncated, false);
   }
+
   const empty = await port.execute(call(MCP_READ_RESOURCE_TOOL, { server: "alpha", uri: "" }), liveSignal());
+
   assert.equal(empty.outcome, "error");
+
   if (empty.outcome === "error") {
     assert.equal(empty.code, "mcp_invalid_arguments");
   }
@@ -193,7 +248,9 @@ test("binary content is reported by size, never decoded into the envelope", asyn
     call(MCP_READ_RESOURCE_TOOL, { server: "alpha", uri: "binary:///logo.png" }),
     liveSignal(),
   );
+
   assert.equal(outcome.outcome, "result");
+
   if (outcome.outcome === "result") {
     assert.ok(outcome.output.includes("[binary content omitted: image/png, about 6 bytes]"));
   }
@@ -206,13 +263,16 @@ test("an unloaded server stops serving: reads fail closed after close", async ()
     call(MCP_READ_RESOURCE_TOOL, { server: "alpha", uri: "file:///a" }),
     liveSignal(),
   );
+
   assert.equal(before.outcome, "result");
   await server.close();
   const after = await port.execute(
     call(MCP_READ_RESOURCE_TOOL, { server: "alpha", uri: "file:///a" }),
     liveSignal(),
   );
+
   assert.equal(after.outcome, "error");
+
   if (after.outcome === "error") {
     assert.equal(after.code, "mcp_not_initialized");
   }
@@ -221,11 +281,13 @@ test("an unloaded server stops serving: reads fail closed after close", async ()
 test("a cancelled call is cancelled, not a failure", async () => {
   const port = createMcpResourcePort([stubServer("alpha")]);
   const controller = new AbortController();
+
   controller.abort();
   const outcome = await port.execute(
     call(MCP_READ_RESOURCE_TOOL, { server: "alpha", uri: "file:///a" }),
     controller.signal,
   );
+
   assert.deepEqual(outcome, { outcome: "cancelled" });
 });
 
@@ -251,8 +313,9 @@ test("WP15-F-A: listings carry a finite deadline instead of an open-ended wait",
     async close() {},
   };
   const port = createMcpResourcePort([server]);
+
   await port.execute(call(MCP_LIST_RESOURCES_TOOL, {}), liveSignal());
-  assert.deepEqual(seen, [{ verb: "resources/list", timeoutMs: DEFAULT_MCP_CALL_TIMEOUT_MS }]);
+  assert.deepEqual(seen, [{ verb: "resources/list", timeoutMs: DEFAULT_MCP_LIST_TIMEOUT_MS }]);
 });
 
 function stubToolPort(names: ReadonlyArray<string>, calls: string[]): ToolPort {
@@ -282,6 +345,7 @@ test("combineMcpToolPorts routes resource names to resources and everything else
   const resources = createMcpResourcePort([stubServer("alpha")]);
   const combined = combineMcpToolPorts(tools, resources);
   const names = combined.snapshot().map((binding) => binding.name);
+
   assert.ok(names.includes("mcp__alpha__echo"));
   assert.ok(names.includes(MCP_LIST_RESOURCES_TOOL));
   await combined.execute(call(MCP_LIST_RESOURCES_TOOL, {}), liveSignal());

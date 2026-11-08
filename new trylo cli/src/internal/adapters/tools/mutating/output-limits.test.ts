@@ -15,6 +15,7 @@ test("a byte budget is a byte budget: CJK output does not overrun it", () => {
   // characters (150 bytes) passed a 100-byte budget untouched.
   const cjk = "中".repeat(50);
   const result = truncateOutput(cjk, { maxBytes: BUDGET });
+
   assert.ok(
     Buffer.byteLength(result.text, "utf8") <= BUDGET,
     `expected <= ${BUDGET} bytes, got ${Buffer.byteLength(result.text, "utf8")}`,
@@ -26,6 +27,7 @@ test("characters outside the BMP are measured as the four bytes they occupy", ()
   // Emoji are surrogate pairs: two UTF-16 units, four UTF-8 bytes.
   const emoji = "👍".repeat(40);
   const result = truncateOutput(emoji, { maxBytes: 40 });
+
   assert.ok(
     Buffer.byteLength(result.text, "utf8") <= 40,
     `expected <= 40 bytes, got ${Buffer.byteLength(result.text, "utf8")}`,
@@ -66,8 +68,10 @@ test("one huge line with no newline anywhere is still bounded", () => {
 test("a line budget also keeps the tail rather than dropping it", () => {
   const text = Array.from({ length: 500 }, (_, i) => `line ${i}`).join("\n");
   const result = truncateOutput(text, { maxBytes: 100_000, maxLines: 20 });
+
   assert.equal(result.truncated, true);
   const lines = result.text.split("\n");
+
   assert.ok(lines.length <= 22, `expected about 20 lines, got ${lines.length}`);
   assert.ok(result.text.includes("line 0"), "head survives");
   assert.ok(result.text.includes("line 499"), "tail survives");
@@ -99,7 +103,9 @@ test("no budget in 0..80 is silently exceeded, and none loses its tail needlessl
     const text = `${"HEAD".repeat(40)}noise${"TAIL-ERROR".repeat(40)}`;
     const result = truncateOutput(text, { maxBytes: budget });
     const out = Buffer.byteLength(result.text, "utf8");
+
     assert.equal(result.truncated, true, `budget ${budget} must report a truncation`);
+
     // The one permitted excess is a marker that cannot fit in the budget at
     // all; anything above the marker's own width is a bug.
     if (out > budget) {
@@ -108,6 +114,7 @@ test("no budget in 0..80 is silently exceeded, and none loses its tail needlessl
         `budget ${budget}: result is ${out} bytes, over both the budget and the marker's width`,
       );
     }
+
     // Both ends survive as soon as the budget can hold the marker *and* a piece
     // of each end. Measured, not assumed: at 32 the head is "HEAD" but only "R"
     // of the tail fits, because the budget is split between the two ends and a
@@ -133,6 +140,7 @@ test("no budget in 0..80 is silently exceeded, and none loses its tail needlessl
 test("omittedBytes is measured, not derived: one meaning in every branch", () => {
   for (const maxBytes of [40, 100, 200, 1000, 4000]) {
     const result = truncateOutput("x".repeat(5000), { maxBytes });
+
     assert.equal(
       result.omittedBytes,
       result.originalBytes - Buffer.byteLength(result.text, "utf8"),
@@ -145,6 +153,7 @@ test("omittedBytes is measured, not derived: one meaning in every branch", () =>
 test("the line branch reports the bytes it removed, not the byte stage's figure", () => {
   const text = Array.from({ length: 5000 }, (_, i) => `line ${i}`).join("\n");
   const result = truncateOutput(text, { maxBytes: 100_000, maxLines: 20 });
+
   assert.equal(result.truncated, true);
   assert.ok(
     result.omittedBytes > 10_000,

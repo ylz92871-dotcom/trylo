@@ -8,14 +8,18 @@ import { readSearchContent, searchSnippet } from "./search-content.js";
 
 test("bounded Node text reads distinguish the exact byte boundary from oversize and obey cancellation", async t => {
   const root = mkdtempSync(join(tmpdir(), "trylo-bounded-read-"));
+
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const target = join(root, "text.txt");
+
   writeFileSync(target, "中文");
   const reader = createNodeFileSystemReader();
+
   assert.ok(reader.readFileUtf8Bounded);
   assert.equal(await reader.readFileUtf8Bounded(target, 6, new AbortController().signal), "中文");
   assert.equal(await reader.readFileUtf8Bounded(target, 5, new AbortController().signal), undefined);
   const controller = new AbortController();
+
   controller.abort();
   await assert.rejects(reader.readFileUtf8Bounded(target, 6, controller.signal), { name: "AbortError" });
 });

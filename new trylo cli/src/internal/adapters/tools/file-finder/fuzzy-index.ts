@@ -68,6 +68,7 @@ export class FileIndex {
     // Deduplicate and filter empty strings (matches Rust HashSet behavior)
     const seen = new Set<string>()
     const paths: string[] = []
+
     for (const line of fileList) {
       if (line.length > 0 && !seen.has(line)) {
         seen.add(line)
@@ -108,12 +109,14 @@ export class FileIndex {
     const seen = new Set<string>()
     const paths: string[] = []
     let chunkStart = performance.now()
+
     for (let i = 0; i < fileList.length; i++) {
       const line = fileList[i]!
       if (line.length > 0 && !seen.has(line)) {
         seen.add(line)
         paths.push(line)
       }
+
       // Check every 256 iterations to amortize performance.now() overhead
       if ((i & 0xff) === 0xff && performance.now() - chunkStart > CHUNK_MS) {
         await yieldToEventLoop()
@@ -125,18 +128,22 @@ export class FileIndex {
 
     chunkStart = performance.now()
     let firstChunk = true
+
     for (let i = 0; i < paths.length; i++) {
       this.indexPath(i)
       if ((i & 0xff) === 0xff && performance.now() - chunkStart > CHUNK_MS) {
         this.readyCount = i + 1
+
         if (firstChunk) {
           markQueryable()
           firstChunk = false
         }
+
         await yieldToEventLoop()
         chunkStart = performance.now()
       }
     }
+
     this.readyCount = paths.length
     markQueryable()
   }
@@ -151,6 +158,7 @@ export class FileIndex {
 
   private resetArrays(paths: string[]): void {
     const n = paths.length
+
     this.paths = paths
     this.lowerPaths = new Array(n)
     this.charBits = new Int32Array(n)
@@ -164,14 +172,18 @@ export class FileIndex {
   // "test" → still a 10%+ free win; 90%+ rejection for rare chars).
   private indexPath(i: number): void {
     const lp = this.paths[i]!.toLowerCase()
+
     this.lowerPaths[i] = lp
     const len = lp.length
+
     this.pathLens[i] = len
     let bits = 0
+
     for (let j = 0; j < len; j++) {
       const c = lp.charCodeAt(j)
       if (c >= 97 && c <= 122) bits |= 1 << (c - 97)
     }
+
     this.charBits[i] = bits
   }
 
@@ -181,6 +193,7 @@ export class FileIndex {
    */
   search(query: string, limit: number): SearchResult[] {
     if (limit <= 0) return []
+
     if (query.length === 0) {
       if (this.topLevelCache) {
         return this.topLevelCache.slice(0, limit)
@@ -194,6 +207,7 @@ export class FileIndex {
     const nLen = Math.min(needle.length, MAX_QUERY_LEN)
     const needleChars: string[] = new Array(nLen)
     let needleBitmap = 0
+
     for (let j = 0; j < nLen; j++) {
       const ch = needle.charAt(j)
       needleChars[j] = ch
@@ -226,17 +240,22 @@ export class FileIndex {
       // we score directly from them — no second scan.
       let pos = haystack.indexOf(needleChars[0]!)
       if (pos === -1) continue
+
       posBuf[0] = pos
       let gapPenalty = 0
       let consecBonus = 0
       let prev = pos
+
       for (let j = 1; j < nLen; j++) {
         pos = haystack.indexOf(needleChars[j]!, prev + 1)
+
         if (pos === -1) continue outer
+
         posBuf[j] = pos
         const gap = pos - prev - 1
         if (gap === 0) consecBonus += BONUS_CONSECUTIVE
         else gapPenalty += PENALTY_GAP_START + gap * PENALTY_GAP_EXTENSION
+
         prev = pos
       }
 
@@ -253,10 +272,13 @@ export class FileIndex {
       const path = paths[i]!
       const hLen = pathLens[i]!
       let score = nLen * SCORE_MATCH + consecBonus - gapPenalty
+
       score += scoreBonusAt(path, posBuf[0]!, true)
+
       for (let j = 1; j < nLen; j++) {
         score += scoreBonusAt(path, posBuf[j]!, false)
       }
+
       score += Math.max(0, 32 - (hLen >> 2))
 
       if (topK.length < limit) {
@@ -268,11 +290,13 @@ export class FileIndex {
       } else if (score > threshold) {
         let lo = 0
         let hi = topK.length
+
         while (lo < hi) {
           const mid = (lo + hi) >> 1
           if (topK[mid]!.fuzzScore < score) lo = mid + 1
           else hi = mid
         }
+
         topK.splice(lo, 0, { path, fuzzScore: score })
         topK.shift()
         threshold = topK[0]!.fuzzScore
@@ -351,6 +375,7 @@ function computeTopLevelEntries(
   for (const p of paths) {
     // Split on first / or \ separator
     let end = p.length
+
     for (let i = 0; i < p.length; i++) {
       const c = p.charCodeAt(i)
       if (c === 47 || c === 92) {
@@ -358,6 +383,7 @@ function computeTopLevelEntries(
         break
       }
     }
+
     const segment = p.slice(0, end)
     if (segment.length > 0) {
       topLevel.add(segment)
@@ -366,6 +392,7 @@ function computeTopLevelEntries(
   }
 
   const sorted = Array.from(topLevel)
+
   sorted.sort((a, b) => {
     const lenDiff = a.length - b.length
     if (lenDiff !== 0) return lenDiff
@@ -376,4 +403,5 @@ function computeTopLevelEntries(
 }
 
 export default FileIndex
+
 export type { FileIndex as FileIndexType }

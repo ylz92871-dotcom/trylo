@@ -59,8 +59,10 @@ function rejectsDevicePath(candidate: string): boolean {
   if (normalized.startsWith("\\\\.\\") || normalized.startsWith("\\\\?\\")) {
     return true;
   }
+
   const first = normalized.split("\\")[0] ?? "";
   const stem = first.includes(":") ? first.slice(first.indexOf(":") + 1) : first;
+
   return WINDOWS_DEVICE_NAMES.has(stem.toLowerCase());
 }
 
@@ -99,12 +101,14 @@ function failFast(candidate: string): PathDenyCode | undefined {
   if (typeof candidate !== "string" || candidate.length === 0 || candidate.includes("\0")) {
     return "invalid_path";
   }
+
   // Absolute paths are aliases, never authority: both resolvers below still
   // prove lexical and real containment against the same workspace root.
   // Reject drive-relative Windows paths whose meaning depends on ambient cwd.
   if (rejectsDevicePath(candidate) || /^[a-z]:[^\\/]/i.test(candidate)) {
     return "path_outside_workspace";
   }
+
   return undefined;
 }
 
@@ -113,13 +117,18 @@ export function resolveInsideWorkspace(root: string, candidate: string, access: 
   if (early !== undefined) {
     return { ok: false, code: early };
   }
+
   const rootReal = canonicalRoot(root);
   const resolved = resolveCandidate(root, rootReal, candidate, alias);
+
   access = targetScope(rootReal, resolved, access);
+
   if (!withinScope(rootReal, resolved, access)) {
     return { ok: false, code: "path_outside_workspace" };
   }
+
   let real: string;
+
   try {
     real = realpathSync.native(resolved);
   } catch (error) {
@@ -132,11 +141,14 @@ export function resolveInsideWorkspace(root: string, candidate: string, access: 
     if (code === "ENOENT" || code === "ENOTDIR") {
       return { ok: true, absolutePath: resolved };
     }
+
     return { ok: false, code: "path_unverifiable" };
   }
+
   if (!withinScope(rootReal, real, access)) {
     return { ok: false, code: "path_escapes_via_link" };
   }
+
   return { ok: true, absolutePath: real };
 }
 
@@ -147,10 +159,12 @@ function deepestExistingAncestor(target: string, root: string): string | undefin
     if (existsSync(probe)) {
       return probe;
     }
+
     const parent = path.dirname(probe);
     if (parent === probe || !isInside(root, probe)) {
       return undefined;
     }
+
     probe = parent;
   }
 }
@@ -168,34 +182,44 @@ export function resolveWriteTarget(root: string, candidate: string, access: File
   if (early !== undefined) {
     return { ok: false, code: early };
   }
+
   const rootReal = canonicalRoot(root);
   const resolved = resolveCandidate(root, rootReal, candidate, alias);
+
   access = targetScope(rootReal, resolved, access);
+
   if (!withinScope(rootReal, resolved, access)) {
     return { ok: false, code: "path_outside_workspace" };
   }
+
   const ancestor = deepestExistingAncestor(resolved, access === "workspace" ? rootReal : path.parse(resolved).root);
   if (ancestor === undefined) {
     return { ok: false, code: "parent_missing" };
   }
+
   let ancestorReal: string;
+
   try {
     ancestorReal = realpathSync.native(ancestor);
   } catch {
     return { ok: false, code: "path_unverifiable" };
   }
+
   if (!withinScope(rootReal, ancestorReal, access)) {
     return { ok: false, code: "path_escapes_via_link" };
   }
+
   const remainder = path.relative(ancestor, resolved);
   const target = remainder.length === 0 ? ancestorReal : path.join(ancestorReal, remainder);
   if (!withinScope(rootReal, target, access)) {
     return { ok: false, code: "path_outside_workspace" };
   }
+
   const parentProblem = requireDirectoryIfPresent(path.dirname(target));
   if (parentProblem !== undefined) {
     return { ok: false, code: parentProblem };
   }
+
   try {
     if (lstatSync(target).isSymbolicLink()) {
       const real = realpathSync.native(target);
@@ -209,6 +233,7 @@ export function resolveWriteTarget(root: string, candidate: string, access: File
       return { ok: false, code: "path_unverifiable" };
     }
   }
+
   return { ok: true, absolutePath: target };
 }
 
@@ -227,6 +252,7 @@ function requireDirectoryIfPresent(candidate: string): PathDenyCode | undefined 
     if (code !== "ENOENT") {
       return "parent_missing";
     }
+
     try {
       // ENOENT from stat but success from lstat means a dangling symlink.
       lstatSync(candidate);
