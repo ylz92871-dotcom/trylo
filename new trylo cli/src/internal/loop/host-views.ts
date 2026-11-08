@@ -9,6 +9,9 @@ import type { Engine } from "./runner-engine.js";
 import { appendToolResult } from "./transcript-append.js";
 import { nextTranscriptSequence } from "./transcript-messages.js";
 import type { ToolRunnerHost } from "./tool-runner.js";
+import { evaluateBudget } from "../domain/iteration.js";
+import { authoringContext, auxiliarySpendingUnavailable, chargeAuxiliaryUsage } from "./auxiliary-usage.js";
+import { flushProgress } from "./progress.js";
 
 /**
  * The narrow views of the engine that its collaborators are allowed to hold.
@@ -51,6 +54,7 @@ export function toolHostFor(engine: Engine, ports: LoopPorts, deps: ViewDeps): T
         : snapshotBeforeWrite(
             {
               ...ports.checkpoint,
+              signal: engine.compactionSignal,
               report: (payload) => emitRaw(engine, "observation", payload),
               state: engine.checkpoint,
             },
@@ -63,19 +67,33 @@ export function toolHostFor(engine: Engine, ports: LoopPorts, deps: ViewDeps): T
 export async function emitCompactionFor(
   engine: Engine,
   ports: LoopPorts,
-  options?: { readonly force?: boolean },
+  options?: { readonly force?: boolean; readonly phase?: "preparing_request" },
 ): Promise<CompactionGapOutcome> {
+  const verdict = evaluateBudget({ iterations: Math.max(0, engine.iterations - (options?.phase === "preparing_request" ? 1 : 0)),
+    promptTokens: 0, outputTokens: engine.usage.outputTokens, costUsd: engine.costUsd }, engine.budget);
+  const refused = auxiliarySpendingUnavailable(engine.auxiliary, engine.budget) ? "auxiliary_usage_unavailable"
+    : verdict.kind === "within_budget" ? undefined : verdict.kind;
+  if (refused !== undefined) return { events: [], storedWindow: false, projectedPromptTokens: undefined };
+
   const outcome = await runCompactionFor(promptContextFor(engine, ports.compaction, ports.tools), {
-    ...options, signal: engine.compactionSignal, onStart: tokensBefore => emitRaw(engine, "observation", {
+    ...options, signal: engine.compactionSignal,
+    authoring: authoringContext(engine.usage, engine.budget, async receipt => {
+      chargeAuxiliaryUsage(engine, receipt);
+      emitRaw(engine, "observation", { component: "auxiliary_usage", operation: "summary_request", ...receipt });
+      await flushProgress(engine, ports);
+    }), onStart: tokensBefore => emitRaw(engine, "observation", {
       component: "compaction", status: "started", tokensBefore,
     }),
   });
+
   // The next-request ceiling uses the current view, including native fields,
   // even when the last stream omitted usage or summary authoring was refused.
   if (outcome.projectedPromptTokens !== undefined) engine.promptTokens = outcome.projectedPromptTokens;
+
   for (const event of outcome.events) {
     emitRaw(engine, event.kind, event.payload);
   }
+
   return outcome;
 }
 
@@ -102,12 +120,14 @@ export function gapHostFor(engine: Engine, ports: LoopPorts, deps: ViewDeps): Ga
     forgiveBudget: () => {
       const limit = engine.budget.maxIterations;
       if (limit === undefined) return;
+
       // A steer refunds the steps already spent, out of an allowance no larger
       // than one turn's budget: redirecting a run may double it, never unbind
       // it. The refund is what was actually spent, so a steer at a gap where
       // nothing had been spent yet costs nothing and grants nothing.
       const allowance = Math.max(0, limit - engine.refunded);
       const refund = Math.min(engine.iterations, allowance);
+
       engine.iterations -= refund;
       engine.refunded += refund;
     },

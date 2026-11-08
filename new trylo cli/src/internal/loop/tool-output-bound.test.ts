@@ -46,6 +46,7 @@ test("a payload inside the bound is returned untouched", () => {
 test("an oversized adapter result is bounded once, with a single marker", () => {
   const value = "x".repeat(MAX_TOOL_OUTPUT_BYTES * 2);
   const bounded = boundToolOutput(value, true);
+
   assert.equal(bounded.truncated, true);
   assert.equal(
     bounded.output.split("[truncated]").length,

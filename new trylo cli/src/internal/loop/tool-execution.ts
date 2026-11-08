@@ -142,16 +142,22 @@ export function boundToolOutput(
   output: string,
   alreadyTruncated: boolean,
 ): { output: string; truncated: boolean } {
+  return boundToolText(output, alreadyTruncated, MAX_TOOL_OUTPUT_BYTES);
+}
+
+function boundToolText(output: string, alreadyTruncated: boolean, maximumBytes: number): { output: string; truncated: boolean } {
   const bytes = Buffer.byteLength(output, "utf8");
-  if (bytes <= MAX_TOOL_OUTPUT_BYTES) {
+  if (bytes <= maximumBytes) {
     return { output, truncated: alreadyTruncated };
   }
-  const marker = "\n[truncated]\n";
-  const budget = MAX_TOOL_OUTPUT_BYTES - Buffer.byteLength(marker, "utf8");
+
+  const marker = cutToBytes("\n[truncated]\n", maximumBytes);
+  const budget = maximumBytes - Buffer.byteLength(marker, "utf8");
   // Half to each end, then whatever the head did not use goes to the tail, so the
   // result is always within the bound whatever the head's character widths were.
   const head = cutToBytes(output, Math.ceil(budget / 2));
   const tail = tailWithin(output, budget - Buffer.byteLength(head, "utf8"));
+
   return { output: `${head}${marker}${tail}`, truncated: true };
 }
 
@@ -165,11 +171,14 @@ function tailWithin(text: string, maxBytes: number): string {
   if (maxBytes <= 0) {
     return "";
   }
+
   const buffer = Buffer.from(text, "utf8");
   if (buffer.length <= maxBytes) {
     return text;
   }
+
   let start = buffer.length - maxBytes;
+
   while (start < buffer.length) {
     const byte = buffer[start];
     if (byte === undefined || (byte & 0xc0) !== 0x80) {
@@ -177,6 +186,7 @@ function tailWithin(text: string, maxBytes: number): string {
     }
     start += 1;
   }
+
   return buffer.subarray(start).toString("utf8");
 }
 
@@ -211,7 +221,12 @@ export async function settleToolOutcome(
   call: ToolExecutionCall,
   outcome: ToolOutcome,
 ): Promise<void> {
-  const bounded = boundToolOutput(toolResultText(outcome), outcome.outcome === "result" && outcome.truncated);
+  const bounded = outcome.outcome === "result"
+    // Text owns its existing output bound; the emitter's lossless public
+    // frames own combined value/text serialization and the physical frame cap.
+    ? boundToolOutput(outcome.output, outcome.truncated)
+    : boundToolOutput(toolResultText(outcome), false);
+
   host.recordResult({
     toolCallId: call.toolCallId,
     name: call.name,
@@ -220,6 +235,7 @@ export async function settleToolOutcome(
     outcome: toolResultOutcome(outcome),
     ...(outcome.outcome === "result" && outcome.images !== undefined ? { images: outcome.images } : {}),
   });
+
   if (outcome.outcome === "result") {
     // Only a reported success may claim bytes landed on disk.
     emitFileWriteRecord(host.emit, call.toolCallId, call.name, outcome.value);
@@ -227,6 +243,7 @@ export async function settleToolOutcome(
     // exist on success values, and only success may extend the diff.
     host.noteTurnDiff?.(call.name, outcome.value);
   }
+
   if (outcome.outcome === "unknown") {
     // An adapter that threw is not the same claim as a tool that ran and
     // failed: the journal keeps the distinction so a later reader is not told
@@ -238,6 +255,7 @@ export async function settleToolOutcome(
       message: failureText(outcome.code, outcome.message),
     });
   }
+
   await host.dispatch(settledInput(host, call.toolCallId, outcome, bounded));
 }
 

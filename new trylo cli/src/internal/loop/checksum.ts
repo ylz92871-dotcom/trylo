@@ -22,15 +22,18 @@ export function verifyJournal(
   if (envelopes.length !== checksums.length) {
     return { ok: false, code: "checksum" };
   }
+
   for (let i = 0; i < envelopes.length; i += 1) {
     const envelope = envelopes[i];
     const expected = checksums[i];
     if (envelope === undefined || expected === undefined) {
       return { ok: false, code: "checksum" };
     }
+
     if (envelopeChecksum(envelope) !== expected) {
       return { ok: false, code: "checksum" };
     }
   }
+
   return { ok: true };
 }

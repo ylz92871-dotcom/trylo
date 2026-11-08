@@ -2,15 +2,47 @@ import type { JsonObject, JsonValue } from "../protocol/envelope.js";
 import type { PermissionPort } from "../ports/permission.js";
 import type {
   ToolCallRequest,
+  ToolBinding,
   ToolOutcome,
   ToolPort,
   ToolSandbox,
 } from "../ports/tools.js";
 
+export type ToolPreflightFailure = Extract<ToolOutcome, { readonly outcome: "error" }>;
+
+export type ToolBindingLookup =
+  | { readonly kind: "available"; readonly binding: ToolBinding }
+  | { readonly kind: "unavailable"; readonly outcome: ToolPreflightFailure };
+
 export type ToolApprovalRequirement = {
+  readonly kind: "available";
   readonly required: boolean;
   readonly degradedReason?: string;
+} | {
+  readonly kind: "unavailable";
+  readonly required: false;
+  readonly outcome: ToolPreflightFailure;
+  readonly degradedReason?: undefined;
 };
+
+/** A catalog failure occurs before any tool adapter can execute. */
+export function lookupToolBinding(tools: ToolPort, name: string): ToolBindingLookup {
+  let bindings: ReadonlyArray<ToolBinding>;
+  try {
+    bindings = tools.snapshot();
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") throw error;
+
+    return { kind: "unavailable", outcome: { outcome: "error", code: "tool_catalog_unavailable",
+      message: "The tool catalog is unavailable. This call was not executed; rediscover the available tools before trying again." } };
+  }
+
+  const binding = bindings.find(item => item.name === name);
+  return binding === undefined
+    ? { kind: "unavailable", outcome: { outcome: "error", code: "unknown_tool",
+      message: `${name} is not available. This call was not executed; use a tool from the current catalog.` } }
+    : { kind: "available", binding };
+}
 
 export type ToolCancelResult =
   | { readonly ok: true }
@@ -23,12 +55,14 @@ export function readToolApprovalRequirement(
   sandbox?: ToolSandbox,
   permission?: PermissionPort,
 ): ToolApprovalRequirement {
+  const lookup = lookupToolBinding(tools, name);
+  if (lookup.kind === "unavailable") return { ...lookup, required: false };
+
   try {
-    const binding = tools.snapshot().find((item) => item.name === name);
-    return { required: binding === undefined || binding.needsApproval || permission?.isDenied?.(name) === true || (call !== undefined && sandbox?.requiresApproval?.(call) === true) };
+    return { kind: "available", required: lookup.binding.needsApproval || permission?.isDenied?.(name) === true || (call !== undefined && sandbox?.requiresApproval?.(call) === true) };
   } catch (err) {
     const detail = err instanceof Error ? err.message : "tool_snapshot_error";
-    return { required: true, degradedReason: `tool_snapshot_unavailable:${detail}` };
+    return { kind: "available", required: true, degradedReason: `tool_snapshot_unavailable:${detail}` };
   }
 }
 
@@ -77,12 +111,14 @@ type DeclaredParameters = ReadonlyMap<string, string | undefined>;
 
 function declaredParameters(tools: ToolPort, name: string): DeclaredParameters {
   const declared = new Map<string, string | undefined>();
+
   try {
     const binding = tools.snapshot().find((item) => item.name === name);
     const properties = binding?.parameters[DECLARED_PROPERTY];
     if (typeof properties !== "object" || properties === null || Array.isArray(properties)) {
       return declared;
     }
+
     for (const [key, schema] of Object.entries(properties)) {
       const type =
         typeof schema === "object" && schema !== null && !Array.isArray(schema)
@@ -95,6 +131,7 @@ function declaredParameters(tools: ToolPort, name: string): DeclaredParameters {
     // here it simply means "no shape is known", so nothing is rewritten.
     return new Map<string, string | undefined>();
   }
+
   return declared;
 }
 
@@ -109,7 +146,9 @@ export function unwrapWrappedArguments(
   if (declared.size === 0) {
     return args;
   }
+
   let merged: Record<string, JsonValue> | undefined;
+
   for (const [key, value] of Object.entries(args)) {
     const wrapped =
       declared.get(key) !== "object" &&
@@ -118,8 +157,10 @@ export function unwrapWrappedArguments(
     if (!wrapped) {
       continue;
     }
+
     merged = merged ?? { ...args };
     delete merged[key];
+
     for (const [inner, innerValue] of Object.entries(value as JsonObject)) {
       // A parameter the model also placed at the top level stays as it wrote
       // it; the wrapper only fills in what is missing.
@@ -128,6 +169,7 @@ export function unwrapWrappedArguments(
       }
     }
   }
+
   return merged === undefined ? args : (merged as JsonObject);
 }
 

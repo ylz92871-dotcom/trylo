@@ -33,48 +33,59 @@ const specifierPattern =
 
 function importedSpecifiers(source: string): string[] {
   const specifiers: string[] = [];
+
   for (const match of source.matchAll(specifierPattern)) {
     const specifier = match[1];
     if (specifier !== undefined) {
       specifiers.push(specifier);
     }
   }
+
   return specifiers;
 }
 
 function forbiddenImportsIn(source: string): ForbiddenHit[] {
   const hits: ForbiddenHit[] = [];
+
   for (const specifier of importedSpecifiers(source)) {
     const segments = specifier.replaceAll("\\", "/").split("/");
+
     for (const layer of segments) {
       if (forbiddenLayers.has(layer)) {
         hits.push({ specifier, layer });
       }
     }
+
     for (const pkg of forbiddenPackages) {
       if (specifier === pkg || specifier.startsWith(`${pkg}/`)) {
         hits.push({ specifier, layer: pkg });
       }
     }
   }
+
   return hits;
 }
 
 async function productionTsFiles(root: string): Promise<string[]> {
   const files: string[] = [];
   const pending: string[] = [root];
+
   while (pending.length > 0) {
     const current = pending.pop();
     if (current === undefined) {
       break;
     }
+
     const entries = await readdir(current, { withFileTypes: true });
+
     for (const entry of entries) {
       const fullPath = join(current, entry.name);
+
       if (entry.isDirectory()) {
         pending.push(fullPath);
         continue;
       }
+
       if (
         entry.isFile() &&
         entry.name.endsWith(".ts") &&
@@ -84,11 +95,13 @@ async function productionTsFiles(root: string): Promise<string[]> {
       }
     }
   }
+
   return files;
 }
 
 test("loop and domain must not import adapters or knowledge", async () => {
   const violations: string[] = [];
+
   for (const root of coreRoots) {
     for (const file of await productionTsFiles(root)) {
       const source = await readFile(file, "utf8");
@@ -99,6 +112,7 @@ test("loop and domain must not import adapters or knowledge", async () => {
       }
     }
   }
+
   assert.deepEqual(violations, []);
 });
 
@@ -110,6 +124,7 @@ test("detector fails when a loop file imports knowledge", async () => {
     "forbidden-loop-import-knowledge.ts",
   );
   const hits = forbiddenImportsIn(await readFile(fixture, "utf8"));
+
   assert.equal(
     hits.some((hit) => hit.layer === "knowledge"),
     true,
@@ -125,6 +140,7 @@ test("detector fails when a loop file imports adapters", async () => {
     "forbidden-loop-import-adapters.ts",
   );
   const hits = forbiddenImportsIn(await readFile(fixture, "utf8"));
+
   assert.equal(
     hits.some((hit) => hit.layer === "adapters"),
     true,
@@ -140,6 +156,7 @@ test("detector fails when a loop file imports journal, learning, or tooling", as
     "forbidden-loop-import-journal.ts",
   );
   const hits = forbiddenImportsIn(await readFile(fixture, "utf8"));
+
   for (const layer of ["journal", "learning", "tooling"]) {
     assert.equal(
       hits.some((hit) => hit.layer === layer),

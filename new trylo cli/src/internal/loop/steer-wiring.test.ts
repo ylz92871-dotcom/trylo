@@ -42,6 +42,7 @@ function endlessToolProvider(): { readonly requests: unknown[]; readonly port: P
           { type: "tool_call", toolCallId: `call-${requests.length}`, name: "echo", arguments: { text: "hi" } },
           { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ];
+
         for (const event of events) {
           yield event;
         }
@@ -73,13 +74,16 @@ test("a message addressed to another turn is never promoted into this one", asyn
       if (handedOver) {
         return [];
       }
+
       handedOver = true;
+
       // Typed for the turn before this one: the late arrival the work package
       // exists to stop.
       return [{ text: "LATE-FROM-THE-PREVIOUS-TURN", mode: "steer", turnId: "turn-before" }];
     }),
     { ...REQUEST, budget: { maxIterations: 3 } },
   );
+
   assert.equal(
     result.inputs.some((input) => input.type === "user_input"),
     false,
@@ -106,6 +110,7 @@ test("a message addressed to this turn is promoted, and the same host is not ask
     { ...REQUEST, budget: { maxIterations: 3 } },
   );
   const steers = result.inputs.filter((input) => input.type === "user_input");
+
   assert.equal(steers.length, 1, "consumed exactly once");
   assert.equal(steers[0]?.text, "ADDRESSED-HERE");
   assert.deepEqual(result.unconsumedInput, []);
@@ -124,17 +129,21 @@ test("a host that floods the turn loses nothing: everything is delivered or hand
         mode: "queue" as const,
         turnId: REQUEST.turnId,
       }));
+
       offered.push(...batch.map((item) => item.text));
+
       return batch;
     }),
     { ...REQUEST, budget: { maxIterations: 2 } },
   );
+
   assert.equal(result.state.terminalReason, "failed");
   const delivered = result.inputs
     .filter((input) => input.type === "user_input")
     .map((input) => input.text);
   const accounted = new Set([...delivered, ...result.unconsumedInput.map((item) => item.text)]);
   const lost = offered.filter((text) => !accounted.has(text));
+
   assert.deepEqual(lost, [], "no message may vanish between the host and the result");
   assert.equal(calls <= 2, true, `the loop must stop asking; it asked ${calls} times`);
 });
@@ -147,7 +156,9 @@ test("what a turn took and never delivered is handed back, not forgotten", async
       if (handedOver) {
         return [];
       }
+
       handedOver = true;
+
       return [
         { text: "DELIVERED", mode: "queue", turnId: REQUEST.turnId },
         { text: "NEVER-DELIVERED-1", mode: "queue", turnId: REQUEST.turnId },
@@ -158,8 +169,10 @@ test("what a turn took and never delivered is handed back, not forgotten", async
     // budget ends the turn with the other two still held.
     { ...REQUEST, budget: { maxIterations: 1 } },
   );
+
   assert.equal(result.state.terminalReason, "failed");
   const delivered = result.inputs.filter((input) => input.type === "user_input").map((input) => input.text);
+
   assert.deepEqual(delivered, ["DELIVERED"], "a queue promotes one message per gap");
   assert.deepEqual(
     result.unconsumedInput.map((input) => input.text),
@@ -185,6 +198,7 @@ test("a turn that consumed everything reports no debt", async () => {
 test("one steer still buys back the steps the run spent going the wrong way", async () => {
   const provider = endlessToolProvider();
   let handedOver = false;
+
   await runTurn(
     portsOf(provider.port, () => {
       if (handedOver) {
@@ -223,6 +237,7 @@ test("a steer at every gap cannot buy an unbounded turn", async () => {
     }),
     { ...REQUEST, budget: { maxIterations: 3 } },
   );
+
   assert.equal(result.state.phase, "terminal", "the turn must end");
   // A refund comes out of an allowance no larger than one turn's budget, so the
   // ceiling can be bought once and not again: at most twice the steps.
@@ -262,6 +277,7 @@ function hostFor(incoming: ReadonlyArray<AddressedUserInput>) {
     nextEventId: () => "evt",
     appendUser: () => {},
   };
+
   return { host, aside, queueLength: () => queue.length, asks: () => asks };
 }
 
@@ -273,6 +289,7 @@ test("a drain never pushes the queue past the ceiling, and sets the excess aside
   }));
   const { host, aside, queueLength } = hostFor(incoming);
   const count = drainPendingInput(host, REQUEST.turnId);
+
   assert.equal(count, MAX_PENDING_INPUT);
   assert.equal(queueLength(), MAX_PENDING_INPUT);
   assert.equal(aside.length, 4);
@@ -281,10 +298,12 @@ test("a drain never pushes the queue past the ceiling, and sets the excess aside
 
 test("a queue already at the ceiling is not asked for another thing", () => {
   const { host, asks, queueLength } = hostFor([{ text: "more", mode: "queue", turnId: REQUEST.turnId }]);
+
   // Fill it the way a turn would: repeatedly, through the same drain.
   for (let index = 0; index < MAX_PENDING_INPUT + 2; index += 1) {
     drainPendingInput(host, REQUEST.turnId);
   }
+
   assert.equal(queueLength(), MAX_PENDING_INPUT);
   assert.equal(asks(), MAX_PENDING_INPUT, "the drain stops asking once there is no room");
 });

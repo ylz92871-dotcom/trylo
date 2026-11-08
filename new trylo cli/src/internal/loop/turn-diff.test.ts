@@ -45,6 +45,7 @@ const MOVE_AB_PREVIEW = ["--- a/a.ts", "+++ b/b.ts", "@@ -1,1 +1,1 @@", "-old-a"
 
 test("empty turn has no diff", () => {
   const tracker = createTurnDiffTracker();
+
   assert.equal(tracker.unifiedDiff(), undefined);
   assert.deepEqual(tracker.summary(), {
     files: 0,
@@ -58,6 +59,7 @@ test("empty turn has no diff", () => {
 
 test("one update renders its preview and counts lines", () => {
   const tracker = createTurnDiffTracker();
+
   tracker.track({ path: "keep.ts", op: "updated", preview: UPDATE_PREVIEW, exact: true });
   assert.equal(tracker.unifiedDiff(), UPDATE_PREVIEW);
   assert.deepEqual(tracker.summary(), {
@@ -111,6 +113,7 @@ test("move renders once with origin, sorted among paths", () => {
 
 test("binary change renders a differ line and counts no rows", () => {
   const tracker = createTurnDiffTracker();
+
   tracker.track({ path: "logo.png", op: "updated", preview: "unreadable-bytes", exact: true, binary: true });
   assert.equal(tracker.unifiedDiff(), "Binary files a/logo.png and b/logo.png differ\n");
   assert.deepEqual(tracker.summary(), {
@@ -125,6 +128,7 @@ test("binary change renders a differ line and counts no rows", () => {
 
 test("inexact delta invalidates the whole turn", () => {
   const tracker = createTurnDiffTracker();
+
   tracker.track({ path: "keep.ts", op: "updated", preview: UPDATE_PREVIEW, exact: true });
   tracker.track({ path: "half.ts", op: "updated", preview: "partial", exact: false });
   assert.equal(tracker.valid, false);
@@ -157,9 +161,11 @@ test("F4 counter-example A: move plus recreate renders two additions, never a re
   // Red evidence: with the old render (origins map only) the diff contained
   // both "rename from a.ts to b.ts" and a second a.ts section.
   const tracker = createTurnDiffTracker();
+
   tracker.track({ path: "b.ts", op: "moved", from: "a.ts", preview: MOVE_PREVIEW, exact: true });
   tracker.track({ path: "a.ts", op: "added", preview: ADD_PREVIEW, exact: true, isNew: true });
   const diff = tracker.unifiedDiff() ?? "";
+
   assert.ok(!diff.includes("rename from"), `must not pair:\n${diff}`);
   assert.deepEqual(tracker.summary().files, 2);
 });
@@ -171,6 +177,7 @@ test("F4 counter-example B: move onto an existing file renders change plus delet
   // content. Red evidence: the old render printed "rename from a.ts to b.ts"
   // and lost the fact that b.ts previously existed.
   const tracker = createTurnDiffTracker();
+
   tracker.track({
     path: "b.ts",
     op: "moved",
@@ -180,6 +187,7 @@ test("F4 counter-example B: move onto an existing file renders change plus delet
     overwrote: true,
   });
   const diff = tracker.unifiedDiff() ?? "";
+
   assert.ok(!diff.includes("rename from"), `must not pair an overwrite:\n${diff}`);
   assert.match(diff, /\+\+\+ b\/b\.ts/);
   assert.match(diff, /--- a\/a\.ts\n\+\+\+ \/dev\/null/);
@@ -189,6 +197,7 @@ test("F4 counter-example B: move onto an existing file renders change plus delet
 
 test("a retained origin preview renders the full deletion", () => {
   const tracker = createTurnDiffTracker();
+
   tracker.track({
     path: "b.ts",
     op: "moved",
@@ -199,6 +208,7 @@ test("a retained origin preview renders the full deletion", () => {
     originPreview: DELETE_PREVIEW_A,
   });
   const diff = tracker.unifiedDiff() ?? "";
+
   assert.ok(diff.includes(DELETE_PREVIEW_A.trim()));
 });
 
@@ -213,6 +223,7 @@ test("moving a turn-created file pairs nothing and stays an addition", () => {
 
 test("feeder maps an apply_patch outcome value, honouring exact", () => {
   const tracker = createTurnDiffTracker();
+
   feedTurnDiffFromOutcome(tracker, {
     applied: [
       { op: "added", path: "fresh.ts", bytes: 6, mode: "created", preview: ADD_PREVIEW },
@@ -226,16 +237,19 @@ test("feeder maps an apply_patch outcome value, honouring exact", () => {
   assert.equal(tracker.valid, true);
   assert.deepEqual(tracker.summary().files, 4);
   const diff = tracker.unifiedDiff() ?? "";
+
   assert.match(diff, /rename from old\.ts\nrename to new\.ts/);
 });
 
 test("feeder invalidates on an inexact batch and on malformed changes", () => {
   const inexact = createTurnDiffTracker();
+
   feedTurnDiffFromOutcome(inexact, { applied: [], exact: false, fileWrites: [] });
   assert.equal(inexact.valid, false);
   assert.match(inexact.invalidReason ?? "", /inexact/);
 
   const malformed = createTurnDiffTracker();
+
   feedTurnDiffFromOutcome(malformed, { applied: [{ op: "moved", path: "x" }], exact: true, fileWrites: [] });
   assert.equal(malformed.valid, false);
 });
@@ -250,6 +264,7 @@ test("feeder ignores non-mutating tools and shapes", () => {
 
 test("single-file writes without previews count in the trailer, never invented", () => {
   const tracker = createTurnDiffTracker();
+
   feedTurnDiffFromOutcome(tracker, {
     fileWrite: { kind: "file_write", path: "over.ts", bytes: 9, mode: "overwritten" },
     path: "over.ts",
@@ -260,5 +275,6 @@ test("single-file writes without previews count in the trailer, never invented",
   assert.deepEqual(tracker.summary().files, 1);
   assert.deepEqual(tracker.summary().unrendered, 1);
   const diff = tracker.unifiedDiff() ?? "";
+
   assert.match(diff, /without retained previews/);
 });

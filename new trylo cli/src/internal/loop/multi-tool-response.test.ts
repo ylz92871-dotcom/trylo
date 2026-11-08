@@ -25,6 +25,7 @@ function scripted(
 ): { readonly requests: ProviderRequest[]; readonly port: ProviderPort } {
   const requests: ProviderRequest[] = [];
   let index = 0;
+
   return {
     requests,
     port: {
@@ -34,7 +35,9 @@ function scripted(
         // stream's terminal event, so anything after the last `yield` may never
         // run and the same script would be replayed on the next request.
         const events = script[index] ?? [];
+
         index += 1;
+
         for (const event of events) {
           yield event;
         }
@@ -98,6 +101,7 @@ test("one response asking for four tools settles all four and the next request c
   assert.equal(result.state.terminalReason, "completed");
   // Every call is answered exactly once, in the order the provider asked.
   const settled = result.transcript.filter((item) => item.kind === "tool_result");
+
   assert.deepEqual(
     settled.map((item) => item.toolCallId),
     ["c1", "c2", "c3", "c4"],
@@ -106,6 +110,7 @@ test("one response asking for four tools settles all four and the next request c
   // The follow-up request must hold one `tool` message per `tool_call`, or the
   // provider rejects the whole turn for an unanswered call.
   const assistant = provider.requests[1]?.messages.find((message) => message.toolCalls !== undefined);
+
   assert.deepEqual(
     assistant?.toolCalls?.map((call) => call.toolCallId),
     ["c1", "c2", "c3", "c4"],
@@ -146,6 +151,7 @@ test("a read followed by a write that needs approval settles both, in order", as
   assert.deepEqual(asked, ["write-1"]);
   assert.equal(result.state.terminalReason, "completed");
   const settled = result.transcript.filter((item) => item.kind === "tool_result");
+
   assert.deepEqual(
     settled.map((item) => item.toolCallId),
     ["read-1", "write-1"],
@@ -183,11 +189,13 @@ test("a refused write is a visible result, and its unapproved sibling still runs
   assert.equal(result.state.terminalReason, "completed");
   assert.deepEqual(executed, ["read-1"]);
   const settled = result.transcript.filter((item) => item.kind === "tool_result");
+
   assert.deepEqual(
     settled.map((item) => item.toolCallId),
     ["read-1", "write-1"],
   );
   const refusal = settled.find((item) => item.toolCallId === "write-1");
+
   assert.equal(refusal?.kind === "tool_result" ? refusal.outcome : undefined, "failed");
   assert.equal(
     refusal?.kind === "tool_result" ? refusal.output.startsWith("permission_denied") : false,

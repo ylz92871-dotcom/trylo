@@ -146,22 +146,28 @@ export function createTurnDiffTracker(): TurnDiffTracker {
     if (from === undefined || from === path) {
       return undefined;
     }
+
     const earlier = origins.get(from) ?? from;
+
     origins.delete(from);
     origins.delete(path);
+
     if (earlier !== path) {
       origins.set(path, earlier);
     }
+
     return earlier;
   }
 
   function trackDelete(path: string, change: TurnDiffChange): void {
     current.delete(path);
     origins.delete(path);
+
     if (createdThisTurn.has(path)) {
       createdThisTurn.delete(path);
       return;
     }
+
     tombstones.set(path, {
       from: undefined,
       preview: change.preview,
@@ -173,9 +179,11 @@ export function createTurnDiffTracker(): TurnDiffTracker {
   function trackUpsert(path: string, change: TurnDiffChange, origin: string | undefined): void {
     tombstones.delete(path);
     const seen = current.get(path);
+
     if (change.op === "added" && change.isNew === true) {
       createdThisTurn.add(path);
     }
+
     current.set(path, {
       from: origin ?? seen?.from,
       preview: change.preview,
@@ -188,22 +196,28 @@ export function createTurnDiffTracker(): TurnDiffTracker {
     const originWasNew = createdThisTurn.has(from);
     const origin = noteOrigin(change.path, from);
     const carried = current.get(from);
+
     current.delete(from);
     tombstones.delete(from);
+
     if (change.overwrote === true) {
       // Move onto an existing destination: no pairing, ever. The destination
       // keeps whatever created-status it already had; the origin only leaves
       // a tombstone when it predates the turn.
       origins.delete(change.path);
+
       if (originWasNew) {
         createdThisTurn.delete(from);
       }
+
       const { from: _origin, ...kept } = change;
+
       trackUpsert(change.path, { ...kept, op: "updated" }, undefined);
       const dest = current.get(change.path);
       if (dest !== undefined && carried !== undefined) {
         current.set(change.path, { ...dest, writes: dest.writes + carried.writes });
       }
+
       if (!originWasNew) {
         tombstones.set(from, {
           from: undefined,
@@ -212,13 +226,16 @@ export function createTurnDiffTracker(): TurnDiffTracker {
           writes: 1,
         });
       }
+
       return;
     }
+
     if (originWasNew) {
       // The destination's bytes are all-new, but the origin stays marked:
       // it was never in the baseline, so no pairing may claim it was.
       createdThisTurn.add(change.path);
     }
+
     trackUpsert(change.path, change, origin ?? carried?.from ?? from);
     const entry = current.get(change.path);
     if (entry !== undefined && carried !== undefined) {
@@ -231,27 +248,34 @@ export function createTurnDiffTracker(): TurnDiffTracker {
       if (!valid) {
         return;
       }
+
       if (change.path.length === 0) {
         tracker.invalidate("a change arrived without a path");
         return;
       }
+
       if (!change.exact) {
         tracker.invalidate(`inexact delta for ${change.path}`);
         return;
       }
+
       if (change.op === "moved") {
         const from = change.from ?? "";
         if (from.length === 0) {
           tracker.invalidate(`a move arrived without a source for ${change.path}`);
           return;
         }
+
         trackMoved(change, from);
+
         return;
       }
+
       if (change.op === "deleted") {
         trackDelete(change.path, change);
         return;
       }
+
       // A later write to a rename destination keeps the origin: the net
       // change is still "moved from there", now with newer content.
       trackUpsert(change.path, change, undefined);
@@ -274,71 +298,89 @@ export function createTurnDiffTracker(): TurnDiffTracker {
       if (!valid || (current.size === 0 && tombstones.size === 0)) {
         return undefined;
       }
+
       const paths = [...current.keys(), ...tombstones.keys()].sort();
       const handled = new Set<string>();
       const parts: string[] = [];
       let unrendered = 0;
+
       for (const path of paths) {
         if (handled.has(path)) {
           continue;
         }
+
         handled.add(path);
         const tombstone = tombstones.get(path);
         if (tombstone !== undefined) {
           parts.push(renderDeletion(path, tombstone));
           continue;
         }
+
         const entry = current.get(path);
         if (entry === undefined) {
           continue;
         }
+
         if (entry.preview === undefined && !entry.binary) {
           unrendered += 1;
           continue;
         }
+
         const origin = pairOrigin(path, entry);
+
         parts.push(renderEntry(path, entry, origin));
       }
+
       if (unrendered > 0) {
         parts.push(
           `... [${unrendered} changed file(s) without retained previews are listed in the turn summary, not rendered here] ...\n`,
         );
       }
+
       if (parts.length === 0) {
         return undefined;
       }
+
       const joined = parts.join("");
       if (joined.length <= MAX_DIFF_CHARS) {
         return joined;
       }
+
       return `${joined.slice(0, MAX_DIFF_CHARS)}\n... [turn diff truncated: ${joined.length - MAX_DIFF_CHARS} more chars] ...\n`;
     },
     summary(): TurnDiffSummary {
       if (!valid) {
         return { files: 0, insertions: 0, deletions: 0, binaryFiles: 0, collapsed: 0, unrendered: 0 };
       }
+
       let insertions = 0;
       let deletions = 0;
       let binaryFiles = 0;
       let collapsed = 0;
       let unrendered = 0;
       const entries = [...current.values(), ...tombstones.values()];
+
       for (const entry of entries) {
         if (entry.binary) {
           binaryFiles += 1;
           continue;
         }
+
         if (entry.preview === undefined) {
           unrendered += 1;
           continue;
         }
+
         const counted = countPreview(entry.preview);
+
         insertions += counted.insertions;
         deletions += counted.deletions;
+
         if (entry.writes > 1) {
           collapsed += 1;
         }
       }
+
       return { files: current.size + tombstones.size, insertions, deletions, binaryFiles, collapsed, unrendered };
     },
   };
@@ -354,15 +396,19 @@ export function createTurnDiffTracker(): TurnDiffTracker {
     if (origin === undefined) {
       return undefined;
     }
+
     if (current.has(origin)) {
       return undefined;
     }
+
     if (createdThisTurn.has(origin)) {
       return undefined;
     }
+
     if (tombstones.has(path)) {
       return undefined;
     }
+
     return origin;
   }
 

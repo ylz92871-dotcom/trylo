@@ -94,7 +94,7 @@ export type AdmissionSource = "prompt" | "remembered" | "policy" | "escalation" 
 
 export type ToolAdmission =
   | { readonly kind: "approved"; readonly source: AdmissionSource }
-  | { readonly kind: "denied"; readonly source: AdmissionSource; readonly reason?: PermissionReason }
+  | { readonly kind: "denied"; readonly source: AdmissionSource; readonly reason?: PermissionReason; readonly message?: string }
   | { readonly kind: "cancelled"; readonly reason?: PermissionReason }
   | { readonly kind: "expired" }
   | { readonly kind: "failed"; readonly message: string }
@@ -140,11 +140,14 @@ export async function admitToolCall(
   // A standing operator denial cannot be overridden by a previous exact-call
   // approval, an execution-policy allowance, a reviewer or an escalation.
   if (ports.permission.isDenied?.(request.name) === true) return { kind: "denied", source: "policy", reason: "policy_denied" };
+
   if (ports.grants.isDenied(request.name)) return { kind: "denied", source: "remembered", reason: "remembered_denial" };
+
   const stopped = await runSandboxGuard(ports, request);
   if (stopped !== undefined) {
     return stopped;
   }
+
   if (ports.execPolicy !== undefined) {
     const verdict = ports.execPolicy(request);
     if (verdict !== undefined) {
@@ -154,6 +157,7 @@ export async function admitToolCall(
       return { kind: "approved", source: "policy" };
     }
   }
+
   const action = actionFor(request);
   const repeated = ports.doom.observe(action);
   if (repeated === false) {
@@ -161,24 +165,30 @@ export async function admitToolCall(
     if (remembered.kind === "approved") {
       return { kind: "approved", source: "remembered" };
     }
+
     if (remembered.kind === "denied") {
       return { kind: "denied", source: "remembered", reason: "remembered_denial" };
     }
   }
+
   const reviewed = await runReviewerGuard(ports, request, action);
   if (reviewed !== undefined) {
     return reviewed;
   }
+
   const answered = await awaitPermissionDecision(ports.permission, action);
   if (answered.outcome === "failed") {
     return { kind: "failed", message: answered.message };
   }
+
   ports.grants.record(action, answered.resolution, answered.scope);
+
   switch (answered.resolution) {
     case "approved":
       return { kind: "approved", source: "prompt" };
     case "denied":
-      return { kind: "denied", source: "prompt", ...(answered.reason === undefined ? {} : { reason: answered.reason }) };
+      return { kind: "denied", source: "prompt", ...(answered.reason === undefined ? {} : { reason: answered.reason }),
+        ...(answered.message === undefined ? {} : { message: answered.message }) };
     case "cancelled":
       return { kind: "cancelled", ...(answered.reason === undefined ? {} : { reason: answered.reason }) };
     default:
@@ -205,6 +215,7 @@ async function runReviewerGuard(
   if (ports.reviewer === undefined) {
     return undefined;
   }
+
   const review: ReviewRequest = {
     action,
     // A retry is a call the sandbox already refused once and a person already
@@ -216,6 +227,7 @@ async function runReviewerGuard(
   if (outcome.kind === "unavailable") {
     return undefined;
   }
+
   switch (outcome.verdict.answer) {
     case "allow":
       return { kind: "approved", source: "reviewed" };
@@ -247,6 +259,7 @@ async function runSandboxGuard(
   if (ports.sandbox === undefined) {
     return undefined;
   }
+
   const verdict = ports.sandbox.evaluate({
     toolCallId: request.toolCallId,
     name: request.name,
@@ -255,9 +268,11 @@ async function runSandboxGuard(
   if (verdict.ok) {
     return undefined;
   }
+
   if (ports.escalation === undefined) {
     return { kind: "sandbox_rejected", code: verdict.code, message: verdict.message };
   }
+
   const input: EscalationInput = {
     toolCallId: request.toolCallId,
     name: request.name,
@@ -268,19 +283,24 @@ async function runSandboxGuard(
   if (request.resume !== undefined && ports.escalation.redeem(request.resume, input)) {
     return undefined;
   }
+
   if (!isEscalatableRefusal(verdict.code)) {
     return { kind: "sandbox_rejected", code: verdict.code, message: verdict.message };
   }
+
   const asked = await ports.escalation.request(input);
   if (asked.ok) {
     return { kind: "approved", source: "escalation" };
   }
+
   if (asked.reason === "cancelled") {
     return { kind: "cancelled", reason: "user_cancelled" };
   }
+
   if (asked.reason === "failed") {
     return { kind: "failed", message: asked.message };
   }
+
   return {
     kind: "sandbox_rejected",
     code: verdict.code,

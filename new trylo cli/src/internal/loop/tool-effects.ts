@@ -22,7 +22,9 @@ function isEffect(value: unknown): value is ToolFileWriteEffect {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return false;
   }
+
   const record = value as Readonly<Record<string, unknown>>;
+
   return (
     record.kind === "file_write" &&
     typeof record.path === "string" &&

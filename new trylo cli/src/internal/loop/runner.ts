@@ -2,17 +2,17 @@ import type { ProfilePort } from "../contract/profile.js";
 import type { Message } from "../contract/execution.js";
 import type { VerificationStatus } from "../contract/execution.js";
 import type { ReduceInput } from "../domain/input.js";
-import { decideIterationEnd, streamCostUsd, type IterationBudget, type UsagePricing } from "../domain/iteration.js";
-import { budgetCeiling, outputBudgetSpent, fitRequestToContext } from "./budget-gate.js";
+import { decideIterationEnd, type IterationBudget, type UsagePricing } from "../domain/iteration.js";
+import { budgetCeiling, callerBudgetSpent } from "./budget-gate.js";
 import type { ExecutionState } from "../domain/state.js";
 import type { CompactRecordDraft, CompactWindow } from "../ports/compaction.js";
 import type { PermissionPort } from "../ports/permission.js";
-import { accumulateUsage, providerContinuationScope, type ProviderMessage, type ProviderPort, type ProviderUsage, type SystemPromptDirective } from "../ports/provider.js";
+import { type ProviderMessage, type ProviderPort, type ProviderUsage, type SystemPromptDirective } from "../ports/provider.js";
 import type { SessionRecord } from "../ports/session.js";
 import type { ToolPort, ToolSandbox } from "../ports/tools.js";
 import type { Envelope, JsonObject } from "../protocol/envelope.js";
 import type { Transcript } from "../protocol/transcript.js";
-import { promptContextFor, type CompactionWiring } from "./compact-boundary.js";
+import type { CompactionWiring } from "./compact-boundary.js";
 import type { DoomLoopTracker } from "./doom-loop.js";
 import type { MethodChannelTake } from "./method-channel.js";
 import type { MethodLearningPort } from "./method-port.js";
@@ -22,7 +22,7 @@ import type { ToolGapPort } from "./tool-gap-port.js";
 import { reportBeat, reportToolGapBeat, reportTurnEnd, teachingFor } from "./method-signal.js";
 import { emitRaw, nextId, type EnvelopeSink } from "./journal-emit.js";
 import type { PermissionGrantCache } from "./permission-grants.js";
-import { buildRequest } from "./request.js";
+import { prepareIterationRequest, recoverIterationRequest, type PreparedIterationRequest } from "./iteration-request.js";
 import { consumeProviderStream } from "./stream.js";
 import { isSuccessfulStreamFinish } from "./stream-verdict.js";
 import { nextTranscriptSequence } from "./transcript-messages.js";
@@ -44,17 +44,19 @@ import type { ExecutionProgressPort } from "../ports/execution-progress.js";
 import type { ExecPolicyGuard } from "./tool-admission.js";
 import { flushProgress, flushStreamItems, preserveOpenBlocks } from "./progress.js";
 import { applyTurnRepairs } from "./turn-repairs.js";
-import { budgetIteration, type BudgetIteration } from "./budget-final-report.js";
+import { budgetIteration } from "./budget-final-report.js";
+import { hasUnknownToolResult, repeatedTruncation, reportInterruption, reportUnknownSettlement, type IterationPurpose } from "./interruption-report.js";
+import { goalBoundary, stopInactiveGoal } from "./goal-boundary.js";
+import { capturePromptMeasurement, measureNativeRequestIdentity } from "./prompt-measurement.js";
+import { recordMainUsage, type ParentUsageAccounting } from "./auxiliary-usage.js";
+import type { PromptInputCheckpoint } from "../ports/prompt-input.js";
+import type { PromptInputCheckpointRecovery } from "./prompt-input-records.js";
+import { recordPromptInputObservation, observePromptInputSelection } from "./prompt-input-lifecycle.js";
+import { capturePersistableInputIdentity } from "./prompt-input-identity.js";
 
-/**
- * How many provider-rejection recoveries one turn may attempt (WP09.3/L06).
- * One, not zero: a refusal a compaction can answer deserves its answer. One,
- * not two: a provider that rejects the compacted view too has said something
- * the loop cannot fix, and the turn must end as that failure.
- */
-const MAX_REACTIVE_RECOVERIES_PER_TURN = 1;
 
 export type LoopPorts = {
+  readonly goal?: import("../ports/goal.js").GoalExecutionPort;
   /** A host-configured command policy participates in the same admission owner. */
   readonly execPolicy?: ExecPolicyGuard;
   /** Awaited durable facts before effects; absent preserves the library path. */
@@ -193,7 +195,7 @@ export type RunTurnRequest = {
   readonly responseSchema?: JsonObject;
 };
 
-export type RunTurnResult = {
+export type RunTurnResult = ParentUsageAccounting & {
   readonly state: ExecutionState;
   readonly envelopes: readonly Envelope[];
   readonly checksums: readonly string[];
@@ -203,6 +205,9 @@ export type RunTurnResult = {
   readonly transcript: Transcript;
   readonly usage: ProviderUsage;
   readonly iterations: number;
+  /** Last proven main request, persisted only beside its matching stream_end. */
+  readonly promptInputCheckpoint?: PromptInputCheckpoint;
+  readonly promptInputRecovery?: Extract<PromptInputCheckpointRecovery, { readonly kind: "unavailable" }>;
   /** Windows stored this turn, oldest first; the loop writes no journal itself. */
   readonly compactions: readonly CompactRecordDraft[];
   /** Derived decision numbering for mapping compact bounds onto durable records. */
@@ -228,8 +233,11 @@ export async function runTurn(ports: LoopPorts, request: RunTurnRequest): Promis
   // The host — seed messages, transcript, every port defaulted — is assembled
   // out of line; what follows is the turn's phases, in the order they happen.
   const engine = await assembleEngine(ports, request, abort);
+
+  await ports.goal?.checkpoint(0, request.turnId);
   await flushProgress(engine, ports);
   const cancelled = followCancellation(request.cancelSignal, engine);
+
   await dispatch(engine, ports, {
     type: "start_turn",
     eventId: nextId(engine),
@@ -239,13 +247,15 @@ export async function runTurn(ports: LoopPorts, request: RunTurnRequest): Promis
     text: request.text,
   });
   await runIterations(engine, ports, cancelled);
-  await applyTurnRepairs(engine, ports, request, cancelled, runIterations);
-  await reportTurnEnd(ports.method, engine.state.turnId);
+  if (!hasUnknownToolResult(engine)) await applyTurnRepairs(engine, ports, request, cancelled, runIterations);
+  await reportTurnEnd(ports.method, engine.state.turnId, engine.state.terminalReason === "cancelled" ? AbortSignal.abort() : request.cancelSignal);
   // Before the flush, not on the way out: the recorder persists
   // `engine.transcript`, so a cancelled turn's open calls have to be answered in
   // the journal itself and not only in the value this function returns.
   settleTranscript(engine);
   await flushProgress(engine, ports);
+  await ports.goal?.checkpoint(engine.usage.totalTokens, engine.state.turnId);
+
   return buildTurnResult(engine);
 }
 
@@ -267,21 +277,28 @@ async function runIterations(
     if (currentPhase(engine) === "terminal") {
       return;
     }
+
     // `cancellationStanding` reads the phase itself, so this is the same
     // question the guard above asked — plus the two ways a cancel is raised.
     if (cancellationStanding(cancelled, engine)) {
       await dispatch(engine, ports, { type: "cancel", eventId: nextId(engine) });
       return;
     }
+
     if (await budgetCeiling(engine, ports)) {
       return;
     }
+
+    if (await stopInactiveGoal(engine, ports)) return;
+
     const iteration = budgetIteration(engine, ports);
     const outcome = await runOneIteration(engine, iteration.ports, cancelled, iteration.purpose);
+
     if (currentPhase(engine) === "terminal") {
       // The stream ended the turn: nothing settled, so there is no beat.
       return;
     }
+
     // Checked before the iteration is settled, not after: a turn whose last beat
     // is one tool call away from `completed` must still obey a cancel that
     // arrived while that call was running.
@@ -289,24 +306,27 @@ async function runIterations(
       await dispatch(engine, ports, { type: "cancel", eventId: nextId(engine) });
       return;
     }
-    // D5: a provider-side truncation (`finish_reason: length`, i.e. the
-    // `max_tokens` we sent — or the provider's own ceiling — cut the stream)
-    // is a failure, never a completion. Without this a `--max-tokens` run that
-    // the provider truncated ends `completed` exit 0: the flag silently did
-    // nothing observable. The usage-budget check beside it is the client-side
-    // half: a provider that ignored `max_tokens` and stopped normally with the
-    // budget spent still fails instead of completing.
-    if (await outputBudgetSpent(engine, ports)) {
+
+    // Explicit cumulative allowances remain authoritative. A provider's single
+    // response limit is handled as continuation, not task completion/failure.
+    if (await callerBudgetSpent(engine, ports)) {
       return;
     }
-    const decision = decideIterationEnd({
+
+    const decision = await goalBoundary(engine, ports, decideIterationEnd({
       providerFinished: outcome.finished,
       unsettledToolInputCount: engine.state.openToolInputIds.length,
       unsettledToolCallCount: unsettledToolCallCount(engine.state),
-      requiresFollowUp: engine.state.requiresFollowUp,
+      requiresFollowUp: engine.state.requiresFollowUp || outcome.toolResultsProduced === true,
       budgetVerdict: { kind: "within_budget" },
       pendingUserInputCount: drainPendingInput(gapHostFor(engine, ports, views), engine.state.turnId),
-    });
+    }), iteration.purpose);
+
+    if (cancellationStanding(cancelled, engine)) {
+      await dispatch(engine, ports, { type: "cancel", eventId: nextId(engine) });
+      return;
+    }
+
     // Reported before the loop decides what comes next, so a card learned on a
     // turn's *last* beat is archived too: archiving never waited for one.
     await reportBeat({
@@ -327,6 +347,7 @@ async function runIterations(
       take: outcome.toolGap,
       emit: (kind, payload) => emitRaw(engine, kind, payload),
     });
+
     if (!(await settleIteration(engine, ports, decision))) {
       return;
     }
@@ -343,18 +364,25 @@ async function settleIteration(
     // The gap: every tool call has settled and the next request is not built
     // yet, so replacing history here cannot race a stream.
     await promoteGapInput(gapHostFor(engine, ports, views));
-    await emitCompactionFor(engine, ports);
+
+    // Prepared adapters own the final message/table shape. Their next request
+    // applies the same soft threshold after its one frozen preparation read.
+    if (ports.provider.prepareRequest === undefined && ports.provider.continuation?.measureRequestIdentity === undefined) await emitCompactionFor(engine, ports);
+
     return true;
   }
+
   if (decision.kind === "complete") {
     await dispatch(engine, ports, { type: "turn_complete", eventId: nextId(engine) });
     return false;
   }
+
   await dispatch(engine, ports, {
     type: "turn_failed",
     eventId: nextId(engine),
     reason: decision.kind === "wait" ? waitingReasonFor(decision.reason) : decision.reason,
   });
+
   return false;
 }
 
@@ -362,6 +390,7 @@ async function settleIteration(
  * Whether the turn continues, and the proposal this beat's channel extracted. */
 type IterationOutcome = {
   readonly finished: boolean;
+  readonly toolResultsProduced?: boolean;
   readonly method: MethodChannelTake | undefined;
   readonly toolGap: ToolGapTake | undefined;
 };
@@ -371,9 +400,11 @@ async function runOneIteration(
   engine: Engine,
   ports: LoopPorts,
   cancelled: CancelWatch,
-  purpose: BudgetIteration["purpose"],
+  purpose: IterationPurpose,
+  recovery?: PreparedIterationRequest,
 ): Promise<IterationOutcome> {
   await dispatch(engine, ports, { type: "begin_stream", eventId: nextId(engine) });
+
   if (engine.contextDegradedReason !== undefined && !engine.contextDegradationReported) {
     emitRaw(engine, "observation", {
       degraded: true,
@@ -381,43 +412,37 @@ async function runOneIteration(
     });
     engine.contextDegradationReported = true;
   }
+
   if (currentPhase(engine) === "terminal") {
     return { finished: false, method: undefined, toolGap: undefined };
   }
+
   engine.iterations += 1;
   // The transcript length the request about to be built will cover; the
   // server's report for it is only comparable to a later basis if the world it
   // measured is recorded beside the number (WP09.1/C35).
   const requestTranscriptLength = engine.transcript.length;
-  const teaching = await teachingFor(
+  const teaching = recovery?.teaching ?? await teachingFor(
     ports.method,
     ports.toolGap,
     engine.state.turnId,
     engine.iterations,
-    ports.tools,
+    ports.tools, engine.transcript,
   );
-  const assembledRequest = buildRequest({
-    attemptId: engine.state.currentAttemptId,
-    model: engine.model,
-    continuationScope: providerContinuationScope(engine.state.sessionId, engine.state.turnId),
-    ...(purpose === "final_report" ? { finalReport: "budget_limit" as const } : {}),
-    tools: ports.tools,
-    prompt: promptContextFor(engine, ports.compaction, ports.tools),
-    // The budget lives on the engine; the request states it so the adapter
-    // actually sends it (D5: --max-tokens never reached the wire before).
-    ...(engine.budget.maxOutputTokens === undefined
-      ? {}
-      : { maxOutputTokens: engine.budget.maxOutputTokens - engine.usage.outputTokens }),
-    ...(teaching.slot === undefined ? {} : { slot: teaching.slot.message }),
-    ...(teaching.toolGapSlot === undefined ? {} : { toolGapSlot: teaching.toolGapSlot }),
-    // WP18.3: caller prompt and schema ride the same way — stated on the
-    // request so the adapter sends them, absent when never asked for.
-    ...(engine.systemPrompt === undefined ? {} : { systemPrompt: engine.systemPrompt }),
-    ...(engine.systemPromptAppend === undefined ? {} : { systemPromptAppend: engine.systemPromptAppend }),
-    ...(engine.responseSchema === undefined ? {} : { responseSchema: engine.responseSchema }),
-  });
-  const request = await fitRequestToContext(engine, ports, assembledRequest);
-  if (request === undefined) return { finished: false, method: undefined, toolGap: undefined };
+  const prepared = recovery ?? await prepareIterationRequest({ engine, ports, purpose, teaching });
+  if (prepared === undefined) return { finished: false, method: undefined, toolGap: undefined };
+
+  if (cancellationStanding(cancelled, engine)) { await dispatch(engine, ports, { type: "cancel", eventId: nextId(engine) });
+    return { finished: false, method: undefined, toolGap: undefined }; }
+
+  if (await callerBudgetSpent(engine, ports)) return { finished: false, method: undefined, toolGap: undefined };
+
+  const request = prepared.request;
+  const requestMeasurement = prepared.requestMeasurement
+    ?? capturePromptMeasurement(request, measureNativeRequestIdentity(ports.provider, request),
+      capturePersistableInputIdentity(ports.provider, request, engine.compaction.window));
+
+  observePromptInputSelection(engine, prepared.budgetDecision, request);
   const streamedInputs = new Set<string>();
   const observation = await consumeProviderStream({
     port: ports.provider, request,
@@ -459,17 +484,14 @@ async function runOneIteration(
         sawStreamStart: true,
       }),
   });
-  engine.promptTokens = observation.usage.inputTokens;
-  engine.promptReport = {
-    promptTokens: observation.usage.inputTokens,
-    transcriptLength: requestTranscriptLength,
-    windowId: engine.compaction.window === undefined ? undefined : engine.compaction.window.windowId,
-  };
-  engine.usage = accumulateUsage(engine.usage, observation.usage);
-  engine.costUsd += streamCostUsd(observation.usage, engine.pricing);
+
+  recordPromptInputObservation(engine, observation, requestMeasurement, requestTranscriptLength);
+  recordMainUsage(engine, observation.usage);
+
   for (const item of observation.transcriptItems) {
     engine.transcript = [...engine.transcript, item];
   }
+
   // Feedback is recorded here, right after the fielding it attributes against and
   // ahead of the cancellation check: it is gated on `sawFinish`, so only a response
   // that actually completed carries a self-report. A cut/cancelled/errored response
@@ -484,6 +506,7 @@ async function runOneIteration(
     take: teaching.feedbackChannel?.take(),
     emit: (kind, payload) => emitRaw(engine, kind, payload),
   });
+
   // A cancellation raised while this stream was open lands here, ahead of the
   // stream's own inputs: an adapter that reports the cut as a transport error
   // rather than a `cancel_ack` must not turn a cancel into a failure. Whatever
@@ -492,27 +515,39 @@ async function runOneIteration(
     await dispatch(engine, ports, { type: "cancel", eventId: nextId(engine) });
     return { finished: false, method: undefined, toolGap: undefined };
   }
+
   // The provider refused the request itself (WP09.3/L06). Before the failure
-  // becomes the turn's, one honest recovery is tried — a forced compaction and
-  // a single retry for a prompt the provider called too long. Media refusals
+  // becomes the turn's, compaction may produce a smaller request. Media refusals
   // are classified and reported, never "recovered" by dropping the user's
-  // attachment. Both bounded by `reactiveCompactions`: one attempt per turn.
+  // attachment. Another retry requires a measured reduction in the prompt.
   if (
     !observation.sawStreamStart &&
     observation.budgetRejection?.kind === "prompt_too_long" &&
-    engine.reactiveCompactions < MAX_REACTIVE_RECOVERIES_PER_TURN &&
     ports.compaction !== undefined
   ) {
-    engine.reactiveCompactions += 1;
-    const outcome = await emitCompactionFor(engine, ports, { force: true });
-    if (outcome.storedWindow) {
-      if (engine.budget.finalRequest === "report_only" && await budgetCeiling(engine, ports)) {
+    const recovery = await recoverIterationRequest(engine, ports, prepared);
+    if (recovery.kind === "stopped") return { finished: false, method: undefined, toolGap: undefined };
+
+    if (recovery.kind === "retry") {
+      if (cancellationStanding(cancelled, engine)) {
+        await dispatch(engine, ports, { type: "cancel", eventId: nextId(engine) });
         return { finished: false, method: undefined, toolGap: undefined };
       }
-      const retry = budgetIteration(engine, ports);
-      return runOneIteration(engine, retry.ports, cancelled, retry.purpose);
+
+      // This call stopped without a provider finish. Close that logical stream
+      // before another begin_stream; it is neither a successful answer nor a new attempt.
+      await dispatch(engine, ports, { type: "finish", eventId: nextId(engine), requiresFollowUp: true });
+
+      if (currentPhase(engine) === "terminal") return { finished: false, method: undefined, toolGap: undefined };
+
+      emitRaw(engine, "observation", { component: "provider", reason: "prompt_too_long", recovery: "compaction" });
+      const retry = typeof purpose === "object" ? { purpose, ports } : budgetIteration(engine, ports);
+
+      return runOneIteration(engine, retry.ports, cancelled, retry.purpose,
+        retry.purpose === purpose ? recovery.prepared : undefined);
     }
   }
+
   if (!observation.sawStreamStart && observation.budgetRejection?.kind === "media_too_large") {
     emitRaw(engine, "observation", {
       degraded: true,
@@ -520,12 +555,25 @@ async function runOneIteration(
       reason: "media_too_large",
     });
   }
-  const finish = await applyStreamInputs(engine, ports, observation.inputs.filter(input => !streamedInputs.has(input.eventId)));
+
+  let finish: ReduceInput | undefined;
+  try {
+    finish = await applyStreamInputs(engine, ports, observation.inputs.filter(input => !streamedInputs.has(input.eventId)));
+  } catch (error) {
+    if (purpose !== "work" || !await reportUnknownSettlement(engine, ports, cancelled, error, observation.inputs, runOneIteration)) throw error;
+    return { finished: false, method: undefined, toolGap: undefined };
+  }
   if (finish !== undefined && currentPhase(engine) !== "terminal") {
     await dispatch(engine, ports, finish);
   }
+
+  if (purpose === "work" && repeatedTruncation(engine, finish, observation.transcriptItems)) {
+    await reportInterruption(engine, ports, cancelled, "output_continuation_no_progress", runOneIteration);
+  }
+
   return {
     finished: finish?.type === "finish" && isSuccessfulStreamFinish(finish.reason),
+    toolResultsProduced: engine.transcript.slice(requestTranscriptLength).some(item => item.kind === "tool_result"),
     method: teaching.channel?.take(),
     toolGap: teaching.toolGapChannel?.take(),
   };

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
@@ -25,9 +26,11 @@ const repoRoot = process.cwd();
 
 /** 本包的两个独占目录前缀（规格 §12）。 */
 const PACKAGE_DIRS: ReadonlyArray<string> = [
-  "src/internal/learning/method",
-  "src/internal/integration/method",
+  "src/internal/learning/agent/subsystems/method",
 ];
+
+/** Old-path bridges stay in scope until their protected consumers migrate. */
+const COMPATIBILITY_DIRS = ["src/internal/learning/method", "src/internal/integration/method"];
 
 /** 执行侧边界文件：`loop/method-*.ts`，测试文件不算。 */
 const LOOP_DIR = "src/internal/loop";
@@ -60,18 +63,34 @@ const AUTOMATIC_MARKERS: ReadonlyArray<string> = ["setInterval", "setTimeout", "
 
 async function packageSources(): Promise<ReadonlyArray<string>> {
   const found: string[] = [];
-  for (const dir of PACKAGE_DIRS) {
-    for (const entry of await readdir(path.join(repoRoot, dir))) {
-      if (entry.endsWith(".ts") && !entry.endsWith(".test.ts")) {
-        found.push(`${dir}/${entry}`);
-      }
-    }
+  const directories = [...PACKAGE_DIRS, ...COMPATIBILITY_DIRS.filter((dir) => existsSync(path.join(repoRoot, dir)))];
+
+  for (const dir of directories) {
+    found.push(...await sourcesIn(dir));
   }
+
   for (const entry of await readdir(path.join(repoRoot, LOOP_DIR))) {
     if (entry.startsWith(LOOP_PREFIX) && entry.endsWith(".ts") && !entry.endsWith(".test.ts")) {
       found.push(`${LOOP_DIR}/${entry}`);
     }
   }
+
+  return found;
+}
+
+/** Recursion keeps every responsibility module under the original package rules. */
+async function sourcesIn(dir: string): Promise<string[]> {
+  const found: string[] = [];
+
+  for (const entry of await readdir(path.join(repoRoot, dir), { withFileTypes: true })) {
+    const file = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) {
+      found.push(...await sourcesIn(file));
+    } else if (entry.isFile() && file.endsWith(".ts") && !file.endsWith(".test.ts")) {
+      found.push(file);
+    }
+  }
+
   return found;
 }
 
@@ -87,6 +106,7 @@ function stripComments(source: string): string {
 
 async function offendersOf(markers: ReadonlyArray<string>): Promise<ReadonlyArray<string>> {
   const offenders: string[] = [];
+
   for (const file of await packageSources()) {
     const code = stripComments(await readFile(path.join(repoRoot, file), "utf8"));
     for (const marker of markers) {
@@ -95,6 +115,7 @@ async function offendersOf(markers: ReadonlyArray<string>): Promise<ReadonlyArra
       }
     }
   }
+
   return offenders;
 }
 
@@ -112,6 +133,7 @@ test("#12: nothing in this package can run on its own clock", async () => {
 
 test("the scan actually covered the package, so the three above cannot pass by accident", async () => {
   const files = await packageSources();
+
   // 三个目录合起来十七个生产文件；取一个远低于真实值、又远高于 0 的下界，
   // 好让它只在「扫描器坏了」时红，不在「有人删了一个文件」时红。
   assert.equal(files.length >= 15, true, `only ${files.length} production files were scanned`);
@@ -121,12 +143,12 @@ test("the scan actually covered the package, so the three above cannot pass by a
     "the scanner must never read a test file as if it were production",
   );
   assert.equal(
-    files.some((file) => file.includes("/learning/method/")),
+    files.some((file) => file.includes("/subsystems/method/domain/")),
     true,
     "the learning side must be in the scan",
   );
   assert.equal(
-    files.some((file) => file.includes("/integration/method/")),
+    files.some((file) => file.includes("/subsystems/method/adapters/")),
     true,
     "the adapter side must be in the scan",
   );

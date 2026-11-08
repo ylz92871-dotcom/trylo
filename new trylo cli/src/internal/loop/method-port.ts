@@ -31,8 +31,12 @@ export type ObservedFailureFact = {
   readonly fingerprint: string;
 };
 
+export type MethodExecutionSpan = { readonly firstSequence: number; readonly lastSequence: number;
+  readonly toolNames: readonly string[] };
+
 /** 一拍执行事实，由执行侧上报。 */
 export type MethodBeatObservation = {
+  readonly executionSpan?: MethodExecutionSpan;
   readonly turnId: string;
   /** 1-based 迭代序号：一次 provider 请求加它结算的一切。 */
   readonly beat: number;
@@ -56,6 +60,10 @@ export type MethodBeatObservation = {
 
 /** 一次请求要注入什么，由执行侧提问。 */
 export type MethodSlotRequest = {
+  readonly previousExecutionSpan?: MethodExecutionSpan;
+  readonly requestBoundarySequence?: number;
+  readonly retrievalCue?: string;
+  readonly retrievalSequence?: number;
   readonly turnId: string;
   /** 正在构建的那一拍的序号。 */
   readonly beat: number;
@@ -82,6 +90,15 @@ export type MethodSlotReceipt = {
   readonly versionId: string;
   readonly proposalId: string;
   readonly nicheId: string;
+  /** Opaque learning provenance. The execution loop only transports it. */
+  readonly binding?: {
+    readonly compilationId?: string;
+    readonly requestBoundarySequence?: number;
+    readonly context: {
+      readonly taskId: string; readonly opportunityId: string; readonly situation: string;
+      readonly features: Readonly<Record<string, string>>;
+    };
+  };
 };
 
 /**
@@ -127,6 +144,8 @@ export type MethodFieldingNotice = {
 export type MethodFeedbackItem = {
   readonly versionId: string;
   readonly helped: boolean;
+  /** Actual practice/observed result self-report; never a tool-success claim. */
+  readonly application?: { readonly practice: string; readonly result: string };
 };
 
 /**
@@ -134,7 +153,7 @@ export type MethodFeedbackItem = {
  *
  * 执行环只在流正常收尾（`sawFinish`）之后才发它：被切断、取消或出错的理解不构成
  * 「模型对这一回答的自报」，那时反馈保持 unknown，而不是被当成 false（F03/F05）。
- * `attemptId` 与上场通知同源——学习侧由它和 versionId 重新派生出与上场相同的
+ * attemptId/beat 与上场通知同源——学习侧由它们和 versionId 重新派生出与上场相同的
  * `exposureId`，于是反馈能精确归因到那一次真实展示；归因不上就拒绝落账（保持
  * unknown），绝不让迟到或错配的反馈进账。
  *
@@ -162,6 +181,8 @@ export type MethodFeedbackNotice = {
 export type MethodLearningPort = {
   observe(report: MethodBeatObservation): Promise<void>;
   intentOn(turnId: string, beat: number): boolean;
+  /** Confirm after requestSlot that the proposal instruction fitted. Absent keeps legacy semantics. */
+  readonly confirmIntent?: (turnId: string, beat: number) => boolean;
   requestSlot(request: MethodSlotRequest): Promise<MethodSlotDelivery | undefined>;
   /**
    * 报告「这一 attempt 真的发出去了」（ME0-2）。
@@ -180,7 +201,7 @@ export type MethodLearningPort = {
    * 删除或沉降（那是别的写入者的事）。写失败只产生结构化降级，绝不让用户任务失败。
    */
   recordFeedback(notice: MethodFeedbackNotice): Promise<void>;
-  endTurn(turnId: string): Promise<void>;
+  endTurn(turnId: string, signal?: AbortSignal): Promise<void>;
 };
 
 /**

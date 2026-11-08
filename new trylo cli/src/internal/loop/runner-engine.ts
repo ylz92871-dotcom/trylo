@@ -21,6 +21,9 @@ import { resumedTranscriptFor, seedMessagesOf } from "./request.js";
 import type { LoopPorts, RunTurnRequest, RunTurnResult } from "./runner.js";
 import { journalView } from "./compact-ledger.js";
 import { pairCancelledToolCalls } from "./transcript-append.js";
+import { parentUsageFields, createAuxiliaryUsageLedger, type AuxiliaryUsageLedger } from "./auxiliary-usage.js";
+import type { PromptInputCheckpoint } from "../ports/prompt-input.js";
+import { recoverPromptInputCheckpoint, type PromptInputCheckpointRecovery } from "./prompt-input-records.js";
 
 /**
  * Where a turn's runtime host is built, and where it is read back.
@@ -49,6 +52,8 @@ export type Engine = {
   model: string;
   budget: IterationBudget;
   iterations: number;
+  /** Last truncated response's content, compared without transient block/call ids. */
+  lastTruncatedContent?: string;
   /**
    * Steps this turn has already been forgiven (WP08.2).
    *
@@ -61,6 +66,8 @@ export type Engine = {
    */
   refunded: number;
   usage: ProviderUsage;
+  mainUsage: ProviderUsage;
+  auxiliary: AuxiliaryUsageLedger;
   /** Next-view basis after a gap, otherwise last reported input; never billed usage. */
   promptTokens: number;
   /**
@@ -77,6 +84,9 @@ export type Engine = {
    * items appended since; undefined until the first stream reports.
    */
   promptReport?: ReportedRequestBasis;
+  /** Fixed one-value metadata; only its matching completion can persist it. */
+  lastPromptInputCheckpoint?: PromptInputCheckpoint;
+  promptInputRecovery?: Extract<PromptInputCheckpointRecovery, { readonly kind: "unavailable" }>;
   transcript: Transcript;
   /** Only acknowledged immutable envelopes can be omitted from later flushes. */
   progressEnvelopeCount: number;
@@ -95,12 +105,11 @@ export type Engine = {
    * and mixing them in would let a refusal be delivered by the back door.
    */
   setAsideInput: ReadonlyArray<AddressedUserInput>;
-  /** Gap compactions this turn; a second one would spin on a full context. */
+  /** Observed gap compactions; telemetry, never an implicit task ceiling. */
   gapCompactions: number;
   /**
    * Reactive recoveries this turn (WP09.3/L06): a provider rejection that a
-   * compaction can answer is retried at most once, so a provider that keeps
-   * rejecting meets the turn's own failure instead of an internal retry loop.
+   * compaction can answer may be retried when the projected request shrank.
    */
   reactiveCompactions: number;
   checkpoint: CheckpointGateState;
@@ -167,6 +176,8 @@ export async function assembleEngine(
     iterations: 0,
     refunded: 0,
     usage: emptyUsage("snapshot"),
+    mainUsage: emptyUsage(),
+    auxiliary: createAuxiliaryUsageLedger(),
     promptTokens: 0,
     costUsd: 0,
     ...(request.pricing === undefined ? {} : { pricing: request.pricing }),
@@ -193,7 +204,18 @@ export async function assembleEngine(
     ...(request.systemPromptAppend === undefined ? {} : { systemPromptAppend: request.systemPromptAppend }),
     ...(request.responseSchema === undefined ? {} : { responseSchema: request.responseSchema }),
   };
+
   adoptResumedWindow(engine.compaction, request.resumedWindow, request.resumedRecords, transcript);
+
+  if (request.resumedRecords !== undefined && request.sessionId !== undefined) {
+    const recovered = recoverPromptInputCheckpoint(request.resumedRecords, request.sessionId);
+    if (recovered.kind === "available") {
+      const basis = recovered.checkpoint.basis;
+      engine.promptReport = { promptTokens: basis.input.tokens, inputTokenObservation: basis.input,
+        transcriptLength: 0, windowId: undefined, storedInputBasis: basis };
+    } else if (recovered.kind === "unavailable") engine.promptInputRecovery = recovered;
+  }
+
   return engine;
 }
 
@@ -238,6 +260,7 @@ export function buildTurnResult(engine: Engine): RunTurnResult {
   settleTranscript(engine);
   const transcript = engine.transcript;
   const netDiff = engine.turnDiff.unifiedDiff();
+
   return {
     state: engine.state,
     envelopes: engine.journal.events(),
@@ -247,7 +270,10 @@ export function buildTurnResult(engine: Engine): RunTurnResult {
     inputs: engine.journal.inputs(),
     transcript,
     usage: engine.usage,
+    ...parentUsageFields(engine),
     iterations: engine.iterations,
+    ...(engine.lastPromptInputCheckpoint === undefined ? {} : { promptInputCheckpoint: engine.lastPromptInputCheckpoint }),
+    ...(engine.promptInputRecovery === undefined ? {} : { promptInputRecovery: engine.promptInputRecovery }),
     compactions: engine.compaction.entries.map((entry) => entry.draft),
     ...(engine.compaction.entries.length === 0 ? {} : { compactionSourceRecords: journalView(
       engine.state.sessionId ?? "", transcript, engine.compaction.entries, engine.compaction.resumed,

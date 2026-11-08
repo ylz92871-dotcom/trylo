@@ -26,9 +26,9 @@ import type { MethodFeedbackItem, MethodSlotReceipt } from "./method-port.js";
  *  - **零缓冲零延迟。** 文本里没有出现围栏标记时一个字符都不扣；出现半个标记时才
  *    扣住那半个。
  *
- * 合法载荷是闭集 `{items:[{ref,helped:boolean}]}`：顶层只有 `items` 一个键，每个
- * item 只有 `ref`（字符串）与 `helped`（布尔）。多一个键、`helped` 不是布尔、
- * `items` 不是数组——都是 `feedback_shape_invalid`。
+ * 合法载荷为 `{items:[{ref,helped:boolean,application?}]}`；application 仅允许
+ * practice/result 两个有界字符串，描述实际使用。旧 bool-only 反馈仍兼容。
+ * 未知键、非布尔 helped、非数组 items 都是 `feedback_shape_invalid`。
  */
 
 /** 与 `learning/method/port.ts::METHOD_FEEDBACK_FENCE` 同字，由合同测试要求相等。 */
@@ -38,14 +38,17 @@ const FENCE = "```";
 const MARKER = `${FENCE}${FEEDBACK_FENCE}`;
 
 /**
- * 扣留上限。一个合法反馈块至多 `slotCards` 条 item（默认 8），每条约 35 字符，
- * 所以合法块永远在 300 字符以内；600 给足余量，撞上它的都是模型在写别的文档。
+ * 至多八条，每条可带两项各160字符的实际使用报告。总围栏继续受硬顶约束，
+ * 超帽块原样可见；不让合法形状的自报变成无界延迟或正文缓冲。
  */
-export const MAX_HELD_CHARS = 600;
+export const MAX_HELD_CHARS = 4000;
+const MAX_FEEDBACK_ITEMS = 8;
+const MAX_APPLICATION_CHARS = 160;
 
 const ITEMS_FIELD = "items";
 const REF_FIELD = "ref";
 const HELPED_FIELD = "helped";
+const APPLICATION_FIELD = "application";
 
 export type FeedbackDispositionCode =
   | "held_over_cap"
@@ -121,27 +124,38 @@ export function createMethodFeedbackChannel(
         blocks.set(event.blockId, { buffer: "" });
         return [event];
       }
+
       if (event.type === "text_delta") {
         const state = blocks.get(event.blockId) ?? { buffer: "" };
+
         state.buffer += event.text;
         const out = consume(state.buffer, true, versionByRef);
+
         state.buffer = out.rest;
         pendingItems ??= out.items;
         pendingCode ??= out.code;
         blocks.set(event.blockId, state);
+
         return visibleDelta(event.blockId, out.visible);
       }
+
       if (event.type === "text_end") {
         const state = blocks.get(event.blockId);
+
         blocks.delete(event.blockId);
+
         if (state === undefined) {
           return [event];
         }
+
         const out = consume(state.buffer, false, versionByRef);
+
         items ??= out.items === undefined ? pendingItems : out.items;
         code ??= out.code === undefined ? pendingCode : out.code;
+
         return [...visibleDelta(event.blockId, out.visible), event];
       }
+
       return [event];
     },
   };
@@ -179,6 +193,7 @@ function consume(
   let rest = buffer;
   let items: ReadonlyArray<MethodFeedbackItem> | undefined;
   let code: FeedbackDispositionCode | undefined;
+
   for (;;) {
     const open = rest.indexOf(MARKER);
     if (open === -1) {
@@ -193,6 +208,7 @@ function consume(
       }
       break;
     }
+
     visible += rest.slice(0, open);
     const held = rest.slice(open);
     const close = held.slice(MARKER.length).indexOf(FENCE);
@@ -203,11 +219,13 @@ function consume(
         rest = held;
         break;
       }
+
       visible += held;
       code ??= holdOpen ? "held_over_cap" : "fence_unterminated";
       rest = "";
       break;
     }
+
     const fenceLen = MARKER.length + close + FENCE.length;
     if (fenceLen > MAX_HELD_CHARS) {
       // 闭合围栏段本身超帽：不是反馈块，连同其后正文一起原样外发。
@@ -216,6 +234,7 @@ function consume(
       rest = "";
       break;
     }
+
     const body = held.slice(MARKER.length, MARKER.length + close).trim();
     const parsed = parseFeedbackBlock(body, versionByRef);
     if (parsed.ok) {
@@ -225,8 +244,10 @@ function consume(
       visible += held.slice(0, fenceLen);
       code ??= parsed.code;
     }
+
     rest = held.slice(fenceLen);
   }
+
   return { visible, rest, items, code };
 }
 
@@ -245,17 +266,21 @@ function parseFeedbackBlock(
   versionByRef: ReadonlyMap<string, string>,
 ): ParsedBlock {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(body) as unknown;
   } catch {
     return { ok: false, code: "feedback_not_json" };
   }
+
   const items = closedSetItems(parsed);
   if (items === undefined) {
     return { ok: false, code: "feedback_shape_invalid" };
   }
+
   const resolved: MethodFeedbackItem[] = [];
   const seen = new Set<string>();
+
   for (const item of items) {
     const one = resolveItem(item, versionByRef, seen);
     if (one === undefined) {
@@ -263,6 +288,7 @@ function parseFeedbackBlock(
     }
     resolved.push(one);
   }
+
   return { ok: true, items: resolved };
 }
 
@@ -271,13 +297,16 @@ function closedSetItems(parsed: unknown): ReadonlyArray<unknown> | undefined {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return undefined;
   }
+
   const fields = parsed as Record<string, unknown>;
   const keys = Object.keys(fields);
   if (keys.length !== 1 || keys[0] !== ITEMS_FIELD) {
     return undefined;
   }
+
   const items = fields[ITEMS_FIELD];
-  return Array.isArray(items) ? (items as ReadonlyArray<unknown>) : undefined;
+
+  return Array.isArray(items) && items.length <= MAX_FEEDBACK_ITEMS ? (items as ReadonlyArray<unknown>) : undefined;
 }
 
 /** 一条 item →（已解析条目 | undefined）。ref 未知或重复也算失败。 */
@@ -290,31 +319,53 @@ function resolveItem(
   if (shape === undefined) {
     return undefined;
   }
+
   const versionId = versionByRef.get(shape.ref);
   if (versionId === undefined || seen.has(shape.ref)) {
     return undefined;
   }
+
   // 记录已见：同一个 ref 在本块里出现第二次是 `feedback_ref_duplicate`。
   seen.add(shape.ref);
-  return { versionId, helped: shape.helped };
+
+  return { versionId, helped: shape.helped, ...(shape.application === undefined ? {} : { application: shape.application }) };
 }
 
-/** 一条 item 的形状：恰好 `{ref:string, helped:boolean}`。不符返回 undefined。 */
-function itemShape(item: unknown): { readonly ref: string; readonly helped: boolean } | undefined {
+type FeedbackShape = { readonly ref: string; readonly helped: boolean;
+  readonly application?: NonNullable<MethodFeedbackItem["application"]> };
+
+/** Closed item contract; optional reports never supply persistent identity. */
+function itemShape(item: unknown): FeedbackShape | undefined {
   if (typeof item !== "object" || item === null || Array.isArray(item)) {
     return undefined;
   }
+
   const fields = item as Record<string, unknown>;
   const keys = Object.keys(fields);
-  if (keys.length !== 2) {
+  if (keys.some(key => ![REF_FIELD, HELPED_FIELD, APPLICATION_FIELD].includes(key))) {
     return undefined;
   }
+
   const ref = fields[REF_FIELD];
   const helped = fields[HELPED_FIELD];
+  const application = fields[APPLICATION_FIELD];
+
   if (typeof ref !== "string" || typeof helped !== "boolean") {
     return undefined;
   }
-  return { ref, helped };
+
+  if (application !== undefined && !applicationShape(application)) return undefined;
+
+  return { ref, helped, ...(application === undefined ? {} : { application }) };
+}
+
+/** Structural mirror of the learning-side application-report guard; loop must
+ * not import learning policy. The cross-boundary contract tests keep it aligned. */
+function applicationShape(value: unknown): value is NonNullable<MethodFeedbackItem["application"]> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const fields = value as Record<string, unknown>;
+  const text = (entry: unknown) => typeof entry === "string" && entry.trim().length > 0 && entry.length <= MAX_APPLICATION_CHARS;
+  return Object.keys(fields).length === 2 && text(fields.practice) && text(fields.result);
 }
 
 /**
@@ -333,12 +384,15 @@ function itemCodeOf(
   if (shape === undefined) {
     return "feedback_shape_invalid";
   }
+
   if (!versionByRef.has(shape.ref)) {
     return "feedback_ref_unknown";
   }
+
   if (seen.has(shape.ref)) {
     return "feedback_ref_duplicate";
   }
+
   return "feedback_shape_invalid";
 }
 
@@ -351,10 +405,12 @@ function itemCodeOf(
  */
 function partialMarkerStart(text: string): number {
   const longest = Math.min(MARKER.length - 1, text.length);
+
   for (let length = longest; length > 0; length -= 1) {
     if (MARKER.startsWith(text.slice(text.length - length))) {
       return text.length - length;
     }
   }
+
   return -1;
 }

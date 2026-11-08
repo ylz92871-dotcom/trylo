@@ -3,6 +3,7 @@ import { assertExhaustive } from "../contract/index.js";
 import type { TranscriptItem } from "../protocol/transcript.js";
 import type { StreamPartials } from "../protocol/stream-partial.js";
 import type {
+  CompleteInputTokenObservation,
   ProviderEvent,
   ProviderPort,
   ProviderRequest,
@@ -47,6 +48,7 @@ export type StreamObservation = {
   readonly inputs: ReadonlyArray<ReduceInput>;
   readonly transcriptItems: ReadonlyArray<TranscriptItem>;
   readonly usage: ProviderUsage;
+  readonly inputTokenObservation?: CompleteInputTokenObservation;
   /** Tool input blocks opened but never closed: the stream was cut. */
   readonly unsettledToolInputCount: number;
   readonly sawFinish: boolean;
@@ -161,6 +163,7 @@ export type StreamRewriter = {
 export async function consumeProviderStream(context: StreamContext): Promise<StreamObservation> {
   const acc = createStreamAccumulator(context.startSequence);
   const iterator = context.port.stream(context.request, context.signal)[Symbol.asyncIterator]();
+
   try {
     await pullStream(context, acc, iterator);
   } finally {
@@ -186,6 +189,7 @@ export async function consumeProviderStream(context: StreamContext): Promise<Str
     inputs: acc.inputs,
     transcriptItems: acc.transcriptItems,
     usage: acc.usage,
+    ...(acc.inputTokenObservation === undefined ? {} : { inputTokenObservation: acc.inputTokenObservation }),
     unsettledToolInputCount: acc.toolInputs.size,
     sawFinish: acc.sawFinish,
     sawError: acc.sawError,
@@ -203,8 +207,10 @@ async function pullStream(context: StreamContext, acc: StreamAccumulator, iterat
   let savedItems = 0;
   let notifiedInputs = 0;
   let savedPartials = partialsDigest(openPartials(acc));
+
   for (;;) {
     let step: IteratorResult<ProviderEvent, unknown>;
+
     try {
       step = await iterator.next();
     } catch {
@@ -216,11 +222,14 @@ async function pullStream(context: StreamContext, acc: StreamAccumulator, iterat
       });
       break;
     }
+
     if (step.done === true) {
       break;
     }
+
     const event = step.value;
     if (event.type === "warning") context.onWarning?.(event);
+
     // One raw event may become several, or none: a channel rewrites text into
     // the part meant for a reader and holds back the part meant for the board.
     // Non-text events come back exactly as they went in.
@@ -232,11 +241,14 @@ async function pullStream(context: StreamContext, acc: StreamAccumulator, iterat
         acc.inputs.push(mapped);
       }
     }
+
     if (event.type === "finish" && !context.signal.aborted) bindCanonicalResponse(context, acc);
+
     if (acc.transcriptItems.length > savedItems) {
       await context.onTranscriptItems?.(acc.transcriptItems.slice(savedItems));
       savedItems = acc.transcriptItems.length;
     }
+
     // Whatever is still open is written before the next pull, so a process
     // killed between two events leaves the received text on disk. Only written
     // when an open block actually changed: an unchanged block has already been
@@ -247,8 +259,11 @@ async function pullStream(context: StreamContext, acc: StreamAccumulator, iterat
       await context.onPartial?.(open);
       savedPartials = digest;
     }
+
     for (const input of acc.inputs.slice(notifiedInputs)) await context.onInput?.(input);
+
     notifiedInputs = acc.inputs.length;
+
     // Commit the fielding the instant the model accepts the request, while the
     // stream is still open (audit P1-1). Awaited here so the exposure is durable
     // before the next pull: a crash mid-stream cannot lose a start that happened.
@@ -257,6 +272,7 @@ async function pullStream(context: StreamContext, acc: StreamAccumulator, iterat
       fieldingCommitted = true;
       await context.onStreamStart?.();
     }
+
     // Nothing after a terminal signal may be treated as model output.
     if (isTerminalEvent(event) || context.signal.aborted) {
       break;
@@ -321,6 +337,10 @@ function applyEvent(
       return;
     case "usage":
       acc.usage = mergeUsage(acc.usage, event.usage);
+      if (event.inputTokenObservation !== undefined) acc.inputTokenObservation = {
+        kind: event.inputTokenObservation.kind, source: event.inputTokenObservation.source,
+        tokens: event.inputTokenObservation.tokens,
+      };
       return;
     case "finish":
       acc.sawFinish = true;

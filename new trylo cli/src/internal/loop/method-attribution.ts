@@ -30,16 +30,20 @@ export async function recordFielding(host: {
   readonly sawStreamStart: boolean;
 }): Promise<void> {
   const { port, turnId, attemptId, slot } = host;
+
   if (port === undefined || turnId === undefined || attemptId === undefined) {
     return;
   }
+
   if (!host.sawStreamStart) {
     return;
   }
+
   const receipts = slot?.receipts ?? [];
   if (receipts.length === 0) {
     return;
   }
+
   await port.recordFielding({ attemptId, turnId, beat: host.beat, receipts });
 }
 
@@ -72,9 +76,11 @@ export async function recordFeedback(host: {
   readonly emit: (kind: string, payload: JsonObject) => void;
 }): Promise<void> {
   const { port, turnId, attemptId } = host;
+
   if (port === undefined || turnId === undefined || attemptId === undefined) {
     return;
   }
+
   if (host.take?.code !== undefined) {
     host.emit("observation", {
       degraded: true,
@@ -82,9 +88,11 @@ export async function recordFeedback(host: {
       reason: host.take.code,
     });
   }
+
   const items = host.take?.items;
   if (items === undefined || items.length === 0 || !host.finished) {
     return;
   }
+
   await port.recordFeedback({ attemptId, turnId, beat: host.beat, items });
 }

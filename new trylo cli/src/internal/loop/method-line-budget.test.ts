@@ -22,27 +22,49 @@ const repoRoot = process.cwd();
 /** `runner.ts` 在 M2 开工时的行数（M1 交付清单：`545→542`）。 */
 const RUNNER_BASELINE_LINES = 542;
 
-const METHOD_PREFIXES = ["learning/method/", "loop/method-", "integration/method/"];
+const METHOD_PREFIXES = ["agent/subsystems/method/", "learning/method/", "loop/method-", "integration/method/"];
+// The upgraded method domain owns its policy. Board's canonical persistence
+// boundary delegates pure validation through these exact seams, never IO or orchestration.
+const METHOD_BOARD_SEAMS: Readonly<Record<string, readonly string[]>> = {
+  "commands.ts": ["experience-facts", "inference", "exposure-binding"], "contracts.ts": ["inference", "exposure-binding"],
+  "events.ts": ["experience-facts"],
+  "state.ts": ["experience-facts", "inference", "experience-source"],
+  "apply-method-ledger.ts": ["inference", "experience-source", "exposure-binding"],
+  "apply-method-experience.ts": ["experience-facts", "experience-state", "experience-source"],
+};
 
 const NEW_FILES: ReadonlyArray<string> = [
-  "src/internal/learning/method/contracts.ts",
-  "src/internal/learning/method/niche.ts",
-  "src/internal/learning/method/vocabulary.ts",
-  "src/internal/learning/method/release.ts",
-  "src/internal/learning/method/gate.ts",
-  "src/internal/learning/method/gate-draft.ts",
-  "src/internal/learning/method/archive.ts",
-  "src/internal/learning/method/compile.ts",
-  "src/internal/learning/method/board.ts",
-  "src/internal/learning/method/board-write.ts",
-  "src/internal/learning/method/board-ledger.ts",
-  "src/internal/learning/method/port.ts",
+  "src/internal/learning/agent/subsystems/method/domain/contracts.ts",
+  "src/internal/learning/agent/subsystems/method/domain/niche.ts",
+  "src/internal/learning/agent/subsystems/method/domain/vocabulary.ts",
+  "src/internal/learning/agent/subsystems/method/domain/release.ts",
+  "src/internal/learning/agent/subsystems/method/domain/gate.ts",
+  "src/internal/learning/agent/subsystems/method/domain/gate-draft.ts",
+  "src/internal/learning/agent/subsystems/method/assets/archive.ts",
+  "src/internal/learning/agent/subsystems/method/orchestration/compile.ts",
+  "src/internal/learning/agent/subsystems/method/orchestration/board.ts",
+  "src/internal/learning/agent/subsystems/method/orchestration/board-write.ts",
+  "src/internal/learning/agent/subsystems/method/orchestration/board-ledger.ts",
+  "src/internal/learning/agent/subsystems/method/port.ts",
   "src/internal/loop/method-channel.ts",
   "src/internal/loop/method-feedback-channel.ts",
   "src/internal/loop/method-signal.ts",
   "src/internal/loop/method-port.ts",
   "src/internal/loop/method-attribution.ts",
-  "src/internal/integration/method/board-writer.ts",
+  "src/internal/loop/method-execution-span.ts",
+  "src/internal/loop/method-context-cue.ts",
+  "src/internal/learning/agent/subsystems/method/adapters/board-writer.ts",
+  ...["experience-feedback", "experience-correction", "experience-revision", "experience-store", "experience-model",
+    "experience-tools", "experience-funding", "funding-identity", "experience-budget", "review-instruction", "review-material", "context-result-budget"].map(name =>
+    `src/internal/learning/agent/subsystems/method/adapters/${name}.ts`),
+  ...["experience-runtime", "experience-review", "experience-effects", "experience-selection", "experience-expand", "experience-trace",
+    "adoption-window", "board-slot"].map(name => `src/internal/learning/agent/subsystems/method/orchestration/${name}.ts`),
+  ...["experience-facts", "experience-source", "experience-state", "inference", "inference-observations", "scope-learning",
+    "adoption-coverage", "adoption-window", "application-report", "change-detection", "compilation-block", "compilation-evidence",
+    "compilation-review", "execution-trace", "experience-render", "exposure-binding", "feedback-adoption", "model-error",
+    "opportunity-representative", "procedure", "recompile-policy", "review-admission", "review-information", "review-progress",
+    "scope-description", "scope-retrieval", "scope-state", "source-trial-policy"]
+    .map(name => `src/internal/learning/agent/subsystems/method/domain/${name}.ts`),
 ];
 
 /** 冻结面：本包不得成为它们的依赖。 */
@@ -88,16 +110,22 @@ test("every new function stays inside the function limit", async () => {
   }
 });
 
-test("no frozen layer imports this package", async () => {
+test("frozen layers only delegate method validation through enumerated pure Board seams", async () => {
   const offenders: string[] = [];
+
   for (const file of [...FROZEN_SOURCES, ...(await controlSources())]) {
     const source = await sourceOf(file);
     for (const specifier of importedSpecifiers(source)) {
       if (METHOD_PREFIXES.some((prefix) => specifier.includes(prefix))) {
+        const allowed = file.startsWith("src/internal/learning/control/") &&
+          (METHOD_BOARD_SEAMS[path.basename(file)] ?? []).some(name =>
+            specifier === `../agent/subsystems/method/domain/${name}.js`);
+        if (allowed) continue;
         offenders.push(`${file} -> ${specifier}`);
       }
     }
   }
+
   assert.deepEqual(offenders, []);
 });
 
@@ -110,11 +138,13 @@ async function controlSources(): Promise<ReadonlyArray<string>> {
 
 function importedSpecifiers(source: string): ReadonlyArray<string> {
   const found: string[] = [];
+
   for (const match of source.matchAll(/(?:from\s+|import\s*\(\s*|^\s*import\s+)['"]([^'"]+)['"]/gm)) {
     if (match[1] !== undefined) {
       found.push(match[1]);
     }
   }
+
   return found;
 }
 
@@ -129,6 +159,7 @@ function topLevelFunctions(source: string): ReadonlyArray<[name: string, lines: 
   const lines = source.split("\n");
   const found: Array<[string, number]> = [];
   let open: { readonly name: string; readonly start: number } | undefined;
+
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
     const declaration = /^(?:export )?(?:async )?function (\w+)/.exec(line);
@@ -136,10 +167,12 @@ function topLevelFunctions(source: string): ReadonlyArray<[name: string, lines: 
       open = { name: declaration[1] ?? "?", start: index };
       continue;
     }
+
     if (line === "}" && open !== undefined) {
       found.push([open.name, index - open.start + 1]);
       open = undefined;
     }
   }
+
   return found;
 }

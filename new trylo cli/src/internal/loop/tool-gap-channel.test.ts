@@ -33,11 +33,13 @@ function fenced(body: string): string {
 
 function emittedText(events: ReadonlyArray<ProviderEvent>): string {
   let out = "";
+
   for (const event of events) {
     if (event.type === "text_delta") {
       out += event.text;
     }
   }
+
   return out;
 }
 
@@ -49,6 +51,7 @@ test("I1 零缓冲：文本里没有标记时一个字符都不扣", () => {
 
 test("I2 闭合并是 JSON → 抽出自报，可见流里不留围栏", () => {
   const disposition = dispositionOfToolGap(`prefix\n${fenced(REPORT)}\nsuffix`);
+
   // 闭合围栏**后面那个换行**仍留在可见文本里：剥离器只摘围栏块，不替模型排版。
   assert.equal(disposition.visible, "prefix\n\nsuffix");
   assert.equal(disposition.selfReport, REPORT);
@@ -88,6 +91,7 @@ test("I6 非文本事件一个字段都不改（附加通道在 tool_call 之外
     arguments: { path: "a.txt" },
   };
   const out = channel.rewrite(event);
+
   assert.equal(out.length, 1);
   assert.equal(out[0], event, "非文本事件必须原样通过（同一个对象，不是副本）");
 });
@@ -101,11 +105,13 @@ test("I7 流式：半个标记先扣住，闭合后一次吐出，围栏体不�
     { type: "text_end", blockId: "b1" },
   ];
   const seen: string[] = [];
+
   for (const event of events) {
     for (const one of channel.rewrite(event)) {
       seen.push(emittedText([one]));
     }
   }
+
   assert.equal(seen.join(""), "hello ", "半截标记不许漏出去，围栏体一个字都不许漏");
   assert.equal(channel.take().selfReport, REPORT);
   assert.equal(channel.take().code, undefined);
@@ -133,14 +139,18 @@ test("I10 两个围栏标记必须逐字不同（同字就等于两台机器抢�
 
 test("I11 抽出来的自报是严格 JSON 文本，学习层可以直接 parse", () => {
   const channel = createToolGapChannel();
+
   channel.rewrite({ type: "text_start", blockId: "b1" });
   channel.rewrite({ type: "text_delta", blockId: "b1", text: fenced(REPORT) });
   channel.rewrite({ type: "text_end", blockId: "b1" });
   const raw = channel.take().selfReport;
+
   assert.equal(typeof raw, "string");
+
   if (raw === undefined) {
     return;
   }
+
   assert.deepEqual(JSON.parse(raw), { need: "新工具:能做PDF表格抽取" });
 });
 

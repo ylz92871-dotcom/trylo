@@ -27,30 +27,39 @@ export function recover(log: RecoveryLog): RecoveryResult {
   if (!journal.ok) {
     return { ok: false, code: "checksum" };
   }
+
   const replayed = replay(log.inputs);
   if (replayed.failedAt !== undefined) {
     return { ok: true, state: replayed.state, reissue: [] };
   }
+
   const committed = new Set(log.committedKeys);
   const issued = new Set(log.issuedKeys);
   const reissue: EffectCommand[] = [];
   let state = initialState();
+
   for (const input of log.inputs) {
     const result = reduce(state, input);
     if (!result.ok) {
       break;
     }
+
     state = result.state;
+
     for (const command of result.commands) {
       if (committed.has(command.idempotencyKey)) {
         continue;
       }
+
+      // An issued side effect may already have happened even without a commit record.
       if (issued.has(command.idempotencyKey) && command.type !== "emit") {
         continue;
       }
+
       reissue.push(command);
     }
   }
+
   return { ok: true, state, reissue };
 }
 

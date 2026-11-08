@@ -30,13 +30,16 @@ const REQUEST = { sessionId: "s", turnId: "t", correlationId: "c", text: "use th
  */
 function scriptFor(toolIterations: number): ReadonlyArray<ReadonlyArray<ProviderEvent>> {
   const script: Array<ReadonlyArray<ProviderEvent>> = [];
+
   for (let index = 0; index < toolIterations; index += 1) {
     script.push([
       { type: "tool_call", toolCallId: `call-${index}`, name: "echo", arguments: { text: "hi" } },
       { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
     ]);
   }
+
   script.push([{ type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false }]);
+
   return script;
 }
 
@@ -46,6 +49,7 @@ function recordingProvider(
   const script = scriptFor(toolIterations);
   const requests: ProviderRequest[] = [];
   let index = 0;
+
   return {
     requests,
     port: {
@@ -83,6 +87,7 @@ function messageText(request: ProviderRequest | undefined): string {
 test("a run with no pendingInput port is byte for byte the run before it", async () => {
   const provider = recordingProvider();
   const result = await runTurn(portsOf(provider.port), REQUEST);
+
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(
     result.inputs.some((input) => input.type === "user_input"),
@@ -111,20 +116,24 @@ test("a steer typed mid-run reaches the next request and the model sees it", asy
     }),
     REQUEST,
   );
+
   assert.equal(result.state.terminalReason, "completed");
 
   const steers = result.inputs.filter((input) => input.type === "user_input");
+
   assert.equal(steers.length, 1);
   assert.equal(steers[0]?.mode, "steer");
 
   // The whole point of a boundary: the message waits for the tool to settle.
   const steerAt = result.inputs.findIndex((input) => input.type === "user_input");
   const toolSettledAt = result.inputs.findIndex((input) => input.type === "tool_succeeded");
+
   assert.equal(toolSettledAt >= 0, true);
   assert.equal(steerAt > toolSettledAt, true);
 
   // A steer the model never sees is not a steer.
   const last = provider.requests.at(-1);
+
   assert.equal(messageText(last).includes("STEER-MARKER"), true);
 });
 
@@ -147,6 +156,7 @@ test("a queued message is taken one gap at a time, and a blank one never", async
   const texts = result.inputs
     .filter((input) => input.type === "user_input")
     .map((input) => (input.type === "user_input" ? input.text : ""));
+
   assert.deepEqual(texts, ["FIRST-MARKER", "SECOND-MARKER"]);
 });
 
@@ -156,6 +166,7 @@ test("a host that never stops offering input is bounded by the iteration budget"
     portsOf(provider.port, () => [{ text: "AGAIN-MARKER", mode: "queue" }]),
     { ...REQUEST, budget: { maxIterations: 3 } },
   );
+
   assert.equal(result.state.terminalReason, "failed");
   assert.equal(provider.requests.length <= 3, true);
 });

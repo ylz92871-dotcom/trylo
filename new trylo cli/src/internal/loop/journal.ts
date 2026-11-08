@@ -25,6 +25,7 @@ export function createExecutionJournal(): ExecutionJournal {
   // their original position without a second, capped reducer history.
   const deliveries = new Map<string, number>();
   let sequencer: AttemptSequencer | undefined;
+
   return {
     bindAttempt(attemptId) {
       sequencer = createAttemptSequencer(attemptId);
@@ -35,8 +36,11 @@ export function createExecutionJournal(): ExecutionJournal {
         deliverySequence = deliveries.size + 1;
         deliveries.set(input.eventId, deliverySequence);
       }
+
       const delivered = { ...input, deliverySequence };
+
       inputs.push(delivered);
+
       return delivered;
     },
     append(event) {

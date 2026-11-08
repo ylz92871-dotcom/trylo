@@ -32,6 +32,7 @@ export function feedTurnDiffFromOutcome(
     feedPatchBatch(tracker, value, batch);
     return;
   }
+
   const single = value["fileWrite"];
   if (isRecord(single)) {
     feedSingleWrite(tracker, value, single);
@@ -48,33 +49,41 @@ function feedPatchBatch(tracker: TurnDiffTracker, value: JsonObject, batch: Read
       tracker.invalidate("an apply_patch change is not an object");
       return;
     }
+
     const op = textOf(raw["op"]);
     const path = textOf(raw["path"]);
     const preview = raw["preview"];
+
     if (op === undefined || !APPLY_PATCH_OPS.has(op) || path === undefined || path.length === 0) {
       tracker.invalidate("an apply_patch change names no valid op/path");
       return;
     }
+
     if (preview !== undefined && typeof preview !== "string") {
       tracker.invalidate(`an apply_patch change carries a non-text preview for ${path}`);
       return;
     }
+
     if (op === "moved") {
       const from = textOf(raw["from"]);
       if (from === undefined || from.length === 0) {
         tracker.invalidate(`a move arrived without a source for ${path}`);
         return;
       }
+
       const overwrote = raw["overwrote"];
       const originPreview = raw["originPreview"];
+
       if (overwrote !== undefined && typeof overwrote !== "boolean") {
         tracker.invalidate(`a move carries a non-boolean overwrote for ${path}`);
         return;
       }
+
       if (originPreview !== undefined && typeof originPreview !== "string") {
         tracker.invalidate(`a move carries a non-text origin preview for ${path}`);
         return;
       }
+
       tracker.track({
         path,
         op: "moved",
@@ -86,7 +95,9 @@ function feedPatchBatch(tracker: TurnDiffTracker, value: JsonObject, batch: Read
       });
       continue;
     }
+
     const mode = textOf(raw["mode"]);
+
     tracker.track({
       path,
       op: op as TurnDiffOp,
@@ -103,11 +114,13 @@ function feedSingleWrite(tracker: TurnDiffTracker, value: JsonObject, effect: Re
   if (path === undefined || path.length === 0 || mode === undefined || !SINGLE_WRITE_MODES.has(mode)) {
     return;
   }
+
   const preview = value["preview"];
   if (preview !== undefined && typeof preview !== "string") {
     tracker.invalidate(`a file write carries a non-text preview for ${path}`);
     return;
   }
+
   tracker.track({
     path,
     op: "added",

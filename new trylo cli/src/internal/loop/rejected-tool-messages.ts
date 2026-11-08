@@ -8,9 +8,11 @@ const REDACTED_CALL_NOTICE = "A tool attempt had invalid arguments. Its argument
  */
 export function pairRejectedToolMessages(messages: readonly ProviderMessage[], rejected: ReadonlyMap<string, string>): readonly ProviderMessage[] {
   if (rejected.size === 0) return messages;
+
   const output: ProviderMessage[] = [];
   const pending = new Set<string>();
   let assistantIndex: number | undefined;
+
   for (const message of messages) {
     const id = message.toolCallId;
     const name = id === undefined ? undefined : rejected.get(id);
@@ -25,15 +27,21 @@ export function pairRejectedToolMessages(messages: readonly ProviderMessage[], r
         assistantIndex = output.length;
         output.push({ role: "assistant", content: REDACTED_CALL_NOTICE, toolCalls: [call] });
       }
+
       pending.add(id);
     }
+
     output.push(message);
+
     if (message.toolCalls !== undefined && message.toolCalls.length > 0) {
       assistantIndex = output.length - 1;
       for (const call of message.toolCalls) pending.add(call.toolCallId);
     }
+
     if (message.role === "tool" && id !== undefined) pending.delete(id);
+
     if (pending.size === 0) assistantIndex = undefined;
   }
+
   return output;
 }

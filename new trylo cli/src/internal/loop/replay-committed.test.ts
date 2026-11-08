@@ -14,12 +14,16 @@ test("committed effect keys are skipped on replay", () => {
     text: "hi",
   };
   const opened = reduce(initialState(), start);
+
   assert.equal(opened.ok, true);
+
   if (!opened.ok) {
     return;
   }
+
   const keys = new Set(opened.commands.map((command) => command.idempotencyKey));
   const replayed = replayCommitted([start], keys);
+
   assert.equal(replayed.skipped.length > 0, true);
   assert.equal(replayed.state.phase, "turning");
 });

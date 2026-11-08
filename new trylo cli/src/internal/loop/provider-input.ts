@@ -19,6 +19,7 @@ export function providerEventToInput(
   if (classified !== undefined) {
     return classified;
   }
+
   switch (event.type) {
     case "text_delta":
       return { type: "text_delta", eventId, text: event.text };
@@ -86,11 +87,14 @@ export function lateProviderEventToInput(event: ProviderEvent, eventId: string):
   if (event.type === "cancel_ack") {
     return { type: "cancel", eventId };
   }
+
   if (event.type === "finish") {
     return { type: "finish", eventId, reason: event.reason, requiresFollowUp: event.requiresFollowUp };
   }
+
   if (event.type === "error") {
     return classifyProviderEvent(event, eventId);
   }
+
   return undefined;
 }

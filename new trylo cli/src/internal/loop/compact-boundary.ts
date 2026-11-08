@@ -1,13 +1,16 @@
 import type {
   CompactionPort,
+  SummaryAuthorReporter,
+  SummaryAuthoringContext,
 } from "../ports/compaction.js";
-import type { ProviderMessage, SystemPromptDirective } from "../ports/provider.js";
+import type { CompleteInputTokenObservation, ProviderMessage, ProviderRequest, SystemPromptDirective } from "../ports/provider.js";
 import type { ToolPort } from "../ports/tools.js";
 import type { JsonObject } from "../protocol/envelope.js";
 import type { EventKind } from "../protocol/kinds.js";
 import type { Transcript, TranscriptItem } from "../protocol/transcript.js";
 import type { CompactionLedger } from "./compact-ledger.js";
 import { promptViewMessages } from "./prompt-view.js";
+import type { PromptMeasurement } from "./prompt-measurement.js";
 
 /**
  * The ledger half of the compaction vocabulary is defined in `compact-ledger.ts`
@@ -45,7 +48,7 @@ export type { CompactionGapOutcome } from "./compaction-gap.js";
  *  - **growth-driven probes, and a bounded rescue**. A hold leaves the probe
  *    available. A window that clears the ceiling rearms it for later growth;
  *    refused or ineffective authoring disables probes for this turn. The
- *    ceiling rescue (`budget-gate.ts`) may force up to two more windows when
+ *    ceiling rescue (`budget-gate.ts`) may force a new window whenever
  *    the provider's report proves the view over the ceiling;
  *  - **compaction never cancels the hard gate**. It exists to reach
  *    `context_limit` less often; if the view is still over the ceiling after a
@@ -60,8 +63,14 @@ export type { CompactionGapOutcome } from "./compaction-gap.js";
 
 export type CompactionWiring = {
   readonly port: CompactionPort;
+  /** A text upper bound can trigger compaction, but exceeding it cannot prove
+   * the actual request exceeds the model window. Absent retains the existing
+   * caller-supplied estimator contract. */
+  readonly estimateAccuracy?: "text_upper_bound";
   /** Pure estimate over the messages the next provider request would carry. */
   readonly estimatePromptTokens: (messages: ReadonlyArray<ProviderMessage>) => number;
+  /** Text-only additions; native additions must be priced in the full lookup. */
+  readonly estimateTextPromptTokens?: (messages: ReadonlyArray<ProviderMessage>) => number;
   /**
    * Authors the summary text. The loop never invents one: `CompactionPort`
    * validates a summary, it does not write it, and a summary the loop made up
@@ -73,9 +82,11 @@ export type CompactionWiring = {
    * default) stays exactly as fast as it was.
    */
   /** The optional full transcript supplies request provenance across windows;
-   * it is not additional material to resend in an auxiliary provider request. */
+   * it is not additional material to resend in an auxiliary provider request.
+   * The optional reporter carries author metadata, never summary content. */
   readonly summarize: (items: ReadonlyArray<TranscriptItem>, previousSummary?: string, signal?: AbortSignal,
-    requestTranscript?: ReadonlyArray<TranscriptItem>) => string | Promise<string>;
+    requestTranscript?: ReadonlyArray<TranscriptItem>, report?: SummaryAuthorReporter,
+    authoring?: SummaryAuthoringContext) => string | Promise<string>;
   /**
    * The tokens the tool table adds to every request (`tools` on the wire).
    *
@@ -86,6 +97,8 @@ export type CompactionWiring = {
    * exactly the old behaviour.
    */
   readonly estimateOverheadTokens?: (tools: ToolPort) => number;
+  /** Actual prepared request table; absent retains the legacy forecast seam. */
+  readonly estimateRequestOverheadTokens?: (request: ProviderRequest) => number;
   /** Stamps the durable draft. The loop owns no clock, so the host lends one. */
   readonly now: () => string;
 };
@@ -95,7 +108,6 @@ export type PromptContext = {
   readonly seedMessages: ReadonlyArray<ProviderMessage>;
   readonly transcript: Transcript;
   readonly ledger: CompactionLedger;
-  readonly toolResultProjection?: "microcompact";
   readonly systemPrompt?: SystemPromptDirective;
   readonly systemPromptAppend?: string;
 };
@@ -120,8 +132,14 @@ export type CompactionInput = PromptContext & {
 };
 
 export type ReportedRequestBasis = {
+  /** Optional validated compact identity restored from a completed stream. */
+  readonly storedInputBasis?: import("../ports/prompt-input.js").StoredPromptInputBasisV1;
   readonly promptTokens: number;
+  readonly inputTokenObservation?: CompleteInputTokenObservation;
+  /** Transcript high-water at sampling; projection identity controls reuse. */
   readonly transcriptLength: number;
+  /** The actual measured request, required before its usage can be reused. */
+  readonly measurement?: PromptMeasurement;
   /**
    * The window the reported request was built under. A window stored *after*
    * that request makes the report stale — it measured a view the projection
@@ -168,7 +186,6 @@ export function promptContextFor(
     reported: source.promptReport,
     ...(source.systemPrompt === undefined ? {} : { systemPrompt: source.systemPrompt }),
     ...(source.systemPromptAppend === undefined ? {} : { systemPromptAppend: source.systemPromptAppend }),
-    ...(wiring === undefined ? {} : { toolResultProjection: "microcompact" as const }),
   };
 }
 

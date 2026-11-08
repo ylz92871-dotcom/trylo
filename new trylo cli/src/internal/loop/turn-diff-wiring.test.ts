@@ -46,16 +46,19 @@ async function wiredTurn(plan: Parameters<typeof createFakeTools>[0]) {
     text: "do it",
   }, abort);
   const host = toolHostFor(engine, ports, { dispatch: async () => undefined });
+
   return { engine, host, ports, abort };
 }
 
 test("a successful apply_patch feeds the engine tracker through the funnel", async () => {
   const { engine, host, ports, abort } = await wiredTurn([toolResult(APPLY_PATCH_VALUE)]);
+
   assert.equal(typeof host.noteTurnDiff, "function");
   await runToolFor(host, ports.tools, { toolCallId: "c1", name: "apply_patch", arguments: {} }, abort.signal);
   assert.deepEqual(engine.turnDiff.summary().files, 1);
   assert.match(engine.turnDiff.unifiedDiff() ?? "", /\+\+\+ b\/fresh\.ts/);
   const published = buildTurnResult(engine).turnDiff;
+
   assert.deepEqual(published.summary.files, 1);
   assert.equal(published.valid, true);
   assert.match(published.diff ?? "", /\+hello/);
@@ -66,6 +69,7 @@ test("failed and non-mutating outcomes leave the tracker alone", async () => {
     { outcome: "error", code: "denied", message: "no" },
     toolResult({ output: "read words" }),
   ]);
+
   await runToolFor(host, ports.tools, { toolCallId: "c1", name: "read_file", arguments: {} }, abort.signal);
   await runToolFor(host, ports.tools, { toolCallId: "c2", name: "read_file", arguments: {} }, abort.signal);
   assert.deepEqual(engine.turnDiff.summary().files, 0);

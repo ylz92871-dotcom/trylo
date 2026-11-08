@@ -20,7 +20,9 @@ export function createFakeProvider(script: FakeProviderScript): ProviderPort {
   return {
     async *stream(_request, signal) {
       const events = script[index] ?? [];
+
       index += 1;
+
       for (const event of events) {
         if (signal.aborted) {
           yield { type: "cancel_ack" };
@@ -136,14 +138,17 @@ export function createFakeCompaction(options: FakeCompactionOptions = {}): FakeC
     compact(request) {
       compactRequests.push(request);
       const outcome = service.compact(request);
+
       // A stored window is the fact the estimate switches on: the view the
       // next request carries is the one the window replaced history for.
       if (outcome.ok) {
         stored = true;
       }
+
       return outcome;
     },
   };
+
   return {
     compactRequests,
     summarizeInputs,

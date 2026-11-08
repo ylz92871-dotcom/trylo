@@ -37,14 +37,17 @@ test("reasoning deltas do not repeatedly submit acknowledged large history", asy
     provider: { async *stream(): AsyncIterable<ProviderEvent> {
       yield { type: "reasoning_start", blockId: "r", redacted: false };
       beforeDeltas = historySubmissions;
+
       for (let i = 0; i < 128; i++) yield {
         type: "reasoning_delta", blockId: "r", text: "synthetic reasoning ", redacted: false,
       };
+
       afterDeltas = historySubmissions;
       yield { type: "reasoning_end", blockId: "r" };
       yield finish;
     } },
   }, { ...request, resumedTranscript: history });
+
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(afterDeltas - beforeDeltas, 0, "received reasoning must not resubmit unchanged durable history");
   assert.ok(result.transcript.some(item => item.kind === "user" && item.text === text));
@@ -56,19 +59,24 @@ test("only an acknowledged transcript may be omitted; replacements still reach p
   const progress: ExecutionProgressPort = {
     async flush(facts) {
       submissions.push(facts.transcript);
-      if (fail) { fail = false; return { ok: false, code: "disk_full" }; }
+      if (fail) {
+        fail = false;
+        return { ok: false, code: "disk_full" };
+      }
       return { ok: true };
     },
     async issue() { return { ok: true }; }, async settle() { return { ok: true }; },
   };
   const setup = ports(progress);
   const engine = await assembleEngine(setup, request, new AbortController());
+
   await assert.rejects(flushProgress(engine, setup), /disk_full/);
   await flushProgress(engine, setup);
   assert.deepEqual(submissions[1], submissions[0], "a failed ack cannot consume history");
   await flushProgress(engine, setup);
   assert.deepEqual(submissions[2], [], "acknowledged unchanged history is omitted");
   const replacement: Transcript = [{ kind: "user", sequence: 41, text: "replacement view after a gap" }];
+
   engine.transcript = replacement;
   await flushProgress(engine, setup);
   assert.deepEqual(submissions[3], replacement, "changed and sparse transcript views must still be checked");

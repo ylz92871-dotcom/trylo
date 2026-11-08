@@ -32,10 +32,12 @@ const SHELL_PARAMETERS: JsonObject = {
 function parametersOf(parameters: JsonObject): ReadonlyMap<string, string | undefined> {
   const declared = new Map<string, string | undefined>();
   const properties = parameters["properties"] as Record<string, JsonObject>;
+
   for (const [key, schema] of Object.entries(properties)) {
     const type = schema["type"];
     declared.set(key, typeof type === "string" ? type : undefined);
   }
+
   return declared;
 }
 
@@ -83,15 +85,19 @@ test("an honest call and a genuinely bad one are both left alone", () => {
     // Nothing to read through: no parameter of this tool appears anywhere.
     { arguments: { command: "cat a.js" } },
   ];
+
   for (const args of untouched) {
     assert.equal(unwrapWrappedArguments(WRITE_DECLARED, args), args, JSON.stringify(args));
   }
+
   // A parameter the tool itself declares as an object is never read through.
   const objectParameter = new Map<string, string | undefined>([["payload", "object"]]);
   const nested = { payload: { payload: { deep: true } } };
+
   assert.equal(unwrapWrappedArguments(objectParameter, nested), nested);
   // With no declared shape at all nothing is rewritten.
   const unknown = { arguments: { path: "a.js" } };
+
   assert.equal(unwrapWrappedArguments(new Map(), unknown), unknown);
 });
 
@@ -115,6 +121,7 @@ type Recording = {
 function recordingTools(): Recording {
   const received: ToolCallRequest[] = [];
   const bindings = [binding("write_file", WRITE_PARAMETERS), binding("run_shell", SHELL_PARAMETERS)];
+
   return {
     received,
     port: {
@@ -133,6 +140,7 @@ function scripted(
 ): { readonly requests: ProviderRequest[]; readonly port: ProviderPort } {
   const requests: ProviderRequest[] = [];
   let index = 0;
+
   return {
     requests,
     port: {
@@ -177,9 +185,11 @@ test("the tool runs on unwrapped arguments and the transcript records the same o
   assert.equal(result.state.terminalReason, "completed");
   assert.deepEqual(tools.received.map((call) => call.arguments), [{ path: "a.js", content: "x" }]);
   const recorded = result.transcript.find((item) => item.kind === "tool_call");
+
   assert.equal(recorded?.kind === "tool_call" ? JSON.stringify(recorded.arguments) : "", '{"path":"a.js","content":"x"}');
   // And the model sees flat arguments when its own call is replayed.
   const replayed = provider.requests[1]?.messages.find((message) => message.toolCalls !== undefined);
+
   assert.equal(JSON.stringify(replayed?.toolCalls?.[0]?.arguments), '{"path":"a.js","content":"x"}');
 });
 
@@ -209,6 +219,7 @@ test("a call the wrapper rule cannot read reaches the tool unchanged", async () 
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "write it" },
   );
+
   assert.deepEqual(tools.received.map((call) => call.arguments), [
     { arguments: { command: "cat a.js" } },
   ]);

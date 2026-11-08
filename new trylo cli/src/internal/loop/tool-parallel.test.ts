@@ -31,6 +31,7 @@ function scripted(
 ): { readonly requests: ProviderRequest[]; readonly port: ProviderPort } {
   const requests: ProviderRequest[] = [];
   let index = 0;
+
   return {
     requests,
     port: {
@@ -78,11 +79,14 @@ function markingTools(
       if (wait > 0) {
         await new Promise((resolve) => setTimeout(resolve, wait));
       }
+
       log.push(`end:${call.toolCallId}`);
+
       return toolResult({ ok: true }, `OUT-${call.toolCallId}`);
     },
     async cancel() {},
   };
+
   return { tools, log };
 }
 

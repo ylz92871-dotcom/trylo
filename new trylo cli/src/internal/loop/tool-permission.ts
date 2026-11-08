@@ -1,5 +1,5 @@
 import type { JsonObject } from "../protocol/envelope.js";
-import type { ReduceInput } from "../domain/input.js";
+import type { PermissionRefusalDetails, ReduceInput } from "../domain/input.js";
 import type { PermissionGrantCache } from "./permission-grants.js";
 import type { DoomLoopTracker } from "./doom-loop.js";
 import type { LoopPorts } from "./runner.js";
@@ -55,16 +55,25 @@ export async function runPermissionFor(
     name: call.name,
     arguments: call.arguments,
   };
-  const admission = await admitToolCall(
-    {
-      permission: ports.permission,
-      grants: call.grants,
-      doom: call.doom,
-      ...(ports.execPolicy === undefined ? {} : { execPolicy: ports.execPolicy }),
-      ...(ports.sandbox === undefined ? {} : { sandbox: ports.sandbox }),
-    },
-    request,
-  );
+  let admission: ToolAdmission;
+  try {
+    admission = await admitToolCall(
+      {
+        permission: ports.permission,
+        grants: call.grants,
+        doom: call.doom,
+        ...(ports.execPolicy === undefined ? {} : { execPolicy: ports.execPolicy }),
+        ...(ports.sandbox === undefined ? {} : { sandbox: ports.sandbox }),
+      },
+      request,
+    );
+  } catch (error) {
+    // Admission has not dispatched the tool. A broken guard cannot grant it,
+    // but the model still needs its failed result to choose permitted work.
+    const detail = error instanceof Error ? error.message : "permission_error";
+    return permissionUnavailable(host, request, `admission_failed:${detail}`);
+  }
+
   switch (admission.kind) {
     case "sandbox_rejected":
       return refuseByGuard(host, request, "sandbox", admission.code, admission.message);
@@ -73,12 +82,7 @@ export async function runPermissionFor(
     case "review_rejected":
       return refuseByReviewer(host, request, admission);
     case "failed":
-      return host.dispatch({
-        type: "permission_failed",
-        eventId: host.nextEventId(),
-        toolCallId: request.toolCallId,
-        message: admission.message,
-      });
+      return permissionUnavailable(host, request, admission.message);
     case "cancelled":
       if (admission.reason !== undefined) {
         host.emit("observation", { component: "permission", code: `permission_${admission.reason}`, reason: admission.reason, toolCallId: request.toolCallId });
@@ -107,6 +111,21 @@ export async function runPermissionFor(
       return _never;
     }
   }
+}
+
+async function permissionUnavailable(
+  host: ToolPermissionHost,
+  request: ToolAdmissionRequest,
+  message: string,
+): Promise<void> {
+  host.reportFailedResult(request.toolCallId, request.name,
+    `permission_unavailable: ${request.name} did not run (${message}). Choose permitted work or ask the user to restore approval.`);
+  await host.dispatch({
+    type: "permission_failed",
+    eventId: host.nextEventId(),
+    toolCallId: request.toolCallId,
+    message,
+  });
 }
 
 /**
@@ -178,9 +197,21 @@ async function refuse(
   admission: Extract<ToolAdmission, { kind: "denied" }>,
 ): Promise<void> {
   const pattern = actionFor(request).pattern;
+  const invalidArguments = admission.reason === "invalid_arguments";
+  const code = invalidArguments ? "invalid_arguments" : "permission_denied";
+  const message = `${code}: ${request.name} did not run${admission.reason === undefined ? "" : ` (${admission.reason})`}${admission.message === undefined ? "" : `: ${admission.message}`}`;
+  const details: PermissionRefusalDetails = {
+    ...(invalidArguments ? { code: "invalid_arguments" } : {}),
+    ...(invalidArguments || admission.message !== undefined ? { message } : {}),
+  };
+
   if (admission.reason !== undefined) {
-    host.emit("observation", { component: "permission", code: `permission_${admission.reason}`, reason: admission.reason, toolCallId: request.toolCallId });
+    host.emit("observation", { component: "permission",
+      code: invalidArguments ? code : `permission_${admission.reason}`, reason: admission.reason,
+      toolCallId: request.toolCallId,
+      ...(admission.message === undefined ? {} : { message: admission.message }) });
   }
+
   if (admission.source === "remembered") {
     host.emit("observation", {
       component: "permission_grant",
@@ -189,6 +220,7 @@ async function refuse(
       pattern,
     });
   }
+
   // Same rule as a sandbox refusal, and for the same reason: a refusal the model
   // never hears about is a refusal it asks for again. It is also what lets one
   // member of a batch be refused while its siblings still run — the transcript
@@ -196,12 +228,13 @@ async function refuse(
   host.reportFailedResult(
     request.toolCallId,
     request.name,
-    `permission_denied: ${request.name} did not run${admission.reason === undefined ? "" : ` (${admission.reason})`}`,
+    message,
   );
   await host.dispatch({
     type: "permission_denied",
     eventId: host.nextEventId(),
     toolCallId: request.toolCallId,
+    ...details,
   });
 }
 

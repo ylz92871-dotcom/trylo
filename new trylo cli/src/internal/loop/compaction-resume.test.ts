@@ -105,6 +105,7 @@ const RESUMED_WINDOW: CompactWindow = {
 
 test("a stored window is adopted as a count of items, not as journal positions", () => {
   const ledger = createCompactionLedger();
+
   adoptResumedWindow(ledger, RESUMED_WINDOW, RESUMED_JOURNAL);
   assert.equal(ledger.replacedPrefix, 3);
   // Re-expressed into this numbering: `session_start` 0, the three replaced
@@ -119,6 +120,7 @@ test("a window with no journal to stand on is not adopted", () => {
   // history nobody replaced would invent a past. The turn then sends the
   // transcript whole, which is what a run without compaction does.
   const bare = createCompactionLedger();
+
   adoptResumedWindow(bare, RESUMED_WINDOW, undefined);
   assert.equal(bare.window, undefined);
   assert.equal(bare.replacedPrefix, 0);
@@ -126,6 +128,7 @@ test("a window with no journal to stand on is not adopted", () => {
 
   // A journal that holds no item the window could stand in for says the same.
   const empty = createCompactionLedger();
+
   adoptResumedWindow(empty, RESUMED_WINDOW, [journalRecord(0, "session_start", {})]);
   assert.equal(empty.window, undefined);
   assert.equal(empty.replacedPrefix, 0);
@@ -133,8 +136,10 @@ test("a window with no journal to stand on is not adopted", () => {
 
 test("the adopted window is placed in the decision journal before the turn's own items", () => {
   const ledger = createCompactionLedger();
+
   adoptResumedWindow(ledger, RESUMED_WINDOW, RESUMED_JOURNAL);
   const view = journalView("s", RESUMED_ITEMS, ledger.entries, ledger.resumed);
+
   // `session_start` 0, three items, the window, then the fourth item: the window
   // sits where it was stored, so a second one added later still advances past it.
   assert.deepEqual(
@@ -155,6 +160,7 @@ test("a window decided in this numbering is placed back on the journal's", () =>
   // Authored here: the first three items (1..3, `session_start` at 0).
   const authored: CompactWindow = { ...RESUMED_WINDOW, replacedFromSequence: 0, replacedToSequence: 3 };
   const placed = windowOnJournal(authored, RESUMED_JOURNAL);
+
   assert.equal(placed?.replacedFromSequence, 2);
   assert.equal(placed?.replacedToSequence, 4);
   assert.equal(placed?.windowId, "w1");
@@ -225,6 +231,7 @@ test("a resumed turn that compacts again starts after the window it resumed unde
     resumedRecords: RESUMED_JOURNAL,
     budget: { maxIterations: 4, contextTokenLimit: 8_000 },
   });
+
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(result.compactions.length, 1);
   const draft = result.compactions[0];
@@ -232,6 +239,7 @@ test("a resumed turn that compacts again starts after the window it resumed unde
   // The journal the port was asked to decide over must already carry the resumed
   // window; without it `compact` sees no previous window and every bound starts over.
   const decision = compaction.compactRequests[0]?.records ?? [];
+
   assert.equal(decision.filter((record) => record.type === "compact").length, 1);
   assert.equal(draft?.payload.windowId, "w2");
   // Three of the four resumed items sit inside the stored window, so the new one
@@ -249,10 +257,11 @@ test("a resumed turn that compacts again starts after the window it resumed unde
     journalRecord(10, "transcript_item", itemAt(result.transcript, 6)),
   ];
   const placed = windowOnJournal(draft?.payload as CompactWindow, written);
+
   assert.equal(placed?.replacedFromSequence, 5);
-  // The resumed oversized view is now compacted before its first send, so
-  // the later tool result is still live outside this window.
-  assert.equal(placed?.replacedToSequence, 9);
+  // Only the old prefix is replaced. The current assistant/tool exchange
+  // stays outside the partial window, including its call at journal 9.
+  assert.equal(placed?.replacedToSequence, 8);
 });
 
 test("a turn with no resumed window compacts from the start, as it always did", async () => {
@@ -264,6 +273,7 @@ test("a turn with no resumed window compacts from the start, as it always did", 
     text: "go",
     budget: { maxIterations: 4, contextTokenLimit: 8_000 },
   });
+
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(result.compactions.length, 1);
   assert.equal(result.compactions[0]?.payload.replacedFromSequence, 0);

@@ -65,6 +65,7 @@ function timelinePorts(provider: ProviderPort, bindings: ReadonlyArray<ToolBindi
     },
     async cancel() {},
   };
+
   return {
     ports: { profile: emptyProfileLoader(), permission: createFakePermission("approved"), tools, provider, progress },
     log,
@@ -82,11 +83,14 @@ test("every issue is flushed first and executed after", async () => {
   ]);
   const { ports, log } = timelinePorts(provider, [WRITE]);
   const result = await runTurn(ports, REQUEST);
+
   assert.equal(result.state.terminalReason, "completed");
 
   const positionOf = (mark: string): number => log.indexOf(mark);
   const issues = log.filter((mark) => mark.startsWith("issue:"));
+
   assert.ok(issues.length >= 2, `expected issues for both calls; timeline was ${JSON.stringify(log)}`);
+
   // Adjacent, not merely earlier: the flush is what makes THIS issue durable,
   // and a flush from three phases ago says nothing about this declaration. A
   // turn start flush elsewhere in the timeline must not satisfy this.
@@ -94,9 +98,11 @@ test("every issue is flushed first and executed after", async () => {
     const at = positionOf(issue);
     assert.equal(log[at - 1], "flush", `${issue} was not immediately preceded by a flush; timeline was ${JSON.stringify(log)}`);
   }
+
   // Every execution starts after every issue: a kill in between leaves
   // declared-but-unexecuted intents, never undeclared effects.
   const lastIssue = Math.max(...issues.map(positionOf));
+
   for (const id of ["w1", "w2"]) {
     const start = positionOf(`start:${id}`);
     assert.ok(start > lastIssue, `tool ${id} started before the issue phase ended; timeline was ${JSON.stringify(log)}`);

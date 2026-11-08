@@ -7,7 +7,8 @@ for (const phase of ["before_headers", "after_stream_started"] as const) test(`q
   const result = classifyProviderEvent({ type: "error", class: "quota", retryable: false, phase, message }, "quota-event");
   assert.equal(result?.type, phase === "before_headers" ? "transport_fail" : "transport_unknown");
   if (result?.type !== "transport_fail" && result?.type !== "transport_unknown") throw new Error("expected transport failure");
-  assert.equal(result.message, message); assert.equal(result.errorClass, "quota");
+  assert.equal(result.message, message);
+  assert.equal(result.errorClass, "quota");
   if (phase === "after_stream_started") assert.equal(adapterClassOf(result), "sent_unacked");
 });
 

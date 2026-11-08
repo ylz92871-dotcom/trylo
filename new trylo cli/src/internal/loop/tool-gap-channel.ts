@@ -74,6 +74,7 @@ function walk(text: string, holdOpen: boolean): Walked {
   let rest = text;
   let selfReport: string | undefined;
   let code: ToolGapDispositionCode | undefined;
+
   for (;;) {
     const open = rest.indexOf(MARKER);
     if (open === -1) {
@@ -82,9 +83,11 @@ function walk(text: string, holdOpen: boolean): Walked {
         visible += partial === -1 ? rest : rest.slice(0, partial);
         break;
       }
+
       visible += rest;
       break;
     }
+
     visible += rest.slice(0, open);
     const held = rest.slice(open);
     if (held.length > MAX_TOOL_GAP_HELD_CHARS) {
@@ -92,6 +95,7 @@ function walk(text: string, holdOpen: boolean): Walked {
       code ??= "held_over_cap";
       break;
     }
+
     const close = held.slice(MARKER.length).indexOf(FENCE);
     if (close === -1) {
       if (holdOpen) {
@@ -101,16 +105,19 @@ function walk(text: string, holdOpen: boolean): Walked {
       code ??= "fence_unterminated";
       break;
     }
+
     const body = held.slice(MARKER.length, MARKER.length + close).trim();
     if (!isJson(body)) {
       visible += held;
       code ??= "self_report_not_json";
       break;
     }
+
     // 第一处合法自报生效：一拍一句话，第二处不是本层要处理的东西。
     selfReport ??= body;
     rest = held.slice(MARKER.length + close + FENCE.length);
   }
+
   return { visible, selfReport, code };
 }
 
@@ -122,11 +129,13 @@ function walk(text: string, holdOpen: boolean): Walked {
  */
 function partialMarkerStart(text: string): number {
   const longest = Math.min(MARKER.length - 1, text.length);
+
   for (let length = longest; length > 0; length -= 1) {
     if (MARKER.startsWith(text.slice(text.length - length))) {
       return text.length - length;
     }
   }
+
   return -1;
 }
 
@@ -177,23 +186,31 @@ export function createToolGapChannel(): ToolGapChannel {
         blocks.set(event.blockId, { raw: "", emitted: 0 });
         return [event];
       }
+
       if (event.type === "text_delta") {
         const state = blocks.get(event.blockId) ?? { raw: "", emitted: 0 };
         state.raw += event.text;
         blocks.set(event.blockId, state);
         return emitNew(state, walk(state.raw, true).visible, event);
       }
+
       if (event.type === "text_end") {
         const state = blocks.get(event.blockId);
+
         blocks.delete(event.blockId);
+
         if (state === undefined) {
           return [event];
         }
+
         const walked = walk(state.raw, false);
+
         selfReport ??= walked.selfReport;
         code ??= walked.code;
+
         return [...emitNew(state, walked.visible, event), event];
       }
+
       return [event];
     },
   };
@@ -211,10 +228,13 @@ function emitNew(
   event: ProviderEvent,
 ): ReadonlyArray<ProviderEvent> {
   const next = visible.slice(state.emitted);
+
   state.emitted = visible.length;
+
   if (next.length === 0) {
     return [];
   }
+
   return event.type === "text_delta" || event.type === "text_end"
     ? [{ type: "text_delta", blockId: event.blockId, text: next }]
     : [];

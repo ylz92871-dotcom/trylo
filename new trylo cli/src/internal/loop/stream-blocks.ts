@@ -1,7 +1,7 @@
 import type { ReduceInput } from "../domain/input.js";
 import type { JsonObject } from "../protocol/envelope.js";
 import type { TranscriptItem } from "../protocol/transcript.js";
-import type { ProviderEvent, ProviderUsage } from "../ports/provider.js";
+import type { CompleteInputTokenObservation, ProviderEvent, ProviderUsage } from "../ports/provider.js";
 import type { StreamPartial, StreamPartials } from "../protocol/stream-partial.js";
 import { emptyUsage } from "../ports/provider.js";
 import type { BudgetRejection } from "./budget-recovery.js";
@@ -64,6 +64,8 @@ export type StreamAccumulator = {
   readonly textBlocks: Map<string, string>;
   readonly reasoningBlocks: Map<string, OpenReasoningBlock>;
   usage: ProviderUsage;
+  /** Request-local provenance; never merged into financial usage. */
+  inputTokenObservation?: CompleteInputTokenObservation;
   sequence: number;
   sawFinish: boolean;
   sawError: boolean;
@@ -106,15 +108,19 @@ export function createStreamAccumulator(startSequence: number): StreamAccumulato
 }
 
 type TextBlockEvent = Extract<ProviderEvent, { readonly type: "text_start" | "text_delta" | "text_end" }>;
+
 type ReasoningBlockEvent = Extract<
   ProviderEvent,
   { readonly type: "reasoning_start" | "reasoning_delta" | "reasoning_end" }
 >;
+
 type ToolInputEvent = Extract<
   ProviderEvent,
   { readonly type: "tool_input_start" | "tool_input_delta" | "tool_input_end" }
 >;
+
 type ToolCallEvent = Extract<ProviderEvent, { readonly type: "tool_call" }>;
+
 type ToolCallInvalidEvent = Extract<ProviderEvent, { readonly type: "tool_call_invalid" }>;
 
 export function applyTextBlock(acc: StreamAccumulator, event: TextBlockEvent): void {
@@ -129,7 +135,9 @@ export function applyTextBlock(acc: StreamAccumulator, event: TextBlockEvent): v
     }
     case "text_end": {
       const text = acc.textBlocks.get(event.blockId);
+
       acc.textBlocks.delete(event.blockId);
+
       if (text !== undefined && text.length > 0) {
         acc.transcriptItems.push({
           kind: "assistant_text",
@@ -138,6 +146,7 @@ export function applyTextBlock(acc: StreamAccumulator, event: TextBlockEvent): v
           text,
         });
       }
+
       return;
     }
   }
@@ -158,7 +167,9 @@ export function applyReasoningBlock(acc: StreamAccumulator, event: ReasoningBloc
     }
     case "reasoning_end": {
       const block = acc.reasoningBlocks.get(event.blockId);
+
       acc.reasoningBlocks.delete(event.blockId);
+
       if (block !== undefined && block.text.length > 0) {
         acc.transcriptItems.push({
           kind: "assistant_reasoning",
@@ -168,6 +179,7 @@ export function applyReasoningBlock(acc: StreamAccumulator, event: ReasoningBloc
           redacted: block.redacted,
         });
       }
+
       return;
     }
   }
@@ -217,20 +229,25 @@ function closeToolInput(
   if (open === undefined || acc.emittedToolCalls.has(toolCallId)) {
     return;
   }
+
   acc.toolInputs.delete(toolCallId);
   const raw = open.text.trim().length === 0 ? "{}" : open.text;
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(raw);
   } catch {
     applyToolCallInvalid(acc, { type: "tool_call_invalid", toolCallId, name: open.name, rawArguments: "", message: "invalid_arguments" }, eventId);
     return;
   }
+
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     applyToolCallInvalid(acc, { type: "tool_call_invalid", toolCallId, name: open.name, rawArguments: "", message: "invalid_arguments:not_object" }, eventId);
     return;
   }
+
   const args = parsed as JsonObject;
+
   applyToolCall(acc, { type: "tool_call", toolCallId, name: open.name, arguments: args }, eventId, normalize);
 }
 
@@ -242,11 +259,14 @@ export function applyToolCall(
 ): void {
   // Adapter already parsed: its result is authoritative, drop fragments.
   acc.toolInputs.delete(event.toolCallId);
+
   if (acc.emittedToolCalls.has(event.toolCallId)) {
     return;
   }
+
   acc.emittedToolCalls.add(event.toolCallId);
   const args = normalize === undefined ? event.arguments : normalize(event.name, event.arguments);
+
   acc.inputs.push({
     type: "tool_request",
     eventId,
@@ -271,7 +291,9 @@ export function applyToolCallInvalid(
   eventId: string,
 ): void {
   acc.toolInputs.delete(event.toolCallId);
+
   if (acc.emittedToolCalls.has(event.toolCallId)) return;
+
   acc.emittedToolCalls.add(event.toolCallId);
   acc.inputs.push({
     type: "tool_arguments_invalid",
@@ -283,6 +305,7 @@ export function applyToolCallInvalid(
   // The reducer emits the failed journal event; this assembler owns the
   // closed conversation feedback. Both parsed and fragment paths use it once.
   const output = event.message.startsWith("invalid_arguments") ? event.message : `invalid_arguments:${event.message}`;
+
   acc.transcriptItems.push({ kind: "tool_result", sequence: acc.sequence++, toolCallId: event.toolCallId, name: event.name, output, truncated: false, outcome: "failed" });
 }
 
@@ -300,15 +323,19 @@ export function applyToolCallInvalid(
  */
 export function openPartials(acc: StreamAccumulator): StreamPartials {
   const partials: StreamPartial[] = [];
+
   for (const [blockId, text] of acc.textBlocks) {
     partials.push({ kind: "assistant_text", blockId, text });
   }
+
   for (const [blockId, block] of acc.reasoningBlocks) {
     partials.push({ kind: "assistant_reasoning", blockId, text: block.text, redacted: block.redacted });
   }
+
   for (const [blockId, open] of acc.toolInputs) {
     partials.push({ kind: "tool_input", blockId, text: open.text, name: open.name });
   }
+
   return partials;
 }
 

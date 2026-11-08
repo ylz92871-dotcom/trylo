@@ -18,6 +18,7 @@ export type PermissionBoundaryResult =
       readonly resolution: PermissionResolution;
       readonly scope: PermissionScope;
       readonly reason?: PermissionReason;
+      readonly message?: string;
     }
   | {
       readonly outcome: "failed";
@@ -45,28 +46,35 @@ export async function awaitPermissionDecision(
       message: "request_failed:permission_action_missing_arguments",
     };
   }
+
   if (action.pattern !== permissionPattern(action.name, action.arguments)) {
     return boundaryFailure("request", new Error("permission_action_fingerprint_mismatch"));
   }
+
   const snapshot = buildPermissionAction(action.toolCallId, action.name, action.arguments);
   let ticket: PermissionTicket;
+
   try {
     ticket = context === undefined ? await permission.request(snapshot) : await permission.request(snapshot, context);
   } catch (err) {
     return boundaryFailure("request", err);
   }
+
   if (ticket === null || typeof ticket !== "object" || typeof ticket.ticketId !== "string" || ticket.ticketId.length === 0 || ticket.toolCallId !== snapshot.toolCallId) {
     return boundaryFailure("request", new Error("permission_ticket_tool_mismatch"));
   }
+
   try {
     const answered = context === undefined ? await permission.awaitDecision(ticket.ticketId)
       : await permission.awaitDecision(ticket.ticketId, context);
     if (!isPermissionDecision(answered)) return boundaryFailure("decision", new Error("invalid_permission_decision"));
+
     return {
       outcome: "decided",
       resolution: answered.resolution,
       scope: answered.scope,
       ...(answered.reason === undefined ? {} : { reason: answered.reason }),
+      ...(answered.message === undefined ? {} : { message: answered.message }),
     };
   } catch (err) {
     return boundaryFailure("decision", err);

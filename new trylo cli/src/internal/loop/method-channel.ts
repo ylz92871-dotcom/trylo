@@ -100,6 +100,7 @@ function walkFences(text: string, holdOpen: boolean): Walked {
   let proposal: string | undefined;
   let summary: string | undefined;
   let code: DispositionCode | undefined;
+
   for (;;) {
     const open = rest.indexOf(MARKER);
     if (open === -1) {
@@ -108,9 +109,11 @@ function walkFences(text: string, holdOpen: boolean): Walked {
         visible += partial === -1 ? rest : rest.slice(0, partial);
         break;
       }
+
       visible += rest;
       break;
     }
+
     visible += rest.slice(0, open);
     const held = rest.slice(open);
     if (held.length > MAX_HELD_CHARS) {
@@ -118,6 +121,7 @@ function walkFences(text: string, holdOpen: boolean): Walked {
       code ??= "held_over_cap";
       break;
     }
+
     const close = held.slice(MARKER.length).indexOf(FENCE);
     if (close === -1) {
       if (holdOpen) {
@@ -127,19 +131,23 @@ function walkFences(text: string, holdOpen: boolean): Walked {
       code ??= "fence_unterminated";
       break;
     }
+
     const body = held.slice(MARKER.length, MARKER.length + close).trim();
     if (!isJson(body)) {
       visible += held;
       code ??= "proposal_not_json";
       break;
     }
+
     // 卡与总结在这里分开：交给门的是**摘过 summary 的那一份**，所以「总结不过
     // 门」是字面事实（`§2.2` 案 A），而不是一句要记得遵守的纪律。
     const split = splitSummary(body);
+
     proposal ??= split.body;
     summary ??= split.summary;
     rest = held.slice(MARKER.length + close + FENCE.length);
   }
+
   return { visible, proposal, summary, code };
 }
 
@@ -164,25 +172,31 @@ function splitSummary(body: string): {
   readonly summary: string | undefined;
 } {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(body) as unknown;
   } catch {
     return { body, summary: undefined };
   }
+
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return { body, summary: undefined };
   }
+
   const fields = parsed as Record<string, unknown>;
   if (!Object.prototype.hasOwnProperty.call(fields, SUMMARY_FIELD)) {
     return { body, summary: undefined };
   }
+
   const value = fields[SUMMARY_FIELD];
   const rest: Record<string, unknown> = {};
+
   for (const [key, entry] of Object.entries(fields)) {
     if (key !== SUMMARY_FIELD) {
       rest[key] = entry;
     }
   }
+
   return {
     body: JSON.stringify(rest),
     summary: typeof value === "string" && value.length > 0 ? value : undefined,
@@ -198,11 +212,13 @@ function splitSummary(body: string): {
  */
 function partialMarkerStart(text: string): number {
   const longest = Math.min(MARKER.length - 1, text.length);
+
   for (let length = longest; length > 0; length -= 1) {
     if (MARKER.startsWith(text.slice(text.length - length))) {
       return text.length - length;
     }
   }
+
   return -1;
 }
 
@@ -265,6 +281,7 @@ export function createMethodChannel(): MethodChannel {
         blocks.set(event.blockId, { raw: "", emitted: 0 });
         return [event];
       }
+
       if (event.type === "text_delta") {
         const state = blocks.get(event.blockId) ?? { raw: "", emitted: 0 };
         state.raw += event.text;
@@ -272,24 +289,32 @@ export function createMethodChannel(): MethodChannel {
         const visible = walkFences(state.raw, true).visible;
         return emitNew(state, visible, event);
       }
+
       if (event.type === "text_end") {
         const state = blocks.get(event.blockId);
+
         blocks.delete(event.blockId);
+
         if (state === undefined) {
           return [event];
         }
+
         const walked = walkFences(state.raw, false);
+
         proposal ??= walked.proposal;
         code ??= walked.code;
         // 与 proposal 同口径：**第一处**解析出的那一句生效，且只在这个块后面发。
         const fresh = summary === undefined ? walked.summary : undefined;
+
         summary ??= walked.summary;
+
         return [
           ...emitNew(state, walked.visible, event),
           ...(fresh === undefined ? [] : [summaryDelta(event.blockId, walked.visible, fresh)]),
           event,
         ];
       }
+
       return [event];
     },
   };
@@ -323,10 +348,13 @@ function emitNew(
   event: ProviderEvent,
 ): ReadonlyArray<ProviderEvent> {
   const next = visible.slice(state.emitted);
+
   state.emitted = visible.length;
+
   if (next.length === 0) {
     return [];
   }
+
   return event.type === "text_delta" || event.type === "text_end"
     ? [{ type: "text_delta", blockId: event.blockId, text: next }]
     : [];

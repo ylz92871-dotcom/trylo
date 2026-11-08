@@ -11,14 +11,18 @@ export type ReorderBuffer<T> = {
 export function createReorderBuffer<T>(max = MAX_REORDER): ReorderBuffer<T> {
   let next = 0;
   const pending = new Map<number, T>();
+
   return {
     push(producerSequence, value) {
       if (producerSequence < next) {
         return { overflow: false, ready: [] };
       }
+
       if (producerSequence === next) {
         const ready: T[] = [value];
+
         next += 1;
+
         while (pending.has(next)) {
           const item = pending.get(next);
           if (item !== undefined) {
@@ -27,12 +31,16 @@ export function createReorderBuffer<T>(max = MAX_REORDER): ReorderBuffer<T> {
           pending.delete(next);
           next += 1;
         }
+
         return { overflow: false, ready };
       }
+
       if (pending.size >= max) {
         return { overflow: true, ready: [] };
       }
+
       pending.set(producerSequence, value);
+
       return { overflow: false, ready: [] };
     },
   };

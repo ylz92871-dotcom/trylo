@@ -3,17 +3,13 @@ import type { PermissionAction } from "../ports/permission.js";
 /**
  * Repeat detection.
  *
- * A model that retries the same call forever is not malicious, it is stuck, and
- * an approval given once must not let it keep going without anyone noticing.
- * After `threshold` identical consecutive calls the call stops being covered by
- * a remembered decision and goes back to a human (or, with nobody there, is
- * denied).
+ * Repetition alone does not revoke a standing user approval. Embeddings may
+ * explicitly request reapproval after a threshold; ordinary execution has no
+ * implicit threshold. Progress/failure handling remains with the task owner.
  *
  * "Identical" is decided by the fingerprint: same tool, same arguments, same
  * order they were asked in.
  */
-
-export const DOOM_LOOP_THRESHOLD = 3;
 
 export type DoomLoopTracker = {
   /** True when this call must be approved again even if a decision was remembered. */
@@ -22,24 +18,22 @@ export type DoomLoopTracker = {
   reset(): void;
 };
 
-export function createDoomLoopTracker(threshold: number = DOOM_LOOP_THRESHOLD): DoomLoopTracker {
-  const recent: string[] = [];
+export function createDoomLoopTracker(threshold?: number): DoomLoopTracker {
+  let previous: string | undefined;
+  let count = 0;
+
   return {
     observe(action) {
-      recent.push(action.pattern);
-      if (recent.length > threshold) {
-        recent.splice(0, recent.length - threshold);
-      }
-      if (recent.length < threshold) {
-        return false;
-      }
-      return recent.every((pattern) => pattern === action.pattern);
+      count = previous === action.pattern ? count + 1 : 1;
+      previous = action.pattern;
+      return threshold !== undefined && count >= threshold;
     },
     consecutive() {
-      return recent.length;
+      return count;
     },
     reset() {
-      recent.length = 0;
+      previous = undefined;
+      count = 0;
     },
   };
 }

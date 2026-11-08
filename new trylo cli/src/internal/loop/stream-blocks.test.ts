@@ -26,6 +26,7 @@ import { createFakeProvider } from "./fakes.js";
 
 test("a closed text block becomes exactly one transcript item, sequenced from the start", () => {
   const acc = createStreamAccumulator(7);
+
   applyTextBlock(acc, { type: "text_start", blockId: "b1" });
   applyTextBlock(acc, { type: "text_delta", blockId: "b1", text: "hel" });
   applyTextBlock(acc, { type: "text_delta", blockId: "b1", text: "lo" });
@@ -46,6 +47,7 @@ test("an empty text block is not a fact and produces nothing", () => {
 
 test("redaction on any reasoning delta survives to the closed block", () => {
   const acc = createStreamAccumulator(0);
+
   applyReasoningBlock(acc, { type: "reasoning_start", blockId: "r1", redacted: false });
   applyReasoningBlock(acc, { type: "reasoning_delta", blockId: "r1", text: "a", redacted: false });
   applyReasoningBlock(acc, { type: "reasoning_delta", blockId: "r1", text: "b", redacted: true });
@@ -57,6 +59,7 @@ test("redaction on any reasoning delta survives to the closed block", () => {
 
 test("arguments that are not JSON become an explicit invalid event, never a throw", () => {
   const acc = createStreamAccumulator(3);
+
   applyToolInput(acc, { type: "tool_input_start", toolCallId: "t1", name: "echo" }, "e1");
   applyToolInput(acc, { type: "tool_input_delta", toolCallId: "t1", argumentsText: "{not json" }, "e2");
   applyToolInput(acc, { type: "tool_input_end", toolCallId: "t1" }, "e3");
@@ -78,6 +81,7 @@ test("arguments that are not JSON become an explicit invalid event, never a thro
 
 test("arguments that parse to a non-object are reported distinctly", () => {
   const acc = createStreamAccumulator(0);
+
   applyToolInput(acc, { type: "tool_input_start", toolCallId: "t1", name: "echo" }, "e1");
   applyToolInput(acc, { type: "tool_input_delta", toolCallId: "t1", argumentsText: "[1,2]" }, "e2");
   applyToolInput(acc, { type: "tool_input_end", toolCallId: "t1" }, "e3");
@@ -95,6 +99,7 @@ test("arguments that parse to a non-object are reported distinctly", () => {
 
 test("an empty argument stream closes as an empty object, not as a parse error", () => {
   const acc = createStreamAccumulator(0);
+
   applyToolInput(acc, { type: "tool_input_start", toolCallId: "t1", name: "noargs" }, "e1");
   applyToolInput(acc, { type: "tool_input_end", toolCallId: "t1" }, "e2");
   assert.deepEqual(acc.inputs, [
@@ -111,6 +116,7 @@ test("an empty argument stream closes as an empty object, not as a parse error",
 
 test("a tool input block the stream never closes stays unsettled and reaches no reducer input", () => {
   const acc = createStreamAccumulator(0);
+
   applyToolInput(acc, { type: "tool_input_start", toolCallId: "t1", name: "echo" }, "e1");
   applyToolInput(acc, { type: "tool_input_delta", toolCallId: "t1", argumentsText: '{"a":1}' }, "e2");
   assert.equal(acc.toolInputs.size, 1);
@@ -121,11 +127,13 @@ test("a tool input block the stream never closes stays unsettled and reaches no 
 
 test("a call announced by fragments and then by the adapter reaches the reducer once", () => {
   const acc = createStreamAccumulator(0);
+
   applyToolInput(acc, { type: "tool_input_start", toolCallId: "t1", name: "echo" }, "e1");
   applyToolInput(acc, { type: "tool_input_delta", toolCallId: "t1", argumentsText: '{"a":1}' }, "e2");
   applyToolInput(acc, { type: "tool_input_end", toolCallId: "t1" }, "e3");
   applyToolCall(acc, { type: "tool_call", toolCallId: "t1", name: "echo", arguments: { a: 1 } }, "e4");
   const requests = acc.inputs.filter((input) => input.type === "tool_request");
+
   assert.deepEqual(requests, [
     {
       type: "tool_request",
@@ -140,6 +148,7 @@ test("a call announced by fragments and then by the adapter reaches the reducer 
 
 test("an adapter-parsed tool_call is authoritative and discards buffered fragments", () => {
   const acc = createStreamAccumulator(0);
+
   applyToolInput(acc, { type: "tool_input_start", toolCallId: "t1", name: "echo" }, "e1");
   applyToolInput(acc, { type: "tool_input_delta", toolCallId: "t1", argumentsText: '{"a"' }, "e2");
   applyToolCall(acc, { type: "tool_call", toolCallId: "t1", name: "echo", arguments: { a: 1 } }, "e3");
@@ -161,6 +170,7 @@ test("an adapter-parsed tool_call is authoritative and discards buffered fragmen
 
 test("argument fragments past the ceiling are dropped rather than buffered", () => {
   const acc = createStreamAccumulator(0);
+
   applyToolInput(acc, { type: "tool_input_start", toolCallId: "t1", name: "echo" }, "e1");
   applyToolInput(
     acc,

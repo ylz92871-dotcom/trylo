@@ -45,12 +45,16 @@ function run(
   chunks: ReadonlyArray<string>,
 ): { readonly visible: string; readonly channel: MethodFeedbackChannel } {
   const channel = createMethodFeedbackChannel(receipts);
+
   channel.rewrite({ type: "text_start", blockId: "b1" });
   const seen: string[] = [];
+
   for (const chunk of chunks) {
     seen.push(deltasAfter(channel.rewrite({ type: "text_delta", blockId: "b1", text: chunk })));
   }
+
   seen.push(deltasAfter(channel.rewrite({ type: "text_end", blockId: "b1" })));
+
   return { visible: seen.join(""), channel };
 }
 
@@ -106,6 +110,7 @@ test("one bad item rejects the entire block: no partial acceptance", () => {
   // so "what the model said" and "what the ledger recorded" cannot diverge.
   const text = fenced('{"items":[{"ref":"m1","helped":true},{"ref":"m9","helped":true}]}');
   const { visible, channel } = run(TWO, [text]);
+
   assert.equal(visible, text);
   assert.equal(channel.take().items, undefined);
   assert.equal(channel.take().code, "feedback_ref_unknown");
@@ -168,6 +173,7 @@ test("a marker split across deltas is held, then stripped, and leaks nothing", (
 
 test("mid-stream the take is undecided; only text_end settles it", () => {
   const channel = createMethodFeedbackChannel(ONE);
+
   channel.rewrite({ type: "text_start", blockId: "b1" });
   channel.rewrite({
     type: "text_delta",
@@ -186,6 +192,7 @@ test("only the first valid block becomes the items: one answer, one verdict", ()
     "\nand\n" +
     fenced('{"items":[{"ref":"m1","helped":false}]}');
   const { visible, channel } = run(ONE, [text]);
+
   assert.deepEqual(channel.take().items, [{ versionId: "ver-1", helped: true }]);
   assert.equal(visible.trim(), "and");
 });
@@ -196,6 +203,7 @@ test("the first illegal block fixes the code even if a later block is valid", ()
     "\nthen\n" +
     fenced('{"items":[{"ref":"m1","helped":true}]}');
   const { channel } = run(ONE, [text]);
+
   assert.equal(channel.take().code, "feedback_ref_unknown");
   assert.deepEqual(channel.take().items, [{ versionId: "ver-1", helped: true }]);
 });
@@ -208,8 +216,10 @@ test("non-text events pass through untouched, field for field", () => {
     name: "write_file",
     arguments: { path: "a.txt" },
   };
+
   assert.deepEqual(channel.rewrite(call), [call]);
   const usage: ProviderEvent = { type: "usage", usage: emptyUsage("snapshot") };
+
   assert.deepEqual(channel.rewrite(usage), [usage]);
 });
 
@@ -225,6 +235,7 @@ test("P1-2: a legal block followed by a long ordinary tail is still stripped (si
   const tail = "x".repeat(MAX_HELD_CHARS + 50);
   const text = `${fenced('{"items":[{"ref":"m1","helped":true}]}')}${tail}`;
   const { visible, channel } = run(ONE, [text]);
+
   assert.equal(visible, tail, "the closed fence is stripped; only the ordinary tail is visible");
   assert.deepEqual(channel.take().items, [{ versionId: "ver-1", helped: true }]);
   assert.equal(channel.take().code, undefined);
@@ -238,6 +249,7 @@ test("P1-2: a block stripped in an early delta stays stripped as later deltas gr
   const tailA = "y".repeat(300);
   const tailB = "z".repeat(350);
   const { visible, channel } = run(ONE, [fence, tailA, tailB]);
+
   assert.equal(visible, tailA + tailB, "the fence stays stripped; only the ordinary tail is visible");
   assert.deepEqual(channel.take().items, [{ versionId: "ver-1", helped: true }]);
   assert.equal(channel.take().code, undefined);

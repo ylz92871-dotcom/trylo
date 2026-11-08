@@ -1,4 +1,4 @@
-import type { CheckpointPort } from "../ports/checkpoint.js";
+import type { CheckpointPort, CheckpointResult, SnapshotOutcome } from "../ports/checkpoint.js";
 import type { JsonObject } from "../protocol/envelope.js";
 
 /**
@@ -31,11 +31,14 @@ export type CheckpointWiring = {
    */
   readonly workspaceRoot: string;
   readonly now: () => string;
+  readonly signal?: AbortSignal;
 };
 
 /** Per-turn state: one snapshot, whatever happens afterwards. */
 export type CheckpointGateState = {
-  done: boolean;
+  preparation:
+    | { readonly phase: "unprepared" }
+    | { readonly phase: "preparing" | "settled"; readonly completion: Promise<void> };
 };
 
 export type CheckpointGate = CheckpointWiring & {
@@ -46,24 +49,35 @@ export type CheckpointGate = CheckpointWiring & {
 /**
  * A fresh per-turn state.
  *
- * Deliberately a factory and not a shared constant: `done` is mutated in
- * place, so a module-level object would be spent by the first turn of the
+ * Deliberately a factory and not a shared constant: preparation belongs to
+ * this turn, so a module-level object would be spent by the first turn of the
  * process and every later turn would silently run with no undo.
  */
 export function checkpointState(): CheckpointGateState {
-  return { done: false };
+  return { preparation: { phase: "unprepared" } };
 }
 
-export async function snapshotBeforeWrite(gate: CheckpointGate, toolName: string): Promise<void> {
-  if (gate.state.done) {
+export function snapshotBeforeWrite(gate: CheckpointGate, toolName: string): Promise<void> {
+  const preparation = gate.state.preparation;
+  if (preparation.phase !== "unprepared") return preparation.completion;
+
+  // Publish ownership before invoking the adapter. Every writer waits for the
+  // same completion, including cancellation/rejection; a failed turn never retries.
+  const completion: Promise<void> = Promise.resolve()
+    .then(() => snapshotAndReport(gate, toolName))
+    .finally(() => {
+      gate.state.preparation = { phase: "settled", completion };
+    });
+  gate.state.preparation = { phase: "preparing", completion };
+  return completion;
+}
+
+async function snapshotAndReport(gate: CheckpointGate, toolName: string): Promise<void> {
+  const result = await snapshotResult(gate, toolName);
+  if (!result.ok && result.code === "snapshot_cancelled") {
+    gate.report({ component: "checkpoint", status: "cancelled", tool: toolName });
     return;
   }
-  gate.state.done = true;
-  const result = await gate.port.snapshot({
-    workspaceRoot: gate.workspaceRoot,
-    label: `before:${toolName}`,
-    createdAt: gate.now(),
-  });
   if (!result.ok) {
     gate.report({
       component: "checkpoint",
@@ -73,6 +87,7 @@ export async function snapshotBeforeWrite(gate: CheckpointGate, toolName: string
     });
     return;
   }
+
   gate.report({
     component: "checkpoint",
     status: "ok",
@@ -81,4 +96,24 @@ export async function snapshotBeforeWrite(gate: CheckpointGate, toolName: string
     bytes: result.value.manifest.totalBytes,
     tool: toolName,
   });
+}
+
+async function snapshotResult(
+  gate: CheckpointGate,
+  toolName: string,
+): Promise<CheckpointResult<SnapshotOutcome>> {
+  try {
+    return await gate.port.snapshot({
+      workspaceRoot: gate.workspaceRoot,
+      label: `before:${toolName}`,
+      createdAt: gate.now(),
+      ...(gate.signal === undefined ? {} : { signal: gate.signal }),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") throw error;
+
+    // Undo storage is optional; a rejected snapshot grants no tool permission
+    // and cannot revoke an already approved write. Keep private paths out of events.
+    return { ok: false, code: "snapshot_interrupted", detail: "checkpoint adapter threw" };
+  }
 }

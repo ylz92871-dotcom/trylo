@@ -100,12 +100,15 @@ test("D7: the list rides with the seed, ahead of the conversation and the slots"
     prompt: { seedMessages: base, transcript: [], ledger: createCompactionLedger() },
   };
   const plain = buildRequest(view);
+
   assert.equal(plain.messages.length, base.length + 1);
   assert.deepEqual(plain.messages.slice(0, base.length), base);
   const listed = plain.messages[base.length];
+
   assert.equal(listed?.role, "system");
   assert.match(listed?.content ?? "", /Available tools this run/);
   const taught = buildRequest({ ...view, slot: method });
+
   assert.deepEqual(taught.messages[taught.messages.length - 1], method);
   assert.equal(taught.messages.length, plain.messages.length + 1);
 });
@@ -129,22 +132,26 @@ test("WP18: replace swaps the seeds, append extends them, schema is carried", ()
     },
   };
   const plain = buildRequest(view);
+
   assert.equal(plain.responseSchema, undefined);
   assert.equal(plain.systemPrompt, undefined);
   assert.deepEqual(plain.messages, [...seeds, { role: "user", content: "hello" }]);
   const replaced = buildRequest({ ...view, systemPrompt: { mode: "replace", text: "you are a tester" } });
+
   assert.deepEqual(replaced.messages, [
     { role: "system", content: "you are a tester" },
     { role: "user", content: "hello" },
   ]);
   assert.deepEqual(replaced.systemPrompt, { mode: "replace", text: "you are a tester" });
   const appended = buildRequest({ ...view, systemPrompt: { mode: "append", text: "be brief" } });
+
   assert.deepEqual(appended.messages, [
     { role: "system", content: "you are trylo" },
     { role: "system", content: "be brief" },
     { role: "user", content: "hello" },
   ]);
   const schematized = buildRequest({ ...view, responseSchema: { type: "object" } });
+
   assert.deepEqual(schematized.responseSchema, { type: "object" });
   assert.deepEqual(schematized.messages, plain.messages);
 });

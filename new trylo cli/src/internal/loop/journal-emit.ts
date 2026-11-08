@@ -2,6 +2,7 @@ import type { ExecutionState } from "../domain/state.js";
 import { PROTOCOL_VERSION, type Envelope, type JsonObject } from "../protocol/envelope.js";
 import { envelopeChecksum } from "./checksum.js";
 import type { ExecutionJournal } from "./journal.js";
+import { publicToolResultFrames } from "../protocol/public-tool-result.js";
 
 /**
  * Journal emission, extracted from `runner.ts` so the runner does not grow.
@@ -43,6 +44,22 @@ export type EmitHost = {
 };
 
 export function emitRaw(engine: EmitHost, kind: string, payload: JsonObject): void {
+  const frames = kind !== "tool_result" ? undefined : publicToolResultFrames(payload, {
+    protocolVersion: PROTOCOL_VERSION, producerId: "loop",
+    ...(engine.state.sessionId === undefined ? {} : { sessionId: engine.state.sessionId }),
+    ...(engine.state.turnId === undefined ? {} : { turnId: engine.state.turnId }),
+    ...(engine.state.currentAttemptId === undefined ? {} : { attemptId: engine.state.currentAttemptId }),
+    ...(engine.state.correlationId === undefined ? {} : { correlationId: engine.state.correlationId }),
+  }, engine.seq + 1);
+  if (frames === undefined) {
+    emitFrame(engine, kind, payload);
+    return;
+  }
+
+  for (const frame of frames) emitFrame(engine, frame.kind, frame.payload);
+}
+
+function emitFrame(engine: EmitHost, kind: string, payload: JsonObject): void {
   // Parsed tool arguments already belong to execution state. Record that fact
   // once here for every single/batch call; projections never reconstruct it.
   const call = kind === "tool_use" && typeof payload.toolCallId === "string"
@@ -61,7 +78,9 @@ export function emitRaw(engine: EmitHost, kind: string, payload: JsonObject): vo
       ? { correlationId: engine.state.correlationId }
       : {}),
   });
+
   engine.checksums.push(envelopeChecksum(envelope));
+
   if (engine.onEnvelope !== undefined) {
     try {
       engine.onEnvelope(envelope);

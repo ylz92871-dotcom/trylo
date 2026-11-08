@@ -6,6 +6,7 @@ test("timeout process_exit and sent_unacked are distinct classes", () => {
   const timeout = classifyProviderEvent({ type: "error", class: "timeout", retryable: false, phase: "before_headers", message: "timeout" }, "e1");
   const exitUnsent = classifyProviderEvent({ type: "error", class: "network", retryable: false, phase: "before_headers", message: "process_exit" }, "e2");
   const unacked = classifyProviderEvent({ type: "error", class: "network", retryable: false, phase: "after_stream_started", message: "sent_unacked" }, "e3");
+
   assert.equal(timeout?.type, "transport_fail");
   assert.equal(timeout && adapterClassOf(timeout), "timeout");
   assert.equal(exitUnsent?.type, "transport_fail");
@@ -17,8 +18,11 @@ test("timeout process_exit and sent_unacked are distinct classes", () => {
 
 test("a classified provider error keeps its own detail (P0-6: http status must survive)", () => {
   const invalid = classifyProviderEvent({ type: "error", class: "invalid_request", retryable: false, phase: "before_headers", message: "http_400" }, "e4");
+
   assert.equal(invalid?.type, "transport_fail");
+
   if (invalid?.type !== "transport_fail") throw new Error("expected transport_fail");
+
   // The head of the diagnosis survives; the class still travels separately.
   assert.equal(invalid.message, "http_400");
   assert.equal(invalid.errorClass, "invalid_request");
@@ -26,6 +30,7 @@ test("a classified provider error keeps its own detail (P0-6: http status must s
   assert.equal(adapterClassOf(invalid), "invalid_request");
   const authed = classifyProviderEvent({ type: "error", class: "auth", retryable: false, phase: "before_headers", message: "http_401" }, "e5");
   if (authed?.type !== "transport_fail") throw new Error("expected transport_fail");
+
   assert.equal(authed.message, "http_401");
   assert.equal(adapterClassOf(authed), "auth");
 });

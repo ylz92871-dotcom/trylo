@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
@@ -20,8 +21,8 @@ import {
   MAX_HINT_CHARS,
   isMethodPointer,
   type MethodCard,
-} from "../learning/method/contracts.js";
-import { variantOf } from "../learning/method/archive.js";
+} from "../learning/agent/subsystems/method/index.js";
+import { variantOf } from "../learning/agent/subsystems/method/assets/archive.js";
 import {
   LEARNING_FENCE as LEARNING_SIDE_FENCE,
   METHOD_FEEDBACK_FENCE as LEARNING_SIDE_FEEDBACK_FENCE,
@@ -32,8 +33,8 @@ import {
   type MethodLearningService,
   type MethodSlotDelivery,
   type MethodSlotReceipt,
-} from "../learning/method/port.js";
-import type { ObservedFact } from "../learning/method/contracts.js";
+} from "../learning/agent/subsystems/method/index.js";
+import type { ObservedFact } from "../learning/agent/subsystems/method/index.js";
 import { resolveProfile } from "../learning/profile/resolver.js";
 import { emptyBoardState, type BoardState } from "../learning/control/state.js";
 
@@ -100,9 +101,11 @@ test("the two port declarations still describe each other", () => {
     feedbackAsLearning,
     feedbackAsLoop,
   ];
+
   for (const bridge of bridges) {
     assert.equal(typeof bridge, "function");
   }
+
   // 交付物的两项各自独立：`message` 是给 provider 的，`receipts` 是执行侧的
   // 事实。合同测试把「两边的字段名与类型一字不差」变成一次编译错误。
   assert.deepEqual(Object.keys(receiptAsLoop({ ref: "m1", versionId: "v", proposalId: "p", nicheId: "n" })).sort(), [
@@ -178,23 +181,37 @@ test("the only pointer a method archive can name is shadow", () => {
 
 test("no source file in this package names an active pointer for a method card", async () => {
   const roots = [
-    path.join(process.cwd(), "src", "internal", "learning", "method"),
-    path.join(process.cwd(), "src", "internal", "integration", "method"),
+    path.join(process.cwd(), "src", "internal", "learning", "agent", "subsystems", "method"),
+    ...["learning/method", "integration/method"]
+      .map((dir) => path.join(process.cwd(), "src", "internal", dir))
+      .filter((dir) => existsSync(dir)),
   ];
   const offenders: string[] = [];
-  for (const root of roots) {
-    for (const entry of await readdir(root)) {
-      if (!entry.endsWith(".ts") || entry.endsWith(".test.ts")) {
+  const pending = [...roots];
+
+  while (pending.length > 0) {
+    const root = pending.pop();
+    if (root === undefined) break;
+
+    for (const entry of await readdir(root, { withFileTypes: true })) {
+      const file = path.join(root, entry.name);
+
+      if (entry.isDirectory()) {
+        pending.push(file);
         continue;
       }
+
+      if (!entry.isFile() || !entry.name.endsWith(".ts") || entry.name.endsWith(".test.ts")) continue;
+
       // 只禁出现在**值位置**的 active：文档里解释「这个值不可表达」是必须写的，
       // 而一个真的把指针写成 active 的字面量不是。
-      const source = await readFile(path.join(root, entry), "utf8");
+      const source = await readFile(file, "utf8");
       if (/pointer\s*:\s*["']active["']/.test(source) || /["']active["']\s+as\s+MethodPointer/.test(source)) {
-        offenders.push(entry);
+        offenders.push(file);
       }
     }
   }
+
   assert.deepEqual(offenders, []);
 });
 
@@ -238,6 +255,7 @@ test("a method card cannot reach the user-facing profile", () => {
     ],
   };
   const snapshot = resolveProfile(state, { scope: variant.nicheId });
+
   assert.deepEqual(snapshot.promptPatches, []);
   assert.deepEqual(snapshot.userRules, []);
 });

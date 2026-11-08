@@ -9,11 +9,13 @@ import { toolHostFor, type ViewDeps } from "./host-views.js";
 import { emitRaw, nextId } from "./journal-emit.js";
 import type { Engine } from "./runner-engine.js";
 import type { LoopPorts } from "./runner.js";
-import { cancelToolSafely, readToolApprovalRequirement } from "./tool-boundary.js";
+import { cancelToolSafely, lookupToolBinding, readToolApprovalRequirement, type ToolPreflightFailure } from "./tool-boundary.js";
 import { executeToolOnly, settleToolOutcome, type ToolExecutionCall } from "./tool-execution.js";
 import { runPermission, runTool, type ToolRunnerHost } from "./tool-runner.js";
 import { flushProgress, issueEffect, settleEffect } from "./progress.js";
 import { executableStreamInputs } from "./stream-verdict.js";
+
+type UnavailableToolCall = { readonly call: ToolExecutionCall; readonly outcome: ToolPreflightFailure };
 
 /**
  * What a reducer command *does*, once the turn loop has decided it exists.
@@ -77,11 +79,14 @@ export async function applyStreamInputs(
   );
   const batched = calls.size > 1;
   const deferred: EffectCommand[] = [];
+  const unavailable = new Map<string, UnavailableToolCall>();
+
   for (const input of executable) {
     if (input.type === "finish") {
       finish = input;
       continue;
     }
+
     if (input.type === "tool_request") {
       const approval = readToolApprovalRequirement(ports.tools, input.name, input, ports.sandbox, ports.permission);
       if (approval.degradedReason !== undefined) {
@@ -91,24 +96,32 @@ export async function applyStreamInputs(
           component: "tool_snapshot",
         });
       }
+
       const request: ReduceInput = { ...input, needsApproval: approval.required };
-      if (batched) {
-        const commands = await applyToState(engine, { ...request, batch: true });
+
+      if (batched || approval.kind === "unavailable") {
+        const commands = await applyToState(engine, { ...request, ...(batched ? { batch: true } : {}) });
         if (commands !== undefined) {
           deferred.push(...commands);
+          if (approval.kind === "unavailable") unavailable.set(input.toolCallId, { call: input, outcome: approval.outcome });
         }
       } else {
         await dispatch(engine, ports, request);
       }
+
       continue;
     }
+
     await dispatch(engine, ports, input);
+
     if (input.type === "text_delta" && engine.cancelAfter === "streaming" && !engine.sawText) {
       engine.sawText = true;
       await dispatch(engine, ports, { type: "cancel", eventId: nextId(engine) });
     }
   }
-  await runDeferred(engine, ports, deferred);
+
+  await runDeferred(engine, ports, deferred, unavailable);
+
   return finish;
 }
 
@@ -126,14 +139,20 @@ async function runDeferred(
   engine: Engine,
   ports: LoopPorts,
   commands: ReadonlyArray<EffectCommand>,
+  unavailable: ReadonlyMap<string, UnavailableToolCall>,
 ): Promise<void> {
   let pending: ExecutionCommand[] = [];
   const flush = async (): Promise<void> => {
     const batch = pending;
+
     pending = [];
+
     if (batch.length === 0) {
       return;
     }
+
+    if (await stopScheduling(engine, ports)) return;
+
     // One execution is the historical single-call shape and gains nothing from
     // a gate, so it keeps its original path byte for byte.
     if (batch.length === 1) {
@@ -143,13 +162,27 @@ async function runDeferred(
       }
       return;
     }
+
     await runExecutionsTogether(engine, ports, batch);
   };
+
   for (const command of commands) {
+    if (await stopScheduling(engine, ports)) return;
+
     if (command.type === "execute_tool") {
+      const refused = unavailable.get(command.toolCallId);
+      if (refused !== undefined) {
+        await flush();
+        // Register every batch member first, then settle unavailable calls in
+        // order without issuing a business effect or requesting approval.
+        await settleToolOutcome(toolHostFor(engine, ports, views), refused.call, refused.outcome);
+        continue;
+      }
+
       pending.push(command);
       continue;
     }
+
     // A `tool_use` envelope only records that the call was asked for; it is
     // written as it arrives and does not split the batch. Splitting on it would
     // leave every batch one call long, because a response alternates
@@ -159,12 +192,14 @@ async function runDeferred(
       await interpret(engine, ports, command);
       continue;
     }
+
     // Anything else is a conversation with something outside the batch — a
     // permission request above all, which is one person's answer and must not
     // race a sibling. The batch that came before it is finished first.
     await flush();
     await interpret(engine, ports, command);
   }
+
   await flush();
 }
 
@@ -189,23 +224,37 @@ async function runExecutionsTogether(
   ports: LoopPorts,
   commands: ReadonlyArray<ExecutionCommand>,
 ): Promise<void> {
+  if (await stopScheduling(engine, ports)) return;
+
   const host = toolHostFor(engine, ports, views);
   const gate = createParallelGate();
   const runs = commands
     .filter((command) => !engine.committed.has(command.idempotencyKey))
     .map((command) => ({ command, call: executionCallOf(host, command.toolCallId) }));
 
+  // Checkpointing is preparation, not an issued user effect. A cancelled
+  // snapshot must not require reconciliation for a tool that never dispatched.
+  for (const run of runs) {
+    await prepareToolWrite(ports, host, run.call);
+    if (await stopScheduling(engine, ports)) return;
+  }
+
   // Progress opens for every member, in the provider's order, before any of
   // them runs: a batch that reported its first "started" after the others had
   // already finished would read as a queue, not as concurrency.
+  const issued: typeof runs = [];
   for (const run of runs) {
+    if (await stopScheduling(engine, ports)) break;
+
     engine.issued.add(run.command.idempotencyKey);
     await issueEffect(engine, ports, run.command.idempotencyKey);
+    issued.push(run);
   }
 
   const outcomes = new Map<string, Promise<ToolOutcome>>();
-  for (const run of runs) {
-    outcomes.set(run.command.toolCallId, executeUnderGate(ports, gate, host, run.call));
+
+  for (const run of issued) {
+    outcomes.set(run.command.toolCallId, executeUnderGate(ports, gate, host, run.call, () => schedulingStopped(engine)));
   }
 
   for (const toolCallId of settlementOrder([...outcomes.keys()])) {
@@ -214,6 +263,7 @@ async function runExecutionsTogether(
     if (run === undefined || pending === undefined) {
       continue;
     }
+
     if (run.call === undefined) {
       await host.dispatch({
         type: "tool_unknown",
@@ -224,10 +274,23 @@ async function runExecutionsTogether(
     } else {
       await settleToolOutcome(host, run.call, await pending);
     }
+
     await settleEffect(engine, ports, run.command.idempotencyKey, toolCallId);
     engine.committed.add(run.command.idempotencyKey);
   }
+
   await flushProgress(engine, ports);
+}
+
+async function prepareToolWrite(
+  ports: LoopPorts,
+  host: ToolRunnerHost,
+  call: ToolExecutionCall | undefined,
+): Promise<void> {
+  if (call === undefined) return;
+  const lookup = lookupToolBinding(ports.tools, call.name);
+  if (lookup.kind !== "unavailable" && lookup.binding.sideEffect === "workspace_write")
+    await host.beforeWrite(call.name);
 }
 
 function executionCallOf(host: ToolRunnerHost, toolCallId: string): ToolExecutionCall | undefined {
@@ -247,16 +310,25 @@ async function executeUnderGate(
   gate: ParallelGate,
   host: ToolRunnerHost,
   call: ToolExecutionCall | undefined,
+  cancelled: () => boolean,
 ): Promise<ToolOutcome> {
   if (call === undefined) {
     return { outcome: "unknown", code: "unknown_tool_call", message: "unknown_tool_call" };
   }
-  const binding = ports.tools.snapshot().find((item) => item.name === call.name);
-  const release = await (binding?.parallelSafe === true ? gate.read() : gate.write());
+
+  const lookup = lookupToolBinding(ports.tools, call.name);
+  if (lookup.kind === "unavailable") return lookup.outcome;
+
+  const release = await (lookup.binding.parallelSafe === true ? gate.read() : gate.write());
+
   try {
-    if (binding?.sideEffect === "workspace_write") {
+    if (cancelled()) return { outcome: "cancelled" };
+
+    if (lookup.binding.sideEffect === "workspace_write") {
       await host.beforeWrite(call.name);
     }
+    if (cancelled()) return { outcome: "cancelled" };
+
     return await executeToolOnly(ports.tools, call, host.abortSignal);
   } finally {
     release();
@@ -276,9 +348,11 @@ export async function dispatch(engine: Engine, ports: LoopPorts, input: ReduceIn
   if (commands === undefined) {
     return;
   }
+
   for (const command of commands) {
     await interpret(engine, ports, command);
   }
+
   await flushProgress(engine, ports);
 }
 
@@ -296,7 +370,9 @@ async function applyToState(
 ): Promise<ReadonlyArray<EffectCommand> | undefined> {
   const delivered = engine.journal.recordInput(input);
   const result = reduce(engine.state, delivered);
+
   engine.state = result.state;
+
   if (!result.ok) {
     emitRaw(engine, "error", {
       code: result.error.code,
@@ -304,6 +380,7 @@ async function applyToState(
     });
     return undefined;
   }
+
   if (
     engine.state.currentAttemptId !== undefined &&
     engine.state.currentAttemptId !== engine.boundAttempt
@@ -311,6 +388,7 @@ async function applyToState(
     engine.journal.bindAttempt(engine.state.currentAttemptId);
     engine.boundAttempt = engine.state.currentAttemptId;
   }
+
   return result.commands;
 }
 
@@ -318,7 +396,11 @@ async function interpret(engine: Engine, ports: LoopPorts, command: EffectComman
   if (engine.committed.has(command.idempotencyKey)) {
     return;
   }
+
+  if ((command.type === "execute_tool" || command.type === "request_permission") && await stopScheduling(engine, ports)) return;
+
   engine.issued.add(command.idempotencyKey);
+
   switch (command.type) {
     case "emit":
       emitRaw(engine, command.kind, command.payload);
@@ -342,12 +424,16 @@ async function interpret(engine: Engine, ports: LoopPorts, command: EffectComman
       await runPermission(toolHostFor(engine, ports, views), ports, command.toolCallId, command.name);
       engine.committed.add(command.idempotencyKey);
       return;
-    case "execute_tool":
+    case "execute_tool": {
+      const host = toolHostFor(engine, ports, views);
+      await prepareToolWrite(ports, host, executionCallOf(host, command.toolCallId));
+      if (await stopScheduling(engine, ports)) return;
       await issueEffect(engine, ports, command.idempotencyKey);
-      await runTool(toolHostFor(engine, ports, views), ports.tools, command.toolCallId);
+      await runTool(host, ports.tools, command.toolCallId, () => schedulingStopped(engine));
       await settleEffect(engine, ports, command.idempotencyKey, command.toolCallId);
       engine.committed.add(command.idempotencyKey);
       return;
+    }
     case "cancel_tool": {
       const cancelled = await cancelToolSafely(ports.tools, command.toolCallId);
       if (!cancelled.ok) {
@@ -358,7 +444,9 @@ async function interpret(engine: Engine, ports: LoopPorts, command: EffectComman
           message: cancelled.message,
         });
       }
+
       engine.committed.add(command.idempotencyKey);
+
       return;
     }
     default: {
@@ -366,6 +454,19 @@ async function interpret(engine: Engine, ports: LoopPorts, command: EffectComman
       emitRaw(engine, "error", { code: "illegal_transition", message: String(_never) });
     }
   }
+}
+
+function schedulingStopped(engine: Engine): boolean {
+  return currentPhase(engine) === "terminal" || engine.compactionSignal.aborted;
+}
+
+/** Stop only between dispatches; already running effects still settle truthfully. */
+async function stopScheduling(engine: Engine, ports: LoopPorts): Promise<boolean> {
+  if (currentPhase(engine) === "terminal") return true;
+  if (!engine.compactionSignal.aborted) return false;
+
+  await dispatch(engine, ports, { type: "cancel", eventId: nextId(engine) });
+  return true;
 }
 
 /**

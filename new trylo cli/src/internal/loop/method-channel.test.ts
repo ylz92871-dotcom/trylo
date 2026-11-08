@@ -9,9 +9,9 @@ import {
   cardLengthOf,
   type MethodCard,
   type MethodRelease,
-} from "../learning/method/contracts.js";
-import { admitCard, type GateContext } from "../learning/method/gate.js";
-import { emptyVocabulary } from "../learning/method/vocabulary.js";
+} from "../learning/agent/subsystems/method/index.js";
+import { admitCard, type GateContext } from "../learning/agent/subsystems/method/domain/gate.js";
+import { emptyVocabulary } from "../learning/agent/subsystems/method/domain/vocabulary.js";
 import {
   LEARNING_FENCE,
   MAX_HELD_CHARS,
@@ -115,6 +115,7 @@ test("the streaming channel emits exactly the visible text, in order, with no ga
     { type: "text_end", blockId: "b1" },
   ];
   const visible = events.map((event) => deltasAfter(channel.rewrite(event))).join("");
+
   assert.equal(visible, "working.\n");
   assert.equal(channel.take().proposal, CARD);
   assert.equal(channel.take().code, undefined);
@@ -124,6 +125,7 @@ test("a marker split across deltas is held, then stripped, and leaks nothing", (
   const channel = createMethodChannel();
   // 标记被从任意位置切开：` ` `` `` ` `` ` ```t ` 都可能是一拍的结尾。
   const visible = feed(channel, ["done.", "\n", "``", "`trylo", "-learning\n", CARD, "\n```"]);
+
   // 标记之前的部分照常外发，标记之后的半段一个字符都没漏出来。
   assert.equal(visible, "done.\n");
   // 流还没结束，所以扣住的东西还没定论：`take` 此刻不给答案。
@@ -137,8 +139,10 @@ test("a marker split across deltas is held, then stripped, and leaks nothing", (
 test("a stream that ends mid-fence flushes the held text instead of dropping it", () => {
   const channel = createMethodChannel();
   const visible = feed(channel, ["done.", "\n", "``", "`trylo", "-learning\n", '{"hint":"half a th']);
+
   assert.equal(visible, "done.\n");
   const tail = deltasAfter(channel.rewrite({ type: "text_end", blockId: "b1" }));
+
   // 未闭合的围栏在 text_end 那一刻**原样**发出去：用户看到的就是那半句。
   assert.equal(tail, `${MARKER}\n{"hint":"half a th`);
   assert.equal(channel.take().code, "fence_unterminated");
@@ -153,8 +157,10 @@ test("non-text events pass through the channel untouched, field for field", () =
     name: "write_file",
     arguments: { path: "a.txt" },
   };
+
   assert.deepEqual(channel.rewrite(call), [call]);
   const usage: ProviderEvent = { type: "usage", usage: emptyUsage("snapshot") };
+
   assert.deepEqual(channel.rewrite(usage), [usage]);
 });
 
@@ -229,6 +235,7 @@ function admittedCard(text: string): MethodCard {
 test("T15: a fence that carries a summary admits, and the card it admits is the bare card", async () => {
   const disposition = dispositionOf(await channelFixture("fence_with_summary.txt"));
   const proposal = disposition.proposal;
+
   assert.notEqual(proposal, undefined, "the fence must be stripped out of the visible text");
 
   // ① 开工缺陷的回归：按 `§5.1` / `§5.5` 写出来的围栏（带 summary）以前被判
@@ -238,12 +245,14 @@ test("T15: a fence that carries a summary admits, and the card it admits is the 
   // ② 门拿到的是摘过的那一份：与不带 summary 的同一张卡**逐字节**相同，所以卡里
   //    没有它，字符帽也量不到它。
   const bare = dispositionOf(await channelFixture("fence_without_summary.txt"));
+
   assert.equal(proposal, bare.proposal);
   assert.equal(cardLengthOf(card), cardLengthOf(admittedCard(bare.proposal ?? "")));
 
   // ③ 同一张卡配一句多长的 summary，卡都一样大：字符帽量的是卡，不是围栏。
   const noisy = `{"summary":"${"长".repeat(400)}",${(bare.proposal ?? "{}").slice(1)}`;
   const noisyDisposition = dispositionOf(fenced(noisy));
+
   assert.equal(noisyDisposition.summary?.length, 400);
   assert.equal(cardLengthOf(admittedCard(noisyDisposition.proposal ?? "")), cardLengthOf(card));
 
@@ -263,6 +272,7 @@ test("T15: a summary that is absent, empty or not a string never costs the card"
     "fence_summary_not_string.txt",
   ]) {
     const disposition = dispositionOf(await channelFixture(name));
+
     // 坏的 summary 只摘键、不产生那一句：卡照过，用户只是看不到轻提示。
     assert.equal(disposition.summary, undefined, name);
     assert.equal(
@@ -277,6 +287,7 @@ test("T15: stripping the summary takes the summary and nothing else", async () =
   // 夹具里除了 summary 还多一个 `junk`：摘完仍然多一个字段，所以门照旧拒。这条钉
   // 住的是「案 A 不是给杠 2 开口子」——摘掉一个键不等于宽容整张卡。
   const disposition = dispositionOf(await channelFixture("fence_with_junk_key.txt"));
+
   assert.equal(disposition.summary, FIXTURE_SUMMARY);
   assert.deepEqual(admitCard(disposition.proposal ?? "", gateContext()), {
     kind: "refused",
@@ -296,6 +307,7 @@ test("T15: the summary is appended to this block, so both downstream paths see i
       if (one.type === "text_start" || one.type === "text_delta" || one.type === "text_end") {
         applyTextBlock(acc, one);
       }
+
       allocated += 1;
       const mapped = providerEventToInput(one, `evt-${allocated}`);
       if (mapped !== undefined && mapped.type === "text_delta") {
@@ -305,6 +317,7 @@ test("T15: the summary is appended to this block, so both downstream paths see i
   };
 
   const fenceAt = text.indexOf(MARKER);
+
   push({ type: "text_start", blockId: "b1" });
   push({ type: "text_delta", blockId: "b1", text: text.slice(0, fenceAt) });
   push({ type: "text_delta", blockId: "b1", text: text.slice(fenceAt) });
@@ -315,6 +328,7 @@ test("T15: the summary is appended to this block, so both downstream paths see i
     .map((item) => (item.kind === "assistant_text" ? item.text : ""))
     .join("");
   const expected = `${outsideFences(text)}${FIXTURE_SUMMARY}`;
+
   assert.equal(transcript, expected);
   assert.equal(journal.join(""), expected);
 
@@ -323,6 +337,7 @@ test("T15: the summary is appended to this block, so both downstream paths see i
     assert.equal(seen.includes("hint"), false);
     assert.equal(seen.includes(LEARNING_FENCE), false);
   }
+
   assert.equal(channel.take().summary, FIXTURE_SUMMARY);
   assert.notEqual(channel.take().proposal, undefined);
 });
@@ -337,6 +352,7 @@ test("T15: when the visible text does not end in a newline, the summary gets its
     channel.rewrite({ type: "text_delta", blockId: "b1", text: `done.${fenced(body)}` }),
   );
   const appended = deltasAfter(channel.rewrite({ type: "text_end", blockId: "b1" }));
+
   assert.equal(streamed, "done.");
   assert.equal(appended, `\n${summary}`);
 });

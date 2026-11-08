@@ -4,7 +4,8 @@ import type { JsonObject } from "../protocol/envelope.js";
 import type { DoomLoopTracker } from "./doom-loop.js";
 import type { PermissionGrantCache } from "./permission-grants.js";
 import type { ToolResultRecord } from "./tool-execution.js";
-import { runToolFor } from "./tool-execution.js";
+import { runToolFor, settleToolOutcome } from "./tool-execution.js";
+import { lookupToolBinding } from "./tool-boundary.js";
 import { runPermissionFor } from "./tool-permission.js";
 
 /**
@@ -61,6 +62,7 @@ export async function runPermission(
     });
     return;
   }
+
   await runPermissionFor(
     {
       emit: host.emit,
@@ -87,6 +89,7 @@ export async function runTool(
   host: ToolRunnerHost,
   tools: Parameters<typeof runToolFor>[1],
   toolCallId: string,
+  cancelled: () => boolean = () => host.abortSignal.aborted,
 ): Promise<void> {
   const call = host.callFor(toolCallId);
   if (call === undefined) {
@@ -98,10 +101,27 @@ export async function runTool(
     });
     return;
   }
-  const binding = tools.snapshot().find((item) => item.name === call.name);
-  if (binding?.sideEffect === "workspace_write") {
+
+  const lookup = lookupToolBinding(tools, call.name);
+  if (lookup.kind === "unavailable") {
+    await settleToolOutcome(host, call, lookup.outcome);
+    return;
+  }
+
+  if (cancelled()) {
+    await settleToolOutcome(host, call, { outcome: "cancelled" });
+    return;
+  }
+
+  if (lookup.binding.sideEffect === "workspace_write") {
     await host.beforeWrite(call.name);
   }
+
+  if (cancelled()) {
+    await settleToolOutcome(host, call, { outcome: "cancelled" });
+    return;
+  }
+
   await runToolFor(
     {
       emit: host.emit,

@@ -106,10 +106,12 @@ export function adoptResumedWindow(
   if (window === undefined || records === undefined) {
     return;
   }
+
   const replaced = livePrefixBefore(window, records, transcript);
   if (replaced === 0) {
     return;
   }
+
   ledger.window = window;
   ledger.replacedPrefix = replaced;
   ledger.resumed = {
@@ -142,6 +144,7 @@ export function windowOnJournal(
   source?: ReadonlyArray<SessionRecord>,
 ): CompactWindow | undefined {
   if (source !== undefined) return mapSourceWindow(window, source, records);
+
   // `replacedFromSequence` 0 is `session_start`, which carries no item, so the
   // first ordinal a window can cover is `-1` — excluded by the comparison below
   // without a special case.
@@ -149,19 +152,24 @@ export function windowOnJournal(
   const to = window.replacedToSequence - 1;
   let first: number | undefined;
   let last: number | undefined;
+
   for (const record of records) {
     const ordinal = transcriptOrdinal(record);
     if (ordinal === undefined || ordinal < from || ordinal > to) {
       continue;
     }
+
     if (first === undefined) {
       first = record.sequence;
     }
+
     last = record.sequence;
   }
+
   if (first === undefined || last === undefined) {
     return undefined;
   }
+
   return { ...window, replacedFromSequence: first, replacedToSequence: last };
 }
 
@@ -174,6 +182,7 @@ function mapSourceWindow(window: CompactWindow, source: ReadonlyArray<SessionRec
     return ordinal !== undefined && ordinals.has(ordinal);
   });
   if (ordinals.size === 0 || matched.length !== ordinals.size) return undefined;
+
   return { ...window, replacedFromSequence: matched[0]!.sequence, replacedToSequence: matched[matched.length - 1]!.sequence };
 }
 
@@ -196,13 +205,16 @@ function livePrefixBefore(
     const ordinals = new Set(records.filter(record => record.sequence <= window.replacedToSequence).map(transcriptOrdinal));
     return transcript.filter(item => ordinals.has(item.sequence)).length;
   }
+
   let count = 0;
+
   for (const record of records) {
     if (record.type !== "transcript_item" || record.sequence > window.replacedToSequence) {
       continue;
     }
     count += 1;
   }
+
   return count;
 }
 
@@ -229,17 +241,21 @@ export function journalView(
   resumed?: ResumedCompaction,
 ): ReadonlyArray<SessionRecord> {
   const windowsAt = new Map<number, unknown[]>();
+
   // The window the turn resumed under comes first: it was stored before any
   // window this turn can store, and windows must strictly advance.
   if (resumed !== undefined) {
     windowsAt.set(resumed.afterItemCount, [resumed.window]);
   }
+
   for (const entry of entries) {
     const queued = windowsAt.get(entry.afterItemCount) ?? [];
     windowsAt.set(entry.afterItemCount, [...queued, entry.draft.payload]);
   }
+
   const records: SessionRecord[] = [viewRecord(0, "session_start", sessionId, {})];
   let sequence = 1;
+
   // One step past the end: a window stored after the newest item still belongs
   // to the journal, and this is the only place it can be emitted.
   for (let itemCount = 0; itemCount <= transcript.length; itemCount += 1) {
@@ -251,6 +267,7 @@ export function journalView(
       records.push(viewRecord(sequence, "compact", sessionId, payload));
       sequence += 1;
     }
+
     const item = transcript[itemCount];
     if (item !== undefined) {
       const payload = asJsonObject(item);
@@ -261,6 +278,7 @@ export function journalView(
       sequence += 1;
     }
   }
+
   return records;
 }
 

@@ -130,13 +130,30 @@ function portsFor(name: ScenarioName): LoopPorts {
         tools: createFakeTools([toolResult({ echo: "hi" })]),
         permission: createFakePermission("approved"),
       };
-    case "approval-deny":
+    case "approval-deny": {
+      let requests = 0;
       return {
         profile,
-        provider: createFakeProvider([[...toolCallEvent("call-1", "echo", { text: "no" })]]),
-        tools: createFakeTools([]),
+        provider: {
+          async *stream(request) {
+            requests += 1;
+            if (requests === 1) {
+              yield* toolCallEvent("call-1", "echo", { text: "no" });
+              return;
+            }
+
+            const denied = request.messages.filter(message => message.role === "tool" && message.toolCallId === "call-1");
+            if (denied.length !== 1 || !denied[0]?.content.includes("permission_denied")) {
+              throw new Error("approval_denial_feedback_missing");
+            }
+            yield* textBlock("denial", "The requested call was denied and did not run.");
+            yield stopEvent();
+          },
+        },
+        tools: { ...createFakeTools([]), async execute() { throw new Error("denied_scenario_tool_executed"); } },
         permission: createFakePermission("denied"),
       };
+    }
     case "tool-fail-repair":
       return {
         profile,

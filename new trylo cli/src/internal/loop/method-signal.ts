@@ -10,6 +10,9 @@ import type { MethodLearningPort, MethodSlotDelivery, MethodSlotMessage } from "
 import type { ToolGapChannel, ToolGapTake } from "./tool-gap-channel.js";
 import { createToolGapChannel } from "./tool-gap-channel.js";
 import type { ToolGapPort } from "./tool-gap-port.js";
+import { projectToolExecutions, toolVersionsOf } from "./tool-execution-projection.js";
+import { methodContextCue } from "./method-context-cue.js";
+import { methodExecutionSpan, methodRequestBoundary, previousMethodExecutionSpan } from "./method-execution-span.js";
 
 /**
  * 执行侧传感器：一拍结算了什么。
@@ -88,8 +91,10 @@ export function failureCodeOf(text: string): string | undefined {
   if (trimmed.length === 0) {
     return undefined;
   }
+
   const colon = trimmed.indexOf(":");
   const candidate = colon === -1 ? trimmed : trimmed.slice(0, colon);
+
   return /^[a-z][a-z0-9_]*$/.test(candidate) ? candidate : undefined;
 }
 
@@ -99,18 +104,21 @@ export function failureCodeOf(text: string): string | undefined {
  * 哈希前先规范化键序：同一个调用换了键序仍然是同一个调用，而指纹的全部意义
  * 就是说出这件事。哈希而不是留着 JSON，是为了账与卡里一个参数值都不出现。
  */
-export function toolFingerprint(args: JsonObject): string {
-  return createHash("sha256").update(canonicalJson(args), "utf8").digest("hex").slice(0, 16);
+export function toolFingerprint(args: JsonObject, length = 16): string {
+  return createHash("sha256").update(canonicalJson(args), "utf8").digest("hex").slice(0, length);
 }
 
 function canonicalJson(value: JsonValue): string {
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value);
   }
+
   if (Array.isArray(value)) {
     return `[${value.map(canonicalJson).join(",")}]`;
   }
+
   const parts: string[] = [];
+
   for (const key of Object.keys(value).sort()) {
     const entry = (value as JsonObject)[key];
     if (entry === undefined) {
@@ -118,43 +126,53 @@ function canonicalJson(value: JsonValue): string {
     }
     parts.push(`${JSON.stringify(key)}:${canonicalJson(entry)}`);
   }
+
   return `{${parts.join(",")}}`;
 }
 
 export function projectToolFailures(transcript: Transcript): FailureProjection {
   const settled = trailingToolResults(transcript);
   const argumentsById = new Map<string, JsonObject>();
+
   for (const item of transcript) {
     if (item.kind === "tool_call") {
       argumentsById.set(item.toolCallId, item.arguments);
     }
   }
+
   const failures: ToolFailureFact[] = [];
   const succeededTools: string[] = [];
+
   for (const item of settled) {
     if (item.outcome === "succeeded") {
       succeededTools.push(item.name);
       continue;
     }
+
     if (item.outcome === "cancelled") {
       continue;
     }
+
     const args = argumentsById.get(item.toolCallId);
     if (args === undefined) {
       return { kind: "unreadable", code: "tool_call_missing" };
     }
+
     const code = failureCodeOf(item.output);
     if (code === undefined) {
       return { kind: "unreadable", code: "failure_code_missing" };
     }
+
     failures.push({ tool: item.name, code, fingerprint: toolFingerprint(args) });
   }
+
   return { kind: "ok", beat: { failures, succeededTools } };
 }
 
 /** 尾部连续的已结算工具结果，就是这一拍的。 */
 function trailingToolResults(transcript: Transcript): ReadonlyArray<ToolResultItem> {
   const settled: ToolResultItem[] = [];
+
   for (let index = transcript.length - 1; index >= 0; index -= 1) {
     const item = transcript[index];
     if (item === undefined || item.kind !== "tool_result") {
@@ -162,6 +180,7 @@ function trailingToolResults(transcript: Transcript): ReadonlyArray<ToolResultIt
     }
     settled.unshift(item);
   }
+
   return settled;
 }
 
@@ -230,13 +249,22 @@ export async function teachingFor(
   turnId: string | undefined,
   beat: number,
   tools: ToolPort,
+  transcript?: Transcript,
 ): Promise<Teaching> {
   if (turnId === undefined || (port === undefined && toolGap === undefined)) {
     return {};
   }
+
   const names = toolNamesOf(tools);
-  const channel = port !== undefined && port.intentOn(turnId, beat) ? createMethodChannel() : undefined;
-  const slot = port === undefined ? undefined : await port.requestSlot({ turnId, beat, toolNames: names });
+  const requested = port !== undefined && port.intentOn(turnId, beat);
+  const cue = port === undefined ? undefined : methodContextCue(transcript);
+  const boundary = port === undefined ? undefined : methodRequestBoundary(transcript);
+  const previousExecutionSpan = port === undefined || transcript === undefined ? undefined : previousMethodExecutionSpan(transcript);
+  const slot = port === undefined ? undefined : await port.requestSlot({ turnId, beat, toolNames: names,
+    ...cue, ...(boundary === undefined ? {} : { requestBoundarySequence: boundary }),
+    ...(previousExecutionSpan === undefined ? {} : { previousExecutionSpan }) });
+  const confirmed = port?.confirmIntent?.(turnId, beat) ?? true;
+  const channel = requested && confirmed ? createMethodChannel() : undefined;
   // Only a beat that actually fielded a card can receive attributable feedback,
   // so the stripper is installed exactly when there is at least one receipt to
   // resolve a ref against. No receipts -> no channel -> the answer text is never
@@ -248,6 +276,7 @@ export async function teachingFor(
   const gapChannel = toolGap !== undefined && toolGap.intentOn(turnId, beat) ? createToolGapChannel() : undefined;
   const gapSlot =
     toolGap === undefined ? undefined : await toolGap.requestPrompt({ turnId, beat, toolNames: names });
+
   return {
     ...(slot === undefined ? {} : { slot }),
     ...(channel === undefined ? {} : { channel }),
@@ -277,9 +306,11 @@ export async function reportBeat(host: {
   readonly emit: (kind: string, payload: JsonObject) => void;
 }): Promise<void> {
   const { port, turnId } = host;
+
   if (port === undefined || turnId === undefined) {
     return;
   }
+
   if (host.take?.code !== undefined) {
     host.emit("observation", {
       degraded: true,
@@ -287,6 +318,7 @@ export async function reportBeat(host: {
       reason: host.take.code,
     });
   }
+
   const projection = projectToolFailures(host.transcript);
   if (projection.kind !== "ok") {
     host.emit("observation", {
@@ -296,13 +328,17 @@ export async function reportBeat(host: {
     });
     return;
   }
+
   const proposal = host.take?.proposal;
+  const executionSpan = methodExecutionSpan(host.transcript);
+
   await port.observe({
     turnId,
     beat: host.beat,
     failures: projection.beat.failures,
     succeededTools: projection.beat.succeededTools,
     toolNames: toolNamesOf(host.tools),
+    ...(executionSpan === undefined ? {} : { executionSpan }),
     ...(proposal === undefined ? {} : { proposal }),
   });
 }
@@ -328,9 +364,11 @@ export async function reportToolGapBeat(host: {
   readonly emit: (kind: string, payload: JsonObject) => void;
 }): Promise<void> {
   const { port, turnId } = host;
+
   if (port === undefined || turnId === undefined) {
     return;
   }
+
   if (host.take?.code !== undefined) {
     host.emit("observation", {
       degraded: true,
@@ -338,19 +376,24 @@ export async function reportToolGapBeat(host: {
       reason: host.take.code,
     });
   }
+
   const projection = projectToolFailures(host.transcript);
   if (projection.kind !== "ok") {
     return;
   }
+
   const selfReport = host.take?.selfReport;
+
   await port.observe({
     turnId,
     beat: host.beat,
     failures: projection.beat.failures,
     toolNames: toolNamesOf(host.tools),
+    executions: projectToolExecutions(host.transcript, args => toolFingerprint(args, 64), failureCodeOf, toolVersionsOf(host.tools)),
     ...(selfReport === undefined ? {} : { selfReport }),
   });
 }
+
 
 /**
  * 关上这一 turn 在板上的那一页。
@@ -363,9 +406,10 @@ export async function reportToolGapBeat(host: {
 export async function reportTurnEnd(
   port: MethodLearningPort | undefined,
   turnId: string | undefined,
+  signal?: AbortSignal,
 ): Promise<void> {
   if (port === undefined || turnId === undefined) {
     return;
   }
-  await port.endTurn(turnId);
+  await port.endTurn(turnId, signal);
 }

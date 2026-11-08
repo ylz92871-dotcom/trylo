@@ -14,7 +14,7 @@ export function executableStreamInputs(inputs: ReadonlyArray<ReduceInput>): Read
   if (isAcceptedStream(inputs)) return inputs;
   return inputs.filter(input => input.type !== "tool_request"
     && input.type !== "tool_input_opened" && input.type !== "tool_arguments_invalid")
-    .map(input => input.type === "finish" ? { ...input, requiresFollowUp: false } : input);
+    .map(input => input.type === "finish" ? { ...input, requiresFollowUp: input.reason === "length" } : input);
 }
 
 /** Shared by execution admission and the durable record of discarded calls. */

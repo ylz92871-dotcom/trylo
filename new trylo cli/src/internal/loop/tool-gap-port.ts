@@ -17,11 +17,23 @@ import type { ObservedFailureFact } from "./method-port.js";
 /** 围栏标记。与学习侧那份逐字相同，由合同测试要求相等。 */
 export const TOOL_GAP_FENCE = "trylo-tool-gap";
 
+/** Settled execution facts only; task quality and causal diagnosis are separate reports. */
+export type ToolExecutionFact = {
+  readonly tool: string;
+  readonly toolCallId: string;
+  readonly versionId?: string;
+  readonly inputHash?: string;
+  readonly outputHash?: string;
+  readonly execution: "returned" | "tool_error" | "timeout" | "protocol_error" | "cancelled" | "unavailable";
+  readonly durationMs?: number;
+};
+
 export type ToolGapBeatObservation = {
   readonly turnId: string;
   readonly beat: number;
   readonly failures: ReadonlyArray<ObservedFailureFact>;
   readonly toolNames: ReadonlyArray<string>;
+  readonly executions?: readonly ToolExecutionFact[];
   /** 本拍抽出的自报原文；缺席 = 这一拍没有自报。 */
   readonly selfReport?: string;
 };

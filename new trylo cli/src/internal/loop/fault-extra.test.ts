@@ -15,6 +15,11 @@ import { parseJournal, serializeJournal } from "./journal.js";
 import { runTurn } from "./runner.js";
 import { MAX_TOOL_OUTPUT_BYTES } from "./tool-execution.js";
 
+const REFUSAL_RESPONSE = [
+  { type: "text_delta", blockId: "refusal", text: "The call did not run. I can continue with permitted work." },
+  { type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false },
+] as const;
+
 test("finish in the same stream as tool_request does not complete the turn", async () => {
   const result = await runTurn(
     {
@@ -26,12 +31,14 @@ test("finish in the same stream as tool_request does not complete the turn", asy
           { type: "tool_call", toolCallId: "call-race", name: "echo", arguments: {} },
           { type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false },
         ],
+        REFUSAL_RESPONSE,
       ]),
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "race" },
   );
-  assert.equal(result.state.terminalReason, "failed");
-  assert.notEqual(result.state.terminalReason, "completed");
+
+  assert.equal(result.state.terminalReason, "completed");
+  assert.equal(result.iterations, 2, "a finish beside the refused call still needs a follow-up request");
   assert.equal(result.envelopes.some((item) => item.kind === "error"), false);
 });
 
@@ -46,16 +53,19 @@ test("model cannot skip approval when snapshot requires it", async () => {
           { type: "tool_call", toolCallId: "call-bypass", name: "echo", arguments: {} },
           { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
+        REFUSAL_RESPONSE,
       ]),
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "bypass" },
   );
+
   assert.equal(result.state.phase, "terminal");
   assert.equal(result.envelopes.some((item) => item.kind === "approval_requested"), true);
-  assert.equal(result.state.terminalReason, "failed");
+  assert.equal(result.state.toolCalls["call-bypass"]?.status, "denied");
+  assert.equal(result.state.terminalReason, "completed");
 });
 
-test("unknown tool always requires approval", async () => {
+test("an unknown tool returns a failed result without asking approval for a missing capability", async () => {
   const result = await runTurn(
     {
       profile: emptyProfileLoader(),
@@ -66,11 +76,15 @@ test("unknown tool always requires approval", async () => {
           { type: "tool_call", toolCallId: "call-unk", name: "mystery", arguments: {} },
           { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
+        REFUSAL_RESPONSE,
       ]),
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "unk" },
   );
-  assert.equal(result.envelopes.some((item) => item.kind === "approval_requested"), true);
+  assert.equal(result.envelopes.some((item) => item.kind === "approval_requested"), false);
+  assert.equal(result.state.terminalReason, "completed");
+  assert.equal(result.transcript.some(item => item.kind === "tool_result" && item.toolCallId === "call-unk"
+    && item.outcome === "failed" && item.output.includes("unknown_tool")), true);
 });
 
 test("profile failure is observable and does not block execution", async () => {
@@ -87,6 +101,7 @@ test("profile failure is observable and does not block execution", async () => {
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "still-run" },
   );
+
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(
     result.envelopes.some(
@@ -113,6 +128,7 @@ test("provider stream receives user messages", async () => {
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "user-body" },
   );
+
   assert.equal(result.state.terminalReason, "completed");
   // The tool list rides with the seed, ahead of the user turn — the stream
   // still carries the user's words, only no longer as the first message.
@@ -131,12 +147,14 @@ test("permission expire is not cancel", async () => {
           { type: "tool_call", toolCallId: "call-e", name: "echo", arguments: {} },
           { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
+        REFUSAL_RESPONSE,
       ]),
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "expire" },
   );
+
   assert.equal(result.state.phase, "terminal");
-  assert.equal(result.state.terminalReason, "failed");
+  assert.equal(result.state.terminalReason, "completed");
   assert.equal(result.state.toolCalls["call-e"]?.status, "denied");
   assert.equal(result.envelopes.some((item) => item.kind === "user_cancel"), false);
   assert.equal(
@@ -180,10 +198,12 @@ test("learning text cannot grant permission", async () => {
           { type: "tool_call", toolCallId: "call-l", name: "echo", arguments: {} },
           { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
+        REFUSAL_RESPONSE,
       ]),
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "learn" },
   );
+
   assert.equal(seen.length, 1);
   // Widened in P03: the action now carries the parsed arguments and their
   // fingerprint, because a *name* cannot say which call is being approved. It
@@ -196,7 +216,8 @@ test("learning text cannot grant permission", async () => {
   ]);
   assert.equal("permission" in (seen[0] ?? {}), false);
   assert.equal("resolution" in (seen[0] ?? {}), false);
-  assert.equal(result.state.terminalReason, "failed");
+  assert.equal(result.state.toolCalls["call-l"]?.status, "denied");
+  assert.equal(result.state.terminalReason, "completed");
 });
 
 test("provider timeout is failed not unknown", async () => {
@@ -209,6 +230,7 @@ test("provider timeout is failed not unknown", async () => {
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "timeout" },
   );
+
   assert.equal(result.state.terminalReason, "failed");
   assert.notEqual(result.state.terminalReason, "unknown");
 });
@@ -236,6 +258,7 @@ test("disconnect without finish is unknown", async () => {
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "disc" },
   );
+
   assert.equal(result.state.phase, "terminal");
   assert.equal(result.state.terminalReason, "unknown");
 });
@@ -279,8 +302,10 @@ test("tool output overflow is truncated with metadata not disguised as failure",
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "big" },
   );
+
   assert.equal(result.state.toolCalls["call-big"]?.status, "succeeded");
   const transcriptResult = result.transcript.find((item) => item.kind === "tool_result");
+
   assert.equal(transcriptResult?.kind, "tool_result");
   assert.equal(transcriptResult !== undefined && transcriptResult.truncated, true);
   assert.equal(
@@ -305,6 +330,7 @@ test("permission cancel is cancelled not denied", async () => {
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "pcancel" },
   );
+
   assert.equal(result.state.terminalReason, "cancelled");
   assert.equal(result.envelopes.some((item) => item.kind === "user_cancel"), true);
   assert.equal(result.envelopes.some((item) => item.kind === "permission_denied"), false);
@@ -329,6 +355,7 @@ test("serialized journal replay yields the same state", async () => {
   const raw = serializeJournal({ envelopes: result.envelopes, inputs: result.inputs });
   const parsed = parseJournal(raw);
   const again = replay(parsed.inputs);
+
   assert.equal(sameState(again.state, result.state), true);
   assert.equal(again.state.terminalReason, "completed");
 });
@@ -344,6 +371,7 @@ test("attempt sequence is monotonic and producer sequence is kept", async () => 
     { sessionId: "s", turnId: "t", correlationId: "c", text: "seq" },
   );
   const sequences = result.envelopes.map((item) => item.sequence);
+
   for (let i = 1; i < sequences.length; i += 1) {
     const prev = sequences[i - 1];
     const cur = sequences[i];
@@ -351,6 +379,7 @@ test("attempt sequence is monotonic and producer sequence is kept", async () => 
       assert.equal(cur > prev, true);
     }
   }
+
   assert.equal(
     result.envelopes.every((item) => typeof item.producerSequence === "number"),
     true,
@@ -379,12 +408,15 @@ test("execution core cannot supply a desired permission decision", async () => {
           { type: "tool_call", toolCallId: "call-authority", name: "echo", arguments: {} },
           { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
+        REFUSAL_RESPONSE,
       ]),
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "authority" },
   );
+
   assert.equal(awaitedTicket, "permission-owned-ticket");
-  assert.equal(result.state.terminalReason, "failed");
+  assert.equal(result.state.toolCalls["call-authority"]?.status, "denied");
+  assert.equal(result.state.terminalReason, "completed");
 });
 
 test("permission adapter failure is not reported as provider transport failure", async () => {
@@ -405,15 +437,17 @@ test("permission adapter failure is not reported as provider transport failure",
           { type: "tool_call", toolCallId: "call-permission-fail", name: "echo", arguments: {} },
           { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
+        REFUSAL_RESPONSE,
       ]),
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "permission failure" },
   );
-  assert.equal(result.state.terminalReason, "failed");
+
+  assert.equal(result.state.terminalReason, "completed");
   assert.equal(result.state.toolCalls["call-permission-fail"]?.status, "permission_failed");
   assert.equal(
     result.envelopes.some(
-      (item) => item.kind === "error" && item.payload.code === "permission_unavailable",
+      (item) => item.kind === "tool_result" && item.payload.code === "permission_unavailable" && item.payload.status === "failed",
     ),
     true,
   );
@@ -453,12 +487,14 @@ test("permission request failure fails closed before tool execution", async () =
           { type: "tool_call", toolCallId: "call-request-fail", name: "echo", arguments: {} },
           { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
+        REFUSAL_RESPONSE,
       ]),
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "request failure" },
   );
+
   assert.equal(executed, false);
-  assert.equal(result.state.terminalReason, "failed");
+  assert.equal(result.state.terminalReason, "completed");
   assert.equal(result.state.toolCalls["call-request-fail"]?.status, "permission_failed");
 });
 
@@ -486,6 +522,7 @@ test("tool adapter throw becomes unknown tool outcome and runTurn stays in contr
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "tool failure" },
   );
+
   assert.equal(result.state.toolCalls["call-tool-throw"]?.status, "unknown");
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(
@@ -498,7 +535,7 @@ test("tool adapter throw becomes unknown tool outcome and runTurn stays in contr
   );
 });
 
-test("tool snapshot failure fails closed to approval and remains observable", async () => {
+test("tool snapshot failure returns a failed result without execution and remains observable", async () => {
   const result = await runTurn(
     {
       profile: emptyProfileLoader(),
@@ -517,15 +554,20 @@ test("tool snapshot failure fails closed to approval and remains observable", as
           { type: "tool_call", toolCallId: "call-snapshot-fail", name: "echo", arguments: {} },
           { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true },
         ],
+        REFUSAL_RESPONSE,
       ]),
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "snapshot failure" },
   );
-  assert.equal(result.state.terminalReason, "failed");
-  assert.equal(result.envelopes.some((item) => item.kind === "approval_requested"), true);
+
+  assert.equal(result.state.terminalReason, "completed");
+  assert.equal(result.envelopes.some((item) => item.kind === "approval_requested"), false);
+  assert.equal(result.transcript.some(item => item.kind === "tool_result" && item.toolCallId === "call-snapshot-fail"
+    && item.outcome === "failed" && item.output.includes("tool_catalog_unavailable")), true);
   assert.equal(
     result.envelopes.some(
-      (item) => item.kind === "observation" && item.payload.component === "tool_snapshot",
+      (item) => item.kind === "tool_result" && item.payload.toolCallId === "call-snapshot-fail"
+        && item.payload.status === "failed" && String(item.payload.message).includes("tool_catalog_unavailable"),
     ),
     true,
   );

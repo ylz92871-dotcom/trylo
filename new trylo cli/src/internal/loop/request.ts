@@ -8,6 +8,7 @@ import type { MethodSlotMessage } from "./method-port.js";
 import type { PromptContext } from "./compact-boundary.js";
 import { promptViewMessages as promptMessages } from "./prompt-view.js";
 import { finalReportInstructions } from "./budget-final-report.js";
+import { interruptionReportInstructions, type InterruptionReport } from "./report-instructions.js";
 
 /**
  * Building the next provider request.
@@ -40,6 +41,7 @@ export function seedMessagesOf(
 export function resumedTranscriptFor(resumed: Transcript | undefined, text: string, records?: ReadonlyArray<SessionRecord>): Transcript {
   const base: Transcript = resumed ?? [];
   let sequence = nextTranscriptSequence(base);
+
   // A read projection may omit an unanswered request. Its durable ordinal is
   // still occupied, so only the raw journal can supply the restart high-water.
   for (const record of records ?? []) {
@@ -47,6 +49,7 @@ export function resumedTranscriptFor(resumed: Transcript | undefined, text: stri
       sequence = Math.max(sequence, record.payload.sequence + 1);
     }
   }
+
   return [...base, { kind: "user", sequence, text }];
 }
 
@@ -54,7 +57,7 @@ export type RequestView = {
   readonly attemptId: string | undefined;
   readonly continuationScope?: string;
   readonly model: string;
-  readonly finalReport?: "budget_limit";
+  readonly finalReport?: "budget_limit" | InterruptionReport;
   readonly tools: ToolPort;
   readonly prompt: PromptContext;
   /**
@@ -116,13 +119,26 @@ export function buildRequest(view: RequestView): ProviderRequest {
     // system segments to the head. Governing rules stay in system messages;
     // the report-only ToolPort, not message-role authority, forbids actions.
     messages: view.finalReport === undefined ? messages
-      : [...messages, { role: "user", content: finalReportInstructions(view.prompt.transcript) }],
+      : [...messages, { role: "user", content: view.finalReport === "budget_limit"
+        ? finalReportInstructions(view.prompt.transcript, view.slot === undefined && view.toolGapSlot === undefined ? "report" : "report_and_auxiliary")
+        : interruptionReportInstructions(view.prompt.transcript, view.finalReport,
+          view.slot === undefined && view.toolGapSlot === undefined ? "report" : "report_and_auxiliary") }],
     tools: toolSpecs(view.tools),
     ...(view.maxOutputTokens === undefined ? {} : { maxOutputTokens: view.maxOutputTokens }),
     ...(view.responseSchema === undefined ? {} : { responseSchema: view.responseSchema }),
     ...(view.systemPrompt === undefined ? {} : { systemPrompt: view.systemPrompt }),
     ...(view.systemPromptAppend === undefined ? {} : { systemPromptAppend: view.systemPromptAppend }),
   };
+}
+
+/** A provider response boundary does not end the user's task or create a new user turn. */
+export function continuationAppend(finishReason: string, append: string | undefined): string | undefined {
+  if (finishReason !== "length") return append;
+  const instruction = "The previous response reached the provider's per-response output limit. "
+    + "Continue the same original task from the recorded text and completed tool results. "
+    + "Do not repeat completed actions or restart the task. Tool calls in the truncated response were not executed; "
+    + "reissue any still-needed unexecuted call with complete arguments. Finish when the original task is actually complete.";
+  return append === undefined || append.trim().length === 0 ? instruction : `${append}\n\n${instruction}`;
 }
 
 /** Request decoration shared by the sender and its context budget. */
@@ -160,13 +176,17 @@ function applySystemPrompt(
   if (directive === undefined) {
     return { messages, seedCount };
   }
+
   if (directive.text.trim().length === 0) {
     return { messages, seedCount };
   }
+
   const extra: ProviderMessage = { role: "system", content: directive.text };
+
   if (directive.mode === "replace") {
     return { messages: [extra, ...messages.slice(seedCount)], seedCount: 1 };
   }
+
   return { messages: [...messages.slice(0, seedCount), extra, ...messages.slice(seedCount)], seedCount: seedCount + 1 };
 }
 
@@ -203,17 +223,21 @@ function applySystemPromptAppend(
  */
 export function toolListMessage(tools: ToolPort): ProviderMessage | undefined {
   let bindings;
+
   try {
     bindings = tools.snapshot();
   } catch {
     return undefined;
   }
+
   if (bindings.length === 0) {
     return undefined;
   }
+
   const names = bindings.map((binding) =>
     binding.needsApproval ? `${binding.name} (needs approval)` : binding.name,
   );
+
   return {
     role: "system",
     content: [
@@ -234,6 +258,7 @@ function withToolList(
   if (list === undefined) {
     return messages;
   }
+
   // System statements stay ahead of the conversation: the list joins the seed
   // and the summary, never the user turn it would otherwise bury.
   return [...messages.slice(0, seedCount), list, ...messages.slice(seedCount)];
@@ -271,7 +296,7 @@ export function withInjectedSlot(
  * names the tools for the slot, so an unreadable catalog simply offers no
  * candidate a tool name to match on.
  */
-function toolSpecs(tools: ToolPort): ReadonlyArray<ProviderToolSpec> {
+export function toolSpecs(tools: ToolPort): ReadonlyArray<ProviderToolSpec> {
   try {
     return tools.snapshot().map((binding) => ({
       name: binding.name,

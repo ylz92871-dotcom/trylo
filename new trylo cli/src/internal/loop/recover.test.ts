@@ -19,10 +19,13 @@ const start = {
 
 test("crash before commit reissues unfinished work", () => {
   const opened = reduce(initialState(), start);
+
   assert.equal(opened.ok, true);
+
   if (!opened.ok) {
     return;
   }
+
   const recovered = recover({
     inputs: [start],
     envelopes: [],
@@ -30,10 +33,13 @@ test("crash before commit reissues unfinished work", () => {
     issuedKeys: [],
     committedKeys: [],
   });
+
   assert.equal(recovered.ok, true);
+
   if (!recovered.ok) {
     return;
   }
+
   assert.equal(
     recovered.reissue.some((command) => command.idempotencyKey === opened.commands[0]?.idempotencyKey),
     true,
@@ -42,10 +48,13 @@ test("crash before commit reissues unfinished work", () => {
 
 test("crash after commit does not reissue", () => {
   const opened = reduce(initialState(), start);
+
   assert.equal(opened.ok, true);
+
   if (!opened.ok) {
     return;
   }
+
   const keys = opened.commands.map((command) => command.idempotencyKey);
   const recovered = recover({
     inputs: [start],
@@ -54,10 +63,13 @@ test("crash after commit does not reissue", () => {
     issuedKeys: keys,
     committedKeys: keys,
   });
+
   assert.equal(recovered.ok, true);
+
   if (!recovered.ok) {
     return;
   }
+
   assert.equal(recovered.reissue.length, 0);
 });
 
@@ -81,20 +93,28 @@ test("issued but not committed does not guess success", () => {
   ];
   let state = initialState();
   const commands: EffectCommand[] = [];
+
   for (const input of inputs) {
     const result = reduce(state, input);
+
     assert.equal(result.ok, true);
+
     if (!result.ok) {
       return;
     }
+
     state = result.state;
     commands.push(...result.commands);
   }
+
   const tool = commands.find((command) => command.type === "execute_tool");
+
   assert.notEqual(tool, undefined);
+
   if (tool === undefined) {
     return;
   }
+
   const recovered = recover({
     inputs: [...inputs],
     envelopes: [],
@@ -102,10 +122,13 @@ test("issued but not committed does not guess success", () => {
     issuedKeys: [tool.idempotencyKey],
     committedKeys: [],
   });
+
   assert.equal(recovered.ok, true);
+
   if (!recovered.ok) {
     return;
   }
+
   assert.equal(
     recovered.reissue.some((command) => command.idempotencyKey === tool.idempotencyKey),
     false,
@@ -131,9 +154,12 @@ test("tampered checksum fails closed", () => {
     issuedKeys: [],
     committedKeys: [],
   });
+
   assert.equal(recovered.ok, false);
+
   if (recovered.ok) {
     return;
   }
+
   assert.equal(recovered.code, "checksum");
 });

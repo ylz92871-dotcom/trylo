@@ -36,6 +36,7 @@ test("a fileWrites batch emits one fact per file, in order", () => {
     ],
   };
   const records = readFileWriteRecords("call-1", "apply_patch", value);
+
   assert.deepEqual(
     records.map((record) => `${record.effect.mode}:${record.effect.path}`),
     ["created:new.txt", "patched:keep.ts", "deleted:gone.txt", "moved:dst.txt"],

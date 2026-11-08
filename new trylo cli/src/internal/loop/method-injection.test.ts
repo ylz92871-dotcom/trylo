@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { methodMessage } from "../learning/method/port.js";
-import { vocabularyOf } from "../learning/method/vocabulary.js";
+import { methodMessage } from "../learning/agent/subsystems/method/index.js";
+import { vocabularyOf } from "../learning/agent/subsystems/method/domain/vocabulary.js";
 import type { ProviderEvent, ProviderPort, ProviderRequest } from "../ports/provider.js";
 import { emptyUsage } from "../ports/provider.js";
 import { decision, type PermissionPort } from "../ports/permission.js";
@@ -94,6 +94,7 @@ function recordingProvider(script: FakeProviderScript): Recording {
       return inner.stream(request, signal);
     },
   };
+
   return { port, requests };
 }
 
@@ -153,6 +154,7 @@ function scriptedMethod(spec: MethodSpec = {}): ScriptedMethod {
       endedTurns.push(turnId);
     },
   };
+
   return { port, reports, slotRequests, fieldings, feedbacks, endedTurns, toolsOffered };
 }
 
@@ -190,23 +192,27 @@ async function run(options: RunOptions): Promise<RunOutcome> {
     text: "please do the thing",
     ...(options.cancelSignal === undefined ? {} : { cancelSignal: options.cancelSignal }),
   });
+
   return { provider, result };
 }
 
 /** 模型写出来的那部分（transcript 一路）。 */
 function assistantTextOf(result: RunTurnResult): string {
   let text = "";
+
   for (const item of result.transcript) {
     if (item.kind === "assistant_text") {
       text += item.text;
     }
   }
+
   return text;
 }
 
 /** 用户终端看到的那部分（journal `text` 一路）。 */
 function journalTextOf(result: RunTurnResult): string {
   let text = "";
+
   for (const envelope of result.envelopes) {
     if (envelope.kind !== "text") {
       continue;
@@ -214,16 +220,19 @@ function journalTextOf(result: RunTurnResult): string {
     const value = envelope.payload.text;
     text += typeof value === "string" ? value : "";
   }
+
   return text;
 }
 
 function observationsOf(result: RunTurnResult): ReadonlyArray<Record<string, unknown>> {
   const found: Array<Record<string, unknown>> = [];
+
   for (const envelope of result.envelopes) {
     if (envelope.kind === "observation") {
       found.push(envelope.payload as Record<string, unknown>);
     }
   }
+
   return found;
 }
 
@@ -259,6 +268,7 @@ test("I1: an injected slot and a stripped fence are two separate decisions", asy
   assert.equal(assistantTextOf(result), "before  after");
   assert.equal(journalTextOf(result), "before  after");
   assert.equal(method.reports[0]?.proposal, CARD_JSON);
+
   for (const request of provider.requests) {
     for (const message of request.messages) {
       assert.equal(message.content.includes("[method slot]"), false);
@@ -289,7 +299,9 @@ test("T2: a released beat appends exactly one system message, both segments pres
     intent: true,
     vocabulary,
   });
+
   assert.notEqual(slot, undefined, "the learning side must compile a slot for this input");
+
   if (slot === undefined) {
     return;
   }
@@ -303,13 +315,16 @@ test("T2: a released beat appends exactly one system message, both segments pres
   const secondOn = on.provider.requests[1];
   const firstOff = off.provider.requests[0];
   const secondOff = off.provider.requests[1];
+
   assert.notEqual(firstOn, undefined);
   assert.notEqual(secondOn, undefined);
   assert.notEqual(firstOff, undefined);
   assert.notEqual(secondOff, undefined);
+
   if (firstOn === undefined || secondOn === undefined) {
     return;
   }
+
   if (firstOff === undefined || secondOff === undefined) {
     return;
   }
@@ -342,6 +357,7 @@ test("T3: a legal fence is stripped from the transcript and from the journal", a
   const { result } = await run({ script: [textBeat(body)], method });
 
   const visible = "before  after";
+
   assert.equal(assistantTextOf(result), visible);
   assert.equal(journalTextOf(result), visible);
   // 两条路各自逐字不含卡文本——只堵住其中一条会留下一个静默的泄漏口。
@@ -383,6 +399,7 @@ test("T4: an unusable fence stays visible, word for word, and is reported", asyn
     const degraded = observationsOf(result).filter(
       (payload) => payload.component === "method_channel",
     );
+
     assert.equal(degraded.length, 1, one.name);
     assert.equal(degraded[0]?.reason, one.code, one.name);
     assert.equal(degraded[0]?.degraded, true, one.name);
@@ -406,6 +423,7 @@ test("the sensor reports this beat's tool catalog and this beat's proposal", asy
   assert.equal(method.reports.length, 2);
   // 拍一：一个工具调用结算了（成功），没有失败，也没有围栏。
   const first = method.reports[0];
+
   assert.equal(first?.turnId, "trn-m2");
   assert.equal(first?.beat, 1);
   assert.deepEqual(first?.succeededTools, ["echo"]);
@@ -414,6 +432,7 @@ test("the sensor reports this beat's tool catalog and this beat's proposal", asy
   assert.equal(first?.proposal, undefined);
   // 拍二：同一批事实，加上这一拍从附加通道抽出来的原文。
   const second = method.reports[1];
+
   assert.equal(second?.beat, 2);
   assert.equal(second?.proposal, CARD_JSON);
   // 拍域：第二拍不再重报第一拍已经结算的工具。
@@ -429,6 +448,7 @@ test("the port is closed exactly once, with this turn's id", async () => {
 
 test("the tool names the slot is compiled against are the real catalog", async () => {
   const method = scriptedMethod();
+
   await run({
     script: [textBeat("hi")],
     method,
@@ -487,10 +507,12 @@ const AFTER_START_ERROR: ReadonlyArray<ProviderEvent> = [
 
 test("ME0-2/F01: a real send records one fielding carrying the slot's receipts", async () => {
   const method = scriptedMethod({ slotBeats: [1], slot: FIELD_SLOT });
+
   await run({ script: [startedTextBeat("done")], method });
 
   assert.equal(method.fieldings.length, 1);
   const notice = method.fieldings[0];
+
   assert.equal(notice?.turnId, "trn-m2");
   assert.equal(notice?.beat, 1);
   assert.deepEqual(notice?.receipts, FIELD_SLOT.receipts);
@@ -501,6 +523,7 @@ test("ME0-2/F01: a real send records one fielding carrying the slot's receipts",
 
 test("ME0-2/F01: two receipts in one slot ride one fielding, in render order", async () => {
   const method = scriptedMethod({ slotBeats: [1], slot: TWO_RECEIPT_SLOT });
+
   await run({ script: [startedTextBeat("done")], method });
 
   assert.equal(method.fieldings.length, 1);
@@ -551,6 +574,7 @@ test("ME0-2/F12: learning off records no fielding and adds no provider call", as
 test("ME0-2/F09: a cancel before stream_start records no fielding", async () => {
   const method = scriptedMethod({ slotBeats: [1], slot: FIELD_SLOT });
   const abort = new AbortController();
+
   abort.abort(); // 进门就取消：第一道边界即停，stream 从没开始。
   const { result } = await run({ script: [startedTextBeat("done")], method, cancelSignal: abort.signal });
 
@@ -586,9 +610,11 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<bool
     if (predicate()) {
       return true;
     }
+
     if (Date.now() >= deadline) {
       return false;
     }
+
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
 }
@@ -609,6 +635,7 @@ test("ME0-2/P1-1: fielding is committed at stream_start, while the stream is sti
     },
   };
   const running = run({ script: [], method, provider });
+
   try {
     // 流仍未结束（gate 未放行）时就已落账：这就是 P1-1 与「流结束后才记」的分水岭。
     const landed = await waitFor(() => method.fieldings.length === 1);
@@ -636,6 +663,7 @@ test("ME0-2/P1-1: a failure before stream_start commits no fielding even mid-str
     },
   };
   const running = run({ script: [], method, provider });
+
   try {
     const settledQuiet = await waitFor(() => false, 200);
     assert.equal(settledQuiet, false);
@@ -644,6 +672,7 @@ test("ME0-2/P1-1: a failure before stream_start commits no fielding even mid-str
     release();
     await running;
   }
+
   assert.equal(method.fieldings.length, 0);
 });
 
@@ -679,6 +708,7 @@ test("ME0-3/F04: a completed answer's valid feedback is recorded with resolved v
   assert.equal(method.fieldings.length, 1);
   assert.equal(method.feedbacks.length, 1);
   const notice = method.feedbacks[0];
+
   assert.equal(notice?.turnId, "trn-m2");
   assert.equal(notice?.beat, 1);
   assert.equal(notice?.attemptId, method.fieldings[0]?.attemptId);
@@ -740,6 +770,7 @@ test("ME0-3: an invalid feedback block stays visible, is reported, and records n
   const degraded = observationsOf(result).filter(
     (payload) => payload.component === "method_feedback_channel",
   );
+
   assert.equal(degraded.length, 1);
   assert.equal(degraded[0]?.reason, "feedback_ref_unknown");
   assert.equal(degraded[0]?.degraded, true);

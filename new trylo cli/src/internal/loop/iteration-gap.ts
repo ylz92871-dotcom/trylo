@@ -137,9 +137,11 @@ export function drainPendingInput(host: GapHost, expectedTurnId: string | undefi
     // rather than being taken and then having nowhere to go.
     return pendingCount(host.queue());
   }
+
   const incoming = host.pending().filter((input) => belongsToTurn(input, expectedTurnId));
   const taken = incoming.slice(0, room);
   const overflow = incoming.slice(room);
+
   if (taken.length > 0) {
     let queue = host.queue();
     for (const input of taken) {
@@ -147,11 +149,13 @@ export function drainPendingInput(host: GapHost, expectedTurnId: string | undefi
     }
     host.setQueue(queue);
   }
+
   if (overflow.length > 0) {
     // Refused at the ceiling, and carried rather than dropped: the turn may
     // not hold them, but nobody may pretend they were never said.
     host.setAside(overflow);
   }
+
   return pendingCount(host.queue());
 }
 
@@ -166,14 +170,18 @@ export async function promoteGapInput(host: GapHost): Promise<void> {
   if (host.phase() !== "turning") {
     return;
   }
+
   const promotion = nextPromotion(host.queue());
   if (promotion.batch.length === 0) {
     return;
   }
+
   host.setQueue(promotion.rest);
+
   if (promotion.resetBudget) {
     host.forgiveBudget();
   }
+
   for (const item of promotion.batch) {
     await host.dispatch({
       type: "user_input",

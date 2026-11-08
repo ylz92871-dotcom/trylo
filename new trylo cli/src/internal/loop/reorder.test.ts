@@ -22,9 +22,11 @@ test("duplicate older sequence is ignored", () => {
 
 test("overflow fails closed when the gap exceeds the bound", () => {
   const buffer = createReorderBuffer<number>(2);
+
   buffer.push(1, 1);
   buffer.push(2, 2);
   const overflow = buffer.push(3, 3);
+
   assert.equal(overflow.overflow, true);
   assert.deepEqual(overflow.ready, []);
   assert.equal(MAX_REORDER, 16);

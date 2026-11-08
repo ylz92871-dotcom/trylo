@@ -26,6 +26,7 @@ export function transcriptToMessages(transcript: Transcript): ReadonlyArray<Prov
     if (assistantText.length === 0 && assistantToolCalls.length === 0) {
       return;
     }
+
     messages.push({
       role: "assistant",
       content: assistantText,
@@ -74,18 +75,22 @@ export function transcriptToMessages(transcript: Transcript): ReadonlyArray<Prov
       }
     }
   }
+
   flushAssistant();
   flushImages();
   const rejected = new Map(transcript.flatMap(item => item.kind === "tool_result" && item.outcome === "failed" && item.output.startsWith("invalid_arguments") ? [[item.toolCallId, item.name] as const] : []));
+
   return pairRejectedToolMessages(messages, rejected);
 }
 
 export function nextTranscriptSequence(transcript: Transcript): number {
   let max = -1;
+
   for (const item of transcript) {
     if (item.sequence > max) {
       max = item.sequence;
     }
   }
+
   return max + 1;
 }

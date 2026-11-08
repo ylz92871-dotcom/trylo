@@ -20,19 +20,25 @@ test("seen event overflow fails the turn with a cause, not a dribble of errors",
     correlationId: "c",
     text: "x",
   });
+
   assert.equal(start.ok, true);
+
   if (!start.ok) {
     return;
   }
+
   const state = {
     ...start.state,
     seenEventIds: Array.from({ length: MAX_SEEN_EVENTS }, (_, i) => `full-${i}`),
   };
   const overflow = reduce(state, { type: "begin_stream", eventId: "new" });
+
   assert.equal(overflow.ok, true);
+
   if (!overflow.ok) {
     return;
   }
+
   assert.equal(overflow.state.phase, "terminal");
   assert.equal(overflow.state.terminalReason, "failed");
 });
@@ -67,6 +73,7 @@ test("unknown tool outcome is not success", async () => {
       text: "unknown",
     },
   );
+
   assert.equal(result.state.toolCalls["call-u"]?.status, "unknown");
   assert.notEqual(result.state.toolCalls["call-u"]?.status, "succeeded");
 });

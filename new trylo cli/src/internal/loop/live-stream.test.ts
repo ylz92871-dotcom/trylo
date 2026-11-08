@@ -18,15 +18,20 @@ test("reasoning and text reach the observer before the provider finishes", async
       yield { type: "reasoning_delta", blockId: "r", text: "first", redacted: false };
       yield { type: "text_start", blockId: "t" };
       yield { type: "text_delta", blockId: "t", text: "hello" };
-      blocked(); await gate;
+      blocked();
+      await gate;
       yield { type: "reasoning_end", blockId: "r" };
       yield { type: "text_end", blockId: "t" };
       yield { type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false };
     } },
   }, { sessionId: "s", turnId: "t", correlationId: "c", text: "hello", onEnvelope: e => { seen.push(e.kind); } });
+
   try {
     await waiting;
     assert.ok(seen.includes("thinking"), "received reasoning must be visible while the stream is still open");
     assert.ok(seen.includes("text"), "received text must be visible while the stream is still open");
-  } finally { release(); await running; }
+  } finally {
+    release();
+    await running;
+  }
 });

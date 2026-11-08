@@ -9,8 +9,11 @@ import type { Envelope } from "../protocol/envelope.js";
 
 const finish: ProviderEvent = { type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false };
 const request = { sessionId: "s", turnId: "t", correlationId: "c", text: "work" };
+
 type Progress = { readonly transcript: Transcript; readonly envelopes: readonly Envelope[] };
+
 type Outcome = "succeeded" | "failed" | "cancelled" | "unknown";
+
 type WriteOutcome = { readonly ok: true } | { readonly ok: false; readonly code: string };
 
 function setup(outcome: ToolOutcome = { outcome: "result", value: {}, output: "done", truncated: false }) {
@@ -22,8 +25,14 @@ function setup(outcome: ToolOutcome = { outcome: "result", value: {}, output: "d
       transcript.push(...input.transcript);
       return { ok: true } as const;
     },
-    async issue(key: string): Promise<WriteOutcome> { order.push("issue:" + key); return { ok: true }; },
-    async settle(key: string, status: Outcome) { order.push(status + ":" + key); return { ok: true } as const; },
+    async issue(key: string): Promise<WriteOutcome> {
+      order.push("issue:" + key);
+      return { ok: true };
+    },
+    async settle(key: string, status: Outcome) {
+      order.push(status + ":" + key);
+      return { ok: true } as const;
+    },
   };
   let beat = 0;
   const ports = {
@@ -54,6 +63,7 @@ function setup(outcome: ToolOutcome = { outcome: "result", value: {}, output: "d
     },
     progress,
   };
+
   return { ports, order, transcript, executions: () => executions };
 }
 
@@ -101,6 +111,7 @@ test("durability: a closed provider block is written while its stream is still o
     },
   };
   const result = await runTurn(ports, request);
+
   assert.equal(result.state.terminalReason, "completed");
 });
 
@@ -157,6 +168,7 @@ test("durability: a cancelled turn flushes synthetic results, not bare tool_use 
   };
 
   const turn = runTurn(ports, { ...request, cancelSignal: controller.signal });
+
   await asked;
   controller.abort();
   const result = await turn;
@@ -165,6 +177,7 @@ test("durability: a cancelled turn flushes synthetic results, not bare tool_use 
   const idsIn = (items: Transcript): string[] =>
     items.filter((item) => item.kind === "tool_result").map((item) => item.toolCallId).sort();
   const durable = idsIn([...new Map(flushes.flat().map(item => [item.sequence, item])).values()]);
+
   assert.deepEqual(
     durable,
     ["call-1", "call-2"],

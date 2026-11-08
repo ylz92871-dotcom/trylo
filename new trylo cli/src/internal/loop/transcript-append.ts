@@ -104,13 +104,17 @@ export function pairCancelledToolCalls(transcript: Transcript): Transcript {
   if (orphans.length === 0) {
     return transcript;
   }
+
   const names = new Map<string, string>();
+
   for (const item of transcript) {
     if (item.kind === "tool_call") {
       names.set(item.toolCallId, item.name);
     }
   }
+
   let next = transcript;
+
   for (const toolCallId of orphans) {
     next = appendToolResult(next, {
       toolCallId,
@@ -120,5 +124,6 @@ export function pairCancelledToolCalls(transcript: Transcript): Transcript {
       outcome: "cancelled",
     });
   }
+
   return next;
 }

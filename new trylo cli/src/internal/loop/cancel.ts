@@ -46,6 +46,7 @@ export function followCancellation(signal: AbortSignal | undefined, engine: Engi
   if (signal === undefined) {
     return () => false;
   }
+
   let requested = false;
   const raise = (): void => {
     requested = true;
@@ -53,11 +54,13 @@ export function followCancellation(signal: AbortSignal | undefined, engine: Engi
       engine.abort.abort();
     }
   };
+
   if (signal.aborted) {
     raise();
   } else {
     signal.addEventListener("abort", raise, { once: true });
   }
+
   return () => requested;
 }
 

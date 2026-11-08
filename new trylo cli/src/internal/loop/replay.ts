@@ -16,6 +16,7 @@ export function replayCommitted(
 ): { state: ExecutionState; skipped: readonly string[] } {
   let state = initialState();
   const skipped: string[] = [];
+
   for (const input of inputs) {
     const result = reduce(state, input);
     if (result.ok) {
@@ -27,5 +28,6 @@ export function replayCommitted(
       }
     }
   }
+
   return { state, skipped };
 }

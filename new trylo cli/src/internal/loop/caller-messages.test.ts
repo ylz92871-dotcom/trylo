@@ -50,6 +50,7 @@ function recordingProvider(): { readonly port: ProviderPort; readonly seen: Prov
       yield stop;
     },
   };
+
   return { port, seen };
 }
 
@@ -83,10 +84,12 @@ const systemText = (sent: ProviderRequest): string =>
 
 test("caller messages reach the request the provider is actually handed", async () => {
   const provider = recordingProvider();
+
   await runTurn(ports(provider.port), request([{ role: "system", content: "PROJECT_RULE_MARKER" }]));
 
   assert.equal(provider.seen.length, 1, "one request must have been sent");
   const sent = provider.seen[0];
+
   assert.ok(sent);
   assert.match(systemText(sent), /PROJECT_RULE_MARKER/);
 });
@@ -99,15 +102,18 @@ test("caller messages are system statements ahead of the user turn, not transcri
   );
 
   const sent = provider.seen[0];
+
   assert.ok(sent);
   const marker = sent.messages.findIndex((message) => message.content.includes("PROJECT_RULE_MARKER"));
   const userTurn = sent.messages.findIndex((message) => message.role === "user");
+
   assert.ok(marker >= 0 && userTurn >= 0);
   assert.ok(marker < userTurn, "rules must precede the conversation they govern");
 
   // The user turn is the one durable transcript item; the rules ride the request
   // and must not be persisted as if the user had said them.
   const userItems = result.transcript.filter((item) => item.kind === "user");
+
   assert.equal(userItems.length, 1);
   assert.equal(
     userItems.some((item) => item.kind === "user" && item.text.includes("PROJECT_RULE_MARKER")),
@@ -118,12 +124,15 @@ test("caller messages are system statements ahead of the user turn, not transcri
 
 test("with no callerMessages the request is byte-identical to the unwired path", async () => {
   const withField = recordingProvider();
+
   await runTurn(ports(withField.port), request());
   const withoutField = recordingProvider();
+
   await runTurn(ports(withoutField.port), request(undefined));
 
   const a = withField.seen[0];
   const b = withoutField.seen[0];
+
   assert.ok(a && b);
   assert.deepEqual(
     a.messages.map((message) => message.content),
@@ -133,12 +142,14 @@ test("with no callerMessages the request is byte-identical to the unwired path",
 
 test("caller messages survive with the learning profile empty (learning off)", async () => {
   const provider = recordingProvider();
+
   // `emptyProfileLoader` is exactly what the CLI ships: EMPTY_PROFILE, no rules,
   // no patches. The rules must be present anyway, or "the model lost its project
   // rules when the learning switch went off" would be a real regression.
   await runTurn(ports(provider.port), request([{ role: "system", content: "RULES_WITHOUT_LEARNING" }]));
 
   const sent = provider.seen[0];
+
   assert.ok(sent);
   assert.match(systemText(sent), /RULES_WITHOUT_LEARNING/);
   // And nothing dresses them as a learned profile.
@@ -148,13 +159,16 @@ test("caller messages survive with the learning profile empty (learning off)", a
 
 test("caller messages are not labelled as learned historical hints", async () => {
   const provider = recordingProvider();
+
   await runTurn(
     ports(provider.port),
     request([{ role: "system", content: "use npm test for verification" }]),
   );
   const sent = provider.seen[0];
+
   assert.ok(sent);
   const text = systemText(sent);
+
   assert.match(text, /use npm test for verification/);
   // The Profile's own wording must not have leaked onto a project rule.
   assert.doesNotMatch(text, /learned historical hints/);
@@ -166,8 +180,10 @@ test("caller messages take part in context estimation like any other seed messag
   // compact against a request smaller than the one it really sends.
   const big = "R".repeat(4_000);
   const provider = recordingProvider();
+
   await runTurn(ports(provider.port), request([{ role: "system", content: big }]));
   const sent = provider.seen[0];
+
   assert.ok(sent);
   assert.equal(sent.messages[0]?.content, big, "the first seed message is the first request message");
 });
@@ -183,8 +199,10 @@ test("no rule file on disk changes nothing about the loop", async () => {
     mkdirSync(join(root, "src"));
     writeFileSync(join(root, "src", "index.ts"), "export const x = 1;\n");
     const provider = recordingProvider();
+
     await runTurn(ports(provider.port), request());
     const sent = provider.seen[0];
+
     assert.ok(sent);
     assert.doesNotMatch(systemText(sent), /Project instructions from/);
   } finally {

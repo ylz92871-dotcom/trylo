@@ -89,6 +89,7 @@ function openEndedProvider(): { readonly port: ProviderPort; readonly reached: P
       });
     },
   };
+
   return { port, reached };
 }
 
@@ -132,6 +133,7 @@ test("an adapter that acks the cut yields the same cancelled turn", async () => 
     async *stream(request_, signal) {
       // Same stream, but it answers the cut the way the fixture adapter does.
       const inner = port.stream(request_, signal)[Symbol.asyncIterator]();
+
       for (;;) {
         const step = await inner.next();
         if (step.done === true) {
@@ -139,12 +141,14 @@ test("an adapter that acks the cut yields the same cancelled turn", async () => 
         }
         yield step.value;
       }
+
       if (signal.aborted) {
         yield { type: "cancel_ack" };
       }
     },
   };
   const running = runTurn(ports(acking), request("cut me", controller.signal));
+
   await reached;
   controller.abort();
   cancelled(await running);
@@ -152,11 +156,13 @@ test("an adapter that acks the cut yields the same cancelled turn", async () => 
 
 test("a cancel raised before the turn starts still lands as cancelled, not failed", async () => {
   const controller = new AbortController();
+
   controller.abort();
   const result = await runTurn(
     ports(createFakeProvider([[...textBlock("b1", "never sent"), stop]])),
     request("already cancelled", controller.signal),
   );
+
   cancelled(result);
 });
 
@@ -176,6 +182,7 @@ test("a cancel raised while a tool runs waits for the boundary and never aborts 
         setTimeout(resolve, 40);
       });
       toolSignals.push(signal.aborted);
+
       return toolResult({ ok: true });
     },
     async cancel() {
@@ -190,9 +197,11 @@ test("a cancel raised while a tool runs waits for the boundary and never aborts 
     ],
   ]);
   const running = runTurn(ports(provider, tools), request("cancel during a tool", controller.signal));
+
   await started;
   controller.abort();
   const result = await running;
+
   assert.deepEqual(toolSignals, [false], "the tool's own signal must not be cut mid-execution");
   cancelled(result);
 });
@@ -225,6 +234,7 @@ test("a cancel that arrives on the last beat beats the completion it was racing"
     [...textBlock("b2", "all done"), stop],
   ]);
   const running = runTurn(ports(provider, tools), request("race the ending", controller.signal));
+
   await started;
   controller.abort();
   cancelled(await running);

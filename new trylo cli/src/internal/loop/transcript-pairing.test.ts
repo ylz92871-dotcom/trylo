@@ -40,6 +40,7 @@ test("pairing reports an unanswered tool_use as an orphan", () => {
     toolCallItem("call-1"),
     toolCallItem("call-2"),
   ]);
+
   assert.deepEqual(pairing.asked, ["call-1", "call-2"]);
   assert.deepEqual(pairing.orphans, ["call-1", "call-2"]);
 });
@@ -56,9 +57,12 @@ test("every orphan gets a cancelled result, and the pairing closes", () => {
     toolCallItem("call-2"),
   ];
   const after = pairCancelledToolCalls(before);
+
   assert.deepEqual(toolPairingOf(after).orphans, [], "the gap must be closed");
   const results = after.filter((item) => item.kind === "tool_result");
+
   assert.equal(results.length, 2);
+
   for (const result of results) {
     if (result.kind !== "tool_result") throw new Error("expected a tool_result");
     assert.equal(result.outcome, "cancelled", "a synthetic result must not claim success");
@@ -96,12 +100,14 @@ test("the same call asked twice is answered once, and the second ask is still an
     toolResultItem("call-1"),
     toolCallItem("call-1"),
   ];
+
   assert.deepEqual(
     toolPairingOf(answeredOnce).orphans,
     ["call-1"],
     "the second ask is unanswered even though the id was answered once",
   );
   const closed = pairCancelledToolCalls(answeredOnce);
+
   assert.deepEqual(toolPairingOf(closed).orphans, [], "both asks end up answered");
   assert.equal(closed.filter((item) => item.kind === "tool_result").length, 2);
 });
@@ -111,6 +117,7 @@ test("an id that already has its result is not given a second one", () => {
   // duplicate result for a call the transcript already carries an answer for.
   // Counted per call, not per id — see the test above.
   const before: Transcript = [toolCallItem("call-1"), toolResultItem("call-1")];
+
   assert.equal(pairCancelledToolCalls(before), before, "one result is enough for one call");
   assert.equal(
     before.filter((item) => item.kind === "tool_result").length,
@@ -125,6 +132,7 @@ test("an orphan is reported as cancelled, never as succeeded or failed", () => {
   const after = pairCancelledToolCalls([toolCallItem("call-1")]);
   const outcome = after.find((item) => item.kind === "tool_result");
   if (outcome?.kind !== "tool_result") throw new Error("expected a tool_result");
+
   assert.equal(outcome.outcome, "cancelled");
   assert.notEqual(outcome.outcome, "succeeded");
   assert.notEqual(outcome.outcome, "failed");

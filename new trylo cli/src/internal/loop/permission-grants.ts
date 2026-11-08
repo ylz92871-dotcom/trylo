@@ -62,10 +62,12 @@ export function createPermissionGrantCache(): PermissionGrantCache {
       if (denied !== undefined) {
         return { kind: "denied" };
       }
+
       const exact = grants.get(action.pattern);
       if (exact !== undefined) {
         return { kind: exact.decision };
       }
+
       return { kind: "ask" };
     },
     record(action, resolution, scope) {

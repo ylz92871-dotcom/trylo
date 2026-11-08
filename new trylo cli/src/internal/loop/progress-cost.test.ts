@@ -22,6 +22,7 @@ test("streaming flush submits each immutable envelope once instead of rescanning
       async issue() { return { ok: true }; }, async settle() { return { ok: true }; },
     },
   }, { sessionId: "s", turnId: "t", correlationId: "c", text: "go" });
+
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(submitted.size, result.envelopes.length);
   assert.equal(Math.max(...submitted.values()), 1, "previous durable deltas must not be re-serialized on every token");

@@ -18,6 +18,7 @@ function recordingProvider(script: ReadonlyArray<ReadonlyArray<ProviderEvent>>):
 } {
   const requests: ProviderRequest[] = [];
   let index = 0;
+
   return {
     requests,
     port: {
@@ -54,8 +55,10 @@ test("a stream that ends with a tool input still open may not complete", async (
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "truncated" },
   );
+
   assert.notEqual(result.state.terminalReason, "completed");
   const payload = terminalEnvelope(result)?.payload ?? {};
+
   assert.equal(payload["cause"], "unsettled_tool_input");
   assert.equal(payload["toolCallIds"], "call-truncated");
 });
@@ -83,10 +86,12 @@ test("a stream that dies after emitting text is unknown and is not retried", asy
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "unstable" },
   );
+
   assert.equal(result.state.terminalReason, "unknown");
   // Retrying after bytes were delivered would duplicate the text.
   assert.equal(provider.requests.length, 1);
   const texts = result.envelopes.filter((envelope) => envelope.kind === "text");
+
   assert.equal(texts.length, 1);
 });
 
@@ -108,6 +113,7 @@ test("repeated usage snapshots are not charged twice", async () => {
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "usage" },
   );
+
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(result.usage.inputTokens, 10);
   assert.equal(result.usage.outputTokens, 5);
@@ -132,6 +138,7 @@ test("usage deltas within one stream accumulate", async () => {
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "usage" },
   );
+
   assert.equal(result.usage.inputTokens, 12);
   assert.equal(result.usage.outputTokens, 8);
 });
@@ -168,12 +175,15 @@ test("a usage snapshot trailing a tool call in the same stream is still recorded
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "usage after tool" },
   );
+
   assert.equal(result.state.terminalReason, "completed");
   const illegal = result.envelopes.filter(
     (envelope) => envelope.kind === "error" && envelope.payload["code"] === "illegal_transition",
   );
+
   assert.deepEqual(illegal, []);
   const usage = result.envelopes.filter((envelope) => envelope.kind === "usage");
+
   assert.equal(usage.length, 1);
   assert.equal(usage[0]?.payload["inputTokens"], 16);
   assert.equal(usage[0]?.payload["outputTokens"], 8);
@@ -206,6 +216,7 @@ test("a turn's usage adds up across iterations instead of reporting only the las
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "two calls" },
   );
+
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(result.usage.inputTokens, 48);
   assert.equal(result.usage.outputTokens, 20);
@@ -231,11 +242,14 @@ test("the second provider request carries the real tool result", async () => {
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "use the tool" },
   );
+
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(provider.requests.length, 2);
   const second = provider.requests[1];
+
   assert.notEqual(second, undefined);
   const toolMessages = (second?.messages ?? []).filter((message) => message.role === "tool");
+
   assert.equal(toolMessages.length, 1);
   assert.equal(toolMessages[0]?.content, "TOOL-OUTPUT-MARKER");
   assert.equal(toolMessages[0]?.toolCallId, "call-1");
@@ -261,7 +275,9 @@ test("the user turn is part of the canonical transcript so a resume can rebuild 
     { sessionId: "s", turnId: "t", correlationId: "c", text: "remember this" },
   );
   const first = result.transcript[0];
+
   assert.equal(first?.kind, "user");
+
   if (first?.kind === "user") {
     assert.equal(first.text, "remember this");
   }
@@ -280,10 +296,12 @@ test("an unknown provider event neither fails the turn nor leaks its payload", a
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "unknown wire" },
   );
+
   assert.equal(result.state.terminalReason, "completed");
   const observation = result.envelopes.find(
     (envelope) => envelope.kind === "observation" && envelope.payload["raw_unknown"] === "vendor_experiment",
   );
+
   assert.notEqual(observation, undefined);
 });
 
@@ -310,9 +328,11 @@ test("the turn loop stops at the configured iteration budget instead of looping"
       budget: { maxIterations: 3 },
     },
   );
+
   assert.equal(result.state.terminalReason, "failed");
   assert.equal(calls <= 3, true, `provider was called ${calls} times`);
   const payload = terminalEnvelope(result)?.payload ?? {};
+
   assert.equal(payload["cause"], "iterations_exhausted");
 });
 
@@ -353,6 +373,7 @@ test("D7: a tool timeout reaches the model as a retryable error, never cancels t
     },
     { sessionId: "s", turnId: "t", correlationId: "c", text: "run something long" },
   );
+
   // The terminal reason, not an exit code: an exit code is what the surface
   // turns a result into, and the loop depending on the surface to describe its
   // own outcome is the dependency the architecture check refuses. "A timeout
@@ -385,16 +406,20 @@ test("D7: envelopes carry the injected clock, not a hardcoded 1970", async () =>
     text: "hi",
     now: () => 1_757_000_000_000,
   });
+
   assert.equal(stamped.envelopes.length > 0, true);
+
   for (const envelope of stamped.envelopes) {
     assert.equal(envelope.timestamp, "2025-09-04T15:33:20.000Z");
   }
+
   const timeless = await runTurn(ports, {
     sessionId: "s",
     turnId: "t2",
     correlationId: "c",
     text: "hi",
   });
+
   for (const envelope of timeless.envelopes) {
     assert.equal(envelope.timestamp, "1970-01-01T00:00:00.000Z");
   }
@@ -417,6 +442,7 @@ test("D5: the turn budget reaches the provider request as maxOutputTokens", asyn
   const provider = recordingProvider([
     [{ type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false }],
   ]);
+
   await runTurn(
     {
       profile: emptyProfileLoader(),
@@ -436,12 +462,13 @@ test("D5: the turn budget reaches the provider request as maxOutputTokens", asyn
   assert.equal(provider.requests[0]?.maxOutputTokens, 50);
 });
 
-test("D5: a length finish folds into output_tokens_exhausted, not a completion", async () => {
-  // provider 因 max_tokens 截断（finish_reason length）时，turn 必须失败
-  // （cause output_tokens_exhausted → exit 1），不许静默按 completed exit 0。
+test("D5: an explicit exhausted output allowance stops instead of reporting completion", async () => {
+  // 显式总输出额度耗尽时不能继续；单次响应截断本身不等于总额度耗尽。
   const provider = recordingProvider([
     [
       { type: "text_delta", blockId: "b1", text: "partial" },
+      { type: "usage", usage: { mode: "snapshot", inputTokens: 10, outputTokens: 50, totalTokens: 60,
+        cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 } },
       { type: "finish", reason: "length", rawReason: "length", requiresFollowUp: false },
     ],
   ]);
@@ -460,7 +487,9 @@ test("D5: a length finish folds into output_tokens_exhausted, not a completion",
       budget: { maxIterations: 3, maxOutputTokens: 50 },
     },
   );
+
   assert.equal(result.state.terminalReason, "failed");
   const payload = terminalEnvelope(result)?.payload ?? {};
+
   assert.equal(payload["cause"], "output_tokens_exhausted");
 });

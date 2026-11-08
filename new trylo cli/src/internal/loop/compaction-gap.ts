@@ -1,13 +1,15 @@
 import type {
   CompactRecordDraft,
+  SummaryAuthorReport,
+  SummaryAuthoringContext,
 } from "../ports/compaction.js";
 import type { Transcript } from "../protocol/transcript.js";
 import { journalView, type CompactionEntry, type CompactionLedger } from "./compact-ledger.js";
 import type { CompactionEvent, CompactionInput, CompactionWiring } from "./compact-boundary.js";
-import { transcriptToMessages } from "./transcript-messages.js";
-import { promptViewMessages } from "./prompt-view.js";
-import { requestMessages } from "./request.js";
+import { requestTokenBasis, localViewBasis } from "./prompt-measurement.js";
+import { compactionPrefixLength, prefixEndSequence } from "./compaction-retention.js";
 import { autoCompactTokenLimit } from "../compaction/policy.js";
+
 export { promptViewMessages, summaryMessage, coveredExchangeTail } from "./prompt-view.js";
 
 /**
@@ -57,24 +59,30 @@ export type CompactionGapOutcome = {
  */
 export async function runCompactionFor(
   input: CompactionInput,
-  options?: { readonly force?: boolean; readonly onStart?: (tokens: number) => void; readonly signal?: AbortSignal },
+  options?: { readonly force?: boolean; readonly onStart?: (tokens: number) => void; readonly signal?: AbortSignal;
+    readonly authoring?: SummaryAuthoringContext },
 ): Promise<CompactionGapOutcome> {
   const { wiring, ledger, sessionId, contextTokenLimit } = input;
+
   if (wiring === undefined || (ledger.attempted && options?.force !== true)) {
     return { events: [], storedWindow: false, projectedPromptTokens: undefined };
   }
+
   // No journal identity to put on a record, or no ceiling to be over: there is
   // nothing to author and nothing to decide.
   if (sessionId === undefined || contextTokenLimit === undefined) {
     return { events: [], storedWindow: false, projectedPromptTokens: undefined };
   }
+
   const records = journalView(sessionId, input.transcript, ledger.entries, ledger.resumed);
   const projected = wiring.port.projectForPrompt({ records });
   if (!projected.ok) {
     ledger.attempted = true;
     return { events: [degradation(projected.code)], storedWindow: false, projectedPromptTokens: undefined };
   }
+
   const estimated = requestTokenBasis(input);
+
   if (options?.force !== true) {
     const decision = wiring.port.shouldCompact({
       view: projected.view,
@@ -85,24 +93,38 @@ export async function runCompactionFor(
       return { events: [], storedWindow: false, projectedPromptTokens: estimated };
     }
   }
+
   // The one await: the decision to compact has been made, the draft does not
   // exist yet. A wiring that returns a promise asks the provider here — at the
   // gap, where no stream is in flight and no envelope ordering can be broken.
   ledger.attempted = true;
   options?.onStart?.(estimated);
-  const summary = await wiring.summarize(projected.view.items, projected.view.window?.summary, options?.signal, input.transcript);
-  if (options?.signal?.aborted) return { events: [degradation("cancelled")], storedWindow: false, projectedPromptTokens: estimated };
+  const prefixLength = compactionPrefixLength(input);
+  if (prefixLength === 0) {
+    return { events: [degradation("nothing_to_compact")], storedWindow: false, projectedPromptTokens: estimated };
+  }
+
+  const prefixOrdinals = new Set(input.transcript.slice(0, prefixLength).map(item => item.sequence));
+  const summaryItems = projected.view.items.filter(item => prefixOrdinals.has(item.sequence));
+  const authorEvents: CompactionEvent[] = [];
+  const summary = await wiring.summarize(summaryItems, projected.view.window?.summary, options?.signal,
+    input.transcript.slice(0, prefixLength), report => { authorEvents.push(authorObservation(report)); }, options?.authoring);
+
+  if (options?.signal?.aborted) return { events: [...authorEvents, degradation("cancelled")], storedWindow: false, projectedPromptTokens: estimated };
+
   const drafted = wiring.port.compact({
     records,
     sessionId,
     at: wiring.now(),
     summary,
+    replacedToSequence: prefixEndSequence(records, input.transcript, prefixLength),
   });
   if (!drafted.ok) {
     // Fail closed: the latch stays on, so a refused authoring is reported once
     // instead of retried at every gap for the rest of the turn.
-    return { events: [degradation(drafted.code)], storedWindow: false, projectedPromptTokens: estimated };
+    return { events: [...authorEvents, degradation(drafted.code)], storedWindow: false, projectedPromptTokens: estimated };
   }
+
   const stored = storeWindow(wiring, ledger, {
     sessionId,
     transcript: input.transcript,
@@ -110,56 +132,33 @@ export async function runCompactionFor(
     draft: drafted.record,
   });
   if (!stored.ok) {
-    return { events: [degradation(stored.code)], storedWindow: false, projectedPromptTokens: estimated };
+    return { events: [...authorEvents, degradation(stored.code)], storedWindow: false, projectedPromptTokens: estimated };
   }
+
   // The post-window basis is local on purpose: the server report describes the
   // request that carried the *old* view, and the whole point of the window is
   // that the next request no longer does.
   const projectedPromptTokens = localViewBasis(input);
+
   ledger.attempted = projectedPromptTokens >= autoCompactTokenLimit(contextTokenLimit);
+
   return {
-    events: stored.events.map(event => ({ ...event, payload: { ...event.payload,
-      tokensBefore: estimated, tokensAfter: projectedPromptTokens } })),
+    events: [...authorEvents, ...stored.events.map(event => ({ ...event, payload: { ...event.payload,
+      tokensBefore: estimated, tokensAfter: projectedPromptTokens } }))],
     storedWindow: true,
     projectedPromptTokens,
   };
 }
 
-/**
- * The token basis of the request the current view would produce.
- *
- * With a server report that still describes this view, two floors are known
- * and the larger wins: the report is what the provider *measured* for the
- * request it answered (plus a local estimate of the items appended since —
- * the split Codex draws between `last_token_usage` and locally unreported
- * items), and the local estimate is what the request *carries* by the same
- * byte rule everywhere. A threshold whose failure mode is a provider refusal
- * must trigger on the larger, never trust either alone: a scripted or
- * under-reporting provider must not hide a full view behind a small number.
- * With a stale report or none at all, only the local estimate exists.
+/** Author telemetry is independent from whether a compact window is admitted.
+ * Copy only the closed metadata contract, never the authored text or errors.
  */
-function requestTokenBasis(
-  input: CompactionInput,
-): number {
-  const wiring = input.wiring;
-  if (wiring === undefined) {
-    return 0;
-  }
-  const local = localViewBasis(input);
-  const reported = input.reported;
-  if (
-    reported !== undefined &&
-    // A zero report is no report: a provider that did not measure the request
-    // (the fixture, a stream cut before usage) has nothing to take a max with.
-    reported.promptTokens > 0 &&
-    reported.windowId === (input.ledger.window === undefined ? undefined : input.ledger.window.windowId)
-  ) {
-    const liveTail = input.transcript.slice(
-      Math.min(reported.transcriptLength, input.transcript.length),
-    );
-    return Math.max(local, reported.promptTokens + wiring.estimatePromptTokens(transcriptToMessages(liveTail)));
-  }
-  return local;
+function authorObservation(report: SummaryAuthorReport): CompactionEvent {
+  return { kind: "observation", payload: {
+    component: "compaction", author: report.author,
+    ...(report.reason === undefined ? {} : { reason: report.reason }),
+    ...(report.author === "extractive" && report.reason !== undefined ? { degraded: true } : {}),
+  } };
 }
 
 /**
@@ -174,40 +173,18 @@ function requestTokenBasis(
  */
 export function currentPromptBasis(input: CompactionInput): number | undefined {
   const { wiring, ledger, sessionId } = input;
+
   if (wiring === undefined || sessionId === undefined) {
     return undefined;
   }
+
   const records = journalView(sessionId, input.transcript, ledger.entries, ledger.resumed);
   const projected = wiring.port.projectForPrompt({ records });
   if (!projected.ok) {
     return undefined;
   }
-  return requestTokenBasis(input);
-}
 
-/**
- * The local estimate of one view: seeds, the standing summary (which
- * `promptMessages` prepends just as this does), the live items, and the tool
- * table. This is the number a threshold can compare against a ceiling when no
- * server report describes the view.
- */
-function localViewBasis(
-  input: CompactionInput,
-): number {
-  const wiring = input.wiring;
-  if (wiring === undefined) {
-    return 0;
-  }
-  const overhead =
-    input.tools !== undefined && wiring.estimateOverheadTokens !== undefined
-      ? wiring.estimateOverheadTokens(input.tools)
-      : 0;
-  const messages = requestMessages(promptViewMessages({ ...input, toolResultProjection: "microcompact" }), input.seedMessages.length, {
-    ...(input.tools === undefined ? {} : { tools: input.tools }),
-    ...(input.systemPrompt === undefined ? {} : { systemPrompt: input.systemPrompt }),
-    ...(input.systemPromptAppend === undefined ? {} : { systemPromptAppend: input.systemPromptAppend }),
-  });
-  return wiring.estimatePromptTokens(messages) + overhead;
+  return requestTokenBasis(input);
 }
 
 /**
@@ -242,11 +219,13 @@ function storeWindow(
   if (!projected.ok) {
     return { ok: false, code: projected.code };
   }
+
   ledger.entries.push(entry);
   ledger.window = projected.view.window;
   // The live tail is what the projection kept; everything before it is what the
   // window now stands in for, expressed as a prefix of the runner's transcript.
   ledger.replacedPrefix = stored.transcript.length - projected.view.items.length;
+
   return {
     ok: true,
     events: [
