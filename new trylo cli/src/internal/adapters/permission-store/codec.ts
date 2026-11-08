@@ -130,18 +130,22 @@ export function decodeStoreLedger(raw: string): LedgerDecode {
   if (raw.length === 0) {
     return { ok: true, events: [] };
   }
+
   // A trailing line without its terminator means a write was interrupted. The
   // event it may or may not have recorded is unknowable, so the whole store
   // refuses to serve: re-authorization is cheaper than a double side effect.
   if (!raw.endsWith("\n")) {
     return { ok: false, reason: "ledger_torn_tail", detail: "trailing record is incomplete" };
   }
+
   const lines = splitRecordLines(raw);
   if (!lines.ok) {
     return { ok: false, reason: "ledger_corrupt", detail: lines.detail };
   }
+
   const events: PermissionStoreEvent[] = [];
   let expected = 1;
+
   for (const line of lines.value) {
     const parsed = decodeLine(line, expected);
     if (!parsed.ok) {
@@ -150,6 +154,7 @@ export function decodeStoreLedger(raw: string): LedgerDecode {
     events.push(parsed.event);
     expected = parsed.event.sequence + 1;
   }
+
   return { ok: true, events };
 }
 
@@ -172,11 +177,13 @@ function splitRecordLines(
   raw: string,
 ): { readonly ok: true; readonly value: readonly string[] } | { readonly ok: false; readonly detail: string } {
   const lines = raw.split("\n");
+
   lines.pop();
   const blank = lines.findIndex((line) => line.length === 0);
   if (blank >= 0) {
     return { ok: false, detail: `blank line between records at line ${String(blank + 1)}` };
   }
+
   return { ok: true, value: lines };
 }
 
@@ -185,20 +192,25 @@ function decodeLine(line: string, expectedSequence: number): LedgerLine {
   if (space <= 0) {
     return { ok: false, reason: "ledger_corrupt", detail: `missing checksum at seq~${String(expectedSequence)}` };
   }
+
   const checksum = line.slice(0, space);
   const payload = line.slice(space + 1);
   if (sha256Hex(payload) !== checksum) {
     return { ok: false, reason: "ledger_corrupt", detail: `checksum mismatch at seq~${String(expectedSequence)}` };
   }
+
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(payload);
   } catch {
     return { ok: false, reason: "ledger_corrupt", detail: `unparseable record at seq~${String(expectedSequence)}` };
   }
+
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return { ok: false, reason: "ledger_corrupt", detail: `record is not an object at seq~${String(expectedSequence)}` };
   }
+
   const event = parsed as Record<string, unknown>;
   if (event.formatVersion !== PERMISSION_STORE_FORMAT_VERSION) {
     return {
@@ -207,6 +219,7 @@ function decodeLine(line: string, expectedSequence: number): LedgerLine {
       detail: `unsupported format version ${String(event.formatVersion)} at seq~${String(expectedSequence)}`,
     };
   }
+
   if (typeof event.sequence !== "number" || event.sequence !== expectedSequence) {
     return {
       ok: false,
@@ -214,6 +227,7 @@ function decodeLine(line: string, expectedSequence: number): LedgerLine {
       detail: `sequence gap: expected ${String(expectedSequence)} got ${String(event.sequence)}`,
     };
   }
+
   return validateEventShape(event, expectedSequence);
 }
 
@@ -316,6 +330,7 @@ export function resolveGrant(
   grantId: string,
 ): PermissionGrant | undefined {
   let grant: PermissionGrant | undefined;
+
   for (const event of events) {
     if (event.grantId !== grantId) {
       continue;
@@ -337,5 +352,6 @@ export function resolveGrant(
       grant = { ...grant, status: "consumed" };
     }
   }
+
   return grant;
 }

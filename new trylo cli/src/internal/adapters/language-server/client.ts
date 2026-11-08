@@ -132,6 +132,7 @@ export function createLanguageServer(options: CreateLanguageServerOptions): Lang
   function teardown(detail: string): void {
     const openConnection = connection;
     const proc = child;
+
     connection = undefined;
     child = undefined;
     capabilities = undefined;
@@ -139,6 +140,7 @@ export function createLanguageServer(options: CreateLanguageServerOptions): Lang
     // not be replayed against it.
     documents.reset();
     state = "stopped";
+
     // The process belongs to this connection. A server that already exited
     // makes the kill a guarded no-op; one that did not is reaped rather than
     // orphaned as a zombie holding the workspace it was indexing.
@@ -149,13 +151,16 @@ export function createLanguageServer(options: CreateLanguageServerOptions): Lang
         // Gone between the check and the signal; nothing left to reap.
       }
     }
+
     // Settle first: a pending request must never hang past the process. The
     // slots layer speaks `Error` because that is what a promise rejects with;
     // `mapLspError` turns this one back into the typed `lsp_server_exited`
     // failure at the query boundary, so no caller sees a raw Error.
     const exited = new Error(`language server exited: ${detail}`);
+
     exited.name = "LspServerExited";
     slots.settleAllPending(exited);
+
     if (openConnection) {
       try {
         openConnection.dispose();
@@ -172,9 +177,11 @@ export function createLanguageServer(options: CreateLanguageServerOptions): Lang
     if (state === "ready") {
       return { ok: true };
     }
+
     if (startPromise) {
       return startPromise;
     }
+
     startPromise = (async () => {
       state = "starting";
       const permitted = await options.deps.authorize(spec.command, spec.args);
@@ -184,12 +191,14 @@ export function createLanguageServer(options: CreateLanguageServerOptions): Lang
         startPromise = undefined;
         return permitted;
       }
+
       try {
         return await launch();
       } finally {
         startPromise = undefined;
       }
     })();
+
     return startPromise;
   }
 
@@ -205,6 +214,7 @@ export function createLanguageServer(options: CreateLanguageServerOptions): Lang
       // A language server must never inherit a TTY and then sit on it.
       windowsHide: true,
     });
+
     child = spawned;
 
     spawned.on("error", (error) => {
@@ -235,6 +245,7 @@ export function createLanguageServer(options: CreateLanguageServerOptions): Lang
       new StreamMessageReader(createBoundedStdout(spawned.stdout, limits.maxMessageBytes)),
       new StreamMessageWriter(spawned.stdin),
     );
+
     connection = open;
 
     // Registering crash handling before listen(): a server that dies during
@@ -261,6 +272,7 @@ export function createLanguageServer(options: CreateLanguageServerOptions): Lang
       teardown("initialize failed");
       return initialize;
     }
+
     capabilities = toCapabilities(initialize.value.capabilities);
     state = "ready";
     await sendNotification(open, "initialized", {});
@@ -268,6 +280,7 @@ export function createLanguageServer(options: CreateLanguageServerOptions): Lang
       options.deps.log({ serverName: spec.serverName, phase: "initialized", detail }),
     );
     options.deps.log({ serverName: spec.serverName, phase: "initialized" });
+
     return { ok: true };
   }
 
@@ -294,6 +307,7 @@ export function createLanguageServer(options: CreateLanguageServerOptions): Lang
         // still bounding how long a stubborn one can hold the turn.
         await waitForExit(child, stopGraceMs);
       }
+
       teardown(reason);
     } finally {
       intentionalStop = false;
@@ -323,10 +337,12 @@ export function createLanguageServer(options: CreateLanguageServerOptions): Lang
     if (!started.ok) {
       return started;
     }
+
     const open = connection;
     if (open === undefined || state !== "ready") {
       return fail("lsp_server_exited", `language server ${spec.serverName} is not running`);
     }
+
     const result = await documents.push(open, document);
     if (!result.ok) {
       // Reported, not thrown: a file the server will not open is usually a
@@ -334,6 +350,7 @@ export function createLanguageServer(options: CreateLanguageServerOptions): Lang
       // its own terms.
       options.deps.log({ serverName: spec.serverName, phase: "ready", detail: result.message });
     }
+
     return { ok: true };
   }
 
@@ -341,6 +358,7 @@ export function createLanguageServer(options: CreateLanguageServerOptions): Lang
     if (signal.aborted) {
       return fail("lsp_cancelled", "cancelled before dispatch");
     }
+
     // Checked before start() on purpose: a caller that is already over the
     // concurrency ceiling should not cause a server to be launched for a query
     // that is then refused.
@@ -350,17 +368,21 @@ export function createLanguageServer(options: CreateLanguageServerOptions): Lang
         `${spec.serverName} already has ${slots.load} requests in flight, the configured maximum of ${limits.maxConcurrentRequests}`,
       );
     }
+
     const started = await start();
     if (!started.ok) {
       return started;
     }
+
     const open = connection;
     if (open === undefined || state !== "ready") {
       return fail("lsp_server_exited", `language server ${spec.serverName} is not running`);
     }
+
     if (capabilities !== undefined && !serverSupports(capabilities, lspQuery.operation)) {
       return fail("lsp_unsupported", `${spec.serverName} does not provide ${lspQuery.operation}`);
     }
+
     const sender: RequestSender = {
       request: (method, params, requestSignal) => {
         const pending = open.sendRequest(method, params, toCancellationToken(requestSignal));
@@ -368,6 +390,7 @@ export function createLanguageServer(options: CreateLanguageServerOptions): Lang
       },
       notify: (method, params) => sendNotification(open, method, params),
     };
+
     try {
       const answer = await withDeadline(runOperation(sender, lspQuery, spec.workspaceRoot), limits.requestTimeoutMs, () => slots.releaseAll());
       return { ok: true, operation: lspQuery.operation, answer, truncated: false };

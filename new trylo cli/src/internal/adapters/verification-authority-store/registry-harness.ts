@@ -58,6 +58,7 @@ export type RegistryHarness = {
 export async function openRegistryFileHarness(): Promise<RegistryHarness> {
   const root = await mkdtemp(path.join(os.tmpdir(), "trylo-registry-"));
   const file = path.join(root, "receipts.ndjson");
+
   return {
     file,
     registry: createRegistry(file),
@@ -96,6 +97,7 @@ export async function issuePass(harness: RegistryHarness): Promise<string> {
   if (!issued.ok) {
     throw new Error(`fixture receipt issuance failed: ${issued.code} ${issued.message}`);
   }
+
   return issued.receipt.receiptId;
 }
 

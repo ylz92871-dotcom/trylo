@@ -27,8 +27,10 @@ export async function acquireWindowsAclLease(writableRoots: readonly string[], h
   const user = await api.getWindowsSandboxUserStatusAsync({ srtWin: handle });
   const sid = user.sid;
   if (sid === undefined || sid.length === 0) throw new Error("isolation_broken: sandbox identity is missing");
+
   const releaseOwner = acquireAclOwner();
   const revoke = () => requireAclRelease(api.revokeWindowsAcl({ sandboxUserSid: sid, srtWin: handle }));
+
   try {
     api.grantWindowsAcl({ read: [], write: writableRoots.map(root => realpathSync.native(root)), sandboxUserSid: sid, srtWin: handle });
   } catch (error) {
@@ -37,8 +39,10 @@ export async function acquireWindowsAclLease(writableRoots: readonly string[], h
     releaseOwner();
     throw error;
   }
+
   let closed = false;
   const readPrograms = new Set<string>();
+
   return {
     helperPath: handle.exe,
     writeRoots(roots) {

@@ -1,7 +1,7 @@
 {
   "upstream": "@anthropic-ai/sandbox-runtime",
   "version": "0.0.73",
-  "copiedFrom": "npm:@anthropic-ai/sandbox-runtime@0.0.73",
+  "copiedFrom": "D:/CC/trylo/trylo cli/node_modules/@anthropic-ai/sandbox-runtime",
   "license": "see LICENSE in this directory",
   "artifacts": {
     "srt-win-x64": {

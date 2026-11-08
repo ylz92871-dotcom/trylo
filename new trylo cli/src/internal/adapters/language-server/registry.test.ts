@@ -37,18 +37,26 @@ describe("pool limit enforcement", () => {
       createServer: () => port,
     });
     const connected = await pool.connectionFor("D:/w", "src/a.ts");
+
     assert.equal(connected.ok, true);
+
     if (!connected.ok) return;
+
     const result = await connected.port.query(
       { operation: "references", path: "src/a.ts", line: 0, character: 0 },
       new AbortController().signal,
     );
+
     assert.equal(result.ok, true);
+
     if (!result.ok) return;
+
     // The pool wraps every connection in the limits decorator: ceilings
     // belong to the pool, not to each caller.
     assert.equal(result.truncated, true);
+
     if (result.answer.status !== "answered") return;
+
     assert.equal(result.answer.locations.length, 5);
     await pool.closeAll();
   });

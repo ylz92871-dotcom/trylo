@@ -27,6 +27,7 @@ test("page ranges parse: single, closed, and open-ended; garbage refuses", () =>
   assert.deepEqual(parsePdfPageRange("3"), { firstPage: 3, lastPage: 3 });
   assert.deepEqual(parsePdfPageRange("3-"), { firstPage: 3, lastPage: Infinity });
   assert.deepEqual(parsePdfPageRange("1-"), { firstPage: 1, lastPage: Infinity });
+
   for (const bad of ["", "0", "5-2", "abc", "-3", "0-5", "-"]) {
     assert.equal(parsePdfPageRange(bad), undefined, JSON.stringify(bad));
   }
@@ -35,10 +36,13 @@ test("page ranges parse: single, closed, and open-ended; garbage refuses", () =>
 test("range sizes: 20 pages pass, 21 refuse, open-ended refuses until bounded", () => {
   assert.equal(checkPdfRangeSize({ firstPage: 1, lastPage: 20 }).ok, true);
   const over = checkPdfRangeSize({ firstPage: 1, lastPage: 21 });
+
   assert.equal(over.ok, false);
+
   if (!over.ok) {
     assert.equal(over.code, "page_range_too_large");
   }
+
   assert.equal(pdfRangeSize({ firstPage: 3, lastPage: Infinity }), Infinity);
   assert.equal(checkPdfRangeSize({ firstPage: 3, lastPage: Infinity }).ok, false);
   assert.equal(PDF_MAX_PAGES_PER_READ, 20);
@@ -56,13 +60,17 @@ test("only .pdf qualifies, in any case, with or without the dot", () => {
 
 test("magic bytes decide: %PDF- passes, renamed HTML and short files refuse", () => {
   const real = Uint8Array.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]);
+
   assert.equal(checkPdfMagic(real).ok, true);
   const html = Uint8Array.from(Buffer.from("<html>renamed</html>", "utf8"));
   const renamed = checkPdfMagic(html);
+
   assert.equal(renamed.ok, false);
+
   if (!renamed.ok) {
     assert.equal(renamed.code, "invalid_pdf");
   }
+
   assert.equal(checkPdfMagic(new Uint8Array(0)).ok, false);
   assert.equal(checkPdfMagic(Uint8Array.from([0x25, 0x50])).ok, false);
 });
@@ -73,18 +81,25 @@ test("sizes: empty refuses, document ceiling and extraction ceiling refuse separ
   if (!empty.ok) {
     assert.equal(empty.code, "empty_file");
   }
+
   assert.equal(checkPdfSize(1024).ok, true);
   assert.equal(checkPdfSize(PDF_TARGET_RAW_SIZE).ok, true);
   const overDocument = checkPdfSize(PDF_TARGET_RAW_SIZE + 1);
+
   assert.equal(overDocument.ok, false);
+
   if (!overDocument.ok) {
     assert.equal(overDocument.code, "too_large");
   }
+
   const overExtract = checkPdfSize(PDF_MAX_EXTRACT_SIZE + 1);
+
   assert.equal(overExtract.ok, false);
+
   if (!overExtract.ok) {
     assert.equal(overExtract.code, "too_large");
   }
+
   assert.equal(API_PDF_MAX_PAGES, 100);
 });
 

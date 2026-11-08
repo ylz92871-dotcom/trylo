@@ -22,9 +22,9 @@ describe("lsp-uri", () => {
   });
 
   it("keeps a Windows drive letter readable", () => {
-    const uri = pathToUri("C:/work/demo-ws/src/a.ts", "D:/proj");
-    assert.equal(uri, "file:///C:/work/demo-ws/src/a.ts");
-    assert.equal(uriToPath(uri), "C:/work/demo-ws/src/a.ts");
+    const uri = pathToUri("D:/CC/trylo/src/a.ts", "D:/proj");
+    assert.equal(uri, "file:///D:/CC/trylo/src/a.ts");
+    assert.equal(uriToPath(uri), "D:/CC/trylo/src/a.ts");
   });
 
   it("normalises backslashes so one file has one spelling", () => {

@@ -51,6 +51,7 @@ async function withStore(
 ): Promise<void> {
   const root = await mkdtemp(path.join(os.tmpdir(), "trylo-approval-"));
   const storePath = path.join(root, "nested", "permission.ndjson");
+
   try {
     await run(createFilePermissionStore({ path: storePath }), storePath);
   } finally {
@@ -79,9 +80,11 @@ test("a forged grant reference is refused: callers cannot assert authorization f
   await withStore(async (store) => {
     // 外审 P0-1 反例：手工构造的引用在 store 里不存在，无从验证。
     const forged = await store.consume(request({ token: { grantId: "grant:attacker-made" } }));
+
     assert.equal(codeOf(forged), "unknown_grant");
     // 即使引用真实存在，绑定事实不符仍然失败——事实由 store 持有。
     const { grantId } = await issuedRef(store);
+
     assert.equal(codeOf(await store.consume(request({ token: { grantId }, action: "activate" }))), "action_mismatch");
     assert.equal(codeOf(await store.consume(request({ token: { grantId }, packageVersionId: "pkg:pdf-lint:2.0.0" }))), "version_mismatch");
     assert.equal(codeOf(await store.consume(request({ token: { grantId }, scope: "shell" }))), "scope_mismatch");
@@ -96,6 +99,7 @@ test("a grant reference resolves only in the store that issued it", async () => 
     const { grantId } = await issuedRef(store);
     // 外审 P1-4 反例：另一条"账本路径"（第二个 store）无法验真同一引用。
     const otherRoot = await mkdtemp(path.join(os.tmpdir(), "trylo-approval-2-"));
+
     try {
       const other = createFilePermissionStore({ path: path.join(otherRoot, "other.ndjson") });
       assert.equal(codeOf(await other.consume(request({ token: { grantId } }))), "unknown_grant");
@@ -131,12 +135,16 @@ test("revoked grants refuse consumption; revoke is idempotent and unknown grants
   await withStore(async (store) => {
     const { grantId } = await issuedRef(store);
     const revoked = await store.revoke(grantId, NOW);
+
     assert.equal(revoked.ok, true);
     assert.equal(codeOf(await store.consume(request({ token: { grantId } }))), "grant_revoked");
     const again = await store.revoke(grantId, NOW);
+
     assert.equal(again.ok, true);
     const missing = await store.revoke("grant:missing", NOW);
+
     assert.equal(missing.ok, false);
+
     if (!missing.ok) {
       assert.equal(missing.code, "unknown_grant");
     }
@@ -153,9 +161,12 @@ test("two store instances consuming the same grant concurrently: exactly one win
       right.consume(request({ token: { grantId } })),
     ]);
     const succeeded = results.filter((result) => result.ok);
+
     assert.equal(succeeded.length, 1);
     const loser = results.find((result) => !result.ok);
+
     assert.equal(loser !== undefined, true);
+
     if (loser !== undefined && !loser.ok) {
       assert.equal(
         loser.code === "replayed" || loser.code === "ledger_lock_conflict",
@@ -169,13 +180,18 @@ test("grant facts come from the store: expiry is checked against the stored gran
   await withStore(async (store) => {
     // 外审 P1-7：非真实日期（2026-02-30）在签发端即被拒绝。
     const badCalendar = await store.issue(issuanceInput({ expiry: "2026-02-30T00:00:00Z" }));
+
     assert.equal(badCalendar.ok, false);
+
     if (!badCalendar.ok) {
       assert.equal(badCalendar.code, "invalid_expiry");
     }
+
     const expired = await issuedRef(store, { expiry: "2020-01-01T00:00:00Z", issuedAt: "2019-01-01T00:00:00Z" });
+
     assert.equal(codeOf(await store.consume(request({ token: { grantId: expired.grantId } }))), "expired");
     const { grantId } = await issuedRef(store);
+
     assert.equal(codeOf(await store.consume(request({ token: { grantId }, now: "just now" }))), "invalid_now");
     assert.equal(codeOf(await store.consume(request({ token: { grantId }, now: "2026-02-30T00:00:00Z" }))), "invalid_now");
     // 08:00Z 仍是有效的（09:00+02:00 = 07:00Z），即使字符串上 "08..." < "09..."。
@@ -183,9 +199,11 @@ test("grant facts come from the store: expiry is checked against the stored gran
     const offsetTrap = await store.consume(
       request({ token: { grantId: offsetOk.grantId }, now: "2026-09-12T09:00:00+02:00" }),
     );
+
     assert.equal(offsetTrap.ok, true);
     // expiry 不晚于 issuedAt 的 grant 不能签发。
     const inverted = await store.issue(issuanceInput({ issuedAt: "2026-12-01T00:00:00Z", expiry: "2026-12-01T00:00:00Z" }));
+
     assert.equal(inverted.ok, false);
   });
 });
@@ -196,13 +214,18 @@ test("distinct grants each consume once and the store stays append-only and fact
     const b = await issuedRef(store);
     const first = await store.consume(request({ token: { grantId: a.grantId } }));
     const second = await store.consume(request({ token: { grantId: b.grantId } }));
+
     assert.equal(first.ok, true);
     assert.equal(second.ok, true);
+
     if (second.ok) {
       assert.equal(second.value.sequence, 4);
     }
+
     const decoded = decodeStoreLedger(await readFile(storePath, "utf8"));
+
     assert.equal(decoded.ok, true);
+
     if (decoded.ok) {
       assert.deepEqual(decoded.events.map((event) => event.kind), [
         "grant_issued",
@@ -211,7 +234,9 @@ test("distinct grants each consume once and the store stays append-only and fact
         "grant_consumed",
       ]);
       const consumed = decoded.events[2];
+
       assert.equal(consumed?.kind, "grant_consumed");
+
       if (consumed?.kind === "grant_consumed") {
         assert.deepEqual(Object.keys(consumed).sort(), [
           "action",

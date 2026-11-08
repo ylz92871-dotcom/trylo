@@ -98,6 +98,7 @@ export class LanguageServerPool implements LanguageServerRegistry {
     if (extension === undefined) {
       return { ok: false, code: "lsp_not_configured", message: `no language server matches ${path}: it has no recognised extension` };
     }
+
     const candidates = this.options.servers.filter((server) => isEnabled(server) && server.extensions.includes(extension));
     if (candidates.length === 0) {
       return {
@@ -106,6 +107,7 @@ export class LanguageServerPool implements LanguageServerRegistry {
         message: `no language server configured for .${extension} files; add one to your LSP settings`,
       };
     }
+
     if (candidates.length > 1) {
       return {
         ok: false,
@@ -113,12 +115,14 @@ export class LanguageServerPool implements LanguageServerRegistry {
         message: `language servers ${candidates.map((c) => c.serverName).join(", ")} all claim .${extension}; configure exactly one`,
       };
     }
+
     const server = candidates[0];
     if (server === undefined) {
       // Unreachable given the length check; kept so a future filter change cannot
       // turn into an unchecked undefined reaching the spawn call.
       return { ok: false, code: "lsp_not_configured", message: `no language server configured for .${extension}` };
     }
+
     // No workspaceRoot here: a config entry describes a *program*, and the root
     // is what the caller is standing in. Conflating them is how one project's
     // index ends up answering about another.
@@ -135,10 +139,12 @@ export class LanguageServerPool implements LanguageServerRegistry {
         message: "no language servers configured; navigation falls back to text search",
       };
     }
+
     const first = enabled[0];
     if (first === undefined) {
       return { ok: false, code: "lsp_not_configured", message: "no language servers configured" };
     }
+
     return {
       ok: true,
       spec: {
@@ -161,11 +167,13 @@ export class LanguageServerPool implements LanguageServerRegistry {
     if (!resolved.ok) {
       return resolved;
     }
+
     const key = connectionKey(resolved.spec.serverName, workspaceRoot);
     const existing = this.connections.get(key);
     if (existing !== undefined) {
       return { ok: true, port: existing };
     }
+
     if (this.connections.size >= (this.options.limits ?? DEFAULT_LSP_LIMITS).maxServers) {
       return {
         ok: false,
@@ -173,6 +181,7 @@ export class LanguageServerPool implements LanguageServerRegistry {
         message: `already holding ${this.connections.size} language servers, the configured maximum; close one before starting another`,
       };
     }
+
     const factory = this.options.createServer ?? createLanguageServer;
     const port = factory({
       spec: {
@@ -190,7 +199,9 @@ export class LanguageServerPool implements LanguageServerRegistry {
     // Ceilings belong to the pool, not to each caller: every consumer of this
     // connection — the tool today, anyone tomorrow — shares one enforcement.
     const limited = withQueryLimits(port, this.options.limits ?? DEFAULT_LSP_LIMITS);
+
     this.connections.set(key, limited);
+
     return { ok: true, port: limited };
   }
 
@@ -202,7 +213,9 @@ export class LanguageServerPool implements LanguageServerRegistry {
   /** Release everything. The owner calls this at session end, not module unload. */
   async closeAll(): Promise<void> {
     const entries = [...this.connections.entries()];
+
     this.connections.clear();
+
     for (const [key, port] of entries) {
       try {
         await port.close();

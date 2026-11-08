@@ -32,9 +32,12 @@ describe("truncateAnswer", () => {
   it("keeps the first locations and says so", () => {
     const answer: LspAnswer = { status: "answered", locations: locations(10) };
     const result = truncateAnswer(answer, 4);
+
     assert.equal(result.truncated, true);
     assert.equal(result.answer.status, "answered");
+
     if (result.answer.status !== "answered") return;
+
     assert.equal(result.answer.locations.length, 4);
     assert.equal(result.answer.locations[0]?.path, "src/f0.ts");
   });
@@ -54,10 +57,14 @@ describe("truncateAnswer", () => {
       location: { path: "a.ts", line: index, character: 0 },
     }));
     const symbolResult = truncateAnswer({ status: "symbols", symbols }, 2);
+
     assert.equal(symbolResult.truncated, true);
+
     if (symbolResult.answer.status !== "symbols") return;
+
     assert.equal(symbolResult.answer.symbols.length, 2);
     const callResult = truncateAnswer({ status: "calls", items: calls }, 2);
+
     assert.equal(callResult.truncated, true);
   });
 
@@ -95,6 +102,7 @@ describe("createIdleWatch", () => {
     const watch = createIdleWatch(20, () => {
       firings += 1;
     });
+
     await new Promise((resolve) => setTimeout(resolve, 60));
     assert.equal(firings, 1);
     watch.dispose();
@@ -107,6 +115,7 @@ describe("createIdleWatch", () => {
     const watch = createIdleWatch(40, () => {
       firings += 1;
     });
+
     watch.dispose();
     await new Promise((resolve) => setTimeout(resolve, 80));
     assert.equal(firings, 0);
@@ -120,6 +129,7 @@ describe("createIdleWatch", () => {
     const watch = createIdleWatch(20, () => {
       firings += 1;
     });
+
     await new Promise((resolve) => setTimeout(resolve, 60));
     assert.equal(firings, 1);
     watch.dispose();
@@ -132,10 +142,12 @@ describe("createIdleWatch", () => {
     const watch = createIdleWatch(40, () => {
       firings += 1;
     });
+
     for (let round = 0; round < 3; round += 1) {
       await new Promise((resolve) => setTimeout(resolve, 20));
       watch.activity();
     }
+
     assert.equal(firings, 0);
     await new Promise((resolve) => setTimeout(resolve, 80));
     assert.equal(firings, 1);
@@ -153,9 +165,11 @@ describe("createBoundedStdout", () => {
     const source = new PassThrough();
     const bounded = createBoundedStdout(source, 1024);
     const received: Array<Buffer> = [];
+
     bounded.on("data", (chunk: Buffer) => received.push(chunk));
     const first = frame('{"a":1}');
     const second = frame('{"b":2}');
+
     source.write(Buffer.concat([first, second]));
     await new Promise((resolve) => setTimeout(resolve, 30));
     assert.deepEqual(Buffer.concat(received), Buffer.concat([first, second]));
@@ -166,8 +180,10 @@ describe("createBoundedStdout", () => {
     const source = new PassThrough();
     const bounded = createBoundedStdout(source, 16);
     const errors: Array<Error> = [];
+
     bounded.on("error", (error: Error) => errors.push(error));
     let closed = false;
+
     bounded.on("close", () => {
       closed = true;
     });
@@ -184,8 +200,10 @@ describe("createBoundedStdout", () => {
     const source = new PassThrough();
     const bounded = createBoundedStdout(source, 1024);
     const received: Array<Buffer> = [];
+
     bounded.on("data", (chunk: Buffer) => received.push(chunk));
     const full = frame('{"split":true}');
+
     source.write(full.subarray(0, 10));
     await new Promise((resolve) => setTimeout(resolve, 10));
     source.write(full.subarray(10));
@@ -201,6 +219,7 @@ describe("createBoundedStdout", () => {
     const source = new PassThrough();
     const bounded = createBoundedStdout(source, 16);
     const errors: Array<Error> = [];
+
     bounded.on("error", (error: Error) => errors.push(error));
     source.write(Buffer.from("this is not a framed message", "utf8"));
     await new Promise((resolve) => setTimeout(resolve, 30));
@@ -215,6 +234,7 @@ describe("createBoundedStdout", () => {
     const source = new PassThrough();
     const bounded = createBoundedStdout(source, 64);
     const received: Array<Buffer> = [];
+
     bounded.on("data", (chunk: Buffer) => received.push(chunk));
     source.write(Buffer.from("this is not a framed message", "utf8"));
     // Like the library itself, an unterminated header block is held until the
@@ -268,10 +288,15 @@ describe("withQueryLimits", () => {
       { ...DEFAULT_LSP_LIMITS, maxLocationsPerAnswer: 5 },
     );
     const result = await port.query({ operation: "references", path: "src/a.ts", line: 0, character: 0 }, signal);
+
     assert.equal(result.ok, true);
+
     if (!result.ok) return;
+
     assert.equal(result.truncated, true);
+
     if (result.answer.status !== "answered") return;
+
     assert.equal(result.answer.locations.length, 5);
   });
 
@@ -282,8 +307,11 @@ describe("withQueryLimits", () => {
       { ...DEFAULT_LSP_LIMITS, maxMessageBytes: 64 },
     );
     const result = await port.openDocument({ path: "src/huge.ts", languageId: "typescript", version: 1, text: "x".repeat(1000) });
+
     assert.equal(result.ok, false);
+
     if (result.ok) return;
+
     assert.equal(result.code, "lsp_limit_exceeded");
     assert.deepEqual(calls, []);
   });
@@ -294,6 +322,7 @@ describe("withQueryLimits", () => {
       stub(calls, { ok: true, operation: "hover", answer: { status: "hover", markdown: "hi" }, truncated: false }),
       { ...DEFAULT_LSP_LIMITS, idleTtlMs: 40 },
     );
+
     assert.deepEqual(await port.ensureStarted(), { ok: true });
     await new Promise((resolve) => setTimeout(resolve, 120));
     assert.deepEqual(calls, ["start", "close"]);
@@ -306,11 +335,14 @@ describe("withQueryLimits", () => {
       stub(calls, { ok: true, operation: "hover", answer: { status: "hover", markdown: "hi" }, truncated: false }),
       { ...DEFAULT_LSP_LIMITS, idleTtlMs: 100 },
     );
+
     assert.deepEqual(await port.ensureStarted(), { ok: true });
+
     for (let round = 0; round < 3; round += 1) {
       await new Promise((resolve) => setTimeout(resolve, 40));
       await port.query({ operation: "hover", path: "src/a.ts", line: 0, character: 0 }, signal);
     }
+
     assert.deepEqual(calls.includes("close"), false);
     await port.close();
   });
@@ -321,6 +353,7 @@ describe("withQueryLimits", () => {
       stub(calls, { ok: true, operation: "hover", answer: { status: "hover", markdown: "hi" }, truncated: false }),
       { ...DEFAULT_LSP_LIMITS, idleTtlMs: 10_000 },
     );
+
     assert.deepEqual(await port.ensureStarted(), { ok: true });
     await port.close();
     await port.close();
@@ -335,6 +368,7 @@ describe("withQueryLimits", () => {
       stub(calls, { ok: true, operation: "hover", answer: { status: "hover", markdown: "hi" }, truncated: false }),
       { ...DEFAULT_LSP_LIMITS, idleTtlMs: 40 },
     );
+
     assert.deepEqual(await port.ensureStarted(), { ok: true });
     await new Promise((resolve) => setTimeout(resolve, 120));
     assert.deepEqual(calls, ["start", "close"]);

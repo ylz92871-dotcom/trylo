@@ -92,10 +92,12 @@ function makeWithLock(registryPath: string) {
     } catch (error) {
       return { failure: { code: "registry_write_failed", message: describe(error) } };
     }
+
     const lock = tryAcquireRegistryLock(lockPath);
     if (!lock.ok) {
       return { failure: { code: lock.code, message: lock.detail } };
     }
+
     // 解码与 step 必须共用同一个 try/finally：早期版本在「解码失败」分支直接
     // return，跳过了释放，于是损坏的 registry 会把锁永久留给本进程，后续调用
     // 全部报 registry_multi_writer —— 一个损坏文件把服务变成不可用。
@@ -123,10 +125,12 @@ async function issueIntoRegistry(
   if (!checked.ok) {
     return { ok: false, code: checked.code, message: checked.message };
   }
+
   const result = await context.withLock<ReceiptIssuanceResult>(
     async (events): Promise<{ value: ReceiptIssuanceResult } | { failure: StoreFailure }> => {
     const sequence = lastSequence(events) + 1;
     const receipt = receiptFromDraft(checked.draft, sequence);
+
     await appendEvent(context.path, {
       formatVersion: VERIFICATION_AUTHORITY_FORMAT_VERSION,
       kind: "receipt_issued",
@@ -144,11 +148,13 @@ async function issueIntoRegistry(
       sourceDigest: receipt.sourceDigest,
       issuedAt: receipt.issuedAt,
     });
+
     return { value: { ok: true as const, receipt } };
   });
   if ("failure" in result) {
     return { ok: false, code: result.failure.code, message: result.failure.message };
   }
+
   return result.value;
 }
 
@@ -160,10 +166,12 @@ async function verifyFromRegistry(
   if (reference === undefined || reference === null) {
     return verifyErr("missing_receipt_ref", "a receipt reference is required");
   }
+
   const receiptId = (reference as Partial<ReceiptReference>).receiptId;
   if (!isNonEmptyString(receiptId)) {
     return verifyErr("invalid_receipt_ref", "receipt reference must carry a non-empty receiptId");
   }
+
   const result = await context.withLock<ReceiptVerificationResult>(
     async (events): Promise<{ value: ReceiptVerificationResult } | { failure: StoreFailure }> => {
     const resolved = resolveReceipt(events, receiptId);
@@ -175,6 +183,7 @@ async function verifyFromRegistry(
         },
       };
     }
+
     if (resolved.status === "revoked") {
       return {
         failure: {
@@ -183,15 +192,18 @@ async function verifyFromRegistry(
         },
       };
     }
+
     const binding = checkReceiptBinding(resolved.receipt, expected);
     if (!binding.ok) {
       return { failure: { code: binding.code, message: binding.message } };
     }
+
     return { value: { ok: true as const, receipt: resolved.receipt } };
   });
   if ("failure" in result) {
     return verifyErr(result.failure.code, result.failure.message);
   }
+
   return result.value;
 }
 
@@ -208,12 +220,14 @@ async function revokeInRegistry(
       message: "revoke needs a receiptId, a reason and a strict ISO-8601 timestamp",
     };
   }
+
   const result = await context.withLock<ReceiptRevocationResult>(
     async (events): Promise<{ value: ReceiptRevocationResult } | { failure: StoreFailure }> => {
     const resolved = resolveReceipt(events, receiptId);
     if (resolved === undefined) {
       return { failure: { code: "unknown_receipt" as const, message: `no receipt ${receiptId}` } };
     }
+
     if (resolved.status === "revoked") {
       return {
         failure: {
@@ -222,6 +236,7 @@ async function revokeInRegistry(
         },
       };
     }
+
     await appendEvent(context.path, {
       formatVersion: VERIFICATION_AUTHORITY_FORMAT_VERSION,
       kind: "receipt_revoked",
@@ -230,11 +245,13 @@ async function revokeInRegistry(
       revokedAt,
       reason,
     });
+
     return { value: { ok: true as const, receiptId, status: "revoked" as const } };
   });
   if ("failure" in result) {
     return { ok: false, code: result.failure.code, message: result.failure.message };
   }
+
   return result.value;
 }
 
@@ -257,22 +274,28 @@ async function readRegistryText(registryPath: string): Promise<string> {
 async function appendEvent(registryPath: string, event: RegistryEvent): Promise<void> {
   const bytes = Buffer.from(encodeRegistryEvent(event), "utf8");
   const handle = await open(registryPath, "a");
+
   try {
     let written = 0;
+
     while (written < bytes.length) {
       const { bytesWritten } = await handle.write(bytes, written, bytes.length - written);
+
       if (bytesWritten <= 0) {
         throw new Error(
           `zero-byte write into receipt registry after ${String(written)} of ${String(bytes.length)} bytes`,
         );
       }
+
       written += bytesWritten;
     }
+
     if (written !== bytes.length) {
       throw new Error(
         `partial write into receipt registry: ${String(written)} of ${String(bytes.length)} bytes`,
       );
     }
+
     await handle.sync();
   } finally {
     await handle.close();
@@ -283,7 +306,9 @@ async function ensureDirectoryDurability(directory: string): Promise<void> {
   if (process.platform === "win32") {
     return;
   }
+
   const handle = await open(directory, "r");
+
   try {
     await handle.sync();
   } finally {

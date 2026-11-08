@@ -14,6 +14,7 @@ describe("ConnectionSlots", () => {
     const first = slots.track(new Promise<string>(() => undefined), undefined);
     const second = slots.track(new Promise<string>(() => undefined), undefined);
     const exited = new Error("gone");
+
     exited.name = "LspServerExited";
     slots.settleAllPending(exited);
     await assert.rejects(first, /gone/);
@@ -22,8 +23,10 @@ describe("ConnectionSlots", () => {
 
   it("counts load so the caller can enforce a ceiling", async () => {
     const slots = new ConnectionSlots();
+
     assert.equal(slots.load, 0);
     const pending = slots.track(new Promise<string>(() => undefined), undefined);
+
     assert.equal(slots.load, 1);
     slots.settleAllPending(new Error("x"));
     await assert.rejects(pending);
@@ -41,6 +44,7 @@ describe("ConnectionSlots", () => {
   it("does not double-settle a request already rejected by teardown", async () => {
     const slots = new ConnectionSlots();
     const pending = slots.track(new Promise<string>(() => undefined), undefined);
+
     slots.settleAllPending(new Error("exit"));
     await assert.rejects(pending, /exit/);
     // A late server reply must not resurrect the slot or resolve after the exit.
@@ -57,6 +61,7 @@ describe("withDeadline", () => {
   it("rejects with DeadlineExceeded and runs the cancel hook", async () => {
     let cancelled = false;
     const never = new Promise<string>(() => undefined);
+
     await assert.rejects(
       withDeadline(never, 5, () => {
         cancelled = true;
@@ -118,6 +123,7 @@ describe("decodeAnswer", () => {
       { uri: "file:///src/a.ts", range: { start: { line: 10, character: 2 }, end: { line: 10, character: 8 } } },
       "definition",
     );
+
     assert.equal(answer.status, "answered");
     assert.deepEqual(answer.status === "answered" ? answer.locations : [], [
       { path: "/src/a.ts", line: 10, character: 2, endLine: 10, endCharacter: 8 },
@@ -156,8 +162,10 @@ describe("decodeAnswer", () => {
       ],
       "document_symbols",
     );
+
     assert.equal(answer.status, "symbols");
     const symbols = answer.status === "symbols" ? answer.symbols : [];
+
     assert.deepEqual(symbols.map((s) => `${s.name}/${s.container ?? "-"}`), ["Outer/-", "inner/Outer"]);
     assert.equal(symbols[0]?.kind, "class");
   });

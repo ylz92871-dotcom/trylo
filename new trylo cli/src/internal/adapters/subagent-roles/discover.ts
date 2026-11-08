@@ -45,33 +45,40 @@ export function discoverRoles(
 
   for (const root of roots) {
     let entries: ReadonlyArray<string>;
+
     try {
       entries = reader.listEntries(root.directory);
     } catch (error) {
       problems.push(`${root.source}: ${root.directory} could not be listed (${String(error)})`);
       continue;
     }
+
     for (const entry of entries) {
       if (!entry.endsWith(ROLE_FILE_SUFFIX)) {
         continue;
       }
+
       const file = path.join(root.directory, entry);
       let raw: string | undefined;
+
       try {
         raw = reader.readFile(file);
       } catch (error) {
         problems.push(`${root.source}: ${file} could not be read (${String(error)})`);
         continue;
       }
+
       if (raw === undefined) {
         continue;
       }
+
       const fallbackName = entry.slice(0, -ROLE_FILE_SUFFIX.length);
       const parsed = parseRoleDocument(raw, fallbackName);
       if (parsed.kind === "invalid") {
         problems.push(`${root.source}: ${file} — ${parsed.reason}`);
         continue;
       }
+
       // First layer wins, and `roots` is ordered project-first by the caller.
       if (!byName.has(parsed.role.name)) {
         byName.set(parsed.role.name, parsed.role);

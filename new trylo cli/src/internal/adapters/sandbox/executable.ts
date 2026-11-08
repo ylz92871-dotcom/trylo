@@ -64,6 +64,7 @@ export function hostProcessEnvironment(): Readonly<Record<string, string | undef
     env["PATH"] ??= executablePath;
     env["Path"] ??= executablePath;
   }
+
   return env;
 }
 
@@ -75,10 +76,12 @@ function pathExtensions(): readonly string[] {
   if (typeof raw !== "string" || raw.length === 0) {
     return DEFAULT_PATH_EXTENSIONS;
   }
+
   const parsed = raw
     .split(";")
     .map((entry) => entry.trim())
     .filter((entry) => entry.startsWith("."));
+
   return parsed.length === 0 ? DEFAULT_PATH_EXTENSIONS : parsed;
 }
 
@@ -114,6 +117,7 @@ export function lookupExecutable(executable: string): ExecutableLookup {
   if (process.platform !== "win32") {
     return { kind: "binary" };
   }
+
   const extension = path.extname(executable).toLowerCase();
   if (SCRIPT_EXTENSIONS.includes(extension)) {
     // A quoted bare batch can receive the caller's cwd as its %~dp0. Pin its
@@ -121,13 +125,16 @@ export function lookupExecutable(executable: string): ExecutableLookup {
     const target = path.basename(executable) === executable ? executableOnPath(executable, [""]) : undefined;
     return { kind: "script", target: target ?? executable };
   }
+
   if (extension.length > 0) {
     return { kind: "binary" };
   }
+
   const candidate = executableOnPath(executable, pathExtensions());
   if (candidate !== undefined && SCRIPT_EXTENSIONS.includes(path.extname(candidate).toLowerCase())) {
     return { kind: "script", target: candidate };
   }
+
   return { kind: "binary" };
 }
 
@@ -146,26 +153,33 @@ export function lookupExecutable(executable: string): ExecutableLookup {
 export function quoteForCommandShell(word: string): string {
   let out = '"';
   let index = 0;
+
   while (index < word.length) {
     const char = word[index] ?? "";
     if (char === "\\") {
       let run = 0;
+
       while (word[index] === "\\") {
         run += 1;
         index += 1;
       }
+
       const next = word[index];
+
       out += "\\".repeat(next === '"' || next === undefined ? run * 2 : run);
       continue;
     }
+
     if (char === '"') {
       out += '\\"';
       index += 1;
       continue;
     }
+
     out += char;
     index += 1;
   }
+
   return `${out}"`;
 }
 
@@ -198,13 +212,16 @@ function refusesShellWord(word: string): boolean {
 
 export function shapeCommand(argv: readonly string[]): CommandShapeResult {
   const [executable, ...rest] = argv;
+
   if (executable === undefined) {
     return { ok: false, code: "empty_command", message: "run_shell requires a non-empty command" };
   }
+
   const lookup = lookupExecutable(executable);
   if (lookup.kind === "binary") {
     return { ok: true, shape: { kind: "direct", argv } };
   }
+
   const shell = commandShellPath();
   if (shell === undefined) {
     return {
@@ -214,6 +231,7 @@ export function shapeCommand(argv: readonly string[]): CommandShapeResult {
         "run_shell cannot start a Windows batch script: ComSpec is unset. Set ComSpec to cmd.exe, or call the underlying executable directly.",
     };
   }
+
   const words = [lookup.target, ...rest];
   const offender = words.find((word) => refusesShellWord(word));
   if (offender !== undefined) {
@@ -224,6 +242,7 @@ export function shapeCommand(argv: readonly string[]): CommandShapeResult {
         "run_shell refuses '%%' and line breaks in a command that must go through cmd; they are expanded rather than passed through",
     };
   }
+
   return {
     ok: true,
     shape: { kind: "shell", argv: [shell, "/d", "/s", "/c", buildCommandShellLine(words)] },

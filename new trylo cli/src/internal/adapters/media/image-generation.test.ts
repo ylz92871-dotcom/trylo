@@ -26,9 +26,12 @@ function callFor(prompt: string): ToolCallRequest {
 
 test("without a backend the tool is absent from the catalog and refuses direct calls", async () => {
   const tools = createImageGenerationTools({});
+
   assert.deepEqual(tools.snapshot(), []);
   const refused = await tools.execute(callFor("a red circle"), new AbortController().signal);
+
   assert.equal(refused.outcome, "error");
+
   if (refused.outcome === "error") {
     assert.equal(refused.code, "image_generation_unavailable");
   }
@@ -48,10 +51,13 @@ test("an empty prompt refuses before any backend is touched", async () => {
     { toolCallId: "c1", name: GENERATE_IMAGE_TOOL, arguments: { prompt: "  " } },
     new AbortController().signal,
   );
+
   assert.equal(refused.outcome, "error");
+
   if (refused.outcome === "error") {
     assert.equal(refused.code, "invalid_arguments");
   }
+
   assert.equal(calls, 0);
 });
 
@@ -64,7 +70,9 @@ test("a backend image validates through the same guard as a local file", async (
     },
   });
   const outcome = await tools.execute(callFor("a red circle"), new AbortController().signal);
+
   assert.equal(outcome.outcome, "result");
+
   if (outcome.outcome === "result") {
     assert.equal(outcome.value.mediaType, "image/png");
     assert.ok(!outcome.output.includes(outcome.value.dataUrl as string));
@@ -80,10 +88,13 @@ test("non-image service bytes fail the gate and a denying catalog fails first", 
     },
   });
   const failed = await tools.execute(callFor("a red circle"), new AbortController().signal);
+
   assert.equal(failed.outcome, "error");
+
   if (failed.outcome === "error") {
     assert.equal(failed.code, "image_generation_failed");
   }
+
   const gated = createImageGenerationTools({
     backend: {
       async generate() {
@@ -94,7 +105,9 @@ test("non-image service bytes fail the gate and a denying catalog fails first", 
     modelId: "lab-7b",
   });
   const denied = await gated.execute(callFor("a red circle"), new AbortController().signal);
+
   assert.equal(denied.outcome, "error");
+
   if (denied.outcome === "error") {
     assert.equal(denied.code, "model_unsupported");
   }

@@ -8,8 +8,11 @@ import test from "node:test";
 test("helper protection and reuse work from a Medium caller without runtime compilation", { skip: process.platform !== "win32" }, () => {
   const root = mkdtempSync(join(tmpdir(), "trylo-medium-helper-"));
   const runtime = join(root, "runtime"), cache = join(root, "cache"), target = join(cache, "probe.exe");
-  mkdirSync(runtime); mkdirSync(cache);
+
+  mkdirSync(runtime);
+  mkdirSync(cache);
   const node = join(runtime, "node.exe");
+
   copyFileSync(process.execPath, node);
   writeFileSync(target, "harmless nonexecutable security descriptor fixture");
   const module = new URL("./windows-helper-protection.js", import.meta.url).href;
@@ -23,6 +26,7 @@ test("helper protection and reuse work from a Medium caller without runtime comp
     "protectWindowsCacheTarget({kind:'executable',path:process.argv[3],state:'existing'},process.env);",
     "console.log(JSON.stringify({sid,protected:true,reused:true}));",
   ].join("\n");
+
   try {
     execFileSync("icacls.exe", [node, "/setintegritylevel", "M"], { windowsHide: true, stdio: "pipe" });
     const result = spawnSync(node, ["--input-type=module", "-e", program, module, cache, target], {

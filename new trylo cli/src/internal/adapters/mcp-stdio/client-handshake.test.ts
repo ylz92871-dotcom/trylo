@@ -11,6 +11,10 @@ test("successful initialization emits the exact MCP lifecycle notification befor
     notify: message => { notifications.push(message); }, respond: () => undefined, onIncoming: () => () => undefined, onFailure: () => () => undefined,
     stderrBytes: () => 0, stderrTruncated: () => false, exited: () => false, terminate: async () => undefined };
   const client = createMcpStdioClient({ serverId: "strict", command: "unused", args: [], env: {}, cwd: ".", transportFactory: () => transport });
-  try { assert.equal((await client.connect()).ok, true); assert.deepEqual(notifications, [{ jsonrpc: "2.0", method: "notifications/initialized" }]); }
+
+  try {
+    assert.equal((await client.connect()).ok, true);
+    assert.deepEqual(notifications, [{ jsonrpc: "2.0", method: "notifications/initialized" }]);
+  }
   finally { await client.close(); }
 });

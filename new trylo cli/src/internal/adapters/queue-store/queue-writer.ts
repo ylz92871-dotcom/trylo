@@ -63,7 +63,9 @@ function release(held: Held | undefined): void {
   if (held === undefined) {
     return;
   }
+
   closeSync(held.fd);
+
   try {
     unlinkSync(held.lockPath);
   } catch {
@@ -85,6 +87,7 @@ export function writerLock(queueFile: string): QueueLock {
   const lockPath = `${queueFile}.lock`;
   let held: Held | undefined;
   let depth = 0;
+
   return {
     async run<T>(body: () => Promise<T>) {
       if (depth > 0) {
@@ -98,12 +101,15 @@ export function writerLock(queueFile: string): QueueLock {
           depth--;
         }
       }
+
       const took = acquire(lockPath);
       if (!took.ok) {
         return { ok: false, code: "queue_locked" } as const;
       }
+
       held = took.held;
       depth = 1;
+
       try {
         return await body();
       } finally {

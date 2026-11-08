@@ -100,6 +100,7 @@ if ($kind -eq 'executable') {
 export function protectWindowsCacheTarget(target: CacheTarget, env: Readonly<Record<string, string | undefined>>): void {
   const systemRoot = env["SystemRoot"] ?? env["SYSTEMROOT"];
   if (systemRoot === undefined) throw new Error("isolation_helper_invalid: SystemRoot is missing");
+
   try {
     execFileSync(join(systemRoot, "System32/WindowsPowerShell/v1.0/powershell.exe"), ["-NoProfile", "-NonInteractive", "-Command", PROTECT_CACHE], {
       env: { ...windowsHelperEnvironment(env), TRYLO_NATIVE_TARGET: target.path, TRYLO_NATIVE_KIND: target.kind, TRYLO_NATIVE_STATE: target.state },

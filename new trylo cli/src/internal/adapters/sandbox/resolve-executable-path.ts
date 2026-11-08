@@ -56,10 +56,12 @@ function pathExtensions(): readonly string[] {
   if (typeof raw !== "string" || raw.length === 0) {
     return DEFAULT_PATH_EXTENSIONS;
   }
+
   const parsed = raw
     .split(";")
     .map((entry) => entry.trim())
     .filter((entry) => entry.startsWith("."));
+
   return parsed.length === 0 ? DEFAULT_PATH_EXTENSIONS : parsed;
 }
 
@@ -111,6 +113,7 @@ export function resolveExecutablePath(executable: string): ResolvedExecutable {
         message: `${executable} does not exist`,
       };
     }
+
     if (!isRegularFile(absolute)) {
       return {
         ok: false,
@@ -118,7 +121,9 @@ export function resolveExecutablePath(executable: string): ResolvedExecutable {
         message: `${executable} is not a regular file, so it cannot be started`,
       };
     }
+
     const extension = path.extname(absolute).toLowerCase();
+
     return {
       ok: true,
       absolutePath: absolute,
@@ -138,7 +143,9 @@ export function resolveExecutablePath(executable: string): ResolvedExecutable {
       if (!isRegularFile(full)) {
         continue;
       }
+
       const candidateExtension = path.extname(full).toLowerCase();
+
       return {
         ok: true,
         absolutePath: full,

@@ -1,7 +1,7 @@
 # Local patches applied to the vendored sandbox-runtime
 
 Upstream: `@anthropic-ai/sandbox-runtime` **0.0.73**, copied verbatim from
-`C:/work/demo-ws/trylo cli/node_modules/@anthropic-ai/sandbox-runtime`.
+`D:/CC/trylo/trylo cli/node_modules/@anthropic-ai/sandbox-runtime`.
 Vendored at `src/internal/adapters/sandbox/vendor/sandbox-runtime/`.
 See `PROVENANCE.json` for the SHA-256 of the two shipped binaries.
 

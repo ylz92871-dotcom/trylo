@@ -9,7 +9,12 @@ export function acquireAclOwner(directory = join(homedir(), ".trylo-sandbox-owne
   // A crashed process cannot block a later process reusing its numeric PID.
   const file = join(directory, `${holderPid}-${birth}.lock`);
   let fd: number;
+
   try { fd = openSync(file, "wx", 0o600); }
   catch (error) { throw new Error("isolation_owner_busy: this process already owns an ACL lease", { cause: error }); }
-  return () => { closeSync(fd); unlinkSync(file); };
+
+  return () => {
+    closeSync(fd);
+    unlinkSync(file);
+  };
 }

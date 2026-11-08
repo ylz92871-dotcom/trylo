@@ -13,6 +13,7 @@ test("private stdin argv accepts data arguments but refuses malformed executable
 test("stdin authentication handles fragmented and coalesced headers without losing input", () => {
   assert.equal(takeStdinHeader(Buffer.from("trylo-stdin-")), undefined);
   const frame = takeStdinHeader(Buffer.from(STDIN_ACK + "release🙂\n"));
+
   assert.ok(frame);
   assert.equal(frame.header.toString() + "\n", STDIN_ACK);
   assert.equal(frame.rest.toString(), "release🙂\n");

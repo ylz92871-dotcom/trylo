@@ -38,10 +38,15 @@ function shellMode(kind: "powershell"): ShellModeResult {
 describe("planMutation under a shell mode", () => {
   it("hands the whole string to the interpreter without tokenizing", () => {
     const result = planMutation(POLICY, call("echo hello | grep h"), shellMode("powershell"));
+
     assert.equal(result.ok, true);
+
     if (!result.ok) return;
+
     assert.equal(result.plan.tool, "run_shell");
+
     if (result.plan.tool !== "run_shell") return;
+
     assert.equal(result.plan.shape.kind, "direct");
     assert.equal(result.plan.steps.length, 0);
     // The command travels as ONE argv element: the interpreter parses, not us.
@@ -50,12 +55,18 @@ describe("planMutation under a shell mode", () => {
 
   it("refuses composition rather than running it twice", () => {
     const steps = planMutation(POLICY, call("echo a", { steps: ["echo b"] }), shellMode("powershell"));
+
     assert.equal(steps.ok, false);
+
     if (steps.ok) return;
+
     assert.equal(steps.code, "shell_mode_rejects_composition");
     const pipe = planMutation(POLICY, call("echo a", { pipeTo: "cat" }), shellMode("powershell"));
+
     assert.equal(pipe.ok, false);
+
     if (pipe.ok) return;
+
     assert.equal(pipe.code, "shell_mode_rejects_composition");
   });
 

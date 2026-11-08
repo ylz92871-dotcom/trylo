@@ -27,6 +27,7 @@ export type RegistryLock =
  */
 export function tryAcquireRegistryLock(lockPath: string): RegistryLock {
   let fd: number;
+
   try {
     fd = openSync(lockPath, "wx");
   } catch (error) {
@@ -35,12 +36,14 @@ export function tryAcquireRegistryLock(lockPath: string): RegistryLock {
     }
     return { ok: false, code: "registry_write_failed", detail: describe(error) };
   }
+
   try {
     writeSync(fd, `${process.pid}\n`);
   } catch (error) {
     closeSync(fd);
     return { ok: false, code: "registry_write_failed", detail: describe(error) };
   }
+
   return {
     ok: true,
     release() {
@@ -58,6 +61,7 @@ export function tryAcquireRegistryLock(lockPath: string): RegistryLock {
 
 function inspectExisting(lockPath: string): RegistryLock {
   let holder = "";
+
   try {
     holder = readFileSync(lockPath, "utf8").trim();
   } catch {
@@ -65,6 +69,7 @@ function inspectExisting(lockPath: string): RegistryLock {
     // with whoever holds it, and this caller fails closed on conflict below.
     holder = "";
   }
+
   if (holder === String(process.pid)) {
     return {
       ok: false,
@@ -72,6 +77,7 @@ function inspectExisting(lockPath: string): RegistryLock {
       detail: `this process already holds ${lockPath}`,
     };
   }
+
   return { ok: false, code: "registry_lock_conflict", detail: lockPath };
 }
 

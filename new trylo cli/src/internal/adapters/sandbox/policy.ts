@@ -13,7 +13,6 @@ import type { ShellModeResult } from "./shell-mode.js";
 /** Rejection, not truncation: an oversized write never becomes a short file. */
 export const DEFAULT_MAX_WRITE_BYTES = 1_048_576;
 
-export const DEFAULT_SHELL_TIMEOUT_MS = 60_000;
 export const DEFAULT_MAX_SHELL_OUTPUT_BYTES = 65_536;
 export const DEFAULT_MAX_SHELL_OUTPUT_LINES = 2_000;
 
@@ -43,6 +42,7 @@ function canonicalRoot(root: string): string {
 export function createSandboxPolicy(config: WorkspaceSandboxConfig): SandboxPolicy {
   const workspaceRoot = canonicalRoot(config.workspaceRoot);
   const workspaceAlias = path.resolve(config.workspaceRoot);
+
   return {
     mode: config.mode ?? "workspace_write",
     network: "restricted",

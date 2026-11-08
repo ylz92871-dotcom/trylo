@@ -48,7 +48,9 @@ function isRecord(value: unknown): value is HandoffRecord {
   if (typeof value !== "object" || value === null) {
     return false;
   }
+
   const record = value as Record<string, unknown>;
+
   return (
     typeof record["sessionId"] === "string" &&
     typeof record["messageId"] === "string" &&
@@ -69,12 +71,15 @@ function encode(record: HandoffRecord): string {
     startedAtMs: record.startedAtMs,
     worker: record.worker,
   };
+
   if (record.ownerRef !== undefined) {
     flat["ownerRef"] = record.ownerRef;
   }
+
   if (record.detail !== undefined) {
     flat["detail"] = record.detail;
   }
+
   return `${JSON.stringify(flat)}\n`;
 }
 
@@ -82,28 +87,36 @@ function decode(raw: string): ReadonlyArray<HandoffRecord> {
   if (raw.trim().length === 0) {
     return [];
   }
+
   const out: HandoffRecord[] = [];
+
   for (const line of raw.split("\n")) {
     if (line.trim().length === 0) {
       continue;
     }
+
     let parsed: unknown;
+
     try {
       parsed = JSON.parse(line);
     } catch {
       // 一行坏了就整份拒读：跳过去会让后面的状态迁移建立在半份记录上。
       throw new Error("handoff store is unreadable");
     }
+
     if (!isRecord(parsed)) {
       throw new Error("handoff store is unreadable");
     }
+
     const withOptional: HandoffRecord = {
       ...parsed,
       ...(parsed.ownerRef === undefined ? {} : { ownerRef: parsed.ownerRef }),
       ...(parsed.detail === undefined ? {} : { detail: parsed.detail }),
     };
+
     out.push(withOptional);
   }
+
   return out;
 }
 
@@ -141,7 +154,9 @@ export function createFileHandoffStore(options: { readonly file: string }): Hand
       const next = current.filter(
         (item) => handoffKey(item.sessionId, item.messageId) !== key,
       );
+
       next.push(record);
+
       return writeAll(next);
     },
     remove: async (sessionId, messageId) => {

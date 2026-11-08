@@ -53,6 +53,7 @@ function lab(): Lab {
     // Written as the whole record, the way the schedule store writes it.
     return rewrite(file, next, occurrences);
   };
+
   return {
     store: createFileWatchStore({
       file,
@@ -99,12 +100,16 @@ test("arming a watch records it and it reads back", async () => {
       text: "the build finished",
       sessionId: "s-1",
     });
+
     assert.equal(created.ok, true);
+
     if (!created.ok) return;
+
     assert.equal(created.value.state.state, "armed");
 
     const listed = await h.store.list("s-1");
     if (!listed.ok) return;
+
     assert.equal(listed.value.length, 1);
     // The record is on disk, not only in the closure.
     assert.match(readFileUtf8(h.file), /"kind": "watch"/);
@@ -121,8 +126,11 @@ test("a watch with no message is refused", async () => {
       text: "   ",
       sessionId: "s-1",
     });
+
     assert.equal(created.ok, false);
+
     if (created.ok) return;
+
     // "A watch that fires to say nothing" is a real product decision, not a
     // validation nit: it would be a notification with no content.
     assert.equal(created.code, "blank_text");
@@ -139,7 +147,9 @@ test("a watch with no session is refused", async () => {
       text: "reminder",
       sessionId: "",
     });
+
     assert.equal(created.ok, false);
+
     if (!created.ok) assert.equal(created.code, "not_a_session");
   } finally {
     h.cleanup();
@@ -154,7 +164,9 @@ test("a deadline in the past is refused by `create` but allowed by `createOrFire
       text: "reminder",
       sessionId: "s-1",
     });
+
     assert.equal(plain.ok, false);
+
     if (!plain.ok) assert.equal(plain.code, "invalid_deadline");
 
     // The immediate form is the "if it is already past, do it now" path — the
@@ -164,7 +176,9 @@ test("a deadline in the past is refused by `create` but allowed by `createOrFire
       text: "reminder",
       sessionId: "s-1",
     });
+
     assert.equal(immediate.ok, true);
+
     if (immediate.ok) {
       assert.equal(immediate.value.fired, true);
       assert.equal(immediate.value.row.state.state, "fired");
@@ -176,19 +190,23 @@ test("a deadline in the past is refused by `create` but allowed by `createOrFire
 
 test("a condition that is already true fires immediately rather than making someone wait", async () => {
   const h = lab();
+
   h.setProbe({
     fileExists: () => true,
     fileContains: () => false,
     lastExitCode: () => undefined,
     flagSet: () => false,
   });
+
   try {
     const armed = await h.store.createOrFire({
       trigger: { kind: "condition", condition: { kind: "file_exists", relativePath: "done.txt" } },
       text: "already finished",
       sessionId: "s-1",
     });
+
     assert.equal(armed.ok, true);
+
     if (armed.ok) {
       assert.equal(armed.value.fired, true);
       // And it says what it saw, so the notification is intelligible.
@@ -207,8 +225,11 @@ test("a condition that is not met stays armed and says why it is waiting", async
       text: "waiting",
       sessionId: "s-1",
     });
+
     assert.equal(armed.ok, true);
+
     if (!armed.ok) return;
+
     assert.equal(armed.value.fired, false);
     assert.equal(armed.value.row.state.state, "armed");
   } finally {
@@ -228,6 +249,7 @@ test("firing twice does not fire twice — the occurrence record is the reason",
 
     const at = T0 + 5_000;
     const first = await h.store.fire(created.value.id, at, "msg-1");
+
     assert.equal(first.ok, true);
 
     // The record now has the occurrence. Add it the way the scheduler would, so
@@ -238,11 +260,15 @@ test("firing twice does not fire twice — the occurrence record is the reason",
     await rewriteArmed(h.file, created.value.id);
 
     const second = await h.store.fire(created.value.id, at, "msg-2");
+
     assert.equal(second.ok, true);
+
     if (!second.ok) return;
+
     // The second attempt does not produce a new message: it reports the one the
     // record already has.
     assert.equal(second.value.state, "fired");
+
     if (second.value.state === "fired") {
       assert.equal(second.value.messageId, "msg-1");
     }
@@ -262,8 +288,11 @@ test("cancelling an armed watch works and is recorded", async () => {
     if (!created.ok) return assert.fail("create must succeed");
 
     const cancelled = await h.store.cancel(created.value.id);
+
     assert.equal(cancelled.ok, true);
+
     if (cancelled.ok) assert.equal(cancelled.value.state, "cancelled");
+
     assert.match(readFileUtf8(h.file), /"state": "cancelled"/);
   } finally {
     h.cleanup();
@@ -279,11 +308,15 @@ test("cancelling something already fired refuses, because the work happened", as
       sessionId: "s-1",
     });
     if (!created.ok) return assert.fail("create must succeed");
+
     await h.store.fire(created.value.id, T0 + 1_000, "msg-1");
 
     const cancelled = await h.store.cancel(created.value.id);
+
     assert.equal(cancelled.ok, false);
+
     if (cancelled.ok) return;
+
     // Reporting success here would let someone "cancel" a completed run.
     assert.equal(cancelled.code, "already_fired");
   } finally {
@@ -313,12 +346,15 @@ test("the armed-watches ceiling is enforced per session", async () => {
       });
       assert.equal(created.ok, true, `watch ${index} must be accepted`);
     }
+
     const overflow = await h.store.create({
       trigger: { kind: "deadline", atMs: T0 + 999_999 },
       text: "one too many",
       sessionId: "s-1",
     });
+
     assert.equal(overflow.ok, false);
+
     if (!overflow.ok) {
       // A person armed with twenty watches will not read twenty notifications.
       assert.equal(overflow.code, "too_many_watches");
@@ -330,12 +366,14 @@ test("the armed-watches ceiling is enforced per session", async () => {
 
 test("evaluate reports what it saw without firing anything", async () => {
   const h = lab();
+
   h.setProbe({
     fileExists: () => true,
     fileContains: () => false,
     lastExitCode: () => undefined,
     flagSet: () => false,
   });
+
   try {
     const created = await h.store.create({
       trigger: { kind: "condition", condition: { kind: "file_exists", relativePath: "x.txt" } },
@@ -343,9 +381,13 @@ test("evaluate reports what it saw without firing anything", async () => {
       sessionId: "s-1",
     });
     if (!created.ok) return assert.fail("create must succeed");
+
     const verdict = await h.store.evaluate(created.value.id);
+
     assert.equal(verdict.ok, true);
+
     if (!verdict.ok) return;
+
     assert.equal(verdict.value.met, true);
     assert.equal(verdict.value.because, "x.txt exists");
     // Evaluating did not fire it — a dry run has to be possible.
@@ -364,12 +406,16 @@ test("forget removes a terminal watch but a missing one is reported", async () =
       sessionId: "s-1",
     });
     if (!created.ok) return assert.fail("create must succeed");
+
     // Only terminal watches can be forgotten: cancel first, then drop.
     const cancelled = await h.store.cancel(created.value.id);
+
     assert.equal(cancelled.ok, true);
     const forgotten = await h.store.forget(created.value.id);
+
     assert.equal(forgotten.ok, true);
     const again = await h.store.forget(created.value.id);
+
     assert.equal(again.ok, false);
   } finally {
     h.cleanup();
@@ -385,15 +431,22 @@ test("forget refuses an armed watch with not_terminal and keeps the record", asy
       sessionId: "s-1",
     });
     if (!created.ok) return assert.fail("create must succeed");
+
     // Red case for the audit: the store, not just the CLI, owns this guard.
     const refused = await h.store.forget(created.value.id);
+
     assert.equal(refused.ok, false);
+
     if (refused.ok) return;
+
     assert.equal(refused.code, "not_terminal");
     // Nothing was deleted: the promise is still armed on disk.
     const listed = await h.store.list("s-1");
+
     assert.equal(listed.ok, true);
+
     if (!listed.ok) return;
+
     assert.equal(listed.value.length, 1);
     assert.match(readFileUtf8(h.file), new RegExp(created.value.id));
   } finally {
@@ -412,13 +465,16 @@ test("session ids with surrounding spaces share one ceiling", async () => {
       });
       assert.equal(created.ok, true, `watch ${index} must be accepted`);
     }
+
     // `" s-1 "` is the same session once trimmed: it must not bypass MAX20.
     const bypass = await h.store.create({
       trigger: { kind: "deadline", atMs: T0 + 999_999 },
       text: "spaced bypass",
       sessionId: "  s-1  ",
     });
+
     assert.equal(bypass.ok, false);
+
     if (!bypass.ok) assert.equal(bypass.code, "too_many_watches");
   } finally {
     h.cleanup();
@@ -434,7 +490,9 @@ test("an unusable session id is refused as not_a_session", async () => {
         text: "notify",
         sessionId: bad,
       });
+
       assert.equal(refused.ok, false, `${bad} must be refused`);
+
       if (!refused.ok) assert.equal(refused.code, "not_a_session");
     }
   } finally {
@@ -455,13 +513,16 @@ test("the total armed ceiling stops a new session when the file is full", async 
         assert.equal(created.ok, true, `s-${session} w${index} must be accepted`);
       }
     }
+
     // 10 sessions × 20 = 200 armed: the 201st, from a fresh session, is refused.
     const overflow = await h.store.create({
       trigger: { kind: "deadline", atMs: T0 + 999_999 },
       text: "one too many overall",
       sessionId: "s-fresh",
     });
+
     assert.equal(overflow.ok, false);
+
     if (!overflow.ok) assert.equal(overflow.code, "too_many_watches");
   } finally {
     h.cleanup();
@@ -492,6 +553,7 @@ function rewriteArmed(file: string, watchId: string): void {
   const parsed = JSON.parse(readFileUtf8(file)) as {
     schedules: Array<Record<string, unknown>>;
   };
+
   for (const row of parsed.schedules) {
     if (row["watchId"] === watchId) {
       row["state"] = "armed";
@@ -500,6 +562,7 @@ function rewriteArmed(file: string, watchId: string): void {
       delete row["firedBecause"];
     }
   }
+
   writeFileSync(file, JSON.stringify(parsed, null, 2) + "\n", "utf8");
 }
 

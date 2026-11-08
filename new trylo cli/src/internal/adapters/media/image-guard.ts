@@ -40,12 +40,15 @@ export function detectImageMime(bytes: Uint8Array): ImageMime | undefined {
   if (startsWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
     return "image/png";
   }
+
   if (startsWith(bytes, [0xff, 0xd8, 0xff])) {
     return "image/jpeg";
   }
+
   if (startsWith(bytes, [0x47, 0x49, 0x46, 0x38])) {
     return "image/gif";
   }
+
   if (
     startsWith(bytes, [0x52, 0x49, 0x46, 0x46]) &&
     bytes.length >= 12 &&
@@ -56,6 +59,7 @@ export function detectImageMime(bytes: Uint8Array): ImageMime | undefined {
   ) {
     return "image/webp";
   }
+
   return undefined;
 }
 
@@ -84,24 +88,32 @@ export function crc32IEEE(bytes: Uint8Array, start: number, end: number): number
     if (table !== undefined) {
       return table;
     }
+
     const built = new Uint32Array(256);
+
     for (let value = 0; value < 256; value += 1) {
       let entry = value;
+
       for (let bit = 0; bit < 8; bit += 1) {
         // Bitwise oddness: `% 2 === 1` lies for the negative int32
         // intermediates XOR can produce (`-3 % 2 === -1`), silently
         // corrupting half the table (WP19 复核 F1 fix round).
         entry = (entry & 1) === 1 ? 0xedb88320 ^ (entry >>> 1) : entry >>> 1;
       }
+
       built[value] = entry;
     }
+
     table = built;
+
     return built;
   };
   let crc = 0xffffffff;
+
   for (let index = start; index < end; index += 1) {
     crc = tableOf()[(crc ^ (bytes[index] as number)) & 0xff] as number ^ (crc >>> 8);
   }
+
   return (crc ^ 0xffffffff) >>> 0;
 }
 
@@ -120,18 +132,22 @@ export function inspectPng(bytes: Uint8Array): PngInspection {
   if (bytes.length < 45) {
     return { ok: false, code: "invalid_image", message: "invalid_image: truncated PNG: shorter than signature + IHDR + IEND" };
   }
+
   const header = readIhdrDimensions(bytes);
   if (!header.ok) {
     return header;
   }
+
   const body = requireImageDataChunks(bytes);
   if (!body.ok) {
     return body;
   }
+
   const trailer = requireIendTrailer(bytes);
   if (!trailer.ok) {
     return trailer;
   }
+
   if (header.width > MAX_IMAGE_DIMENSION || header.height > MAX_IMAGE_DIMENSION) {
     return {
       ok: false,
@@ -139,6 +155,7 @@ export function inspectPng(bytes: Uint8Array): PngInspection {
       message: `too_large: PNG is ${header.width}x${header.height}, over the ${MAX_IMAGE_DIMENSION}px edge this package can send without a resizer`,
     };
   }
+
   return { ok: true, width: header.width, height: header.height };
 }
 
@@ -154,16 +171,19 @@ function readIhdrDimensions(bytes: Uint8Array): PngInspection | PngRefusal {
   ) {
     return { ok: false, code: "invalid_image", message: "invalid_image: PNG first chunk is not IHDR" };
   }
+
   const width = readU32BE(bytes, 16);
   const height = readU32BE(bytes, 20);
   if (width === 0 || height === 0) {
     return { ok: false, code: "invalid_image", message: "invalid_image: PNG has a zero dimension" };
   }
+
   // CRC covers the IHDR tag + data (bytes 12..29), never the length field;
   // stored at 29..33.
   if (crc32IEEE(bytes, 12, 29) !== readU32BE(bytes, 29)) {
     return { ok: false, code: "invalid_image", message: "invalid_image: PNG IHDR CRC mismatch (corrupt header)" };
   }
+
   return { ok: true, width, height };
 }
 
@@ -174,6 +194,7 @@ function readIhdrDimensions(bytes: Uint8Array): PngInspection | PngRefusal {
 function requireImageDataChunks(bytes: Uint8Array): PngInspection | PngRefusal {
   let offset = 33;
   let sawImageData = false;
+
   while (offset + 8 <= bytes.length) {
     const length = readU32BE(bytes, offset);
     const tag =
@@ -184,14 +205,17 @@ function requireImageDataChunks(bytes: Uint8Array): PngInspection | PngRefusal {
     if (tag === 0x49454e44) {
       break;
     }
+
     if (offset + 12 + length > bytes.length) {
       return { ok: false, code: "invalid_image", message: "invalid_image: truncated PNG: chunk overruns the file" };
     }
+
     // No early return: chunks past the first IDAT are still walked, so a
     // lying length later in the file cannot hide behind valid image data.
     sawImageData = sawImageData || tag === 0x49444154;
     offset += 12 + length;
   }
+
   return sawImageData
     ? { ok: true, width: 0, height: 0 }
     : { ok: false, code: "invalid_image", message: "invalid_image: PNG has no IDAT image data" };
@@ -210,6 +234,7 @@ function requireIendTrailer(bytes: Uint8Array): PngInspection | PngRefusal {
   ) {
     return { ok: false, code: "invalid_image", message: "invalid_image: truncated PNG: missing IEND trailer" };
   }
+
   return { ok: true, width: 0, height: 0 };
 }
 
@@ -296,9 +321,11 @@ export type ImageBytesInput = {
  */
 export function checkImageBytes(input: ImageBytesInput): ImageValidation {
   const ceiling = input.maxBytes ?? MAX_IMAGE_BYTES;
+
   if (input.bytes.length === 0) {
     return { ok: false, code: "empty_file", message: "empty_file: image file is empty" };
   }
+
   if (input.bytes.length > ceiling) {
     return {
       ok: false,
@@ -306,10 +333,12 @@ export function checkImageBytes(input: ImageBytesInput): ImageValidation {
       message: `too_large: ${input.bytes.length} bytes exceeds ${ceiling} byte image ceiling`,
     };
   }
+
   const magic = detectImageMime(input.bytes);
   if (magic === undefined) {
     return { ok: false, code: "invalid_image", message: "invalid_image: unable to process image: invalid or unsupported image data" };
   }
+
   if (input.path !== undefined) {
     const dot = input.path.lastIndexOf(".");
     const hinted = dot >= 0 ? extensionMime(input.path.slice(dot + 1)) : undefined;
@@ -321,6 +350,7 @@ export function checkImageBytes(input: ImageBytesInput): ImageValidation {
       };
     }
   }
+
   const dimensions = parsePngDimensions(input.bytes);
   // Structure is proven per format before anything travels further: magic
   // without a body is a claim, not an image (WP19 复核 F1).
@@ -328,6 +358,7 @@ export function checkImageBytes(input: ImageBytesInput): ImageValidation {
   if (!structure.ok) {
     return { ok: false, code: structure.code, message: structure.message };
   }
+
   return {
     ok: true,
     attachment: {
@@ -348,9 +379,11 @@ export function checkImageDetail(input: ImageDetailInput):
   if (input === undefined) {
     return { ok: true, detail: "high" };
   }
+
   if (isImageDetail(input)) {
     return { ok: true, detail: input };
   }
+
   return {
     ok: false,
     code: "unsupported_detail",

@@ -24,6 +24,7 @@ import path from "node:path";
  */
 
 export const SHELL_KINDS = ["bash", "zsh", "sh", "powershell", "cmd"] as const;
+
 export type ShellKind = (typeof SHELL_KINDS)[number];
 
 export function isShellKind(value: string): value is ShellKind {
@@ -154,6 +155,7 @@ function onPath(surface: ShellEnvironment, program: string): string | undefined 
     surface.platform === "win32"
       ? (surface.env["PATHEXT"] ?? ".COM;.EXE;.BAT;.CMD").split(";").filter((e) => e.length > 0)
       : [""];
+
   for (const directory of searchPath(surface)) {
     for (const extension of extensions) {
       const candidate = path.join(directory, `${program}${extension}`);
@@ -162,6 +164,7 @@ function onPath(surface: ShellEnvironment, program: string): string | undefined 
       }
     }
   }
+
   return undefined;
 }
 
@@ -191,16 +194,19 @@ export function resolveShell(surface: ShellEnvironment, kind: ShellKind): ShellL
       message: `No such shell: ${JSON.stringify(kind)}. This build knows ${SHELL_KINDS.join(", ")}.`,
     };
   }
+
   for (const program of PROGRAM_NAMES[kind]) {
     const found = onPath(surface, program);
     if (found !== undefined) {
       return { ok: true, shell: { kind, path: found } };
     }
   }
+
   const fallback = firstExisting(surface, FALLBACK_PATHS[kind]);
   if (fallback !== undefined) {
     return { ok: true, shell: { kind, path: fallback } };
   }
+
   return {
     ok: false,
     code: "shell_not_installed",
@@ -230,6 +236,7 @@ export function resolveDefaultShell(surface: ShellEnvironment): ShellLookupResul
   if (resolved.ok) {
     return resolved;
   }
+
   // The preferred shell is missing. cmd on Windows and bash elsewhere are the
   // last resorts that still exist on a stock install, and the failure is only
   // reported when neither does.
@@ -238,6 +245,7 @@ export function resolveDefaultShell(surface: ShellEnvironment): ShellLookupResul
   if (fallback.ok) {
     return fallback;
   }
+
   return {
     ok: false,
     code: "no_shell_available",

@@ -107,6 +107,7 @@ export function createFileWorker(options: FileWorkerOptions): WorkerPort {
       worker: options.worker,
       ownerRef,
     };
+
     // 1. 领取事实先落盘 —— 它比队列项活得久，也说得清这条去了哪里。
     await options.handoffs.put(base);
 
@@ -115,6 +116,7 @@ export function createFileWorker(options: FileWorkerOptions): WorkerPort {
     // failed / cancelled。只有它抛异常（进程崩、provider 连不上这一类）才谈得上
     // 「不知道交没交出去」，那时候才需要 probe。
     let threw = false;
+
     try {
       // 2. 交给 owner。ref 是幂等的，重复调用不会让同一句话跑两遍。
       result = await options.owner.execute(job);
@@ -128,6 +130,7 @@ export function createFileWorker(options: FileWorkerOptions): WorkerPort {
     }
 
     const endedAtMs = options.clock.now();
+
     settled.push(receiptOf(job, result, startedAtMs, endedAtMs, options.worker));
 
     if (!threw) {
@@ -148,11 +151,13 @@ export function createFileWorker(options: FileWorkerOptions): WorkerPort {
       // 队列项已经删了、又问不出 owner 收没收到 —— 不补回去这条就没了。
       await claim.restore(job);
     }
+
     await options.handoffs.put({
       ...base,
       state: plan.mark,
       ...(result.detail === undefined ? {} : { detail: result.detail }),
     });
+
     return result.outcome;
   }
 
@@ -168,6 +173,7 @@ export function createFileWorker(options: FileWorkerOptions): WorkerPort {
       (record) => record.state === "handing_off",
     );
     let handled = 0;
+
     for (const record of pending) {
       if (record.ownerRef === undefined) {
         // 连 ref 都没记下 —— 无从问起，只能交给人。
@@ -175,6 +181,7 @@ export function createFileWorker(options: FileWorkerOptions): WorkerPort {
         handled += 1;
         continue;
       }
+
       const probe = await options.owner.probe(record.ownerRef);
       const stillQueued = await claim.has(record.sessionId, record.messageId);
       const plan = recoverPlanFor(probe, stillQueued);
@@ -195,8 +202,10 @@ export function createFileWorker(options: FileWorkerOptions): WorkerPort {
           state: plan.mark,
         });
       }
+
       handled += 1;
     }
+
     return handled;
   }
 
@@ -206,6 +215,7 @@ export function createFileWorker(options: FileWorkerOptions): WorkerPort {
     if (last !== undefined) {
       return { ok: true, value: last };
     }
+
     return {
       ok: false,
       code: "executor_failed",
@@ -224,11 +234,14 @@ export function createFileWorker(options: FileWorkerOptions): WorkerPort {
       // 看见它，立刻执行等于恢复这件事没发生过，人也无从知道中间崩过一次。
       return passOf(0);
     }
+
     const sessions = discoverQueuedSessions(io, options.queueDir);
     let taken = 0;
     let refused: WorkerFailureCode | undefined;
+
     for (let slot = 0; slot < budget; slot += 1) {
       let job: WorkerJob | undefined;
+
       for (const sessionId of sessions) {
         // 队首带着交接记录（尤其 unknown：那条是补回队列给人看见的）就把它**留在原地**
         // 继续往后看。以前这里 `continue` 掉的是整个会话，一条无法判定的作业就把会话
@@ -236,45 +249,56 @@ export function createFileWorker(options: FileWorkerOptions): WorkerPort {
         // 有界扫描：一个会话一次最多看 16 条，超过就说明这堆该人来看了，
         // 而不是让 worker 每 tick 把整个队列读穿。
         const held = new Set<string>();
+
         for (let looks = 0; looks < SESSION_LOOKS_PER_PASS; looks += 1) {
           const head = await claim.peek(sessionId, held);
           if (head === undefined) {
             break;
           }
+
           const seen = await options.handoffs.get(sessionId, head.messageId);
           if (seen !== undefined) {
             held.add(head.messageId);
             continue;
           }
+
           const got = await claim.claim(sessionId, held);
           if (got.ok) {
             job = got.value;
             break;
           }
+
           if (got.code !== "no_work") {
             refused = got.code;
             break;
           }
         }
+
         if (job !== undefined || refused !== undefined) {
           break;
         }
       }
+
       if (refused !== undefined) {
         break;
       }
+
       if (job === undefined) {
         refused = "no_work";
         break;
       }
+
       const outcome = await handoffAndRun(job);
+
       taken += 1;
+
       // 只有跑成的才接着领下一条：一个刚失败的执行器，下一条大概率同样失败，
       // 连着跑会把第一条真正的报错淹进噪声里。
       if (outcome !== "completed") {
         break;
       }
     }
+
     return passOf(taken, refused);
   }
 

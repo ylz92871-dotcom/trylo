@@ -65,16 +65,20 @@ async function backlinkMatches(
   if (typeof gitDir !== "string") {
     return false;
   }
+
   const raw = await context.io.readText(joinUnder(context, gitDir, "gitdir"));
   if (typeof raw !== "string") {
     return false;
   }
+
   const target = raw.trim();
   if (target.length === 0) {
     return false;
   }
+
   const backlink = await context.io.canonicalize(resolveAgainst(context, gitDir, target));
   const gitFile = await context.io.canonicalize(joinUnder(context, canonicalRoot, ".git"));
+
   return typeof backlink === "string" && typeof gitFile === "string" && backlink === gitFile;
 }
 
@@ -86,10 +90,12 @@ export async function listManagedWorktrees(
   if (typeof sourceCwd !== "string") {
     return sourceCwd;
   }
+
   const sourceRoot = await repositoryRootOf(context, sourceCwd, request);
   if (typeof sourceRoot !== "string") {
     return sourceRoot;
   }
+
   const relative = relativeWithin(sourceRoot, sourceCwd, platformOf(context));
   if (relative === undefined) {
     return {
@@ -113,34 +119,41 @@ export async function listManagedWorktrees(
   }
 
   const found: ManagedWorktree[] = [];
+
   for (const entry of parseWorktreeList(listed.stdout)) {
     const bucket = parentOf(context, entry.root);
     if (!(await context.io.isDirectory(entry.root)) || !(await context.io.isDirectory(bucket))) {
       continue;
     }
+
     const canonicalRoot = await context.io.canonicalize(entry.root);
     const root = typeof canonicalRoot === "string" ? canonicalRoot : entry.root;
     const linkedGitFile = await context.io.isFile(joinUnder(context, root, ".git"));
     if (!hasManagedLayout(resolvedPool, root, platformOf(context)) || !linkedGitFile) {
       continue;
     }
+
     const commonDir = await gitDirPathOf(context, root, "--git-common-dir", request);
     if (typeof commonDir !== "string" || commonDir !== sourceCommonDir) {
       continue;
     }
+
     if (!(await backlinkMatches(context, root, request))) {
       continue;
     }
+
     const cwd = joinUnder(context, entry.root, relative);
     if (!(await isSafeWorktreeCwd(context, root, cwd))) {
       continue;
     }
+
     if (entry.headSha === undefined) {
       // Codex `lib.rs:257-258` fails the whole listing rather than dropping
       // the entry: a managed checkout with no HEAD is a broken one, and
       // silently omitting it would make the pool look cleaner than it is.
       return { ok: false, code: "git_failed", detail: `managed worktree ${entry.root} has no HEAD` };
     }
+
     found.push({
       root: entry.root,
       cwd,
@@ -152,6 +165,7 @@ export async function listManagedWorktrees(
   }
 
   found.sort((left, right) => (left.root < right.root ? -1 : left.root > right.root ? 1 : 0));
+
   return { ok: true, value: found };
 }
 
@@ -167,30 +181,37 @@ export async function removeManagedWorktree(
   if (!listed.ok) {
     return listed;
   }
+
   const checkout = listed.value.find((item) => item.root === request.root);
   if (checkout === undefined) {
     return { ok: false, code: "not_managed", detail: `${request.root} is not a managed worktree in this repository` };
   }
+
   const sourceCwd = await canonicalize(context, request.sourceCwd);
   if (typeof sourceCwd !== "string") {
     return sourceCwd;
   }
+
   const checkoutRoot = await canonicalize(context, checkout.root);
   if (typeof checkoutRoot !== "string") {
     return checkoutRoot;
   }
+
   // Codex `lib.rs:300-302`: deleting the checkout you are standing in would
   // remove the directory the running session is using.
   if (isWithin(checkoutRoot, sourceCwd, platformOf(context))) {
     return { ok: false, code: "current_checkout", detail: "switch to another checkout before deleting the current worktree" };
   }
+
   const ignored = await runWorktreeGit(context, ignoredFilesArgv(platformOf(context)), checkout.root, request, "working-tree");
   if (!ignored.ok) {
     return ignored.failure;
   }
+
   if (ignored.stdout.length > 0) {
     return { ok: false, code: "has_ignored_files", detail: "worktree contains ignored local files; remove them before deleting it" };
   }
+
   // No `--force`: git itself refuses a checkout with modified or untracked
   // tracked files, which is the last line of defence for the user's work.
   const removed = await runWorktreeGit(
@@ -203,6 +224,8 @@ export async function removeManagedWorktree(
   if (!removed.ok) {
     return removed.failure;
   }
+
   await context.io.removeEmptyDir(parentOf(context, request.root));
+
   return { ok: true, value: undefined };
 }

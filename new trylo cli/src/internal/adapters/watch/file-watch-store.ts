@@ -94,6 +94,7 @@ export function createFileWatchStore(options: FileWatchStoreOptions): WatchPort 
   function watches(sessionId?: string): ReadonlyArray<WatchRow> {
     const wanted = sessionId?.trim();
     const found: Array<WatchRow> = [];
+
     for (const row of readRows(options.file)) {
       const decoded = decodeWatch(row);
       // Compare trimmed on both sides: rows written before trim-normalisation
@@ -102,6 +103,7 @@ export function createFileWatchStore(options: FileWatchStoreOptions): WatchPort 
         found.push(decoded);
       }
     }
+
     return found.sort((left, right) => right.createdAtMs - left.createdAtMs);
   }
 
@@ -144,7 +146,9 @@ export function createFileWatchStore(options: FileWatchStoreOptions): WatchPort 
           : { met: false },
       };
     }
+
     const verdict = evaluateCondition(row.trigger.condition, options.probe);
+
     return verdict.met
       ? { ok: true, value: { met: true, because: verdict.because } }
       : { ok: true, value: { met: false } };
@@ -157,24 +161,28 @@ export function createFileWatchStore(options: FileWatchStoreOptions): WatchPort 
     if (input.text.trim().length === 0) {
       return refusal("blank_text", "a watch with no message would fire to say nothing");
     }
+
     // Normalise once: `" s-1 "` and `"s-1"` are the same session, and counting
     // them separately would let spaced ids bypass the per-session ceiling.
     const sessionId = input.sessionId.trim();
     if (sessionId.length === 0) {
       return refusal("not_a_session", "a watch needs a session to deliver to; pass --session <id>");
     }
+
     if (!isUsableSessionId(sessionId)) {
       return refusal(
         "not_a_session",
         "that session id cannot name a queue file; use letters, digits, dot, dash or underscore, never containing ..",
       );
     }
+
     if (input.trigger.kind === "deadline" && input.trigger.atMs <= options.clock.now() && !allowPastDeadline) {
       return refusal(
         "invalid_deadline",
         "that moment has already passed; use the immediate form if you want it fired now",
       );
     }
+
     const armedForSession = watches(sessionId).filter((row) => row.state.state === "armed").length;
     if (armedForSession >= MAX_WATCHES_PER_SESSION) {
       return refusal(
@@ -182,6 +190,7 @@ export function createFileWatchStore(options: FileWatchStoreOptions): WatchPort 
         `this session already has ${armedForSession} armed watches; cancel one before arming another`,
       );
     }
+
     const armedTotal = watches().filter((row) => row.state.state === "armed").length;
     if (armedTotal >= MAX_WATCHES_TOTAL) {
       return refusal(
@@ -189,6 +198,7 @@ export function createFileWatchStore(options: FileWatchStoreOptions): WatchPort 
         `the record already holds ${armedTotal} armed watches; cancel one before arming another`,
       );
     }
+
     const nowMs = options.clock.now();
     const id = options.clock.newWatchId();
     const fireAtMs = input.trigger.kind === "deadline" ? input.trigger.atMs : nowMs;
@@ -200,6 +210,7 @@ export function createFileWatchStore(options: FileWatchStoreOptions): WatchPort 
       sessionId,
       createdAtMs: nowMs,
     };
+
     return options.writeRows([...readRows(options.file), encodeWatch(row)])
       ? { ok: true, value: row }
       : refusal("watch_unwritable", "the watch record could not be written, so nothing was armed");
@@ -230,6 +241,7 @@ export function createFileWatchStore(options: FileWatchStoreOptions): WatchPort 
       // carries one (the crash case, where the row was lost), the row otherwise.
       const recordedMessageId =
         existing?.state.state === "fired" ? existing.state.messageId : messageIdFrom(alreadyRecorded, messageId);
+
       return {
         ok: true,
         value: {
@@ -242,6 +254,7 @@ export function createFileWatchStore(options: FileWatchStoreOptions): WatchPort 
         },
       };
     }
+
     const fired: WatchRow = {
       ...row,
       state: { state: "fired", watchId: row.id, firedAtMs: observedAtMs, messageId },
@@ -250,6 +263,7 @@ export function createFileWatchStore(options: FileWatchStoreOptions): WatchPort 
     if (!replace(row.id, recorded)) {
       return refusal("watch_unwritable", "the fire was not recorded, so the watch is still armed");
     }
+
     return { ok: true, value: { row: recorded, messageId } };
   }
 
@@ -267,9 +281,11 @@ export function createFileWatchStore(options: FileWatchStoreOptions): WatchPort 
         return recorded;
       }
     }
+
     if (occurrence.state.state === "unknown" && typeof occurrence.state.reason === "string") {
       return fallback;
     }
+
     return fallback;
   }
 
@@ -290,11 +306,13 @@ export function createFileWatchStore(options: FileWatchStoreOptions): WatchPort 
       if (!armed.ok) {
         return armed;
       }
+
       const row = armed.value;
       const verdict = await evaluateRow(row);
       if (!verdict.ok || !verdict.value.met) {
         return { ok: true, value: { row, fired: false } };
       }
+
       const settled = await settleFire(
         row,
         verdict.value.because ?? "the condition was met",
@@ -304,6 +322,7 @@ export function createFileWatchStore(options: FileWatchStoreOptions): WatchPort 
       if (!settled.ok) {
         return settled;
       }
+
       // The **settled** row, not the one `arm` produced: handing back an
       // `armed` row would leave the caller holding a state the record on disk
       // contradicts, and that disagreement only surfaces when someone cancels
@@ -319,6 +338,7 @@ export function createFileWatchStore(options: FileWatchStoreOptions): WatchPort 
       // The domain decides from the *state*, not from the row, so the rule lives in
       // one place and this layer cannot have a second opinion about it.
       const verdict = cancelWatch(row?.state, watchId, options.clock.now());
+
       switch (verdict.kind) {
         case "not_found":
           return refusal("watch_not_found", verdict.message);
@@ -332,7 +352,9 @@ export function createFileWatchStore(options: FileWatchStoreOptions): WatchPort 
         case "cancelled":
           break;
       }
+
       const next: WatchRow = { ...(row as WatchRow), state: verdict.state };
+
       return replace(watchId, next)
         ? { ok: true, value: verdict.state }
         : refusal("watch_unwritable", "the watch record could not be written, so nothing was cancelled");
@@ -351,12 +373,15 @@ export function createFileWatchStore(options: FileWatchStoreOptions): WatchPort 
       if (row === undefined) {
         return refusal("watch_not_found", `no watch ${watchId}`);
       }
+
       if (row.state.state !== "armed") {
         // A terminal watch reports what it is. Firing it again would produce a
         // second notification for a condition that has not changed.
         return { ok: true, value: row.state };
       }
+
       const settled = await settleFire(row, `fired at ${new Date(atMs).toISOString()}`, atMs, messageId);
+
       return settled.ok ? { ok: true, value: settled.value.row.state } : settled;
     },
 
@@ -378,11 +403,13 @@ export function createFileWatchStore(options: FileWatchStoreOptions): WatchPort 
           `watch ${watchId} is still armed; only fired or cancelled watches can be forgotten`,
         );
       }
+
       const current = readRows(options.file);
       const kept = current.filter((row) => !(row["kind"] === "watch" && row["watchId"] === watchId));
       if (kept.length === current.length) {
         return refusal("watch_not_found", `no watch ${watchId}`);
       }
+
       return options.writeRows(kept)
         ? { ok: true, value: true }
         : refusal("watch_unwritable", "the watch record could not be written");

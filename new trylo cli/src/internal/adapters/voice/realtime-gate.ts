@@ -78,13 +78,16 @@ export function createVoiceGate(config: VoiceGateConfig): {
       if (!availability.ok) {
         return refusal("voice_unavailable", availability.message);
       }
+
       const started = apply({ type: "start" });
       if (!started.ok) {
         return started;
       }
+
       if (signal.aborted) {
         return apply({ type: "cancel" });
       }
+
       try {
         const outcome = await (config.backend as VoiceBackend).start(signal);
         if (!outcome.ok) {
@@ -103,18 +106,22 @@ export function createVoiceGate(config: VoiceGateConfig): {
       if (payloadBase64.length === 0) {
         return refusal("invalid_voice_payload", "invalid_voice_payload: empty chunk");
       }
+
       if (payloadBase64.length > MAX_VOICE_CHUNK_CHARS) {
         return refusal(
           "voice_chunk_too_large",
           `voice_chunk_too_large: ${payloadBase64.length} chars exceeds ${MAX_VOICE_CHUNK_CHARS}`,
         );
       }
+
       if (session.status !== "live") {
         return refusal("illegal_voice_transition", `illegal_voice_transition: append_${kind} not allowed while ${session.status}`);
       }
+
       if (signal.aborted) {
         return apply({ type: "cancel" });
       }
+
       try {
         const outcome = await (config.backend as VoiceBackend).append(kind, payloadBase64, signal);
         if (!outcome.ok) {
@@ -134,6 +141,7 @@ export function createVoiceGate(config: VoiceGateConfig): {
       if (!requested.ok) {
         return requested;
       }
+
       try {
         const outcome = await (config.backend as VoiceBackend).stop(signal);
         if (!outcome.ok) {

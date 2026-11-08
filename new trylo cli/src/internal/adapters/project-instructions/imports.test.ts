@@ -85,8 +85,10 @@ test("a missing import is reported and leaves a placeholder", () => {
 
 test("an import outside the workspace is refused, home paths included", () => {
   const outside = path.join(path.dirname(workspace), "outside-import.md");
+
   writeFileSync(outside, "host bytes");
   const result = expand(`@${outside.replaceAll("\\", "/")}`);
+
   assert.equal(result.problems.length, 1);
   assert.match(result.problems[0] ?? "", /^project_instructions_import_outside_root:/);
   assert.match(result.text, /outside the workspace/);
@@ -122,6 +124,7 @@ test("the budget is shared across the whole expansion, and spent in bytes", () =
   write("budget-a.md", "a".repeat(30));
   write("budget-b.md", "b".repeat(30));
   const result = expand("@./budget-a.md\nmiddle\n@./budget-b.md", workspace, 50);
+
   assert.match(result.text, /^a{30}\nmiddle\n/);
   assert.doesNotMatch(result.text, /b{30}/);
   assert.equal(result.problems.length, 1);
@@ -135,6 +138,7 @@ test("a nested chain cannot spend the budget twice", () => {
   write("nest-outer.md", `${"o".repeat(50)}\n@./nest-inner.md`);
   write("nest-inner.md", "i".repeat(40));
   const result = expand("@./nest-outer.md", workspace, 100);
+
   assert.match(result.text, /o{50}/);
   assert.doesNotMatch(result.text, /i{40}/);
   assert.equal(result.problems.length, 1);

@@ -48,6 +48,7 @@ export function parsePdfPageRange(pages: string): PdfPageRange | undefined {
   if (trimmed.length === 0) {
     return undefined;
   }
+
   if (trimmed.endsWith("-")) {
     const first = Number.parseInt(trimmed.slice(0, -1), 10);
     if (Number.isNaN(first) || first < 1) {
@@ -55,6 +56,7 @@ export function parsePdfPageRange(pages: string): PdfPageRange | undefined {
     }
     return { firstPage: first, lastPage: Infinity };
   }
+
   const dash = trimmed.indexOf("-");
   if (dash === -1) {
     const page = Number.parseInt(trimmed, 10);
@@ -63,11 +65,13 @@ export function parsePdfPageRange(pages: string): PdfPageRange | undefined {
     }
     return { firstPage: page, lastPage: page };
   }
+
   const first = Number.parseInt(trimmed.slice(0, dash), 10);
   const last = Number.parseInt(trimmed.slice(dash + 1), 10);
   if (Number.isNaN(first) || Number.isNaN(last) || first < 1 || last < 1 || last < first) {
     return undefined;
   }
+
   return { firstPage: first, lastPage: last };
 }
 
@@ -139,6 +143,7 @@ export function checkPdfSize(byteLength: number): PdfSizeVerdict {
   if (byteLength === 0) {
     return { ok: false, code: "empty_file", message: "empty_file: PDF file is empty" };
   }
+
   if (byteLength > PDF_MAX_EXTRACT_SIZE) {
     return {
       ok: false,
@@ -146,6 +151,7 @@ export function checkPdfSize(byteLength: number): PdfSizeVerdict {
       message: `too_large: ${byteLength} bytes exceed the ${PDF_MAX_EXTRACT_SIZE} byte extraction ceiling`,
     };
   }
+
   if (byteLength > PDF_TARGET_RAW_SIZE) {
     return {
       ok: false,
@@ -153,6 +159,7 @@ export function checkPdfSize(byteLength: number): PdfSizeVerdict {
       message: `too_large: ${byteLength} bytes exceed the ${PDF_TARGET_RAW_SIZE} byte document ceiling; use a page range instead`,
     };
   }
+
   return { ok: true };
 }
 

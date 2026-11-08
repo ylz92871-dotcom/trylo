@@ -35,8 +35,11 @@ test("read_only mode still refuses the mutating set", () => {
     name: WRITE_FILE_TOOL,
     arguments: { path: "a.txt", content: "x" },
   });
+
   assert.equal(planned.ok, false);
+
   if (planned.ok) return;
+
   assert.equal(planned.code, "sandbox_read_only");
 });
 
@@ -53,7 +56,10 @@ test("an unnamed skill is refused before any surface loads it", () => {
     name: SKILL_TOOL_NAME,
     arguments: {},
   });
+
   assert.equal(planned.ok, false);
+
   if (planned.ok) return;
+
   assert.equal(planned.code, "invalid_arguments");
 });

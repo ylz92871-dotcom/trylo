@@ -72,6 +72,7 @@ export function createFileScheduleStore(options: FileScheduleStoreOptions): Sche
     if (!read.ok) {
       return read;
     }
+
     return {
       ok: true,
       value: {
@@ -119,10 +120,12 @@ export function createFileScheduleStore(options: FileScheduleStoreOptions): Sche
       if (!validated.ok) {
         return validated;
       }
+
       const loaded = load();
       if (!loaded.ok) {
         return loaded;
       }
+
       const live = loaded.value.schedules.filter((schedule) => schedule.tombstonedAtMs === undefined);
       if (live.length >= MAX_SCHEDULES) {
         return {
@@ -131,6 +134,7 @@ export function createFileScheduleStore(options: FileScheduleStoreOptions): Sche
           message: `too many schedules (max ${MAX_SCHEDULES}); delete one first`,
         };
       }
+
       const schedule: Schedule = {
         ...validated.value,
         id: `sch_${randomUUID().slice(0, 8)}`,
@@ -140,6 +144,7 @@ export function createFileScheduleStore(options: FileScheduleStoreOptions): Sche
       if (!saved.ok) {
         return saved;
       }
+
       return { ok: true, value: schedule };
     },
 
@@ -148,10 +153,12 @@ export function createFileScheduleStore(options: FileScheduleStoreOptions): Sche
       if (!loaded.ok) {
         return loaded;
       }
+
       const index = loaded.value.schedules.findIndex((schedule) => schedule.id === scheduleId);
       if (index < 0) {
         return { ok: false, code: "unknown_schedule", message: `no schedule ${scheduleId}` };
       }
+
       const existing = loaded.value.schedules[index] as Schedule;
       if (existing.tombstonedAtMs !== undefined) {
         return {
@@ -160,6 +167,7 @@ export function createFileScheduleStore(options: FileScheduleStoreOptions): Sche
           message: `schedule ${scheduleId} was already deleted at ${new Date(existing.tombstonedAtMs).toISOString()}`,
         };
       }
+
       const consequence = deleteConsequence(existing, loaded.value.occurrences);
       // A tombstone is still written for the in-flight cases: the schedule must
       // stop producing new work even though an attempt already exists. What is
@@ -167,14 +175,17 @@ export function createFileScheduleStore(options: FileScheduleStoreOptions): Sche
       // consequence reports, and the caller decides whether to cancel the runner.
       const tombstoned: Schedule = { ...existing, tombstonedAtMs: now() };
       const schedules = [...loaded.value.schedules];
+
       schedules[index] = tombstoned;
       const saved = save(schedules, loaded.value.occurrences);
       if (!saved.ok) {
         return saved;
       }
+
       if (consequence.kind === "already_tombstoned") {
         return { ok: false, code: "already_tombstoned", message: `schedule ${scheduleId} is gone` };
       }
+
       return { ok: true, value: true };
     },
 
@@ -185,6 +196,7 @@ export function createFileScheduleStore(options: FileScheduleStoreOptions): Sche
         // could no longer tell which writer is current.
         return { ok: true, value: token };
       }
+
       const took = acquireLease(lockPath, ownerId, options.pid, {
         now,
         newToken: () => randomUUID(),
@@ -197,7 +209,9 @@ export function createFileScheduleStore(options: FileScheduleStoreOptions): Sche
           message: `the scheduler lease is held by ${holder}; only one scheduler may run`,
         };
       }
+
       token = took.token;
+
       return { ok: true, value: took.token };
     },
 
@@ -214,10 +228,12 @@ export function createFileScheduleStore(options: FileScheduleStoreOptions): Sche
       if (!permitted.ok) {
         return permitted;
       }
+
       const loaded = load();
       if (!loaded.ok) {
         return loaded;
       }
+
       const settled = new Set(
         loaded.value.occurrences
           .filter((occurrence) => occurrence.state.state !== "due")
@@ -230,6 +246,7 @@ export function createFileScheduleStore(options: FileScheduleStoreOptions): Sche
       if (derived.length === 0) {
         return { ok: true, value: [] };
       }
+
       const claimedAtMs = nowMs;
       const claimed = derived.map((occurrence): Occurrence => ({
         ...occurrence,
@@ -242,6 +259,7 @@ export function createFileScheduleStore(options: FileScheduleStoreOptions): Sche
       if (!saved.ok) {
         return saved;
       }
+
       return { ok: true, value: claimed };
     },
 
@@ -250,14 +268,17 @@ export function createFileScheduleStore(options: FileScheduleStoreOptions): Sche
       if (!permitted.ok) {
         return permitted;
       }
+
       const loaded = load();
       if (!loaded.ok) {
         return loaded;
       }
+
       const index = loaded.value.occurrences.findIndex((occurrence) => occurrence.id === occurrenceId);
       if (index < 0) {
         return { ok: false, code: "unknown_schedule", message: `no occurrence ${occurrenceId}` };
       }
+
       const current = loaded.value.occurrences[index] as Occurrence;
       if (
         current.state.state === "completed" ||
@@ -271,12 +292,14 @@ export function createFileScheduleStore(options: FileScheduleStoreOptions): Sche
         // cancellation, an unobserved effect) with a success nobody observed.
         return { ok: true, value: current };
       }
+
       const settledAtMs = now();
       const settled: Occurrence = {
         ...current,
         state: settledState(current.state, outcome, settledAtMs),
       };
       const occurrences = [...loaded.value.occurrences];
+
       occurrences[index] = settled;
       // The recurrence anchor advances only here — see the file comment on the
       // crash windows.
@@ -290,6 +313,7 @@ export function createFileScheduleStore(options: FileScheduleStoreOptions): Sche
       if (!saved.ok) {
         return saved;
       }
+
       return { ok: true, value: settled };
     },
 
@@ -298,6 +322,7 @@ export function createFileScheduleStore(options: FileScheduleStoreOptions): Sche
       if (!loaded.ok) {
         return loaded;
       }
+
       return {
         ok: true,
         value: loaded.value.occurrences
@@ -335,7 +360,9 @@ function advanceAnchors(
     if (schedule.id !== settled.scheduleId || schedule.tombstonedAtMs !== undefined) {
       return schedule;
     }
+
     const advanced: Schedule = { ...schedule, lastFiredAtMs: settledAtMs };
+
     return shouldRetireAfterFire(advanced, settledAtMs, recurringMaxAgeMs)
       ? { ...advanced, tombstonedAtMs: settledAtMs }
       : advanced;

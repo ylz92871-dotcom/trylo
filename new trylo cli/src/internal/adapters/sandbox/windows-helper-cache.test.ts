@@ -17,6 +17,7 @@ function fixture() {
 test("a protected cache uses pinned bytes outside the source and validates reuse", () => {
   const fx = fixture();
   const events: string[] = [];
+
   try {
     const protect = (target: { kind: string; state: string }) => { events.push(`${target.kind}:${target.state}`); };
     const first = cacheWindowsHelper(fx.source, fx.directory, protect);

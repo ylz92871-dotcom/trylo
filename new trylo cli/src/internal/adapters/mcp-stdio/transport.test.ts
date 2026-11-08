@@ -37,6 +37,7 @@ test("whitelisted platform keys survive, but only when set", () => {
   if (process.env.PATH !== undefined) {
     assert.equal(env.PATH, process.env.PATH);
   }
+
   // No key the child did not ask for and that is not on the platform whitelist
   // can appear: the extra map above is empty, so the result is a subset of the
   // fixed whitelist.
@@ -67,8 +68,10 @@ test("notify and respond report an undeliverable message instead of dropping it"
   });
   try {
     const failures: StdioTransportFailure[] = [];
+
     transport.onFailure((failure) => failures.push(failure));
     const terminating = transport.terminate();
+
     transport.notify(notificationMessage("initialized"));
     transport.respond(errorResponse(1, -32601, "method not found"));
     await terminating;

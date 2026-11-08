@@ -54,12 +54,14 @@ export function appendLine(file: string, line: string): boolean {
   try {
     mkdirSync(path.dirname(file), { recursive: true });
     const handle = openSync(file, "a");
+
     try {
       writeSync(handle, line);
       fsyncSync(handle);
     } finally {
       closeSync(handle);
     }
+
     return true;
   } catch {
     return false;
@@ -83,6 +85,7 @@ export function rewriteAll(file: string, contents: string): boolean {
 function writeReplacement(temporary: string, contents: string): void {
   mkdirSync(path.dirname(temporary), { recursive: true });
   const handle = openSync(temporary, "w");
+
   try {
     writeSync(handle, contents);
     fsyncSync(handle);
@@ -118,6 +121,7 @@ export async function rewriteQueuedFile(file: string, contents: string, io: Queu
   try {
     writeReplacement(temporary, contents);
     const delays = [0, 10, 25, 75];
+
     for (let attempt = 0; attempt < delays.length; attempt += 1) {
       await io.wait(delays[attempt] ?? 0);
       try {
@@ -127,6 +131,7 @@ export async function rewriteQueuedFile(file: string, contents: string, io: Queu
         if (!isFilesystemBusy(error) || attempt === delays.length - 1) throw error;
       }
     }
+
     return false;
   } catch {
     return false;

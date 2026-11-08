@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { hostProcessEnvironment } from "./executable.js";
 
 type AccessRule = { readonly sid: string; readonly mask: number; readonly deny: boolean; readonly inheritOnly: boolean };
+
 const COMMON = new Set(["S-1-1-0", "S-1-5-11", "S-1-5-32-545"]);
 const READ_EXECUTE = 0x1200a9;
 
@@ -19,10 +20,13 @@ export function hasPublicExecutableRead(program: string): boolean {
   const env = { ...hostProcessEnvironment() };
   const systemRoot = env["SystemRoot"] ?? env["SYSTEMROOT"];
   if (systemRoot === undefined) return false;
+
   // Windows PowerShell 5 cannot load a PowerShell 7 module path inherited by a host.
   for (const key of Object.keys(env)) if (key.toUpperCase() === "PSMODULEPATH") delete env[key];
+
   const paths = [program, dirname(program)].map(path => `'${path.replaceAll("'", "''")}'`).join(",");
   const script = `$ErrorActionPreference='Stop'; @(${paths}) | ForEach-Object { $rules=(Get-Acl -LiteralPath $_).GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]); @($rules | ForEach-Object { @{sid=$_.IdentityReference.Value; mask=[int]$_.FileSystemRights; deny=($_.AccessControlType -eq 'Deny'); inheritOnly=(($_.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) -ne 0)} }) | ConvertTo-Json -Compress; }`;
+
   try {
     const output = execFileSync(join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), ["-NoProfile", "-NonInteractive", "-Command", script], { env, encoding: "utf8", windowsHide: true, timeout: 10000 });
     const rows = output.trim().split(/\r?\n/).map(line => JSON.parse(line) as unknown);

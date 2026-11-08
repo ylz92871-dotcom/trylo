@@ -75,6 +75,7 @@ async function allocateCheckout(
   if (ensured !== undefined) {
     return { ok: false, code: "unresolved_path", detail: `cannot create worktree pool ${poolRoot}: ${ensured.error}` };
   }
+
   for (let attempt = 0; attempt <= BUCKET_ATTEMPTS; attempt += 1) {
     const hex = context.randomHex().replaceAll("-", "").toLowerCase();
     if (!/^[0-9a-f]{4}/.test(hex)) {
@@ -82,16 +83,20 @@ async function allocateCheckout(
       // bad draw keeps the loop total rather than inventing a bucket name.
       continue;
     }
+
     const bucket = bucketPath(poolRoot, hex.slice(0, 4), platformOf(context));
     const created = await context.io.createDir(bucket);
     if (created === "created") {
       return checkoutPath(bucket, repositoryName, platformOf(context));
     }
+
     if (created === "exists") {
       continue;
     }
+
     return { ok: false, code: "unresolved_path", detail: `cannot create worktree bucket ${bucket}: ${created.error}` };
   }
+
   return {
     ok: false,
     code: "bucket_exhausted",
@@ -113,7 +118,9 @@ async function rollbackCheckout(
     request,
     "working-tree",
   );
+
   await context.io.removeEmptyDir(parentOf(context, root));
+
   return step.ok ? undefined : step.failure;
 }
 
@@ -141,10 +148,12 @@ export async function createManagedWorktree(
   if (typeof sourceCwd !== "string") {
     return sourceCwd;
   }
+
   const sourceRoot = await repositoryRootOf(context, sourceCwd, request);
   if (typeof sourceRoot !== "string") {
     return sourceRoot;
   }
+
   const relative = relativeWithin(sourceRoot, sourceCwd, platformOf(context));
   if (relative === undefined) {
     return {
@@ -153,6 +162,7 @@ export async function createManagedWorktree(
       detail: `${sourceCwd} is outside the repository root ${sourceRoot}`,
     };
   }
+
   const repositoryName = repositoryNameOf(sourceRoot, platformOf(context));
   if (repositoryName === undefined) {
     return { ok: false, code: "unresolved_path", detail: `repository root ${sourceRoot} has no directory name` };
@@ -220,6 +230,7 @@ async function populateCheckout(
   if (typeof configPath !== "string") {
     return configPath;
   }
+
   const pinned = await runWorktreeGit(
     context,
     setCoreWorktreeArgv(platformOf(context), configPath, root),
@@ -230,6 +241,7 @@ async function populateCheckout(
   if (!pinned.ok) {
     return pinned.failure;
   }
+
   const reset = await runWorktreeGit(
     context,
     populateWorktreeArgv(platformOf(context), headSha),
@@ -237,5 +249,6 @@ async function populateCheckout(
     request,
     "working-tree",
   );
+
   return reset.ok ? undefined : reset.failure;
 }

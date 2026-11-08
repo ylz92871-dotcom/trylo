@@ -15,13 +15,18 @@ import {
 test("an explicit batch extension resolves a PATH target before cmd receives it", { skip: process.platform !== "win32" }, () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "trylo-explicit-batch-"));
   const previous = process.env["PATH"];
+
   try {
     const script = path.join(root, "trylo-explicit-probe.cmd");
+
     writeFileSync(script, "@echo off\r\n", "utf8");
     process.env["PATH"] = root + path.delimiter + (previous ?? "");
     const result = shapeCommand(["trylo-explicit-probe.cmd", "--version"]);
+
     assert.equal(result.ok, true);
+
     if (!result.ok) return;
+
     assert.ok(result.shape.argv.at(-1)?.includes(script), "a relative PATH batch gives %~dp0 the working directory");
   } finally {
     if (previous === undefined) delete process.env["PATH"]; else process.env["PATH"] = previous;
@@ -67,9 +72,12 @@ test("a non-Windows platform never routes through cmd", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "trylo-exec-"));
   try {
     const script = path.join(root, "probe.cmd");
+
     writeFileSync(script, "@echo off\r\n", "utf8");
     const shape = shapeCommand([script, "--version"]);
+
     assert.equal(shape.ok, true);
+
     if (shape.ok) {
       assert.equal(shape.shape.kind, isWindows ? "shell" : "direct");
     }
@@ -98,12 +106,16 @@ test("an empty argv is refused instead of inventing a program", () => {
 test("a batch script found on PATH is the one that gets run", { skip: !isWindows }, () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "trylo-exec-"));
   const previousPath = process.env["PATH"];
+
   try {
     const script = path.join(root, "trylo-probe.cmd");
+
     writeFileSync(script, "@echo off\r\n", "utf8");
     process.env["PATH"] = `${root}${path.delimiter}${previousPath ?? ""}`;
     const lookup = lookupExecutable("trylo-probe");
+
     assert.equal(lookup.kind, "script");
+
     if (lookup.kind === "script") {
       // PATHEXT is upper case, so the discovered name inherits its casing.
       assert.equal(path.basename(lookup.target).toLowerCase(), "trylo-probe.cmd");
@@ -121,10 +133,13 @@ test("a batch script found on PATH is the one that gets run", { skip: !isWindows
 test("percent and line breaks are refused rather than handed to cmd", { skip: !isWindows }, () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "trylo-exec-"));
   const previousPath = process.env["PATH"];
+
   try {
     const script = path.join(root, "trylo-probe.cmd");
+
     writeFileSync(script, "@echo off\r\n", "utf8");
     process.env["PATH"] = `${root}${path.delimiter}${previousPath ?? ""}`;
+
     for (const payload of ["%OS%", "before%OS%after", "line1\nline2"]) {
       const shape = shapeCommand(["trylo-probe", payload]);
       assert.equal(shape.ok, false, payload);
@@ -132,9 +147,11 @@ test("percent and line breaks are refused rather than handed to cmd", { skip: !i
         assert.equal(shape.code, "cmd_metacharacter_forbidden", payload);
       }
     }
+
     // The refusal is about expansion, not about quoting: a caret is inert once
     // the word is quoted, so `npm i pkg@^1.0.0` keeps working.
     const caret = shapeCommand(["trylo-probe", "pkg@^1.0.0"]);
+
     assert.equal(caret.ok, true);
   } finally {
     if (previousPath === undefined) {
@@ -151,15 +168,19 @@ test("a missing command shell is refused with an alternative, not a silent fallb
   const previousPath = process.env["PATH"];
   const previousComSpec = process.env["ComSpec"];
   const previousComSpecUpper = process.env["COMSPEC"];
+
   try {
     const script = path.join(root, "trylo-probe.cmd");
+
     writeFileSync(script, "@echo off\r\n", "utf8");
     process.env["PATH"] = `${root}${path.delimiter}${previousPath ?? ""}`;
     delete process.env["ComSpec"];
     delete process.env["COMSPEC"];
     assert.equal(commandShellPath(), undefined);
     const shape = shapeCommand(["trylo-probe", "--version"]);
+
     assert.equal(shape.ok, false);
+
     if (!shape.ok) {
       assert.equal(shape.code, "command_shell_unavailable");
       assert.match(shape.message, /cmd\.exe/);
@@ -170,16 +191,19 @@ test("a missing command shell is refused with an alternative, not a silent fallb
     } else {
       process.env["PATH"] = previousPath;
     }
+
     if (previousComSpec === undefined) {
       delete process.env["ComSpec"];
     } else {
       process.env["ComSpec"] = previousComSpec;
     }
+
     if (previousComSpecUpper === undefined) {
       delete process.env["COMSPEC"];
     } else {
       process.env["COMSPEC"] = previousComSpecUpper;
     }
+
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -187,19 +211,25 @@ test("a missing command shell is refused with an alternative, not a silent fallb
 test("the shell shape is a controlled cmd invocation, never shell: true", { skip: !isWindows }, () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "trylo-exec-"));
   const previousPath = process.env["PATH"];
+
   try {
     const script = path.join(root, "trylo-probe.cmd");
+
     writeFileSync(script, "@echo off\r\n", "utf8");
     process.env["PATH"] = `${root}${path.delimiter}${previousPath ?? ""}`;
     const shape = shapeCommand(["trylo-probe", "--version"]);
+
     assert.equal(shape.ok, true);
+
     if (shape.ok && shape.shape.kind === "shell") {
       const argv = shape.shape.argv;
+
       assert.equal(argv[1], "/d");
       assert.equal(argv[2], "/s");
       assert.equal(argv[3], "/c");
       assert.equal(argv.length, 5);
       const line = argv[4] ?? "";
+
       assert.ok(line.startsWith('""'), "the outer pair is what /s strips");
       assert.ok(line.endsWith('"'));
       assert.ok(!line.includes(" & "), "no unquoted operator may reach cmd");
@@ -221,14 +251,17 @@ test("the host environment reader hands back a copy, not the live object", () =>
   // environment, and a caller that kept the object would see later mutations
   // appear under it.
   const first = hostProcessEnvironment();
+
   assert.equal(typeof first, "object");
   // Written through a widened local, because the contract under test is that the
   // caller *cannot* write through the returned handle — the test has to attempt
   // the write to prove it, and `Readonly<Record<...>>` forbids that at the type
   // level. So the attempt is made on a mutable view of the same object.
   const writable = first as Record<string, string | undefined>;
+
   writable["WP12_PROBE"] = "mutated";
   const second = hostProcessEnvironment();
+
   assert.equal(second["WP12_PROBE"], undefined, "the reader must not expose the live environment");
 });
 

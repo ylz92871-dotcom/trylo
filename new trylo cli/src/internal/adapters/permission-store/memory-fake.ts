@@ -87,19 +87,23 @@ async function consumeGrant(
   if (request.token === undefined) {
     return consumptionErr("missing_token", "a grant reference is required");
   }
+
   if (!isNonEmptyString(request.token.grantId)) {
     return consumptionErr("invalid_token", "grant reference must carry a non-empty grantId");
   }
+
   const grantId = request.token.grantId;
   const index = state.grants.findIndex((item) => item.grantId === grantId);
   const grant = state.grants[index];
   if (grant === undefined) {
     return consumptionErr("unknown_grant", `no grant ${grantId} in this Permission store`);
   }
+
   const checked = checkApprovalConsumption(grant, request);
   if (!checked.ok) {
     return consumptionErr(checked.code, checked.message);
   }
+
   state.grants[index] = { ...grant, status: "consumed" };
   state.sequence += 1;
   const receipt: ApprovalConsumptionReceipt = {
@@ -111,6 +115,7 @@ async function consumeGrant(
     consumedAt: request.now,
     sequence: state.sequence,
   };
+
   return consumptionOk(receipt);
 }
 
@@ -124,13 +129,16 @@ async function issueGrant(
     // programming error in the caller, not a runtime outcome to negotiate.
     throw new Error(`memory store refused grant issuance: ${checked.code} ${checked.message}`);
   }
+
   const grant: PermissionGrant = {
     ...input,
     grantId: deriveGrantId(input, state.sequence + 1, state.storeId),
     status: "active",
   };
+
   state.sequence += 1;
   state.grants.push(grant);
+
   return { ok: true, grant };
 }
 
@@ -142,16 +150,19 @@ function revokeGrant(state: MemoryStoreState, grantId: string, now: string): Rev
       ? { ok: false, code: "invalid_now", message: "revoke needs a strict ISO-8601 timestamp" }
       : { ok: false, code: "unknown_grant", message: "revoke needs a non-empty grantId" };
   }
+
   const index = state.grants.findIndex((item) => item.grantId === grantId);
   const grant = state.grants[index];
   if (grant === undefined) {
     return { ok: false, code: "unknown_grant", message: `no grant ${grantId}` };
   }
+
   if (grant.status === "active") {
     state.grants[index] = { ...grant, status: "revoked" };
     state.sequence += 1;
     return { ok: true, grantId, status: "revoked" };
   }
+
   return { ok: true, grantId, status: grant.status };
 }
 

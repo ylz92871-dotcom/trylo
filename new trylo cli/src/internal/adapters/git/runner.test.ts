@@ -39,6 +39,7 @@ function fakeChild(script: { exit: number | null; stdout?: string; stderr?: stri
       }
     },
   };
+
   return {
     child,
     start(): void {
@@ -49,16 +50,19 @@ function fakeChild(script: { exit: number | null; stdout?: string; stderr?: stri
           }
           return;
         }
+
         if (script.stdout !== undefined) {
           for (const listener of outListeners) {
             listener(script.stdout);
           }
         }
+
         if (script.stderr !== undefined) {
           for (const listener of errListeners) {
             listener(script.stderr);
           }
         }
+
         for (const listener of listeners.get("close") ?? []) {
           listener(script.exit);
         }
@@ -76,6 +80,7 @@ test("exits and output resolve, spawn errors reject", async () => {
     },
   });
   const result = await runner.run(["git", "diff"], "/work");
+
   assert.deepEqual(result, { exit: 1, stdout: "--- a/f.ts\n", stderr: "" });
 
   const failing = fakeChild({ exit: null, error: new Error("spawn git ENOENT") });
@@ -85,6 +90,7 @@ test("exits and output resolve, spawn errors reject", async () => {
       return failing.child as never;
     },
   });
+
   await assert.rejects(missing.run(["git", "diff"], "/work"), /ENOENT/);
 });
 
@@ -113,5 +119,6 @@ test("background git preserves output and cancellation without a Windows console
     signal: controller.signal,
     env: { GIT_OPTIONAL_LOCKS: "0" },
   });
+
   assert.deepEqual(result, { exit: 0, stdout: "diff content\n", stderr: "" });
 });

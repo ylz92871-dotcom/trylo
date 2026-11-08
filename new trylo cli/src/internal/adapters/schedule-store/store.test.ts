@@ -27,6 +27,7 @@ function home(): string {
 function testClock(startMs: number) {
   let current = startMs;
   let attempts = 0;
+
   return {
     now: () => current,
     newAttemptId: () => `att_${++attempts}`,
@@ -50,6 +51,7 @@ function newStore(overrides: { readonly clock?: ReturnType<typeof testClock>; re
     pid: 1000,
     recurringMaxAgeMs: 7 * 24 * 60 * 60 * 1000,
   });
+
   return { store, clock };
 }
 
@@ -57,16 +59,22 @@ test("a created schedule is durable: it is readable after a new store opens the 
   const homeDir = home();
   const { store } = newStore({ homeDir });
   const created = await store.create({ cron: "0 9 * * *", prompt: "check the build", recurring: true, durable: true, delivery: "queue" });
+
   assert.equal(created.ok, true);
+
   if (!created.ok) return;
+
   assert.match(created.value.id, /^sch_/);
 
   // A second store, same home: the schedule must be there, because it was
   // acknowledged before this process existed.
   const reopened = newStore({ homeDir }).store;
   const listed = await reopened.list();
+
   assert.equal(listed.ok, true);
+
   if (!listed.ok) return;
+
   assert.equal(listed.value.length, 1);
   assert.equal(listed.value[0]?.prompt, "check the build");
   assert.equal(listed.value[0]?.cron, "0 9 * * *");
@@ -74,14 +82,18 @@ test("a created schedule is durable: it is readable after a new store opens the 
 
 test("an invalid expression is refused at creation, not accepted and never fired", async () => {
   const { store } = newStore();
+
   for (const cron of ["bogus", "* * * *", "60 * * * *", "*/0 * * * *"]) {
     const created = await store.create({ cron, prompt: "x", recurring: true, durable: false, delivery: "queue" });
     assert.equal(created.ok, false, `${cron} must be refused`);
     if (created.ok) continue;
     assert.equal(created.code, "invalid_expression");
   }
+
   const listed = await store.list();
+
   assert.equal(listed.ok, true);
+
   if (listed.ok) assert.equal(listed.value.length, 0);
 });
 
@@ -94,23 +106,32 @@ test("a blank prompt is refused; an empty schedule is not a task", async () => {
 
 test("claiming due work requires the lease, and an unwritten token is refused", async () => {
   const { store, clock } = newStore();
+
   await store.create({ cron: EVERY_MINUTE, prompt: "tick", recurring: true, durable: true, delivery: "queue" });
 
   // No lease taken at all.
   const unleased = await store.claimDue(clock.now(), "made-up-token");
+
   assert.equal(unleased.ok, false);
+
   if (unleased.ok) return;
+
   assert.equal(unleased.code, "lease_lost");
 
   const took = await store.acquireLease("owner-a");
+
   assert.equal(took.ok, true);
+
   if (!took.ok) return;
+
   const claimed = await store.claimDue(clock.now(), took.value);
+
   assert.equal(claimed.ok, true);
 });
 
 test("a due occurrence is claimed once and never twice for the same instant", async () => {
   const { store, clock } = newStore();
+
   await store.create({ cron: EVERY_MINUTE, prompt: "tick", recurring: true, durable: true, delivery: "queue" });
   const took = await store.acquireLease("owner-a");
   if (!took.ok) return assert.fail("lease must be acquirable");
@@ -118,8 +139,10 @@ test("a due occurrence is claimed once and never twice for the same instant", as
   clock.advanceTo(T0 + 61_000);
   const first = await store.claimDue(clock.now(), took.value);
   if (!first.ok) return assert.fail("claim must succeed");
+
   assert.equal(first.value.length, 1);
   const occurrence = first.value[0];
+
   assert.ok(occurrence !== undefined);
   // Deterministic identity: the same schedule and the same due moment always name
   // the same occurrence, which is what makes a restart recognisable rather than
@@ -132,21 +155,26 @@ test("a due occurrence is claimed once and never twice for the same instant", as
   // Same instant, second claim: nothing new, because the first is recorded.
   const second = await store.claimDue(clock.now(), took.value);
   if (!second.ok) return assert.fail("second claim must be answerable");
+
   assert.equal(second.value.length, 0);
 });
 
 test("nothing is due before the cron says so", async () => {
   const { store, clock } = newStore();
+
   await store.create({ cron: "0 9 * * *", prompt: "morning", recurring: true, durable: true, delivery: "queue" });
   const took = await store.acquireLease("owner-a");
   if (!took.ok) return assert.fail("lease must be acquirable");
+
   const atMidnight = await store.claimDue(clock.now(), took.value);
   if (!atMidnight.ok) return assert.fail("claim must be answerable");
+
   assert.equal(atMidnight.value.length, 0);
 });
 
 test("settling advances the anchor, so a recurring schedule does not replay every missed slot", async () => {
   const { store, clock } = newStore();
+
   await store.create({ cron: EVERY_MINUTE, prompt: "tick", recurring: true, durable: true, delivery: "queue" });
   const took = await store.acquireLease("owner-a");
   if (!took.ok) return assert.fail("lease must be acquirable");
@@ -154,16 +182,19 @@ test("settling advances the anchor, so a recurring schedule does not replay ever
   clock.advanceTo(T0 + 61_000);
   const claimed = await store.claimDue(clock.now(), took.value);
   if (!claimed.ok) return assert.fail("claim must succeed");
+
   const occurrence = claimed.value[0];
   if (occurrence === undefined) return assert.fail("one occurrence expected");
 
   const settled = await store.settle(occurrence.id, { outcome: "completed", result: { ok: true } }, took.value);
+
   assert.equal(settled.ok, true);
 
   // A host that was down for an hour owes ONE occurrence, not sixty.
   clock.advanceTo(T0 + 61 * 60_000);
   const afterGap = await store.claimDue(clock.now(), took.value);
   if (!afterGap.ok) return assert.fail("claim must be answerable");
+
   assert.equal(afterGap.value.length, 1);
   // And it is the *next* minute after the settled one, not the first missed one.
   assert.equal(afterGap.value[0]?.dueAtMs, T0 + 2 * 60_000);
@@ -171,9 +202,11 @@ test("settling advances the anchor, so a recurring schedule does not replay ever
 
 test("an unknown result is recorded as unknown, never as failed", async () => {
   const { store, clock } = newStore();
+
   await store.create({ cron: EVERY_MINUTE, prompt: "tick", recurring: true, durable: true, delivery: "queue" });
   const took = await store.acquireLease("owner-a");
   if (!took.ok) return assert.fail("lease must be acquirable");
+
   clock.advanceTo(T0 + 61_000);
   const claimed = await store.claimDue(clock.now(), took.value);
   const occurrence = claimed.ok ? claimed.value[0] : undefined;
@@ -185,6 +218,7 @@ test("an unknown result is recorded as unknown, never as failed", async () => {
     took.value,
   );
   if (!settled.ok) return assert.fail("settle must succeed");
+
   // `unknown` is its own state: it must not read as a failure, because a failure
   // invites a retry and a retry re-does an effect nobody observed.
   assert.equal(settled.value.state.state, "unknown");
@@ -192,9 +226,11 @@ test("an unknown result is recorded as unknown, never as failed", async () => {
 
 test("settling twice does not rewrite a recorded outcome", async () => {
   const { store, clock } = newStore();
+
   await store.create({ cron: EVERY_MINUTE, prompt: "tick", recurring: true, durable: true, delivery: "queue" });
   const took = await store.acquireLease("owner-a");
   if (!took.ok) return assert.fail("lease must be acquirable");
+
   clock.advanceTo(T0 + 61_000);
   const claimed = await store.claimDue(clock.now(), took.value);
   const occurrence = claimed.ok ? claimed.value[0] : undefined;
@@ -203,6 +239,7 @@ test("settling twice does not rewrite a recorded outcome", async () => {
   await store.settle(occurrence.id, { outcome: "failed", code: "boom", message: "it broke" }, took.value);
   const second = await store.settle(occurrence.id, { outcome: "completed", result: { ok: true } }, took.value);
   if (!second.ok) return assert.fail("second settle must be answerable");
+
   // A late duplicate from a retried caller must not replace a recorded failure
   // with a success nobody observed.
   assert.equal(second.value.state.state, "failed");
@@ -214,14 +251,17 @@ test("deleting tombstones the schedule and it stops producing work", async () =>
   if (!created.ok) return assert.fail("create must succeed");
 
   const deleted = await store.delete(created.value.id);
+
   assert.equal(deleted.ok, true);
   const listed = await store.list();
   if (listed.ok) assert.equal(listed.value.length, 0);
 
   const took = await store.acquireLease("owner-a");
   if (!took.ok) return assert.fail("lease must be acquirable");
+
   clock.advanceTo(T0 + 61_000);
   const afterDelete = await store.claimDue(clock.now(), took.value);
+
   // The schedule is gone, so no work is owed. This is the ADR's "delete must
   // stop later execution", not merely "the row disappeared".
   if (afterDelete.ok) assert.equal(afterDelete.value.length, 0);
@@ -231,10 +271,14 @@ test("deleting an already-deleted schedule says so rather than claiming success"
   const { store } = newStore();
   const created = await store.create({ cron: EVERY_MINUTE, prompt: "tick", recurring: true, durable: true, delivery: "queue" });
   if (!created.ok) return assert.fail("create must succeed");
+
   await store.delete(created.value.id);
   const again = await store.delete(created.value.id);
+
   assert.equal(again.ok, false);
+
   if (again.ok) return;
+
   assert.equal(again.code, "already_tombstoned");
 });
 
@@ -256,6 +300,7 @@ test("delete reports what is already in flight instead of implying it stopped", 
     prompt: "p",
     delivery: "queue" as const,
   };
+
   // The three cases have different remedies, so the answer is a union.
   assert.equal(deleteConsequence(schedule, []).kind, "not_yet_due");
   assert.equal(deleteConsequence(schedule, [dispatched]).kind, "in_flight");
@@ -272,8 +317,10 @@ test("the delete consequence survives a round trip through the file", async () =
   const { store, clock } = newStore({ homeDir });
   const created = await store.create({ cron: EVERY_MINUTE, prompt: "tick", recurring: true, durable: true, delivery: "queue" });
   if (!created.ok) return assert.fail("create must succeed");
+
   const took = await store.acquireLease("owner-a");
   if (!took.ok) return assert.fail("lease must be acquirable");
+
   clock.advanceTo(T0 + 61_000);
   const claimed = await store.claimDue(clock.now(), took.value);
   if (!claimed.ok || claimed.value[0] === undefined) return assert.fail("one occurrence expected");
@@ -284,6 +331,7 @@ test("the delete consequence survives a round trip through the file", async () =
     schedules: ReadonlyArray<{ id: string; lastFiredAtMs?: number }>;
     occurrences: ReadonlyArray<{ id: string; state: { state: string } }>;
   };
+
   assert.equal(onDisk.occurrences.length, 1);
   assert.equal(onDisk.occurrences[0]?.state.state, "claimed");
   // The anchor has NOT moved: a claim is not a fire.
@@ -294,19 +342,24 @@ test("a corrupted record is reported unreadable, never as an empty schedule list
   const homeDir = home();
   const { store } = newStore({ homeDir });
   const file = join(homeDir, "schedule", "schedules.json");
+
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, "{ this is not json", "utf8");
   const listed = await store.list();
+
   // "You have no schedules" and "I could not read yours" lead a person to
   // opposite conclusions, and only one of them is true.
   assert.equal(listed.ok, false);
+
   if (listed.ok) return;
+
   assert.equal(listed.code, "schedule_unreadable");
 });
 
 test("a row with the wrong shape is dropped rather than cast", async () => {
   const homeDir = home();
   const file = join(homeDir, "schedule", "schedules.json");
+
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(
     file,
@@ -324,6 +377,7 @@ test("a row with the wrong shape is dropped rather than cast", async () => {
   const { store } = newStore({ homeDir });
   const listed = await store.list();
   if (!listed.ok) return assert.fail("a row-level problem must not make the file unreadable");
+
   assert.equal(listed.value.length, 1);
   assert.equal(listed.value[0]?.id, "sch_ok");
 });
@@ -339,6 +393,7 @@ test("occurrence identity is derived from the schedule and the instant", () => {
     delivery: "queue" as const,
   };
   const due = dueOccurrences([schedule], T0 + 61_000);
+
   assert.equal(due.length, 1);
   assert.equal(due[0]?.id, `sch_7@${T0 + 60_000}`);
   // Same inputs, same ids: that is the property recovery depends on.
@@ -357,6 +412,7 @@ test("a tombstoned schedule owes nothing", () => {
     delivery: "queue" as const,
     tombstonedAtMs: T0 + 1000,
   };
+
   assert.equal(dueOccurrences([schedule], T0 + 61_000).length, 0);
   assert.equal(nextDueAtMs(schedule), null);
 });
@@ -368,8 +424,11 @@ test("a cancelled outcome before dispatch settles as cancelled with the reason, 
     { outcome: "cancelled", reason: "person withdrew the request" },
     atMs,
   );
+
   assert.equal(fromDue.state, "cancelled");
+
   if (fromDue.state !== "cancelled") return;
+
   // Nothing ran, so no attempt is invented and no result is fabricated: the
   // record carries the reason and the moment, and nothing else.
   assert.equal(fromDue.cancelledAtMs, atMs);
@@ -380,8 +439,11 @@ test("a cancelled outcome before dispatch settles as cancelled with the reason, 
     { outcome: "cancelled", reason: "no longer needed" },
     atMs,
   );
+
   assert.equal(fromClaimed.state, "cancelled");
+
   if (fromClaimed.state !== "cancelled") return;
+
   assert.equal(fromClaimed.reason, "no longer needed");
 });
 
@@ -391,12 +453,15 @@ test("a cancelled outcome after dispatch settles as unknown, never completed, an
     { outcome: "cancelled", reason: "stop arrived mid-run" },
     T0 + 5_000,
   );
+
   // The effect may have landed before the stop did, so this is an observation
   // gap rather than proof nothing ran. `unknown` hands it to reconciliation;
   // `completed` would be a lie about something nobody observed, and `failed`
   // would invite a retry of work that may already have happened.
   assert.equal(interrupted.state, "unknown");
+
   if (interrupted.state !== "unknown") return;
+
   assert.equal(interrupted.attemptId, "att_1");
   assert.match(interrupted.reason, /stop arrived mid-run/);
 });
@@ -408,17 +473,22 @@ test("settling a cancelled or unknown occurrence twice does not rewrite it", asy
   ] as const;
   for (const first of firsts) {
     const { store, clock } = newStore();
+
     await store.create({ cron: EVERY_MINUTE, prompt: "tick", recurring: true, durable: true, delivery: "queue" });
     const took = await store.acquireLease("owner-a");
     if (!took.ok) return assert.fail("lease must be acquirable");
+
     clock.advanceTo(T0 + 61_000);
     const claimed = await store.claimDue(clock.now(), took.value);
     const occurrence = claimed.ok ? claimed.value[0] : undefined;
     if (occurrence === undefined) return assert.fail("one occurrence expected");
+
     const settled = await store.settle(occurrence.id, first, took.value);
     if (!settled.ok) return assert.fail("settle must succeed");
+
     const second = await store.settle(occurrence.id, { outcome: "completed", result: { ok: true } }, took.value);
     if (!second.ok) return assert.fail("second settle must be answerable");
+
     // A late duplicate — e.g. a runner that never heard the cancel — must not
     // replace the recorded terminal with a success nobody observed.
     assert.equal(second.value.state.state, first.outcome);
@@ -429,22 +499,28 @@ test("delete writes only a tombstone: in-flight work stays named and is never re
   const { store, clock } = newStore();
   const created = await store.create({ cron: EVERY_MINUTE, prompt: "tick", recurring: true, durable: true, delivery: "queue" });
   if (!created.ok) return assert.fail("create must succeed");
+
   const took = await store.acquireLease("owner-a");
   if (!took.ok) return assert.fail("lease must be acquirable");
+
   clock.advanceTo(T0 + 61_000);
   const claimed = await store.claimDue(clock.now(), took.value);
   if (!claimed.ok || claimed.value[0] === undefined) return assert.fail("one occurrence expected");
 
   const deleted = await store.delete(created.value.id);
+
   assert.equal(deleted.ok, true);
   // The tombstone stops new work, but the attempt already handed out is still
   // on record: deleting must not pretend it was recalled from the runner.
   const states = await store.occurrenceStatesOf(created.value.id);
   if (!states.ok) return assert.fail("states must be readable");
+
   assert.equal(states.value.length, 1);
   assert.equal(states.value[0]?.state, "claimed");
   const afterDelete = await store.claimDue(clock.now(), took.value);
   if (afterDelete.ok) assert.equal(afterDelete.value.length, 0);
+
   const listed = await store.listOccurrences();
+
   assert.equal(listed.filter((occurrence) => occurrence.scheduleId === created.value.id).length, 1);
 });

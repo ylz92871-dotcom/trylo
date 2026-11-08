@@ -39,16 +39,20 @@ function readSteps(call: ToolCallRequest): readonly string[] | null | undefined 
   if (value === undefined || value === null) {
     return undefined;
   }
+
   if (!Array.isArray(value)) {
     return null;
   }
+
   const steps: string[] = [];
+
   for (const entry of value) {
     if (typeof entry !== "string" || entry.length === 0) {
       return null;
     }
     steps.push(entry);
   }
+
   return steps;
 }
 
@@ -60,25 +64,32 @@ function planStep(
   if (!pipeline.ok) {
     return { ok: false, code: pipeline.code, message: pipeline.message };
   }
+
   // Linked tail-first: the last segment has no receiver, each earlier one
   // receives into the next. A lone command is a chain of one, exactly the
   // shape every existing caller already handles.
   let chained: ShellStep | undefined;
+
   for (let index = pipeline.segments.length - 1; index >= 0; index -= 1) {
     const segment = pipeline.segments[index];
     if (segment === undefined) {
       return { ok: false, code: "empty_command", message: "run_shell requires a non-empty command" };
     }
+
     const shape = shapeCommand(segment.argv);
     if (!shape.ok) {
       return { ok: false, code: shape.code, message: shape.message };
     }
+
     const command: ShellCommand = { executable: segment.executable, argv: segment.argv, shape: shape.shape };
+
     chained = chained === undefined ? command : { ...command, pipeTo: chained };
   }
+
   if (chained === undefined) {
     return { ok: false, code: "empty_command", message: "run_shell requires a non-empty command" };
   }
+
   return { ok: true, step: chained };
 }
 
@@ -98,10 +109,13 @@ function planCwd(
   if (requested === null) {
     return { ok: false, code: "invalid_arguments", message: "run_shell cwd must be a non-empty path" };
   }
+
   if (requested === undefined) {
     return { ok: true, absolutePath: policy.workspaceRoot };
   }
+
   const verdict = planWorkingDirectory(policy.workspaceRoot, requested, policy.fileAccess, policy.workspaceAlias);
+
   return verdict.ok
     ? { ok: true, absolutePath: verdict.absolutePath }
     : { ok: false, code: verdict.code, message: verdict.message };
@@ -127,14 +141,18 @@ export function planShellString(plan: ShellStringPlan, mode: ShellModeResult): M
     // name on it — never a substitution, per the WP05 acceptance.
     return deny(mode.code, mode.message);
   }
+
   if (mode.mode.kind === "none") {
     return deny("shell_mode_miswired", "a direct plan reached the shell planner; the caller must keep the direct path");
   }
+
   const refused = compositionRefusal(plan.hasSteps, plan.hasPipeTo);
   if (refused !== undefined) {
     return deny(refused, "run_shell steps and pipeTo are this package's own composition and are refused under a shell interpreter");
   }
+
   const shape = shellModeShape(mode.mode, plan.command);
+
   return {
     ok: true,
     plan: {
@@ -154,11 +172,13 @@ export function planShell(policy: SandboxPolicy, call: ToolCallRequest, shellMod
   if (typeof rawCommand !== "string" || rawCommand.length === 0) {
     return deny("invalid_arguments", "run_shell requires a non-empty command");
   }
+
   const command = rawCommand;
   const commandTexts = [command, call.arguments["pipeTo"], ...(Array.isArray(call.arguments["steps"]) ? call.arguments["steps"] : [])];
   if (commandTexts.some(text => typeof text === "string" && text.includes("\0"))) {
     return deny("invalid_arguments", "run_shell command, steps and pipeTo must not contain NUL characters");
   }
+
   const stdoutFile = call.arguments["stdoutFile"];
   if (stdoutFile !== undefined) {
     if (typeof stdoutFile !== "string" || stdoutFile.length === 0) return deny("invalid_arguments", "stdoutFile requires a non-empty workspace-relative file path");
@@ -166,28 +186,35 @@ export function planShell(policy: SandboxPolicy, call: ToolCallRequest, shellMod
     const destination = resolveWriteTarget(policy.workspaceRoot, stdoutFile, policy.fileAccess, policy.workspaceAlias);
     if (!destination.ok) return deny(destination.code, `stdoutFile target refused: ${destination.code}`);
   }
+
   const stepsArgument = readSteps(call);
   if (stepsArgument === null) {
     return deny("invalid_arguments", "run_shell steps must be an array of non-empty commands");
   }
+
   const pipeArgument = readOptionalText(call, "pipeTo");
   if (pipeArgument === null) {
     return deny("invalid_arguments", "run_shell pipeTo must be a non-empty command");
   }
+
   if (stepsArgument !== undefined && pipeArgument !== undefined) {
     return deny("invalid_arguments", "run_shell accepts steps or pipeTo, not both");
   }
+
   const cwd = planCwd(policy, call);
   if (!cwd.ok) {
     return deny(cwd.code, cwd.message);
   }
+
   if (shellMode !== undefined && (!shellMode.ok || shellMode.mode.kind !== "none")) {
     return planShellString(
       { command, cwd: cwd.absolutePath, hasSteps: stepsArgument !== undefined, hasPipeTo: pipeArgument !== undefined, ...(stdoutFile === undefined ? {} : { stdoutFile }) },
       shellMode,
     );
   }
+
   const steps: ShellStep[] = [];
+
   for (const text of [command, ...(stepsArgument ?? [])]) {
     const step = planStep(policy, text);
     if (!step.ok) {
@@ -195,23 +222,29 @@ export function planShell(policy: SandboxPolicy, call: ToolCallRequest, shellMod
     }
     steps.push(step.step);
   }
+
   if (pipeArgument !== undefined) {
     const receiver = planStep(policy, pipeArgument);
     if (!receiver.ok) {
       return deny(receiver.code, receiver.message);
     }
+
     const [head, ...rest] = steps;
+
     if (head === undefined) {
       return deny("empty_command", "run_shell requires a non-empty command");
     }
+
     // `pipeTo` extends the head: with an inline pipeline already there it
     // becomes the last receiver rather than replacing anything.
     steps.splice(0, steps.length, appendReceiver(head, receiver.step), ...rest);
   }
+
   const head = steps[0];
   if (head === undefined) {
     return deny("empty_command", "run_shell requires a non-empty command");
   }
+
   return {
     ok: true,
     plan: {

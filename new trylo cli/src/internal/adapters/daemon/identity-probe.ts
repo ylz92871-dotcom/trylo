@@ -65,14 +65,18 @@ function queryWin32CreationDate(pid: number): Promise<string> {
             reject(new Error(`no process with pid ${pid}`));
             return;
           }
+
           reject(new Error(`PowerShell query failed: ${stderr.trim() || error.message}`));
+
           return;
         }
+
         const value = stdout.trim();
         if (value.length === 0) {
           reject(new Error(`PowerShell returned nothing for pid ${pid}`));
           return;
         }
+
         resolvePromise(value);
       },
     );

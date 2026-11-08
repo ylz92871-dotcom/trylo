@@ -82,30 +82,36 @@ export function discoverSkills(roots: ReadonlyArray<SkillRoot>, reader: SkillRea
   const problems: string[] = [];
   const seenFiles = new Set<string>();
   const names = new Map<string, SkillDescriptor>();
+
   for (const root of roots) {
     for (const entry of reader.listDirectories(root.directory)) {
       const skillPath = path.join(root.directory, entry, "SKILL.md");
       let raw: string | undefined;
+
       try {
         raw = reader.readText(skillPath);
       } catch {
         problems.push(`skill_unreadable:${toForwardSlashes(skillPath)}`);
         continue;
       }
+
       if (raw === undefined) {
         // No SKILL.md: an ordinary directory in a skills root, not an error.
         continue;
       }
+
       const canonical = reader.canonical(skillPath);
       if (seenFiles.has(canonical)) {
         problems.push(`skill_duplicate_file:${toForwardSlashes(skillPath)}`);
         continue;
       }
+
       const parsed = parseSkillDocument(raw);
       if (parsed.kind === "invalid") {
         problems.push(`skill_invalid:${toForwardSlashes(skillPath)}:${parsed.reason}`);
         continue;
       }
+
       seenFiles.add(canonical);
       const descriptor: SkillDescriptor = {
         name: parsed.skill.name ?? entry,
@@ -129,10 +135,12 @@ export function discoverSkills(roots: ReadonlyArray<SkillRoot>, reader: SkillRea
         problems.push(`skill_name_shadowed:${descriptor.name}:${toForwardSlashes(skillPath)}`);
         continue;
       }
+
       names.set(descriptor.name, descriptor);
       skills.push(descriptor);
     }
   }
+
   return { skills, problems };
 }
 

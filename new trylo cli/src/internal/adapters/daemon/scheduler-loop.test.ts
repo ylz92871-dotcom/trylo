@@ -38,6 +38,7 @@ function harness() {
   let clock = T0;
   let attempts = 0;
   const cleanup = () => rmSync(home, { recursive: true, force: true });
+
   return {
     home,
     fired,
@@ -101,7 +102,9 @@ async function seed(store: ReturnType<typeof createFileScheduleStore>, prompt: s
     delivery: "queue",
     sessionId: "s-1",
   });
+
   assert.equal(created.ok, true, "seeding a schedule must succeed");
+
   return created.ok ? created.value : null;
 }
 
@@ -112,6 +115,7 @@ test("a tick with nothing due fires nothing and says so", async () => {
   // The loop's own store takes the lease at run time; hand it the token by taking
   // the lease on the same store object shape.
   const outcome = await loop.tickOnce();
+
   // Without the loop having taken a lease, a tick must refuse rather than fire.
   assert.equal(outcome.kind, "lease_lost");
   void token;
@@ -121,14 +125,17 @@ test("a tick with nothing due fires nothing and says so", async () => {
 test("firing hands the prompt to the runner and records the outcome durably", async () => {
   const h = harness();
   const loop = h.loop();
+
   await seed(h.store(), "tick the build");
 
   // Take the lease through the loop's own path so the token is the one it holds.
   const running = loop.run();
+
   // Let the first pass happen, then stop it.
   await new Promise((tick) => setTimeout(tick, 10));
   loop.stop();
   const reason = await running;
+
   assert.match(reason, /stopped/);
 
   // Nothing was due yet, so nothing fired — and the daemon still advertised itself
@@ -139,9 +146,11 @@ test("firing hands the prompt to the runner and records the outcome durably", as
 
 test("due work fires exactly once per occurrence, and the record survives", async () => {
   const h = harness();
+
   await seed(h.store(), "tick the build");
   const loop = h.loop();
   const running = loop.run();
+
   await new Promise((tick) => setTimeout(tick, 20));
 
   // Move past the first due minute so the next tick has something to do.
@@ -158,6 +167,7 @@ test("due work fires exactly once per occurrence, and the record survives", asyn
   // The durable facts: the fire is recorded as completed, and the recurrence
   // anchor advanced.
   const completed = record.occurrences.filter((o) => o.state.state === "completed");
+
   assert.ok(completed.length >= 1, "a completed occurrence must be on disk");
   assert.ok(
     record.schedules[0]?.lastFiredAtMs !== undefined,
@@ -171,10 +181,12 @@ test("two loops on one home: the second cannot take the lease and says why", asy
   const first = h.loop();
   const second = h.loop({ ownerId: "other-owner" });
   const firstRun = first.run();
+
   await new Promise((tick) => setTimeout(tick, 20));
 
   // The second loop must be told it is not the owner rather than quietly ticking.
   const secondReason = await second.run();
+
   assert.match(secondReason, /could not take the schedule lease/);
   // And the first is still the one running.
   assert.equal(first.isRunning(), true);
@@ -186,11 +198,13 @@ test("two loops on one home: the second cannot take the lease and says why", asy
 
 test("a stale writer is refused after the lease moved, and the old loop stops", async () => {
   const h = harness();
+
   await seed(h.store(), "tick");
 
   // A first loop takes the lease and runs.
   const first = h.loop();
   const firstRun = first.run();
+
   await new Promise((tick) => setTimeout(tick, 20));
   assert.equal(first.isRunning(), true);
 
@@ -202,6 +216,7 @@ test("a stale writer is refused after the lease moved, and the old loop stops", 
   // that refusal is the fencing, and it is why the rival can only win here.
   const rival = h.store({ ownerId: "rival" });
   const rivalTook = await rival.acquireLease("rival");
+
   assert.equal(rivalTook.ok, true, "a released lease must be available to the next owner");
 
   // The old owner coming back with its stale token must be refused. It cannot even
@@ -209,6 +224,7 @@ test("a stale writer is refused after the lease moved, and the old loop stops", 
   // occurrence.
   const staleToken = "token-from-a-previous-lease";
   const staleClaim = await first.tickOnce();
+
   assert.equal(
     staleClaim.kind,
     "lease_lost",
@@ -217,6 +233,7 @@ test("a stale writer is refused after the lease moved, and the old loop stops", 
 
   // And the rival, holding a real token, can claim normally.
   const rivalClaim = await rival.claimDue(T0 + 61_000, rivalTook.ok ? rivalTook.value : "");
+
   assert.equal(rivalClaim.ok, true, "the current lease holder must be able to claim");
   void staleToken;
   h.cleanup();
@@ -224,12 +241,15 @@ test("a stale writer is refused after the lease moved, and the old loop stops", 
 
 test("a burst is capped: one tick fires no more than the budget", async () => {
   const h = harness();
+
   // Three schedules all due at once.
   for (const prompt of ["one", "two", "three"]) {
     await seed(h.store(), prompt);
   }
+
   const loop = h.loop({ maxOccurrencesPerTick: 2 });
   const running = loop.run();
+
   await new Promise((tick) => setTimeout(tick, 20));
   h.at(T0 + 61_000);
   await new Promise((tick) => setTimeout(tick, 20));
@@ -242,6 +262,7 @@ test("a burst is capped: one tick fires no more than the budget", async () => {
   const record = JSON.parse(readFileSync(join(h.home, "schedule", "schedules.json"), "utf8")) as {
     schedules: ReadonlyArray<{ id: string }>;
   };
+
   assert.equal(record.schedules.length, 3, "all three schedules are still there");
   h.cleanup();
 });
@@ -250,8 +271,10 @@ test("the heartbeat is written while running and names a real tick time", async 
   const h = harness();
   const loop = h.loop();
   const running = loop.run();
+
   await new Promise((tick) => setTimeout(tick, 30));
   const heartbeat = readHeartbeat(h.home);
+
   assert.ok(heartbeat !== undefined, "a running daemon must leave a heartbeat");
   assert.ok(heartbeat.lastTickAtMs >= T0, "the heartbeat must carry a real time");
   loop.stop();
@@ -261,11 +284,13 @@ test("the heartbeat is written while running and names a real tick time", async 
 
 test("stopping ends the loop and withdraws the advertisement", async () => {
   const h = harness();
+
   writeDiscovery(h.home, { pid: 4242, startedAtMs: T0 });
   assert.deepEqual(readDiscovery(h.home), { pid: 4242, startedAtMs: T0 });
 
   const loop = h.loop();
   const running = loop.run();
+
   await new Promise((tick) => setTimeout(tick, 20));
   loop.stop();
   await running;
@@ -278,8 +303,10 @@ test("stopping ends the loop and withdraws the advertisement", async () => {
 
 test("an owner refuses to start when a healthy daemon already advertises itself", async () => {
   const h = harness();
+
   writeDiscovery(h.home, { pid: 4242, startedAtMs: T0 });
   const discovered = readDiscovery(h.home);
+
   assert.deepEqual(discovered, { pid: 4242, startedAtMs: T0 });
   // The record exists; whether the process is behind it is the identity check's
   // job, and that is deliberately separate (see `verifyIdentity`).
@@ -289,9 +316,11 @@ test("an owner refuses to start when a healthy daemon already advertises itself"
 
 test("a stop request addressed to this daemon ends the loop", async () => {
   const h = harness();
+
   await seed(h.store(), "tick");
   const loop = h.loop({ stopToken: "tok-1" });
   const running = loop.run();
+
   await new Promise((tick) => setTimeout(tick, 20));
 
   // This is the channel that reaches a detached win32 daemon, where a signal
@@ -307,9 +336,11 @@ test("a stop request addressed to this daemon ends the loop", async () => {
 
 test("a stop request addressed to another daemon is ignored", async () => {
   const h = harness();
+
   await seed(h.store(), "tick");
   const loop = h.loop({ stopToken: "tok-1" });
   const running = loop.run();
+
   await new Promise((tick) => setTimeout(tick, 20));
 
   // A leftover request from a daemon that has since exited must not stop this one.
@@ -324,11 +355,13 @@ test("a stop request addressed to another daemon is ignored", async () => {
 
 test("a stale stop request is cleared at start, so a new daemon is not born stopping", async () => {
   const h = harness();
+
   // Left behind by a previous daemon.
   requestStop(h.home, "stale", "tok-old");
 
   const loop = h.loop({ stopToken: "tok-new" });
   const running = loop.run();
+
   await new Promise((tick) => setTimeout(tick, 20));
   assert.equal(loop.isRunning(), true, "a stale request must not stop a freshly started daemon");
 
@@ -350,6 +383,7 @@ test("the stop request is consumed, so it cannot fire twice", async () => {
 
 test("the tick calls the step and counts its fires in the heartbeat", async () => {
   const h = harness();
+
   await seed(h.store(), "cron fire");
   let calls = 0;
   const loop = h.loop({
@@ -360,10 +394,12 @@ test("the tick calls the step and counts its fires in the heartbeat", async () =
       assert.match(access.file, /schedule[\/]schedules\.json$/);
       assert.equal(typeof access.writeRows, "function");
       assert.deepEqual(await access.occurrences(), []);
+
       return 2;
     },
   });
   const running = loop.run();
+
   await new Promise((tick) => setTimeout(tick, 25));
   loop.stop();
   await running;
@@ -375,6 +411,7 @@ test("the tick calls the step and counts its fires in the heartbeat", async () =
 
 test("a step that throws does not stop the scheduler, and counts nothing", async () => {
   const h = harness();
+
   await seed(h.store(), "cron fire");
   const loop = h.loop({
     runStep: async () => {
@@ -384,9 +421,11 @@ test("a step that throws does not stop the scheduler, and counts nothing", async
     },
   });
   const running = loop.run();
+
   await new Promise((tick) => setTimeout(tick, 40));
   loop.stop();
   const reason = await running;
+
   // The loop ended because it was asked to, not because the step broke it.
   assert.match(reason, /stopped/);
   assert.equal(loop.isRunning(), false);
@@ -402,6 +441,7 @@ test("a step cannot settle an occurrence: the access object offers no such power
     },
   });
   const running = loop.run();
+
   await new Promise((tick) => setTimeout(tick, 20));
   loop.stop();
   await running;
@@ -413,6 +453,7 @@ test("a step cannot settle an occurrence: the access object offers no such power
 
 test("the step's writeRows replaces watch rows and keeps cron rows and occurrences", async () => {
   const h = harness();
+
   await seed(h.store(), "a cron schedule");
   let reported = false;
   const loop = h.loop({
@@ -423,11 +464,13 @@ test("the step's writeRows replaces watch rows and keeps cron rows and occurrenc
         occurrences: unknown[];
       };
       const wrote = access.writeRows([]);
+
       assert.equal(wrote, true, "the write must land");
       const after = JSON.parse(readFileUtf8(access.file)) as {
         schedules: Array<Record<string, unknown>>;
         occurrences: unknown[];
       };
+
       // The cron row is untouched: a step cannot rewrite a schedule.
       assert.equal(after.schedules.length, 1);
       assert.match(String(after.schedules[0]?.cron ?? ""), /^\* \* \* \* \*$/);
@@ -435,10 +478,12 @@ test("the step's writeRows replaces watch rows and keeps cron rows and occurrenc
       // check reads. A step that dropped it would re-enable duplicate fires.
       assert.equal(after.occurrences.length, before.occurrences.length);
       reported = true;
+
       return 0;
     },
   });
   const running = loop.run();
+
   await new Promise((tick) => setTimeout(tick, 25));
   loop.stop();
   await running;

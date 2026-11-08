@@ -38,10 +38,12 @@ export function writeWatchRows(
     // and replacing it with the watch rows would destroy whatever it holds.
     return false;
   }
+
   const schedules = [
     ...record.value.schedules.filter((row) => !isWatchRow(row)),
     ...watchRows,
   ];
+
   return writeScheduleFile(file, {
     version: 1,
     // The row union is wider than `Schedule` on purpose — a watch row is not a

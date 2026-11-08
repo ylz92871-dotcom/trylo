@@ -49,6 +49,7 @@ function makeFileLink(linkPath: string, target: string): boolean {
 test("escaping write targets are refused and nothing appears outside the root", () => {
   const root = tempRoot();
   const outside = tempRoot();
+
   try {
     writeFileSync(join(outside, "escape.txt"), "outside");
     const cases: ReadonlyArray<[string, string]> = [
@@ -61,17 +62,21 @@ test("escaping write targets are refused and nothing appears outside the root", 
       ["contains\0inside.txt", "invalid_path"],
       ["", "invalid_arguments"],
     ];
+
     for (const [candidate, code] of cases) {
       const planned = planMutation(policyFor(root), {
         toolCallId: "c",
         name: WRITE_FILE_TOOL,
         arguments: { path: candidate, content: "x" },
       });
+
       assert.equal(planned.ok, false, candidate);
+
       if (!planned.ok) {
         assert.equal(planned.code, code, candidate);
       }
     }
+
     assert.deepEqual(readdirSync(outside), ["escape.txt"]);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -82,26 +87,33 @@ test("escaping write targets are refused and nothing appears outside the root", 
 test("a junction out of the workspace is refused for writes at any depth", (t) => {
   const root = tempRoot();
   const outside = tempRoot();
+
   try {
     if (!makeLink(join(root, "escape-link"), outside)) {
       t.skip("the platform refused to create the symlink, so this escape case cannot run here");
       return;
     }
+
     const shallow = planMutation(policyFor(root), {
       toolCallId: "c",
       name: WRITE_FILE_TOOL,
       arguments: { path: "escape-link/x.txt", content: "x" },
     });
+
     assert.equal(shallow.ok, false);
+
     if (!shallow.ok) {
       assert.equal(shallow.code, "path_escapes_via_link");
     }
+
     const deeper = planMutation(policyFor(root), {
       toolCallId: "c",
       name: WRITE_FILE_TOOL,
       arguments: { path: "escape-link/deeper/x.txt", content: "x" },
     });
+
     assert.equal(deeper.ok, false);
+
     if (!deeper.ok) {
       // The ancestor walk stops at the junction itself, so the refusal names the
       // real problem instead of reporting a missing directory inside it.
@@ -116,21 +128,27 @@ test("a junction out of the workspace is refused for writes at any depth", (t) =
 test("writing through a file symlink that points outside is refused", (t) => {
   const root = tempRoot();
   const outside = tempRoot();
+
   try {
     writeFileSync(join(outside, "target.txt"), "original");
+
     if (!makeFileLink(join(root, "alias.txt"), join(outside, "target.txt"))) {
       t.skip("the platform refused to create the symlink, so this escape case cannot run here");
       return;
     }
+
     const planned = planMutation(policyFor(root), {
       toolCallId: "c",
       name: WRITE_FILE_TOOL,
       arguments: { path: "alias.txt", content: "hijacked" },
     });
+
     assert.equal(planned.ok, false);
+
     if (!planned.ok) {
       assert.equal(planned.code, "path_escapes_via_link");
     }
+
     assert.equal(readFileSync(join(outside, "target.txt"), "utf8"), "original");
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -146,18 +164,23 @@ test("a write into a missing directory is planned (parents are created at execut
       name: WRITE_FILE_TOOL,
       arguments: { path: "not-there/a.txt", content: "x" },
     });
+
     assert.equal(nested.ok, true);
+
     if (nested.ok && nested.plan.tool === "write_file") {
       assert.match(nested.plan.absolutePath, /[\\/]not-there[\\/]a\.txt$/);
     } else {
       assert.fail("expected a write_file plan");
     }
+
     const missingEdit = planMutation(policyFor(root), {
       toolCallId: "c",
       name: EDIT_FILE_TOOL,
       arguments: { path: "absent.txt", patch: "@@ -1 +1 @@\n-a\n+b\n" },
     });
+
     assert.equal(missingEdit.ok, false);
+
     if (!missingEdit.ok) {
       assert.equal(missingEdit.code, "file_missing");
     }
@@ -174,7 +197,9 @@ test("an oversized write is rejected rather than truncated into a shorter file",
       name: WRITE_FILE_TOOL,
       arguments: { path: "big.txt", content: "x".repeat(65) },
     });
+
     assert.equal(planned.ok, false);
+
     if (!planned.ok) {
       assert.equal(planned.code, "write_too_large");
     }
@@ -191,7 +216,9 @@ test("multibyte content is measured in bytes, not code units", () => {
       name: WRITE_FILE_TOOL,
       arguments: { path: "utf8.txt", content: "é".repeat(33) },
     });
+
     assert.equal(planned.ok, false);
+
     if (!planned.ok) {
       assert.equal(planned.code, "write_too_large");
     }
@@ -209,6 +236,7 @@ test("read_only and deny_all refuse every mutating tool even inside the root", (
       [EDIT_FILE_TOOL, { path: "exists.txt", patch: "@@ -1 +1 @@\n-a\n+b\n" }],
       [RUN_SHELL_TOOL, { command: "node -v" }],
     ];
+
     for (const mode of ["read_only", "deny_all"] as const) {
       for (const [name, args] of calls) {
         const planned = planMutation(policyFor(root, mode), {
@@ -216,7 +244,9 @@ test("read_only and deny_all refuse every mutating tool even inside the root", (
           name,
           arguments: args,
         });
+
         assert.equal(planned.ok, false, `${mode}/${name}`);
+
         if (!planned.ok) {
           assert.equal(planned.code, mode === "read_only" ? "sandbox_read_only" : "sandbox_deny_all");
         }
@@ -235,7 +265,9 @@ test("a tool with no sandbox constraint is refused instead of waved through", ()
       name: "read_file",
       arguments: { path: "a.txt" },
     });
+
     assert.equal(planned.ok, false);
+
     if (!planned.ok) {
       assert.equal(planned.code, "unknown_tool");
     }
@@ -247,6 +279,7 @@ test("a tool with no sandbox constraint is refused instead of waved through", ()
 test("shell commands cannot change directory, use operators or escape the root", () => {
   const root = tempRoot();
   const outside = tempRoot();
+
   try {
     const cases: ReadonlyArray<[string, string]> = [
       ["cd ..", "cd_forbidden"],
@@ -269,7 +302,9 @@ test("shell commands cannot change directory, use operators or escape the root",
         name: RUN_SHELL_TOOL,
         arguments: { command },
       });
+
       assert.equal(planned.ok, false, command);
+
       if (!planned.ok) {
         assert.equal(planned.code, code, command);
       }
@@ -291,7 +326,9 @@ test("D7: a pipeline is planned segment by segment under the same refusal rules"
       name: RUN_SHELL_TOOL,
       arguments: { command: "node -e 1 | node -e 2 | node -e 3" },
     });
+
     assert.equal(planned.ok, true);
+
     if (planned.ok && planned.plan.tool === "run_shell") {
       const [head, ...rest] = planned.plan.steps;
       assert.equal(rest.length, 0);
@@ -299,6 +336,7 @@ test("D7: a pipeline is planned segment by segment under the same refusal rules"
       assert.deepEqual(head?.pipeTo?.argv, ["node", "-e", "2"]);
       assert.deepEqual(head?.pipeTo?.pipeTo?.argv, ["node", "-e", "3"]);
     }
+
     const refused: ReadonlyArray<[string, string]> = [
       ["a || b", "shell_parse_failed"],
       ["| b", "shell_parse_failed"],
@@ -310,6 +348,7 @@ test("D7: a pipeline is planned segment by segment under the same refusal rules"
       ["`whoami` | b", "shell_operator_forbidden"],
       ["$(whoami) | b", "shell_operator_forbidden"],
     ];
+
     for (const [command, code] of refused) {
       const denied = planMutation(policy, { toolCallId: "c", name: RUN_SHELL_TOOL, arguments: { command } });
       assert.equal(denied.ok, false, command);
@@ -317,13 +356,16 @@ test("D7: a pipeline is planned segment by segment under the same refusal rules"
         assert.equal(denied.code, code, command);
       }
     }
+
     // 引号里的竖线是字面量，不是管道。
     const quoted = planMutation(policy, {
       toolCallId: "c",
       name: RUN_SHELL_TOOL,
       arguments: { command: 'node -e "console.log(1)"' },
     });
+
     assert.equal(quoted.ok, true);
+
     if (quoted.ok && quoted.plan.tool === "run_shell") {
       assert.equal(quoted.plan.steps[0]?.pipeTo, undefined);
     }
@@ -340,7 +382,9 @@ test("an accepted shell plan pins the working directory to the workspace root", 
       name: RUN_SHELL_TOOL,
       arguments: { command: "node -v" },
     });
+
     assert.equal(planned.ok, true);
+
     if (planned.ok && planned.plan.tool === "run_shell") {
       assert.deepEqual(planned.plan.argv, ["node", "-v"]);
       assert.equal(planned.plan.cwd, realpathSync(root));
@@ -358,16 +402,21 @@ test("quoting decides whether an operator is literal: only quoted ones survive",
       name: RUN_SHELL_TOOL,
       arguments: { command: `node -e "console.log('a>b')"` },
     });
+
     assert.equal(quoted.ok, true);
+
     if (quoted.ok && quoted.plan.tool === "run_shell") {
       assert.equal(quoted.plan.argv[2], "console.log('a>b')");
     }
+
     const bare = planMutation(policyFor(root), {
       toolCallId: "c",
       name: RUN_SHELL_TOOL,
       arguments: { command: `node -e console.log(a>b)` },
     });
+
     assert.equal(bare.ok, false);
+
     if (!bare.ok) {
       assert.equal(bare.code, "shell_operator_forbidden");
     }
@@ -389,6 +438,7 @@ test("planning the same call twice is deterministic", () => {
       name: RUN_SHELL_TOOL,
       arguments: { command: "node -v" },
     } as const;
+
     assert.deepEqual(planMutation(policy, call), planMutation(policy, call));
   } finally {
     rmSync(root, { recursive: true, force: true });

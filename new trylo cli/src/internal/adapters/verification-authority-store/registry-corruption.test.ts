@@ -23,14 +23,18 @@ test("checksum corruption in the middle fails closed for reads and writes", asyn
   const harness = await openRegistryFileHarness();
   try {
     const first = await issuePass(harness);
+
     await issuePass(harness);
     const original = await readRaw(harness);
     const corrupted = original.replace("receipt:agent_method:1", "receipt:agent_method:X");
+
     assert.notEqual(corrupted, original, "the corruption must actually land on disk");
     await writeFile(harness.file, corrupted, "utf8");
 
     const verified = await harness.registry.verify({ receiptId: first }, EXPECTED);
+
     assert.equal(verified.ok, false);
+
     if (!verified.ok) {
       assert.equal(verified.code, "registry_corrupt");
     }
@@ -49,10 +53,13 @@ test("checksum corruption in the middle fails closed for reads and writes", asyn
       issuedAt: "2026-09-13T00:00:00.000Z",
       sourceFactRef: "execution:turn-1",
     });
+
     assert.equal(issued.ok, false);
+
     if (!issued.ok) {
       assert.equal(issued.code, "registry_corrupt");
     }
+
     assert.equal(await readRaw(harness), corrupted);
   } finally {
     await harness.close();
@@ -64,11 +71,14 @@ test("a torn tail is refused instead of guessed", async () => {
   try {
     const receiptId = await issuePass(harness);
     const text = await readRaw(harness);
+
     assert.equal(text.endsWith("\n"), true);
     await writeFile(harness.file, text.slice(0, -1), "utf8");
 
     const verified = await harness.registry.verify({ receiptId }, EXPECTED);
+
     assert.equal(verified.ok, false);
+
     if (!verified.ok) {
       assert.equal(verified.code, "registry_torn_tail");
     }
@@ -81,13 +91,17 @@ test("a sequence gap refuses the whole registry", async () => {
   const harness = await openRegistryFileHarness();
   try {
     const first = await issuePass(harness);
+
     await issuePass(harness);
     const lines = (await readRaw(harness)).split("\n").filter((entry) => entry !== "");
+
     assert.equal(lines.length, 2);
     await writeFile(harness.file, `${lines[1] ?? ""}\n`, "utf8");
 
     const verified = await harness.registry.verify({ receiptId: first }, EXPECTED);
+
     assert.equal(verified.ok, false);
+
     if (!verified.ok) {
       assert.equal(verified.code, "registry_corrupt");
       assert.match(verified.message, /sequence gap/);
@@ -102,19 +116,27 @@ test("a correctly checksummed record with an unknown key is still refused", asyn
   try {
     const receiptId = await issuePass(harness);
     const decoded = decodeRegistry(await readRaw(harness));
+
     assert.equal(decoded.ok, true);
+
     if (!decoded.ok) {
       return;
     }
+
     const [first] = decoded.events;
+
     if (first === undefined) {
       return;
     }
+
     const tampered = { ...first, injectedAuthority: "self-issued" };
+
     await writeFile(harness.file, `${line(tampered)}\n`, "utf8");
 
     const verified = await harness.registry.verify({ receiptId }, EXPECTED);
+
     assert.equal(verified.ok, false);
+
     if (!verified.ok) {
       assert.equal(verified.code, "registry_corrupt");
       assert.match(verified.message, /unknown keys/);
@@ -129,14 +151,19 @@ test("a hand-written record whose verifier is its generator behind an alias is r
   try {
     const receiptId = await issuePass(harness);
     const decoded = decodeRegistry(await readRaw(harness));
+
     assert.equal(decoded.ok, true);
+
     if (!decoded.ok) {
       return;
     }
+
     const [first] = decoded.events;
+
     if (first === undefined || first.kind !== "receipt_issued") {
       throw new Error("fixture must contain one issued receipt");
     }
+
     // 校验和正确、形状正确，只有身份带一个尾随空格。若按原始字符串比较
     // （外审 R3 §3 P2-1 的旧行为），这就是两个「不同」身份，会一路通过读取。
     await writeFile(
@@ -146,7 +173,9 @@ test("a hand-written record whose verifier is its generator behind an alias is r
     );
 
     const verified = await harness.registry.verify({ receiptId }, EXPECTED);
+
     assert.equal(verified.ok, false);
+
     if (!verified.ok) {
       assert.equal(verified.code, "receipt_identity_not_independent");
     }
@@ -159,16 +188,20 @@ test("a blank line between records is corruption, not something to skip", async 
   const harness = await openRegistryFileHarness();
   try {
     const receiptId = await issuePass(harness);
+
     await issuePass(harness);
     const raw = await readRaw(harness);
     const lines = raw.split("\n");
+
     // 两行记录之间插入一个空行：行尾换行是记录完整性的一部分，
     // 空白行意味着有人改过文件，必须按损坏拒绝而不是 filter 掉继续读。
     assert.equal(lines.length, 3, "two records plus the trailing terminator");
     await writeFile(harness.file, `${lines[0] ?? ""}\n\n${lines[1] ?? ""}\n`, "utf8");
 
     const verified = await harness.registry.verify({ receiptId }, EXPECTED);
+
     assert.equal(verified.ok, false);
+
     if (!verified.ok) {
       assert.equal(verified.code, "registry_corrupt");
       assert.match(verified.message, /blank line/);
@@ -188,7 +221,9 @@ test("a blank line between records is corruption, not something to skip", async 
       issuedAt: "2026-09-13T00:00:00.000Z",
       sourceFactRef: "execution:turn-1",
     });
+
     assert.equal(issued.ok, false);
+
     if (!issued.ok) {
       assert.equal(issued.code, "registry_corrupt");
     }
@@ -202,18 +237,25 @@ test("an unsupported format version refuses the whole registry", async () => {
   try {
     const receiptId = await issuePass(harness);
     const decoded = decodeRegistry(await readRaw(harness));
+
     assert.equal(decoded.ok, true);
+
     if (!decoded.ok) {
       return;
     }
+
     const [first] = decoded.events;
+
     if (first === undefined) {
       return;
     }
+
     await writeFile(harness.file, `${line({ ...first, formatVersion: 99 })}\n`, "utf8");
 
     const verified = await harness.registry.verify({ receiptId }, EXPECTED);
+
     assert.equal(verified.ok, false);
+
     if (!verified.ok) {
       assert.equal(verified.code, "registry_corrupt");
       assert.match(verified.message, /unsupported format version/);
@@ -240,7 +282,9 @@ test("a lock held by another process is reported, not waited out", async () => {
       issuedAt: "2026-09-13T00:00:00.000Z",
       sourceFactRef: "execution:turn-1",
     });
+
     assert.equal(issued.ok, false);
+
     if (!issued.ok) {
       assert.equal(issued.code, "registry_lock_conflict");
     }

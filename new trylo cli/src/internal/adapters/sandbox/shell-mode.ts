@@ -69,9 +69,11 @@ export function readShellSetting(value: unknown): ShellKind | undefined | null {
   if (value === undefined || value === null) {
     return undefined;
   }
+
   if (typeof value !== "string" || value.length === 0) {
     return null;
   }
+
   return isShellKind(value) ? value : null;
 }
 

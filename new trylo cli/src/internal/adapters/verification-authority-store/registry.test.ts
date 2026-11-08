@@ -25,7 +25,9 @@ test("a receipt survives a brand new registry instance on the same file", async 
     const receiptId = await issuePass(harness);
     const reopened = createRegistry(harness.file);
     const verified = await reopened.verify({ receiptId }, EXPECTED);
+
     assert.equal(verified.ok, true);
+
     if (verified.ok) {
       assert.equal(verified.receipt.receiptId, receiptId);
       assert.equal(verified.receipt.verdict, "pass");
@@ -55,22 +57,29 @@ test("revoking a receipt closes promotion, and revoke reports its own failures",
   try {
     const receiptId = await issuePass(harness);
     const revoked = await harness.registry.revoke(receiptId, "2026-09-13T01:00:00.000Z", "audit");
+
     assert.equal(revoked.ok, true);
 
     const after = await harness.registry.verify({ receiptId }, EXPECTED);
+
     assert.equal(after.ok, false);
+
     if (!after.ok) {
       assert.equal(after.code, "receipt_revoked");
     }
 
     const again = await harness.registry.revoke(receiptId, "2026-09-13T01:00:00.000Z", "audit");
+
     assert.equal(again.ok, false);
+
     if (!again.ok) {
       assert.equal(again.code, "receipt_revoked");
     }
 
     const ghost = await harness.registry.revoke("receipt:ghost", "2026-09-13T01:00:00.000Z", "audit");
+
     assert.equal(ghost.ok, false);
+
     if (!ghost.ok) {
       assert.equal(ghost.code, "unknown_receipt");
     }
@@ -95,19 +104,26 @@ test("the registry stores only the declared keys, never raw content", async () =
       issuedAt: "2026-09-13T00:00:00.000Z",
       sourceFactRef: "user_explicit:please-fix-ts-1234",
     });
+
     assert.equal(issued.ok, true);
 
     const decoded = decodeRegistry(await readRaw(harness));
+
     assert.equal(decoded.ok, true);
+
     if (!decoded.ok) {
       return;
     }
+
     assert.equal(decoded.events.length, 1);
     const [event] = decoded.events;
+
     assert.notEqual(event, undefined);
+
     if (event === undefined) {
       return;
     }
+
     assert.deepEqual(Object.keys(event).sort(), [...registryKeySets().issued].sort());
     // 只存摘要/引用，不存原始正文：用户的原始输入不进入 registry。
     assert.equal(JSON.stringify(event).includes("please-fix-ts-1234"), false);

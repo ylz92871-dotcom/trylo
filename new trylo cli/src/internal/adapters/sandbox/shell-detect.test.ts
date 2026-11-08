@@ -63,7 +63,9 @@ test("PATH is searched before the install locations", () => {
     fileExists: (candidate) => candidate === "C:\\tools\\bin\\bash.EXE",
   });
   const result = resolveShell(host, "bash");
+
   assert.equal(result.ok, true);
+
   if (result.ok) {
     // A shell the user put on PATH is the one they meant; the fallback list
     // only answers "is there any of this here at all".
@@ -77,7 +79,9 @@ test("PATH order decides, so the first directory that has it wins", () => {
     candidate === "C:\\first\\bash.EXE" || candidate === "C:\\second\\bash.EXE";
   const host = surface({ env: pathWith("C:\\first", "C:\\second"), fileExists: both });
   const result = resolveShell(host, "bash");
+
   assert.equal(result.ok, true);
+
   if (result.ok) {
     assert.equal(result.shell.path, "C:\\first\\bash.EXE");
   }
@@ -95,6 +99,7 @@ test("case-insensitivity is the probe's job, and this module does not re-add it"
     fileExists: (candidate) => candidate === "/bin/bash.exe",
   });
   const found = resolveShell(caseSensitive, "bash");
+
   assert.equal(found.ok, false, "a literal .EXE must not match a lowercase file on a case-sensitive fs");
   const insensitive = surface({
     platform: "win32",
@@ -102,11 +107,14 @@ test("case-insensitivity is the probe's job, and this module does not re-add it"
     fileExists: (candidate) => candidate.toLowerCase() === "c:\\tools\\bash.exe".toLowerCase(),
   });
   const alsoFound = resolveShell(insensitive, "bash");
+
   assert.equal(alsoFound.ok, true);
   // Unchanged on a non-Windows surface: no PATHEXT suffix is appended at all.
   const unix = surface({ platform: "linux", env: { PATH: "/bin" }, fileExists: (c) => c === "/bin/bash" });
   const onUnix = resolveShell(unix, "bash");
+
   assert.equal(onUnix.ok, true);
+
   if (onUnix.ok) {
     assert.equal(onUnix.shell.path, "/bin/bash");
   }
@@ -119,7 +127,9 @@ test("pwsh is preferred over powershell when both are installed", () => {
       candidate === "C:\\ps7\\pwsh.EXE" || candidate === "C:\\ps51\\powershell.EXE",
   });
   const result = resolveShell(host, "powershell");
+
   assert.equal(result.ok, true);
+
   if (result.ok) {
     // PowerShell 7 is the one that behaves the way the exit-code contract
     // describes; 5.1 only works because of the `$LASTEXITCODE` tail.
@@ -133,23 +143,29 @@ test("PATHEXT decides which spelling on PATH counts", () => {
     fileExists: (candidate) => candidate === "C:\\tools\\bash.CMD",
   });
   const result = resolveShell(host, "bash");
+
   assert.equal(result.ok, true);
+
   if (result.ok) {
     assert.equal(result.shell.path, "C:\\tools\\bash.CMD");
   }
+
   // The same directory with a PATHEXT that has no .CMD does not resolve — the
   // extension list is what makes a bare name a program rather than a guess.
   const strict = resolveShell(
     surface({ env: { PATH: "C:\\tools", PATHEXT: ".EXE" }, fileExists: () => false }),
     "bash",
   );
+
   assert.equal(strict.ok, false);
 });
 
 test("a named shell that is not installed fails, and is never substituted", () => {
   const host = surface({ env: pathWith("C:\\tools"), fileExists: () => false });
   const result = resolveShell(host, "zsh");
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.code, "shell_not_installed");
     // The name the caller asked for is in the message, because "command not
@@ -161,7 +177,9 @@ test("a named shell that is not installed fails, and is never substituted", () =
 test("a missing PowerShell says so in the words a user would use", () => {
   const host = surface({ env: pathWith("C:\\tools"), fileExists: () => false });
   const result = resolveShell(host, "powershell");
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.code, "shell_not_installed");
     assert.match(result.message, /pwsh/);
@@ -178,11 +196,14 @@ test("the install locations are the fallback, not the first choice", () => {
       candidate === "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
   });
   const result = resolveShell(host, "powershell");
+
   assert.equal(result.ok, true);
+
   if (result.ok) {
     assert.equal(result.shell.path, "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
   }
 });
+
 test("the default shell is the platform's own, and never the user's SHELL var", () => {
   assert.equal(defaultShellKind(surface({ platform: "win32" })), "powershell");
   assert.equal(defaultShellKind(surface({ platform: "linux" })), "sh");
@@ -190,6 +211,7 @@ test("the default shell is the platform's own, and never the user's SHELL var", 
   // session is running it; this picks the interpreter for a command the MODEL
   // wrote, so it does not read that variable at all.
   const withShellVar = defaultShellKind(surface({ platform: "linux", env: { SHELL: "/bin/zsh" } }));
+
   assert.equal(withShellVar, "sh");
 });
 
@@ -200,13 +222,18 @@ test("the default falls back only when the platform's own shell is missing", () 
     fileExists: (candidate) => candidate === "C:\\Windows\\System32\\cmd.exe",
   });
   const result = resolveDefaultShell(noPowerShell);
+
   assert.equal(result.ok, true);
+
   if (result.ok) {
     assert.equal(result.shell.kind, "cmd");
   }
+
   // Nothing at all is a typed failure, not a guess.
   const bare = resolveDefaultShell(surface({ platform: "win32" }));
+
   assert.equal(bare.ok, false);
+
   if (!bare.ok) {
     assert.equal(bare.code, "no_shell_available");
   }
@@ -214,6 +241,7 @@ test("the default falls back only when the platform's own shell is missing", () 
 
 test("the command string reaches the shell as one argument, unquoted", () => {
   const bash = { kind: "bash", path: "/bin/bash" } as const;
+
   // `&&`, a pipe, a redirection and a substitution have to arrive as the author
   // wrote them: a second quoting layer would reinterpret them, and every
   // construct it mangles is a bug report instead of a command.
@@ -224,12 +252,14 @@ test("the command string reaches the shell as one argument, unquoted", () => {
 
 test("PowerShell gets -NoProfile -NonInteractive and the exit-code tail", () => {
   const argv = shellExecArgv({ kind: "powershell", path: "pwsh.exe" }, "Write-Output hi");
+
   assert.equal(argv[0], "pwsh.exe");
   assert.equal(argv[1], "-NoProfile");
   assert.equal(argv[2], "-NonInteractive");
   assert.equal(argv[3], "-Command");
   // Text is between the UTF-8 setup and the exit-code tail, unchanged.
   const command = argv[4] ?? "";
+
   assert.equal(command.includes("\nWrite-Output hi"), true);
   assert.equal(command.startsWith("[Console]::InputEncoding = [Console]::OutputEncoding = $OutputEncoding = "), true);
   assert.equal(command.endsWith(POWERSHELL_EXIT_TAIL), true);
@@ -259,6 +289,7 @@ test("the PowerShell tail reads $LASTEXITCODE before $?", () => {
   // process's exit status — PowerShell does not otherwise propagate it upward.
   const lastExitAt = POWERSHELL_EXIT_TAIL.indexOf("$LASTEXITCODE");
   const questionAt = POWERSHELL_EXIT_TAIL.indexOf("$?");
+
   assert.equal(lastExitAt < questionAt, true, "tail must read $LASTEXITCODE before $?");
   assert.match(POWERSHELL_EXIT_TAIL, /exit \$_ec/);
 });

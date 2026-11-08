@@ -130,15 +130,18 @@ function planForMode(policy: SandboxPolicy, name: string): MutationPlanResult | 
   if (!isPlannedTool(name)) {
     return deny("unknown_tool", `no sandbox constraint exists for tool ${name}`);
   }
+
   if (policy.mode === "deny_all") {
     return deny("sandbox_deny_all", `${name} is refused by sandbox mode deny_all`);
   }
+
   // `read_only` names the mutating set, not "every planned tool": a read-only
   // tool added to the planned set keeps its own plan (复核 F2) — refusing it
   // here would deny a read because it sits in a mutating list.
   if (policy.mode === "read_only" && isMutatingTool(name)) {
     return deny("sandbox_read_only", `${name} is refused by sandbox mode read_only`);
   }
+
   return undefined;
 }
 
@@ -155,21 +158,27 @@ export function planMutation(policy: SandboxPolicy, call: ToolCallRequest, shell
   if (mode !== undefined) {
     return mode;
   }
+
   if (call.name === SKILL_TOOL_NAME) {
     return planSkill(call);
   }
+
   if (call.name === WRITE_FILE_TOOL) {
     return planWrite(policy, call);
   }
+
   if (call.name === EDIT_FILE_TOOL) {
     return planEdit(policy, call);
   }
+
   if (call.name === NOTEBOOK_EDIT_TOOL) {
     return planNotebookEdit(policy, call);
   }
+
   if (call.name === APPLY_PATCH_TOOL) {
     return planApplyPatch(call);
   }
+
   return planShell(policy, call, shellMode);
 }
 
@@ -186,14 +195,17 @@ function planWrite(policy: SandboxPolicy, call: ToolCallRequest): MutationPlanRe
   if (!path.ok) {
     return deny(path.code, "write_file requires a non-empty path");
   }
+
   const content = call.arguments["content"];
   if (typeof content !== "string") {
     return deny("invalid_arguments", "write_file requires content to be a string");
   }
+
   const verdict = resolveWriteTarget(policy.workspaceRoot, path.value, policy.fileAccess, policy.workspaceAlias);
   if (!verdict.ok) {
     return deny(verdict.code, `write_file target refused: ${verdict.code}`);
   }
+
   const bytes = Buffer.byteLength(content, "utf8");
   if (bytes > policy.maxWriteBytes) {
     return deny(
@@ -201,6 +213,7 @@ function planWrite(policy: SandboxPolicy, call: ToolCallRequest): MutationPlanRe
       `write_file refuses ${bytes} bytes above the ${policy.maxWriteBytes} byte ceiling; it is never silently truncated`,
     );
   }
+
   return { ok: true, plan: { tool: "write_file", absolutePath: verdict.absolutePath, bytes } };
 }
 
@@ -209,15 +222,19 @@ function planEdit(policy: SandboxPolicy, call: ToolCallRequest): MutationPlanRes
   if (!path.ok) {
     return deny(path.code, "edit_file requires a non-empty path");
   }
+
   const edit = readEditInput(call.arguments);
   if (edit.kind === "invalid") return deny(edit.code, edit.message);
+
   if (edit.kind === "replace" && Buffer.byteLength(edit.newString, "utf8") > policy.maxWriteBytes) {
     return deny("write_too_large", `edit_file replacement exceeds the ${policy.maxWriteBytes} byte ceiling`);
   }
+
   const verdict = resolveInsideWorkspace(policy.workspaceRoot, path.value, policy.fileAccess, policy.workspaceAlias);
   if (!verdict.ok) {
     return deny(verdict.code, `edit_file target refused: ${verdict.code}`);
   }
+
   try {
     if (!statSync(verdict.absolutePath).isFile()) {
       return deny("file_missing", "edit_file requires an existing regular file");
@@ -225,6 +242,7 @@ function planEdit(policy: SandboxPolicy, call: ToolCallRequest): MutationPlanRes
   } catch {
     return deny("file_missing", "edit_file requires an existing regular file");
   }
+
   return { ok: true, plan: { tool: "edit_file", absolutePath: verdict.absolutePath, maxWriteBytes: policy.maxWriteBytes } };
 }
 
@@ -233,17 +251,21 @@ function planNotebookEdit(policy: SandboxPolicy, call: ToolCallRequest): Mutatio
   if (!path.ok) {
     return deny(path.code, "notebook_edit requires a non-empty path");
   }
+
   if (!path.value.toLowerCase().endsWith(".ipynb")) {
     return deny("invalid_arguments", "notebook_edit only edits .ipynb files");
   }
+
   const source = call.arguments["new_source"];
   if (typeof source !== "string") {
     return deny("invalid_arguments", "notebook_edit requires new_source to be a string");
   }
+
   const verdict = resolveInsideWorkspace(policy.workspaceRoot, path.value, policy.fileAccess, policy.workspaceAlias);
   if (!verdict.ok) {
     return deny(verdict.code, `notebook_edit target refused: ${verdict.code}`);
   }
+
   try {
     if (!statSync(verdict.absolutePath).isFile()) {
       return deny("file_missing", "notebook_edit requires an existing regular file");
@@ -251,6 +273,7 @@ function planNotebookEdit(policy: SandboxPolicy, call: ToolCallRequest): Mutatio
   } catch {
     return deny("file_missing", "notebook_edit requires an existing regular file");
   }
+
   return { ok: true, plan: { tool: "notebook_edit", absolutePath: verdict.absolutePath, maxWriteBytes: policy.maxWriteBytes } };
 }
 

@@ -64,11 +64,13 @@ const LANGUAGE_BY_EXTENSION: Readonly<Record<string, string>> = {
 export function extensionOf(path: string): string | undefined {
   const name = path.replaceAll("\\", "/").split("/").pop() ?? "";
   const dot = name.lastIndexOf(".");
+
   // A leading dot means a dotfile (`.gitignore`), not an extension. Without this
   // check every dotfile in a project would route to whatever owns "".
   if (dot <= 0 || dot === name.length - 1) {
     return undefined;
   }
+
   return name.slice(dot + 1).toLowerCase();
 }
 

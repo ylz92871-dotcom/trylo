@@ -62,13 +62,16 @@ function decodeTrigger(value: unknown): WatchTrigger | undefined {
   if (typeof value !== "object" || value === null) {
     return undefined;
   }
+
   const record = value as Record<string, unknown>;
   if (record["kind"] === "deadline") {
     return typeof record["atMs"] === "number" ? { kind: "deadline", atMs: record["atMs"] } : undefined;
   }
+
   if (record["kind"] === "condition" && typeof record["condition"] === "object" && record["condition"] !== null) {
     return { kind: "condition", condition: record["condition"] } as WatchTrigger;
   }
+
   return undefined;
 }
 
@@ -83,20 +86,25 @@ export function decodeWatch(row: StoredRow): WatchRow | undefined {
   if (row["kind"] !== "watch") {
     return undefined;
   }
+
   const id = row["watchId"];
   const text = row["text"];
   const sessionId = row["sessionId"];
   const createdAtMs = row["createdAtMs"];
   const trigger = decodeTrigger(row["trigger"]);
+
   if (typeof id !== "string" || id.length === 0) {
     return undefined;
   }
+
   if (typeof text !== "string" || typeof sessionId !== "string") {
     return undefined;
   }
+
   if (typeof createdAtMs !== "number" || trigger === undefined) {
     return undefined;
   }
+
   return {
     id,
     trigger,
@@ -123,6 +131,7 @@ function decodeState(
       messageId: typeof row["messageId"] === "string" ? row["messageId"] : id,
     };
   }
+
   if (state === "cancelled") {
     return {
       state: "cancelled",
@@ -131,9 +140,11 @@ function decodeState(
       reason: typeof row["reason"] === "string" ? row["reason"] : "cancelled",
     };
   }
+
   // Anything else is armed: the state a watch is in for as long as it is waiting,
   // and the only state in which cancelling is meaningful.
   const armedAtMs = numberOr(row["armedAtMs"], createdAtMs);
+
   return {
     state: "armed",
     watchId: id,
@@ -159,6 +170,7 @@ export function encodeWatch(row: WatchRow): StoredRow {
     createdAtMs: row.createdAtMs,
     state: row.state.state,
   };
+
   if (row.state.state === "fired") {
     return {
       ...base,
@@ -167,8 +179,10 @@ export function encodeWatch(row: WatchRow): StoredRow {
       ...(row.firedBecause === undefined ? {} : { firedBecause: row.firedBecause }),
     };
   }
+
   if (row.state.state === "cancelled") {
     return { ...base, cancelledAtMs: row.state.cancelledAtMs, reason: row.state.reason };
   }
+
   return { ...base, armedAtMs: row.state.fireAtMs };
 }

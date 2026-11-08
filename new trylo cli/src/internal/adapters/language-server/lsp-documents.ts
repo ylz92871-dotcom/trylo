@@ -80,6 +80,7 @@ export class DocumentSynchroniser {
         },
       });
       this.versions.set(document.path, document.version ?? 1);
+
       return { ok: true };
     } catch (error) {
       // Not fatal to the connection: the server may simply not handle that

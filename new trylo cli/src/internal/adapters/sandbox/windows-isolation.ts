@@ -91,13 +91,17 @@ export function createWindowsIsolation(config: WindowsIsolationConfig = {}): Iso
 
     async run(request: IsolationRequest): Promise<IsolationOutcome> {
       if (request.signal.aborted) return { outcome: "cancelled" };
+
       if (request.network.allowedDomains.length > 0) {
         return { outcome: "isolation_failed", code: "isolation_refused", message: "domain proxy is not configured for this execution port; the command was not run" };
       }
+
       if (request.files.denyReadPaths.some(p => /[*?[\]]/.test(p)) || request.files.denyWritePaths.some(p => /[*?[\]]/.test(p))) {
         return { outcome: "isolation_failed", code: "isolation_refused", message: "unexpanded deny globs are refused; the command was not run" };
       }
+
       let prepared;
+
       try {
         const helperPath = config.helperPath ?? (hostShellEnvironment().platform === "win32" ? prepareWindowsHelper(config.hostEnv, request.files.writableRoots) : undefined);
         prepared = await prepareWindowsIsolation(request.files.writableRoots, { ...config, ...(helperPath === undefined ? {} : { helperPath }) }, () => request.signal.aborted);
@@ -107,8 +111,11 @@ export function createWindowsIsolation(config: WindowsIsolationConfig = {}): Iso
         if (request.signal.aborted) return { outcome: "cancelled", ...cleanupFailure };
         return { outcome: "isolation_failed", code: "isolation_start_failed", message: messageOf(error), ...cleanupFailure };
       }
+
       const availability = prepared.availability;
+
       if (request.signal.aborted && prepared.lease === undefined) return { outcome: "cancelled" };
+
       if (availability.state !== "ready") {
         // Fail closed. Running the command unconfined would execute something
         // the user approved on the assumption of a boundary that is absent.
@@ -121,22 +128,29 @@ export function createWindowsIsolation(config: WindowsIsolationConfig = {}): Iso
               : `the Windows sandbox is not enforcing (${availability.state}), so the command was not run: ${availability.reason}`,
         };
       }
+
       const lease = prepared.lease;
       if (lease === undefined) return { outcome: "isolation_failed", code: "isolation_broken", message: "the command was not run: readiness returned no ACL owner" };
+
       let observed: IsolationOutcome;
+
       try {
         const program = request.argv[0];
         if (request.signal.aborted) observed = { outcome: "cancelled" };
         else if (program === undefined) observed = { outcome: "isolation_failed", code: "isolation_refused", message: "no executable was named" };
         else {
           lease.readExecutable(program);
-          observed = await execConfined(lease.helperPath, request, config.hostEnv);
+          // Native ACL inspection can block the event loop; cancellation may arrive during it.
+          observed = request.signal.aborted ? { outcome: "cancelled" }
+            : await execConfined(lease.helperPath, request, config.hostEnv);
         }
       } catch (error) {
         observed = { outcome: "isolation_failed", code: "isolation_start_failed", message: messageOf(error) };
       }
+
       try { lease.close(); }
       catch (error) { return { ...observed, cleanupFailure: { code: "isolation_cleanup_failed", message: messageOf(error) } }; }
+
       return observed;
     },
   };
@@ -162,17 +176,22 @@ function messageOf(err: unknown): string {
 
 function buildArgv(helper: string, request: IsolationRequest): string[] {
   const argv = [helper, DISPATCH_ARG, "exec", "--quiet"];
+
   for (const p of request.files.denyReadPaths) {
     argv.push("--deny-read", p);
   }
+
   for (const p of request.files.denyWritePaths) {
     argv.push("--deny-write", p);
   }
+
   for (const [key, value] of Object.entries(request.env ?? {})) {
     argv.push("--env", `${key}=${value}`);
   }
+
   // `--` stops srt-win from reading our target as its own options.
   argv.push("--", ...request.argv);
+
   return argv;
 }
 
@@ -186,6 +205,7 @@ function collect(stream: NodeJS.ReadableStream | null | undefined, into: string[
   if (stream === null || stream === undefined) {
     return;
   }
+
   stream.setEncoding("utf8");
   stream.on("data", (chunk: string) => {
     if (into.join("").length < limit) {
@@ -214,6 +234,7 @@ async function execConfined(
 ): Promise<IsolationOutcome> {
   const argv = buildArgv(helper, request);
   const limit = 65_536;
+
   return await new Promise<IsolationOutcome>((resolve) => {
     const out: Streaming = { stdout: [], stderr: [], limit };
     let settled = false;
@@ -224,15 +245,19 @@ async function execConfined(
       if (settled) {
         return;
       }
+
       settled = true;
+
       if (timer !== undefined) {
         clearTimeout(timer);
       }
+
       request.signal.removeEventListener("abort", onAbort);
       resolve(result);
     };
 
     let child: ChildProcess | undefined;
+
     try {
       child = spawn(argv[0] as string, argv.slice(1), {
         cwd: request.cwd,
@@ -275,7 +300,9 @@ async function execConfined(
         finish({ outcome: "cancelled" });
         return;
       }
+
       const stderr = clip(out.stderr, limit);
+
       // srt-win reserves 15 for "the sandbox user is not provisioned" and 16
       // for "the sandbox refused this launch" (a mapped-drive cwd, an
       // unstamped path). Neither means the command ran, so neither may be
@@ -288,6 +315,7 @@ async function execConfined(
         });
         return;
       }
+
       finish({
         outcome: "completed",
         stdout: clip(out.stdout, limit),
@@ -306,15 +334,19 @@ export async function windowsIsolationDiagnostic(
 ): Promise<IsolationDiagnostic> {
   const availability = await createWindowsIsolation(config).probe();
   const base = { backend: "windows-srt", state: availability.state };
+
   if (availability.state === "ready") {
     return { ...base, detail: availability.evidence };
   }
+
   if (availability.state === "not_installed") {
     return { ...base, detail: "the sandbox account is not provisioned", remedy: availability.installHint };
   }
+
   if (availability.state === "broken") {
     return { ...base, detail: availability.reason, remedy: "re-run the installer, then re-check" };
   }
+
   return { ...base, detail: availability.reason, raw: { platform: process.platform } as JsonObject };
 }
 

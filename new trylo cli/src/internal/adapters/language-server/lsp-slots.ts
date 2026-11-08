@@ -36,6 +36,7 @@ export class ConnectionSlots {
     this.inFlight += 1;
     return new Promise<T>((resolve, reject) => {
       const entry: Pending = { settle: (reason) => reject(reason) };
+
       this.pending.add(entry);
       const finish = (): void => {
         if (!this.pending.delete(entry)) {
@@ -45,6 +46,7 @@ export class ConnectionSlots {
         }
         this.inFlight -= 1;
       };
+
       promise.then(
         (value) => {
           finish();
@@ -55,6 +57,7 @@ export class ConnectionSlots {
           reject(error instanceof Error ? error : new Error(String(error)));
         },
       );
+
       if (signal !== undefined) {
         if (signal.aborted) {
           entry.settle(abortError());

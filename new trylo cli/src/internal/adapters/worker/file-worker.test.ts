@@ -61,6 +61,7 @@ test("一趟从队列领一条活，并把它交给执行 owner", async () => {
   const { home, queueDir, handoffFile } = tempHome();
   const time = clock();
   const queue = createFileBackgroundQueue({ path: queuePathFor(home)("s1"), clock: time });
+
   await queue.enqueue("build the board");
 
   const seen: string[] = [];
@@ -78,6 +79,7 @@ test("一趟从队列领一条活，并把它交给执行 owner", async () => {
     }),
   });
   const result = await worker.pass();
+
   assert.equal(result.taken, 1);
   assert.deepEqual(seen, ["build the board"]);
 });
@@ -87,6 +89,7 @@ test("交接成功之后，交接记录是 acked，队列里也不再留着它",
   const time = clock();
   const queue = createFileBackgroundQueue({ path: queuePathFor(home)("s1"), clock: time });
   const enqueued = await queue.enqueue("done soon");
+
   assert.equal(enqueued.ok, true);
 
   const handoffs = createFileHandoffStore({ file: handoffFile });
@@ -100,11 +103,15 @@ test("交接成功之后，交接记录是 acked，队列里也不再留着它",
       execute: async (): Promise<WorkerTurnResult> => ({ outcome: "completed" }),
     }),
   });
+
   await worker.pass();
   const record = await handoffs.get("s1", enqueued.ok ? enqueued.value.id : "");
+
   assert.equal(record?.state, "acked");
   const left = await queue.list(0, 20);
+
   assert.equal(left.ok, true);
+
   if (left.ok) {
     assert.equal(left.value.total, 0);
   }
@@ -114,6 +121,7 @@ test("owner 说没收到而队列项已删 —— 任务被补回队列，没有
   const { home, queueDir, handoffFile } = tempHome();
   const time = clock();
   const queue = createFileBackgroundQueue({ path: queuePathFor(home)("s1"), clock: time });
+
   await queue.enqueue("must survive");
 
   const worker = createFileWorker({
@@ -131,10 +139,13 @@ test("owner 说没收到而队列项已删 —— 任务被补回队列，没有
       probe: async () => "not_received",
     }),
   });
+
   await worker.pass();
   // 有牙：这一条是「交接中崩溃不能丢任务」的全部内容。补不回去，这条就没了。
   const left = await queue.list(0, 20);
+
   assert.equal(left.ok, true);
+
   if (left.ok) {
     assert.equal(left.value.total, 1);
     assert.equal(left.value.items[0]?.text, "must survive");
@@ -145,6 +156,7 @@ test("owner 说已经收到了 —— 不再补回队列，避免跑两遍", asy
   const { home, queueDir, handoffFile } = tempHome();
   const time = clock();
   const queue = createFileBackgroundQueue({ path: queuePathFor(home)("s1"), clock: time });
+
   await queue.enqueue("already taken");
 
   const worker = createFileWorker({
@@ -158,10 +170,13 @@ test("owner 说已经收到了 —— 不再补回队列，避免跑两遍", asy
       probe: async () => "received",
     }),
   });
+
   await worker.pass();
   // 有牙：补回去就是同一句话被跑两遍。
   const left = await queue.list(0, 20);
+
   assert.equal(left.ok, true);
+
   if (left.ok) {
     assert.equal(left.value.total, 0);
   }
@@ -172,6 +187,7 @@ test("owner 也查不出来 —— 补回队列让人看见，但下一趟不会
   const time = clock();
   const queue = createFileBackgroundQueue({ path: queuePathFor(home)("s1"), clock: time });
   const enqueued = await queue.enqueue("ambiguous");
+
   assert.equal(enqueued.ok, true);
 
   const handoffs = createFileHandoffStore({ file: handoffFile });
@@ -188,20 +204,27 @@ test("owner 也查不出来 —— 补回队列让人看见，但下一趟不会
       probe: async () => "unknown",
     }),
   });
+
   await worker.pass();
   const record = await handoffs.get("s1", enqueued.ok ? enqueued.value.id : "");
+
   assert.equal(record?.state, "unknown");
   // 队列项在领取那一刻就删了；unknown 时若什么都不做，这条就真没了 —— 补回是「不丢任务」。
   const left = await queue.list(0, 20);
+
   assert.equal(left.ok, true);
+
   if (left.ok) {
     assert.equal(left.value.total, 1);
   }
+
   // 有牙：补回不等于重做。再跑一趟，它必须还在那里 —— worker 看到 unknown 记录
   // 应当跳过，而不是自己跑一遍「可能已经跑过」的任务。
   await worker.pass();
   const after = await queue.list(0, 20);
+
   assert.equal(after.ok, true);
+
   if (after.ok) {
     assert.equal(after.value.total, 1);
   }
@@ -215,6 +238,7 @@ test("被扣住的那条留在原地，但它后面的照走 —— 队首不许
   const time = clock();
   const queue = createFileBackgroundQueue({ path: queuePathFor(home)("s1"), clock: time });
   const blocked = await queue.enqueue("ambiguous");
+
   assert.equal(blocked.ok, true);
   const handoffs = createFileHandoffStore({ file: handoffFile });
   const executed: string[] = [];
@@ -231,8 +255,10 @@ test("被扣住的那条留在原地，但它后面的照走 —— 队首不许
       probe: async () => "unknown",
     }),
   });
+
   await worker.pass();
   const record = await handoffs.get("s1", blocked.ok ? blocked.value.id : "");
+
   assert.equal(record?.state, "unknown");
 
   // 换一个看得见结果的执行器：它记录自己跑了什么文本。
@@ -250,12 +276,15 @@ test("被扣住的那条留在原地，但它后面的照走 —— 队首不许
     }),
   });
   const next = await queue.enqueue("behind the blocked one");
+
   assert.equal(next.ok, true);
 
   await seeing.pass();
   assert.deepEqual(executed, ["behind the blocked one"], "被扣住的后面那条必须能走");
   const left = await queue.list(0, 20);
+
   assert.equal(left.ok, true);
+
   if (left.ok) {
     assert.equal(left.value.total, 1, "扣住的那条不许被删掉或跑掉，它得留在队列里给人看见");
     assert.equal(left.ok && left.value.items[0]?.text, "ambiguous");
@@ -267,6 +296,7 @@ test("上一任崩在交接窗口里、owner 说没收到 —— 重启后补回
   const time = clock();
   const queue = createFileBackgroundQueue({ path: queuePathFor(home)("s1"), clock: time });
   const handoffs = createFileHandoffStore({ file: handoffFile });
+
   // 伪造上一任的遗留：记录写了、队列项已经没了。
   await handoffs.put({
     sessionId: "s1",
@@ -289,9 +319,12 @@ test("上一任崩在交接窗口里、owner 说没收到 —— 重启后补回
       probe: async () => "not_received",
     }),
   });
+
   await worker.pass();
   const left = await queue.list(0, 20);
+
   assert.equal(left.ok, true);
+
   if (left.ok) {
     assert.equal(left.value.total, 1);
     assert.equal(left.value.items[0]?.text, "survive the crash");
@@ -302,6 +335,7 @@ test("上一任崩在交接窗口里、owner 说收到了 —— 重启后补上
   const { home, queueDir, handoffFile } = tempHome();
   const time = clock();
   const handoffs = createFileHandoffStore({ file: handoffFile });
+
   await handoffs.put({
     sessionId: "s1",
     messageId: "msg_acked",
@@ -323,8 +357,10 @@ test("上一任崩在交接窗口里、owner 说收到了 —— 重启后补上
       probe: async () => "received",
     }),
   });
+
   await worker.pass();
   const record = await handoffs.get("s1", "msg_acked");
+
   assert.equal(record?.state, "acked");
 });
 
@@ -354,6 +390,7 @@ test("队列空时一趟领 0 条并报 no_work", async () => {
     }),
   });
   const result = await worker.pass();
+
   assert.equal(result.taken, 0);
   assert.equal(result.refused, "no_work");
   assert.equal(calls, 0);
@@ -363,9 +400,11 @@ test("一趟的条数封顶在预算内", async () => {
   const { home, queueDir, handoffFile } = tempHome();
   const time = clock();
   const queue = createFileBackgroundQueue({ path: queuePathFor(home)("s1"), clock: time });
+
   for (let i = 0; i < 10; i += 1) {
     await queue.enqueue(`job-${i}`);
   }
+
   const worker = createFileWorker({
     queuePathFor: queuePathFor(home),
     queueDir,
@@ -378,9 +417,12 @@ test("一趟的条数封顶在预算内", async () => {
     }),
   });
   const result = await worker.pass();
+
   assert.equal(result.taken, 3);
   const left = await queue.list(0, 20);
+
   assert.equal(left.ok, true);
+
   if (left.ok) {
     assert.equal(left.value.total, 7);
   }
@@ -390,6 +432,7 @@ test("执行器抛异常时记成 failed，不把这一趟打掉", async () => {
   const { home, queueDir, handoffFile } = tempHome();
   const time = clock();
   const queue = createFileBackgroundQueue({ path: queuePathFor(home)("s1"), clock: time });
+
   await queue.enqueue("boom");
 
   const worker = createFileWorker({
@@ -406,8 +449,10 @@ test("执行器抛异常时记成 failed，不把这一趟打掉", async () => {
     }),
   });
   const result = await worker.pass();
+
   assert.equal(result.taken, 1);
   const receipts = await worker.receipts();
+
   assert.equal(receipts[0]?.outcome, "failed");
   assert.match(receipts[0]?.detail ?? "", /executor exploded/);
 });

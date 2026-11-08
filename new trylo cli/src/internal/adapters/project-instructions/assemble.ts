@@ -40,7 +40,9 @@ export function assembleInstructionMessages(
   environment: EnvironmentFacts,
 ): ReadonlyArray<Message> {
   const messages: Message[] = [];
+
   messages.push(environmentMessage(environment));
+
   for (const instruction of adopted) {
     messages.push({
       role: "system",
@@ -55,6 +57,7 @@ export function assembleInstructionMessages(
       ].join("\n"),
     });
   }
+
   return messages;
 }
 
@@ -71,15 +74,18 @@ function environmentMessage(environment: EnvironmentFacts): Message {
     `- node: ${environment.nodeVersion}`,
     `- workspace root: ${environment.workspaceRoot}`,
   ];
+
   if (environment.startupDirectory !== undefined) {
     lines.push(`- started in: ${environment.startupDirectory}`);
   }
+
   lines.push(
     "Tool paths are relative to the workspace root. For shell commands follow the mounted tool's description and argument schema: the configured shell accepts full command strings, while direct execution accepts only planner-approved pipelines and sequential commands. Use syntax for the actual interpreter on this platform. Read a target before editing so its local project rules are discovered.",
     "For multi-step or lengthy tool work, send a brief user-facing progress update before starting and when your plan or results materially change. State what you are checking, the useful result, and the next step; do not expose private chain-of-thought. Skip progress narration for simple answers or when the user asks for results only. Finish with the outcome, checks actually performed, and any unresolved limitation; every success claim must have evidence.",
     "For existing source files prefer edit_file: it preserves untouched bytes and original line endings. write_file replaces the entire file with the supplied bytes; if you use it, retain the project's line-ending convention yourself. Do not report a project convention as preserved without checking the resulting file.",
     "edit_file.patch expects raw unified diff, without Markdown fences: every unchanged/context line starts with ONE diff-space followed by the full original line, including its indentation. A source line ' * doc' must be written as '  * doc' in context. Removed/added lines start with -/+ followed by the full original line. Use @@ alone when you have not counted hunk lines.",
   );
+
   return { role: "system", content: lines.join("\n") };
 }
 
@@ -101,6 +107,7 @@ export function loadInstructionMessages(input: {
   const problems: string[] = [];
   const chain = ancestorChain(input.workspaceRoot, input.startupDirectory);
   const seen = new Set<string>();
+
   chain.forEach((directory, index) => {
     const scope = index === 0 ? "workspace_root" : "directory";
     const lookup = lookupInstruction(input.reader, input.workspaceRoot, directory, scope);
@@ -110,19 +117,24 @@ export function loadInstructionMessages(input: {
     if (seen.has(identity)) {
       return;
     }
+
     seen.add(identity);
+
     if (lookup.kind === "found") {
       adopted.push(adoptWithImports(lookup.instruction, input, (problem) => problems.push(problem)));
       return;
     }
+
     if (lookup.kind === "oversized") {
       problems.push(`project_instructions_oversized:${lookup.relativePath}`);
       return;
     }
+
     if (lookup.kind === "unreadable") {
       problems.push(`project_instructions_unreadable:${lookup.relativePath}`);
     }
   });
+
   return {
     messages: assembleInstructionMessages(adopted, input.environment),
     adopted,
@@ -150,12 +162,15 @@ function adoptWithImports(
     workspaceRoot: input.workspaceRoot,
     reader: input.reader,
   });
+
   for (const problem of expansion.problems) {
     onProblem(`${problem}@${instruction.relativePath}`);
   }
+
   if (expansion.text === instruction.text) {
     return instruction;
   }
+
   return {
     ...instruction,
     text: expansion.text,
@@ -171,6 +186,7 @@ export function lookupLocalInstructions(
   const directory = path.dirname(targetAbsolute);
   const chain = ancestorChain(workspaceRoot, directory);
   const found: ProjectInstruction[] = [];
+
   chain.forEach((entry, index) => {
     const lookup: InstructionLookup = lookupInstruction(
       reader,
@@ -182,5 +198,6 @@ export function lookupLocalInstructions(
       found.push(lookup.instruction);
     }
   });
+
   return found;
 }

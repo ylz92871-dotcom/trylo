@@ -47,10 +47,13 @@ test("a shell name outside the union is a typed refusal, not a crash", () => {
   const host = hostShellEnvironment();
   // @ts-expect-error a name outside ShellKind is exactly what this asserts
   const refused = resolveShell(host, "pwsh");
+
   assert.equal(refused.ok, false);
+
   if (refused.ok) {
     return;
   }
+
   assert.equal(refused.code, "unknown_shell_kind");
   // The message has to name what was asked for AND what exists, because the
   // caller is a settings file that will be read by a person debugging it.
@@ -64,6 +67,7 @@ test("a shell name outside the union is a typed refusal, not a crash", () => {
   // value would produce one.
   const forged = { kind: "pwsh", path: "C:/nowhere/pwsh.exe" };
   const argv = shellExecArgv(forged as Parameters<typeof shellExecArgv>[0], "echo hi");
+
   assert.equal(Array.isArray(argv), true, "shellExecArgv must always return an array");
   assert.equal(argv[0], "C:/nowhere/pwsh.exe");
 });
@@ -93,6 +97,7 @@ function removeWorkspace(dir: string): void {
       if (attempt === 4) {
         return;
       }
+
       const code = (error as { readonly code?: unknown }).code;
       if (code !== "EPERM" && code !== "EBUSY") {
         throw error;
@@ -109,10 +114,13 @@ function removeWorkspace(dir: string): void {
 test("a real PowerShell run honours operators and reports a native failure", async () => {
   const host = hostShellEnvironment();
   const shell = resolveShell(host, "powershell");
+
   assert.equal(shell.ok, true, "no PowerShell on this machine");
+
   if (!shell.ok) {
     return;
   }
+
   const { spawn } = await import("node:child_process");
   const run = (command: string): Promise<{ code: number; out: string }> =>
     new Promise((resolveRun) => {
@@ -123,6 +131,7 @@ test("a real PowerShell run honours operators and reports a native failure", asy
         ...(needsVerbatimArguments(shell.shell) ? { windowsVerbatimArguments: true } : {}),
       });
       let out = "";
+
       child.stdout?.on("data", (chunk: Buffer) => {
         out += chunk.toString("utf8");
       });
@@ -134,12 +143,14 @@ test("a real PowerShell run honours operators and reports a native failure", asy
   // Operators mean what they mean in this shell — this is the whole point of
   // handing over one unquoted argument instead of a pre-parsed argv.
   const piped = await run("Write-Output (2 + 3) | ForEach-Object { $_ }");
+
   assert.equal(piped.code, 0);
   assert.equal(piped.out.trim(), "5");
 
   // The measured failure: a non-zero native exit survives a later cmdlet, and
   // the tail turns it into the process's exit status instead of 0.
   const failed = await run("cmd /c exit 4; Write-Output after");
+
   assert.match(failed.out, /after/, "the tail must not swallow the command's own output");
   assert.equal(failed.code, 4, "PowerShell must not report a failed native command as success");
 });
@@ -147,12 +158,16 @@ test("a real PowerShell run honours operators and reports a native failure", asy
 test("a real bash run honours operators, redirection and a non-zero exit", async () => {
   const host = hostShellEnvironment();
   const shell = resolveShell(host, "bash");
+
   assert.equal(shell.ok, true, "no bash on this machine");
+
   if (!shell.ok) {
     return;
   }
+
   const dir = mkdtempSync(path.join(os.tmpdir(), "trylo-wp05-"));
   const { spawn } = await import("node:child_process");
+
   try {
     const run = (command: string): Promise<{ code: number; out: string }> =>
       new Promise((resolveRun) => {
@@ -164,6 +179,7 @@ test("a real bash run honours operators, redirection and a non-zero exit", async
           ...(needsVerbatimArguments(shell.shell) ? { windowsVerbatimArguments: true } : {}),
         });
         let out = "";
+
         child.stdout?.on("data", (chunk: Buffer) => {
           out += chunk.toString("utf8");
         });
@@ -173,16 +189,19 @@ test("a real bash run honours operators, redirection and a non-zero exit", async
       });
 
     const chained = await run("echo a && echo b");
+
     assert.equal(chained.code, 0);
     assert.equal(chained.out.trim().split("\n").join(","), "a,b");
 
     const redirected = await run("echo hi > out.txt && cat out.txt");
+
     assert.equal(redirected.code, 0);
     assert.match(redirected.out, /hi/);
     // Real disk evidence, not just the echo of it.
     assert.equal(readFileSync(path.join(dir, "out.txt"), "utf8").trim(), "hi");
 
     const failed = await run("exit 7");
+
     assert.equal(failed.code, 7);
   } finally {
     removeWorkspace(dir);
@@ -193,11 +212,13 @@ test("a shell that is named but absent fails to start, with the name in the erro
   // The explicit-failure half of WP05.1's acceptance: not a silent substitution,
   // and not a bare ENOENT the model has to interpret.
   const marker = path.join(os.tmpdir(), "trylo-wp05-absent-shell");
+
   assert.equal(existsSync(marker), false);
   const { spawn } = await import("node:child_process");
   const result = await new Promise<{ code: number | null; err: NodeJS.ErrnoException | undefined }>(
     (resolveRun) => {
       const child = spawn("trylo-no-such-shell-xyz", ["-c", "echo hi"], { stdio: "ignore" });
+
       child.on("error", (err: NodeJS.ErrnoException) => {
         resolveRun({ code: null, err });
       });
@@ -206,17 +227,20 @@ test("a shell that is named but absent fails to start, with the name in the erro
       });
     },
   );
+
   assert.equal(result.err?.code, "ENOENT");
   assert.match(result.err?.message ?? "", /trylo-no-such-shell-xyz/);
 });
 
 test("the host record is built from this machine, and overridable", () => {
   const host = hostShellEnvironment();
+
   assert.equal(host.platform, process.platform);
   assert.equal(host.fileExists(process.execPath), true);
   assert.equal(host.fileExists(path.join(os.tmpdir(), "trylo-does-not-exist-xyz")), false);
   // Overrides let a caller with a real context pass what it already holds.
   const pinned = hostShellEnvironment({ platform: "linux", env: { PATH: "/bin" } });
+
   assert.equal(pinned.platform, "linux");
   assert.equal(pinned.env["PATH"], "/bin");
 });

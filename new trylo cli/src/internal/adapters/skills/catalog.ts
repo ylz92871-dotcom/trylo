@@ -31,10 +31,12 @@ export function createSkillCatalog(skills: ReadonlyArray<SkillDescriptor>): Skil
 function compose(descriptor: SkillDescriptor, args: string | undefined): LoadedSkill {
   const dir = descriptor.skillRoot.replaceAll("\\", "/");
   let content = `Base directory for this skill: ${dir}\n\n${descriptor.body}`;
+
   // `${CLAUDE_SKILL_DIR}` is honoured beside the Trylo spelling so skill
   // libraries written for the old CLI keep working; both names resolve to the
   // same directory and neither can be set by the file itself.
   content = content.replaceAll("${TRYLO_SKILL_DIR}", dir).replaceAll("${CLAUDE_SKILL_DIR}", dir);
   content = substituteArguments(content, args, descriptor.argumentNames ?? [], true);
+
   return { descriptor, content };
 }

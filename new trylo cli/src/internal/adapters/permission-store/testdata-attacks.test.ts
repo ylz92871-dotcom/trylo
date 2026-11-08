@@ -29,10 +29,13 @@ type ApprovalAttack = {
 test("testdata/approval negative fixtures all fail closed", async () => {
   const dir = approvalAttackDir();
   const files = (await readdir(dir)).filter((name) => name.endsWith(".json")).sort();
+
   assert.equal(files.length >= 6, true, "the approval attack corpus must be non-trivial");
+
   for (const file of files) {
     const attack = JSON.parse(await readFile(path.join(dir, file), "utf8")) as ApprovalAttack;
     const outcome = await runApprovalAttack(attack);
+
     assert.deepEqual(
       { ok: outcome.ok, code: outcome.ok ? "ok" : outcome.code },
       { ok: attack.expect.ok, code: attack.expect.code },
@@ -58,6 +61,7 @@ async function runApprovalAttack(
           scope: String(input.scope),
           now: String(input.now),
         });
+
         return { ok: result.ok, ...(result.ok ? {} : { code: result.code }) };
       }
       case "cross-binding-facts":
@@ -74,8 +78,10 @@ async function runApprovalAttack(
         if (!issued.ok) {
           return { ok: false, code: issued.code };
         }
+
         const input = attack.input ?? {};
         const action = String(input.action) as "acquire" | "modify" | "activate" | "contribute";
+
         if (attack.kind === "second-store-reference") {
           const other = createFilePermissionStore({ path: path.join(root, "second.ndjson") });
           const result = await other.consume({
@@ -86,8 +92,10 @@ async function runApprovalAttack(
             scope: String(input.scope),
             now: String(input.now),
           });
+
           return { ok: result.ok, ...(result.ok ? {} : { code: result.code }) };
         }
+
         const result = await store.consume({
           token: { grantId: issued.grant.grantId },
           action,
@@ -96,6 +104,7 @@ async function runApprovalAttack(
           scope: String(input.scope),
           now: String(input.now),
         });
+
         return { ok: result.ok, ...(result.ok ? {} : { code: result.code }) };
       }
       case "invalid-calendar-date": {
@@ -108,16 +117,19 @@ async function runApprovalAttack(
           issuedAt: String(issuance.issuedAt),
           expiry: String(issuance.expiry),
         });
+
         return { ok: issued.ok, ...(issued.ok ? {} : { code: issued.code }) };
       }
       case "corrupt-ledger-line": {
         const payload = canonicalJson(attack.payload);
+
         await writeFile(
           path.join(root, "permission.ndjson"),
           `${sha256Hex(payload)} ${payload}\n`,
           "utf8",
         );
         const decoded = decodeStoreLedger(`${sha256Hex(payload)} ${payload}\n`);
+
         return { ok: decoded.ok, ...(decoded.ok ? {} : { code: decoded.reason }) };
       }
       default:

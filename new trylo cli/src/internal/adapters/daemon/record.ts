@@ -90,24 +90,30 @@ export function requestStop(home: string, reason: string, token: string): boolea
  */
 export function readStopRequest(home: string, token: string): { readonly reason: string } | undefined {
   let raw: string;
+
   try {
     raw = readFileSync(stopPath(home), "utf8");
   } catch {
     return undefined;
   }
+
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(raw);
   } catch {
     return undefined;
   }
+
   if (typeof parsed !== "object" || parsed === null) {
     return undefined;
   }
+
   const record = parsed as Record<string, unknown>;
   if (record["token"] !== token) {
     return undefined;
   }
+
   return { reason: typeof record["reason"] === "string" ? record["reason"] : "a stop was requested" };
 }
 
@@ -259,29 +265,37 @@ export function writeHeartbeat(home: string, heartbeat: DaemonHeartbeat): boolea
  */
 export function readHeartbeat(home: string): DaemonHeartbeat | undefined {
   let raw: string;
+
   try {
     raw = readFileSync(statePath(home), "utf8");
   } catch {
     return undefined;
   }
+
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(raw);
   } catch {
     return undefined;
   }
+
   if (typeof parsed !== "object" || parsed === null) {
     return undefined;
   }
+
   const record = parsed as Record<string, unknown>;
   const lastTickAtMs = record["lastTickAtMs"];
   const firedCount = record["firedCount"];
+
   if (typeof lastTickAtMs !== "number" || !Number.isFinite(lastTickAtMs)) {
     return undefined;
   }
+
   if (typeof firedCount !== "number" || !Number.isFinite(firedCount)) {
     return undefined;
   }
+
   return { lastTickAtMs, firedCount };
 }
 

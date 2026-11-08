@@ -64,6 +64,7 @@ test("the root rule file is adopted and named in the message it produces", () =>
 
     assert.equal(result.adopted.length, 1);
     const adopted = result.adopted[0];
+
     assert.ok(adopted);
     assert.equal(adopted.relativePath, "AGENTS.md");
     assert.equal(adopted.scope, "workspace_root");
@@ -88,6 +89,7 @@ test("one directory contributes one rule file: AGENTS.md wins, the others are no
     assert.equal(result.adopted.length, 1);
     assert.equal(result.adopted[0]?.relativePath, "AGENTS.md");
     const text = result.messages.map((message) => message.content).join("\n");
+
     assert.match(text, /from agents/);
     assert.doesNotMatch(text, /from claude/);
     assert.doesNotMatch(text, /from gemini/);
@@ -119,6 +121,7 @@ test("a subdirectory rule is scoped to its own subtree and composed under the ro
     writeFileSync(join(root, "src", "ui", "AGENTS.md"), "ui rule");
 
     const result = load(root, join(root, "src", "ui"));
+
     assert.deepEqual(
       result.adopted.map((rule) => rule.relativePath),
       ["AGENTS.md", "src/AGENTS.md", "src/ui/AGENTS.md"],
@@ -128,6 +131,7 @@ test("a subdirectory rule is scoped to its own subtree and composed under the ro
     assert.equal(result.adopted[2]?.scope, "directory");
     assert.equal(result.adopted[2]?.scopePath, "src/ui");
     const text = result.messages.map((message) => message.content).join("\n");
+
     assert.match(text, /applies to src\/ui\/ and below/);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -140,6 +144,7 @@ test("running from a subdirectory still sees the root rules", () => {
     writeFileSync(join(root, "AGENTS.md"), "root rule");
     mkdirSync(join(root, "src"), { recursive: true });
     const result = load(root, join(root, "src"));
+
     assert.deepEqual(
       result.adopted.map((rule) => rule.relativePath),
       ["AGENTS.md"],
@@ -168,10 +173,12 @@ test("a project with no rules produces no rule messages, and says so by staying 
   try {
     writeFileSync(join(root, "package.json"), "{}");
     const result = load(root, root);
+
     assert.deepEqual(result.adopted, []);
     assert.deepEqual(result.problems, []);
     // The environment statement is unconditional; no rule claims to exist.
     const text = result.messages.map((message) => message.content).join("\n");
+
     assert.doesNotMatch(text, /Project instructions from/);
     assert.match(text, /workspace root:/);
   } finally {
@@ -200,6 +207,7 @@ test("an unreadable rule file is reported rather than treated as no rules", () =
     readText: () => undefined,
   };
   const lookup = lookupInstruction(reader, root, root, "workspace_root");
+
   assert.equal(lookup.kind, "unreadable");
 
   const result = loadInstructionMessages({
@@ -208,6 +216,7 @@ test("an unreadable rule file is reported rather than treated as no rules", () =
     startupDirectory: root,
     environment: { ...environment, workspaceRoot: root, startupDirectory: root },
   });
+
   assert.deepEqual(result.problems, ["project_instructions_unreadable:AGENTS.md"]);
   rmSync(root, { recursive: true, force: true });
 });
@@ -217,6 +226,7 @@ test("the environment statement names the real platform and describes both shell
   try {
     const result = load(root, root);
     const text = result.messages[0]?.content ?? "";
+
     assert.match(text, /platform: win32/);
     assert.match(text, /node: v22\.22\.2/);
     assert.match(text, /configured shell/);
@@ -234,6 +244,7 @@ test("rules are labelled as the project's own, not as learned hints", () => {
     const text = load(root, root)
       .messages.map((message) => message.content)
       .join("\n");
+
     assert.match(text, /these are this project's own engineering rules/i);
     assert.doesNotMatch(text, /learned historical hints/i);
     assert.doesNotMatch(text, /Trylo learned profile/);
@@ -248,10 +259,13 @@ test("the content hash changes when the rule text changes", () => {
   const root = tempRoot();
   try {
     const file = join(root, "AGENTS.md");
+
     writeFileSync(file, "first version");
     const before = load(root, root).adopted[0]?.contentHash;
+
     writeFileSync(file, "second version");
     const after = load(root, root).adopted[0]?.contentHash;
+
     assert.ok(before && after);
     assert.notEqual(before, after, "a resume compares hashes to notice a rule changed");
   } finally {
@@ -283,6 +297,7 @@ test("a deep module's rules are found when a target inside it is read", () => {
       root,
       join(root, "src", "ui", "button.ts"),
     );
+
     assert.deepEqual(
       found.map((rule) => rule.relativePath),
       ["AGENTS.md", "src/ui/AGENTS.md"],

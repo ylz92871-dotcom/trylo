@@ -7,10 +7,12 @@ import { planWorkingDirectory } from "./command.js";
 
 test("an absolute workspace root cwd is the same admitted directory as dot", t => {
   const root = mkdtempSync(path.join(os.tmpdir(), "trylo-cwd-root-"));
+
   t.after(() => rmSync(root, { recursive: true, force: true }));
   assert.deepEqual(planWorkingDirectory(root, root), planWorkingDirectory(root, "."));
   assert.deepEqual(planWorkingDirectory(root, root + path.sep), planWorkingDirectory(root, "."));
   const subdir = path.join(root, "src");
+
   mkdirSync(subdir);
   assert.deepEqual(planWorkingDirectory(root, subdir), planWorkingDirectory(root, "src"));
   assert.equal(planWorkingDirectory(root, "../other").ok, false);

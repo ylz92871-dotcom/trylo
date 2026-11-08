@@ -88,6 +88,7 @@ type TransportState = {
 
 export function createStdioTransport(spec: StdioTransportSpec): StdioTransport {
   let child: ChildProcessWithoutNullStreams;
+
   try {
     child = spawn(spec.command, [...spec.args], {
       cwd: spec.cwd,
@@ -117,6 +118,7 @@ export function createStdioTransport(spec: StdioTransportSpec): StdioTransport {
     terminated: false,
     failure: undefined,
   };
+
   wireChildEvents(state);
 
   return {
@@ -159,6 +161,7 @@ export function createStdioTransport(spec: StdioTransportSpec): StdioTransport {
 
 function wireChildEvents(state: TransportState): void {
   const { child } = state;
+
   child.stdout.setEncoding("utf8");
   child.stderr.setEncoding("utf8");
 
@@ -169,6 +172,7 @@ function wireChildEvents(state: TransportState): void {
     // A missing binary surfaces here as ENOENT. `spawn` did not throw, so this
     // is the only notification a caller gets.
     const code = (error as { readonly code?: unknown }).code;
+
     state.exited = true;
     settleAll(state, { code: "child_exited", detail: "child failed to start" });
     emitFailure(state, {
@@ -183,6 +187,7 @@ function wireChildEvents(state: TransportState): void {
       code: "child_exited" as const,
       detail: `exit ${String(exitCode)} signal ${String(signal)}`,
     };
+
     settleAll(state, detail);
     emitFailure(state, detail);
   });
@@ -191,10 +196,13 @@ function wireChildEvents(state: TransportState): void {
 function handleStdoutChunk(state: TransportState, chunk: string): void {
   state.buffer += chunk;
   const scanned = scanFrames(state.buffer);
+
   state.buffer = scanned.rest;
+
   if (scanned.overflowed) {
     emitFailure(state, { code: "framing", detail: "frame exceeded the maximum size" });
   }
+
   for (const message of scanned.messages) {
     dispatchMessage(state, message);
   }
@@ -206,8 +214,11 @@ function handleStderrChunk(state: TransportState, chunk: string): void {
     state.stderrTruncated = true;
     return;
   }
+
   const taken = chunk.length > budget ? chunk.slice(0, budget) : chunk;
+
   state.stderrBytes += taken.length;
+
   if (taken.length < chunk.length) {
     state.stderrTruncated = true;
   }
@@ -217,7 +228,9 @@ function emitFailure(state: TransportState, detail: StdioTransportFailure): void
   if (state.failure !== undefined) {
     return;
   }
+
   state.failure = detail;
+
   for (const listener of state.failureListeners) {
     listener(detail);
   }
@@ -246,13 +259,16 @@ function dispatchMessage(state: TransportState, message: DecodedMessage): void {
         // Only reachable for an unattributable error; nothing is waiting.
         return;
       }
+
       const resolve = state.pending.get(id);
       if (resolve === undefined) {
         return;
       }
+
       state.pending.delete(id);
       state.abortHandlers.delete(id);
       resolve(message.response);
+
       return;
     }
     case "request":
@@ -278,6 +294,7 @@ function rejectWith(state: TransportState, id: JsonRpcId, detail: string): void 
   if (resolve === undefined) {
     return;
   }
+
   state.pending.delete(id);
   state.abortHandlers.delete(id);
   resolve({ jsonrpc: "2.0", id, error: { code: -32000, message: detail } });
@@ -307,6 +324,7 @@ function sendRequest(
       error: { code: -32000, message: "child_exited: the server process is gone" },
     });
   }
+
   if (signal?.aborted === true) {
     return Promise.resolve({
       jsonrpc: "2.0",
@@ -314,8 +332,10 @@ function sendRequest(
       error: { code: -32000, message: "aborted: request was cancelled before it was sent" },
     });
   }
+
   return new Promise<JsonRpcResponse>((resolve) => {
     state.pending.set(message.id, resolve);
+
     if (signal !== undefined) {
       const onAbort = (): void => {
         rejectWith(state, message.id, "aborted: request was cancelled");
@@ -323,6 +343,7 @@ function sendRequest(
       state.abortHandlers.set(message.id, onAbort);
       signal.addEventListener("abort", onAbort, { once: true });
     }
+
     if (!writeFrame(state, encodeMessage(message))) {
       rejectWith(state, message.id, "write_failed: could not write to the server");
     }
@@ -333,11 +354,15 @@ async function terminateChild(state: TransportState): Promise<void> {
   if (state.terminated) {
     return;
   }
+
   state.terminated = true;
+
   if (state.exited) {
     return;
   }
+
   const { child } = state;
+
   await new Promise<void>((resolve) => {
     let settled = false;
     const done = (): void => {
@@ -347,12 +372,15 @@ async function terminateChild(state: TransportState): Promise<void> {
       settled = true;
       resolve();
     };
+
     child.once("exit", done);
+
     try {
       child.stdin.end();
     } catch {
       // The child may already have closed its end.
     }
+
     try {
       if (!child.kill()) {
         done();
@@ -362,9 +390,11 @@ async function terminateChild(state: TransportState): Promise<void> {
       // way — and the deadline timer below is the backstop either way.
       done();
     }
+
     // A child that ignores SIGTERM must not hold the caller forever; the
     // process is detached from this client's interests either way.
     const timer = setTimeout(done, 2_000);
+
     timer.unref?.();
   });
 }

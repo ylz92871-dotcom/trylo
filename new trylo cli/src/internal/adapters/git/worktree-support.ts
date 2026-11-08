@@ -92,6 +92,7 @@ async function runOnce(
     operation === "working-tree"
       ? { ...env, ...(await probeFilterEnv(context, cwd, env, request.signal)) }
       : env;
+
   try {
     const result = await context.runner.run(argv, cwd, {
       ...(request.signal === undefined ? {} : { signal: request.signal }),
@@ -103,6 +104,7 @@ async function runOnce(
         failure: { ok: false, code: "git_failed", detail: detailFor(argv, result.stderr, result.exit) },
       };
     }
+
     return { ok: true, stdout: result.stdout, stderr: result.stderr };
   } catch (error) {
     if (request.signal?.aborted === true) {
@@ -138,6 +140,7 @@ async function probeFilterEnv(
     if (probe.exit !== 0 && probe.exit !== 1) {
       return {};
     }
+
     return filterNeuterEnv(parseFilterDriverNames(probe.stdout));
   } catch {
     // Contract: the probe is an optimisation over "run with filters as
@@ -187,6 +190,7 @@ export async function repositoryRootOf(
       ? { ok: false, code: "not_a_repository", detail: `${cwd} is not inside a git repository` }
       : text;
   }
+
   return canonicalize(context, text);
 }
 
@@ -213,8 +217,10 @@ export async function isSafeWorktreeCwd(context: WorktreeContext, root: string, 
   if (typeof resolvedRoot !== "string" || typeof resolvedCwd !== "string") {
     return false;
   }
+
   if (!(await context.io.isDirectory(resolvedCwd))) {
     return false;
   }
+
   return isWithin(resolvedRoot, resolvedCwd, platformOf(context));
 }

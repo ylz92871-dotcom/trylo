@@ -20,6 +20,7 @@ import { needsPathApproval, readPathAdmission } from "./read-path-admission.js";
 export function createWorkspaceSandbox(config: WorkspaceSandboxConfig): ToolSandbox {
   const policy: SandboxPolicy = createSandboxPolicy(config);
   const shellMode = config.shellMode;
+
   return {
     policy,
     ...(policy.mode !== "deny_all" && (config.fileAccess === undefined || config.fileAccess === "workspace") ? {}
@@ -27,10 +28,12 @@ export function createWorkspaceSandbox(config: WorkspaceSandboxConfig): ToolSand
     evaluate(call: ToolCallRequest): SandboxVerdict {
       const read = readPathAdmission(policy, call);
       if (read !== undefined) return read;
+
       const planned = planMutation(policy, call, shellMode);
       if (planned.ok) {
         return { ok: true };
       }
+
       return { ok: false, code: planned.code, message: planned.message };
     },
   };

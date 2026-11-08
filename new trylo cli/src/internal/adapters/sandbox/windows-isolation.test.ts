@@ -40,7 +40,9 @@ function request(overrides: Partial<Parameters<ReturnType<typeof createWindowsIs
 test("a missing helper is reported as broken, never as ready", async () => {
   const port = createWindowsIsolation({ helperPath: path.join(tmpdir(), "definitely-absent-srt-win.exe") });
   const availability = await port.probe();
+
   assert.notEqual(availability.state, "ready");
+
   if (availability.state === "unavailable") {
     assert.match(availability.reason, /win32|platform/i);
   } else {
@@ -55,7 +57,9 @@ test("no state other than ready runs a command", async () => {
   // the adapter from degrading into an unconfined spawn.
   const port = createWindowsIsolation({ helperPath: path.join(tmpdir(), "definitely-absent-srt-win.exe") });
   const outcome = await port.run(request());
+
   assert.equal(outcome.outcome, "isolation_failed");
+
   if (outcome.outcome === "isolation_failed") {
     assert.ok(
       outcome.code === "isolation_unavailable" ||
@@ -73,8 +77,11 @@ test("an unavailable backend names the platform rather than blaming the machine"
   if (isWindows) {
     return;
   }
+
   const availability = await createWindowsIsolation().probe();
+
   assert.equal(availability.state, "unavailable");
+
   if (availability.state === "unavailable") {
     assert.match(availability.reason, /Windows/);
   }
@@ -94,6 +101,7 @@ test("a glob never reaches the helper as a literal path", async () => {
       },
     }),
   );
+
   // The launch is refused for the missing helper, so the assertion here is
   // only that the request was well-formed enough to reach that point without
   // throwing — the glob filtering itself is asserted by buildArgv coverage.

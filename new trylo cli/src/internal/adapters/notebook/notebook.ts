@@ -108,44 +108,54 @@ function invalid(message: string): NotebookParseResult {
  */
 export function parseNotebookDocument(text: string): NotebookParseResult {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(text);
   } catch {
     return invalid("file is not valid JSON");
   }
+
   if (!isJsonObject(parsed)) {
     return invalid("top level is not an object");
   }
+
   const cellsValue: JsonValue = parsed["cells"] ?? [];
   if (!Array.isArray(cellsValue)) {
     return invalid('missing "cells" array');
   }
+
   const metadataValue = parsed["metadata"];
   const languageInfo = isJsonObject(metadataValue) ? metadataValue["language_info"] : undefined;
   const languageName = isJsonObject(languageInfo) ? languageInfo["name"] : undefined;
   const language = typeof languageName === "string" ? languageName : "python";
   const cells: NotebookCellRecord[] = [];
+
   for (let index = 0; index < cellsValue.length; index += 1) {
     const rawCell = cellsValue[index];
     if (!isJsonObject(rawCell)) {
       return invalid(`cell ${index} is not an object`);
     }
+
     const cellTypeValue = rawCell["cell_type"];
     if (typeof cellTypeValue !== "string") {
       return invalid(`cell ${index} has no string cell_type`);
     }
+
     const sourceValue = rawCell["source"];
     if (typeof sourceValue !== "string" && !isStringArray(sourceValue)) {
       return invalid(`cell ${index} has no string-or-array source`);
     }
+
     const idValue = rawCell["id"];
     if (idValue !== undefined && typeof idValue !== "string") {
       return invalid(`cell ${index} has a non-string id`);
     }
+
     const metadataCell = rawCell["metadata"];
     if (metadataCell !== undefined && !isJsonObject(metadataCell)) {
       return invalid(`cell ${index} has non-object metadata`);
     }
+
     const executionValue = rawCell["execution_count"];
     if (
       executionValue !== undefined &&
@@ -154,14 +164,17 @@ export function parseNotebookDocument(text: string): NotebookParseResult {
     ) {
       return invalid(`cell ${index} has a non-numeric execution_count`);
     }
+
     const executionCount: number | null | undefined =
       typeof executionValue === "number" ? executionValue : executionValue === null ? null : undefined;
     const outputsValue = rawCell["outputs"];
     if (outputsValue !== undefined && !Array.isArray(outputsValue)) {
       return invalid(`cell ${index} has non-array outputs`);
     }
+
     const source = typeof sourceValue === "string" ? sourceValue : sourceValue.join("");
     const isCode = cellTypeValue === "code";
+
     cells.push({
       cellType: cellTypeValue,
       cellId: idValue,
@@ -178,7 +191,9 @@ export function parseNotebookDocument(text: string): NotebookParseResult {
       outputViews: undefined,
     });
   }
+
   const withViews = cells.map((cell, index) => attachOutputViews(cell, index, language, false));
+
   return { ok: true, document: { raw: parsed, cells: withViews, language } };
 }
 
@@ -194,9 +209,11 @@ function plainTextOf(data: unknown): string {
   if (typeof data === "string") {
     return data;
   }
+
   if (Array.isArray(data)) {
     return data.filter((entry): entry is string => typeof entry === "string").join("");
   }
+
   return "";
 }
 
@@ -205,10 +222,12 @@ function extractOutputImage(data: JsonObject): NotebookOutputImage | undefined {
   if (typeof png === "string") {
     return { image_data: png.replace(/\s/g, ""), media_type: "image/png" };
   }
+
   const jpeg = data["image/jpeg"];
   if (typeof jpeg === "string") {
     return { image_data: jpeg.replace(/\s/g, ""), media_type: "image/jpeg" };
   }
+
   return undefined;
 }
 
@@ -218,15 +237,18 @@ function viewOfOutput(output: JsonObject): NotebookCellOutputView {
   if (kind === "stream") {
     return { output_type: kind, text: capText(plainTextOf(output["text"])).text };
   }
+
   if (kind === "execute_result" || kind === "display_data") {
     const data = output["data"];
     const dataObject = isJsonObject(data) ? data : {};
     const text = capText(plainTextOf(dataObject["text/plain"])).text;
     const image = extractOutputImage(dataObject);
+
     return image === undefined
       ? { output_type: kind, text }
       : { output_type: kind, text, image };
   }
+
   if (kind === "error") {
     const nameValue = output["ename"];
     const valueValue = output["evalue"];
@@ -236,8 +258,10 @@ function viewOfOutput(output: JsonObject): NotebookCellOutputView {
     const trace = Array.isArray(traceValue)
       ? traceValue.filter((entry): entry is string => typeof entry === "string").join("\n")
       : "";
+
     return { output_type: kind, text: capText(`${name}: ${value}\n${trace}`).text };
   }
+
   return { output_type: kind, text: "" };
 }
 
@@ -265,6 +289,7 @@ function attachOutputViews(
   if (cell.cellType !== "code" || cell.outputs === undefined || cell.outputs.length === 0) {
     return { ...cell, language: cell.cellType === "code" ? language : undefined };
   }
+
   const views = cell.outputs.map(viewOfOutput);
   if (!includeLargeOutputs && outputsSize(views) > NOTEBOOK_LARGE_OUTPUT_THRESHOLD) {
     return {
@@ -273,6 +298,7 @@ function attachOutputViews(
       outputViews: [largeOutputsPlaceholder(index)],
     };
   }
+
   return { ...cell, language, outputViews: views };
 }
 
@@ -293,15 +319,20 @@ export function cellViewsForTool(
  */
 export function serializeCellsForTool(cells: ReadonlyArray<NotebookCellRecord>): string {
   const parts: string[] = [];
+
   for (const cell of cells) {
     const metadata: string[] = [];
+
     if (cell.cellType !== "code") {
       metadata.push(`<cell_type>${cell.cellType}</cell_type>`);
     }
+
     if (cell.cellType === "code" && cell.language !== undefined && cell.language !== "python") {
       metadata.push(`<language>${cell.language}</language>`);
     }
+
     parts.push(`<cell id="${cell.cellId ?? "cell-unknown"}">${metadata.join("")}${cell.source}</cell>`);
+
     for (const output of cell.outputViews ?? []) {
       if (output.text.length > 0) {
         parts.push(output.text);
@@ -311,6 +342,7 @@ export function serializeCellsForTool(cells: ReadonlyArray<NotebookCellRecord>):
       }
     }
   }
+
   return parts.join("\n");
 }
 
@@ -337,10 +369,12 @@ export function locateCellIndex(
   if (exact !== -1) {
     return { ok: true, index: exact };
   }
+
   const positional = parseCellId(cellId);
   if (positional === undefined) {
     return { ok: false, code: "cell_not_found", message: `cell_not_found: no cell with ID "${cellId}"` };
   }
+
   if (positional < 0 || positional >= cells.length) {
     return {
       ok: false,
@@ -348,6 +382,7 @@ export function locateCellIndex(
       message: `cell_index_out_of_range: cell index ${positional} does not exist`,
     };
   }
+
   return { ok: true, index: positional };
 }
 
@@ -395,6 +430,7 @@ export function applyNotebookEdit(
       message: "missing_cell_type: cell_type is required when edit_mode=insert",
     };
   }
+
   if (input.edit_mode !== "insert" && input.cell_id === undefined) {
     return {
       ok: false,
@@ -402,7 +438,9 @@ export function applyNotebookEdit(
       message: "missing_cell_id: cell_id is required when edit_mode is replace or delete",
     };
   }
+
   let index: number;
+
   if (input.cell_id === undefined) {
     index = 0;
   } else {
@@ -412,6 +450,7 @@ export function applyNotebookEdit(
     }
     index = input.edit_mode === "insert" ? located.index + 1 : located.index;
   }
+
   // Convert replace to insert if trying to replace one past the end (legacy
   // `NotebookEditTool.call` parity). Unreachable through `locateCellIndex`,
   // which refuses `cell-N == length` first — kept as TOCTOU defense for
@@ -420,11 +459,14 @@ export function applyNotebookEdit(
   if (mode === "replace" && index === cells.length) {
     mode = "insert";
   }
+
   const next = [...cells];
+
   if (mode === "delete") {
     next.splice(index, 1);
     return { ok: true, cells: next, appliedCellId: undefined, editMode: mode };
   }
+
   if (mode === "insert") {
     const kind = input.cell_type ?? "code";
     const inserted: NotebookCellRecord = kind === "markdown"
@@ -450,9 +492,12 @@ export function applyNotebookEdit(
         outputs: [],
         outputViews: [],
       };
+
     next.splice(index, 0, inserted);
+
     return { ok: true, cells: next, appliedCellId: input.newCellId, editMode: mode };
   }
+
   const target = next[index];
   if (target === undefined) {
     return {
@@ -461,7 +506,9 @@ export function applyNotebookEdit(
       message: `cell_index_out_of_range: cell index ${index} does not exist`,
     };
   }
+
   const cleared = target.cellType === "code";
+
   next[index] = {
     ...target,
     cellType: input.cell_type ?? target.cellType,
@@ -471,6 +518,7 @@ export function applyNotebookEdit(
     outputs: cleared ? [] : target.outputs,
     outputViews: cleared ? [] : target.outputViews,
   };
+
   return { ok: true, cells: next, appliedCellId: target.cellId, editMode: mode };
 }
 
@@ -480,13 +528,16 @@ function cellToRaw(cell: NotebookCellRecord): JsonObject {
     source: typeof cell.sourceRaw === "string" ? cell.sourceRaw : [...cell.sourceRaw],
     metadata: cell.metadata,
   };
+
   if (cell.cellId !== undefined) {
     raw["id"] = cell.cellId;
   }
+
   if (cell.cellType === "code") {
     raw["execution_count"] = cell.executionCount ?? null;
     raw["outputs"] = cell.outputs === undefined ? [] : [...cell.outputs];
   }
+
   return raw;
 }
 

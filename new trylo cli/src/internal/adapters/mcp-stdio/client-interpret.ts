@@ -49,14 +49,17 @@ export function interpretInitialize(
       detail: `${serverId} refused initialize: ${response.error.code} ${response.error.message}`,
     };
   }
+
   const result = paramsAsObject(response.result);
   if (result === undefined) {
     return { ok: false, code: "invalid_server_info", detail: "initialize result is not an object" };
   }
+
   const version = result["protocolVersion"];
   if (typeof version !== "string") {
     return { ok: false, code: "invalid_server_info", detail: "initialize result has no protocolVersion" };
   }
+
   if (!isSupportedProtocolVersion(version)) {
     return {
       ok: false,
@@ -64,6 +67,7 @@ export function interpretInitialize(
       detail: `${serverId} speaks ${version}; supported: ${SUPPORTED_MCP_PROTOCOL_VERSIONS.join(", ")}`,
     };
   }
+
   const rawServerInfo = paramsAsObject(result["serverInfo"]);
   const name = typeof rawServerInfo?.["name"] === "string" ? rawServerInfo["name"] : serverId;
   const serverVersion = typeof rawServerInfo?.["version"] === "string" ? rawServerInfo["version"] : "unknown";
@@ -99,19 +103,24 @@ export function interpretToolList(
       detail: `tools/list failed: ${response.error.code} ${response.error.message}`,
     };
   }
+
   const result = paramsAsObject(response.result);
   const tools = result?.["tools"];
   if (!Array.isArray(tools)) {
     return { ok: false, code: "invalid_tool_spec", detail: "tools/list result has no tools array" };
   }
+
   const specs: McpToolSpec[] = [];
+
   for (const raw of tools) {
     const spec = toToolSpec(raw, serverId, dropped);
     if (spec !== undefined) {
       specs.push(spec);
     }
   }
+
   void activeTransport;
+
   return { ok: true, value: specs };
 }
 
@@ -127,21 +136,26 @@ export function toToolSpec(raw: JsonValue, serverId: string, dropped: string[]):
   if (record === undefined) {
     return undefined;
   }
+
   const serverToolName = record["name"];
   if (typeof serverToolName !== "string") {
     return undefined;
   }
+
   const qualified = qualifyMcpToolName(serverId, serverToolName);
   if (!qualified.ok) {
     dropped.push(serverToolName);
     return undefined;
   }
+
   const inputSchema = record["inputSchema"];
   if (typeof inputSchema !== "object" || inputSchema === null || Array.isArray(inputSchema)) {
     dropped.push(serverToolName);
     return undefined;
   }
+
   const description = record["description"];
+
   return {
     serverToolName,
     qualifiedName: qualified.value,
@@ -169,27 +183,35 @@ export function interpretToolResult(response: JsonRpcResponse, activeTransport: 
     if (message.includes("capability_unsupported")) {
       return { outcome: "unknown", code: "mcp_capability_unsupported", message };
     }
+
     if (message.includes("timeout")) {
       return { outcome: "unknown", code: "mcp_timeout", message };
     }
+
     if (message.includes("framing")) {
       return { outcome: "unknown", code: "mcp_framing", message };
     }
+
     if (message.includes("child_exited")) {
       return crashedOutcome(activeTransport);
     }
+
     return { outcome: "error", code: "mcp_protocol_error", message };
   }
+
   const result = paramsAsObject(response.result);
   if (result === undefined) {
     return { outcome: "unknown", code: "mcp_framing", message: "tools/call result is not an object" };
   }
+
   const content = result["content"];
   const text = extractText(content);
+
   if (result["isError"] === true) {
     // The tool ran and reported failure: this is an `error`, not an `unknown`.
     return { outcome: "error", code: "mcp_tool_error", message: text.length > 0 ? text : "server reported isError" };
   }
+
   if (isInputRequired(result)) {
     // A multi-round-trip result cannot be represented by a single call outcome
     // (D3 §10.11). Refusing keeps the loop's turn semantics honest.
@@ -199,11 +221,13 @@ export function interpretToolResult(response: JsonRpcResponse, activeTransport: 
       message: "server requested a multi-round-trip result, which this client does not implement",
     };
   }
+
   const structured = result["structuredContent"];
   const value: JsonObject =
     typeof structured === "object" && structured !== null && !Array.isArray(structured)
       ? (structured as JsonObject)
       : {};
+
   return attachMcpImages({ outcome: "result", value, output: text, truncated: false }, content);
 }
 
@@ -217,16 +241,20 @@ export function extractText(content: JsonValue | undefined): string {
   if (!Array.isArray(content)) {
     return "";
   }
+
   const parts: string[] = [];
+
   for (const item of content) {
     const record = paramsAsObject(item);
     if (record === undefined) {
       continue;
     }
+
     if (record["type"] === "text" && typeof record["text"] === "string") {
       parts.push(record["text"]);
     }
   }
+
   return parts.join("\n");
 }
 

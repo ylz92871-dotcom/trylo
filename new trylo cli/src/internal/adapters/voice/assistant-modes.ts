@@ -7,7 +7,7 @@
  * the tree would read as a feature in every listing that counts files — this
  * table reads as the absence it is.
  *
- * Paths are repo-relative to `C:/work/demo-ws/trylo cli`, the only baseline this
+ * Paths are repo-relative to `D:/CC/trylo/trylo cli`, the only baseline this
  * package may draw these modes from.
  */
 

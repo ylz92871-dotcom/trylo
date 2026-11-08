@@ -94,9 +94,11 @@ export function checkOutbound(params: unknown, maxBytes: number): string | undef
   if (bytes === undefined) {
     return "parameters cannot be serialised, so their size cannot be bounded";
   }
+
   if (bytes > maxBytes) {
     return `parameters serialise to ${bytes} bytes, the configured maximum is ${maxBytes}`;
   }
+
   return undefined;
 }
 
@@ -130,10 +132,12 @@ export function createIdleWatch(ttlMs: number, onIdle: () => void): IdleWatch {
     if (timer !== undefined) {
       clearTimeout(timer);
     }
+
     if (!Number.isFinite(ttlMs) || ttlMs <= 0) {
       timer = undefined;
       return;
     }
+
     timer = setTimeout(() => {
       timer = undefined;
       if (!disposed) {
@@ -142,7 +146,9 @@ export function createIdleWatch(ttlMs: number, onIdle: () => void): IdleWatch {
     }, ttlMs);
     timer.unref?.();
   };
+
   arm();
+
   return {
     activity(): void {
       if (!disposed) {
@@ -192,18 +198,24 @@ export function createBoundedStdout(source: Readable, maxBytes: number): Readabl
     if (failed) {
       return;
     }
+
     pending = Buffer.concat([pending, chunk]);
+
     for (;;) {
       if (bodyRemaining > 0) {
         const take = Math.min(bodyRemaining, pending.length);
+
         out.write(pending.subarray(0, take));
         pending = pending.subarray(take);
         bodyRemaining -= take;
+
         if (pending.length === 0) {
           return;
         }
+
         continue;
       }
+
       const end = pending.indexOf(HEADER_END);
       if (end < 0) {
         // No complete headers yet. If the header block itself already exceeds
@@ -216,8 +228,10 @@ export function createBoundedStdout(source: Readable, maxBytes: number): Readabl
         // a framing it cannot parse yet, and it buffers anyway.
         return;
       }
+
       const declared = parseDeclaredLength(pending.subarray(0, end));
       const total = end + HEADER_END.length;
+
       if (declared === undefined) {
         // Not our verdict to give: forward everything and let the library's
         // own header check fail on its own terms from here on.
@@ -225,13 +239,16 @@ export function createBoundedStdout(source: Readable, maxBytes: number): Readabl
         pending = Buffer.alloc(0);
         return;
       }
+
       if (declared > maxBytes) {
         violation(declared);
         return;
       }
+
       out.write(pending.subarray(0, total));
       pending = pending.subarray(total);
       bodyRemaining = declared;
+
       if (pending.length === 0) {
         return;
       }
@@ -254,26 +271,32 @@ export function createBoundedStdout(source: Readable, maxBytes: number): Readabl
     }
     out.end();
   });
+
   return out;
 }
 
 function parseDeclaredLength(headerBlock: Buffer): number | undefined {
   const text = headerBlock.toString("utf8");
   const lines = text.split("\r\n");
+
   for (const line of lines) {
     const separator = line.indexOf(":");
     if (separator < 0) {
       continue;
     }
+
     if (line.slice(0, separator).trim().toLowerCase() !== "content-length") {
       continue;
     }
+
     const value = Number.parseInt(line.slice(separator + 1).trim(), 10);
     if (Number.isInteger(value) && value >= 0) {
       return value;
     }
+
     return undefined;
   }
+
   return undefined;
 }
 
@@ -305,10 +328,12 @@ export function withQueryLimits(port: LanguageServerPort, limits: LspLimits): La
   const guardedClose = async (): Promise<void> => {
     idle?.dispose();
     idle = undefined;
+
     if (closeDone) {
       await lastClose;
       return;
     }
+
     closeDone = true;
     lastClose = port.close();
     await lastClose;
@@ -321,6 +346,7 @@ export function withQueryLimits(port: LanguageServerPort, limits: LspLimits): La
       void guardedClose();
     });
   };
+
   return {
     serverName: port.serverName,
     workspaceRoot: port.workspaceRoot,
@@ -336,10 +362,12 @@ export function withQueryLimits(port: LanguageServerPort, limits: LspLimits): La
       if (oversized !== undefined) {
         return limitRefusal(port.serverName, `open of ${document.path}`, outboundByteLength(document.text), limits.maxMessageBytes);
       }
+
       const opened = await port.openDocument(document);
       if (opened.ok) {
         arm();
       }
+
       return opened;
     },
     query: async (query: LspQuery, signal: AbortSignal) => {
@@ -347,12 +375,14 @@ export function withQueryLimits(port: LanguageServerPort, limits: LspLimits): La
       if (oversized !== undefined) {
         return limitRefusal(port.serverName, "query path", outboundByteLength(query.path), limits.maxMessageBytes);
       }
+
       const result = await port.query(query, signal);
       if (result.ok) {
         arm();
         const kept = truncateAnswer(result.answer, limits.maxLocationsPerAnswer);
         return { ok: true, operation: result.operation, answer: kept.answer, truncated: kept.truncated };
       }
+
       return result;
     },
     isRunning: () => port.isRunning(),

@@ -51,16 +51,21 @@ test("a setting that is not a shell name is refused, not guessed at", () => {
 
 test("no setting resolves to the platform's own shell", () => {
   const win = resolveShellMode(withBash, undefined);
+
   assert.equal(win.ok, false, "the fixture has no PowerShell, and that is the answer");
+
   if (!win.ok) {
     assert.equal(win.code, "shell_not_installed");
   }
+
   const withPowerShell = surface({
     env: { PATH: "C:\\ps", PATHEXT: ".EXE" },
     fileExists: (candidate) => candidate === "C:\\ps\\powershell.EXE",
   });
   const resolved = resolveShellMode(withPowerShell, undefined);
+
   assert.equal(resolved.ok, true);
+
   if (resolved.ok) {
     assert.equal(resolved.mode.kind, "shell");
   }
@@ -131,6 +136,7 @@ test("steps and pipeTo are refused under a shell rather than double-run", () => 
  */
 test("run_shell keeps interpreter selection out and declares only reviewed additive options", () => {
   const properties = RUN_SHELL_BINDING.parameters.properties as Record<string, unknown>;
+
   assert.equal(
     Object.hasOwn(properties, "shell"),
     false,
@@ -169,12 +175,16 @@ test("run_shell keeps interpreter selection out and declares only reviewed addit
 test("the settings schema accepts exactly the shell names this layer can resolve", async () => {
   const { SETTINGS_SCHEMA } = await import("../../settings/schema.js");
   const spec = SETTINGS_SCHEMA["shell"];
+
   assert.notEqual(spec, undefined, "the run-level shell setting is not in the closed set");
   assert.equal(spec?.kind, "enum", "shell must stay an enum so a typo is refused, not looked up");
+
   if (spec?.kind !== "enum") {
     return;
   }
+
   assert.deepEqual([...spec.members].sort(), [...SHELL_KINDS].sort());
+
   // And every name the schema admits is one this layer will resolve rather than
   // treat as a typo, so the two directions cannot drift apart silently.
   for (const name of spec.members) {
@@ -190,6 +200,7 @@ test("the settings schema accepts exactly the shell names this layer can resolve
  */
 test("no packaged default puts an interpreter in front of an ordinary run", async () => {
   const { PACKAGED_DEFAULTS } = await import("../../settings/schema.js");
+
   assert.equal(Object.hasOwn(PACKAGED_DEFAULTS, "shell"), false);
   // What that means at this layer is a TWO-step contract, and stating only half
   // of it would hide the trap: `readShellSetting` answers "was one asked for"
@@ -197,8 +208,10 @@ test("no packaged default puts an interpreter in front of an ordinary run", asyn
   // shell (the platform's) and it is the CALLER that must not call it. The
   // pairing below is the run as it must actually be written.
   const requested = readShellSetting(undefined);
+
   assert.equal(requested, undefined, "unset must be distinguishable from a bad value");
   const mode: ShellMode = requested === undefined ? { kind: "none" } : resolveOrFail(requested);
+
   assert.deepEqual(mode, { kind: "none" });
   assert.deepEqual(shellModeShape(mode, "echo hi"), { kind: "direct", argv: ["echo hi"] });
 });

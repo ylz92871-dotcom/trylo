@@ -17,6 +17,7 @@ test("sandbox preparation failure is distinct from a denied tool or broken comma
   const sandbox = createWorkspaceSandbox({ workspaceRoot: root });
   const tools = createWorkspaceTools({ workspaceRoot: root, sandbox,
     spawner: boundary.spawner(async () => assert.fail("no command may start through a failed boundary")) });
+
   try {
     for (let index = 0; index < 2; index += 1) {
       const result = await tools.execute({ toolCallId: `s-${index}`, name: "run_shell",

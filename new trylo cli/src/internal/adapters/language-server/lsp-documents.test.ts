@@ -26,6 +26,7 @@ describe("DocumentSynchroniser", () => {
     const { sent, connection } = recorder();
     const sync = new DocumentSynchroniser("D:/w");
     const result = await sync.push(connection as never, DOC);
+
     assert.equal(result.ok, true);
     assert.equal(sent.length, 1);
     assert.equal(sent[0]?.method, "textDocument/didOpen");
@@ -37,21 +38,25 @@ describe("DocumentSynchroniser", () => {
     // picker queries the same file repeatedly — so this is the common path.
     const { sent, connection } = recorder();
     const sync = new DocumentSynchroniser("D:/w");
+
     await sync.push(connection as never, DOC);
     await sync.push(connection as never, { ...DOC, text: "export const x = 2;" });
     assert.deepEqual(sent.map((entry) => entry.method), ["textDocument/didOpen", "textDocument/didChange"]);
     const change = sent[1]?.params as { contentChanges: Array<{ text: string }> };
+
     assert.equal(change.contentChanges[0]?.text, "export const x = 2;");
   });
 
   it("advances the version so a server can order the changes", async () => {
     const { sent, connection } = recorder();
     const sync = new DocumentSynchroniser("D:/w");
+
     await sync.push(connection as never, { ...DOC, version: 4 });
     await sync.push(connection as never, { ...DOC, version: 99 });
     // A didChange the server cannot order is a didChange it may drop, so the
     // synchroniser's own counter wins over whatever the caller passed.
     const change = sent[1]?.params as { textDocument: { version: number } };
+
     assert.equal(change.textDocument.version, 5);
   });
 
@@ -68,6 +73,7 @@ describe("DocumentSynchroniser", () => {
     // it to update a document it never opened.
     const { sent, connection } = recorder();
     const sync = new DocumentSynchroniser("D:/w");
+
     await sync.push(connection as never, DOC);
     sync.reset();
     assert.equal(sync.heldCount, 0);
@@ -83,8 +89,11 @@ describe("DocumentSynchroniser", () => {
       },
     };
     const result = await sync.push(failing as never, DOC);
+
     assert.equal(result.ok, false);
+
     if (result.ok) return;
+
     assert.match(result.message, /didOpen failed for src\/a\.ts/);
     // A refused document is not remembered as held, so a retry starts clean.
     assert.equal(sync.heldCount, 0);
@@ -99,6 +108,7 @@ describe("DocumentSynchroniser", () => {
       },
     };
     const sync = new DocumentSynchroniser("D:/w");
+
     assert.equal((await sync.push(flaky as never, DOC)).ok, false);
     // Second attempt must be a fresh open, not a change to a file never opened.
     assert.equal((await sync.push(flaky as never, DOC)).ok, true);

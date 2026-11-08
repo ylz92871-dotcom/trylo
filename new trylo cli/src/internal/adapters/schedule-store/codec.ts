@@ -78,16 +78,27 @@ function decodeSchedule(raw: unknown): Schedule | null {
   if (!isRecord(raw)) {
     return null;
   }
+
   const { id, cron, prompt, createdAtMs, recurring, durable, delivery, sessionId, permanent, lastFiredAtMs, tombstonedAtMs } = raw;
+
   if (typeof id !== "string" || id.length === 0) return null;
+
   if (typeof cron !== "string" || cron.length === 0) return null;
+
   if (typeof prompt !== "string") return null;
+
   if (typeof createdAtMs !== "number" || !Number.isFinite(createdAtMs)) return null;
+
   if (delivery !== "queue" && delivery !== "wait") return null;
+
   if (sessionId !== undefined && typeof sessionId !== "string") return null;
+
   if (permanent !== undefined && typeof permanent !== "boolean") return null;
+
   if (lastFiredAtMs !== undefined && (typeof lastFiredAtMs !== "number" || !Number.isFinite(lastFiredAtMs))) return null;
+
   if (tombstonedAtMs !== undefined && (typeof tombstonedAtMs !== "number" || !Number.isFinite(tombstonedAtMs))) return null;
+
   return {
     id,
     cron,
@@ -108,14 +119,22 @@ function decodeOccurrence(raw: unknown): Occurrence | null {
   if (!isRecord(raw)) {
     return null;
   }
+
   const { id, scheduleId, dueAtMs, state, prompt, delivery, sessionId } = raw;
+
   if (typeof id !== "string" || typeof scheduleId !== "string") return null;
+
   if (typeof dueAtMs !== "number" || !Number.isFinite(dueAtMs)) return null;
+
   if (typeof prompt !== "string") return null;
+
   if (delivery !== "queue" && delivery !== "wait") return null;
+
   if (sessionId !== undefined && typeof sessionId !== "string") return null;
+
   const decodedState = decodeState(state);
   if (decodedState === null) return null;
+
   return {
     id,
     scheduleId,
@@ -152,9 +171,11 @@ function narrowJsonValue(value: unknown, depth: number): JsonValue | undefined {
   if (depth > MAX_JSON_DEPTH) {
     return undefined;
   }
+
   if (value === null) {
     return null;
   }
+
   switch (typeof value) {
     case "string":
     case "boolean":
@@ -167,8 +188,10 @@ function narrowJsonValue(value: unknown, depth: number): JsonValue | undefined {
       // undefined, function, symbol, bigint: not representable in JSON.
       return undefined;
   }
+
   if (Array.isArray(value)) {
     const entries: Array<JsonValue> = [];
+
     for (const entry of value) {
       const narrowed = narrowJsonValue(entry, depth + 1);
       if (narrowed === undefined) {
@@ -176,8 +199,10 @@ function narrowJsonValue(value: unknown, depth: number): JsonValue | undefined {
       }
       entries.push(narrowed);
     }
+
     return entries;
   }
+
   return narrowJsonObject(value as Record<string, unknown>, depth + 1);
 }
 
@@ -194,7 +219,9 @@ function narrowJsonObject(value: Record<string, unknown>, depth: number): JsonOb
   if (depth > MAX_JSON_DEPTH) {
     return undefined;
   }
+
   const entries = new Map<string, JsonValue>();
+
   for (const [key, entry] of Object.entries(value)) {
     const narrowed = narrowJsonValue(entry, depth);
     if (narrowed === undefined) {
@@ -202,6 +229,7 @@ function narrowJsonObject(value: Record<string, unknown>, depth: number): JsonOb
     }
     entries.set(key, narrowed);
   }
+
   return Object.fromEntries(entries);
 }
 
@@ -236,10 +264,14 @@ function decodeState(raw: unknown): OccurrenceState | null {
       const attemptId = raw["attemptId"];
       const completedAtMs = raw["completedAtMs"];
       const result = raw["result"];
+
       if (typeof attemptId !== "string" || typeof completedAtMs !== "number") return null;
+
       if (!isRecord(result)) return null;
+
       const narrowedResult = narrowJsonObject(result, 0);
       if (narrowedResult === undefined) return null;
+
       return { state: "completed", attemptId, completedAtMs, result: narrowedResult };
     }
     case "failed": {
@@ -247,8 +279,11 @@ function decodeState(raw: unknown): OccurrenceState | null {
       const failedAtMs = raw["failedAtMs"];
       const code = raw["code"];
       const message = raw["message"];
+
       if (typeof attemptId !== "string" || typeof failedAtMs !== "number") return null;
+
       if (typeof code !== "string" || typeof message !== "string") return null;
+
       return { state: "failed", attemptId, failedAtMs, code, message };
     }
     case "cancelled": {
@@ -280,6 +315,7 @@ function decodeState(raw: unknown): OccurrenceState | null {
  */
 export function readScheduleFile(file: string): ScheduleResult<StoredFile> {
   let raw: string;
+
   try {
     raw = readFileSync(file, "utf8");
   } catch (error: unknown) {
@@ -290,17 +326,22 @@ export function readScheduleFile(file: string): ScheduleResult<StoredFile> {
     }
     return { ok: false, code: "schedule_unreadable", message: `could not read ${file}: ${String(error)}` };
   }
+
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(raw);
   } catch {
     return { ok: false, code: "schedule_unreadable", message: `${file} is not valid JSON` };
   }
+
   if (!isRecord(parsed)) {
     return { ok: false, code: "schedule_unreadable", message: `${file} is not an object` };
   }
+
   const schedules = Array.isArray(parsed["schedules"]) ? parsed["schedules"] : [];
   const occurrences = Array.isArray(parsed["occurrences"]) ? parsed["occurrences"] : [];
+
   return {
     ok: true,
     value: {

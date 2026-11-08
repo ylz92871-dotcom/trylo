@@ -54,23 +54,29 @@ function decode(raw: string): QueueResult<ReadonlyArray<StoredLine>> {
   if (raw.trim().length === 0) {
     return { ok: true, value: [] };
   }
+
   const items: StoredLine[] = [];
   const lines = raw.split("\n");
   if (lines[lines.length - 1] === "") {
     lines.pop();
   }
+
   for (const line of lines) {
     let parsed: unknown;
+
     try {
       parsed = JSON.parse(line);
     } catch {
       return { ok: false, code: "queue_unreadable" };
     }
+
     if (!isStoredLine(parsed)) {
       return { ok: false, code: "queue_unreadable" };
     }
+
     items.push(parsed);
   }
+
   return { ok: true, value: items };
 }
 
@@ -78,7 +84,9 @@ function isStoredLine(value: unknown): value is StoredLine {
   if (typeof value !== "object" || value === null) {
     return false;
   }
+
   const record = value as Record<string, unknown>;
+
   return (
     typeof record["id"] === "string" &&
     typeof record["text"] === "string" &&
@@ -99,18 +107,22 @@ export function createFileBackgroundQueue(config: FileQueueConfig): BackgroundQu
       if (limit <= 0) {
         return { ok: false, code: "queue_unreadable" } as const;
       }
+
       const raw = readAll(config.path);
       if (!raw.ok) {
         return raw;
       }
+
       const decoded = decode(raw.text);
       if (!decoded.ok) {
         return decoded;
       }
+
       const page: QueuePage = {
         items: decoded.value.slice(offset, offset + limit),
         total: decoded.value.length,
       };
+
       return { ok: true, value: page };
     }),
 
@@ -119,14 +131,17 @@ export function createFileBackgroundQueue(config: FileQueueConfig): BackgroundQu
       if (!raw.ok) {
         return raw;
       }
+
       const decoded = decode(raw.text);
       if (!decoded.ok) {
         return decoded;
       }
+
       const verdict = enqueueVerdict(text, decoded.value.length);
       if (verdict.kind === "refused") {
         return { ok: false, code: verdict.code } as const;
       }
+
       const item: StoredLine = {
         id: config.clock.newId("q"),
         text: verdict.text,
@@ -135,6 +150,7 @@ export function createFileBackgroundQueue(config: FileQueueConfig): BackgroundQu
       if (!appendLine(config.path, encode(item))) {
         return { ok: false, code: "queue_unwritable" } as const;
       }
+
       return { ok: true, value: item } as const;
     }),
 
@@ -157,18 +173,22 @@ export function createFileBackgroundQueue(config: FileQueueConfig): BackgroundQu
       if (!raw.ok) {
         return raw;
       }
+
       const decoded = decode(raw.text);
       if (!decoded.ok) {
         return decoded;
       }
+
       const already = decoded.value.find((item) => item.id === message.id);
       if (already !== undefined) {
         return { ok: true, value: already } as const;
       }
+
       const verdict = enqueueVerdict(message.text, decoded.value.length);
       if (verdict.kind === "refused") {
         return { ok: false, code: verdict.code } as const;
       }
+
       const item: StoredLine = {
         id: message.id,
         text: verdict.text,
@@ -177,6 +197,7 @@ export function createFileBackgroundQueue(config: FileQueueConfig): BackgroundQu
       if (!appendLine(config.path, encode(item))) {
         return { ok: false, code: "queue_unwritable" } as const;
       }
+
       return { ok: true, value: item } as const;
     }),
 
@@ -185,25 +206,32 @@ export function createFileBackgroundQueue(config: FileQueueConfig): BackgroundQu
       if (!raw.ok) {
         return raw;
       }
+
       const decoded = decode(raw.text);
       if (!decoded.ok) {
         return decoded;
       }
+
       const verdict = enqueueVerdict(text, decoded.value.length);
       if (verdict.kind === "refused") {
         return { ok: false, code: verdict.code } as const;
       }
+
       const index = decoded.value.findIndex((item) => item.id === id);
       const found = decoded.value[index];
       if (index < 0 || found === undefined) {
         return { ok: false, code: "unknown_item" } as const;
       }
+
       const updated: StoredLine = { ...found, text: verdict.text };
       const next = [...decoded.value];
+
       next[index] = updated;
+
       if (!await rewriteQueuedFile(config.path, next.map(encode).join(""))) {
         return { ok: false, code: "queue_unwritable" } as const;
       }
+
       return { ok: true, value: updated } as const;
     }),
 
@@ -212,17 +240,21 @@ export function createFileBackgroundQueue(config: FileQueueConfig): BackgroundQu
       if (!raw.ok) {
         return raw;
       }
+
       const decoded = decode(raw.text);
       if (!decoded.ok) {
         return decoded;
       }
+
       const next = decoded.value.filter((item) => item.id !== id);
       if (next.length === decoded.value.length) {
         return { ok: false, code: "unknown_item" } as const;
       }
+
       if (!await rewriteQueuedFile(config.path, next.map(encode).join(""))) {
         return { ok: false, code: "queue_unwritable" } as const;
       }
+
       return { ok: true, value: true } as const;
     }),
 
@@ -231,14 +263,18 @@ export function createFileBackgroundQueue(config: FileQueueConfig): BackgroundQu
       if (!raw.ok) {
         return raw;
       }
+
       const decoded = decode(raw.text);
       if (!decoded.ok) {
         return decoded;
       }
+
       const byId = new Map(decoded.value.map((item) => [item.id, item]));
+
       if (!isPermutation(decoded.value.map((item) => item.id), orderedIds)) {
         return { ok: false, code: "order_not_a_permutation" } as const;
       }
+
       // Every id was just proven to be present exactly once, so this lookup
       // cannot miss; `flatMap` keeps that guarantee visible instead of asserting.
       const next = orderedIds.flatMap((id) => {
@@ -248,9 +284,11 @@ export function createFileBackgroundQueue(config: FileQueueConfig): BackgroundQu
       if (next.length !== decoded.value.length) {
         return { ok: false, code: "order_not_a_permutation" } as const;
       }
+
       if (!await rewriteQueuedFile(config.path, next.map(encode).join(""))) {
         return { ok: false, code: "queue_unwritable" } as const;
       }
+
       return { ok: true, value: true } as const;
     }),
 

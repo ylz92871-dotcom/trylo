@@ -133,10 +133,12 @@ function makeWithLock(storePath: string) {
     } catch (error) {
       return { failure: { code: "ledger_write_failed", message: describe(error) } };
     }
+
     const lock = tryAcquireLedgerLock(lockPath);
     if (!lock.ok) {
       return { failure: { code: lock.reason, message: lock.detail } };
     }
+
     // 解码与业务步骤共用同一个 try/finally：早期版本在「解码失败」分支直接 return，
     // 跳过了锁释放，于是**损坏的账本会把锁永久留给本进程**，之后所有操作都报
     // ledger_lock_conflict —— 一个损坏文件把整个 store 变成不可用，而且掩盖了真正的
@@ -166,20 +168,25 @@ async function consumeFromStore(
   if (request.token === undefined) {
     return consumptionErr("missing_token", "a grant reference is required");
   }
+
   if (!isNonEmptyString(request.token.grantId)) {
     return consumptionErr("invalid_token", "grant reference must carry a non-empty grantId");
   }
+
   const grantId = request.token.grantId;
   const result = await ctx.withLock(async (events) => {
     const grant = resolveGrant(events, grantId);
     if (grant === undefined) {
       return { failure: { code: "unknown_grant" as const, message: `no grant ${grantId} in this Permission store` } };
     }
+
     const checked = checkApprovalConsumption(grant, request);
     if (!checked.ok) {
       return { failure: checked };
     }
+
     const sequence = lastSequence(events) + 1;
+
     await appendEvent(ctx.path, grantConsumedEvent({
       sequence,
       kind: "grant_consumed",
@@ -199,11 +206,13 @@ async function consumeFromStore(
       consumedAt: request.now,
       sequence,
     };
+
     return { value: consumptionOk(receipt) };
   });
   if ("failure" in result) {
     return consumptionErr(result.failure.code, result.failure.message);
   }
+
   return result.value;
 }
 
@@ -215,9 +224,11 @@ async function issueFromStore(
   if (!checked.ok) {
     return { ok: false, code: checked.code, message: checked.message };
   }
+
   const result = await ctx.withLock(async (events) => {
     const sequence = lastSequence(events) + 1;
     const grantId = deriveGrantId(input, sequence, ctx.storeId);
+
     await appendEvent(ctx.path, grantIssuedEvent({
       sequence,
       kind: "grant_issued",
@@ -229,11 +240,13 @@ async function issueFromStore(
       issuedAt: input.issuedAt,
       expiry: input.expiry,
     }));
+
     return { value: { ok: true as const, grant: { ...input, grantId, status: "active" as const } } };
   });
   if ("failure" in result) {
     return { ok: false, code: result.failure.code, message: result.failure.message };
   }
+
   return result.value;
 }
 
@@ -245,25 +258,30 @@ async function revokeFromStore(
   if (!isNonEmptyString(grantId) || epochMs(now) === undefined) {
     return { ok: false, code: "invalid_token", message: "revoke needs a grantId and a strict ISO-8601 timestamp" };
   }
+
   const result = await ctx.withLock(async (events) => {
     const grant = resolveGrant(events, grantId);
     if (grant === undefined) {
       return { failure: { code: "unknown_grant" as const, message: `no grant ${grantId} in this Permission store` } };
     }
+
     if (grant.status !== "active") {
       return { value: { ok: true as const, grantId, status: grant.status } };
     }
+
     await appendEvent(ctx.path, grantRevokedEvent({
       sequence: lastSequence(events) + 1,
       kind: "grant_revoked",
       grantId,
       revokedAt: now,
     }));
+
     return { value: { ok: true as const, grantId, status: "revoked" as const } };
   });
   if ("failure" in result) {
     return { ok: false, code: result.failure.code, message: result.failure.message };
   }
+
   return result.value;
 }
 
@@ -272,15 +290,18 @@ async function getGrantFromStore(
   grantId: string,
 ): Promise<PermissionGrantLookup> {
   let raw: string;
+
   try {
     raw = await readStoreText(ctx.path);
   } catch (error) {
     return { ok: false, code: "ledger_write_failed", message: describe(error) };
   }
+
   const decoded = decodeStoreLedger(raw);
   if (!decoded.ok) {
     return { ok: false, code: decoded.reason, message: decoded.detail };
   }
+
   return { ok: true, grant: resolveGrant(decoded.events, grantId) };
 }
 
@@ -309,8 +330,10 @@ async function appendEvent(storePath: string, event: PermissionStoreEvent): Prom
   const line = encodeStoreEvent(event);
   const bytes = Buffer.from(line, "utf8");
   const handle = await open(storePath, "a");
+
   try {
     let written = 0;
+
     while (written < bytes.length) {
       const { bytesWritten } = await handle.write(bytes, written, bytes.length - written);
       if (bytesWritten <= 0) {
@@ -318,9 +341,11 @@ async function appendEvent(storePath: string, event: PermissionStoreEvent): Prom
       }
       written += bytesWritten;
     }
+
     if (written !== bytes.length) {
       throw new Error(`partial write into permission store: ${String(written)} of ${String(bytes.length)} bytes`);
     }
+
     await handle.sync();
   } finally {
     await handle.close();
@@ -337,7 +362,9 @@ async function ensureDirectoryDurability(directory: string): Promise<void> {
   if (process.platform === "win32") {
     return;
   }
+
   const handle = await open(directory, "r");
+
   try {
     await handle.sync();
   } finally {

@@ -165,9 +165,11 @@ export function createSchedulerLoop(options: SchedulerLoopOptions) {
 
   async function tick(): Promise<TickOutcome> {
     const nowMs = options.clock.now();
+
     if (leaseToken === undefined) {
       return { kind: "lease_lost", reason: "this process holds no lease" };
     }
+
     const claimed = await store.claimDue(nowMs, leaseToken);
     if (!claimed.ok) {
       // A lost lease is not a retryable condition: another daemon owns the
@@ -177,10 +179,12 @@ export function createSchedulerLoop(options: SchedulerLoopOptions) {
         reason: claimed.message,
       };
     }
+
     // The step runs before the occurrences are counted, and its fires join the same
     // tick budget — a host with twenty watches and twenty due schedules does one
     // bounded pass, not two unbounded ones.
     let stepFires = 0;
+
     if (options.runStep !== undefined) {
       try {
         stepFires = await options.runStep({
@@ -196,6 +200,7 @@ export function createSchedulerLoop(options: SchedulerLoopOptions) {
         stepFires = 0;
       }
     }
+
     // The step's fires reach the heartbeat **here**, before the early return
     // below. Counting them only on the path that also had due occurrences would
     // make a host that only ever runs watches report a permanently flat
@@ -204,18 +209,22 @@ export function createSchedulerLoop(options: SchedulerLoopOptions) {
     if (stepFires > 0) {
       heartbeat = { lastTickAtMs: options.clock.now(), firedCount: heartbeat.firedCount + stepFires };
     }
+
     if (claimed.value.length === 0) {
       return stepFires > 0
         ? { kind: "fired", occurrenceId: "step", result: { outcome: "completed", result: { fires: stepFires } } }
         : { kind: "nothing_due" };
     }
+
     let last: TickOutcome = { kind: "nothing_due" };
+
     for (const occurrence of claimed.value.slice(0, options.maxOccurrencesPerTick)) {
       const result = await options.runOccurrence(occurrence);
       await store.settle(occurrence.id, result, leaseToken);
       heartbeat = { lastTickAtMs: options.clock.now(), firedCount: heartbeat.firedCount + 1 };
       last = { kind: "fired", occurrenceId: occurrence.id, result };
     }
+
     return last;
   }
 
@@ -234,6 +243,7 @@ export function createSchedulerLoop(options: SchedulerLoopOptions) {
         options.onStop?.(reason);
         return reason;
       }
+
       leaseToken = took.value;
       // A stop request left by a previous daemon must not stop this one. Clearing
       // it at start is what makes "absent means nobody asked" true again.
@@ -255,6 +265,7 @@ export function createSchedulerLoop(options: SchedulerLoopOptions) {
       let idleCycles = 0;
       let lastTickStartedAtMs = options.clock.now();
       const maxIdleCycles = 2;
+
       try {
         while (running && !stopped) {
           // The stop file is the channel that actually reaches a detached win32
@@ -266,13 +277,16 @@ export function createSchedulerLoop(options: SchedulerLoopOptions) {
             clearStopRequest(options.home);
             break;
           }
+
           if (!inFlight) {
             inFlight = true;
             const startedAtMs = options.clock.now();
             const outcome = await tick();
+
             inFlight = false;
             heartbeat = { lastTickAtMs: options.clock.now(), firedCount: heartbeat.firedCount };
             writeHeartbeat(options.home, heartbeat);
+
             if (outcome.kind === "lease_lost") {
               // Losing the lease mid-life means another daemon took over. The
               // right answer is to stop, not to retry: two schedulers firing the
@@ -280,8 +294,10 @@ export function createSchedulerLoop(options: SchedulerLoopOptions) {
               reason = outcome.reason;
               break;
             }
+
             idleCycles = startedAtMs - lastTickStartedAtMs < options.tickIntervalMs ? idleCycles + 1 : 0;
             lastTickStartedAtMs = startedAtMs;
+
             if (idleCycles >= maxIdleCycles) {
               reason =
                 `the loop was not throttled: ${maxIdleCycles} consecutive ticks completed in under ` +
@@ -289,18 +305,22 @@ export function createSchedulerLoop(options: SchedulerLoopOptions) {
               break;
             }
           }
+
           await options.sleep(options.tickIntervalMs);
         }
       } finally {
         inFlight = false;
         running = false;
+
         if (leaseToken !== undefined) {
           await store.releaseLease();
           leaseToken = undefined;
         }
+
         clearDiscovery(options.home);
         options.onStop?.(reason);
       }
+
       return reason;
     },
 
@@ -336,17 +356,21 @@ export function createSchedulerLoop(options: SchedulerLoopOptions) {
       if (!listed.ok) {
         return null;
       }
+
       const nowMs = options.clock.now();
       let soonest: number | null = null;
+
       for (const schedule of listed.value) {
         const due = nextDueAtMs(schedule);
         if (due === null) {
           continue;
         }
+
         if (soonest === null || due < soonest) {
           soonest = due;
         }
       }
+
       // A due-in-the-past schedule means work is waiting now, so the caller
       // should tick rather than sleep until "next".
       return soonest !== null && soonest <= nowMs ? nowMs : soonest;
@@ -371,6 +395,7 @@ export function createQueueRunner(options: {
           "Re-create it with --session <id>.",
       };
     }
+
     const enqueued = await createFileBackgroundQueue({
       path: options.queuePathFor(sessionId),
       clock: options.clock,
@@ -385,6 +410,7 @@ export function createQueueRunner(options: {
         },
       };
     }
+
     return {
       outcome: "failed",
       code: enqueued.code,

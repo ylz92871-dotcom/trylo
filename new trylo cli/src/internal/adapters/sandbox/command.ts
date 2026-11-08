@@ -91,16 +91,21 @@ export function isWindowsPathWord(word: string, following?: string): boolean {
   if (word === "\\" && following?.startsWith("\\") === true) {
     return true;
   }
+
   if (word.startsWith("\\\\")) {
     return true;
   }
+
   if (word.length < 3) {
     return false;
   }
+
   const [first, second, third] = [word[0], word[1], word[2]];
+
   if (first === undefined || second === undefined || third === undefined) {
     return false;
   }
+
   // `C:\` or `C:/`
   return second === ":" && /[A-Za-z]/.test(first) && (third === "\\" || third === "/");
 }
@@ -121,28 +126,34 @@ class CommandScanner {
         this.index += 1;
         continue;
       }
+
       if (char === "'") {
         if (this.readSingle() === false) {
           return undefined;
         }
         continue;
       }
+
       if (char === '"') {
         if (this.readDouble() === false) {
           return undefined;
         }
         continue;
       }
+
       if (char === "\\") {
         if (this.readEscape() === false) {
           return undefined;
         }
         continue;
       }
+
       this.push(char, false);
       this.index += 1;
     }
+
     this.flush();
+
     return this.tokens;
   }
 
@@ -151,29 +162,36 @@ class CommandScanner {
     if (end === -1) {
       return false;
     }
+
     for (const char of this.command.slice(this.index + 1, end)) {
       this.push(char, true);
     }
+
     this.index = end + 1;
+
     return true;
   }
 
   private readDouble(): boolean {
     let cursor = this.index + 1;
+
     while (cursor < this.command.length) {
       const char = this.command[cursor] ?? "";
       if (char === '"') {
         this.index = cursor + 1;
         return true;
       }
+
       if (char === "\\" && ['"', "\\"].includes(this.command[cursor + 1] ?? "")) {
         this.push(this.command[cursor + 1] ?? "", true);
         cursor += 2;
         continue;
       }
+
       this.push(char, true);
       cursor += 1;
     }
+
     return false;
   }
 
@@ -182,6 +200,7 @@ class CommandScanner {
     if (next === undefined) {
       return false;
     }
+
     // The word so far, plus this backslash: whether it is a separator depends on
     // the word it belongs to, and a path's later separators carry no marker of
     // their own. The backslash is appended because it is the character that
@@ -195,8 +214,10 @@ class CommandScanner {
       this.index += 1;
       return true;
     }
+
     this.push(next, true);
     this.index += 2;
+
     return true;
   }
 
@@ -261,12 +282,15 @@ export function planWorkingDirectory(
   if (typeof candidate !== "string" || candidate.trim().length === 0) {
     return { ok: false, code: "invalid_path", message: "run_shell cwd must be a non-empty path" };
   }
+
   const rootAlias = isWorkspaceRootCwd(workspaceRoot, candidate);
+
   // Absolute workspace subdirectories are aliases, not additional authority.
   // Reject traversal spellings before the shared realpath/link containment gate.
   if (access === "workspace" && candidate.split(/[\\/]/).includes("..")) {
     return { ok: false, code: "path_outside_workspace", message: "run_shell cwd refuses parent traversal" };
   }
+
   const verdict = resolveInsideWorkspace(workspaceRoot, rootAlias ? "." : candidate, access, workspaceAlias);
   if (!verdict.ok) {
     return {
@@ -275,6 +299,7 @@ export function planWorkingDirectory(
       message: `run_shell cwd refused: ${verdict.code}`,
     };
   }
+
   try {
     if (!statSync(verdict.absolutePath).isDirectory()) {
       return {
@@ -290,6 +315,7 @@ export function planWorkingDirectory(
       message: "run_shell cwd must be an existing directory inside the workspace",
     };
   }
+
   return { ok: true, absolutePath: verdict.absolutePath };
 }
 
@@ -302,9 +328,11 @@ export function planWorkingDirectory(
  */
 function planQualifiedExecutable(policy: ShellCommandPolicy, argv: readonly string[]): ShellCommandResult {
   const [executable, ...rest] = argv;
+
   if (executable === undefined) {
     return { ok: false, code: "empty_command", message: "run_shell requires a non-empty command" };
   }
+
   const verdict = resolveInsideWorkspace(policy.workspaceRoot, executable);
   if (!verdict.ok) {
     if (policy.allowAbsoluteExecutable && path.isAbsolute(executable)) {
@@ -317,6 +345,7 @@ function planQualifiedExecutable(policy: ShellCommandPolicy, argv: readonly stri
       message: `run_shell executable refused: ${verdict.code}`,
     };
   }
+
   return {
     ok: true,
     executable: verdict.absolutePath,
@@ -328,6 +357,7 @@ export function planShellCommand(policy: ShellCommandPolicy, command: string): S
   if (command.trim().length === 0) {
     return { ok: false, code: "empty_command", message: "run_shell requires a non-empty command" };
   }
+
   if (/[\r\n]/.test(command)) {
     return {
       ok: false,
@@ -336,6 +366,7 @@ export function planShellCommand(policy: ShellCommandPolicy, command: string): S
         "run_shell rejects multi-line commands: it runs one command per call. Write the script into a file with write_file and run that file, or pass the extra commands through 'steps'.",
     };
   }
+
   const tokens = tokenizeCommand(command);
   if (tokens === undefined) {
     return {
@@ -344,9 +375,11 @@ export function planShellCommand(policy: ShellCommandPolicy, command: string): S
       message: "run_shell could not parse the command",
     };
   }
+
   if (tokens.length === 0) {
     return { ok: false, code: "empty_command", message: "run_shell requires a non-empty command" };
   }
+
   const operator = firstUnquotedOperator(tokens);
   if (operator !== undefined) {
     return {
@@ -355,6 +388,7 @@ export function planShellCommand(policy: ShellCommandPolicy, command: string): S
       message: `run_shell rejects the shell operator '${operator}' written outside quotes: there is no shell here, so it would reach the program as literal text instead of doing what it does in a shell. Quote the word so it stays one argument ('node -e "console.log(1+(2))"' works), or write the expression into a file with write_file and run that file. For real composition use 'steps' or 'pipeTo'.`,
     };
   }
+
   const argv = tokens.map((token) => token.text);
   const executable = argv[0] ?? "";
   if (refusesChangeDirectory(executable)) {
@@ -364,9 +398,11 @@ export function planShellCommand(policy: ShellCommandPolicy, command: string): S
       message: "run_shell rejects cd; the working directory is pinned to the workspace",
     };
   }
+
   if (executable.includes("/") || executable.includes("\\")) {
     return planQualifiedExecutable(policy, argv);
   }
+
   return { ok: true, executable, argv };
 }
 
@@ -406,6 +442,7 @@ function splitPipeline(command: string): { readonly ok: true; readonly segments:
   };
   const parseFailed = { ok: false as const, code: "shell_parse_failed" as const, message: "run_shell could not parse the command" };
   let index = 0;
+
   while (index < command.length) {
     const char = command[index] ?? "";
     if (char === "'") {
@@ -413,14 +450,17 @@ function splitPipeline(command: string): { readonly ok: true; readonly segments:
       if (end === -1) {
         return parseFailed;
       }
+
       current += command.slice(index, end + 1);
       index = end + 1;
       continue;
     }
+
     if (char === '"') {
       let cursor = index + 1;
       let closed = false;
       let piece = '"';
+
       while (cursor < command.length) {
         const inner = command[cursor] ?? "";
         if (inner === '"') {
@@ -429,26 +469,32 @@ function splitPipeline(command: string): { readonly ok: true; readonly segments:
           closed = true;
           break;
         }
+
         if (inner === "\\" && (command[cursor + 1] === '"' || command[cursor + 1] === "\\")) {
           piece += command.slice(cursor, cursor + 2);
           cursor += 2;
           continue;
         }
+
         piece += inner;
         cursor += 1;
       }
+
       if (!closed) {
         return parseFailed;
       }
+
       current += piece;
       index = cursor;
       continue;
     }
+
     if (char === "\\") {
       const next = command[index + 1];
       if (next === undefined) {
         return parseFailed;
       }
+
       // Same rule and same question as `CommandScanner.readEscape` — is the word
       // this backslash belongs to a path? — so a split can never disagree with
       // the tokenizer about where a word ends. The word is read off `current`
@@ -457,10 +503,12 @@ function splitPipeline(command: string): { readonly ok: true; readonly segments:
       // character that would complete a `C:\` opening.
       const wordSoFar = current.slice(Math.max(current.lastIndexOf(" "), current.lastIndexOf("\t")) + 1);
       const separator = isWindowsPathWord(`${wordSoFar}\\`, command.slice(index + 1));
+
       current += separator ? "\\" : command.slice(index, index + 2);
       index += separator ? 1 : 2;
       continue;
     }
+
     if (char === "|") {
       if (!push()) {
         return {
@@ -469,9 +517,11 @@ function splitPipeline(command: string): { readonly ok: true; readonly segments:
           message: "run_shell refuses an empty pipeline segment: a pipe needs a command on both sides, and `||` is not two pipes",
         };
       }
+
       index += 1;
       continue;
     }
+
     if (char === ">" || char === "<") {
       return {
         ok: false,
@@ -479,9 +529,11 @@ function splitPipeline(command: string): { readonly ok: true; readonly segments:
         message: `run_shell redirection ('${char}') is not supported: commands run as programs and arguments, with no shell interpreter. This also applies to workspace files. Use write_file/edit_file for file changes, or the supported pipeline/steps options for command composition; approval does not enable shell syntax.`,
       };
     }
+
     current += char;
     index += 1;
   }
+
   if (!push()) {
     return {
       ok: false,
@@ -489,6 +541,7 @@ function splitPipeline(command: string): { readonly ok: true; readonly segments:
       message: "run_shell refuses an empty pipeline segment: a pipe needs a command on both sides",
     };
   }
+
   return { ok: true, segments };
 }
 
@@ -505,6 +558,7 @@ export function planShellPipeline(
   if (command.trim().length === 0) {
     return { ok: false, code: "empty_command", message: "run_shell requires a non-empty command" };
   }
+
   if (/[\r\n]/.test(command)) {
     return {
       ok: false,
@@ -513,11 +567,14 @@ export function planShellPipeline(
         "run_shell rejects multi-line commands: it runs one command per call. Write the script into a file with write_file and run that file, or pass the extra commands through 'steps'.",
     };
   }
+
   const split = splitPipeline(command);
   if (!split.ok) {
     return split;
   }
+
   const segments: ShellPipelineSegment[] = [];
+
   for (const text of split.segments) {
     const planned = planShellCommand(policy, text);
     if (!planned.ok) {
@@ -525,5 +582,6 @@ export function planShellPipeline(
     }
     segments.push({ executable: planned.executable, argv: planned.argv });
   }
+
   return { ok: true, segments };
 }

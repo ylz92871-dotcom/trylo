@@ -20,6 +20,7 @@ export type LedgerLock =
  */
 export function tryAcquireLedgerLock(lockPath: string): LedgerLock {
   let fd: number;
+
   try {
     fd = openSync(lockPath, "wx");
   } catch (error) {
@@ -28,6 +29,7 @@ export function tryAcquireLedgerLock(lockPath: string): LedgerLock {
     }
     return { ok: false, reason: "ledger_write_failed", detail: describe(error) };
   }
+
   return {
     ok: true,
     release() {

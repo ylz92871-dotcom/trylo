@@ -28,6 +28,7 @@ function splitQuoted(args: string): ReadonlyArray<string> | undefined {
   let current = "";
   let quote: string | undefined;
   let started = false;
+
   for (const character of args) {
     if (quote !== undefined) {
       if (character === quote) {
@@ -37,11 +38,13 @@ function splitQuoted(args: string): ReadonlyArray<string> | undefined {
       }
       continue;
     }
+
     if (character === '"' || character === "'") {
       quote = character;
       started = true;
       continue;
     }
+
     if (/\s/.test(character)) {
       if (started || current.length > 0) {
         tokens.push(current);
@@ -50,15 +53,19 @@ function splitQuoted(args: string): ReadonlyArray<string> | undefined {
       }
       continue;
     }
+
     current += character;
     started = true;
   }
+
   if (quote !== undefined) {
     return undefined;
   }
+
   if (started || current.length > 0) {
     tokens.push(current);
   }
+
   return tokens;
 }
 
@@ -84,18 +91,22 @@ export function substituteArguments(
   if (args === undefined) {
     return content;
   }
+
   const parsed = parseArgumentTokens(args);
   const original = content;
   let result = content;
+
   argumentNames.forEach((name, index) => {
     result = result.replace(new RegExp(`\\$${escapeRegExp(name)}(?![\\[\\w])`, "g"), parsed[index] ?? "");
   });
   result = result.replace(/\$ARGUMENTS\[(\d+)\]/g, (_, index: string) => parsed[Number(index)] ?? "");
   result = result.replace(/\$(\d+)(?!\w)/g, (_, index: string) => parsed[Number(index)] ?? "");
   result = result.replaceAll("$ARGUMENTS", args);
+
   if (result === original && appendIfNoPlaceholder && args.length > 0) {
     return `${result}\n\nARGUMENTS: ${args}`;
   }
+
   return result;
 }
 

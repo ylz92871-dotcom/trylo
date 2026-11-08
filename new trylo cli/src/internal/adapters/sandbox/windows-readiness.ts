@@ -22,9 +22,12 @@ export async function prepareWindowsIsolation(writableRoots: readonly string[], 
   const broken = (reason: string): PreparedIsolation => ({ availability: { state: "broken", backend: "windows-srt", reason } });
   const platform = hostShellEnvironment().platform;
   if (platform !== "win32") return { availability: { state: "unavailable", reason: `windows-srt isolation runs only on Windows; this machine reports ${platform}` } };
+
   if (!existsSync(helper)) return broken(`the srt-win helper is missing at ${helper}; the vendored copy was not deployed`);
+
   const handle = { exe: helper, prependArgs: [DISPATCH_ARG] };
   let api: VendorWindowsApi;
+
   try {
     api = config.vendorApi ?? await loadVendor();
     const status = await api.checkWindowsSandboxStatusAsync({ srtWin: handle });
@@ -37,13 +40,18 @@ export async function prepareWindowsIsolation(writableRoots: readonly string[], 
   // This is the execution owner's lease, not a second bootstrap ACL owner.
   // No workspace write permission is granted until behavioural WFP proof.
   const lease = await acquireWindowsAclLease([], handle, api, config.readableExecutable);
+
   try {
     if (cancelled()) throw new Error("isolation_cancelled: command was not run");
+
     lease.readExecutable(helper);
     const proof = await api.verifyWindowsWfpEgress({ srtWin: handle });
     if (proof.target.length === 0) throw new Error("the WFP egress verification returned no probe target; the fence was not proven");
+
     if (cancelled()) throw new Error("isolation_cancelled: command was not run");
+
     if (writableRoots.length > 0) lease.writeRoots(writableRoots);
+
     return { availability: { state: "ready", backend: "windows-srt", evidence: "srt-sandbox provisioned; a direct connect as the sandbox account is refused (egress_probe=blocked)" }, lease };
   } catch (error) {
     try { lease.close(); }

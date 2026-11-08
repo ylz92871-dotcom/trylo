@@ -26,10 +26,13 @@ function scalar(data: Record<string, string | string[]>, key: string): string | 
   if (value === undefined) {
     return undefined;
   }
+
   if (Array.isArray(value)) {
     return undefined;
   }
+
   const trimmed = value.trim();
+
   return trimmed.length === 0 ? undefined : trimmed;
 }
 
@@ -41,10 +44,12 @@ function list(
   if (value === undefined) {
     return undefined;
   }
+
   if (typeof value === "string") {
     // `tools: read_file` is one tool, not a sentence about tools.
     return value.split(/[\s,]+/).filter((item) => item.length > 0);
   }
+
   return value.filter((item) => item.trim().length > 0).map((item) => item.trim());
 }
 
@@ -53,10 +58,12 @@ function count(data: Record<string, string | string[]>, key: string): number | u
   if (raw === undefined) {
     return undefined;
   }
+
   const parsed = Number(raw);
   if (!Number.isInteger(parsed) || parsed <= 0) {
     return Number.NaN;
   }
+
   return parsed;
 }
 
@@ -82,6 +89,7 @@ export function parseRoleDocument(raw: string, fallbackName: string): RoleParse 
   if (frontmatter.length > FRONTMATTER_LIMIT) {
     return { kind: "invalid", reason: "frontmatter exceeds the size limit" };
   }
+
   const data = parseFrontmatterLines(frontmatter);
   if (typeof data === "string") {
     return { kind: "invalid", reason: `invalid frontmatter (${data})` };
@@ -94,6 +102,7 @@ export function parseRoleDocument(raw: string, fallbackName: string): RoleParse 
     // another is not a role.
     return { kind: "invalid", reason: "role file needs a description" };
   }
+
   const declaredName = scalar(data, "name") ?? name;
   const turns = count(data, "max-iterations");
   if (Number.isNaN(turns)) {

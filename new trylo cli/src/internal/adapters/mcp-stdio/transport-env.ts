@@ -26,14 +26,17 @@ const INHERITED_ENVIRONMENT = [
 
 export function childEnvironment(extra: Readonly<Record<string, string>>): Readonly<Record<string, string>> {
   const env: Record<string, string> = {};
+
   for (const key of INHERITED_ENVIRONMENT) {
     const value = process.env[key];
     if (typeof value === "string") {
       env[key] = value;
     }
   }
+
   for (const [key, value] of Object.entries(extra)) {
     env[key] = value;
   }
+
   return env;
 }

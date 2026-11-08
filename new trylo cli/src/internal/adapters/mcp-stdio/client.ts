@@ -1,5 +1,7 @@
 import type { JsonObject } from "../../protocol/envelope.js";
+import { executionDeadline } from "../execution-deadline.js";
 import { TRYLO_VERSION } from "../../protocol/version.js";
+import { createWorkspaceRoots, type McpWorkspaceRoots } from "../../mcp/roots.js";
 import {
   DEFAULT_MCP_LIST_TIMEOUT_MS,
   DEFAULT_MCP_PROTOCOL_VERSION,
@@ -68,8 +70,8 @@ import {
  *    unambiguously (see `mcp/names.ts`); it is dropped from the listing so it
  *    can never become callable, and the rest of the server keeps working.
  *
- * `timeoutMs` is required on every call and is finite. A call with no deadline
- * is not something this layer knows how to clean up after.
+ * Calls honor explicit deadlines and cancellation. Omitted execution deadlines
+ * remain omitted; discovery has its own bounded handshake/listing lifecycle.
  *
  * The connection state lives in one {@link ClientState} object and every
  * lifecycle step is a module function over it, so the factory is a table
@@ -83,6 +85,8 @@ export type McpClientSpec = {
   readonly args: ReadonlyArray<string>;
   readonly env: Readonly<Record<string, string>>;
   readonly cwd: string;
+  /** Explicit execution workspace, independent of the child process working directory. */
+  readonly workspaceRoot?: string;
   /** Bounded diagnostics budget for stderr. */
   readonly maxStderrBytes?: number;
   /** How long the whole handshake may take. */
@@ -93,7 +97,9 @@ export type McpClientSpec = {
   readonly transportFactory?: (spec: StdioTransportSpec) => StdioTransport;
 };
 
-const DEFAULT_HANDSHAKE_TIMEOUT_MS = 10_000;
+// The bundled Windows server took 19.9s to initialize under real machine load.
+// Give startup the existing discovery window; explicit caller deadlines still win.
+const DEFAULT_HANDSHAKE_TIMEOUT_MS = DEFAULT_MCP_LIST_TIMEOUT_MS;
 const DEFAULT_STDERR_BYTES = 64 * 1024;
 const CLIENT_INFO = { name: "trylo", version: TRYLO_VERSION } as const;
 
@@ -107,6 +113,7 @@ const UNSUPPORTED_SERVER_METHODS = new Set<string>([
 /** The whole mutable state of one connection, in one place. */
 type ClientState = {
   readonly spec: McpClientSpec;
+  readonly roots: McpWorkspaceRoots;
   readonly nextId: () => number;
   readonly transportFactory: (spec: StdioTransportSpec) => StdioTransport;
   /** Servers that misuse `__` in a tool name, recorded once for diagnostics. */
@@ -120,6 +127,7 @@ type ClientState = {
 export function createMcpStdioClient(spec: McpClientSpec): McpStdioClient {
   const state: ClientState = {
     spec,
+    roots: createWorkspaceRoots(spec.workspaceRoot),
     nextId: createRequestIds(),
     transportFactory: spec.transportFactory ?? createStdioTransport,
     droppedToolNames: [],
@@ -147,12 +155,15 @@ const ensureOpen = <T>(state: ClientState, failure: (detail: string) => T): Open
   if (state.closed) {
     return { failure: failure("closed: the connection has been closed") };
   }
+
   if (state.transport === undefined) {
     return { failure: failure("not_initialized: connect() has not been called") };
   }
+
   if (state.transport.exited()) {
     return { failure: failure("child_exited: the server process is gone") };
   }
+
   return undefined;
 };
 
@@ -171,9 +182,11 @@ async function connectClient(
   if (state.closed) {
     return failConnect("closed", "closed: the connection has been closed");
   }
+
   if (state.transport !== undefined) {
     return failConnect("already_connected", "this client already owns a connection");
   }
+
   const activeTransport = state.transportFactory({
     command: state.spec.command,
     args: state.spec.args,
@@ -181,6 +194,7 @@ async function connectClient(
     cwd: state.spec.cwd,
     maxStderrBytes: state.spec.maxStderrBytes ?? DEFAULT_STDERR_BYTES,
   });
+
   state.transport = activeTransport;
 
   // Server-initiated traffic is wired before the handshake so a capability
@@ -195,11 +209,12 @@ async function connectClient(
   const response = await activeTransport.request(
     requestMessage(state.nextId(), "initialize", {
       protocolVersion: requestedVersion,
-      capabilities: { tools: {}, resources: {} },
+      capabilities: state.roots.capabilities,
       clientInfo: CLIENT_INFO,
     }),
     controller.signal,
   );
+
   clearTimeout(timer);
 
   const info = interpretInitialize(activeTransport, response, state.spec.serverId);
@@ -211,6 +226,7 @@ async function connectClient(
   // Only reachable after a version the server and this client both accept.
   activeTransport.notify(notificationMessage("notifications/initialized"));
   state.serverInfo = info.value;
+
   return { ok: true, value: info.value };
 }
 
@@ -221,9 +237,11 @@ async function listClientTools(
   if (notOpen !== undefined) {
     return notOpen.failure;
   }
+
   if (state.listCache !== undefined) {
     return { ok: true, value: state.listCache };
   }
+
   const activeTransport = state.transport as StdioTransport;
   const response = await activeTransport.request(
     requestMessage(state.nextId(), "tools/list", {}),
@@ -233,7 +251,9 @@ async function listClientTools(
   if (!parsed.ok) {
     return parsed;
   }
+
   state.listCache = parsed.value;
+
   return { ok: true, value: state.listCache };
 }
 
@@ -251,23 +271,26 @@ async function resolveCallableTool(state: ClientState, request: McpCallRequest):
   if (notOpen !== undefined) {
     return notOpen.failure;
   }
-  if (!Number.isFinite(request.timeoutMs) || request.timeoutMs <= 0) {
-    // Refused rather than defaulted: an unbounded call is a caller bug that
-    // would otherwise be discovered as a hung process.
+
+  if (request.timeoutMs !== undefined && (!Number.isSafeInteger(request.timeoutMs) || request.timeoutMs <= 0)) {
     return refuseCall("invalid_arguments", "timeoutMs must be a finite positive number");
   }
+
   const split = splitQualified(request.qualifiedName);
   if (split === undefined || split.serverId !== state.spec.serverId) {
     return refuseCall("unknown_tool", `${request.qualifiedName} does not belong to server ${state.spec.serverId}`);
   }
+
   const list = await listClientTools(state);
   if (!list.ok) {
     return refuseCall("protocol_error", `tool list unavailable: ${list.detail}`);
   }
+
   const tool = list.value.find((item) => item.serverToolName === split.serverToolName);
   if (tool === undefined) {
     return refuseCall("unknown_tool", `${split.serverToolName} is not published by this server`);
   }
+
   return { ok: true, tool };
 }
 
@@ -279,20 +302,23 @@ async function callClientTool(
   if (!resolved.ok) {
     return resolved;
   }
+
   const activeTransport = state.transport as StdioTransport;
   const controller = new AbortController();
   const onAbort = (): void => controller.abort();
+
   if (request.signal !== undefined) {
     if (request.signal.aborted) {
       return { ok: true, outcome: { outcome: "cancelled" } };
     }
     request.signal.addEventListener("abort", onAbort, { once: true });
   }
+
   let timedOut = false;
-  const timer = setTimeout(() => {
+  const timer = executionDeadline(request.timeoutMs, () => {
     timedOut = true;
     controller.abort();
-  }, request.timeoutMs);
+  });
 
   try {
     const response = await activeTransport.request(
@@ -302,6 +328,7 @@ async function callClientTool(
       }),
       controller.signal,
     );
+
     // A timeout is decided by the clock, not by what the reply says: a
     // response that arrives after the deadline is late, and reporting it as
     // a result would make the deadline advisory.
@@ -309,20 +336,25 @@ async function callClientTool(
       await killChild(activeTransport);
       return { ok: true, outcome: timeoutOutcome() };
     }
+
     if (request.signal?.aborted === true) {
       return { ok: true, outcome: { outcome: "cancelled" } };
     }
+
     if (activeTransport.exited()) {
       return { ok: true, outcome: crashedOutcome(activeTransport) };
     }
+
     const outcome = interpretToolResult(response, activeTransport);
+
     if (timedOut) {
       await killChild(activeTransport);
       return { ok: true, outcome: timeoutOutcome() };
     }
+
     return { ok: true, outcome };
   } finally {
-    clearTimeout(timer);
+    timer?.cancel();
     if (request.signal !== undefined) {
       request.signal.removeEventListener("abort", onAbort);
     }
@@ -348,10 +380,12 @@ async function listClientResources(
   if (notOpen !== undefined) {
     return notOpen.failure;
   }
+
   const deadline = timeoutMs ?? DEFAULT_MCP_LIST_TIMEOUT_MS;
   if (!Number.isFinite(deadline) || deadline <= 0) {
     return { ok: false, code: "invalid_arguments", detail: "timeoutMs must be a finite positive number" };
   }
+
   const activeTransport = state.transport as StdioTransport;
   const controller = new AbortController();
   let timedOut = false;
@@ -359,6 +393,7 @@ async function listClientResources(
     timedOut = true;
     controller.abort();
   }, deadline);
+
   try {
     const response = await activeTransport.request(
       requestMessage(state.nextId(), "resources/list", {
@@ -366,6 +401,7 @@ async function listClientResources(
       }),
       controller.signal,
     );
+
     // Decided by the clock, not by what the reply says: the transport may
     // settle an aborted request as an error response rather than a rejection,
     // and reporting that as a result would make the deadline advisory.
@@ -373,6 +409,7 @@ async function listClientResources(
       await killChild(activeTransport);
       return { ok: false, code: "timeout", detail: "the server did not answer resources/list before the deadline" };
     }
+
     return interpretResourceList(response);
   } catch (error) {
     // The only signal armed here is the deadline's own: any other rejection
@@ -396,10 +433,12 @@ async function listClientResourceTemplates(
   if (notOpen !== undefined) {
     return notOpen.failure;
   }
+
   const deadline = timeoutMs ?? DEFAULT_MCP_LIST_TIMEOUT_MS;
   if (!Number.isFinite(deadline) || deadline <= 0) {
     return { ok: false, code: "invalid_arguments", detail: "timeoutMs must be a finite positive number" };
   }
+
   const activeTransport = state.transport as StdioTransport;
   const controller = new AbortController();
   let timedOut = false;
@@ -407,6 +446,7 @@ async function listClientResourceTemplates(
     timedOut = true;
     controller.abort();
   }, deadline);
+
   try {
     const response = await activeTransport.request(
       requestMessage(state.nextId(), "resources/templates/list", {
@@ -414,6 +454,7 @@ async function listClientResourceTemplates(
       }),
       controller.signal,
     );
+
     if (timedOut) {
       await killChild(activeTransport);
       return {
@@ -422,6 +463,7 @@ async function listClientResourceTemplates(
         detail: "the server did not answer resources/templates/list before the deadline",
       };
     }
+
     return interpretResourceTemplates(response);
   } catch (error) {
     if (!timedOut) {
@@ -451,44 +493,54 @@ async function readClientResource(
   if (notOpen !== undefined) {
     return notOpen.failure;
   }
+
   if (request.uri.length === 0) {
     return refuseResource("invalid_arguments", "uri must be a non-empty string");
   }
-  if (!Number.isFinite(request.timeoutMs) || request.timeoutMs <= 0) {
+
+  if (request.timeoutMs !== undefined && (!Number.isSafeInteger(request.timeoutMs) || request.timeoutMs <= 0)) {
     return refuseResource("invalid_arguments", "timeoutMs must be a finite positive number");
   }
+
   const activeTransport = state.transport as StdioTransport;
   const controller = new AbortController();
   const onAbort = (): void => controller.abort();
+
   if (request.signal !== undefined) {
     if (request.signal.aborted) {
       return refuseResource("cancelled", "read cancelled before it was sent");
     }
     request.signal.addEventListener("abort", onAbort, { once: true });
   }
+
   let timedOut = false;
-  const timer = setTimeout(() => {
+  const timer = executionDeadline(request.timeoutMs, () => {
     timedOut = true;
     controller.abort();
-  }, request.timeoutMs);
+  });
+
   try {
     const response = await activeTransport.request(
       requestMessage(state.nextId(), "resources/read", { uri: request.uri }),
       controller.signal,
     );
+
     if (timedOut) {
       await killChild(activeTransport);
       return refuseResource("timeout", "the server did not answer resources/read before the deadline");
     }
+
     if (request.signal?.aborted === true) {
       return refuseResource("cancelled", "read cancelled while waiting for the server");
     }
+
     if (activeTransport.exited()) {
       return refuseResource("child_crashed", `the server process exited (stderr ${activeTransport.stderrBytes()} bytes)`);
     }
+
     return interpretResourceRead(response);
   } finally {
-    clearTimeout(timer);
+    timer?.cancel();
     if (request.signal !== undefined) {
       request.signal.removeEventListener("abort", onAbort);
     }
@@ -504,9 +556,11 @@ async function closeClient(state: ClientState): Promise<void> {
   if (state.closed) {
     return;
   }
+
   state.closed = true;
   state.listCache = undefined;
   state.serverInfo = undefined;
+
   if (state.transport !== undefined) {
     await state.transport.terminate();
   }
@@ -536,17 +590,26 @@ function handleIncoming(
   message: JsonRpcIncomingRequest | JsonRpcNotification,
 ): void {
   const isRequest = "id" in message;
+
+  if (isRequest && message.method === "roots/list" && state.roots.list !== undefined) {
+    activeTransport.respond({ jsonrpc: "2.0", id: message.id, result: state.roots.list });
+    return;
+  }
+
   if (UNSUPPORTED_SERVER_METHODS.has(message.method)) {
     if (isRequest) {
       activeTransport.respond(
         errorResponse(message.id, JSON_RPC_METHOD_NOT_FOUND, `unsupported capability: ${message.method}`),
       );
     }
+
     // The session cannot be trusted to continue: a server that needs
     // elicitation will keep asking, and this client will keep refusing.
     void closeQuietly(state);
+
     return;
   }
+
   if (isRequest) {
     // Any other server-initiated request is equally outside this package.
     activeTransport.respond(
@@ -559,8 +622,10 @@ async function closeQuietly(state: ClientState): Promise<void> {
   if (state.closed) {
     return;
   }
+
   state.closed = true;
   state.listCache = undefined;
+
   if (state.transport !== undefined) {
     await state.transport.terminate();
   }

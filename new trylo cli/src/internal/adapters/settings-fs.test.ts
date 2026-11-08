@@ -43,11 +43,15 @@ test("five layers resolve with correct precedence and layer attribution", () => 
     }),
   );
   const result = loader.load(baseRequest({ cliFlag: { maxTokens: 512 } }));
+
   assert.equal(result.ok, true, JSON.stringify(result));
+
   if (!result.ok) {
     return;
   }
+
   const view = loader.publicView(result.value);
+
   assert.deepEqual(view["provider"], { value: "openai-compatible", layer: "system" });
   assert.deepEqual(view["endpoint"], { value: "https://sys.test", layer: "system" });
   assert.deepEqual(view["model"], { value: "project-model", layer: "project" });
@@ -60,11 +64,15 @@ test("five layers resolve with correct precedence and layer attribution", () => 
 test("adversarial #8: a missing user file still succeeds and falls through to packaged", () => {
   const loader = createSettingsLoader(fakeFs({})); // no files at all
   const result = loader.load(baseRequest());
+
   assert.equal(result.ok, true, JSON.stringify(result));
+
   if (!result.ok) {
     return;
   }
+
   const view = loader.publicView(result.value);
+
   assert.deepEqual(view["provider"], { value: "fixture", layer: "packaged_default" });
   assert.equal(view["model"], undefined); // no layer supplied a model
 });
@@ -72,10 +80,13 @@ test("adversarial #8: a missing user file still succeeds and falls through to pa
 test("adversarial #7: cli_flag overrides the user model and the view says so", () => {
   const loader = createSettingsLoader(fakeFs({ [userFile]: JSON.stringify({ model: "user-model" }) }));
   const result = loader.load(baseRequest({ cliFlag: { model: "flag-model" } }));
+
   assert.equal(result.ok, true);
+
   if (!result.ok) {
     return;
   }
+
   assert.deepEqual(loader.publicView(result.value)["model"], {
     value: "flag-model",
     layer: "cli_flag",
@@ -94,7 +105,9 @@ test("adversarial #1: an unknown key fails the whole load", () => {
 test("adversarial #2: apiKey in the user file fails; no resolved config exists", () => {
   const loader = createSettingsLoader(fakeFs({ [userFile]: '{"apiKey":"sk-FAKE-not-real"}' }));
   const result = loader.load(baseRequest());
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.code, "secret_key");
     assert.equal("value" in result, false);
@@ -137,7 +150,9 @@ test("fail-closed: one invalid layer fails the load even when other layers are v
     }),
   );
   const result = loader.load(baseRequest());
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.code, "unknown_key");
   }
@@ -162,7 +177,9 @@ test("a readFile throw is read_failed, distinct from missing", () => {
     },
   });
   const result = loader.load(baseRequest());
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.code, "read_failed");
   }
@@ -188,11 +205,15 @@ test("real node:fs against testdata/settings/fs proves the disk path and five-la
     homeDir: path.join(fixtureRoot, "home"),
     workspaceDir: path.join(fixtureRoot, "workspace"),
   });
+
   assert.equal(result.ok, true, JSON.stringify(result));
+
   if (!result.ok) {
     return;
   }
+
   const view = loader.publicView(result.value);
+
   assert.deepEqual(view["provider"], { value: "openai-compatible", layer: "system" });
   assert.deepEqual(view["endpoint"], { value: "https://example.test/v1", layer: "system" });
   assert.deepEqual(view["model"], { value: "project-model", layer: "project" });

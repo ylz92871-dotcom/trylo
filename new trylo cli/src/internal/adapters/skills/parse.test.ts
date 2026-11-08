@@ -25,8 +25,11 @@ test("parses a frontmatter skill with explicit fields", () => {
       "Write the commit message.",
     ].join("\n"),
   );
+
   assert.equal(parsed.kind, "ok");
+
   if (parsed.kind !== "ok") return;
+
   assert.equal(parsed.skill.name, "commit-helper");
   assert.equal(parsed.skill.description, "Drafts commits from the staged diff");
   assert.equal(parsed.skill.whenToUse, "When the user asks to commit");

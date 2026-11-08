@@ -31,9 +31,11 @@ function toErrorText(data: unknown): string {
   if (typeof data === "string") {
     return data;
   }
+
   if (data instanceof Uint8Array) {
     return new TextDecoder().decode(data);
   }
+
   return String(data);
 }
 
@@ -46,9 +48,11 @@ function runOnce(
   timeoutMs: number,
 ): Promise<GitCommandResult> {
   const [file, ...args] = argv;
+
   if (file === undefined) {
     throw new Error("git runner received an empty argv");
   }
+
   return new Promise<GitCommandResult>((resolve, reject) => {
     // No `process.env` read here: `env` arrives from the caller (the CLI
     // context's injected environment plus driver neutering), and `undefined`
@@ -66,17 +70,20 @@ function runOnce(
     const timer = setTimeout(() => {
       if (!settled) {
         settled = true;
+
         try {
           child.kill();
         } catch {
           // Already gone; the error below still reports the timeout.
         }
+
         reject(new Error(`git ${args.join(" ")} timed out after ${timeoutMs}ms`));
       }
     }, timeoutMs);
     if (timer.unref !== undefined) {
       timer.unref();
     }
+
     child.stdout?.on("data", (chunk) => {
       stdout += toErrorText(chunk);
     });
@@ -109,6 +116,7 @@ function runOnce(
 export function createGitRunner(options?: GitRunnerOptions): GitCommandRunner {
   const spawnImpl: GitSpawn = options?.spawnImpl ?? ((file, argv, spawnOptions) => spawn(file, [...argv], spawnOptions));
   const timeoutMs = options?.timeoutMs ?? GIT_DIFF_TIMEOUT_MS;
+
   return {
     run(argv, cwd, runOptions): Promise<GitCommandResult> {
       try {

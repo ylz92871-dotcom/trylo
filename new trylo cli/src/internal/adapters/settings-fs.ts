@@ -133,6 +133,7 @@ export function loadSettingsDetailed(
   for (const plan of discovery.plans) {
     const first = plan.candidates[0];
     let selected: { readonly path: string; readonly raw: string } | undefined;
+
     try {
       selected = selectCandidate(plan.candidates, io.readFile);
     } catch {
@@ -146,15 +147,18 @@ export function loadSettingsDetailed(
         first,
       );
     }
+
     if (selected === undefined) {
       sources.push(source(plan.layer, "missing", first));
       continue; // missing layer: contributes nothing
     }
+
     const parsed = parseLayerContent({ status: "present", raw: selected.raw }, selected.path);
     if (!parsed.ok) {
       sources.push(source(plan.layer, "invalid", selected.path, parsed.detail));
       return failure(parsed.code, plan.layer, parsed.detail, selected.path);
     }
+
     sources.push(source(plan.layer, "loaded", selected.path));
     contributions.push({ layer: plan.layer, values: parsed.values });
   }
@@ -165,6 +169,7 @@ export function loadSettingsDetailed(
       sources.push(source("cli_flag", "invalid", undefined, parsedFlag.detail));
       return failure(parsedFlag.code, "cli_flag", parsedFlag.detail);
     }
+
     sources.push(source("cli_flag", "loaded"));
     contributions.push({ layer: "cli_flag", values: parsedFlag.values });
   }

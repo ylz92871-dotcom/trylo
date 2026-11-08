@@ -42,6 +42,7 @@ export function pathToUri(path: string, workspaceRoot: string): string {
     .split("/")
     .map((segment) => encodeURIComponent(segment).replaceAll("%3A", ":"))
     .join("/");
+
   return `file://${encoded}`;
 }
 
@@ -54,12 +55,14 @@ export function uriToPath(uri: string): string | undefined {
   if (!uri.startsWith("file://")) {
     return undefined;
   }
+
   const withoutScheme = uri.slice("file://".length);
   const decoded = safeDecode(withoutScheme);
   // A drive path comes back as `/D:/...` because the URI has an empty authority.
   // The slash belongs to the URI syntax, not to the path, so it is stripped here
   // — otherwise one file would have two spellings depending on the direction.
   const normalized = decoded.replaceAll("\\", "/");
+
   // The URI has an empty authority, so a drive path arrives with a leading slash
   // (`file:///D:/x` -> `/D:/x`). That slash is URI syntax, not part of the path.
   // Testing *after* removing it is what makes the drive case work: `^[A-Za-z]:`
@@ -67,6 +70,7 @@ export function uriToPath(uri: string): string | undefined {
   if (normalized.startsWith("/") && WINDOWS_DRIVE.test(normalized.slice(1))) {
     return normalized.slice(1);
   }
+
   return normalized.startsWith("/") ? normalized : `/${normalized}`;
 }
 

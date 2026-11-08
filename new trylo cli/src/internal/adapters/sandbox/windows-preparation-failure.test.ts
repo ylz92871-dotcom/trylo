@@ -10,8 +10,12 @@ test("a cached preparation failure tells callers not to retry and preserves unre
   const root = mkdtempSync(join(tmpdir(), "trylo-preparation-failure-"));
   let prepared = 0;
   const failure = isolationCleanupError("partial grant", new Error("fixture grant failed"), new Error("fixture cleanup failed"));
+
   try {
-    const boundary = createWindowsShellBoundary(root, { LOCALAPPDATA: root, SystemRoot: "Z:\\missing-system" }, async () => { prepared += 1; throw failure; });
+    const boundary = createWindowsShellBoundary(root, { LOCALAPPDATA: root, SystemRoot: "Z:\\missing-system" }, async () => {
+      prepared += 1;
+      throw failure;
+    });
     for (let call = 0; call < 3; call += 1) await assert.rejects(boundary.wrap([process.execPath]), /Do not retry.*session/);
     assert.equal(prepared, 1);
     await assert.rejects(boundary.close(), error => error === failure);

@@ -64,6 +64,7 @@ export async function runOperation(
       if (items.length === 0) {
         return { status: "empty" };
       }
+
       // Incoming only: "who calls this" is the question a reader asks first, and
       // adding an `direction` argument now would be a second contract to freeze
       // before anything consumes it.

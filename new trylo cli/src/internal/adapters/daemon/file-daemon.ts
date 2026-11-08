@@ -176,16 +176,19 @@ export function createFileDaemon(options: FileDaemonOptions): DaemonPort {
     if (discovered === undefined) {
       return { status: "stopped" };
     }
+
     const verdict = await verifyIdentity(discovered, options.probe);
     if (verdict.verdict === "unverifiable") {
       return { status: "unhealthy", pid: discovered.pid, reason: verdict.reason };
     }
+
     if (verdict.verdict === "gone") {
       // The record outlived its process. Reported as stopped rather than crashed:
       // nothing is known about work in flight from a discovery file alone, and
       // the durable occurrence record is where that fact lives.
       return { status: "stopped" };
     }
+
     const heartbeat = readHeartbeat(options.home);
     if (isStale(heartbeat, options.clock.now(), options.tickIntervalMs ?? 1_000, maxBehind)) {
       return {
@@ -196,6 +199,7 @@ export function createFileDaemon(options: FileDaemonOptions): DaemonPort {
           `more than ${maxBehind} tick intervals ago`,
       };
     }
+
     return {
       status: "running",
       pid: discovered.pid,
@@ -234,8 +238,10 @@ export function createFileDaemon(options: FileDaemonOptions): DaemonPort {
       if (!permitted.ok) {
         return permitted;
       }
+
       const log = logPath(options.home);
       let descriptor: number;
+
       try {
         descriptor = openLog(options.home);
       } catch (error: unknown) {
@@ -247,6 +253,7 @@ export function createFileDaemon(options: FileDaemonOptions): DaemonPort {
           message: `cannot open the daemon log ${log}: ${error instanceof Error ? error.message : String(error)}`,
         };
       }
+
       try {
         const child = spawn(options.launch.file, [...options.launch.args], {
           // The flags that make a background process actually background — each
@@ -265,6 +272,7 @@ export function createFileDaemon(options: FileDaemonOptions): DaemonPort {
             message: `could not spawn ${options.launch.file}; the platform gave no pid`,
           };
         }
+
         // `detached` is not the same thing as "the parent is free to leave":
         // libuv still holds the child handle until it exits, so a CLI that spawned
         // a daemon without this `unref` **never exited** — measured, `trylo daemon
@@ -275,6 +283,7 @@ export function createFileDaemon(options: FileDaemonOptions): DaemonPort {
         // naming a pid that is not this one.
         clearDiscovery(options.home);
         let died: string | undefined;
+
         child.on("exit", (code, signal) => {
           died = signal !== null ? `killed by ${signal}` : `exited with code ${code}`;
         });
@@ -286,19 +295,25 @@ export function createFileDaemon(options: FileDaemonOptions): DaemonPort {
         const sleep =
           options.ready?.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
         let lastStatus = "stopped";
+
         for (let attempt = 0; attempt < attempts; attempt += 1) {
           // The child's own event wins over the poll: a process that says it is
           // gone has already answered, and waiting longer adds nothing.
           if (died !== undefined) {
             return failedLaunch(log, `the daemon died during launch (${died})`);
           }
+
           const state = await readState();
+
           lastStatus = state.status;
+
           if (state.status === "running" && state.pid === pid) {
             return { ok: true, value: { pid } };
           }
+
           await sleep(intervalMs);
         }
+
         return failedLaunch(
           log,
           `the daemon did not advertise itself as pid ${pid} within ${attempts} looks (last status: ${lastStatus})`,
@@ -316,13 +331,16 @@ export function createFileDaemon(options: FileDaemonOptions): DaemonPort {
       if (!permitted.ok) {
         return permitted;
       }
+
       // `stopRefusal` admits only the states that carry a pid, so the narrowing
       // here is the type system confirming the same thing. `stopped` is
       // impossible here and would mean the refusal above let it through.
       if (current.status === "stopped") {
         return { ok: false, code: "not_running", message: "the daemon is already stopped" };
       }
+
       const pid = current.pid;
+
       // `force` is absent by default, and absent means *polite*. Written as
       // `!== true` rather than `=== false` because the previous form made an
       // omitted flag mean "force": `stop({})` — the shape a caller writes when it
@@ -348,6 +366,7 @@ export function createFileDaemon(options: FileDaemonOptions): DaemonPort {
           // record with no process behind it is exactly what `status` reports as
           // `stopped`, so withdrawing it here is the same fact stated earlier.
           clearDiscovery(options.home);
+
           return { ok: true, value: "stopped" };
         } catch (error: unknown) {
           // One `catch`, one outcome: the polite path failed, so fall through to
@@ -356,8 +375,10 @@ export function createFileDaemon(options: FileDaemonOptions): DaemonPort {
           void error;
         }
       }
+
       await options.kill(pid, { force: stopOptions.force === true });
       clearDiscovery(options.home);
+
       return { ok: true, value: "stopped" };
     },
 

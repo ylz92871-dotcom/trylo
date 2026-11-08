@@ -37,17 +37,21 @@ const BOOLEAN_FIELDS = ["user-invocable", "disable-model-invocation"] as const;
 
 export function parseSkillDocument(raw: string): SkillParse {
   const { frontmatter, body } = splitFrontmatter(raw);
+
   if (frontmatter === null) {
     return { kind: "ok", skill: fields({}, body) };
   }
+
   const data = parseFrontmatterLines(frontmatter);
   if (typeof data === "string") {
     return { kind: "invalid", reason: `parse: invalid frontmatter (${data})` };
   }
+
   const name = scalar(data["name"]);
   if (name !== undefined && name.length > MAX_NAME_LENGTH) {
     return { kind: "invalid", reason: `parse: name exceeds ${MAX_NAME_LENGTH} characters` };
   }
+
   for (const field of BOOLEAN_FIELDS) {
     const value = scalar(data[field]);
     if (value !== undefined && value !== "true" && value !== "false") {
@@ -56,6 +60,7 @@ export function parseSkillDocument(raw: string): SkillParse {
       return { kind: "invalid", reason: `parse: unrecognized boolean '${field}: ${value}' (use true or false)` };
     }
   }
+
   return { kind: "ok", skill: fields(data, body) };
 }
 
@@ -63,6 +68,7 @@ function fields(data: Record<string, string | string[]>, body: string): ParsedSk
   const description = scalar(data["description"]) ?? fallbackDescription(body);
   const paths = parsePaths(data["paths"]);
   const named = scalar(data["name"]);
+
   return {
     name: named === undefined ? undefined : collapseWhitespace(named),
     description,
@@ -88,14 +94,17 @@ export function splitFrontmatter(raw: string): { frontmatter: string | null; bod
   if ((lines[0] ?? "").trim() !== "---") {
     return { frontmatter: null, body: raw };
   }
+
   const closing = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
   if (closing === -1 || closing === 1) {
     return { frontmatter: null, body: raw };
   }
+
   const frontmatter = lines.slice(1, closing).join("\n");
   if (frontmatter.length > FRONTMATTER_LIMIT) {
     return { frontmatter: null, body: raw };
   }
+
   return { frontmatter, body: lines.slice(closing + 1).join("\n").replace(/^\n/, "") };
 }
 
@@ -107,36 +116,45 @@ export function splitFrontmatter(raw: string): { frontmatter: string | null; bod
 export function parseFrontmatterLines(frontmatter: string): Record<string, string | string[]> | string {
   const data: Record<string, string | string[]> = {};
   let currentKey: string | undefined;
+
   for (const line of frontmatter.split("\n")) {
     const trimmed = line.trim();
     if (trimmed.length === 0 || trimmed.startsWith("#")) {
       continue;
     }
+
     if (trimmed.startsWith("- ")) {
       if (currentKey === undefined) {
         return "list item outside a key";
       }
+
       const existing = data[currentKey];
       const list = Array.isArray(existing) ? existing : [];
+
       if (existing !== undefined && !Array.isArray(existing)) {
         return `mixed scalar and list for '${currentKey}'`;
       }
+
       list.push(stripQuotesAndComment(trimmed.slice(2)));
       data[currentKey] = list;
       continue;
     }
+
     const colon = trimmed.indexOf(":");
     if (colon <= 0) {
       return `unparseable line '${trimmed}'`;
     }
+
     currentKey = trimmed.slice(0, colon).trim();
     const value = trimmed.slice(colon + 1).trim();
     if (value.length === 0) {
       data[currentKey] = [];
       continue;
     }
+
     data[currentKey] = stripQuotesAndComment(value);
   }
+
   return data;
 }
 
@@ -149,10 +167,12 @@ function stripQuotesAndComment(value: string): string {
   ) {
     return text.slice(1, -1);
   }
+
   const comment = text.indexOf(" #");
   if (comment !== -1) {
     text = text.slice(0, comment);
   }
+
   return text.trim();
 }
 
@@ -188,17 +208,23 @@ function splitCommaRespectingBraces(value: string): ReadonlyArray<string> {
   const parts: string[] = [];
   let current = "";
   let braceDepth = 0;
+
   for (const character of value) {
     if (character === "{") braceDepth += 1;
+
     if (character === "}") braceDepth -= 1;
+
     if (character === "," && braceDepth === 0) {
       parts.push(current.trim());
       current = "";
       continue;
     }
+
     current += character;
   }
+
   parts.push(current.trim());
+
   return parts;
 }
 
@@ -208,11 +234,13 @@ function parsePaths(value: string | string[] | undefined): ReadonlyArray<string>
   if (listed === undefined) {
     return undefined;
   }
+
   const expanded = listed.flatMap((pattern) => expandBraces(pattern)).map((pattern) => {
     const withoutTrailingAll = pattern.endsWith("/**") ? pattern.slice(0, -3) : pattern;
     return withoutTrailingAll.replace(/\/+$/, "");
   });
   const kept = expanded.filter((pattern) => pattern.length > 0 && pattern !== "**");
+
   return kept;
 }
 
@@ -221,7 +249,9 @@ function expandBraces(pattern: string): ReadonlyArray<string> {
   if (match === null) {
     return [pattern];
   }
+
   const [, prefix, alternatives, suffix] = match;
+
   return (alternatives ?? "")
     .split(",")
     .map((alternative) => expandBraces(`${prefix ?? ""}${alternative.trim()}${suffix ?? ""}`))

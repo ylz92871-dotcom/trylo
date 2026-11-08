@@ -71,6 +71,7 @@ export async function pollWatches(
     // conditions are met" rather than "I cannot tell".
     return { fired: [], skippedAlreadyFired: 0, examined: 0 };
   }
+
   const armed = listed.value.filter((row) => row.state.state === "armed");
   const fired: Array<WatchFire> = [];
   let skippedAlreadyFired = 0;
@@ -82,12 +83,15 @@ export async function pollWatches(
       // better than a pass that never ends.
       break;
     }
+
     const verdict = await options.watches.evaluate(row.id);
     if (!verdict.ok || !verdict.value.met) {
       continue;
     }
+
     const because = verdict.value.because ?? "the condition was met";
     const occurrenceId = watchOccurrenceId(row.id, watchFireMoment(row));
+
     if (alreadyFired(await options.occurrences(), row.id, watchFireMoment(row))) {
       // Already recorded. Skipping here — before the queue is touched — is what
       // makes a condition that stays true harmless instead of a burst.
@@ -95,6 +99,7 @@ export async function pollWatches(
       await options.watches.fire(row.id, nowMs, occurrenceId);
       continue;
     }
+
     const text = messageFor(row, because);
     const messageId = await options.enqueue(row.sessionId, text);
     const settled = await options.watches.fire(row.id, nowMs, messageId);
@@ -104,6 +109,7 @@ export async function pollWatches(
       // reason `enqueue` runs before `fire` and not the other way round.
       continue;
     }
+
     fired.push({ watchId: row.id, because, messageId, text });
   }
 

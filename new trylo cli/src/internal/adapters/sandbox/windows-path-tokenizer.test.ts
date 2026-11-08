@@ -48,6 +48,7 @@ test("separators are kept, not turned into control characters", () => {
   // every separator is present verbatim.
   assert.deepEqual(words("C:\\b\\n\\v\\t\\test"), ["C:\\b\\n\\v\\t\\test"]);
   const out = words("C:\\b\\n\\v\\t\\f\\r\\a\\0test");
+
   for (const char of out?.[0] ?? "") {
     assert.ok(char.charCodeAt(0) >= 0x20, `unexpected control character in ${JSON.stringify(out)}`);
   }
@@ -122,13 +123,18 @@ test("the planner now sees the path the caller wrote", () => {
   // the real path.
   const policy = { workspaceRoot: "C:\\w", allowAbsoluteExecutable: false };
   const planned = planShellPipeline(policy, "C:\\tools\\prog.exe");
+
   assert.equal(planned.ok, false, "an absolute executable is refused when not allowed");
+
   if (!planned.ok) {
     assert.equal(planned.code, "path_outside_workspace");
   }
+
   // And with the policy permissive it is admitted as the path that was written.
   const allowed = planShellPipeline({ ...policy, allowAbsoluteExecutable: true }, "C:\\tools\\prog.exe -v");
+
   assert.equal(allowed.ok, true);
+
   if (allowed.ok) {
     assert.deepEqual(allowed.segments[0]?.argv, ["C:\\tools\\prog.exe", "-v"]);
   }
@@ -162,7 +168,9 @@ test("a pipeline of real drive paths keeps every path whole", () => {
     { workspaceRoot: "/w", allowAbsoluteExecutable: true },
     "C:\\tools\\a.exe --in C:\\in\\x.txt | C:\\tools\\b.exe",
   );
+
   assert.equal(planned.ok, true);
+
   if (planned.ok) {
     assert.deepEqual(planned.segments[0]?.argv, ["C:\\tools\\a.exe", "--in", "C:\\in\\x.txt"]);
     assert.deepEqual(planned.segments[1]?.argv, ["C:\\tools\\b.exe"]);

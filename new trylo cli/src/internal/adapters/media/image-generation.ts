@@ -80,13 +80,16 @@ export function createImageGenerationTools(config: ImageGenerationConfig): ToolP
       if (call.name !== GENERATE_IMAGE_TOOL) {
         return { outcome: "error", code: "unknown_tool", message: `unknown_tool:${call.name}` };
       }
+
       const prompt = readPrompt(call.arguments);
       if (prompt === undefined) {
         return { outcome: "error", code: "invalid_arguments", message: "generate_image requires prompt" };
       }
+
       if (signal.aborted) {
         return { outcome: "cancelled" };
       }
+
       if (config.backend === undefined) {
         return {
           outcome: "error",
@@ -94,6 +97,7 @@ export function createImageGenerationTools(config: ImageGenerationConfig): ToolP
           message: "image_generation_unavailable: no image backend configured (externally_blocked)",
         };
       }
+
       if (config.catalog !== undefined && config.modelId !== undefined) {
         const demand = demandModel(config.catalog, config.modelId, { kind: "toolKind", toolKind: "image_generation" });
         if (!demand.ok) {
@@ -104,7 +108,9 @@ export function createImageGenerationTools(config: ImageGenerationConfig): ToolP
           };
         }
       }
+
       let generated: Awaited<ReturnType<ImageGenerationBackend["generate"]>>;
+
       try {
         generated = await config.backend.generate({ prompt }, signal);
       } catch (error) {
@@ -114,12 +120,15 @@ export function createImageGenerationTools(config: ImageGenerationConfig): ToolP
         const message = error instanceof Error ? error.message : "backend threw";
         return { outcome: "error", code: "image_backend_threw", message: `image_backend_threw:${message}` };
       }
+
       if (signal.aborted) {
         return { outcome: "cancelled" };
       }
+
       if (!generated.ok) {
         return { outcome: "error", code: generated.code, message: generated.message };
       }
+
       // The service is not trusted on format: its bytes face the same guard as
       // a local file before they may travel further.
       const validation = checkImageBytes({ bytes: generated.artifact.bytes });
@@ -130,6 +139,7 @@ export function createImageGenerationTools(config: ImageGenerationConfig): ToolP
           message: `image_generation_failed: service returned ${validation.code}`,
         };
       }
+
       const attachment = { ...validation.attachment, detail: "high" as const };
       const summary = describeImageForLog(attachment);
       const value: JsonObject = {
@@ -139,6 +149,7 @@ export function createImageGenerationTools(config: ImageGenerationConfig): ToolP
         ...(attachment.height === undefined ? {} : { height: attachment.height }),
         dataUrl: `data:${attachment.mediaType};base64,${attachment.dataBase64}`,
       };
+
       return { outcome: "result", value, output: `${summary} prompt=${JSON.stringify(prompt)}`, truncated: false };
     },
     async cancel(): Promise<void> {

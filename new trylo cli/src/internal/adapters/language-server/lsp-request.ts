@@ -29,36 +29,45 @@ export function mapLspError(error: unknown, context: string): LspFailure {
   if (isCancellation(error)) {
     return { ok: false, code: "lsp_cancelled", message: `${context}: cancelled` };
   }
+
   if (isTimeout(error)) {
     return { ok: false, code: "lsp_timeout", message: `${context}: ${describe(error)}` };
   }
+
   if (isInvalidResult(error)) {
     return { ok: false, code: "lsp_invalid_result", message: `${context}: ${describe(error)}` };
   }
+
   if (isLimitError(error)) {
     return { ok: false, code: "lsp_limit_exceeded", message: `${context}: ${describe(error)}` };
   }
+
   if (isServerExit(error)) {
     // Checked before the numeric codes: teardown marks its own error with this
     // name, and it must land on `lsp_server_exited` so the caller knows the
     // connection state changed rather than that one request was refused.
     return { ok: false, code: "lsp_server_exited", message: `${context}: ${describe(error)}` };
   }
+
   const code = numericCode(error);
   if (code === JSON_RPC_REQUEST_CANCELLED) {
     return { ok: false, code: "lsp_cancelled", message: `${context}: cancelled by the server` };
   }
+
   if (code === JSON_RPC_CONTENT_MODIFIED) {
     // The document moved under the query. Reporting it as invalid position tells
     // the caller to re-read, which is the only thing that can help.
     return { ok: false, code: "lsp_invalid_position", message: `${context}: document changed on disk; re-read it and retry` };
   }
+
   if (code === JSON_RPC_CONNECTION_CLOSED || code === JSON_RPC_SERVER_NOT_INITIALIZED) {
     return { ok: false, code: "lsp_server_exited", message: `${context}: ${describe(error)}` };
   }
+
   if (isSpawnFailure(error)) {
     return { ok: false, code: "lsp_start_failed", message: `${context}: ${describe(error)}` };
   }
+
   return { ok: false, code: "lsp_start_failed", message: `${context}: ${describe(error)}` };
 }
 

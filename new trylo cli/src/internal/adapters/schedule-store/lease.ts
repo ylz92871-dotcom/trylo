@@ -55,24 +55,30 @@ export type LeaseIo = {
  */
 export function readLease(lockPath: string): LeaseState {
   let raw: string;
+
   try {
     raw = readFileSync(lockPath, "utf8");
   } catch {
     return { held: false };
   }
+
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(raw);
   } catch {
     return { held: false };
   }
+
   if (typeof parsed !== "object" || parsed === null) {
     return { held: false };
   }
+
   const record = parsed as Record<string, unknown>;
   if (typeof record["ownerId"] !== "string" || typeof record["token"] !== "string") {
     return { held: false };
   }
+
   return {
     held: true,
     ownerId: record["ownerId"],
@@ -98,20 +104,24 @@ export function acquireLease(
   if (existing.held) {
     return { ok: false, held: existing };
   }
+
   const token = io.newToken();
   const body = JSON.stringify(
     { ownerId, token, pid, acquiredAtMs: io.now() },
     null,
     2,
   );
+
   try {
     mkdirSync(path.dirname(lockPath), { recursive: true });
     const handle = openSync(lockPath, "wx");
+
     try {
       writeFileSync(handle, body);
     } finally {
       closeSync(handle);
     }
+
     return { ok: true, token };
   } catch {
     // Another process won the create between the read and the write. Reporting
@@ -136,17 +146,20 @@ export function releaseLease(
   if (!current.held) {
     return { released: true };
   }
+
   if (current.ownerId !== ownerId || current.token !== token) {
     return {
       released: false,
       reason: `lease belongs to ${current.ownerId}; not removing another owner's lease`,
     };
   }
+
   try {
     unlinkSync(lockPath);
   } catch {
     // Already gone — the desired state either way.
   }
+
   return { released: true };
 }
 

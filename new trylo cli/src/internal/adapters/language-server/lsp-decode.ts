@@ -45,10 +45,12 @@ function decodeHover(result: unknown): LspAnswer {
   if (record === undefined) {
     return { status: "hover", markdown: plainText(result) };
   }
+
   const contents = record["contents"];
   if (contents === undefined || contents === null) {
     return { status: "empty" };
   }
+
   return { status: "hover", markdown: hoverText(contents) };
 }
 
@@ -61,9 +63,11 @@ function hoverText(contents: unknown): string {
   if (typeof contents === "string") {
     return contents;
   }
+
   if (Array.isArray(contents)) {
     return contents.map((entry) => hoverText(entry)).filter((part) => part.length > 0).join("\n\n");
   }
+
   const record = asRecord(contents);
   if (record !== undefined) {
     const value = record["value"];
@@ -71,6 +75,7 @@ function hoverText(contents: unknown): string {
       return value;
     }
   }
+
   return "";
 }
 
@@ -82,6 +87,7 @@ function decodeSymbols(result: unknown): LspAnswer {
   if (!Array.isArray(result)) {
     throw new InvalidLspResult("documentSymbol did not return an array");
   }
+
   const symbols: LspSymbol[] = [];
   // Nested children are flattened with their container named, because a flat list
   // is what a model can act on and what a journal entry can store.
@@ -91,13 +97,16 @@ function decodeSymbols(result: unknown): LspAnswer {
       if (record === undefined) {
         continue;
       }
+
       const name = record["name"];
       if (typeof name !== "string") {
         continue;
       }
+
       const range = locationFromRange(record["range"]);
       const location = range === undefined ? undefined : { path: "", ...range };
       const resolved = location === undefined || location.path === "" ? undefined : { ...location, path: resolvePath(record, location) };
+
       symbols.push({
         name,
         kind: kindName(record["kind"]),
@@ -110,7 +119,9 @@ function decodeSymbols(result: unknown): LspAnswer {
       }
     }
   };
+
   walk(result, undefined);
+
   return symbols.length === 0 ? { status: "empty" } : { status: "symbols", symbols };
 }
 
@@ -118,26 +129,32 @@ function decodeCalls(result: unknown): LspAnswer {
   if (!Array.isArray(result)) {
     throw new InvalidLspResult("incomingCalls did not return an array");
   }
+
   const items: LspCallHierarchyItem[] = [];
+
   for (const entry of result) {
     const record = asRecord(entry);
     if (record === undefined) {
       continue;
     }
+
     const from = asRecord(record["from"]);
     if (from === undefined) {
       continue;
     }
+
     const location = locationFromUri(asRecord(from["location"])?.["uri"], from["selectionRange"] ?? from["range"]);
     if (location === undefined) {
       continue;
     }
+
     items.push({
       name: stringOr(from["name"], "unknown"),
       kind: kindName(from["kind"]),
       location,
     });
   }
+
   return items.length === 0 ? { status: "empty" } : { status: "calls", items };
 }
 
@@ -147,16 +164,19 @@ function decodeLocations(result: unknown, operation: string): ReadonlyArray<LspL
   // silently promoted to a list of one with a different meaning.
   const entries = Array.isArray(result) ? result : [result];
   const locations: LspLocation[] = [];
+
   for (const entry of entries) {
     const record = asRecord(entry);
     if (record === undefined) {
       throw new InvalidLspResult(`${operation} returned a non-location entry`);
     }
+
     const location = locationFromUri(record["uri"], record["range"] ?? record["targetRange"] ?? record["selectionRange"]);
     if (location !== undefined) {
       locations.push(location);
     }
   }
+
   return locations;
 }
 
@@ -169,16 +189,19 @@ function locationFromUri(uri: unknown, range: unknown): LspLocation | undefined 
   if (typeof uri !== "string") {
     return undefined;
   }
+
   const path = uriToPath(uri);
   if (path === undefined) {
     // A `jdt://` or `untitled:` document has no path on this disk. Dropping it
     // keeps the answer honest about what the user can actually open.
     return undefined;
   }
+
   const span = locationFromRange(range);
   if (span === undefined) {
     return { path, line: 0, character: 0 };
   }
+
   return { path, ...span };
 }
 
@@ -187,16 +210,19 @@ function locationFromRange(range: unknown): { line: number; character: number; e
   if (record === undefined) {
     return undefined;
   }
+
   const start = asRecord(record["start"]);
   if (start === undefined) {
     return undefined;
   }
+
   const end = asRecord(record["end"]);
   const span = {
     line: numberOr(start["line"], 0),
     character: numberOr(start["character"], 0),
     ...(end === undefined ? {} : { endLine: numberOr(end["line"], 0), endCharacter: numberOr(end["character"], 0) }),
   };
+
   return span;
 }
 
@@ -233,8 +259,10 @@ export function kindName(value: unknown): string {
   if (typeof value === "string") {
     return value;
   }
+
   if (typeof value !== "number") {
     return "unknown";
   }
+
   return SYMBOL_KINDS[value] ?? `kind:${value}`;
 }

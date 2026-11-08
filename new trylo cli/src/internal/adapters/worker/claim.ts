@@ -51,26 +51,33 @@ export type QueueDirIo = {
  */
 export function discoverQueuedSessions(io: QueueDirIo, dir: string): ReadonlyArray<string> {
   let names: ReadonlyArray<string>;
+
   try {
     names = io.readDir(dir);
   } catch {
     return [];
   }
+
   const out: { readonly id: string; readonly modifiedAtMs: number }[] = [];
+
   for (const name of names) {
     if (!name.endsWith(QUEUE_FILE_SUFFIX)) {
       continue;
     }
+
     const id = name.slice(0, -QUEUE_FILE_SUFFIX.length);
     if (id.length === 0 || id.includes("/") || id.includes("\\") || id.includes("..")) {
       continue;
     }
+
     const modifiedAtMs = io.statFile(`${dir}/${name}`);
     if (modifiedAtMs === undefined) {
       continue;
     }
+
     out.push({ id, modifiedAtMs });
   }
+
   // 老的最先：队列是先进先出的，先动的应该是等得最久的那条。
   return out
     .sort((left, right) => left.modifiedAtMs - right.modifiedAtMs)
@@ -136,13 +143,17 @@ export function createQueueClaim(options: {
     if (existing !== undefined) {
       return existing;
     }
+
     const created = createFileBackgroundQueue({
       path: options.queuePathFor(sessionId),
       clock: options.clock,
     });
+
     queues.set(sessionId, created);
+
     return created;
   };
+
   return {
     claim: async (sessionId, skip) => {
       const queue = queueFor(sessionId);
@@ -155,6 +166,7 @@ export function createQueueClaim(options: {
           message: `the queue for ${sessionId} is empty`,
         };
       }
+
       if (decision.kind === "unknown") {
         return {
           ok: false,
@@ -162,6 +174,7 @@ export function createQueueClaim(options: {
           message: `the queue for ${sessionId} could not be read (${decision.code})`,
         };
       }
+
       const items = page.ok ? page.value.items : [];
       const message =
         skip === undefined || skip.size === 0
@@ -176,6 +189,7 @@ export function createQueueClaim(options: {
           message: `every queued message in ${sessionId} is held by a handoff record`,
         };
       }
+
       const dropped = await queue.delete(message.id);
       if (!dropped.ok) {
         // 领不到就不能跑。跑一条还在队列里的消息，是让同一个问题被回答两次的唯一方式。
@@ -185,6 +199,7 @@ export function createQueueClaim(options: {
           message: `the head of ${sessionId}'s queue could not be taken (${dropped.code})`,
         };
       }
+
       return {
         ok: true,
         value: {
@@ -210,6 +225,7 @@ export function createQueueClaim(options: {
       if (!page.ok) {
         return undefined;
       }
+
       const head =
         skip === undefined || skip.size === 0
           ? page.value.items[0]
@@ -217,6 +233,7 @@ export function createQueueClaim(options: {
       if (head === undefined) {
         return undefined;
       }
+
       return {
         sessionId,
         messageId: head.id,
@@ -231,6 +248,7 @@ export function createQueueClaim(options: {
         // 什么也不做（少一条看不见）。
         return false;
       }
+
       return page.value.items.some((item) => item.id === messageId);
     },
   };

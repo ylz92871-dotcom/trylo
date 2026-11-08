@@ -6,6 +6,7 @@ import { SRT_WIN } from "./sandbox-vendor.js";
 import { protectWindowsCacheTarget, type CacheTarget } from "./windows-helper-protection.js";
 
 type HelperSource = { readonly path: string; readonly sha256: string };
+
 type ProtectCache = (target: CacheTarget) => void;
 
 function digest(bytes: Uint8Array): string { return createHash("sha256").update(bytes).digest("hex"); }
@@ -27,15 +28,20 @@ export function cacheWindowsHelper(source: HelperSource, directory: string, prot
 /** Captured trusted code uses the same protection and integrity checks as the native helper. */
 export function cacheWindowsBytes(bytes: Uint8Array, sha256: string, directory: string, name: string, protect: ProtectCache, writableRoots: readonly string[] = []): string {
   assertOutsideWriteRoots(directory, writableRoots);
+
   if (!/^[a-f0-9]{64}$/.test(sha256) || digest(bytes) !== sha256 || basename(name) !== name || name === "." || name === "..") {
     throw new Error("isolation_helper_invalid: invalid captured file or digest");
   }
+
   const directoryExists = existsSync(directory);
   if (directoryExists && (!lstatSync(directory).isDirectory() || redirectedDirectory(directory))) {
     throw new Error("isolation_helper_invalid: private cache is redirected");
   }
+
   mkdirSync(directory, { recursive: true });
+
   if (redirectedDirectory(directory)) throw new Error("isolation_helper_invalid: cache became redirected");
+
   protect({ kind: "directory", path: directory, state: directoryExists ? "existing" : "new" });
   const executable = join(directory, name);
   const executableExists = existsSync(executable);
@@ -47,17 +53,22 @@ export function cacheWindowsBytes(bytes: Uint8Array, sha256: string, directory: 
       if (!existsSync(executable)) throw error;
     }
   }
+
   const stat = lstatSync(executable);
   if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || digest(readFileSync(executable)) !== sha256) {
     throw new Error("isolation_helper_invalid: private helper is linked, redirected, incomplete or modified");
   }
+
   protect({ kind: "executable", path: executable, state: executableExists ? "existing" : "new" });
+
   return executable;
 }
 
 function assertOutsideWriteRoots(directory: string, roots: readonly string[]): void {
   if (roots.length === 0) return;
+
   const canonical = existsSync(directory) ? realpathSync.native(directory) : join(realpathSync.native(dirname(directory)), basename(directory));
+
   for (const root of roots) {
     const path = relative(realpathSync.native(root), canonical);
     if (path === "" || (!isAbsolute(path) && path !== ".." && !path.startsWith(`..${sep}`))) {
@@ -69,11 +80,15 @@ function assertOutsideWriteRoots(directory: string, roots: readonly string[]): v
 function pinnedSource(): HelperSource {
   const provenance: unknown = JSON.parse(readFileSync(new URL("./vendor/sandbox-runtime/PROVENANCE.json", import.meta.url), "utf8"));
   if (typeof provenance !== "object" || provenance === null || !("artifacts" in provenance)) throw new Error("isolation_helper_invalid: malformed provenance");
+
   const artifacts = provenance.artifacts;
   const architecture = dirname(SRT_WIN).endsWith("arm64") ? "arm64" : "x64";
+
   if (typeof artifacts !== "object" || artifacts === null) throw new Error("isolation_helper_invalid: missing artifact map");
+
   const artifact: unknown = Reflect.get(artifacts, `srt-win-${architecture}`);
   if (typeof artifact !== "object" || artifact === null || !("sha256" in artifact) || typeof artifact.sha256 !== "string") throw new Error("isolation_helper_invalid: missing artifact digest");
+
   return { path: SRT_WIN, sha256: artifact.sha256 };
 }
 
@@ -89,8 +104,10 @@ export function existingWindowsHelper(env = hostProcessEnvironment()): string {
   const directory = cacheDirectory(env);
   const candidate = join(directory, `srt-win-${source.sha256}.exe`);
   if (!existsSync(candidate)) return source.path;
+
   const stat = lstatSync(candidate);
   if (redirectedDirectory(directory) || !stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || digest(readFileSync(candidate)) !== source.sha256) throw new Error("isolation_helper_invalid: cached helper differs from provenance");
+
   return candidate;
 }
 

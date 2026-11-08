@@ -136,14 +136,18 @@ export function lookupInstruction(
     if (size === undefined) {
       continue;
     }
+
     const relativePath = toWorkspaceRelative(workspaceRoot, absolutePath);
+
     if (size > MAX_INSTRUCTION_BYTES) {
       return { kind: "oversized", relativePath, bytes: size };
     }
+
     const text = reader.readText(absolutePath);
     if (text === undefined) {
       return { kind: "unreadable", relativePath, detail: "read_failed" };
     }
+
     return {
       kind: "found",
       instruction: {
@@ -177,17 +181,22 @@ export function ancestorChain(
   const canonicalRoot = path.resolve(workspaceRoot);
   const chain: string[] = [];
   let current = path.resolve(directoryAbsolute);
+
   for (;;) {
     chain.push(current);
+
     if (current === canonicalRoot) {
       break;
     }
+
     const parent = path.dirname(current);
     if (parent === current) {
       // Not under the root after all; the root is the boundary either way.
       break;
     }
+
     current = parent;
   }
+
   return chain.reverse();
 }

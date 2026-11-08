@@ -34,6 +34,7 @@ function createRunner(
     async run(argv, cwd): Promise<GitCommandResult> {
       const args = argv.slice(1);
       const command = subcommand(args);
+
       calls.push(`${command} @${cwd}`);
       // The filter probe runs before every working-tree command and answers
       // "none configured" by default, which is the common case.
@@ -46,9 +47,11 @@ function createRunner(
       if (resolved instanceof Error) {
         throw resolved;
       }
+
       return { exit: resolved.exit ?? 0, stdout: resolved.stdout ?? "", stderr: resolved.stderr ?? "" };
     },
   };
+
   return { runner, calls };
 }
 
@@ -116,7 +119,9 @@ function createIo(files: ReadonlyMap<string, FakeFile>): { io: WorktreeIo; files
       return { removed: false };
     },
   };
+
   void asIoFailure;
+
   return { io, files: state };
 }
 
@@ -130,6 +135,7 @@ function seeded(): Map<string, FakeFile> {
 function manager(replies: Map<string, Reply>, files = seeded(), randomHex?: () => string) {
   const { io, files: state } = createIo(files);
   const { runner, calls } = createRunner(replies, state);
+
   return {
     port: createWorktreeManager({
       settings: { root: POOL, platform: "posix" },
@@ -156,20 +162,25 @@ function withDiskEffect(replies: Map<string, Reply>, materialise = true): Map<st
   // Rewrite after the walk: mutating a Map while iterating it makes the
   // replacement value the next thing visited, which silently skips entries.
   const rewritten: Array<readonly [string, Reply]> = [];
+
   for (const [key, value] of replies) {
     if (value instanceof Error || typeof value === "function") {
       continue;
     }
+
     const add = key.match(/^worktree add --detach --no-checkout (\S+) \S+$/);
     if (add !== null && (value.exit ?? 0) === 0) {
       const root = add[1] ?? "";
+
       rewritten.push([
         key,
         (files: Map<string, FakeFile>) => {
           const bucket = root.slice(0, root.lastIndexOf("/"));
+
           files.set(bucket, { dir: true });
           files.set(root, { dir: true });
           files.set(`${root}/.git`, { dir: false, text: `gitdir: /repo/.git/worktrees/repo\n` });
+
           // `reset --hard` materialises the tracked tree, so the
           // subdirectories the repository had exist in the new checkout too.
           // Without this, every later "is the caller's directory present"
@@ -179,11 +190,13 @@ function withDiskEffect(replies: Map<string, Reply>, materialise = true): Map<st
               files.set(`${root}${entry.slice("/repo".length)}`, { dir: true });
             }
           }
+
           return value;
         },
       ]);
       continue;
     }
+
     const remove = key.match(/^worktree remove (?:--force )?(\S+)$/);
     if (remove !== null && (value.exit ?? 0) === 0) {
       const root = remove[1] ?? "";
@@ -197,9 +210,11 @@ function withDiskEffect(replies: Map<string, Reply>, materialise = true): Map<st
       ]);
     }
   }
+
   for (const [key, reply] of rewritten) {
     replies.set(key, reply);
   }
+
   return replies;
 }
 
@@ -230,7 +245,9 @@ function withCreatedCheckout(): Map<string, FakeFile> {
     ["/pool/0a1b/repo/src", { dir: true }],
     ["/repo/.git", { dir: true }],
   ]);
+
   seedAdmin(files, "repo", "/pool/0a1b/repo");
+
   return files;
 }
 
@@ -253,10 +270,13 @@ test("create returns a checkout whose cwd keeps the caller's subdirectory", asyn
   const files = seeded();
   const { port, calls } = manager(baseReplies("sha1"), files, () => "0a1b");
   const outcome = await port.create({ sourceCwd: "/repo" });
+
   assert.equal(outcome.ok, true);
+
   if (!outcome.ok) {
     return;
   }
+
   assert.equal(outcome.value.root, "/pool/0a1b/repo");
   assert.equal(outcome.value.cwd, "/pool/0a1b/repo", "no subdirectory means the checkout root");
   assert.equal(outcome.value.headSha, "sha1");
@@ -272,7 +292,9 @@ test("create preserves a nested working directory", async () => {
   const files = new Map([...seeded(), ["/repo/src", { dir: true }]]);
   const { port } = manager(baseReplies("sha1"), files, () => "0a1b");
   const outcome = await port.create({ sourceCwd: "/repo/src" });
+
   assert.equal(outcome.ok, true);
+
   if (outcome.ok) {
     assert.equal(outcome.value.cwd, "/pool/0a1b/repo/src");
   }
@@ -286,10 +308,13 @@ test("a relative pool root is refused before anything runs", async () => {
     io: createIo(seeded()).io,
   });
   const outcome = await port.create({ sourceCwd: "/repo" });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.code, "relative_root");
   }
+
   assert.deepEqual(calls, [], "no git ran against a root we cannot resolve");
 });
 
@@ -297,7 +322,9 @@ test("a directory outside a repository is reported as such, not as a git failure
   const files = new Map([...seeded(), ["/tmp", { dir: true }]]);
   const { port } = manager(new Map([["rev-parse --show-toplevel", { exit: 128, stderr: "not a git repository" }]]), files);
   const outcome = await port.create({ sourceCwd: "/tmp" });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.code, "not_a_repository", "the reason a person needs is 'not a repo', not 'git said no'");
   }
@@ -323,10 +350,13 @@ test("git missing is 'git_unavailable', which a caller must not read as git's ve
 
 test("a cancellation is a distinct terminal state", async () => {
   const controller = new AbortController();
+
   controller.abort();
   const { port } = manager(new Map([["rev-parse --show-toplevel", new Error("aborted")]]));
   const outcome = await port.list({ sourceCwd: "/repo", signal: controller.signal });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.code, "cancelled");
   }
@@ -352,7 +382,9 @@ test("a taken bucket is retried with a fresh name", async () => {
   const names = ["0a1b", "0a1b", "ffff"];
   const { port } = manager(replies, files, () => names.shift() ?? "ffff");
   const outcome = await port.create({ sourceCwd: "/repo" });
+
   assert.equal(outcome.ok, true, "an occupied bucket is skipped, not adopted");
+
   if (outcome.ok) {
     assert.equal(outcome.value.root, "/pool/ffff/repo");
   }
@@ -362,7 +394,9 @@ test("a draw that is not hex is skipped rather than becoming a bucket name", asy
   const names = ["zz", "0a1b"];
   const { port } = manager(baseReplies("sha1"), seeded(), () => names.shift() ?? "0a1b");
   const outcome = await port.create({ sourceCwd: "/repo" });
+
   assert.equal(outcome.ok, true);
+
   if (outcome.ok) {
     assert.equal(outcome.value.root, "/pool/0a1b/repo");
   }
@@ -370,27 +404,35 @@ test("a draw that is not hex is skipped rather than becoming a bucket name", asy
 
 test("a failed checkout leaves no bucket behind", async () => {
   const replies = baseReplies("sha1");
+
   replies.set("worktree add --detach --no-checkout /pool/0a1b/repo sha1", { exit: 128, stderr: "fatal: bad revision" });
   const { port, files } = manager(replies, seeded(), () => "0a1b");
   const outcome = await port.create({ sourceCwd: "/repo" });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.code, "git_failed");
     assert.equal(outcome.detail.includes("bad revision"), true, "git's own words reach the caller");
   }
+
   assert.equal(files.has("/pool/0a1b"), false, "an empty bucket is reclaimed");
 });
 
 test("a failure while populating rolls the checkout back with force", async () => {
   const replies = baseReplies("sha1");
+
   replies.set("--work-tree=. reset --hard --no-recurse-submodules sha1", { exit: 1, stderr: "out of disk" });
   replies.set("worktree remove --force /pool/0a1b/repo", { exit: 0 });
   const { port, calls } = manager(replies, seeded(), () => "0a1b");
   const outcome = await port.create({ sourceCwd: "/repo" });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.code, "git_failed");
   }
+
   assert.equal(
     calls.some((call) => call.startsWith("worktree remove --force")),
     true,
@@ -416,20 +458,26 @@ test("create rolls back when the requested base lacks the caller's directory", a
   );
   const { port, calls } = manager(replies, files, () => "0a1b");
   const outcome = await port.create({ sourceCwd: "/repo/src" });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.code, "outside_repository");
   }
+
   assert.equal(calls.some((call) => call.startsWith("worktree remove --force")), true);
 });
 
 test("list returns our checkouts and nothing else", async () => {
   const { port } = manager(listingReplies, withCreatedCheckout());
   const outcome = await port.list({ sourceCwd: "/repo" });
+
   assert.equal(outcome.ok, true);
+
   if (!outcome.ok) {
     return;
   }
+
   assert.equal(outcome.value.length, 1, "the primary checkout is not ours to manage");
   assert.equal(outcome.value[0]?.root, "/pool/0a1b/repo");
   assert.equal(outcome.value[0]?.headSha, "bbb");
@@ -437,18 +485,22 @@ test("list returns our checkouts and nothing else", async () => {
 
 test("a hand-made worktree is invisible to list, so remove cannot reach it", async () => {
   const files = withCreatedCheckout();
+
   files.set("/elsewhere/manual", { dir: true });
   files.set("/elsewhere/manual/.git", { dir: false, text: "gitdir: /repo/.git/worktrees/manual\n" });
   files.set("/repo/.git/worktrees/manual", { dir: true });
   files.set("/repo/.git/worktrees/manual/gitdir", { dir: false, text: "/elsewhere/manual/.git\n" });
   const replies = new Map(listingReplies);
+
   replies.set(
     "worktree list --porcelain -z",
     { stdout: "worktree /elsewhere/manual\0HEAD ccc\0detached\0\0worktree /pool/0a1b/repo\0HEAD bbb\0detached\0\0" },
   );
   const { port } = manager(replies, files);
   const outcome = await port.list({ sourceCwd: "/repo" });
+
   assert.equal(outcome.ok, true);
+
   if (outcome.ok) {
     assert.deepEqual(
       outcome.value.map((item) => item.root),
@@ -477,8 +529,10 @@ test("the backlink probe runs with the caller's environment", async () => {
   };
   const port = createWorktreeManager({ settings: { root: POOL, platform: "posix" }, runner: watched, io });
   const outcome = await port.list({ sourceCwd: "/repo", baseEnv: { [marker]: "carried" } });
+
   assert.equal(outcome.ok, true);
   const gitDirEnvs = perCommand.get("rev-parse --git-dir") ?? [];
+
   assert.equal(gitDirEnvs.length > 0, true, "the backlink probe did not run");
   assert.equal(
     gitDirEnvs.every((env) => env?.[marker] === "carried"),
@@ -489,11 +543,14 @@ test("the backlink probe runs with the caller's environment", async () => {
 
 test("a stale registration whose directory was recycled is not adopted", async () => {
   const files = withCreatedCheckout();
+
   // The administration directory now points at a different checkout.
   files.set("/repo/.git/worktrees/repo/gitdir", { dir: false, text: "/pool/ffff/repo/.git\n" });
   const { port } = manager(listingReplies, files);
   const outcome = await port.list({ sourceCwd: "/repo" });
+
   assert.equal(outcome.ok, true);
+
   if (outcome.ok) {
     assert.deepEqual(outcome.value, [], "a backlink to elsewhere means this registration is stale");
   }
@@ -501,10 +558,13 @@ test("a stale registration whose directory was recycled is not adopted", async (
 
 test("a managed checkout with no HEAD fails the listing rather than vanishing from it", async () => {
   const replies = new Map(listingReplies);
+
   replies.set("worktree list --porcelain -z", { stdout: "worktree /pool/0a1b/repo\0detached\0\0" });
   const { port } = manager(replies, withCreatedCheckout());
   const outcome = await port.list({ sourceCwd: "/repo" });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.detail.includes("no HEAD"), true);
   }
@@ -522,22 +582,29 @@ test("remove refuses a path that is not ours", async () => {
 test("remove refuses the checkout you are standing in", async () => {
   const { port, calls } = manager(listingReplies, withCreatedCheckout());
   const outcome = await port.remove({ sourceCwd: "/pool/0a1b/repo/src", root: "/pool/0a1b/repo" });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.code, "current_checkout");
   }
+
   assert.equal(calls.some((call) => call.includes("worktree remove")), false, "nothing was deleted");
 });
 
 test("remove refuses a checkout holding ignored local files", async () => {
   const replies = new Map(listingReplies);
+
   replies.set("ls-files --others --ignored --exclude-standard -z", { stdout: "node_modules/x\0" });
   const { port, calls } = manager(replies, withCreatedCheckout());
   const outcome = await port.remove({ sourceCwd: "/repo", root: "/pool/0a1b/repo" });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.code, "has_ignored_files");
   }
+
   assert.equal(calls.some((call) => call.startsWith("worktree remove")), false);
 });
 
@@ -545,9 +612,11 @@ test("remove never passes --force, so git refuses tracked changes for us", async
   const replies = withDiskEffect(
     new Map([...listingReplies, ["ls-files --others --ignored --exclude-standard -z", { stdout: "" }]]),
   );
+
   replies.set("worktree remove /pool/0a1b/repo", { exit: 0 });
   const { port, calls, files } = manager(withDiskEffect(replies), withCreatedCheckout());
   const outcome = await port.remove({ sourceCwd: "/repo", root: "/pool/0a1b/repo" });
+
   assert.equal(outcome.ok, true);
   assert.equal(calls.some((call) => call.includes("--force")), false, "git, not us, is what refuses dirty work");
   assert.equal(files.has("/pool/0a1b/repo"), false, "the checkout is gone");
@@ -556,11 +625,14 @@ test("remove never passes --force, so git refuses tracked changes for us", async
 
 test("a git refusal during remove surfaces as a failure, not as a completed deletion", async () => {
   const replies = new Map(listingReplies);
+
   replies.set("ls-files --others --ignored --exclude-standard -z", { stdout: "" });
   replies.set("worktree remove /pool/0a1b/repo", { exit: 128, stderr: "fatal: contains modified or untracked files" });
   const { port } = manager(replies, withCreatedCheckout());
   const outcome = await port.remove({ sourceCwd: "/repo", root: "/pool/0a1b/repo" });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.detail.includes("modified or untracked"), true, "the user's work is what stopped us");
   }
@@ -587,28 +659,37 @@ test("an unbound checkout answers 'no owner' rather than failing", async () => {
 test("binding is exclusive and idempotent for the same owner", async () => {
   const { port, files } = manager(ownerReplies, ownerFiles());
   const first = await port.bindOwner({ root: "/pool/0a1b/repo", ownerId: "task-1" });
+
   assert.equal(first.ok, true);
   const again = await port.bindOwner({ root: "/pool/0a1b/repo", ownerId: "task-1" });
+
   assert.equal(again.ok, true, "re-binding our own checkout is not a conflict");
   const other = await port.bindOwner({ root: "/pool/0a1b/repo", ownerId: "task-2" });
+
   assert.equal(other.ok, false);
+
   if (!other.ok) {
     assert.equal(other.code, "already_owned");
   }
+
   const owner = await port.ownerOf({ root: "/pool/0a1b/repo" });
+
   assert.equal(owner.ok && owner.value, "task-1", "the first owner kept it");
   assert.equal(files.has("/repo/.git/worktrees/repo/trylo-worktree.json"), true);
 });
 
 test("a race for the same checkout loses to whoever wrote first", async () => {
   const files = ownerFiles();
+
   files.set("/repo/.git/worktrees/repo/trylo-worktree.json", {
     dir: false,
     text: '{"version":1,"ownerId":"task-9"}\n',
   });
   const { port } = manager(ownerReplies, files);
   const outcome = await port.bindOwner({ root: "/pool/0a1b/repo", ownerId: "task-1" });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.code, "already_owned");
   }
@@ -616,10 +697,13 @@ test("a race for the same checkout loses to whoever wrote first", async () => {
 
 test("a corrupted ownership record is reported, not read as unowned", async () => {
   const files = ownerFiles();
+
   files.set("/repo/.git/worktrees/repo/trylo-worktree.json", { dir: false, text: "{ not json" });
   const { port } = manager(ownerReplies, files);
   const outcome = await port.ownerOf({ root: "/pool/0a1b/repo" });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.code, "owner_invalid");
   }
@@ -627,10 +711,13 @@ test("a corrupted ownership record is reported, not read as unowned", async () =
 
 test("a checkout outside the pool has no owner record to report", async () => {
   const files = ownerFiles();
+
   files.set("/elsewhere/manual", { dir: true });
   const { port } = manager(ownerReplies, files);
   const outcome = await port.ownerOf({ root: "/elsewhere/manual" });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.code, "not_managed", "a hand-made worktree has no owner concept here");
   }

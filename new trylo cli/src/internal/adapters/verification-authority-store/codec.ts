@@ -97,16 +97,20 @@ export function decodeRegistry(raw: string): RegistryDecode {
   if (raw.length === 0) {
     return { ok: true, events: [] };
   }
+
   // 缺少结尾换行说明写入被中断；那条记录是否落盘不可知，整库拒绝服务。
   if (!raw.endsWith("\n")) {
     return corrupt("registry_torn_tail", "trailing record is incomplete");
   }
+
   const lines = splitRecordLines(raw);
   if (!lines.ok) {
     return corrupt("registry_corrupt", lines.detail);
   }
+
   const events: RegistryEvent[] = [];
   let expected = 1;
+
   for (const line of lines.value) {
     const parsed = decodeLine(line, expected);
     if (!parsed.ok) {
@@ -115,6 +119,7 @@ export function decodeRegistry(raw: string): RegistryDecode {
     events.push(parsed.event);
     expected = parsed.event.sequence + 1;
   }
+
   return { ok: true, events };
 }
 
@@ -133,11 +138,13 @@ function splitRecordLines(
   raw: string,
 ): { readonly ok: true; readonly value: readonly string[] } | { readonly ok: false; readonly detail: string } {
   const lines = raw.split("\n");
+
   lines.pop();
   const blank = lines.findIndex((line) => line.length === 0);
   if (blank >= 0) {
     return { ok: false, detail: `blank line between records at line ${String(blank + 1)}` };
   }
+
   return { ok: true, value: lines };
 }
 
@@ -149,20 +156,25 @@ function decodeLine(
   if (space <= 0) {
     return corrupt("registry_corrupt", `missing checksum at seq~${String(expectedSequence)}`);
   }
+
   const checksum = line.slice(0, space);
   const payload = line.slice(space + 1);
   if (sha256Hex(payload) !== checksum) {
     return corrupt("registry_corrupt", `checksum mismatch at seq~${String(expectedSequence)}`);
   }
+
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(payload);
   } catch {
     return corrupt("registry_corrupt", `unparseable record at seq~${String(expectedSequence)}`);
   }
+
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return corrupt("registry_corrupt", `record is not an object at seq~${String(expectedSequence)}`);
   }
+
   const event = parsed as Record<string, unknown>;
   if (event.formatVersion !== VERIFICATION_REGISTRY_FORMAT_VERSION) {
     return corrupt(
@@ -170,12 +182,14 @@ function decodeLine(
       `unsupported format version ${String(event.formatVersion)} at seq~${String(expectedSequence)}`,
     );
   }
+
   if (typeof event.sequence !== "number" || event.sequence !== expectedSequence) {
     return corrupt(
       "registry_corrupt",
       `sequence gap: expected ${String(expectedSequence)} got ${String(event.sequence)}`,
     );
   }
+
   return decodeBody(event, expectedSequence);
 }
 
@@ -186,9 +200,11 @@ function decodeBody(
   if (event.kind === "receipt_issued") {
     return decodeReceiptIssued(event, sequence);
   }
+
   if (event.kind === "receipt_revoked") {
     return decodeReceiptRevoked(event, sequence);
   }
+
   return corrupt("registry_corrupt", `unknown kind ${String(event.kind)} at seq~${String(sequence)}`);
 }
 
@@ -202,6 +218,7 @@ function decodeReceiptIssued(event: Record<string, unknown>, sequence: number): 
   if (extra.length > 0) {
     return corrupt("registry_corrupt", `unknown keys at seq~${String(sequence)}: ${extra.join(",")}`);
   }
+
   // 收据解析器只接受收据自己的 14 个键；`kind` 和 `sequence` 是账本记录层面的
   // 字段，不能混进去（否则「未知键」检查会把自己人挡在门外）。
   const receiptParse = parseVerificationReceipt({
@@ -223,7 +240,9 @@ function decodeReceiptIssued(event: Record<string, unknown>, sequence: number): 
   if (!receiptParse.ok) {
     return corrupt("registry_corrupt", `${receiptParse.detail} at seq~${String(sequence)}`);
   }
+
   const receipt = receiptParse.value;
+
   return {
     ok: true,
     event: {
@@ -252,6 +271,7 @@ function decodeReceiptRevoked(event: Record<string, unknown>, sequence: number):
   if (extra.length > 0) {
     return corrupt("registry_corrupt", `unknown keys at seq~${String(sequence)}: ${extra.join(",")}`);
   }
+
   const receiptId = event.receiptId;
   const reason = event.reason;
   const revokedAt = event.revokedAt;
@@ -263,6 +283,7 @@ function decodeReceiptRevoked(event: Record<string, unknown>, sequence: number):
   ) {
     return corrupt("registry_corrupt", `malformed receipt_revoked at seq~${String(sequence)}`);
   }
+
   return {
     ok: true,
     event: {
@@ -290,6 +311,7 @@ export function resolveReceipt(
   receiptId: string,
 ): ResolvedReceipt | undefined {
   let resolved: ResolvedReceipt | undefined;
+
   for (const event of events) {
     if (event.receiptId !== receiptId) {
       continue;
@@ -320,6 +342,7 @@ export function resolveReceipt(
       resolved = { receipt: resolved.receipt, status: "revoked" };
     }
   }
+
   return resolved;
 }
 

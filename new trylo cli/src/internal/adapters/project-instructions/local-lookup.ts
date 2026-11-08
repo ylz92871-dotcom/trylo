@@ -57,15 +57,19 @@ export function buildLocalRuleLookup(
     if (lookup.kind === "found") {
       return lookup.instruction;
     }
+
     if (lookup.kind !== "absent") input.onProblem?.(`project_instructions_${lookup.kind}:${lookup.relativePath}`);
+
     return lookup.kind === "absent" ? "absent" : "unusable";
   };
+
   return (targetAbsolutePath: string): ReadonlyArray<LocalRuleNote> => {
     // The *directory*, not the file: a rule lives in a directory, and asking
     // for `src/button.ts/AGENTS.md` would probe three filenames that can never
     // exist — once per file read, for an answer that is always "absent".
     const chain = ancestorChain(input.workspaceRoot, path.dirname(targetAbsolutePath));
     const notes: LocalRuleNote[] = [];
+
     chain.forEach((directory, index) => {
       const scope = index === 0 ? "workspace_root" : "directory";
       // A rule is a property of the directory's rule file, so the memo is keyed
@@ -74,13 +78,17 @@ export function buildLocalRuleLookup(
       const key = `${scope}:${directory}`;
       const held = memo.get(key);
       const rule: Memo = held ?? resolve(directory, scope);
+
       memo.set(key, rule);
+
       if (rule === "absent" || rule === "unusable") {
         return;
       }
+
       if (adopted.has(rule.relativePath)) {
         return;
       }
+
       notes.push({
         relativePath: rule.relativePath,
         scopePath: rule.scopePath,
@@ -89,6 +97,7 @@ export function buildLocalRuleLookup(
         text: rule.text,
       });
     });
+
     return notes;
   };
 }

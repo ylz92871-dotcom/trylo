@@ -50,6 +50,7 @@ export function expandInstructionImports(input: ImportExpansionInput): ImportExp
     budget: input.maxTotalImportBytes ?? DEFAULT_TOTAL_IMPORT_BYTES,
   };
   const text = expandText(input, state);
+
   return { text, problems: state.problems };
 }
 
@@ -86,10 +87,12 @@ function wholeLineReference(line: string): string | undefined {
   if (!trimmed.startsWith("@") || trimmed.length < 2) {
     return undefined;
   }
+
   const reference = trimmed.slice(1);
   if (/\s/.test(reference)) {
     return undefined;
   }
+
   return reference;
 }
 
@@ -107,50 +110,61 @@ function expandReference(
     state.problems.push(`project_instructions_import_outside_root:${homeish}`);
     return `(@import refused: ${homeish} is outside the workspace)`;
   }
+
   const resolved = resolveReference(reference, input);
   if (resolved === undefined) {
     // Not a path we can name (e.g. a bare `@`); leave the line as written.
     return line;
   }
+
   if (!isPathWithinRoot(input.workspaceRoot, resolved)) {
     state.problems.push(`project_instructions_import_outside_root:${toForwardSlashes(resolved)}`);
     return `(@import refused: ${toForwardSlashes(resolved)} is outside the workspace)`;
   }
+
   if (state.depth >= MAX_IMPORT_DEPTH) {
     state.problems.push(`project_instructions_import_depth:${toForwardSlashes(resolved)}`);
     // The reference stays visible: its content was not included, and the model
     // (or the user) can still go and read it.
     return line;
   }
+
   const canonical = canonicalOf(resolved);
   if (state.visiting.has(canonical)) {
     // The content is already part of this expansion; the line has nothing to add.
     state.problems.push(`project_instructions_import_cycle:${toForwardSlashes(resolved)}`);
     return "";
   }
+
   const size = input.reader.fileSize(resolved);
   if (size === undefined) {
     state.problems.push(`project_instructions_import_missing:${toForwardSlashes(resolved)}`);
     return `(@import not readable: ${toForwardSlashes(resolved)})`;
   }
+
   if (size > MAX_INSTRUCTION_BYTES) {
     state.problems.push(`project_instructions_import_oversized:${toForwardSlashes(resolved)}`);
     return `(@import too large to include: ${toForwardSlashes(resolved)})`;
   }
+
   const text = input.reader.readText(resolved);
   if (text === undefined) {
     state.problems.push(`project_instructions_import_missing:${toForwardSlashes(resolved)}`);
     return `(@import not readable: ${toForwardSlashes(resolved)})`;
   }
+
   const byteSize = Buffer.byteLength(text, "utf8");
   if (byteSize > state.budget) {
     state.problems.push(`project_instructions_import_budget:${toForwardSlashes(resolved)}`);
     return `(@import not included: instruction import budget exhausted at ${toForwardSlashes(resolved)})`;
   }
+
   state.budget -= byteSize;
   state.visiting.add(canonical);
   const parentDepth = state.depth;
+
   state.depth = parentDepth + 1;
+
   try {
     const expanded = expandText(
       { ...input, text, baseDirectory: path.dirname(resolved) },
