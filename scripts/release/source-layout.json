@@ -7,7 +7,7 @@
     {
       "id": "cli",
       "source": "new trylo cli",
-      "target": "trylo-cli",
+      "target": "new trylo cli",
       "excludePrefixes": [
         "docs",
         "open",
@@ -42,20 +42,6 @@
       "reason": "Service host and existing isolated service adapters; provenance is retained."
     },
     {
-      "id": "work",
-      "source": "work",
-      "target": "work",
-      "excludePrefixes": [
-        "vendor",
-        "tests/fixtures/work-recordings"
-      ],
-      "excludeFiles": [
-        "HANDOFF.md",
-        "WORK-REPAIR-MIGRATION-UI-ARCHITECTURE.md"
-      ],
-      "reason": "Work product source; vendor closure and recording-dependent tests remain release blockers."
-    },
-    {
       "id": "mobile",
       "source": "mobile-app",
       "target": "mobile-app",
@@ -70,18 +56,6 @@
       "reason": "Mobile and Android source without local signing state or generated web assets."
     },
     {
-      "id": "website",
-      "source": "trylocode-site",
-      "target": "website",
-      "excludePrefixes": [
-        "app/releases"
-      ],
-      "excludeFiles": [
-        "REDESIGN-PLAN.md"
-      ],
-      "reason": "Website source is explicitly included; release binaries are separate."
-    },
-    {
       "id": "fixture",
       "source": "docs/fixtures",
       "target": "docs/fixtures",
@@ -90,65 +64,42 @@
       ],
       "excludeFiles": [],
       "reason": "Existing synthetic fixture candidates; privacy and test reachability review still required."
-    },
-    {
-      "id": "tool-sources",
-      "source": "new_tool",
-      "target": "new_tool",
-      "excludePrefixes": [
-        "packages",
-        "browser",
-        "office",
-        "ingestion"
-      ],
-      "excludeFiles": [],
-      "reason": "Trylo-maintained Windows-MCP fork and tooling documentation; downloaded environments remain excluded."
-    },
-    {
-      "id": "remote-relay",
-      "source": "remote-relay",
-      "target": "remote-relay",
-      "excludePrefixes": [
-        "releases"
-      ],
-      "excludeFiles": [],
-      "reason": "Remote collaboration relay source and deployment templates; no live environment, data or credentials."
     }
   ],
   "extraFiles": [
     {
       "source": "new trylo cli/vendor-bin/pty/Cargo.toml",
-      "target": "native/pty/Cargo.toml",
+      "target": "new trylo cli/vendor-bin/pty/Cargo.toml",
       "reason": "Existing Trylo PTY source and provenance, explicitly selected from ignored build inputs."
     },
     {
       "source": "new trylo cli/vendor-bin/pty/Cargo.lock",
-      "target": "native/pty/Cargo.lock",
+      "target": "new trylo cli/vendor-bin/pty/Cargo.lock",
       "reason": "Existing Trylo PTY source and provenance, explicitly selected from ignored build inputs."
     },
     {
       "source": "new trylo cli/vendor-bin/pty/PROVENANCE.json",
-      "target": "native/pty/PROVENANCE.json",
+      "target": "new trylo cli/vendor-bin/pty/PROVENANCE.json",
       "reason": "Existing Trylo PTY source and provenance, explicitly selected from ignored build inputs."
     },
     {
       "source": "new trylo cli/vendor-bin/pty/src/main.rs",
-      "target": "native/pty/src/main.rs",
+      "target": "new trylo cli/vendor-bin/pty/src/main.rs",
       "reason": "Existing Trylo PTY source and provenance, explicitly selected from ignored build inputs."
     },
     {
-      "source": "new_tool/computer-control/Windows-MCP/native/wgc-helper/Interop.cs",
-      "target": "native/wgc/Interop.cs",
+      "source": "desktop-services/toolchain/computer-control/Windows-MCP/native/wgc-helper/Interop.cs",
+      "target": "desktop-services/toolchain/computer-control/Windows-MCP/native/wgc-helper/Interop.cs",
       "reason": "Existing WGC helper source, explicitly selected from ignored build inputs; provenance review remains required."
     },
     {
-      "source": "new_tool/computer-control/Windows-MCP/native/wgc-helper/Program.cs",
-      "target": "native/wgc/Program.cs",
+      "source": "desktop-services/toolchain/computer-control/Windows-MCP/native/wgc-helper/Program.cs",
+      "target": "desktop-services/toolchain/computer-control/Windows-MCP/native/wgc-helper/Program.cs",
       "reason": "Existing WGC helper source, explicitly selected from ignored build inputs; provenance review remains required."
     },
     {
-      "source": "new_tool/computer-control/Windows-MCP/native/wgc-helper/TryloWgcHelper.csproj",
-      "target": "native/wgc/TryloWgcHelper.csproj",
+      "source": "desktop-services/toolchain/computer-control/Windows-MCP/native/wgc-helper/TryloWgcHelper.csproj",
+      "target": "desktop-services/toolchain/computer-control/Windows-MCP/native/wgc-helper/TryloWgcHelper.csproj",
       "reason": "Existing WGC helper source, explicitly selected from ignored build inputs; provenance review remains required."
     },
     {
@@ -167,13 +118,8 @@
       "reason": "First-batch architecture and release organization."
     },
     {
-      "source": "third_party/README.md",
-      "target": "third_party/README.md",
-      "reason": "First-batch architecture and release organization."
-    },
-    {
-      "source": "tools/release/source-layout.json",
-      "target": "tools/release/source-layout.json",
+      "source": "scripts/release/source-layout.json",
+      "target": "scripts/release/source-layout.json",
       "reason": "First-batch architecture and release organization."
     },
     {
@@ -182,74 +128,64 @@
       "reason": "First-batch architecture and release organization."
     },
     {
-      "source": "desktop/src/settings/development-cli-runtime.test.ts",
-      "target": "desktop/src/settings/development-cli-runtime.test.ts",
-      "reason": "Preserve the untracked test accompanying existing development runtime settings changes."
-    },
-    {
       "source": ".gitignore",
       "target": ".gitignore",
       "reason": "Existing repository ignore rules; final target-path rules must be reviewed during migration."
     },
     {
       "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/linux-sandbox-utils.d.ts",
-      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/linux-sandbox-utils.d.ts",
+      "target": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/linux-sandbox-utils.d.ts",
       "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
     },
     {
       "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/mitm-ca.js",
-      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/mitm-ca.js",
+      "target": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/mitm-ca.js",
       "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
     },
     {
       "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/request-filter.d.ts",
-      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/request-filter.d.ts",
+      "target": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/request-filter.d.ts",
       "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
     },
     {
       "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-config.d.ts",
-      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-config.d.ts",
+      "target": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-config.d.ts",
       "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
     },
     {
       "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-schemas.d.ts",
-      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-schemas.d.ts",
+      "target": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-schemas.d.ts",
       "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
     },
     {
       "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-utils.d.ts",
-      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-utils.d.ts",
+      "target": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-utils.d.ts",
       "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
     },
     {
       "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-utils.js",
-      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-utils.js",
+      "target": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-utils.js",
       "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
     },
     {
       "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/windows-sandbox-utils.d.ts",
-      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/windows-sandbox-utils.d.ts",
+      "target": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/windows-sandbox-utils.d.ts",
       "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
     },
     {
       "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/windows-sandbox-utils.js",
-      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/windows-sandbox-utils.js",
+      "target": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/windows-sandbox-utils.js",
       "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
     },
     {
       "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/utils/debug.js",
-      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/utils/debug.js",
+      "target": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/utils/debug.js",
       "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
     },
     {
       "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/utils/platform.js",
-      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/utils/platform.js",
+      "target": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/utils/platform.js",
       "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
-    },
-    {
-      "source": "tool-sources.json",
-      "target": "tool-sources.json",
-      "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
     },
     {
       "source": "scripts/setup-repository-tools.mjs",
@@ -262,38 +198,38 @@
       "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
     },
     {
-      "source": "new_tool/README.md",
-      "target": "new_tool/README.md",
+      "source": "desktop-services/toolchain/README.md",
+      "target": "desktop-services/toolchain/README.md",
       "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
     },
     {
-      "source": "new_tool/computer-control/Windows-MCP/PROVENANCE.json",
-      "target": "new_tool/computer-control/Windows-MCP/PROVENANCE.json",
+      "source": "desktop-services/toolchain/computer-control/Windows-MCP/PROVENANCE.json",
+      "target": "desktop-services/toolchain/computer-control/Windows-MCP/PROVENANCE.json",
       "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
     },
     {
-      "source": "new_tool/computer-control/Windows-MCP/README.md",
-      "target": "new_tool/computer-control/Windows-MCP/README.md",
+      "source": "desktop-services/toolchain/computer-control/Windows-MCP/README.md",
+      "target": "desktop-services/toolchain/computer-control/Windows-MCP/README.md",
       "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
     },
     {
-      "source": "new_tool/computer-control/Windows-MCP/LICENSE.md",
-      "target": "new_tool/computer-control/Windows-MCP/LICENSE.md",
+      "source": "desktop-services/toolchain/computer-control/Windows-MCP/LICENSE.md",
+      "target": "desktop-services/toolchain/computer-control/Windows-MCP/LICENSE.md",
       "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
     },
     {
-      "source": "new_tool/computer-control/Windows-MCP/pyproject.toml",
-      "target": "new_tool/computer-control/Windows-MCP/pyproject.toml",
+      "source": "desktop-services/toolchain/computer-control/Windows-MCP/pyproject.toml",
+      "target": "desktop-services/toolchain/computer-control/Windows-MCP/pyproject.toml",
       "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
     },
     {
-      "source": "new_tool/computer-control/Windows-MCP/uv.lock",
-      "target": "new_tool/computer-control/Windows-MCP/uv.lock",
+      "source": "desktop-services/toolchain/computer-control/Windows-MCP/uv.lock",
+      "target": "desktop-services/toolchain/computer-control/Windows-MCP/uv.lock",
       "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
     },
     {
-      "source": "new_tool/computer-control/Windows-MCP/.python-version",
-      "target": "new_tool/computer-control/Windows-MCP/.python-version",
+      "source": "desktop-services/toolchain/computer-control/Windows-MCP/.python-version",
+      "target": "desktop-services/toolchain/computer-control/Windows-MCP/.python-version",
       "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
     },
     {
@@ -303,12 +239,12 @@
     },
     {
       "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/windows-persistent-ca.js",
-      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/windows-persistent-ca.js",
+      "target": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/windows-persistent-ca.js",
       "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
     },
     {
       "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-schemas.d.ts",
-      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-schemas.d.ts",
+      "target": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-schemas.d.ts",
       "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
     },
     {
@@ -333,12 +269,12 @@
     },
     {
       "source": "new trylo cli/vendor-bin/pty/win-x64/trylo-pty.exe",
-      "target": "native/pty/win-x64/trylo-pty.exe",
+      "target": "new trylo cli/vendor-bin/pty/win-x64/trylo-pty.exe",
       "reason": "Explicit native build input or preparation instructions; dependency caches and full release output remain excluded."
     },
     {
       "source": "new trylo cli/vendor-bin/pty/README.md",
-      "target": "native/pty/README.md",
+      "target": "new trylo cli/vendor-bin/pty/README.md",
       "reason": "Explicit native build input or preparation instructions; dependency caches and full release output remain excluded."
     },
     {
@@ -489,5 +425,6 @@
       "lineSha256": "140f556bdc171fe8e29df2c8ec7d60d298d923e94b4eee15e1f84d18fa9f1fa6",
       "reason": "Fixed sentinel in isolated temporary-root keyring opt-in tests."
     }
-  ]
+  ],
+  "websiteSourcePolicy": "Private: website and new account/invitation/model-pool backend code are excluded (owner decision 2026-11-09)."
 }

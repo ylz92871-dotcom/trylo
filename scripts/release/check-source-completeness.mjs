@@ -32,7 +32,7 @@ function json(relative) {
   const file = requireFile(relative);
   return file ? JSON.parse(readFileSync(file, 'utf8')) : null;
 }
-const layout = json('tools/release/source-layout.json');
+const layout = json('scripts/release/source-layout.json');
 for (const entry of layout?.extraFiles ?? []) requireFile(entry.source);
 // The source checkout includes this exact first-party helper. Downloaded sandbox
 // helpers stay outside Git and are checked by setup-cli-native.mjs instead.
@@ -50,15 +50,15 @@ else {
 const config = json('desktop/src-tauri/tauri.conf.json');
 for (const icon of config?.bundle?.icon ?? []) requireFile(`desktop/src-tauri/${icon}`);
 const distribution = json('desktop/distribution.json');
-requireFile('desktop/.env.production');
-const productionEnv = readFileSync(path.join(root, 'desktop/.env.production'), 'utf8');
-if (!productionEnv.split(/\r?\n/).includes('VITE_TRYLO_DEFAULT_CLI_RUNTIME=trylo-v1')
-    || !productionEnv.split(/\r?\n/).includes('VITE_TRYLO_NEW_CLI_ONLY=true')) failures.push('production must select the new-only CLI distribution');
-if (distribution?.defaultCliRuntime !== 'trylo-v1' || distribution?.components?.legacyCliRuntime?.bundled !== false) failures.push('new-only distribution must default to trylo-v1 and exclude the compatibility artifact');
-if (Object.entries(config?.bundle?.resources ?? {}).some(([source, target]) => /cli-legacy/.test(source + target))) failures.push('new-only bundle must not map the legacy CLI');
+if (distribution?.defaultCliRuntime !== 'trylo-v1'
+    || distribution?.components?.legacyCliRuntime !== undefined
+    || distribution?.components?.coworkRuntime?.bundled !== false) failures.push('distribution must register only the new CLI and retire CoWork');
+if (Object.entries(config?.bundle?.resources ?? {}).some(([source, target]) => /cli-legacy|legacy-cli/.test(source + target))) failures.push('new-only bundle must not map the legacy CLI');
+const settingsModal=requireFile('desktop/src/components/app-shell/SettingsModal.tsx');
+if(settingsModal && /legacy-stream-json|aria-label="CLI runtime"/.test(readFileSync(settingsModal,'utf8'))) failures.push('settings must not expose the retired CLI selector');
 const catalog = createToolCatalog();
 failures.push(...catalog.rejected().map(item => `invalid tool manifest: ${item.id}`));
-const registry = loadRepositoryToolRegistry(path.join(root, 'tool-sources.json'));
+const registry = loadRepositoryToolRegistry(path.join(root, 'desktop-services/toolchain/tool-sources.json'));
 failures.push(...registry.problems);
 for (const id of ['officecli', 'playwright', 'windows-mcp', 'chrome-devtools']) {
   const manifest = catalog.get(id);
@@ -67,13 +67,17 @@ for (const id of ['officecli', 'playwright', 'windows-mcp', 'chrome-devtools']) 
     failures.push(`missing repository tool: ${id}`);
     continue;
   }
-  const expected = id === 'windows-mcp'
-    ? path.join(root, 'new_tool/computer-control/Windows-MCP/src/windows_mcp/__main__.py')
-    : path.join(root, 'new_tool/packages', id, manifest.version, manifest.artifact.executableRelativePath);
+  const sourceEntries = {
+    officecli: 'office/OfficeCLI/_dist-trylo/officecli.exe',
+    playwright: 'browser/playwright-mcp/cli.js',
+    'windows-mcp': 'computer-control/Windows-MCP/src/windows_mcp/__main__.py',
+    'chrome-devtools': 'browser/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js',
+  };
+  const expected = path.join(root, 'desktop-services/toolchain', sourceEntries[id]);
   const policy = id === 'windows-mcp' ? 'managed-local' : 'repository-local';
   if (entry.path !== expected || entry.policy !== policy) failures.push(`repository tool pin disagrees: ${id}`);
 }
-const forkRoot = 'new_tool/computer-control/Windows-MCP';
+const forkRoot = 'desktop-services/toolchain/computer-control/Windows-MCP';
 const provenance = json(`${forkRoot}/PROVENANCE.json`);
 if (provenance) {
   if (provenance.hashEncoding !== 'utf8-lf' || !provenance.files?.length) throw new Error('Invalid fork source inventory');

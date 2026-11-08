@@ -1,9 +1,0 @@
-{
-  "initialPortableBytes": 593012640,
-  "previousR3PortableBytes": 219903437,
-  "currentPortableBytes": 156223917,
-  "currentInstallerBytes": 138930883,
-  "portableReductionFromR3Percent": 28.96,
-  "installerReductionFromInitialPercent": 76.57,
-  "coworkBundled": false
-}

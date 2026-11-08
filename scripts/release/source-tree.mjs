@@ -6,12 +6,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'));
-const layout = JSON.parse(readFileSync(path.join(root, 'tools/release/source-layout.json'), 'utf8'));
+const layout = JSON.parse(readFileSync(path.join(root, 'scripts/release/source-layout.json'), 'utf8'));
 const options = {};
 for (let index = 2; index < process.argv.length; index += 2) {
   const key = process.argv[index];
   if (!['--preview', '--report'].includes(key) || !process.argv[index + 1] || options[key]) {
-    throw new Error('Usage: node scripts/release/source-tree.mjs [--preview .local-release/new-directory] [--report .local-release/report.json]');
+    throw new Error('Usage: node scripts/release/source-tree.mjs [--preview _workspace/artifacts/source-preview/new-directory] [--report _workspace/artifacts/source-preview/report.json]');
   }
   options[key] = process.argv[index + 1];
 }
@@ -33,8 +33,8 @@ function localPath(relative) {
 }
 function outputPath(relative) {
   const absolute = localPath(relative);
-  const releaseRoot = path.join(root, '.local-release');
-  if (!absolute.startsWith(releaseRoot + path.sep)) throw new Error('Outputs must stay below .local-release/');
+  const releaseRoot = path.join(root, '_workspace/artifacts/source-preview');
+  if (!absolute.startsWith(releaseRoot + path.sep)) throw new Error('Outputs must stay below _workspace/artifacts/source-preview/');
   return absolute;
 }
 const preview = options['--preview'] ? outputPath(options['--preview']) : null;
@@ -91,6 +91,9 @@ const rootPattern = /[dD]:[\\/]+[cC][cC][\\/]+trylo/;
 const legacyPattern = /CLAUDE_CODE_|(?<!new )trylo cli[\\/]|DEFAULT_CLI_RUNTIME_PROTOCOL[^\n]*= ['"]legacy-stream-json/;
 const credentialPattern = /\b(?:sk-[A-Za-z0-9_-]{28,}|ark-[A-Za-z0-9_-]{28,})\b|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/;
 for (const item of [...selected.values()].sort((a, b) => a.target.localeCompare(b.target, 'en'))) {
+  if (['trylocode-site', 'website', '_workspace', 'remote-relay'].some(prefix => below(item.source, prefix) || below(item.target, prefix))) {
+    throw new Error('Private source cannot be exported: ' + item.source);
+  }
   const sourcePath = localPath(item.source);
   localPath(item.target);
   const targetKey = item.target.toLowerCase();
