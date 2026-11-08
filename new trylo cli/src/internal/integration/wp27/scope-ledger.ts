@@ -66,28 +66,36 @@ function collectLedgerFailures(
 ): readonly LedgerFailure[] {
   const failures: LedgerFailure[] = [];
   const seen = new Set<string>();
+
   for (const row of rows) {
     if (seen.has(row.id)) {
       failures.push({ code: "duplicate_id", detail: `duplicate capability id: ${row.id}` });
       continue;
     }
+
     seen.add(row.id);
+
     if (!isNonEmpty(row.primaryWorkPackage)) {
       failures.push({ code: "missing_primary", detail: `missing primaryWorkPackage: ${row.id}` });
     }
   }
+
   const excludedSeen = new Set<string>();
+
   for (const excluded of excludedIds) {
     if (!seen.has(excluded)) {
       failures.push({ code: "unknown_excluded_id", detail: `excluded id not in ledger: ${excluded}` });
       continue;
     }
+
     if (excludedSeen.has(excluded)) {
       failures.push({ code: "duplicate_excluded_id", detail: `excluded id listed twice: ${excluded}` });
       continue;
     }
+
     excludedSeen.add(excluded);
   }
+
   return failures;
 }
 
@@ -120,8 +128,10 @@ export function checkLedgerIntegrity(
   if (failures.length > 0) {
     return { kind: "incomplete", failures };
   }
+
   const excluded = new Set(excludedIds);
   const excludedRows = rows.filter((row) => excluded.has(row.id)).length;
+
   return {
     kind: "complete",
     total: rows.length,
@@ -142,6 +152,7 @@ export function findDanglingPrerequisites(
 ): readonly { readonly id: string; readonly missing: string }[] {
   const known = new Set(packages.map((pkg) => pkg.id));
   const dangling: { id: string; missing: string }[] = [];
+
   for (const pkg of packages) {
     for (const dep of pkg.prerequisites) {
       if (!known.has(dep)) {
@@ -149,6 +160,7 @@ export function findDanglingPrerequisites(
       }
     }
   }
+
   return dangling;
 }
 
@@ -159,9 +171,11 @@ export function findDanglingPrerequisites(
  */
 export function checkPrerequisitesAcyclic(packages: readonly PackageEdge[]): AcyclicVerdict {
   const edges = new Map<string, readonly string[]>();
+
   for (const pkg of packages) {
     edges.set(pkg.id, pkg.prerequisites);
   }
+
   const permanent = new Set<string>();
   const temporary = new Set<string>();
   const trail: string[] = [];
@@ -170,22 +184,27 @@ export function checkPrerequisitesAcyclic(packages: readonly PackageEdge[]): Acy
     if (permanent.has(id)) {
       return undefined;
     }
+
     if (temporary.has(id)) {
       const start = trail.indexOf(id);
       return start < 0 ? [id] : [...trail.slice(start), id];
     }
+
     temporary.add(id);
     trail.push(id);
     const next = edges.get(id) ?? [];
+
     for (const dep of next) {
       const cycle = visit(dep);
       if (cycle !== undefined) {
         return cycle;
       }
     }
+
     temporary.delete(id);
     trail.pop();
     permanent.add(id);
+
     return undefined;
   }
 
@@ -195,5 +214,6 @@ export function checkPrerequisitesAcyclic(packages: readonly PackageEdge[]): Acy
       return { kind: "cyclic", cycle };
     }
   }
+
   return { kind: "acyclic" };
 }

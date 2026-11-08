@@ -94,6 +94,7 @@ export function createIsolatedChildRunner(worktrees: WorktreePort): IsolatedChil
       if (request.childId.length === 0) {
         return { ok: false, code: "owner_invalid", detail: "child id cannot be empty" };
       }
+
       const created = await worktrees.create({
         sourceCwd: request.parentCwd,
         ...(request.baseEnv === undefined ? {} : { baseEnv: request.baseEnv }),
@@ -102,6 +103,7 @@ export function createIsolatedChildRunner(worktrees: WorktreePort): IsolatedChil
       if (!created.ok) {
         return created;
       }
+
       // Binding after creation rather than before: the checkout has no metadata
       // directory until git has made it, so an earlier write would have nowhere
       // to land.
@@ -129,6 +131,7 @@ export function createIsolatedChildRunner(worktrees: WorktreePort): IsolatedChil
               detail: `${bound.detail}; the unowned checkout also could not be removed: ${removed.detail}`,
             };
       }
+
       return {
         ok: true,
         lease: { root: created.value.root, cwd: created.value.cwd, headSha: created.value.headSha },
@@ -145,12 +148,14 @@ export function createIsolatedChildRunner(worktrees: WorktreePort): IsolatedChil
       if (outcome.ok) {
         return { state: "removed" };
       }
+
       if (outcome.code === "has_ignored_files") {
         // The child's uncommitted work lives here. That is the answer a caller
         // wants — "it made changes, go and look" — and it is not an error to
         // have produced it.
         return { state: "kept", reason: "child_has_changes" };
       }
+
       return { state: "kept", reason: outcome.code, detail: outcome.detail };
     },
   };

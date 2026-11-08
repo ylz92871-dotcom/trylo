@@ -9,11 +9,11 @@ import type { BoardCommand } from "../learning/control/commands.js";
 import type { EvidenceBundle } from "../learning/control/contracts.js";
 import { reduceAll } from "../learning/control/reducer.js";
 import { emptyBoardState } from "../learning/control/state.js";
-import { createRecordingBoardPort } from "../learning/domains/tool/board-adapter.js";
-import { submitBindingDraft } from "../learning/domains/tool/curator.js";
-import { buildPackageVersion } from "../tooling/builder/design.js";
-import { executeContribution } from "../tooling/contribution/bundle.js";
-import { acquireToQuarantine } from "../tooling/quarantine/acquire.js";
+import { createRecordingBoardPort } from "../learning/agent/subsystems/tool/domain/board-adapter.js";
+import { submitBindingDraft } from "../learning/agent/subsystems/tool/domain/curator.js";
+import { buildPackageVersion } from "../learning/agent/subsystems/tool/assets/builder/design.js";
+import { executeContribution } from "../learning/agent/subsystems/tool/assets/contribution/bundle.js";
+import { acquireToQuarantine } from "../learning/agent/subsystems/tool/adapters/quarantine/acquire.js";
 import { createSideEffectGuard } from "../tooling/side-effects.js";
 import { archive, design, manifest, provenance } from "../tooling/testing/fixtures.js";
 import { validationRecord } from "./testing/fixtures.js";
@@ -48,24 +48,31 @@ test("no production module keeps a module-level ledger, issuer, or reset hook", 
   const forbidden = ["resetApprovalReplayLog", "issueApprovalToken", "defaultLedger", "consumeApprovalToken", "ApprovalConsumptionToken"];
   const pending = [srcRoot];
   const hits: string[] = [];
+
   while (pending.length > 0) {
     const current = pending.pop();
     if (current === undefined) {
       break;
     }
+
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       const full = path.join(current, entry.name);
+
       if (entry.isDirectory()) {
         pending.push(full);
         continue;
       }
+
       if (!entry.name.endsWith(".ts")) {
         continue;
       }
+
       if (entry.name === selfSource) {
         continue;
       }
+
       const text = readFileSync(full, "utf8");
+
       for (const marker of forbidden) {
         if (text.includes(marker)) {
           hits.push(`${path.relative(srcRoot, full)}: ${marker}`);
@@ -73,6 +80,7 @@ test("no production module keeps a module-level ledger, issuer, or reset hook", 
       }
     }
   }
+
   assert.deepEqual(hits, []);
 });
 
@@ -92,10 +100,13 @@ test("without an injected port none of the four protected call sites performs an
       manifest: manifest(),
       provenance: provenance(),
     });
+
     assert.equal(acquired.ok, false);
+
     if (!acquired.ok) {
       assert.equal(acquired.code, "no_port");
     }
+
     assert.equal(existsSync(quarantineRoot), false, "acquire must not create the quarantine root");
 
     const built = await buildPackageVersion({
@@ -113,7 +124,9 @@ test("without an injected port none of the four protected call sites performs an
       provenance: provenance(),
       contentHash: "hash-9",
     });
+
     assert.equal(built.ok, false);
+
     if (!built.ok) {
       assert.equal(built.code, "no_port");
     }
@@ -125,10 +138,13 @@ test("without an injected port none of the four protected call sites performs an
       validationRecord(),
       { token: { grantId: "grant:unused" }, now: NOW },
     );
+
     assert.equal(bound.ok, false);
+
     if (!bound.ok) {
       assert.equal(bound.code, "no_port");
     }
+
     assert.deepEqual(board.snapshot(), []);
 
     const guard = createSideEffectGuard();
@@ -142,10 +158,13 @@ test("without an injected port none of the four protected call sites performs an
       "push",
       guard,
     );
+
     assert.equal(contributed.ok, false);
+
     if (!contributed.ok) {
       assert.equal(contributed.code, "no_port");
     }
+
     // 外审 P1-10：未授权的调用不得在 guard 上留下任何尝试记录。
     assert.deepEqual(guard.attempts(), []);
   } finally {
@@ -222,10 +241,13 @@ test("the board's evidence gate is traceability only: forged receipt coordinates
     },
   ];
   const applied = reduceAll(emptyBoardState(), commands);
+
   assert.equal(applied.ok, true, "the board accepts the forged coordinates by design");
+
   if (!applied.ok) {
     return;
   }
+
   assert.equal(
     applied.state.proposals[0]?.lifecycle,
     "shadow",

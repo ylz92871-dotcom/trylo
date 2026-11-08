@@ -7,7 +7,7 @@ import { emptyBoardState } from "../../learning/control/state.js";
 import { candidate } from "../../tooling/testing/fixtures.js";
 import { issueAgentMethodReceipt, openRegistryHarness } from "../testing/authority-fixtures.js";
 import { packageAdmission, toolEvidenceAdmission, validationRecord } from "../testing/fixtures.js";
-import { mapToolCandidate } from "../tool/package.js";
+import { mapToolCandidate } from "../../learning/agent/subsystems/tool/adapters/board/package.js";
 import { admitToolEvidence } from "./gateway.js";
 
 /**
@@ -32,24 +32,31 @@ test("positive path: a registry-backed receipt promotes the candidate to shadow"
       candidate({ candidateId: "cand-mit", name: "pdf-lint" }),
       packageAdmission(),
     );
+
     assert.equal(proposal.ok, true);
+
     if (!proposal.ok) {
       return;
     }
+
     const issued = await issueAgentMethodReceipt(harness, validationRecord(), { scope: "docs" });
     const evidence = await admitToolEvidence(
       harness.registry,
       evidenceDraftShape,
       toolEvidenceAdmission({ receiptRef: issued.receiptId, proposalId: PROPOSAL_ID }),
     );
+
     assert.equal(evidence.ok, true);
+
     if (!evidence.ok) {
       return;
     }
+
     const command = evidence.value[0];
     if (command?.type !== "record_evidence") {
       throw new Error("expected record_evidence");
     }
+
     // provenance 由 gateway 从收据派生，晋升因此可回查到 registry 里的同一条记录。
     assert.equal(command.evidence.provenance, `receipt:${issued.receiptId}`);
     assert.deepEqual(command.evidence.kinds, ["external_verifier"]);
@@ -79,10 +86,13 @@ test("positive path: a registry-backed receipt promotes the candidate to shadow"
       },
     ];
     const applied = reduceAll(emptyBoardState(), commands);
+
     assert.equal(applied.ok, true);
+
     if (!applied.ok) {
       return;
     }
+
     assert.equal(applied.state.proposals[0]?.lifecycle, "shadow");
     assert.equal(applied.state.evidence[0]?.receipt?.receiptId, issued.receiptId);
   } finally {
@@ -124,7 +134,9 @@ test("a structurally pretty EvidenceBundle with no receipt cannot promote", asyn
     { type: "record_evidence", commandId: "c-3", issuedAt: AT, evidence: forged },
   ];
   const applied = reduceAll(emptyBoardState(), commands);
+
   assert.equal(applied.ok, false);
+
   if (!applied.ok) {
     assert.equal(applied.reason, "unverifiable_evidence_provenance");
   }

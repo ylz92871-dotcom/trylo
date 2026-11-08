@@ -7,7 +7,7 @@ import { createFileBoardStore } from "../adapters/learning-store/file-event-stor
 import type { BoardCommand } from "../learning/control/commands.js";
 import type { BoardStore } from "../learning/control/store-port.js";
 import type { VerificationAuthorityReader } from "../learning/verification-authority/contracts.js";
-import { mapToolCandidate } from "./tool/package.js";
+import { mapToolCandidate } from "../learning/agent/subsystems/tool/adapters/board/package.js";
 import { mapUserRuleDraft } from "./content/user-rule.js";
 import { admitContentEvidence, admitToolEvidence } from "./contract/gateway.js";
 import { projectMyToolsFromBoard, productionToolsFromBoard } from "./activation/read-model.js";
@@ -46,6 +46,7 @@ async function withStore(run: (store: BoardStore) => Promise<void>): Promise<voi
   if (!("apply" in created)) {
     throw new Error(`could not open board store: ${created.detail}`);
   }
+
   try {
     await run(created);
   } finally {
@@ -66,11 +67,15 @@ test("content drafts reach real board state through the gateway and the file sto
   try {
     await withStore(async (store) => {
       const proposal = mapUserRuleDraft(userRuleDraft(), proposalAdmission());
+
       assert.equal(proposal.ok, true);
+
       if (!proposal.ok) {
         return;
       }
+
       const proposalId = proposal.value[0]?.proposal.proposalId ?? "";
+
       await applyAll(store, proposal.value);
 
       // 用户证据的唯一合法来源：执行当时落下的身份事实（WP-F §7 D3.3）。
@@ -84,10 +89,13 @@ test("content drafts reach real board state through the gateway and the file sto
         evidenceDraft({ proposalId }),
         evidenceAdmission({ receiptRef: receipt.receiptId }),
       );
+
       assert.equal(evidence.ok, true);
+
       if (!evidence.ok) {
         return;
       }
+
       await applyAll(store, [
         { type: "quarantine", commandId: "board-1", issuedAt: AT, proposalId },
         { type: "start_evaluation", commandId: "board-2", issuedAt: AT, proposalId },
@@ -95,11 +103,15 @@ test("content drafts reach real board state through the gateway and the file sto
       ]);
 
       const loaded = await store.load();
+
       assert.equal(loaded.ok, true);
+
       if (!loaded.ok) {
         return;
       }
+
       const stored = loaded.state.proposals.find((item) => item.proposalId === proposalId);
+
       assert.equal(stored?.lifecycle, "evaluating");
       assert.equal(stored?.assetKind, "user_rule");
       assert.equal(loaded.state.evidence.length, 1);
@@ -120,10 +132,13 @@ test("a tool candidate reaches production visibility only through board activati
         candidate({ candidateId: "cand-mit", name: "pdf-lint" }),
         packageAdmission(),
       );
+
       assert.equal(mapped.ok, true);
+
       if (!mapped.ok) {
         return;
       }
+
       for (const command of mapped.value) {
         assert.equal(
           (ADAPTER_ALLOWED_COMMAND_TYPES as readonly string[]).includes(command.type),
@@ -131,7 +146,9 @@ test("a tool candidate reaches production visibility only through board activati
           command.type,
         );
       }
+
       const proposalId = "tool_package:cand-mit";
+
       await applyAll(store, mapped.value);
 
       const receipt = await issueAgentMethodReceipt(harness, validationRecord(), { scope: "docs" });
@@ -140,7 +157,9 @@ test("a tool candidate reaches production visibility only through board activati
         { kind: "submit_evidence", evidenceId: "ev-tool-1", summary: "十段验证通过" },
         toolEvidenceAdmission({ proposalId, receiptRef: receipt.receiptId }),
       );
+
       assert.equal(toolEvidence.ok, true);
+
       if (!toolEvidence.ok) {
         return;
       }
@@ -164,10 +183,13 @@ test("a tool candidate reaches production visibility only through board activati
 
       // 资产已提交、证据已记录，但 Board 还没有给出任何激活指针：生产搜索必须看不见。
       let loaded = await store.load();
+
       assert.equal(loaded.ok, true);
+
       if (!loaded.ok) {
         return;
       }
+
       assert.equal(loaded.state.proposals[0]?.lifecycle, "evaluating");
       assert.equal(loaded.state.activations.length, 0);
       const beforeActivation = productionToolsFromBoard({
@@ -176,7 +198,9 @@ test("a tool candidate reaches production visibility only through board activati
         validations: [passingValidation()],
         descriptions: { [VERSION_ID]: "lint pdf files" },
       });
+
       assert.equal(beforeActivation.ok, true);
+
       if (beforeActivation.ok) {
         assert.equal(beforeActivation.value.length, 0, "no board activation means no production visibility");
       }
@@ -187,16 +211,20 @@ test("a tool candidate reaches production visibility only through board activati
       ]);
       loaded = await store.load();
       assert.equal(loaded.ok, true);
+
       if (!loaded.ok) {
         return;
       }
+
       const shadow = productionToolsFromBoard({
         board: loaded.state,
         packages: [pkg({ catalogState: "verified", manifest: manifest({ shouldDefer: false }) })],
         validations: [passingValidation()],
         descriptions: { [VERSION_ID]: "lint pdf files" },
       });
+
       assert.equal(shadow.ok, true);
+
       if (shadow.ok) {
         assert.equal(shadow.value.length, 1, "a board-approved shadow pointer makes the tool visible");
       }
@@ -220,7 +248,9 @@ test("a tool candidate reaches production visibility only through board activati
         proposalId,
         versionId: ASSET_VERSION_ID,
       });
+
       assert.equal(denied.ok, false);
+
       if (!denied.ok) {
         assert.equal(denied.reason, "approval_not_granted");
       }
@@ -238,9 +268,11 @@ test("a tool candidate reaches production visibility only through board activati
 
       loaded = await store.load();
       assert.equal(loaded.ok, true);
+
       if (!loaded.ok) {
         return;
       }
+
       assert.equal(loaded.state.activations.length, 1);
 
       const active = productionToolsFromBoard({
@@ -249,7 +281,9 @@ test("a tool candidate reaches production visibility only through board activati
         validations: [passingValidation()],
         descriptions: { [VERSION_ID]: "lint pdf files" },
       });
+
       assert.equal(active.ok, true);
+
       if (active.ok) {
         assert.equal(active.value.length, 1);
       }
@@ -259,7 +293,9 @@ test("a tool candidate reaches production visibility only through board activati
         packages: [pkg({ catalogState: "verified" })],
         validations: [passingValidation()],
       });
+
       assert.equal(myTools.ok, true);
+
       if (myTools.ok) {
         assert.equal(myTools.value[0]?.lifecycle, "active");
       }
@@ -269,16 +305,20 @@ test("a tool candidate reaches production visibility only through board activati
       ]);
       loaded = await store.load();
       assert.equal(loaded.ok, true);
+
       if (!loaded.ok) {
         return;
       }
+
       const afterSuspend = productionToolsFromBoard({
         board: loaded.state,
         packages: [pkg({ catalogState: "verified", manifest: manifest({ shouldDefer: false }) })],
         validations: [passingValidation()],
         descriptions: { [VERSION_ID]: "lint pdf files" },
       });
+
       assert.equal(afterSuspend.ok, true);
+
       if (afterSuspend.ok) {
         assert.equal(afterSuspend.value.length, 0, "a suspended tool leaves production search");
       }

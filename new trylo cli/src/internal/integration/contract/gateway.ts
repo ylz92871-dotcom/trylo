@@ -58,11 +58,13 @@ const RECEIPT_FAILURE_TO_REASON: Readonly<Record<ReceiptFailureCode, MappingFail
 /** 按 canonical 枚举顺序输出 kinds；不依赖调用方书写顺序，也不需要类型断言。 */
 function canonicalKindOrder(kinds: ReadonlySet<EvidenceKind>): readonly EvidenceKind[] {
   const ordered: EvidenceKind[] = [];
+
   for (const kind of EVIDENCE_KINDS) {
     if (kinds.has(kind)) {
       ordered.push(kind);
     }
   }
+
   return ordered;
 }
 
@@ -86,6 +88,7 @@ async function readVerifiedSubject(
       ),
     };
   }
+
   if (authority === undefined) {
     return {
       failure: rejected(
@@ -94,6 +97,7 @@ async function readVerifiedSubject(
       ),
     };
   }
+
   const verified = await authority.verify({ receiptId: receiptRef }, expected);
   if (!verified.ok) {
     return {
@@ -103,6 +107,7 @@ async function readVerifiedSubject(
       ),
     };
   }
+
   if (verified.receipt.verdict !== "pass") {
     // 只有 pass 才能成为 promotion 依据；fail/partial 记录进不了这道门。
     return {
@@ -112,6 +117,7 @@ async function readVerifiedSubject(
       ),
     };
   }
+
   return {
     receiptId: verified.receipt.receiptId,
     verdict: verified.receipt.verdict,
@@ -133,36 +139,47 @@ function checkToolEvidenceAdmission(
   if (!isNonEmptyString(draft.evidenceId)) {
     return rejected("missing_admission", "evidenceId is required");
   }
+
   if (!isNonEmptyString(draft.summary)) {
     return rejected("missing_summary", "an evidence submission must say what it is");
   }
+
   if (!isNonEmptyString(admission.commandId)) {
     return rejected("missing_admission", "commandId is required");
   }
+
   if (!isIso8601(admission.issuedAt)) {
     return rejected("invalid_admission", "issuedAt must be a parseable ISO-8601 timestamp");
   }
+
   if (!isNonEmptyString(admission.proposalId)) {
     return rejected("missing_admission", "proposalId is required");
   }
+
   if (!isNonEmptyString(admission.dataVersion)) {
     return rejected("missing_admission", "dataVersion is required");
   }
+
   if (!isNonEmptyString(admission.packageVersionId)) {
     return rejected("missing_version_link", "evidence must name the package version it covers");
   }
+
   if (!isNonEmptyString(admission.scope)) {
     return rejected("missing_scope", "evidence must name the scope it applies to");
   }
+
   if (admission.failureSamples !== undefined && !isStringArray(admission.failureSamples)) {
     return rejected("invalid_admission", "failureSamples must be an array of strings");
   }
+
   if (admission.critiqueRef !== undefined && !isNonEmptyString(admission.critiqueRef)) {
     return rejected("missing_admission", "critiqueRef must be a non-empty source reference");
   }
+
   if (admission.critiqueRef !== undefined && admission.critiqueRef === draft.summary) {
     return rejected("summary_as_provenance", "critiqueRef must be a source reference, not the summary");
   }
+
   return undefined;
 }
 
@@ -195,7 +212,9 @@ export async function admitToolEvidence(
   }
 
   const kinds = new Set<EvidenceKind>();
+
   kinds.add("external_verifier");
+
   if (admission.critiqueRef !== undefined) {
     kinds.add("llm_critique");
   }
@@ -236,27 +255,35 @@ function checkContentEvidenceAdmission(
   if (!isNonEmptyString(admission.commandId)) {
     return rejected("missing_admission", "commandId is required");
   }
+
   if (!isIso8601(admission.issuedAt)) {
     return rejected("invalid_admission", "issuedAt must be a parseable ISO-8601 timestamp");
   }
+
   if (!isNonEmptyString(admission.evidenceId)) {
     return rejected("missing_admission", "evidenceId is required");
   }
+
   if (!isNonEmptyString(admission.dataVersion)) {
     return rejected("missing_admission", "dataVersion is required");
   }
+
   if (!isNonEmptyString(admission.candidateVersion)) {
     return rejected("missing_version_link", "evidence must name the candidate version it covers");
   }
+
   if (!isNonEmptyString(admission.scope)) {
     return rejected("missing_scope", "evidence must name the scope it applies to");
   }
+
   if (draft.replay.compared !== true) {
     return rejected("missing_replay", "evidence requires a completed baseline/candidate replay");
   }
+
   if (admission.failureSamples !== undefined && !isStringArray(admission.failureSamples)) {
     return rejected("invalid_admission", "failureSamples must be an array of strings");
   }
+
   if (admission.delta !== undefined) {
     const delta = admission.delta;
     if (
@@ -267,6 +294,7 @@ function checkContentEvidenceAdmission(
       return rejected("invalid_admission", "delta requires metric and finite baseline/candidate");
     }
   }
+
   return undefined;
 }
 
@@ -286,6 +314,7 @@ export async function admitContentEvidence(
   if (!isEvaluationEvidenceDraftShape(draft)) {
     return rejected("invalid_admission", "evaluation evidence draft is malformed");
   }
+
   const invalid = checkContentEvidenceAdmission(draft, admission);
   if (invalid !== undefined) {
     return invalid;
@@ -303,7 +332,9 @@ export async function admitContentEvidence(
   }
 
   const kinds = new Set<EvidenceKind>();
+
   kinds.add("user_feedback");
+
   if (draft.weakSignals.length > 0) {
     kinds.add("llm_critique");
   }

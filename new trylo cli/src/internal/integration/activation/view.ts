@@ -53,16 +53,20 @@ export function projectToolActivationView(
 ): MappingResult<readonly BoardActivationView[]> {
   const seen: SeenActivationKeys = { keys: new Set(), versions: new Set() };
   const views: BoardActivationView[] = [];
+
   for (const record of input.records) {
     if (!(TOOL_ASSET_KINDS as readonly string[]).includes(record.assetKind)) {
       continue;
     }
+
     const projected = projectActivationRecord(input, record, seen);
     if (!projected.ok) {
       return { ok: false, reason: projected.failure.reason, detail: projected.failure.detail };
     }
+
     views.push(projected.view);
   }
+
   return mapped(views);
 }
 
@@ -75,22 +79,26 @@ function projectActivationRecord(
   if (pointerFailure !== undefined) {
     return { ok: false, failure: pointerFailure };
   }
+
   const asset = input.assets.find((item) => item.versionId === record.versionId);
   if (asset === undefined) {
     return fail("missing_asset_link", `activation ${record.versionId} has no canonical asset behind it`);
   }
+
   if (asset.kind !== record.assetKind) {
     return fail(
       "invalid_activation",
       `asset kind ${asset.kind} does not match activation kind ${record.assetKind}`,
     );
   }
+
   if (asset.scope !== record.scope) {
     return fail(
       "invalid_activation",
       `asset scope ${asset.scope} does not match activation scope ${record.scope}`,
     );
   }
+
   const proposal = input.proposals.find(
     (item) => item.proposalId === asset.createdFromProposalId,
   );
@@ -100,34 +108,42 @@ function projectActivationRecord(
       `asset ${asset.versionId} does not trace back to a canonical proposal`,
     );
   }
+
   if (proposal.assetKind !== record.assetKind || proposal.scope !== record.scope) {
     return fail(
       "invalid_activation",
       "the producing proposal disagrees with the activation on kind or scope",
     );
   }
+
   if (!isPlainRecord(asset.content) || !isNonEmptyString(asset.content.packageVersionId)) {
     return fail(
       "missing_package_version",
       "the canonical tool asset does not declare the tooling packageVersionId it maps to",
     );
   }
+
   const packageVersionId = asset.content.packageVersionId;
+
   if (input.minSequence !== undefined && record.boardSequence <= input.minSequence) {
     return fail(
       "stale_sequence",
       `sequence ${String(record.boardSequence)} is not newer than ${String(input.minSequence)}`,
     );
   }
+
   const key = activationKey(record.scope, record.assetKind);
   if (seen.keys.has(key)) {
     return fail("duplicate_activation_key", key.replace("\u0000", "|"));
   }
+
   if (seen.versions.has(packageVersionId)) {
     return fail("duplicate_activation_key", packageVersionId);
   }
+
   seen.keys.add(key);
   seen.versions.add(packageVersionId);
+
   return {
     ok: true,
     view: {
@@ -143,9 +159,11 @@ function checkPointer(record: ActivationRecord): MappingFailure | undefined {
   if (!isOneOf(ACTIVATION_POINTERS, record.pointer)) {
     return rejected("invalid_activation", `unknown activation pointer ${String(record.pointer)}`);
   }
+
   if (!isNonEmptyString(record.versionId)) {
     return rejected("missing_package_version", "activation record has no version id");
   }
+
   return undefined;
 }
 

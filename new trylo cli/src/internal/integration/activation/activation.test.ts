@@ -85,7 +85,9 @@ test("only tool assets are projected, the packageVersionId comes from the canoni
     assets: [asset()],
     proposals: [proposal()],
   });
+
   assert.equal(result.ok, true);
+
   if (result.ok) {
     assert.equal(result.value.length, 1);
     // canonical 资产版本 id ≠ tooling 包版本 id：视图里的 id 来自资产 content。
@@ -101,10 +103,13 @@ test("only tool assets are projected, the packageVersionId comes from the canoni
     assets: [asset(), asset({ versionId: "asset:tool-package:8" })],
     proposals: [proposal()],
   });
+
   assert.equal(duplicate.ok, false);
+
   if (!duplicate.ok) {
     assert.equal(duplicate.reason, "duplicate_activation_key");
   }
+
   // 不同 canonical 资产但声明了同一个 tooling packageVersionId → ID 冲突。
   const idConflict = projectToolActivationView({
     records: [
@@ -126,7 +131,9 @@ test("only tool assets are projected, the packageVersionId comes from the canoni
     ],
     proposals: [proposal(), proposal({ proposalId: "tool_binding:b1", assetKind: "tool_binding" })],
   });
+
   assert.equal(idConflict.ok, false);
+
   if (!idConflict.ok) {
     assert.equal(idConflict.reason, "duplicate_activation_key");
   }
@@ -138,7 +145,9 @@ test("a forged activation record with no canonical asset behind it fails closed 
     assets: [],
     proposals: [],
   });
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "missing_asset_link");
   }
@@ -150,7 +159,9 @@ test("an asset whose kind or scope disagrees with the activation fails closed", 
     assets: [asset({ kind: "tool_binding" })],
     proposals: [proposal()],
   });
+
   assert.equal(kindMismatch.ok, false);
+
   if (!kindMismatch.ok) {
     assert.equal(kindMismatch.reason, "invalid_activation");
   }
@@ -160,7 +171,9 @@ test("an asset whose kind or scope disagrees with the activation fails closed", 
     assets: [asset()],
     proposals: [proposal()],
   });
+
   assert.equal(scopeMismatch.ok, false);
+
   if (!scopeMismatch.ok) {
     assert.equal(scopeMismatch.reason, "invalid_activation");
   }
@@ -172,7 +185,9 @@ test("an asset that does not trace back to a canonical proposal fails closed", (
     assets: [asset({ createdFromProposalId: "tool_package:ghost" })],
     proposals: [proposal()],
   });
+
   assert.equal(orphan.ok, false);
+
   if (!orphan.ok) {
     assert.equal(orphan.reason, "missing_asset_link");
   }
@@ -182,7 +197,9 @@ test("an asset that does not trace back to a canonical proposal fails closed", (
     assets: [asset()],
     proposals: [proposal({ assetKind: "user_rule" })],
   });
+
   assert.equal(kindDrift.ok, false);
+
   if (!kindDrift.ok) {
     assert.equal(kindDrift.reason, "invalid_activation");
   }
@@ -194,7 +211,9 @@ test("a tool asset whose content does not declare the tooling packageVersionId f
     assets: [asset({ content: { identity: "pdf-lint" } })],
     proposals: [proposal()],
   });
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "missing_package_version");
   }
@@ -207,7 +226,9 @@ test("a stale projection cannot overwrite newer board state", () => {
     proposals: [proposal()],
     minSequence: 7,
   });
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "stale_sequence");
   }
@@ -219,7 +240,9 @@ test("a projection without a version id fails closed", () => {
     assets: [asset()],
     proposals: [proposal()],
   });
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "missing_package_version");
   }
@@ -232,7 +255,9 @@ test("my tools shows the board lifecycle, not a catalog guess", () => {
     packages: [pkg({ catalogState: "verified" })],
     validations: [passingValidation()],
   });
+
   assert.equal(result.ok, true);
+
   if (result.ok) {
     assert.equal(result.value.length, 1);
     assert.equal(result.value[0]?.lifecycle, "suspended");
@@ -251,7 +276,9 @@ test("production search only sees verified, independently validated, active tool
     validations: [passingValidation()],
     descriptions: { [PACKAGE_VERSION_ID]: "lint pdf files" },
   });
+
   assert.equal(visible.ok, true);
+
   if (visible.ok) {
     assert.equal(visible.value.length, 1);
     assert.equal(visible.value[0]?.name, "pdf-lint");
@@ -263,7 +290,9 @@ test("production search only sees verified, independently validated, active tool
     validations: [passingValidation()],
     descriptions: {},
   });
+
   assert.equal(suspended.ok, true);
+
   if (suspended.ok) {
     assert.equal(suspended.value.length, 0);
   }
@@ -274,7 +303,9 @@ test("production search only sees verified, independently validated, active tool
     validations: [],
     descriptions: {},
   });
+
   assert.equal(unverified.ok, true);
+
   if (unverified.ok) {
     assert.equal(unverified.value.length, 0);
   }
@@ -295,7 +326,9 @@ test("a corrupted board projection is reported instead of silently hidden", () =
     validations: [],
     descriptions: {},
   });
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "duplicate_activation_key");
   }

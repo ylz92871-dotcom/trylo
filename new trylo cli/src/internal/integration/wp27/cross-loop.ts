@@ -54,16 +54,19 @@ function findConflictingStage(
   outcomes: readonly StageOutcome[],
 ): { readonly stage: CrossLoopStage; readonly results: readonly string[] } | undefined {
   const byStage = new Map<CrossLoopStage, string[]>();
+
   for (const outcome of outcomes) {
     const seen = byStage.get(outcome.stage) ?? [];
     seen.push(outcome.result);
     byStage.set(outcome.stage, seen);
   }
+
   for (const [stage, results] of byStage) {
     if (new Set(results).size > 1) {
       return { stage, results };
     }
   }
+
   return undefined;
 }
 
@@ -93,18 +96,22 @@ export function evaluateCrossLoop(outcomes: readonly StageOutcome[]): CrossLoopV
       failure: `conflicting results for one stage: ${conflict.stage} (${conflict.results.join(" vs ")})`,
     };
   }
+
   const byStage = new Map<CrossLoopStage, StageOutcome>();
+
   for (const outcome of outcomes) {
     if (!byStage.has(outcome.stage)) {
       byStage.set(outcome.stage, outcome);
     }
   }
+
   const failed = CROSS_LOOP_STAGES.map((stage) => byStage.get(stage)).find(
     (outcome) => outcome?.result === "failed",
   );
   if (failed !== undefined) {
     return { kind: "failed", failedStage: failed.stage, failure: pendingReason(failed, failed.stage) };
   }
+
   const blocked = CROSS_LOOP_STAGES.map((stage) => byStage.get(stage)).find(
     (outcome) => outcome?.result === "blocked",
   );
@@ -115,9 +122,11 @@ export function evaluateCrossLoop(outcomes: readonly StageOutcome[]): CrossLoopV
       reason: pendingReason(blocked, blocked.stage),
     };
   }
+
   const pending = CROSS_LOOP_STAGES.filter((stage) => !isSettledPass(byStage.get(stage)));
   if (pending.length > 0) {
     return { kind: "partial", pendingStages: pending };
   }
+
   return { kind: "closed", closedStages: [...CROSS_LOOP_STAGES] };
 }

@@ -17,7 +17,7 @@ import {
   EXTERNAL_VERDICT_KINDS,
   VERDICT_RESULTS,
 } from "../../learning/domains/shared/types.js";
-import type { PromptPatchDraft } from "../../learning/domains/prompt/builder.js";
+import type { PromptPatchDraft } from "../../learning/agent/subsystems/method/legacy-prompt/builder.js";
 import type { SkillDraft } from "../../learning/domains/skill/inducer.js";
 import type { UserRuleDraft, WithdrawCommandDraft } from "../../learning/domains/user/builder.js";
 import type { WorkflowDraft } from "../../learning/domains/workflow/inducer.js";
@@ -97,7 +97,9 @@ export function isWithdrawDraftShape(value: unknown): value is WithdrawCommandDr
   if (!isPlainRecord(value) || value.kind !== "withdraw" || typeof value.status !== "string") {
     return false;
   }
+
   const command = value.command;
+
   return (
     isNonEmptyString(value.id) &&
     isPlainRecord(command) &&

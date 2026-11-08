@@ -10,8 +10,8 @@ import {
   storeIdFromPath,
   type FilePermissionStoreOptions,
 } from "../adapters/permission-store/index.js";
-import { createRecordingBoardPort } from "../learning/domains/tool/board-adapter.js";
-import { submitBindingDraft } from "../learning/domains/tool/curator.js";
+import { createRecordingBoardPort } from "../learning/agent/subsystems/tool/domain/board-adapter.js";
+import { submitBindingDraft } from "../learning/agent/subsystems/tool/domain/curator.js";
 import { grantInput } from "../tooling/testing/fixtures.js";
 import type { ValidationRecord } from "../tooling/contract/types.js";
 import { validationRecord } from "./testing/fixtures.js";
@@ -43,10 +43,13 @@ const FILE_STORE_OPTIONS_ARE_PATH_ONLY: ExactKeys<FilePermissionStoreOptions, "p
 test("the memory permission store is per-instance and its port surface stays consume-only", async () => {
   const store = createMemoryPermissionStore();
   const issued = await store.issue(grantInput({ action: "activate" }));
+
   assert.equal(issued.ok, true);
+
   if (!issued.ok) {
     return;
   }
+
   const use = {
     token: { grantId: issued.grant.grantId },
     action: "activate" as const,
@@ -57,10 +60,12 @@ test("the memory permission store is per-instance and its port surface stays con
   };
   const left = store;
   const right = createMemoryPermissionStore();
+
   assert.equal((await left.consume(use)).ok, true);
   assert.equal((await right.consume(use)).ok, false, "another store cannot verify a reference it did not issue");
   assert.equal((await left.consume(use)).ok, false, "the same store must refuse a replay");
   const port = { consume: left.consume };
+
   assert.deepEqual(Object.keys(port).sort(), ["consume"]);
 });
 
@@ -75,10 +80,13 @@ test("store identity is exactly the store path, so colliding identities are unre
     const storePath = path.join(root, "permission.ndjson");
     const store = createFilePermissionStore({ path: storePath });
     const issued = await store.issue(facts);
+
     assert.equal(issued.ok, true);
+
     if (!issued.ok) {
       return;
     }
+
     // 序列 1 的 grant 身份必须**恰好等于**「事实 + 序号 + 路径派生身份」这一配方。
     // 派生里没有第二个可变输入，因此「同一部署内两个 store 身份相同」在结构上不可达。
     assert.equal(issued.grant.grantId, deriveGrantId(facts, 1, storeIdFromPath(storePath)));
@@ -87,10 +95,13 @@ test("store identity is exactly the store path, so colliding identities are unre
     const otherPath = path.join(root, "nested", "permission.ndjson");
     const other = createFilePermissionStore({ path: otherPath });
     const otherIssued = await other.issue(facts);
+
     assert.equal(otherIssued.ok, true);
+
     if (!otherIssued.ok) {
       return;
     }
+
     assert.notEqual(issued.grant.grantId, otherIssued.grant.grantId);
     assert.notEqual(storeIdFromPath(storePath), storeIdFromPath(otherPath));
   } finally {
@@ -106,11 +117,14 @@ test("two stores issuing the same facts derive different grant identities (R2 P2
     const right = createFilePermissionStore({ path: path.join(root, "right.ndjson") });
     const issuedLeft = await left.issue(facts);
     const issuedRight = await right.issue(facts);
+
     assert.equal(issuedLeft.ok, true);
     assert.equal(issuedRight.ok, true);
+
     if (!issuedLeft.ok || !issuedRight.ok) {
       return;
     }
+
     assert.notEqual(
       issuedLeft.grant.grantId,
       issuedRight.grant.grantId,
@@ -124,8 +138,10 @@ test("two stores issuing the same facts derive different grant identities (R2 P2
       scope: facts.scope,
       now: NOW,
     };
+
     assert.equal((await left.consume(use)).ok, true);
     const crossed = await right.consume(use);
+
     assert.equal(crossed.ok, false, "the other store must not be able to consume the same reference");
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -137,10 +153,13 @@ test("a durable permission store drives activation once and the board only sees 
   try {
     const store = createFilePermissionStore({ path: path.join(root, "permission.ndjson") });
     const issued = await store.issue(grantInput({ action: "activate" }));
+
     assert.equal(issued.ok, true);
+
     if (!issued.ok) {
       return;
     }
+
     const validation: ValidationRecord = validationRecord();
     const board = createRecordingBoardPort();
     const first = await submitBindingDraft(
@@ -159,6 +178,7 @@ test("a durable permission store drives activation once and the board only sees 
         now: NOW,
       },
     );
+
     assert.equal(first.ok, true);
     assert.equal(board.snapshot().length, 1);
 
@@ -178,10 +198,13 @@ test("a durable permission store drives activation once and the board only sees 
         now: NOW,
       },
     );
+
     assert.equal(second.ok, false);
+
     if (!second.ok) {
       assert.equal(second.code, "replayed");
     }
+
     assert.equal(board.snapshot().length, 1, "the replayed activation must not reach the board again");
   } finally {
     await rm(root, { recursive: true, force: true });

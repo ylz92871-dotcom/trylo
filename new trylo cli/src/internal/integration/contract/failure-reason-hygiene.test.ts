@@ -130,18 +130,23 @@ for (const spec of ENUMS) {
         : spec.producerRoots.map((entry) => path.resolve(root, "src", entry));
 
     const dead: string[] = [];
+
     for (const code of spec.codes) {
       let producers = 0;
+
       for (const { file, literals } of sources) {
         const resolved = path.resolve(file);
         if (resolved === declaring) {
           continue;
         }
+
         if (allowedRoots !== undefined && !allowedRoots.some((base) => resolved.startsWith(base))) {
           continue;
         }
+
         producers += literals.has(code) ? 1 : 0;
       }
+
       if (producers === 0) {
         dead.push(code);
       }
@@ -172,19 +177,23 @@ function runtimeStringLiterals(source: string, fileName: string): ReadonlySet<st
     }
     node.forEachChild(visit);
   };
+
   visit(file);
+
   return found;
 }
 
 /** 字面量是否处于类型位置：祖先链上出现任何 `TypeNode` 即为「只是提到」。 */
 function isTypePosition(node: ts.Node): boolean {
   let current: ts.Node | undefined = node.parent;
+
   while (current !== undefined) {
     if (ts.isTypeNode(current)) {
       return true;
     }
     current = current.parent;
   }
+
   return false;
 }
 
@@ -193,8 +202,10 @@ async function listTs(target: string): Promise<string[]> {
   if (info.isFile()) {
     return target.endsWith(".ts") ? [target] : [];
   }
+
   const entries = await readdir(target, { withFileTypes: true });
   const files: string[] = [];
+
   for (const entry of entries) {
     const full = path.join(target, entry.name);
     if (entry.isDirectory()) {
@@ -203,5 +214,6 @@ async function listTs(target: string): Promise<string[]> {
       files.push(full);
     }
   }
+
   return files;
 }

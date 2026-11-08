@@ -10,7 +10,7 @@ import type { EvaluationEvidenceDraft } from "../evaluation/types.js";
 import { productionToolsFromBoard } from "./activation/read-model.js";
 import { mapContentDraft } from "./content/index.js";
 import { admitContentEvidence, admitToolEvidence } from "./contract/gateway.js";
-import { mapToolCommandDraft } from "./tool/index.js";
+import { mapToolCommandDraft } from "../learning/agent/subsystems/tool/adapters/board/index.js";
 import {
   evidenceDraft,
   proposalAdmission,
@@ -61,8 +61,10 @@ type AttackOutcome = { readonly ok: boolean; readonly reason?: string };
 test("testdata/integration negative fixtures all fail closed", async () => {
   const dir = integrationAttackDir();
   const files = (await readdir(dir)).filter((name) => name.endsWith(".json")).sort();
+
   assert.equal(files.length >= 6, true, "the integration attack corpus must be non-trivial");
   const harness = await openRegistryHarness();
+
   try {
     for (const file of files) {
       const attack = JSON.parse(await readFile(path.join(dir, file), "utf8")) as IntegrationAttack;
@@ -163,6 +165,7 @@ async function attackMixedAnchors(
     evidenceDraft(attack.draftOverrides as Partial<EvaluationEvidenceDraft>),
     admission,
   );
+
   return { ok: result.ok, ...(result.ok ? {} : { reason: result.reason }) };
 }
 
@@ -184,10 +187,12 @@ test("the integration corpus names every WP-F attack class", async () => {
   const dir = integrationAttackDir();
   const files = (await readdir(dir)).filter((name) => name.endsWith(".json"));
   const kinds = new Set<string>();
+
   for (const file of files) {
     const attack = JSON.parse(await readFile(path.join(dir, file), "utf8")) as IntegrationAttack;
     kinds.add(attack.kind);
   }
+
   for (const required of [
     "self-reported-verdict",
     "forged-activation-record",

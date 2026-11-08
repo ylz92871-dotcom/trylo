@@ -28,12 +28,14 @@ function scripted(failures: Partial<Record<"create" | "bind" | "remove", string>
   const journal: Journal = { created: [], bound: [], removed: [] };
   const worktrees: WorktreePort = {
     settings: () => ({ root: "/pool", platform: "posix" }),
+
     async create(request) {
       journal.created.push({ sourceCwd: request.sourceCwd, ...(request.base === undefined ? {} : { base: request.base }) });
       const failure = failures.create;
       if (failure !== undefined) {
         return { ok: false, code: "git_unavailable", detail: failure };
       }
+
       return {
         ok: true,
         value: {
@@ -46,9 +48,11 @@ function scripted(failures: Partial<Record<"create" | "bind" | "remove", string>
         },
       };
     },
+
     async list() {
       return { ok: true, value: [] };
     },
+
     async bindOwner(request) {
       journal.bound.push({ root: request.root, ownerId: request.ownerId });
       const failure = failures.bind;
@@ -56,9 +60,11 @@ function scripted(failures: Partial<Record<"create" | "bind" | "remove", string>
         ? { ok: true, value: undefined }
         : { ok: false, code: "already_owned", detail: failure };
     },
+
     async ownerOf() {
       return { ok: true, value: undefined };
     },
+
     async remove(request) {
       journal.removed.push({ root: request.root });
       const failure = failures.remove;
@@ -67,6 +73,7 @@ function scripted(failures: Partial<Record<"create" | "bind" | "remove", string>
         : { ok: false, code: "has_ignored_files", detail: failure };
     },
   };
+
   return { worktrees, journal };
 }
 
@@ -74,10 +81,13 @@ test("a leased child runs in its own checkout, never the parent's directory", as
   const { worktrees, journal } = scripted();
   const runner = createIsolatedChildRunner(worktrees);
   const outcome = await runner.lease({ parentCwd: "/repo", childId: "sub-1" });
+
   assert.equal(outcome.ok, true);
+
   if (!outcome.ok) {
     return;
   }
+
   assert.equal(outcome.lease.cwd, "/pool/0a1b/repo", "the child must not be pointed back at /repo");
   assert.notEqual(outcome.lease.cwd, "/repo");
   assert.deepEqual(journal.bound, [{ root: "/pool/0a1b/repo", ownerId: "sub-1" }], "the child, not the display name, owns it");
@@ -95,11 +105,14 @@ test("a failed create leaves no checkout behind and no lease", async () => {
   const { worktrees, journal } = scripted({ create: "git is not installed" });
   const runner = createIsolatedChildRunner(worktrees);
   const outcome = await runner.lease({ parentCwd: "/repo", childId: "sub-1" });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.code, "git_unavailable");
     assert.equal(outcome.detail.includes("git is not installed"), true);
   }
+
   assert.deepEqual(journal.bound, [], "no ownership was claimed for a checkout that does not exist");
 });
 
@@ -115,7 +128,9 @@ test("when the rollback also fails, both facts reach the caller", async () => {
   const { worktrees } = scripted({ bind: "bind refused", remove: "ignored files present" });
   const runner = createIsolatedChildRunner(worktrees);
   const outcome = await runner.lease({ parentCwd: "/repo", childId: "sub-1" });
+
   assert.equal(outcome.ok, false);
+
   if (!outcome.ok) {
     assert.equal(outcome.detail.includes("bind refused"), true);
     assert.equal(outcome.detail.includes("ignored files present"), true, "a swallowed cleanup failure is how directories go missing");
@@ -126,11 +141,15 @@ test("releasing a clean checkout removes it", async () => {
   const { worktrees, journal } = scripted();
   const runner = createIsolatedChildRunner(worktrees);
   const leased = await runner.lease({ parentCwd: "/repo", childId: "sub-1" });
+
   assert.equal(leased.ok, true);
+
   if (!leased.ok) {
     return;
   }
+
   const released = await runner.release(leased.lease, "/repo");
+
   assert.deepEqual(released, { state: "removed" });
   assert.deepEqual(journal.removed, [{ root: "/pool/0a1b/repo" }]);
 });
@@ -139,20 +158,25 @@ test("a checkout holding the child's changes is kept and reported as kept", asyn
   const { worktrees } = scripted({ remove: "worktree contains ignored local files" });
   const runner = createIsolatedChildRunner(worktrees);
   const leased = await runner.lease({ parentCwd: "/repo", childId: "sub-1" });
+
   assert.equal(leased.ok, true);
+
   if (!leased.ok) {
     return;
   }
+
   // Uncommitted work is the deliverable, not a fault. The state must be
   // distinguishable from a clean removal, or the caller reports success for
   // work that is still sitting on disk.
   const released = await runner.release(leased.lease, "/repo");
+
   assert.deepEqual(released, { state: "kept", reason: "child_has_changes" });
 });
 
 test("a refusal to release for any other reason is reported", async () => {
   const worktrees: WorktreePort = {
     settings: () => ({ root: "/pool", platform: "posix" }),
+
     async create(request) {
       return {
         ok: true,
@@ -166,6 +190,7 @@ test("a refusal to release for any other reason is reported", async () => {
         },
       };
     },
+
     async list() {
       return { ok: true, value: [] };
     },
@@ -181,12 +206,17 @@ test("a refusal to release for any other reason is reported", async () => {
   };
   const runner = createIsolatedChildRunner(worktrees);
   const leased = await runner.lease({ parentCwd: "/repo", childId: "sub-1" });
+
   assert.equal(leased.ok, true);
+
   if (!leased.ok) {
     return;
   }
+
   const released = await runner.release(leased.lease, "/pool/0a1b/repo");
+
   assert.equal(released.state, "kept", "a genuine refusal must not be swallowed into success");
+
   if (released.state === "kept" && released.reason !== "child_has_changes") {
     assert.equal(released.reason, "current_checkout");
     assert.equal(typeof released.detail, "string");
@@ -200,6 +230,7 @@ test("release passes the caller's environment and signal to git", async () => {
   let sawSignal = false;
   const worktrees: WorktreePort = {
     settings: () => ({ root: "/pool", platform: "posix" }),
+
     async create(request) {
       seen.push(request.baseEnv);
       return {
@@ -214,6 +245,7 @@ test("release passes the caller's environment and signal to git", async () => {
         },
       };
     },
+
     async list() {
       return { ok: true, value: [] };
     },
@@ -223,6 +255,7 @@ test("release passes the caller's environment and signal to git", async () => {
     async ownerOf() {
       return { ok: true, value: undefined };
     },
+
     async remove(request) {
       seen.push(request.baseEnv);
       sawSignal = request.signal !== undefined;
@@ -233,10 +266,13 @@ test("release passes the caller's environment and signal to git", async () => {
   const controller = new AbortController();
   const baseEnv = { TRYLO_HOME: "/home/x" };
   const leased = await runner.lease({ parentCwd: "/repo", childId: "sub-1", baseEnv, signal: controller.signal });
+
   assert.equal(leased.ok, true);
+
   if (!leased.ok) {
     return;
   }
+
   await runner.release(leased.lease, "/repo", { baseEnv, signal: controller.signal });
   assert.deepEqual(seen, [baseEnv, baseEnv], "both the create and the remove must carry it");
   assert.equal(sawSignal, true, "a cancelled release must still reach git");

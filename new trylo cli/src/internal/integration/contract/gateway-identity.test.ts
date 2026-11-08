@@ -44,14 +44,19 @@ function issueWithIdentities(harness: RegistryHarness, verifierId: string, gener
 test("generator and verifier cannot be the same identity, and a whitespace alias does not help", async () => {
   await withHarness(async (harness) => {
     const sameIdentity = await issueWithIdentities(harness, "one-agent", "one-agent");
+
     assert.equal(sameIdentity.ok, false);
+
     if (!sameIdentity.ok) {
       assert.equal(sameIdentity.code, "generator_is_verifier");
     }
+
     // 别名（尾随空白 / NFC 未合成序列）**不能**把同一身份写成两个身份：
     // 外审 R3 §3 P2-1 的反例是这条收据曾经签发成功并晋升成功。
     const alias = await issueWithIdentities(harness, "one-agent ", "one-agent");
+
     assert.equal(alias.ok, false, "a trailing-space alias is the same identity");
+
     if (!alias.ok) {
       assert.equal(alias.code, "generator_is_verifier");
     }
@@ -66,9 +71,11 @@ test("identity independence is NFC+trim only: case and homoglyph aliases are sti
     // 该残留登记在 `HANDOFF-MANIFEST.md` §OPEN 的 P2-1 行。**不得**把它改写成
     // 「别名已全部拒绝」——那正是外审 R3 §3 P2-1 指出的过度声明。
     const caseAlias = await issueWithIdentities(harness, "One-Agent", "one-agent");
+
     assert.equal(caseAlias.ok, true, "case folding is a documented residual, not a closed gap");
 
     const homoglyphAlias = await issueWithIdentities(harness, "one-\u0430gent", "one-agent");
+
     assert.equal(homoglyphAlias.ok, true, "homoglyphs are a documented residual, not a closed gap");
   });
 });

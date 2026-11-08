@@ -21,7 +21,7 @@ import {
   withdrawDraft,
   workflowDraft,
 } from "./testing/fixtures.js";
-import { mapToolCommandDraft } from "./tool/index.js";
+import { mapToolCommandDraft } from "../learning/agent/subsystems/tool/adapters/board/index.js";
 import type { BoardCommand } from "../learning/control/commands.js";
 
 /**
@@ -72,10 +72,13 @@ async function assertWhitelisted(
   label: string,
 ): Promise<void> {
   const resolved = await result;
+
   assert.equal(resolved.ok, true, `${label} should map`);
+
   if (!resolved.ok) {
     return;
   }
+
   for (const command of resolved.value) {
     assert.equal(
       (ADAPTER_ALLOWED_COMMAND_TYPES as readonly string[]).includes(command.type),
@@ -106,19 +109,25 @@ test("no source kind can emit activation or approval commands", async () => {
     rollbackAdmission(),
   ];
   const drafts = toolDrafts();
+
   for (let index = 0; index < drafts.length; index += 1) {
     const draft = drafts[index];
     const admission = admissions[index];
+
     assert.notEqual(admission, undefined);
+
     if (draft === undefined || admission === undefined) {
       continue;
     }
+
     // 未注入 authority port 时 submit_evidence 只能失败；其余 kind 仍必须映射。
     const mapped = await mapToolCommandDraft(draft, admission);
+
     if (draft.kind === "submit_evidence") {
       assert.equal(mapped.ok, false, "evidence cannot map without an authority port");
       continue;
     }
+
     assert.equal(mapped.ok, true, `${draft.kind} should map`);
   }
 });
@@ -173,20 +182,25 @@ test("untrusted entry input never throws: unknown JSON fails closed (P1-11)", as
     { kind: "exploding_kind" },
     { kind: "submit_evidence", evidenceId: 1 },
   ];
+
   for (const draft of garbage) {
     const content = mapContentDraft(draft, proposalAdmission());
     assert.equal(content.ok, false, `mapContentDraft(${String(draft)}) must fail closed`);
     const tool = await mapToolCommandDraft(draft, toolEvidenceAdmission());
     assert.equal(tool.ok, false, `mapToolCommandDraft(${String(draft)}) must fail closed`);
   }
+
   const drafts = toolDrafts();
+
   for (let index = 0; index < drafts.length; index += 1) {
     const draft = drafts[index];
     const wrongAdmission = admissions[(index + 1) % admissions.length];
     if (draft === undefined || wrongAdmission === undefined) {
       throw new Error("fixture admission missing");
     }
+
     const result = await mapToolCommandDraft(draft, wrongAdmission);
+
     assert.equal(result.ok, false, `draft ${draft.kind} must refuse a mismatched admission`);
   }
 });
@@ -199,26 +213,36 @@ test("a candidate cannot smuggle extra permissions past the exact-match gate (P1
   const smuggled = await mapToolCommandDraft(draft, packageAdmission({
     requestedAuthorities: ["fs.read", "network.full", "shell.exec"],
   }));
+
   assert.equal(smuggled.ok, false);
+
   if (!smuggled.ok) {
     assert.equal(smuggled.reason, "authority_mismatch");
   }
+
   const missing = await mapToolCommandDraft(draft, packageAdmission({ requestedAuthorities: [] }));
+
   assert.equal(missing.ok, false);
   const exact = await mapToolCommandDraft(draft, packageAdmission({ requestedAuthorities: ["fs.read"] }));
+
   assert.equal(exact.ok, true);
 });
 
 test("a withdraw admission that does not match its draft is refused (P1-1)", () => {
   const draft = withdrawDraft();
   const mismatchedPayload = mapContentDraft(draft, withdrawAdmission({ payloadId: "something-else" }));
+
   assert.equal(mismatchedPayload.ok, false);
+
   if (!mismatchedPayload.ok) {
     assert.equal(mismatchedPayload.reason, "invalid_admission");
   }
+
   const mismatchedKind = mapContentDraft(draft, withdrawAdmission({ assetKind: "skill" }));
+
   assert.equal(mismatchedKind.ok, false);
   const bound = mapContentDraft(draft, withdrawAdmission());
+
   assert.equal(bound.ok, true);
 });
 
@@ -226,12 +250,15 @@ test("a withdraw admission without an authoritative target resolution is refused
   // WP-F / 外审 R2 §3.3：模糊自然语言撤回不得映射到任意 entityId。
   const draft = withdrawDraft();
   const resolutions: readonly unknown[] = [undefined, "guessed", "model_recall", 42];
+
   for (const resolution of resolutions) {
     const result = mapContentDraft(
       draft,
       withdrawAdmission({ targetResolution: resolution as never }),
     );
+
     assert.equal(result.ok, false, `targetResolution ${String(resolution)} must be refused`);
+
     if (!result.ok) {
       assert.equal(result.reason, "unresolvable_withdraw_target");
     }

@@ -45,6 +45,7 @@ test("the turn request carries the job's session, text and a fresh turn id", () 
     now: () => 7,
     newId: (prefix) => `${prefix}_42`,
   });
+
   assert.equal(request.sessionId, "sess_1");
   assert.equal(request.text, "write the file");
   assert.equal(request.turnId, "turn_42");

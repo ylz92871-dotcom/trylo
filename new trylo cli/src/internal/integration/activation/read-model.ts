@@ -9,8 +9,8 @@ import type {
   ToolPackageVersion,
   ValidationRecord,
 } from "../../tooling/contract/types.js";
-import type { ContributionStatus, ProjectorInput } from "../../tooling/my-tools/projector.js";
-import { projectMyTools } from "../../tooling/my-tools/projector.js";
+import type { ContributionStatus, ProjectorInput } from "../../learning/agent/subsystems/tool/assets/my-tools/projector.js";
+import { projectMyTools } from "../../learning/agent/subsystems/tool/assets/my-tools/projector.js";
 import type { MappingResult } from "../contract/rejection.js";
 import { projectToolActivationView } from "./view.js";
 
@@ -52,6 +52,7 @@ export function projectMyToolsFromBoard(
   if (!activations.ok) {
     return activations;
   }
+
   const projectorInput: ProjectorInput = {
     packages: input.packages,
     validations: input.validations,
@@ -60,6 +61,7 @@ export function projectMyToolsFromBoard(
     ...(input.healthByPackage === undefined ? {} : { healthByPackage: input.healthByPackage }),
     ...(input.effectByPackage === undefined ? {} : { effectByPackage: input.effectByPackage }),
   };
+
   return { ok: true, value: projectMyTools(projectorInput) };
 }
 
@@ -75,11 +77,13 @@ export function productionToolsFromBoard(
   if (!activations.ok) {
     return activations;
   }
+
   const searchInput: ProductionSearchInput = {
     packages: input.packages,
     validations: input.validations,
     activations: activations.value,
     descriptions: input.descriptions,
   };
+
   return { ok: true, value: listProductionTools(searchInput) };
 }

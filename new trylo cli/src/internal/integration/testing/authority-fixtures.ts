@@ -92,6 +92,7 @@ export async function issueAgentMethodReceipt(
   if (!issued.ok) {
     throw new Error(`fixture receipt issuance failed: ${issued.code} ${issued.message}`);
   }
+
   return { receiptId: issued.receipt.receiptId, receipt: issued.receipt };
 }
 
@@ -122,5 +123,6 @@ export async function issueUserExplicitReceipt(
   if (!issued.ok) {
     throw new Error(`fixture receipt issuance failed: ${issued.code} ${issued.message}`);
   }
+
   return { receiptId: issued.receipt.receiptId, receipt: issued.receipt };
 }

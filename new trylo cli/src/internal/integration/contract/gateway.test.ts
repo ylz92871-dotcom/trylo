@@ -58,10 +58,13 @@ test("R1: a fully self-consistent forged record has no power without a registry 
         packageVersionId: forged.packageVersionId,
       }),
     );
+
     assert.equal(result.ok, false);
+
     if (!result.ok) {
       assert.equal(result.reason, "verification_receipt_unavailable");
     }
+
     // 旧形状的字段被剥掉后也无法换回权力。
     const legacyShaped = await admitToolEvidence(
       harness.registry,
@@ -74,6 +77,7 @@ test("R1: a fully self-consistent forged record has no power without a registry 
         externalVerdict: "pass",
       } as unknown as Parameters<typeof admitToolEvidence>[2],
     );
+
     assert.equal(legacyShaped.ok, false);
   });
 });
@@ -87,7 +91,9 @@ test("a real receipt cannot be replayed across subject, version, scope or domain
       evidenceDraftShape,
       toolEvidenceAdmission({ receiptRef: issued.receiptId, scope: "other-scope" }),
     );
+
     assert.equal(mismatchedScope.ok, false);
+
     if (!mismatchedScope.ok) {
       assert.equal(mismatchedScope.reason, "verification_binding_mismatch");
     }
@@ -100,7 +106,9 @@ test("a real receipt cannot be replayed across subject, version, scope or domain
         packageVersionId: "pkg:pdf-lint:9.9.9",
       }),
     );
+
     assert.equal(mismatchedVersion.ok, false);
+
     if (!mismatchedVersion.ok) {
       assert.equal(mismatchedVersion.reason, "verification_binding_mismatch");
     }
@@ -115,7 +123,9 @@ test("a real receipt cannot be replayed across subject, version, scope or domain
         scope: "docs",
       }),
     );
+
     assert.equal(wrongDomain.ok, false);
+
     if (!wrongDomain.ok) {
       assert.equal(wrongDomain.reason, "verification_binding_mismatch");
     }
@@ -135,6 +145,7 @@ test("a pass receipt cannot be replayed onto a newer version of the same subject
         dataVersion: "validation-2026-09-14",
       }),
     );
+
     assert.equal(newer.ok, true, "the same version is still admissible");
 
     const stillOldVersion = await issueAgentMethodReceipt(
@@ -150,7 +161,9 @@ test("a pass receipt cannot be replayed onto a newer version of the same subject
         packageVersionId: "pkg:pdf-lint:2.0.0",
       }),
     );
+
     assert.equal(crossVersion.ok, false);
+
     if (!crossVersion.ok) {
       assert.equal(crossVersion.reason, "verification_binding_mismatch");
     }
@@ -161,6 +174,7 @@ test("a revoked receipt cannot promote anything", async () => {
   await withHarness(async (harness) => {
     const issued = await issueAgentMethodReceipt(harness, validationRecord(), { scope: "docs" });
     const revoked = await harness.registry.revoke(issued.receiptId, AT, "verifier withdrawn");
+
     assert.equal(revoked.ok, true);
 
     const result = await admitToolEvidence(
@@ -168,7 +182,9 @@ test("a revoked receipt cannot promote anything", async () => {
       evidenceDraftShape,
       toolEvidenceAdmission({ receiptRef: issued.receiptId }),
     );
+
     assert.equal(result.ok, false);
+
     if (!result.ok) {
       assert.equal(result.reason, "verification_receipt_unavailable");
     }
@@ -184,10 +200,13 @@ test("C: an agent checker pass cannot masquerade as user-explicit evidence", asy
       evidenceDraft({ proposalId: "prop-1" }),
       evidenceAdmission({ receiptRef: agentReceipt.receiptId, candidateVersion: "cand-1", scope: "docs" }),
     );
+
     assert.equal(result.ok, false);
+
     if (!result.ok) {
       assert.equal(result.reason, "verification_binding_mismatch");
     }
+
     // user_explicit 域拒绝学习环自造来源：前缀不受支持的引用签不出发票。
     const selfInvented = await harness.registry.issue({
       domain: "user_explicit",
@@ -202,7 +221,9 @@ test("C: an agent checker pass cannot masquerade as user-explicit evidence", asy
       issuedAt: AT,
       sourceFactRef: "model-recall:the-user-probably-likes-this",
     });
+
     assert.equal(selfInvented.ok, false);
+
     if (!selfInvented.ok) {
       assert.equal(selfInvented.code, "missing_issuance_field");
     }
@@ -217,7 +238,9 @@ test("D: a user-explicit receipt cannot masquerade as tool verification", async 
       evidenceDraftShape,
       toolEvidenceAdmission({ receiptRef: userReceipt.receiptId }),
     );
+
     assert.equal(result.ok, false);
+
     if (!result.ok) {
       assert.equal(result.reason, "verification_binding_mismatch");
     }
@@ -226,16 +249,21 @@ test("D: a user-explicit receipt cannot masquerade as tool verification", async 
 
 test("without an injected authority port no evidence command is produced", async () => {
   const result = await admitToolEvidence(undefined, evidenceDraftShape, toolEvidenceAdmission());
+
   assert.equal(result.ok, false);
+
   if (!result.ok) {
     assert.equal(result.reason, "verification_authority_unavailable");
   }
+
   const content = await admitContentEvidence(
     undefined,
     evidenceDraft({ proposalId: "prop-1" }),
     evidenceAdmission(),
   );
+
   assert.equal(content.ok, false);
+
   if (!content.ok) {
     assert.equal(content.reason, "verification_authority_unavailable");
   }
@@ -254,6 +282,7 @@ test("a corrupted registry fails closed instead of granting a pass", async () =>
       scope: "docs",
     });
     const raw = await readFile(registryPath, "utf8");
+
     // 中段改一个字节：checksum 不再匹配。
     await writeFile(registryPath, raw.replace("receipt_issued", "receipt_issuXed"), "utf8");
     const verified = await registry.verify(
@@ -266,7 +295,9 @@ test("a corrupted registry fails closed instead of granting a pass", async () =>
         scope: "docs",
       },
     );
+
     assert.equal(verified.ok, false);
+
     if (!verified.ok) {
       assert.equal(verified.code, "registry_corrupt");
     }

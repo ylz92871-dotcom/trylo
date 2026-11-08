@@ -39,7 +39,9 @@ test("WP27.3 红例：实现人冒充复核人不得冻结", () => {
     },
     SCOPE,
   );
+
   assert.equal(verdict.kind, "not_freezable");
+
   if (verdict.kind === "not_freezable") {
     assert.ok(verdict.failures.some((failure) => failure.code === "same_reviewer"));
   }
@@ -59,7 +61,9 @@ test("WP27.3 红例：缺 hash/制品/证据分别显式失败", () => {
     },
     SCOPE,
   );
+
   assert.equal(verdict.kind, "not_freezable");
+
   if (verdict.kind === "not_freezable") {
     const codes = verdict.failures.map((failure) => failure.code);
     assert.ok(codes.includes("missing_hash"));
@@ -82,10 +86,13 @@ test("WP27.3 红例：不拥有任何能力的包不得通过四眼冻结", () =
     },
     SCOPE,
   );
+
   assert.equal(unknownPackage.kind, "not_freezable");
+
   if (unknownPackage.kind === "not_freezable") {
     assert.ok(unknownPackage.failures.some((failure) => failure.code === "no_owned_capability"));
   }
+
   const emptyPackage = validateFreezeCandidate(
     {
       packageId: "",
@@ -99,6 +106,7 @@ test("WP27.3 红例：不拥有任何能力的包不得通过四眼冻结", () =
     },
     SCOPE,
   );
+
   assert.equal(emptyPackage.kind, "not_freezable");
 });
 
@@ -116,7 +124,9 @@ test("WP27.3 红例：排除包携 PASS 不得冻结", () => {
     },
     SCOPE,
   );
+
   assert.equal(verdict.kind, "not_freezable");
+
   if (verdict.kind === "not_freezable") {
     assert.ok(verdict.failures.some((failure) => failure.code === "excluded_claimed_pass"));
   }
@@ -136,7 +146,9 @@ test("WP27.3 红例：大小写不同的同一人视为同一复核人", () => {
     },
     SCOPE,
   );
+
   assert.equal(verdict.kind, "not_freezable");
+
   if (verdict.kind === "not_freezable") {
     assert.ok(verdict.failures.some((failure) => failure.code === "same_reviewer"));
   }
@@ -156,10 +168,13 @@ test("WP27.3 红例：复核的不是将被冻结的那一版不得冻结", () =
     },
     SCOPE,
   );
+
   assert.equal(staleReview.kind, "not_freezable");
+
   if (staleReview.kind === "not_freezable") {
     assert.ok(staleReview.failures.some((failure) => failure.code === "review_covers_other_revision"));
   }
+
   const noReviewedHash = validateFreezeCandidate(
     {
       packageId: "WP23",
@@ -173,6 +188,7 @@ test("WP27.3 红例：复核的不是将被冻结的那一版不得冻结", () =
     },
     SCOPE,
   );
+
   assert.equal(noReviewedHash.kind, "not_freezable");
 });
 
@@ -190,7 +206,9 @@ test("WP27.3 红例：成熟度断言必须是四档之一", () => {
     },
     SCOPE,
   );
+
   assert.equal(verdict.kind, "not_freezable");
+
   if (verdict.kind === "not_freezable") {
     assert.ok(verdict.failures.some((failure) => failure.code === "invalid_maturity"));
   }

@@ -71,33 +71,41 @@ function isSamePerson(left: string, right: string): boolean {
 
 function collectOwnerFailures(candidate: FreezeCandidate): readonly FreezeFailure[] {
   const failures: FreezeFailure[] = [];
+
   if (isBlank(candidate.implementer) || isBlank(candidate.reviewer)) {
     failures.push({ code: "anonymous_owner", detail: `${candidate.packageId}: implementer/reviewer must be named` });
     return failures;
   }
+
   if (isSamePerson(candidate.implementer, candidate.reviewer)) {
     failures.push({ code: "same_reviewer", detail: `${candidate.packageId}: reviewer must differ from implementer` });
   }
+
   if (!MATURITY_CLAIMS.has(candidate.maturityClaim)) {
     failures.push({
       code: "invalid_maturity",
       detail: `${candidate.packageId}: maturity claim is not one of the four defined levels: ${candidate.maturityClaim}`,
     });
   }
+
   return failures;
 }
 
 function collectEvidenceFailures(candidate: FreezeCandidate): readonly FreezeFailure[] {
   const failures: FreezeFailure[] = [];
+
   if (isBlank(candidate.sourceHash)) {
     failures.push({ code: "missing_hash", detail: `${candidate.packageId}: source hash is required` });
   }
+
   if (isBlank(candidate.artifactPath)) {
     failures.push({ code: "missing_artifact", detail: `${candidate.packageId}: artifact path is required` });
   }
+
   if (isBlank(candidate.evidenceLink)) {
     failures.push({ code: "missing_evidence", detail: `${candidate.packageId}: evidence link is required` });
   }
+
   if (isBlank(candidate.reviewedHash)) {
     failures.push({ code: "missing_hash", detail: `${candidate.packageId}: the revision the reviewer read is required` });
   } else if (candidate.reviewedHash.trim() !== candidate.sourceHash.trim()) {
@@ -106,6 +114,7 @@ function collectEvidenceFailures(candidate: FreezeCandidate): readonly FreezeFai
       detail: `${candidate.packageId}: reviewer signed ${candidate.reviewedHash} but ${candidate.sourceHash} would be frozen`,
     });
   }
+
   return failures;
 }
 
@@ -120,6 +129,7 @@ export function validateFreezeCandidate(
   const failures: FreezeFailure[] = [...collectOwnerFailures(candidate), ...collectEvidenceFailures(candidate)];
   const owned = scope.filter((item) => item.primaryWorkPackage === candidate.packageId);
   const ownedInScope = owned.filter((item) => item.scope === "in_scope");
+
   if (owned.length === 0) {
     failures.push({
       code: "no_owned_capability",
@@ -131,8 +141,10 @@ export function validateFreezeCandidate(
       detail: `${candidate.packageId}: all owned capabilities are excluded_by_user; no PASS to freeze`,
     });
   }
+
   if (failures.length > 0) {
     return { kind: "not_freezable", failures };
   }
+
   return { kind: "freezable", packageId: candidate.packageId };
 }

@@ -100,6 +100,7 @@ export function createLoopWorkerExecutor(
     execute: async (job: WorkerJob): Promise<WorkerTurnResult> => {
       const result = await runTurn(options.ports, workerTurnRequest(job, options));
       const outcome = outcomeOfTurn(result.state);
+
       return {
         outcome,
         detail:
@@ -108,6 +109,7 @@ export function createLoopWorkerExecutor(
             : `turn ended ${outcome} after ${result.iterations} iteration(s)`,
       };
     },
+
     // 保守：见文件头。宁可让 worker 补回并标 unknown，也不猜「确定没交出去」。
     probe: async (_ref: string): Promise<HandoffProbe> => "unknown",
   };

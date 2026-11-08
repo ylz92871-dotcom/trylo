@@ -12,8 +12,8 @@ import type {
   TaskFamily,
   VersionPins,
 } from "../../learning/domains/shared/types.js";
-import type { PromptAttributionRecord } from "../../learning/domains/prompt/attribution.js";
-import { buildPromptPatchDraft, type PromptPatchDraft } from "../../learning/domains/prompt/builder.js";
+import type { PromptAttributionRecord } from "../../learning/agent/subsystems/method/legacy-prompt/attribution.js";
+import { buildPromptPatchDraft, type PromptPatchDraft } from "../../learning/agent/subsystems/method/legacy-prompt/builder.js";
 import { induceSkill, type SkillDraft, type SkillEpisode } from "../../learning/domains/skill/inducer.js";
 import { buildUserRule, type UserRuleDraft, type WithdrawCommandDraft } from "../../learning/domains/user/builder.js";
 import { induceWorkflow, type WorkflowDraft, type WorkflowEpisode } from "../../learning/domains/workflow/inducer.js";
@@ -67,6 +67,7 @@ export function userRuleDraft(): UserRuleDraft {
   if (result.kind !== "draft") {
     throw new Error(`user rule fixture broken: ${result.kind}`);
   }
+
   return result.draft;
 }
 
@@ -90,6 +91,7 @@ export function promptRecord(
     ref: "run-1",
     selfGenerated: false,
   };
+
   return {
     baselinePromptHash: "b-1",
     candidatePatch: ops,
@@ -132,9 +134,11 @@ export function skillDraft(): SkillDraft {
       steps: ["reproduce failing test", "patch the production code", "re-run the same test"],
       checks: ["unit_test exit 0"],
     };
+
     if (failureMode === undefined) {
       return base;
     }
+
     return { ...base, failureMode };
   };
   const result = induceSkill([
@@ -145,6 +149,7 @@ export function skillDraft(): SkillDraft {
   if (result.kind !== "draft") {
     throw new Error(`skill fixture broken: ${result.kind}`);
   }
+
   return result.draft;
 }
 
@@ -167,6 +172,7 @@ export function workflowDraft(): WorkflowDraft {
   if (result.kind !== "draft") {
     throw new Error(`workflow fixture broken: ${result.kind}`);
   }
+
   return result.draft;
 }
 

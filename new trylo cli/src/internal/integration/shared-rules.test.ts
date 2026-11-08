@@ -65,12 +65,15 @@ test("the loop's bound and the shared cutter agree on every byte boundary", () =
     "x".repeat(MAX_TOOL_OUTPUT_BYTES + 1),
   ]) {
     const bounded = boundToolOutput(`${sample}TAIL-ERROR: it failed`, false);
+
     assert.equal(bounded.truncated, true);
     assert.equal(bounded.output.includes("�"), false, "a cut must not leave a replacement character");
     const markerAt = bounded.output.indexOf("\n[truncated]\n");
+
     assert.ok(markerAt > 0, "the marker must be present and not at the very start");
     const head = bounded.output.slice(0, markerAt);
     const expectedHead = cutFromProtocol(sample, Math.ceil((MAX_TOOL_OUTPUT_BYTES - 13) / 2));
+
     assert.equal(head, expectedHead, "the loop's head is not the shared cutter's head");
   }
 });
@@ -106,6 +109,7 @@ test("a repeated id is not a settled id: the second ask is still an orphan", () 
   // answer of "no orphans" here would let a dangling `tool_use` reach the next
   // provider request, which most providers reject.
   const pairing = toolPairingOf(repeatedId);
+
   assert.equal(pairing.asked.length, 1, "asked lists the id once");
   assert.deepEqual(pairing.orphans, ["x"], "but the second, unanswered call is still an orphan");
   assert.equal(allToolCallsSettled(repeatedId), false);
@@ -131,6 +135,7 @@ test("the loop's pairing and the store's verdict agree across shapes", () => {
     // are one fact seen from opposite sides.
     const settled = allToolCallsSettled(shape);
     const orphans = toolPairingOf(shape).orphans;
+
     assert.equal(
       settled,
       orphans.length === 0,
