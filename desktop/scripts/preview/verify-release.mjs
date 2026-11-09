@@ -47,7 +47,7 @@ for (const file of sources.files) {
   const target = await regularFile(sourceDirectory, file.name);
   if (!supplied || supplied.url !== file.url || supplied.sha256 !== file.sha256 || (await stat(target)).size !== file.bytes || await digest(target) !== file.sha256) throw new Error(`Source archive mismatch: ${file.name}`);
 }
-// This checks every original Office byte and rejects extra/missing files.
+// This checks the pinned conversion profile and rejects extra/missing files.
 execFileSync(process.execPath, [path.join(here, 'stage-office-engine.mjs'), '--check'], { windowsHide: true, stdio: 'inherit' });
 
 const notices = [];
@@ -65,6 +65,7 @@ for (const relative of officeNotices) notices.push({ path: relative, sha256: awa
 const ownSources = [
   'docs/preview/README.md', 'docs/preview/DEPENDENCIES.md', 'docs/preview/codecs.md',
   'scripts/preview/source-archives.lock.json', 'scripts/preview/office-engine.lock.json',
+  'scripts/preview/office-runtime-profile.mjs', 'scripts/preview/stage-office-engine.mjs',
   'src/preview/workers/image-worker.js', 'src/preview/workers/cad-worker.js',
   'src/preview/workers/run-worker.ts',
   'src/preview/providers/raster.ts', 'src/preview/providers/cad.ts',
@@ -110,11 +111,11 @@ if (prior?.identity === identity && prior.sourceCompanion?.file === companionNam
 }
 const manifest = {
   schemaVersion: 1, productVersion: pkg.version, identity,
-  office: { version: office.version, buildId: office.buildId, distributionFilesSha256: office.distributionFilesSha256 },
+  office: { version: office.version, buildId: office.buildId, runtimeProfile: office.runtimeProfile, upstreamDistributionFilesSha256: office.upstreamDistributionFilesSha256, distributionFilesSha256: office.distributionFilesSha256 },
   sourceCompanion: { file: companionName, sha256: companionSha256, bytes: (await stat(companion)).size },
   sources: [...sources.files, ...media.lock.files, ...archive.lock.sources], archive: { version: archive.lock.version }, media: { version: media.lock.engineVersion, ffmpegCommit: media.lock.ffmpegCommit, builderCommit: media.lock.builderCommit }, suppliedFiles: notices, applicationAdapters: ownFiles,
 };
 await writeFile(`${manifestPath}.partial-${process.pid}`, `${JSON.stringify(manifest, null, 2)}\n`);
 await rename(`${manifestPath}.partial-${process.pid}`, manifestPath);
-await writeFile(path.join(output, 'README.txt'), `Trylo preview release companion\n\nDistribute preview-release.json and ${companionName} alongside the matching installer.\nThe installer carries unmodified LibreOffice, image/CAD codecs, and their license notices.\nThe companion includes matching upstream sources/build recipes, notices, and Trylo worker adapters.\nSHA256 ${companionName}: ${companionSha256}\n\nThis gate verifies supply consistency. Native UI and installer acceptance are separate.\n`);
+await writeFile(path.join(output, 'README.txt'), `Trylo preview release companion\n\nDistribute preview-release.json and ${companionName} alongside the matching installer.\nLibreOffice uses the ${office.runtimeProfile} conversion profile. Its binaries are unchanged; unused UI languages, editing dictionaries/help/gallery are omitted, and dictionaries.xcu retains hyphenation registrations only.\nThe companion includes matching upstream sources/build recipes, license notices, Trylo adapters, and the exact profile/staging scripts needed to reproduce these changes.\nSHA256 ${companionName}: ${companionSha256}\n\nThis gate verifies supply consistency. Native UI and installer acceptance are separate.\n`);
 console.log(`Preview release verified: Office ${office.version}; ${sources.files.length} source archives; companion ${companion}`);

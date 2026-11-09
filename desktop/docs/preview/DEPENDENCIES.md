@@ -5,11 +5,11 @@
 用户于 2026-11-03 明确允许 LibreOffice 作为仓库 stars 门槛的例外，采用范围是可替换、独立管理的本地 Office 页面引擎和发行供给。该例外不适用于其他项目，也不授权其接管 Trylo 核心运行时。
 
 - 项目由 The Document Foundation 治理，有独立发布、Windows x64 官方 MSI、版本归档、官方摘要/签名和安全公告渠道。代码有企业与社区贡献；不能用基金会名称或提交总量代替维护风险判断。依据：[基金会](https://www.documentfoundation.org/)、[下载](https://www.libreoffice.org/download/)、[系统要求](https://www.libreoffice.org/system-requirements/)、[安全公告](https://www.libreoffice.org/security/)。
-- 当前锁定 26.8.2.2 / Windows x64，官方 MSI SHA256 和核心摘要见 `scripts/preview/office-engine.lock.json`。完整原样管理镜像以文件到 PDF 的进程边界接入，发布配置不依赖系统 Office。核心协议、CLI、学习和成果模型不依赖 LibreOffice 类型。
-- 构建时 `supply-office-engine.ps1` 复用已验证资源，或获取固定官方 MSI、检查摘要/发布者、只作管理镜像解包和完整暂存。它不运行普通系统安装，不接管关联/用户配置；应用运行时不会下载引擎。
+- 当前锁定 26.8.2.2 / Windows x64，官方 MSI SHA256 和核心摘要见 `scripts/preview/office-engine.lock.json`。以文件到 PDF 的进程边界接入，发布配置不依赖系统 Office。核心协议、CLI、学习和成果模型不依赖 LibreOffice 类型。
+- 构建时 `supply-office-engine.ps1` 复用已验证资源，或获取固定官方 MSI、检查摘要/发布者、作管理镜像解包并应用固定精简配置。它不运行普通系统安装，不接管关联/用户配置；应用运行时不会下载引擎。
 - 26.8.2.2 全量暂存为 19,417 文件 / 1,583,065,349 字节。六种 DOCX/XLSX/PPTX/DOC/XLS/PPT 的正式文件到 PDF 接口已真实通过，含项目范围、原件不变及作业清理；随后原始文件全量摘要仍匹配。页面数与末尾文字检查通过，并以 Poppler 检查中文、图片与图表页面。实际原生交互和安装验收仍未完成，不能继承旧版本或离线输出的结论。
 - 许可由实际 `license.txt`、`LICENSE.html`、`NOTICE` 和对应源码供给承担，不能把整个分发包概括为单一许可。引擎和解码器的版本源码伴随包、原始构建脚本与摘要在发行工作目录保存，公共发行必须同步提供相应内容。
-- 成本：完整镜像占用约 1.58 GB，当前为优先验证完整兼容性的供给形式。以后若裁剪语言/帮助/组件，须形成独立配置和格式回归，不能直接删除未知文件缩包。转换不是系统级沙箱，排版受字体与兼容性影响。
+- 2026-11-10 瘦身配置 `headless-preview-zh-en-v1`：完整上游镜像的摘要仍独立固定；分发时使用 6,465 文件 / 661,169,972 字节的转换配置。保留转换二进制、格式过滤器、全部原有字体、CJK 数据和多语言断词词典；界面语言保留英文、简繁中文。移除拼写/同义词词库及其 XCU 注册、其他界面翻译、离线帮助、画廊、模板、额外图标主题、求解器和维基发布扩展。二进制不作修改；XCU 改动由随源码伴随包提供的 `office-runtime-profile.mjs` 重现。完整上游和精简分发各有固定清单摘要，运行时校验继续使用精简后的 pin，未放宽校验。六种 Office 格式的定向结果及安装包大小记录在 `docs/validation/2026-11-10-installer-slimming.md`。转换不是系统级沙箱，排版受字体与兼容性影响。
 
 未采用的主要路径：ONLYOFFICE DocumentServer 需要完整服务栈及 AGPL/附加条款评估；DesktopEditors 是完整编辑器宿主；单纯 OOXML 前端渲染无法满足 Office 排版/图片/图表的统一预览。本次保留现有 OOXML 基础/表格数据视图作为明确标注的辅助视图。退出方案是替换文件到 PDF 提供器并继续使用已有 PDF 阅读器，成果存储和容器无需随引擎重构。
 

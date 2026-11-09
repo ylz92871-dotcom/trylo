@@ -6,7 +6,11 @@ $stage = Join-Path $PSScriptRoot 'stage-office-engine.mjs'
 # A verified supplied tree needs no installed Office or extraction cache.
 if (Test-Path -LiteralPath $resources) {
     node $stage --check
-    if ($LASTEXITCODE -ne 0) { throw 'Preserve and inspect the invalid staged Office engine before replacing it.' }
+    if ($LASTEXITCODE -ne 0) {
+        # Only the exact upstream full inventory can be migrated automatically.
+        node $stage --from-staged-full
+        if ($LASTEXITCODE -ne 0) { throw 'Preserve and inspect the invalid staged Office engine before replacing it.' }
+    }
     return
 }
 if ($env:TRYLO_OFFICE_ENGINE_DIR) {

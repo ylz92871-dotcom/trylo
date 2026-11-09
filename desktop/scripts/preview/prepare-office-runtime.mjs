@@ -15,7 +15,7 @@ export async function prepareOfficeRuntime(engineRoot) {
   const root = await realpath(engineRoot);
   const relativeRoot = path.relative(checkout, root);
   if (!relativeRoot || relativeRoot === '..' || relativeRoot.startsWith(`..${path.sep}`) || path.isAbsolute(relativeRoot)) throw new Error('Office dev runtime must stay inside this checkout');
-  await verifyOfficeRuntime(root); // Pinned complete inventory identity and critical binaries.
+  await verifyOfficeRuntime(root); // Pinned runtime inventory and critical binaries.
   const manifest = JSON.parse(await readFile(path.join(root, 'manifest.json'), 'utf8'));
   const executables = [];
   for (const entry of manifest.files) {

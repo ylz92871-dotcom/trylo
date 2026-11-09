@@ -9,7 +9,7 @@ export async function verifyOfficeRuntime(root) {
   const manifestFile = path.join(root, 'manifest.json');
   if ((await stat(manifestFile)).size > 5 * 1024 * 1024) throw new Error('Office 引擎清单过大');
   const manifest = JSON.parse(await readFile(manifestFile, 'utf8'));
-  if (manifest.schemaVersion !== 1 || manifest.provider !== lock.provider || manifest.version !== lock.version || manifest.buildId !== lock.buildId || manifest.entry !== 'program/soffice.com' || !Array.isArray(manifest.files) || manifest.files.length > 20_000) throw new Error('Office 引擎版本与发行配置不一致');
+  if (manifest.schemaVersion !== 1 || manifest.provider !== lock.provider || manifest.version !== lock.version || manifest.buildId !== lock.buildId || manifest.runtimeProfile !== lock.runtimeProfile || manifest.entry !== 'program/soffice.com' || !Array.isArray(manifest.files) || manifest.files.length > 20_000) throw new Error('Office 引擎版本与发行配置不一致');
   const entries = [...manifest.files].map(({ path, size, sha256 }) => ({ path, size, sha256 })).sort((a, b) => Buffer.compare(Buffer.from(a.path), Buffer.from(b.path)));
   if (createHash('sha256').update(JSON.stringify(entries)).digest('hex') !== lock.distributionFilesSha256) throw new Error('Office 引擎文件清单校验失败');
   const canonicalRoot = await realpath(root);

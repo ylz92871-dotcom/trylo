@@ -1,14 +1,18 @@
 import { createReadStream } from 'node:fs';
-import { cp, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { officeRuntimeProfile, planOfficeRuntime } from './office-runtime-profile.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const lock = JSON.parse(await readFile(path.join(here, 'office-engine.lock.json'), 'utf8'));
 const desktop = path.resolve(here, '../..');
 const destination = path.join(desktop, 'src-tauri/resources/preview/office');
+if (lock.runtimeProfile !== officeRuntimeProfile || !/^[a-f0-9]{64}$/.test(lock.upstreamDistributionFilesSha256 ?? '')) {
+  throw new Error('Office runtime profile and upstream inventory must be pinned together');
+}
 
 async function digest(file) {
   const hash = createHash('sha256');
@@ -19,7 +23,7 @@ async function inventory(root, directory = '', files = [], skipInstaller = false
   for (const entry of await readdir(path.join(root, directory), { withFileTypes: true })) {
     const relative = path.posix.join(directory, entry.name);
     // Administrative extraction retains its input MSI at the root; it is
-    // a supply artifact, not a runtime file. Copy every other original file.
+    // a supply artifact, not a runtime file. Inventory every other original file.
     if (skipInstaller && !directory && entry.isFile() && /\.msi$/i.test(entry.name)) continue;
     if (entry.isSymbolicLink()) throw new Error(`Redirected engine entry: ${relative}`);
     if (entry.isDirectory()) await inventory(root, relative, files, skipInstaller);
@@ -30,7 +34,7 @@ async function inventory(root, directory = '', files = [], skipInstaller = false
   }
   return files.sort((a, b) => a.path.localeCompare(b.path));
 }
-function validate(files) {
+function validate(files, expectedIdentity = lock.distributionFilesSha256) {
   const byPath = new Map(files.map((file) => [file.path, file]));
   for (const [name, hash] of Object.entries(lock.criticalFiles)) {
     if (byPath.get(name)?.sha256 !== hash) throw new Error(`Pinned Office engine mismatch: ${name}`);
@@ -40,14 +44,14 @@ function validate(files) {
   }
   if (!files.some((file) => file.path.startsWith('share/registry/'))) throw new Error('Missing Office filter registry');
   const identity = createHash('sha256').update(canonicalFiles(files)).digest('hex');
-  if (identity !== lock.distributionFilesSha256) throw new Error('Full Office payload does not match the official release inventory');
+  if (identity !== expectedIdentity) throw new Error('Office payload does not match the pinned distribution inventory');
 }
 function canonicalFiles(files) {
   return JSON.stringify([...files].sort((a, b) => Buffer.compare(Buffer.from(a.path), Buffer.from(b.path))));
 }
 async function check(root) {
   const manifest = JSON.parse(await readFile(path.join(root, 'manifest.json'), 'utf8'));
-  if (manifest.provider !== lock.provider || manifest.version !== lock.version || manifest.buildId !== lock.buildId) throw new Error('Engine manifest does not match the release lock');
+  if (manifest.provider !== lock.provider || manifest.version !== lock.version || manifest.buildId !== lock.buildId || manifest.runtimeProfile !== officeRuntimeProfile) throw new Error('Engine manifest does not match the release lock');
   const files = await inventory(root);
   validate(files);
   if (canonicalFiles(files) !== canonicalFiles(manifest.files)) throw new Error('Office distribution inventory mismatch');
@@ -63,19 +67,20 @@ if (process.argv.includes('--check')) {
   // All mutation targets are resolved under this checkout. Reject a junction
   // redirecting the resource directory before copying or renaming anything.
   if ((await realpath(resources)).toLowerCase() !== resources.toLowerCase()) throw new Error('Redirected preview resources directory');
+  const fromStagedFull = process.argv.includes('--from-staged-full');
   try {
     const existing = await check(destination);
     console.log(`Office engine already staged: ${existing.version}, ${existing.files.length} files`);
     process.exit(0);
   } catch (error) {
     try { await stat(destination); } catch { /* no prior stage */ }
-    if (await stat(destination).catch(() => null)) throw new Error(`Existing engine is invalid; preserve and inspect it before restaging: ${error.message}`);
+    if (!fromStagedFull && await stat(destination).catch(() => null)) throw new Error(`Existing engine is invalid; preserve and inspect it before restaging: ${error.message}`);
   }
   const sourceArgument = process.argv.indexOf('--source');
-  const source = await realpath(sourceArgument >= 0 ? process.argv[sourceArgument + 1] : process.env.TRYLO_OFFICE_ENGINE_DIR ?? path.join(process.env.ProgramW6432 ?? process.env.ProgramFiles ?? '', 'LibreOffice'));
-  if (source.toLowerCase().startsWith(resources.toLowerCase())) throw new Error('Engine source must be independent of staged resources');
+  const source = await realpath(fromStagedFull ? destination : sourceArgument >= 0 ? process.argv[sourceArgument + 1] : process.env.TRYLO_OFFICE_ENGINE_DIR ?? path.join(process.env.ProgramW6432 ?? process.env.ProgramFiles ?? '', 'LibreOffice'));
+  if (!fromStagedFull && source.toLowerCase().startsWith(resources.toLowerCase())) throw new Error('Engine source must be independent of staged resources');
   const files = await inventory(source, '', [], true);
-  validate(files);
+  validate(files, lock.upstreamDistributionFilesSha256);
   const version = await readFile(path.join(source, 'program/version.ini'), 'utf8');
   if (!version.includes(`buildid=${lock.buildId}`)) throw new Error('Office build identity mismatch');
   if (process.platform === 'win32') {
@@ -91,11 +96,32 @@ if (process.argv.includes('--check')) {
   }
   const staging = `${destination}.staging-${process.pid}`;
   if (!staging.startsWith(`${resources}${path.sep}`)) throw new Error('Staging path escaped resources');
-  await cp(source, staging, { recursive: true, errorOnExist: true, force: false, dereference: false,
-    filter: (file) => path.dirname(file) !== source || !/\.msi$/i.test(file),
-  });
-  await writeFile(path.join(staging, 'manifest.json'), `${JSON.stringify({ schemaVersion: 1, ...lock, entry: 'program/soffice.com', files }, null, 2)}\n`);
+  if (await stat(staging).catch(() => null)) throw new Error(`Retain and inspect existing stage: ${staging}`);
+  const plan = await planOfficeRuntime(files, relative => readFile(path.join(source, relative)));
+  const runtimeFiles = [];
+  for (const file of plan.files) {
+    const target = path.join(staging, file.path);
+    await mkdir(path.dirname(target), { recursive: true });
+    const replacement = plan.replacements.get(file.path);
+    if (replacement) {
+      await writeFile(target, replacement, { flag: 'wx' });
+      runtimeFiles.push({ path: file.path, size: replacement.length, sha256: createHash('sha256').update(replacement).digest('hex') });
+    } else {
+      await copyFile(path.join(source, file.path), target);
+      runtimeFiles.push(file);
+    }
+  }
+  validate(runtimeFiles);
+  await writeFile(path.join(staging, 'manifest.json'), `${JSON.stringify({ schemaVersion: 1, ...lock, entry: 'program/soffice.com', files: runtimeFiles }, null, 2)}\n`);
   await check(staging);
+  if (fromStagedFull) {
+    const backupRoot = path.resolve(desktop, '../_workspace/cache/desktop/preview');
+    await mkdir(backupRoot, { recursive: true });
+    if ((await realpath(backupRoot)).toLowerCase() !== backupRoot.toLowerCase()) throw new Error('Redirected Office supply cache');
+    const backup = path.join(backupRoot, `office-upstream-${lock.version}-${process.pid}`);
+    await rename(destination, backup);
+    console.log(`Verified upstream supply retained: ${backup}`);
+  }
   await rename(staging, destination);
-  console.log(`Office engine staged: ${lock.version}, ${files.length} files, ${files.reduce((sum, file) => sum + file.size, 0)} bytes`);
+  console.log(`Office engine staged: ${lock.version}, ${runtimeFiles.length} files, ${runtimeFiles.reduce((sum, file) => sum + file.size, 0)} bytes; ${officeRuntimeProfile}`);
 }

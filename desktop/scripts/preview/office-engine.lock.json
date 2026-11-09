@@ -11,5 +11,7 @@
     "program/version.ini": "22aa2c78538971ce5094da8d648e29523369610e659e456b943e254f35bc506d"
   },
   "packageSha256": "ff4b911403b67ee9e6249f820f9782c44bb32c94fdaa45b0da53a8e419e5307a",
-  "distributionFilesSha256": "0d3d0b9371090adc58d3d4dd1accc2fcaa1791d2c2dd233e3754a528a7468ff2"
+  "upstreamDistributionFilesSha256": "0d3d0b9371090adc58d3d4dd1accc2fcaa1791d2c2dd233e3754a528a7468ff2",
+  "runtimeProfile": "headless-preview-zh-en-v1",
+  "distributionFilesSha256": "ecf0880e00270b40a7fff597bcb66dde074cfd9383e718a3893c07fb52004884"
 }

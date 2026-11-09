@@ -16,7 +16,7 @@ test('refuses a byte-tampered executable without changing its integrity or data'
   const root = await mkdtemp(path.join(base, 'tampered-'));
   try {
     await mkdir(path.join(root, 'program'));
-    await copyFile(path.join(checkout, 'desktop/src-tauri/target/debug/preview/office/manifest.json'), path.join(root, 'manifest.json'));
+    await copyFile(path.join(checkout, 'desktop/src-tauri/resources/preview/office/manifest.json'), path.join(root, 'manifest.json'));
     const executable = path.join(root, 'program/soffice.com');
     await writeFile(executable, 'MZ-deliberately-invalid-fixture');
     const label = () => execFileSync('icacls.exe', [executable], { encoding: 'utf8', windowsHide: true });
