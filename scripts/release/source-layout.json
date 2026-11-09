@@ -26,7 +26,10 @@
       "target": "desktop",
       "excludePrefixes": [
         "spike-results",
-        "src-tauri/resources"
+        "src-tauri/resources",
+        ".claude",
+        "optional-dependencies",
+        "prototype"
       ],
       "excludeFiles": [
         "CLAUDE.md"

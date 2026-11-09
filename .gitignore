@@ -264,3 +264,9 @@ new trylo cli/trylo-audit-*
 /tools/
 /tool-sources.json
 !/desktop-services/toolchain/tool-sources.json
+
+/desktop/.claude/
+
+/desktop/optional-dependencies/
+
+/desktop/prototype/
