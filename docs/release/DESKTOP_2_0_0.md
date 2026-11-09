@@ -62,7 +62,7 @@ macOS Apple Silicon 与 Linux x86_64 本次同步开放 **第一版 Beta** 二�
 
 邀请码分为标准内测与优质内测两类。测试阶段提供每日 token 配额，旗舰模型池及相关限量 API 权益面向优质内测用户开放。
 
-旗舰模型池包括 **Kimi 3.1 Pro、DeepSeek V4.11017（原厂版）、Qwen 3.8 Max、GLM 5.3** 等；同时为优质内测伙伴提供 **字节旗舰视频、生图与语言模型 API** 限量体验。
+旗舰模型池包括 **Kimi 3.1 Pro、DeepSeek V4.11017（原厂版）、Qwen 3.8 Max、GLM 5.3** 等；同时为优质内测伙伴提供 **Seedance 2.5 视频、Seedream 5.0 Pro 生图、豆包 Seed 2.1 Pro 语言模型 API** 限量体验。
 
 <sub>具体模型、额度与开放时间以邀请通知及当期供应为准。</sub>
 

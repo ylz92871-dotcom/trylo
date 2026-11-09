@@ -55,7 +55,7 @@ There are standard and selected-tester invitation tiers. Daily token quotas are 
 
 We are inviting people who will use Trylo for real work, report issues and help shape the next generation of personal agents.
 
-The flagship pool includes **Kimi 3.1 Pro, DeepSeek V4.11017 (original provider), Qwen 3.8 Max and GLM 5.3**, alongside limited **ByteDance flagship video, image and language API** quotas.
+The flagship pool includes **Kimi 3.1 Pro, DeepSeek V4.11017 (original provider), Qwen 3.8 Max and GLM 5.3**, alongside limited **Seedance 2.5 video, Seedream 5.0 Pro image, and Doubao Seed 2.1 Pro language API** quotas.
 
 <sub>Exact models, availability and quotas follow the invitation terms.</sub>
 

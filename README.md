@@ -87,13 +87,13 @@ Desktop 2.0 仅使用独立研发的新版 Trylo CLI，旧 CLI 已退役，不�
 
 我们正在邀请愿意认真使用、记录问题和提供反馈的内测伙伴，一起打磨下一代个人智能体。
 
-内测旗舰模型池：**Kimi 3.1 Pro、DeepSeek V4.11017（原厂版）、Qwen 3.8 Max、GLM 5.3** 等。另提供 **字节旗舰视频、生图与语言模型 API** 的限量体验配额。
+内测旗舰模型池：**Kimi 3.1 Pro、DeepSeek V4.11017（原厂版）、Qwen 3.8 Max、GLM 5.3** 等。另提供 **Seedance 2.5 视频、Seedream 5.0 Pro 生图、豆包 Seed 2.1 Pro 语言模型 API** 的限量体验配额。
 
 <sub>具体模型、额度与开放时间以邀请通知及当期供应为准。</sub>
 
 请发送邮件至 **[ylz92871@gmail.com](mailto:ylz92871@gmail.com?subject=Trylo%202.0%20内测申请)**，介绍使用场景、操作系统与可以提供的反馈。作者人工审核后通过邮件发放邀请码。
 
-[了解内测计划](https://trylocode.me/#beta)
+[了解内测计划](https://trylocode.me/release/2.0/#beta)
 
 ## 开发者入口与公开范围
 
