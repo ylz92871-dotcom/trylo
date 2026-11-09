@@ -284,5 +284,5 @@ def main(out_dir, sizes):
 
 
 if __name__ == '__main__':
-    out = sys.argv[1] if len(sys.argv) > 1 else r'C:\work\demo-ws\desktop\src-tauri\icons'
+    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'desktop', 'src-tauri', 'icons')
     main(out, [32, 128])
