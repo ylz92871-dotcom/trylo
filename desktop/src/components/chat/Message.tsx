@@ -60,7 +60,6 @@ import { DeliverableProgressPanel } from './DeliverableProgressPanel';
 // decision cards for daemon permission requests and
 // structured user-input question sets.
 import { ApprovalMessageRow } from './ApprovalMessageRow';
-import { InputRequestCard } from './InputRequestCard';
 import { CognitionPromptCard } from '../user-learning/CognitionPromptCard';
 import { LearningImpactCard } from '../user-learning/LearningImpactCard';
 import { SubagentCard } from './SubagentCard';
@@ -324,7 +323,7 @@ function MessageImpl(props: MessageProps): ReactElement {
           />
         );
       }
-      return <ToolCard variant="event" key={m.id} message={m} {...(props.onPromoteRuntimeArtifact ? { onPromoteRuntimeArtifact: props.onPromoteRuntimeArtifact } : {})} />;
+      return <ToolCard variant="event" key={m.id} message={m} workspacePath={props.workspacePath} {...(props.onPromoteRuntimeArtifact ? { onPromoteRuntimeArtifact: props.onPromoteRuntimeArtifact } : {})} />;
     }
     case 'thinking': {
       return (
@@ -434,16 +433,8 @@ function MessageImpl(props: MessageProps): ReactElement {
         onRespond={props.onRespondApproval} onOpenPreview={props.onOpenApprovalPreview} />;
     }
     case 'input_request': {
-      // Live requests route by their originating CLI id. Saved cards cannot answer a later run.
-      return (
-        <div className="message message--input-request" role="listitem">
-          <InputRequestCard
-            key={m.id}
-            message={m}
-            onRespond={props.onRespondInputRequest}
-          />
-        </div>
-      );
+      // Questions are presented above the composer by the conversation surface.
+      return <></>;
     }
     case 'cognition_prompt': {
       return (

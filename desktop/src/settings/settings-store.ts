@@ -3,6 +3,7 @@ import {
   DEFAULT_COLLABORATION_LEARNING,
   type CollaborationLearningSettings,
 } from './collaboration-learning'
+import { mediaGenerationSettings, DEFAULT_MEDIA_GENERATION, type MediaGenerationSettings } from './media-generation'
 import {
   agentLearningSettings,
   DEFAULT_AGENT_LEARNING,
@@ -233,6 +234,7 @@ export function removeProfile(s: TryloSettings, id: string): TryloSettings {
 }
 
 export interface TryloSettings {
+  readonly mediaGeneration?: MediaGenerationSettings
   /** Working windows and declared capacities, scoped to endpoint/protocol/model. */
   readonly modelContextPreferences?: ModelContextPreferences
   readonly modelReasoningPreferences?: ModelReasoningPreferences
@@ -322,6 +324,7 @@ const STORAGE_KEY = 'trylo:settings:v1'
 const STORAGE_BACKUP_KEY = 'trylo:settings:v1:backup'
 
 const DEFAULTS: TryloSettings = {
+  mediaGeneration: DEFAULT_MEDIA_GENERATION,
   modelContextPreferences: {},
   modelReasoningPreferences: {},
   apiKey: '',
@@ -514,6 +517,7 @@ function migrateSettings(value: unknown): TryloSettings | null {
   }
   return {
     modelContextPreferences: parseModelContextPreferences(stored['modelContextPreferences']),
+    mediaGeneration: mediaGenerationSettings(stored['mediaGeneration']),
     modelReasoningPreferences: parseModelReasoningPreferences(stored['modelReasoningPreferences']),
     apiKey: stringValue(stored['apiKey'], DEFAULTS.apiKey),
     apiHost: stringValue(stored['apiHost'], DEFAULTS.apiHost),

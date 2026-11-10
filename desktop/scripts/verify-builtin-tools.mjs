@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inventoryTree } from './stage-builtin-tools.mjs';
 import { loadRepositoryToolRegistry, BUILTIN_TOOL_IDS } from '../../desktop-services/src/tooling/tool-package-manager.mjs';
+import { SOFTWARE_RUNTIME_FILES } from '../../desktop-services/src/tooling/software-workspace-contract.mjs';
 
 export async function verifyBuiltinTools(root) {
   const registry = loadRepositoryToolRegistry(path.join(root, 'tool-sources.json'));
@@ -13,6 +14,7 @@ export async function verifyBuiltinTools(root) {
   }
   const inventory = JSON.parse(await fs.readFile(path.join(root, 'inventory.json'), 'utf8'));
   const actual = await inventoryTree(root);
+  for (const file of SOFTWARE_RUNTIME_FILES) if (!actual[`software-workspace/${file}`]) throw new Error(`Missing software workspace runtime: ${file}`);
   if (Object.keys(actual).length !== Object.keys(inventory.files ?? {}).length) throw new Error('Built-in inventory file count differs');
   for (const [name, digest] of Object.entries(actual)) {
     if (inventory.files[name] !== digest) throw new Error(`Built-in artifact changed: ${name}`);

@@ -6,6 +6,11 @@ import { applyEvents } from './events';
 import { latestContextTokens, type ChatMessage, type CompactionMessage } from './types';
 
 const result: CompactionMessage = { id: 'compact', kind: 'compaction', role: 'system', createdAt: 2, reason: 'auto', tokensBefore: 180000, tokensAfter: 40000 };
+
+it('identifies compression counts as estimates rather than exact provider billing', () => {
+  const view = render(<CompactionCard message={result} />);
+  expect(view.container.querySelector('.compaction__unit')?.textContent).toContain('估算');
+});
 afterEach(cleanup);
 
 it('renders runtime start and completion through one treatment without changing canonical events or readings', () => {

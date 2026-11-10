@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 import { createRelayServer } from '../src/server.mjs';
 import { createStore } from '../src/store.mjs';
 import { createRelayClient } from '../../desktop-services/src/remote/relay-client.mjs';
+import { protectFixtureUser } from './helpers/mfa-fixture.mjs';
 const password = 'synthetic-test-password-123';
 async function fixture(t) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'trylo-accounts-'));
@@ -18,9 +19,11 @@ async function fixture(t) {
   const salt = crypto.randomBytes(16).toString('hex'), passwordHash = (await promisify(crypto.scrypt)(password, salt, 64)).toString('hex');
   const legacy = { version: 1, users: [{ id: 'operator-id', username: 'ylz', salt, passwordHash, role: 'admin' }], devices: [], sessions: [] };
   const legacyBytes = JSON.stringify(legacy); await fs.writeFile(path.join(directory, 'state.json'), legacyBytes);
+  const factor = await protectFixtureUser(directory, 'operator-id', () => clock);
   let relay = await createRelayServer({ dataDir: directory, webOrigin: origin, secureCookies: false, now: () => clock, webDir: path.resolve('../trylocode-site/console') }); await relay.listen(port);
   t.after(async () => { await relay.close(); await fs.rm(directory, { recursive: true, force: true }); });
   async function request(route, { method = 'GET', cookie, token, csrf, body, from = origin } = {}) {
+    if (body && ((route.endsWith('/login') && body.username === 'ylz') || body.currentPassword)) { clock += 60001; body = { ...body, otp: factor.otp(clock) }; }
     const response = await fetch(origin + route, { method, headers: { ...(from ? { Origin: from } : {}), ...(cookie ? { Cookie: cookie } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(csrf ? { 'X-CSRF-Token': csrf } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
     const data = await response.json().catch(() => ({})); return { status: response.status, data, cookie: response.headers.get('set-cookie')?.split(';')[0], response };
   }
@@ -47,7 +50,11 @@ test('migration preserves legacy bytes, identity and credentials; admin/user ses
 
 test('invitation consumption is atomic under concurrent registration, no first-user admin, native bypass closed', async t => {
   const f = await fixture(t), invitation = await f.invite();
-  const results = await Promise.all(['one', 'two'].map(username => f.request('/api/account/register', { method: 'POST', body: { username, password, inviteCode: invitation.code, role: 'admin' } })));
+  const attempts = ['one', 'two'].map(username => ({ username, password, inviteCode: invitation.code, role: 'admin' }));
+  const results = await Promise.all(attempts.map(body => f.request('/api/account/register', { method: 'POST', body })));
+  // Admission permits one anonymous KDF job while reserving the other slot for
+  // authenticated account containment. A busy contender retries after it frees.
+  for (let i = 0; i < results.length; i++) if (results[i].status === 429) results[i] = await f.request('/api/account/register', { method: 'POST', body: attempts[i] });
   assert.deepEqual(results.map(item => item.status).sort(), [201, 403]);
   const joined = results.find(item => item.status === 201); assert.equal(joined.data.user.role, 'user');
   const session = await f.request('/api/account/session', { cookie: joined.cookie });

@@ -31,6 +31,7 @@ import { resolvePinnedWgcHelper } from './tool-package-manager.mjs';
 import { toolRuntimeIdentity } from './tool-runtime-identity.mjs';
 import { CORE_TOOL_RUNTIME_REVISION } from './tool-catalog.mjs';
 import { MODEL_PREVIEW_NAMES, MODEL_PREVIEW_VERSION } from './model-preview-contract.mjs';
+import { SOFTWARE_NAMES, SOFTWARE_VERSION } from './software-workspace-contract.mjs';
 
 /** Placeholder expanded per-run in a manifest's argv (spec §10.2). */
 const RUNTIME_DIR_TOKEN = '{runtimeDir}';
@@ -205,6 +206,7 @@ export function createToolProfileService(options = {}) {
   const browserObserver = options.browserObserver;
   const nativeBrowser = options.nativeBrowser;
   const modelPreview = options.modelPreview;
+  const softwareWorkspace = options.softwareWorkspace;
   // An embedded caller's argv[1] is its launcher, which need not implement
   // --native-browser-mcp. The service host supplies its own path when bundled.
   const hostEntrypoint = options.hostEntrypoint ?? fileURLToPath(new URL('../host.mjs', import.meta.url));
@@ -341,6 +343,7 @@ export function createToolProfileService(options = {}) {
 
     // 2. Trylo package contributions — explicit, health-gated.
     const mcpServers = { ...hermesPart.servers };
+    const preparedPackages = new Set();
     const packageHealth = [];
     const unavailableCapabilities = [];
 
@@ -493,11 +496,40 @@ export function createToolProfileService(options = {}) {
             env: { ...manifest.mcp.env, ...helperEnv, ...identityEnv },
           };
         }
+        preparedPackages.add(id);
       } catch (error) {
         // One optional package must not discard the other servers in this run.
         const detail = String(error?.message ?? error);
         markPackageUnavailable(id, manifest, 'package_resolution_failed', detail,
           `${manifest?.displayName ?? id} 准备失败，其他工具仍可继续使用。`);
+      }
+    }
+
+    // Placement transport preserves each existing CAD tool and approval rule.
+    // Only packages already admitted by this profile can enter the workspace.
+    if (softwareWorkspace && computerUse && projectRoot && conversationId) {
+      try {
+        const connection = await softwareWorkspace.configure({ projectRoot, conversationId });
+        for (const id of ['solidworks-mcp', 'autocad-mcp']) {
+          const name = catalog.get(id)?.mcp.serverName;
+          const server = mcpServers[name];
+          if (!server || !preparedPackages.has(id)) continue;
+          await softwareWorkspace.configure({ projectRoot, conversationId, packageId: id, server });
+          mcpServers[name] = { command: process.execPath,
+            args: [hostEntrypoint, '--software-workspace-mcp', connection.gate, id], env: server.env };
+        }
+        if (mcpServers['trylo-software']) throw new Error('software_workspace_server_name_collision');
+        mcpServers['trylo-software'] = { command: process.execPath,
+          args: [hostEntrypoint, '--software-workspace-mcp', connection.gate], env: {} };
+        packageHealth.push({ id: 'software-workspace', classifierId: 'software-workspace', displayName: '软件工作区',
+          version: SOFTWARE_VERSION, adoption: 'stable', serverName: 'trylo-software', state: 'installed',
+          available: true, active: true, builtIn: true, runtimeIdentity: `software-workspace@${SOFTWARE_VERSION}`,
+          detail: 'Conversation-owned background software', expectedTools: [...SOFTWARE_NAMES], protocol: 'not-checked', checkedAt: now() });
+      } catch (error) {
+        // No foreground fallback after a placement failure.
+        for (const id of ['solidworks-mcp', 'autocad-mcp']) if (preparedPackages.has(id)) delete mcpServers[catalog.get(id)?.mcp.serverName];
+        unavailableCapabilities.push({ id: 'software-workspace', type: 'adapter', reasonCode: 'software_workspace_unavailable',
+          detail: String(error.message ?? error), userMessage: '软件工作区连接失败，请检查工具服务后重试。' });
       }
     }
 
@@ -530,6 +562,7 @@ export function createToolProfileService(options = {}) {
     // precedes step 2a), so this is bypass-immune.
     const askRules = catalog.list().map((m) => `mcp__${m.mcp.serverName}__*`);
     if (modelPreview) askRules.push('mcp__trylo-preview__*');
+    if (softwareWorkspace && computerUse) askRules.push('mcp__trylo-software__*');
     const settingsContents = `${stableStringify({
       permissions: { ask: askRules, deny: [] },
     })}\n`;

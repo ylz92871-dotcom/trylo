@@ -420,7 +420,9 @@ describe('work.cad.v1 profile', () => {
     });
     const resolved = await tooling.resolveProfile({ surface: 'work', requestedProfileId: 'work.cad.v1', projectRoot: tmpRoot, conversationId: 'conv-1' });
     assert.equal(resolved.ok, true);
-    assert.deepEqual(resolved.serverNames, ['trylo-kicad']);
+    // Host-owned capabilities (software workspace, model preview) compose after
+    // the health-gated packages; they do not need a host application install.
+    assert.deepEqual(resolved.serverNames, ['trylo-kicad', 'trylo-software', 'trylo-preview']);
     const blockedEntry = resolved.unavailableCapabilities.find((c) => c.id === 'solidworks-mcp');
     assert.ok(blockedEntry, 'the degraded package must be reported');
     assert.equal(blockedEntry.reasonCode, 'not_installed');

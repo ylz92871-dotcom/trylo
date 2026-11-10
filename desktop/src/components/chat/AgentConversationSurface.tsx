@@ -20,13 +20,14 @@ import { viewStateLabel } from './view-state'
 // they provide runtime/domain data and capability
 // actions, never a second layout.
 
-import { useContext, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { ComposerLayoutContext } from './composer-layout'
 import { ConversationPresentation } from './ConversationPresentation'
 import { Message } from './Message'
 import type { ChatMessage } from './types'
 import { MessageList } from './MessageList'
-import type { ConversationRunViewState } from './view-state'
+import { deriveConversationRunViewState, type ConversationRunViewState } from './view-state'
+import { ComposerInputRequests } from './ComposerInputRequests'
 import { SubagentConversation } from './SubagentConversation'
 import { AgentAvatarScope } from './AgentAvatar'
 import type { SendSubagentInput } from '../../host-adapter/subagent-contract'
@@ -105,6 +106,14 @@ export interface AgentConversationSurfaceProps {
 
 export function AgentConversationSurface(props: AgentConversationSurfaceProps): ReactElement {
   const presentation = useContext(ConversationPresentation)
+  const timelineMessages = useMemo(
+    () => props.messages.filter(message => message.kind !== 'input_request'),
+    [props.messages],
+  )
+  // Waiting state still reads the complete history, including composer questions.
+  const viewState = props.viewState ?? deriveConversationRunViewState({
+    messages: props.messages, running: props.running,
+  })
   const observeEnvironment = presentation.observeEnvironment
   useEffect(() => {
     observeEnvironment?.({
@@ -115,7 +124,7 @@ export function AgentConversationSurface(props: AgentConversationSurfaceProps): 
   }, [observeEnvironment, props.onOpenArtifact, props.artifactHost, props.workspacePath])
   const embeddedTimeline =
     typeof presentation.timeline === 'function'
-      ? presentation.timeline(props.messages, {
+      ? presentation.timeline(timelineMessages, {
           ...props,
           renderEvent: (message) => <Message {...props} message={message} />,
         })
@@ -177,9 +186,9 @@ export function AgentConversationSurface(props: AgentConversationSurfaceProps): 
           ) : (
             <MessageList
               surface={props.surface}
-              messages={props.messages}
+              messages={timelineMessages}
               running={props.running}
-              viewState={props.viewState}
+              viewState={viewState}
               selectedSubagentId={selectedId}
               onSelectSubagent={(id) => {
                 opener.current =
@@ -213,7 +222,10 @@ export function AgentConversationSurface(props: AgentConversationSurfaceProps): 
           {!presentation.embedded && props.personTeamStatusBarSlot}
           {props.cognitionBadgeSlot}
           {props.learningReceiptSlot}
-          {!isEmpty && props.composer}
+          {!isEmpty && <>
+            <ComposerInputRequests messages={props.messages} onRespond={props.onRespondInputRequest} />
+            {props.composer}
+          </>}
         </div>
         {selected?.kind === 'subagent' && (
           <SubagentConversation

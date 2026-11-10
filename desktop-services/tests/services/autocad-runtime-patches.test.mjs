@@ -3,6 +3,55 @@ import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { patchAutocadComSource } from '../../src/tooling/autocad-runtime-patches.mjs';
 
+test('a completed new drawing survives a busy metadata read without replaying Add', () => {
+  const source = `class Backend:
+    async def drawing_new(self, template=None):
+        def _sync():
+            app = _acad_app()
+            if template:
+                doc = app.Documents.Add(template)
+            else:
+                doc = app.Documents.Add()
+            return {"ok": True, "name": doc.Name}
+
+        result = await self._run(_sync)
+        await self._ensure_document_state()
+        return result
+`;
+  const patched = patchAutocadComSource(source);
+  const harness = `import asyncio
+from types import SimpleNamespace as NS
+_COM_ERROR = (OSError,)
+calls = []
+class Document:
+    @property
+    def Name(self):
+        raise AttributeError("<unknown>.Name")
+def add(*args):
+    calls.append(args)
+    return Document()
+def _acad_app():
+    return NS(Documents=NS(Add=add))
+${patched}
+async def run(self, fn):
+    return fn()
+async def busy(self):
+    raise RuntimeError("metadata rejected")
+Backend._run = run
+Backend._ensure_document_state = busy
+Backend._reset_document_state = lambda self: None
+backend = Backend()
+value = asyncio.run(backend.drawing_new())
+assert len(calls) == 1
+assert value["ok"] is True and value["metadata_pending"] is True
+assert backend._document_scope_key is None
+print("completed write retained; metadata pending; Add called once")
+`;
+  const result = spawnSync(process.env.TRYLO_TEST_PYTHON ?? 'python', ['-B', '-'], { input: harness, encoding: 'utf8', windowsHide: true, timeout: 5000 });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(patchAutocadComSource(patched), patched);
+});
+
 test('system variables bind to the active document and preserve coercion', () => {
   const original = `class Backend:
     async def system_get_variable(self, name):

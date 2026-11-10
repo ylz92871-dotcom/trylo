@@ -14,6 +14,7 @@ const events = new Map<string, Set<(payload: unknown) => void>>();
 const manager = {
   currentHealth: 'ready',
   onHealth: () => () => {},
+  onDown: () => () => {},
   client: {
     request: async (method: string, params: unknown) => {
       const response = await fetch('/rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ method, params }) });

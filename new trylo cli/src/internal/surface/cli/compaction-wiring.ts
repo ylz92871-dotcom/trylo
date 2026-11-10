@@ -50,6 +50,11 @@ export function estimatePromptTokens(messages: ReadonlyArray<ProviderMessage>): 
   return estimateMessagesTokens(messages);
 }
 
+/** Soft forecast only. Native input is priced separately by its request owner. */
+export function estimateAutomaticRequestTokens(messages: readonly ProviderMessage[], tools: readonly ProviderToolSpec[]): number {
+  return estimateMessagesTokens(messages) + estimateToolSpecsTokens(tools);
+}
+
 /** Admission uses a byte-level text upper bound; display estimates keep their
  * existing compression heuristic. Neither value includes unknown image or
  * provider-template tokens. */
@@ -88,6 +93,7 @@ function toolTableText(tools: ToolPort): ReadonlyArray<ProviderToolSpec> {
 }
 
 export type CompactionWiringInput = {
+  readonly estimateAutomaticTokens?: CompactionWiring["estimateAutomaticTokens"];
   readonly estimateAccuracy?: CompactionWiring["estimateAccuracy"];
   /**
    * The token basis. The shipped one is {@link boundMessagesTextTokens}: a pure
@@ -126,9 +132,11 @@ export type CompactionWiringInput = {
 export function compactionWiring(input: CompactionWiringInput): CompactionWiring {
   const estimateText = input.estimateTextPromptTokens ?? (input.estimatePromptTokens === undefined ? boundMessagesTextTokens : undefined);
   const estimateAccuracy = input.estimateAccuracy ?? (input.estimatePromptTokens === undefined ? "text_upper_bound" : undefined);
+  const automatic = input.estimateAutomaticTokens ?? (input.estimatePromptTokens === undefined ? estimateAutomaticRequestTokens : undefined);
 
   return {
     port: createCompactionService(),
+    ...(automatic === undefined ? {} : { estimateAutomaticTokens: automatic }),
     ...(estimateAccuracy === undefined ? {} : { estimateAccuracy }),
     estimatePromptTokens: input.estimatePromptTokens ?? boundMessagesTextTokens,
     ...(estimateText === undefined ? {} : { estimateTextPromptTokens: estimateText }),

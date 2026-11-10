@@ -40,7 +40,7 @@ export async function createCredentialVault({ store, directory }) {
   return {
     has(source) { return slots(source).length > 0; },
     slots, read,
-    async save(source, secret, slot = 'primary') {
+    async save(source, secret, slot = 'primary', authorize) {
       validSlot(slot);
       if (typeof secret !== 'string' || secret.length < 16 || secret.length > 512 || /[\s\x00-\x1f]/.test(secret)) throw quotaError(400, '密钥格式无效。');
       if (slots(source).some(other => other !== slot && read(source, other) === secret)) throw quotaError(409, '该密钥已在此池中配置。');
@@ -49,9 +49,9 @@ export async function createCredentialVault({ store, directory }) {
       cipher.setAAD(Buffer.from(aad));
       const ciphertext = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
       const value = JSON.stringify({ v: 1, iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), data: ciphertext.toString('base64') });
-      await store.sqlWrite(db => slot === 'primary'
+      await store.sqlWrite(db => { authorize?.(); return slot === 'primary'
         ? db.prepare('INSERT INTO model_credentials(upstream_id,binding,ciphertext,updated_at) VALUES(?,?,?,?) ON CONFLICT(upstream_id) DO UPDATE SET binding=excluded.binding,ciphertext=excluded.ciphertext,updated_at=excluded.updated_at').run(source.id, aad, value, Date.now())
-        : db.prepare('INSERT INTO model_credential_slots(upstream_id,slot,binding,ciphertext,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(upstream_id,slot) DO UPDATE SET binding=excluded.binding,ciphertext=excluded.ciphertext,updated_at=excluded.updated_at').run(source.id, slot, aad, value, Date.now()));
+        : db.prepare('INSERT INTO model_credential_slots(upstream_id,slot,binding,ciphertext,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(upstream_id,slot) DO UPDATE SET binding=excluded.binding,ciphertext=excluded.ciphertext,updated_at=excluded.updated_at').run(source.id, slot, aad, value, Date.now()); });
     },
   };
 }

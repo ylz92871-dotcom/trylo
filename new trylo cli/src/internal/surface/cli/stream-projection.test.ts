@@ -27,6 +27,24 @@ function envelope(kind: string, payload: JsonObject, sequence: number): Envelope
   };
 }
 
+test("only successful native generation receipts project closed media metadata", () => {
+  const artifact = { path: "/task/out.png", mimeType: "image/png", size: 70, sha256: "a".repeat(64), base64: "PRIVATE_TRANSPORT" };
+  for (const name of ["image_generate", "mcp_unrelated"]) {
+    for (const status of ["succeeded", "failed"]) {
+      const events = projectEnvelopes([
+        envelope("tool_use", { toolCallId: "image", name }, 1),
+        envelope("tool_result", { toolCallId: "image", status, output: "Saved", value: {
+          generatedMedia: { schema: "trylo.generated-media.v1", artifacts: [artifact] },
+        } }, 2),
+      ]);
+      const result = events.find(event => event.type === "tool_result");
+      assert.ok(result?.type === "tool_result");
+      assert.equal(result.generatedMedia?.length, name === "image_generate" && status === "succeeded" ? 1 : undefined);
+      assert.equal(JSON.stringify(events).includes("PRIVATE_TRANSPORT"), false);
+    }
+  }
+});
+
 function fixtures(): ReadonlyArray<Envelope> {
   return [
     envelope("thinking", { text: "considering", redacted: false }, 1),

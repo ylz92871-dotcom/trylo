@@ -39,7 +39,8 @@ export function createStdioSession(io: Io, goalCommand?: import("./goal-session.
     for (const settle of [...pending.values()]) settle(undefined);
   };
   // Settlement removes the correlation entry before releasing the waiting caller.
-  const request = (requestId: string, body: object, valid: (reply: Reply) => boolean, signal?: AbortSignal): Promise<Reply | undefined> => {
+  const request = (requestId: string, body: object, valid: (reply: Reply) => boolean, signal?: AbortSignal,
+    lifetime: "approval-deadline" | "until-answer" = "approval-deadline"): Promise<Reply | undefined> => {
     if (closed || signal?.aborted) return Promise.resolve(undefined);
     return new Promise(resolve => {
       const settle = (reply: Reply | undefined): void => {
@@ -58,11 +59,12 @@ export function createStdioSession(io: Io, goalCommand?: import("./goal-session.
         resolve(reply);
       };
       const abort = (): void => settle(undefined);
-      const timer = setTimeout(abort, TTL_MS);
+      const timer = lifetime === "approval-deadline" ? setTimeout(abort, TTL_MS) : undefined;
 
       pending.set(requestId, settle);
       signal?.addEventListener("abort", abort, { once: true });
-      write({ type: "control_request", request_id: requestId, expires_at: io.now() + TTL_MS, request: body });
+      write({ type: "control_request", request_id: requestId,
+        ...(lifetime === "approval-deadline" ? { expires_at: io.now() + TTL_MS } : {}), request: body });
     });
   };
   // Route every input through this reader so control replies cannot become prompts.
@@ -190,7 +192,7 @@ export function createStdioSession(io: Io, goalCommand?: import("./goal-session.
 
     question: (question: AskUserRequest, signal: AbortSignal) => request(question.requestId,
       { subtype: "ask_user_question", questions: question.questions }, reply => reply.status === "dismissed"
-        || (reply.status === "submitted" && typeof reply.answers === "object" && reply.answers !== null && !Array.isArray(reply.answers)), signal),
+        || (reply.status === "submitted" && typeof reply.answers === "object" && reply.answers !== null && !Array.isArray(reply.answers)), signal, "until-answer"),
   };
 }
 

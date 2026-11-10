@@ -145,22 +145,36 @@ test("withdrawing a mounted candidate prevents its next invocation", async t => 
   assert.equal(fx.count(), 0);
 });
 
-test("a Board write conflict reports missing use persistence without losing the known tool result", async t => {
+test("Board contention keeps the completed result pending until the canonical writer admits its record", async t => {
   const fx = await seed(t), opened = await openToolCandidateUse(fx.options);
   assert.ok(opened.ok);
   t.after(opened.mount.close);
   const owner = createFileBoardStore(fx.root);
   assert.ok("apply" in owner);
+  let released = false;
+  const release = async () => { if (!released) { released = true; await owner.close(); } };
 
   try {
-    const result = await opened.mount.tools.execute({ toolCallId: "write-conflict", name: opened.mount.binding.name, arguments: { input: 11 } }, new AbortController().signal);
+    const pending = opened.mount.tools.execute({ toolCallId: "write-conflict", name: opened.mount.binding.name, arguments: { input: 11 } }, new AbortController().signal);
+    // A completed invocation's evidence is not discarded: the call stays pending
+    // with one visible waiting warning until the competing writer leaves.
+    const deadline = Date.now() + 15000;
+    while (!fx.warnings.some(text => text.startsWith("tool_use_recording_waiting"))) {
+      assert.ok(Date.now() < deadline, "recording contention never became visible");
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    assert.equal(fx.warnings.length, 1);
+    await release();
+    const result = await pending;
     assert.equal(result.outcome, "result");
     if (result.outcome === "result") {
       assert.equal(result.value.result, 22);
-      assert.equal(result.value.useRecording, "unavailable");
+      assert.equal(result.value.useRecording, "recorded");
     }
-    assert.equal(fx.warnings.length, 1);
-  } finally { await owner.close(); }
+    const history = await readToolCandidateUses(fx.root, fx.saved.versionId);
+    assert.ok(history.ok);
+    assert.equal(history.records.length, 1);
+  } finally { await release(); }
 });
 
 test("closing a task aborts its running candidate and removes the borrowed table", async t => {

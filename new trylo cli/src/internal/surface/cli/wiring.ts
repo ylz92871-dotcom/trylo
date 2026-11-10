@@ -23,7 +23,7 @@ import type { ProviderPort } from "../../ports/provider.js";
 import { checkpointWiring } from "./checkpoint-wiring.js";
 import { createModelSummarizer, DEFAULT_COMPACT_SUMMARY_MODE } from "./compact-model-summarizer.js";
 import { createPageExtractor } from "./web-wiring.js";
-import { boundMessagesTextTokens, compactionWiring } from "./compaction-wiring.js";
+import { boundMessagesTextTokens, compactionWiring, estimateAutomaticRequestTokens } from "./compaction-wiring.js";
 import {
   openPermissionLedger,
   type FilePermissionStore,
@@ -336,6 +336,7 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
       // request itself; this estimator exists so a caller that supplies one
       // uses the same pure basis rather than a second, drifting one.
       compaction: compactionWiring({
+        estimateAutomaticTokens: estimateAutomaticRequestTokens,
         estimateAccuracy: "text_upper_bound",
         estimatePromptTokens: messages => boundMessagesTextTokens(messages) + (provider.continuation?.estimateOverheadTokens?.(messages) ?? 0),
         estimateTextPromptTokens: boundMessagesTextTokens,

@@ -7,6 +7,7 @@ import type { Transcript } from "../protocol/transcript.js";
 import { journalView, type CompactionEntry, type CompactionLedger } from "./compact-ledger.js";
 import type { CompactionEvent, CompactionInput, CompactionWiring } from "./compact-boundary.js";
 import { requestTokenBasis, localViewBasis } from "./prompt-measurement.js";
+import { automaticGapTokens, automaticViewTokens } from "./automatic-pressure.js";
 import { compactionPrefixLength, prefixEndSequence } from "./compaction-retention.js";
 import { autoCompactTokenLimit } from "../compaction/policy.js";
 
@@ -60,7 +61,7 @@ export type CompactionGapOutcome = {
 export async function runCompactionFor(
   input: CompactionInput,
   options?: { readonly force?: boolean; readonly onStart?: (tokens: number) => void; readonly signal?: AbortSignal;
-    readonly authoring?: SummaryAuthoringContext },
+    readonly authoring?: SummaryAuthoringContext; readonly estimatedPromptTokens?: number },
 ): Promise<CompactionGapOutcome> {
   const { wiring, ledger, sessionId, contextTokenLimit } = input;
 
@@ -81,7 +82,10 @@ export async function runCompactionFor(
     return { events: [degradation(projected.code)], storedWindow: false, projectedPromptTokens: undefined };
   }
 
-  const estimated = requestTokenBasis(input);
+  // A prepared caller supplies its final measured basis. Forecast history
+  // cannot override that number or turn an automatic probe into a forced cut.
+  const estimated = options?.estimatedPromptTokens ?? automaticGapTokens(input);
+  const localTokensBefore = options?.force === true ? undefined : localViewBasis(input);
 
   if (options?.force !== true) {
     const decision = wiring.port.shouldCompact({
@@ -130,7 +134,7 @@ export async function runCompactionFor(
     transcript: input.transcript,
     liveCount: projected.view.items.length,
     draft: drafted.record,
-  });
+  }, input, localTokensBefore);
   if (!stored.ok) {
     return { events: [...authorEvents, degradation(stored.code)], storedWindow: false, projectedPromptTokens: estimated };
   }
@@ -138,13 +142,16 @@ export async function runCompactionFor(
   // The post-window basis is local on purpose: the server report describes the
   // request that carried the *old* view, and the whole point of the window is
   // that the next request no longer does.
-  const projectedPromptTokens = localViewBasis(input);
+  const projectedPromptTokens = stored.projectedPromptTokens;
+  const automaticTokens = stored.automaticTokens;
 
-  ledger.attempted = projectedPromptTokens >= autoCompactTokenLimit(contextTokenLimit);
+  // A heuristic post-cut size is not acknowledgement from the provider. Let
+  // the next actual request establish the new window before probing again.
+  ledger.attempted = wiring.estimateAutomaticTokens !== undefined || automaticTokens >= autoCompactTokenLimit(contextTokenLimit);
 
   return {
     events: [...authorEvents, ...stored.events.map(event => ({ ...event, payload: { ...event.payload,
-      tokensBefore: estimated, tokensAfter: projectedPromptTokens } }))],
+      tokensBefore: estimated, tokensAfter: automaticTokens } }))],
     storedWindow: true,
     projectedPromptTokens,
   };
@@ -203,7 +210,10 @@ function storeWindow(
     readonly liveCount: number;
     readonly draft: CompactRecordDraft;
   },
-): { readonly ok: true; readonly events: ReadonlyArray<CompactionEvent> } | { readonly ok: false; readonly code: string } {
+  input: CompactionInput,
+  localTokensBefore: number | undefined,
+): { readonly ok: true; readonly events: ReadonlyArray<CompactionEvent>; readonly projectedPromptTokens: number; readonly automaticTokens: number }
+  | { readonly ok: false; readonly code: string } {
   const entry: CompactionEntry = {
     draft: stored.draft,
     afterItemCount: stored.transcript.length,
@@ -220,14 +230,29 @@ function storeWindow(
     return { ok: false, code: projected.code };
   }
 
+  const replacedPrefix = stored.transcript.length - projected.view.items.length;
+  const candidate = { ...ledger, entries: [...ledger.entries, entry], window: projected.view.window, replacedPrefix };
+  const candidateInput = { ...input, ledger: candidate };
+  const candidateBound = localViewBasis(candidateInput);
+  const automaticTokens = automaticViewTokens(candidateInput);
+
+  // Compare like-for-like local presentations, never subtract an estimate
+  // from a server measurement. A no-op draft must not churn window identity,
+  // discard calibrated usage, or appear as a completed compression in the UI.
+  // Forced recovery separately verifies the full rebuilt request: unknown
+  // image/native costs need not shrink with this local text presentation.
+  if (localTokensBefore !== undefined && candidateBound >= localTokensBefore) return { ok: false, code: "nothing_to_reduce" };
+
   ledger.entries.push(entry);
   ledger.window = projected.view.window;
   // The live tail is what the projection kept; everything before it is what the
   // window now stands in for, expressed as a prefix of the runner's transcript.
-  ledger.replacedPrefix = stored.transcript.length - projected.view.items.length;
+  ledger.replacedPrefix = replacedPrefix;
 
   return {
     ok: true,
+    projectedPromptTokens: candidateBound,
+    automaticTokens,
     events: [
       {
         kind: "compact",

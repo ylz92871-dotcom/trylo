@@ -38,7 +38,9 @@ async function scenario(options: { readonly budget?: IterationBudget; readonly c
     budget: { contextTokenLimit: 10_000, ...options.budget },
     ...(options.cancellation === undefined ? {} : { cancelSignal: options.cancellation.signal }), resumedTranscript: [
       { kind: "user", sequence: 0, text: "An older task." },
-      { kind: "assistant_text", sequence: 1, blockId: "old", text: "Older completed observation. ".repeat(300) },
+      // Leave the first send below the automatic byte threshold. Cancellation
+      // and application failure must happen during reactive authoring/rebase.
+      { kind: "assistant_text", sequence: 1, blockId: "old", text: "Older completed observation. ".repeat(100) },
     ] });
 
   return { requests, result, preparations };

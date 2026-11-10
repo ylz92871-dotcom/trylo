@@ -1,0 +1,1062 @@
+{
+ "generatedAt": "2026-11-10T23:50:03.398286+00:00",
+ "mainRange": {
+  "from": "4058d820",
+  "to": "35da5631"
+ },
+ "desktopVersion": "2.1.0",
+ "cliVersion": "0.1.0",
+ "stagedCount": 173,
+ "statusCounts": {
+  "public-adapted": 1,
+  "identical": 166,
+  "main-worktree": 6
+ },
+ "excluded": {
+  "trylocode-site": "website source is not published",
+  "new trylo cli/docs": "internal work-package documents",
+  "desktop/docs/validation": "internal validation records",
+  "_workspace": "development by-products and evidence",
+  "vendor legacy JS": "public .gitignore excludes new trylo cli/src/**/*.js; never tracked publicly"
+ },
+ "files": [
+  {
+   "path": ".gitignore",
+   "sha256": "de0815db8ee40a0633c1d8effc8796b178e8d9c62d938fbbf78404cd726ca664",
+   "bytes": 10205,
+   "status": "public-adapted"
+  },
+  {
+   "path": "desktop-services/scripts/verify-software-workspace.mjs",
+   "sha256": "0856eddbc18534568873d0ae7bee6713feebb7917db5ca1d35f72dad17ed1f39",
+   "bytes": 3507,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/src/host.mjs",
+   "sha256": "f7f13357095c69af405bb9bc804879e807af23419b6f82069a83d437bf0e1d90",
+   "bytes": 17774,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/src/tooling/autocad-runtime-patches.mjs",
+   "sha256": "3bf1a1ee9e201b49ab248bff70be072a650cf9c3f54114579d042867d5303a50",
+   "bytes": 5743,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/src/tooling/index.mjs",
+   "sha256": "469ae9f895e42f485acd995a06cfac2818157aabed19463c7e2631cdc5f4deeb",
+   "bytes": 17547,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/src/tooling/software-workspace-contract.mjs",
+   "sha256": "add0ee44f99a7864939091345c87cb088ac6ded758081011c168c9d9577ae86d",
+   "bytes": 6827,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/src/tooling/software-workspace-mcp.mjs",
+   "sha256": "fa2e985881d13c85b437a30ef306f6bf0f549a38fc82a3bdf6d3d1854df4bae7",
+   "bytes": 4275,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/src/tooling/software-workspace-process.mjs",
+   "sha256": "61cc0f126759a9b08be83e24cf0753d81d9c1193203e646f84956481c2ab8506",
+   "bytes": 2636,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/src/tooling/software-workspace-service.mjs",
+   "sha256": "2e68929c921c10a1388335ec352914e9218795eed4895f9c66e867990ed4f5c0",
+   "bytes": 14413,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/src/tooling/tool-catalog.mjs",
+   "sha256": "5a82d63e2862186816b5cb5b59fccb870b7b266b3c60beacfff5d6080a17c626",
+   "bytes": 19021,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/src/tooling/tool-profile-service.mjs",
+   "sha256": "a6da19e1db3645a600b5350027929ffd07c24fda1d0b2b12bcfa5b8da23ade05",
+   "bytes": 30116,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/tests/fixtures/software-workspace.py",
+   "sha256": "47d78cc7047ef058c024c832dae465aaa3f857f2a60944ba15589abff2e89a0c",
+   "bytes": 1483,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/tests/services/autocad-runtime-patches.test.mjs",
+   "sha256": "7d8e3b4f1a9c46f051df6fdd7905f662aa796d0ac3f3d1f486e8719c018391b3",
+   "bytes": 5249,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/tests/services/computer-preview-domain.test.mjs",
+   "sha256": "f65c98257b54967de37535932f5d7c88e5d25b34293c5068802b14d0acd75c24",
+   "bytes": 2738,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/tests/services/software-workspace-profile.test.mjs",
+   "sha256": "1a00c3c1b47127645da8436920d4ff712c6f15445318152025c4611fe1286a9f",
+   "bytes": 3690,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/tests/services/tool-app-condition.test.mjs",
+   "sha256": "c674c5d9502163e4d27ca0bbac8819ca25d2b49840966f41786d9f4fbda0b7e2",
+   "bytes": 15819,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/tests/services/tool-package-manager-cad.test.mjs",
+   "sha256": "31bccb1f94fbf76d9effa8e8a30d4d5b18272c0ccdc600facc23816b4cef4cd2",
+   "bytes": 33722,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/tests/services/tooling.test.mjs",
+   "sha256": "7edaa82bd14292146cfa992e40de7448fc9582628bed88ae7e2f4a563d839555",
+   "bytes": 54281,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/tests/tooling/software-workspace-mcp.test.mjs",
+   "sha256": "9213c73368e47ec07b9361586e7a95c6a696fbf0d76be143753a67460064296d",
+   "bytes": 2284,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/tests/tooling/software-workspace.test.mjs",
+   "sha256": "9bb8d6b3d4e60c4c4cb7f048c5eb9a33b83cb59a4b58293967e878a1714d260c",
+   "bytes": 4959,
+   "status": "identical"
+  },
+  {
+   "path": "desktop-services/toolchain/software-workspace/applications.py",
+   "sha256": "827db5fbc47463c8d38f21c9d4907e4fee10518d907fda7940a55897a80e0226",
+   "bytes": 1983,
+   "status": "main-worktree"
+  },
+  {
+   "path": "desktop-services/toolchain/software-workspace/controller.py",
+   "sha256": "786926c85788bc181cad038ff270f23edde11f57e28ca82c2f91887ed20b935c",
+   "bytes": 3592,
+   "status": "main-worktree"
+  },
+  {
+   "path": "desktop-services/toolchain/software-workspace/guard/sitecustomize.py",
+   "sha256": "b3d4f2da43f08c498d1eead6fc914587721f5c3309a49ac445032a0b694eb34b",
+   "bytes": 3266,
+   "status": "main-worktree"
+  },
+  {
+   "path": "desktop-services/toolchain/software-workspace/launcher.py",
+   "sha256": "330a3b1d22a144e03d06c0d0bab1eb9e5a92aaa3f047542d7cf717f0beec4013",
+   "bytes": 3453,
+   "status": "main-worktree"
+  },
+  {
+   "path": "desktop-services/toolchain/software-workspace/native.py",
+   "sha256": "c3b6262d4dfbb965583d2e7b6ee902e59fa9bab92c51050b63439f4504eb2be6",
+   "bytes": 8498,
+   "status": "main-worktree"
+  },
+  {
+   "path": "desktop-services/toolchain/software-workspace/worker.py",
+   "sha256": "bdeded24ba3d6415695ee8663c8320d9d69edec9f8e92bed74449e3de35b88b2",
+   "bytes": 13964,
+   "status": "main-worktree"
+  },
+  {
+   "path": "desktop/distribution.json",
+   "sha256": "292049316874a7fbf384447afa717e633d6b75d39f8eba07e29de591447c2d2b",
+   "bytes": 318,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/docs/software-workspace.md",
+   "sha256": "c855b217d0871d4c73b84630836bed897a775450be16b6f791e15e585fe378a5",
+   "bytes": 3686,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/package.json",
+   "sha256": "b15796180aee4e046fa1ce9d906ed10e3a152aaa56f709c3192603781debe181",
+   "bytes": 3906,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/scripts/stage-builtin-tools.mjs",
+   "sha256": "105459eef077839da557c6a4f7a4632c2fcd947e4c01874a40880a42f48fec75",
+   "bytes": 9562,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/scripts/verify-builtin-tools.mjs",
+   "sha256": "a8729bc9a83f15938cc872e7df44e8ff4ef7713eacb83af462e93a3dc698554a",
+   "bytes": 1938,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/scripts/verify-software-workspace-ui.mjs",
+   "sha256": "fa30ce810a9250836b73b3cdfd5a61c689b8d06542be49e21879e54ed030a8d4",
+   "bytes": 12127,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src-tauri/Cargo.lock",
+   "sha256": "11e487ceb79e28cb4eee41b2296bd161304668da6985bdc4ba4e361d4238b993",
+   "bytes": 134203,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src-tauri/Cargo.toml",
+   "sha256": "b151f6d7b587e05e04557246ffcb929accb308ff446903e4cb126c08c469893e",
+   "bytes": 2411,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src-tauri/tauri.conf.json",
+   "sha256": "8789080201e2fabca10173143c770d52e1f0a370da5d20bc3376d67e06ad61f0",
+   "bytes": 2265,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/App.tsx",
+   "sha256": "0fb09fdeb03c71a8c2fb9b53388a6b2fa21650217f555fc2dc696472aed1e56b",
+   "bytes": 280173,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/approval/approval-preview.ts",
+   "sha256": "a327baeacf1e08bf8f88ecd67ae19c037c1e2ccd5edabc9f01cf0f4212ecb38e",
+   "bytes": 18459,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/app-shell/AppShell.tsx",
+   "sha256": "c79f974ebd33eaea72b1477f75daa3a4c59d74a7eb205d6026c3b8345d61543d",
+   "bytes": 30004,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/app-shell/MediaGenerationSettings.test.tsx",
+   "sha256": "492ac94441a58b1212a2c802e34c872d21fe91ce391ac45f1b8594a75f968ba6",
+   "bytes": 1836,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/app-shell/MediaGenerationSettings.tsx",
+   "sha256": "47c6a2c971979c7e980d4802c00b3285edd044c8a254216b711a4d117cc42dcc",
+   "bytes": 4743,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/app-shell/SettingsModal.connection.test.tsx",
+   "sha256": "de1a7379b7a12a3b4ecb4e27789b052e5ea7b85cc81189ebcc9024b6c5e78d71",
+   "bytes": 5702,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/app-shell/SettingsModal.tsx",
+   "sha256": "eacd20309a2c194bb7c4dbc3b1a0b0fe6a0c17a3e90085f2dac73d4b735e6d31",
+   "bytes": 70225,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/chat/AgentConversationSurface.input-request.test.tsx",
+   "sha256": "aa10820d42484bf02ed0f8a0049e71682422b224acffb3e329e2cecea5dc9f11",
+   "bytes": 3376,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/chat/AgentConversationSurface.tsx",
+   "sha256": "c85fdf5bee0f0b222ba574217b03af67c667cb68d3dcb99779979c3f120d2543",
+   "bytes": 10997,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/chat/CodeReasoningTranscript.tsx",
+   "sha256": "a3a70c5112dd9f2c8c54525fc4532c51f6a6e52b0a6ddd45ed2bca5e0156ccd8",
+   "bytes": 14298,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/chat/CompactionCard.test.tsx",
+   "sha256": "1f8c68a6ce836d83031128dcd058a7244c7b74a325ed3fe8083b76140b8ea5d6",
+   "bytes": 5451,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/chat/CompactionCard.tsx",
+   "sha256": "82525a9c5cefc328c26d92c0b6477e256c419bdbe861ce37c0b945b5515b1a1c",
+   "bytes": 3936,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/chat/ComposerInputRequests.tsx",
+   "sha256": "ac6c189758fc309e87949bf350385166465b4d8f79f900907ae49571e90a3e60",
+   "bytes": 851,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/chat/GeneratedMediaPreview.tsx",
+   "sha256": "afeb7ceb95ac30e64994135b2614da37089f7ebd06f24d6ca2ac233906f9fe02",
+   "bytes": 3518,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/chat/InputRequestCard.freeform.test.tsx",
+   "sha256": "678c9cdacabf65df303fb126bb4bbee985872ed5b6fd379cd65b89315006cdff",
+   "bytes": 1000,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/chat/InputRequestCard.tsx",
+   "sha256": "9540e029c6a12cc374491801cd8d1dbf0b429564e49ab6449f36e232cc0cc077",
+   "bytes": 10185,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/chat/Message.tsx",
+   "sha256": "b160e56aed1e907263681484c8785d490fa916bb5da1071991348443b3a5dfa7",
+   "bytes": 21907,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/chat/ToolCard.tsx",
+   "sha256": "5fc5d82b0bd8f7d1382d23539b680f9ac126e7f264faa28dac855ac6f9872e87",
+   "bytes": 35218,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/chat/generated-media.test.tsx",
+   "sha256": "f6f174c8db284d30f73eb5c0ccc957860ca71e6ca067937abeb33d8a0c129c08",
+   "bytes": 2484,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/chat/tool-event-presentation.ts",
+   "sha256": "f8791ce99f264100e15c53ecdb4e5de9014c397b00b1bb423b24a2b5aa161d3a",
+   "bytes": 1506,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/software-workspace/SoftwareCanvas.tsx",
+   "sha256": "004212a0803cfbe53df844ae235ccca27f94b6a5b1a4d83f5d0eee80c38343ae",
+   "bytes": 6650,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/software-workspace/SoftwareInputBar.tsx",
+   "sha256": "3998e886ea4840eed7cdddb442f8092b839bb42ee7a406271427e0269e7babc3",
+   "bytes": 1609,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/software-workspace/SoftwareLauncher.tsx",
+   "sha256": "b1d8e49b4ad04c4e4a951df0219bb43a47fb21543ac00b3c7141042d84a49005",
+   "bytes": 2694,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/components/software-workspace/SoftwareWorkspacePanel.tsx",
+   "sha256": "755a6fa64cbda0b28b01513e01336c8c578f5b540aa2e91b67c825ddd3768519",
+   "bytes": 12050,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/host-adapter/generated-media.test.ts",
+   "sha256": "bb29ed22627c8596f2d02497670fa77acb4f13ccd404b086c992766a616eac83",
+   "bytes": 1259,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/host-adapter/generated-media.ts",
+   "sha256": "adf29eca5012bc9959f7a1747d18b286bf31adccc914800e83a91386b555d9cc",
+   "bytes": 891,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/host-adapter/trylo-v1-connection.test.ts",
+   "sha256": "03cf128f2fca49f0c0e79f23f5cf2e1520288c9a456948bc48fe888112552cf0",
+   "bytes": 4130,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/host-adapter/trylo-v1-connection.ts",
+   "sha256": "0b9ac3138667a80ec9f1c2684421fe3d400badd7423fa3cc5de47726ef3894bf",
+   "bytes": 3027,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/host-adapter/trylo-v1-event-adapter.ts",
+   "sha256": "df7c465ef2eaa9eee4aca676039d93e543d5aea908de55f1813ae8acd3b2630e",
+   "bytes": 24443,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/host-adapter/trylo-v1-protocol.ts",
+   "sha256": "9f5a9992a0bd4d5cd101befba1400bc31fa072170c234c6de411608fd75a5254",
+   "bytes": 15356,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/host-adapter/trylo-v1-runner.ts",
+   "sha256": "9491fb95224aa00fa27c6afad36c538e472df6bf48295481ce58093d521e176d",
+   "bytes": 27574,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/index.css",
+   "sha256": "8372ea2d8ad2d8aba510836f7993980e26be6c51165e5678bcece7670d5ec1e8",
+   "bytes": 4583,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/permission/code-tool-policy.test.ts",
+   "sha256": "1e8016ed6a627a211e8b8f81ce34793f93acafb44b695ca52b3e090ba51b8229",
+   "bytes": 4668,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/runtime/conversation-run-supervisor.ts",
+   "sha256": "de3e3dc1ec8a7eb4d7d0a7adf24bfc75f83a1e9c360b57e8ec82af71cc72f288",
+   "bytes": 36249,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/runtime/prerun-warning-recovery.test.ts",
+   "sha256": "c1b8a4747603b16832255d3c26e84cac2b63b151bbfb2c0d3fd80eb92fcce532",
+   "bytes": 6775,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/runtime/recovered-team-output.ts",
+   "sha256": "f8e5e618038d857b2598fd14d0d0681e0cb253c23cc27aacf5319d83e571ecd0",
+   "bytes": 19933,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/runtime/recovery-output-selection.ts",
+   "sha256": "5d21c8b936d0854d725f0c17933b0debc95540257563e72a7149e30a47e2e334",
+   "bytes": 3300,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/runtime/recovery-settled-output.test.ts",
+   "sha256": "d18dc1f2f965d9feb132e0e227a3d7819442539775961b5586692679402d79ef",
+   "bytes": 2023,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/runtime/runtime-types.ts",
+   "sha256": "afdf7f45585b97ef4d6d5b252b7e5af5b3deff7decc2e58c277eb1e36f5cf003",
+   "bytes": 4917,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/runtime/watch-restored-conversation.ts",
+   "sha256": "e5767db18b2b92ec8a47ca57fbd3051481841526d608a913779148f1da5588e6",
+   "bytes": 5381,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/services-host/methods.ts",
+   "sha256": "347b3aa94413d58a70de1d453204c96e35e03b3f1fec12fcea0215d5f5ca8213",
+   "bytes": 54151,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/settings/media-generation.ts",
+   "sha256": "f4d1e10d438c2f5a90fb392ef1c5658eaf18617fcc0912b87f258448d42a17e3",
+   "bytes": 3905,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/settings/settings-store.ts",
+   "sha256": "0e2ef9bb20c99c070b9dd90b3514efac6bdc653fe882bd49814cfec7e72c9385",
+   "bytes": 31896,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/styles/components/generated-media.css",
+   "sha256": "d67f2bc8780f90f7cf0110d66b37ba3eae3855eb1b98101c231058efe8bac3e1",
+   "bytes": 2572,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/styles/components/input-request-card.css",
+   "sha256": "97bd560d57b3d846f804d5c714939b0603adc0d81a19fe8a2340f0a9def10844",
+   "bytes": 4156,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/styles/components/software-workspace.css",
+   "sha256": "91b40f3227d566e2f2908b52ef472db74a36b371be61056999e6eb5aa878c5ff",
+   "bytes": 10341,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/tooling/classifiers/software-workspace-classifier.test.ts",
+   "sha256": "a7ff1f9f23d00434545586ac7ace6a45678ab95df23fc4300b53d816ef289cd6",
+   "bytes": 2719,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/tooling/classifiers/software-workspace-classifier.ts",
+   "sha256": "6e1c0ce5f741b8130861c3783b17c0eb59da2c76b7d72e05fde89ca2eacfde31",
+   "bytes": 3010,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/tooling/software-workspace-types.ts",
+   "sha256": "749869426299c8d5a65606a2b5edc8a1dcd1ed81bff801432d97f59f931d4fb0",
+   "bytes": 3152,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/tooling/tool-risk-classifier.test.ts",
+   "sha256": "de7bdb3a8694b2391451d9b847e777b77cc05d065f32bf65755ab33323ab9b7a",
+   "bytes": 13075,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/tooling/tool-risk-classifier.ts",
+   "sha256": "a994ac12ec78a49040498054bd1ff06c4d4b8a787f64115bbab71b7180654d25",
+   "bytes": 11279,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/tooling/tooling-facade.ts",
+   "sha256": "cbb7109d54fa79a9b111fd4ddd5c475af8a3ba55d777bbb893f9676583260e63",
+   "bytes": 15137,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/tooling/use-generated-media-url.test.tsx",
+   "sha256": "d0940a684e731b3f1f6e9bc9122f39f2341414fec482a6c6b2acfa7bcf6e5f38",
+   "bytes": 2319,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/tooling/use-generated-media-url.ts",
+   "sha256": "a8a8991268b477fef6899524d8e1df8096afd84c4a3a0a7d38fbdfb313b284e0",
+   "bytes": 2224,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/tooling/use-software-workspace.test.tsx",
+   "sha256": "3308b083eba51031c0d133dfc746c7e127ea51078457f31d264e347378cf2e86",
+   "bytes": 2894,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/src/tooling/use-software-workspace.ts",
+   "sha256": "f8ee6b08f854d786891a52bddf5ab37c752185cea5025948e61c19240711fe5a",
+   "bytes": 9304,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/testdata/model-preview-acceptance/fixture.tsx",
+   "sha256": "a5d49f6e0e17546af2cf29483a1ab164626e4247e27f50114def8a4a7acce6e8",
+   "bytes": 5233,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/testdata/software-workspace-acceptance/fixture.tsx",
+   "sha256": "904b10e61bebcd9b87e6421b9df6f61954bd8fb57293deb356e897be800761b6",
+   "bytes": 4945,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/package.json",
+   "sha256": "be11f2a973f23e764eda74d23800a8702104d17cb46902c0d295e514c8e2e248",
+   "bytes": 1762,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/scripts/copy-builtin-skills.mjs",
+   "sha256": "87cccf6b5aa425f0a2817b5cd67fa38ab55b42c590d3697e56fae59d8f0a4430",
+   "bytes": 438,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/adapters/media-generation/artifacts.ts",
+   "sha256": "657f5b69c3098b25d9db425d8d3a9239c704e6582cd4c10bbaabaeec23615a99",
+   "bytes": 8382,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/adapters/media-generation/config.ts",
+   "sha256": "c7328acc3a726ac92ef383fb5745dfa5e454232b001b0d5ae300074ad8d4ce00",
+   "bytes": 2596,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/adapters/media-generation/http.ts",
+   "sha256": "3aa3aafcce6abc29aff55478be96bb76cc02f297e0d4c7a2ebd21c9e7fa9eae6",
+   "bytes": 2683,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/adapters/media-generation/images.ts",
+   "sha256": "63083022fb0f64e1b15c916afbed9c5209bab63af44688100cd2d8fca4e60ed6",
+   "bytes": 2501,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/adapters/media-generation/index.ts",
+   "sha256": "fbfe91d013908eab09cb741e42210b6843fce2f40791158f5b9dbcb8d6ac88ad",
+   "bytes": 9464,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/adapters/media-generation/permission.test.ts",
+   "sha256": "53a73373bdae7c0826e54fa3fa918d6fe49716f2b6ae901a56bcd415538d130e",
+   "bytes": 4875,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/adapters/media-generation/protocols.test.ts",
+   "sha256": "366825e0409612a8921218fb918fc0a33e40b7d56d36eebd432a30ca3b2b417f",
+   "bytes": 11384,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/adapters/media-generation/videos.ts",
+   "sha256": "b51ba1f74aedfdad189af15a8e1c213248bbd226b05745d8130284429d6afbc1",
+   "bytes": 3275,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/adapters/tools/ask-user/index.ts",
+   "sha256": "e468de4f4ee90fef2ec4a3c22820d4685de967f75a0b1bcf926dc36fb2c0682e",
+   "bytes": 11450,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/builtin-skills/browser-media-creation/SKILL.md",
+   "sha256": "70af9d9868842451426cda1b017f643ea04e4dacbe3e28b9a82f5ff32fbcb79d",
+   "bytes": 2706,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/compaction/exact-observations.ts",
+   "sha256": "10b72fa10aad7f57d8ac1db4f5fc53f74a6a867c79aa348afd840f1680edf206",
+   "bytes": 5567,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/compaction/rolling-request.test.ts",
+   "sha256": "121aaec4692f2efd5b4c630cd667528ebada32bea5b83bb935be3b108305bae9",
+   "bytes": 6113,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/domain/ask-user-freeform.test.ts",
+   "sha256": "a543f1dad9db74943c1fdce102511208a23858abdfd1d69af12ef53f89842d59",
+   "bytes": 488,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/domain/ask-user.ts",
+   "sha256": "fd98fc54153eba18bc4cf4f6c5171fc2d320228c14838008ab4628da92e0b560",
+   "bytes": 11456,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/e2e/automatic-compaction-pressure.test.ts",
+   "sha256": "0f8c389ab4d5a59f6160b9bcfeedf9707f6dfa01e05da6e0d14fc20c250fbfd7",
+   "bytes": 5247,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/e2e/model-summary-failure.test.ts",
+   "sha256": "831dbfd2fbf3a94d2942a9f48ded5350dfd3360f1938b0d7f6ebb15b12be28b7",
+   "bytes": 8441,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/e2e/prepared-budget-decision.test.ts",
+   "sha256": "94e7b83b9c16de4723c9a49cfae2f1a8e521a2f20a01a47c860a17adb153401b",
+   "bytes": 6178,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/e2e/prepared-compaction-progress.test.ts",
+   "sha256": "3fd011011fa0274ae5447baf501ec4b864d6af522b0446d656dd58ca1d1c2a8e",
+   "bytes": 9768,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/e2e/prepared-reactive-boundaries.test.ts",
+   "sha256": "f67c207052dc86450f111dedf785b9422d8d6dbcecce34ac8d5456be87dea038",
+   "bytes": 4931,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/e2e/prepared-reactive-recovery.test.ts",
+   "sha256": "62e494c9a08a2c4364667b58c98ad6700bb7fa6f8bc047baeca86a335d59c853",
+   "bytes": 4295,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/integration/skill-learning/catalog.test.ts",
+   "sha256": "b5bdc581191ea311a938f5062efde4fe24cb90b04aab0166d7508a26d124247b",
+   "bytes": 10737,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/learning/agent/subsystems/tool/runtime/evolution-runtime.test.ts",
+   "sha256": "52fada421daff3a084c1dec22920e81287b25674da132ae32e226842331d2f21",
+   "bytes": 12361,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/learning/agent/subsystems/tool/runtime/evolution-runtime.ts",
+   "sha256": "14dbb8a31acb391276cc6890bd7424755c0eb3790373fdd2e284b70dcc517d0f",
+   "bytes": 6992,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/learning/agent/subsystems/tool/runtime/evolution-use.test.ts",
+   "sha256": "4bee2f4f98181d386c16c9308099fbf5231d45184944c8ab20addfcb309dbe62",
+   "bytes": 16028,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/learning/agent/subsystems/tool/runtime/frozen-use.ts",
+   "sha256": "4dd891b8ab90e8e62b29c87ebe16b72301a314ec2ff3357152090d05d12287e2",
+   "bytes": 9564,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/loop/automatic-pressure.ts",
+   "sha256": "73f8ec2b33d09518dad040cd0ce1112998ac15743babc5be3b1e854d4aa7e4a5",
+   "bytes": 2261,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/loop/budget-gate.ts",
+   "sha256": "10da7645a799dcab69f0b1a3387a51e2c2fd2fe188efc763b3f81c0eb21e8c07",
+   "bytes": 13503,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/loop/compact-boundary.ts",
+   "sha256": "cfe87836e79a75c18b1aa71a0157befa72133ba097d4fb8a94370edcec2c748c",
+   "bytes": 10472,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/loop/compact-ledger.ts",
+   "sha256": "30e6369fccdd096a3a6a6552c9ffceb022443c600900457386818a9b98d02116",
+   "bytes": 12242,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/loop/compaction-exact-observations.test.ts",
+   "sha256": "b5bfa828a8d09aa8f68d0087661878e7c7fd9b0c5c19fb463470dde8e834d823",
+   "bytes": 8882,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/loop/compaction-gap.ts",
+   "sha256": "d06a9ee1199e00de504dbe1e1235f10b1f2d224461322dda5b0737b911c27ccc",
+   "bytes": 12036,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/loop/compaction-retention.test.ts",
+   "sha256": "e2fbfc7713375af8f6b5ecbe4cff6d3793a759db05b765da19ad7e40f310256d",
+   "bytes": 8799,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/loop/compaction-retention.ts",
+   "sha256": "9071ffbe82bea793baac0b12d8891cb50b1026ae3491a0c05dc823e8f66980c9",
+   "bytes": 3157,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/loop/host-views.ts",
+   "sha256": "de8b4d4ae9d55e1b761293c8b9e7cbef1fcf0b34882d6cf03b451bb6e89a72e0",
+   "bytes": 6600,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/loop/prepared-compaction.ts",
+   "sha256": "b779efcefa913c60b95f2afd31128f6bd465db2116ca9f1ba3d30edd52fbab93",
+   "bytes": 1231,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/loop/prompt-budget-observation.ts",
+   "sha256": "c05887e66a7d9c254fbe110300af9ecde230c685077024ee2b21d955b297c73a",
+   "bytes": 1976,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/loop/prompt-measurement.ts",
+   "sha256": "1dd22de0cc3a0853803f37bcb938792a5e4fe4bc12b9899468e4fd8f44aaf941",
+   "bytes": 22197,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/loop/server-calibrated-measurement.test.ts",
+   "sha256": "082628e4d86a90ca1de50fd865f74ddf6b8b5001648b3daabafad19b456ebd2c",
+   "bytes": 10488,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/loop/stored-prompt-budget.test.ts",
+   "sha256": "5520c6e9575529bf5c45c385519d02c1a18c42378bb8d4a014f63012a91a73b4",
+   "bytes": 13804,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/loop/stored-prompt-budget.ts",
+   "sha256": "f6002548327d6ab1eba6ee231d47713db60f03d183c05140c89ab9ef15e1dbfb",
+   "bytes": 4226,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/ports/skills.ts",
+   "sha256": "10f0280c0c188b246540d663b91e1884ac20d9e05b428dbf6734e2ce3aa49cd7",
+   "bytes": 3399,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/protocol/cli-stream.ts",
+   "sha256": "7c10d99c06420c1abf64f52ef762ecdbe19afc8e9023688bd0d1cabadcd2c6dd",
+   "bytes": 8879,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/protocol/generated-media.ts",
+   "sha256": "fd8a1ac81e5ab7501290e8b11f3219b016ac3fee993d79ac25e8dfc4745da5c6",
+   "bytes": 1400,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/surface/cli/compaction-wiring.ts",
+   "sha256": "d164cbd9a464b5c7644d4f368ca3bcf165f0fc9f1b2d04ee705d9bde717f07f5",
+   "bytes": 7472,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/surface/cli/media-wiring.ts",
+   "sha256": "614ed7c0002860d6cbedd5dcf9533f0f4e28c126d47ba0df6fbaa9f50e8dde18",
+   "bytes": 917,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/surface/cli/question-options-session.test.ts",
+   "sha256": "dc6a1a54e2aab9772ed9dc47707b76628a4fbf2c87fa925dac8fd79a2db49d27",
+   "bytes": 8578,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/surface/cli/run-command.ts",
+   "sha256": "a777b817ff3aa52bcf17e7f20c1b87c6446665e69b1a96342db4bbbfa16a47c2",
+   "bytes": 19688,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/surface/cli/skills-wiring.test.ts",
+   "sha256": "56090e5e237f5a756d4108f4637b64c57b780f024827a08b38be57cc90af541f",
+   "bytes": 6641,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/surface/cli/skills-wiring.ts",
+   "sha256": "c9cfe5f071e189c545c5213b952ff0da4c85f1dca84f3bbe21b4a8eb745f2915",
+   "bytes": 3152,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/surface/cli/stdio-questions.ts",
+   "sha256": "51f8510bac4d869457cd940009ce305ba873d76e6c25807606622e559e1b2edc",
+   "bytes": 3062,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/surface/cli/stdio-session.test.ts",
+   "sha256": "d48ae4d678a3e48b6f2de690896cbe56e55040df47a520fa777d6d74ab24a841",
+   "bytes": 11460,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/surface/cli/stdio-session.ts",
+   "sha256": "a7be4542fe95bade4042836ec3017f54f7b3db99dc988dfad90035c84f655bbb",
+   "bytes": 9221,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/surface/cli/stream-projection.test.ts",
+   "sha256": "fe619a5cab7c7006c88040cb7d0426fc092ec2d146fdfa663060c0ce420ad57b",
+   "bytes": 13914,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/surface/cli/stream-projection.ts",
+   "sha256": "2f82ff8c751d4f1fbb91a8476c648025abe4fee902a165fca529c4ea5d538473",
+   "bytes": 25816,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/surface/cli/wiring-catalog.ts",
+   "sha256": "11dc107a7d2658113ac9037e972a79ea31f3fbbfcdf25b3e3d2594f1372f52d0",
+   "bytes": 8838,
+   "status": "identical"
+  },
+  {
+   "path": "new trylo cli/src/internal/surface/cli/wiring.ts",
+   "sha256": "117bcc7828ad246dbd3b9aba973dfcc9bb9601c5b3ee5b28cc1acf6139ff1c83",
+   "bytes": 23916,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/ACCOUNT-SERVICE.md",
+   "sha256": "6083f0604657787f0d3099301ddee68b16e16ad0905d65926ff22eac84df1b0f",
+   "bytes": 8639,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/deploy/Dockerfile",
+   "sha256": "736663b707a9c9b636d91485e4d106a09e87914bad5329ca55c99efaa9c34b77",
+   "bytes": 935,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/package-lock.json",
+   "sha256": "19bd8d20e22d9c27c6ab4a87320742b000f51b482dc9ad4f6e3128e4b05d3f86",
+   "bytes": 906,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/package.json",
+   "sha256": "c5813f60d5dcf2ab0719264918a1b48b0f9c096381acd32cf02d02b98b9f2cb0",
+   "bytes": 392,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/scripts/package.mjs",
+   "sha256": "8926a81460ba0b85a6cffacc984db97941557d51181c52823797aa81b666c31e",
+   "bytes": 3299,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/scripts/verify-package.mjs",
+   "sha256": "2f36c4df958e5d595c815b1c18d6e6975c55980855529e7b4b6fb58f4602105d",
+   "bytes": 2065,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/src/accounts.mjs",
+   "sha256": "9ac6a13d594ec68044a07aafb1295c73a36dece2a2b84551385230b3ba72eb8c",
+   "bytes": 33741,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/src/main.mjs",
+   "sha256": "d590ed0ae3dbadec335d0f6501baaf7e9de0e8d3e1841983dd8138d962f24317",
+   "bytes": 973,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/src/model-service/README.md",
+   "sha256": "a31d6a3b26fc9e7668cd639930cb3ff07feb6b507f1799d329d2bffae0fdd3e8",
+   "bytes": 7851,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/src/model-service/amd.mjs",
+   "sha256": "1ed0c02f197f25d4061a23efd5765f48055b0988c74676cff0d59e8291d40518",
+   "bytes": 11840,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/src/model-service/credentials.mjs",
+   "sha256": "379834744f8a08ca954072a2c2b5db963a61f750bb8ea44886a09ba3c97ab67b",
+   "bytes": 5062,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/src/model-service/quota.mjs",
+   "sha256": "aa147c485c345aab9206c05b0ac368017d84f0c13b50fd13fcf936bfd2a88d15",
+   "bytes": 20128,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/src/model-service/service.mjs",
+   "sha256": "8a2c9aa3a36fb9ff335019cdfd2018272e9de51c20082856155b5fd5f8784518",
+   "bytes": 15610,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/src/server.mjs",
+   "sha256": "f369ba081a054e03f9757fb04ddad6aaa1d774100b0602fd3bbc6ac150d524b0",
+   "bytes": 33879,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/src/web.mjs",
+   "sha256": "12a05576719a3a9df57aef3c1aeb646275da072b26bf6603941d90ceffa95279",
+   "bytes": 1978,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/tests/accounts.test.mjs",
+   "sha256": "bc3cabdd2dffeb008beb54ea2647ae0cdb2810a331b2bcb970fae6b3cbbdc988",
+   "bytes": 14509,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/tests/amd-pool.test.mjs",
+   "sha256": "a84b0f8bb06973b5d0bc63691b8aba333146c232235d2cb0dc133445579565c4",
+   "bytes": 16129,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/tests/console.test.mjs",
+   "sha256": "711e1b16bc0155bd43dfdf5b7b6900455d0bf449b3e6411e155062bfa4b0c75a",
+   "bytes": 7600,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/tests/model-console.test.mjs",
+   "sha256": "f80271d0758f1a0e7ef3e174af20178c29a23d8f1a440fe65826410f52e3dc76",
+   "bytes": 9399,
+   "status": "identical"
+  },
+  {
+   "path": "remote-relay/tests/model-quota.test.mjs",
+   "sha256": "5ecd63ece3da66a663c390e5cdd72da05fe3c21123623b84601435c3a9f4db60",
+   "bytes": 24100,
+   "status": "identical"
+  },
+  {
+   "path": "scripts/workspace-layout-pending.json",
+   "sha256": "7f6a8cb58c5d3799e798d8ab12672f3e9edc602702077a8f852cf54e57dc9f6d",
+   "bytes": 4135,
+   "status": "identical"
+  },
+  {
+   "path": "scripts/workspace-layout.test.mjs",
+   "sha256": "3034b8c9ec1e30d7df3650edf205327ea78b2b825dcac03b1b5de861744ab7ae",
+   "bytes": 3869,
+   "status": "identical"
+  }
+ ]
+}

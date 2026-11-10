@@ -9,7 +9,8 @@ export function v1CredentialEnv(providerId: string | undefined, apiKey: string |
 }
 
 export async function ensureV1Connection(settings: SettingsForCodeRun, provider: ProviderArgs): Promise<Readonly<Record<string, string>>> {
-  const env = v1CredentialEnv(provider.providerId, settings.apiKey);
+  const env: Readonly<Record<string, string>> = { ...v1CredentialEnv(provider.providerId, settings.apiKey),
+    ...(settings.mediaGeneration === undefined ? {} : { TRYLO_MEDIA_CONFIG: JSON.stringify(settings.mediaGeneration) }) };
   if (!provider.providerId) {
     if (settings.apiKey?.trim() || settings.apiHost?.trim()) {
       throw new Error('新 CLI 需要显式 provider：当前 Anthropic 格式连接无法映射到新 CLI。请配置 provider，或选择 OpenAI 格式。');

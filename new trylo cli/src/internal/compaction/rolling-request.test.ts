@@ -3,11 +3,15 @@ import { test } from "node:test";
 import type { TranscriptItem } from "../protocol/transcript.js";
 import { createCompactionLedger } from "../loop/compact-ledger.js";
 import { runCompactionFor } from "../loop/compaction-gap.js";
+import { automaticViewTokens } from "../loop/automatic-pressure.js";
 import { promptViewMessages } from "../loop/prompt-view.js";
 import { compactionWiring } from "../surface/cli/compaction-wiring.js";
 import { createModelSummarizer } from "../surface/cli/compact-model-summarizer.js";
+import { autoCompactTokenLimit } from "./policy.js";
 import { validateSummary } from "./summary.js";
 import { childCompaction } from "../subagent/context-budget.js";
+
+const CONTEXT_TOKEN_LIMIT = 10000;
 
 for (const mode of ["extractive", "model", "model-fallback", "child"] as const) {
  for (const [preparationReads, priorRequest] of [[0, true], [20, true], [20, false]] as const) {
@@ -41,7 +45,7 @@ for (const mode of ["extractive", "model", "model-fallback", "child"] as const) 
     } } });
     const ledger = createCompactionLedger();
     const context = { wiring: mode === "child" ? childCompaction({ async *stream() {} }) : compactionWiring({ nowMs: 0, ...(mode === "extractive" ? {} : { summarize }) }),
-      ledger, sessionId: "rolling-request", contextTokenLimit: 10000, transcript: items, seedMessages: [], tools: undefined, reported: undefined };
+      ledger, sessionId: "rolling-request", contextTokenLimit: CONTEXT_TOKEN_LIMIT, transcript: items, seedMessages: [], tools: undefined, reported: undefined };
 
     for (let window = 1; window <= 3; window++) {
       if (window > 1 || preparationReads > 0) for (let i = 0; i < 120; i++) {
@@ -63,6 +67,14 @@ for (const mode of ["extractive", "model", "model-fallback", "child"] as const) 
       assert.equal(validateSummary(summary).ok, true);
 
       if (window > 1) assert.ok(view.includes(`CHECKPOINT_${window}_119`), "the origin must not crowd out the latest state in the actual provider view");
+
+      // One automatic window per preparation pass. The latch stays closed until
+      // the next request's own basis rearms it (budget-gate.ts:86), so a stored
+      // window has to land below the trigger for this sequence to be reachable
+      // in the runner at all — assert that, then model the request.
+      assert.ok(automaticViewTokens(context) < autoCompactTokenLimit(CONTEXT_TOKEN_LIMIT),
+        `window ${window} did not land below the trigger, so no request could rearm the probe`);
+      ledger.attempted = false;
     }
 
     const sequence = items.length;

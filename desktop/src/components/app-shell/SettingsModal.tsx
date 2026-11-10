@@ -1,4 +1,6 @@
 import { ModelConnectionFields } from './ModelConnectionFields'
+import { MediaGenerationSettings } from './MediaGenerationSettings'
+import { mediaGenerationProblem } from '../../settings/media-generation'
 import { ModelContextSettings } from './ModelContextSettings'
 import { workflowLearningSettings } from '../../settings/workflow-learning'
 import { agentLearningSettings } from '../../settings/agent-learning'
@@ -77,6 +79,7 @@ import { derivePackageView, type ToolPlatformState } from '../../tooling/use-too
 
 export type SettingsTab =
   | 'connection'
+  | 'media'
   | 'appearance'
   | 'behavior'
   | 'tools'
@@ -92,6 +95,7 @@ const SETTINGS_TABS: readonly {
   Icon: LucideIcon
 }[] = [
   { id: 'connection', label: '模型连接', description: '管理模型服务和常用连接配置。', Icon: Plug },
+  { id: 'media', label: '图片与视频', description: '配置生成 API 与网页创作方式。', Icon: Plug },
   { id: 'appearance', label: '外观', description: '调整界面主题，让工作更舒适。', Icon: Palette },
   {
     id: 'behavior',
@@ -259,6 +263,7 @@ function WorkCapabilityHint(props: {
 
 export function SettingsModal(props: SettingsModalProps): ReactElement | null {
   const [form, setForm] = useState<FormState>(() => toFormState(props.initial))
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null)
   const centralThoughtEdited = useRef(false)
   useEffect(() => {
     centralThoughtEdited.current = false
@@ -268,6 +273,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
   if (!sameSettingsExceptNotices(initialPreferences.current, props.initial))
     initialPreferences.current = props.initial
   const formInitial = initialPreferences.current
+  useEffect(() => { setEditingProfileId(null) }, [props.open, formInitial])
   const testGeneration = useRef(0)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(null)
@@ -403,6 +409,12 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
 
   const onSave = async (e: { preventDefault(): void }): Promise<void> => {
     e.preventDefault()
+    const mediaProblem = mediaGenerationProblem(form.mediaGeneration)
+    if (mediaProblem) {
+      setSettingsTab('media')
+      setSaveError(mediaProblem)
+      return
+    }
     // The inline field owns its error; do not silently normalize an invalid draft at save time.
     if (checkLearningBudgetProblem((form.checkLearning ?? DEFAULT_CHECK_LEARNING).tokenBudget)) {
       setSettingsTab('learning')
@@ -455,9 +467,15 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
       connectionChanged || (navigationTab === 'connection' && !contextEdited)
         ? 'connection'
         : 'preferences'
+    const editedForm = editingProfileId ? {
+      ...form,
+      activeModelProfileId: editingProfileId,
+      modelProfiles: form.modelProfiles.map(profile => profile.id === editingProfileId
+        ? { ...profile, ...connectionFields(form) } : profile),
+    } : form
     const next = settingsForSave(
       props.initial,
-      intent === 'connection' ? { ...form, poolModel: '' } : form,
+      intent === 'connection' ? { ...editedForm, poolModel: '' } : editedForm,
     )
     const previousCentral = agentLearningSettings(props.initial.agentLearning).centralEnabled
     const nextCentral = agentLearningSettings(next.agentLearning).centralEnabled
@@ -543,6 +561,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
   }
 
   const handleApplyProfile = (id: string): void => {
+    setEditingProfileId(null)
     setSaveError(null)
     if (!id) {
       set('activeModelProfileId', '')
@@ -567,6 +586,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
   }
 
   const handleRemoveProfile = (id: string): void => {
+    if (editingProfileId === id) setEditingProfileId(null)
     setForm((f) => removeProfile(f, id))
   }
 
@@ -715,6 +735,8 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
   // ── Render content by selected tab ─────────────────────
   const renderSection = (tab: SettingsTab): ReactElement => {
     switch (tab) {
+      case 'media':
+        return <MediaGenerationSettings value={form.mediaGeneration} onChange={value => set('mediaGeneration', value)} />
       case 'appearance':
         return <AppearanceSettings />
       case 'connection':
@@ -819,6 +841,15 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
                             : ''}
                         </span>
                         <span className="settings-modal__profile-actions">
+                          <button
+                            type="button"
+                            className="settings-modal__btn settings-modal__btn--ghost"
+                            aria-label={`编辑 ${p.name}`}
+                            onClick={() => { handleApplyProfile(p.id); setEditingProfileId(p.id) }}
+                            title="载入并编辑，保存设置后更新这个配置"
+                          >
+                            {editingProfileId === p.id ? '正在编辑' : '编辑'}
+                          </button>
                           <button
                             type="button"
                             className="settings-modal__btn settings-modal__btn--ghost"

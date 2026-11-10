@@ -1,11 +1,12 @@
 {
   "name": "@trylo/remote-relay",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
+    "check:layout": "node ../scripts/check-workspace-layout.mjs",
     "start": "node src/main.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node ../scripts/check-workspace-layout.mjs && node --test tests/*.test.mjs"
   },
   "dependencies": {
     "ws": "8.21.0"

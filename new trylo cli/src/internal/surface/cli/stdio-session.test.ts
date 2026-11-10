@@ -153,6 +153,25 @@ test("one stdin reader routes a question, approval and guidance independently", 
   } finally { h.close(); }
 });
 
+test("a free-text account answer crosses the real stdio question transport without an approval deadline", async () => {
+  const h = harness();
+  try {
+    const owner = createAskUserTools({ surfaceAnswersOnly: true, nextRequestId: () => "account-q" });
+    const asking = stdioQuestions(owner, h.channel).execute({ name: "ask_user_question", toolCallId: "account", arguments: {
+      questions: [{ id: "account", header: "账号", question: "你有哪些可以创作的网页账号？" }],
+    } }, new AbortController().signal);
+    await tick();
+    const frame = h.frames.find(frame => frame.request_id === "account-q");
+    assert.ok(frame);
+    assert.equal(frame.expires_at, undefined, "questions wait for the real answer or explicit cancellation; approvals keep their own expiry");
+    h.feed(response("account-q", { status: "submitted", answers: { account: "我有即梦账号，由我登录。" } }));
+    const answered = await asking;
+    assert.ok(answered.outcome === "result");
+    assert.match(answered.output, /我有即梦账号，由我登录/);
+    assert.deepEqual(owner.pending(), []);
+  } finally { h.close(); }
+});
+
 test("malformed and stale replies cannot deny or approve a pending tool", async () => {
   const h = harness();
   try {

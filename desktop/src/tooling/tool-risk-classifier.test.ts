@@ -120,8 +120,9 @@ describe('routing (§6.2)', () => {
 
   it('without the list (undefined) the classifier still applies — legacy runs are rare but real', () => {
     const router = createToolRiskClassifier();
-    const { managedPackageIds: _omitted, ...withoutList } = request();
-    expect(router.classify(withoutList).behavior).toBe('auto_allow');
+    // The classifier reads the list only through `!== undefined`, so a legacy
+    // run that never carried the field takes this same path.
+    expect(router.classify(request({ managedPackageIds: undefined })).behavior).toBe('auto_allow');
   });
 
   it('exposes the managed server names for diagnostics (core four + the CAD/EDA adapters)', () => {
@@ -132,6 +133,7 @@ describe('routing (§6.2)', () => {
       'trylo-windows',
       'trylo-chrome',
       'trylo-preview',
+      'trylo-software',
       'trylo-solidworks',
       'trylo-autocad',
       'trylo-kicad',

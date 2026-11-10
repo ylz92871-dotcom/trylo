@@ -27,6 +27,7 @@ import { createRemoteServices } from './remote/index.mjs';
 import { createToolingServices } from './tooling/index.mjs';
 import { runNativeBrowserMcp } from './tooling/native-browser-mcp.mjs';
 import { runModelPreviewMcp } from './tooling/model-preview-mcp.mjs';
+import { runSoftwareWorkspaceMcp } from './tooling/software-workspace-mcp.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -234,6 +235,7 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
     .register('tooling', 'viewportInput', (params) => tooling.viewportInput(params))
     .register('tooling', 'viewportStop', () => tooling.viewportStop())
     .register('tooling', 'computerPreviewStart', params => tooling.computerPreviewStart(params))
+    .register('tooling', 'softwareWorkspace', params => tooling.softwareWorkspace(params))
     .register('tooling', 'computerPreviewAck', params => tooling.computerPreviewAck(params))
     .register('tooling', 'computerPreviewStop', params => tooling.computerPreviewStop(params));
   function handleRequest(frame) {
@@ -334,7 +336,9 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
 // `file://${argv[1]}` string never matches import.meta.url on win32.
 import { fileURLToPath, pathToFileURL } from 'node:url';
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  if (process.argv[2] === '--native-browser-mcp') {
+  if (process.argv[2] === '--software-workspace-mcp') {
+    await runSoftwareWorkspaceMcp({ gate: process.argv[3], packageId: process.argv[4] });
+  } else if (process.argv[2] === '--native-browser-mcp') {
     await runNativeBrowserMcp({ gate: process.argv[3], entry: process.argv[4], args: process.argv.slice(5) });
   } else if (process.argv[2] === '--model-preview-mcp') {
     await runModelPreviewMcp({ gate: process.argv[3] });

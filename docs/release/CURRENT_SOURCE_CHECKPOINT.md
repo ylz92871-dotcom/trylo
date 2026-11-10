@@ -1,8 +1,16 @@
 # 当前源码检查点
 
+2026-11-11：**Desktop 2.1.0**。软件控制内置工具——宿主应用运行在独立隐藏桌面，不占用屏幕与鼠标，对话旁可直接预览与接管；新增生图与视频工具；修复 Desktop 长任务压缩空转并改进自动压缩估算与近期历史保留；完善自由回答与选项式提问。本轮同时把 software-workspace 的 6 个运行时源文件按既有白名单方式公开。
+
+[当前版本说明](DESKTOP_2_1_0.md) · [源码同步记录](SOURCE_SYNC_2026_11_11.md) · [逐文件来源与摘要清单](SOURCE_SYNC_2026_11_11.json)
+
+2026-11-09（补记）：Desktop 2.0.0。中央学习系统 Beta（可选，默认关闭）、工作台与预览演进、独立新版 CLI 成为唯一引擎、macOS Apple Silicon 与 Linux x86_64 首版 Beta。当时未在本页登记，此处补记；发行说明与安装资产自发布当日即为原件。
+
+[版本说明](DESKTOP_2_0_0.md) · [GitHub Release](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v2.0.0)
+
 2026-11-02：Desktop 1.2.0 工具生产管理、工具学习记录、团队进度与后台命令闪窗修复。仅新版 CLI，官网源码不再进入公库。
 
-[当前版本说明](DESKTOP_1_2_0.md) · [验证摘要](DESKTOP_1_2_0_VERIFICATION.json) · [源码同步记录](SOURCE_SYNC_2026_11_02.md)
+[版本说明](DESKTOP_1_2_0.md) · [验证摘要](DESKTOP_1_2_0_VERIFICATION.json) · [源码同步记录](SOURCE_SYNC_2026_11_02.md)
 
 2026-10-27：Desktop 1.1.0 账号、团队、UI 与长任务更新。仅新版 CLI，旧版保留。
 

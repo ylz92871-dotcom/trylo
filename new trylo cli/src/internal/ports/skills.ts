@@ -15,7 +15,7 @@ import type { ToolOutcome } from "./tools.js";
  */
 
 /** Where a skill was found. `additional` is reserved for explicit caller-supplied directories. */
-export type SkillSource = "project" | "user" | "additional";
+export type SkillSource = "project" | "user" | "additional" | "builtin";
 
 export type SkillDescriptor = {
   readonly name: string;

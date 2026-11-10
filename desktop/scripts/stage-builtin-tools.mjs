@@ -95,7 +95,7 @@ export function prepareBuiltinPython(root) {
     { windowsHide: true, env, timeout: 120000, stdio: 'pipe' });
 }
 
-export async function stageBuiltinTools({ target, sourceRoot = toolsRoot, pythonRoot } = {}) {
+export async function stageBuiltinTools({ target, sourceRoot = toolsRoot, pythonRoot, officeArtifact } = {}) {
   if (!target) throw new Error('An explicit bundle target is required');
   if (existsSync(target)) throw new Error(`Refuse to merge with an existing built-in bundle: ${target}`);
   await fs.mkdir(target, { recursive: true });
@@ -104,7 +104,16 @@ export async function stageBuiltinTools({ target, sourceRoot = toolsRoot, python
     tools[id] = { policy: 'bundled', entry, version, args, sha256: sha(await fs.readFile(path.join(target, entry))) };
   };
   const office = path.join(sourceRoot, 'office/OfficeCLI');
-  await copy(await buildBuiltinOffice(office), path.join(target, 'office/officecli.exe'));
+  // An explicit unchanged build input may be reused by scoped runtime work.
+  // The caller binds it to a recorded digest; default release builds publish
+  // Office from source exactly as before.
+  let officeExecutable;
+  if (officeArtifact) {
+    const bytes = await fs.readFile(officeArtifact.path);
+    if (sha(bytes) !== officeArtifact.sha256) throw new Error('Office build input digest mismatch');
+    officeExecutable = officeArtifact.path;
+  } else officeExecutable = await buildBuiltinOffice(office);
+  await copy(officeExecutable, path.join(target, 'office/officecli.exe'));
   for (const name of ['LICENSE', 'NOTICE']) if (existsSync(path.join(office, name))) await copy(path.join(office, name), path.join(target, 'office', name));
   const officeVersion = execFileSync(path.join(target, 'office/officecli.exe'), ['--version'], { windowsHide: true, encoding: 'utf8', timeout: 15000 }).trim();
   await register('officecli', 'office/officecli.exe', officeVersion);
@@ -138,6 +147,7 @@ export async function stageBuiltinTools({ target, sourceRoot = toolsRoot, python
   const version = execFileSync(path.join(python, 'python.exe'), ['-B', '-c', 'import importlib.metadata as m; print(m.version("windows-mcp"))'], { windowsHide: true, encoding: 'utf8', timeout: 15000 }).trim();
   await register('windows-mcp', 'computer/python/python.exe', version, ['-B', '-m', 'windows_mcp']);
   prepareBuiltinPython(target);
+  await copy(path.join(sourceRoot, 'software-workspace'), path.join(target, 'software-workspace'));
   await fs.writeFile(path.join(target, 'tool-sources.json'), JSON.stringify({ schemaVersion: 1, tools }, null, 2) + '\n');
   const inventory = await inventoryTree(target);
   await fs.writeFile(path.join(target, 'inventory.json'), JSON.stringify({ schemaVersion: 1, files: inventory }, null, 2) + '\n');

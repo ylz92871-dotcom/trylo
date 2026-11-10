@@ -94,6 +94,7 @@ export type CliV1Event =
       readonly status: string;
       readonly output: string;
       readonly truncated: boolean;
+      readonly generatedMedia?: readonly GeneratedMediaArtifact[];
       readonly message?: string;
       readonly name?: string;
       readonly code?: string;
@@ -271,6 +272,7 @@ function fieldsAreValid(type: CliV1EventType, raw: Record<string, unknown>): boo
         (raw.status === 'succeeded' || raw.status === 'failed' || raw.status === 'cancelled' || raw.status === 'unknown') &&
         typeof raw.output === 'string' &&
         typeof raw.truncated === 'boolean' &&
+        (raw.generatedMedia === undefined || readGeneratedMedia(raw.generatedMedia) !== undefined) &&
         (raw.message === undefined || typeof raw.message === 'string') &&
         (raw.name === undefined || isNonEmptyString(raw.name)) &&
         (raw.code === undefined || isNonEmptyString(raw.code)) &&
@@ -340,3 +342,4 @@ export function parseCliV1Event(line: string): CliV1ParseResult {
   }
   return { ok: true, event: parsed as unknown as CliV1Event };
 }
+import { readGeneratedMedia, type GeneratedMediaArtifact } from './generated-media';

@@ -8,6 +8,8 @@ import {
 export interface PersistedRecoveryRun {
   readonly runId: string
   readonly turnId: string
+  /** Durable result receipt, not inferred from a final-looking assistant text. */
+  readonly settled?: true
 }
 
 /** Read the existing result owner; a recovery observer never writes a second run record. */
@@ -28,7 +30,9 @@ export function persistedConversationRecoveryRun(
     )
   )
     return undefined
-  return { runId: first.runId, turnId: first.turnId }
+  const settled = first.finishedAt !== undefined && Number.isFinite(first.finishedAt)
+    && ['completed', 'failed', 'cancelled'].includes(first.status)
+  return { runId: first.runId, turnId: first.turnId, ...(settled ? { settled: true as const } : {}) }
 }
 
 export type OutputSelection =

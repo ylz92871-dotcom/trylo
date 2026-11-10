@@ -1,5 +1,6 @@
 import type { ToolRunnerPort } from "../../../../../ports/tool-runner-port.js";
 import type { ToolEvolutionRequest, ToolEvolutionCandidate, ToolEvolutionRequirement } from "../domain/evolution/contracts.js";
+import { TOOL_EVOLUTION_MAX_GENERATION_MS } from "../domain/evolution/contracts.js";
 import { parseToolEvolutionCandidate, parseToolEvolutionRequest } from "../domain/evolution/parse.js";
 import type { ToolEvolutionVerification, ToolEvolutionVerifier } from "../domain/evolution/verification.js";
 import { hasCompleteSampleCoverage } from "../domain/evolution/verification.js";
@@ -34,8 +35,9 @@ export type ToolEvolutionRuntimeOptions = {
 
 /** The worker proposes; the execution adapter checks; only the existing Board archives assets. */
 export function createToolEvolutionRuntime(options: ToolEvolutionRuntimeOptions) {
-  if (options.timeoutMs !== undefined && (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs <= 0)) {
-    throw new Error("an explicit generation timeout must be a positive integer");
+  if (options.timeoutMs !== undefined && (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs <= 0
+    || options.timeoutMs > TOOL_EVOLUTION_MAX_GENERATION_MS)) {
+    throw new Error(`an explicit generation timeout must be a positive integer within the ${TOOL_EVOLUTION_MAX_GENERATION_MS}ms evolution contract`);
   }
   return {
     async evolve(raw: unknown, signal: AbortSignal): Promise<ToolEvolutionOutcome> {

@@ -68,6 +68,7 @@ export type CliStreamEvent =
       readonly status: string;
       readonly output: string;
       readonly truncated: boolean;
+      readonly generatedMedia?: readonly import("./generated-media.js").GeneratedMediaArtifact[];
       /**
        * Why a call failed, when the journal has a reason for it. Optional on
        * purpose: it is added to an existing field set, so a consumer that never

@@ -163,7 +163,9 @@ describe('tooling.resolveProfile', () => {
     assert.equal(resolved.profileRevision, '3');
     // Nothing installed in the test root: Hermes intact, browser + desktop
     // degrade to reported unavailable capabilities (§4.4), never a failure.
-    assert.deepEqual(resolved.serverNames, ['trylo-hermes-capabilities']);
+    // Host-owned capabilities (software workspace, model preview) still compose:
+    // they do not need a host application install.
+    assert.deepEqual(resolved.serverNames, ['trylo-hermes-capabilities', 'trylo-software', 'trylo-preview']);
     const ids = resolved.unavailableCapabilities.map((c) => c.id);
     assert.ok(ids.includes('playwright'));
     assert.ok(ids.includes('windows-mcp'));
@@ -221,8 +223,9 @@ describe('tooling.resolveProfile', () => {
     const ids = resolved.unavailableCapabilities.map((c) => c.id);
     assert.ok(ids.includes('officecli'));
     assert.ok(ids.includes('playwright'));
-    // The run still carries a usable config — Hermes is intact.
-    assert.deepEqual(resolved.serverNames, ['trylo-hermes-capabilities']);
+    // The run still carries a usable config — Hermes is intact, and the
+    // host-owned software/preview servers need no install of their own.
+    assert.deepEqual(resolved.serverNames, ['trylo-hermes-capabilities', 'trylo-software', 'trylo-preview']);
     assert.ok(resolved.mcpConfigPath);
   });
 
@@ -243,6 +246,8 @@ describe('tooling.resolveProfile', () => {
       'mcp__trylo-jlceda__*',
       'mcp__trylo-kicad__*',
       'mcp__trylo-office__*',
+      'mcp__trylo-preview__*',
+      'mcp__trylo-software__*',
       'mcp__trylo-solidworks__*',
       'mcp__trylo-windows__*',
     ]);

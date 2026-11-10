@@ -5,6 +5,7 @@ import { JSDOM } from '../../desktop/node_modules/jsdom/lib/api.js';
 
 const root = new URL('../../trylocode-site/console/', import.meta.url);
 const files = await Promise.all(['shared/ui.js', 'shared/api.js', 'admin/model-service/index.js', 'admin/model-service/api-client.js', 'admin/app.js'].map(file => fs.readFile(new URL(file, root), 'utf8')));
+const mfaSource = await fs.readFile(new URL('shared/mfa.js', root), 'utf8');
 const strip = text => text.replace(/^import .*;\r?\n/gm, '').replaceAll('export ', '');
 const reply = (data, status = 200) => ({ ok: status < 400, status, json: async () => data });
 async function until(check) { for (let i = 0; i < 100; i++) { if (check()) return; await new Promise(resolve => setTimeout(resolve, 10)); } assert.ok(check(), 'Expected rendered state'); }
@@ -25,7 +26,7 @@ async function fixture(t, options = {}) {
     }
     return reply({ '/api/admin/session': { user: { username: 'operator', role: 'admin' }, csrf: 'fresh-csrf' }, '/api/admin/invitations': { invitations: [] }, '/api/admin/users': { users: [] }, '/api/admin/limits': { maxAccounts: 100, maxDevices: 2 }, '/api/admin/audit': { records: [] }, '/api/admin/model-service': data }[url]);
   };
-  window.eval(`${strip(files[0])}\nconst e = escape;\n${strip(files[1])}\nconst {mountModelService} = (() => {${strip(files[2])}\nreturn {mountModelService};})();\n${strip(files[3])}\n${strip(files[4])}`);
+  window.eval(`${strip(files[0])}\nconst e = escape;\n${strip(files[1])}\n${strip(mfaSource)}\nconst {mountModelService} = (() => {${strip(files[2])}\nreturn {mountModelService};})();\n${strip(files[3])}\n${strip(files[4])}`);
   const doc = window.document; await until(() => doc.querySelector('[data-ms-action="new-upstream"]'));
   const field = (name, value) => { const node = doc.querySelector(`#ms-${name}`); node.value = value; node.dispatchEvent(new window.Event('input', { bubbles: true })); };
   return { window, doc, calls, field, data };
@@ -97,7 +98,7 @@ test('account console reads its own quota ledger without adding incompatible uni
     }[url]);
   };
   const user = await fs.readFile(new URL('user/app.js', root), 'utf8');
-  window.eval(`${strip(files[0])}\nconst e = escape;\n${strip(files[1])}\n${strip(user)}`);
+  window.eval(`${strip(files[0])}\nconst e = escape;\n${strip(files[1])}\n${strip(mfaSource)}\n${strip(user)}`);
   await until(() => window.document.querySelector('tbody'));
   assert.match(window.document.querySelector('tbody').textContent, /70 \/ 100 Token/);
   assert.match(window.document.querySelector('tbody').textContent, /3 \/ 10 次请求/);

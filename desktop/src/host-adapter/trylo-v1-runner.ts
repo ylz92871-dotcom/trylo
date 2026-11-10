@@ -248,6 +248,8 @@ interface TryloV1Run {
   readonly exited: Promise<void>
   readonly markExited: () => void
   readonly adapter: TryloV1EventAdapter
+  readonly recoveryScope?: Pick<import('./process-service').RecoverableProcess,
+    'projectKey' | 'conversationId' | 'identity'>
   readonly onEvents: (events: readonly LoopEvent[]) => void
   readonly guard: { isSuperseded: () => boolean }
   stderr: string[]
@@ -310,6 +312,9 @@ function observeRunExit(run: TryloV1Run, info: ProcessExitInfo): void {
     }
     // Missing run_result never proves completion, even with a successful exit.
     const events = run.adapter.finalizeExit({
+      ...(run.recoveryScope ? { nativeAttempt: {
+        ...run.recoveryScope, id: info.id, pid: info.pid,
+      } } : {}),
       exitCode: info.code,
       stderr: run.stderr,
       cancelled: run.cancelled,
@@ -450,6 +455,10 @@ export async function startTryloV1(
     exited,
     markExited,
     adapter,
+    ...(args.recoveryIdentity && args.projectKey && args.conversationId ? { recoveryScope: {
+      projectKey: args.projectKey, conversationId: args.conversationId,
+      identity: args.recoveryIdentity,
+    } } : {}),
     onEvents: args.onEvents,
     guard: args.guard ?? { isSuperseded: () => false },
     stderr: [],

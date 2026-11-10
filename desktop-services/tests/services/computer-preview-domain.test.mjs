@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
@@ -8,8 +9,7 @@ import { createToolingServices } from '../../src/tooling/index.mjs';
 import { encode, decodeRaw, eventFrame } from '../../src/protocol/frames.mjs';
 
 test('production tooling domain carries scoped frames and acknowledgements through the real event codec', async () => {
-  const testParent = path.resolve('../Temp/desktop-ui-integration');
-  fs.mkdirSync(testParent, { recursive: true });
+  const testParent = fs.mkdtempSync(path.join(os.tmpdir(), 'trylo-desktop-ui-integration-'));
   const root = fs.mkdtempSync(path.join(testParent, 'computer-preview-domain-'));
   const events = [];
   const child = new EventEmitter();
@@ -40,5 +40,6 @@ test('production tooling domain carries scoped frames and acknowledgements throu
     services.dispose();
     assert.ok(root.startsWith(testParent + path.sep));
     fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(testParent, { recursive: true, force: true });
   }
 });

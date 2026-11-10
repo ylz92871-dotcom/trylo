@@ -5,7 +5,7 @@ import type { AskUserRequest } from "../../domain/ask-user.js";
 import type { ToolOutcome } from "../../ports/tools.js";
 
 async function waitForAnswer(owner: AskUserSession, pending: AskUserRequest, channel: StdioSession, signal: AbortSignal): Promise<ToolOutcome> {
-  for (let attempt = 0; attempt < 32; attempt += 1) {
+  while (!signal.aborted) {
     const reply = await channel.question(pending, signal);
     if (reply === undefined || reply.status === "dismissed") {
       owner.cancelRequest(pending.requestId);
@@ -19,7 +19,8 @@ async function waitForAnswer(owner: AskUserSession, pending: AskUserRequest, cha
     if (answered.outcome === "result") return { ...answered,
       output: `User answer for request ${pending.requestId}: ${JSON.stringify(answers)}\n${answered.output}` };
   }
-  return { outcome: "error", code: "invalid_user_answer", message: "No valid user answer was received." };
+  owner.cancelRequest(pending.requestId);
+  return { outcome: "cancelled" };
 }
 
 /** Resume old unanswered requests without introducing a second stdin reader. */
@@ -35,7 +36,7 @@ export function stdioQuestions(owner: AskUserSession, channel: StdioSession): As
   return {
     ...owner,
     snapshot: () => owner.snapshot().map(binding => binding.name === "ask_user_question"
-      ? { ...binding, timeoutMs: 10 * 60 * 1000, description: "Ask the user structured questions and wait for their actual answers. The host displays choices and free text; never answer on the user's behalf." } : binding),
+      ? { ...binding, timeoutMs: undefined, description: binding.description + " The host waits for the user's actual answer or explicit cancellation; never answer on the user's behalf." } : binding),
 
     async execute(call, signal) {
       const issued = await owner.execute(call, signal);

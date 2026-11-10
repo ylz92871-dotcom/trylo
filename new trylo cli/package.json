@@ -19,7 +19,7 @@
   },
   "scripts": {
     "check:layout": "node ../scripts/check-workspace-layout.mjs",
-    "build": "node ../scripts/check-workspace-layout.mjs && tsc -p tsconfig.json && node scripts/copy-vendor.mjs && node scripts/pty/copy-pty-vendor.mjs && node scripts/release-inventory.mjs",
+    "build": "node ../scripts/check-workspace-layout.mjs && tsc -p tsconfig.json && node scripts/copy-builtin-skills.mjs && node scripts/copy-vendor.mjs && node scripts/pty/copy-pty-vendor.mjs && node scripts/release-inventory.mjs",
     "clean": "node scripts/quality/clean-dist.mjs",
     "prepack": "npm run build",
     "format:check": "node scripts/quality/format-check.mjs",

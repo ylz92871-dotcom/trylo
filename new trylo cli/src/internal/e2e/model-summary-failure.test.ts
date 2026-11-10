@@ -13,6 +13,14 @@ type WireBody = { messages: WireMessage[]; tools?: unknown[] };
 
 const PARTIAL = "This incomplete model summary must never become a stored window.";
 
+// Automatic maintenance prices the shipping estimate, not a byte upper bound
+// (automatic-compaction-pressure.test.ts), so the pressure has to be real and
+// it has to sit in the replaced prefix: two settled step exchanges ahead of the
+// read the assertions inspect. A window always retains the newest settled
+// exchange beside its call, so the wire below carries that exchange plus the
+// read — the pairing is what this test pins, not a one-call wire.
+const STEP_OUTPUT = "Verified step detail ".repeat(1_200);
+
 function response(frames: ReadonlyArray<unknown>): Response {
   return new Response(frames.map(frame => `data: ${JSON.stringify(frame)}\n\n`).join("") + "data: [DONE]\n\n");
 }
@@ -33,18 +41,24 @@ test("a partial Chat summary error stores only extractive facts and the next wir
         ]);
       }
 
-      if (++mainRequests === 1) return response([
-        { choices: [{ delta: { tool_calls: [{ index: 0, id: "read-proof", function: { name: "echo", arguments: "{}" } }] }, finish_reason: null }] },
-        { choices: [{ delta: {}, finish_reason: "tool_calls" }], usage: { prompt_tokens: 9500, completion_tokens: 10, total_tokens: 9510 } },
-      ]);
+      // No usage report: the shipping estimate of the real transcript is what
+      // may trigger automatic maintenance now, so the pressure has to be real.
+      if (++mainRequests <= 3) {
+        const id = mainRequests === 3 ? "read-proof" : `step-${mainRequests}`;
+        return response([
+          { choices: [{ delta: { tool_calls: [{ index: 0, id, function: { name: "echo", arguments: "{}" } }] }, finish_reason: null }] },
+          { choices: [{ delta: {}, finish_reason: "tool_calls" }] },
+        ]);
+      }
 
       return response([{ choices: [{ delta: { content: "Verified the actual fixture." }, finish_reason: "stop" }] }]);
     } });
   const result = await runTurn({ provider, profile: emptyProfileLoader(), permission: createFakePermission("approved"),
-    tools: createFakeTools([toolResult({}, "verified fixture value")], [echoBinding({ needsApproval: false })]),
+    tools: createFakeTools([toolResult({}, STEP_OUTPUT), toolResult({}, STEP_OUTPUT), toolResult({}, "verified fixture value")],
+      [echoBinding({ needsApproval: false })]),
     compaction: compactionWiring({ nowMs: 0, summarize: createModelSummarizer({ provider, model: "fixture" }) }),
   }, { sessionId: "s", turnId: "t", correlationId: "c", model: "fixture", text: "Read the fixture and verify its actual value.",
-    budget: { maxIterations: 3, contextTokenLimit: 10_000 } });
+    budget: { maxIterations: 5, contextTokenLimit: 10_000 } });
 
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(result.compactions.length, 1);
@@ -57,9 +71,10 @@ test("a partial Chat summary error stores only extractive facts and the next wir
   const calls = next.messages.flatMap(message => message.tool_calls?.map(call => call.id) ?? []);
   const results = next.messages.filter(message => message.role === "tool").map(message => message.tool_call_id);
 
-  assert.deepEqual(calls, ["read-proof"]);
   assert.deepEqual(results, calls);
-  assert.equal(next.messages.find(message => message.role === "tool")?.content, "verified fixture value");
+  assert.ok(calls.includes("read-proof"), "the read this test is about must survive the window");
+  assert.equal(next.messages.find(message => message.role === "tool" && message.tool_call_id === "read-proof")?.content,
+    "verified fixture value");
 });
 
 test("cancelling summary authoring never creates a compaction draft", async () => {

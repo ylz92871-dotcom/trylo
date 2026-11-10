@@ -53,6 +53,17 @@ test("changed PA system is charged in full on top of the old server count", () =
   assert.equal(basis(next, 100), 700 + estimate([newHost]));
 });
 
+test("automatic maintenance re-estimates replacement systems without weakening admission or dropping added history", () => {
+  const next = { ...base, messages: [...base.messages.slice(0, -1), assistant, newHost] };
+  const previous = report();
+  const admission = measurement.evaluatePreparedRequestBudget(next, 100, previous, undefined, estimate);
+  const automatic = measurement.evaluatePreparedRequestBudget(next, 100, previous, undefined, estimate,
+    undefined, undefined, undefined, "automatic");
+  assert.equal(admission.decision.tokens, 700 + estimate([assistant, newHost]));
+  assert.equal(automatic.decision.tokens, 700 + estimate([assistant]));
+  assert.equal(automatic.exactInputTokens, undefined, "a forecast cannot claim a full current provider measurement");
+});
+
 test("removed old system keeps its old server cost instead of an estimated saving", () => {
   const next = { ...base, messages: base.messages.filter(item => item.role !== "system") };
   assert.equal(basis(next, 100), 700);

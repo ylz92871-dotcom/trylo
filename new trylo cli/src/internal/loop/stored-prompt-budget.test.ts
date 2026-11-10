@@ -16,6 +16,22 @@ const native = (fields: readonly string[] = [EMPTY, EMPTY, A]): ProviderNativeRe
   requestDigest: A, messageFieldDigests: fields, messageOverheadTokens: fields.map(() => 0) });
 const estimate = (messages: readonly ProviderMessage[]) => messages.length * 5;
 
+test("resumed automatic pressure retains the measured/history floor without billing a replaced host twice", () => {
+  const input = { kind: "complete_prompt" as const, source: "provider_complete_input" as const, tokens: 900 };
+  const measurement = capturePromptMeasurement(request, undefined, capturePersistableInputIdentity(provider, request, undefined));
+  const stored = captureStoredInputBasis(measurement, input);
+  assert.ok(stored);
+  const current = { ...request, messages: [...request.messages.slice(1), { role: "assistant" as const, content: "New evidence" },
+    { role: "system" as const, content: "New host state" }] };
+  const reported: ReportedRequestBasis = { promptTokens: 900, transcriptLength: request.messages.length, windowId: undefined, storedInputBasis: stored };
+  const binding = capturePersistableInputIdentity(provider, current, undefined);
+  const admission = evaluatePreparedRequestBudget(current, 100, reported, undefined, estimate, undefined, undefined, binding);
+  const automatic = evaluatePreparedRequestBudget(current, 100, reported, undefined, estimate, undefined, undefined, binding, "automatic");
+  assert.equal(admission.decision.tokens, 910);
+  assert.equal(automatic.decision.tokens, 905);
+  assert.equal(automatic.exactInputTokens, undefined);
+});
+
 test("a complete measured prefix is retained while appended text uses its byte-level bound", () => {
   const previous: ProviderRequest = { attemptId: "previous", model: "fixture", tools: [],
     messages: [{ role: "user", content: "Measured history" }] };

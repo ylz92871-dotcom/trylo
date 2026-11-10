@@ -1,0 +1,122 @@
+/* Default to a quiet disclosure. Image bytes are loaded only while expanded. */
+.generated-media {
+  max-width: min(100%, 640px);
+  margin: 6px 0 12px 24px;
+}
+.generated-media__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  color: var(--fg-muted);
+  font-size: 12px;
+  list-style: none;
+  cursor: pointer;
+}
+.generated-media__summary::-webkit-details-marker {
+  display: none;
+}
+.generated-media__summary::marker {
+  content: '';
+}
+.generated-media__summary:hover {
+  color: var(--fg);
+}
+.generated-media__chevron {
+  transition: transform 120ms ease;
+}
+.generated-media[open] > .generated-media__summary .generated-media__chevron {
+  transform: rotate(90deg);
+}
+.generated-media__summary:focus-visible,
+.generated-media__thumbnail:focus-visible {
+  outline: 2px solid var(--fg-muted);
+  outline-offset: 3px;
+}
+.generated-media__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.generated-media__image {
+  width: 200px;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+.generated-media__grid[data-multiple='false'] > .generated-media__image {
+  width: 240px;
+}
+.generated-media__thumbnail {
+  display: block;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-panel);
+  cursor: zoom-in;
+}
+.generated-media__thumbnail > img {
+  display: block;
+  width: 100%;
+  height: 144px;
+  object-fit: contain;
+}
+.generated-media__grid[data-multiple='false'] .generated-media__thumbnail > img {
+  height: 160px;
+}
+.generated-media__pending,
+.generated-media__unavailable {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+.generated-media__unavailable {
+  min-height: 144px;
+  padding: 12px;
+}
+.generated-media__pending {
+  margin-left: 24px;
+  padding: 8px 0;
+}
+.generated-media__viewer {
+  max-width: 92vw;
+  max-height: 90vh;
+  padding: 38px 16px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+.generated-media__viewer::backdrop {
+  background: rgb(0 0 0 / 65%);
+}
+.generated-media__viewer > img {
+  display: block;
+  max-width: 86vw;
+  max-height: 79vh;
+  object-fit: contain;
+}
+.generated-media__viewer > button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+@media (max-width: 600px) {
+  .generated-media {
+    margin-left: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .generated-media__chevron {
+    transition: none;
+  }
+}

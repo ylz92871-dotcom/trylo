@@ -27,6 +27,7 @@
 // `unavailable`; the card still renders the safe summary.
 
 import type { FilePath } from '../host-adapter/types';
+import { softwareWorkspaceClassifier, buildSoftwareApprovalPreview } from '../tooling/classifiers/software-workspace-classifier';
 import { shellApprovalPreview } from './shell-approval-preview';
 import {
   OFFICECLI_TOOL_NAME,
@@ -412,6 +413,7 @@ const parseCadEdaMcp: Parser = async (args) => ({
   ok: true,
   preview: buildCadEdaApprovalPreviewForTool(args.toolName),
 });
+const parseSoftwareMcp: Parser = async args => ({ ok: true, preview: buildSoftwareApprovalPreview(args) });
 
 /* Map tool name → parser. Both the Claude Code names and the cowork
  * `write_file` / `edit_file` / `run_command` aliases are
@@ -455,6 +457,7 @@ const PARSERS: Readonly<Record<string, Parser>> = (() => {
       parsers[full] = parseCadEdaMcp;
     }
   }
+  for (const full of softwareWorkspaceClassifier.expectedTools) parsers[full] = parseSoftwareMcp;
   return parsers;
 })();
 

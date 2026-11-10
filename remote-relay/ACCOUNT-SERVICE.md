@@ -79,17 +79,22 @@ socket peer; behind the shared ingress that can be a shared limit.
 The 2026-10-25 AMD release enables the owner-funded free pool behind the explicit
 `TRYLO_ENABLE_AMD_POOL=1` flag. It imports the full AMD catalog, stores endpoint-bound
 credentials with AES-256-GCM, and meters authorized Chat unary/SSE requests against
-the existing atomic request ledger. Accounts require administrator grants; the configured daily grant is enforced server-side. Dedicated audio/OCR/decision invocation and
+the existing atomic request ledger. Owner YLZ has a 1000-request daily grant; other
+accounts need administrator grants. Dedicated audio/OCR/decision invocation and
 the published Desktop 1.0.6 platform-provider integration remain incomplete.
 The current Desktop source and staged Service Host now synchronize granted text
 models and bridge actual CLI Chat/SSE/tool continuation through a model-scoped
-loopback capability. Multiple configured provider credentials share the account grant;
+loopback capability. Two AMD account keys share the original 1000/day grant;
 neither supplier key nor the native account bearer goes into renderer settings.
 Coding Plan execution, official provider balance queries, relay traffic budgets,
 account recovery and MFA remain separate work. Custom local Desktop API settings
 remain independent. See `src/model-service/README.md` for enforcement and boundaries.
 
 ## Deployment and recovery
+
+Security release 0.2.5 adds account-wide reauthentication/revocation and versioned
+password hashes. Follow [SECURITY.md](SECURITY.md) for its verified deployment and
+compatible rollback path; an unmodified 0.2.4 image cannot verify upgraded hashes.
 
 Node >=22.13 required for the built-in SQLite API. Production observed Node 22.23.3.
 Data is on the existing `trylo-relay_relay_data` Docker volume. The canonical

@@ -21,6 +21,7 @@
 @import './styles/components/workflow-receipt.css';
 @import './styles/components/browser-preview.css';
 @import './styles/components/agent-model-preview.css';
+@import './styles/components/software-workspace.css';
 @import './styles/components/input-bar.css';
 @import './styles/components/workspace-picker.css';
 @import './components/chat/goal-control.css';
@@ -95,3 +96,4 @@
 @import './styles/components/browser-tool-sidebar.css';
 @import './styles/components/browser-activity.css';
 @import './styles/components/browser-control.css';
+@import './styles/components/generated-media.css';

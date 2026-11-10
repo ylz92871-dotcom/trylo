@@ -194,6 +194,13 @@ __pycache__/
 !/desktop-services/toolchain/computer-control/Windows-MCP/.python-version
 !/desktop-services/toolchain/computer-control/Windows-MCP/manifest.json
 !/desktop-services/toolchain/computer-control/Windows-MCP/server.json
+# 2026-11-11：software-workspace 运行时是发行输入（stage/verify-builtin-tools 直接依赖），按 Windows-MCP 同样的精确白名单公开
+!/desktop-services/toolchain/software-workspace/
+/desktop-services/toolchain/software-workspace/*
+!/desktop-services/toolchain/software-workspace/*.py
+!/desktop-services/toolchain/software-workspace/guard/
+/desktop-services/toolchain/software-workspace/guard/*
+!/desktop-services/toolchain/software-workspace/guard/sitecustomize.py
 # ── 2026-09-06：本地构建产�?/ agent 痕迹（组长确认不入库）───────────
 .trae/
 .vite/

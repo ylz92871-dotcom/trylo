@@ -54,7 +54,7 @@ export function CompactionCard(props: CompactionCardProps): ReactElement {
     {state === 'failed' ? <CircleAlert className="compaction__icon" size={18} strokeWidth={1.5} aria-hidden="true" /> : <FoldMark />}
     <span className="compaction__title" role="status" aria-atomic="true">{title}</span>
     {hasAny && <span className="compaction__usage" aria-label={`压缩前：${before} tokens；压缩后：${after} tokens`} title={usageDetail}>
-      <span>压缩前 {before}</span><ArrowRight size={12} strokeWidth={1.5} aria-hidden="true" /><span>压缩后 {after}</span><span className="compaction__unit">tokens</span>
+      <span>压缩前 {before}</span><ArrowRight size={12} strokeWidth={1.5} aria-hidden="true" /><span>压缩后 {after}</span><span className="compaction__unit" title="请求大小估算，实际计量以模型回报为准。">tokens（估算）</span>
     </span>}
     <span className="compaction__rule" aria-hidden="true" />
   </>;

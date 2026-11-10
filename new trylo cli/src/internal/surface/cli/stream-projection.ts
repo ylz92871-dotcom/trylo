@@ -9,6 +9,7 @@ import { isSubagentObservation } from "../../protocol/subagent-observation.js";
 import { isSelectedPromptBudgetObservation } from "../../protocol/prompt-budget-observation.js";
 import { isSubagentDelivery } from "../../protocol/subagent-handoff.js";
 import { projectRoutingReceipt } from "../../protocol/routing-receipt.js";
+import { generatedMediaArtifacts } from "../../protocol/generated-media.js";
 import { createPublicToolResultReader, PublicToolResultError } from "../../protocol/public-tool-result.js";
 
 /**
@@ -205,12 +206,15 @@ function projectToolResult(state: BlockState, envelope: Envelope): CliStreamEven
   const elapsed = started === undefined ? undefined : Date.parse(envelope.timestamp) - started.timestamp;
   const fileChanges = envelope.payload.status === "succeeded" ? projectFileMutations(name, envelope.payload.value) : undefined;
   const routing = projectRoutingReceipt(name, envelope.payload.value);
+  const generatedMedia = envelope.payload.status === "succeeded" && ["image_generate", "video_get_result"].includes(name)
+    ? generatedMediaArtifacts(envelope.payload.value) : undefined;
 
   return {
     type: "tool_result", toolCallId,
     status: text(envelope.payload, "status"),
     output: text(envelope.payload, "output"),
     truncated: envelope.payload.truncated === true,
+    ...(generatedMedia === undefined ? {} : { generatedMedia }),
     ...(reason === "" ? {} : { message: reason }),
     ...(name === "" ? {} : { name }),
     ...(code === "" ? {} : { code }),

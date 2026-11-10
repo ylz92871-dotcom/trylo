@@ -25,6 +25,7 @@ import { createViewportBridge } from './viewport-bridge.mjs';
 import { createBrowserObserver } from './browser-observer.mjs';
 import { createNativeBrowserService } from './native-browser-service.mjs';
 import { createModelPreviewService } from './model-preview-service.mjs';
+import { createSoftwareWorkspace, softwareRuntimeEntry } from './software-workspace-service.mjs';
 import { createComputerPreviewStream, resolveComputerPreviewPython } from './computer-preview-stream.mjs';
 
 /**
@@ -98,6 +99,10 @@ export function createToolingServices(options = {}) {
   const browserObserver = createBrowserObserver({ storageRoot, emit: emitViewport });
   const nativeBrowser = createNativeBrowserService({ emit: emitViewport, ...(seam.nativeBrowser ?? {}) });
   const modelPreview = createModelPreviewService({ emit: emitViewport, ...(seam.modelPreview ?? {}) });
+  const softwareWorkspace = createSoftwareWorkspace({ storageRoot, emit: emitViewport,
+    resolveRuntime: async () => ({ executable: await resolveComputerPreviewPython({ catalog, packages }), entry: await softwareRuntimeEntry() }),
+    ...(seam.softwareWorkspace ?? {}),
+  });
   const computerPreview = createComputerPreviewStream({
     emit: emitViewport,
     resolveExecutable: () => resolveComputerPreviewPython({ catalog, packages }),
@@ -111,6 +116,7 @@ export function createToolingServices(options = {}) {
     storageRoot,
     browserObserver,
     modelPreview,
+    softwareWorkspace,
     ...(options.hostEntrypoint ? { hostEntrypoint: options.hostEntrypoint } : {}),
     ...(enableRepositoryTools || seam.nativeBrowser ? { nativeBrowser } : {}),
     ...(seam.profilesRoot ? { profilesRoot: seam.profilesRoot } : {}),
@@ -366,6 +372,8 @@ export function createToolingServices(options = {}) {
       return computerPreview.start(params);
     },
 
+    softwareWorkspace(params = {}) { return softwareWorkspace.command(params); },
+
     computerPreviewStop(params = {}) {
       return computerPreview.stop(params);
     },
@@ -392,6 +400,7 @@ export function createToolingServices(options = {}) {
     dispose() {
       void nativeBrowser.dispose();
       void modelPreview.dispose();
+      void softwareWorkspace.dispose();
       toolResultCache.stop();
       health.clearCache();
       void viewport.stop();

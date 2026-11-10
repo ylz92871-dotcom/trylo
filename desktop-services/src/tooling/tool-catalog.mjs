@@ -23,7 +23,7 @@ import { FREECAD_MCP_MANIFEST } from './manifests/freecad-mcp.mjs';
 import { BLENDER_MCP_MANIFEST } from './manifests/blender-mcp.mjs';
 
 export const CATALOG_SCHEMA_VERSION = 1;
-export const CORE_TOOL_RUNTIME_REVISION = 7;
+export const CORE_TOOL_RUNTIME_REVISION = 8;
 
 /** Every manifest Trylo ships. Adding a package = adding one frozen object. */
 const MANIFESTS = Object.freeze([

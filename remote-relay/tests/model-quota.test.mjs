@@ -10,6 +10,7 @@ import { createStore } from '../src/store.mjs';
 import { createModelQuota, quotaWindow } from '../src/model-service/quota.mjs';
 import { createModelService } from '../src/model-service/service.mjs';
 import { createRelayServer } from '../src/server.mjs';
+import { protectFixtureUser } from './helpers/mfa-fixture.mjs';
 
 const testRoot = path.resolve(fileURLToPath(new URL('../evidence/model-quota-20261023/test-data', import.meta.url)));
 const instant = Date.parse('2026-10-23T12:00:00Z');
@@ -207,20 +208,29 @@ async function httpFixture(t) {
   const password = 'synthetic-quota-password-123', salt = crypto.randomBytes(16).toString('hex');
   const passwordHash = (await promisify(crypto.scrypt)(password, salt, 64)).toString('hex');
   const store = await createStore(directory); await store.change(state => { state.users = [{ id: 'admin', username: 'operator', role: 'admin', salt, passwordHash }, { id: 'one', username: 'tester.one', salt, passwordHash }, { id: 'two', username: 'tester.two', salt, passwordHash }]; }); await store.close();
+  let clock = Date.now();
+  const factor = await protectFixtureUser(directory, 'admin', () => clock);
+  clock += 60001;
   let upstreamCalls = 0;
   const upstream = http.createServer((request, response) => { upstreamCalls++; request.resume(); response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ value: { text: 'synthetic upstream reply' }, units: 7 })); });
   await new Promise(resolve => upstream.listen(0, '127.0.0.1', resolve));
   const executor = { quote: () => 20, async run() { return fetch(`http://127.0.0.1:${upstream.address().port}/synthetic`, { method: 'POST' }).then(response => response.json()); } };
   // Port zero is supported by listen; determine the actual origin before login.
-  const relay = await createRelayServer({ dataDir: directory, secureCookies: false, webOrigin: 'https://quota.test', modelExecutor: executor, webDir: path.resolve('../trylocode-site/console') }); await relay.listen(0);
+  const relay = await createRelayServer({ dataDir: directory, now: () => clock, secureCookies: false, webOrigin: 'https://quota.test', modelExecutor: executor, webDir: path.resolve('../trylocode-site/console') }); await relay.listen(0);
   const origin = `http://127.0.0.1:${relay.server.address().port}`;
   t.after(async () => { await relay.close(); await new Promise(resolve => upstream.close(resolve)); if (!path.resolve(directory).startsWith(testRoot + path.sep)) throw Error('Invalid cleanup root'); await fs.rm(directory, { recursive: true, force: true }); });
-  async function request(route, { method = 'GET', cookie, csrf, token, body } = {}) {
+  async function request(route, { method = 'GET', cookie, csrf, token, body, declaredLength } = {}) {
+    if (declaredLength) return new Promise((resolve, reject) => {
+      const outgoing = http.request(origin + route, { method, headers: { Origin: 'https://quota.test', 'Content-Type': 'application/json', 'Content-Length': declaredLength, ...(cookie ? { Cookie: cookie } : {}), ...(csrf ? { 'X-CSRF-Token': csrf } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } }, response => {
+        response.resume(); response.once('end', () => resolve({ status: response.statusCode, data: {} }));
+      });
+      outgoing.on('error', reject); outgoing.flushHeaders();
+    });
     const response = await fetch(origin + route, { method, headers: { Origin: 'https://quota.test', ...(cookie ? { Cookie: cookie } : {}), ...(csrf ? { 'X-CSRF-Token': csrf } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) }, body: body !== undefined ? JSON.stringify(body) : undefined });
     return { status: response.status, data: await response.json().catch(() => ({})), cookie: response.headers.get('set-cookie')?.split(';')[0] };
   }
   async function login(scope, username) {
-    const result = await request(`/api/${scope}/login`, { method: 'POST', body: { username, password } }); assert.equal(result.status, 200);
+    const result = await request(`/api/${scope}/login`, { method: 'POST', body: { username, password, ...(username === 'operator' ? { otp: factor.otp(clock) } : {}) } }); assert.equal(result.status, 200);
     const session = await request(`/api/${scope}/session`, { cookie: result.cookie }); return { cookie: result.cookie, csrf: session.data.csrf };
   }
   const admin = await login('admin', 'operator'), user = await login('account', 'tester.one'), other = await login('account', 'tester.two');
@@ -275,10 +285,10 @@ test('only authenticated model routes accept a large bounded request', async t =
   const native = await f.request('/relay/login',{method:'POST',body:{username:'tester.one',password:f.password}}); assert.equal(native.status,200);
   assert.equal((await f.request('/relay/model-requests',{token:native.data.accessToken,method:'POST',body:body(600000)})).status,200);
   const before = f.calls();
-  assert.equal((await f.request('/api/account/model-requests',{...f.user,method:'POST',body:body(8400000)})).status,413);
-  assert.equal((await f.request('/relay/model-requests',{token:native.data.accessToken,method:'POST',body:body(8400000)})).status,413);
+  assert.equal((await f.request('/api/account/model-requests',{...f.user,method:'POST',declaredLength:8400000})).status,413);
+  assert.equal((await f.request('/relay/model-requests',{token:native.data.accessToken,method:'POST',declaredLength:8400000})).status,413);
   assert.equal(f.calls(),before);
-  assert.equal((await f.request('/api/admin/limits',{...f.admin,method:'POST',body:{padding:'x'.repeat(600000)}})).status,413);
-  assert.equal((await f.request('/relay/device-session',{token:native.data.accessToken,method:'POST',body:{padding:'x'.repeat(600000)}})).status,413);
+  assert.equal((await f.request('/api/admin/limits',{...f.admin,method:'POST',declaredLength:600000})).status,413);
+  assert.equal((await f.request('/relay/device-session',{token:native.data.accessToken,method:'POST',declaredLength:600000})).status,413);
 });
 

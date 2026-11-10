@@ -7,7 +7,8 @@ import { privateSummaryField, publicSummaryValue } from "./tool-action-material.
 
 /** Payload bodies stay compacted. Metadata retains complete atomic values,
  * including a checksum's subject and adjacent verification fields. */
-const BODY_FIELDS = /^(?:text|body|content|stdout|stderr|sourceText|rawText|rawOutput)$/i;
+const BODY_FIELDS = /^(?:text|body|content|stdout|stderr|sourceText|rawText|rawOutput|dataUrl|dataBase64|b64_json|base64|inputSchema|outputSchema)$/i;
+const DISCOVERY_TOOLS = new Set(["mcp_search_tools", "mcp_list_servers"]);
 
 type Observation = {
   readonly sequence: number;
@@ -26,6 +27,10 @@ export function exactObservationMessages(transcript: Transcript, excluded: Reado
   for (const [resultIndex, callIndex] of toolCallIndexByResult(transcript)) {
     const result = transcript[resultIndex], call = transcript[callIndex];
     if (result?.kind !== "tool_result" || call?.kind !== "tool_call" || result.outcome !== "succeeded" || excluded.has(result)) continue;
+    // Schemas describe a rediscoverable capability, not a verified artifact.
+    // Pinning every old catalog beside the new summary makes cuts stop saving
+    // space and can preserve stale availability as if it were current state.
+    if (DISCOVERY_TOOLS.has(call.name)) continue;
 
     const values = exactValues(result.output);
     if (values.length === 0) continue;

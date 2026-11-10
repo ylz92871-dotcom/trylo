@@ -37,7 +37,7 @@ import {
 const ASK_BINDING: ToolBinding = {
   name: "ask_user_question",
   description:
-    "Ask the user 1-4 structured questions (2-4 options each, header at most 12 chars). Returns a requestId; the user's answer arrives via answer_user_question. Answers are input, never permission for a side effect.",
+    "Ask the user when a needed preference, account or constraint cannot be inferred. Ask 1-4 concise questions; omit options for free text, or offer 2-4 choices with the recommended one first. Do useful independent work while awaiting an asynchronous answer. Answers are input, never permission for a side effect.",
   sideEffect: "read_only",
   parameters: {
     type: "object",
@@ -67,7 +67,7 @@ const ASK_BINDING: ToolBinding = {
             },
             multiSelect: { type: "boolean" },
           },
-          required: ["header", "question", "options"],
+          required: ["header", "question"],
         },
       },
     },

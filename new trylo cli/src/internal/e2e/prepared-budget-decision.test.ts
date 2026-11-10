@@ -76,7 +76,9 @@ for (const phase of ["automatic", "reactive"] as const) test(`${phase} rebuildin
   }, { sessionId: "budget-rebuilding", turnId: phase, correlationId: "c", model: "fixture", text: "Preserve this current input.",
     budget: { contextTokenLimit: phase === "automatic" ? 1000 : 10_000 }, resumedTranscript: [
       { kind: "user", sequence: 0, text: "An earlier task." },
-      { kind: "assistant_text", sequence: 1, blockId: "earlier", text: "An older completed observation. ".repeat(300) },
+      // The reactive case must reach the rejected send before automatic
+      // byte-bound compaction; the automatic case deliberately exceeds it.
+      { kind: "assistant_text", sequence: 1, blockId: "earlier", text: "An older completed observation. ".repeat(phase === "automatic" ? 300 : 100) },
     ] });
 
   assert.equal(result.state.terminalReason, "completed");

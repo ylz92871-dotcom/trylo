@@ -83,11 +83,19 @@ function skillCall(arguments_: Record<string, string>): ToolCallRequest {
   return { toolCallId: "t-wire", name: SKILL_TOOL_NAME, arguments: arguments_ };
 }
 
-test("a run with no installed skills keeps the old tool catalog", () => {
-  const empty = skillsPortFor(home, {}, path.join(workspace, "nowhere"));
+test("disabling the builtin browser fallback and having no installed skills leaves the catalog empty", () => {
+  const empty = skillsPortFor(home, { TRYLO_MEDIA_CONFIG: JSON.stringify({ version: 1, browserFallback: false }) }, path.join(workspace, "nowhere"));
   assert.equal(empty.catalog, undefined);
   const wiring = wire(undefined);
   assert.equal(wiring.ports.tools.snapshot().some((binding) => binding.name === SKILL_TOOL_NAME), false);
+});
+
+test("a fresh run discovers and loads the official browser-media skill without global prompt injection", () => {
+  const builtins = skillsPortFor(home, {}, path.join(workspace, "nowhere")).catalog!;
+  assert.deepEqual(builtins.list().map(skill => skill.name), ["browser-media-creation"]);
+  const loaded = builtins.load("browser-media-creation", "");
+  assert.equal(loaded.kind, "loaded");
+  if (loaded.kind === "loaded") assert.match(loaded.skill.content, /login/);
 });
 
 test("a run with skills mounts the skill tool and serves a model call", async () => {

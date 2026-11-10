@@ -25,6 +25,10 @@ quota and usage views reuse `console/user/app.js`.
 - Account cookies/CSRF and native bearer authorization remain authoritative.
   Phone pairing credentials cannot call the native model routes. Clients cannot
   supply another user's ID, usage values, public settlement or an arbitrary URL.
+- HTTP handlers recheck the current session after reading the body and inside
+  queued quota/credential transactions. Revocation, expiry, account disabling or
+  loss of the administrator role blocks pending work before dispatch or mutation.
+  Already dispatched operations retain their accounting when cancelled.
 
 ## Provider boundary
 
@@ -79,6 +83,14 @@ quote, including reasoning/cache accounting; no characters-to-tokens estimate is
 assumed. The current AMD adapter meters one request for unary or completed SSE.
 Adding Token-based streaming needs a provider-specific trustworthy meter. No
 automatic fallback to a different paid source is performed.
+
+Unary and SSE JSON are decoded before credential redaction, including string
+values and property names; JSON escaping cannot bypass that check. Provider
+responses retain the 4 MiB byte limit and additionally cap parsed structure at
+128 levels and 100,000 values. SSE backpressure observes the execution's abort
+signal: a timed-out slow receiver is disconnected and its upstream reader and
+credential lease are released. `revokeUser(userId)` cancels the user's active
+model operations for the account-wide session revocation path.
 
 This is a **single active service process per database**. Startup recovery treats
 old dispatched operations as uncertain; do not run multiple independent workers

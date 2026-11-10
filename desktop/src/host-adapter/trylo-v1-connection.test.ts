@@ -1,7 +1,16 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { SettingsForCodeRun } from '../runtime/runtime-types';
+import { DEFAULT_MEDIA_GENERATION } from '../settings/media-generation';
 
 const h = vi.hoisted(() => ({ providers: vi.fn(), status: vi.fn(), credential: vi.fn() }));
+
+it('passes independent media credentials only through the child environment', async () => {
+  const mediaGeneration = { ...DEFAULT_MEDIA_GENERATION, image: { ...DEFAULT_MEDIA_GENERATION.image, apiKey: 'MEDIA_KEY', model: 'media-model' } };
+  const env = await ensureV1Connection({ ...settings, apiKey: 'CHAT_KEY', mediaGeneration }, { providerId: 'openai-compatible' });
+  expect(env.TRYLO_OPENAI_API_KEY).toBe('CHAT_KEY');
+  expect(JSON.parse(env.TRYLO_MEDIA_CONFIG!)).toEqual(mediaGeneration);
+  expect(h.providers).not.toHaveBeenCalled();
+});
 vi.mock('./cli-auth-status', async importOriginal => ({
   ...await importOriginal<typeof import('./cli-auth-status')>(), readCliProviders: h.providers, readCliAuthStatus: h.status,
 }));

@@ -1,6 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs/promises';import path from 'node:path';import crypto from 'node:crypto';import {promisify} from 'node:util';
 import {createStore} from '../src/store.mjs';import {createCredentialVault} from '../src/model-service/credentials.mjs';import {AMD_BASE,createAmdExecutor,normalizeAmdModels,isAmdSource} from '../src/model-service/amd.mjs';import {createModelService} from '../src/model-service/service.mjs';import {createRelayServer} from '../src/server.mjs';
-const root=path.resolve('../output/amd-free-pool-20261025/test-data'),secret='synthetic-amd-key-not-a-real-credential';
+import {protectFixtureUser} from './helpers/mfa-fixture.mjs';
+const root=path.resolve('../_workspace/artifacts/output/amd-free-pool-20261025/test-data'),secret='synthetic-amd-key-not-a-real-credential';
 const metadata={data:[{id:'chat-model',output:['text'],providers:[{streaming:true,tools:true,vision:true}],context_length:32768},{id:'voice-model',output:['audio'],providers:[{streaming:false}]},{id:'ocr-model',output:['ocr'],providers:[{ocr:true}]},{id:'decision-model',output:['decision']}]};
 const config={name:'Synthetic AMD',endpoint:AMD_BASE,type:'free',protocol:'chat',unit:'requests',period:'day',models:['chat-model'],defaultLimit:1000,totalLimit:100000,concurrency:2};
 const response=body=>new Response(JSON.stringify(body),{headers:{'Content-Type':'application/json'}});
@@ -70,7 +71,7 @@ test('authorized free routing meters one actual call; replay, denied account and
  let calls=0;const f=await fixture(t,async(url,init)=>{calls++;assert.equal(url,AMD_BASE+'/chat/completions');assert.equal(init.redirect,'error');assert.equal(init.headers.Authorization,'Bearer '+secret);const body=JSON.parse(init.body);assert.equal(body.model,'chat-model');assert.equal(body.max_tokens,64);assert.equal(body.endpoint,undefined);return response({choices:[{message:{content:'reply '+secret}}],usage:{total_tokens:3}});});
  const request=f.request();const result=await f.service.execute('owner',request);assert.match(result.result.choices[0].message.content,/redacted/);assert.equal(f.service.quota.userQuotas('owner').quotas[0].used,1);
  await assert.rejects(f.service.execute('owner',request),e=>e.status===409);await assert.rejects(f.service.execute('other',f.request()),e=>e.status===403);
- await assert.rejects(f.service.execute('owner',f.request({model:'voice-model'})),e=>e.code==='model_capability');await assert.rejects(f.service.execute('owner',f.request({payload:{...payload,max_tokens:100000}})),e=>e.status===400);
+ await assert.rejects(f.service.execute('owner',f.request({model:'voice-model'})),e=>e.code==='model_capability');await assert.rejects(f.service.execute('owner',f.request({payload:{...payload,max_tokens:1.5}})),e=>e.status===400);
  assert.equal(calls,1);assert.equal(f.service.quota.requests('owner').length,1);assert.equal(f.service.userModels('owner').models.length,4);
 });
 test('unusable free quota never falls through to a separately authorized paid source',async t=>{
@@ -90,10 +91,11 @@ test('changed source invalidates retained credential before any network dispatch
 test('HTTP AMD setup reuses admin CSRF, exposes all models, and streams through the authorized account',async t=>{
  await fs.mkdir(root,{recursive:true});const directory=await fs.mkdtemp(path.join(root,'http-')),password='synthetic-model-admin-password',salt=crypto.randomBytes(16).toString('hex'),passwordHash=(await promisify(crypto.scrypt)(password,salt,64)).toString('hex');
  const store=await createStore(directory);await store.change(state=>{state.users=[{id:'a',username:'operator',role:'admin',salt,passwordHash}];});await store.close();let modelCalls=0;
- const relay=await createRelayServer({dataDir:directory,enableAmd:true,secureCookies:false,webOrigin:'https://test.invalid',amdTransport:async(url)=>{if(url.endsWith('/models'))return response(metadata);modelCalls++;return streamResponse(true);}});await relay.listen(0);const base='http://127.0.0.1:'+relay.server.address().port;
+ let clock=Date.now();const factor=await protectFixtureUser(directory,'a',()=>clock);clock+=60001;
+ const relay=await createRelayServer({dataDir:directory,now:()=>clock,enableAmd:true,secureCookies:false,webOrigin:'https://test.invalid',amdTransport:async(url)=>{if(url.endsWith('/models'))return response(metadata);modelCalls++;return streamResponse(true);}});await relay.listen(0);const base='http://127.0.0.1:'+relay.server.address().port;
  t.after(async()=>{await relay.close();await fs.rm(directory,{recursive:true,force:true});});
  async function call(route,{cookie,csrf,body,method=body?'POST':'GET'}={}){return fetch(base+route,{method,headers:{Origin:'https://test.invalid',...(cookie?{Cookie:cookie}:{}),...(csrf?{'X-CSRF-Token':csrf}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});}
- async function login(scope){const r=await call('/api/'+scope+'/login',{body:{username:'operator',password}}),cookie=r.headers.get('set-cookie').split(';')[0],s=await(await call('/api/'+scope+'/session',{cookie})).json();return{cookie,csrf:s.csrf};}
+ async function login(scope){clock+=60001;const r=await call('/api/'+scope+'/login',{body:{username:'operator',password,otp:factor.otp(clock)}}),cookie=r.headers.get('set-cookie').split(';')[0],s=await(await call('/api/'+scope+'/session',{cookie})).json();return{cookie,csrf:s.csrf};}
  const admin=await login('admin'),user=await login('account'),prefix='/api/admin/model-service';const saved=await(await call(prefix+'/upstreams',{...admin,body:config})).json(),id=saved.upstreams[0].id;
  assert.equal((await call(prefix+'/upstreams/'+id+'/credential',{cookie:admin.cookie,body:{apiKey:secret}})).status,403);assert.equal((await call(prefix+'/upstreams/'+id+'/credential',{...user,body:{apiKey:secret}})).status,401);
  const configured=await call(prefix+'/upstreams/'+id+'/credential',{...admin,body:{apiKey:secret}});assert.equal(configured.status,200);assert.ok(!(await configured.text()).includes(secret));

@@ -757,6 +757,7 @@ export function settingsForCodeReplay(
  *  so App doesn't need to navigate the settings shape. */
 export function settingsForCodeRun(
   settings: {
+    mediaGeneration?: import('../settings/media-generation').MediaGenerationSettings
     apiKey?: string
     apiHost?: string
     apiModel?: string
@@ -808,6 +809,7 @@ export function settingsForCodeRun(
       modelContextWindow: context.capacity,
     },
     apiKey: settings.poolModel?.trim() ? undefined : settings.apiKey || undefined,
+    ...(settings.mediaGeneration === undefined ? {} : { mediaGeneration: settings.mediaGeneration }),
     apiHost: settings.poolModel?.trim() ? undefined : settings.apiHost || undefined,
     apiModel: model,
     ...(settings.poolModel?.trim() ? { platformModel: settings.poolModel.trim() } : {}),

@@ -1326,6 +1326,7 @@ export interface RemoteRequestEvent {
 export type RemoteStatusEvent = RemoteStatusResult;
 
 export interface ServiceEventMap {
+  readonly 'tooling.softwareWorkspaceState': import('../tooling/software-workspace-types').SoftwareState;
   readonly 'host.permissionDecision': PermissionDecisionEvent;
   readonly 'host.petChat': PetChatRequestMessage;
   readonly 'host.remoteRequest': RemoteRequestEvent;
@@ -1366,6 +1367,7 @@ export interface NativeBrowserState {
 // ── method table (name → params/result) ──────────────────────────────
 
 export interface ServiceMethodMap {
+  readonly 'tooling.softwareWorkspace': { params: import('../tooling/software-workspace-types').SoftwareCommand; result: import('../tooling/software-workspace-types').SoftwareResult };
   readonly 'pet.enable': { params: PetEnableParams; result: PetEnableResult };
   readonly 'pet.disable': { params: undefined; result: PetDisableResult };
   readonly 'pet.openChat': { params: undefined; result: PetOpenChatResult };

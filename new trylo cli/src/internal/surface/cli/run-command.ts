@@ -34,6 +34,7 @@ import { createRunExecution } from "./run-execution-wiring.js";
 import { observeRunCancellation } from "./run-interrupt.js";
 import { closeRunResources } from "./run-resources.js";
 import { createAskUserTools } from "../../adapters/tools/ask-user/index.js";
+import { mediaToolsFor } from "./media-wiring.js";
 import { restoreQuestions } from "../../adapters/tools/ask-user/recovery.js";
 import { answerQuestionInput } from "./question-input.js";
 import { resolvePrompt } from "./run-prompt.js";
@@ -306,7 +307,10 @@ export async function handleRun(ctx: CliContext, options: RunCommandOptions, sin
     const effective = workflow?.scaffold ?? goalRun.scaffold;
     const extensionBase = extensionTools ?? effective.additionalTools;
     const legacyTools = extensionBase === undefined ? workflow?.tools : workflow === undefined ? extensionBase : composeAdditionalTools(extensionBase, workflow.tools);
-    const preparedBase = { ...effective, ...(legacyTools === undefined ? {} : { additionalTools: legacyTools }) };
+    const media = mediaToolsFor(ctx.env, effective.execution?.workspaceRoot ?? effective.workspaceRoot);
+    if (media !== undefined && "message" in media) return reportFailure(ctx, media);
+    const additional = media === undefined ? legacyTools : legacyTools === undefined ? media : composeAdditionalTools(legacyTools, media);
+    const preparedBase = { ...effective, ...(additional === undefined ? {} : { additionalTools: additional }) };
     const prepared = improvement === undefined ? preparedBase : bindWorkflowImprovement(preparedBase, improvement);
     const observed = workflow === undefined ? ctx : { ...ctx, onRunEnvelope: (envelope: import("../../protocol/envelope.js").Envelope) => {
       workflow?.observe(envelope);

@@ -99,7 +99,9 @@ export function openFrozenToolUse(options: FrozenUseOptions, selected: FrozenUse
         execution: execution.kind === "value" ? "returned" : execution.kind,
         ...(execution.kind === "value" ? { outputHash: contentHashOf(execution.value) } : {}), quality: "unverified", occurredAt: new Date(options.now()).toISOString(),
         ...(usageLessonRefs.length === 0 ? {} : { usageLessonRefs }) };
-      const saved = await recordFrozenToolUse(options, record, combined);
+      // The terminal record outlives the call's own abort: cancellation is a
+      // durable fact, and close() awaits it with the writer's backpressure.
+      const saved = await recordFrozenToolUse(options, record, new AbortController().signal);
       if (!saved.ok) options.warn(`tool_use_not_recorded:${saved.reason}:${record.useId}`);
 
       return toolOutcome(execution, options.versionId, saved.ok);

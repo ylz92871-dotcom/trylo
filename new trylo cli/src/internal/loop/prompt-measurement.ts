@@ -23,6 +23,8 @@ export type PromptBudgetBasisDecision = {
   readonly observedInputTokens?: number;
   readonly addedTokens?: number;
   readonly inputTokenObservation?: CompleteInputTokenObservation;
+  /** Automatic-maintenance estimate, distinct from the admission bound. */
+  readonly automaticTokens?: number;
 };
 
 /** Identity of the actual request a provider measured, without retaining its text. */
@@ -112,7 +114,8 @@ export function evaluatePreparedRequestBudget(request: ProviderRequest, local: n
   estimatePromptTokens: (messages: ReadonlyArray<ProviderMessage>) => number,
   nativeIdentity?: ProviderNativeRequestIdentity | null,
   estimateTextPromptTokens?: (messages: ReadonlyArray<ProviderMessage>) => number,
-  persistableInput?: PersistablePromptInputIdentity): PreparedRequestBudgetEvaluation {
+  persistableInput?: PersistablePromptInputIdentity,
+  purpose: "admission" | "automatic" = "admission"): PreparedRequestBudgetEvaluation {
   const current = capturePromptMeasurement(request, nativeIdentity, persistableInput);
   const observed = completeInputObservation(reported?.storedInputBasis?.input ?? reported?.inputTokenObservation);
   const make = (basis: PromptBudgetBasisDecision["basis"], tokens: number, reason: PromptBudgetBasisReason,
@@ -128,7 +131,8 @@ export function evaluatePreparedRequestBudget(request: ProviderRequest, local: n
 
   if (reported.storedInputBasis !== undefined) {
     const restored = evaluateStoredPromptInputBasis(request, current, reported.storedInputBasis,
-      estimatePromptTokens, estimateTextPromptTokens);
+      estimatePromptTokens, estimateTextPromptTokens,
+      purpose === "automatic" ? { currentTokens: local } : undefined);
     return restored.kind === "matched"
       ? make("server_plus_added", restored.tokens, "complete_prompt_preserved", restored.addedTokens)
       : fallback(restored.reason);
@@ -182,9 +186,34 @@ export function evaluatePreparedRequestBudget(request: ProviderRequest, local: n
     && measurement.messageDigests.every((digest, index) => digest === current.messageDigests[index])
     && (native === undefined || native.messageFieldDigests.every((digest, index) => digest === previousNative?.messageFieldDigests[index]));
 
+  // Admission keeps its conservative full replacement charge. Automatic
+  // maintenance can re-estimate the current system text instead: charging
+  // the whole new host packet on top of a count that already included the old
+  // packet repeatedly invents pressure. Keep the observed floor and every new
+  // non-system/native addition; this estimate never proves a hard overflow.
+  if (purpose === "automatic" && calibrated && !unpricedMedia
+    && added.some(index => request.messages[index]!.role === "system") && removedMeasuredSystem(current, measurement)) {
+    const nonSystem = added.filter(index => request.messages[index]!.role !== "system");
+    const messages = nonSystem.map(index => request.messages[index]!);
+    const extra = native === undefined ? estimatePromptTokens(messages)
+      : estimateTextPromptTokens!(messages) + nonSystem.reduce((sum, index) => sum + native.messageOverheadTokens[index]!, 0);
+    return make("server_plus_added", Math.max(local, observed.tokens + extra), "complete_prompt_preserved", extra);
+  }
+
   return calibrated && !unpricedMedia ? make("server_plus_added", observed.tokens + addedTokens, "complete_prompt_preserved", addedTokens,
     identicalInput ? observed.tokens : undefined)
     : make("legacy_max", Math.max(local, reported.promptTokens + addedTokens), unpricedMedia ? "unpriced_media" : "legacy_or_unknown_source", addedTokens);
+}
+
+function removedMeasuredSystem(current: PromptMeasurement, previous: PromptMeasurement): boolean {
+  const remaining = current.messageDigests.filter((_digest, index) => current.messageRoles?.[index] === "system");
+  for (const [index, role] of previous.messageRoles!.entries()) {
+    if (role !== "system") continue;
+    const match = remaining.indexOf(previous.messageDigests[index]!);
+    if (match < 0) return true;
+    remaining.splice(match, 1);
+  }
+  return false;
 }
 
 /** Output reservation/clamping changes association, never input calibration.
@@ -290,7 +319,7 @@ export function requestTokenBasis(input: CompactionInput): number {
   const wiring = input.wiring;
   if (wiring === undefined) return 0;
 
-  const messages = currentMessages(input);
+  const messages = currentPromptMessages(input);
   const local = estimateCurrentView(input, messages);
   const reported = input.reported;
   const measurement = reported?.measurement;
@@ -299,16 +328,24 @@ export function requestTokenBasis(input: CompactionInput): number {
     || measurement.toolDigest !== digestOf(input.tools === undefined ? [] : toolSpecs(input.tools))
     || !hasMeasuredPrefix(messages, measurement)) return local;
 
-  return Math.max(local, reported.promptTokens
-    + wiring.estimatePromptTokens(messages.slice(measurement.messageDigests.length)));
+  const additions = messages.slice(measurement.messageDigests.length);
+  const added = wiring.estimatePromptTokens(additions);
+  const observed = completeInputObservation(reported.inputTokenObservation);
+
+  // The unchanged measured prefix already includes its text and tool table.
+  // A byte upper bound is not a second floor on a complete provider count;
+  // using it here would re-trigger the gap immediately after fit accepted the
+  // calibrated request. Legacy/unknown usage keeps its conservative contract.
+  return observed !== undefined && hasInputIdentity(measurement) && !additions.some(hasMedia)
+    ? observed.tokens + added : Math.max(local, reported.promptTokens + added);
 }
 
 /** The exact current projection, including decorations and provider-owned overhead. */
 export function localViewBasis(input: CompactionInput): number {
-  return input.wiring === undefined ? 0 : estimateCurrentView(input, currentMessages(input));
+  return input.wiring === undefined ? 0 : estimateCurrentView(input, currentPromptMessages(input));
 }
 
-function currentMessages(input: CompactionInput): ReadonlyArray<ProviderMessage> {
+export function currentPromptMessages(input: CompactionInput): ReadonlyArray<ProviderMessage> {
   return requestMessages(promptViewMessages(input), input.seedMessages.length, {
     ...(input.tools === undefined ? {} : { tools: input.tools }),
     ...(input.systemPrompt === undefined ? {} : { systemPrompt: input.systemPrompt }),

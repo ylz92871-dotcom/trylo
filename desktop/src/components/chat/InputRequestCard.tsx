@@ -15,7 +15,7 @@
 // same card in place via the mapper.
 
 import { useState, type ReactElement } from 'react';
-import { Check, ClipboardList, Minus } from 'lucide-react';
+import { Check, Minus } from 'lucide-react';
 import type { InputRequestAnswer, InputRequestQuestion } from '../../host-adapter/input-request';
 import type { InputRequestMessage } from './types';
 
@@ -42,6 +42,11 @@ function buildAnswers(
   const out: Record<string, InputRequestAnswer> = Object.create(null);
   for (const q of questions) {
     const label = selected.get(q.id);
+    if (q.options.length === 0) {
+      const text = otherText.get(q.id)?.trim();
+      if (text) out[q.id] = { otherText: text };
+      continue;
+    }
     if (!label?.length) continue;
     const labels = label.filter(value => value !== OTHER_MARKER);
     const text = label.includes(OTHER_MARKER) ? otherText.get(q.id)?.trim() : undefined;
@@ -75,6 +80,7 @@ export function InputRequestCard(
   const allAnswered =
     m.questions.length > 0 &&
     m.questions.every((q) => {
+      if (q.options.length === 0) return (otherText.get(q.id) ?? '').trim().length > 0;
       const sel = selected.get(q.id);
       if (!sel?.length) return false;
       // "Other" only counts once non-empty free text is given.
@@ -105,19 +111,19 @@ export function InputRequestCard(
 
   return (
     <div className={`input-request-card${resolved ? ' input-request-card--resolved' : ''}`}>
-      <div className="input-request-card__head">
+      {resolved && <div className="input-request-card__head">
         {m.status === 'submitted' ? <Check size={14} aria-hidden="true" />
           : m.status === 'dismissed' ? <Minus size={14} aria-hidden="true" />
-            : <ClipboardList size={15} aria-hidden="true" />}
+            : null}
         <span className="input-request-card__title">
           {m.status === 'submitted'
             ? '已回答'
             : m.status === 'dismissed'
               ? '已跳过'
-              : '需要你确认'}
+              : '需要你的回答'}
         </span>
         {m.questions.length > 1 ? <span className="input-request-card__state">{m.questions.length} 个问题</span> : null}
-      </div>
+      </div>}
       {m.status === 'submitted' && m.answers ? (
         <ul className="input-request-card__answers">
           {m.questions.map((q) => {
@@ -147,7 +153,8 @@ export function InputRequestCard(
                 {q.options.length > 0 ? (
                   <div className="input-request-card__options" role={q.multiSelect ? 'group' : 'radiogroup'} aria-label={q.question}>
                     {q.options.map((o) => (
-                      <label key={o.label} className="input-request-card__option">
+                      <label key={o.label} className="input-request-card__option"
+                        data-selected={selected.get(q.id)?.includes(o.label) ?? false}>
                         <input
                           type={q.multiSelect ? 'checkbox' : 'radio'}
                           name={`ir-${m.requestId}-${q.id}`}
@@ -168,7 +175,8 @@ export function InputRequestCard(
                         ) : null}
                       </label>
                     ))}
-                    <label className="input-request-card__option">
+                    <label className="input-request-card__option"
+                      data-selected={selected.get(q.id)?.includes(OTHER_MARKER) ?? false}>
                       <input
                         type={q.multiSelect ? 'checkbox' : 'radio'}
                         name={`ir-${m.requestId}-${q.id}`}
@@ -191,9 +199,9 @@ export function InputRequestCard(
                     </label>
                   </div>
                 ) : (
-                  <p className="input-request-card__no-options">—</p>
+                  null
                 )}
-                {selected.get(q.id)?.includes(OTHER_MARKER) ? (
+                {q.options.length === 0 || selected.get(q.id)?.includes(OTHER_MARKER) ? (
                   <textarea
                     className="input-request-card__other"
                     aria-label={`${q.question} — 自定义回答`}
@@ -210,16 +218,8 @@ export function InputRequestCard(
               </li>
             ))}
           </ul>
-          {error ? <p role="alert">{error}</p> : null}
+          {error ? <p className="input-request-card__error" role="alert">{error}</p> : null}
           <div className="input-request-card__actions">
-            <button
-              type="button"
-              className="input-request-card__btn input-request-card__btn--submit"
-              onClick={() => submit('submitted')}
-              disabled={submitting || !props.onRespond || !allAnswered}
-            >
-              {submitting ? '正在发送…' : '提交回答'}
-            </button>
             <button
               type="button"
               className="input-request-card__btn input-request-card__btn--dismiss"
@@ -227,6 +227,14 @@ export function InputRequestCard(
               disabled={submitting || !props.onRespond}
             >
               跳过
+            </button>
+            <button
+              type="button"
+              className="input-request-card__btn input-request-card__btn--submit"
+              onClick={() => submit('submitted')}
+              disabled={submitting || !props.onRespond || !allAnswered}
+            >
+              {submitting ? '正在发送…' : '提交回答'}
             </button>
           </div>
         </>

@@ -6,6 +6,21 @@ import { promptViewMessages } from "./prompt-view.js";
 
 const checksum = "b5197f04e582c7cb783b70915cf92528c92c7f727c4ba865ae980019303a886d";
 
+test("discovery schemas and binary transport do not become permanently pinned verification facts", () => {
+  const items: TranscriptItem[] = [{ kind: "user", sequence: 0, text: "Create the deliverable and retain its checksum." }];
+  items.push({ kind: "tool_call", sequence: 1, toolCallId: "discovery", name: "mcp_search_tools", arguments: {} },
+    { kind: "tool_result", sequence: 2, toolCallId: "discovery", name: "mcp_search_tools", outcome: "succeeded", truncated: false,
+      output: JSON.stringify({ status: "ready", tools: [{ name: "OLD_DISCOVERY_SCHEMA", inputSchema: { description: "schema ".repeat(1000) } }] }) });
+  exchange(items, "artifact", JSON.stringify({ artifact: "scene.png", checksum, dataUrl: "data:image/png;base64,INLINE_BINARY_TRANSPORT",
+    inputSchema: { description: "NON_FACT_SCHEMA" } }));
+  items.push({ kind: "user", sequence: items.length, text: "Continue from the saved deliverable." });
+  const visible = promptViewMessages(compacted(items)).map(message => message.content).join("\n");
+  assert.ok(visible.includes(checksum) && visible.includes("scene.png"));
+  assert.equal(visible.includes("OLD_DISCOVERY_SCHEMA"), false);
+  assert.equal(visible.includes("INLINE_BINARY_TRANSPORT"), false);
+  assert.equal(visible.includes("NON_FACT_SCHEMA"), false);
+});
+
 function exchange(items: TranscriptItem[], id: string, output: string, outcome: "succeeded" | "failed" = "succeeded", truncated = false): void {
   items.push({ kind: "tool_call", sequence: items.length, toolCallId: id, name: "read_file", arguments: { path: `${id}.json` } });
   items.push({ kind: "tool_result", sequence: items.length, toolCallId: id, name: "read_file", output, outcome, truncated });

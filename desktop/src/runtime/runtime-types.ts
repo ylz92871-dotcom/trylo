@@ -19,6 +19,7 @@ import type { CentralRuntimePolicy } from '../host-adapter/trylo-v1-runner'
  * settings store shape.
  */
 export interface SettingsForCodeRun {
+  readonly mediaGeneration?: import('../settings/media-generation').MediaGenerationSettings
   readonly cliPath: FilePath
   readonly cwd: FilePath
   /**

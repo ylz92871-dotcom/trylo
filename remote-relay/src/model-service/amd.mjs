@@ -1,4 +1,5 @@
 import { quotaError } from './quota.mjs';
+import { parseBoundedJson } from '../bounded-json.mjs';
 export const AMD_BASE = 'https://developer.amd.com.cn/radeon/api/v1';
 const fail = (status, message, code = 'upstream_unavailable') => { throw quotaError(status, message, code); };
 export function isAmdSource(source) {
@@ -15,12 +16,25 @@ export function normalizeAmdModels(data) {
     return { id: item.id, outputs, chat: outputs.includes('text'), streaming: providers.some(p => p.streaming === true), vision: providers.some(p => p.vision === true), tools: providers.some(p => p.tools === true), contextLength: Number.isSafeInteger(item.context_length) ? item.context_length : 0 };
   });
 }
+function providerJson(text, secret) {
+  // JSON escapes are decoded before redaction: scanning the wire text misses
+  // credentials echoed as e.g. "\u0073...". Never trust provider key names either.
+  let remaining = 100000;
+  function clean(value, depth = 0) {
+    if (--remaining < 0 || depth > 128) fail(502, 'AMD 返回内容结构超过限制。');
+    if (typeof value === 'string') return value.replaceAll(secret, '[redacted]');
+    if (!value || typeof value !== 'object') return value;
+    if (Array.isArray(value)) return value.map(item => clean(item, depth + 1));
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key.replaceAll(secret, '[redacted]'), clean(item, depth + 1)]));
+  }
+  return clean(parseBoundedJson(text));
+}
 async function boundedJson(response, secret, max = 4 * 1024 * 1024) {
   if (!response.body) fail(502, 'AMD 返回了空响应。');
   const reader = response.body.getReader(); const chunks = []; let bytes = 0;
   try {
     for (;;) { const next = await reader.read(); if (next.done) break; bytes += next.value.length; if (bytes > max) fail(502, 'AMD 返回内容超过限制。'); chunks.push(Buffer.from(next.value)); }
-    return JSON.parse(Buffer.concat(chunks).toString('utf8').replaceAll(secret, '[redacted]'));
+    return providerJson(Buffer.concat(chunks).toString('utf8'), secret);
   } catch (error) { if (error.status) throw error; fail(502, 'AMD 返回内容无法解析。'); }
   finally { await reader.cancel().catch(() => {}); }
 }
@@ -64,8 +78,8 @@ export function createAmdExecutor({ vault, transport = fetch, now = Date.now }) 
       if (!Array.isArray(payload.messages) || !payload.messages.length || payload.messages.length > 2048 || payload.messages.some(message => !message || !['system', 'developer', 'user', 'assistant', 'tool'].includes(message.role) || !(typeof message.content === 'string' || Array.isArray(message.content) || (message.role === 'assistant' && Array.isArray(message.tool_calls))))) fail(400, '请提供有效的聊天消息（最多 2048 条）。');
     if (payload.model !== undefined || payload.n !== undefined && payload.n !== 1 || payload.stream !== undefined && typeof payload.stream !== 'boolean') fail(400, '模型由授权决定，单次请求只生成一个回答。');
     if (payload.stream && (!streaming || !info.streaming)) fail(400, '当前请求不支持流式返回。');
-    const allowance = payload.max_tokens ?? payload.max_completion_tokens ?? 2048;
-    if (!Number.isSafeInteger(allowance) || allowance < 1 || allowance > 8192) fail(400, '单次输出上限必须为 1–8192 Token。');
+    const allowance = payload.max_tokens ?? payload.max_completion_tokens;
+    if (allowance !== undefined && (!Number.isSafeInteger(allowance) || allowance < 1)) fail(400, '显式输出额度必须为正安全整数。');
     // The CLI carries base instructions, workspace rules and context notes as
     // separate system messages. AMD accepts one system block at the front.
     // Preserve every instruction in order, without changing the chat/tool order.
@@ -75,7 +89,7 @@ export function createAmdExecutor({ vault, transport = fetch, now = Date.now }) 
       return message.content.map(part => part.text).join('\n');
     });
     const messages = [...(instructions.length ? [{ role: 'system', content: instructions.join('\n\n') }] : []), ...payload.messages.filter(message => !['system', 'developer'].includes(message.role))];
-    const result = { messages, model, max_tokens: allowance, stream: Boolean(payload.stream) };
+    const result = { messages, model, ...(allowance === undefined ? {} : { max_tokens: allowance }), stream: Boolean(payload.stream) };
     for (const name of ['temperature', 'top_p', 'stop', 'response_format', 'tools', 'tool_choice', 'reasoning_effort']) if (payload[name] !== undefined) result[name] = payload[name];
     if (result.tools && !info.tools) fail(400, '该模型未声明工具调用能力。', 'model_capability');
     if (result.stream) result.stream_options = { include_usage: true };
@@ -109,11 +123,10 @@ export function createAmdExecutor({ vault, transport = fetch, now = Date.now }) 
         return { value, units: 1 };
       }
       if (!response.headers.get('content-type')?.includes('text/event-stream') || !response.body) fail(502, 'AMD 未返回流式事件。');
-      const reader = response.body.getReader(), decoder = new TextDecoder(); let buffer = '', bytes = 0, done = false;
+      const reader = response.body.getReader(), decoder = new TextDecoder(); let buffer = '', done = false;
       try {
         for (;;) {
           const next = await reader.read(); if (next.done) break;
-          bytes += next.value.length; if (bytes > 4 * 1024 * 1024) fail(502, 'AMD 流式响应超过限制。');
           buffer = (buffer + decoder.decode(next.value, { stream: true })).replace(/\r\n/g, '\n');
           let boundary;
           while ((boundary = buffer.indexOf('\n\n')) >= 0) {
@@ -121,7 +134,7 @@ export function createAmdExecutor({ vault, transport = fetch, now = Date.now }) 
             const data = event.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n');
             if (!data) continue;
             if (data === '[DONE]') { done = true; break; }
-            let value; try { value = JSON.parse(data.replaceAll(secret, '[redacted]')); } catch { fail(502, 'AMD 流式事件无法解析。'); }
+            let value; try { value = providerJson(data, secret); } catch { fail(502, 'AMD 流式事件无法解析。'); }
             if (value.error) throw Object.assign(quotaError(502, 'AMD 拒绝了聊天请求，请检查模型能力与请求格式。', 'upstream_rejected'), { requestFinished: true });
             if (!Array.isArray(value.choices)) fail(502, 'AMD 流式请求未完成。');
             await onChunk(value);

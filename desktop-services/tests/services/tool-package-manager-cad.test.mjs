@@ -499,6 +499,8 @@ describe('shipped CAD/EDA manifests + work.cad.v1 composition', () => {
       conversationId: 'conv-cad',
     });
     assert.equal(resolved.ok, true, resolved.error ?? '');
+    // Host-owned capabilities (model preview, software workspace) compose
+    // alongside the six adapters without a host application install.
     assert.deepEqual([...resolved.serverNames].sort(), [
       'trylo-autocad',
       'trylo-blender',
@@ -506,21 +508,23 @@ describe('shipped CAD/EDA manifests + work.cad.v1 composition', () => {
       'trylo-jlceda',
       'trylo-kicad',
       'trylo-office',
+      'trylo-preview',
+      'trylo-software',
       'trylo-solidworks',
       'trylo-windows',
     ]);
-    // {installDir} token: the solidworks source entry resolves inside the
-    // override's install dir.
+    // Placement: SOLIDWORKS rides the conversation's software workspace relay.
+    // Its {installDir}-expanded spec travels inside the relay and is pinned by
+    // software-workspace-profile.test.mjs.
     const swCommand = resolved.mcpConfigPath
       ? JSON.parse(fs.readFileSync(resolved.mcpConfigPath, 'utf8')).mcpServers['trylo-solidworks']
       : null;
     assert.ok(swCommand);
-    // The manifest's sourceEntry uses forward slashes; Windows accepts both,
-    // so compare resolved (normalized) paths.
-    assert.equal(
-      path.resolve(swCommand.args[0]),
-      path.resolve(path.join(swDir, 'mcp-server', 'server.py')),
-    );
+    assert.equal(swCommand.command, process.execPath);
+    assert.ok(swCommand.args[0].endsWith('host.mjs'));
+    assert.equal(swCommand.args[1], '--software-workspace-mcp');
+    assert.match(swCommand.args[2], /^http:\/\/127\.0\.0\.1:\d+\/[0-9a-f]{64}$/);
+    assert.equal(swCommand.args[3], 'solidworks-mcp');
     assert.ok(resolved.cliArgs.includes('--strict-mcp-config'));
     tooling.dispose();
   });

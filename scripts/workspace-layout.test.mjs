@@ -49,3 +49,14 @@ test('missing or uninspected pending entries cannot silently become clean', t =>
     assert.match(result.violations[0].reason, /absent or outside inspected/);
   }
 });
+
+test('a revived native state exception preserves only that state, not its parent or siblings', t => {
+  const { root, file } = fixture(t);
+  file('Temp/desktop-native-proof-20261003/.trylo/conversations.v1.json');
+  file('Temp/desktop-native-proof-20261003/other.log');
+  file('Temp/new-output/result.json');
+  const exception = { path: 'Temp/desktop-native-proof-20261003/.trylo', reason: 'Existing private state; writer unconfirmed', evidence: '_workspace/tasks/native-state.json' };
+  const result = inspectWorkspaceLayout(root, [exception]);
+  assert.deepEqual(result.pending, [exception]);
+  assert.deepEqual(result.violations.map(item => item.path).sort(), ['Temp/desktop-native-proof-20261003/other.log', 'Temp/new-output']);
+});

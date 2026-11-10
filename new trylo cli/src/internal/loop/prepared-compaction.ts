@@ -8,6 +8,12 @@ import { toolSpecs } from "./request.js";
 export function preparedCompaction(wiring: CompactionWiring, snapshot: ProviderRequestPreparation,
   base: ProviderRequest): CompactionWiring {
   return { ...wiring,
+    ...(wiring.estimateAutomaticTokens === undefined ? {} : {
+      estimateAutomaticTokens: (messages, tools) => {
+        const request = snapshot.apply({ ...base, messages, tools });
+        return wiring.estimateAutomaticTokens!(request.messages, request.tools);
+      },
+    }),
     estimatePromptTokens: messages => wiring.estimatePromptTokens(snapshot.apply({ ...base, messages }).messages),
     estimateOverheadTokens: tools => {
       const request = snapshot.apply({ ...base, tools: toolSpecs(tools) });

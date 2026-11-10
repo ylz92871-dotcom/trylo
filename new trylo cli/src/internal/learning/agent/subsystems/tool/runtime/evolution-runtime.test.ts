@@ -63,16 +63,24 @@ test("tool evolution rejects duplicate check identities pretending to cover ever
   assert.equal(result.kind, "failed");
 });
 
-test("tool evolution cancels a background task after an observation timeout", async () => {
+test("observation windows keep the same task alive until the runner's governance answer", async () => {
   let cancelled = 0;
+  let waits = 0;
   const worker: ToolRunnerPort = { ...runner(), cancel: async () => {
     cancelled += 1;
     return true;
   },
-    wait: async taskId => ({ taskId, observed: "timeout", status: "running" }) };
+    wait: async taskId => {
+      waits += 1;
+      return waits === 1
+        ? { taskId, observed: "timeout", status: "running" }
+        : { taskId, observed: "terminal", status: "failed", error: { code: "generation_timeout", message: "governance deadline reached" } };
+    } };
   const result = await createToolEvolutionRuntime({ runner: worker, verifier: passing, archive, now: () => 0 }).evolve(request, new AbortController().signal);
   assert.equal(result.kind, "failed");
-  assert.equal(cancelled, 1);
+  if (result.kind === "failed") assert.equal(result.code, "generation_timeout");
+  assert.equal(waits, 2);
+  assert.equal(cancelled, 0);
 });
 
 test("tool evolution never archives a failed generalization", async () => {

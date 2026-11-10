@@ -9,6 +9,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { AlertCircle, Ban, ChevronRight, Clock3, FileEdit, FileText, Globe, Hand, Keyboard, Loader, MousePointer2, ScanEye, Search, Terminal, Wrench, type LucideIcon } from 'lucide-react';
 import { ToolCard } from './ToolCard';
+import { GeneratedMediaPreview } from './GeneratedMediaPreview';
 import { useConversationDisclosure } from './conversation-disclosure';
 import { FileChangeCards } from './FileChangeCard';
 import { EventReasoningNote } from './EventReasoningNote';
@@ -235,7 +236,7 @@ function CodeReasoningTranscriptImpl(
                   <div key={entry.id} className="code-reasoning__tool">
                     {computeFileChanges(entry.tool, entry.input, entry.outputContent).length > 0
                       ? <FileChangeCards variant="event" message={entry} workspacePath={props.workspacePath} onOpenFile={props.onOpenArtifact} />
-                      : <ToolCard variant="event" message={entry} />}
+                      : <ToolCard variant="event" message={entry} workspacePath={props.workspacePath} />}
                   </div>
                 );
               }
@@ -246,6 +247,7 @@ function CodeReasoningTranscriptImpl(
           </div>
         </div>
       </div>
+      {!expanded && props.entries.map(entry => entry.kind === 'tool' ? <GeneratedMediaPreview key={entry.id} message={entry} workspacePath={props.workspacePath} /> : null)}
     </section>
   );
 }

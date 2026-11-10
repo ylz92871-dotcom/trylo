@@ -10,7 +10,8 @@ type StoredBudgetEvaluation = { readonly kind: "matched"; readonly tokens: numbe
  * subsequence. The active turn's original array matcher remains unchanged. */
 export function evaluateStoredPromptInputBasis(request: ProviderRequest, current: PromptMeasurement,
   stored: StoredPromptInputBasisV1, estimatePromptTokens: (messages: readonly ProviderMessage[]) => number,
-  estimateTextPromptTokens?: (messages: readonly ProviderMessage[]) => number): StoredBudgetEvaluation {
+  estimateTextPromptTokens?: (messages: readonly ProviderMessage[]) => number,
+  automatic?: { readonly currentTokens: number }): StoredBudgetEvaluation {
   const no = (reason: PromptBudgetBasisReason): StoredBudgetEvaluation => ({ kind: "unavailable", reason });
 
   if (!isStoredPromptInputBasisV1(stored)) return no("invalid_report");
@@ -51,9 +52,14 @@ export function evaluateStoredPromptInputBasis(request: ProviderRequest, current
   const messages = added.map(index => request.messages[index]!);
   if (messages.some(message => (message.attachments?.length ?? 0) > 0 || (message.imageReferences?.length ?? 0) > 0)) return no("unpriced_media");
 
-  const addedTokens = messages.length === 0 ? 0 : native === undefined ? estimatePromptTokens(messages)
-    : estimateTextPromptTokens!(messages) + added.reduce((sum, index) => sum + native.messageOverheadTokens[index]!, 0);
-  const tokens = stored.input.tokens + addedTokens;
+  const price = (indices: readonly number[]) => indices.length === 0 ? 0 : native === undefined
+    ? estimatePromptTokens(indices.map(index => request.messages[index]!))
+    : estimateTextPromptTokens!(indices.map(index => request.messages[index]!)) + indices.reduce((sum, index) => sum + native.messageOverheadTokens[index]!, 0);
+  // The compact proof cannot reconstruct old system text. Admission keeps
+  // charging the replacement in full; automatic maintenance re-estimates the
+  // current presentation while retaining the observed input/history floor.
+  const addedTokens = price(automatic !== undefined && !sameSystems ? history.slice(stored.nonSystem.count) : added);
+  const tokens = Math.max(stored.input.tokens + addedTokens, automatic !== undefined && !sameSystems ? automatic.currentTokens : 0);
   if (!Number.isSafeInteger(addedTokens) || addedTokens < 0 || !Number.isSafeInteger(tokens)) return no("invalid_report");
 
   return { kind: "matched", tokens, addedTokens };

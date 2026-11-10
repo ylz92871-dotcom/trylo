@@ -69,7 +69,8 @@ export type CompactionLedger = {
   window: CompactWindow | undefined;
   /** The resumed turn's window, held in this numbering. Undefined when not resuming. */
   resumed: ResumedCompaction | undefined;
-  /** Refused or ineffective authoring disables further automatic probes this turn. */
+  /** Refused/ineffective authoring latches the current pressure episode.
+   * A fresh final-request forecast below the trigger rearms it for new growth. */
   attempted: boolean;
 };
 

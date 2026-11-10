@@ -8,6 +8,7 @@ const consoleRoot = new URL('../../trylocode-site/console/', import.meta.url);
 const adminSource = await fs.readFile(new URL('admin/app.js', consoleRoot), 'utf8');
 const apiSource = await fs.readFile(new URL('shared/api.js', consoleRoot), 'utf8');
 const uiSource = await fs.readFile(new URL('shared/ui.js', consoleRoot), 'utf8');
+const mfaSource = await fs.readFile(new URL('shared/mfa.js', consoleRoot), 'utf8');
 const response = (data, status = 200) => ({ ok: status < 400, status, json: async () => data });
 async function until(check) {
   for (let i = 0; i < 100; i++) { if (check()) return; await new Promise(resolve => setTimeout(resolve, 10)); }
@@ -29,7 +30,7 @@ async function fixture(t, post) {
       '/api/admin/audit': { records: [] },
     }[url]);
   };
-  window.eval(`${uiSource.replaceAll('export ', '')}\nconst e = escape;\n${apiSource.replace('export ', '')}\n${adminSource.replace(/^import .*;\r?\n/gm, '')}`);
+  window.eval(`${uiSource.replaceAll('export ', '')}\nconst e = escape;\n${apiSource.replace('export ', '')}\n${mfaSource.replace(/^import .*;\r?\n/gm, '').replaceAll('export ', '')}\n${adminSource.replace(/^import .*;\r?\n/gm, '')}`);
   const doc = window.document;
   await until(() => doc.querySelector('[data-action="new"]'));
   doc.querySelector('[data-action="new"]').click();

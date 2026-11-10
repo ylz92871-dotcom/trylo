@@ -8,6 +8,15 @@ const audit = { at: 1, profileId: 'fixture', packageId: 'fixture', toolName: inp
   behavior: 'prompt' as const, risk: 'external' as const, reasonCode: 'external_effect', inputDigest: 'fixture', pathZones: [] };
 
 describe('final Code tool policy shared by both CLI runtimes', () => {
+  it('media tools preserve all four selected modes instead of inventing another approval policy', () => {
+    for (const toolName of ['image_generate', 'video_generate', 'video_get_result']) {
+      for (const permissionLevel of ['read_only', 'ask', 'workspace_write', 'unrestricted'] as const) {
+        expect(resolveCodeToolPolicy({ ...input, toolName, permissionLevel }, { behavior: 'unmanaged' })).toMatchObject({
+          behavior: permissionLevel === 'read_only' ? 'deny' : permissionLevel === 'unrestricted' ? 'auto_allow' : 'prompt',
+        });
+      }
+    }
+  });
   it('approval previews identify external targets and exact shell commands without file contents', () => {
     const file = resolveCodeToolPolicy({ ...input, permissionLevel: 'ask', toolName: 'write_file',
       input: { path: 'D:/outside/report.txt', content: 'private proposed content' } }, { behavior: 'unmanaged' });

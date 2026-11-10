@@ -25,6 +25,7 @@ export interface WatchRestoredConversationInput {
   readonly expectedRun?: () => PersistedRecoveryRun | undefined
   readonly onRecovered: (receipt: ConversationOutputRecovery) => void | Promise<void>
   readonly onError: (error: unknown) => void
+  readonly onReady?: () => void
 }
 
 const observers = new Map<string, () => void>()
@@ -91,6 +92,7 @@ export function watchRestoredConversation(input: WatchRestoredConversationInput)
           'detached'
       }
       lastError = undefined
+      input.onReady?.()
     } catch (error) {
       if (disposed) return
       retry = true

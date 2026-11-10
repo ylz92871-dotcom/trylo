@@ -62,7 +62,10 @@ test("a Board skill reaches the existing CLI catalog and skill tool; only load r
     const catalog = wired.catalog;
 
     assert.ok(catalog);
-    const descriptor = catalog.list()[0];
+    // The bundled browser-media-creation skill shares this catalog and lists
+    // before the Board entries, so the learned skill is selected by origin
+    // rather than by position. This fixture's temp roots hold no other skill.
+    const descriptor = catalog.list().find(entry => entry.source !== "builtin");
 
     assert.ok(descriptor);
     assert.equal(loads.length, 0);

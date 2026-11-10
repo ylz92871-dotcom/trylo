@@ -86,6 +86,10 @@ async function waitForReady(ensureReady: ToolingFacadeOptions['ensureReady'], si
 
 export function createToolingFacade(client: ServicesClient, readiness: ToolingFacadeOptions = {}) {
   return {
+    async softwareWorkspace(params: import('./software-workspace-types').SoftwareCommand) {
+      await waitForReady(readiness.ensureReady);
+      return client.request('tooling.softwareWorkspace', params);
+    },
     // Subscribe during effect setup, not facade construction in render.
     // StrictMode discards a render and replays setup/cleanup; each setup
     // must attach to the committed client and return its own cleanup.

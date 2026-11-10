@@ -23,6 +23,34 @@ export function patchAutocadComSource(source) {
   // A system variable belongs to that document, never AcadApplication.
   result = result.replace(/\bapp\.(GetVariable|SetVariable)\(/g, 'doc.$1(');
 
+  // Documents.Add has already committed when its following Name/FullName
+  // reads get rejected during startup. Preserve that known write and expose
+  // pending metadata instead of inviting a duplicate drawing on retry.
+  result = result.replace(`            return {"ok": True, "name": doc.Name}
+
+        result = await self._run(_sync)
+        await self._ensure_document_state()
+        return result`, `            result = {"ok": True}
+            try:
+                result["name"] = doc.Name
+            except _COM_ERROR + (AttributeError,) as exc:
+                result["metadata_pending"] = True
+                result["metadata_error"] = str(exc)
+            return result
+
+        result = await self._run(_sync)
+        self._document_scope_key = None
+        self._transaction_active = False
+        self._reset_document_state()
+        try:
+            await self._ensure_document_state()
+        except _COM_ERROR + (AttributeError, RuntimeError) as exc:
+            result["metadata_pending"] = True
+            result["metadata_error"] = str(exc)
+        return result`);
+  result = result.replaceAll('except (_COM_ERROR, AttributeError) as exc:', 'except _COM_ERROR + (AttributeError,) as exc:')
+    .replaceAll('except (_COM_ERROR, AttributeError, RuntimeError) as exc:', 'except _COM_ERROR + (AttributeError, RuntimeError) as exc:');
+
   if (!result.includes('def _trylo_require_com_ready(')) {
     result = result.replace('def _acad_doc():', `def _trylo_require_com_ready(app):
     """Preserve busy state before dynamic dispatch masks it as AttributeError."""

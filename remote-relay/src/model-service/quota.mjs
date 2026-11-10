@@ -84,8 +84,9 @@ export async function createModelQuota({ store, now = Date.now, globalConcurrenc
     if (!grant || grant.userId !== userId || grant.upstreamId !== source.id || grant.revoked || grant.expiresAtMs <= now() || !grant.models.includes(model)) fail(403, '该账号没有有效的模型授权。', 'grant_unavailable');
     return { source, grant };
   }
-  async function saveUpstream(value, actor) {
+  async function saveUpstream(value, actor, authorize) {
     return store.sqlWrite(db => {
+      authorize?.();
       if (!value || typeof value !== 'object' || Array.isArray(value)) fail(400, '上游配置格式无效。');
       if (value.apiKey || value.secret || value.accessToken) fail(400, '当前只配置配额；真实密钥随上游适配器接入。', 'credentials_unavailable');
       const existing = value.id ? lookup(db, 'model_upstreams', value.id) : null;
@@ -106,8 +107,9 @@ export async function createModelQuota({ store, now = Date.now, globalConcurrenc
       put(db, 'model_upstreams', item); audit(db, actor, existing ? 'model.upstream.update' : 'model.upstream.create', item.id); return item.id;
     });
   }
-  async function saveGrant(value, actor) {
+  async function saveGrant(value, actor, authorize) {
     return store.sqlWrite(db => {
+      authorize?.();
       if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.userId !== 'string' || typeof value.upstreamId !== 'string') fail(400, '授权配置格式无效。');
       const existing = value.id ? lookup(db, 'model_grants', value.id) : null;
       if (value.id && !existing) fail(404, '授权不存在。');
@@ -129,12 +131,13 @@ export async function createModelQuota({ store, now = Date.now, globalConcurrenc
       put(db, 'model_grants', item); audit(db, actor, existing ? 'model.grant.update' : 'model.grant.create', item.id); return item.id;
     });
   }
-  async function reserve({ userId, upstreamId, model, requestKey, fingerprint, units, timeoutMs = 120000 }) {
+  async function reserve({ userId, upstreamId, model, requestKey, fingerprint, units, timeoutMs = 120000, authorize }) {
     integer(units, '预占额度'); integer(timeoutMs, '请求时限', 300000);
     if (typeof requestKey !== 'string' || !/^[a-zA-Z0-9_-]{16,128}$/.test(requestKey) || typeof fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(fingerprint)) fail(400, '请求标识无效。');
     // Commit stale-operation accounting even when the new admission is denied.
     await store.sqlWrite(recoverExpired);
     return store.sqlWrite(db => {
+      authorize?.();
       const { source, grant } = eligibility(db, userId, upstreamId, model);
       if (source.unit === 'requests' && units !== 1) fail(400, '次数配额每次调用必须预占 1 次。');
       const prior = db.prepare('SELECT id,fingerprint,status FROM model_requests WHERE user_id=? AND request_key=?').get(userId, requestKey);
@@ -149,12 +152,20 @@ export async function createModelQuota({ store, now = Date.now, globalConcurrenc
       return item;
     });
   }
-  async function dispatch(id) {
+  async function dispatch(id, authorize) {
     return store.sqlWrite(db => {
+      authorize?.();
       const item = db.prepare('SELECT * FROM model_requests WHERE id=?').get(id);
       if (!item || item.status !== 'reserved' || item.deadline_at <= now()) fail(409, '预占已失效。');
       eligibility(db, item.user_id, item.upstream_id, item.model, item.grant_id);
       db.prepare("UPDATE model_requests SET status='dispatched' WHERE id=?").run(id);
+    });
+  }
+  async function renew(id, timeoutMs = 120000) {
+    integer(timeoutMs, '记账租约', 300000);
+    return store.sqlWrite(db => {
+      const result = db.prepare("UPDATE model_requests SET deadline_at=? WHERE id=? AND status='dispatched'").run(now() + timeoutMs, id);
+      return result.changes === 1;
     });
   }
   async function release(id, knownUnsent = false) {
@@ -163,9 +174,10 @@ export async function createModelQuota({ store, now = Date.now, globalConcurrenc
   async function uncertain(id) {
     return store.sqlWrite(db => { db.prepare("UPDATE model_requests SET status='uncertain',charged_units=reserved_units,settled_at=? WHERE id=? AND status='dispatched'").run(now(), id); });
   }
-  async function settle(id, units, { reconcile = false, actor, reason } = {}) {
+  async function settle(id, units, { reconcile = false, actor, reason, authorize } = {}) {
     if (!Number.isSafeInteger(units) || units < 0 || units > 1000000000) fail(400, '结算用量无效。');
     return store.sqlWrite(db => {
+      authorize?.();
       if (reconcile && (!users(db).some(user => user.id === actor && user.role === 'admin' && !user.disabled) || typeof reason !== 'string' || reason.trim().length < 8 || reason.length > 300)) fail(400, '核对结算需要管理员身份和至少 8 字的依据说明。');
       const item = db.prepare('SELECT * FROM model_requests WHERE id=?').get(id);
       if (!item) fail(404, '请求不存在。');
@@ -183,13 +195,13 @@ export async function createModelQuota({ store, now = Date.now, globalConcurrenc
     });
   }
   return {
-    snapshot, reserve, dispatch, release, uncertain, settle, recoverAfterRestart,
-    async setCatalog(id, catalog, actor) { await store.sqlWrite(db => { const item = lookup(db, 'model_upstreams', id); if (!item) fail(404, '上游不存在。'); item.models = cleanModels(catalog.map(model => model.id)); item.catalog = catalog; item.catalogSyncedAt = now(); item.updatedAt = now(); put(db, 'model_upstreams', item); audit(db, actor, 'model.catalog.sync', id); }); return snapshot(); },
+    snapshot, reserve, dispatch, renew, release, uncertain, settle, recoverAfterRestart,
+    async setCatalog(id, catalog, actor, authorize) { await store.sqlWrite(db => { authorize?.(); const item = lookup(db, 'model_upstreams', id); if (!item) fail(404, '上游不存在。'); item.models = cleanModels(catalog.map(model => model.id)); item.catalog = catalog; item.catalogSyncedAt = now(); item.updatedAt = now(); put(db, 'model_upstreams', item); audit(db, actor, 'model.catalog.sync', id); }); return snapshot(); },
     async credentialAudit(id, actor) { await store.sqlWrite(db => audit(db, actor, 'model.credential.update', id)); },
-    async saveUpstream(value, actor) { await saveUpstream(value, actor); return snapshot(); },
-    async saveGrant(value, actor) { await saveGrant(value, actor); return snapshot(); },
-    async setEnabled(id, enabled, actor) { if (typeof enabled !== 'boolean') fail(400, '启停状态无效。'); await store.sqlWrite(db => { const item = lookup(db, 'model_upstreams', id); if (!item) fail(404, '上游不存在。'); item.enabled = enabled; item.updatedAt = now(); item.actor = actor; put(db, 'model_upstreams', item); audit(db, actor, enabled ? 'model.upstream.enable' : 'model.upstream.pause', id); }); return snapshot(); },
-    async revoke(id, actor) { await store.sqlWrite(db => { const item = lookup(db, 'model_grants', id); if (!item) fail(404, '授权不存在。'); item.revoked = true; item.updatedAt = now(); item.actor = actor; put(db, 'model_grants', item); audit(db, actor, 'model.grant.revoke', id); }); return snapshot(); },
+    async saveUpstream(value, actor, authorize) { await saveUpstream(value, actor, authorize); return snapshot(); },
+    async saveGrant(value, actor, authorize) { await saveGrant(value, actor, authorize); return snapshot(); },
+    async setEnabled(id, enabled, actor, authorize) { if (typeof enabled !== 'boolean') fail(400, '启停状态无效。'); await store.sqlWrite(db => { authorize?.(); const item = lookup(db, 'model_upstreams', id); if (!item) fail(404, '上游不存在。'); item.enabled = enabled; item.updatedAt = now(); item.actor = actor; put(db, 'model_upstreams', item); audit(db, actor, enabled ? 'model.upstream.enable' : 'model.upstream.pause', id); }); return snapshot(); },
+    async revoke(id, actor, authorize) { await store.sqlWrite(db => { authorize?.(); const item = lookup(db, 'model_grants', id); if (!item) fail(404, '授权不存在。'); item.revoked = true; item.updatedAt = now(); item.actor = actor; put(db, 'model_grants', item); audit(db, actor, 'model.grant.revoke', id); }); return snapshot(); },
     userQuotas(userId) { return store.sqlRead(db => { requireUser(db, userId); return { quotas: list(db, 'model_grants').filter(item => item.userId === userId).map(item => { const source = lookup(db, 'model_upstreams', item.upstreamId); const { actor, ...view } = grantView(db, item); return { ...view, upstreamName: source.name, models: view.models.filter(model => source.models.includes(model)) }; }), executionEnabled: false, resetTimezone: 'Asia/Shanghai' }; }); },
     requests(userId) { return store.sqlRead(db => db.prepare(`SELECT id,user_id userId,upstream_id upstreamId,grant_id grantId,model,unit,reserved_units reserved,charged_units used,status,created_at createdAt,settled_at settledAt,reconciled_by reconciledBy,reconciliation_reason reconciliationReason FROM model_requests ${userId ? 'WHERE user_id=?' : ''} ORDER BY rowid DESC LIMIT 200`).all(...(userId ? [userId] : []))); },
     source(id) { return store.sqlRead(db => lookup(db, 'model_upstreams', id)); },

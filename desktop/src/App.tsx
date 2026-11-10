@@ -1396,6 +1396,10 @@ function App({
               : [...previous, notice]
           })
         },
+        onReady: () => updateMessagesAt(root, conversationId, previous => {
+          const id = 'conversation-output-recovery:' + conversationId
+          return previous.some(message => message.id === id) ? previous.filter(message => message.id !== id) : previous
+        }),
       }),
     )
     return () => {

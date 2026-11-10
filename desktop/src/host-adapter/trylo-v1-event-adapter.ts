@@ -17,7 +17,7 @@
 //   3. Optional tool input is projected when present. Old streams without
 //      it still work; missing duration and tool lists are never guessed.
 
-import type { LoopEvent } from './loop-events';
+import type { LoopEvent, RuntimeWarningEvent } from './loop-events';
 import { FILE_MUTATION_SCHEMA } from '../tooling/file-mutation-facts';
 import { ROUTING_RECEIPT_SCHEMA } from '../domain/routing-receipt';
 import { parseCliV1Event, type CliV1Event, type CliV1Rejected, type CliV1Usage } from './trylo-v1-protocol';
@@ -25,12 +25,17 @@ import { desktopV1Tool } from './trylo-v1-tool';
 import { ThinkScrubber } from './think-scrubber';
 import { thinkingSummary } from './thinking-summary';
 import { summarizeStderr, describeV1Rejections } from './trylo-v1-diagnostics';
+import type { RecoverableProcess } from './process-service';
+import { processRecoveryIdentityKey } from './process-recovery-identity';
+import { hashIdentity } from '../tooling/runtime-fingerprint';
 export { summarizeStderr } from './trylo-v1-diagnostics';
 
 /** Why a run ended. `unknown` is the honest answer when we can't tell. */
 export type TryloV1Outcome = 'completed' | 'failed' | 'cancelled' | 'unknown';
 
 export interface TryloV1ExitInfo {
+  /** Existing native owner, shared by live delivery and retained output replay. */
+  readonly nativeAttempt?: RecoverableProcess;
   /** Process exit code; null when the wait failed / was signalled. */
   readonly exitCode: number | null;
   /** stderr lines captured on the separate channel (spec §4.2). */
@@ -48,6 +53,15 @@ export interface TryloV1RunSummary {
   readonly usage: CliV1Usage | null;
   /** Null until an authoritative `run_result` was consumed. */
   readonly outcome: TryloV1Outcome | null;
+}
+
+function nativeExitWarningId(attempt: RecoverableProcess): string {
+  const scope = JSON.stringify([
+    attempt.id, attempt.pid, attempt.projectKey, attempt.conversationId,
+    processRecoveryIdentityKey(attempt.identity),
+  ]);
+  // The shared UI hash consumes low bytes; encode Unicode scopes losslessly.
+  return `warn:process-exit:${hashIdentity([encodeURIComponent(scope)])}`;
 }
 
 export class TryloV1EventAdapter {
@@ -111,7 +125,7 @@ export class TryloV1EventAdapter {
    * production consumer. A protocol mismatch is the real reason such a
    * run dies, so it has to reach the user.
    */
-  warn(code: string, message: string): LoopEvent {
+  warn(code: string, message: string): RuntimeWarningEvent {
     const { seq, ts } = this.next();
     return this.warningEvent(seq, ts, code, message);
   }
@@ -122,7 +136,7 @@ export class TryloV1EventAdapter {
     code: string,
     message: string,
     diagnostic?: import('./trylo-v1-protocol').NativeContinuationDiagnostic,
-  ): LoopEvent {
+  ): RuntimeWarningEvent {
     const id = this.sessionId && this.turnId
       ? `warn:${this.sessionId}:${this.turnId}:${seq}`
       : `warn-${ts}-${seq}`;
@@ -196,8 +210,17 @@ export class TryloV1EventAdapter {
         : `The run ended without a terminal event (exit ${String(info.exitCode)}).`);
     // The runner already surfaces rejected wire frames as one specific
     // protocol diagnostic. Do not append a second generic exit warning.
-    const warnings = outcome === 'cancelled' || this.rejections.length > 0 ? []
-      : [this.warn(outcome === 'failed' ? 'process_failed' : 'missing_terminal', detail)];
+    const warnings: LoopEvent[] = [];
+    if (outcome !== 'cancelled' && this.rejections.length === 0) {
+      const warning = this.warn(outcome === 'failed' ? 'process_failed' : 'missing_terminal', detail);
+      const attempt = info.nativeAttempt;
+      // Before run_start there is no CLI event identity. Both delivery paths
+      // must identify this exit by the same native attempt, without exposing paths.
+      const id = this.sessionId === null && this.turnId === null && attempt
+        ? nativeExitWarningId(attempt)
+        : undefined;
+      warnings.push(id === undefined ? warning : { ...warning, id });
+    }
     return [...warnings, ...this.emitTerminal(outcome, detail, 'no_run_result')];
   }
 
@@ -399,6 +422,9 @@ export class TryloV1EventAdapter {
     const name = this.toolNames.get(event.toolCallId) ?? (event.name ? desktopV1Tool(event.name, undefined).name : '');
     this.toolNames.delete(event.toolCallId);
     const content = [
+      ...((event.status === 'succeeded' ? readGeneratedMedia(event.generatedMedia) : undefined)?.map(artifact => artifact.mimeType.startsWith('image/') ? {
+        type: 'image' as const, alt: '生成的图片', ref: { id: `generated-${artifact.sha256}`, storage: 'workspace-artifact' as const, ...artifact },
+      } : { type: 'resource_link' as const, uri: artifact.path, name: artifact.path.split(/[\\/]/).at(-1) ?? '生成的视频', mimeType: artifact.mimeType }) ?? []),
       ...(event.fileChanges === undefined ? [] : [{ type: 'structured' as const, schema: FILE_MUTATION_SCHEMA, value: event.fileChanges }]),
       ...(event.routing === undefined ? [] : [{ type: 'structured' as const, schema: ROUTING_RECEIPT_SCHEMA, value: event.routing }]),
     ];
@@ -533,3 +559,4 @@ export class TryloV1EventAdapter {
     ];
   }
 }
+import { readGeneratedMedia } from './generated-media';

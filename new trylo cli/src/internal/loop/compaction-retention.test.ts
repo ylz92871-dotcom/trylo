@@ -24,6 +24,17 @@ function inputFor(items: TranscriptItem[]): CompactionInput {
   };
 }
 
+test("automatic post-cut estimates do not become hard-ceiling admission evidence", async () => {
+  const input = inputFor([{ kind: "user", sequence: 0, text: "Continue." },
+    { kind: "assistant_text", sequence: 1, blockId: "old", text: "Old observations." }]);
+  const outcome = await runCompactionFor({ ...input, contextTokenLimit: 10_000, wiring: { ...input.wiring!,
+    estimatePromptTokens: () => 12_000, estimateAutomaticTokens: () => 1_000,
+  } }, { force: true });
+  assert.equal(outcome.storedWindow, true);
+  assert.equal(outcome.projectedPromptTokens, 12_000);
+  assert.equal(outcome.events.find(event => event.kind === "compact")?.payload.tokensAfter, 1_000);
+});
+
 function longTask(): TranscriptItem[] {
   const items: TranscriptItem[] = [{ kind: "user", sequence: 0, text: "Repair the current layout and preserve the public interface." }];
   for (let index = 0; index < 10; index++) appendExchange(items, `old-${index}`, `OLD-RESULT-${index}:` + "x".repeat(17_900));

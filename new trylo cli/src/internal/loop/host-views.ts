@@ -67,7 +67,7 @@ export function toolHostFor(engine: Engine, ports: LoopPorts, deps: ViewDeps): T
 export async function emitCompactionFor(
   engine: Engine,
   ports: LoopPorts,
-  options?: { readonly force?: boolean; readonly phase?: "preparing_request" },
+  options?: { readonly force?: boolean; readonly phase?: "preparing_request"; readonly estimatedPromptTokens?: number },
 ): Promise<CompactionGapOutcome> {
   const verdict = evaluateBudget({ iterations: Math.max(0, engine.iterations - (options?.phase === "preparing_request" ? 1 : 0)),
     promptTokens: 0, outputTokens: engine.usage.outputTokens, costUsd: engine.costUsd }, engine.budget);

@@ -15,6 +15,15 @@ const initial = { ...settingsDefaults, ...connectionFields(profile), modelProfil
 beforeEach(() => { window.localStorage.clear(); saveSettings(initial); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); window.localStorage.clear(); });
 
+it('edits an explicitly chosen saved connection in place when saving settings', () => {
+  render(<SettingsModal open initial={initial} onClose={vi.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: '编辑 Old' }));
+  fireEvent.change(screen.getByLabelText('模型名称'), { target: { value: 'updated-model' } });
+  fireEvent.click(screen.getByRole('button', { name: '保存设置' }));
+  expect(loadSettings().modelProfiles).toEqual([expect.objectContaining({ id: 'old', apiModel: 'updated-model' })]);
+  expect(loadSettings().activeModelProfileId).toBe('old');
+});
+
 it('saving an edited OpenAI connection detaches a stale saved-profile pointer and pool override', () => {
   const onSave = vi.fn(), onClose = vi.fn();
   render(<SettingsModal open initial={initial} onSave={onSave} onClose={onClose} />);

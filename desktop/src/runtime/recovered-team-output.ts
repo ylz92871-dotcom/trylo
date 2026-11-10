@@ -43,8 +43,8 @@ export class IncompleteTeamOutputError extends Error {
   ) {
     super(
       confirmedExited
-        ? '原执行已退出，但保留输出不完整；保留先前已核实结果。'
-        : '原执行仍在继续，但保留输出存在缺口，暂时无法完整恢复。可以等待原执行结束，或主动停止；不会重放操作或将缺失记录当作执行结果。',
+        ? '实时日志缓存已不完整，当前对话中保存的内容仍可查看。未从缺失日志重放操作。'
+        : '原执行仍在继续，但实时日志缓存有缺口。可以等待原执行结束，或主动停止；当前已保存的对话不受影响。',
     )
   }
 }
@@ -240,15 +240,25 @@ export class RecoveredTeamOutput {
       return this.readExpired(port, projectKey, conversationId, selection)
     if (selection.kind === 'team' && candidates.length !== 1)
       throw new Error('同一团队存在多个执行记录，未自动接管。请先停止旧执行。')
+    const liveIds = selection.kind === 'conversation'
+      ? registeredProcessIds(await nativeRead(() => port.list())) : new Set<string>()
     const process =
       selection.kind === 'team'
         ? candidates[0]!
         : selectConversationOutput(
             candidates,
-            registeredProcessIds(await nativeRead(() => port.list())),
+            liveIds,
             selection.turnIds,
             selection.expectedRun,
           )!
+    // A finished, matching durable run already owns its visible result. Its
+    // bounded raw replay ring can expire without invalidating that result.
+    // A live process always retains the ordinary recovery/ownership checks.
+    if (selection.kind === 'conversation' && selection.expectedRun?.settled
+      && isConversationRecoveryIdentity(process.identity)
+      && process.identity.runId === selection.expectedRun.runId
+      && process.identity.turnId === selection.expectedRun.turnId
+      && !liveIds.has(process.id)) return null
     let entry = this.connections.get(process.id)
     if (!entry) {
       entry = {
@@ -373,7 +383,8 @@ export class RecoveredTeamOutput {
     }
     appendEvents(
       entry,
-      entry.adapter.finalizeExit({ exitCode, stderr: entry.stderr, cancelled: entry.cancelled }),
+      entry.adapter.finalizeExit({ nativeAttempt: entry.process,
+        exitCode, stderr: entry.stderr, cancelled: entry.cancelled }),
     )
     entry.finalized = true
   }

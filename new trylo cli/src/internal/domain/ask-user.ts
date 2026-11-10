@@ -14,7 +14,7 @@ import type { JsonObject } from "../protocol/envelope.js";
  *   recommended option first, client-added `Other`).
  *
  * The canonical shape is the union both sources already agree on: 1-4
- * questions, 2-4 options each, unique question texts, unique labels per
+ * questions, omitted options for free text or 2-4 choices, unique question texts, unique labels per
  * question, header at most 12 chars. `id` is optional on input and always
  * present after normalisation (derived from the header when absent), so a
  * caller written against either source validates here.
@@ -38,7 +38,7 @@ export type AskUserQuestionInput = {
   readonly id?: string;
   readonly header: string;
   readonly question: string;
-  readonly options: ReadonlyArray<AskUserOption>;
+  readonly options?: ReadonlyArray<AskUserOption>;
   readonly multiSelect?: boolean;
 };
 
@@ -135,12 +135,12 @@ function validateQuestion(entry: unknown, seenQuestions: Set<string>, seenIds: S
     return { ok: false, message: `duplicate question text: "${questionText}"` };
   }
 
-  if (Array.isArray(rawOptions) === false) {
+  if (rawOptions !== undefined && Array.isArray(rawOptions) === false) {
     return { ok: false, message: `question "${questionText}" needs an options array` };
   }
 
-  const options = rawOptions as ReadonlyArray<unknown>;
-  if (options.length < MIN_OPTIONS || options.length > MAX_OPTIONS) {
+  const options: ReadonlyArray<unknown> = rawOptions === undefined ? [] : rawOptions as ReadonlyArray<unknown>;
+    if ((options.length > 0 && options.length < MIN_OPTIONS) || options.length > MAX_OPTIONS) {
     return { ok: false, message: `question "${questionText}" needs ${MIN_OPTIONS}-${MAX_OPTIONS} options; got ${options.length}` };
   }
 

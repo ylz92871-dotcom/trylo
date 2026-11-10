@@ -81,13 +81,38 @@ function isParameterObject(value: JsonValue | undefined): value is JsonObject {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+/** The two question aliases now allow free text. Old choices remain valid;
+ * project only their former required list, retaining every other schema fact. */
+function requiredQuestionOptionsCatalog(tools: ToolPort): ToolPort {
+  return { ...tools, snapshot: () => tools.snapshot().map(binding => {
+    if (binding.name !== "ask_user_question" && binding.name !== "request_user_input_async") return binding;
+    const properties = binding.parameters.properties;
+    if (!isParameterObject(properties)) return binding;
+    const questions = properties.questions;
+    if (!isParameterObject(questions)) return binding;
+    const items = questions.items;
+    if (!isParameterObject(items)) return binding;
+
+    const required = items.required;
+    if (!Array.isArray(required) || required.length !== 2 || required[0] !== "header" || required[1] !== "question") return binding;
+
+    return { ...binding, parameters: { ...binding.parameters, properties: { ...properties,
+      questions: { ...questions, items: { ...items, required: ["header", "question", "options"] } },
+    } } };
+  }) };
+}
+
 export function compatibleCatalogHashes(workspaceRoot: string, selection?: readonly string[]): ReadonlyArray<string> {
   const tools = catalogForHashing(workspaceRoot, selection);
   // Adding a query over the existing Todo owner does not reinterpret old
   // mutations or permissions. Accept exactly the catalog before that query.
   const priorTodo: ToolPort = { ...tools, snapshot: () => tools.snapshot().filter(binding => binding.name !== "todo_read") };
-  return [toolCatalogHash(priorTodo, selection), ...executionCompatibleCatalogHashes(tools, selection),
-    ...executionCompatibleCatalogHashes(priorTodo, selection)];
+  const priorQuestions = requiredQuestionOptionsCatalog(tools);
+  const priorTodoQuestions = requiredQuestionOptionsCatalog(priorTodo);
+  return [...new Set([toolCatalogHash(priorTodo, selection), ...executionCompatibleCatalogHashes(tools, selection),
+    ...executionCompatibleCatalogHashes(priorTodo, selection), toolCatalogHash(priorQuestions, selection),
+    toolCatalogHash(priorTodoQuestions, selection), ...executionCompatibleCatalogHashes(priorQuestions, selection),
+    ...executionCompatibleCatalogHashes(priorTodoQuestions, selection)])];
 }
 
 function executionCompatibleCatalogHashes(tools: ToolPort, selection?: readonly string[]): ReadonlyArray<string> {

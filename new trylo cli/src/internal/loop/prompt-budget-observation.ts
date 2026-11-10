@@ -16,6 +16,7 @@ export function promptBudgetObservationPayload(decision: PromptBudgetBasisDecisi
   return {
     component: PROMPT_BUDGET_COMPONENT, status: PROMPT_BUDGET_SELECTED_STATUS,
     basis: decision.basis, tokens: decision.tokens, localEstimate: decision.localEstimate,
+    ...(decision.automaticTokens === undefined ? {} : { automaticTokens: decision.automaticTokens }),
     reason: decision.reason, requestDigest: decision.requestDigest,
     streamIndex: coordinates.streamIndex,
     ...(coordinates.turnId === undefined ? {} : { turnId: coordinates.turnId }),

@@ -4,7 +4,7 @@ import type { Transcript } from "../protocol/transcript.js";
 import { toolCallIndexByResult } from "../protocol/tool-pairing.js";
 import type { CompactionInput } from "./compact-boundary.js";
 import { coveredExchangeTail } from "./prompt-view.js";
-import { localViewBasis } from "./prompt-measurement.js";
+import { automaticViewTokens } from "./automatic-pressure.js";
 
 /** Compact an old prefix, rather than replacing an entire ongoing task with
  * a short digest. Half the existing soft window is a retention target, not a
@@ -22,7 +22,7 @@ export function compactionPrefixLength(input: CompactionInput): number {
   const target = Math.floor(contextTokenLimit * 9 / 20);
 
   for (const cut of candidates) {
-    const tokens = localViewBasis({ ...input, ledger: {
+    const tokens = automaticViewTokens({ ...input, ledger: {
       ...ledger, replacedPrefix: cut,
       // Reserve the existing maximum summary size using three UTF-8 bytes per
       // code unit. This is a size bound, not an authored or stored summary.

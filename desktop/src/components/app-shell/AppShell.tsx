@@ -1,7 +1,9 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactElement, ReactNode } from 'react';
 import { TopBar } from './TopBar';
 import { BrowserToolSidebar } from '../chat/BrowserToolSidebar';
-import { Box, Globe, Monitor } from 'lucide-react';
+import { AppWindow, Box, Globe, Monitor } from 'lucide-react';
+import { SoftwareWorkspacePanel } from '../software-workspace/SoftwareWorkspacePanel';
+import { useSoftwareWorkspace } from '../../tooling/use-software-workspace';
 import type { ChatMessage } from '../chat/types';
 import { toolPreviewState } from '../../tooling/tool-preview-state';
 import { useBrowserReplay } from '../../tooling/use-browser-replay';
@@ -221,10 +223,14 @@ export function AppShell(props: AppShellProps): ReactElement {
   const [modelPreviewKey, setModelPreviewKey] = useState<number | null>(null);
   const [modelPreviewOpen, setModelPreviewOpen] = useState(false);
   const [modelPreviewWidth, setModelPreviewWidth] = useState(520);
+  const latestDock = useRef({ open: props.rightRailOpen, approval: !!props.approvalDiff, toggle: props.onToggleRightRail });
+  latestDock.current = { open: props.rightRailOpen, approval: !!props.approvalDiff, toggle: props.onToggleRightRail };
+  const hideSoftware = useRef<() => void>(() => {});
   useEffect(() => {
     if (modelPreviewKey === null) { setModelPreviewOpen(false); return; }
     setModelPreviewOpen(true); setBrowserPreviewOpen(false);
-    if (props.rightRailOpen && !props.approvalDiff) props.onToggleRightRail();
+    hideSoftware.current();
+    if (latestDock.current.open && !latestDock.current.approval) latestDock.current.toggle();
     // A newly available scene may open the dock once. Later user navigation
     // owns panel visibility, without closing the model's background session.
   }, [modelPreviewKey]);
@@ -260,10 +266,21 @@ export function AppShell(props: AppShellProps): ReactElement {
   const browserState = useMemo(() => toolPreviewState(props.toolMessages ?? [], 'browser', { running: runActive }), [props.toolMessages, runActive]);
   const computerState = useMemo(() => toolPreviewState(props.toolMessages ?? [], 'computer', { running: runActive }), [props.toolMessages, runActive]);
   const previewScope = `${props.currentWorkspaceId}:${props.activeSessionId}:${props.topMode}`;
+  const software = useSoftwareWorkspace({ facade: props.toolingFacade, manager: props.serviceManager,
+    projectRoot: props.workspaces.find(workspace => workspace.id === props.currentWorkspaceId)?.root,
+    conversationId: props.activeSessionId, suspended: props.settingsOpen || props.remotePairingOpen || props.activityOpen });
+  const [softwareWidth, setSoftwareWidth] = useState(600);
+  hideSoftware.current = () => software.setOpen(false);
+  useEffect(() => {
+    if (!software.open) return;
+    if (latestDock.current.approval) { hideSoftware.current(); return; }
+    setBrowserPreviewOpen(false); setModelPreviewOpen(false);
+    if (latestDock.current.open) latestDock.current.toggle();
+  }, [software.open]);
   const browserReplay = useBrowserReplay(browserState, props.browserPreview, previewScope);
   const workbench = useToolWorkbenchLifecycle({ scope: previewScope, running: runActive,
     browser: browserState, computer: computerState, onError: setPreviewError,
-    showBrowser: () => { setModelPreviewOpen(false); if (props.rightRailOpen) props.onToggleRightRail(); setBrowserPreviewOpen(true); } });
+    showBrowser: () => { software.setOpen(false); setModelPreviewOpen(false); if (props.rightRailOpen) props.onToggleRightRail(); setBrowserPreviewOpen(true); } });
   useComputerPreview(computerState, previewScope, { manager: props.serviceManager, facade: props.toolingFacade,
     projectRoot: props.workspaces.find(workspace => workspace.id === props.currentWorkspaceId)?.root,
     conversationId: props.activeSessionId, turnId: computerState.turnId, display: computerState.display,
@@ -280,8 +297,12 @@ export function AppShell(props: AppShellProps): ReactElement {
   // the preview drawer without lifting state to App: they dispatch
   // `trylo:open-browser-preview`.
   const { rightRailOpen, onToggleRightRail } = props;
+  const setSoftwareOpen = software.setOpen;
+  const approvalReview = !!props.approvalDiff;
+  useEffect(() => { if (rightRailOpen || approvalReview) setSoftwareOpen(false); }, [rightRailOpen, approvalReview, setSoftwareOpen]);
   useEffect(() => {
     const onOpen = (): void => {
+      hideSoftware.current();
       setModelPreviewOpen(false);
       if (rightRailOpen) onToggleRightRail();
       setBrowserPreviewOpen(true);
@@ -368,14 +389,17 @@ export function AppShell(props: AppShellProps): ReactElement {
             conversationTitle={props.sessions.find((session) => session.id === props.activeSessionId)?.title}
             right={<>
               {modelPreviewKey !== null && <button type="button" className={`top-bar__rail-toggle${modelPreviewOpen ? ' top-bar__rail-toggle--active' : ''}`} aria-label="3D 工作区" title="3D 工作区" aria-pressed={modelPreviewOpen} onClick={() => {
+                software.setOpen(false);
                 if (!modelPreviewOpen) { setBrowserPreviewOpen(false); if (props.rightRailOpen) props.onToggleRightRail(); }
                 setModelPreviewOpen(open => !open);
               }}><Box size={16} strokeWidth={1.65} aria-hidden="true" /></button>}
               <button type="button" className={`top-bar__rail-toggle${browserPreviewOpen ? ' top-bar__rail-toggle--active' : ''}`} aria-label="浏览器侧栏" title="浏览器侧栏" aria-pressed={browserPreviewOpen} onClick={() => {
+                software.setOpen(false);
                 setModelPreviewOpen(false);
                 if (!browserPreviewOpen && props.rightRailOpen) props.onToggleRightRail();
                 setBrowserPreviewOpen(open => !open);
               }}><Globe size={16} strokeWidth={1.65} aria-hidden="true" /></button>
+              <button type="button" className={`top-bar__rail-toggle${software.open ? ' top-bar__rail-toggle--active' : ''}`} aria-label="软件工作区" title="软件工作区" aria-pressed={software.open} onClick={() => software.setOpen(!software.open)}><AppWindow size={16} strokeWidth={1.65} aria-hidden="true" /></button>
               <button type="button" className={`top-bar__rail-toggle${runActive && computerState.hasTools ? ' top-bar__rail-toggle--active' : ''}`} aria-label={runActive && computerState.hasTools ? '电脑悬浮窗，控制正在工作' : '电脑悬浮窗'} title={runActive && computerState.hasTools ? '电脑控制正在工作' : '电脑悬浮窗'} onClick={() => { setPreviewError(''); void workbench.openComputer(); }}><Monitor size={16} strokeWidth={1.65} aria-hidden="true" />{runActive && computerState.hasTools && <span className="top-bar__activity-dot" aria-hidden="true" />}</button>
               {props.topBarRight}
             </>}
@@ -385,9 +409,13 @@ export function AppShell(props: AppShellProps): ReactElement {
           />
           {props.children}
         </div>
-        {modelPreviewOpen && modelPreviewKey !== null && !props.rightRailOpen && !browserPreviewOpen && <RailResizer side="right" width={Math.min(modelPreviewWidth, browserMaxWidth)} min={320} max={browserMaxWidth} onChange={setModelPreviewWidth} />}
+        {software.open && !props.rightRailOpen && !props.approvalDiff && <>
+          <RailResizer side="right" width={Math.min(softwareWidth, browserMaxWidth)} min={320} max={browserMaxWidth} onChange={setSoftwareWidth} />
+          <SoftwareWorkspacePanel controller={software} width={Math.min(softwareWidth, browserMaxWidth)} onClose={() => software.setOpen(false)} />
+        </>}
+        {modelPreviewOpen && modelPreviewKey !== null && !props.rightRailOpen && !browserPreviewOpen && !software.open && <RailResizer side="right" width={Math.min(modelPreviewWidth, browserMaxWidth)} min={320} max={browserMaxWidth} onChange={setModelPreviewWidth} />}
         <div style={{ display:'contents', '--model-preview-width': `${Math.min(modelPreviewWidth, browserMaxWidth)}px` } as CSSProperties}>
-          {props.modelPreview?.(setModelPreviewKey, modelPreviewOpen && !props.rightRailOpen && !browserPreviewOpen && !props.settingsOpen && !props.approvalDiff)}
+          {props.modelPreview?.(setModelPreviewKey, modelPreviewOpen && !props.rightRailOpen && !browserPreviewOpen && !software.open && !props.settingsOpen && !props.approvalDiff)}
         </div>
         {props.rightRailOpen && props.peekExpanded !== true && (
           <RailResizer

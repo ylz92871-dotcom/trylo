@@ -23,6 +23,7 @@ import { memo, useEffect, useRef, useState, type ReactElement, type ReactNode } 
 import { useConversationDisclosure } from './conversation-disclosure'
 import { isRoutingReceipt, ROUTING_RECEIPT_SCHEMA } from '../../domain/routing-receipt'
 import { RoutingReceipt } from './RoutingReceipt'
+import { GeneratedMediaPreview, isImageGenerationTool } from './GeneratedMediaPreview'
 import {
   ChevronRight,
   Loader2,
@@ -40,6 +41,8 @@ import {
   Braces,
   FileWarning,
   UploadCloud,
+  Image as ImageIcon,
+  Video,
   type LucideIcon,
 } from 'lucide-react'
 import type { ToolMessage } from './types'
@@ -66,6 +69,7 @@ import {
 } from '../../agent-learning/skill-pending-review'
 
 export interface ToolCardProps {
+  readonly workspacePath?: string
   readonly message: ToolMessage
   readonly variant?: 'event'
   /** PR-3 遗留收口 (§6.5/§7.3): promote one of the conversation's runtime
@@ -151,6 +155,9 @@ const TOOL_META: Record<
   string,
   { label: string; Icon: LucideIcon; tone: 'bash' | 'fs' | 'web' | 'other' }
 > = {
+  image_generate: { label: '生成图片', Icon: ImageIcon, tone: 'other' },
+  video_generate: { label: '创建视频任务', Icon: Video, tone: 'other' },
+  video_get_result: { label: '获取视频', Icon: Video, tone: 'other' },
   bash: { label: 'Bash', Icon: Terminal, tone: 'bash' },
   read: { label: 'Read', Icon: FileText, tone: 'fs' },
   edit: { label: 'Edit', Icon: FileEdit, tone: 'fs' },
@@ -293,6 +300,7 @@ function ToolCardImpl(props: ToolCardProps): ReactElement {
           </span>
         </span>
       </button>
+      <GeneratedMediaPreview message={m} workspacePath={props.workspacePath} />
       {skillReview ? (
         <button
           type="button"
@@ -378,6 +386,7 @@ function ToolCardBody(props: { message: ToolMessage; card: ToolCardProps }): Rea
     ) ?? []
   const visibleOutputContent = m.outputContent?.filter(
     (block) =>
+      !(block.type === 'image' && isImageGenerationTool(m)) &&
       !(
         block.type === 'structured' &&
         block.schema === ROUTING_RECEIPT_SCHEMA &&

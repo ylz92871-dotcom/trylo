@@ -3,7 +3,7 @@ import type {
   SummaryAuthorReporter,
   SummaryAuthoringContext,
 } from "../ports/compaction.js";
-import type { CompleteInputTokenObservation, ProviderMessage, ProviderRequest, SystemPromptDirective } from "../ports/provider.js";
+import type { CompleteInputTokenObservation, ProviderMessage, ProviderRequest, ProviderToolSpec, SystemPromptDirective } from "../ports/provider.js";
 import type { ToolPort } from "../ports/tools.js";
 import type { JsonObject } from "../protocol/envelope.js";
 import type { EventKind } from "../protocol/kinds.js";
@@ -36,23 +36,22 @@ export type { CompactionGapOutcome } from "./compaction-gap.js";
  *
  *  - **optional**. No wiring means the transcript is sent whole, byte for byte
  *    as before. Compaction is something a composition root opts into;
- *  - **one token basis**. The gap's estimate over the exact view the next
- *    request would carry — server-reported where the report still describes
- *    the view, local estimate elsewhere (WP09.1/C35) — compared against
- *    `budget.contextTokenLimit`. No wall clock, and no second switch on
- *    message count — two ways to trip one decision need a precedence rule
- *    nobody wrote down;
+ *  - **one request view, distinct evidence**. Automatic maintenance uses a
+ *    calibrated text forecast over the actual prepared view. Admission keeps
+ *    its separate conservative bound/complete-measurement contract. A soft
+ *    estimate cannot prove hard overflow or replace the hard gate's basis.
+ *    Both use the caller's same `budget.contextTokenLimit`; no count/timer cap;
  *  - **one ceiling**. The limit is the budget's, not a second copy here. A port
  *    injected without a configured ceiling therefore never compacts, because
  *    there is nothing to be over;
  *  - **growth-driven probes, and a bounded rescue**. A hold leaves the probe
  *    available. A window that clears the ceiling rearms it for later growth;
- *    refused or ineffective authoring disables probes for this turn. The
+ *    refused or ineffective authoring latches the current pressure episode. The
  *    ceiling rescue (`budget-gate.ts`) may force a new window whenever
  *    the provider's report proves the view over the ceiling;
- *  - **compaction never cancels the hard gate**. It exists to reach
- *    `context_limit` less often; if the view is still over the ceiling after a
- *    stored window, the turn ends at `context_limit`;
+ *  - **compaction never cancels the hard gate**. The post-cut admission basis
+ *    remains distinct from the displayed forecast. Complete measured overflow
+ *    and real provider rejection keep their existing refusal/recovery owners;
  *  - **fail closed**. A refused summary stores no window, replaces no history
  *    and is reported as a degradation — silently dropping the replaced text
  *    without a summary would invent a shorter past;
@@ -63,6 +62,9 @@ export type { CompactionGapOutcome } from "./compaction-gap.js";
 
 export type CompactionWiring = {
   readonly port: CompactionPort;
+  /** Automatic maintenance uses an estimate, not a worst-case byte bound.
+   * This does not supply evidence for a hard context refusal. */
+  readonly estimateAutomaticTokens?: (messages: readonly ProviderMessage[], tools: readonly ProviderToolSpec[]) => number;
   /** A text upper bound can trigger compaction, but exceeding it cannot prove
    * the actual request exceeds the model window. Absent retains the existing
    * caller-supplied estimator contract. */

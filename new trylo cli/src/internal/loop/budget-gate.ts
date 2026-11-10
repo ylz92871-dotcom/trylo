@@ -13,6 +13,7 @@ import { associatePromptBudgetDecision, evaluatePreparedRequestBudget, localPrep
   type PromptBudgetBasisDecision, type PromptMeasurement } from "./prompt-measurement.js";
 import { auxiliarySpendingUnavailable, spendingVerdict } from "./auxiliary-usage.js";
 import { capturePersistableInputIdentity } from "./prompt-input-identity.js";
+import { automaticRequestTokens } from "./automatic-pressure.js";
 
 type RequestRebuild = {
   readonly rebuild: () => ProviderRequest;
@@ -74,13 +75,23 @@ export async function fitRequestToContext(engine: Engine, ports: LoopPorts, requ
   };
   let evaluation = estimate(request);
   let tokens = evaluation.decision.tokens;
+  const pressure = (request: ProviderRequest, value: typeof evaluation) => automaticRequestTokens(request, wiring,
+    engine.promptReport, engine.compaction.window?.windowId, value);
+  let automaticTokens = pressure(request, evaluation);
+  const trigger = autoCompactTokenLimit(limit);
+
+  // Re-arm from the final request's basis, including a matching complete
+  // provider measurement. An irreducible byte bound must not force a new
+  // summary at every send and invalidate that measurement again.
+  if (automaticTokens < trigger) engine.compaction.attempted = false;
 
   // A freshly prepared host slot can make otherwise valid history too large.
-  // Rebuild with the same snapshot while actual compaction makes progress;
-  // neither a fixed retry count nor repeated host admission owns this rescue.
-  while (tokens >= autoCompactTokenLimit(limit) && prepared !== undefined && !engine.abort.signal.aborted) {
+  // Automatic preparation obeys the same ineffective/refused latch as the
+  // iteration gap. A real provider rejection retains its separate forced
+  // recovery path; there is no turn-wide compaction count or task limit.
+  while (automaticTokens >= trigger && prepared !== undefined && !engine.compaction.attempted && !engine.abort.signal.aborted) {
     const rescuePorts = prepared.compaction === undefined ? ports : { ...ports, compaction: prepared.compaction };
-    const outcome = await emitCompactionFor(engine, rescuePorts, { force: true, phase: "preparing_request" });
+    const outcome = await emitCompactionFor(engine, rescuePorts, { estimatedPromptTokens: automaticTokens, phase: "preparing_request" });
 
     if (engine.compactionSignal.aborted) return undefined;
 
@@ -95,6 +106,8 @@ export async function fitRequestToContext(engine: Engine, ports: LoopPorts, requ
 
     evaluation = nextEvaluation;
     tokens = nextTokens;
+    automaticTokens = pressure(request, nextEvaluation);
+    engine.compaction.attempted = wiring.estimateAutomaticTokens !== undefined || automaticTokens >= trigger;
 
     if (!improved) break;
   }
@@ -118,7 +131,9 @@ export async function fitRequestToContext(engine: Engine, ports: LoopPorts, requ
     // not an input-token setting. Rebinding this pure hash cannot query native
     // state or run a different admission calculation for the observation.
     return { request: fitted, requestMeasurement: evaluation.measurement,
-      budgetDecision: associatePromptBudgetDecision(evaluation.decision, fitted, evaluation.measurement) };
+      budgetDecision: associatePromptBudgetDecision({ ...evaluation.decision,
+        ...(wiring.estimateAutomaticTokens === undefined ? {} : { automaticTokens }),
+      }, fitted, evaluation.measurement) };
   }
 
   await dispatch(engine, ports, { type: "budget_exhausted", eventId: nextId(engine), reason: "context_limit", used: tokens, limit });

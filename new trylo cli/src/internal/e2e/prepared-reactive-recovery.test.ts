@@ -52,7 +52,8 @@ for (const prepared of [false, true]) {
 
 test("a shrinking prepared recovery reuses the original snapshot without another host admission", async () => {
   const { requests, result, preparations } = await rejectedRequest(true,
-    "An older completed observation. ".repeat(300), "Earlier observations are complete.");
+    // Below the proactive byte threshold, so the rejection exercises recovery.
+    "An older completed observation. ".repeat(100), "Earlier observations are complete.");
 
   assert.equal(result.state.terminalReason, "completed");
   assert.equal(requests.length, 2);

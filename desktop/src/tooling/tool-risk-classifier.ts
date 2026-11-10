@@ -33,6 +33,7 @@ import { playwrightClassifier } from './classifiers/playwright-classifier';
 import { windowsClassifier } from './classifiers/windows-mcp-classifier';
 import { chromeDevtoolsClassifier } from './classifiers/chrome-devtools-classifier';
 import { modelPreviewClassifier } from './classifiers/model-preview-classifier';
+import { softwareWorkspaceClassifier } from './classifiers/software-workspace-classifier';
 import { CAD_EDA_CLASSIFIERS } from './classifiers/cad-eda-classifier';
 import type { BrowserLeaseGrant } from './classifiers/playwright-classifier';
 import type { WindowsLeaseGrant } from './classifiers/windows-mcp-classifier';
@@ -189,6 +190,7 @@ export function createToolRiskClassifier(
     windowsClassifier,
     chromeDevtoolsClassifier,
     modelPreviewClassifier,
+    softwareWorkspaceClassifier,
     // CAD/EDA adapters (TRYLO-CAD-EDA-TOOL-ADAPTER §7): six explicit policy
     // tables over the audited tool surfaces.
     ...CAD_EDA_CLASSIFIERS,
