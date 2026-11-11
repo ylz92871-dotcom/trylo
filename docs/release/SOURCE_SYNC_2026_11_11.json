@@ -1,15 +1,15 @@
 {
- "generatedAt": "2026-11-10T23:50:03.398286+00:00",
+ "generatedAt": "2026-11-11T06:58:36.082877+00:00",
  "mainRange": {
   "from": "4058d820",
-  "to": "35da5631"
+  "to": "fe6c8442"
  },
  "desktopVersion": "2.1.0",
  "cliVersion": "0.1.0",
- "stagedCount": 173,
+ "stagedCount": 174,
  "statusCounts": {
   "public-adapted": 1,
-  "identical": 166,
+  "identical": 167,
   "main-worktree": 6
  },
  "excluded": {
@@ -198,6 +198,12 @@
    "path": "desktop/scripts/stage-builtin-tools.mjs",
    "sha256": "105459eef077839da557c6a4f7a4632c2fcd947e4c01874a40880a42f48fec75",
    "bytes": 9562,
+   "status": "identical"
+  },
+  {
+   "path": "desktop/scripts/stage-cli.mjs",
+   "sha256": "befacf1787d63632329cae10c9a8453ca9e649fdadebb5b284f5dab7d43c394d",
+   "bytes": 14926,
    "status": "identical"
   },
   {

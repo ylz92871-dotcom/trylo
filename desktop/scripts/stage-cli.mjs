@@ -18,6 +18,16 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { stageCliOptions } from './stage-cli-options.mjs';
 
+// The isolated smoke runs against a brand-new TRYLO_HOME, and that first run
+// pays the home's one-time initialisation before it can emit anything. Measured
+// on the build machine 2026-11-11 (owner authorised raising the old 60s budget,
+// which this routinely exceeded): first frame after 41.1s for the installed 2.0.0
+// CLI and 41.2s for this 2.1.0 closure — identical — against 5-8s once the same
+// home exists. Worst observed under load was 57s. 180s keeps a ~3x margin over
+// the outlier and stays inside the approval request's own 660s validity, so a
+// genuinely stuck CLI still fails this gate.
+const SMOKE_BUDGET_MS = 180_000;
+
 // Build-machine only: stage the audited CLI closure and exercise it outside the checkout.
 const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const source = path.resolve(desktop, '../new trylo cli');
@@ -243,7 +253,7 @@ try {
         if (timedOut)
           reject(
             new Error(
-              `Staged CLI approval smoke exceeded 60 seconds (${frames.length} frames): ${stderr}`,
+              `Staged CLI approval smoke exceeded ${SMOKE_BUDGET_MS / 1000} seconds (${frames.length} frames): ${stderr}`,
             ),
           );
         else code === 0 ? resolve() : reject(new Error(`Staged CLI exit ${code}: ${stderr}`));
@@ -284,7 +294,7 @@ try {
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill();
-    }, 60_000);
+    }, SMOKE_BUDGET_MS);
     try {
       child.stdin.write(
         JSON.stringify({
