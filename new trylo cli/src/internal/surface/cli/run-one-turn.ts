@@ -209,8 +209,8 @@ async function runPreparedTurn(
     ...(scaffold.maxIterations === undefined ? {} : { maxIterations: scaffold.maxIterations }),
     ...(scaffold.maxTokens === undefined ? {} : { maxTokens: scaffold.maxTokens }),
     ...(scaffold.systemPrompt === undefined ? {} : { systemPrompt: scaffold.systemPrompt }),
-    ...(scaffold.systemPromptAppend === undefined && team.protocol === undefined ? {} : { systemPromptAppend:
-      [scaffold.systemPromptAppend, team.protocol].filter(item => item !== undefined).join("\n") }),
+    ...(scaffold.systemPromptAppend === undefined && scaffold.effectContinuation === undefined && team.protocol === undefined ? {} : { systemPromptAppend:
+      [scaffold.systemPromptAppend, scaffold.effectContinuation, team.protocol].filter(item => item !== undefined).join("\n") }),
     ...(scaffold.responseSchema === undefined ? {} : { responseSchema: scaffold.responseSchema }),
     ...(scaffold.contextTokenLimit === undefined
       ? {}

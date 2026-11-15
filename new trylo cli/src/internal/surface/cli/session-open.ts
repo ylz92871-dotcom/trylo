@@ -16,13 +16,14 @@ import type { CliContext } from "./context.js";
 import { fail, type RunFailure } from "./run-failure.js";
 import type { ResolvedSettings } from "./run-settings.js";
 import { isValidSessionId, sessionPath, sessionsDir } from "./session-paths.js";
+import { sessionEffectContinuation } from "./session-effect-continuation.js";
 
 /**
  * Opening, resuming, or declining a session.
  *
- * Every path here fails closed: if a stored session cannot be proven intact,
- * or was written under different runtime facts, it is never partially
- * replayed. That is the whole reason this is not inlined into `prepareRun`.
+ * History is read as data, never executed again. Unreadable journals and
+ * workspace identity conflicts are genuine failures; unknown past outcomes
+ * and changes to today's tools must not lock an otherwise usable conversation.
  */
 
 type SessionOpen =
@@ -40,6 +41,7 @@ type SessionOpen =
       readonly window: CompactWindow | undefined;
       /** The journal as loaded: windows already stored sit in here. */
       readonly records: ReadonlyArray<SessionRecord>;
+      readonly continuationNotice: string | undefined;
     }
   | { readonly kind: "failed"; readonly failure: RunFailure };
 
@@ -95,10 +97,10 @@ function fingerprintMismatch(
     scopes.push("model");
   }
 
-  if (stored.toolCatalogHash !== current.toolCatalogHash && !compatibleCatalogs.includes(stored.toolCatalogHash)) {
-    if (migrate.catalog !== true) {
-      return { refused: "the tool catalog changed", scopes: [] };
-    }
+  // History is descriptive, not an executable tool queue. Future calls use the
+  // current catalog and permission gates; catalog drift cannot lock a conversation.
+  if (stored.toolCatalogHash !== current.toolCatalogHash && !compatibleCatalogs.includes(stored.toolCatalogHash)
+    && migrate.catalog === true) {
     scopes.push("catalog");
   }
 
@@ -239,13 +241,6 @@ async function openExistingSession(
       `session ${sessionId} records cannot be read: ${records.code}`, "start a new session; unreadable records are never treated as empty history") };
   }
 
-  if (recovered.session.reconcileRequired.length > 0) {
-    await store.release();
-    return { kind: "failed", failure: fail(EXIT_CODES.CONFIG,
-      `session ${sessionId} requires effect reconciliation: ${recovered.session.reconcileRequired.join(", ")}`,
-      "inspect the journal, workspace and running processes before starting a new session; unknown actions are never automatically repeated") };
-  }
-
   const stored = records.view.records;
   const projected = createCompactionService().projectForPrompt({ records: stored });
   if (!projected.ok) {
@@ -260,6 +255,7 @@ async function openExistingSession(
     transcript: recovered.session.transcript,
     window: projected.view.window,
     records: stored,
+    continuationNotice: sessionEffectContinuation(recovered.session.pendingEffects, stored),
   };
 }
 

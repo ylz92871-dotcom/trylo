@@ -45,7 +45,7 @@ import type { ExecPolicyGuard } from "./tool-admission.js";
 import { flushProgress, flushStreamItems, preserveOpenBlocks } from "./progress.js";
 import { applyTurnRepairs } from "./turn-repairs.js";
 import { budgetIteration } from "./budget-final-report.js";
-import { hasUnknownToolResult, repeatedTruncation, reportInterruption, reportUnknownSettlement, type IterationPurpose } from "./interruption-report.js";
+import { repeatedTruncation, reportInterruption, reportUnknownSettlement, type IterationPurpose } from "./interruption-report.js";
 import { goalBoundary, stopInactiveGoal } from "./goal-boundary.js";
 import { capturePromptMeasurement, measureNativeRequestIdentity } from "./prompt-measurement.js";
 import { recordMainUsage, type ParentUsageAccounting } from "./auxiliary-usage.js";
@@ -247,7 +247,7 @@ export async function runTurn(ports: LoopPorts, request: RunTurnRequest): Promis
     text: request.text,
   });
   await runIterations(engine, ports, cancelled);
-  if (!hasUnknownToolResult(engine)) await applyTurnRepairs(engine, ports, request, cancelled, runIterations);
+  await applyTurnRepairs(engine, ports, request, cancelled, runIterations);
   await reportTurnEnd(ports.method, engine.state.turnId, engine.state.terminalReason === "cancelled" ? AbortSignal.abort() : request.cancelSignal);
   // Before the flush, not on the way out: the recorder persists
   // `engine.transcript`, so a cancelled turn's open calls have to be answered in

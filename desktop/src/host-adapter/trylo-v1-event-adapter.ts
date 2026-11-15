@@ -125,9 +125,13 @@ export class TryloV1EventAdapter {
    * production consumer. A protocol mismatch is the real reason such a
    * run dies, so it has to reach the user.
    */
-  warn(code: string, message: string): RuntimeWarningEvent {
+  warn(
+    code: string,
+    message: string,
+    reconcile?: import('./loop-events').ReconcileWarningPayload,
+  ): RuntimeWarningEvent {
     const { seq, ts } = this.next();
-    return this.warningEvent(seq, ts, code, message);
+    return this.warningEvent(seq, ts, code, message, undefined, reconcile);
   }
 
   private warningEvent(
@@ -136,11 +140,14 @@ export class TryloV1EventAdapter {
     code: string,
     message: string,
     diagnostic?: import('./trylo-v1-protocol').NativeContinuationDiagnostic,
+    reconcile?: import('./loop-events').ReconcileWarningPayload,
   ): RuntimeWarningEvent {
     const id = this.sessionId && this.turnId
       ? `warn:${this.sessionId}:${this.turnId}:${seq}`
       : `warn-${ts}-${seq}`;
-    return { type: 'runtime_warning', id, seq, ts, code, message, ...(diagnostic === undefined ? {} : { diagnostic }) };
+    return { type: 'runtime_warning', id, seq, ts, code, message,
+      ...(diagnostic === undefined ? {} : { diagnostic }),
+      ...(reconcile === undefined ? {} : { reconcile }) };
   }
 
   /** One sentence describing what the wire guard refused, if anything. */

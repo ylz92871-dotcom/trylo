@@ -14,6 +14,7 @@ type ConfirmedState = { readonly kind: 'failed' | 'detached'; readonly error: Er
 type Entry = {
   readonly selection: Selection
   targets: readonly LiveProcessInfo[]
+  readonly interruptRequested: Set<string>
   state:
     | {
         readonly kind: 'inspecting'
@@ -255,6 +256,7 @@ export class RecoveredConversationStop {
     const entry: Entry = {
       selection,
       targets: previous?.targets ?? [],
+      interruptRequested: previous?.interruptRequested ?? new Set(),
       state: activity === 'inspecting'
         ? { kind: activity, completion, previous: previous?.state }
         : { kind: activity, completion },
@@ -337,7 +339,7 @@ export class RecoveredConversationStop {
     )
     this.changed()
     if (!entry.targets.length) return this.assertNoExternalOwner(processes, scope, excluded)
-    const forceTargets = await this.interruptDetached(processes, entry.targets)
+    const forceTargets = await this.interruptDetached(processes, entry.targets, entry.interruptRequested)
     const stopped = await Promise.allSettled(
       forceTargets.map((target) => this.nativeCall(() => processes.stop(target.id))),
     )
@@ -389,19 +391,25 @@ export class RecoveredConversationStop {
   private async interruptDetached(
     processes: ProcessPort,
     targets: readonly LiveProcessInfo[],
+    requested: Set<string>,
   ): Promise<readonly LiveProcessInfo[]> {
     // Older fixture/browser ports have no stdin. Current native roots use the
     // same graceful interrupt window as a controller-owned new CLI turn.
     if (!processes.send) return targets
     const outcomes = await Promise.all(
       targets.map(async (target) => {
+        if (requested.has(target.id)) return false
         const observation = new AbortController()
+        let delivered = false
         try {
-          return await requestCliInterrupt({
+          const exited = await requestCliInterrupt({
             processId: target.id,
             send: (id, frame) => processes.send!(id, frame),
             exited: this.observeOriginalExit(processes, target.id, observation.signal),
+            onDelivered: () => { delivered = true; requested.add(target.id) },
           })
+          if (!exited && delivered) throw new Error('已请求停止，原执行仍在收尾。可以等待；再次停止将强制结束原进程。')
+          return exited
         } finally {
           observation.abort()
         }

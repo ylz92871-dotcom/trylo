@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import os from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { EXIT_CODES } from "../../protocol/cli-stream.js";
@@ -17,6 +16,7 @@ import { handleRun } from "./run-command.js";
 import { handleStdioRun } from "./run-stdio.js";
 import { createNdjsonSessionStore } from "../../adapters/session-store/ndjson.js";
 import { createWorkflowExecution } from "../../integration/workflow-learning/execution.js";
+import { testScratchPath } from "../../testing/scratch.js";
 import { readWorkflowVersion } from "../../integration/workflow-learning/archive.js";
 import { selectWorkflowPath } from "../../learning/domains/workflow/trace-learn.js";
 import { resolveActiveWorkflowAdoption } from "../../integration/workflow-learning/run-adoption.js";
@@ -34,7 +34,7 @@ import { createBoardReader } from "../../adapters/learning-store/file-event-stor
  */
 
 function workspace(files: Readonly<Record<string, string>>): { readonly dir: string; readonly cleanup: () => void } {
-  const dir = mkdtempSync(join(os.tmpdir(), "trylo-wf-"));
+  const dir = mkdtempSync(testScratchPath("trylo-wf-"));
 
   for (const [relative, text] of Object.entries(files)) {
     const absolute = join(dir, relative);
@@ -270,7 +270,7 @@ test("ordinary run and stdio restore the same frozen workflow without repeating 
   }
 });
 
-test("restart cannot refill a workflow allowance or automatically repeat an unknown effect", async () => {
+test("restart preserves an explicit workflow allowance while unknown effects remain inspectable", async () => {
   for (const failure of ["budget", "unknown_effect"] as const) {
     const fx = await dailyFixture();
     try {
@@ -287,11 +287,30 @@ test("restart cannot refill a workflow allowance or automatically repeat an unkn
 
       const before = fx.records().length;
 
-      assert.equal(await handleRun(fx.ctx, { message: ["Continue."], readStdin: false, provider: "fixture", resume: "daily" }, fx.sink), EXIT_CODES.CONFIG);
-      assert.equal(fx.records().length, before, "refusal before any provider or tool activity");
-      assert.match(fx.err.join(""), failure === "budget" ? /workflow_budget_exhausted/ : /requires effect reconciliation/);
+      const code = await handleRun(fx.ctx, { message: ["Inspect the current result; do not repeat the interrupted action."], readStdin: false, provider: "fixture", resume: "daily" }, fx.sink);
+      if (failure === "budget") {
+        assert.equal(code, EXIT_CODES.CONFIG);
+        assert.equal(fx.records().length, before, "an explicit allowance is never silently refilled");
+        assert.match(fx.err.join(""), /workflow_budget_exhausted/);
+      } else {
+        assert.equal(code, EXIT_CODES.EXECUTION_FAILURE, "the fixture's unverified workflow can report its actual state");
+        assert.ok(fx.records().length > before, "unknown effects do not prevent a new turn");
+        assert.equal(fx.records().filter(record => record.type === "effect_issued" && record.payload.key === "tool:write-outcome-unknown").length, 1);
+      }
     } finally { fx.ws.cleanup(); }
   }
+});
+
+test("valid workflow context is not rejected by an arbitrary file-size cutoff", async () => {
+  const fx = await dailyFixture();
+  try {
+    const file = join(fx.ws.dir, "task.json");
+    writeFileSync(file, readFileSync(file, "utf8") + " ".repeat(20000));
+    const code = await handleRun(fx.ctx, { message: ["Run with this valid context."], readStdin: false, provider: "fixture", session: "daily",
+      workflowVersion: fx.versionId, workflowTask: "task.json" }, fx.sink);
+    assert.equal(code, EXIT_CODES.EXECUTION_FAILURE, "workflow validation applies to parsed content, not JSON formatting size");
+    assert.ok(fx.records().some(record => record.type === "turn_start"));
+  } finally { fx.ws.cleanup(); }
 });
 
 test("verified completion before a process interruption permits a different next task in the same session", async () => {

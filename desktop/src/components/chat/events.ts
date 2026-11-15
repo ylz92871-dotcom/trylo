@@ -381,6 +381,18 @@ function applySubagent(msgs: ChatMessage[], e: SubagentEvent): ChatMessage[] {
 }
 
 /**
+ * 把还挂在「执行中」的工具卡改成「已中断」。
+ *
+ * 一次运行没了以后，不会再有人给这些调用写结果：继续转圈就是在告诉用户
+ * "还在跑，等着就行"。取消、崩溃、没写终态，收尾都是这一句话。
+ */
+export function settleOpenTools(msgs: readonly ChatMessage[]): ChatMessage[] {
+  return msgs.map(message => (message.kind === 'tool' && (message.status === 'running' || message.status === 'pending')
+    ? { ...message, status: 'interrupted' as const }
+    : message));
+}
+
+/**
  * P08 §5: surface a runtime warning as its own notice row.
  *
  * `code` is always shown, because the captured golden warnings carry an
@@ -397,8 +409,14 @@ function applyRuntimeWarning(msgs: ChatMessage[], e: RuntimeWarningEvent): ChatM
   if (noticeId !== undefined
     && msgs.some(message => message.kind === 'notice' && message.noticeId === noticeId)) return msgs;
   const text = e.message.trim() !== '' ? e.message : `运行时提示：${e.code}`;
+  // 这些 code 只在一个时候出现：进程没了，而它没有把结果写完。此时还挂在
+  // 「执行中」的工具卡不是在执行，是没人来收尾——继续转圈就是在骗人。
+  const diedMidRun = e.code === 'missing_terminal'
+    || e.code === 'process_failed'
+    || e.code === 'effect_reconciliation_required';
+  const settled = diedMidRun ? settleOpenTools(msgs) : msgs;
   return [
-    ...msgs,
+    ...settled,
     {
       id,
       // `system`, never `assistant`: a warning is host evidence about
@@ -409,6 +427,9 @@ function applyRuntimeWarning(msgs: ChatMessage[], e: RuntimeWarningEvent): ChatM
       kind: 'notice',
       text,
       ...(noticeId === undefined ? {} : { noticeId }),
+      // 被副作用栅栏挡住时，清单跟着这条 notice 一起进界面：渲染方靠它决定
+      // 显示卡片还是普通提示，不需要再去反解英文错误文本。
+      ...(e.reconcile === undefined ? {} : { reconcile: e.reconcile }),
     } satisfies NoticeMessage,
   ];
 }

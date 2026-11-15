@@ -52,8 +52,25 @@ export type CliCommandInput = {
   readonly control?: CliCommandControlPort;
   /** Lifecycle ownership without changing a command's EOF/JSON protocol. */
   readonly lifecycle?: CliCommandControlPort;
+  /**
+   * 取消后等引擎自己收尾的时长。产品用默认值；固定时间线的测试传小值，
+   * 这样"多久算收不了尾"只有一处定义。
+   */
+  readonly cancelGraceMs?: number;
 };
 export type CliCommandResult = { readonly ok: true; readonly stdout: string } | { readonly ok: false; readonly reason: string; readonly stdout?: string };
+
+/**
+ * 取消一次命令时，先给引擎多长时间自己收尾。
+ *
+ * 中断不是"立刻消失"：引擎要停掉在跑的工具、把结论写进日志、结算已经发出去的
+ * 副作用。被杀掉的进程什么都写不了，留下的是"一步操作发出去了、结果没记下来"。
+ *
+ * 但这两个要求是对立的：等得久，别人收不了尾时"停止"这按钮就像失灵。这里是
+ * 上限而不是延迟——进程一退出就立刻返回，只有赖着不走才等满。5 秒够停掉还在跑
+ * 的子进程树并写完终态，又不至于让人觉得点了没反应；停止期间界面显示"正在停止"。
+ */
+const CANCEL_SETTLE_MS = 5000;
 
 function within<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -129,7 +146,7 @@ export async function runCliCommand(input: CliCommandInput): Promise<CliCommandR
         lifecycle?.clearProcess(child.id);
         try { await within(input.process.send?.(child.id, `${JSON.stringify({ type: 'control_request', request_id: `interrupt-${child.id}`,
           request: { subtype: 'interrupt' } })}\n`) ?? Promise.resolve(), 1000); } catch { /* Force stop still uses the original process owner. */ }
-        try { await within(exit, 1500); return; } catch { /* No exit receipt yet. */ }
+        try { await within(exit, input.cancelGraceMs ?? CANCEL_SETTLE_MS); return; } catch { /* No exit receipt yet. */ }
         try {
           await within(input.process.stop(child.id), 3000);
           await within(exit, 1500);

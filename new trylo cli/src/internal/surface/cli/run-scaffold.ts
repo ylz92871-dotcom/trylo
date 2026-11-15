@@ -67,6 +67,8 @@ export type RunScaffold = {
   readonly resumeView?: CompactWindow;
   /** The journal a resume was loaded from, so a compaction projects over it. */
   readonly resumeRecords?: ReadonlyArray<SessionRecord>;
+  /** Refreshed from durable history, independent of caller system instructions. */
+  readonly effectContinuation?: string;
 
   readonly maxIterations?: number;
   readonly maxTokens?: number;

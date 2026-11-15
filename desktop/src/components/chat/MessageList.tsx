@@ -333,9 +333,16 @@ export function MessageList(props: MessageListProps): ReactElement {
         if (!message) continue;
         const phase = phaseAtIndex.get(index);
         if (phase) {
+          // 已经不在跑的轮次里不可能还有工具在跑：轮到这儿还挂着 running 的，
+          // 结果永远不会来。按「已中断」呈现，而不是让它一直转圈。
+          const entries = turnActive
+            ? phase.entries
+            : phase.entries.map(entry => (entry.kind === 'tool' && (entry.status === 'running' || entry.status === 'pending')
+              ? { ...entry, status: 'interrupted' as const }
+              : entry));
           // Narration cannot settle a live tool; an active run cannot make a
           // completed phase spin. Reasoning is live only at the current tail.
-          const hasActiveTool = phase.entries.some(entry =>
+          const hasActiveTool = entries.some(entry =>
             entry.kind === 'tool' && (entry.status === 'running' || entry.status === 'pending'));
           const tail = phase.entries.at(-1);
           const hasLiveReasoning = tail === turnMsgs.at(-1)
@@ -346,7 +353,7 @@ export function MessageList(props: MessageListProps): ReactElement {
             key: `code-process:${currentTurn.turnId}:${phase.phaseId}:${phase.firstIndex}`,
             turnId: currentTurn.turnId,
             phaseId: phase.phaseId,
-            entries: phase.entries,
+            entries,
             active: turnActive && (hasActiveTool || hasLiveReasoning),
           });
         }

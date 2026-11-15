@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, type SpawnOptions, spawn } from "node:child_process";
 import { publishSessionsTo, type SessionJobs } from "./session-job-publication.js";
 
 import {
@@ -78,10 +78,11 @@ export type ProcessSessionRegistry = {
   get(sessionId: ProcessSessionId): ProcessSessionSnapshot | undefined;
   /** Drain live trees; reject if any OS termination was refused. */
   shutdown(): Promise<void>;
-  readonly maxSessions: number;
+  readonly maxSessions: number | undefined;
 };
 
 export type ProcessSessionRegistryOptions = {
+  readonly spawnProcess?: (program: string, args: readonly string[], options: SpawnOptions) => ChildProcess;
   /** Refuse a start beyond this many live sessions rather than evicting one. */
   readonly maxSessions?: number;
   /** The durable job table to mirror into, if one is wired (WP26 / A04). */
@@ -161,12 +162,13 @@ function snapshotOf(record: SessionRecord): ProcessSessionSnapshot {
 export function createProcessSessionRegistry(
   options: ProcessSessionRegistryOptions = {},
 ): ProcessSessionRegistry {
-  const maxSessions = options.maxSessions ?? 64;
+  const maxSessions = options.maxSessions;
   const maxBufferBytes = clampBufferBytes(options.maxBufferBytes ?? DEFAULT_MAX_BUFFER_BYTES);
   const maxReadBytes = Math.max(4, options.maxReadBytes ?? DEFAULT_MAX_READ_BYTES);
   const now = options.now ?? ((): number => Date.now());
   const publish = publishSessionsTo(options.jobs);
   const terminate = options.terminate ?? killTree;
+  const startChild = options.spawnProcess ?? spawn;
   const sessions = new Map<ProcessSessionId, SessionRecord>();
   const stops = new SessionStopRequests();
   let lifecycle: SessionLifecycle = "open";
@@ -239,7 +241,7 @@ export function createProcessSessionRegistry(
     async start(start: ProcessSessionStart, signal?: AbortSignal): Promise<ProcessSessionSnapshot> {
       assertSessionStartAllowed(lifecycle, signal);
 
-      if (liveSessions().length >= maxSessions) {
+      if (maxSessions !== undefined && liveSessions().length >= maxSessions) {
         throw new Error(
           `process session limit reached (${maxSessions}); stop one before starting another`,
         );
@@ -253,7 +255,7 @@ export function createProcessSessionRegistry(
 
       const id = isProcessSessionIdShape(start.id) ? start.id : newProcessSessionId();
       const buffer = createBoundedBuffer(start.maxBufferBytes || maxBufferBytes);
-      const child = spawn(program, args, {
+      const child = startChild(program, args, {
         cwd: start.cwd,
         env: { ...start.env },
         stdio: ["pipe", "pipe", "pipe"],

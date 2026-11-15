@@ -162,6 +162,8 @@ export async function prepareRun(
     ...(input.options.fileAccess === undefined ? {} : { fileAccess: input.options.fileAccess }),
     ...(input.options.shellIsolation === undefined ? {} : { shellIsolation: input.options.shellIsolation }) });
   const questions = createAskUserTools({ surfaceAnswersOnly: true, nextRequestId: () => ctx.newId("ask"), restored: opened.kind === "resume" ? restoreQuestions(opened.transcript) : [] });
+  const appendedPrompt = [requested.systemPromptAppend, style.append]
+    .filter(part => part !== undefined && part.length > 0).join("\n\n");
 
   return {
     questions,
@@ -194,6 +196,7 @@ export async function prepareRun(
       ? {}
       : { resumeView: opened.window }),
     ...(opened.kind !== "resume" ? {} : { resumeRecords: opened.records }),
+    ...(opened.kind !== "resume" || opened.continuationNotice === undefined ? {} : { effectContinuation: opened.continuationNotice }),
     ...(settings.maxIterations === undefined ? {} : { maxIterations: settings.maxIterations }),
     ...(projectContext === undefined ? {} : { projectContext }),
     ...(settings.maxTokens === undefined ? {} : { maxTokens: settings.maxTokens }),
@@ -205,15 +208,7 @@ export async function prepareRun(
     ...(shell === undefined ? {} : { shell }),
     ...(input.options.fileAccess === undefined ? {} : { fileAccess: input.options.fileAccess }),
     ...requested,
-    // The style prompt joins the caller's own append, when both are present;
-    // either alone behaves exactly as it would without the other.
-    ...((requested.systemPromptAppend === undefined && style.append === undefined
-      ? {}
-      : {
-          systemPromptAppend: [requested.systemPromptAppend, style.append]
-            .filter((part) => part !== undefined && part.length > 0)
-            .join("\n\n"),
-        })),
+    ...(appendedPrompt.length === 0 ? {} : { systemPromptAppend: appendedPrompt }),
     ...(input.options.centralRuntimePolicy === undefined ? {} : { centralRuntimePolicy: input.options.centralRuntimePolicy }),
     ...(input.options.centralLearningThoughtMaxTokens === undefined ? {} : { centralLearningThoughtMaxTokens: input.options.centralLearningThoughtMaxTokens }),
     ...(input.options.centralLearning === undefined ? {} : { centralLearning: input.options.centralLearning,
@@ -307,10 +302,13 @@ export async function handleRun(ctx: CliContext, options: RunCommandOptions, sin
     const effective = workflow?.scaffold ?? goalRun.scaffold;
     const extensionBase = extensionTools ?? effective.additionalTools;
     const legacyTools = extensionBase === undefined ? workflow?.tools : workflow === undefined ? extensionBase : composeAdditionalTools(extensionBase, workflow.tools);
-    const media = mediaToolsFor(ctx.env, effective.execution?.workspaceRoot ?? effective.workspaceRoot);
-    if (media !== undefined && "message" in media) return reportFailure(ctx, media);
+    const mediaSetup = mediaToolsFor(ctx.env, effective.execution?.workspaceRoot ?? effective.workspaceRoot);
+    if (mediaSetup.warning !== undefined) ctx.stderr(`warning: ${mediaSetup.warning}\n`);
+    const media = mediaSetup.tools;
     const additional = media === undefined ? legacyTools : legacyTools === undefined ? media : composeAdditionalTools(legacyTools, media);
-    const preparedBase = { ...effective, ...(additional === undefined ? {} : { additionalTools: additional }) };
+    const preparedBase = { ...effective, ...(additional === undefined ? {} : { additionalTools: additional }),
+      ...(mediaSetup.warning === undefined ? {} : { systemPromptAppend:
+        [effective.systemPromptAppend, mediaSetup.warning].filter(Boolean).join("\n\n") }) };
     const prepared = improvement === undefined ? preparedBase : bindWorkflowImprovement(preparedBase, improvement);
     const observed = workflow === undefined ? ctx : { ...ctx, onRunEnvelope: (envelope: import("../../protocol/envelope.js").Envelope) => {
       workflow?.observe(envelope);

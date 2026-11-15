@@ -108,6 +108,44 @@ const {
 const CLI_PATH = 'D:/CC/trylo/new trylo cli/dist/cmd/trylo/main.js' as never
 const CWD = 'D:/CC/trylo/workspace' as never
 
+it('does not force-kill a delivered cancellation merely because cleanup exceeds three seconds', async () => {
+  vi.useFakeTimers()
+  const run = await startTryloV1({ prompt: 'hello', cliPath: CLI_PATH, cwd: CWD, providerId: 'fixture', onEvents: () => {} })
+  const first = stopTryloV1(run.processId).then(() => null, error => error as Error)
+  try {
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(h.record.stopped).toEqual([])
+    expect(await first).toBeInstanceOf(Error)
+    expect(isTryloV1Process(run.processId)).toBe(true)
+    const forced = stopTryloV1(run.processId)
+    expect(h.record.stopped).toEqual([run.processId])
+    emitExit(run.processId, 130)
+    await forced
+  } finally {
+    if (isTryloV1Process(run.processId)) emitExit(run.processId, 130)
+    await first
+    vi.useRealTimers()
+  }
+})
+
+it('offers reconciliation when an established session is refused before run_start', async () => {
+  const events: LoopEvent[] = []
+  const pending = [{ turn: 'old-turn', key: 'tool:old-call', issuedAtSequence: 2, issuedAt: '2026-11-16T00:00:00Z' }]
+  const probePendingEffects = vi.fn(async () => pending)
+  const { processId } = await startTryloV1({
+    prompt: 'continue', cliPath: CLI_PATH, cwd: CWD,
+    binding: { state: 'established', sessionId: 'desktop-blocked' },
+    onEvents: rows => events.push(...rows), probePendingEffects,
+  })
+  emitStderr(processId, ['session desktop-blocked requires effect reconciliation: tool:old-call'])
+  emitExit(processId, 52)
+  expect(probePendingEffects).toHaveBeenCalledWith('desktop-blocked')
+  await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({
+    type: 'runtime_warning', code: 'effect_reconciliation_required',
+    reconcile: { sessionId: 'desktop-blocked', pending },
+  })))
+})
+
 describe('cancellation before native spawn response', () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -1203,8 +1241,7 @@ describe('TryloV1Runner lifecycle', () => {
         onTerminal: (outcome) => sink.outcomes.push(outcome),
       })
       const stopping = stopTryloV1(processId)
-      await vi.advanceTimersByTimeAsync(3000)
-      expect(h.record.stopped).toEqual([processId])
+      expect(h.record.stopped).toEqual([])
       emitExit(processId, 1)
       await stopping
       expect(sink.outcomes).toEqual(['cancelled'])
@@ -1224,6 +1261,7 @@ describe('TryloV1Runner lifecycle', () => {
         providerId: 'fixture',
         onEvents: (events) => sink.events.push(...events),
       })
+      vi.spyOn(h.service, 'send').mockRejectedValueOnce(new Error('closed stdin'))
       const stopping = stopTryloV1(processId)
       const rejected = expect(stopping).rejects.toThrow(/exit|退出/i)
       await vi.advanceTimersByTimeAsync(5000)
@@ -1292,7 +1330,6 @@ describe('TryloV1Runner lifecycle', () => {
 
   it('stops the child when it is superseded before startup completes', async () => {
     const sink = collect()
-    vi.spyOn(h.service, 'send').mockRejectedValueOnce(new Error('cancelled control pipe'))
     vi.spyOn(h.service, 'stop').mockImplementationOnce(async (id) => {
       h.record.stopped.push(id)
       emitExit(id, 130)

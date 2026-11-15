@@ -142,6 +142,16 @@ const POLICIES: Record<ConversationRunViewState, ConversationMotionPolicy> = {
     toolLoaderSpin: false,
   },
 
+  // 用户要求停止、进程还在收尾：心跳留着（它确实还在动），但工具转圈停掉——
+  // 不让界面继续表演"正在干活"。
+  stopping: {
+    primary: 'header_pulse',
+    headerPulse: true,
+    footerDots: false,
+    turnProgressSpin: false,
+    toolLoaderSpin: false,
+  },
+
   // Terminal states → no loop animation (spec §7.2).
   completed: NONE,
   failed: NONE,

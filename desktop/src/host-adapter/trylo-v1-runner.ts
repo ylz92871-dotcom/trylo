@@ -252,8 +252,21 @@ interface TryloV1Run {
     'projectKey' | 'conversationId' | 'identity'>
   readonly onEvents: (events: readonly LoopEvent[]) => void
   readonly guard: { isSuperseded: () => boolean }
+  /**
+   * 退出后由调用方决定"还差哪几步没被证明"。
+   *
+   * 这里只留一个回调，不认识清单、不认识 CLI 的核对命令：host-adapter 是原生
+   * 端口的实现，upstream 的 runtime 才拥有那个概念。反向 import 会成环。
+   */
+  readonly probePendingEffects?: (sessionId: string) => Promise<readonly import('./loop-events').UnprovenEffect[] | undefined>
+  /** 退出后若会话被副作用栅栏挡住，用同一份 CLI 组合去问引擎"还差哪几步"。 */
+  readonly cliPath: FilePath
+  readonly cwd: FilePath
+  readonly nodeProgram?: string
   stderr: string[]
   cancelled: boolean
+  /** 提示是否真的送到 CLI；决定退出后要不要去问"还差哪几步"。 */
+  promptDelivered: boolean
   state: TryloV1State
   /** P08 §6.2: the session binding, advanced as the run progresses. */
   binding: CliSessionBinding
@@ -324,6 +337,36 @@ function observeRunExit(run: TryloV1Run, info: ProcessExitInfo): void {
       run.onTerminal?.(run.adapter.summary().outcome ?? 'unknown')
     }
   }
+  if (!run.guard.isSuperseded() && run.adapter.summary().outcome !== 'completed') {
+    // Both a lost terminal and a refused resume may leave unconfirmed effects.
+    // 这时会话多半被副作用栅栏挡住，而界面只看到一张永远「执行中」的工具卡。
+    // 探针是一次只读查询，问引擎"还差哪几步没被证明"，答案随这条警告进界面。
+    const sessionId = run.binding.state === 'none' ? null : run.binding.sessionId
+    // An established session can be refused before run_start precisely because
+    // an older turn is pending. Fresh pre-run failures have nothing to inspect.
+    if (run.probePendingEffects !== undefined && sessionId !== null
+      && (run.binding.state === 'established' || (run.promptDelivered && run.adapter.summary().turnId !== null))) {
+      void run.probePendingEffects(sessionId).then(
+        (pending) => {
+          if (pending === undefined || pending.length === 0) return
+          if (run.guard.isSuperseded()) return
+          run.onEvents([run.adapter.warn(
+            'effect_reconciliation_required',
+            `上一次有 ${String(pending.length)} 步操作的结果尚未确认。可以继续对话或检查结果，系统不会自动重放这些操作。`,
+            { sessionId, pending: [...pending] },
+          )])
+        },
+        // 探针失败不许伪装成"没有问题"：那是把未知说成干净。
+        (error: unknown) => {
+          if (run.guard.isSuperseded()) return
+          run.onEvents([run.adapter.warn(
+            'effect_reconciliation_unavailable',
+            `无法确认上一次操作是否执行：${error instanceof Error ? error.message : String(error)}`,
+          )])
+        },
+      )
+    }
+  }
   run.onExit?.(info)
 }
 
@@ -341,6 +384,11 @@ export interface StartTryloV1Args {
   readonly onControlFrame?: (frame: ControlFrame, processId: string) => void
   readonly prompt: string
   readonly cliPath: FilePath
+  /**
+   * 异常退出后由 runtime 侧注入的只读探针：问引擎这个会话还差哪几步没被证明。
+   * host-adapter 不认识清单也不认识核对命令，只负责把答案随警告送进界面。
+   */
+  readonly probePendingEffects?: (sessionId: string) => Promise<readonly import('./loop-events').UnprovenEffect[] | undefined>
   /** P08 §WP6: pinned Node, resolved with cliPath (never defaulted here). */
   readonly nodeProgram?: string
   readonly cwd: FilePath
@@ -461,8 +509,13 @@ export async function startTryloV1(
     } } : {}),
     onEvents: args.onEvents,
     guard: args.guard ?? { isSuperseded: () => false },
+    ...(args.probePendingEffects === undefined ? {} : { probePendingEffects: args.probePendingEffects }),
+    cliPath: args.cliPath,
+    cwd: args.cwd,
+    ...(args.nodeProgram === undefined ? {} : { nodeProgram: args.nodeProgram }),
     stderr: [],
     cancelled: false,
+    promptDelivered: false,
     state: 'spawning',
     binding,
     ...(args.onBindingChange ? { onBindingChange: args.onBindingChange } : {}),
@@ -559,6 +612,9 @@ export async function startTryloV1(
       5000,
     )
     if (!delivered) throw new Error('Initial prompt write acknowledgement timed out.')
+    // 提示真的送到了，才可能有副作用发出。pre-run 就死掉的进程连这一步都没到，
+    // 去问引擎"还差哪几步"只会凭空多起一个 CLI，什么也问不出来。
+    run.promptDelivered = true
   } catch (error) {
     if (hasExited(run)) return { processId: handleKey, state: () => run.state }
     if (!run.guard.isSuperseded()) {
@@ -591,21 +647,27 @@ export async function startTryloV1(
 }
 
 /**
- * Ask the CLI to cancel and seal its journal; terminate the process tree if
- * an older or unresponsive control channel cannot acknowledge by exiting.
+ * First Stop requests cancellation and journal settlement. A repeated Stop
+ * explicitly forces the original tree; a broken control channel falls back immediately.
  */
 export async function stopTryloV1(processId: string): Promise<void> {
   const run = live.get(processId)
-  if (run) {
-    run.cancelled = true
+  const interruptNeeded = run && !run.cancelled && run.state !== 'spawning'
+  if (run) run.cancelled = true
+  if (interruptNeeded) {
+    let delivered = false
     if (
       await requestCliInterrupt({
         processId,
         exited: run.exited,
         send: (id, frame) => hostAdapter.process.send(id, frame),
+        onDelivered: () => { delivered = true },
       })
     )
       return
+    if (delivered) {
+      throw new Error('已请求停止，原执行仍在收尾。可以等待；再次停止将强制结束原进程。')
+    }
   }
   if (hasExited(run)) return
   try {

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import os from "node:os";
 import { join } from "node:path";
 import { EXIT_CODES } from "../../protocol/cli-stream.js";
 import { SESSION_FORMAT_VERSION } from "../../ports/session.js";
@@ -15,15 +14,16 @@ import { dispatch } from "./commands.js";
 import type { CliContext } from "./context.js";
 import { openSession } from "./session-open.js";
 import { createTurnRecorder } from "./turn-recorder.js";
+import { testScratchPath } from "../../testing/scratch.js";
 
 /**
  * Manual reconciliation of actions whose outcome the run could not prove
  * (WP01.3).
  *
  * The failure this closes is not "a tool failed" — it is "a tool crossed the
- * line and then nobody could say whether it landed". That state has to stop the
- * session from resuming, and the only thing allowed to start it again is a
- * person naming the action and what they checked. Every test here drives the
+ * line and then nobody could say whether it landed". That fact survives while
+ * the conversation continues; a person can optionally name the action and
+ * record what they checked. Every test here drives the
  * real command surface (`parseArgs` + `dispatch`) against a real journal on
  * disk, because a reconcile that only worked in memory would be the same bug
  * wearing a different hat.
@@ -40,7 +40,7 @@ const FINGERPRINT = {
 const AT = "1970-01-01T00:00:00.000Z";
 
 function tempHome(): string {
-  return mkdtempSync(join(os.tmpdir(), "trylo-reconcile-"));
+  return mkdtempSync(testScratchPath("trylo-reconcile-"));
 }
 
 function sessionFile(root: string, id: string): string {
@@ -333,15 +333,33 @@ test("the same key in two turns: settling one turn leaves the other unresolved",
   }
 });
 
-test("a reconciled session opens for resume and the action is not repeated", async () => {
+test("an unconfirmed historical action does not lock the next user turn or replay the action", async () => {
   const root = tempHome();
   try {
     await buildUnknownSession(root, "s1");
     const { ctx } = ctxOf(root);
     const options = { resume: "s1", message: [], readStdin: false };
-    const blocked = await openSession(ctx, options, FINGERPRINT);
-
-    assert.equal(blocked.kind, "failed", "an unproven action must block a resume");
+    const continued = await openSession(ctx, options, FINGERPRINT);
+    assert.equal(continued.kind, "resume", "unknown past work must not lock the conversation");
+    if (continued.kind === "resume") {
+      const notice = continued.continuationNotice;
+      assert.ok(notice);
+      assert.match(notice, /tool:c1/);
+      assert.match(notice, /Do not automatically repeat/);
+      let replayed = 0;
+      const result = await runTurn({ profile: emptyProfileLoader(), permission: createFakePermission("approved"),
+        tools: { snapshot: () => [], async execute() { replayed += 1; throw new Error("old action was replayed"); }, async cancel() {} },
+        provider: { async *stream(request) {
+          assert.ok(request.messages.some(message => typeof message.content === "string" && message.content.includes("tool:c1")));
+          yield { type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false };
+        } },
+      }, { sessionId: "s1", turnId: "next", correlationId: "next", text: "Just give me Word; stop converting PDF.",
+        resumedTranscript: continued.transcript, systemPromptAppend: notice });
+      assert.equal(result.state.terminalReason, "completed");
+      assert.equal(replayed, 0);
+      await continued.session.release();
+    }
+    assert.equal((await recordsOf(root, "s1")).session.pendingEffects.length, 1, "continuing never invents a verdict");
 
     const recorded = await cli(root, ["session", "reconcile", "s1", "--turn", "t1", "--key", "tool:c1", "--outcome", "committed", "--evidence", "the file exists"]);
 

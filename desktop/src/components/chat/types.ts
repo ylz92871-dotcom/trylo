@@ -124,6 +124,16 @@ export interface NoticeMessage extends MessageBase {
    * once, however many turns, replays or remounts delivered them.
    */
   readonly noticeId?: string;
+  /**
+   * 会话被"未证明的副作用"挡住时，引擎给出的待核对清单。
+   *
+   * 有它，这张 notice 就不是一句话了：界面要给用户一个能回答的问题（做了/没做
+   * + 证据），判定写回引擎后会话才继续。没有它，notice 仍然只是通知。
+   */
+  readonly reconcile?: {
+    readonly sessionId: string;
+    readonly pending: ReadonlyArray<import('../../runtime/effect-reconciliation').PendingEffect>;
+  };
 }
 
 export interface ToolMessage extends MessageBase {

@@ -329,7 +329,8 @@ async function executeUnderGate(
     }
     if (cancelled()) return { outcome: "cancelled" };
 
-    return await executeToolOnly(ports.tools, call, host.abortSignal);
+    return await executeToolOnly(ports.tools, call, host.abortSignal,
+      host.cancelSignal === undefined ? undefined : { signal: host.cancelSignal, emit: host.emit });
   } finally {
     release();
   }

@@ -2,6 +2,7 @@ import type { JsonObject } from "../protocol/envelope.js";
 import type { ReduceInput } from "../domain/input.js";
 import type { ToolCallRequest, ToolPort, ToolOutcome } from "../ports/tools.js";
 import { executeToolSafely } from "./tool-boundary.js";
+import { executeWithCancellation, type ToolCancellation } from "./tool-cancellation.js";
 import { emitFileWriteRecord } from "./tool-effects.js";
 import { cutToBytes } from "../protocol/text-cut.js";
 import type { ImageReference } from "../protocol/image-reference.js";
@@ -86,7 +87,7 @@ export function toolResultText(outcome: ToolOutcome): string {
     case "error":
       return failureText(outcome.code, outcome.message);
     case "unknown":
-      return failureText(outcome.code, outcome.message);
+      return `${failureText(outcome.code, outcome.message)}\nThis tool's final outcome is unconfirmed. Inspect the current state before deciding what to do next. Do not automatically repeat this operation or treat it as failed or successful.`;
     case "cancelled":
       return "";
     default: {
@@ -207,13 +208,14 @@ export async function executeToolOnly(
   tools: ToolPort,
   call: ToolExecutionCall,
   signal: AbortSignal,
+  cancellation?: ToolCancellation,
 ): Promise<ToolOutcome> {
   const request: ToolCallRequest = {
     toolCallId: call.toolCallId,
     name: call.name,
     arguments: call.arguments,
   };
-  return await executeToolSafely(tools, request, signal);
+  return await executeWithCancellation(tools, call.toolCallId, () => executeToolSafely(tools, request, signal), cancellation);
 }
 
 export async function settleToolOutcome(
@@ -264,8 +266,9 @@ export async function runToolFor(
   tools: ToolPort,
   call: ToolExecutionCall,
   signal: AbortSignal,
+  cancellation?: ToolCancellation,
 ): Promise<void> {
-  await settleToolOutcome(host, call, await executeToolOnly(tools, call, signal));
+  await settleToolOutcome(host, call, await executeToolOnly(tools, call, signal, cancellation));
 }
 
 function settledInput(

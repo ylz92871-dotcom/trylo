@@ -60,7 +60,9 @@ it.each(['read refresh', 'explicit stop retry'] as const)(
     const service = new LostExitProcess(process.env), supervisor = new ConversationRunSupervisor();
     const scope = { projectKey: directory, conversationId: 'library', projectRoot: directory };
     const owner = supervisor.libraryApprovalPort(scope), recovery = supervisor.libraryRecoveryPort();
-    const runtime = { process: service, cliPath: script as FilePath, cwd: directory as FilePath, nodeProgram: process.execPath };
+    const runtime = { process: service, cliPath: script as FilePath, cwd: directory as FilePath, nodeProgram: process.execPath,
+      // 这个用例固定的是「收不了尾就硬杀并保留恢复入口」，不是等多久。
+      cancelGraceMs: 1500 };
     const clients = createDesktopLibraryClients(runtime, undefined, owner);
     const cancel = new AbortController();
     const first = runCliCommand({ ...runtime, args: ['--hold'], stdin: '{}\n', lifecycle: owner, signal: cancel.signal });

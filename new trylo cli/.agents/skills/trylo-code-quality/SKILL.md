@@ -1,11 +1,24 @@
 ---
 name: trylo-code-quality
-description: Mandatory for every Trylo code change across all projects, including source, tests, scripts, build configuration, toolchain and services. UI work must keep Code and Work synchronized. Checks permissions first, then readability, state ownership, architecture and proportionate validation. CLI-specific gates apply only to CLI work.
+description: Mandatory for every Trylo code change across all projects. Prioritizes usable task completion and continuation, rejects excessive defensive restrictions, then checks permissions, readability, ownership and proportionate evidence. UI work keeps Code and Work synchronized; CLI-specific rules apply only to CLI work.
 ---
 
 # Trylo Code Quality Gate
 
-Treat readability and maintainability as release-blocking requirements.
+Make the user's task work. Readability, maintainability and checks support that outcome.
+
+## User experience and task continuation come first
+
+Owner decision, 2026-11-16: review the entire CLI runtime for excessive defensive design. User experience takes priority over preserving old implementation rules or making existing checks green.
+
+- Establish the intended user journey and observe the actual failure before deciding which invariant to preserve. A passing check does not establish that the product is usable; a failing old check does not establish that a usability fix is wrong.
+- Treat existing tests, architecture gates and historical contracts as claims to examine. When they enforce obsolete or harmful behavior, update the behavior and its checks together, recording the user-visible reason. Do not keep a defect to satisfy a test, loosen a check merely to hide a defect, or pursue unrelated green checks instead of solving the reported problem.
+- Keep failures local to the operation that actually failed. A tool refusal, missing optional capability, interruption, transient provider error or uncertain past result must not unnecessarily terminate unrelated work, disable ordinary tools, lock a conversation, or force the user to start over.
+- Preserve uncertain outcomes as facts and provide context for inspection and continuation in the current or next turn. An acknowledged unknown tool outcome is not a persistence failure and must not strip all tools from later iterations. Do not invent success, clear unknown facts, or automatically replay an uncertain write.
+- Prefer cancellation that reaches the current owner, durable progress, actionable tool results, resumable context and recovery in the existing conversation. Do not add mandatory manual reconciliation, confirmations, silent caps, automatic force-kills or global fail-closed behavior merely because they look conservative.
+- A restriction needs a concrete failure, an actual user/permission/provider/data-integrity requirement, a scope proportional to that requirement, and an explanation of why a usable continuation cannot satisfy it. User-selected limits and explicit refusals remain authoritative; this principle does not expand permissions or erase facts.
+- Audit the whole runtime journey when requested: startup/configuration, permission and tool dispatch, single/batched execution, provider transport, cancellation, compaction, budgets, background work, workflows and session recovery. Do not limit a whole-CLI request to the initial error family or claim a whole-runtime audit from one repaired path.
+- Verify the intended behavior first, then run the relevant checks. Use focused regressions and real boundary probes where they answer an unresolved question; do not spend time or paid quota repeatedly checking a weak design.
 
 ## Mandatory activation across Trylo
 
@@ -13,16 +26,16 @@ Owner decision, 2026-11-09: every Trylo code task must load, read and apply this
 
 Use the owning project's contracts and proportionate checks. This requirement does not apply CLI-only phases to other projects or authorize unrelated refactors, product changes, permission changes, paid calls or releases.
 
-## Permission-chain correctness comes first
+## Preserve the user's permission choice
 
-Owner decision, 2026-11-08: permission failures have repeatedly broken real tasks. Check this chain before other implementation work and first in self-review whenever CLI, tools, MCP, Desktop dispatch, installation or runtime packaging is affected. For unrelated changes, record why the chain is unaffected; do not expand a small task into an unrelated permission migration.
+Owner decision, 2026-11-08: permission failures have repeatedly broken real tasks. Trace this chain while diagnosing the actual user journey whenever CLI, tools, MCP, Desktop dispatch, installation or runtime packaging is affected. For unrelated changes, record why the chain is unaffected; do not expand a small task into an unrelated permission migration.
 
 - Trace the user's selected mode through the per-run snapshot, CLI flags, sandbox/filesystem scope, host approval decision, tool classifier and actual child process. An enabled tool in fully automatic mode must not become unusable because one layer silently applies a different mode, stale package manifest or narrower implicit scope.
 - Separate application authorization, tool availability, protocol/argument validity, filesystem ACLs and Windows integrity labels. `policy_denied` is not evidence of a Low/Medium/High mismatch. Record the actual denying layer and machine-readable reason; do not guess from a visible warning.
 - Preserve explicit denials, disabled tools, cancellation and granted scope. Full automation follows the user's authorized scope; it is not permission to bypass standing restrictions. Conversely, unknown syntax, a classifier that lags the shipped binary, or an internal service exception must not invent a standing denial. Correct the contract or return an actionable tool failure and let the model continue.
 - Verify all affected tool paths: built-ins, bundled MCP and user-mounted MCP. For bundled runtimes, check the exact binary/interpreter/helper dependency closure, parent/child integrity, ACLs and writable data/cache/temp paths. A standalone executable succeeding does not prove the app-launched tool can run. Respect the existing approved development integrity setting; do not globally elevate, weaken ACLs or change user authorization to make a check pass.
 - Treat a refused or undispatched call as one failed tool result with its exact call identity and reason. The model must receive it and be able to choose an allowed alternative or explain the limitation. Single and batched calls, expired approvals, approval transport errors and pre-execution guard errors must not end the whole turn with warnings alone. No denied call may execute, and no failed call may be reported as successful.
-- Preserve genuine outcome-unknown and persistence/ownership failures. Do not clear their reconciliation facts or replay an uncertain write. When execution must stop, provide a truthful final explanation through the existing model/reporting owner when possible, or an explicitly system-sourced failure when the provider or writer cannot continue. User cancellation must not trigger another model request.
+- Preserve genuine outcome-unknown and persistence/ownership failures. Do not clear their facts or replay an uncertain write. Stop only the execution that cannot truthfully continue; an uncertain historical action must not lock the next user turn. Explain the actual failure through the existing reporting owner, or an explicitly system-sourced failure when the provider or writer cannot continue. User cancellation must not trigger another model request.
 - Exercise affected modes and failure branches with meaningful local probes, including a permitted tool call, a real refusal, an approval transport failure and continuation after failure. Cover single/batch behavior and the bundled app-to-tool path when changed. Bind source, development output and staged runtime bytes before claiming delivery; distinguish local fixture, native startup and actual provider/task acceptance.
 - Audit new permission conditions, hidden token/time/count limits and terminal transitions as product behavior. Do not add speculative restrictions or an automatic retry that changes authority. Report what changed, why it is authorized, which layer refused the original call and how continuation was verified.
 
@@ -125,6 +138,7 @@ Use compilation/import resolution, the affected existing contract/regression tes
 
 Review the diff in this order and report findings even when the list is empty:
 
+0. User experience: does the actual user journey work, can the task continue after a local failure, and are all remaining restrictions justified by current requirements? Update obsolete checks instead of preserving harmful behavior for their sake.
 1. Permissions: does the affected chain preserve the user's selected mode and scope through host, CLI, tool and operating system, with refusal and failure returned to the model instead of silently terminating the turn?
 2. Readability: can a new maintainer explain control flow, state ownership, and failure behavior without reconstructing intent?
 3. Maintainability: is there one extension point, no duplication of policy, and no speculative abstraction?

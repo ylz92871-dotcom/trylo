@@ -47,6 +47,7 @@ export function toolHostFor(engine: Engine, ports: LoopPorts, deps: ViewDeps): T
     grants: engine.grants,
     doom: engine.doom,
     abortSignal: engine.abort.signal,
+    cancelSignal: engine.compactionSignal,
     noteTurnDiff: (_tool, value) => feedTurnDiffFromOutcome(engine.turnDiff, value),
     beforeWrite: (name) =>
       ports.checkpoint === undefined

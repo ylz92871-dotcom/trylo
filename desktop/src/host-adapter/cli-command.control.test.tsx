@@ -123,7 +123,7 @@ it('retains an unconfirmed stop in the original Supervisor and lets the visible 
   const f = fixture({ graceful: false }), supervisor = new ConversationRunSupervisor(), cancel = new AbortController();
   const control = supervisor.libraryApprovalPort({ ...f.scope, projectRoot: paths.cwd }), recovery = supervisor.libraryRecoveryPort();
   f.process.stop.mockRejectedValueOnce(new Error('actual-stop-failed'));
-  const result = runCliCommand({ ...paths, process: f.process, args: ['library', 'expert', '-'], stdin: '{"operation":"submit"}\n', control, signal: cancel.signal });
+  const result = runCliCommand({ ...paths, process: f.process, args: ['library', 'expert', '-'], stdin: '{"operation":"submit"}\n', control, signal: cancel.signal, cancelGraceMs: 1500 });
   await waitFor(() => expect(supervisor.pendingCodePermissions()).toHaveLength(1));
   vi.useFakeTimers(); cancel.abort(); await vi.advanceTimersByTimeAsync(1600);
   expect(await result).toEqual({ ok: false, reason: 'stop_unconfirmed' });

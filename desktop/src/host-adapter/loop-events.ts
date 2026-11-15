@@ -319,12 +319,39 @@ export interface AbortedEvent extends BaseEvent {
  * consumer may treat an empty message as "nothing to show". The code
  * alone is the notice.
  */
-export interface RuntimeWarningEvent extends BaseEvent {
-  readonly type: 'runtime_warning';
+/**
+ * 一次已发出、但结果没被证明的副作用。
+ *
+ * 形状归 CLI 的 `session reconcile --json`：这里只搬运，不解释。`turn` 缺失
+ * 表示这条记录无法在应用内定位到轮次（界面要如实说，而不是猜一个）。
+ */
+export interface UnprovenEffect {
+  readonly turn?: string;
+  readonly key: string;
+  readonly issuedAtSequence: number;
+  readonly issuedAt: string;
+  readonly tool?: string;
+  readonly arguments?: Readonly<Record<string, unknown>>;
+}
+
+/** 会话被副作用栅栏挡住时的随身清单。 */
+export interface ReconcileWarningPayload {
+  readonly sessionId: string;
+  readonly pending: ReadonlyArray<UnprovenEffect>;
+}
+
+export interface RuntimeWarningEvent extends BaseEvent {  readonly type: 'runtime_warning';
   /** Stable warning identity scoped to the canonical CLI session and turn. */
   readonly id?: string;
   readonly code: string;
   readonly message: string;
+  /**
+   * 会话被未证明的副作用挡住时才出现：引擎的待核对清单。
+   *
+   * 有了它，这条 warning 就不再只是"一句话"，界面可以让用户回答"做了没有"，
+   * 把判定写回引擎。没有它，warning 仍然是纯通知。
+   */
+  readonly reconcile?: ReconcileWarningPayload;
   /**
    * Additive diagnosis for degradations the CLI can classify. The renderer
    * uses `noticeId` to keep one degraded notice per reason and history set,

@@ -53,7 +53,8 @@ function byId(view: SessionView, sessionId: string): SessionOwner | undefined {
 
 export function createSessionView(view: SessionView): ProcessSessionRegistry {
   return {
-    get maxSessions(): number {
+    get maxSessions(): number | undefined {
+      if (view.pipes.maxSessions === undefined || (view.pty !== undefined && view.pty.maxSessions === undefined)) return undefined;
       return view.pipes.maxSessions + (view.pty?.maxSessions ?? 0);
     },
 

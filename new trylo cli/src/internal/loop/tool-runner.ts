@@ -31,6 +31,8 @@ export type ToolRunnerHost = {
   readonly grants: PermissionGrantCache;
   readonly doom: DoomLoopTracker;
   readonly abortSignal: AbortSignal;
+  /** Requests adapter cancellation without cutting an atomic write's signal. */
+  readonly cancelSignal?: AbortSignal;
   /** Undo is made here or not at all: once per turn, before the first write. */
   readonly beforeWrite: (toolName: string) => Promise<void>;
   /**
@@ -133,5 +135,6 @@ export async function runTool(
     tools,
     { toolCallId, name: call.name, arguments: call.arguments },
     host.abortSignal,
+    host.cancelSignal === undefined ? undefined : { signal: host.cancelSignal, emit: host.emit },
   );
 }

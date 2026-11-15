@@ -26,6 +26,7 @@ const ALL_STATES: readonly ConversationRunViewState[] = [
   'finalizing',
   'awaiting_input',
   'reconnecting',
+  'stopping',
   'completed',
   'failed',
   'cancelled',
@@ -99,6 +100,13 @@ const EXPECTED: Record<
     toolLoaderSpin: false,
   },
   reconnecting: {
+    primary: 'header_pulse',
+    headerPulse: true,
+    footerDots: false,
+    turnProgressSpin: false,
+    toolLoaderSpin: false,
+  },
+  stopping: {
     primary: 'header_pulse',
     headerPulse: true,
     footerDots: false,

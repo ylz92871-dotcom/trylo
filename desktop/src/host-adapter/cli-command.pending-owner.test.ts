@@ -32,7 +32,9 @@ it('the original owner retains a real child before its delayed handle, blocks a 
   const service = new DelayedProcess(process.env), supervisor = new ConversationRunSupervisor(), cancel = new AbortController();
   const scope = { projectKey: directory, conversationId: 'library-pending', projectRoot: directory };
   const owner = supervisor.libraryApprovalPort(scope), recovery = supervisor.libraryRecoveryPort();
-  const runtime = { process: service, cliPath: script as FilePath, nodeProgram: process.execPath, cwd: directory as FilePath, lifecycle: owner, recovery };
+  const runtime = { process: service, cliPath: script as FilePath, nodeProgram: process.execPath, cwd: directory as FilePath, lifecycle: owner, recovery,
+    // 假时钟只推进到刚过旧窗口的位置；这里固定等待时长，测的仍是"收不了尾就硬杀"。
+    cancelGraceMs: 1500 };
   try {
     const first = approveToolAcquisition(runtime, acquisitionFixture(), cancel.signal);
     await started; expect(service.children.size).toBe(1); expect(owner.canStart?.()).toBe(false);

@@ -32,6 +32,7 @@ export type ConversationRunViewState =
   | 'finalizing'
   | 'awaiting_input'
   | 'reconnecting'
+  | 'stopping'
   | 'completed'
   | 'failed'
   | 'cancelled'
@@ -43,6 +44,12 @@ export interface DeriveRunViewStateInput {
   readonly running: boolean
   /** Code spawn error. */
   readonly error?: boolean
+  /**
+   * 用户已经要求停止，进程还在收尾（写终态、结算在飞的副作用）。
+   *
+   * 这段时间里说"执行中"是撒谎，说"已中断"也早了一步：它正在停。
+   */
+  readonly stopping?: boolean
 }
 
 /** The tail of the message stream that indicates the run is
@@ -90,6 +97,9 @@ export function deriveConversationRunViewState(
   input: DeriveRunViewStateInput,
 ): ConversationRunViewState {
   const { messages, running, error, recoveryState } = input
+  // 停止优先于一切：用户已经按了停止，界面该说的是"正在停"，而不是继续描述
+  // 停止之前那个状态。进程退出后这个标志会自己消失，回到正常的终态。
+  if (input.stopping === true) return 'stopping'
   if (recoveryState?.kind === 'unavailable') return 'failed'
   if (recoveryState?.kind === 'reconnecting') return 'reconnecting'
   if (recoveryState?.kind === 'streaming') {
@@ -151,6 +161,8 @@ export function viewStateLabel(state: ConversationRunViewState): string {
       return '等待你的回复'
     case 'reconnecting':
       return '正在重新连接…'
+    case 'stopping':
+      return '正在停止…'
     case 'completed':
       return '已完成'
     case 'failed':

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createToolCatalog } from '../../desktop-services/src/tooling/tool-catalog.mjs';
 import { loadRepositoryToolRegistry } from '../../desktop-services/src/tooling/tool-package-manager.mjs';
+import { readSkillRuntimeClosure } from '../../new trylo cli/scripts/skill-learning/copy-hermes-runtime.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const failures = [];
@@ -34,6 +35,13 @@ function json(relative) {
 }
 const layout = json('scripts/release/source-layout.json');
 for (const entry of layout?.extraFiles ?? []) requireFile(entry.source);
+// The CLI's maintained JS adapters are source inputs despite the general
+// src/**/*.js ignore rule. Verify their actual manifest, not only TS imports.
+try {
+  checkedFiles += readSkillRuntimeClosure().files.length;
+} catch (error) {
+  failures.push(`CLI skill runtime source closure: ${error.message}`);
+}
 // The source checkout includes this exact first-party helper. Downloaded sandbox
 // helpers stay outside Git and are checked by setup-cli-native.mjs instead.
 const ptyProvenance = json('new trylo cli/vendor-bin/pty/PROVENANCE.json');

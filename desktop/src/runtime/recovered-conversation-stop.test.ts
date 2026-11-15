@@ -6,6 +6,24 @@ import { RecoveredConversationStop } from './recovered-conversation-stop';
 const target: LiveProcessInfo = { id: 'old-root' as ProcessId, pid: 1, label: 'trylo-cli-v1', command: 'node',
   metadata: { projectKey: 'project', conversationId: 'conversation', runId: 'old-turn' } };
 
+it('lets a delivered detached cancellation drain until the user explicitly requests force', async () => {
+  vi.useFakeTimers();
+  let alive = true;
+  const stop = vi.fn(async () => { alive = false; });
+  const owner = new RecoveredConversationStop(async () => ({
+    list: async () => alive ? [target] : [], send: async () => {}, stop,
+  }), () => {});
+  try {
+    const first = owner.stop('project', 'conversation').then(() => null, error => error as Error);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(stop).not.toHaveBeenCalled();
+    expect(await first).toBeInstanceOf(Error);
+    await owner.stop('project', 'conversation');
+    expect(stop).toHaveBeenCalledOnce();
+    expect(owner.isHeld('project', 'conversation')).toBe(false);
+  } finally { vi.useRealTimers(); }
+});
+
 it('keeps a read-only owner inspection invisible while retaining its internal send hold', async () => {
   let release!: () => void;
   const pending = new Promise<void>(resolve => { release = resolve; });

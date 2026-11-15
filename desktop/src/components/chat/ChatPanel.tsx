@@ -193,6 +193,9 @@ export interface ChatPanelProps {
   /** True when the agent is in an error state. v1.15. */
   readonly error?: boolean
   readonly recoveryState?: import('../../runtime/runtime-types').CodeRunRecoveryState
+  /** 用户已要求停止、进程还在收尾。界面要说"正在停止"，不说"执行中"。 */
+  readonly stopping?: boolean
+  readonly workStopping?: boolean
   readonly onStop?: () => void
   readonly sendingDisabled?: boolean
   readonly contextUsed: number
@@ -265,8 +268,9 @@ export function ChatPanel(props: ChatPanelProps): ReactElement {
         running,
         error,
         recoveryState: props.recoveryState,
+        stopping: props.stopping,
       }),
-    [props.messages, running, error, props.recoveryState],
+    [props.messages, running, error, props.recoveryState, props.stopping],
   )
 
   if (props.topMode === 'work') {
@@ -389,8 +393,9 @@ function WorkSurface(props: ChatPanelProps): ReactElement {
         running: props.workRunning,
         error: props.workError,
         recoveryState: props.workRecoveryState,
+        stopping: props.workStopping,
       }),
-    [props.workMessages, props.workRunning, props.workError, props.workRecoveryState],
+    [props.workMessages, props.workRunning, props.workError, props.workRecoveryState, props.workStopping],
   )
   // P2-1 Work Package B: staged entries → shared chip view shape.
   // Memoized on the snapshot array (reference-stable per partition

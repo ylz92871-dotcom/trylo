@@ -13,9 +13,9 @@ import { isValidSessionId, sessionPath } from "./session-paths.js";
  * (WP01.3).
  *
  * A tool call that crossed the execution boundary and then lost contact with
- * its result is neither failed nor succeeded — it is unknown, and the journal
- * refuses to resume until somebody says which it was. This is the command that
- * says it.
+ * its result is neither failed nor succeeded — it is unknown. The next turn may
+ * inspect and continue without replaying it; this optional command records a
+ * person's evidence-backed determination without rewriting that history.
  *
  * Four rules are load-bearing and are why this file is shaped the way it is:
  *

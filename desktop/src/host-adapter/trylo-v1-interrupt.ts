@@ -31,13 +31,17 @@ export async function requestCliInterrupt(input: {
   readonly processId: string
   readonly send: (id: string, frame: string) => Promise<void>
   readonly exited: Promise<void>
+  readonly onDelivered?: () => void
 }): Promise<boolean> {
   try {
     const sent = Promise.resolve().then(() =>
       input.send(input.processId, cliInterruptFrame(input.processId)),
     )
     return await completesWithin(
-      Promise.race([input.exited, sent.then(() => input.exited)]),
+      Promise.race([input.exited, sent.then(() => {
+        input.onDelivered?.()
+        return input.exited
+      })]),
       CLI_INTERRUPT_GRACE_MS,
     )
   } catch {

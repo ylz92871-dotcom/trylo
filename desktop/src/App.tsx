@@ -96,7 +96,7 @@ import {
   prepareWorkAttachmentRetry,
   recoverWorkAttachmentHistory,
 } from './attachments/attachment-history'
-import { applyEvents, finalizeLatestTurnTimer } from './components/chat/events'
+import { applyEvents, finalizeLatestTurnTimer, settleOpenTools } from './components/chat/events'
 import { lastUserIndex } from './components/chat/message-identity'
 // Round-3 P2: model-mentioned file links resolve a bare basename against
 // the files this conversation actually touched (no more root-join 404).
@@ -187,6 +187,8 @@ import {
   type TryloSettings,
   type SettingsSaveIntent,
 } from './settings/settings-store'
+import { installEffectReconcileHost } from './components/chat/effect-reconcile-context'
+import { recordEffectVerdict } from './runtime/effect-reconciliation'
 import { withoutSettingsNotice, type SettingsNotice } from './settings/settings-notices'
 import {
   effectiveModelForConversation,
@@ -1739,6 +1741,15 @@ function App({
       ...(libraryNodeProgram === undefined ? {} : { nodeProgram: libraryNodeProgram }),
     }
   }, [libraryCliPath, libraryNodeProgram, currentWorkspace.root])
+  // 一条"发出去了、结果没记下来"的操作只有人能撤销它的不确定：卡片负责摆问题，
+  // 写回引擎需要 CLI 路径和工作目录。这里把两者接上，随设置变化重新安装。
+  useEffect(() => {
+    installEffectReconcileHost({
+      settle: async (request) =>
+        recordEffectVerdict(toolLearningRuntime, request),
+    })
+    return () => installEffectReconcileHost(null)
+  }, [toolLearningRuntime])
   const libraryControl = useMemo(
     () =>
       supervisor.libraryApprovalPort({
@@ -2414,9 +2425,11 @@ function App({
         updateMessagesAt(target.root, target.conversationId, (prev) =>
           // Idempotent append: the observer already dedupes per runId, and the
           // notice id is derived from that runId, so a replay cannot stack.
+          // 运行结束（含强制打断）后没有谁会再给在飞的工具写结果：先收尾，
+          // 否则卡片一直转「执行中」。
           prev.some((message) => message.id === target.message.id)
             ? prev
-            : [...prev, target.message],
+            : [...settleOpenTools(prev), target.message],
         )
       }),
     [updateMessagesAt],
@@ -3531,8 +3544,21 @@ function App({
 
   // P0 Work 单一发送: Work Stop 不再走 workd runtime.cancelTask，
   // 直接停止 Code supervisor 上的 Work 会话运行。
+  /**
+   * 用户按了停止、到进程真的退出之间，这段空白必须被说出来。
+   *
+   * 停止不是瞬间的：进程要停掉在跑的工具、写完终态。这段时间里界面如果继续显示
+   * "执行中"，用户会以为按钮没反应；如果立刻显示"已中断"，又是在提前宣布结果。
+   */
+  const [stoppingConversations, setStoppingConversations] = useState<readonly string[]>([])
+  const trackStopping = useCallback((conversationId: string | null): (() => void) => {
+    if (conversationId === null || conversationId === '') return () => {}
+    setStoppingConversations(prev => (prev.includes(conversationId) ? prev : [...prev, conversationId]))
+    return () => setStoppingConversations(prev => prev.filter(id => id !== conversationId))
+  }, [])
   const handleWorkStop = useCallback(() => {
     if (!workSessionId) return
+    const releaseStopping = trackStopping(workSessionId)
     const turnId = workMessagesRef.current[lastUserIndex(workMessagesRef.current)]?.id ?? ''
     workSendIdempotencyRef.current = null
     try {
@@ -3569,7 +3595,8 @@ function App({
         ),
       )
       .catch((error: unknown) => reportStopFailure(currentWorkspace.root, workSessionId, error))
-  }, [supervisor, workSessionId, currentWorkspace.root, updateMessagesAt, reportStopFailure])
+      .finally(releaseStopping)
+  }, [supervisor, workSessionId, currentWorkspace.root, updateMessagesAt, reportStopFailure, trackStopping])
 
   // 2026-08-30 (P0 Work 单一发送) + 2026-09-04 (CLI 单核): approvals run
   // solely through the supervisor's CodePermissionRegistry — the workd
@@ -4047,10 +4074,12 @@ function App({
       /* never block stop */
     }
     if (codeSessionId) {
+      const release = trackStopping(codeSessionId)
       void supervisor
         .stopConversation(currentWorkspaceKey, codeSessionId)
         .then(() => setMessages((prev) => finalizeTurnTimer(prev, turnId, Date.now(), 'cancelled')))
         .catch((error: unknown) => reportStopFailure(currentWorkspace.root, codeSessionId, error))
+        .finally(release)
     }
   }, [
     supervisor,
@@ -4059,6 +4088,7 @@ function App({
     codeSessionId,
     setMessages,
     reportStopFailure,
+    trackStopping,
   ])
 
   // The context follows the current workspace. Recreating
@@ -6263,6 +6293,7 @@ function App({
               workRunning={workRunning}
               workError={workCodeView.error}
               workRecoveryState={workCodeView.recoveryState}
+              workStopping={stoppingConversations.includes(workSessionId ?? '')}
               workComposerRunning={workBusy}
               onWorkStop={handleWorkStop}
               // M4-E (spec §6.7 Core "approval"): the inline ApprovalCard responder.
@@ -6383,6 +6414,7 @@ function App({
               running={running}
               error={error}
               recoveryState={codeView.recoveryState}
+              stopping={stoppingConversations.includes(codeSessionId ?? '')}
               onStop={onStop}
               queuedCount={topMode === 'work' ? workQueuedCount : codeQueuedCount}
               onInterruptQueued={topMode === 'work' ? interruptWorkQueue : interruptCodeQueue}

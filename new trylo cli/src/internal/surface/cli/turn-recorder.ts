@@ -15,19 +15,17 @@ import { isNormalProviderReturnObservation, isProviderWaitObservation, providerR
 
 type RecordInput = Parameters<SessionPort["append"]>[0];
 
-type EffectState = "open" | "reconciliation_required";
-
 type AppendFact = (type: RecordInput["type"], payload: RecordInput["payload"], at?: string) => Promise<ProgressWriteOutcome>;
+
+type EnvelopeAttemptCursor = { readonly values: Map<number, string>; high: number };
 
 type RecorderCursor = {
   /** Ordinal -> digest of everything known durable, resumed items included. */
   readonly items: Map<number, string>;
   /** Same for envelopes, which are per-turn and start empty. */
-  readonly envelopes: Map<number, string>;
+  readonly envelopeAttempts: Map<string, EnvelopeAttemptCursor>;
   /** Highest ordinal written or resumed; nothing durable appears below it. */
   highItem: number;
-  highEnvelope: number;
-  effectState: EffectState;
   readonly scope: string;
   continuation: ProviderContinuationPort | undefined;
   readonly sessionId: string;
@@ -131,21 +129,12 @@ function progressPort(append: AppendFact, cursor: RecorderCursor, observers: Pic
      * show it without ever replaying it.
      */
     preserve: createPartialRecorder(payload => append("stream_partial", payload)),
-    issue: key => cursor.effectState === "reconciliation_required"
-      ? Promise.resolve({ ok: false, code: "effect_reconciliation_required" })
-      : append("effect_issued", { key }),
+    issue: key => append("effect_issued", { key }),
 
     async settle(key, outcome) {
       const type = outcome === "succeeded" ? "effect_committed" : outcome === "unknown" ? "effect_unknown" : "effect_failed";
       const result = await append(type, { key, outcome });
       if (result.ok) notifyCommitted(() => observers.onCommittedEffect?.(key, outcome));
-
-      if (result.ok && outcome === "unknown") {
-        cursor.effectState = "reconciliation_required";
-        // The fact is durable, but this lease cannot safely continue. Stop
-        // through the same typed boundary the host closes on write failures.
-        return { ok: false, code: "effect_reconciliation_required" };
-      }
 
       return result;
     },
@@ -181,7 +170,7 @@ function seedCursor(resumed: Transcript, scope: string, sessionId: string, turnI
     if (item.sequence > highItem) highItem = item.sequence;
   }
 
-  return { items, envelopes: new Map(), highItem, highEnvelope: -1, effectState: "open", scope, continuation: undefined,
+  return { items, envelopeAttempts: new Map(), highItem, scope, continuation: undefined,
     sessionId, turnId, streamIndex: 0, streamAttemptId: undefined, streamOpen: false };
 }
 
@@ -230,8 +219,12 @@ async function appendNewFacts(append: AppendFact, cursor: RecorderCursor, facts:
   }
 
   for (const envelope of facts.envelopes) {
+    // Canonical sequence restarts for each attempt; retrying the same turn is
+    // not a rewrite of the previous attempt's sequence zero.
+    const attemptKey = envelope.attemptId ?? "";
+    const attempt = cursor.envelopeAttempts.get(attemptKey) ?? { values: new Map<number, string>(), high: -1 };
     const digest = digestOf(envelope);
-    const verdict = classify(cursor.envelopes, cursor.highEnvelope, envelope.sequence, digest);
+    const verdict = classify(attempt.values, attempt.high, envelope.sequence, digest);
     if (verdict === "skip") continue;
 
     if (verdict === "conflict") return { ok: false, code: "progress_sequence_conflict:envelope" };
@@ -264,9 +257,9 @@ async function appendNewFacts(append: AppendFact, cursor: RecorderCursor, facts:
         && "noticeId" in diagnostic && typeof diagnostic.noticeId === "string") cursor.continuation?.acknowledgeNotice?.(diagnostic.noticeId);
     }
 
-    cursor.envelopes.set(envelope.sequence, digest);
-
-    if (envelope.sequence > cursor.highEnvelope) cursor.highEnvelope = envelope.sequence;
+    attempt.values.set(envelope.sequence, digest);
+    attempt.high = Math.max(attempt.high, envelope.sequence);
+    cursor.envelopeAttempts.set(attemptKey, attempt);
 
     notifyCommitted(() => onCommittedEnvelope?.(envelope));
   }

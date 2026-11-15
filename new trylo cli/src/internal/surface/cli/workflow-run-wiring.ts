@@ -31,7 +31,7 @@ export async function openWorkflowRun(ctx: CliContext, options: RunCommandOption
     if (options.workflowVersion === undefined || options.workflowTask === undefined) return refusal("workflow version and task context are required together");
 
     const raw = ctx.readFile(path.resolve(ctx.cwd, options.workflowTask));
-    if (raw === undefined || raw.length > 16384) return refusal("workflow task context is unreadable or exceeds 16 KiB");
+    if (raw === undefined) return refusal("workflow task context is unreadable");
 
     let value: unknown;
 
@@ -92,7 +92,7 @@ export async function openWorkflowRun(ctx: CliContext, options: RunCommandOption
     const target = resolveInsideWorkspace(scaffold.workspaceRoot, reference);
     if (!target.ok) return undefined;
     const value = ctx.readFile(target.absolutePath);
-    return value === undefined || value.length > 1048576 ? undefined : createHash("sha256").update(value).digest("hex");
+    return value === undefined ? undefined : createHash("sha256").update(value).digest("hex");
   };
   const projectionInput: Parameters<typeof createWorkflowExecution>[0] = { artifact: selected.value.artifact, versionId: adoption.versionId,
     traceId: ctx.newId("workflow-trace"), executionId: adoption.instanceId, sessionId: scaffold.sessionId,

@@ -91,7 +91,7 @@ export type PtySessionRegistryPort = {
   list(): ProcessSessionList;
   get(sessionId: ProcessSessionId): ProcessSessionSnapshot | undefined;
   shutdown(): void;
-  readonly maxSessions: number;
+  readonly maxSessions: number | undefined;
 };
 
 function snapshotOf(record: PtySession): ProcessSessionSnapshot {
@@ -115,7 +115,7 @@ export function createPtySessionRegistry(
   options: PtySessionRegistryOptions = {},
 ): PtySessionRegistryPort {
   const stops = new SessionStopRequests();
-  const maxSessions = options.maxSessions ?? 8;
+  const maxSessions = options.maxSessions;
   let lifecycle: SessionLifecycle = "open";
   const maxBufferBytes = clampBufferBytes(options.maxBufferBytes ?? DEFAULT_MAX_BUFFER_BYTES);
   const maxReadBytes = Math.max(4, options.maxReadBytes ?? DEFAULT_MAX_READ_BYTES);
@@ -200,7 +200,7 @@ export function createPtySessionRegistry(
         throw new Error("the PTY registry only starts sessions that asked for a terminal");
       }
 
-      if (liveSessions().length >= maxSessions) {
+      if (maxSessions !== undefined && liveSessions().length >= maxSessions) {
         throw new Error(
           `PTY session limit reached (${maxSessions}); stop one before starting another`,
         );

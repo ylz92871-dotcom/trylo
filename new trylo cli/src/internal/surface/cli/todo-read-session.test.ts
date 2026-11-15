@@ -70,7 +70,7 @@ test("a saved pre-todo_read catalog resumes and exposes its restored list throug
   } finally { await opened.session.release(); }
 });
 
-test("todo_read compatibility still refuses unrelated tool-schema drift", async t => {
+test("current tool-schema changes do not strand an existing conversation", async t => {
   const home = mkdtempSync(testScratchPath("todo-read-drift-"));
 
   t.after(() => rmSync(home, { recursive: true, force: true }));
@@ -83,7 +83,6 @@ test("todo_read compatibility still refuses unrelated tool-schema drift", async 
     { schemaVersion: "1", providerId: "fixture", model: "fixture", workspaceId: "workspace", toolCatalogHash: catalogHash(home) },
     compatibleCatalogHashes(home));
 
-  assert.equal(opened.kind, "failed");
-
-  if (opened.kind === "failed") assert.match(opened.failure.message, /tool catalog changed/);
+  assert.equal(opened.kind, "resume", "historical calls are data; future calls use today's catalog and permissions");
+  if (opened.kind === "resume") await opened.session.release();
 });

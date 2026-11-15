@@ -2,6 +2,7 @@ import { isTranscriptItem, type TranscriptItem } from "../../protocol/transcript
 import { isStreamPartial, partialKey, type StreamPartial, type StreamPartialId } from "../../protocol/stream-partial.js";
 import { readPartialRecord } from "../../protocol/stream-partial-record.js";
 import { isExecutionExtensionMetadata } from "../../ports/execution-extension.js";
+import { toolEffectKey } from "../../ports/effect-key.js";
 import {
   isRuntimeFingerprint,
   type PendingEffect,
@@ -39,7 +40,7 @@ function completedPartial(item: TranscriptItem): StreamPartialId | undefined {
  * partially projected value: `isTranscriptItem` and `isRuntimeFingerprint`
  * replace what would otherwise be blind casts.
  *
- * `effect_issued` without a matching `effect_committed` is reported as
+ * `effect_issued` without a matching settlement or durable tool result is reported as
  * `reconcileRequired` rather than resolved here: deciding what an unfinished
  * effect means belongs to the caller that owns the effect, not to the reader of
  * the journal.
@@ -82,6 +83,12 @@ export function recover(records: readonly SessionRecord[], tornTail: boolean): R
         }
 
         transcript.push(record.payload);
+        // Results are flushed before the effect receipt. Losing that later
+        // receipt must not discard an already durable, same-turn outcome.
+        if (record.payload.kind === "tool_result" && record.payload.outcome !== "unknown") {
+          const identity = JSON.stringify([record.turnId ?? null, toolEffectKey(record.payload.toolCallId)]);
+          if (issued.has(identity)) settled.add(identity);
+        }
         const completed = completedPartial(record.payload);
         if (completed !== undefined) openPartials.delete(partialKey(completed, record.turnId));
 

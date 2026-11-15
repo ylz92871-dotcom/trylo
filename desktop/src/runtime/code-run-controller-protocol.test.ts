@@ -13,6 +13,7 @@ import type { SettingsForCodeRun } from './runtime-types'
 import type { ResolvedToolRuntime } from '../tooling/types'
 import { platformModelConnection } from '../account/platform-models'
 import { CliSessionStore } from './cli-session-store'
+import * as effectReconciliation from './effect-reconciliation'
 import * as sessionBinding from '../host-adapter/cli-session-binding'
 import { startTryloV1, stopTryloV1 } from '../host-adapter/trylo-v1-runner'
 import type { ProcessExitInfo } from '../host-adapter/process-service'
@@ -203,6 +204,21 @@ beforeEach(() => {
   m.calls.stopTryloProcess = 0
   m.calls.stopTryloV1 = 0
   m.calls.sendPrompt = 0
+})
+
+it.each(['code', 'work'] as const)('uses the pinned runtime for %s effect recovery', async (surface) => {
+  const read = vi.spyOn(effectReconciliation, 'readPendingEffects').mockResolvedValue({ ok: true, pending: [], openBlocks: 0 })
+  try {
+    const c = controller()
+    await c.run({ ...request('trylo-v1', 'continue', { cliNodeProgram: 'C:/Trylo/runtime/node.exe' }),
+      toolRuntime: { ...selectedProfile(), surface } })
+    const run = vi.mocked(startTryloV1).mock.calls.at(-1)?.[0]
+    expect(run?.probePendingEffects).toBeDefined()
+    await run?.probePendingEffects?.('desktop-original')
+    expect(read).toHaveBeenCalledWith(expect.objectContaining({
+      cliPath: CLI_PATH, cwd: CWD, nodeProgram: 'C:/Trylo/runtime/node.exe',
+    }), 'desktop-original')
+  } finally { read.mockRestore() }
 })
 
 it.each([0, 41])(

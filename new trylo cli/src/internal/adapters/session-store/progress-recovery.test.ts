@@ -28,3 +28,23 @@ test("durable recovery: malformed effect identity fails closed", () => {
   const outcome = recover([start, { ...record("effect_issued", "t", "k", 1), payload: {} }], false);
   assert.equal(outcome.ok, false);
 });
+
+for (const result of ["succeeded", "failed", "cancelled", "unknown"] as const) {
+  test(`durable recovery: a recorded ${result} tool result survives loss of the settlement receipt`, () => {
+    const outcome = recover([start, record("effect_issued", "t", "tool:c", 1), {
+      ...record("transcript_item", "t", "unused", 2),
+      payload: { kind: "tool_result", sequence: 0, toolCallId: "c", name: "echo", output: "", truncated: false, outcome: result },
+    }], false);
+    assert.ok(outcome.ok);
+    assert.deepEqual(outcome.session.reconcileRequired, result === "unknown" ? ["tool:c"] : []);
+  });
+}
+
+test("durable recovery: a previous turn's result cannot resolve a repeated call id", () => {
+  const outcome = recover([start, record("effect_issued", "t1", "tool:c", 1), {
+    ...record("transcript_item", "t1", "unused", 2),
+    payload: { kind: "tool_result", sequence: 0, toolCallId: "c", name: "echo", output: "", truncated: false, outcome: "cancelled" },
+  }, record("effect_issued", "t2", "tool:c", 3)], false);
+  assert.ok(outcome.ok);
+  assert.deepEqual(outcome.session.reconcileRequired, ["tool:c"]);
+});

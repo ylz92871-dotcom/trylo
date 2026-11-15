@@ -8,8 +8,6 @@ import type { TurnFailure, TurnHostInput } from "./host.js";
 import { persistTurnResult } from "./session-record.js";
 import type { TurnRenderer } from "./render.js";
 import type { TurnRecorder } from "./turn-recorder.js";
-import { ExecutionProgressError } from "../../ports/execution-progress.js";
-import { hostFailure } from "./host-failure.js";
 
 /**
  * Settling a turn that has already run.
@@ -112,14 +110,6 @@ export async function finishTurn(finish: TurnFinishInput): Promise<TurnOutcome |
     },
     { status, finishReason: result.state.finishReason },
   );
-
-  // The explanation is durable and visible, but a later REPL/TUI turn must not
-  // construct a fresh open recorder over this unresolved effect's writer lease.
-  if (finish.recorder !== undefined && Object.values(result.state.toolCalls).some(call => call.status === "unknown"
-    && result.issuedKeys.includes(`tool:${call.toolCallId}`))) {
-    const failure = await hostFailure(new ExecutionProgressError("settle", "effect_reconciliation_required"), input.session);
-    return status === "cancelled" ? { ...failure, exitCode: EXIT_CODES.CANCELLED } : failure;
-  }
 
   return {
     exitCode: exitCodeForResult(result) as ExitCode,

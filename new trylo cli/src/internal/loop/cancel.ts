@@ -39,8 +39,9 @@ export type CancelWatch = () => boolean;
  * signal a tool executes under, and aborting *that* would stop a write in flight
  * without going through `cancel_tool` — the half-written-workspace case the
  * reducer's own cancel path exists to avoid. A cancel raised while a tool runs
- * is applied at the boundary after it settles, which is what "a flag the loop
- * checks at its next boundary" means.
+ * is applied at the boundary after it settles. In parallel, tool-cancellation
+ * asks the active adapter to stop through ToolPort.cancel: process/MCP owners
+ * can stop promptly, while atomic writes retain their original signal.
  */
 export function followCancellation(signal: AbortSignal | undefined, engine: Engine): CancelWatch {
   if (signal === undefined) {

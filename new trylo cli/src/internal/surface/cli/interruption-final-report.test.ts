@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { scaffoldAfterTurn } from "./turn-threading.js";
+
 import { createNdjsonSessionStore } from "../../adapters/session-store/ndjson.js";
 import { runTurn } from "../../loop/runner.js";
 import { createFakePermission, createFakeProvider, createFakeTools, echoBinding, emptyProfileLoader } from "../../loop/fakes.js";
@@ -33,9 +35,45 @@ function observedProvider(scripts: ProviderEvent[][], requests: ProviderRequest[
   return { async *stream(input, signal) { requests.push(input); yield* scripted.stream(input, signal); } };
 }
 
+for (const retry of [false, true]) test(`a durable unknown permits inspection and explicit recovery (retry=${retry})`, async () => {
+  const root = mkdtempSync(join(testScratchPath(), "unknown-then-inspect-"));
+  const session = createNdjsonSessionStore({ path: join(root, "s.ndjson") });
+  try {
+    assert.ok((await session.start({ sessionId: "s", createdAt: "1970-01-01T00:00:00Z",
+      fingerprint: { schemaVersion: "1", workspaceId: "w", providerId: "fixture", model: "m", toolCatalogHash: "h" } })).ok);
+    const recorder = createTurnRecorder({ session, sessionId: "s", turnId: "t", now: () => 0 });
+    assert.ok(recorder);
+    await recorder.start({ startedAt: 0, toolCatalogHash: "h" });
+    const requests: ProviderRequest[] = [], executed: string[] = [];
+    const result = await runTurn({ progress: recorder.progress, profile: emptyProfileLoader(), permission: createFakePermission("approved"),
+      tools: { snapshot: () => [echoBinding({ name: "write", needsApproval: false }), echoBinding({ name: "read", needsApproval: false })],
+        async execute(input) {
+          executed.push(input.name);
+          return input.name === "write" ? { outcome: "unknown", code: "lost_ack", message: "connection lost" }
+            : { outcome: "result", value: { present: true }, output: "Current state inspected.", truncated: false };
+        }, async cancel() {} },
+      provider: observedProvider([
+        [{ type: "tool_call", toolCallId: "write", name: "write", arguments: {} }, { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true }],
+        [{ type: "tool_call", toolCallId: "inspect", name: "read", arguments: {} }, { type: "finish", reason: "tool_calls", rawReason: "tool_calls", requiresFollowUp: true }],
+        retry ? [{ type: "error", class: "network", retryable: true, phase: "before_headers", message: "network" }]
+          : [{ type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false }],
+        [{ type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false }],
+      ], requests),
+    }, { sessionId: "s", turnId: "t", correlationId: "c", text: "Inspect after an uncertain write instead of repeating it.", retryOnce: retry });
+    assert.equal(result.state.terminalReason, "completed");
+    assert.deepEqual(executed, ["write", "read"]);
+    assert.equal(result.state.toolCalls.write?.status, "unknown");
+    assert.equal(result.state.toolCalls.inspect?.status, "succeeded");
+    assert.ok(requests[1]?.messages.some(message => typeof message.content === "string" && /unconfirmed/i.test(message.content)));
+    const read = await session.read();
+    assert.ok(read.ok);
+    assert.deepEqual(read.session.reconcileRequired, ["tool:write"]);
+  } finally { await session.release(); }
+});
+
 for (const cancel of [false, true]) test(cancel
-  ? "closing a cancelled unknown lease preserves cancellation status and exit code"
-  : "a durable unknown can explain the interruption without tools or clearing its effect fence", async () => {
+  ? "a cancelled unknown outcome preserves cancellation status and a usable writer"
+  : "a durable unknown remains truthful while the response and authorized tools stay available", async () => {
   const root = mkdtempSync(join(testScratchPath(), "interruption-report-"));
   const session = createNdjsonSessionStore({ path: join(root, "s.ndjson") });
   const requests: ProviderRequest[] = [];
@@ -56,10 +94,11 @@ for (const cancel of [false, true]) test(cancel
       tools: { ...tools, async execute(input, signal) { const result = await tools.execute(input, signal); if (cancel) cancellation.abort(); return result; } } },
     { ...request, onEnvelope: renderer.onEnvelope, cancelSignal: cancellation.signal });
 
-    assert.equal(result.state.terminalReason, cancel ? "cancelled" : "failed", "an explanation must not promote uncertain work to success");
+    assert.equal(result.state.terminalReason, cancel ? "cancelled" : "completed");
+    assert.equal(result.state.toolCalls.c?.status, "unknown", "completing a response never promotes the uncertain operation to success");
     assert.equal(requests.length, cancel ? 1 : 2);
     if (!cancel) {
-      assert.deepEqual(requests[1]?.tools, []);
+      assert.ok((requests[1]?.tools.length ?? 0) > 0, "uncertainty must not disable authorized tools");
       assert.match(requests[1]?.messages.at(-1)?.content ?? "", /unconfirmed|uncertain/);
       assert.equal(result.transcript.at(-1)?.kind, "assistant_text");
     }
@@ -67,18 +106,24 @@ for (const cancel of [false, true]) test(cancel
     assert.ok(recovered.ok);
     assert.deepEqual(recovered.session.reconcileRequired, ["tool:c"]);
     assert.equal(recovered.session.transcript.some(item => item.kind === "assistant_text" && item.text.includes("unconfirmed")), !cancel);
-    assert.deepEqual(await recorder.progress.issue("another-action"), { ok: false, code: "effect_reconciliation_required" });
     const finished = await finishTurn({ result, renderer, recorder, startedAt: 0, providerId: "fixture", model: "m", extraWarnings: [],
       input: { ...request, workspaceRoot: root, workspaceId: "w", checkpointRoot: join(root, "undo"), providerId: "fixture", model: "m", endpoint: "", apiKey: undefined,
         permission: createFakePermission("approved"), format: "stream-json", session, sink, now: () => 0 } });
-    assert.ok("continuation" in finished && finished.continuation === "session_closed");
-    assert.equal(finished.exitCode, cancel ? 130 : 52);
+    assert.ok("result" in finished, "an acknowledged unknown outcome must not close the conversation writer");
+    assert.equal(finished.exitCode, cancel ? 130 : 0);
+    const threaded = await scaffoldAfterTurn({ providerId: "fixture", providerKind: "fixture", model: "m", endpoint: "", apiKey: undefined,
+      format: "stream-json", workspaceRoot: root, workspaceId: "w", checkpointRoot: join(root, "undo"), sessionId: "s", session,
+      systemPromptAppend: "Caller instructions remain intact.", warnings: [], close: () => session.release() }, finished);
+    assert.ok("effectContinuation" in threaded);
+    assert.match(threaded.effectContinuation ?? "", /tool:c/);
+    assert.match(threaded.systemPromptAppend ?? "", /Caller instructions remain intact/);
     const terminal = frames.flatMap(frame => JSON.parse(frame) as { type: string; status?: string });
-    assert.deepEqual(terminal.filter(frame => frame.type === "run_result").map(frame => frame.status), [cancel ? "cancelled" : "failed"]);
-    const before = await session.readRecords();
-    assert.deepEqual(await session.append({ type: "turn_input", sessionId: "s", turnId: "next", at: "1970-01-01T00:00:00Z", payload: { text: "after closed lease" } }),
-      { ok: false, code: "lock_conflict" }, "the old live scaffold cannot append through the closed lease");
-    assert.deepEqual(await session.readRecords(), before);
+    assert.deepEqual(terminal.filter(frame => frame.type === "run_result").map(frame => frame.status), [cancel ? "cancelled" : "completed"]);
+    const appended = await session.append({ type: "turn_input", sessionId: "s", turnId: "next", at: "1970-01-01T00:00:00Z", payload: { text: "inspect the earlier operation" } });
+    assert.equal(appended.ok, true, "REPL and TUI retain their healthy writer for the next user turn");
+    const after = await session.read();
+    assert.ok(after.ok);
+    assert.deepEqual(after.session.reconcileRequired, ["tool:c"], "continuation does not erase uncertainty");
   } finally { await session.release(); rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -101,7 +146,7 @@ test("a reconciled historical unknown cannot close a successful current turn tha
     await previous.start({ startedAt: 0, toolCatalogHash: "h" });
     assert.deepEqual(await previous.progress.flush({ transcript: history, envelopes: [] }), { ok: true });
     assert.deepEqual(await previous.progress.issue("tool:c"), { ok: true });
-    assert.deepEqual(await previous.progress.settle("tool:c", "unknown"), { ok: false, code: "effect_reconciliation_required" });
+    assert.deepEqual(await previous.progress.settle("tool:c", "unknown"), { ok: true });
     await previous.finish({ status: "failed", finishReason: "unknown", usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } });
     assert.equal((await session.append({ type: "effect_failed", sessionId: "s", turnId: "old", at: "1970-01-01T00:00:00Z",
       payload: { key: "tool:c", outcome: "failed" } })).ok, true, "fixture reconciliation preserves the historical unknown transcript");

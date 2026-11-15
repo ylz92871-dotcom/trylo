@@ -30,6 +30,8 @@ import { STEER_DELIVERED, STEER_NOT_RUNNING, type SteerDelivery } from './steer-
 import type { PermissionLevel } from '../permission/permission-policy'
 import type { ResolvedToolRuntime, ToolSurface } from '../tooling/types'
 import { verifyCliRuntime } from './cli-runtime-guard'
+import { readPendingEffects } from './effect-reconciliation'
+import { hostAdapter } from '../host-adapter'
 import { spawnEnvForTeamAccess } from '../tooling/team-surface-env'
 import { observeToolProtocol, protocolDriftReasonCode } from '../tooling/tool-protocol-observer'
 import { toolAvailabilitySystemPrompt } from '../tooling/tool-availability-context'
@@ -669,6 +671,20 @@ export class CodeRunController {
           ? { nodeProgram: request.settings.cliNodeProgram }
           : {}),
         cwd: request.settings.cwd,
+        /**
+         * 进程没写出终态就没了的时候，界面必须知道"哪一步没被证明"。
+         * 只读查询，失败让 runner 如实报告，不在这里假装干净。
+         */
+        probePendingEffects: async (sessionId) => {
+          const read = await readPendingEffects(
+            { process: hostAdapter.process, cliPath: request.settings.cliPath, cwd: request.settings.cwd,
+              ...(request.settings.cliNodeProgram ? { nodeProgram: request.settings.cliNodeProgram } : {}) },
+            sessionId,
+          )
+          // 读不出来就抛：runner 会把它报成"无法确认"，而不是当成没有待核对项。
+          if (!read.ok) throw new Error(read.reason)
+          return read.pending
+        },
         // P08 §6.2: first v1 turn creates a session, later turns
         // resume it. Ephemeral until then.
         binding: pendingBinding,

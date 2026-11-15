@@ -32,7 +32,7 @@
 
 import { memo, useEffect, useState, type ReactElement } from 'react';
 import { CircleAlert, Rocket } from 'lucide-react';
-import { RuntimeNotice } from './RuntimeNotice';
+import { ReconcileNotice } from './ReconcileNotice';
 import { WorkflowReceipt } from './WorkflowReceipt';
 import { isWorkflowState } from '../../domain/workflow-state';
 import { AssistantAnswer } from './AssistantAnswer';
@@ -467,7 +467,7 @@ function MessageImpl(props: MessageProps): ReactElement {
       // render as a small status line.
       return (
         <div className="message message--notice" role="listitem">
-          <RuntimeNotice text={m.text} />
+          <ReconcileNotice message={m} />
         </div>
       );
     }

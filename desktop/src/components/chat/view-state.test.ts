@@ -147,6 +147,15 @@ describe('deriveConversationRunViewState (spec §5.3)', () => {
     expect(deriveConversationRunViewState({ messages: [user(), completed, user('next', 2000)], running: true })).toBe('waiting_first_output');
   });
 
+  it('says it is stopping instead of still working once stop was asked for', () => {
+    // 进程还在收尾时，界面说"执行中"是撒谎，说"已中断"是提前宣布结果。
+    expect(deriveConversationRunViewState({ messages: [user(), toolRunning()], running: true, stopping: true })).toBe('stopping');
+    expect(deriveConversationRunViewState({ messages: [user()], running: false, stopping: true })).toBe('stopping');
+    expect(viewStateLabel('stopping')).toBe('正在停止…');
+    expect(viewStateShowsHeaderPulse('stopping')).toBe(true);
+    expect(viewStateShowsFooterDots('stopping')).toBe(false);
+  });
+
   it('keeps parallel work and pending approvals visible after another tool finishes', () => {
     const done = { ...toolRunning(), id: 'finished', status: 'done' } as ChatMessage;
     expect(deriveConversationRunViewState({ messages: [user(), toolRunning(), done], running: true })).toBe('tool_running');
