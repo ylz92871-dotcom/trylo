@@ -20,11 +20,14 @@ export async function buildBuiltinOffice(source) {
   await fs.mkdir(scratch, { recursive: true });
   const log = path.join(build, 'build.log');
   const logFd = openSync(log, 'w');
+  // SDK 10's shared trim/single-file analyzer stalls on the large command bodies.
+  // Publish still runs ILLink and reports trim warnings on the actual binary.
   try { execFileSync('dotnet', ['publish', path.join(source, 'src/officecli/officecli.csproj'), '--no-restore', '--disable-build-servers',
     '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true', '-p:PublishSingleFile=true',
+    '-p:EnableTrimAnalyzer=false', '-p:EnableSingleFileAnalyzer=false', '-p:SuppressTrimAnalysisWarnings=false',
     '-p:DefineConstants=TRYLO_BUNDLED', '-p:UseSharedCompilation=false', '-maxcpucount:1', `-p:IntermediateOutputPath=${scratch}${path.sep}`, '-o', build],
   { windowsHide: true, env: { ...process.env, TEMP: scratch, TMP: scratch, DOTNET_CLI_TELEMETRY_OPTOUT: '1',
-    DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE: '1', DOTNET_GCConserveMemory: '9', DOTNET_gcServer: '0' }, stdio: ['ignore', logFd, logFd] });
+    DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE: '1', DOTNET_gcServer: '0' }, stdio: ['ignore', logFd, logFd] });
   } catch (error) { throw new Error(`OfficeCLI source build failed; see ${log}`, { cause: error }); }
   finally { closeSync(logFd); }
   return path.join(build, 'officecli.exe');
