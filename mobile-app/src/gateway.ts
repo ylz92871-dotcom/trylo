@@ -31,7 +31,20 @@ export interface TimelineEvent {
   durationMs?: number;
 }
 
+export interface RemoteMember {
+  id: string; name: string; status: 'running' | 'waiting' | 'done' | 'failed' | 'cancelled';
+  prompt?: string; result?: string; error?: string; durationMs?: number;
+  rounds?: readonly { round: number; prompt: string; result: string }[];
+}
+export interface RemoteCollaboration {
+  canStartTeam: boolean;
+  profiles: readonly { id: string; title: string; members: readonly string[] }[];
+  team: { id: string; title: string; status: string } | null;
+  members: readonly RemoteMember[];
+}
+
 export interface RemoteSnapshot {
+  collaboration?: RemoteCollaboration;
   device: {
     id: string;
     name: string;
@@ -502,7 +515,7 @@ export class RemoteGatewayClient {
   /** Slimmed attachment shape sent to the gateway. Images travel as base64
    *  data URLs (already downscaled by `buildAttachment`); text files inline
    *  their extracted content. `sendData`/`text` are the full payloads. */
-  async sendChat(text: string, attachments?: DirectAttachment[], opts?: { surface?: RemoteSurface }) {
+  async sendChat(text: string, attachments?: DirectAttachment[], opts?: { surface?: RemoteSurface; teamProfileId?: string }) {
     const payload = attachments?.length
       ? attachments.map(item => ({
         kind: item.kind,
@@ -520,6 +533,7 @@ export class RemoteGatewayClient {
         text,
         ...(payload ? { attachments: payload } : {}),
         ...(opts?.surface ? { surface: opts.surface } : {}),
+        ...(opts?.teamProfileId ? { teamProfileId: opts.teamProfileId } : {}),
       }),
     });
   }

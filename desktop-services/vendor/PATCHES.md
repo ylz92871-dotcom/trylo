@@ -247,3 +247,7 @@ Service Host 送到渲染进程（审计 §3.2 诊断脱敏约束）。
 - `learning-loop/learning-state.js`：只要求 `{ get, update }` Memento 形状，Desktop 用
   `src/learning/file-memento.mjs` 提供，不新建 schema。
 - `remote-gateway/index.js`、`remote-tunnel.js`：全部参数化（Phase 4）。
+
+## 2026-11-16 Mobile collaboration projection
+
+`legacy/remote-gateway/index.js` adds canonical `collaborationState` projections (Desktop reducer owns resume/round identity), session-scoped clearing, bounded member/round text, and forwards an optional `teamProfileId` through the existing authenticated task handler. Desktop's Team Access launch and supervisor remain the only execution owners. Old phones and Desktop builds keep solo behavior. Origin hashes above remain historical.

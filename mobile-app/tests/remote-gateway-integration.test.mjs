@@ -56,3 +56,40 @@ test('real gateway reconnect recovers missed results, approvals and selected ses
     for (const [key, descriptor] of originals) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; }
   }
 });
+
+
+test('Code and Work team messages, canonical member updates and session restoration use the real gateway', async () => {
+  const port = 51000 + Math.floor(Math.random() * 9000);
+  const fixture = createFixture(port);
+  const headers = { Authorization: `Bearer ${fixture.token}`, 'Content-Type': 'application/json' };
+  const request = async (path, body) => {
+    const response = await fetch(`http://127.0.0.1:${port}${path}`, { method: body ? 'POST' : 'GET', headers, body: body ? JSON.stringify(body) : undefined });
+    assert.equal(response.ok, true); return response.json();
+  };
+  try {
+    await fixture.gateway.start(); fixture.initialize();
+    for (const surface of ['code', 'work']) {
+      const { sessionId } = await request('/v1/sessions', { surface });
+      await request('/v1/chat/messages', { surface, text: 'Test team UX', teamProfileId: 'fixture-team' });
+      let snapshot = await request('/v1/snapshot');
+      assert.equal(snapshot.activeSessionId, sessionId);
+      assert.equal(snapshot.collaboration.team.title, '产品协作团队');
+      assert.equal(snapshot.collaboration.members.length, 3);
+      const collaboration = structuredClone(snapshot.collaboration);
+      Object.assign(collaboration.members.find(member => member.id === 'worker'), { status: 'done', result: 'Updated result' });
+      fixture.gateway.publish({ type: 'collaborationState', sessionId, collaboration });
+      snapshot = await request('/v1/snapshot');
+      const worker = snapshot.collaboration.members.find(member => member.id === 'worker');
+      assert.equal(worker.name, '界面实现');
+      assert.match(worker.prompt, /Code/);
+      assert.equal(worker.result, 'Updated result');
+      const other = await request('/v1/sessions', { surface });
+      assert.equal((await request('/v1/snapshot')).collaboration.members.length, 0);
+      fixture.gateway.publish({ type: 'collaborationState', sessionId, collaboration });
+      assert.equal((await request('/v1/snapshot')).activeSessionId, other.sessionId);
+      assert.equal((await request('/v1/snapshot')).collaboration.members.length, 0);
+      await request(`/v1/sessions/${sessionId}/select`, {});
+      assert.equal((await request('/v1/snapshot')).collaboration.members.find(member => member.id === 'worker').result, 'Updated result');
+    }
+  } finally { await fixture.gateway.stop(); }
+});

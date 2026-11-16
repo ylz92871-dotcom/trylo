@@ -14,7 +14,7 @@ import { emptyWorkspaceHistory } from '../host-adapter/conversation-history';
 import { IDLE_CODE_VIEW_STATE } from '../runtime/runtime-types';
 import type { ConversationRunSupervisor } from '../runtime/conversation-run-supervisor';
 import type { ServiceHealth, ServiceManager } from '../services-host/service-manager';
-import type { RemoteAgentStateEvent, RemoteGatewayEvent, RemotePermissionRequestStateEvent, RemoteRequestEvent, RemoteRespondParams, RemoteStatusResult } from '../services-host/methods';
+import type { RemoteAgentStateEvent, RemoteCollaborationState, RemoteGatewayEvent, RemotePermissionRequestStateEvent, RemoteRequestEvent, RemoteRespondParams, RemoteStatusResult } from '../services-host/methods';
 import type { ServicesRemotePort } from './remote-port';
 import { EMPTY_REMOTE_STATUS } from './remote-port';
 import { RemoteController } from './remote-controller';
@@ -53,7 +53,7 @@ function waitFor(fn: () => boolean, what: string): Promise<void> {
   });
 }
 
-function createHarness(options: { chatHandle?: boolean } = {}) {
+function createHarness(options: { chatHandle?: boolean; collaboration?: () => RemoteCollaborationState } = {}) {
   let workspaceName = 'Workspace';
   const responded: RemoteRespondParams[] = [];
   const published: RemoteGatewayEvent[] = [];
@@ -147,6 +147,7 @@ function createHarness(options: { chatHandle?: boolean } = {}) {
     workspaces,
     sessions,
     sendTask,
+    collaboration: options.collaboration,
     cancelTask,
     approvals: approvals as never,
     artifacts,
@@ -415,7 +416,7 @@ describe('RemoteController handler routing', () => {
     h.fireRequest({ requestId: 'new-failed', name: 'session', payload: { create: true, surface: 'code' } });
     await waitFor(() => h.responded.some((r) => r.requestId === 'new-failed'), 'failed create response');
     expect(h.responded.find((r) => r.requestId === 'new-failed')?.ok).toBe(false);
-    expect(h.responded.find((r) => r.requestId === 'new-failed')?.error?.message).toBe("remote handler 'session' failed");
+    expect(h.responded.find((r) => r.requestId === 'new-failed')?.error?.message).toBe('History unavailable');
     expect(h.responded.find((r) => r.requestId === 'new-failed')?.result).toBeUndefined();
   });
 
@@ -596,4 +597,25 @@ describe('RemoteController status', () => {
     expect(h.controller.status().reasonCode).toBe('not_attempted');
     off();
   });
+});
+
+
+it('publishes canonical member revisions once and forces restoration after gateway restart', async () => {
+  let state: RemoteCollaborationState = { canStartTeam: true, profiles: [], team: null, members: [] };
+  const h = createHarness({ collaboration: () => state });
+  await h.controller.setEnabled(true);
+  const updates = () => h.published.filter(event => event.type === 'collaborationState');
+  expect(updates()).toHaveLength(1);
+  h.controller.refreshCollaboration();
+  expect(updates()).toHaveLength(1);
+  state = { ...state, members: [{ id: 'stable-row', name: 'Review', status: 'done', rounds: [{ round: 1, prompt: 'Review', result: 'Done' }] }] };
+  h.controller.refreshCollaboration();
+  expect(updates()).toHaveLength(2);
+  state = { ...state, members: [{ ...state.members[0]!, status: 'running', rounds: [...state.members[0]!.rounds!, { round: 2, prompt: 'Revise', result: '' }] }] };
+  h.controller.refreshCollaboration();
+  expect(updates()).toHaveLength(3);
+  expect(updates().at(-1)).toMatchObject({ sessionId: 'c1', collaboration: { members: [{ id: 'stable-row', status: 'running', rounds: [{ round: 1 }, { round: 2 }] }] } });
+  await h.controller.setEnabled(false);
+  await h.controller.setEnabled(true);
+  expect(updates()).toHaveLength(4);
 });

@@ -254,6 +254,7 @@ describe('projectLoopEvents', () => {
     const out = projectLoopEvents([
       le('todo_updated', 1, { todos: [] }),
       le('compact', 2, { kind: 'boundary', tokensBefore: 1, tokensAfter: 2, reason: 'x' }),
+      // Members use the canonical conversation projection, including resume history.
       le('subagent', 3, { kind: 'spawn', id: 'a' }),
     ], 't', 'agent', now);
     expect(out).toEqual([]);
@@ -501,19 +502,19 @@ describe('buildFullSnapshot', () => {
     now,
   };
 
-  it('emits agentState first followed by session/projects/approvals', () => {
+  it('selects the session before restoring binding/projects/approvals', () => {
     const out = buildFullSnapshot(opts);
     expect(out.map((e) => e.type)).toEqual([
-      'agentState',
       'sessionState',
+      'agentState',
       'projectsState',
       'permissionRequestState',
     ]);
   });
 
-  it('leads with the failed agentState when the binding errored', () => {
+  it('restores the failed binding after selecting its session', () => {
     const out = buildFullSnapshot({ ...opts, view: view({ bindingState: 'exited', error: true }) });
-    expect(out[0]).toEqual({ type: 'agentState', state: 'failed', detail: 'Run failed' });
+    expect(out[1]).toEqual({ type: 'agentState', state: 'failed', detail: 'Run failed' });
   });
 });
 

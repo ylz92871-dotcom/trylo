@@ -8,14 +8,20 @@ const h = vi.hoisted(() => ({
   snapshot: null as any,
   snapshots: null as any,
   states: null as any,
+  directMounts: 0,
+  directUnmounts: 0,
 }));
 vi.mock("../src/gateway", () => ({
   gatewayClient: h.client,
   parsePairingData: JSON.parse,
 }));
-vi.mock("../src/DirectChatView", () => ({
-  default: () => <p>手机直连页面</p>,
-}));
+vi.mock("../src/DirectChatView", async () => {
+  const { useEffect } = await import("react");
+  return { default: ({ onHome }: any) => {
+    useEffect(() => { h.directMounts++; return () => { h.directUnmounts++; }; }, []);
+    return <div><p>手机直连页面</p><button onClick={onHome}>返回首页</button></div>;
+  } };
+});
 vi.mock("../src/ui", () => ({
   MarkdownMessage: ({ text }: any) => <p>{text}</p>,
   BrandMark: () => <span />,
@@ -38,7 +44,7 @@ vi.mock("@capacitor/barcode-scanner", () => ({
 vi.mock("@ionic/react", async () => {
   const React = await import("react");
   const div = ({ children, className, ...props }: any) => (
-    <div className={className}>{children}</div>
+    <div className={className} hidden={props.hidden} style={props.style}>{children}</div>
   );
   const result: Record<string, any> = Object.fromEntries(
     [
@@ -204,7 +210,7 @@ const heading = (text: string) =>
     (el) => visible(el) && el.textContent === text,
   );
 async function devices() {
-  await click("返回会话列表");
+  if (button("返回会话列表")) await click("返回会话列表");
   await click("设备");
 }
 async function direct() {
@@ -214,6 +220,7 @@ async function direct() {
 function workbench(state = h.snapshot, connection = "connected", demo = false) {
   return (
     <RemoteWorkbench
+      navigation={{ id: 0, tab: "chat" }}
       snapshot={state}
       messages={state.conversation}
       state={connection as any}
@@ -239,6 +246,8 @@ function workbench(state = h.snapshot, connection = "connected", demo = false) {
 beforeEach(() => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   localStorage.clear();
+  h.directMounts = 0;
+  h.directUnmounts = 0;
   h.snapshot = snapshot();
   h.snapshots = null;
   h.states = null;
@@ -279,24 +288,24 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-test("direct sidebar destinations reach the matching remote page", async () => {
+test("home exposes phone chat and computer work without a setup gate", async () => {
   await render(<App />);
-  await direct();
-  await click("打开项目与会话");
-  await click("待处理0");
+  expect(heading("从这里开始")).toBeDefined();
+  await click("在手机上聊聊写作、问答、整理想法，无需连接电脑");
+  expect(container.textContent).toContain("手机直连页面");
+  await click("返回首页");
+  expect(heading("从这里开始")).toBeDefined();
+  await click("待处理");
   expect(heading("待处理")).toBeDefined();
-  await click("设备");
-  await click("手机直连聊天");
-  await click("打开项目与会话");
-  await click("执行与结果");
-  expect(heading("项目文件")).toBeDefined();
-  await click("返回会话列表");
-  await click("设备");
-  await click("手机直连聊天");
-  await click("打开项目与会话");
-  await click("设备与连接");
-  expect(heading("设备")).toBeDefined();
 });
+
+async function openCurrent() {
+  await click("会话");
+  const row = container.querySelector<HTMLButtonElement>(".rw-session");
+  expect(row).not.toBeNull();
+  await act(async () => row!.click());
+}
+async function renderConversation() { await render(<App />); await openCurrent(); }
 
 test("demo content never claims a connected computer or permits remote writes", async () => {
   await render(workbench(h.snapshot, "connected", true));
@@ -309,10 +318,10 @@ test("demo content never claims a connected computer or permits remote writes", 
   expect(container.querySelector('.rw-device-card .online')).toBeNull();
 });
 test("remote draft survives a visit to direct chat", async () => {
-  await render(<App />);
+  await renderConversation();
   await input("还没发送的远程草稿");
   await direct();
-  await click("返回远程会话");
+  await click("返回首页");
   // Returning keeps the previous remote navigation position; reopen the current chat.
   if (button("会话")) {
     await click("会话");
@@ -330,6 +339,7 @@ test("remote draft survives a visit to direct chat", async () => {
 });
 test("same tool ids in another session do not inherit expansion", async () => {
   await render(workbench());
+  await click("过程模式");
   const summary = container.querySelector("summary")!;
   await act(async () => {
     summary.click();
@@ -342,7 +352,7 @@ test("same tool ids in another session do not inherit expansion", async () => {
 test("a late projects read cannot roll back a newer selected project", async () => {
   const pending = deferred<any>();
   h.client.getProjects.mockReturnValue(pending.promise);
-  await render(<App />);
+  await renderConversation();
   await devices();
   await click("切换项目");
   h.snapshot = snapshot("s2", "p2");
@@ -358,7 +368,7 @@ test("a late projects read cannot roll back a newer selected project", async () 
 test("project selection is serialized while its request is pending", async () => {
   const pending = deferred<any>();
   h.client.selectProject.mockReturnValue(pending.promise);
-  await render(<App />);
+  await renderConversation();
   await devices();
   await click("切换项目");
   const p2 = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
@@ -372,7 +382,7 @@ test("project selection is serialized while its request is pending", async () =>
   await act(async () => pending.resolve({ accepted: true }));
 });
 test("a failed refresh preserves the current session rather than loading a newer different cache", async () => {
-  await render(<App />);
+  await renderConversation();
   saveRemoteConversation(
     "other",
     "p2",
@@ -393,7 +403,7 @@ test("a failed refresh preserves the current session rather than loading a newer
 test("secure-storage initialization failure still leaves an actionable offline screen", async () => {
   h.client.initialize.mockRejectedValue(new Error("安全存储不可用"));
   await render(<App />);
-  expect(button("返回会话列表")).toBeDefined();
+  expect(heading("从这里开始")).toBeDefined();
 });
 test("an empty authoritative session clears its prior offline cache", () => {
   saveRemoteConversation(
@@ -484,7 +494,7 @@ test("late artifact lists cannot replace files from a newer session", async () =
     .mockResolvedValue([
       { id: "new.md", name: "new.md", kind: "file", size: 1, modifiedAt: 1 },
     ]);
-  await render(<App />);
+  await renderConversation();
   h.snapshot = snapshot("s2");
   await act(async () => h.snapshots(clone(h.snapshot)));
   await click("结果1");
@@ -512,7 +522,7 @@ test("navigation blocks other writes until a fresh subscription snapshot arrives
     }
     return () => {};
   });
-  await render(<App />);
+  await renderConversation();
   await devices();
   await click("切换项目");
   const p2 = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
@@ -564,7 +574,7 @@ test("cold offline cache restores the matching session identity and Work surface
     state("connecting");
     return () => {};
   });
-  await render(<App />);
+  await renderConversation();
   expect(heading("历史 Work")).toBeDefined();
   expect(container.textContent).toContain("离线的会话内容");
   expect(container.textContent).toContain("Work");
@@ -580,4 +590,69 @@ test("a failed stop stays reviewable and reports its error inside the active pan
     container.querySelector('[role="dialog"] [role="alert"]')?.textContent,
   ).toBe("停止请求失败");
   expect(heading("停止当前任务？")).toBeDefined();
+});
+
+
+test("team selection is explicit and members remain separate from assistant replies", async () => {
+  h.snapshot.collaboration = { canStartTeam: true, profiles: [{ id: "team-profile", title: "实现与审查", members: ["实现", "审查"] }], team: null,
+    members: [{ id: "child", name: "审查员", status: "waiting", prompt: "审查窄屏布局", result: "第一轮发现问题", rounds: [{ round: 1, prompt: "检查", result: "第一轮发现问题" }, { round: 2, prompt: "复核", result: "第二轮通过" }] }] };
+  await render(workbench());
+  await click("选择协作方式");
+  await click("实现与审查实现 · 审查");
+  expect(h.client.sendChat).not.toHaveBeenCalled();
+  await input("请完成移动端优化");
+  await click("发送消息");
+  expect(h.client.sendChat).toHaveBeenCalledWith("请完成移动端优化", [], { surface: "code", teamProfileId: "team-profile" });
+  await click("成员1");
+  const row = container.querySelector<HTMLButtonElement>(".rw-member-row")!;
+  await act(async () => row.click());
+  expect(container.textContent).toContain("审查窄屏布局");
+  expect(container.textContent).toContain("第二轮通过");
+  expect(container.textContent).toContain("等待中");
+  await render(workbench(snapshot("s2")));
+  expect(container.textContent).not.toContain("第二轮通过");
+});
+
+test("a fresh unpaired home has real choices and hides simulated approvals", async () => {
+  await render(<RemoteWorkbench {...workbench(h.snapshot, "connected", true).props} navigation={{ id: 0, tab: "home" }} />);
+  expect(button("连接我的电脑")).toBeDefined();
+  expect(button("在手机上聊聊写作、问答、整理想法，无需连接电脑")).toBeDefined();
+  expect(button("发送消息")).toBeUndefined();
+  await click("待处理");
+  expect(heading("暂时没有待处理事项")).toBeDefined();
+});
+
+
+test("visiting home and remote work never tears down an active phone chat", async () => {
+  await render(<App />);
+  await click("在手机上聊聊写作、问答、整理想法，无需连接电脑");
+  await click("返回首页");
+  await openCurrent();
+  expect(h.directMounts).toBe(1);
+  expect(h.directUnmounts).toBe(0);
+});
+
+test("offline team cache keeps member details with their conversation and disables team launch", () => {
+  saveRemoteConversation("s1", "p1", [], "pc", { collaboration: { canStartTeam: true, profiles: [{ id: "profile", title: "Team", members: [] }], team: null,
+    members: [{ id: "child", name: "审查", status: "done", result: "已完成审查" }] } });
+  const cached = readLatestCachedConversation("pc");
+  expect(cached?.collaboration?.members[0].result).toBe("已完成审查");
+  expect(cached?.collaboration?.canStartTeam).toBe(false);
+  expect(readLatestCachedConversation("other-computer")).toBeNull();
+});
+
+
+test("a canonical resumed member updates the open detail without adding another person", async () => {
+  const first = snapshot();
+  first.collaboration = { canStartTeam: true, profiles: [], team: null, members: [{ id: "stable-row", name: "审查员", status: "done", prompt: "检查", result: "初次回复", rounds: [{ round: 1, prompt: "检查", result: "初次回复" }] }] };
+  await render(workbench(first));
+  await click("成员1");
+  await act(async () => container.querySelector<HTMLButtonElement>(".rw-member-row")!.click());
+  const next = clone(first);
+  next.collaboration!.members = [{ ...next.collaboration!.members[0], status: "running", rounds: [{ round: 1, prompt: "检查", result: "初次回复" }, { round: 2, prompt: "再检查", result: "续跑回复" }] }];
+  await render(workbench(next));
+  expect(heading("审查员")).toBeDefined();
+  expect(container.textContent).toContain("续跑回复");
+  expect(container.textContent).toContain("进行中");
+  expect(container.querySelectorAll(".rw-member-row")).toHaveLength(0);
 });

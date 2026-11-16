@@ -46,7 +46,7 @@ export interface RemoteChatAttachment {
 export interface RemoteRouterContext {
   readonly workspaces: { list(): readonly RemoteProjectSummary[]; activeProjectId(): string; select(projectId: string): Promise<void> };
   readonly sessions: { list(): readonly RemoteSessionSummary[]; activeSessionId(): string; select(sessionId: string): Promise<{ switching: boolean }>; create?(surface: RemoteTaskSurface): Promise<string> };
-  readonly sendTask: (req: { projectKey: string; conversationId: string; mode: string; surface: RemoteTaskSurface; text: string; requestId: string; attachments?: readonly RemoteChatAttachment[] }) => Promise<unknown>;
+  readonly sendTask: (req: { projectKey: string; conversationId: string; mode: string; surface: RemoteTaskSurface; teamProfileId?: string; text: string; requestId: string; attachments?: readonly RemoteChatAttachment[] }) => Promise<unknown>;
   readonly cancelTask: (projectKey: string, conversationId: string) => Promise<void>;
   readonly approvals: ApprovalService;
   /** Read-only Work deliverables (`.trylo/out` of the active workspace). */
@@ -183,6 +183,7 @@ export class RemoteRouter {
         conversationId: this.ctx.conversationId(),
         mode: this.ctx.mode(),
         surface,
+        ...(typeof record.teamProfileId === 'string' ? { teamProfileId: record.teamProfileId } : {}),
         text,
         requestId,
         ...(attachments.length ? { attachments } : {}),
@@ -233,8 +234,9 @@ export class RemoteRouter {
       }
       const outcome = await handler(payload, requestId);
       await this.ctx.respond(requestId, outcome.ok, outcome.result, outcome.error);
-    } catch {
-      await this.ctx.respond(requestId, false, undefined, { code: 'HANDLER_ERROR', message: `remote handler '${name}' failed`, statusCode: 500 }).catch(() => {});
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : `remote handler '${name}' failed`;
+      await this.ctx.respond(requestId, false, undefined, { code: 'HANDLER_ERROR', message, statusCode: 500 }).catch(() => {});
     }
   }
 }

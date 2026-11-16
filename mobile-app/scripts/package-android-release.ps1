@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$SigningDirectory = "")
+param([string]$SigningDirectory = "", [string[]]$GradleArguments = @())
 
 $ErrorActionPreference = 'Stop'
 $mobileRoot = Split-Path -Parent $PSScriptRoot
@@ -101,7 +101,7 @@ try {
     $socketOption = '-Djdk.net.unixdomain.tmpdir="{0}"' -f $buildSocketDirectory
     $env:JAVA_TOOL_OPTIONS = "$previousJavaToolOptions $socketOption".Trim()
   }
-  & .\gradlew.bat lintRelease assembleRelease
+  & .\gradlew.bat @GradleArguments lintRelease assembleRelease
   Assert-LastExitCode 'Android release build'
 } finally {
   if ($null -eq $previousJavaToolOptions) {

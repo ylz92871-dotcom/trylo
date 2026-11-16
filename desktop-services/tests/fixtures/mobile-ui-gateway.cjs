@@ -8,8 +8,13 @@ function createFixture(port = 49404) {
   let count = 0;
   const sessions = [{ id: activeSessionId, title: '手机端 UI 更新', surface: 'code', updatedAt: Date.now() }];
   const history = new Map([[activeSessionId, []]]);
+  const collaboration = new Map();
+  const emptyCollaboration = () => ({ canStartTeam: true, profiles: [{ id: 'fixture-team', title: '产品协作团队', members: ['方案设计', '实现', '独立审查'] }], team: null, members: [] });
   let gateway;
-  const publishSession = () => gateway.publish({ type: 'sessionState', activeSessionId, sessions, conversation: history.get(activeSessionId) || [] });
+  const publishSession = () => {
+    gateway.publish({ type: 'sessionState', activeSessionId, sessions, conversation: history.get(activeSessionId) || [] });
+    gateway.publish({ type: 'collaborationState', sessionId: activeSessionId, collaboration: collaboration.get(activeSessionId) || emptyCollaboration() });
+  };
   const settle = allowed => {
     const at = Date.now();
     gateway.publish({ type: 'permissionRequestState', requests: [] });
@@ -18,11 +23,19 @@ function createFixture(port = 49404) {
       gateway.publish({ type: 'turnFinished', turn: { id: pendingTurn, resultText: '界面调整已完成，构建通过。这是本机验收数据。', completedAt: at }, at });
       gateway.publish({ type: 'assistant', at });
     } else gateway.publish({ type: 'stopped', at });
+    const data = gateway.getSnapshot().collaboration;
+    if (data.team) {
+      data.team.status = allowed ? 'completed' : 'cancelled';
+      data.members = data.members.map(member => member.status === 'done' ? member : { ...member, status: allowed ? 'done' : 'cancelled', result: allowed ? '本机验收完成。' : member.result });
+      collaboration.set(activeSessionId, data);
+      gateway.publish({ type: 'collaborationState', sessionId: activeSessionId, collaboration: data });
+    }
     history.set(activeSessionId, gateway.getSnapshot().conversation);
   };
   gateway = createRemoteGateway({ port, host: '127.0.0.1', authToken: TOKEN, deviceName: '本机验收电脑', workspaceName: 'Trylo', handlers: {
     session: async payload => {
       history.set(activeSessionId, gateway.getSnapshot().conversation);
+      collaboration.set(activeSessionId, gateway.getSnapshot().collaboration);
       if (payload.create) {
         activeSessionId = `${payload.surface}-${++count}`;
         sessions.unshift({ id: activeSessionId, title: '新对话', surface: payload.surface, updatedAt: Date.now() });
@@ -38,6 +51,15 @@ function createFixture(port = 49404) {
     task: async payload => {
       pendingTurn = `fixture-${++count}`;
       const at = Date.now();
+      if (payload.teamProfileId) {
+        const data = { ...emptyCollaboration(), team: { id: `team-${count}`, title: '产品协作团队', status: 'running' }, members: [
+          { id: 'architect', name: '方案设计', status: 'done', prompt: '梳理首次使用路径，给出手机端导航方案。', result: '采用首页、会话、待处理、设备四个入口。把手机聊天与电脑任务放在首页，过程信息按需展开。', durationMs: 12400 },
+          { id: 'worker', name: '界面实现', status: 'running', prompt: '实现任务首页，并保持 Code 与 Work 的成员视图一致。', result: '首页已完成，正在核对窄屏布局。', durationMs: 8200 },
+          { id: 'reviewer', name: '独立审查', status: 'waiting', prompt: '检查首次使用是否清晰，以及离线和切换会话时的状态。', result: '' },
+        ] };
+        collaboration.set(activeSessionId, data);
+        gateway.publish({ type: 'collaborationState', sessionId: activeSessionId, collaboration: data });
+      }
       gateway.publish({ type: 'agentState', state: 'running', at });
       gateway.publish({ type: 'turnStarted', turn: { id: pendingTurn, prompt: payload.text, startedAt: at }, at });
       gateway.publish({ type: 'turnEvent', turnId: pendingTurn, event: { category: 'reasoning', title: '梳理会话与侧栏布局', detail: '保持对话入口简洁，读取文件后核对品牌标识。', status: 'done' }, at: at + 1 });

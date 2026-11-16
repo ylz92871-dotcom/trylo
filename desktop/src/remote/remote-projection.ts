@@ -364,8 +364,9 @@ export function buildFullSnapshot(opts: {
 }): RemoteGatewayEvent[] {
   const events: RemoteGatewayEvent[] = [];
   const binding = projectBindingState(opts.view);
-  if (binding) events.push(binding);
+  // Selecting a session resets the gateway's old binding; restore the live state afterwards.
   events.push(projectSessionState({ history: opts.history, kind: opts.kind, now: opts.now }));
+  if (binding) events.push(binding);
   events.push(projectProjectsState({ index: opts.index, currentWorkspace: opts.currentWorkspace, now: opts.now }));
   events.push(projectApprovals({ code: opts.code, now: opts.now }));
   return events;

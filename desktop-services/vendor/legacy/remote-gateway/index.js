@@ -162,6 +162,19 @@ function timingSafeTokenEqual(actual, expected) {
   return actualBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
+// Additive mobile collaboration projection. No executor or permission owner lives here.
+function normalizeRemoteMember(value) {
+  if (!value || typeof value !== 'object' || !value.id) return null;
+  const text = key => typeof value[key] === 'string' ? value[key].slice(0, 24000) : undefined;
+  return { id: String(value.id).slice(0, 240), name: String(value.name || '').slice(0, 120),
+    status: ['running', 'waiting', 'done', 'failed', 'cancelled'].includes(value.status) ? value.status : 'running',
+    ...(text('prompt') !== undefined ? { prompt: text('prompt') } : {}),
+    ...(text('result') !== undefined ? { result: text('result') } : {}),
+    ...(text('error') !== undefined ? { error: text('error') } : {}),
+    ...(Number.isFinite(value.durationMs) ? { durationMs: Math.max(0, value.durationMs) } : {}),
+    ...(Array.isArray(value.rounds) ? { rounds: value.rounds.slice(-20).map(r => ({ round: Number(r.round) || 1, prompt: String(r.prompt || '').slice(0, 24000), result: String(r.result || '').slice(0, 24000) })) } : {}) };
+}
+
 function createRemoteGateway(options = {}) {
   const port = Number(options.port) || DEFAULT_PORT;
   const host = String(options.host || '127.0.0.1');
@@ -212,6 +225,7 @@ function createRemoteGateway(options = {}) {
     projects: [],
     activeProjectId: '',
     approvals: [],
+    collaboration: { canStartTeam: false, profiles: [], team: null, members: [] },
   };
 
   const corsHeaders = request => {
@@ -287,6 +301,7 @@ function createRemoteGateway(options = {}) {
       projects: state.projects.map(item => ({ ...item })),
       activeProjectId: state.activeProjectId,
       approvals: state.approvals.map(item => ({ ...item })),
+      collaboration: structuredClone(state.collaboration),
     };
   };
 
@@ -599,9 +614,17 @@ function createRemoteGateway(options = {}) {
           turnId,
         });
       }
+    } else if (payload.type === 'collaborationState') {
+      if (String(payload.sessionId || '') !== state.activeSessionId) return;
+      const data = payload.collaboration || {};
+      state.collaboration = { canStartTeam: data.canStartTeam === true,
+        profiles: (Array.isArray(data.profiles) ? data.profiles : []).slice(0, 20).map(p => ({ id: String(p.id || ''), title: String(p.title || '').slice(0, 120), members: (Array.isArray(p.members) ? p.members : []).map(name => String(name).slice(0, 120)) })),
+        team: data.team && typeof data.team === 'object' ? { id: String(data.team.id || ''), title: String(data.team.title || '').slice(0, 120), status: String(data.team.status || '') } : null,
+        members: (Array.isArray(data.members) ? data.members : []).slice(-120).map(normalizeRemoteMember).filter(Boolean) };
     } else if (payload.type === 'sessionState') {
       const activeSessionId = String(payload.activeSessionId || '');
       if (activeSessionId !== state.activeSessionId) {
+        state.collaboration = { canStartTeam: false, profiles: [], team: null, members: [] };
         state.agent.timeline = [];
         state.agent.status = 'idle';
         state.agent.phase = 'ready';
@@ -807,7 +830,7 @@ function createRemoteGateway(options = {}) {
       // Desktop `task` handler can route to the right runtime. Older phones
       // send nothing and land on Code (the router's default).
       const surface = String(body.surface || '').toLowerCase() === 'work' ? 'work' : 'code';
-      await invokeHandler('task', { type: 'task_send', mode: state.agent.mode, requestId, text, attachments, surface });
+      await invokeHandler('task', { type: 'task_send', mode: state.agent.mode, requestId, text, attachments, surface, ...(typeof body.teamProfileId === 'string' ? { teamProfileId: body.teamProfileId } : {}) });
       sendJson(request, response, 202, { accepted: true, requestId });
       return;
     }

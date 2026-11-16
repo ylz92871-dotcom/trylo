@@ -1,5 +1,10 @@
 import type { DirectAttachment } from "./directChat";
-import type { RemoteChatMessage, RemoteSurface } from "./gateway";
+import type {
+  RemoteChatMessage,
+  RemoteSurface,
+  RemoteCollaboration,
+  RemoteMember,
+} from "./gateway";
 
 /**
  * Read-only on-device cache for the REMOTE conversation.
@@ -30,6 +35,61 @@ export interface CachedRemoteConversation {
   projectId?: string;
   surface?: RemoteSurface;
   title?: string;
+  collaboration?: RemoteCollaboration;
+}
+
+/** Offline excerpts are read-only and share the conversation's storage budget. */
+function cacheCollaboration(
+  data?: RemoteCollaboration,
+): RemoteCollaboration | undefined {
+  if (!data || !Array.isArray(data.members)) return undefined;
+  const excerpt = (value?: string) =>
+    typeof value === "string" && value.length > 6000
+      ? `${value.slice(0, 6000)}\n…`
+      : value;
+  return {
+    canStartTeam: false,
+    profiles: [],
+    team:
+      data.team &&
+      typeof data.team.id === "string" &&
+      typeof data.team.title === "string"
+        ? {
+            id: data.team.id,
+            title: data.team.title,
+            status: String(data.team.status || ""),
+          }
+        : null,
+    members: data.members
+      .filter(
+        (member) =>
+          member &&
+          typeof member.id === "string" &&
+          typeof member.name === "string" &&
+          ["running", "waiting", "done", "failed", "cancelled"].includes(
+            member.status,
+          ),
+      )
+      .slice(-20)
+      .map((member): RemoteMember => ({
+        id: member.id,
+        name: member.name,
+        status: member.status,
+        prompt: excerpt(member.prompt),
+        result: excerpt(member.result),
+        error: excerpt(member.error),
+        durationMs: member.durationMs,
+        rounds: Array.isArray(member.rounds)
+          ? member.rounds
+              .slice(-2)
+              .map((round: NonNullable<RemoteMember["rounds"]>[number]) => ({
+                round: round.round,
+                prompt: excerpt(round.prompt) || "",
+                result: excerpt(round.result) || "",
+              }))
+          : undefined,
+      })),
+  };
 }
 
 type RemoteCacheFile = Record<string, CachedRemoteConversation>;
@@ -50,7 +110,8 @@ function stripAttachment(attachment: DirectAttachment): DirectAttachment {
 }
 
 function sanitizeMessage(message: RemoteChatMessage): RemoteChatMessage | null {
-  if (!message || typeof message !== "object" || Array.isArray(message)) return null;
+  if (!message || typeof message !== "object" || Array.isArray(message))
+    return null;
   if (
     message.role !== "user" &&
     message.role !== "assistant" &&
@@ -60,8 +121,15 @@ function sanitizeMessage(message: RemoteChatMessage): RemoteChatMessage | null {
     return null;
   const text = String(message.text || "").slice(0, MAX_MESSAGE_CHARS);
   const attachments = Array.isArray(message.attachments)
-    ? message.attachments.filter(attachment => attachment && typeof attachment === "object"
-        && (attachment.kind === "image" || attachment.kind === "text")).slice(0, 6).map(stripAttachment)
+    ? message.attachments
+        .filter(
+          (attachment) =>
+            attachment &&
+            typeof attachment === "object" &&
+            (attachment.kind === "image" || attachment.kind === "text"),
+        )
+        .slice(0, 6)
+        .map(stripAttachment)
     : [];
   if (!text && attachments.length === 0 && message.role !== "tool") return null;
   return {
@@ -102,8 +170,12 @@ function sanitizeMessage(message: RemoteChatMessage): RemoteChatMessage | null {
   };
 }
 
-function sanitizeMessages(messages: readonly RemoteChatMessage[]): RemoteChatMessage[] {
-  return messages.slice(-MAX_MESSAGES_PER_SESSION).map(sanitizeMessage)
+function sanitizeMessages(
+  messages: readonly RemoteChatMessage[],
+): RemoteChatMessage[] {
+  return messages
+    .slice(-MAX_MESSAGES_PER_SESSION)
+    .map(sanitizeMessage)
     .filter((message): message is RemoteChatMessage => Boolean(message));
 }
 
@@ -112,7 +184,8 @@ export function loadRemoteCache(): RemoteCacheFile {
     const parsed = JSON.parse(
       localStorage.getItem(CACHE_STORAGE_KEY) || "{}",
     ) as RemoteCacheFile;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return {};
     const entries = Object.values(parsed).filter(
       (entry): entry is CachedRemoteConversation =>
         Boolean(entry) &&
@@ -126,7 +199,11 @@ export function loadRemoteCache(): RemoteCacheFile {
         .slice(0, MAX_SESSIONS)
         .map((entry) => [
           `${entry.deviceId || "legacy"}:${entry.sessionId}`,
-          { ...entry, messages: sanitizeMessages(entry.messages) },
+          {
+            ...entry,
+            messages: sanitizeMessages(entry.messages),
+            collaboration: cacheCollaboration(entry.collaboration),
+          },
         ]),
     );
   } catch {
@@ -148,7 +225,12 @@ export function saveRemoteConversation(
   workspace: string,
   messages: RemoteChatMessage[],
   deviceId?: string,
-  context: { projectId?: string; surface?: RemoteSurface; title?: string } = {},
+  context: {
+    projectId?: string;
+    surface?: RemoteSurface;
+    title?: string;
+    collaboration?: RemoteCollaboration;
+  } = {},
 ) {
   if (!sessionId) return;
   const clean = sanitizeMessages(messages);
@@ -160,6 +242,7 @@ export function saveRemoteConversation(
     messages: clean,
     at: Date.now(),
     ...context,
+    collaboration: cacheCollaboration(context.collaboration),
   };
   const entries = Object.values(cache)
     .sort((a, b) => b.at - a.at)

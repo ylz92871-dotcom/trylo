@@ -49,7 +49,6 @@ import {
   uiText,
 } from "./ui";
 import DirectChatView from "./DirectChatView";
-import MobileNavigation from "./MobileNavigation";
 import RemoteWorkbench from "./remote/RemoteWorkbench";
 import { offlineSnapshot } from "./remoteOffline";
 import {
@@ -72,8 +71,7 @@ type ToastState = {
   message: string;
   color?: string;
 } | null;
-const APP_VERSION = "1.5.0";
-const APP_RELEASE_DATE = "2026.10.15";
+const APP_VERSION = "1.7.0";
 const REMOTE_SURFACE_STORAGE_KEY = "trylo.remoteSurface";
 function loadRemoteSurface(): RemoteSurface {
   return localStorage.getItem(REMOTE_SURFACE_STORAGE_KEY) === "work"
@@ -86,18 +84,12 @@ function App() {
       ? "direct"
       : "remote",
   );
-  const [activeTab, setActiveTab] = useState<TabId>("chat");
   const [remoteNavigation, setRemoteNavigation] = useState({
     id: 0,
-    tab: "chat" as TabId,
+    tab: "home" as TabId,
   });
   const requestRemoteTab = (tab: TabId) => {
-    setActiveTab(tab);
     setRemoteNavigation((current) => ({ id: current.id + 1, tab }));
-  };
-  const changeModule = (module: AppModule) => {
-    if (module === "remote") requestRemoteTab("chat");
-    setActiveModule(module);
   };
   const [navigationBusy, setNavigationBusy] = useState(false);
   const [snapshot, setSnapshot] = useState<RemoteSnapshot | null>(null);
@@ -260,6 +252,7 @@ function App() {
         next.device.id,
         {
           projectId: next.activeProjectId,
+            collaboration: next.collaboration,
           surface: activeSurface,
           title: next.sessions.find(
             (session) => session.id === next.activeSessionId,
@@ -400,6 +393,7 @@ function App() {
     setMessages([]);
     setLoading(true);
     setIsDemo(false);
+    requestRemoteTab("home");
     reconnect();
     setPairingOpen(false);
     setToast({ message: `正在连接 ${pairing.deviceName}`, color: "primary" });
@@ -411,6 +405,7 @@ function App() {
     setMessages([]);
     setLoading(true);
     setIsDemo(true);
+    requestRemoteTab("home");
     reconnect();
     setPairingOpen(false);
   };
@@ -502,61 +497,40 @@ function App() {
       uiText(uiLanguage, "新建会话失败", "Unable to create chat"),
     );
   };
-  const changeRemoteSurface = async (surface: RemoteSurface) => {
-    if (surface === remoteSurface) return;
-    const session = snapshot?.sessions.find((item) => item.surface === surface);
-    if (session) await selectProjectSession(session.id);
-    else await createRemoteSession(surface);
-  };
-  if ((loading || !snapshot) && activeModule === "remote") {
-    return (
-      <IonApp>
-        <div className="launch-screen">
-          <BrandMark />
-          <div className="launch-screen__copy">
-            <strong>Trylo Code</strong>
-            <span>
-              {uiText(
-                uiLanguage,
-                "正在寻找你的工作空间",
-                "Finding your workspace",
-              )}
-            </span>
-          </div>
-          <IonSpinner name="crescent" />
-        </div>
-      </IonApp>
-    );
-  }
   const remoteSnapshot = snapshot;
   return (
     <IonApp className={`app-module--${activeModule}`}>
       <IonPage>
-        {activeModule === "direct" && (
-          <MobileNavigation
+        {loading && !snapshot && activeModule === "remote" && (
+          <div className="launch-screen">
+            <BrandMark />
+            <div className="launch-screen__copy">
+              <strong>Trylo</strong>
+              <span>
+                {uiText(
+                  uiLanguage,
+                  "正在读取你的会话",
+                  "Loading your conversations",
+                )}
+              </span>
+            </div>
+            <IonSpinner name="crescent" />
+          </div>
+        )}
+        <IonContent
+          hidden={activeModule !== "direct"}
+          fullscreen
+          className="app-content app-content--direct"
+          style={{ display: activeModule === "direct" ? undefined : "none" }}
+        >
+          <DirectChatView
             language={uiLanguage}
-            snapshot={remoteSnapshot}
-            module={activeModule}
-            tab={activeTab}
-            surface={remoteSurface}
-            connection={connectionState}
-            demo={isDemo}
-            busy={navigationBusy}
-            onModule={changeModule}
-            onTab={requestRemoteTab}
-            onProject={switchProject}
-            onSession={selectProjectSession}
-            onNew={() => void createRemoteSession()}
-            onSurface={(surface) => void changeRemoteSurface(surface)}
-            onSettings={() => setSettingsOpen(true)}
+            onHome={() => {
+              setActiveModule("remote");
+              requestRemoteTab("home");
+            }}
           />
-        )}
-
-        {activeModule === "direct" && (
-          <IonContent fullscreen className="app-content app-content--direct">
-            <DirectChatView language={uiLanguage} />
-          </IonContent>
-        )}
+        </IonContent>
         {remoteSnapshot && (
           <RemoteWorkbench
             hidden={activeModule !== "remote"}
@@ -1177,7 +1151,6 @@ function SettingsModal({
                 {uiText(language, "版本", "Version")} {APP_VERSION}
               </h3>
             </div>
-            <IonBadge color="light">{APP_RELEASE_DATE}</IonBadge>
           </div>
           <p>{language === "en" ? "What's new" : "本次更新"}</p>
           <ul>

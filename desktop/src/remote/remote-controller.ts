@@ -56,7 +56,8 @@ export interface RemoteControllerOptions {
   /** Handler authorities — Desktop owns every gateway handler (arch §7.2). */
   readonly workspaces: { list(): readonly RemoteProjectSummary[]; activeProjectId(): string; select(projectId: string): Promise<void> };
   readonly sessions: { list(): readonly RemoteSessionSummary[]; activeSessionId(): string; select(sessionId: string): Promise<{ switching: boolean }>; create?(surface: RemoteTaskSurface): Promise<string> };
-  readonly sendTask: (req: { projectKey: string; conversationId: string; mode: string; surface: RemoteTaskSurface; text: string; requestId: string; attachments?: readonly import('./remote-routing').RemoteChatAttachment[] }) => Promise<unknown>;
+  readonly sendTask: (req: { projectKey: string; conversationId: string; mode: string; surface: RemoteTaskSurface; teamProfileId?: string; text: string; requestId: string; attachments?: readonly import('./remote-routing').RemoteChatAttachment[] }) => Promise<unknown>;
+  readonly collaboration?: () => import('../services-host/methods').RemoteCollaborationState;
   readonly cancelTask: (projectKey: string, conversationId: string) => Promise<void>;
   readonly approvals: ApprovalService;
   /** Read-only Work deliverables (`.trylo/out` of the active workspace). */
@@ -84,6 +85,7 @@ export class RemoteController {
   private readonly thinkAccum = new Map<string, string>();
   private readonly textAccum = new Map<string, string>();
   private lastPublishedState = '';
+  private lastPublishedCollaborationKey = '';
   private lastPublishedPermissionKey = '';
   private remoteStatusValue: RemoteStatusResult = EMPTY_REMOTE_STATUS;
   private started = false;
@@ -119,16 +121,19 @@ export class RemoteController {
 
   readonly lifecycle: CodeRunLifecycleObserver = {
     onRunStarted: (scope) => {
-      if (scope.projectKey === this.options.projectKey() && scope.conversationId === this.options.conversationId()) this.publishSnapshot();
+      if (scope.projectKey !== this.options.projectKey() || scope.conversationId !== this.options.conversationId()) return Promise.resolve();
+      this.publishSnapshot();
       this.publishAgentState('running', 'Starting the run');
       return Promise.resolve();
     },
     onEvents: (scope, events: readonly LoopEvent[]) => {
+      if (scope.projectKey !== this.options.projectKey() || scope.conversationId !== this.options.conversationId()) return;
       for (const event of asEvents(projectLoopEvents(events, scope.turnId, this.options.mode(), undefined, this.thinkAccum, this.textAccum))) this.publish(event);
     },
     onRunTerminal: (scope, outcome: CodeRunOutcome) => {
       this.thinkAccum.delete(scope.turnId);
       this.textAccum.delete(scope.turnId);
+      if (scope.projectKey !== this.options.projectKey() || scope.conversationId !== this.options.conversationId()) return;
       this.publish(
         outcome === 'failed'
           ? { type: 'error', message: 'Code run failed' }
@@ -276,6 +281,15 @@ export class RemoteController {
     for (const event of projectTaskReceipt({ ...opts, now: Date.now })) this.publish(event);
   }
 
+  refreshCollaboration(force = false): void {
+    if (!this.channelEnabled || !this.options.collaboration) return;
+    const event = { type: 'collaborationState' as const, sessionId: this.options.conversationId(), collaboration: this.options.collaboration() };
+    const key = JSON.stringify([this.options.projectKey(), event]);
+    if (!force && key === this.lastPublishedCollaborationKey) return;
+    this.lastPublishedCollaborationKey = key;
+    this.publish(event);
+  }
+
   // ── internals ────────────────────────────────────────────────────────
 
   private async startup(generation: number): Promise<void> {
@@ -364,6 +378,7 @@ export class RemoteController {
     this.needsReenable = false;
     for (const dispose of this.disposers.splice(0)) dispose();
     this.lastPublishedState = '';
+    this.lastPublishedCollaborationKey = '';
     this.lastPublishedPermissionKey = '';
     this.setStatus(EMPTY_REMOTE_STATUS);
     if (stopManager) await this.options.manager.stop().catch(() => {});
@@ -422,6 +437,7 @@ export class RemoteController {
       now: Date.now,
     });
     for (const event of asEvents(snapshot)) this.publish(event);
+    this.refreshCollaboration(true);
   }
 
   private publishPermissions(): void {

@@ -1,3 +1,5 @@
+import { projectCollaboration } from './remote/remote-collaboration'
+import { launchRemoteTeam } from './remote/remote-team-launch'
 import { buildActivityItems, type ActivityNavigation } from './components/activity/activity-items'
 import {
   createTeamApprovalPresentation,
@@ -2013,6 +2015,7 @@ function App({
         surface,
         text,
         requestId,
+        teamProfileId,
         attachments,
       }) => {
         // Explicit (projectKey, conversationId) from the mobile request —
@@ -2076,6 +2079,10 @@ function App({
           }
         }
         const record = history.conversations[conversationId]
+        const sendPermission = resolveEffectivePermission({
+          settingsDefault: current.permissionLevel ?? DEFAULT_PERMISSION_LEVEL,
+          conversationOverride: record?.permissionLevel ?? null,
+        })
         const sendTurnId = `remote-${requestId}`
         const userMessage = beginConversationTurn({
           text,
@@ -2101,6 +2108,36 @@ function App({
         // the agent knows to read the materialised files via its file tools.
         const attachmentCtx = created.length ? buildAttachmentPromptContext(created) : ''
         const prompt = attachmentCtx ? `${attachmentCtx}\n\n${text}` : text
+        if (teamProfileId) {
+          await launchRemoteTeam({ supervisor, projectKey, root, workspaceId: workspace.id,
+            conversationId, surface, profileId: teamProfileId, goal: prompt, turnId: sendTurnId,
+            settings: current, permissionLevel: sendPermission.level,
+            priorMessages: record?.messages ?? EMPTY_CHAT_MESSAGES,
+            preparePrompt: (input) => userLearning.preparePrompt(input),
+            writeFile: (path, body) => hostAdapter.fs.writeFile(path, body),
+            workProfile: workToolProfile(current), lifecycleObserver: codeLifecycleObserver,
+            onPrepared: (result) => {
+              const selected = remoteContextRef.current
+              const selectedHistory = historiesRef.current[workspaceKey(selected.currentWorkspace.root)]
+              if (workspaceKey(selected.currentWorkspace.root) === projectKey &&
+                selected.topMode === surface && selectedHistory?.activeByKind[surface] === conversationId) {
+                setTeamRun({ ...result.run, workspaceId: workspace.id, selectedSeatId: null } as unknown as TeamRun)
+              }
+            },
+            onEvents: (events) => {
+              feedTeamEvents(setTeamRun, { workspaceId: root, personConversationId: conversationId }, events, { onClarify: handlePersonClarify })
+              updateMessagesAt(root, conversationId, (prev) => applyEvents(prev, events))
+            },
+            onFailed: (teamRunId, error, cancelled) => {
+              if (cancelled && supervisor.controller(projectKey, conversationId).ownsNativeTurn(sendTurnId)) return
+              const context = { workspaceId: root, personConversationId: conversationId, teamRunId }
+              const events = cancelled ? routeTeamEvents(context, [{ type: 'loop_end', reason: 'cancelled', ts: Date.now() }])
+                : failTeamStart(context, error instanceof Error ? error.message : String(error), Date.now())
+              setTeamRun((previous) => mergeTeamProjection(previous, events))
+            },
+          })
+          return
+        }
         if (surface === 'work') {
           await sendWorkChat(supervisor, {
             projectKey,
@@ -2109,7 +2146,7 @@ function App({
             settings: settingsForCodeReplay(current, root),
             systemPrompt: buildWorkProfilePrompt(root),
             codeMode: 'agent',
-            permissionLevel: effectivePermission.level,
+            permissionLevel: sendPermission.level,
             priorMessages: record?.messages ?? EMPTY_CHAT_MESSAGES,
             turnId: sendTurnId,
             ...workToolProfile(current),
@@ -2126,7 +2163,7 @@ function App({
           // P2: remote / replayed sends use the current effective
           // level. The user cannot change the picker for a
           // replayed run; the active override wins.
-          permissionLevel: effectivePermission.level,
+          permissionLevel: sendPermission.level,
           priorMessages: record?.messages ?? EMPTY_CHAT_MESSAGES,
           turnId: sendTurnId,
           lifecycleObserver: codeLifecycleObserver,
@@ -2146,6 +2183,14 @@ function App({
       },
       approvals: companion.approvals,
       chatHandle: (message, chat) => companionPortRef.current!.chatHandle(message, chat),
+      collaboration: () => {
+        const context = remoteContextRef.current
+        const history = historiesRef.current[workspaceKey(context.currentWorkspace.root)]
+        const conversationId = history?.activeByKind[context.topMode] || ''
+        const run = teamRunForContext({ workspaceId: context.currentWorkspace.root, personConversationId: conversationId })
+        return projectCollaboration({ messages: history?.conversations[conversationId]?.messages || [], run,
+          profiles: builtinTemplatesForSurface(context.topMode, Date.now()), enabled: settingsRef.current.userLearning.teamAccessEnabled === true })
+      },
       history: () =>
         historiesRef.current[workspaceKey(remoteContextRef.current.currentWorkspace.root)] ?? null,
       workspaceIndex: () => {
@@ -2179,6 +2224,8 @@ function App({
     })
   }
   const remoteController = remoteControllerRef.current
+  const remoteConversationMessages = topMode === 'work' ? workMessages : messages
+  useEffect(() => { remoteController.refreshCollaboration() }, [remoteController, teamRun, teamRunsVersionTick, topMode, activeSessionId, settings.userLearning.teamAccessEnabled, remoteConversationMessages])
   const [remoteConfigurationReady, setRemoteConfigurationReady] = useState(!isTauriFn())
   useEffect(() => {
     if (!isTauriFn()) return

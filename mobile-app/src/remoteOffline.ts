@@ -31,6 +31,7 @@ export function offlineSnapshot(
     },
     activeSessionId: history?.sessionId || "",
     conversation: history?.messages || [],
+    collaboration: history?.collaboration,
     sessions: history
       ? [
           {

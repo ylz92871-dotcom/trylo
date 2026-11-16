@@ -16,6 +16,8 @@ import {
 } from "../gateway";
 import { Icon, Mark } from "./icons";
 import InlineProcess from "./InlineProcess";
+import Home from "./Home";
+import Collaboration from "./Collaboration";
 import {
   AttachmentStrip,
   MarkdownMessage,
@@ -29,17 +31,17 @@ import {
   type DirectAttachment,
 } from "../directChat";
 import "./workbench.css";
-type View = "sessions" | "conversation" | "inbox" | "devices";
-type Pane = "chat" | "activity" | "results";
+type View = "home" | "sessions" | "conversation" | "inbox" | "devices";
+type Pane = "chat" | "activity" | "results" | "team";
 type DisplayMode = "dialogue" | "process";
 const MODE_KEY = "trylo.remote.displayMode.v1";
 function readMode(): DisplayMode {
   try {
-    return localStorage.getItem(MODE_KEY) === "dialogue"
-      ? "dialogue"
-      : "process";
+    return localStorage.getItem(MODE_KEY) === "process"
+      ? "process"
+      : "dialogue";
   } catch {
-    return "process";
+    return "dialogue";
   }
 }
 type Sheet =
@@ -48,7 +50,7 @@ type Sheet =
       id: string;
     }
   | {
-      kind: "device" | "new" | "stop";
+      kind: "device" | "new" | "stop" | "team";
     }
   | {
       kind: "tool";
@@ -234,7 +236,7 @@ export default function RemoteWorkbench({
       setPending(false);
     }
   };
-  const [view, setView] = useState<View>("conversation");
+  const [view, setView] = useState<View>("home");
   const [pane, setPane] = useState<Pane>("chat");
   const [displayMode, setDisplayMode] = useState<DisplayMode>(readMode);
   const [expandedEvents, setExpandedEvents] = useState<Record<string, boolean>>(
@@ -242,6 +244,8 @@ export default function RemoteWorkbench({
   );
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [filter, setFilter] = useState("all");
+  const [teamProfiles, setTeamProfiles] = useState<Record<string, string>>({});
+  const teamProfileId = teamProfiles[contextKey];
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [selectedTurn, setSelectedTurn] = useState<string | undefined>();
   const [attachmentDrafts, setAttachmentDrafts] = useState<
@@ -301,17 +305,20 @@ export default function RemoteWorkbench({
     !!snapshot &&
     !["idle", "done", "failed"].includes(snapshot.agent.status) &&
     snapshot.agent.phase !== "stopped";
-  const offlineText =
-    demo ? t("尚未连接电脑，当前显示演示内容") : state === "offline"
+  const offlineText = demo
+    ? t("尚未连接电脑，当前显示演示内容")
+    : state === "offline"
       ? t("连接已断开")
       : state === "reconnecting"
         ? t("正在恢复连接")
         : t("正在同步会话");
-  const connectionText = demo ? t("未配对") : ready
-    ? t("已同步")
-    : state === "offline"
-      ? t("离线")
-      : t("同步中");
+  const connectionText = demo
+    ? t("未配对")
+    : ready
+      ? t("已同步")
+      : state === "offline"
+        ? t("离线")
+        : t("同步中");
   useEffect(() => {
     if (
       sheet?.kind === "approval" &&
@@ -337,7 +344,7 @@ export default function RemoteWorkbench({
     setSheet(null);
     setView(
       navigation.tab === "home"
-        ? "devices"
+        ? "home"
         : navigation.tab === "approvals"
           ? "inbox"
           : "conversation",
@@ -410,6 +417,7 @@ export default function RemoteWorkbench({
       await perform(() =>
         client.sendChat(sent.trim(), attachments, {
           surface: session?.surface || "code",
+          ...(teamProfileId ? { teamProfileId } : {}),
         }),
       )
     ) {
@@ -531,7 +539,7 @@ export default function RemoteWorkbench({
   }
   const nav = (
     <nav className="rw-navigation" aria-label={t("远程工作台导航")}>
-      {(["sessions", "inbox", "devices"] as const).map((item, i) => (
+      {(["home", "sessions", "inbox", "devices"] as const).map((item, i) => (
         <button
           key={item}
           aria-current={view === item ? "page" : undefined}
@@ -541,10 +549,17 @@ export default function RemoteWorkbench({
           }}
         >
           <span>
-            <Icon name={["message", "inbox", "desktop"][i]} />
-            {item === "inbox" && approval && <i />}
+            <Icon name={["home", "message", "inbox", "desktop"][i]} />
+            {item === "inbox" && !demo && approval && <i />}
           </span>
-          {[t("会话"), t("待处理"), t("设备")][i]}
+          {
+            [
+              language === "en" ? "Home" : "首页",
+              t("会话"),
+              t("待处理"),
+              t("设备"),
+            ][i]
+          }
         </button>
       ))}
     </nav>
@@ -599,7 +614,9 @@ export default function RemoteWorkbench({
                     {offlineText}
                     {!demo && t("，已保留内容和草稿。")}
                   </span>
-                  <button onClick={demo ? onPair : reconnect}>{t(demo ? "连接电脑" : "重试")}</button>
+                  <button onClick={demo ? onPair : reconnect}>
+                    {t(demo ? "连接电脑" : "重试")}
+                  </button>
                 </div>
               )}
               <div className="rw-viewbar">
@@ -630,18 +647,36 @@ export default function RemoteWorkbench({
                   {t("结果")}
                   {artifacts.length > 0 && <small>{artifacts.length}</small>}
                 </button>
+                <button
+                  className={`rw-result-entry${pane === "team" ? " selected" : ""}`}
+                  aria-pressed={pane === "team"}
+                  onClick={() => {
+                    rememberPosition();
+                    setPane(pane === "team" ? "chat" : "team");
+                  }}
+                >
+                  <Icon name="team" size={16} />
+                  {language === "en" ? "Team" : "成员"}
+                  {!!snapshot.collaboration?.members.length && (
+                    <small>{snapshot.collaboration.members.length}</small>
+                  )}
+                </button>
               </div>
               <div
                 className={`rw-feed rw-feed-${pane} rw-mode-${displayMode}`}
                 role="region"
                 aria-label={
-                  pane === "chat"
-                    ? displayMode === "process"
-                      ? t("完整事件流")
-                      : t("对话内容")
-                    : pane === "activity"
-                      ? t("执行记录")
-                      : t("项目结果")
+                  pane === "team"
+                    ? language === "en"
+                      ? "Team and subagents"
+                      : "团队与子智能体"
+                    : pane === "chat"
+                      ? displayMode === "process"
+                        ? t("完整事件流")
+                        : t("对话内容")
+                      : pane === "activity"
+                        ? t("执行记录")
+                        : t("项目结果")
                 }
                 ref={feed}
                 onScroll={() => {
@@ -658,6 +693,13 @@ export default function RemoteWorkbench({
                   }
                 }}
               >
+                {pane === "team" && (
+                  <Collaboration
+                    key={contextKey}
+                    data={snapshot.collaboration}
+                    language={language}
+                  />
+                )}
                 {pane === "chat" && (
                   <>
                     {conversation.length ? (
@@ -882,96 +924,122 @@ export default function RemoteWorkbench({
                     {error}
                   </p>
                 )}
-                <input
-                  ref={fileInput}
-                  type="file"
-                  multiple
-                  hidden
-                  accept="image/*,.txt,.md,.json,.csv,.ts,.tsx,.js,.py,.log,.html,.css,.xml,.yaml,.yml"
-                  onChange={(e) =>
-                    void addFiles(Array.from(e.target.files || []))
-                  }
-                />
-                {attachments.length > 0 && (
-                  <div className="remote-attachments">
-                    {attachments.map((file) => (
-                      <span key={file.id}>
-                        {file.name}
+                {pane === "chat" && (
+                  <>
+                    <input
+                      ref={fileInput}
+                      type="file"
+                      multiple
+                      hidden
+                      accept="image/*,.txt,.md,.json,.csv,.ts,.tsx,.js,.py,.log,.html,.css,.xml,.yaml,.yml"
+                      onChange={(e) =>
+                        void addFiles(Array.from(e.target.files || []))
+                      }
+                    />
+                    {attachments.length > 0 && (
+                      <div className="remote-attachments">
+                        {attachments.map((file) => (
+                          <span key={file.id}>
+                            {file.name}
+                            <button
+                              type="button"
+                              aria-label={
+                                language === "en"
+                                  ? `Remove ${file.name}`
+                                  : `移除 ${file.name}`
+                              }
+                              onClick={() =>
+                                setAttachmentDrafts((current) => ({
+                                  ...current,
+                                  [contextKey]: (
+                                    current[contextKey] || []
+                                  ).filter((item) => item.id !== file.id),
+                                }))
+                              }
+                            >
+                              <Icon name="close" size={12} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <form
+                      className="rw-composer"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void send();
+                      }}
+                    >
+                      <textarea
+                        rows={2}
+                        aria-label={t("发送到电脑的消息")}
+                        placeholder={
+                          ready
+                            ? t("让电脑继续做点什么…")
+                            : t("连接恢复后继续，草稿会保留")
+                        }
+                        value={draft}
+                        onChange={(e) =>
+                          setDrafts((current) => ({
+                            ...current,
+                            [contextKey]: e.target.value,
+                          }))
+                        }
+                      />
+                      <div>
+                        <span>
+                          <button
+                            type="button"
+                            className="remote-attach"
+                            aria-label={t("添加附件")}
+                            disabled={pending || processingFiles}
+                            onClick={() => fileInput.current?.click()}
+                          >
+                            <Icon name="add" size={16} />
+                          </button>
+                          <Icon name="desktop" size={12} />
+                          {session?.surface === "work" ? "Work" : "Code"}
+                          <button
+                            type="button"
+                            className="rw-collaboration-select"
+                            aria-label={
+                              language === "en"
+                                ? "Choose collaboration mode"
+                                : "选择协作方式"
+                            }
+                            onClick={() => setSheet({ kind: "team" })}
+                          >
+                            <Icon
+                              name={teamProfileId ? "team" : "message"}
+                              size={14}
+                            />
+                            {teamProfileId
+                              ? language === "en"
+                                ? "Team"
+                                : "团队协作"
+                              : language === "en"
+                                ? "Solo"
+                                : "单人"}
+                            <Icon name="down" size={11} />
+                          </button>
+                        </span>
                         <button
-                          type="button"
-                          aria-label={
-                            language === "en"
-                              ? `Remove ${file.name}`
-                              : `移除 ${file.name}`
-                          }
-                          onClick={() =>
-                            setAttachmentDrafts((current) => ({
-                              ...current,
-                              [contextKey]: (current[contextKey] || []).filter(
-                                (item) => item.id !== file.id,
-                              ),
-                            }))
+                          aria-label={t("发送消息")}
+                          className="rw-send"
+                          disabled={
+                            !ready ||
+                            pending ||
+                            (!draft.trim() && !attachments.length) ||
+                            processingFiles ||
+                            !!approval
                           }
                         >
-                          <Icon name="close" size={12} />
+                          <Icon name="arrow" size={19} />
                         </button>
-                      </span>
-                    ))}
-                  </div>
+                      </div>
+                    </form>
+                  </>
                 )}
-                <form
-                  className="rw-composer"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    void send();
-                  }}
-                >
-                  <textarea
-                    rows={2}
-                    aria-label={t("发送到电脑的消息")}
-                    placeholder={
-                      ready
-                        ? t("让电脑继续做点什么…")
-                        : t("连接恢复后继续，草稿会保留")
-                    }
-                    value={draft}
-                    onChange={(e) =>
-                      setDrafts((current) => ({
-                        ...current,
-                        [contextKey]: e.target.value,
-                      }))
-                    }
-                  />
-                  <div>
-                    <span>
-                      <button
-                        type="button"
-                        className="remote-attach"
-                        aria-label={t("添加附件")}
-                        disabled={pending || processingFiles}
-                        onClick={() => fileInput.current?.click()}
-                      >
-                        <Icon name="add" size={16} />
-                      </button>
-                      <Icon name="desktop" size={12} />
-                      {session?.surface === "work" ? "Work" : "Code"}
-                      <small>{t("在电脑上执行")}</small>
-                    </span>
-                    <button
-                      aria-label={t("发送消息")}
-                      className="rw-send"
-                      disabled={
-                        !ready ||
-                        pending ||
-                        (!draft.trim() && !attachments.length) ||
-                        processingFiles ||
-                        !!approval
-                      }
-                    >
-                      <Icon name="arrow" size={19} />
-                    </button>
-                  </div>
-                </form>
                 <div className="rw-safe-area" />
               </div>
             </>
@@ -981,19 +1049,37 @@ export default function RemoteWorkbench({
                 <div className="rw-brand">
                   <Mark />
                   <span>Trylo</span>
-                  <span className="rw-remote-label">{t("远程")}</span>
+                  <span className="rw-remote-label">
+                    {language === "en" ? "Your workspace" : "随时接着做"}
+                  </span>
                 </div>
                 <button
                   className="rw-icon"
-                  aria-label={t("新建远程会话")}
-                  disabled={!ready || pending}
-                  onClick={() => setSheet({ kind: "new" })}
+                  aria-label={view === "home" ? t("设置") : t("新建远程会话")}
+                  disabled={view !== "home" && (!ready || pending)}
+                  onClick={() =>
+                    view === "home" ? onSettings() : setSheet({ kind: "new" })
+                  }
                 >
-                  <Icon name="add" size={23} />
+                  <Icon name={view === "home" ? "settings" : "add"} size={23} />
                 </button>
               </header>
               <div className="rw-home-scroll">
-                {view === "sessions" && (
+                {(view === "home" || (demo && view === "sessions")) && (
+                  <Home
+                    snapshot={snapshot}
+                    demo={demo}
+                    ready={ready}
+                    language={language}
+                    onDirect={onDirect}
+                    onPair={onPair}
+                    onSessions={() => setView("sessions")}
+                    onSession={(id) => void openSession(id)}
+                    onInbox={() => setView("inbox")}
+                    onDemo={() => setView("conversation")}
+                  />
+                )}
+                {view === "sessions" && !demo && (
                   <>
                     <div className="rw-home-title">
                       <h1>{t("会话")}</h1>
@@ -1066,7 +1152,7 @@ export default function RemoteWorkbench({
                         <button
                           className="rw-session"
                           key={s.id}
-                          disabled={!ready || pending}
+                          disabled={(!ready && s.id !== sessionId) || pending}
                           onClick={() => void openSession(s.id)}
                         >
                           <div className="rw-session-line">
@@ -1129,13 +1215,13 @@ export default function RemoteWorkbench({
                     <div className="rw-home-title">
                       <h1>{t("待处理")}</h1>
                       <span className="rw-count">
-                        {snapshot?.approvals.length || 0}
+                        {demo ? 0 : snapshot.approvals.length}
                       </span>
                     </div>
                     <p className="rw-description">
                       {t("需要你确认后才能继续的操作。")}
                     </p>
-                    {snapshot.approvals.length ? (
+                    {!demo && snapshot.approvals.length ? (
                       snapshot.approvals.map((item) => (
                         <button
                           key={item.id}
@@ -1262,15 +1348,19 @@ export default function RemoteWorkbench({
             key={sheet.kind}
             language={language}
             title={
-              sheet.kind === "approval"
-                ? t("确认电脑上的操作")
-                : sheet.kind === "tool"
-                  ? sheet.message.title || t("执行详情")
-                  : sheet.kind === "new"
-                    ? t("新建会话")
-                    : sheet.kind === "stop"
-                      ? t("停止当前任务？")
-                      : t("会话与设备")
+              sheet.kind === "team"
+                ? language === "en"
+                  ? "Collaboration"
+                  : "选择协作方式"
+                : sheet.kind === "approval"
+                  ? t("确认电脑上的操作")
+                  : sheet.kind === "tool"
+                    ? sheet.message.title || t("执行详情")
+                    : sheet.kind === "new"
+                      ? t("新建会话")
+                      : sheet.kind === "stop"
+                        ? t("停止当前任务？")
+                        : t("会话与设备")
             }
             onClose={() => setSheet(null)}
             footer={
@@ -1332,6 +1422,68 @@ export default function RemoteWorkbench({
               ) : undefined
             }
           >
+            {sheet.kind === "team" && (
+              <div className="rw-team-picker">
+                <p className="rw-description">
+                  {language === "en"
+                    ? "Choose how to handle your next message. Work runs on your computer."
+                    : "选择下一条消息的协作方式，任务会在电脑上执行。"}
+                </p>
+                <button
+                  className="rw-profile-option"
+                  aria-pressed={!teamProfileId}
+                  onClick={() => {
+                    setTeamProfiles((current) => ({
+                      ...current,
+                      [contextKey]: "",
+                    }));
+                    setSheet(null);
+                  }}
+                >
+                  <Icon name="message" />
+                  <span>
+                    <strong>{language === "en" ? "Solo" : "单人"}</strong>
+                    <small>
+                      {language === "en"
+                        ? "Let the main agent handle your request"
+                        : "由主智能体处理，需要时委派子任务"}
+                    </small>
+                  </span>
+                  {!teamProfileId && <Icon name="check" size={18} />}
+                </button>
+                {snapshot.collaboration?.canStartTeam ? (
+                  snapshot.collaboration.profiles.map((profile) => (
+                    <button
+                      key={profile.id}
+                      className="rw-profile-option"
+                      aria-pressed={profile.id === teamProfileId}
+                      onClick={() => {
+                        setTeamProfiles((current) => ({
+                          ...current,
+                          [contextKey]: profile.id,
+                        }));
+                        setSheet(null);
+                      }}
+                    >
+                      <Icon name="team" />
+                      <span>
+                        <strong>{profile.title}</strong>
+                        <small>{profile.members.join(" · ")}</small>
+                      </span>
+                      {profile.id === teamProfileId && (
+                        <Icon name="check" size={18} />
+                      )}
+                    </button>
+                  ))
+                ) : (
+                  <p className="rw-description">
+                    {language === "en"
+                      ? "Update Desktop to a version that supports mobile teams and enable Team Access. Members appear here when they join."
+                      : "请更新到支持手机团队的配套电脑版，并开启团队协作。成员开始参与后会出现在「成员」。"}
+                  </p>
+                )}
+              </div>
+            )}
             {sheet.kind === "approval" && (
               <>
                 <div className="rw-approval-context">

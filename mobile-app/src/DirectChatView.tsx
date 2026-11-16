@@ -23,6 +23,7 @@ import {
 } from '@ionic/react';
 import {
   addOutline,
+  arrowBackOutline,
   alertCircleOutline,
   attachOutline,
   chatbubbleEllipsesOutline,
@@ -108,7 +109,7 @@ const SUGGESTIONS: Record<UiLanguage, string[]> = {
   ],
 };
 
-function DirectChatView({ language }: { language: UiLanguage }) {
+function DirectChatView({ language, onHome }: { language: UiLanguage; onHome?: () => void }) {
   const [conversations, setConversations] = useState<DirectConversation[]>([]);
   const [activeId, setActiveId] = useState('');
   const [composer, setComposer] = useState('');
@@ -458,14 +459,17 @@ function DirectChatView({ language }: { language: UiLanguage }) {
     <>
       <div className="direct-chat">
         <div className="direct-chat-bar">
+          <div className="direct-chat-bar__leading">
+          {onHome && <button type="button" className="direct-chat-bar__btn" aria-label={uiText(language, '返回首页', 'Back to home')} onClick={onHome}><IonIcon icon={arrowBackOutline} /></button>}
           <button type="button" className="direct-chat-bar__btn" aria-label={uiText(language, '会话列表', 'Conversations')} onClick={() => setDrawerOpen(true)}>
             <IonIcon icon={menuOutline} />
           </button>
+          </div>
           <div className="direct-chat-bar__title">
-            <strong>{activeConversation?.title || uiText(language, '新对话', 'New chat')}</strong>
+            <strong>{activeConversation?.title || uiText(language, '手机聊天', 'Phone chat')}</strong>
             <small>
               <span className="direct-provider-dot" />
-              {config.model || uiText(language, '未配置模型', 'No model')}
+              {needsSetup ? uiText(language, '连接你自己的模型', 'Connect your own model') : config.model}
             </small>
           </div>
           <div className="direct-chat-bar__actions">
@@ -477,24 +481,28 @@ function DirectChatView({ language }: { language: UiLanguage }) {
             >
               <IonIcon icon={settingsOutline} />
             </button>
-            <button type="button" className="direct-chat-bar__btn" aria-label={uiText(language, '新建对话', 'New chat')} onClick={startNewChat} disabled={streaming}>
+            {!needsSetup && <button type="button" className="direct-chat-bar__btn" aria-label={uiText(language, '新建对话', 'New chat')} onClick={startNewChat} disabled={streaming}>
               <IonIcon icon={addOutline} />
-            </button>
+            </button>}
           </div>
         </div>
 
         <div className="direct-message-list" ref={messagesRef}>
           {needsSetup ? (
             <div className="direct-setup-nudge">
-              <EmptyState
-                icon={keyOutline}
-                title={uiText(language, '先连接你的 AI', 'Connect your AI first')}
-                detail={uiText(language, '填写模型服务商和 API Key，聊天记录只保存在这台手机上。', 'Add a provider and API key. Conversations stay on this phone.')}
-              />
+              <BrandMark small />
+              <h1>{uiText(language, '随手聊，从一个想法开始', 'A conversation starts with an idea')}</h1>
+              <p>{uiText(language, '连接你自己的模型服务商，就可以在手机上写作、问答和整理想法，无需连接电脑。', 'Connect your own model provider to write, ask questions, and explore ideas. No computer needed.')}</p>
+              <ol className="direct-setup-steps">
+                <li>{uiText(language, '选择你使用的模型服务商', 'Choose your model provider')}</li>
+                <li>{uiText(language, '填写该服务商提供的 API Key', 'Add the API key from your provider')}</li>
+                <li>{uiText(language, '选好模型，开始对话', 'Choose a model and start chatting')}</li>
+              </ol>
               <IonButton expand="block" className="direct-setup-button" onClick={() => setSettingsOpen(true)}>
-                <IonIcon slot="start" icon={settingsOutline} />
-                {uiText(language, '打开 API 设置', 'Open API settings')}
+                <IonIcon slot="start" icon={keyOutline} />
+                {uiText(language, '连接模型服务商', 'Connect a model provider')}
               </IonButton>
+              <p className="direct-setup-privacy">{uiText(language, '聊天记录保留在这台手机上。请求直接发送给你选择的服务商。', 'Conversations stay on this phone. Requests go directly to your chosen provider.')}</p>
             </div>
           ) : showWelcome ? (
             <div className="direct-welcome">
@@ -557,11 +565,7 @@ function DirectChatView({ language }: { language: UiLanguage }) {
         </div>
 
         <div className="direct-composer">
-          {needsSetup ? (
-            <IonButton expand="block" className="direct-composer-setup" onClick={() => setSettingsOpen(true)}>
-              <IonIcon slot="start" icon={keyOutline} />{uiText(language, '配置 API 后开始聊天', 'Add your API key to start chatting')}
-            </IonButton>
-          ) : (
+          {!needsSetup && (
             <>
               {attachments.length > 0 && (
                 <div className="direct-attach-tray">

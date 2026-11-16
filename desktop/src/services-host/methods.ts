@@ -532,6 +532,27 @@ export interface RemoteDisableResult {
   readonly ok: boolean;
 }
 
+export interface RemoteMember {
+  readonly id: string;
+  readonly name: string;
+  readonly status: 'running' | 'waiting' | 'done' | 'failed' | 'cancelled';
+  readonly prompt?: string;
+  readonly result?: string;
+  readonly error?: string;
+  readonly durationMs?: number;
+  readonly rounds?: readonly { readonly round: number; readonly prompt: string; readonly result: string }[];
+}
+export interface RemoteCollaborationState {
+  readonly canStartTeam: boolean;
+  readonly profiles: readonly { readonly id: string; readonly title: string; readonly members: readonly string[] }[];
+  readonly team: { readonly id: string; readonly status: string; readonly title: string } | null;
+  readonly members: readonly RemoteMember[];
+}
+export interface RemoteCollaborationEvent {
+  readonly type: 'collaborationState';
+  readonly sessionId: string;
+  readonly collaboration: RemoteCollaborationState;
+}
 /** A gateway `publish()` event (gateway state machine, vendor
  *  remote-gateway/index.js). The projection emits these — the shapes are
  *  the gateway's, never re-invented here. */
@@ -688,6 +709,7 @@ export interface RemotePermissionRequestStateEvent {
 }
 
 export type RemoteGatewayEvent =
+  | RemoteCollaborationEvent
   | RemoteAgentStateEvent
   | RemoteTraceEvent
   | RemoteAssistantEvent

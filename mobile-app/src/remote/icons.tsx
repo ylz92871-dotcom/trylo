@@ -1,5 +1,22 @@
 import type { ReactNode } from "react";
 const paths: Record<string, ReactNode> = {
+  settings: (
+    <>
+      <path d="m10 3-1 3-3 1-3-1-1 3 2 3-1 3 2 3 3-1 3 1 2 3 3-1 1-3 3-1 1-3-2-3-3-1-1-3z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  home: (
+    <>
+      <path d="m3 11 9-8 9 8M5 10v11h5v-7h4v7h5V10" />
+    </>
+  ),
+  team: (
+    <>
+      <circle cx="9" cy="7" r="3" />
+      <path d="M3 21v-4a6 6 0 0 1 12 0v4M16 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 5v2" />
+    </>
+  ),
   back: <path d="m14 6-6 6 6 6" />,
   chevron: <path d="m9 6 6 6-6 6" />,
   down: <path d="m6 9 6 6 6-6" />,
