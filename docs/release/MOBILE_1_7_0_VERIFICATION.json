@@ -1,0 +1,17 @@
+{
+  "version": "1.7.0",
+  "versionCode": 10700,
+  "package": "com.trylo.remote",
+  "sourceCommit": "8d6c9a8b8f0e1257fd6f3b38b1980b70cef519a5",
+  "bytes": 25141336,
+  "sha256": "718c14d91f1d053a38f09c3abf4a424b147cea1f4f7cb229180479aa1491137c",
+  "certificateSha256": "ab9e21069ac68fe1155a03d7db1ff857b2aeda13d0e8e949782d426f5059489b",
+  "signatureMatchesPrevious": true,
+  "signatureMatchesPublished": false,
+  "earlyDebugSigningMigrationRequired": true,
+  "webAssetsMatch": true,
+  "webAssetCount": 13,
+  "nativeDeviceAcceptance": false,
+  "androidLintRelease": "passed",
+  "relatedTestsPassed": 120
+}
