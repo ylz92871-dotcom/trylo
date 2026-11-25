@@ -13,7 +13,7 @@ export interface PtySpawnResult {
 
 export interface PtyService {
   spawn(opts: {
-    shell: string;
+    shell?: string;
     cols: number;
     rows: number;
     cwd: string | null;

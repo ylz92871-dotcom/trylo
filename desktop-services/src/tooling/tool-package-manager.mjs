@@ -32,7 +32,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { applyAutocadRuntimePatches } from './autocad-runtime-patches.mjs';
 import { toolInstallDir } from './tool-runtime-identity.mjs';
@@ -158,7 +158,7 @@ export function discoverRepositoryToolRegistry(env = process.env) {
  * override map deliberately: `resolve()` reports the required local build as
  * unavailable instead of silently falling back to a stale managed install.
  */
-export function loadRepositoryToolRegistry(registryPath) {
+export function loadRepositoryToolRegistry(registryPath, hostTarget = `${process.platform}-${process.arch}`) {
   const file = registryPath ? path.resolve(registryPath) : null;
   if (!file) return { file: null, overrides: {}, entries: {}, problems: [] };
   try {
@@ -171,6 +171,7 @@ export function loadRepositoryToolRegistry(registryPath) {
     const entries = {};
     const problems = [];
     for (const [id, value] of Object.entries(parsed.tools)) {
+      if (value?.platform && value.platform !== hostTarget) continue;
       const entry = typeof value === 'string' ? value : value?.entry;
       if (typeof entry !== 'string' || entry.trim() === '') {
         problems.push(`${id}.entry is required`);
@@ -319,12 +320,23 @@ export function createToolPackageManager(options = {}) {
   const repositoryRegistryPath = options.enableRepositoryTools
     ? (options.localToolRegistryPath ?? discoverRepositoryToolRegistry())
     : null;
-  const repositoryRegistry = () => loadRepositoryToolRegistry(repositoryRegistryPath);
+  const managedDarwin = options.target?.startsWith('darwin-');
+  const repositoryRegistry = () => loadRepositoryToolRegistry(repositoryRegistryPath, options.target);
+  function isBuiltIn(id, entry = repositoryRegistry().entries[id]) {
+    if (!options.enableRepositoryTools || !BUILTIN_TOOL_IDS.includes(id)) return false;
+    return !managedDarwin || entry?.policy === 'bundled' || entry?.available === true;
+  }
   // Live merge on every read: the file is the durable local-first wiring,
   // the env var is the ephemeral dev/CI seam and wins per-key. Re-reading
   // the (tiny) file keeps a long-lived sidecar honest after a set/clear.
   const currentOverrides = () => {
     const usableEnvOverrides = { ...envOverrides };
+    const registry = repositoryRegistry();
+    if (managedDarwin) {
+      for (const [id, entry] of Object.entries(registry.entries)) {
+        if (entry.policy === 'repository-local' && !entry.available) delete registry.overrides[id];
+      }
+    }
     // A desktop launched before a toolchain relocation can keep a stale
     // dev-only environment path forever, shadowing its correct file/default.
     // Core built-ins recover from that missing inherited path. Explicit API
@@ -334,7 +346,7 @@ export function createToolPackageManager(options = {}) {
         if (usableEnvOverrides[id] && !isFileSync(usableEnvOverrides[id])) delete usableEnvOverrides[id];
       }
     }
-    return { ...repositoryRegistry().overrides, ...loadFileOverrides(installRoot), ...usableEnvOverrides };
+    return { ...registry.overrides, ...loadFileOverrides(installRoot), ...usableEnvOverrides };
   };
   // §6.5 zero-config mirror: a `<storageRoot>/pinned-artifact-mirror`
   // directory (marker: mirror-manifest.json from the mirror script) is
@@ -356,6 +368,7 @@ export function createToolPackageManager(options = {}) {
   // Test seam: the browser-body install shells out; tests inject a runner
   // instead of downloading a real Chromium.
   const runCommand = options.runCommand ?? runBoundedCommand;
+  const findUv = options.resolveUv ?? resolveUvExecutable;
 
   async function runInstallCommand(stageRoot, executable, args, timeoutMs, opts = {}) {
     // Python's editable-wheel builder appends another ~120 characters to
@@ -446,7 +459,7 @@ export function createToolPackageManager(options = {}) {
   async function resolve(manifest) {
     const override = currentOverrides()[manifest.id];
     const entry = repositoryRegistry().entries[manifest.id];
-    const builtIn = options.enableRepositoryTools && BUILTIN_TOOL_IDS.includes(manifest.id);
+    const builtIn = isBuiltIn(manifest.id, entry ?? null);
     if (override) {
       const bundled = entry?.policy === 'bundled' && entry.path === override;
       const exists = isFileSync(override);
@@ -553,6 +566,7 @@ export function createToolPackageManager(options = {}) {
     await fsp.mkdir(dir, { recursive: true });
     const target = expectedExecutable(manifest);
     await fsp.copyFile(artefactPath, target);
+    if (process.platform !== 'win32') await fsp.chmod(target, 0o755);
     await fsp.writeFile(
       path.join(dir, INSTALL_STATE_FILE),
       JSON.stringify(
@@ -608,7 +622,7 @@ export function createToolPackageManager(options = {}) {
     if (!id) return { ok: false, reasonCode: 'missing_id', error: 'a package id is required' };
     const manifest = options.catalog?.get(id);
     if (!manifest) return { ok: false, id, reasonCode: 'unknown_package' };
-    if (options.enableRepositoryTools && BUILTIN_TOOL_IDS.includes(id)) {
+    if (isBuiltIn(id)) {
       return { ok: false, id, reasonCode: 'builtin_tool', error: 'This tool ships with Trylo; repair or update the application.' };
     }
     if (!installRoot) {
@@ -851,7 +865,7 @@ export function createToolPackageManager(options = {}) {
    * never a half-installed version directory.
    */
   async function installPinnedPythonEnv(manifest, archivePath) {
-    const uv = resolveUvExecutable();
+    const uv = findUv();
     if (!uv) {
       return {
         ok: false,
@@ -1045,7 +1059,7 @@ export function createToolPackageManager(options = {}) {
    * half-installed version directory.
    */
   async function installPinnedPypiEnv(manifest, archivePath) {
-    const uv = resolveUvExecutable();
+    const uv = findUv();
     if (!uv) {
       return {
         ok: false,
@@ -1467,7 +1481,7 @@ export function createToolPackageManager(options = {}) {
     const id = String(params.id ?? '');
     const manifest = options.catalog?.get(id);
     if (!manifest) return { ok: false, id, reasonCode: 'unknown_package' };
-    if (options.enableRepositoryTools && BUILTIN_TOOL_IDS.includes(id)) return { ok: false, id, reasonCode: 'builtin_tool' };
+    if (isBuiltIn(id)) return { ok: false, id, reasonCode: 'builtin_tool' };
     if (!installRoot) return { ok: false, id, reasonCode: 'no_install_root' };
     try {
       await fsp.rm(versionDir(manifest), { recursive: true, force: true });
@@ -1501,7 +1515,7 @@ export function createToolPackageManager(options = {}) {
    */
   async function installBrowser(params = {}) {
     const id = String(params.id ?? '');
-    if (options.enableRepositoryTools && BUILTIN_TOOL_IDS.includes(id)) return { ok: false, id, reasonCode: 'builtin_tool' };
+    if (!managedDarwin && isBuiltIn(id)) return { ok: false, id, reasonCode: 'builtin_tool' };
     const manifest = options.catalog?.get(id);
     if (!manifest) return { ok: false, id, reasonCode: 'unknown_package' };
     if (manifest.browserCondition?.kind !== 'playwright-chromium') {
@@ -1513,8 +1527,11 @@ export function createToolPackageManager(options = {}) {
     }
     // <versionDir>/node_modules/@playwright/mcp/cli.js → sibling playwright.
     const mcpDir = path.dirname(installed.executable);
-    const playwrightCli = path.resolve(mcpDir, '..', '..', 'playwright', 'cli.js');
-    if (!isFileSync(playwrightCli)) {
+    const playwrightCli = [
+      path.resolve(mcpDir, '..', '..', 'playwright', 'cli.js'),
+      path.join(mcpDir, 'node_modules', 'playwright', 'cli.js'),
+    ].find(isFileSync);
+    if (!playwrightCli) {
       return { ok: false, id, reasonCode: 'playwright_cli_missing', error: `pinned playwright CLI not found at ${path.basename(path.dirname(path.dirname(playwrightCli)))}` };
     }
     const browserDir = path.dirname(playwrightCli);
@@ -1619,6 +1636,7 @@ export function resolveUvExecutable() {
       candidates.push(path.join(localAppData, 'Programs', 'uv', 'uv.exe'));
     }
   } else {
+    if (process.platform === 'darwin') candidates.push('/opt/homebrew/bin/uv');
     candidates.push('/usr/local/bin/uv');
     candidates.push('/usr/bin/uv');
   }

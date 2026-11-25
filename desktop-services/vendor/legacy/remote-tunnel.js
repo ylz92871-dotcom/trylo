@@ -71,6 +71,7 @@ function cloudflaredCandidates(configuredPath = '') {
     'cloudflared',
     process.platform === 'win32' ? 'C:\\Program Files (x86)\\cloudflared\\cloudflared.exe' : '',
     process.platform === 'win32' ? 'C:\\Program Files\\cloudflared\\cloudflared.exe' : '',
+    process.platform === 'darwin' ? '/opt/homebrew/bin/cloudflared' : '',
     process.platform !== 'win32' ? '/usr/local/bin/cloudflared' : '',
     process.platform !== 'win32' ? '/usr/bin/cloudflared' : '',
   ].filter(Boolean);

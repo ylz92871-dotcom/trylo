@@ -20,16 +20,20 @@ function tempRoot(): string {
 test("absolute paths, parent escapes and device paths are refused", () => {
   const root = tempRoot();
   try {
-    const cases: ReadonlyArray<[string, string]> = [
-      ["C:/Windows/win.ini", "path_outside_workspace"],
+    const cases: [string, string][] = [
       ["/etc/passwd", "path_outside_workspace"],
       ["../../secret.txt", "path_outside_workspace"],
       ["a/../../secret.txt", "path_outside_workspace"],
       ["\\\\.\\PhysicalDrive0", "path_outside_workspace"],
-      ["CON", "path_outside_workspace"],
-      ["nul", "path_outside_workspace"],
       ["", "invalid_path"],
     ];
+    if (process.platform === "win32") {
+      cases.push(
+        ["C:/Windows/win.ini", "path_outside_workspace"],
+        ["CON", "path_outside_workspace"],
+        ["nul", "path_outside_workspace"],
+      );
+    }
     for (const [candidate, code] of cases) {
       const verdict = resolveInsideWorkspace(root, candidate);
       assert.equal(verdict.ok, false, candidate);
@@ -37,6 +41,16 @@ test("absolute paths, parent escapes and device paths are refused", () => {
         assert.equal(verdict.code, code, candidate);
       }
     }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("POSIX can read files named after Windows devices", { skip: process.platform === "win32" }, () => {
+  const root = tempRoot();
+  try {
+    writeFileSync(join(root, "CON"), "local file");
+    assert.equal(resolveInsideWorkspace(root, "CON").ok, true);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

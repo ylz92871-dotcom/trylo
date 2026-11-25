@@ -173,7 +173,7 @@ describe("pty helper resolution", () => {
       path.join("scripts", "pty", "copy-pty-vendor.mjs"),
       "utf8",
     );
-    const declared = /export const PTY_DIST_SUBDIR = "([^"]+)"/.exec(script);
+    const declared = /const PTY_DIST_SUBDIR = "([^"]+)"/.exec(script);
 
     assert.ok(declared !== null, "the copy script must declare where it writes the artifact");
     const fromScript = declared[1]?.split("/").join(path.sep) ?? "";

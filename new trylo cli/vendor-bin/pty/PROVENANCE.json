@@ -1,8 +1,8 @@
 {
   "$comment": [
     "Provenance for the vendored PTY sidecar. Read together with vendor-bin/pty/src/main.rs,",
-    "which is the exact source that produced the artifacts below. Nothing here is inferred:",
-    "every hash was computed from the file in this tree, and every command was run as written.",
+    "which records the current source. Each platform artifact identifies the source it was built from.",
+    "Each artifact hash was computed from its file in this tree.",
     "",
     "This file is the ledger that lets a reviewer answer three questions without trusting",
     "this repository: what source produced the binary, what was built from it, and does the",
@@ -13,12 +13,12 @@
     "version": "0.1.0",
     "protocolVersion": 2,
     "language": "rust",
-    "purpose": "ConPTY sidecar. Node has no pseudo-terminal; this is the only Windows implementation reachable from TypeScript."
+    "purpose": "Native PTY sidecar for the Node CLI (Windows ConPTY and macOS POSIX PTY)."
   },
   "source": {
     "path": "vendor-bin/pty/src/main.rs",
-    "sha256": "0572800c539a58fa25aecbbe4877f7676857cc1b061f3b2b8489c5bdd27c4d1c",
-    "bytes": 21748,
+    "sha256": "43df51fd1582c4d58ed6162ef2c3940674ec9e04aa743f7e7de7d020d46253e5",
+    "bytes": 21981,
     "origin": "Written for WP06 against the mechanism in the two audited sources below. Not a copy of either: Codex's utils/pty is a Rust library with no executable, and the old CLI has no PTY at all (measured: no node-pty in its package.json, zero matches for `pty.spawn` across 1969 TS sources).",
     "referenceSources": [
       {
@@ -57,7 +57,30 @@
       "sha256": "ae9f7f6606b34fff023edbb49b1cf187dbea50faa0b97c3208e99a1caf526ac4",
       "bytes": 475136,
       "platform": "win32",
-      "arch": "x64"
+      "arch": "x64",
+      "source": {
+        "revision": "456e45000aaa0655a994fac0b741ba0f15bb7a67",
+        "sha256": "0572800c539a58fa25aecbbe4877f7676857cc1b061f3b2b8489c5bdd27c4d1c",
+        "bytes": 21748
+      }
+    },
+    "trylo-pty-darwin-arm64": {
+      "path": "vendor-bin/pty/darwin-arm64/trylo-pty",
+      "sha256": "4d7926c52f7fb4c36c1317f6b76efdd0d870db4436a63175e7133406fe89286d",
+      "bytes": 603568,
+      "platform": "darwin",
+      "arch": "arm64",
+      "source": {
+        "sha256": "43df51fd1582c4d58ed6162ef2c3940674ec9e04aa743f7e7de7d020d46253e5",
+        "bytes": 21981
+      },
+      "build": {
+        "command": "MACOSX_DEPLOYMENT_TARGET=14.0 cargo build --release --locked --offline --target aarch64-apple-darwin",
+        "cwd": "vendor-bin/pty",
+        "toolchain": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+        "sdk": "27.2",
+        "minimumSystemVersion": "14.0"
+      }
     }
   },
   "unsupportedPlatforms": {
@@ -65,8 +88,7 @@
     "win32-arm64": "not built — no toolchain or machine to verify it on",
     "linux-x64": "not built",
     "linux-arm64": "not built",
-    "darwin-x64": "not built",
-    "darwin-arm64": "not built"
+    "darwin-x64": "not built"
   },
   "knownConstraints": [
     "portable-pty builds the CreateProcessW environment block from exactly what CommandBuilder was given. An empty block is not an empty environment, it is an invalid one: CreateProcessW answers ERROR_INVALID_PARAMETER (87). The sidecar therefore restores SystemRoot/COMSPEC/PATH/TEMP after env_clear(). Measured both ways on this machine.",

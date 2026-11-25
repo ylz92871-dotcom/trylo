@@ -212,18 +212,35 @@ test("a group that dies on the graceful signal never needs the force", async () 
 });
 
 test("the graceful signal is actually given time before the force", async () => {
-  // The regression with teeth: the old ladder sent all three signals in one tick,
-  // so `waits` was empty and there was no window at all.
-  let polls = 0;
-  const { deps, signals, waits } = unixDeps(() => {
-    polls += 1;
-    return polls > 2;
-  }, 2_000, 1_000);
+  const { deps, signals, waits } = unixDeps(() => signals.includes("SIGKILL"), 2_000, 1_000);
   const outcome = await terminateProcessTree(fakeChild({ pid: 555 }), deps);
 
   assert.equal(outcome.ok, true);
   assert.deepEqual(signals, ["SIGTERM", "SIGKILL"], "escalate only after the window");
-  assert.deepEqual(waits, [2_000, 1_000], "a real wait between graceful and force, and after it");
+  assert.equal(waits.reduce((total, value) => total + value, 0), 2_000);
+});
+
+test("a group that exits during grace returns after the first poll", async () => {
+  const { deps, signals, waits } = unixDeps(() => waits.length > 0);
+  const outcome = await terminateProcessTree(fakeChild({ pid: 555 }), deps);
+
+  assert.deepEqual(outcome, { ok: true, how: "killed" });
+  assert.deepEqual(signals, ["SIGTERM"]);
+  assert.deepEqual(waits, [50]);
+});
+
+test("Darwin observes exit after a transient permission error and never forces a denied group", async () => {
+  const denied = () => { throw Object.assign(new Error("kill EPERM"), { code: "EPERM" }); };
+  const transient = unixDeps(() => transient.waits.length === 0 ? denied() : true);
+  const recovered = await terminateProcessTree(fakeChild({ pid: 555 }), { ...transient.deps, platform: "darwin" });
+  assert.deepEqual(recovered, { ok: true, how: "killed" });
+  assert.deepEqual(transient.signals, ["SIGTERM"]);
+
+  const persistent = unixDeps(denied);
+  const refused = await terminateProcessTree(fakeChild({ pid: 555 }), { ...persistent.deps, platform: "darwin" });
+  assert.equal(refused.ok, false);
+  if (!refused.ok) assert.equal(refused.code, "tree_kill_unobservable");
+  assert.deepEqual(persistent.signals, ["SIGTERM"]);
 });
 
 test("a tree that outlives SIGKILL is reported, never declared killed", async () => {

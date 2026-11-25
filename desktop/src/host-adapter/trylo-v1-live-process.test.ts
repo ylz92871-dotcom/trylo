@@ -184,7 +184,8 @@ it('denying through the production registry leaves disk untouched and releases D
   await terminal.promise
   await Promise.all(service.exits.values())
   expect(existsSync(join(workspace, 'fixture-output.txt'))).toBe(false)
-  expect(events.find((e) => e.type === 'loop_end')).toMatchObject({ isError: true })
+  expect(events.find((e) => e.type === 'tool_result')).toMatchObject({ ok: false })
+  expect(events.find((e) => e.type === 'loop_end')).toMatchObject({ isError: false })
   expect(controller.getViewState().running).toBe(false)
   expect(registry.list()).toHaveLength(0)
 }, 15_000)

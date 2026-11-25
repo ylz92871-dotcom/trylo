@@ -11,6 +11,7 @@ import { windowsHelperEnvironment } from "./windows-helper-environment.js";
 import { hostNodeExecutable, type CommandShape } from "./executable.js";
 import { ShellIsolationError } from "../../ports/isolation.js";
 import { captureWindowsStdinBridge } from "./windows-stdin-bridge.js";
+import type { ProcessSessionStart } from "../../ports/process-session.js";
 
 function pinExecutable(argv: readonly string[]): readonly string[] {
   const program = argv[0];
@@ -76,16 +77,19 @@ export function createWindowsShellBoundary(workspaceRoot: string, hostEnvironmen
     return command;
   };
 
-  return {
-    wrap,
-    async wrapPipeSession(argv: readonly string[]): Promise<readonly string[]> {
+  async function wrapPipeSession(argv: readonly string[]): Promise<readonly string[]> {
       const pinned = pinExecutable(argv);
       // Prepare the existing broker/cache owner before publishing its sibling bundle.
       await wrap(pinned);
       stdinBridge ??= publishStdinBridge(hostEnvironment, [workspaceRoot]);
       const broker = await wrap([hostNodeExecutable(), "--preserve-symlinks", "--preserve-symlinks-main", stdinBridge.client, JSON.stringify(pinned)], [stdinBridge.packageMetadata, stdinBridge.client, pinned[0] ?? ""]);
       return [hostNodeExecutable(), stdinBridge.host, JSON.stringify(broker)];
-    },
+  }
+
+  return {
+    wrap,
+    wrapPipeSession,
+    wrapSession: (request: ProcessSessionStart) => request.tty ? wrap(request.argv) : wrapPipeSession(request.argv),
     helperEnvironment: () => windowsHelperEnvironment(hostEnvironment),
     spawner(spawn: ShellSpawner): ShellSpawner {
       return async (spec: ShellSpawnSpec) => {

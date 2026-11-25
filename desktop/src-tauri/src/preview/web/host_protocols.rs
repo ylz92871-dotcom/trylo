@@ -1,4 +1,4 @@
-//! A document WebView must not inherit the host's filesystem/IPC protocols.
+//! A document `WebView` must not inherit the host's filesystem/IPC protocols.
 //! Start blank, remove Wry's per-view protocol filters, then navigate. Do not
 //! replace responses after handlers run: an async asset handler could overwrite
 //! the denial or read an arbitrarily large file before CORS rejects its body.

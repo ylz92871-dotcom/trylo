@@ -1,1 +1,2 @@
 result/desktop/*LICENSE.txt -text whitespace=-space-before-tab
+desktop/vendor/preview/archive/libarchive.js -text whitespace=cr-at-eol

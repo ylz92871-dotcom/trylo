@@ -17,7 +17,7 @@ export function stageCliOptions(argv, { cwd, source, resources }) {
       preparedClosure = true;
       continue;
     }
-    const match = /^--(cli-dist|output)=(.+)$/.exec(value);
+    const match = /^--(cli-dist|output|node)=(.+)$/.exec(value);
     assert.ok(match, `Unknown staging option: ${value}`);
     assert.equal(values.has(match[1]), false, `Duplicate --${match[1]}`);
     values.set(match[1], path.resolve(cwd, match[2]));
@@ -31,5 +31,5 @@ export function stageCliOptions(argv, { cwd, source, resources }) {
   assert.ok(!within(target, dist) && !within(dist, target), 'Staging output overlaps build input');
   assert.notEqual(dist, source, 'Build output must not be the CLI source root');
   assert.ok(!within(path.join(source, 'src'), dist), 'Build output overlaps TypeScript sources');
-  return { dist, target, skipBuild, preparedClosure, isolatedOutput: values.has('output') };
+  return { dist, target, node: values.get('node'), skipBuild, preparedClosure, isolatedOutput: values.has('output') };
 }

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test from "node:test";
 import { createFakeDiscoveryPort } from "../assets/acquisition/discovery.js";
 import { admitBuiltPackage } from "../assets/builder/admit.js";
@@ -104,9 +105,12 @@ test("deferred tool call without schema load gets an explicit hint", () => {
 });
 
 test("global config roots are forbidden quarantine targets", () => {
-  const home = process.env.USERPROFILE ?? process.env.HOME;
+  const home = process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME;
   if (home !== undefined && home.length > 0) {
-    assert.equal(isForbiddenQuarantineRoot(`${home}\\.trylo`), true);
+    assert.equal(isForbiddenQuarantineRoot(path.join(home, ".trylo")), true);
+    if (process.platform === "darwin") {
+      assert.equal(isForbiddenQuarantineRoot(path.join(home, "LIBRARY", "application support")), true);
+    }
   }
 });
 

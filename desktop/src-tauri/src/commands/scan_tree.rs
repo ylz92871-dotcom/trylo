@@ -70,6 +70,7 @@ pub fn scan_tree_files(
     scan_tree_filtered(root, max_files, max_depth, &[], None)
 }
 
+#[allow(clippy::too_many_lines)] // Keep the recursive walk with its local traversal policy.
 pub fn scan_tree_filtered(
     root: &std::path::Path,
     max_files: usize,
@@ -83,7 +84,6 @@ pub fn scan_tree_filtered(
         exclude_dirs: &'a [String],
         extensions: Option<&'a [String]>,
     }
-    let policy = Policy { max_files, max_depth, exclude_dirs, extensions };
     // Local items first (clippy items_after_statements): the scalar-typed
     // recursion + warning helpers keep the walk testable without exposing the
     // recursive detail. Every nested call passes the same &mut state through.
@@ -173,6 +173,7 @@ pub fn scan_tree_filtered(
         true
     }
 
+    let policy = Policy { max_files, max_depth, exclude_dirs, extensions };
     let mut files: Vec<FileStat> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
     let mut truncated = false;
@@ -375,7 +376,7 @@ mod tests {
         fs::write(root.join("plain.txt"), "x").unwrap();
         let link = root.join("link.txt");
         #[cfg(unix)]
-        std::os::unix::fs::symlink(&real.join("target.txt"), &link).unwrap();
+        std::os::unix::fs::symlink(real.join("target.txt"), &link).unwrap();
         #[cfg(windows)]
         {
             use std::os::windows::fs::symlink_file;

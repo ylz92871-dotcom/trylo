@@ -6,7 +6,10 @@ import crypto from 'node:crypto';
 export function toolInstallDir(manifest, executable) {
   const relative=String(manifest.artifact?.executableRelativePath ?? '').replaceAll('\\','/');
   const target=String(executable ?? '').replaceAll('\\','/');
-  if (relative && target.toLowerCase().endsWith(`/${relative.toLowerCase()}`)) {
+  const matches = process.platform === 'win32'
+    ? target.toLowerCase().endsWith(`/${relative.toLowerCase()}`)
+    : target.endsWith(`/${relative}`);
+  if (relative && matches) {
     const root=target.slice(0,-relative.length);
     return path.normalize(/^[a-z]:\/$/i.test(root)?root:root.replace(/\/$/,''));
   }
@@ -27,7 +30,7 @@ export function toolRuntimeIdentity(manifest, installed) {
   const files=[executable];
   if (root) files.push(path.join(root,'install-state.json'));
   if (executable && /python/.test(manifest.artifact?.installStrategy ?? manifest.healthCheck ?? '')) {
-    files.push(path.join(path.dirname(executable),'python.exe'));
+    files.push(path.join(path.dirname(executable), process.platform === 'win32' ? 'python.exe' : 'python'));
   }
   if (root && manifest.artifact?.sourceEntry) files.push(path.join(root,manifest.artifact.sourceEntry));
   if (root && manifest.id==='windows-mcp') {

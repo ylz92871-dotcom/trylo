@@ -35,10 +35,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const outputArg = process.argv.find(value => value.startsWith("--out-dir="))?.slice(10);
 
 /** Where the binaries are kept in the source tree, and what to call them there. */
-const STAGED = [
+const STAGED = process.platform === "win32" ? [
   { from: "vendor-bin/srt-win-x64.exe", arch: "x64" },
   { from: "vendor-bin/srt-win-arm64.exe", arch: "arm64" },
-];
+] : [];
 
 /** The vendored runtime tree, relative to `src`, which tsc mirrors into `dist`. */
 const VENDOR_REL = "internal/adapters/sandbox/vendor/sandbox-runtime";

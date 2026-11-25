@@ -1,8 +1,8 @@
-// Explicit preparation for existing, pinned Windows CLI build inputs.
+// Explicit preparation for existing, pinned CLI build inputs.
 // npm run build remains offline and never downloads or weakens its hash checks.
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -43,6 +43,14 @@ function present(entry) {
   if (!valid(readFileSync(dest), entry)) throw new Error(`Native input differs from provenance: ${entry.relative}; preserve and investigate it before replacing.`);
   return true;
 }
+if (process.platform === 'darwin' && process.arch === 'arm64') {
+  const native = pty.artifacts['trylo-pty-darwin-arm64'];
+  if (!native || !present({ relative: native.path, ...native })) throw new Error('Missing tracked Apple Silicon PTY helper');
+  accessSync(checkedPath(native.path), constants.X_OK);
+  if (args[0] === '--archive') throw new Error('The npm sandbox archive is for Windows. The macOS CLI uses system Seatbelt.');
+  console.log(`OK ${native.path}`);
+  process.exit(0);
+}
 const ptyEntry = pty.artifacts['trylo-pty-win-x64'];
 if (!ptyEntry || !present({ relative: ptyEntry.path, ...ptyEntry })) throw new Error('Missing tracked Windows x64 PTY helper. Pull the complete source checkout; see docs/development/build-from-source.md.');
 const missing = helpers.filter(entry => !present(entry));
@@ -53,7 +61,7 @@ if (args[0] === '--check') {
 } else if (missing.length === 0) {
   console.log('All CLI native inputs already match provenance; no download.');
 } else {
-  if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('This source build currently supports Windows x64. No PTY artifact is shipped for this platform.');
+  if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('The npm sandbox archive is only used by the Windows x64 build.');
   let archive;
   if (args[0] === '--archive') {
     const file = path.resolve(args[1]);

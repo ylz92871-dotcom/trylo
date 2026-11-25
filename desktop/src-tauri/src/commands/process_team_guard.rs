@@ -1,18 +1,19 @@
+#[cfg(windows)]
 use std::io;
 
 /// While a Windows team root is awaited, its tree belongs to the Native shell
 /// even if it exits without running Rust destructors. The job handle is neither
 /// named nor inherited; losing this owner closes its last handle and kills
-/// the owned tree. Unix retains its existing explicit-stop policy.
+/// the owned tree.
+#[cfg(windows)]
 #[derive(Clone)]
 pub struct TeamProcessGuard {
-    #[cfg(windows)]
     job: std::sync::Arc<std::os::windows::io::OwnedHandle>,
 }
 
+#[cfg(windows)]
 impl TeamProcessGuard {
     pub fn capture(child: &std::process::Child) -> io::Result<Self> {
-        #[cfg(windows)]
         {
             use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
             use windows_sys::Win32::System::JobObjects::{
@@ -52,11 +53,6 @@ impl TeamProcessGuard {
             Ok(Self {
                 job: std::sync::Arc::new(job),
             })
-        }
-        #[cfg(not(windows))]
-        {
-            let _ = child;
-            Ok(Self {})
         }
     }
 
@@ -105,6 +101,31 @@ impl TeamProcessGuard {
             Err(io::Error::last_os_error())
         } else {
             Ok(())
+        }
+    }
+}
+
+#[cfg(unix)]
+pub struct TeamProcessGuard {
+    group: std::sync::Arc<super::posix_process_group::PosixProcessGroup>,
+}
+
+#[cfg(unix)]
+impl TeamProcessGuard {
+    pub(super) fn new(group: std::sync::Arc<super::posix_process_group::PosixProcessGroup>) -> Self {
+        Self { group }
+    }
+
+    pub(super) fn release_after_exit(&self) {
+        self.group.release_after_exit();
+    }
+}
+
+#[cfg(unix)]
+impl Drop for TeamProcessGuard {
+    fn drop(&mut self) {
+        if let Err(error) = self.group.terminate() {
+            eprintln!("[process] failed to terminate the team process group: {error}");
         }
     }
 }

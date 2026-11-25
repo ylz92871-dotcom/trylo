@@ -35,7 +35,8 @@ fn on_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 // `run` deliberately panics if the Tauri app fails to bootstrap.
-#[allow(clippy::missing_panics_doc)]
+// The IPC registrations form one manifest so the label gate covers every command.
+#[allow(clippy::missing_panics_doc, clippy::too_many_lines)]
 pub fn run() {
     tauri::Builder::default()
         .register_asynchronous_uri_scheme_protocol("trylo-preview", |context, request, responder| {
@@ -179,6 +180,7 @@ pub fn run() {
                 commands::team_runs_storage::team_runs_load,
                 commands::team_runs_storage::team_runs_save,
                 commands::test_connection::test_connection,
+                #[cfg(windows)]
                 commands::pick_folder::pick_folder,
                 commands::work_host::work_host_open_file,
                 commands::work_host::work_host_open_file_with_app,

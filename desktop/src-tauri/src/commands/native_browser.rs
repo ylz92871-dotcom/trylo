@@ -1,9 +1,14 @@
 //! Native browser contents belong to Desktop, not to the MCP process tree.
 //! Every command is main-webview-only; remote pages have no application IPC.
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, net::TcpListener, sync::{Mutex, atomic::{AtomicU64, Ordering}}};
+use std::{collections::HashMap, sync::Mutex};
+#[cfg(windows)]
+use std::{net::TcpListener, sync::atomic::{AtomicU64, Ordering}};
+#[cfg(any(windows, test))]
 use sha2::{Digest, Sha256};
-use tauri::{Emitter, Manager, Webview, WebviewBuilder, WebviewUrl};
+use tauri::{Manager, Webview};
+#[cfg(windows)]
+use tauri::{Emitter, WebviewBuilder, WebviewUrl};
 
 #[derive(Clone, Copy, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -11,6 +16,7 @@ pub struct Bounds { pub x: f64, pub y: f64, pub width: f64, pub height: f64 }
 impl Default for Bounds {
     fn default() -> Self { Self { x: 0.0, y: 0.0, width: 480.0, height: 640.0 } }
 }
+#[cfg(any(windows, test))]
 impl Bounds {
     fn validate(self) -> Result<Self, String> {
         if [self.x, self.y, self.width, self.height].iter().any(|v| !v.is_finite())
@@ -29,8 +35,10 @@ pub struct NativeTab { pub label: String, pub marker: String, pub popup: bool }
 pub struct NativeSession {
     pub scope: String, pub cdp_port: u16, pub tabs: Vec<NativeTab>, pub active_label: String,
     bounds: Bounds,
+    #[cfg(any(windows, test))]
     #[serde(skip)] visible: bool,
     zoom: f64,
+    #[cfg(windows)]
     #[serde(skip)] next_tab: u64,
 }
 #[derive(Default)]
@@ -39,14 +47,29 @@ pub fn allows_application_ipc(label: &str) -> bool { !label.starts_with("browser
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeCommand {
-    pub scope: String, pub operation: String, pub label: Option<String>,
-    pub url: Option<String>, pub bounds: Option<Bounds>, pub visible: Option<bool>, pub zoom: Option<f64>,
+    #[cfg(windows)]
+    pub scope: String,
+    #[cfg(windows)]
+    pub operation: String,
+    #[cfg(windows)]
+    pub label: Option<String>,
+    #[cfg(windows)]
+    pub url: Option<String>,
+    #[cfg(windows)]
+    pub bounds: Option<Bounds>,
+    #[cfg(windows)]
+    pub visible: Option<bool>,
+    #[cfg(windows)]
+    pub zoom: Option<f64>,
 }
+#[cfg(windows)]
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PageEvent { scope: String, label: String, url: Option<String>, title: Option<String> }
+#[cfg(windows)]
 static NEXT_POPUP: AtomicU64 = AtomicU64::new(1);
 
+#[cfg(windows)]
 fn observe_native_controls(webview: &Webview, scope: &str) -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -84,6 +107,7 @@ fn observe_native_controls(webview: &Webview, scope: &str) -> Result<(), String>
     Ok(())
 }
 
+#[cfg(windows)]
 fn report_native_zoom(webview: &Webview, scope: &str) {
     #[cfg(windows)]
     {
@@ -97,6 +121,7 @@ fn report_native_zoom(webview: &Webview, scope: &str) {
     { let _ = (webview, scope); }
 }
 
+#[cfg(windows)]
 fn native_navigation(webview: &Webview, operation: String) -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -113,6 +138,7 @@ fn native_navigation(webview: &Webview, operation: String) -> Result<(), String>
     { let _ = (webview, operation); Err("当前平台尚未接入原生浏览器".into()) }
 }
 
+#[cfg(windows)]
 fn acknowledge_native_bounds(webview: &Webview) -> Result<(), String> {
     // set_bounds posts to the UI thread. Await the following callback so
     // renderer backpressure tracks application of bounds, not just enqueueing.
@@ -122,13 +148,16 @@ fn acknowledge_native_bounds(webview: &Webview) -> Result<(), String> {
     receive.recv_timeout(std::time::Duration::from_secs(5)).map_err(|_| "浏览器视口更新超时".to_string())
 }
 
+#[cfg(any(windows, test))]
 fn scope_digest(scope: &str) -> String {
     // Persistent cookie profiles must keep their identity across Rust upgrades.
     format!("{:x}", Sha256::digest(scope.as_bytes()))
 }
+#[cfg(windows)]
 fn view(app: &tauri::AppHandle, label: &str) -> Result<Webview, String> {
     app.get_webview(label).ok_or_else(|| "原生浏览器页面已关闭".into())
 }
+#[cfg(windows)]
 fn create_tab(app: &tauri::AppHandle, session: &mut NativeSession, url: Option<&str>) -> Result<NativeTab, String> {
     if session.tabs.len() >= 32 { return Err("浏览器标签页已达到 32 页".into()); }
     let label = format!("browser-{}-{}", scope_digest(&session.scope), session.next_tab);
@@ -221,6 +250,7 @@ fn create_tab(app: &tauri::AppHandle, session: &mut NativeSession, url: Option<&
     }
     Ok(record)
 }
+#[cfg(any(windows, test))]
 fn presentation_update(session: &NativeSession, tab: &NativeTab, previous: Option<&NativeSession>) -> (bool, Option<bool>) {
     let known = previous.is_some_and(|old| old.tabs.iter().any(|old_tab| old_tab.label == tab.label));
     let visible = session.visible && tab.label == session.active_label;
@@ -228,6 +258,7 @@ fn presentation_update(session: &NativeSession, tab: &NativeTab, previous: Optio
     let bounds_changed = !tab.popup && (!known || previous.map_or(true, |old| old.bounds != session.bounds) || visible && !was_visible);
     (bounds_changed, if !known || visible != was_visible { Some(visible) } else { None })
 }
+#[cfg(windows)]
 fn present(app: &tauri::AppHandle, session: &NativeSession, previous: Option<&NativeSession>) -> Result<(), String> {
     for tab in &session.tabs {
         let (bounds_changed, visibility) = presentation_update(session, tab, previous);
@@ -266,12 +297,14 @@ pub fn close_owned_popups(app: &tauri::AppHandle) {
         for label in labels { if let Some(window) = app.get_webview_window(&label) { let _ = window.close(); } }
     });
 }
+#[cfg(windows)]
 fn execute(app: &tauri::AppHandle, command: &NativeCommand) -> Result<NativeSession, String> {
     let state = app.state::<NativeBrowserState>();
     let mut sessions = state.0.lock().map_err(|e| e.to_string())?;
     execute_with_sessions(app, command, &mut sessions)
 }
 
+#[cfg(windows)]
 fn execute_with_sessions(
     app: &tauri::AppHandle,
     command: &NativeCommand,
@@ -371,7 +404,7 @@ fn try_layout_on_ui(app: &tauri::AppHandle, command: &NativeCommand) -> Option<R
 pub async fn native_browser_command(webview: Webview, command: NativeCommand) -> Result<NativeSession, String> {
     if webview.label() != "main" { return Err("只有主界面可以控制原生浏览器".into()); }
     #[cfg(not(windows))]
-    { let _ = command; return Err("当前平台尚未接入原生浏览器".into()); }
+    { let _ = command; Err("当前平台尚未接入原生浏览器".into()) }
     #[cfg(windows)]
     {
         let app = webview.app_handle().clone();
@@ -393,7 +426,7 @@ mod tests {
     use super::*;
     #[test] fn service_host_receives_geometry_and_zoom_but_not_presentation_internals() {
         let session = NativeSession { scope: "one".into(), cdp_port: 9000, tabs: vec![], active_label: "tab".into(),
-            bounds: Bounds::default(), visible: true, zoom: 1.5, next_tab: 2 };
+            bounds: Bounds::default(), visible: true, zoom: 1.5, #[cfg(windows)] next_tab: 2 };
         let value = serde_json::to_value(session).unwrap();
         assert_eq!(value["bounds"]["width"], 480.0);
         assert_eq!(value["zoom"], 1.5);
@@ -403,7 +436,7 @@ mod tests {
     #[test] fn resizing_only_changes_bounds_and_restoring_a_hidden_view_reapplies_them() {
         let tab = NativeTab { label: "browser-one".into(), marker: "about:blank".into(), popup: false };
         let previous = NativeSession { scope: "one".into(), cdp_port: 9000, tabs: vec![tab.clone()], active_label: tab.label.clone(),
-            bounds: Bounds::default(), visible: true, zoom: 1.0, next_tab: 2 };
+            bounds: Bounds::default(), visible: true, zoom: 1.0, #[cfg(windows)] next_tab: 2 };
         let mut current = previous.clone(); current.bounds.width = 640.0;
         assert_eq!(presentation_update(&current, &tab, Some(&previous)), (true, None));
         assert_eq!(presentation_update(&current, &tab, Some(&current)), (false, None));

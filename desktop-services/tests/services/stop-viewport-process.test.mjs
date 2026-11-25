@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { test } from 'node:test';
 import { stopViewportProcess } from '../../src/tooling/stop-viewport-process.mjs';
 
@@ -33,4 +35,21 @@ test('the Unix branch keeps the existing direct-child stop path', async () => {
   const child = { pid: 777, exitCode: null, signalCode: null, kill() { killed += 1; } };
   await stopViewportProcess(child, { platform: 'linux', terminateTree: async () => { throw new Error('wrong platform'); } });
   assert.equal(killed, 1);
+});
+
+test('Darwin reaps a TERM-resistant browser group and its descendant', { skip: process.platform !== 'darwin' }, async t => {
+  const child = spawn('/bin/sh', ['-c', "trap '' TERM; /bin/sleep 60 & echo $!; wait"], {
+    stdio: ['ignore', 'pipe', 'ignore'],
+    detached: true,
+  });
+  t.after(() => {
+    if (child.exitCode === null && child.signalCode === null) return stopViewportProcess(child);
+  });
+  const done = once(child, 'exit');
+  const [pid] = await once(child.stdout, 'data');
+  const descendant = Number(String(pid).trim());
+  assert.ok(Number.isSafeInteger(descendant) && descendant > 1);
+  await stopViewportProcess(child);
+  assert.deepEqual(await done, [null, 'SIGKILL']);
+  assert.throws(() => process.kill(descendant, 0), { code: 'ESRCH' });
 });

@@ -69,6 +69,7 @@ function build(overrides = {}) {
     appDataDir: tmpRoot,
     sidecarsDir: tmpRoot,
     seam: {
+      target: 'win32-x64',
       hermes: overrides.hermes ?? hermesStub(),
       installRoot: overrides.installRoot ?? path.join(tmpRoot, 'tool-packages'),
       profilesRoot: overrides.profilesRoot ?? path.join(tmpRoot, 'tool-profiles'),
@@ -77,6 +78,7 @@ function build(overrides = {}) {
       ...(overrides.probePythonMetadata ? { probePythonMetadata: overrides.probePythonMetadata } : {}),
       ...(overrides.overrides ? { overrides: overrides.overrides } : {}),
       ...(overrides.manifests ? { manifests: overrides.manifests } : {}),
+      ...(overrides.resolveUv ? { resolveUv: overrides.resolveUv } : {}),
     },
   });
 }
@@ -287,28 +289,11 @@ describe('tooling.install — pinned-python-env transport (§8.2, PR-6)', () => 
     const tooling = build({
       manifests: [OFFICECLI_MANIFEST, fixture.manifest],
       installRoot: freshRoot(),
+      resolveUv: () => null,
     });
-    // Force the resolver to fail via the UV_PATH seam pointing nowhere and
-    // PATH stripped of uv. resolveUvExecutable is read inside install(); the
-    // env seam must make it answer null.
-    const savedPath = process.env.PATH;
-    const savedUvPath = process.env.UV_PATH;
-    const savedUserProfile = process.env.USERPROFILE;
-    const savedLocalAppData = process.env.LOCALAPPDATA;
-    try {
-      process.env.UV_PATH = path.join(tmpRoot, 'definitely-missing-uv.exe');
-      process.env.USERPROFILE = path.join(tmpRoot, 'no-home');
-      process.env.LOCALAPPDATA = path.join(tmpRoot, 'no-lad');
-      process.env.PATH = '';
-      const result = await tooling.install({ id: 'testpy', archivePath: fixture.tgz });
-      assert.equal(result.ok, false);
-      assert.equal(result.reasonCode, 'uv_missing');
-    } finally {
-      process.env.PATH = savedPath;
-      if (savedUvPath === undefined) delete process.env.UV_PATH; else process.env.UV_PATH = savedUvPath;
-      if (savedUserProfile === undefined) delete process.env.USERPROFILE; else process.env.USERPROFILE = savedUserProfile;
-      if (savedLocalAppData === undefined) delete process.env.LOCALAPPDATA; else process.env.LOCALAPPDATA = savedLocalAppData;
-    }
+    const result = await tooling.install({ id: 'testpy', archivePath: fixture.tgz });
+    assert.equal(result.ok, false);
+    assert.equal(result.reasonCode, 'uv_missing');
   });
 
   it('a real uv sync against a tiny locked project materialises the venv and the entry', async function () {

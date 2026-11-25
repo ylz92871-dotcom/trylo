@@ -44,8 +44,8 @@ impl MediaProcess {
         if let Some(cwd) = cwd { command.current_dir(cwd); }
         #[cfg(windows)]
         { use std::os::windows::process::CommandExt; command.creation_flags(0x0800_0000); }
-        let mut child = command.spawn().map_err(|e| format!("媒体引擎启动失败：{e}"))?;
-        let attached = OwnedTreeTerminator::capture(&child).map_err(|e| e.to_string()).and_then(|tree| control.attach(tree));
+        let (mut child, tree) = OwnedTreeTerminator::spawn(&mut command).map_err(|e| format!("媒体引擎启动失败：{e}"))?;
+        let attached = control.attach(tree);
         if let Err(error) = attached { let _ = child.kill(); let _ = child.wait(); return Err(error); }
         let mut stdout = child.stdout.take().ok_or("媒体进程没有输出流")?;
         let mut stderr = child.stderr.take().ok_or("媒体进程没有诊断流")?;
@@ -90,9 +90,9 @@ impl Drop for MediaProcess {
         if let Ok(mut process) = self.control.process.lock() { *process = None; }
     }
 }
-pub fn probe(executable: &Path, args: &[String], source: &Path, control: Arc<Control>) -> Result<Vec<u8>, String> {
+pub fn probe(executable: &Path, args: &[String], source: &Path, control: &Arc<Control>) -> Result<Vec<u8>, String> {
     let deadline = Instant::now() + Duration::from_millis(policy().probe_timeout_ms);
-    let mut process = MediaProcess::spawn(executable, args, source, None, Arc::clone(&control))?;
+    let mut process = MediaProcess::spawn(executable, args, source, None, Arc::clone(control))?;
     let output = process.output.take().ok_or("媒体探测输出不可用")?;
     let mut bytes = Vec::new();
     loop {

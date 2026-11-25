@@ -6,7 +6,7 @@ import { previewFormatFiles } from './codec-files.mjs';
 import { verifyArchiveRelease } from './verify-archive-engine.mjs';
 const archiveSupply = await verifyArchiveRelease();
 const desktop = fileURLToPath(new URL('../../', import.meta.url));
-const root = path.join(desktop, 'src-tauri/resources/preview/codecs');
+const root = path.resolve(process.env.TRYLO_RESOURCE_DIR ?? path.join(desktop, 'src-tauri/resources'), 'preview/codecs');
 await mkdir(root, { recursive: true });
 if ((await realpath(root)).toLowerCase() !== root.toLowerCase()) throw new Error('Redirected codec resources');
 const files = [];

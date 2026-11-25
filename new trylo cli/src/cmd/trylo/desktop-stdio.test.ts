@@ -82,9 +82,10 @@ test("Desktop stdio runs before EOF and exits after approving the actual write",
 
 test("Desktop denial never performs the requested write", async () => {
   const result = await runDesktop("deny");
-  assert.equal(result.code, 1, result.stderr);
+  assert.equal(result.code, 0, result.stderr);
   assert.equal(result.written, undefined);
-  assert.equal(result.frames.find(frame => frame.type === "run_result")?.status, "failed");
+  assert.equal(result.frames.find(frame => frame.type === "tool_result")?.code, "permission_denied");
+  assert.equal(result.frames.find(frame => frame.type === "run_result")?.status, "completed");
 });
 
 test("Desktop approval input closing cancels rather than approving", async () => {

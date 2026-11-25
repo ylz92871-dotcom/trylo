@@ -22,7 +22,7 @@ import { createPtySessionRegistry } from "./pty-session.js";
  */
 
 const resolution = resolvePtyHelper();
-const canRun = resolution.ok;
+const canRun = process.platform === "win32" && resolution.ok;
 
 /** Windows' own command interpreter, located rather than assumed. */
 function commandInterpreter(): string | undefined {
@@ -87,7 +87,22 @@ async function readUntil(
   return output;
 }
 
-describe("pty sessions over a real ConPTY", { skip: canRun ? false : `no helper: ${resolution.ok ? "" : resolution.message}` }, () => {
+it("launches a POSIX terminal with the bundled macOS sidecar", {
+  skip: process.platform !== "darwin" || process.arch !== "arm64",
+  timeout: 10000,
+}, async () => {
+  assert.ok(resolution.ok, resolution.ok ? undefined : resolution.message);
+  const registry = createPtySessionRegistry();
+  try {
+    const terminalCheck = 'if (process.stdin.isTTY && process.stdout.isTTY && process.env.TERM && process.env.HOME) console.log("POSIX_PTY_READY");';
+    const session = await registry.start({ ...startOf([process.execPath, "-e", terminalCheck]), env: {} });
+    assert.match(await readUntil(registry, session.id, "POSIX_PTY_READY"), /POSIX_PTY_READY/);
+  } finally {
+    await registry.shutdown();
+  }
+});
+
+describe("pty sessions over a real ConPTY", { skip: !canRun }, () => {
   it("starts a program in a terminal and returns its output and its own exit code", async () => {
     assert.ok(interpreter !== undefined, "this suite needs cmd.exe to have a program to run");
     const registry = createPtySessionRegistry();

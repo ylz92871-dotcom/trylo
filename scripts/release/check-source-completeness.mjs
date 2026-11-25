@@ -45,11 +45,16 @@ try {
 // The source checkout includes this exact first-party helper. Downloaded sandbox
 // helpers stay outside Git and are checked by setup-cli-native.mjs instead.
 const ptyProvenance = json('new trylo cli/vendor-bin/pty/PROVENANCE.json');
-const ptyArtifact = ptyProvenance?.artifacts?.['trylo-pty-win-x64'];
-const ptyRelative = 'new trylo cli/vendor-bin/pty/win-x64/trylo-pty.exe';
-if (ptyArtifact?.path !== 'vendor-bin/pty/win-x64/trylo-pty.exe') failures.push('invalid PTY artifact path');
-else {
-  const helper = requireFile(ptyRelative);
+for (const [id, relative] of [
+  ['trylo-pty-win-x64', 'vendor-bin/pty/win-x64/trylo-pty.exe'],
+  ['trylo-pty-darwin-arm64', 'vendor-bin/pty/darwin-arm64/trylo-pty'],
+]) {
+  const ptyArtifact = ptyProvenance?.artifacts?.[id];
+  if (ptyArtifact?.path !== relative) {
+    failures.push(`invalid PTY artifact path: ${id}`);
+    continue;
+  }
+  const helper = requireFile(`new trylo cli/${relative}`);
   if (helper) {
     const bytes = readFileSync(helper);
     if (bytes.length !== ptyArtifact.bytes || createHash('sha256').update(bytes).digest('hex') !== ptyArtifact.sha256) failures.push('PTY helper differs from provenance');
@@ -66,7 +71,7 @@ const settingsModal=requireFile('desktop/src/components/app-shell/SettingsModal.
 if(settingsModal && /legacy-stream-json|aria-label="CLI runtime"/.test(readFileSync(settingsModal,'utf8'))) failures.push('settings must not expose the retired CLI selector');
 const catalog = createToolCatalog();
 failures.push(...catalog.rejected().map(item => `invalid tool manifest: ${item.id}`));
-const registry = loadRepositoryToolRegistry(path.join(root, 'desktop-services/toolchain/tool-sources.json'));
+const registry = loadRepositoryToolRegistry(path.join(root, 'desktop-services/toolchain/tool-sources.json'), 'win32-x64');
 failures.push(...registry.problems);
 for (const id of ['officecli', 'playwright', 'windows-mcp', 'chrome-devtools']) {
   const manifest = catalog.get(id);

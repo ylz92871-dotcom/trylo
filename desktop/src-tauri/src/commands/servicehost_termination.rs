@@ -1,8 +1,8 @@
 //! Service Host owns workers, but the singleton desktop pet belongs to all
 //! connected clients. Never use an image-wide sweep or taskkill /T here.
 
-use std::io;
-use std::process::Child;
+#[cfg(not(unix))]
+use std::{io, process::Child};
 
 #[cfg(windows)]
 mod platform {
@@ -329,13 +329,15 @@ mod platform {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(unix, windows)))]
 mod platform {
     use super::{io, Child};
     pub struct HostProcessTree {
         pid: u32,
     }
     impl HostProcessTree {
+        // The shared caller also handles fallible Windows process capture.
+        #[allow(clippy::unnecessary_wraps)]
         pub fn capture(child: &Child) -> io::Result<Self> {
             Ok(Self { pid: child.id() })
         }
@@ -352,4 +354,7 @@ mod platform {
     }
 }
 
+#[cfg(not(unix))]
 pub use platform::HostProcessTree;
+#[cfg(unix)]
+pub(super) use super::posix_process_group::PosixProcessGroup as HostProcessTree;

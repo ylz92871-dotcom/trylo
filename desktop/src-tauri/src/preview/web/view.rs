@@ -26,7 +26,7 @@ fn retire(app: &tauri::AppHandle, state: &WebPreviewState, active: &mut Option<A
     }
     Ok(())
 }
-#[derive(Deserialize)]
+#[derive(Clone, Copy, Deserialize)]
 pub struct WebBounds { pub x: f64, pub y: f64, pub width: f64, pub height: f64 }
 
 pub fn layout(app: &tauri::AppHandle, state: &WebPreviewState, token: &str, bounds: WebBounds, visible: bool) -> Result<(), String> {

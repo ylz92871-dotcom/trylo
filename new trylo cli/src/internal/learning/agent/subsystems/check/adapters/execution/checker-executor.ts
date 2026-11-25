@@ -1,6 +1,5 @@
 import { createToolCandidateExecutor } from "../../../../../../adapters/tool-evolution/process-executor.js";
-import { createWindowsIsolation } from "../../../../../../adapters/sandbox/windows-isolation.js";
-import { windowsHelperEnvironment } from "../../../../../../adapters/sandbox/windows-helper-environment.js";
+import { createPlatformIsolation } from "../../../../../../adapters/sandbox/platform-isolation.js";
 import { hostNodeExecutable } from "../../../../../../adapters/sandbox/executable.js";
 import { permissionPattern } from "../../../../../../ports/permission.js";
 import { type PermissionPort } from "../../../../../../ports/permission.js";
@@ -9,7 +8,7 @@ import { type CandidateExecution, type CandidateExecutor } from "../../../../../
 
 export function createApprovedCheckerExecutor(host: { readonly permission: PermissionPort; readonly scratchRoot: string;
   readonly env: Readonly<Record<string, string | undefined>> }): CandidateExecutor {
-  const executor = createToolCandidateExecutor({ isolation: createWindowsIsolation({ hostEnv: windowsHelperEnvironment(host.env) }),
+  const executor = createToolCandidateExecutor({ isolation: createPlatformIsolation(host.env),
     scratchRoot: host.scratchRoot, nodeExecutable: hostNodeExecutable(),
     profile: "confined_json_function_v1", timeoutMs: 5000 });
   const approved: CandidateExecutor = {

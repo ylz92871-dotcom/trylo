@@ -1,6 +1,6 @@
 // Copies only pinned console programs, shared libraries and original notices.
 // Never invokes FFmpeg/ffplay, downloads on app startup, or searches PATH.
-import { copyFile, mkdir, readdir, realpath, stat, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, readdir, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { mediaEngineLock as lock, mediaEngineRoot as destination, verifyMediaEngine } from './media-engine.mjs';
 if (!process.argv.includes('--check')) {
@@ -18,6 +18,7 @@ if (!process.argv.includes('--check')) {
       const target = path.join(destination, entry.path);
       await mkdir(path.dirname(target), { recursive: true });
       await copyFile(path.join(source, entry.path), target, 1);
+      if (lock.platform === 'darwin-arm64' && entry.path.startsWith('bin/')) await chmod(target, 0o755);
     }
     await writeFile(path.join(destination, 'manifest.json'), JSON.stringify(lock, null, 2) + '\n', { flag: 'wx' });
   }

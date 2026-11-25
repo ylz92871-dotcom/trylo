@@ -1,6 +1,6 @@
 //! Reuse extension registration, never document configuration or history.
 use std::path::{Component, Path, PathBuf};
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 const MAX_ENTRIES: usize = 512;
 const MAX_BYTES: usize = 2 * 1024 * 1024;
@@ -71,7 +71,6 @@ impl ExtensionSeed {
         for (relative, bytes) in &self.files {
             let target = root.join(relative);
             tokio::fs::create_dir_all(target.parent().ok_or("extension cache parent missing")?).await.map_err(|e| e.to_string())?;
-            use tokio::io::AsyncWriteExt;
             let mut file = tokio::fs::OpenOptions::new().create_new(true).write(true).open(target).await.map_err(|e| e.to_string())?;
             file.write_all(bytes).await.map_err(|e| e.to_string())?;
         }

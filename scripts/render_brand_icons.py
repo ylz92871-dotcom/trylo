@@ -14,6 +14,7 @@ on a warm-charcoal background. The character of the mark is
 preserved (thin strokes, rounded joins, slight asymmetry that makes
 it read as a real mark instead of a Unicode X).
 """
+import io
 import math
 import os
 import sys
@@ -236,22 +237,9 @@ def render(size_px):
 
 
 def write_icns(png_256, out_path):
-    """Minimal .icns: Mac uses 256x256 and 128x128 PNGs.
-    The file format is documented; for simplicity we use the 256x256 PNG
-    in an ICNS container built with Pillow. PyPI `icnsutil` isn't
-    guaranteed, so we mimic the macOS behavior by writing a 256-only
-    container that most modern macOS versions still accept."""
-    try:
-        from PIL import IcoImagePlugin
-    except Exception:
-        IcoImagePlugin = None
-    # Fallback: write the 128@2 PNG bytes verbatim as the .icns;
-    # macOS 11+ actually accepts a bare PNG renamed to .icns for some
-    # shapes, but the safer path is to embed it in an icns container.
-    # Many bundlers accept raw PNG-as-icns; we mirror that. The
-    # build script also copies 128@2 as a fallback (see tauri.conf).
-    with open(out_path, 'wb') as f:
-        f.write(png_256)
+    """Encode the bitmap in the ICNS container required by the macOS bundle."""
+    with Image.open(io.BytesIO(png_256)) as image:
+        image.save(out_path, format="ICNS")
 
 
 def main(out_dir, sizes):

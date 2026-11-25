@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { accessSync, constants, existsSync, statSync } from "node:fs";
 import path from "node:path";
 import type { ShellEnvironment } from "./shell-detect.js";
 
@@ -51,14 +51,14 @@ const DEFAULT_PATH_EXTENSIONS = [".COM", ".EXE", ".BAT", ".CMD"];
  */
 export function hostProcessEnvironment(): Readonly<Record<string, string | undefined>> {
   const env: Record<string, string | undefined> = { ...process.env };
+  if (process.platform !== "win32") return env;
   // Windows keeps one casing per name on enumeration: a process that holds
   // both `PATH` and `Path` spreads only one of them, and a child that reads
   // the other spelling (MSYS bash reads exactly `PATH`) finds nothing and
   // presents as a broken install. Both spellings name the same directory
   // list, so the copy carries both — reading stays case-insensitive, and no
   // caller has to know which spelling the parent happened to keep.
-  const pathKey = process.platform === "win32"
-    ? Object.keys(env).find(name => name.toLowerCase() === "path") : undefined;
+  const pathKey = Object.keys(env).find(name => name.toLowerCase() === "path");
   const executablePath = env["PATH"] ?? env["Path"] ?? (pathKey === undefined ? undefined : env[pathKey]);
   if (executablePath !== undefined) {
     env["PATH"] ??= executablePath;
@@ -266,9 +266,18 @@ export function shapeCommand(argv: readonly string[]): CommandShapeResult {
 export function hostShellEnvironment(
   overrides: Partial<ShellEnvironment> = {},
 ): ShellEnvironment {
+  const platform = overrides.platform ?? process.platform;
   return {
-    platform: overrides.platform ?? process.platform,
+    platform,
     env: overrides.env ?? process.env,
-    fileExists: overrides.fileExists ?? existsSync,
+    fileExists: overrides.fileExists ?? (platform === "win32" ? existsSync : isExecutableFile),
   };
+}
+
+export function isExecutableFile(candidate: string): boolean {
+  try {
+    if (!statSync(candidate).isFile()) return false;
+    accessSync(candidate, constants.X_OK);
+    return true;
+  } catch { return false; }
 }

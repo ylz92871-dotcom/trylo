@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use tauri::http::{Request, Response};
@@ -84,7 +85,6 @@ impl WebAssets {
                 session.loaded.insert(target); session.total += metadata.len();
             }
         }
-        use std::io::Read;
         let mut bytes = Vec::new();
         file.take(policy().max_resource_bytes + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
         if bytes.len() as u64 > policy().max_resource_bytes { return Err("网页资源读取时超过大小限制".into()); }

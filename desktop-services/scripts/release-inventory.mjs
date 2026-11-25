@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 import { WINDOWS_MCP_MANIFEST } from '../src/tooling/manifests/windows-mcp.mjs';
 import { verifyBuiltinTools } from '../../desktop/scripts/verify-builtin-tools.mjs';
+import { macosNodePin, verifyMacosNode } from '../../desktop/scripts/macos-node-pin.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(packageRoot, '..');
@@ -34,20 +35,18 @@ const sidecarsRoot = process.env.TRYLO_SIDECARS_DIR
 /// verifying a real resources tree.
 const resourceRoot = packagedResourceRoot ?? path.join(repoRoot, 'desktop', 'src-tauri');
 const verifyingPackaged = Boolean(packagedResourceRoot);
+const windows = process.platform === 'win32';
+const darwin = process.platform === 'darwin';
 
 /// Relative paths that may hold the pinned Node runtime, mirroring
 /// `node_runtime_candidates()` in `desktop/src-tauri/src/commands/node_runtime.rs`.
 /// Only the host triple's entry ships; the generic one exists so a maintainer
 /// can stage a runtime without matching the triple exactly.
 const NODE_RUNTIME_CANDIDATES =
-  process.platform === 'win32'
+  windows
     ? ['runtime/node/win-x64/node.exe', 'runtime/node/node.exe']
-    : process.platform === 'darwin'
-      ? [
-          'runtime/node/darwin-arm64/bin/node',
-          'runtime/node/darwin-x64/bin/node',
-          'runtime/node/node',
-        ]
+    : darwin
+      ? [`runtime/node/darwin-${process.arch}/bin/node`]
       : [
           'runtime/node/linux-x64/bin/node',
           'runtime/node/linux-arm64/bin/node',
@@ -63,7 +62,7 @@ const sha256 = async (p) => {
 async function checkItem(label, p, isRequired) {
   try {
     const stat = await fs.stat(p);
-    if (!stat.isFile()) return { label, path: p, ok: false, error: 'not a file' };
+    if (!stat.isFile()) return { label, path: p, ok: false, error: 'not a file', required: isRequired };
     const hash = await sha256(p);
     return { label, path: p, ok: true, sha: hash, size: stat.size };
   } catch {
@@ -181,17 +180,21 @@ async function main() {
   }
   const packagedBundle = path.join(serviceRoot, 'dist', 'host.bundle.mjs');
   if (verifyingPackaged) await verifyBuiltinTools(path.join(serviceRoot, 'builtin-tools'));
+  if (verifyingPackaged && darwin) {
+    if (process.arch !== 'arm64') throw new Error('Unsupported macOS release architecture');
+    await verifyMacosNode(path.join(resourceRoot, 'runtime/node', macosNodePin.triple));
+  }
   const items = [
     distributionItem,
     await checkItem('service-host bundle', packagedBundle, true),
     ...(verifyingPackaged ? [await checkBundleParity(packagedBundle)] : []),
-    await checkItem(
+    ...(windows ? [await checkItem(
       'Windows-MCP Trylo fork',
       path.join(serviceRoot, 'windows-mcp-fork', 'tools', 'ocr.py'),
       verifyingPackaged,
-    ),
+    )] : []),
     // WCC-P2-05: the pinned .NET WGC helper, digest-gated (spec §19.8).
-    await checkWgcHelper(),
+    ...(windows ? [await checkWgcHelper()] : []),
     await checkItem('vendor desktop companion bridge', path.join(serviceRoot, 'vendor', 'legacy', 'desktop-companion-bridge.js'), true),
     await checkItem('vendor Hermes capability manager', path.join(serviceRoot, 'vendor', 'legacy', 'hermes-capability-manager.js'), true),
     await checkItem('vendor Hermes session sync', path.join(serviceRoot, 'vendor', 'legacy', 'hermes-session-sync.js'), true),
@@ -206,7 +209,7 @@ async function main() {
       path.join(serviceRoot, 'node_modules', 'ws', 'package.json'),
       verifyingPackaged,
     ),
-    await checkItem('desktop pet executable', path.join(sidecarsRoot, 'desktop-companion', 'publish', 'TryloDesktopPet.exe'), true),
+    ...(windows ? [await checkItem('desktop pet executable', path.join(sidecarsRoot, 'desktop-companion', 'publish', 'TryloDesktopPet.exe'), true)] : []),
     await checkItem('Hermes server', path.join(sidecarsRoot, 'hermes-capabilities', 'server.py'), true),
     await checkItem('Hermes dependency lock', path.join(sidecarsRoot, 'hermes-capabilities', 'requirements.lock'), true),
     // Phase 3 read-only Skills adapter (desktop-services/src/learning/skills-client.mjs
@@ -216,7 +219,10 @@ async function main() {
     // The pinned Node runtime. The installed app must never depend on
     // `node` being on the system PATH (audit §2.3 Task W4).
     await checkAny('pinned Node runtime', resourceRoot, NODE_RUNTIME_CANDIDATES, verifyingPackaged),
-    await checkItem('managed tool npm runtime', path.join(resourceRoot, 'runtime/node/win-x64/node_modules/npm/bin/npm-cli.js'), verifyingPackaged && process.platform === 'win32'),
+    ...((windows || darwin) ? [await checkItem('managed tool npm runtime',
+      path.join(resourceRoot, windows
+        ? 'runtime/node/win-x64/node_modules/npm/bin/npm-cli.js'
+        : `runtime/node/darwin-${process.arch}/lib/node_modules/npm/bin/npm-cli.js`), verifyingPackaged)] : []),
   ];
 
   const failures = items.filter((i) => !i.ok);

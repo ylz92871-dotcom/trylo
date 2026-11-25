@@ -90,8 +90,7 @@ pub fn is_installed(cfg: &LspServerConfig) -> bool {
         super::background_command::command("which")
             .arg(cfg.command)
             .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
+            .is_ok_and(|o| o.status.success())
     }
 }
 

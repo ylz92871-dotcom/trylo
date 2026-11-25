@@ -172,11 +172,11 @@ pub async fn work_host_show_in_folder(
         ));
     }
     let target = validate_target(&file_path, &allowed_root)?;
-    // The parent of a contained path is either contained or the
-    // root itself — both are inside the allowed boundary.
-    let parent = target.parent().unwrap_or(&target);
-    open_with_default_app(parent)
-        .map_err(|e| io_error("(work_host_show_in_folder)", std::io::Error::other(e)))
+    #[cfg(target_os = "macos")]
+    let result = macos_open(&["-R"], &target);
+    #[cfg(not(target_os = "macos"))]
+    let result = open_with_default_app(target.parent().unwrap_or(&target));
+    result.map_err(|e| io_error("(work_host_show_in_folder)", std::io::Error::other(e)))
 }
 
 #[tauri::command]
@@ -202,11 +202,7 @@ fn open_with_default_app(path: &Path) -> Result<(), String> {
     }
     #[cfg(target_os = "macos")]
     {
-        Command::new("open")
-            .arg(path)
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| e.to_string())
+        macos_open(&[], path)
     }
     #[cfg(target_os = "linux")]
     {
@@ -219,49 +215,55 @@ fn open_with_default_app(path: &Path) -> Result<(), String> {
 }
 
 fn launch_with_app(path: &Path, app_identifier: &str) -> Result<(), String> {
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    if !is_safe_app_identifier(app_identifier) {
+        return Err(format!("unsafe app identifier: {app_identifier}"));
+    }
     #[cfg(target_os = "windows")]
     {
-        // ShellExecuteW with the app as the "file" and the target
-        // as its parameters — still no shell, and the identifier
-        // must be a plain executable token.
-        if !is_safe_app_identifier(app_identifier) {
-            return Err(format!("unsafe app identifier: {app_identifier}"));
-        }
         shell_execute_windows(Path::new(app_identifier), Some(path))
     }
     #[cfg(target_os = "macos")]
     {
-        // `open -a <app> <path>` — argv launch, no shell.
-        Command::new("open")
-            .args(["-a", app_identifier])
-            .arg(path)
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| e.to_string())
+        macos_open(&["-a", app_identifier], path)
     }
     #[cfg(target_os = "linux")]
     {
-        // xdg-open doesn't support specifying an app directly.
-        // The `app_identifier` is treated as the .desktop file
-        // name; if that's wrong we fall back to default-app
-        // open.
-        Command::new("xdg-open")
-            .arg(path)
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| e.to_string())
+        let _ = app_identifier;
+        open_with_default_app(path)
     }
 }
 
-/// App identifiers reach the OS as a launch target; restrict them
-/// to plain filename tokens (no separators, no dots-leading
-/// escapes beyond a normal extension).
+#[cfg(target_os = "macos")]
+fn macos_open(options: &[&str], path: &Path) -> Result<(), String> {
+    let output = Command::new("/usr/bin/open")
+        .args(options)
+        .arg("--")
+        .arg(path)
+        .output()
+        .map_err(|error| error.to_string())?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(format!("open failed ({}): {}", output.status, String::from_utf8_lossy(&output.stderr).trim()))
+    }
+}
+
+/// App identifiers are names, so reject paths, switches and control characters.
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn is_safe_app_identifier(identifier: &str) -> bool {
-    !identifier.is_empty()
+    let starts_with_name = if cfg!(target_os = "macos") {
+        identifier.starts_with(char::is_alphanumeric) && identifier.trim() == identifier
+    } else {
+        !identifier.is_empty()
+    };
+    starts_with_name
         && identifier.len() <= 64
-        && identifier
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_')
+        && identifier.chars().all(|c| {
+            c.is_ascii_alphanumeric()
+                || matches!(c, '.' | '-' | '_')
+                || (cfg!(target_os = "macos") && (c == ' ' || c.is_alphanumeric()))
+        })
 }
 
 #[cfg(target_os = "windows")]
@@ -323,6 +325,7 @@ mod tests {
         assert!(!is_http_url("http"));
     }
 
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     #[test]
     fn app_identifier_allowlist() {
         assert!(is_safe_app_identifier("winword"));
@@ -333,6 +336,8 @@ mod tests {
         assert!(!is_safe_app_identifier("a\\b"));
         assert!(!is_safe_app_identifier("../evil"));
         assert!(!is_safe_app_identifier(&"x".repeat(65)));
+        assert_eq!(is_safe_app_identifier("Microsoft Word"), cfg!(target_os = "macos"));
+        assert_eq!(is_safe_app_identifier("预览"), cfg!(target_os = "macos"));
     }
 
     #[cfg(target_os = "windows")]

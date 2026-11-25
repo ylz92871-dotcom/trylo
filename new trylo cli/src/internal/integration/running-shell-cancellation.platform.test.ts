@@ -8,8 +8,8 @@ import { createNdjsonSessionStore } from "../adapters/session-store/ndjson.js";
 import { SESSION_FORMAT_VERSION } from "../ports/session.js";
 import { testScratchPath } from "../testing/scratch.js";
 import { createTurnRecorder } from "../surface/cli/turn-recorder.js";
-import { createFakePermission, createFakeProvider, emptyProfileLoader } from "./fakes.js";
-import { runTurn } from "./runner.js";
+import { createFakePermission, createFakeProvider, emptyProfileLoader } from "../loop/fakes.js";
+import { runTurn } from "../loop/runner.js";
 
 test("interrupting a real shell stops its process and permits the next turn in the same durable session", { timeout: 20000 }, async () => {
   const root = mkdtempSync(testScratchPath("live-shell-cancel-"));

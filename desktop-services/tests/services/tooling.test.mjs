@@ -78,6 +78,7 @@ function build(overrides = {}) {
     appDataDir: tmpRoot,
     sidecarsDir: tmpRoot,
     seam: {
+      target: 'win32-x64',
       hermes: overrides.hermes ?? hermesStub(),
       installRoot: overrides.installRoot ?? path.join(tmpRoot, 'tool-packages'),
       profilesRoot: overrides.profilesRoot ?? path.join(tmpRoot, 'tool-profiles'),
@@ -94,6 +95,16 @@ function build(overrides = {}) {
 }
 
 describe('tool catalog', () => {
+  it('selects the pinned native OfficeCLI and shared browser closures on Apple Silicon', () => {
+    const catalog = createToolCatalog({ target: 'darwin-arm64', supportedOnly: true });
+    assert.deepEqual(catalog.list().map(manifest => manifest.id).sort(), ['chrome-devtools', 'officecli', 'playwright']);
+    assert.equal(catalog.get('officecli').artifact.executableRelativePath, 'officecli-mac-arm64');
+    assert.equal(catalog.get('officecli').artifact.archiveSha256, OFFICECLI_MANIFEST.platformArtifacts[0].archiveSha256);
+    assert.equal(catalog.get('playwright').artifact.archiveSha256, PLAYWRIGHT_MANIFEST.artifact.archiveSha256);
+    assert.equal(catalog.get('chrome-devtools').artifact.platform, 'darwin-arm64');
+    assert.deepEqual(catalog.rejected(), []);
+  });
+
   it('ships the audited manifests and rejects none of them', () => {
     const catalog = createToolCatalog();
     assert.deepEqual(
@@ -1138,7 +1149,7 @@ describe('tooling.sweepToolCache — BinaryRef tool cache TTL (PR-4)', () => {
     const tooling = createToolingServices({ appDataDir, sidecarsDir: tmpRoot, seam: { toolCacheTtlMs: 60 * 60 * 1000 } });
     const stats = await tooling.sweepToolCache();
     assert.equal(stats.ok, true);
-    assert.equal(stats.removed, 1);
+    assert.equal(fs.existsSync(path.join(root, 'cd/cdef.png')), false);
     tooling.dispose();
   });
 });

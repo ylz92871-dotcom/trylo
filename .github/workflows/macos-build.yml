@@ -1,0 +1,83 @@
+name: Trylo macOS arm64
+
+on:
+  push:
+    branches: [MacOS]
+  pull_request:
+    branches: [MacOS]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: xcode-27
+    timeout-minutes: 45
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '14.0'
+      DEVELOPER_DIR: /Library/Developer/CommandLineTools
+      RUSTUP_TOOLCHAIN: '1.97.1'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.22.2'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.33.2'
+      - name: Verify checkout and install locked dependencies
+        run: |
+          test "$(uname -m)" = arm64
+          node scripts/check-workspace-layout.mjs
+          node scripts/release/check-source-completeness.mjs
+          node scripts/setup-cli-native.mjs --check
+          rustup toolchain install 1.97.1 --profile minimal --component clippy
+          (cd 'new trylo cli' && npm ci)
+          (cd desktop-services && npm ci)
+          (cd desktop && pnpm install --frozen-lockfile)
+      - name: Check CLI, sidecar and desktop
+        run: |
+          (cd 'new trylo cli' && npm run build && npm run verify && npm run build)
+          (cd desktop-services && npm test)
+          (
+            cd desktop
+            pnpm typecheck
+            pnpm lint
+            pnpm test
+            pnpm build
+            node --input-type=module -e "import { prepareDevResources } from './scripts/prepare-dev-resources.mjs'; prepareDevResources(process.cwd())"
+            cd src-tauri
+            cargo clippy --locked --all-targets -- -D warnings
+            cargo test --locked
+          )
+      - name: Fetch locked preview sources and build FFmpeg
+        run: |
+          release_dir="$GITHUB_WORKSPACE/_workspace/artifacts/macos-release"
+          mkdir -p "$release_dir"
+          node desktop/scripts/preview/fetch-sources.mjs --output "$release_dir/preview-sources"
+          node desktop/scripts/preview/fetch-macos-engine-sources.mjs "$release_dir"
+          bash desktop/scripts/preview/media-build/macos.sh "$release_dir/media-sources/ffmpeg-source.tar.gz" "$release_dir/media"
+          {
+            printf 'TRYLO_MACOS_MEDIA_ENGINE_DIR=%s\n' "$release_dir/media"
+            printf 'TRYLO_PREVIEW_SOURCES_DIR=%s\n' "$release_dir/preview-sources"
+            printf 'TRYLO_MEDIA_SOURCES_DIR=%s\n' "$release_dir/media-sources"
+            printf 'TRYLO_ARCHIVE_SOURCES_DIR=%s\n' "$release_dir/archive-sources"
+            printf 'TRYLO_PREVIEW_RELEASE_DIR=%s\n' "$release_dir/preview-release"
+          } >> "$GITHUB_ENV"
+      - name: Build the internal installer and record its digest
+        run: |
+          (cd desktop && pnpm exec tauri build --debug --bundles app,dmg)
+          cd desktop/src-tauri/target/debug/bundle/dmg
+          for image in ./*.dmg; do /usr/bin/hdiutil verify "$image"; done
+          shasum -a 256 ./*.dmg > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Trylo-macOS-arm64-internal
+          if-no-files-found: error
+          path: |
+            desktop/src-tauri/target/debug/bundle/dmg/*.dmg
+            desktop/src-tauri/target/debug/bundle/dmg/SHA256SUMS.txt
+            _workspace/artifacts/macos-release/preview-release/

@@ -84,7 +84,7 @@ function wheelManifest({ id, wheels }) {
       pythonVersion: '3.12',
       pythonPackage: id,
       wheels: Object.freeze(wheels.map((w) => Object.freeze(w))),
-      executableRelativePath: '.venv/Scripts/cad-test.exe',
+      executableRelativePath: process.platform === 'win32' ? '.venv/Scripts/cad-test.exe' : '.venv/bin/cad-test',
     }),
     mcp: Object.freeze({
       serverName: `trylo-${id}`,
@@ -161,7 +161,7 @@ describe('pinned-pypi-env: wheels mode', () => {
       { name: 'fake-dep', version: '0.2.0' },
     ]);
     const manifest = wheelManifest({ id: 'cad-test', wheels });
-    const uv = fakeUvRunCommand('cad-test.exe');
+    const uv = fakeUvRunCommand(path.basename(manifest.artifact.executableRelativePath));
     const packages = build(manifest, { runCommand: uv.run });
     const result = await packages.install({ id: 'cad-test' });
     assert.equal(result.ok, true, result.error ?? '');

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ptyArtifactDirectory, ptyStagedPath } from "./pty/copy-pty-vendor.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const distRoot = resolve(process.argv.find(value => value.startsWith("--out-dir="))?.slice(10) ?? join(root, "dist"));
@@ -33,13 +34,18 @@ for (const [path, entry] of Object.entries(lock.packages)) {
 const sandboxPath = "internal/adapters/sandbox/vendor/sandbox-runtime";
 const sandbox = read(`src/${sandboxPath}/PROVENANCE.json`);
 const pty = read("vendor-bin/pty/PROVENANCE.json");
+const ptyName = `trylo-pty-${ptyArtifactDirectory(process.platform, process.arch)}`;
+const ptyArtifact = pty.artifacts[ptyName];
+if (ptyArtifact === undefined) throw new Error(`release inventory: missing provenance for ${ptyName}`);
+const sandboxArtifacts = process.platform === "win32" ? Object.entries(sandbox.artifacts) : [];
 
 for (const [name, source, provenance] of [
-  ...Object.entries(sandbox.artifacts).map(([name, meta]) => [name, `${sandboxPath}/srt-win/${name.endsWith("arm64") ? "arm64" : "x64"}/srt-win.exe`, { ...meta, version: sandbox.version }]),
-  ...Object.entries(pty.artifacts).map(([name, meta]) => [name, `internal/vendor/pty/${meta.platform === "win32" ? "win" : meta.platform}-${meta.arch}/trylo-pty.exe`, { ...meta, version: pty.helper.version }]),
+  ...sandboxArtifacts.map(([name, meta]) => [name, `${sandboxPath}/srt-win/${name.endsWith("arm64") ? "arm64" : "x64"}/srt-win.exe`, { ...meta, version: sandbox.version }]),
+  [ptyName, ptyStagedPath(process.platform, process.arch), { ...ptyArtifact, version: pty.helper.version }],
 ]) {
-  const sha256 = createHash("sha256").update(readFileSync(join(distRoot, source))).digest("hex");
-  if (sha256 !== provenance.sha256) throw new Error(`release inventory: helper ${name} differs from provenance`);
+  const bytes = readFileSync(join(distRoot, source));
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  if (bytes.length !== provenance.bytes || sha256 !== provenance.sha256) throw new Error(`release inventory: helper ${name} differs from provenance`);
   components.push({ type: "file", name, version: provenance.version, hashes: [{ alg: "SHA-256", content: sha256 }], properties: [{ name: "trylo:artifact-path", value: source }] });
 }
 

@@ -8,7 +8,7 @@
     "check:layout": "node ../scripts/check-workspace-layout.mjs",
     "dev": "vite",
     "build": "node ../scripts/check-workspace-layout.mjs && tsc -b && vite build",
-    "build:bundle": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/prepare-sidecars.ps1 && pnpm build",
+    "build:bundle": "node scripts/prepare-sidecars.mjs && pnpm build",
     "preview": "vite preview",
     "tauri": "node scripts/run-tauri.mjs",
     "tauri:dev": "node scripts/start-desktop-dev.mjs",

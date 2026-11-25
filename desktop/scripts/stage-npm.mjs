@@ -17,9 +17,11 @@ export function verifyNpmArchive(bytes) {
 }
 
 export async function stageNpm(nodeDir, archivePath = process.env.TRYLO_NPM_ARCHIVE) {
-  const node = path.join(nodeDir, process.platform === 'win32' ? 'node.exe' : 'node');
+  const windows = process.platform === 'win32';
+  const node = path.join(nodeDir, windows ? 'node.exe' : 'bin/node');
   const stage = path.join(nodeDir, `.npm-stage-${crypto.randomUUID()}`);
-  const target = path.join(nodeDir, 'node_modules', 'npm');
+  const moduleRoot = windows ? nodeDir : path.join(nodeDir, 'lib');
+  const target = path.join(moduleRoot, 'node_modules', 'npm');
   await fs.mkdir(stage, { recursive: true });
   try {
     const archive = path.join(stage, 'npm.tgz');
@@ -39,7 +41,7 @@ export async function stageNpm(nodeDir, archivePath = process.env.TRYLO_NPM_ARCH
     // Refuse redirected destinations before replacing a previous staged copy.
     const modules = path.dirname(target);
     await fs.mkdir(modules, { recursive: true });
-    for (const dir of [nodeDir, modules, target]) {
+    for (const dir of new Set([nodeDir, moduleRoot, modules, target])) {
       const stat = await fs.lstat(dir).catch(error => error.code === 'ENOENT' ? null : Promise.reject(error));
       if (stat?.isSymbolicLink()) throw new Error('Redirected npm staging destination');
     }

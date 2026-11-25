@@ -59,16 +59,14 @@ const PROBE_RETRY_DELAY_MS = 400;
 
 /**
  * PR-6 (§8.2): read the pinned distribution's version from its OWN venv.
- * `<versionDir>/.venv/Scripts/python.exe -c "importlib.metadata.version(...)"`
+ * `<venv interpreter> -c "importlib.metadata.version(...)"`
  * is the only signal that cannot be faked by a stale console-script banner:
  * it proves the venv exists, the interpreter runs, and the distribution the
  * lock materialised is the one the manifest pins. Never rejects.
  */
 export function defaultProbePythonMetadata(entryExecutable, expectedName, timeoutMs = PYTHON_METADATA_PROBE_TIMEOUT_MS) {
   return new Promise((resolve) => {
-    // entryExecutable = <versionDir>/.venv/Scripts/windows-mcp.exe → the
-    // interpreter sits in the same Scripts directory.
-    const python = path.join(path.dirname(entryExecutable), 'python.exe');
+    const python = path.join(path.dirname(entryExecutable), process.platform === 'win32' ? 'python.exe' : 'python');
     let settled = false;
     const finish = (value) => {
       if (settled) return;

@@ -25,6 +25,7 @@ pub mod lsp_state;
 pub mod lsp_stop;
 pub mod native_browser;
 pub mod node_runtime;
+#[cfg(windows)]
 pub mod pick_folder;
 pub mod preview;
 pub mod process_close_input;
@@ -34,6 +35,8 @@ pub mod process_recovery;
 mod process_recovery_identity;
 pub mod process_send;
 pub mod process_spawn;
+#[cfg(unix)]
+pub(crate) mod posix_process_group;
 pub mod process_state;
 pub mod process_stop;
 pub mod process_team_guard;

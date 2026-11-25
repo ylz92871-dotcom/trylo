@@ -1,6 +1,62 @@
 # 从公开源码构建
 
-当前可验证的 CLI 构建目标是 Windows x64、Node >=22。源码发布不要求把 node_modules、dist、Cargo target 或整个桌面安装包提交到 Git，但必需输入必须能从仓库、固定下载或已说明的源码构建步骤获得。
+发行准备流程覆盖 Windows x64、Node >=22。`MacOS` 分支另有 Apple Silicon 开发入口。源码发布只需要仓库输入、固定下载和已记录的源码构建步骤。
+
+## macOS Apple Silicon 开发预览
+
+在 `MacOS` 分支上使用 macOS 14 或更新版本、Xcode Command Line Tools、Node 22、pnpm 和 Rust 1.97.1。由仓库根目录执行：
+
+```sh
+rustup toolchain install 1.97.1 --profile minimal --component clippy
+(cd 'new trylo cli' && npm ci && npm run build)
+(cd desktop-services && npm ci)
+(cd desktop && pnpm install --frozen-lockfile)
+(cd desktop && MACOSX_DEPLOYMENT_TARGET=14.0 RUSTUP_TOOLCHAIN=1.97.1 pnpm tauri:dev)
+```
+
+CLI 构建校验仓库内 Apple Silicon PTY（伪终端）的 SHA-256 并设置执行位。Tauri 开发入口准备资源目录，使用当前检出的 CLI 及启动 `pnpm` 时使用的 Node。Code 和 Work 可以从顶部工具栏打开当前工作区的终端。
+
+如需独立执行原生检查，先运行 `pnpm build` 生成前端资源，再从 `desktop/` 准备开发资源：
+
+```sh
+node --input-type=module -e "import { prepareDevResources } from './scripts/prepare-dev-resources.mjs'; prepareDevResources(process.cwd())"
+cd src-tauri
+export MACOSX_DEPLOYMENT_TARGET=14.0
+cargo +1.97.1 clippy --locked --all-targets -- -D warnings
+cargo +1.97.1 test --locked
+```
+
+CLI 在 Apple Silicon 上默认使用 Seatbelt，显式的 `--shell-isolation host` 继续走宿主审批边界。设置 `TRYLO_PREFER_KEYRING=1` 可启用 macOS Keychain（钥匙串）。默认凭据仍使用权限为 `0600` 的文件。
+
+## macOS 后端资源与内测打包
+
+依赖安装完成后，从仓库根目录生成独立的 sidecar resources（辅助进程资源）。目标为新目录。
+
+```sh
+node scripts/setup-cli-native.mjs --check
+node desktop/scripts/prepare-macos-sidecars.mjs "$PWD/_workspace/artifacts/macos-resources"
+```
+
+脚本固定 Node 24.14.1、npm 11.11.0 和三个 MCP 工具。它验证 npm 完整依赖闭包、CLI 审批、Service Host（服务宿主）和 Remote Gateway（远程网关）。
+
+完整打包需要 LibreOffice、FFmpeg 和对应的源码归档。以下命令使用同一个候选目录。
+
+```sh
+build_root="$PWD/_workspace/artifacts/macos-release"
+mkdir -p "$build_root"
+node desktop/scripts/preview/fetch-sources.mjs --output "$build_root/preview-sources"
+node desktop/scripts/preview/fetch-macos-engine-sources.mjs "$build_root"
+bash desktop/scripts/preview/media-build/macos.sh "$build_root/media-sources/ffmpeg-source.tar.gz" "$build_root/media"
+
+export TRYLO_MACOS_MEDIA_ENGINE_DIR="$build_root/media"
+export TRYLO_PREVIEW_SOURCES_DIR="$build_root/preview-sources"
+export TRYLO_MEDIA_SOURCES_DIR="$build_root/media-sources"
+export TRYLO_ARCHIVE_SOURCES_DIR="$build_root/archive-sources"
+export TRYLO_PREVIEW_RELEASE_DIR="$build_root/preview-release"
+(cd desktop && MACOSX_DEPLOYMENT_TARGET=14.0 RUSTUP_TOOLCHAIN=1.97.1 pnpm exec tauri build --debug --bundles app,dmg)
+```
+
+FFmpeg 制品锁使用 Apple clang 21.0.0 和 macOS 27.2 SDK 捕获。打包校验实际二进制 SHA-256，使用其他工具链时需先验证构建结果。LibreOffice 可用 `TRYLO_MACOS_OFFICE_DMG` 指定已取得的固定 DMG，脚本仍校验映像摘要和上游签名。当前 macOS 资源保留完整的 LibreOffice 应用包与上游许可文件。
 
 ## 新版 CLI：首次准备
 

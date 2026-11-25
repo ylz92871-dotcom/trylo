@@ -110,7 +110,7 @@ mod tests {
         fs::write(real.join("target.txt"), "secret").unwrap();
         let link = root.join("link.txt");
         #[cfg(unix)]
-        std::os::unix::fs::symlink(&real.join("target.txt"), &link).unwrap();
+        std::os::unix::fs::symlink(real.join("target.txt"), &link).unwrap();
         #[cfg(windows)]
         {
             use std::os::windows::fs::symlink_file;

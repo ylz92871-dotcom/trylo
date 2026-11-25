@@ -45,7 +45,13 @@ export function createToolingServices(options = {}) {
   const seam = options.seam ?? {};
   const enableRepositoryTools = options.seam === undefined;
 
-  const catalog = createToolCatalog(seam.manifests ? { manifests: seam.manifests } : {});
+  const target = seam.target ?? `${process.platform}-${process.arch}`;
+  const nativeBrowserEnabled = Boolean(seam.nativeBrowser) || (enableRepositoryTools && target.startsWith('win32-'));
+  const catalog = createToolCatalog({
+    ...(seam.manifests ? { manifests: seam.manifests } : {}),
+    target,
+    supportedOnly: enableRepositoryTools && target.startsWith('darwin-'),
+  });
 
   const rejected = catalog.rejected();
   if (rejected.length > 0 && log) {
@@ -64,9 +70,11 @@ export function createToolingServices(options = {}) {
     ...(seam.download ? { download: seam.download } : {}),
     // Test seam: replaces the browser-body install child process (§3.3-7).
     ...(seam.runCommand ? { runCommand: seam.runCommand } : {}),
+    ...(seam.resolveUv ? { resolveUv: seam.resolveUv } : {}),
     // A real source-checkout host reads this service's toolchain registry. Test
     // seams and packaged installs remain hermetic unless explicitly wired.
     enableRepositoryTools,
+    target,
     ...(options.localToolRegistryPath
       ? { localToolRegistryPath: options.localToolRegistryPath }
       : {}),
@@ -75,7 +83,7 @@ export function createToolingServices(options = {}) {
   const health = createToolHealthService({
     packages,
     catalog,
-    browserBackend: enableRepositoryTools || seam.nativeBrowser ? 'native' : 'screencast',
+    browserBackend: nativeBrowserEnabled ? 'native' : 'screencast',
     // Test seam: replaces the `--version` child-process probe so health can
     // be exercised without a real binary.
     ...(seam.probe ? { probe: seam.probe } : {}),
@@ -118,7 +126,7 @@ export function createToolingServices(options = {}) {
     modelPreview,
     softwareWorkspace,
     ...(options.hostEntrypoint ? { hostEntrypoint: options.hostEntrypoint } : {}),
-    ...(enableRepositoryTools || seam.nativeBrowser ? { nativeBrowser } : {}),
+    ...(nativeBrowserEnabled ? { nativeBrowser } : {}),
     ...(seam.profilesRoot ? { profilesRoot: seam.profilesRoot } : {}),
   });
 
@@ -403,9 +411,9 @@ export function createToolingServices(options = {}) {
       void softwareWorkspace.dispose();
       toolResultCache.stop();
       health.clearCache();
-      void viewport.stop();
       void browserObserver.stop();
       computerPreview.dispose();
+      return viewport.stop();
     },
   };
 }

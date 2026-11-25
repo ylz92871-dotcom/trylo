@@ -3,6 +3,7 @@
   "tools": {
     "officecli": {
       "entry": "office/OfficeCLI/_dist-trylo/officecli.exe",
+      "platform": "win32-x64",
       "policy": "repository-local"
     },
     "playwright": {

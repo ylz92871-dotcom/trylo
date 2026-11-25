@@ -17,18 +17,15 @@ import '@xterm/xterm/css/xterm.css';
 import { hostAdapter } from '../../host-adapter';
 import './Terminal.css';
 
-const DEFAULT_SHELL = 'bash.exe';
-
 export interface TerminalProps {
   /** Working directory the spawned shell starts in. */
   readonly cwd: string;
+  readonly id: string;
+  readonly onReturnFocus: () => void;
 }
 
-export function Terminal({ cwd }: TerminalProps): ReactElement {
+export function Terminal({ cwd, id, onReturnFocus }: TerminalProps): ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
-  const xtermRef = useRef<XTerm | null>(null);
-  const fitRef = useRef<FitAddon | null>(null);
-  const ptyIdRef = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,17 +33,21 @@ export function Terminal({ cwd }: TerminalProps): ReactElement {
     if (!container) return;
 
     const xterm = new XTerm({
-      fontFamily: 'Cascadia Mono, Consolas, monospace',
+      fontFamily: 'SFMono-Regular, Menlo, Cascadia Mono, Consolas, monospace',
       fontSize: 13,
       theme: { background: '#0d1117' },
-      cursorBlink: true,
+      cursorBlink: !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     });
     const fit = new FitAddon();
     xterm.loadAddon(fit);
     xterm.open(container);
+    xterm.textarea?.setAttribute('aria-label', '终端输入，按 Shift+Escape 返回工具栏');
     fit.fit();
-    xtermRef.current = xterm;
-    fitRef.current = fit;
+    xterm.attachCustomKeyEventHandler((event) => {
+      if (event.type !== 'keydown' || event.key !== 'Escape' || !event.shiftKey) return true;
+      onReturnFocus();
+      return false;
+    });
 
     let ptyId: string | null = null;
     let alive = true;
@@ -73,46 +74,37 @@ export function Terminal({ cwd }: TerminalProps): ReactElement {
     (async () => {
       try {
         const result = await hostAdapter.pty.spawn({
-          shell: DEFAULT_SHELL,
           cols: xterm.cols,
           rows: xterm.rows,
           cwd,
           onOutput: (data) => {
-            // Tauri serializes Vec<u8> as a JSON array of numbers.
-            // xterm.write accepts string or Uint8Array; build the
-            // Uint8Array from the array.
-            if (alive) xterm.write(new Uint8Array(data));
+            if (alive) xterm.write(data);
           },
         });
+        if (!alive) {
+          await hostAdapter.pty.kill(result.id);
+          return;
+        }
         ptyId = result.id;
-        ptyIdRef.current = result.id;
-        xterm.writeln(`\x1b[90m[Trylo terminal — ${result.shell}]\x1b[0m`);
+        xterm.writeln(`[Trylo terminal — ${result.shell}]`);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        if (alive) {
-          xterm.writeln(`\x1b[31m[pty spawn failed: ${message}]\x1b[0m`);
-          setError(message);
-        }
+        if (alive) setError(message);
       }
     })();
 
     return () => {
       alive = false;
       ro.disconnect();
-      if (ptyIdRef.current) {
-        void hostAdapter.pty.kill(ptyIdRef.current);
-        ptyIdRef.current = null;
-      }
+      if (ptyId) void hostAdapter.pty.kill(ptyId);
       xterm.dispose();
-      xtermRef.current = null;
-      fitRef.current = null;
     };
-  }, [cwd]);
+  }, [cwd, onReturnFocus]);
 
   return (
-    <div className="terminal-panel">
-      {error && <div className="terminal-error">error: {error}</div>}
+    <section className="terminal-panel" id={id} aria-label="集成终端">
+      {error && <div className="terminal-error" role="alert">终端启动失败：{error}</div>}
       <div ref={containerRef} className="terminal-container" />
-    </div>
+    </section>
   );
 }

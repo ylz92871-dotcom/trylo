@@ -16,6 +16,7 @@ import {
 } from "../../internal/adapters/worker/file-worker.js";
 import type { WorkerExecutionOwner } from "../../internal/ports/worker.js";
 import { readProcessAmbient } from "../../internal/adapters/daemon/process-ambient.js";
+import { observeDarwinProcess } from "../../internal/adapters/process-session/darwin-process.js";
 import { sessionQueuePath, tryloHome } from "../../internal/surface/cli/session-paths.js";
 import { buildDaemonWorkerExecutor } from "./daemon-wiring.js";
 
@@ -91,6 +92,7 @@ export async function runDaemon(input: {
   readonly homeDir: string;
   readonly now: () => number;
   readonly pid: number;
+  readonly startedAtMs?: number;
   readonly installSignals: (signals: ReadonlyArray<NodeJS.Signals>, handler: () => void) => () => void;
   readonly report: (code: number) => void;
   readonly tickIntervalMs?: number;
@@ -114,6 +116,7 @@ export async function runDaemon(input: {
     homeDir: input.homeDir,
     now: input.now,
     pid: input.pid,
+    ...(input.startedAtMs === undefined ? {} : { startedAtMs: input.startedAtMs }),
     installSignals: input.installSignals,
     report: input.report,
     tryloHome,
@@ -284,6 +287,9 @@ if (ambientEnv["TRYLO_DAEMON_NO_AUTOSTART"] === undefined) {
     note(tryloHome(homeDir, ambientEnv), `worker disabled: ${built.reason}`);
   }
 
+  const nativeIdentity = process.platform === "darwin" ? await observeDarwinProcess(process.pid) : undefined;
+  if (process.platform === "darwin" && nativeIdentity === undefined) throw new Error("Could not confirm daemon start time");
+
   await runDaemon({
     env: ambientEnv,
     homeDir,
@@ -293,6 +299,7 @@ if (ambientEnv["TRYLO_DAEMON_NO_AUTOSTART"] === undefined) {
     cwd: process.cwd(),
     now: ambientNow,
     pid: process.pid,
+    ...(nativeIdentity === undefined ? {} : { startedAtMs: nativeIdentity.startedAtMs }),
     ...(built.ok ? { workerExecutor: built.executor } : {}),
 
     installSignals: (signals, handler) => {

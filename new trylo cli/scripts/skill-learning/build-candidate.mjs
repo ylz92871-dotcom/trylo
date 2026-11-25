@@ -1,18 +1,19 @@
 // A frozen production candidate, never an incremental rebuild of shared dist.
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import ts from "typescript";
 import { copyWindowsClosure } from "../sandbox-closure.mjs";
-import { PTY_DIST_SUBDIR } from "../pty/copy-pty-vendor.mjs";
+import { ptyArtifactDirectory, ptyStagedPath } from "../pty/copy-pty-vendor.mjs";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const workspaceRoot = path.resolve(packageRoot, "..");
 const require = createRequire(import.meta.url);
 const VENDOR_REL = "internal/adapters/sandbox/vendor/sandbox-runtime";
+const sandboxArchitectures = process.platform === "win32" ? ["x64", "arm64"] : [];
 const HELP = "node scripts/skill-learning/build-candidate.mjs --out <new absolute directory inside workspace>\nCreates <out>/dist/cmd/trylo/main.js, a frozen source manifest, strict tsc evidence and verified native helpers. Does not run the full test gate.";
 
 function sha(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
@@ -122,14 +123,14 @@ function freezeSource(output) {
   }
 
   const ptyProvenance = JSON.parse(readFileSync(path.join(packageRoot, "vendor-bin/pty/PROVENANCE.json"), "utf8"));
-  const platformArch = `${process.platform === "win32" ? "win" : process.platform}-${process.arch}`;
+  const platformArch = ptyArtifactDirectory(process.platform, process.arch);
   const ptyArtifact = ptyProvenance.artifacts?.[`trylo-pty-${platformArch}`];
   if (!ptyArtifact || !inside(packageRoot, path.resolve(packageRoot, ptyArtifact.path))) throw new Error("candidate_pty_artifact_unavailable");
 
   for (const name of ["tsconfig.json", "package.json", "package-lock.json", "scripts/skill-learning/build-candidate.mjs",
     "scripts/sandbox-closure.mjs", "scripts/pty/copy-pty-vendor.mjs", "scripts/copy-vendor.mjs", "vendor-bin/pty/PROVENANCE.json",
     "vendor-bin/pty/src/main.rs", "vendor-bin/pty/Cargo.toml", "vendor-bin/pty/Cargo.lock", ptyArtifact.path,
-    "vendor-bin/srt-win-x64.exe", "vendor-bin/srt-win-arm64.exe"]) {
+    ...sandboxArchitectures.map(arch => `vendor-bin/srt-win-${arch}.exe`)]) {
     const bytes = readFileSync(path.join(packageRoot, name));
     mkdirSync(path.dirname(path.join(frozenRoot, name)), { recursive: true });
     writeFileSync(path.join(frozenRoot, name), bytes, { flag: "wx" });
@@ -220,15 +221,17 @@ function stageHelpers(output, frozen) {
   const moduleCount = copyWindowsClosure(source, destination); // Existing reviewed static dependency walker.
   const binaries = [];
 
-  for (const arch of ["x64", "arm64"]) stageVerified(path.join(frozen.frozenRoot, `vendor-bin/srt-win-${arch}.exe`),
+  for (const arch of sandboxArchitectures) stageVerified(path.join(frozen.frozenRoot, `vendor-bin/srt-win-${arch}.exe`),
     path.join(destination, `srt-win/${arch}/srt-win.exe`), sandbox.artifacts?.[`srt-win-${arch}`], `srt-win-${arch}`, binaries);
 
   const pty = JSON.parse(readFileSync(path.join(frozen.evidenceRoot, "pty-provenance.json"), "utf8"));
-  const platformArch = `${process.platform === "win32" ? "win" : process.platform}-${process.arch}`;
+  const platformArch = ptyArtifactDirectory(process.platform, process.arch);
   const entry = pty.artifacts?.[`trylo-pty-${platformArch}`];
   if (!entry || !inside(packageRoot, path.resolve(packageRoot, entry.path))) throw new Error("candidate_pty_artifact_unavailable");
 
-  stageVerified(path.join(frozen.frozenRoot, entry.path), path.join(dist, PTY_DIST_SUBDIR, platformArch, "trylo-pty.exe"), entry, `trylo-pty-${platformArch}`, binaries);
+  const ptyDestination = path.join(dist, ptyStagedPath(process.platform, process.arch));
+  stageVerified(path.join(frozen.frozenRoot, entry.path), ptyDestination, entry, `trylo-pty-${platformArch}`, binaries);
+  if (process.platform !== "win32") chmodSync(ptyDestination, 0o755);
   const staged = filesUnder(destination).map(file => ({ path: relative(dist, file), bytes: lstatSync(file).size, sha256: sha(readFileSync(file)) }));
 
   for (const row of staged.filter(item => !item.path.includes("/srt-win/"))) {

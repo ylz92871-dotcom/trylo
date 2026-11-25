@@ -21,7 +21,7 @@
 
 use std::collections::HashMap;
 use std::io::BufReader;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -35,6 +35,9 @@ use crate::commands::process_recovery::{self, RecoveryIdentity, RecoveryProcess}
 use crate::commands::process_state::{
     ProcessEntry, ProcessInputControl, ProcessMetadata, ProcessState, ProcessStopControl,
 };
+#[cfg(unix)]
+use crate::commands::posix_process_group::PosixProcessGroup;
+#[cfg(not(unix))]
 use crate::commands::process_termination::OwnedTreeTerminator;
 
 #[derive(Debug, Serialize)]
@@ -101,6 +104,7 @@ fn redact_args(args: &[String]) -> String {
 /// `None` there; on Unix it is `ExitStatus::signal()`.
 #[cfg(unix)]
 fn exit_signal(status: std::process::ExitStatus) -> Option<i32> {
+    use std::os::unix::process::ExitStatusExt;
     status.signal()
 }
 
@@ -143,10 +147,12 @@ pub async fn process_spawn(
         if !identity.is_valid()
             || project_key
                 .as_deref()
-                .is_none_or(|key| key.trim().is_empty())
+                .filter(|key| !key.trim().is_empty())
+                .is_none()
             || conversation_id
                 .as_deref()
-                .is_none_or(|id| id.trim().is_empty())
+                .filter(|id| !id.trim().is_empty())
+                .is_none()
         {
             return Err(CommandError::Validation {
                 reason: "output recovery requires an immutable turn and conversation owner".into(),
@@ -177,12 +183,7 @@ pub async fn process_spawn(
         redact_env(env.as_ref())
     );
 
-    let mut cmd = Command::new(&command);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000); // Piped CLI workers must not open a console window.
-    }
+    let mut cmd = super::background_command::command(&command);
     cmd.args(&args);
     if let Some(cwd) = &cwd {
         eprintln!("[rust]   cwd={cwd}");
@@ -214,21 +215,15 @@ pub async fn process_spawn(
         cmd.stderr(Stdio::null());
     }
 
-    let mut child = match cmd.spawn() {
-        Ok(c) => {
-            eprintln!("[rust]   spawn ok, pid={}", c.id());
-            c
-        }
-        Err(e) => {
-            eprintln!("[rust]   spawn FAILED: {e}");
-            return Err(io_error(
-                &format!("(process) {command}"),
-                std::io::Error::other(e.to_string()),
-            ));
-        }
-    };
+    let spawn_error = |error| io_error(&format!("(process) {command}"), error);
+    #[cfg(unix)]
+    let (mut child, group) = PosixProcessGroup::spawn(&mut cmd).map_err(spawn_error)?;
+    #[cfg(not(unix))]
+    let mut child = cmd.spawn().map_err(spawn_error)?;
 
     let pid = child.id();
+    eprintln!("[rust]   spawn ok, pid={pid}");
+    #[cfg(windows)]
     let team_tree = if team_owner.is_some() {
         match crate::commands::process_team_guard::TeamProcessGuard::capture(&child) {
             Ok(guard) => Some(guard),
@@ -241,6 +236,13 @@ pub async fn process_spawn(
     } else {
         None
     };
+    #[cfg(unix)]
+    let group = Arc::new(group);
+    #[cfg(unix)]
+    let team_tree = team_owner.as_ref().map(|_| crate::commands::process_team_guard::TeamProcessGuard::new(Arc::clone(&group)));
+    #[cfg(unix)]
+    let group_for_exit = Arc::clone(&group);
+    #[cfg(not(unix))]
     let terminator = match OwnedTreeTerminator::capture(&child) {
         Ok(terminator) => terminator,
         Err(error) => {
@@ -372,8 +374,7 @@ pub async fn process_spawn(
 
     let input = ProcessInputControl::new(Some(Box::new(stdin)));
     let input_for_exit = Arc::clone(&input);
-    // Team roots use their pinned Windows job; other roots retain the bounded
-    // identity-pinned helper. The reaper alone confirms either kind of exit.
+    // Windows team roots use a pinned Job Object. POSIX commands own a process group.
     #[cfg(windows)]
     let team_stop = team_tree.clone();
     let stop_control = ProcessStopControl::new(move || {
@@ -381,7 +382,10 @@ pub async fn process_spawn(
         if let Some(guard) = &team_stop {
             return guard.terminate();
         }
-        terminator.terminate()
+        #[cfg(not(unix))]
+        { terminator.terminate() }
+        #[cfg(unix)]
+        { group.terminate() }
     });
     state
         .processes
@@ -438,6 +442,12 @@ pub async fn process_spawn(
             if let Err(error) = guard.release_after_exit() {
                 eprintln!("[rust] process {id_for_exit}: observed exit, background policy release failed: {error}");
             }
+        }
+        #[cfg(unix)]
+        if let Some(guard) = &tree_owner {
+            guard.release_after_exit();
+        } else {
+            group_for_exit.release_after_exit();
         }
         input_for_exit.mark_exited();
         let (code, signal) = (status.code(), exit_signal(status));

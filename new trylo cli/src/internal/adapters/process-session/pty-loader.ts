@@ -51,15 +51,6 @@ export function ptyPlatformArch(
   return `${ptyPlatformLabel(platform)}-${arch}`;
 }
 
-/**
- * Where the helper is expected, relative to this module. `dist/internal/adapters/
- * process-session/pty-loader.js` is three levels below `dist`, and the artifact
- * sits at `dist/internal/vendor/pty/…`.
- */
-function expectedHelperPath(platformArch: string, moduleDir: string): string {
-  return path.join(moduleDir, "..", "..", "..", DIST_SUBDIR, platformArch, "trylo-pty.exe");
-}
-
 export type PtyHelperResolution =
   | { readonly ok: true; readonly helperPath: string; readonly source: "package" | "override" }
   | { readonly ok: false; readonly code: PtyHelperMissingCode; readonly message: string };
@@ -142,7 +133,8 @@ function findRepoRoot(startDir: string): string | undefined {
 
 export function resolvePtyHelper(input: ResolutionInput = {}): PtyHelperResolution {
   const exists = input.exists ?? defaultExists;
-  const platformArch = ptyPlatformArch(input.platform ?? process.platform, input.arch ?? process.arch);
+  const platform = input.platform ?? process.platform;
+  const platformArch = ptyPlatformArch(platform, input.arch ?? process.arch);
   const moduleDir =
     input.moduleDir ?? path.dirname(fileURLToPath(import.meta.url));
 
@@ -159,7 +151,8 @@ export function resolvePtyHelper(input: ResolutionInput = {}): PtyHelperResoluti
     return { ok: true, helperPath: input.override, source: "override" };
   }
 
-  const candidate = expectedHelperPath(platformArch, moduleDir);
+  const executable = platform === "win32" ? "trylo-pty.exe" : "trylo-pty";
+  const candidate = path.join(moduleDir, "..", "..", "..", DIST_SUBDIR, platformArch, executable);
   if (exists(candidate)) {
     return { ok: true, helperPath: candidate, source: "package" };
   }
@@ -176,7 +169,7 @@ export function resolvePtyHelper(input: ResolutionInput = {}): PtyHelperResoluti
     code: "pty_helper_not_built_for_platform",
     message:
       `No PTY sidecar for ${platformArch}. Looked for ${candidate}. ${builtPart} ` +
-      `Build one with: cargo build --release --offline (in vendor-bin/pty), then record its sha256 in PROVENANCE.json. ` +
+      `Build one with: cargo build --release --locked (in vendor-bin/pty), then record its sha256 in PROVENANCE.json. ` +
       `A terminal session cannot be provided on this platform — it is not the same thing as a pipe, and is not reported as one.`,
   };
 }

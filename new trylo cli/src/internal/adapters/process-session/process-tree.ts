@@ -96,6 +96,10 @@ export type TreeKillDeps = {
   readonly wait?: (ms: number) => Promise<void>;
 };
 
+export function supportsPosixProcessGroups(platform: NodeJS.Platform = process.platform): boolean {
+  return platform === "linux" || platform === "darwin" || platform === "freebsd";
+}
+
 /**
  * Windows' own tree walker. `/T` is the part that matters — it walks children —
  * and `/F` is what makes it a *termination* instead of a close request that a
@@ -127,6 +131,7 @@ export const DEFAULT_GRACE_MS = 2_000;
 
 /** How long the forced signal is given before the group is declared unkillable. */
 const DEFAULT_SETTLE_MS = 1_000;
+const GROUP_POLL_MS = 50;
 
 function defaultRun(
   file: string,
@@ -208,8 +213,7 @@ export function describeFailure(code: TreeTerminationCode, detail: string): stri
  * Only works because the caller spawned the child `detached`, which makes it a
  * group leader; without that, `kill(-pgid)` would signal *this* process's own
  * group, which is the worst possible answer. `detached` is therefore a
- * requirement of calling this, not an optimisation, and `spawnGroupChild`
- * below is how the tree layer spawns.
+ * requirement of calling this, and the pipe registry applies it on spawn.
  *
  * # Why this waits now
  *
@@ -263,10 +267,14 @@ async function terminatePosixGroup(child: ProcessHandle, deps: TreeKillDeps): Pr
     }
   };
 
-  const observe = (): TreeTermination | undefined => {
+  const observe = (retryPermitted: boolean): TreeTermination | undefined => {
     try {
       return groupGone(pid) ? { ok: true, how: "killed" } : undefined;
     } catch (error) {
+      // Darwin can briefly report EPERM after a signal and before confirming exit.
+      // Recheck within the observation window and surface persistent denial.
+      if (retryPermitted && deps.platform === "darwin" && typeof error === "object"
+        && error !== null && "code" in error && error.code === "EPERM") return undefined;
       return {
         ok: false,
         code: "tree_kill_unobservable",
@@ -275,22 +283,25 @@ async function terminatePosixGroup(child: ProcessHandle, deps: TreeKillDeps): Pr
     }
   };
 
-  // Graceful, one signal, then a real wait for the group to go.
+  const waitForGroupExit = async (budgetMs: number): Promise<TreeTermination | undefined> => {
+    let remaining = budgetMs;
+    let observed = observe(remaining > 0);
+    while (observed === undefined && remaining > 0) {
+      const delay = Math.min(remaining, GROUP_POLL_MS);
+      await wait(delay);
+      remaining -= delay;
+      observed = observe(remaining > 0);
+    }
+    return observed;
+  };
+
   send(GRACEFUL_SIGNALS[0] ?? "SIGTERM");
-
-  const initial = observe();
-  if (initial !== undefined) return initial;
-
-  await wait(grace);
-
-  const graceful = observe();
+  const graceful = await waitForGroupExit(grace);
   if (graceful !== undefined) return graceful;
 
   // Still alive after the grace window: force it, then wait again and look.
   send("SIGKILL");
-  await wait(settle);
-
-  const forced = observe();
+  const forced = await waitForGroupExit(settle);
   if (forced !== undefined) return forced;
 
   return {
@@ -403,7 +414,7 @@ export async function terminateProcessTree(
     return await terminateWindowsTree(child, deps);
   }
 
-  if (deps.platform === "linux" || deps.platform === "darwin" || deps.platform === "freebsd") {
+  if (supportsPosixProcessGroups(deps.platform)) {
     return await terminatePosixGroup(child, deps);
   }
 

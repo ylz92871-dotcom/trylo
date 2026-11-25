@@ -157,14 +157,19 @@ fn reap_within(child: &mut Child, budget: Duration) -> bool {
     }
 }
 
+// The reaper owns the Windows identity even after the original caller returns.
+#[cfg_attr(not(windows), allow(clippy::needless_pass_by_value))]
 fn retain_unreaped_helper(mut child: Child, identity: Option<OwnedTreeTerminator>) {
     std::thread::spawn(move || {
-        let _identity = identity;
         // Only this background owner may wait without a caller deadline.
         // Keep the Child and root pin on transient observation failures.
         while child.wait().is_err() {
             std::thread::sleep(Duration::from_millis(50));
         }
+        #[cfg(windows)]
+        drop(identity);
+        #[cfg(not(windows))]
+        let _ = identity;
     });
 }
 

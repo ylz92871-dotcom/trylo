@@ -16,30 +16,16 @@
 import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { stopViewportProcess } from './stop-viewport-process.mjs';
-import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 
-import { probePlaywrightChromium } from './tool-browser-condition.mjs';
+import { chromiumExecutable, probePlaywrightChromium } from './tool-browser-condition.mjs';
 import { activePageTarget } from './browser-target.mjs';
 import { createBrowserActivity } from './browser-activity.mjs';
 import { createScreencastStream } from './screencast-stream.mjs';
 
 const START_TIMEOUT_MS = 20_000;
 const POLL_INTERVAL_MS = 250;
-
-/** Resolve the chrome.exe inside a probed build — the platform folder name
- *  depends on the playwright generation (1.49+ ships `chrome-win64/`,
- *  older releases `chrome-win/`), so check both. */
-function chromiumExecutable(root, build) {
-  for (const platformDir of ['chrome-win64', 'chrome-win']) {
-    const exe = path.join(root, build, platformDir, 'chrome.exe');
-    try {
-      if (fs.statSync(exe).isFile()) return exe;
-    } catch { /* try the next layout */ }
-  }
-  return null;
-}
 
 /** Pure: pick the first usable page target from a /json/list payload. */
 export function pickPageTarget(targets) {
@@ -298,13 +284,13 @@ export function createViewportBridge({ log = null, emit = null, storageRoot = ''
               error: 'panel browser (Chromium) is not installed — install the Playwright browser body first',
             };
           }
-          const executable = chromiumExecutable(browser.root, browser.build);
+          const executable = chromiumExecutable(browser.root, browser.build)?.executable;
           if (!executable) {
             report('error', 'browser_binary_missing');
             return {
               ok: false,
               reasonCode: 'browser_binary_missing',
-              error: 'the probed chromium build has no chrome.exe — reinstall the Playwright browser body',
+              error: 'the probed Chromium executable is missing — reinstall the Playwright browser body',
             };
           }
           cdpPort = await freePort();
@@ -313,6 +299,7 @@ export function createViewportBridge({ log = null, emit = null, storageRoot = ''
           // death). Sweep the dir again on stop.
           profileDir = path.join(storageRoot || '.', `viewport-profile-${process.pid}-${Date.now()}`);
           await fsp.mkdir(profileDir, { recursive: true });
+          if (state !== 'starting') throw new Error('viewport start cancelled');
           const ownedChild = spawn(executable, [
             `--remote-debugging-port=${cdpPort}`,
             `--user-data-dir=${profileDir}`,
@@ -328,11 +315,15 @@ export function createViewportBridge({ log = null, emit = null, storageRoot = ''
             '--disable-features=CalculateNativeWinOcclusion',
             '--window-size=1280,800',
             'about:blank',
-          ], { stdio: 'ignore', windowsHide: true });
+          ], { stdio: 'ignore', windowsHide: true, detached: process.platform === 'darwin' });
           child = ownedChild;
           ownedChild.on('exit', () => {
             if (child !== ownedChild) return;
-            child = null;
+            if (process.platform === 'darwin') {
+              void killChild().catch(error => report('error', String(error.message).slice(0, 200)));
+            } else {
+              child = null;
+            }
             if (state === 'running' || state === 'starting') {
               closeWebSocket();
               report('stopped', '浏览器已退出');

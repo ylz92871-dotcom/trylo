@@ -74,6 +74,8 @@ export const PLAYWRIGHT_MANIFEST = Object.freeze({
     ]),
   }),
 
+  sharedArtifactPlatforms: Object.freeze(['darwin-arm64']),
+
   mcp: Object.freeze({
     serverName: 'trylo-browser',
     transport: 'stdio',

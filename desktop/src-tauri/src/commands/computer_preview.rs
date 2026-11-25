@@ -105,6 +105,8 @@ fn observer_handle<R: tauri::Runtime>(preview: &tauri::WebviewWindow<R>) -> Resu
     Ok(Some(hwnd.0 as usize as u64))
 }
 #[cfg(not(windows))]
+// Match the fallible Windows handle lookup at the common call site.
+#[allow(clippy::unnecessary_wraps)]
 fn observer_handle<R: tauri::Runtime>(_preview: &tauri::WebviewWindow<R>) -> Result<Option<u64>, String> { Ok(None) }
 
 #[tauri::command]

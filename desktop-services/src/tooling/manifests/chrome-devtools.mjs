@@ -106,6 +106,8 @@ export const CHROME_DEVTOOLS_MANIFEST = Object.freeze({
     npmDependencies: Object.freeze([]),
   }),
 
+  sharedArtifactPlatforms: Object.freeze(['darwin-arm64']),
+
   mcp: Object.freeze({
     serverName: 'trylo-chrome',
     transport: 'stdio',

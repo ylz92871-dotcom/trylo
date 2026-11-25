@@ -118,10 +118,20 @@ export function validateManifest(manifest) {
     problems.push('source.repository and source.license are required');
   }
 
-  const artifact = manifest.artifact;
-  if (!artifact || !STRATEGIES.includes(artifact.installStrategy)) {
-    problems.push(`artifact.installStrategy must be one of ${STRATEGIES.join('|')}`);
-  } else {
+  const alternatives = manifest.platformArtifacts ?? [];
+  if (!Array.isArray(alternatives)) problems.push('platformArtifacts must be an array');
+  const sharedPlatforms = manifest.sharedArtifactPlatforms ?? [];
+  if (!isStringArray(sharedPlatforms) || (sharedPlatforms.length && manifest.artifact?.installStrategy !== 'pinned-npm')) {
+    problems.push('sharedArtifactPlatforms must be an array of platform names for a pinned-npm artifact');
+  }
+  const platforms = new Set(Array.isArray(sharedPlatforms) ? sharedPlatforms : []);
+  for (const artifact of [manifest.artifact, ...(Array.isArray(alternatives) ? alternatives : [])]) {
+    if (!artifact || !STRATEGIES.includes(artifact.installStrategy)) {
+      problems.push(`artifact.installStrategy must be one of ${STRATEGIES.join('|')}`);
+      continue;
+    }
+    if (platforms.has(artifact.platform)) problems.push(`duplicate artifact platform '${artifact.platform}'`);
+    platforms.add(artifact.platform);
     if (!isNonEmptyString(artifact.platform)) problems.push('artifact.platform is required');
     if (!isNonEmptyString(artifact.executableRelativePath)) {
       problems.push('artifact.executableRelativePath is required');
@@ -349,7 +359,7 @@ export function validateManifest(manifest) {
   return problems;
 }
 
-export function createToolCatalog({ manifests = MANIFESTS } = {}) {
+export function createToolCatalog({ manifests = MANIFESTS, target = `${process.platform}-${process.arch}`, supportedOnly = false } = {}) {
   const byId = new Map();
   const invalid = [];
 
@@ -359,6 +369,10 @@ export function createToolCatalog({ manifests = MANIFESTS } = {}) {
       invalid.push({ id: manifest?.id ?? '<unknown>', problems });
       continue;
     }
+    const artifact = manifest.artifact.platform === target ? manifest.artifact
+      : manifest.platformArtifacts?.find(candidate => candidate.platform === target)
+        ?? (manifest.sharedArtifactPlatforms?.includes(target) ? Object.freeze({ ...manifest.artifact, platform: target }) : null);
+    if (!artifact && supportedOnly) continue;
     if (byId.has(manifest.id)) {
       invalid.push({ id: manifest.id, problems: ['duplicate manifest id'] });
       continue;
@@ -373,7 +387,10 @@ export function createToolCatalog({ manifests = MANIFESTS } = {}) {
         continue;
       }
     }
-    byId.set(manifest.id, manifest);
+    const { platformArtifacts, sharedArtifactPlatforms, ...fields } = manifest;
+    byId.set(manifest.id, artifact && artifact !== manifest.artifact
+      ? Object.freeze({ ...fields, artifact })
+      : manifest);
   }
 
   return {

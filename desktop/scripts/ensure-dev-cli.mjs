@@ -4,6 +4,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readSkillRuntimeClosure, SKILL_RUNTIME_REL } from '../../new trylo cli/scripts/skill-learning/copy-hermes-runtime.mjs';
+import { ptyArtifactDirectory } from '../../new trylo cli/scripts/pty/copy-pty-vendor.mjs';
 
 const flags = ['--context-window', '--model-context-window'];
 const toolCommands = ['status', 'production-list', 'production-show', 'production-verify', 'production-activate'];
@@ -30,24 +31,30 @@ function sourceFiles(directory) {
 function nativeHelpersReady(cliRoot, dist) {
   const inventory = JSON.parse(readFileSync(path.join(dist, 'sbom.json'), 'utf8'));
   if (!Array.isArray(inventory.components)) return false;
-  for (const provenancePath of ['src/internal/adapters/sandbox/vendor/sandbox-runtime/PROVENANCE.json', 'vendor-bin/pty/PROVENANCE.json']) {
-    const provenance = JSON.parse(readFileSync(path.join(cliRoot, provenancePath), 'utf8'));
-    const entries = Object.entries(provenance.artifacts ?? {});
-    if (entries.length === 0) return false;
-    for (const [name, metadata] of entries) {
-      if (typeof metadata.sha256 !== 'string' || !Number.isSafeInteger(metadata.bytes)) return false;
-      const components = inventory.components.filter(row => row?.type === 'file' && row.name === name);
-      if (components.length !== 1) return false;
-      const component = components[0];
-      const relative = component.properties?.find(row => row.name === 'trylo:artifact-path')?.value;
-      if (typeof relative !== 'string' || !component.hashes?.some(row => row.alg === 'SHA-256' && row.content === metadata.sha256)) return false;
-      const output = path.resolve(dist, relative);
-      if (!output.startsWith(dist + path.sep)) return false;
-      const bytes = readFileSync(output);
-      if (bytes.length !== metadata.bytes || createHash('sha256').update(bytes).digest('hex') !== metadata.sha256) return false;
-    }
+
+  const ptyName = `trylo-pty-${ptyArtifactDirectory(process.platform, process.arch)}`;
+  const readProvenance = relative => JSON.parse(readFileSync(path.join(cliRoot, relative), 'utf8')).artifacts;
+  const pty = readProvenance('vendor-bin/pty/PROVENANCE.json');
+  const entries = [[ptyName, pty?.[ptyName]]];
+  if (process.platform === 'win32') {
+    const sandbox = readProvenance('src/internal/adapters/sandbox/vendor/sandbox-runtime/PROVENANCE.json');
+    const sandboxEntries = Object.entries(sandbox ?? {});
+    if (sandboxEntries.length === 0) return false;
+    entries.push(...sandboxEntries);
   }
-  return true;
+
+  return entries.every(([name, metadata]) => {
+    if (typeof metadata?.sha256 !== 'string' || !Number.isSafeInteger(metadata.bytes)) return false;
+    const components = inventory.components.filter(row => row?.type === 'file' && row.name === name);
+    if (components.length !== 1) return false;
+    const component = components[0];
+    const relative = component.properties?.find(row => row.name === 'trylo:artifact-path')?.value;
+    if (typeof relative !== 'string' || !component.hashes?.some(row => row.alg === 'SHA-256' && row.content === metadata.sha256)) return false;
+    const output = path.resolve(dist, relative);
+    if (!output.startsWith(dist + path.sep)) return false;
+    const bytes = readFileSync(output);
+    return bytes.length === metadata.bytes && createHash('sha256').update(bytes).digest('hex') === metadata.sha256;
+  });
 }
 
 /** Read-only build readiness, including child/dynamic entries not loaded by --help.

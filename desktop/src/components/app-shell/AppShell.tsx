@@ -1,7 +1,7 @@
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactElement, ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactElement, ReactNode } from 'react';
 import { TopBar } from './TopBar';
 import { BrowserToolSidebar } from '../chat/BrowserToolSidebar';
-import { AppWindow, Box, Globe, Monitor } from 'lucide-react';
+import { AppWindow, Box, Globe, Monitor, Terminal as TerminalIcon } from 'lucide-react';
 import { SoftwareWorkspacePanel } from '../software-workspace/SoftwareWorkspacePanel';
 import { useSoftwareWorkspace } from '../../tooling/use-software-workspace';
 import type { ChatMessage } from '../chat/types';
@@ -24,6 +24,7 @@ import { LibraryProcessRecovery } from './LibraryProcessRecovery';
 import { RemotePairingModal } from './RemotePairingModal';
 import { useDesktopAccount } from '../../account/use-desktop-account';
 import type { FilePath, TopLevelMode } from '../../host-adapter/types';
+import { isTauri } from '../../host-adapter/tauri-detect';
 import type { ConversationSession } from '../../host-adapter/conversation-history';
 import type { SettingsSaveIntent, TryloSettings } from '../../settings/settings-store';
 import type { SettingsNotice } from '../../settings/settings-notices';
@@ -40,6 +41,7 @@ import {
 
 export const DEFAULT_LEFT_RAIL_WIDTH = 256;
 export const DEFAULT_RIGHT_RAIL_WIDTH = 480;
+const Terminal = lazy(() => import('../product-ui/Terminal').then(({ Terminal }) => ({ default: Terminal })));
 
 export interface AppShellProps {
   readonly resultReview?: RightRailReview;
@@ -207,6 +209,13 @@ export function AppShell(props: AppShellProps): ReactElement {
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('connection');
   const activityTrigger = useRef<HTMLButtonElement>(null);
   const activityPanelId = useId();
+  const terminalId = useId();
+  const terminalTrigger = useRef<HTMLButtonElement>(null);
+  const [terminalWorkspace, setTerminalWorkspace] = useState<string | null>(null);
+  const workspace = props.workspaces.find((item) => item.id === props.currentWorkspaceId);
+  const terminalAvailable = Boolean(workspace?.root) && isTauri() && navigator.platform.startsWith('Mac');
+  const terminalOpen = terminalAvailable && terminalWorkspace === props.currentWorkspaceId;
+  const focusTerminalTrigger = useCallback(() => terminalTrigger.current?.focus(), []);
   const [accountOpenRequest, setAccountOpenRequest] = useState(0);
   const account = useDesktopAccount(props.remoteController, {
     serverUrl: props.settings.remote.relayUrl || 'https://relay.trylocode.me',
@@ -385,9 +394,21 @@ export function AppShell(props: AppShellProps): ReactElement {
         )}
         <div className="app-shell__main">
           <TopBar
-            workspaceName={props.workspaces.find((ws) => ws.id === props.currentWorkspaceId)?.name ?? 'Trylo'}
+            workspaceName={workspace?.name ?? 'Trylo'}
             conversationTitle={props.sessions.find((session) => session.id === props.activeSessionId)?.title}
             right={<>
+              {terminalAvailable && (
+                <button
+                  type="button"
+                  ref={terminalTrigger}
+                  className={`top-bar__rail-toggle${terminalOpen ? ' top-bar__rail-toggle--active' : ''}`}
+                  aria-label="集成终端"
+                  title="集成终端"
+                  aria-expanded={terminalOpen}
+                  aria-controls={terminalOpen ? terminalId : undefined}
+                  onClick={() => setTerminalWorkspace(terminalOpen ? null : props.currentWorkspaceId)}
+                ><TerminalIcon size={16} aria-hidden="true" /></button>
+              )}
               {modelPreviewKey !== null && <button type="button" className={`top-bar__rail-toggle${modelPreviewOpen ? ' top-bar__rail-toggle--active' : ''}`} aria-label="3D 工作区" title="3D 工作区" aria-pressed={modelPreviewOpen} onClick={() => {
                 software.setOpen(false);
                 if (!modelPreviewOpen) { setBrowserPreviewOpen(false); if (props.rightRailOpen) props.onToggleRightRail(); }
@@ -408,6 +429,11 @@ export function AppShell(props: AppShellProps): ReactElement {
             onToggleLeftRail={props.onToggleLeftRail}
           />
           {props.children}
+          {terminalOpen && workspace?.root && (
+            <Suspense fallback={<div id={terminalId} role="status">正在打开终端…</div>}>
+              <Terminal key={workspace.root} cwd={workspace.root} id={terminalId} onReturnFocus={focusTerminalTrigger} />
+            </Suspense>
+          )}
         </div>
         {software.open && !props.rightRailOpen && !props.approvalDiff && <>
           <RailResizer side="right" width={Math.min(softwareWidth, browserMaxWidth)} min={320} max={browserMaxWidth} onChange={setSoftwareWidth} />
