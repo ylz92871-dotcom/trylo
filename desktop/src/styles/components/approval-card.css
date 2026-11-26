@@ -9,7 +9,7 @@
   --approval-cta-ink: #fff;
   position: relative;
   width: 100%;
-  max-width: 720px;
+  max-width: var(--conversation-width);
   min-width: 0;
   margin: 12px auto 0;
   padding: 18px 20px 16px;
@@ -47,7 +47,7 @@
 .approval-card__command > summary::-webkit-details-marker, .approval-card--resolved > summary::-webkit-details-marker { display: none; }
 .approval-card__command > summary > svg:last-child { margin-left: auto; transform: rotate(-90deg); }
 .approval-card__command[open] > summary > svg:last-child { transform: none; }
-.approval-card__command pre { max-height: 320px; overflow: auto; margin: 0; padding: 0 14px 13px; color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.85 'Cascadia Code', Consolas, var(--font-mono); tab-size: 2; }
+.approval-card__command pre { max-height: 320px; overflow: auto; margin: 0; padding: 0 14px 13px; color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.85 var(--font-mono); tab-size: 2; }
 .approval-card__command pre code { font: inherit; color: inherit; }
 .approval-card__options { display: flex; flex-wrap: wrap; gap: 5px 10px; border-top: 1px solid var(--approval-edge); padding: 8px 12px; color: var(--fg-muted); font-size: 11px; }
 .approval-card__options > span { flex-shrink: 0; }
@@ -105,4 +105,47 @@
   .approval-card::before { background: CanvasText; }
   .approval-card__seal, .approval-card__state, .approval-card__command { border-color: CanvasText; }
   .approval-card__btn--approve { background: Highlight; color: HighlightText; border-color: Highlight; }
+}
+
+/* ── macOS Retina hairline & focus halo parity (Code & Work shared) ──── */
+:root[data-platform='macos'] .approval-card {
+  --approval-edge: var(--macos-hairline);
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 0.5px var(--macos-hairline),
+    0 2px 10px rgba(0, 0, 0, 0.04);
+}
+
+:root[data-platform='macos'][data-theme='dark'] .approval-card {
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 0.5px var(--macos-hairline);
+}
+
+:root[data-platform='macos'] .approval-card__state,
+:root[data-platform='macos'] .approval-card__eyebrow,
+:root[data-platform='macos'] .approval-card__location > code {
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-platform='macos'] .approval-card__btn {
+  border-radius: 6px;
+}
+
+:root[data-platform='macos'] .approval-card :is(button, summary):focus-visible {
+  outline: none;
+  box-shadow: var(--macos-focus-halo);
+}
+
+@media (forced-colors: active) {
+  :root[data-platform='macos'] .approval-card {
+    border-color: CanvasText;
+    box-shadow: none;
+  }
+
+  :root[data-platform='macos'] .approval-card :is(button, summary):focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
 }

@@ -1,5 +1,5 @@
 .top-bar { height: var(--top-bar-h); min-height: var(--top-bar-h); display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 20px 0 25px; }
-.top-bar__breadcrumb { display: flex; align-items: center; gap: 10px; color: var(--fg-muted); font-size: 12px; min-width: 0; }
+.top-bar__breadcrumb { display: flex; align-items: center; gap: 10px; color: var(--fg-muted); font-size: 12px; min-width: 0; flex: 1 1 auto; }
 .top-bar__workspace { flex-shrink: 0; }
 .top-bar__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
 .top-bar__right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
@@ -10,3 +10,171 @@
 .top-bar__rail-toggle { position:relative; display:inline-flex; align-items:center; justify-content:center; width:32px; min-width:32px; height:32px; flex-shrink:0; padding:0; border-radius:7px; color:var(--fg-muted); }
 .top-bar__rail-toggle:hover, .top-bar__rail-toggle--active { background:var(--brand-soft); color:var(--brand); }
 .top-bar__activity-dot { position:absolute; top:4px; right:4px; width:5px; height:5px; border-radius:50%; background:var(--brand); box-shadow:0 0 0 2px var(--bg); }
+
+/* ── Unified Code | Work segmented switcher ───────────────────────────── */
+.top-bar__mode-switch {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  flex: 0 0 auto;
+  height: 26px;
+  padding: 2px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:root[data-theme='dark'] .top-bar__mode-switch {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.top-bar__mode-thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc(50% - 2px);
+  border-radius: 5px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  pointer-events: none;
+  transform: translateX(0%);
+  transition:
+    transform 180ms var(--ease-spring-subtle),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+.top-bar__mode-thumb[data-active-index='1'] {
+  transform: translateX(100%);
+}
+
+:root[data-theme='dark'] .top-bar__mode-thumb {
+  background: #383631;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.34), inset 0 0.5px 0 rgba(255, 255, 255, 0.12);
+}
+
+.top-bar__mode-btn {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--fg-muted);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.top-bar__mode-btn:hover:not(.top-bar__mode-btn--active) {
+  color: var(--fg);
+}
+
+.top-bar__mode-btn--active {
+  color: var(--fg);
+}
+
+/* ── macOS unified 46px toolbar & anti-moving-target toggle ─────────────── */
+:root[data-platform='macos'] .top-bar {
+  padding: 0 16px;
+  gap: 12px;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: padding-left var(--duration-panel) var(--ease-panel);
+}
+
+:root[data-platform='macos'] .top-bar[data-rail-collapsed='true'] {
+  padding-left: 88px;
+}
+
+:root[data-platform='macos'][data-fullscreen='true'] .top-bar[data-rail-collapsed='true'] {
+  padding-left: 12px;
+}
+
+@media (max-width: 900px) {
+  :root[data-platform='macos'] .top-bar {
+    padding-inline: 14px;
+    gap: 8px;
+  }
+  :root[data-platform='macos'] .top-bar[data-rail-collapsed='true'] {
+    padding-left: 88px;
+  }
+  :root[data-platform='macos'][data-fullscreen='true'] .top-bar[data-rail-collapsed='true'] {
+    padding-left: 12px;
+  }
+}
+
+:root[data-platform='macos'] .top-bar__breadcrumb {
+  gap: 8px;
+  font-size: 13px;
+}
+
+:root[data-platform='macos'] .top-bar__breadcrumb > svg {
+  pointer-events: none;
+}
+
+:root[data-platform='macos'] .top-bar__icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  flex: 0 0 auto;
+}
+
+:root[data-platform='macos'] .top-bar__rail-toggle {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+
+:root[data-platform='macos'] .top-bar button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 34%, transparent);
+}
+
+:root[data-platform='macos'] .top-bar :is(
+  .top-bar__breadcrumb,
+  .top-bar__mode-switch,
+  .top-bar__right
+) {
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+:root[data-platform='macos'][data-window-focused='false'] .top-bar :is(
+  .top-bar__breadcrumb,
+  .top-bar__mode-switch,
+  .top-bar__right
+) {
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .top-bar__mode-thumb,
+  :root[data-platform='macos'] .top-bar {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .top-bar__mode-switch {
+    border: 1px solid ButtonText;
+    background: Canvas;
+  }
+  .top-bar__mode-thumb {
+    display: none;
+  }
+  .top-bar__mode-btn--active {
+    background: Highlight;
+    color: HighlightText;
+    box-shadow: none;
+    forced-color-adjust: none;
+  }
+  :root[data-platform='macos'] .top-bar button:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+}

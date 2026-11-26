@@ -1,5 +1,5 @@
-// Desktop owns the native views. This is a CDP adapter and an MCP-call gate,
-// never a pixel transport. A held gate waits for whole tool calls to finish.
+// Desktop owns the native views. WebView2 sessions also expose a CDP adapter
+// and an MCP-call gate. A held gate waits for whole tool calls to finish.
 import http from 'node:http';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -56,6 +56,12 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
     return { ok: true };
   }
   function state(session) {
+    if (session.record.cdpAvailable === false) {
+      return { ok: true, scope: session.scope, cdpAvailable: false, nativeLayout: 'direct',
+        revision: ++session.revision, state: 'running', detail: '', control: 'user', inFlight: 0,
+        activeLabel: session.record.activeLabel,
+        tabs: session.record.tabs.map(tab => ({ id: tab.label, label: tab.label, title: tab.title || '新标签页', url: tab.url || tab.marker })) };
+    }
     const failure = session.failed || session.viewport.error();
     return { ok: true, scope: session.scope, nativeLayout: 'direct', revision: session.revision = (session.revision ?? 0) + 1, state: failure ? 'error' : 'running', detail: failure || '',
       control: session.held ? session.leases.size ? 'pending' : 'user' : 'agent', inFlight: session.leases.size,
@@ -64,7 +70,7 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
       tabs: [...session.targets].map(([id, tab]) => ({ id, label: tab.label, title: tab.title || '新标签页', url: tab.url || '', popup: session.record.tabs.find(native => native.label === tab.label)?.popup === true, ...(tab.navigationError ? { navigationError: tab.navigationError } : {}) })) };
   }
   function report(session) {
-    if (!session.leases.size && (session.held || !session.clients.size)) for (const cursor of session.cursors.values()) cursor.hide();
+    if (session.record.cdpAvailable !== false && !session.leases.size && (session.held || !session.clients.size)) for (const cursor of session.cursors.values()) cursor.hide();
     emit?.('nativeBrowserState', state(session));
   }
   async function pages(session) {
@@ -97,6 +103,11 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
   async function nativeOperation(session, operation, params = {}) {
     const record = await requestNative(session.scope, operation, params);
     if (!record || record.scope !== session.scope || record.cdpPort !== session.record.cdpPort) throw new Error('原生浏览器会话不匹配');
+    if (session.record.cdpAvailable === false) {
+      if (record.cdpAvailable !== false || !record.tabs?.some(tab => tab.label === record.activeLabel)) throw new Error('原生浏览器会话不匹配');
+      session.record = record;
+      return record;
+    }
     session.record = record;
     // This operation owns the selected native view, not the readiness of
     // every sibling. A reconnecting background tab cannot block Network.enable
@@ -322,7 +333,17 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
   }
   async function register({ projectRoot, conversationId, record } = {}) {
     const scope = nativeBrowserScope({ projectRoot, conversationId });
-    if (!conversationId || record?.scope !== scope || !Number.isInteger(record?.cdpPort) || record.cdpPort < 1 || record.cdpPort > 65535 || !record.tabs?.length) throw new Error('原生浏览器注册参数无效');
+    if (!conversationId || record?.scope !== scope || !record.tabs?.length) throw new Error('原生浏览器注册参数无效');
+    if (record.cdpAvailable === false) {
+      if (record.cdpPort !== undefined || !record.tabs.some(tab => tab.label === record.activeLabel)) throw new Error('原生浏览器注册参数无效');
+      const previous = sessions.get(scope);
+      if (previous) await disposeSession(previous);
+      const session = { scope, record, revision: previous?.revision ?? 0 };
+      sessions.set(scope, session);
+      report(session);
+      return state(session);
+    }
+    if (!Number.isInteger(record.cdpPort) || record.cdpPort < 1 || record.cdpPort > 65535) throw new Error('原生浏览器注册参数无效');
     if ([...sessions.values()].some(session => session.scope !== scope && session.record.cdpPort === record.cdpPort)) throw new Error('浏览器端口已属于另一个会话');
     let session = sessions.get(scope);
     if (session && session.record.cdpPort === record.cdpPort) { session.record = record; await refresh(session); report(session); return { ...state(session), endpoint: session.base }; }
@@ -364,14 +385,20 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
   }
   function get(scope) { const session = sessions.get(scope); if (!session) throw new Error('原生浏览器尚未连接'); return session; }
   async function control({ scope, heldByUser } = {}) {
-    const session = get(scope); session.held = heldByUser === true; report(session); wake(session); return state(session);
+    const session = get(scope);
+    if (session.record.cdpAvailable !== false) { session.held = heldByUser === true; report(session); wake(session); }
+    return state(session);
   }
   async function snapshot({ scope } = {}) { const session = get(scope); return serial(session, async () => {
+    if (session.record.cdpAvailable === false) {
+      await nativeOperation(session, 'ensure');
+      return state(session);
+    }
     try { session.record = await requestNative(scope, 'ensure'); await refresh(session); await session.viewport.sync(session.record.activeLabel); }
     catch (error) { session.failed = String(error.message ?? error); }
     return state(session);
   }); }
-  async function configure({ packageId, projectRoot, conversationId } = {}) {
+  async function ensureSession({ projectRoot, conversationId }) {
     const scope = nativeBrowserScope({ projectRoot, conversationId });
     if (preparations.has(scope)) await preparations.get(scope);
     if (!sessions.has(scope)) {
@@ -382,20 +409,29 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
       preparations.set(scope, preparing);
       try { await preparing; } finally { preparations.delete(scope); }
     }
-    const session = get(scope);
+    return get(scope);
+  }
+  async function configure({ packageId, ...params } = {}) {
+    const session = await ensureSession(params);
+    if (session.record.cdpAvailable === false) throw new Error('此浏览器仅供手动浏览，请使用独立浏览器 MCP');
     // Puppeteer resolves /json/version at the origin, discarding our scoped
     // token path. Its direct WebSocket option preserves the session boundary.
     return { endpoint: session.base + '/', gate: session.base, args: packageId === 'playwright' ? ['--cdp-endpoint', session.base + '/'] : ['--wsEndpoint', `${session.wsBase}/browser`] };
   }
-  async function open(params = {}) { await configure({ ...params, packageId: 'playwright' }); return snapshot({ scope: nativeBrowserScope(params) }); }
-  async function select({ scope, label } = {}) { const session = get(scope); return serial(session, async () => { await nativeOperation(session, 'activate', { label }); await session.viewport.sync(label); report(session); return state(session); }); }
-  async function create({ scope } = {}) { const session = get(scope); return serial(session, async () => { await nativeOperation(session, 'create'); await session.viewport.sync(session.record.activeLabel); report(session); return state(session); }); }
+  async function open(params = {}) { const session = await ensureSession(params); return snapshot({ scope: session.scope }); }
+  async function select({ scope, label } = {}) { const session = get(scope); return serial(session, async () => { await nativeOperation(session, 'activate', { label }); await session.viewport?.sync(label); report(session); return state(session); }); }
+  async function create({ scope } = {}) { const session = get(scope); return serial(session, async () => { await nativeOperation(session, 'create'); await session.viewport?.sync(session.record.activeLabel); report(session); return state(session); }); }
   async function layout({ scope, bounds, visible, nativeApplied = false } = {}) { const session = get(scope); return serial(session, async () => {
     if (typeof visible !== 'boolean') throw new Error('浏览器显示状态无效');
+    if (session.record.cdpAvailable === false) {
+      if (!nativeApplied) await nativeOperation(session, 'layout', { bounds, visible });
+      return state(session);
+    }
     try { await session.viewport.layout(bounds, visible, nativeApplied === true); } finally { report(session); }
     return state(session);
   }); }
   async function viewport({ scope, label, viewport: input } = {}) { const session = get(scope); return serial(session, async () => {
+    if (session.record.cdpAvailable === false) throw new Error('内置浏览器尺寸随侧栏变化');
     if (session.record.activeLabel !== label) throw new Error('页面已切换，请在当前标签页重新设置尺寸');
     if (session.leases.size > 0) throw new Error('等待当前浏览器操作结束后再设置页面尺寸');
     session.viewportChanging = true;
@@ -403,6 +439,7 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
     return state(session);
   }); }
   async function disposeSession(session) {
+    if (session.record.cdpAvailable === false) return;
     session.viewportCdp.dispose();
     await session.preview.dispose();
     clearInterval(session.timer); session.held = true;

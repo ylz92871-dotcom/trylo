@@ -3,6 +3,7 @@ import { ArrowUpRight, ChevronDown, Clipboard, ExternalLink, FileText, FolderOpe
 import type { ArtifactHost, ExternalApplication } from '../../host-adapter/artifact-actions';
 import { artifactCardCanPreview, type ArtifactCardKind } from '../../preview/formats';
 import { artifactDenialText, isHttpArtifact, relativeArtifactPath, validateArtifactTarget } from '../../results/artifact-paths';
+import { isMacPlatform } from '../../utils/platform';
 import { ArtifactCardMenu, type ArtifactMenuAction } from './ArtifactCardMenu';
 
 export interface ArtifactCardProps {
@@ -18,7 +19,7 @@ export interface ArtifactCardProps {
   readonly secondaryAction?: ReactNode;
 }
 
-const EXTERNAL_APPLICATIONS: Readonly<Record<ArtifactCardKind, readonly ExternalApplication[]>> = {
+const EXTERNAL_APPLICATIONS_DEFAULT: Readonly<Record<ArtifactCardKind, readonly ExternalApplication[]>> = {
   document: [
     { identifier: 'winword', name: 'Microsoft Word' },
     { identifier: 'pages', name: 'Pages' },
@@ -38,6 +39,32 @@ const EXTERNAL_APPLICATIONS: Readonly<Record<ArtifactCardKind, readonly External
   web: [],
   file: [],
 };
+
+const EXTERNAL_APPLICATIONS_MAC: Readonly<Record<ArtifactCardKind, readonly ExternalApplication[]>> = {
+  document: [
+    { identifier: 'Microsoft Word', name: 'Microsoft Word' },
+    { identifier: 'Pages', name: 'Pages' },
+    { identifier: 'LibreOffice', name: 'LibreOffice' },
+    { identifier: 'TextEdit', name: 'TextEdit' },
+  ],
+  presentation: [
+    { identifier: 'Microsoft PowerPoint', name: 'Microsoft PowerPoint' },
+    { identifier: 'Keynote', name: 'Keynote' },
+    { identifier: 'LibreOffice', name: 'LibreOffice' },
+    { identifier: 'Preview', name: 'Preview' },
+  ],
+  spreadsheet: [
+    { identifier: 'Microsoft Excel', name: 'Microsoft Excel' },
+    { identifier: 'Numbers', name: 'Numbers' },
+    { identifier: 'LibreOffice', name: 'LibreOffice' },
+  ],
+  web: [],
+  file: [],
+};
+
+function externalApplicationsFor(kind: ArtifactCardKind, mac: boolean): readonly ExternalApplication[] {
+  return (mac ? EXTERNAL_APPLICATIONS_MAC : EXTERNAL_APPLICATIONS_DEFAULT)[kind];
+}
 
 const FAMILY_LABELS: Readonly<Record<ArtifactCardKind, string>> = {
   document: 'document', presentation: 'presentation', spreadsheet: 'spreadsheet', web: 'web page', file: 'file',
@@ -93,7 +120,8 @@ export function ArtifactCard(props: ArtifactCardProps): JSX.Element {
     id: 'copy', label: row ? '复制路径' : 'Copy path', icon: Clipboard,
     run: () => perform(() => host().copyToClipboard(props.filePath)),
   };
-  const options: ArtifactMenuAction[] = EXTERNAL_APPLICATIONS[props.kind].map((application) => ({
+  const mac = isMacPlatform();
+  const options: ArtifactMenuAction[] = externalApplicationsFor(props.kind, mac).map((application) => ({
     id: application.identifier,
     label: application.name,
     disabled: !!denial,
@@ -105,7 +133,7 @@ export function ArtifactCard(props: ArtifactCardProps): JSX.Element {
   }
   if (props.kind === 'web' || props.kind === 'file' || url) options.push(copy);
   if (!row || !url) options.push({
-    id: 'folder', label: row ? '在文件夹中显示' : 'Open in folder', icon: FolderOpen, separator: true,
+    id: 'folder', label: mac ? (row ? '在访达中显示' : 'Reveal in Finder') : (row ? '在文件夹中显示' : 'Open in folder'), icon: FolderOpen, separator: true,
     disabled: !!denial, title: denial,
     run: () => perform(() => host().showInFolder(props.filePath)),
   });

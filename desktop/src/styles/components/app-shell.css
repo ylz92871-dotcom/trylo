@@ -38,6 +38,108 @@
   overflow: hidden;
 }
 
+/* ── Collapsible rail slots (220ms macOS panel choreography) ─────────── */
+.left-rail-slot {
+  flex: 0 0 auto;
+  width: var(--rail-left-w, var(--rail-left-default, 240px));
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  transition: width var(--duration-panel) var(--ease-panel);
+}
+
+.left-rail-slot[data-collapsed='true'],
+.left-rail-slot[data-motion-state='entering'] {
+  width: 0;
+}
+
+.left-rail-slot > .left-rail {
+  width: var(--rail-left-w, var(--rail-left-default, 240px));
+  min-width: var(--rail-left-w, var(--rail-left-default, 240px));
+  transition:
+    opacity var(--duration-panel) var(--ease-panel),
+    transform var(--duration-panel) var(--ease-panel);
+}
+
+.left-rail-slot[data-collapsed='true'] > .left-rail,
+.left-rail-slot[data-motion-state='entering'] > .left-rail {
+  opacity: 0;
+  transform: translateX(-12px);
+}
+
+.right-rail-slot {
+  flex: 0 0 auto;
+  width: clamp(260px, var(--rail-right-w, var(--rail-right-files-w, 320px)), 38vw);
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  transition: width var(--duration-panel) var(--ease-panel);
+}
+
+.right-rail-slot[data-wide='true'] {
+  width: clamp(380px, var(--rail-right-w, var(--rail-right-wide-w, 480px)), var(--rail-content-max, calc(100vw - 440px)));
+}
+
+.right-rail-slot[data-open='false'],
+.right-rail-slot[data-motion-state='entering'],
+.right-rail-slot[data-motion-state='exiting'] {
+  overflow: hidden;
+}
+
+.right-rail-slot[data-open='false'],
+.right-rail-slot[data-motion-state='entering'] {
+  width: 0;
+}
+
+.right-rail-slot > .right-rail {
+  transition:
+    opacity var(--duration-panel) var(--ease-panel),
+    transform var(--duration-panel) var(--ease-panel);
+}
+
+.right-rail-slot[data-motion-state='entering'] > .right-rail,
+.right-rail-slot[data-motion-state='exiting'] > .right-rail {
+  opacity: 0;
+  transform: translateX(12px);
+}
+
+/* Drag-zero-lag: disable width transitions while a RailResizer is actively dragged. */
+.app-shell[data-resizing='true'] :is(.left-rail-slot, .right-rail-slot) {
+  transition: none;
+}
+
+@media (max-width: 1100px) {
+  .right-rail-slot {
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 30;
+    width: min(420px, calc(100% - 220px));
+    pointer-events: auto;
+  }
+  .right-rail-slot[data-wide='true'] {
+    width: min(var(--rail-right-w, 480px), calc(100% - 40px));
+  }
+  .right-rail-slot[data-open='false'],
+  .right-rail-slot[data-motion-state='entering'] {
+    width: 0;
+    pointer-events: none;
+  }
+  .right-rail-slot > .right-rail {
+    position: relative;
+    inset: auto;
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .left-rail-slot,
+  .left-rail-slot > .left-rail,
+  .right-rail-slot,
+  .right-rail-slot > .right-rail {
+    transition: none;
+  }
+}
+
 /* ── Rail resizers (draggable splitters) ───────────── */
 .rail-resizer {
   flex: 0 0 auto;
@@ -70,4 +172,39 @@
 .rail-resizer--right {
   /* sits to the left of the right rail; nudge the line to its right edge */
   margin-right: -1px;
+}
+
+/* macOS native vibrancy split: transparent outer shell over Effect::Sidebar,
+ * crisp opaque main canvas, and zero-gap left resizer overlap. */
+:root[data-platform='macos'] {
+  --top-bar-h: 46px;
+}
+
+:root[data-platform='macos'] .app-shell {
+  --top-bar-h: 46px;
+  background: transparent;
+  box-shadow: none;
+}
+
+:root[data-platform='macos'] .app-shell__body > .app-shell__main {
+  background: var(--bg);
+  border-radius: 0;
+}
+
+:root[data-platform='macos'] .rail-resizer--left {
+  margin-left: -2px;
+  margin-right: -3px;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-platform='macos'] .app-shell {
+    background: var(--bg);
+  }
+}
+
+@media (forced-colors: active) {
+  :root[data-platform='macos'] .app-shell {
+    background: Canvas;
+    box-shadow: none;
+  }
 }

@@ -299,7 +299,7 @@ mod tests {
     #[test]
     fn candidates_are_platform_specific() {
         let candidates = node_runtime_candidates();
-        assert!(!candidates.is_empty());
+        assert_ne!(candidates, [] as [&str; 0]);
         if cfg!(target_os = "windows") {
             assert!(candidates[0].ends_with("node.exe"));
             assert!(candidates.contains(&"runtime/node/win-x64/node.exe"));

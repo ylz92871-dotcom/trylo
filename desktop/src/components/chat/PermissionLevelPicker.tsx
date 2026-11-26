@@ -42,6 +42,7 @@ import {
   type PermissionLevel,
   type PermissionLevelDescriptor,
 } from '../../permission/permission-policy';
+import { usePresenceTransition } from '../../utils/use-presence-transition';
 
 const ICONS: Readonly<Record<PermissionLevel, LucideIcon>> = {
   read_only: Eye,
@@ -74,6 +75,7 @@ export function PermissionLevelPicker(
   props: PermissionLevelPickerProps,
 ): ReactElement {
   const [open, setOpen] = useState(false);
+  const menuPresence = usePresenceTransition(open, 110);
   const [focusIndex, setFocusIndex] = useState<number>(() =>
     Math.max(0, PERMISSION_LEVELS.findIndex((d) => d.value === props.level)),
   );
@@ -214,12 +216,14 @@ export function PermissionLevelPicker(
         ) : null}
         <span aria-hidden="true" className="permission-picker__caret">▾</span>
       </button>
-      {open ? (
+      {menuPresence.mounted ? (
         <ul
           ref={listRef}
           id={labelId}
-          role="listbox"
-          aria-label="选择权限等级"
+          data-motion-state={menuPresence.state}
+          role={menuPresence.state === 'exiting' ? undefined : 'listbox'}
+          aria-label={menuPresence.state === 'exiting' ? undefined : '选择权限等级'}
+          aria-hidden={menuPresence.state === 'exiting' ? true : undefined}
           className="permission-picker__menu"
         >
           {PERMISSION_LEVELS.map((d, i) => {

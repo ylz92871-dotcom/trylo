@@ -2,7 +2,7 @@
 @font-face { font-family: TryloStartup; src: url('/startup/manrope.woff') format('woff'); font-display: swap; font-weight: 200 800; }
 :root { --startup-ground: #fff; --startup-ink: #292a27; --startup-muted: #62655e; --startup-gold: #946d22; --logo-chip-bg: #111318; --logo-chip-ink: #f3e3a6; }
 :root[data-theme='dark'] { --startup-ground: #202123; --startup-ink: #ebece8; --startup-muted: #afb1ab; --startup-gold: #ddc27f; }
-.startup-screen { position: fixed; inset: 0; z-index: 10000; overflow: hidden; isolation: isolate; color: var(--startup-ink); font-family: TryloStartup, 'Segoe UI', 'Microsoft YaHei', sans-serif; --startup-unit: calc(100vw / 1280); }
+.startup-screen { position: fixed; inset: 0; z-index: 10000; overflow: hidden; isolation: isolate; color: var(--startup-ink); font-family: TryloStartup, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei', sans-serif; --startup-unit: calc(100vw / 1280); }
 .startup-screen__veil { position: absolute; inset: 0; background: var(--startup-ground); pointer-events: none; }
 .startup-screen__position { position: absolute; left: 50%; top: 42.5%; width: 31.25vw; height: 31.25vw; transform: translate(-50%,-50%); transform-origin: center; pointer-events: none; }
 .startup-screen__turn { position: absolute; inset: 0; opacity: 0; transform-origin: 50% 50%; }

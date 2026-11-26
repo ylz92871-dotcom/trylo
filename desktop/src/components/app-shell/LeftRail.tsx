@@ -7,6 +7,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type MouseEvent,
   type ReactElement,
   type Ref,
 } from 'react';
@@ -20,6 +21,14 @@ import {
 import type { ConversationSession } from '../../host-adapter/conversation-history';
 import { useUserProfile } from '../../user-profile/use-user-profile';
 import type { DesktopAccountModel } from '../../account/desktop-account';
+import {
+  isInteractiveTitlebarTarget,
+  revealWorkspaceDirectory,
+  showNativeContextMenu,
+  toggleNativeWindowZoom,
+} from '../../host-adapter/native-shell';
+import { isTauri } from '../../host-adapter/tauri-detect';
+import { formatShortcut, isMacPlatform } from '../../utils/platform';
 
 /** Shape of a workspace the rail needs. Defined here so
  *  LeftRail is self-contained; App.tsx re-exports the
@@ -114,6 +123,46 @@ export function LeftRail(props: LeftRailProps): ReactElement | null {
 
   if (props.collapsed) return null;
 
+  const mac = isMacPlatform();
+
+  const onHeaderDoubleClick = (event: MouseEvent<HTMLDivElement>): void => {
+    if (!mac || isInteractiveTitlebarTarget(event.target)) return;
+    void toggleNativeWindowZoom();
+  };
+
+  const onWorkspaceContextMenu = (
+    event: MouseEvent<HTMLDivElement>,
+    ws: WorkspaceEntry,
+    active: boolean,
+  ): void => {
+    if (!mac || !isTauri()) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    void showNativeContextMenu([
+      {
+        id: 'primary',
+        label: active ? '新建任务' : '切换到此项目',
+      },
+      { id: 'reveal', label: '在 Finder 中显示' },
+      { id: 'sep-1', label: '', separator: true },
+      {
+        id: 'close',
+        label: '关闭工作区',
+        enabled: props.workspaces.length > 1,
+      },
+    ]).then((choice) => {
+      if (choice === 'primary') {
+        if (active) props.onNewSession();
+        else toggleProject(ws.id);
+      } else if (choice === 'reveal') {
+        void revealWorkspaceDirectory(ws.root);
+      } else if (choice === 'close') {
+        props.onCloseWorkspace(ws.id);
+      }
+    });
+  };
+
   const toggleProject = (wsId: string): void => {
     if (expandedId === wsId) {
       // Clicking the already-open project collapses it.
@@ -135,12 +184,39 @@ export function LeftRail(props: LeftRailProps): ReactElement | null {
       aria-label="Workspaces and sessions"
       style={{ position: 'relative' }}
     >
-      <div className="left-rail__header">
-        <div className="left-rail__brand" data-startup-logo><Logo size={40} tone="cream" variant="solid" withBg decorative /><span>Trylo</span></div>
-        <button type="button" className="left-rail__collapse" onClick={props.onToggleCollapse} title="收起侧栏" aria-label="Collapse rail"><PanelLeft size={16} /></button>
-      </div>
+      {mac ? (
+        <div className="left-rail__header" data-tauri-drag-region="" onDoubleClick={onHeaderDoubleClick}>
+          <button
+            type="button"
+            className="left-rail__collapse"
+            onClick={props.onToggleCollapse}
+            title={`收起侧栏 ${formatShortcut(['Mod', 'B'])}`}
+            aria-label="Collapse rail"
+            data-tauri-drag-region="false"
+          >
+            <PanelLeft size={16} />
+          </button>
+          <div className="left-rail__brand" data-startup-logo data-tauri-drag-region="">
+            <Logo size={22} tone="cream" variant="solid" withBg decorative />
+            <span data-tauri-drag-region="">Trylo</span>
+          </div>
+        </div>
+      ) : (
+        <div className="left-rail__header">
+          <div className="left-rail__brand" data-startup-logo><Logo size={40} tone="cream" variant="solid" withBg decorative /><span>Trylo</span></div>
+          <button type="button" className="left-rail__collapse" onClick={props.onToggleCollapse} title="收起侧栏" aria-label="Collapse rail"><PanelLeft size={16} /></button>
+        </div>
+      )}
       <nav className="left-rail__navigation" aria-label="任务导航">
-        <button type="button" className="left-rail__nav left-rail__new" onClick={props.onNewSession}><SquarePen size={16} /><span>新任务</span></button>
+        <button
+          type="button"
+          className="left-rail__nav left-rail__new"
+          onClick={props.onNewSession}
+          title={mac ? `新任务 ${formatShortcut(['Mod', 'N'])}` : undefined}
+        >
+          <SquarePen size={16} />
+          <span>新任务</span>
+        </button>
         {props.onOpenActivity && <button ref={props.activityTriggerRef} type="button" className="left-rail__nav" onClick={props.onOpenActivity} aria-haspopup="dialog" aria-expanded={props.activityOpen ?? false} aria-controls={props.activityOpen ? props.activityPanelId : undefined}><Layers2 size={16} /><span>运行中的任务</span>{(props.activeRuns ?? 0) > 0 && <span className="left-rail__count">{props.activeRuns}</span>}</button>}
         {props.onOpenTools && <button type="button" className="left-rail__nav" onClick={props.onOpenTools}><Blocks size={16} /><span>工具与技能</span></button>}
       </nav>
@@ -148,7 +224,15 @@ export function LeftRail(props: LeftRailProps): ReactElement | null {
       <section className="left-rail__section left-rail__section--workspaces" aria-label="Workspaces">
         <div className="left-rail__section-title">
           <span>项目</span>
-          <button type="button" className="left-rail__project-add" onClick={props.onOpenFolder} aria-label="打开项目" title="打开项目"><Plus size={16} /></button>
+          <button
+            type="button"
+            className="left-rail__project-add"
+            onClick={props.onOpenFolder}
+            aria-label="打开项目"
+            title={mac ? `打开项目 ${formatShortcut(['Mod', 'O'])}` : '打开项目'}
+          >
+            <Plus size={16} />
+          </button>
         </div>
 
         <ul className="left-rail__workspaces" role="list">
@@ -161,7 +245,7 @@ export function LeftRail(props: LeftRailProps): ReactElement | null {
                 role="listitem"
                 className={`workspace-node${active ? ' workspace-node--active' : ''}`}
               >
-                <div className="workspace-item">
+                <div className="workspace-item" onContextMenu={(event) => onWorkspaceContextMenu(event, ws, active)}>
                   <button
                     type="button"
                     className="workspace-item__row"
@@ -331,7 +415,7 @@ export function LeftRail(props: LeftRailProps): ReactElement | null {
                 props.onOpenSettings?.();
               }}
               aria-label="设置"
-              title="设置"
+              title={mac ? `设置 ${formatShortcut(['Mod', ','])}` : '设置'}
             >
               <Settings2 size={16} />
             </button>

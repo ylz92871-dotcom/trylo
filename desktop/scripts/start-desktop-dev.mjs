@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { prepareDevResources } from './prepare-dev-resources.mjs';
 import { ensureDevelopmentCli } from './ensure-dev-cli.mjs';
+import { stageMacosComputerUse } from './stage-macos-computer-use.mjs';
 
 const desktopRoot = fileURLToPath(new URL('../', import.meta.url));
 const args = process.argv.slice(2);
@@ -35,6 +36,9 @@ if (!args.some(arg => arg === '--help' || arg === '-h') && !environment.TRYLO_CL
 // sidecar publish (or downloads) just to supply this checkout's manifest.
 if (!args.some(arg => arg === '--help' || arg === '-h')) {
   devResourceConfig = prepareDevResources(desktopRoot);
+  if (process.platform === 'darwin' && process.arch === 'arm64' && environment.TRYLO_MACOS_COMPUTER_USE === '1') {
+    stageMacosComputerUse(resolve(desktopRoot, 'src-tauri/resources'));
+  }
 }
 
 // Windows cannot replace an executable still mapped by an old Desktop window.

@@ -9,28 +9,54 @@
 // each command lives in its own file under `src-tauri/src/commands/`.
 
 mod commands;
+mod macos_shell;
 mod preview;
+mod window_state;
 
 use tauri::Manager;
 
-fn on_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
-    if window.label() != "main" || !matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
-        return;
-    }
-    if let Some(preview) = window.app_handle().get_webview_window("computer-preview") {
+fn teardown_app(app_handle: &tauri::AppHandle, origin: &str) {
+    if let Some(preview) = app_handle.get_webview_window("computer-preview") {
         let _ = preview.close();
     }
-    commands::native_browser::close_owned_popups(window.app_handle());
-    let report = commands::shutdown::shutdown_all(window.app_handle());
+    commands::native_browser::close_owned_popups(app_handle);
+    let report = commands::shutdown::shutdown_all(app_handle);
     if !report.was_clean() {
         eprintln!(
-            "[trylo] window-close teardown: processes={} ptys={} lsps={}",
+            "[trylo] {origin} teardown: processes={} ptys={} lsps={}",
             report.processes, report.ptys, report.lsps
         );
     }
-    // Main-close owns application exit even when hidden native resources remain.
-    // Request the normal Tauri exit path after the existing child teardown.
-    window.app_handle().exit(0);
+}
+
+fn on_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
+    #[cfg(target_os = "macos")]
+    macos_shell::on_window_event(window, event);
+
+    let tauri::WindowEvent::CloseRequested { api, .. } = event else {
+        return;
+    };
+    if window.label() != "main" {
+        return;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // Keep background tasks and local services alive when closing the main window;
+        // clicking the Dock icon restores it and Cmd+Q runs full teardown.
+        api.prevent_close();
+        window.app_handle().state::<window_state::WindowStateManager>().flush();
+        let _ = window.hide();
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = api;
+        // Main-close owns application exit even when hidden native resources remain.
+        // Request the normal Tauri exit path after the existing child teardown.
+        teardown_app(window.app_handle(), "window-close");
+        window.app_handle().exit(0);
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -38,7 +64,11 @@ fn on_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
 // The IPC registrations form one manifest so the label gate covers every command.
 #[allow(clippy::missing_panics_doc, clippy::too_many_lines)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "macos")]
+    let builder = macos_shell::configure_builder(builder);
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder
         .register_asynchronous_uri_scheme_protocol("trylo-preview", |context, request, responder| {
             let app = context.app_handle().clone();
             let label = context.webview_label().to_string();
@@ -46,7 +76,8 @@ pub fn run() {
                 let state = app.state::<preview::web::WebPreviewState>();
                 responder.respond(state.serve(&request, &label));
             });
-        })
+        });
+    builder
         .register_asynchronous_uri_scheme_protocol("trylo-media", |context, request, responder| {
             let app = context.app_handle().clone();
             let label = context.webview_label().to_string();
@@ -66,6 +97,7 @@ pub fn run() {
         //                                              available locally.
         .setup(|app| {
             app.manage(commands::computer_preview::PreviewState::default());
+            #[cfg(not(target_os = "macos"))]
             app.manage(commands::native_browser::NativeBrowserState::default());
             app.manage(preview::web::WebPreviewState::default());
             // Day 4: register the watcher state so the watch command
@@ -103,6 +135,11 @@ pub fn run() {
             // renderer via servicehost_spawn. See
             // docs/TRYLO-MIGRATION-EXECUTION-SPEC-2026-08-28.md §5.
             app.manage(commands::servicehost_state::ServiceHostState::default());
+            app.manage(window_state::WindowStateManager::default());
+
+            #[cfg(target_os = "macos")]
+            macos_shell::setup(app.handle())?;
+
             Ok(())
         })
         .on_window_event(on_window_event)
@@ -202,6 +239,12 @@ pub fn run() {
                 commands::servicehost::servicehost_status,
                 commands::servicehost::servicehost_paths,
                 commands::servicehost::servicehost_diagnostics,
+                macos_shell::set_window_theme,
+                macos_shell::set_native_window_title,
+                macos_shell::toggle_window_zoom,
+                macos_shell::set_dock_attention,
+                macos_shell::show_native_context_menu,
+                macos_shell::reveal_workspace_directory,
             ];
             handler(invoke)
         })
@@ -216,18 +259,23 @@ pub fn run() {
 }
 
 fn on_run_event(app_handle: &tauri::AppHandle, event: &tauri::RunEvent) {
+    #[cfg(target_os = "macos")]
+    if let tauri::RunEvent::Reopen {
+        has_visible_windows: false,
+        ..
+    } = event
+    {
+        macos_shell::restore_main_window(app_handle);
+        return;
+    }
+
     // Closing the last window and explicit/OS exit share the idempotent
     // native owner. WebView reload never enters this shutdown path.
     if matches!(
         event,
         tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
     ) {
-        let report = commands::shutdown::shutdown_all(app_handle);
-        if !report.was_clean() {
-            eprintln!(
-                "[trylo] exit teardown: processes={} ptys={} lsps={}",
-                report.processes, report.ptys, report.lsps
-            );
-        }
+        app_handle.state::<window_state::WindowStateManager>().flush();
+        teardown_app(app_handle, "exit");
     }
 }

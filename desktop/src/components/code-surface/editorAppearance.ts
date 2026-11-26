@@ -4,7 +4,7 @@ export const editorTheme = (theme: 'light' | 'dark'): string => `trylo-${theme}`
 
 /** One presentation policy; model ownership stays with each editor/reader. */
 export const editorReadingOptions: Monaco.editor.IEditorOptions = {
-  fontFamily: '"Cascadia Code", Consolas, "SFMono-Regular", monospace',
+  fontFamily: '"SF Mono", ui-monospace, "SFMono-Regular", Menlo, "Cascadia Code", Consolas, monospace',
   fontSize: 13, lineHeight: 22, fontLigatures: false,
   lineNumbers: 'on', lineNumbersMinChars: 3, lineDecorationsWidth: 12,
   minimap: { enabled: false }, padding: { top: 12, bottom: 12 },

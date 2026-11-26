@@ -125,6 +125,7 @@ export function createToolingServices(options = {}) {
     browserObserver,
     modelPreview,
     softwareWorkspace,
+    macosComputerEnabled: enableRepositoryTools && target === 'darwin-arm64' && process.env.TRYLO_MACOS_COMPUTER_USE === '1',
     ...(options.hostEntrypoint ? { hostEntrypoint: options.hostEntrypoint } : {}),
     ...(nativeBrowserEnabled ? { nativeBrowser } : {}),
     ...(seam.profilesRoot ? { profilesRoot: seam.profilesRoot } : {}),

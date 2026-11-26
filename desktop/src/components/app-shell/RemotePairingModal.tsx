@@ -3,6 +3,7 @@ import { RadioTower, RefreshCw, X, Cloud, Link, Monitor, Smartphone, ShieldCheck
 import { remoteSettingsDefaults, type RemoteSettings } from '../../settings/settings-store';
 import type { RemotePairingInfoResult, RemoteStatusResult, RelayAccountStatus } from '../../services-host/methods';
 import type { RelayAccountActions } from './SettingsModal';
+import { usePresenceTransition } from '../../utils/use-presence-transition';
 
 export interface RemotePairingModalProps {
   readonly open: boolean;
@@ -92,12 +93,14 @@ export function RemotePairingModal(props: RemotePairingModalProps): ReactElement
     if (enabled) setConfirm({ title: '切换连接方式？', detail: '当前手机连接会断开。新连接就绪后，请重新扫码。', action });
     else void perform(action);
   }
-  if (!props.open) return null;
+  const presence = usePresenceTransition(props.open, 130);
+  if (!presence.mounted) return null;
+  const isExiting = presence.state === 'exiting';
   const needsLogin = mode === 'server' && (account?.loggedIn === false || (!account?.loggedIn && Boolean(props.onOpenAccount)));
   const headline = needsLogin ? '登录后即可连接这台电脑' : !enabled ? '远程访问已暂停' : running ? mode === 'server' ? '已连接到官方服务器' : '独立隧道已连接' : reconnecting ? '服务器连接中断，正在重连' : loading ? '正在连接这台电脑' : '远程连接尚未就绪';
   const retryLabel = running ? '刷新二维码' : reconnecting ? '重连并生成二维码' : '重试启动并生成二维码';
-  return <div className="remote-pairing-modal__overlay" role="presentation" onClick={e => { if (e.target === e.currentTarget) props.onClose(); }}>
-    <section className="remote-pairing-modal" role="dialog" aria-modal="true" aria-labelledby="remote-pairing-modal__title" onKeyDown={e => {
+  return <div className="remote-pairing-modal__overlay" data-motion-state={presence.state} role="presentation" aria-hidden={isExiting ? true : undefined} onClick={e => { if (!isExiting && e.target === e.currentTarget) props.onClose(); }}>
+    <section className="remote-pairing-modal" role={isExiting ? undefined : 'dialog'} aria-modal={isExiting ? undefined : true} aria-labelledby={isExiting ? undefined : 'remote-pairing-modal__title'} onKeyDown={e => {
       if (e.key === 'Escape') { if (confirm) setConfirm(null); else props.onClose(); }
       if (e.key !== 'Tab') return;
       const nodes = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),summary,select')).filter(n => n.getClientRects().length);

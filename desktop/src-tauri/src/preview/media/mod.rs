@@ -103,7 +103,9 @@ impl MediaState {
 
         let session = self.session(token, owner)?; let count = segment_count(session.info()?.duration)?;
         if index >= count { return Err("媒体片段不存在".into()); }
-        self.0.requests.fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| (count < policy().max_queued_jobs).then_some(count + 1)).map_err(|_| "待加载的媒体片段过多")?;
+        if !process::increment_below(&self.0.requests, policy().max_queued_jobs) {
+            return Err("待加载的媒体片段过多".into());
+        }
         let _request = RequestCount(&self.0.requests);
         let version = {
             let mut playback = session.playback.lock().map_err(|_| "媒体状态不可用")?;

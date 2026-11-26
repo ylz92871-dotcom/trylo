@@ -1374,6 +1374,7 @@ export type ServiceEventTopic = keyof ServiceEventMap;
 
 export interface NativeBrowserState {
   readonly nativeLayout?: 'direct';
+  readonly cdpAvailable?: boolean;
   readonly revision?: number;
   readonly ok: boolean;
   readonly scope: string;

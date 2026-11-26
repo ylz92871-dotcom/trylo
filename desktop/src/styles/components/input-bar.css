@@ -1,4 +1,4 @@
-.input-bar-wrapper { position: relative; flex: 0 0 auto; width: calc(100% - 48px); max-width: var(--conversation-width); margin: 10px auto 12px; }
+.input-bar-wrapper { position: relative; flex: 0 0 auto; width: calc(100% - 56px); max-width: var(--conversation-width); margin: 8px auto 14px; }
 .input-bar { position: relative; border: 1px solid var(--border); border-radius: 16px; background: var(--bg); padding: 9px 11px 7px; box-shadow: 0 3px 12px #22222205; }
 .input-bar:focus-within { border-color: var(--ink-mute); }
 .input-bar--dragging { outline: 2px dashed var(--link); outline-offset: 4px; background: var(--link-soft); }
@@ -42,3 +42,32 @@
 @media (max-width: 900px) { .input-bar-wrapper { width: calc(100% - 32px); } .input-bar__hint { display: none; } }
 
 .input-bar-wrapper .permission-picker__trigger { height:18px; padding:0; gap:6px; font-weight:400; letter-spacing:0; }
+
+:root[data-platform='macos'] .input-bar {
+  border-radius: 14px;
+  padding: 10px 12px 8px;
+}
+
+:root[data-platform='macos'] .input-bar-wrapper .input-bar__attach,
+:root[data-platform='macos'] .input-bar__more,
+:root[data-platform='macos'] .input-bar__mode {
+  border-radius: 6px;
+}
+
+:root[data-platform='macos'] .input-bar__queued,
+:root[data-platform='macos'] .input-bar__hint {
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-platform='macos'] :is(.input-bar__stop, .input-bar__send, .input-bar__attach):focus-visible {
+  outline: none;
+  box-shadow: var(--macos-focus-halo);
+}
+
+@media (forced-colors: active) {
+  :root[data-platform='macos'] :is(.input-bar__stop, .input-bar__send, .input-bar__attach):focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+}

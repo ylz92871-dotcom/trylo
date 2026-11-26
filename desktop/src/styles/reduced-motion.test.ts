@@ -113,8 +113,15 @@ describe('reduced-motion CSS fallback (spec §7.5)', () => {
     const media = parseRules(tokens).find((r) => REDUCE_MEDIA.test(r.header));
     expect(media).toBeDefined();
     for (const prop of [
+      '--duration-micro: 0ms',
       '--duration-fast: 0ms',
+      '--duration-popover-in: 0ms',
+      '--duration-popover-out: 0ms',
+      '--duration-view: 0ms',
+      '--duration-modal-in: 0ms',
+      '--duration-modal-out: 0ms',
       '--duration-base: 0ms',
+      '--duration-panel: 0ms',
       '--duration-slow: 0ms',
     ]) {
       expect(media!.body).toContain(prop);

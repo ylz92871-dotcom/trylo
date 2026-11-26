@@ -7,9 +7,14 @@
   var root = document.getElementById('root');
   if (!screen || !status || !reload || !root) return;
 
-  // Match appearance-store.ts, including its light default and restricted-storage fallback.
-  var preference = 'light';
-  try { preference = localStorage.getItem('trylo.appearance.v1') || 'light'; } catch (_) { /* Session fallback. */ }
+  // Match appearance-store.ts: macOS defaults to 'system', others default to 'light', with restricted-storage fallback.
+  var isMac = /mac/i.test(navigator.platform || '') || /macintosh|mac os x/i.test(navigator.userAgent || '');
+  var defaultPreference = isMac ? 'system' : 'light';
+  var preference = defaultPreference;
+  try {
+    var saved = localStorage.getItem('trylo.appearance.v1');
+    if (saved === 'light' || saved === 'dark' || saved === 'system') preference = saved;
+  } catch (_) { /* Session fallback. */ }
   var dark = preference === 'dark' || (preference === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
   root.inert = true;

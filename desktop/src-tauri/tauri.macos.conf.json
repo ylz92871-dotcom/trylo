@@ -1,11 +1,44 @@
 {
+  "app": {
+    "windows": [
+      {
+        "title": "Trylo",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true,
+        "maximizable": true,
+        "minimizable": true,
+        "fullscreen": false,
+        "center": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 16, "y": 25 },
+        "shadow": true,
+        "acceptFirstMouse": true,
+        "allowLinkPreview": false,
+        "transparent": true,
+        "windowEffects": {
+          "effects": ["sidebar"],
+          "state": "followsWindowActiveState"
+        }
+      }
+    ]
+  },
   "bundle": {
     "targets": ["app", "dmg"],
     "resources": {
+      "resources/preview/": null,
+      "resources/preview/codecs/": "preview/codecs/",
+      "resources/preview/media/": "preview/media/",
       "resources/sidecars/desktop-companion/publish/": null
     },
     "macOS": {
-      "minimumSystemVersion": "14.0"
+      "minimumSystemVersion": "14.0",
+      "files": {
+        "Resources/preview/office/LibreOffice.app": "resources/preview/office/LibreOffice.app"
+      }
     }
   }
 }

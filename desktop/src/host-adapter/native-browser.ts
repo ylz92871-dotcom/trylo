@@ -8,8 +8,9 @@ export type NativeBrowserViewportRequest = { readonly mode: 'panel' } | { readon
 export type NativeBrowserViewport = { readonly mode: 'panel'; readonly scale: number; readonly width?: number; readonly height?: number } | { readonly mode: 'fixed'; readonly scale: number; readonly width: number; readonly height: number; readonly mobile?: boolean; readonly deviceScaleFactor?: number }
 export interface NativeBrowserRecord {
   readonly scope: string
-  readonly cdpPort: number
-  readonly tabs: readonly { readonly label: string; readonly marker: string; readonly popup?: boolean }[]
+  readonly cdpAvailable?: boolean
+  readonly cdpPort?: number
+  readonly tabs: readonly { readonly label: string; readonly marker: string; readonly popup?: boolean; readonly url?: string; readonly title?: string }[]
   readonly activeLabel: string
   readonly bounds?: NativeBrowserBounds
   readonly zoom?: number

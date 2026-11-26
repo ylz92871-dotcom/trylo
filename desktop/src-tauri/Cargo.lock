@@ -4277,8 +4277,11 @@ name = "trylo-desktop"
 version = "2.1.0"
 dependencies = [
  "anyhow",
+ "block2",
  "libc",
  "notify",
+ "objc2",
+ "objc2-app-kit",
  "portable-pty",
  "serde",
  "serde_json",
@@ -4293,6 +4296,7 @@ dependencies = [
  "webview2-com",
  "windows-core 0.61.2",
  "windows-sys 0.61.2",
+ "wry",
 ]
 
 [[package]]

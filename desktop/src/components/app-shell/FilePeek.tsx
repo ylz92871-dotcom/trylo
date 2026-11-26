@@ -27,6 +27,7 @@ import { isTauri } from '../../host-adapter/tauri-detect';
 import type { FilePath } from '../../host-adapter/types';
 import { PreviewRouter, previewKindFor, previewKindLabel } from '../preview';
 import type { PreviewKind } from '../../preview/formats';
+import { usePresenceTransition } from '../../utils/use-presence-transition';
 
 export interface FilePeekProps {
   readonly path: FilePath;
@@ -50,6 +51,7 @@ export function FilePeek(props: FilePeekProps): ReactElement {
   const [revision, setRevision] = useState(0);
   const [actionError, setActionError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuPresence = usePresenceTransition(menuOpen, 110);
   const actionsRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menuOpen) return;
@@ -102,7 +104,7 @@ export function FilePeek(props: FilePeekProps): ReactElement {
           onClick={() => { if (props.allowedRoot) invalidateOfficePages(props.path, props.allowedRoot); setRevision((n) => n + 1); props.onReload?.(); }}><RotateCw size={15} /></button>
         {host && <div ref={actionsRef} className="file-peek__actions" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setMenuOpen(false); }} onKeyDown={event => { if (event.key === 'Escape' && menuOpen) { event.stopPropagation(); setMenuOpen(false); event.currentTarget.querySelector('button')?.focus(); } }}>
           <button type="button" className="file-peek__expand" title="文件操作" aria-label="文件操作" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}><MoreHorizontal size={16} /></button>
-          {menuOpen && <div className="file-peek__menu" aria-label="文件操作列表">
+          {menuPresence.mounted && <div className="file-peek__menu" data-motion-state={menuPresence.state} aria-label={menuPresence.state === 'exiting' ? undefined : '文件操作列表'} aria-hidden={menuPresence.state === 'exiting' ? true : undefined}>
           {multiple && <div className="file-peek__menu-nav">
             <button type="button" aria-label="上一个文件" disabled={fileIndex <= 0} onClick={() => { const file = props.files?.[fileIndex - 1]; if (file) { props.onSelectFile?.(file.path); setMenuOpen(false); } }}><ChevronLeft size={15} />上一个文件</button>
             <button type="button" aria-label="下一个文件" disabled={fileIndex < 0 || fileIndex >= (props.files?.length ?? 0) - 1} onClick={() => { const file = props.files?.[fileIndex + 1]; if (file) { props.onSelectFile?.(file.path); setMenuOpen(false); } }}><ChevronRight size={15} />下一个文件</button>

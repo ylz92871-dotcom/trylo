@@ -20,10 +20,25 @@ impl Control {
         self.check()?; *process = Some(tree); Ok(())
     }
 }
+pub(super) fn increment_below(counter: &AtomicUsize, limit: usize) -> bool {
+    let mut count = counter.load(Ordering::Acquire);
+    loop {
+        if count >= limit {
+            return false;
+        }
+        match counter.compare_exchange_weak(count, count + 1, Ordering::AcqRel, Ordering::Acquire) {
+            Ok(_) => return true,
+            Err(actual) => count = actual,
+        }
+    }
+}
+
 pub struct Slot(Arc<AtomicUsize>);
 impl Slot {
     pub fn acquire(slots: &Arc<AtomicUsize>) -> Result<Self, String> {
-        slots.fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| (count < policy().max_concurrent_jobs).then_some(count + 1)).map_err(|_| "媒体兼容引擎繁忙，请稍后重试")?;
+        if !increment_below(slots, policy().max_concurrent_jobs) {
+            return Err("媒体兼容引擎繁忙，请稍后重试".into());
+        }
         Ok(Self(Arc::clone(slots)))
     }
 }

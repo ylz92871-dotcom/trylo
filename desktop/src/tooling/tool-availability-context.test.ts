@@ -77,6 +77,14 @@ describe('current built-in declaration from the immutable run snapshot', () => {
     expect(prompt).not.toMatch(/只能.*绝对|必须.*绝对/);
   });
 
+  it('describes macOS desktop tools with their actual permission and coordinate contract', () => {
+    const prompt = toolAvailabilitySystemPrompt(undefined, { runtime: runtime({ serverNames: ['trylo-macos'] }) });
+    expect(prompt).toContain('server=trylo-macos');
+    expect(prompt).toContain('status 检查系统授权');
+    expect(prompt).toContain('全局屏幕点坐标');
+    expect(prompt).not.toContain('Snapshot/Screenshot');
+  });
+
   it('keeps unready reasons, explicit nonselection and unmounted capabilities distinct without leaking messages', () => {
     const prompt = toolAvailabilitySystemPrompt(undefined, {
       computerUse: false,

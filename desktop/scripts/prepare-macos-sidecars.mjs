@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stageBuiltinTools } from './stage-builtin-tools.mjs';
+import { stageMacosComputerUse } from './stage-macos-computer-use.mjs';
 
 assert.equal(`${process.platform}-${process.arch}`, 'darwin-arm64', 'Use an Apple Silicon builder');
 assert.ok(process.argv[2], 'Usage: node prepare-macos-sidecars.mjs <new resources directory> [--preview]');
@@ -58,6 +59,7 @@ try {
   ]);
   await fs.writeFile(path.join(candidate, 'desktop-services/package.json'), '{"private":true,"type":"commonjs"}\n');
   await stageBuiltinTools({ target: path.join(candidate, 'desktop-services/builtin-tools') });
+  stageMacosComputerUse(candidate);
   const resourceEnv = { ...process.env, TRYLO_RESOURCE_DIR: candidate };
   if (preview) {
     const officeDmg = process.env.TRYLO_MACOS_OFFICE_DMG;

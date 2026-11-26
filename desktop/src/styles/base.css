@@ -71,3 +71,34 @@ a {
   background: var(--accent);
   color: var(--bg);
 }
+
+/* macOS WKWebView reveals native window vibrancy behind transparent chrome,
+ * restores native Retina font smoothing, and uses soft accent focus halos. */
+:root[data-platform='macos'],
+:root[data-platform='macos'] body,
+:root[data-platform='macos'] #root {
+  background: transparent;
+}
+
+:root[data-platform='macos'] body {
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+  font-optical-sizing: auto;
+}
+
+:root[data-platform='macos'] button:focus-visible,
+:root[data-platform='macos'] summary:focus-visible,
+:root[data-platform='macos'] select:focus-visible {
+  outline: none;
+  box-shadow: var(--macos-focus-halo, 0 0 0 3px color-mix(in srgb, var(--brand) 34%, transparent));
+}
+
+@media (forced-colors: active) {
+  :root[data-platform='macos'] button:focus-visible,
+  :root[data-platform='macos'] summary:focus-visible,
+  :root[data-platform='macos'] select:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+}

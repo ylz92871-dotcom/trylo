@@ -8,6 +8,8 @@
   padding: 8px 2px 4px;
   overflow-x: auto;
   overflow-y: hidden;
+}
+:root:not([data-platform='macos']) .attachment-list {
   scrollbar-width: thin;
 }
 .attachment-chip {

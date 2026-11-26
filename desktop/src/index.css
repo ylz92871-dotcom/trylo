@@ -11,6 +11,7 @@
 
 @import './styles/tokens.css';
 @import './styles/base.css';
+@import './styles/motion.css';
 
 @import './styles/components/app-shell.css';
 @import './styles/components/top-bar.css';
@@ -97,3 +98,4 @@
 @import './styles/components/browser-activity.css';
 @import './styles/components/browser-control.css';
 @import './styles/components/generated-media.css';
+@import './components/product-ui/SearchPanel.css';

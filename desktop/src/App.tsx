@@ -48,6 +48,16 @@ import {
 import { PanelRight } from 'lucide-react'
 import { createTryloContext, hostAdapter } from './host-adapter'
 import { isTauri } from './host-adapter/tauri-detect'
+import {
+  subscribeNativeMenuActions,
+  subscribeNativeShellState,
+  syncNativeDockAttention,
+  syncNativeWindowTitle,
+} from './host-adapter/native-shell'
+import { alertNativeDialog, confirmNativeDialog } from './host-adapter/native-dialog'
+import { refreshSystemAppearance } from './settings/appearance-store'
+import { formatShortcut, isMacPlatform } from './utils/platform'
+import { SearchPanel, type SearchPanelAction } from './components/product-ui/SearchPanel'
 import { CliSessionStore } from './runtime/cli-session-store'
 import type { FilePath, CodeMode, TopLevelMode } from './host-adapter/types'
 // v1.16.6 (M4-A runtime ownership): the ConversationRunSupervisor
@@ -409,7 +419,7 @@ import {
   type WorkspaceIndex,
 } from './host-adapter/conversation-history'
 
-const DEFAULT_WORKSPACE_ROOT = 'D:/CC/trylo' as const
+const DEFAULT_WORKSPACE_ROOT = '' as const
 const isTauriFn = isTauri
 const EMPTY_CHAT_MESSAGES: readonly ChatMessage[] = []
 
@@ -663,8 +673,8 @@ function App({
       root: initialWorkspaceRoot,
       name:
         initialWorkspaceRoot === DEFAULT_WORKSPACE_ROOT
-          ? basenameOf(initialWorkspaceRoot)
-          : '本地工作区',
+          ? '本地工作区'
+          : basenameOf(initialWorkspaceRoot) || '本地工作区',
     })
   }
   const initialWorkspaceIndex = initialWorkspaceIndexRef.current
@@ -1647,6 +1657,7 @@ function App({
   // lets any descendant trigger it.
   const [settingsOpen, setSettingsOpen] = useState(false)
   const openSettings = useCallback(() => setSettingsOpen(true), [])
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   // 2026-08-29: remote pairing modal — opened by the TopBar
   // "远程" button. Holds the pairing QR + enable switch.
   const [showRemotePairing, setShowRemotePairing] = useState(false)
@@ -5999,8 +6010,271 @@ function App({
     ],
   )
 
+  const toggleRightRailFromShell = useCallback((): void => {
+    window.dispatchEvent(new Event('trylo:close-browser-preview'))
+    if (rightRailOpen) (topMode === 'code' ? selectCodeReview : selectWorkReview)(false)
+    onToggleRightRail()
+  }, [rightRailOpen, topMode, selectCodeReview, selectWorkReview, onToggleRightRail])
+
+  const shellActionsRef = useRef<{
+    readonly toggleTerminal: () => void
+    readonly toggleBrowserSidebar: () => void
+  } | null>(null)
+  const [windowFocused, setWindowFocused] = useState(true)
+  const dockAttentionPrevRef = useRef({ approvals: 0, runs: 0 })
+
+  const totalPendingApprovals =
+    codeApprovals.length + workApprovals.length + libraryApprovals.length
+  const totalActiveRuns = activeCodeRuns.length + (workRunning ? 1 : 0)
+
+  const nativeWindowTitle = currentActiveSession?.title
+    ? `${currentActiveSession.title} — ${currentWorkspace.name} — Trylo`
+    : `${currentWorkspace.name} — Trylo`
+
+  useEffect(() => {
+    void syncNativeWindowTitle(nativeWindowTitle)
+  }, [nativeWindowTitle])
+
+  useEffect(() => {
+    const prev = dockAttentionPrevRef.current
+    const approvalsIncreased = totalPendingApprovals > prev.approvals
+    const runCompleted = prev.runs > 0 && totalActiveRuns === 0
+    dockAttentionPrevRef.current = {
+      approvals: totalPendingApprovals,
+      runs: totalActiveRuns,
+    }
+    void syncNativeDockAttention({
+      badgeCount: totalPendingApprovals,
+      bounce: !windowFocused && (approvalsIncreased || runCompleted),
+    })
+  }, [totalPendingApprovals, totalActiveRuns, windowFocused])
+
+  const nativeMenuHandlersRef = useRef({
+    openSettings,
+    onNewSession,
+    onOpenFolder: () => {
+      void onOpenFolder()
+    },
+    onToggleLeftRail,
+    onToggleRightRail: toggleRightRailFromShell,
+    onToggleCommandPalette: () => {
+      setCommandPaletteOpen((open) => !open)
+    },
+    onOpenCommandPalette: () => {
+      setCommandPaletteOpen(true)
+    },
+    onSwitchMode: onTopModeChange,
+    onToggleTerminal: () => shellActionsRef.current?.toggleTerminal(),
+    onToggleBrowserSidebar: () => shellActionsRef.current?.toggleBrowserSidebar(),
+  })
+  nativeMenuHandlersRef.current = {
+    openSettings,
+    onNewSession,
+    onOpenFolder: () => {
+      void onOpenFolder()
+    },
+    onToggleLeftRail,
+    onToggleRightRail: toggleRightRailFromShell,
+    onToggleCommandPalette: () => {
+      setCommandPaletteOpen((open) => !open)
+    },
+    onOpenCommandPalette: () => {
+      setCommandPaletteOpen(true)
+    },
+    onSwitchMode: onTopModeChange,
+    onToggleTerminal: () => shellActionsRef.current?.toggleTerminal(),
+    onToggleBrowserSidebar: () => shellActionsRef.current?.toggleBrowserSidebar(),
+  }
+
+  useEffect(() => {
+    return subscribeNativeShellState({
+      onSystemThemeChange: refreshSystemAppearance,
+      onWindowFocusChange: setWindowFocused,
+    })
+  }, [])
+
+  useEffect(() => {
+    return subscribeNativeMenuActions({
+      'app.settings': () => nativeMenuHandlersRef.current.openSettings(),
+      'file.new-task': () => nativeMenuHandlersRef.current.onNewSession(),
+      'file.open-folder': () => nativeMenuHandlersRef.current.onOpenFolder(),
+      'view.toggle-sidebar': () => nativeMenuHandlersRef.current.onToggleLeftRail(),
+      'view.toggle-right-rail': () => nativeMenuHandlersRef.current.onToggleRightRail(),
+      'view.command-palette': () => nativeMenuHandlersRef.current.onToggleCommandPalette(),
+      'view.mode-code': () => nativeMenuHandlersRef.current.onSwitchMode('code'),
+      'view.mode-work': () => nativeMenuHandlersRef.current.onSwitchMode('work'),
+      'view.toggle-terminal': () => nativeMenuHandlersRef.current.onToggleTerminal(),
+      'view.toggle-browser': () => nativeMenuHandlersRef.current.onToggleBrowserSidebar(),
+      'help.shortcuts': () => nativeMenuHandlersRef.current.onOpenCommandPalette(),
+    })
+  }, [])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return
+      const mac = isMacPlatform()
+      const tauriNativeMenuActive = mac && isTauri()
+      const key = event.key.toLowerCase()
+
+      if (mac && event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+        if (!tauriNativeMenuActive && (event.code === 'Backquote' || key === '`')) {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onToggleTerminal()
+        }
+        return
+      }
+
+      if (mac && event.metaKey && event.altKey && !event.ctrlKey && !event.shiftKey) {
+        if (!tauriNativeMenuActive && key === 'b') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onToggleBrowserSidebar()
+        }
+        return
+      }
+
+      const primaryMod = mac
+        ? event.metaKey && !event.ctrlKey
+        : event.ctrlKey && !event.metaKey
+      if (!primaryMod || event.altKey) return
+
+      if (!event.shiftKey && key === 'k' && !tauriNativeMenuActive) {
+        event.preventDefault()
+        nativeMenuHandlersRef.current.onToggleCommandPalette()
+      } else if (event.shiftKey && key === 'f') {
+        event.preventDefault()
+        nativeMenuHandlersRef.current.onOpenCommandPalette()
+      } else if (mac && !event.shiftKey && key === 'j') {
+        event.preventDefault()
+        nativeMenuHandlersRef.current.onToggleTerminal()
+      } else if (!tauriNativeMenuActive) {
+        if (!event.shiftKey && key === '1') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onSwitchMode('code')
+        } else if (!event.shiftKey && key === '2') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onSwitchMode('work')
+        } else if (!event.shiftKey && key === '/') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onOpenCommandPalette()
+        } else if (!event.shiftKey && key === 'n') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onNewSession()
+        } else if (!event.shiftKey && key === 'o') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onOpenFolder()
+        } else if (!event.shiftKey && key === 'b') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onToggleLeftRail()
+        } else if (event.shiftKey && key === 'b') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onToggleRightRail()
+        } else if (!event.shiftKey && key === ',') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.openSettings()
+        }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  const commandPaletteActions = useMemo<readonly SearchPanelAction[]>(
+    () => [
+      {
+        id: 'file.new-task',
+        label: '新建对话',
+        hint: '在当前工作区创建新任务对话',
+        shortcut: ['Mod', 'N'],
+        keywords: 'new task session chat conversation 新建 任务 对话',
+        onSelect: onNewSession,
+      },
+      {
+        id: 'file.open-folder',
+        label: '打开文件夹…',
+        hint: '切换或添加本地工作区目录',
+        shortcut: ['Mod', 'O'],
+        keywords: 'open folder workspace directory 打开 文件夹 工作区',
+        onSelect: () => {
+          void onOpenFolder()
+        },
+      },
+      {
+        id: 'mode.code',
+        label: '切换到 Code 模式',
+        hint: topMode === 'code' ? '当前正在使用 Code 模式' : '代码工程、调试与 Diff 工作台',
+        shortcut: ['Mod', '1'],
+        keywords: 'code mode coding developer 代码 模式',
+        onSelect: () => onTopModeChange('code'),
+      },
+      {
+        id: 'mode.work',
+        label: '切换到 Work 模式',
+        hint: topMode === 'work' ? '当前正在使用 Work 模式' : '通用协作、文档与交付工作台',
+        shortcut: ['Mod', '2'],
+        keywords: 'work mode office deliverables 工作 模式 交付',
+        onSelect: () => onTopModeChange('work'),
+      },
+      {
+        id: 'view.toggle-sidebar',
+        label: leftRailCollapsed ? '显示侧边栏' : '隐藏侧边栏',
+        hint: '切换左侧工作区与对话栏',
+        shortcut: ['Mod', 'B'],
+        keywords: 'toggle sidebar left rail 侧边栏 导航',
+        onSelect: onToggleLeftRail,
+      },
+      {
+        id: 'view.toggle-right-rail',
+        label: rightRailOpen ? '隐藏结果侧栏' : '显示结果侧栏',
+        hint: '切换右侧文件树与结果面板',
+        shortcut: ['Mod', 'Shift', 'B'],
+        keywords: 'toggle right panel rail files results 右侧栏 文件 结果',
+        onSelect: toggleRightRailFromShell,
+      },
+      ...(isMacPlatform() && isTauri()
+        ? [
+            {
+              id: 'view.toggle-terminal',
+              label: '切换集成终端',
+              hint: '在工作区底部打开或收起内置终端',
+              shortcut: ['Control', '`'] as const,
+              keywords: 'terminal shell console 终端 命令行',
+              onSelect: () => shellActionsRef.current?.toggleTerminal(),
+            },
+          ]
+        : []),
+      {
+        id: 'view.toggle-browser',
+        label: '切换浏览器侧栏',
+        hint: '展开或收起内置浏览器预览面板',
+        shortcut: ['Option', 'Mod', 'B'],
+        keywords: 'browser web preview sidebar 浏览器 侧栏',
+        onSelect: () => shellActionsRef.current?.toggleBrowserSidebar(),
+      },
+      {
+        id: 'app.settings',
+        label: '打开设置…',
+        hint: '连接、外观、模型与工具设置',
+        shortcut: ['Mod', ','],
+        keywords: 'settings preferences appearance theme 设置 偏好 外观',
+        onSelect: openSettings,
+      },
+    ],
+    [
+      topMode,
+      leftRailCollapsed,
+      rightRailOpen,
+      onNewSession,
+      onOpenFolder,
+      onTopModeChange,
+      onToggleLeftRail,
+      toggleRightRailFromShell,
+      openSettings,
+    ],
+  )
+
   return (
     <AppShell
+      shellActionsRef={shellActionsRef}
       modelPreview={(onAvailable, shown) => (
         <AgentModelPreviewWorkspace
           manager={serviceManager}
@@ -6078,6 +6352,7 @@ function App({
       onArchiveSession={onArchiveSession}
       onUnarchiveSession={onUnarchiveSession}
       topMode={topMode}
+      onTopModeChange={onTopModeChange}
       // Person | Team surface (spec §1.2). A second segmented
       // control on the right of the TopBar; visually quieter than
       // the Code | Work tab so it doesn't read as a third product
@@ -6202,7 +6477,7 @@ function App({
               window.dispatchEvent(new Event('trylo:close-browser-preview'))
               onToggleRightRail()
             }}
-            title="结果侧栏"
+            title={isMacPlatform() ? `结果侧栏 ${formatShortcut(['Mod', 'Shift', 'B'])}` : '结果侧栏'}
             aria-label="结果侧栏"
             aria-pressed={rightRailOpen}
           >
@@ -6648,28 +6923,55 @@ function App({
           URL.revokeObjectURL(url)
         }}
         onDeleteUserData={() => {
-          if (!window.confirm('删除全部 User Learning 数据？此操作不能恢复。')) return
-          // WP-CL / B20: the formal ledger lives in the CLI's home, not in this
-          // store. Clear it first and only then clear the panel — the other
-          // order lets the UI say "deleted" while `facts.ndjson` still holds
-          // who the user is.
-          const resolved = settingsForCodeRun(settings, currentWorkspace.root)
-          void deleteCliUserMemory({
-            process: hostAdapter.process,
-            cliPath: resolved.cliPath,
-            ...(resolved.cliNodeProgram === undefined
-              ? {}
-              : { nodeProgram: resolved.cliNodeProgram }),
-            cwd: currentWorkspace.root,
-          }).then((result) => {
+          void (async () => {
+            const confirmed = await confirmNativeDialog({
+              title: '删除 User Learning 数据',
+              message: '删除全部 User Learning 数据？此操作不能恢复。',
+              kind: 'warning',
+              okLabel: '删除',
+              cancelLabel: '取消',
+            })
+            if (!confirmed) return
+            // WP-CL / B20: the formal ledger lives in the CLI's home, not in this
+            // store. Clear it first and only then clear the panel — the other
+            // order lets the UI say "deleted" while `facts.ndjson` still holds
+            // who the user is.
+            const resolved = settingsForCodeRun(settings, currentWorkspace.root)
+            const result = await deleteCliUserMemory({
+              process: hostAdapter.process,
+              cliPath: resolved.cliPath,
+              ...(resolved.cliNodeProgram === undefined
+                ? {}
+                : { nodeProgram: resolved.cliNodeProgram }),
+              cwd: currentWorkspace.root,
+            })
             if (!result.ok) {
-              window.alert(`本机记忆没有删干净：${result.reason}`)
+              await alertNativeDialog({
+                title: '删除未完成',
+                message: `本机记忆没有删干净：${result.reason}`,
+                kind: 'error',
+              })
               return
             }
             userLearning.deleteUserData()
             bumpLearning()
-          })
+          })()
         }}
+      />
+      <SearchPanel
+        modal
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        searchRoot={currentWorkspace.root}
+        onResultOpen={(path) => {
+          setCommandPaletteOpen(false)
+          if (/^[a-z]:[\\/]/i.test(path) || path.startsWith('/')) {
+            void onSelectFile(path, 'file')
+          } else {
+            onOpenResultFile(path)
+          }
+        }}
+        actions={commandPaletteActions}
       />
     </AppShell>
   )

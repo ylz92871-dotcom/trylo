@@ -1,4 +1,5 @@
-.chat-panel { position: relative; width: 100%; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; background: var(--bg); isolation: isolate; }
+.chat-panel { position: relative; width: 100%; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; background: var(--bg); isolation: isolate; animation: trylo-view-enter var(--duration-view) var(--ease-out); }
+@media (prefers-reduced-motion: reduce) { .chat-panel { animation: none; } }
 .chat-panel__home { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-block: 118px 36px; }
 .chat-panel__home .input-bar-wrapper { margin-top: 0; margin-bottom: 0; }
 .chat-panel__corner { position: absolute; top: 12px; right: 16px; z-index: 5; }

@@ -189,25 +189,49 @@ describe('early startup screen', () => {
   });
 
   it('matches the appearance store default, saved themes, system preference and restricted storage fallback', () => {
-    const cases = [
-      { saved: null, systemDark: true, restricted: false, expected: 'light' },
-      { saved: 'unknown', systemDark: true, restricted: false, expected: 'light' },
-      { saved: 'light', systemDark: true, restricted: false, expected: 'light' },
-      { saved: 'dark', systemDark: false, restricted: false, expected: 'dark' },
-      { saved: 'system', systemDark: true, restricted: false, expected: 'dark' },
-      { saved: 'system', systemDark: false, restricted: false, expected: 'light' },
-      { saved: 'dark', systemDark: true, restricted: true, expected: 'light' },
-    ];
-    for (const testCase of cases) {
-      localStorage.clear();
-      if (testCase.saved !== null) localStorage.setItem('trylo.appearance.v1', testCase.saved);
-      systemDark = testCase.systemDark;
-      storageRestricted = testCase.restricted;
-      installDocument();
-      start();
-      expect(document.documentElement.dataset.theme, JSON.stringify(testCase)).toBe(testCase.expected);
-      finishAndRemove();
+    const origPlatform = Object.getOwnPropertyDescriptor(window.navigator, 'platform');
+    const origUserAgent = Object.getOwnPropertyDescriptor(window.navigator, 'userAgent');
+    const setNav = (platform: string, userAgent = ''): void => {
+      Object.defineProperty(window.navigator, 'platform', { value: platform, configurable: true });
+      Object.defineProperty(window.navigator, 'userAgent', { value: userAgent, configurable: true });
+    };
+
+    try {
+      const cases = [
+        // Windows / non-macOS defaults to 'light'
+        { platform: 'Win32', userAgent: '', saved: null, systemDark: true, restricted: false, expected: 'light' },
+        { platform: 'Win32', userAgent: '', saved: 'unknown', systemDark: true, restricted: false, expected: 'light' },
+        { platform: 'Win32', userAgent: '', saved: 'light', systemDark: true, restricted: false, expected: 'light' },
+        { platform: 'Win32', userAgent: '', saved: 'dark', systemDark: false, restricted: false, expected: 'dark' },
+        { platform: 'Win32', userAgent: '', saved: 'system', systemDark: true, restricted: false, expected: 'dark' },
+        { platform: 'Win32', userAgent: '', saved: 'system', systemDark: false, restricted: false, expected: 'light' },
+        { platform: 'Win32', userAgent: '', saved: 'dark', systemDark: true, restricted: true, expected: 'light' },
+        // macOS defaults to 'system' when saved preference is missing/invalid/restricted
+        { platform: 'MacIntel', userAgent: '', saved: null, systemDark: true, restricted: false, expected: 'dark' },
+        { platform: 'MacIntel', userAgent: '', saved: null, systemDark: false, restricted: false, expected: 'light' },
+        { platform: '', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)', saved: null, systemDark: true, restricted: false, expected: 'dark' },
+        { platform: 'MacIntel', userAgent: '', saved: 'unknown', systemDark: true, restricted: false, expected: 'dark' },
+        { platform: 'MacIntel', userAgent: '', saved: 'light', systemDark: true, restricted: false, expected: 'light' },
+        { platform: 'MacIntel', userAgent: '', saved: 'dark', systemDark: false, restricted: false, expected: 'dark' },
+        { platform: 'MacIntel', userAgent: '', saved: 'dark', systemDark: true, restricted: true, expected: 'dark' },
+      ];
+      for (const testCase of cases) {
+        setNav(testCase.platform, testCase.userAgent);
+        localStorage.clear();
+        if (testCase.saved !== null) localStorage.setItem('trylo.appearance.v1', testCase.saved);
+        systemDark = testCase.systemDark;
+        storageRestricted = testCase.restricted;
+        installDocument();
+        start();
+        expect(document.documentElement.dataset.theme, JSON.stringify(testCase)).toBe(testCase.expected);
+        finishAndRemove();
+      }
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      if (origPlatform) Object.defineProperty(window.navigator, 'platform', origPlatform);
+      else delete (window.navigator as { platform?: string }).platform;
+      if (origUserAgent) Object.defineProperty(window.navigator, 'userAgent', origUserAgent);
+      else delete (window.navigator as { userAgent?: string }).userAgent;
     }
-    expect(vi.getTimerCount()).toBe(0);
   });
 });

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type ReactElement, type MouseEvent as ReactMouseEvent } from 'react';
 import { Archive, ArchiveRestore, PanelsTopLeft, Code2, Pencil, X } from 'lucide-react';
 import type { ConversationSession } from '../../host-adapter/conversation-history';
+import { showNativeContextMenu } from '../../host-adapter/native-shell';
+import { isTauri } from '../../host-adapter/tauri-detect';
+import { isImeComposing, isMacPlatform } from '../../utils/platform';
 
 // ── SessionRow ────────────────────────────────────────────────────────
 // One row per session. Pulled out of the parent JSX so the rename-input
@@ -48,6 +51,36 @@ export function SessionRow(props: SessionRowProps): ReactElement {
     props.onStartEdit(s.id);
   };
 
+  const onRowContextMenu = (e: ReactMouseEvent): void => {
+    if (!isMacPlatform() || !isTauri() || props.isEditing) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const items = props.archived
+      ? [
+          {
+            id: 'unarchive',
+            label: '从归档恢复',
+            enabled: Boolean(props.onUnarchive) && !props.isRunning,
+          },
+          { id: 'sep-1', label: '', separator: true },
+          { id: 'delete', label: '删除', enabled: !props.isRunning },
+        ]
+      : [
+          { id: 'rename', label: '重命名', enabled: !props.isRunning },
+          { id: 'archive', label: '归档', enabled: !props.isRunning },
+          { id: 'sep-1', label: '', separator: true },
+          { id: 'delete', label: '删除', enabled: !props.isRunning },
+        ];
+
+    void showNativeContextMenu(items).then((choice) => {
+      if (choice === 'rename') props.onStartEdit(s.id);
+      else if (choice === 'archive') props.onArchive(s.id);
+      else if (choice === 'unarchive') props.onUnarchive?.(s.id);
+      else if (choice === 'delete') props.onDelete(s.id);
+    });
+  };
+
   return (
     <li
       role="listitem"
@@ -56,6 +89,7 @@ export function SessionRow(props: SessionRowProps): ReactElement {
         + `${props.archived ? ' session-row--archived' : ''}`
       }
       onClick={onRowClick}
+      onContextMenu={onRowContextMenu}
       onMouseEnter={() => props.setHoverSessionId(s.id)}
       onMouseLeave={() => props.setHoverSessionId(null)}
       title={s.title}
@@ -202,7 +236,7 @@ function RenameInput(props: RenameInputProps): ReactElement {
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !isImeComposing(e)) {
           e.preventDefault();
           commit();
         } else if (e.key === 'Escape') {

@@ -30,6 +30,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { usePlatformModels } from '../../account/use-platform-models';
+import { usePresenceTransition } from '../../utils/use-presence-transition';
 
 export type ModelChoice = { readonly id: string; readonly label: string; readonly hint: string };
 
@@ -82,6 +83,7 @@ export function ModelSelector(props: ModelSelectorProps): ReactElement {
     onSelectProfile,
   } = props;
   const [open, setOpen] = useState(false);
+  const popoverPresence = usePresenceTransition(open, 110);
   const platform = usePlatformModels(open);
   const anchorRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -188,6 +190,7 @@ export function ModelSelector(props: ModelSelectorProps): ReactElement {
       const down = below >= Math.min(naturalHeight, 480) || below > above;
       const maxHeight = Math.min(480, down ? below : above);
       const height = Math.min(naturalHeight, maxHeight);
+      menu.dataset.placement = down ? 'below' : 'above';
       Object.assign(menu.style, {
         left: `${Math.max(margin, Math.min(rect.left, window.innerWidth - menu.offsetWidth - margin))}px`,
         top: `${Math.max(viewportTop + margin, Math.min(down ? rect.bottom + gap : rect.top - height - gap, viewportBottom - height - margin))}px`,
@@ -296,13 +299,15 @@ export function ModelSelector(props: ModelSelectorProps): ReactElement {
       >
         <span className="model-selector__chip-label">{chipLabel}</span><ChevronDown size={12} aria-hidden="true" />
       </button>
-      {open &&
+      {popoverPresence.mounted &&
         createPortal(
           <div
             ref={listRef}
             className="model-selector__popover mode-popover mode-popover--anchored"
-            role="listbox"
-            aria-label="Select model"
+            data-motion-state={popoverPresence.state}
+            role={popoverPresence.state === 'exiting' ? undefined : 'listbox'}
+            aria-label={popoverPresence.state === 'exiting' ? undefined : 'Select model'}
+            aria-hidden={popoverPresence.state === 'exiting' ? true : undefined}
             tabIndex={-1}
           >
             {GROUPS.map((group, groupIndex) => {

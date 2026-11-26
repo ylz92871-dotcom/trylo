@@ -33,7 +33,8 @@ impl OfficeEngine {
             receiver
         }).clone();
         loop {
-            if let Some(result) = { ready.borrow().clone() } { return result; }
+            let current = ready.borrow().clone();
+            if let Some(result) = current { return result; }
             ready.changed().await.map_err(|_| "页面引擎校验任务未完成".to_string())?;
         }
     }

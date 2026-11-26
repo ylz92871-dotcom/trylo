@@ -151,7 +151,8 @@
 .preview__search input { flex: 1; }
 .preview__pdf-stage { position: relative; min-height: 0; flex: 1; background:var(--reader-canvas, #f0f1f3); }
 .preview__pdf-stage[hidden] { display: none; }
-.preview__pdf-container { position: absolute; inset: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.preview__pdf-container { position: absolute; inset: 0; overflow: auto; overscroll-behavior: contain; }
+:root:not([data-platform='macos']) .preview__pdf-container { scrollbar-gutter: stable; }
 .preview__loading { position: absolute; inset: 0; z-index: 2; display:flex; align-items:center; justify-content:center; gap:10px; background:var(--bg); color: var(--fg-muted); font-size: var(--text-sm); }
 .preview__pdf .pdfViewer .page { border: none; margin: 12px auto; box-shadow: 0 2px 8px #0002; }
 
@@ -267,6 +268,7 @@
   color: var(--fg-muted);
   font-size: var(--text-xs);
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   padding-top: 2px;
 }
 
@@ -383,7 +385,7 @@
 .preview__reader-status .preview__page-input { width:32px; height:25px; padding:0 2px; border:1px solid transparent; border-radius:4px; background:transparent; color:var(--fg); font:12px var(--font-body); }
 .preview__reader-status .preview__page-input:hover, .preview__reader-status .preview__page-input:focus { border-color:var(--border); background:var(--ink-hover); }
 .preview__reader-status .preview__page-label { min-width:39px; font-size:11px; }
-.preview__pdf-container { scrollbar-gutter:auto; }
+:root:not([data-platform='macos']) .preview__pdf-container { scrollbar-gutter:auto; }
 .preview__pdf-container .pdfViewer { --page-margin:18px auto; --page-border:0; --page-border-image:none; padding:18px 16px; }
 .preview__pdf-container .pdfViewer .page { border:0; box-shadow:0 2px 12px #00000018; }
 .preview__pdf--slides .pdfViewer { display:flex; align-items:center; justify-content:center; min-width:100%; min-height:100%; padding:16px; box-sizing:border-box; }
@@ -427,3 +429,21 @@
 .preview__canvas--fit { max-width:none; }
 
 @media (prefers-reduced-motion:reduce) { .preview__spinner { animation:none; } }
+
+:root[data-platform='macos'] :is(.preview__toolbar, .preview__pdf) :is(button, input, select):focus-visible {
+  outline: none;
+  box-shadow: var(--macos-focus-halo);
+}
+
+:root[data-platform='macos'] .preview__workbook .preview__table tbody th,
+:root[data-platform='macos'] .preview__archive-directory td:last-child {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (forced-colors: active) {
+  :root[data-platform='macos'] :is(.preview__toolbar, .preview__pdf) :is(button, input, select):focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+}

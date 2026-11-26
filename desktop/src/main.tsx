@@ -8,6 +8,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { AppErrorBoundary } from './components/app-shell/AppErrorBoundary';
+import { initNativeShellPlatform } from './host-adapter/native-shell';
 import { NativeWorkspaceBootstrap } from './runtime/NativeWorkspaceBootstrap';
 import './index.css';
 
@@ -17,6 +18,8 @@ if (!rootEl) {
   // condition we should paper over.
   throw new Error('Root element #root not found in index.html');
 }
+
+initNativeShellPlatform();
 
 createRoot(rootEl).render(
   <StrictMode>

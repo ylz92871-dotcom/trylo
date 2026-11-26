@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { WINDOWS_MCP_MANIFEST } from '../src/tooling/manifests/windows-mcp.mjs';
 import { verifyBuiltinTools } from '../../desktop/scripts/verify-builtin-tools.mjs';
 import { macosNodePin, verifyMacosNode } from '../../desktop/scripts/macos-node-pin.mjs';
+import { MACOS_COMPUTER_EXECUTABLE } from '../src/tooling/macos-computer-contract.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(packageRoot, '..');
@@ -195,6 +196,7 @@ async function main() {
     )] : []),
     // WCC-P2-05: the pinned .NET WGC helper, digest-gated (spec §19.8).
     ...(windows ? [await checkWgcHelper()] : []),
+    ...(darwin && verifyingPackaged ? [await checkItem('macOS Computer Use helper', path.join(serviceRoot, MACOS_COMPUTER_EXECUTABLE), true)] : []),
     await checkItem('vendor desktop companion bridge', path.join(serviceRoot, 'vendor', 'legacy', 'desktop-companion-bridge.js'), true),
     await checkItem('vendor Hermes capability manager', path.join(serviceRoot, 'vendor', 'legacy', 'hermes-capability-manager.js'), true),
     await checkItem('vendor Hermes session sync', path.join(serviceRoot, 'vendor', 'legacy', 'hermes-session-sync.js'), true),

@@ -32,6 +32,7 @@ import { toolRuntimeIdentity } from './tool-runtime-identity.mjs';
 import { CORE_TOOL_RUNTIME_REVISION } from './tool-catalog.mjs';
 import { MODEL_PREVIEW_NAMES, MODEL_PREVIEW_VERSION } from './model-preview-contract.mjs';
 import { SOFTWARE_NAMES, SOFTWARE_VERSION } from './software-workspace-contract.mjs';
+import { MACOS_COMPUTER_ID, MACOS_COMPUTER_SERVER, MACOS_COMPUTER_TOOLS, MACOS_COMPUTER_VERSION, MACOS_COMPUTER_EXECUTABLE } from './macos-computer-contract.mjs';
 
 /** Placeholder expanded per-run in a manifest's argv (spec §10.2). */
 const RUNTIME_DIR_TOKEN = '{runtimeDir}';
@@ -207,6 +208,7 @@ export function createToolProfileService(options = {}) {
   const nativeBrowser = options.nativeBrowser;
   const modelPreview = options.modelPreview;
   const softwareWorkspace = options.softwareWorkspace;
+  const macosComputerEnabled = options.macosComputerEnabled === true;
   // An embedded caller's argv[1] is its launcher, which need not implement
   // --native-browser-mcp. The service host supplies its own path when bundled.
   const hostEntrypoint = options.hostEntrypoint ?? fileURLToPath(new URL('../host.mjs', import.meta.url));
@@ -373,7 +375,7 @@ export function createToolProfileService(options = {}) {
       // 电脑控制开关: when explicitly disabled, the desktop-control package is
       // dropped from the Profile. Not an "unavailable capability" (the user
       // turned it off, not a missing dependency) — the tools are simply absent.
-      if (!computerUse && id === WINDOWS_MCP_PACKAGE_ID) continue;
+      if (id === WINDOWS_MCP_PACKAGE_ID && (!computerUse || macosComputerEnabled)) continue;
       let manifest;
       try {
         manifest = catalog.get(id);
@@ -533,6 +535,27 @@ export function createToolProfileService(options = {}) {
       }
     }
 
+    if (macosComputerEnabled && computerUse) {
+      try {
+        if (mcpServers[MACOS_COMPUTER_SERVER]) throw new Error('macos_computer_server_name_collision');
+        const hostDir = path.dirname(hostEntrypoint);
+        const servicesDir = path.basename(hostEntrypoint) === 'host.bundle.mjs'
+          ? path.resolve(hostDir, '..')
+          : path.resolve(hostDir, '../../desktop/src-tauri/resources/desktop-services');
+        const command = path.join(servicesDir, MACOS_COMPUTER_EXECUTABLE);
+        await fsp.access(command, fs.constants.X_OK);
+        const identity = sha256(await fsp.readFile(command));
+        mcpServers[MACOS_COMPUTER_SERVER] = { command, args: [], env: {} };
+        packageHealth.push({ id: MACOS_COMPUTER_ID, classifierId: MACOS_COMPUTER_ID, displayName: 'macOS Computer Use',
+          version: MACOS_COMPUTER_VERSION, adoption: 'trial', serverName: MACOS_COMPUTER_SERVER, state: 'installed',
+          available: true, active: true, builtIn: true, runtimeIdentity: `macos-computer:${identity}`,
+          detail: 'macOS native Computer Use (opt-in)', expectedTools: [...MACOS_COMPUTER_TOOLS], protocol: 'not-checked', checkedAt: now() });
+      } catch (error) {
+        unavailableCapabilities.push({ id: MACOS_COMPUTER_ID, type: 'package', reasonCode: 'macos_computer_unavailable',
+          detail: String(error.message ?? error), userMessage: 'macOS 电脑操作助手不可用，其他工具仍可继续使用。' });
+      }
+    }
+
     // The host-owned preview has no package installation lifecycle.
     if (modelPreview && projectRoot && conversationId) {
       try {
@@ -563,6 +586,7 @@ export function createToolProfileService(options = {}) {
     const askRules = catalog.list().map((m) => `mcp__${m.mcp.serverName}__*`);
     if (modelPreview) askRules.push('mcp__trylo-preview__*');
     if (softwareWorkspace && computerUse) askRules.push('mcp__trylo-software__*');
+    if (macosComputerEnabled) askRules.push(`mcp__${MACOS_COMPUTER_SERVER}__*`);
     const settingsContents = `${stableStringify({
       permissions: { ask: askRules, deny: [] },
     })}\n`;

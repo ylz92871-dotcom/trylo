@@ -86,6 +86,7 @@
 }
 
 .permission-picker__menu {
+  --popover-origin-y: 4px;
   position: absolute;
   bottom: calc(100% + 6px);
   left: 0;
@@ -99,6 +100,12 @@
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   z-index: 20;
+  transform-origin: bottom left;
+  animation: trylo-popover-in var(--duration-popover-in) var(--ease-out) both;
+}
+
+.permission-picker__menu[data-motion-state='exiting'] {
+  animation: trylo-popover-out var(--duration-popover-out) var(--ease-in) both;
 }
 
 .permission-picker__item {
@@ -161,4 +168,49 @@
   color: var(--fg-muted);
   text-align: right;
   border-top: 1px solid var(--border);
+}
+
+:root[data-platform='macos'] .permission-picker__menu {
+  padding: 6px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--macos-popover-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: var(--macos-popover-shadow);
+}
+
+:root[data-platform='macos'] .permission-picker__item {
+  border-radius: 6px;
+}
+
+:root[data-platform='macos'] .permission-picker__item--focus {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
+:root[data-platform='macos'] .permission-picker__footer {
+  border-top-color: var(--macos-hairline);
+}
+
+:root[data-platform='macos'] .permission-picker__trigger:focus-visible {
+  outline: none;
+  box-shadow: var(--macos-focus-halo);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-platform='macos'] .permission-picker__menu {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (forced-colors: active) {
+  :root[data-platform='macos'] .permission-picker__menu {
+    border: 1px solid CanvasText;
+  }
+  :root[data-platform='macos'] .permission-picker__trigger:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
 }

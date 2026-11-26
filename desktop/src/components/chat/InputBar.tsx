@@ -20,6 +20,7 @@ import type { PermissionLevel } from '../../permission/permission-policy';
 import { GoalControl } from './GoalControl';
 import { ComposerActions } from './ComposerActions';
 import { isGoalSnapshot, type GoalControl as GoalAction } from '../../domain/goal';
+import { formatShortcut, isImeComposing, isMacPlatform } from '../../utils/platform';
 
 const CODE_LABEL: Record<CodeMode, string> = { agent: '执行', chat: '对话', plan: '计划', cognition: '偏好' };
 const CODE_PLACEHOLDER: Record<CodeMode, string> = {
@@ -187,6 +188,8 @@ export function InputBar(props: InputBarProps): ReactElement {
   const plusRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isWork = props.conversationKind === 'work';
+  const isMac = isMacPlatform();
+  const enterShortcut = formatShortcut(['Enter']);
   const canSend = props.canSend !== false && props.text.trim().length > 0 && (props.attachmentLoading ?? 0) === 0;
   const showStop = props.running && props.onStop !== undefined && props.text.trim().length === 0;
   const resize = useCallback((el: HTMLTextAreaElement | null) => {
@@ -203,7 +206,7 @@ export function InputBar(props: InputBarProps): ReactElement {
   };
   const submit = (event: FormEvent, openGoal?: () => void): void => { event.preventDefault(); send(openGoal); };
   const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>, openGoal?: () => void): void => {
-    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+    if (event.key === 'Enter' && !event.shiftKey && !isImeComposing(event)) {
       event.preventDefault(); send(openGoal);
     }
   };
@@ -249,7 +252,7 @@ export function InputBar(props: InputBarProps): ReactElement {
       <textarea ref={textareaRef} className="input-bar__input" value={props.text}
         onChange={(event) => props.onTextChange(event.target.value)} onKeyDown={event => keyDown(event, openGoal)} onPaste={paste}
         placeholder={props.viewState === 'awaiting_input' ? '直接回复，任务会从这里继续…'
-          : props.running ? '输入调整方向，Enter 发送后续消息…'
+          : props.running ? (isMac ? `输入调整方向，${enterShortcut} 发送后续消息…` : '输入调整方向，Enter 发送后续消息…')
           : isWork ? '描述你想完成的工作，或添加资料…' : CODE_PLACEHOLDER[props.codeMode]}
         rows={1} spellCheck={false} autoComplete="off" aria-label="Message" />
       <AttachmentList attachments={props.attachments} onRemove={props.onRemoveAttachment}
@@ -280,7 +283,7 @@ export function InputBar(props: InputBarProps): ReactElement {
       {isWork && props.toolProfileId && <ToolProfileChip profileId={props.toolProfileId} onOpenSettings={props.onOpenToolSettings} />}
       {!isStart && moreControl}
       <div className="input-bar__actions-spare" />
-      {!isStart && <span className="input-bar__hint">Enter 发送</span>}
+      {!isStart && <span className="input-bar__hint">{`${enterShortcut} 发送`}</span>}
       {(props.contextUsed > 0 || props.contextUnknown) && <ContextRing used={props.contextUsed} total={props.contextWindow} onCompact={props.onCompact}
         busy={props.compacting} unknown={props.contextUnknown} disabled={props.running || props.compactAvailable === false} />}
     </div>}

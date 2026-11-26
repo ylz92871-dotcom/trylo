@@ -31,6 +31,7 @@ import type { ApprovalPreview } from '../approval/approval-preview';
 import { officecliClassifier } from './classifiers/officecli-classifier';
 import { playwrightClassifier } from './classifiers/playwright-classifier';
 import { windowsClassifier } from './classifiers/windows-mcp-classifier';
+import { macosComputerClassifier } from './classifiers/macos-computer-classifier';
 import { chromeDevtoolsClassifier } from './classifiers/chrome-devtools-classifier';
 import { modelPreviewClassifier } from './classifiers/model-preview-classifier';
 import { softwareWorkspaceClassifier } from './classifiers/software-workspace-classifier';
@@ -188,6 +189,7 @@ export function createToolRiskClassifier(
     officecliClassifier,
     playwrightClassifier,
     windowsClassifier,
+    macosComputerClassifier,
     chromeDevtoolsClassifier,
     modelPreviewClassifier,
     softwareWorkspaceClassifier,

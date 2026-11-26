@@ -90,10 +90,13 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
   box-shadow:
     0 10px 28px rgba(38, 39, 37, 0.1),
     0 1px 4px rgba(38, 39, 37, 0.05);
+}
+
+:root:not([data-platform='macos']) .model-selector__popover {
+  scrollbar-gutter: stable;
 }
 
 .model-selector__group-heading {
@@ -175,4 +178,45 @@
   flex-shrink: 0;
   font-size: 11px;
   color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-platform='macos'] .model-selector__popover {
+  border: 0;
+  border-radius: 12px;
+  padding: 6px;
+  background: var(--macos-popover-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: var(--macos-popover-shadow);
+}
+
+:root[data-platform='macos'] .model-selector__item {
+  border-radius: 6px;
+}
+
+:root[data-platform='macos'] .model-selector__item:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
+:root[data-platform='macos'] .model-selector__item--current,
+:root[data-platform='macos'] .model-selector__item--current:hover {
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
+}
+
+:root[data-platform='macos'] .model-selector__divider {
+  background: var(--macos-hairline);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-platform='macos'] .model-selector__popover {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (forced-colors: active) {
+  :root[data-platform='macos'] .model-selector__popover {
+    border: 1px solid CanvasText;
+  }
 }

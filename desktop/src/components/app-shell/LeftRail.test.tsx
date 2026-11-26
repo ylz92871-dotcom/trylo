@@ -1,6 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { describe, expect, it, vi, type Mock } from 'vitest';
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 import type { ConversationSession } from '../../host-adapter/conversation-history';
 import type { FilePath } from '../../host-adapter/types';
 import { LeftRail } from './LeftRail';
@@ -21,6 +21,23 @@ vi.mock('../../user-profile/profile-store', () => ({
     pickImage: () => new Promise<never>(() => undefined),
   },
 }));
+
+function mockPlatform(platform: string): () => void {
+  const original = Object.getOwnPropertyDescriptor(window.navigator, 'platform');
+  Object.defineProperty(window.navigator, 'platform', { value: platform, configurable: true });
+  return () => {
+    if (original) Object.defineProperty(window.navigator, 'platform', original);
+    else delete (window.navigator as { platform?: string }).platform;
+  };
+}
+
+let restorePlatform: (() => void) | undefined;
+
+afterEach(() => {
+  cleanup();
+  restorePlatform?.();
+  restorePlatform = undefined;
+});
 
 function session(
   id: string,
@@ -198,5 +215,79 @@ describe('LeftRail profile row', () => {
     expect(screen.getByRole('dialog', { name: '用户资料' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '用户资料' }));
     expect(screen.queryByRole('dialog', { name: '用户资料' })).toBeNull();
+  });
+});
+
+describe('LeftRail macOS unified header & platform isolation', () => {
+  it('places the collapse button before the compact 22px brand on macOS with drag regions', () => {
+    restorePlatform = mockPlatform('MacIntel');
+    const { container } = render(
+      <LeftRail
+        workspaces={[{ id: 'ws-1', root: '/tmp/project' as FilePath, name: 'project' }]}
+        currentWorkspaceId="ws-1"
+        sessions={[session('code-1', 'code', 100), session('work-1', 'work', 200)]}
+        activeSessionId="code-1"
+        collapsed={false}
+        runningSessionIds={new Set<string>()}
+        onSwitchWorkspace={vi.fn()}
+        onOpenFolder={vi.fn()}
+        onCloseWorkspace={vi.fn()}
+        onSelectSession={vi.fn()}
+        onNewSession={vi.fn()}
+        onDeleteSession={vi.fn()}
+        onRenameSession={vi.fn()}
+        onArchiveSession={vi.fn()}
+        onUnarchiveSession={vi.fn()}
+        onToggleCollapse={vi.fn()}
+      />,
+    );
+
+    const header = container.querySelector('.left-rail__header')!;
+    const collapseBtn = screen.getByRole('button', { name: 'Collapse rail' });
+    const brand = container.querySelector('.left-rail__brand[data-startup-logo]') as HTMLElement;
+    const chip = brand.querySelector('.trilo-mark--chip') as HTMLElement;
+
+    expect(header).toHaveAttribute('data-tauri-drag-region', '');
+    expect(collapseBtn).toHaveAttribute('data-tauri-drag-region', 'false');
+    expect(brand).toHaveAttribute('data-tauri-drag-region', '');
+    expect(chip.style.width).toBe('22px');
+    expect(header.firstElementChild).toBe(collapseBtn);
+    expect(collapseBtn.compareDocumentPosition(brand) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('Fix persistence')).toBeInTheDocument();
+    expect(screen.getByText('Draft report')).toBeInTheDocument();
+  });
+
+  it('retains the original brand-first 40px header layout without drag regions on Windows', () => {
+    restorePlatform = mockPlatform('Win32');
+    const { container } = render(
+      <LeftRail
+        workspaces={[{ id: 'ws-1', root: 'D:/project' as FilePath, name: 'project' }]}
+        currentWorkspaceId="ws-1"
+        sessions={[session('code-1', 'code', 100)]}
+        activeSessionId="code-1"
+        collapsed={false}
+        runningSessionIds={new Set<string>()}
+        onSwitchWorkspace={vi.fn()}
+        onOpenFolder={vi.fn()}
+        onCloseWorkspace={vi.fn()}
+        onSelectSession={vi.fn()}
+        onNewSession={vi.fn()}
+        onDeleteSession={vi.fn()}
+        onRenameSession={vi.fn()}
+        onArchiveSession={vi.fn()}
+        onUnarchiveSession={vi.fn()}
+        onToggleCollapse={vi.fn()}
+      />,
+    );
+
+    const header = container.querySelector('.left-rail__header')!;
+    const collapseBtn = screen.getByRole('button', { name: 'Collapse rail' });
+    const brand = container.querySelector('.left-rail__brand[data-startup-logo]') as HTMLElement;
+    const chip = brand.querySelector('.trilo-mark--chip') as HTMLElement;
+
+    expect(header).not.toHaveAttribute('data-tauri-drag-region');
+    expect(collapseBtn).not.toHaveAttribute('data-tauri-drag-region');
+    expect(chip.style.width).toBe('40px');
+    expect(header.firstElementChild).toBe(brand);
   });
 });

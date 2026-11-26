@@ -113,6 +113,8 @@
   border-radius: 0;
   box-shadow: none;
   background: color-mix(in srgb, var(--fg) 4%, var(--bg));
+}
+:root:not([data-platform='macos']) .computer-preview-window .preview-image__viewport {
   scrollbar-color: var(--border-strong) transparent;
 }
 .computer-preview-window .preview-image__empty {

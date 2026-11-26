@@ -7,7 +7,7 @@
  * "远程" button, instead of buried inside Settings. */
 
 /* Connected workbench: matches the reviewed preview and shared theme tokens. */
-.remote-pairing-modal.remote-pairing-modal { width: min(868px, calc(100vw - 40px)); max-height: min(90vh, 850px); position: relative; }
+.remote-pairing-modal.remote-pairing-modal { width: min(780px, calc(100vw - 64px)); max-height: min(90vh, 850px); position: relative; }
 .remote-pairing-modal__header.remote-pairing-modal__header { padding: 24px 30px; }
 .remote-connect__title { display: flex; align-items: center; gap: 14px; }
 .remote-connect__title > span { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: var(--brand-soft); color: var(--brand); }
@@ -15,7 +15,7 @@
 .remote-connect__title p { margin: 6px 0 0; font-size: 12px; color: var(--fg-muted); }
 .remote-connect__content { padding: 22px 30px 25px; overflow-y: auto; }
 .remote-connect__tabs { display: flex; gap: 30px; border-bottom: 1px solid var(--border); margin-bottom: 22px; }
-.remote-connect__tabs button { display: flex; gap: 8px; align-items: center; padding: 0 2px 15px; border: 0; border-bottom: 2px solid transparent; background: none; font: inherit; color: var(--fg-muted); cursor: pointer; }
+.remote-connect__tabs button { display: flex; gap: 8px; align-items: center; padding: 0 2px 15px; border: 0; border-bottom: 2px solid transparent; background: none; font: inherit; color: var(--fg-muted); cursor: pointer; transition: color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out); }
 .remote-connect__tabs button[aria-selected=true] { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600; }
 .remote-connect__tabs small { padding: 2px 5px; border-radius: 4px; background: var(--brand-soft); font-size: 10px; }
 .remote-connect__status { display: flex; gap: 12px; align-items: center; padding: 14px 16px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 9px; }
@@ -24,7 +24,7 @@
 .remote-connect__status strong { font-size: 13px; font-weight: 600; }
 .remote-connect__status p { margin: 5px 0 0; font-size: 11px; color: var(--fg-muted); }
 .remote-connect__status button { margin-left: auto; flex-shrink: 0; border: 0; background: none; font: inherit; font-size: 12px; color: var(--brand); cursor: pointer; }
-.remote-connect__grid { display: grid; grid-template-columns: 1fr 1fr; margin-top: 26px; }
+.remote-connect__grid { display: grid; grid-template-columns: 292px minmax(0, 1fr); margin-top: 26px; }
 .remote-connect__grid h3 { margin: 0 0 15px; font-size: 13px; font-weight: 600; }
 .remote-connect__pairing { padding-right: 30px; border-right: 1px solid var(--border); text-align: center; }
 .remote-connect__pairing h3 { display: flex; align-items: center; justify-content: space-between; text-align: left; }
@@ -68,8 +68,8 @@
 .remote-connect__tunnels button[aria-pressed=true] { background: var(--brand-soft); color: var(--brand); }
 .remote-pairing-modal__footer.remote-pairing-modal__footer { justify-content: space-between; align-items: center; padding: 14px 25px; }
 .remote-pairing-modal__footer > span { display: flex; align-items: center; gap: 7px; color: var(--fg-muted); font-size: 11px; }
-.remote-connect__confirm { position: absolute; inset: 0; background: #0006; display: grid; place-items: center; padding: 25px; z-index: 2; }
-.remote-connect__confirm > div { max-width: 380px; padding: 26px; background: var(--bg-panel); border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: 0 16px 50px #0003; }
+.remote-connect__confirm { position: absolute; inset: 0; background: #0006; display: grid; place-items: center; padding: 25px; z-index: 2; animation: trylo-fade-in var(--duration-fast) var(--ease-out) both; }
+.remote-connect__confirm > div { max-width: 380px; padding: 26px; background: var(--bg-panel); border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: 0 16px 50px #0003; animation: trylo-modal-in var(--duration-modal-in) var(--ease-out) both; }
 .remote-connect__confirm h3 { margin: 0 0 14px; font-size: 17px; }
 .remote-connect__confirm p { font-size: 12px; line-height: 1.8; color: var(--fg-muted); }
 .remote-connect__confirm > div > div { display: flex; justify-content: flex-end; gap: 16px; margin-top: 22px; }
@@ -98,7 +98,11 @@
   justify-content: center;
   z-index: 120;
   backdrop-filter: blur(2px);
-  animation: rpm-fade 140ms ease-out;
+  animation: trylo-fade-in var(--duration-modal-in) var(--ease-out) both;
+}
+
+.remote-pairing-modal__overlay[data-motion-state='exiting'] {
+  animation: trylo-fade-out var(--duration-modal-out) var(--ease-in) both;
 }
 
 .remote-pairing-modal {
@@ -112,7 +116,11 @@
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   font-family: var(--font-body);
-  animation: rpm-rise 160ms ease-out;
+  animation: trylo-modal-in var(--duration-modal-in) var(--ease-out) both;
+}
+
+.remote-pairing-modal__overlay[data-motion-state='exiting'] .remote-pairing-modal {
+  animation: trylo-modal-out var(--duration-modal-out) var(--ease-in) both;
 }
 
 .remote-pairing-modal__header {
@@ -391,8 +399,97 @@
 @media (prefers-reduced-motion: reduce) {
   .remote-pairing-modal__overlay,
   .remote-pairing-modal,
+  .remote-connect__confirm,
+  .remote-connect__confirm > div,
   .remote-pairing-modal__qr-skeleton,
   .remote-pairing-modal__spin {
     animation: none;
+  }
+}
+
+/* ── macOS Sheet geometry, hairline borders & focus halo parity ───────── */
+:root[data-platform='macos'] .remote-pairing-modal__overlay {
+  background: rgba(15, 16, 18, 0.34);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+:root[data-platform='macos'][data-theme='dark'] .remote-pairing-modal__overlay {
+  background: rgba(0, 0, 0, 0.56);
+}
+
+:root[data-platform='macos'] .remote-pairing-modal {
+  border: 0;
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 0.5px rgba(0, 0, 0, 0.08),
+    0 24px 64px rgba(0, 0, 0, 0.22);
+}
+
+:root[data-platform='macos'][data-theme='dark'] .remote-pairing-modal {
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
+    0 24px 64px rgba(0, 0, 0, 0.55);
+}
+
+:root[data-platform='macos'] .remote-pairing-modal__header,
+:root[data-platform='macos'] .remote-connect__tabs,
+:root[data-platform='macos'] .remote-connect__pairing,
+:root[data-platform='macos'] .remote-connect__login form,
+:root[data-platform='macos'] .remote-connect__details hr {
+  border-color: var(--macos-hairline);
+}
+
+:root[data-platform='macos'] .remote-pairing-modal__footer {
+  border-top-color: var(--macos-hairline);
+}
+
+:root[data-platform='macos'] .remote-connect__status,
+:root[data-platform='macos'] .remote-connect__tunnels,
+:root[data-platform='macos'] .remote-pairing-modal__status,
+:root[data-platform='macos'] .remote-pairing-modal__btn--ghost {
+  border-color: var(--macos-hairline-strong);
+}
+
+:root[data-platform='macos'] .remote-connect__content input {
+  border-color: var(--macos-hairline-strong);
+  border-radius: 6px;
+}
+
+:root[data-platform='macos'] .remote-connect__content input:focus,
+:root[data-platform='macos'] .remote-pairing-modal :is(button, input, summary):focus-visible {
+  outline: none;
+  box-shadow: var(--macos-focus-halo);
+}
+
+:root[data-platform='macos'] .remote-connect__confirm > div {
+  border: 0;
+  border-radius: 14px;
+  background: var(--macos-popover-bg);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: var(--macos-popover-shadow);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-platform='macos'] .remote-pairing-modal__overlay,
+  :root[data-platform='macos'] .remote-connect__confirm > div {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (forced-colors: active) {
+  :root[data-platform='macos'] .remote-pairing-modal,
+  :root[data-platform='macos'] .remote-connect__confirm > div {
+    border: 1px solid CanvasText;
+    box-shadow: none;
+  }
+
+  :root[data-platform='macos'] .remote-pairing-modal :is(button, input, summary):focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
   }
 }

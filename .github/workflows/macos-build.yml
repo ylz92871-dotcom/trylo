@@ -70,6 +70,7 @@ jobs:
       - name: Build the internal installer and record its digest
         run: |
           (cd desktop && pnpm exec tauri build --debug --bundles app,dmg)
+          node --input-type=module -e "import { verifyMacosOfficeEngine } from './desktop/scripts/preview/office-engine-darwin.mjs'; await verifyMacosOfficeEngine('desktop/src-tauri/target/debug/bundle/macos/Trylo.app/Contents/Resources/preview/office')"
           cd desktop/src-tauri/target/debug/bundle/dmg
           for image in ./*.dmg; do /usr/bin/hdiutil verify "$image"; done
           shasum -a 256 ./*.dmg > SHA256SUMS.txt

@@ -1,14 +1,18 @@
 //! Native browser contents belong to Desktop, not to the MCP process tree.
 //! Every command is main-webview-only; remote pages have no application IPC.
 use serde::{Deserialize, Serialize};
+#[cfg(not(target_os = "macos"))]
 use std::{collections::HashMap, sync::Mutex};
 #[cfg(windows)]
 use std::{net::TcpListener, sync::atomic::{AtomicU64, Ordering}};
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 use sha2::{Digest, Sha256};
 use tauri::{Manager, Webview};
 #[cfg(windows)]
 use tauri::{Emitter, WebviewBuilder, WebviewUrl};
+#[cfg(target_os = "macos")]
+#[path = "native_browser_darwin.rs"]
+mod darwin;
 
 #[derive(Clone, Copy, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,7 +20,7 @@ pub struct Bounds { pub x: f64, pub y: f64, pub width: f64, pub height: f64 }
 impl Default for Bounds {
     fn default() -> Self { Self { x: 0.0, y: 0.0, width: 480.0, height: 640.0 } }
 }
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 impl Bounds {
     fn validate(self) -> Result<Self, String> {
         if [self.x, self.y, self.width, self.height].iter().any(|v| !v.is_finite())
@@ -29,40 +33,51 @@ impl Bounds {
 }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeTab { pub label: String, pub marker: String, pub popup: bool }
+pub struct NativeTab {
+    pub label: String, pub marker: String, pub popup: bool,
+    #[cfg(target_os = "macos")]
+    pub url: String,
+    #[cfg(target_os = "macos")]
+    pub title: String,
+}
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeSession {
-    pub scope: String, pub cdp_port: u16, pub tabs: Vec<NativeTab>, pub active_label: String,
+    pub scope: String,
+    pub cdp_available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cdp_port: Option<u16>,
+    pub tabs: Vec<NativeTab>, pub active_label: String,
     bounds: Bounds,
-    #[cfg(any(windows, test))]
+    #[cfg(any(windows, target_os = "macos", test))]
     #[serde(skip)] visible: bool,
     zoom: f64,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     #[serde(skip)] next_tab: u64,
 }
+#[cfg(not(target_os = "macos"))]
 #[derive(Default)]
 pub struct NativeBrowserState(pub Mutex<HashMap<String, NativeSession>>);
 pub fn allows_application_ipc(label: &str) -> bool { !label.starts_with("browser-") }
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeCommand {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub scope: String,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub operation: String,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub label: Option<String>,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub url: Option<String>,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub bounds: Option<Bounds>,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub visible: Option<bool>,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub zoom: Option<f64>,
 }
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PageEvent { scope: String, label: String, url: Option<String>, title: Option<String> }
@@ -148,7 +163,7 @@ fn acknowledge_native_bounds(webview: &Webview) -> Result<(), String> {
     receive.recv_timeout(std::time::Duration::from_secs(5)).map_err(|_| "浏览器视口更新超时".to_string())
 }
 
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 fn scope_digest(scope: &str) -> String {
     // Persistent cookie profiles must keep their identity across Rust upgrades.
     format!("{:x}", Sha256::digest(scope.as_bytes()))
@@ -160,6 +175,7 @@ fn view(app: &tauri::AppHandle, label: &str) -> Result<Webview, String> {
 #[cfg(windows)]
 fn create_tab(app: &tauri::AppHandle, session: &mut NativeSession, url: Option<&str>) -> Result<NativeTab, String> {
     if session.tabs.len() >= 32 { return Err("浏览器标签页已达到 32 页".into()); }
+    let port = session.cdp_port.ok_or("浏览器缺少调试端口")?;
     let label = format!("browser-{}-{}", scope_digest(&session.scope), session.next_tab);
     session.next_tab += 1;
     let marker = format!("about:blank#trylo-native-{label}");
@@ -172,11 +188,11 @@ fn create_tab(app: &tauri::AppHandle, session: &mut NativeSession, url: Option<&
     let popup_scope = session.scope.clone();
     let popup_app = app.clone();
     let popup_data = data.clone();
-    let popup_args = format!("--remote-debugging-port={} --remote-debugging-address=127.0.0.1", session.cdp_port);
+    let popup_args = format!("--remote-debugging-port={port} --remote-debugging-address=127.0.0.1");
     let script = format!("Object.defineProperty(globalThis,'__tryloNativeView',{{value:{label:?},configurable:false}});");
     let builder = WebviewBuilder::new(&label, WebviewUrl::External(initial))
         .data_directory(data)
-        .additional_browser_args(&format!("--remote-debugging-port={} --remote-debugging-address=127.0.0.1", session.cdp_port))
+        .additional_browser_args(&format!("--remote-debugging-port={port} --remote-debugging-address=127.0.0.1"))
         .disable_drag_drop_handler()
         .zoom_hotkeys_enabled(true)
         .initialization_script(&script)
@@ -250,7 +266,7 @@ fn create_tab(app: &tauri::AppHandle, session: &mut NativeSession, url: Option<&
     }
     Ok(record)
 }
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 fn presentation_update(session: &NativeSession, tab: &NativeTab, previous: Option<&NativeSession>) -> (bool, Option<bool>) {
     let known = previous.is_some_and(|old| old.tabs.iter().any(|old_tab| old_tab.label == tab.label));
     let visible = session.visible && tab.label == session.active_label;
@@ -286,6 +302,12 @@ fn present(app: &tauri::AppHandle, session: &NativeSession, previous: Option<&Na
     Ok(())
 }
 
+#[cfg(target_os = "macos")]
+pub fn close_owned_popups(app: &tauri::AppHandle) {
+    darwin::close_all(app);
+}
+
+#[cfg(not(target_os = "macos"))]
 pub fn close_owned_popups(app: &tauri::AppHandle) {
     // A creation command may hold the session lock while waiting on this UI
     // thread. Never acquire that lock inside the native close callback.
@@ -316,7 +338,7 @@ fn execute_with_sessions(
         let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
         let port = listener.local_addr().map_err(|e| e.to_string())?.port();
         drop(listener);
-        let mut session = NativeSession { scope: command.scope.clone(), cdp_port: port, tabs: vec![], active_label: String::new(),
+        let mut session = NativeSession { scope: command.scope.clone(), cdp_available: true, cdp_port: Some(port), tabs: vec![], active_label: String::new(),
             bounds: Bounds::default(), visible: false, zoom: 1.0, next_tab: 1 };
         create_tab(app, &mut session, None)?;
         sessions.insert(command.scope.clone(), session);
@@ -403,8 +425,10 @@ fn try_layout_on_ui(app: &tauri::AppHandle, command: &NativeCommand) -> Option<R
 #[tauri::command]
 pub async fn native_browser_command(webview: Webview, command: NativeCommand) -> Result<NativeSession, String> {
     if webview.label() != "main" { return Err("只有主界面可以控制原生浏览器".into()); }
-    #[cfg(not(windows))]
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     { let _ = command; Err("当前平台尚未接入原生浏览器".into()) }
+    #[cfg(target_os = "macos")]
+    { darwin::command(webview.app_handle(), command).await }
     #[cfg(windows)]
     {
         let app = webview.app_handle().clone();
@@ -425,8 +449,8 @@ pub async fn native_browser_command(webview: Webview, command: NativeCommand) ->
 mod tests {
     use super::*;
     #[test] fn service_host_receives_geometry_and_zoom_but_not_presentation_internals() {
-        let session = NativeSession { scope: "one".into(), cdp_port: 9000, tabs: vec![], active_label: "tab".into(),
-            bounds: Bounds::default(), visible: true, zoom: 1.5, #[cfg(windows)] next_tab: 2 };
+        let session = NativeSession { scope: "one".into(), cdp_available: true, cdp_port: Some(9000), tabs: vec![], active_label: "tab".into(),
+            bounds: Bounds::default(), visible: true, zoom: 1.5, #[cfg(any(windows, target_os = "macos"))] next_tab: 2 };
         let value = serde_json::to_value(session).unwrap();
         assert_eq!(value["bounds"]["width"], 480.0);
         assert_eq!(value["zoom"], 1.5);
@@ -434,9 +458,10 @@ mod tests {
         assert!(value.get("nextTab").is_none());
     }
     #[test] fn resizing_only_changes_bounds_and_restoring_a_hidden_view_reapplies_them() {
-        let tab = NativeTab { label: "browser-one".into(), marker: "about:blank".into(), popup: false };
-        let previous = NativeSession { scope: "one".into(), cdp_port: 9000, tabs: vec![tab.clone()], active_label: tab.label.clone(),
-            bounds: Bounds::default(), visible: true, zoom: 1.0, #[cfg(windows)] next_tab: 2 };
+        let tab = NativeTab { label: "browser-one".into(), marker: "about:blank".into(), popup: false,
+            #[cfg(target_os = "macos")] url: "about:blank".into(), #[cfg(target_os = "macos")] title: String::new() };
+        let previous = NativeSession { scope: "one".into(), cdp_available: true, cdp_port: Some(9000), tabs: vec![tab.clone()], active_label: tab.label.clone(),
+            bounds: Bounds::default(), visible: true, zoom: 1.0, #[cfg(any(windows, target_os = "macos"))] next_tab: 2 };
         let mut current = previous.clone(); current.bounds.width = 640.0;
         assert_eq!(presentation_update(&current, &tab, Some(&previous)), (true, None));
         assert_eq!(presentation_update(&current, &tab, Some(&current)), (false, None));

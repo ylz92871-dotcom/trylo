@@ -20,7 +20,8 @@ import { viewStateLabel } from './view-state'
 // they provide runtime/domain data and capability
 // actions, never a second layout.
 
-import { useContext, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
+import { prefersReducedMotion } from '../../utils/use-presence-transition'
 import { ComposerLayoutContext } from './composer-layout'
 import { ConversationPresentation } from './ConversationPresentation'
 import { Message } from './Message'
@@ -142,6 +143,45 @@ export function AgentConversationSurface(props: AgentConversationSurfaceProps): 
   })
   const selectedIsCurrent =
     props.messages.findIndex((message) => message.id === selectedId) > latestUserIndex
+  const panelRef = useRef<HTMLDivElement>(null)
+  const prevEmptyRef = useRef(isEmpty)
+  const homeComposerTopRef = useRef<number | null>(null)
+
+  useLayoutEffect(() => {
+    const panel = panelRef.current
+    if (!panel) return
+
+    const captureHomeComposer = (): void => {
+      const rect = panel.querySelector<HTMLElement>('.input-bar-wrapper')?.getBoundingClientRect()
+      homeComposerTopRef.current = rect ? rect.top : null
+    }
+
+    if (isEmpty) {
+      captureHomeComposer()
+      prevEmptyRef.current = true
+      window.addEventListener('resize', captureHomeComposer)
+      return () => window.removeEventListener('resize', captureHomeComposer)
+    }
+
+    if (prevEmptyRef.current && !prefersReducedMotion()) {
+      const fromTop = homeComposerTopRef.current
+      const composer = panel.querySelector<HTMLElement>('.input-bar-wrapper')
+      if (fromTop !== null && composer && typeof composer.animate === 'function') {
+        const deltaY = fromTop - composer.getBoundingClientRect().top
+        if (Math.abs(deltaY) >= 12) {
+          const clampedY = Math.max(-360, Math.min(360, deltaY))
+          composer.animate(
+            [{ transform: `translateY(${clampedY}px)` }, { transform: 'translateY(0)' }],
+            { duration: 240, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+          )
+        }
+      }
+    }
+    prevEmptyRef.current = false
+    homeComposerTopRef.current = null
+    return undefined
+  }, [isEmpty])
+
   useEffect(() => {
     if (selectedId && !selected) setSelectedId(null)
   }, [selectedId, selected])
@@ -165,7 +205,7 @@ export function AgentConversationSurface(props: AgentConversationSurfaceProps): 
           }
         }}
       >
-        <div className="chat-panel" data-empty={isEmpty}>
+        <div ref={panelRef} className="chat-panel" data-empty={isEmpty}>
           {props.cornerSlot !== undefined && (
             <div className="chat-panel__corner">{props.cornerSlot}</div>
           )}

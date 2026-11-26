@@ -9,7 +9,7 @@
 .right-rail {
   display: flex;
   flex-direction: column;
-  width: clamp(280px, var(--rail-right-w, 480px), 45vw);
+  width: clamp(260px, var(--rail-right-w, var(--rail-right-files-w, 320px)), 38vw);
   flex: 0 0 auto;
   /* Match the page so the tree reads as a quiet side panel,
      not a second surface competing with the work area. The
@@ -20,7 +20,7 @@
   overflow: hidden;
 }
 
-.right-rail__header { display:flex; align-items:center; gap:6px; height:46px; padding:0 10px 0 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.right-rail__header { display:flex; align-items:center; gap:6px; height:var(--top-bar-h, 46px); min-height:var(--top-bar-h, 46px); padding:0 10px 0 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
 .right-rail__close {
   width: 28px;
   height: 28px;
@@ -48,13 +48,20 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+}
+
+.right-rail__body:not([hidden]) {
+  animation: trylo-view-enter var(--duration-view) var(--ease-out);
+}
+
+:root:not([data-platform='macos']) .right-rail__body {
   scrollbar-width: thin;
   scrollbar-color: var(--ink-hover) transparent;
 }
 
 .right-rail__body[hidden] { display: none; }
 .right-rail__tabs { display:flex; align-self:stretch; align-items:stretch; gap:20px; margin-right:auto; }
-.right-rail__tabs button { font-size:12px; color:var(--fg-muted); padding:0 2px; border-bottom:2px solid transparent; }
+.right-rail__tabs button { font-size:12px; color:var(--fg-muted); padding:0 2px; border-bottom:2px solid transparent; transition:color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out); }
 .right-rail__tabs button[aria-selected="true"] { color:var(--fg); border-bottom-color:var(--fg); }
 .right-rail__preview { overflow:hidden; }
 .right-rail__preview > .file-peek:not(.file-peek--expanded),
@@ -74,5 +81,52 @@
 }
 
 /* Preview and review follow the shell's available-space limit, not a second vw cap. */
-.right-rail:is([data-view="preview"],[data-view="review"]) { width:clamp(280px,var(--rail-right-w,480px),var(--rail-content-max,calc(100vw - 440px))); }
+.right-rail:is([data-view="preview"],[data-view="review"]) { width:clamp(380px,var(--rail-right-w,var(--rail-right-wide-w,480px)),var(--rail-content-max,calc(100vw - 440px))); }
 @media (max-width:1100px) { .right-rail:is([data-view="preview"],[data-view="review"]) { width:min(var(--rail-right-w,480px),calc(100% - 40px)); } }
+
+/* macOS crisp opaque right panel with translucent hairline dividers. */
+:root[data-platform='macos'] .right-rail {
+  background: var(--bg);
+  border-left: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+:root[data-platform='macos'][data-theme='dark'] .right-rail {
+  border-left-color: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-platform='macos'] .right-rail:not(.right-rail--reviewable) .right-rail__header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+:root[data-platform='macos'][data-theme='dark'] .right-rail:not(.right-rail--reviewable) .right-rail__header {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+@media (min-resolution: 2dppx) {
+  :root[data-platform='macos'] .right-rail {
+    border-left-width: 0.5px;
+  }
+  :root[data-platform='macos'] .right-rail:not(.right-rail--reviewable) .right-rail__header {
+    border-bottom-width: 0.5px;
+  }
+}
+
+:root[data-platform='macos'] .right-rail__close {
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .right-rail__body:not([hidden]) {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  :root[data-platform='macos'] .right-rail {
+    background: Canvas;
+    border-left: 1px solid CanvasText;
+  }
+  :root[data-platform='macos'] .right-rail:not(.right-rail--reviewable) .right-rail__header {
+    border-bottom: 1px solid CanvasText;
+  }
+}

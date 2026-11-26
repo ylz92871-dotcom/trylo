@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactElement, ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactElement, ReactNode } from 'react';
 import { TopBar } from './TopBar';
 import { BrowserToolSidebar } from '../chat/BrowserToolSidebar';
 import { AppWindow, Box, Globe, Monitor, Terminal as TerminalIcon } from 'lucide-react';
@@ -25,6 +25,8 @@ import { RemotePairingModal } from './RemotePairingModal';
 import { useDesktopAccount } from '../../account/use-desktop-account';
 import type { FilePath, TopLevelMode } from '../../host-adapter/types';
 import { isTauri } from '../../host-adapter/tauri-detect';
+import { isMacPlatform, formatShortcut } from '../../utils/platform';
+import { prefersReducedMotion, usePresenceTransition } from '../../utils/use-presence-transition';
 import type { ConversationSession } from '../../host-adapter/conversation-history';
 import type { SettingsSaveIntent, TryloSettings } from '../../settings/settings-store';
 import type { SettingsNotice } from '../../settings/settings-notices';
@@ -39,8 +41,9 @@ import {
   type ActivityItem,
 } from '../activity/BackgroundActivityCenter';
 
-export const DEFAULT_LEFT_RAIL_WIDTH = 256;
-export const DEFAULT_RIGHT_RAIL_WIDTH = 480;
+export const DEFAULT_LEFT_RAIL_WIDTH = 240;
+export const DEFAULT_RIGHT_RAIL_WIDTH = 320;
+export const DEFAULT_RIGHT_RAIL_WIDE_WIDTH = 480;
 const Terminal = lazy(() => import('../product-ui/Terminal').then(({ Terminal }) => ({ default: Terminal })));
 
 export interface AppShellProps {
@@ -79,6 +82,8 @@ export interface AppShellProps {
   readonly onUnarchiveSession: (id: string) => void;
 
   readonly topMode: TopLevelMode;
+  /** Switches between Code and Work top-level workspaces from the unified toolbar. */
+  readonly onTopModeChange?: (mode: TopLevelMode) => void;
   /** Content for the right side of the top bar. */
   readonly topBarRight?: ReactNode;
   /** Person | Team surface (spec §1.2): a second segmented control
@@ -202,6 +207,10 @@ export interface AppShellProps {
   readonly toolMessages?: readonly ChatMessage[];
   readonly serviceManager?: ServiceManager | null;
   readonly toolingFacade?: ToolingFacade | null;
+  readonly shellActionsRef?: MutableRefObject<{
+    readonly toggleTerminal: () => void;
+    readonly toggleBrowserSidebar: () => void;
+  } | null>;
 }
 
 export function AppShell(props: AppShellProps): ReactElement {
@@ -213,7 +222,8 @@ export function AppShell(props: AppShellProps): ReactElement {
   const terminalTrigger = useRef<HTMLButtonElement>(null);
   const [terminalWorkspace, setTerminalWorkspace] = useState<string | null>(null);
   const workspace = props.workspaces.find((item) => item.id === props.currentWorkspaceId);
-  const terminalAvailable = Boolean(workspace?.root) && isTauri() && navigator.platform.startsWith('Mac');
+  const mac = isMacPlatform();
+  const terminalAvailable = Boolean(workspace?.root) && isTauri() && mac;
   const terminalOpen = terminalAvailable && terminalWorkspace === props.currentWorkspaceId;
   const focusTerminalTrigger = useCallback(() => terminalTrigger.current?.focus(), []);
   const [accountOpenRequest, setAccountOpenRequest] = useState(0);
@@ -245,6 +255,37 @@ export function AppShell(props: AppShellProps): ReactElement {
   }, [modelPreviewKey]);
   const [browserWidth, setBrowserWidth] = useState(480);
   const [browserFullscreen, setBrowserFullscreen] = useState(false);
+  const [resizingRail, setResizingRail] = useState(false);
+  const [leftRailTransitioning, setLeftRailTransitioning] = useState(false);
+  const prevLeftCollapsed = useRef(props.leftRailCollapsed);
+  const leftSlotRef = useRef<HTMLDivElement>(null);
+  const rightSlotRef = useRef<HTMLDivElement>(null);
+  const leftRailPresence = usePresenceTransition(!props.leftRailCollapsed, 220);
+  const rightRailPresence = usePresenceTransition(props.rightRailOpen, 220);
+
+  useEffect(() => {
+    const el = leftSlotRef.current;
+    if (!el) return;
+    if (props.leftRailCollapsed) el.setAttribute('inert', '');
+    else el.removeAttribute('inert');
+  }, [props.leftRailCollapsed]);
+
+  useEffect(() => {
+    const el = rightSlotRef.current;
+    if (!el) return;
+    if (!props.rightRailOpen) el.setAttribute('inert', '');
+    else el.removeAttribute('inert');
+  }, [props.rightRailOpen]);
+
+  useEffect(() => {
+    if (prevLeftCollapsed.current === props.leftRailCollapsed) return;
+    prevLeftCollapsed.current = props.leftRailCollapsed;
+    if (!browserPreviewOpen || prefersReducedMotion()) return;
+    setLeftRailTransitioning(true);
+    const timer = window.setTimeout(() => setLeftRailTransitioning(false), 240);
+    return () => window.clearTimeout(timer);
+  }, [props.leftRailCollapsed, browserPreviewOpen]);
+
   const [bodyWidth, setBodyWidth] = useState(window.innerWidth);
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -293,7 +334,7 @@ export function AppShell(props: AppShellProps): ReactElement {
   useComputerPreview(computerState, previewScope, { manager: props.serviceManager, facade: props.toolingFacade,
     projectRoot: props.workspaces.find(workspace => workspace.id === props.currentWorkspaceId)?.root,
     conversationId: props.activeSessionId, turnId: computerState.turnId, display: computerState.display,
-    enabled: runActive && computerState.hasStarted === true && workbench.computerVisible,
+    enabled: !mac && runActive && computerState.hasStarted === true && workbench.computerVisible,
     excludeWindow: workbench.computerHandle });
   useEffect(() => { if (props.rightRailOpen) setBrowserPreviewOpen(false); }, [props.rightRailOpen]);
   useEffect(() => {
@@ -324,6 +365,29 @@ export function AppShell(props: AppShellProps): ReactElement {
     onSwitchWorkspace: props.onSwitchWorkspace, onOpenFolder: props.onOpenFolder }),
   [props.workspaces, props.currentWorkspaceId, props.onSwitchWorkspace, props.onOpenFolder]);
 
+  const { shellActionsRef, currentWorkspaceId } = props;
+  useEffect(() => {
+    if (!shellActionsRef) return;
+    shellActionsRef.current = {
+      toggleTerminal: () => {
+        if (!terminalAvailable) return;
+        setTerminalWorkspace((current) => (current === currentWorkspaceId ? null : currentWorkspaceId));
+      },
+      toggleBrowserSidebar: () => {
+        hideSoftware.current();
+        setModelPreviewOpen(false);
+        setBrowserPreviewOpen((open) => {
+          const next = !open;
+          if (next && rightRailOpen) onToggleRightRail();
+          return next;
+        });
+      },
+    };
+    return () => {
+      shellActionsRef.current = null;
+    };
+  }, [shellActionsRef, terminalAvailable, currentWorkspaceId, rightRailOpen, onToggleRightRail]);
+
   const preview = props.approvalDiff ? (
     <GitDiffView path={props.approvalDiff.path} diff={props.approvalDiff.diff}
       notice="待审批变更（Diff 仅展示拟修改内容，不会自动批准）" onClose={props.approvalDiff.onClose} />
@@ -339,63 +403,87 @@ export function AppShell(props: AppShellProps): ReactElement {
     : props.peekFile ? `file:${props.peekFile.path}:${props.peekFile.requestId ?? ''}`
     : props.gitDiff ? `diff:${props.gitDiff.id ?? props.gitDiff.path}` : null;
 
+  const rightRailWide = Boolean(preview || props.resultReview);
+  const effectiveRightWidth = rightRailWide
+    ? Math.min(Math.max(props.rightWidth, DEFAULT_RIGHT_RAIL_WIDE_WIDTH), browserMaxWidth)
+    : Math.min(props.rightWidth, 420);
+
   return (
     <WorkspaceNavigationContext.Provider value={workspaceNavigation}>
-    <div className="app-shell" data-mode={props.topMode} style={{
-      '--rail-left-w': `${props.leftWidth}px`,
-      '--rail-right-w': `${Math.min(props.rightWidth, preview || props.resultReview ? browserMaxWidth : 520)}px`,
-      ...props.style,
-    } as CSSProperties}>
+    <div
+      className="app-shell"
+      data-mode={props.topMode}
+      data-resizing={resizingRail ? 'true' : undefined}
+      style={{
+        '--rail-left-w': `${props.leftWidth}px`,
+        '--rail-right-w': `${effectiveRightWidth}px`,
+        ...(rightRailWide ? { '--rail-content-max': `${browserMaxWidth}px` } : {}),
+        ...props.style,
+      } as CSSProperties}
+    >
       <div
         className="app-shell__body"
         ref={bodyRef}
         data-peek-open={props.peekFile ? 'true' : 'false'}
       >
-        <LeftRail
-          workspaces={props.workspaces}
-          currentWorkspaceId={props.currentWorkspaceId}
-          sessions={props.sessions}
-          activeSessionId={props.activeSessionId}
-          runningSessionIds={props.runningSessionIds}
-          teamMarks={props.teamMarks}
-          collapsed={props.leftRailCollapsed}
-          onSwitchWorkspace={props.onSwitchWorkspace}
-          onOpenFolder={props.onOpenFolder}
-          onCloseWorkspace={props.onCloseWorkspace}
-          onSelectSession={props.onSelectSession}
-          onNewSession={props.onNewSession}
-          onDeleteSession={props.onDeleteSession}
-          onRenameSession={props.onRenameSession}
-          onArchiveSession={props.onArchiveSession}
-          onUnarchiveSession={props.onUnarchiveSession}
-          onToggleCollapse={props.onToggleLeftRail}
-          onOpenActivity={props.onOpenActivityCenter ? () => props.activityOpen ? props.onActivityOpenChange?.(false) : props.onOpenActivityCenter?.() : undefined}
-          activityTriggerRef={activityTrigger}
-          activityOpen={props.activityOpen}
-          activityPanelId={activityPanelId}
-          activeRuns={props.activityItems?.length ?? props.activeCodeRuns}
-          onOpenTools={() => { setSettingsTab('tools'); props.onSettingsOpenChange(true); }}
-          onOpenLearning={props.onOpenLearningPending}
-          onOpenRemote={() => props.onRemotePairingOpenChange(true)}
-          remoteRunning={props.remoteRunning}
-          onOpenSettings={() => { setSettingsTab('connection'); props.onSettingsOpenChange(true); }}
-          account={account}
-          accountOpenRequest={accountOpenRequest}
-          accountRemoteActive={(props.settings.remote.connectionMode ?? 'server') === 'server' && (props.remoteEnabled ?? false)}
-        />
+        <div
+          ref={leftSlotRef}
+          className="left-rail-slot"
+          data-collapsed={props.leftRailCollapsed ? 'true' : 'false'}
+          data-motion-state={leftRailPresence.state}
+          aria-hidden={props.leftRailCollapsed ? 'true' : undefined}
+        >
+          {leftRailPresence.mounted && (
+            <LeftRail
+              workspaces={props.workspaces}
+              currentWorkspaceId={props.currentWorkspaceId}
+              sessions={props.sessions}
+              activeSessionId={props.activeSessionId}
+              runningSessionIds={props.runningSessionIds}
+              teamMarks={props.teamMarks}
+              collapsed={false}
+              onSwitchWorkspace={props.onSwitchWorkspace}
+              onOpenFolder={props.onOpenFolder}
+              onCloseWorkspace={props.onCloseWorkspace}
+              onSelectSession={props.onSelectSession}
+              onNewSession={props.onNewSession}
+              onDeleteSession={props.onDeleteSession}
+              onRenameSession={props.onRenameSession}
+              onArchiveSession={props.onArchiveSession}
+              onUnarchiveSession={props.onUnarchiveSession}
+              onToggleCollapse={props.onToggleLeftRail}
+              onOpenActivity={props.onOpenActivityCenter ? () => props.activityOpen ? props.onActivityOpenChange?.(false) : props.onOpenActivityCenter?.() : undefined}
+              activityTriggerRef={activityTrigger}
+              activityOpen={props.activityOpen}
+              activityPanelId={activityPanelId}
+              activeRuns={props.activityItems?.length ?? props.activeCodeRuns}
+              onOpenTools={() => { setSettingsTab('tools'); props.onSettingsOpenChange(true); }}
+              onOpenLearning={props.onOpenLearningPending}
+              onOpenRemote={() => props.onRemotePairingOpenChange(true)}
+              remoteRunning={props.remoteRunning}
+              onOpenSettings={() => { setSettingsTab('connection'); props.onSettingsOpenChange(true); }}
+              account={account}
+              accountOpenRequest={accountOpenRequest}
+              accountRemoteActive={(props.settings.remote.connectionMode ?? 'server') === 'server' && (props.remoteEnabled ?? false)}
+            />
+          )}
+        </div>
         {!props.leftRailCollapsed && (
           <RailResizer
             side="left"
             width={props.leftWidth}
-            min={180}
-            max={440}
+            min={mac ? 212 : 184}
+            max={360}
             onChange={props.onLeftWidthChange}
+            onDraggingChange={setResizingRail}
           />
         )}
         <div className="app-shell__main">
           <TopBar
             workspaceName={workspace?.name ?? 'Trylo'}
             conversationTitle={props.sessions.find((session) => session.id === props.activeSessionId)?.title}
+            topMode={props.topMode}
+            onTopModeChange={props.onTopModeChange}
             right={<>
               {terminalAvailable && (
                 <button
@@ -403,25 +491,26 @@ export function AppShell(props: AppShellProps): ReactElement {
                   ref={terminalTrigger}
                   className={`top-bar__rail-toggle${terminalOpen ? ' top-bar__rail-toggle--active' : ''}`}
                   aria-label="集成终端"
-                  title="集成终端"
+                  title={mac ? `集成终端 ${formatShortcut(['Control', '`'])}` : '集成终端'}
                   aria-expanded={terminalOpen}
                   aria-controls={terminalOpen ? terminalId : undefined}
+                  data-tauri-drag-region={mac ? 'false' : undefined}
                   onClick={() => setTerminalWorkspace(terminalOpen ? null : props.currentWorkspaceId)}
                 ><TerminalIcon size={16} aria-hidden="true" /></button>
               )}
-              {modelPreviewKey !== null && <button type="button" className={`top-bar__rail-toggle${modelPreviewOpen ? ' top-bar__rail-toggle--active' : ''}`} aria-label="3D 工作区" title="3D 工作区" aria-pressed={modelPreviewOpen} onClick={() => {
+              {modelPreviewKey !== null && <button type="button" className={`top-bar__rail-toggle${modelPreviewOpen ? ' top-bar__rail-toggle--active' : ''}`} aria-label="3D 工作区" title="3D 工作区" aria-pressed={modelPreviewOpen} data-tauri-drag-region={mac ? 'false' : undefined} onClick={() => {
                 software.setOpen(false);
                 if (!modelPreviewOpen) { setBrowserPreviewOpen(false); if (props.rightRailOpen) props.onToggleRightRail(); }
                 setModelPreviewOpen(open => !open);
               }}><Box size={16} strokeWidth={1.65} aria-hidden="true" /></button>}
-              <button type="button" className={`top-bar__rail-toggle${browserPreviewOpen ? ' top-bar__rail-toggle--active' : ''}`} aria-label="浏览器侧栏" title="浏览器侧栏" aria-pressed={browserPreviewOpen} onClick={() => {
+              <button type="button" className={`top-bar__rail-toggle${browserPreviewOpen ? ' top-bar__rail-toggle--active' : ''}`} aria-label="浏览器侧栏" title={mac ? `浏览器侧栏 ${formatShortcut(['Option', 'Mod', 'B'])}` : '浏览器侧栏'} aria-pressed={browserPreviewOpen} data-tauri-drag-region={mac ? 'false' : undefined} onClick={() => {
                 software.setOpen(false);
                 setModelPreviewOpen(false);
                 if (!browserPreviewOpen && props.rightRailOpen) props.onToggleRightRail();
                 setBrowserPreviewOpen(open => !open);
               }}><Globe size={16} strokeWidth={1.65} aria-hidden="true" /></button>
-              <button type="button" className={`top-bar__rail-toggle${software.open ? ' top-bar__rail-toggle--active' : ''}`} aria-label="软件工作区" title="软件工作区" aria-pressed={software.open} onClick={() => software.setOpen(!software.open)}><AppWindow size={16} strokeWidth={1.65} aria-hidden="true" /></button>
-              <button type="button" className={`top-bar__rail-toggle${runActive && computerState.hasTools ? ' top-bar__rail-toggle--active' : ''}`} aria-label={runActive && computerState.hasTools ? '电脑悬浮窗，控制正在工作' : '电脑悬浮窗'} title={runActive && computerState.hasTools ? '电脑控制正在工作' : '电脑悬浮窗'} onClick={() => { setPreviewError(''); void workbench.openComputer(); }}><Monitor size={16} strokeWidth={1.65} aria-hidden="true" />{runActive && computerState.hasTools && <span className="top-bar__activity-dot" aria-hidden="true" />}</button>
+              {!mac && <button type="button" className={`top-bar__rail-toggle${software.open ? ' top-bar__rail-toggle--active' : ''}`} aria-label="软件工作区" title="软件工作区" aria-pressed={software.open} onClick={() => software.setOpen(!software.open)}><AppWindow size={16} strokeWidth={1.65} aria-hidden="true" /></button>}
+              {!mac && <button type="button" className={`top-bar__rail-toggle${runActive && computerState.hasTools ? ' top-bar__rail-toggle--active' : ''}`} aria-label={runActive && computerState.hasTools ? '电脑悬浮窗，控制正在工作' : '电脑悬浮窗'} title={runActive && computerState.hasTools ? '电脑控制正在工作' : '电脑悬浮窗'} onClick={() => { setPreviewError(''); void workbench.openComputer(); }}><Monitor size={16} strokeWidth={1.65} aria-hidden="true" />{runActive && computerState.hasTools && <span className="top-bar__activity-dot" aria-hidden="true" />}</button>}
               {props.topBarRight}
             </>}
             collaborationSwitch={props.topBarCollaborationSwitch}
@@ -431,11 +520,17 @@ export function AppShell(props: AppShellProps): ReactElement {
           {props.children}
           {terminalOpen && workspace?.root && (
             <Suspense fallback={<div id={terminalId} role="status">正在打开终端…</div>}>
-              <Terminal key={workspace.root} cwd={workspace.root} id={terminalId} onReturnFocus={focusTerminalTrigger} />
+              <Terminal
+                key={workspace.root}
+                cwd={workspace.root}
+                id={terminalId}
+                onReturnFocus={focusTerminalTrigger}
+                onClose={() => setTerminalWorkspace(null)}
+              />
             </Suspense>
           )}
         </div>
-        {software.open && !props.rightRailOpen && !props.approvalDiff && <>
+        {!mac && software.open && !props.rightRailOpen && !props.approvalDiff && <>
           <RailResizer side="right" width={Math.min(softwareWidth, browserMaxWidth)} min={320} max={browserMaxWidth} onChange={setSoftwareWidth} />
           <SoftwareWorkspacePanel controller={software} width={Math.min(softwareWidth, browserMaxWidth)} onClose={() => software.setOpen(false)} />
         </>}
@@ -446,30 +541,42 @@ export function AppShell(props: AppShellProps): ReactElement {
         {props.rightRailOpen && props.peekExpanded !== true && (
           <RailResizer
             side="right"
-            width={Math.min(props.rightWidth, preview || props.resultReview ? browserMaxWidth : 520)}
-            min={props.resultReview ? 320 : 280}
-            max={preview || props.resultReview ? browserMaxWidth : 520}
+            width={effectiveRightWidth}
+            min={rightRailWide ? (props.resultReview ? 320 : 360) : 260}
+            max={rightRailWide ? browserMaxWidth : 420}
             onChange={props.onRightWidthChange}
+            onDraggingChange={setResizingRail}
           />
         )}
         {browserPreviewOpen && <>
-          {!browserFullscreen && <RailResizer side="right" width={shownBrowserWidth} min={320} max={browserMaxWidth} onChange={setBrowserWidth} />}
+          {!browserFullscreen && <RailResizer side="right" width={shownBrowserWidth} min={320} max={browserMaxWidth} onChange={setBrowserWidth} onDraggingChange={setResizingRail} />}
           <BrowserToolSidebar key={`${previewScope}:${browserState.turnId}`} state={browserState} preview={props.browserPreview} replay={browserReplay}
             width={shownBrowserWidth} running={runActive} fullscreen={browserFullscreen} onToggleFullscreen={() => setBrowserFullscreen(value => !value)}
-            suspended={props.settingsOpen || props.remotePairingOpen || props.activityOpen}
+            suspended={props.settingsOpen || props.remotePairingOpen || props.activityOpen || leftRailTransitioning}
             onClose={() => setBrowserPreviewOpen(false)} />
         </>}
-        <RightRail
-          review={props.resultReview}
-          maxWidth={preview || props.resultReview ? browserMaxWidth : undefined}
-          open={props.rightRailOpen}
-          preview={preview}
-          previewKey={previewKey}
-          onExpandPreview={props.peekFile && !props.peekExpanded ? props.onTogglePeekExpanded : undefined}
-          root={props.fileTreeRoot}
-          onClose={props.onToggleRightRail}
-          onSelectFile={props.onSelectFile}
-        />
+        <div
+          ref={rightSlotRef}
+          className="right-rail-slot"
+          data-open={props.rightRailOpen ? 'true' : 'false'}
+          data-wide={rightRailWide ? 'true' : 'false'}
+          data-motion-state={rightRailPresence.state}
+          aria-hidden={!props.rightRailOpen ? 'true' : undefined}
+        >
+          {rightRailPresence.mounted && (
+            <RightRail
+              review={props.resultReview}
+              maxWidth={rightRailWide ? browserMaxWidth : undefined}
+              open={true}
+              preview={preview}
+              previewKey={previewKey}
+              onExpandPreview={props.peekFile && !props.peekExpanded ? props.onTogglePeekExpanded : undefined}
+              root={props.fileTreeRoot}
+              onClose={props.onToggleRightRail}
+              onSelectFile={props.onSelectFile}
+            />
+          )}
+        </div>
       </div>
       {!props.settingsOpen && props.collaborationResources?.libraryRecovery
         && <LibraryProcessRecovery port={props.collaborationResources.libraryRecovery} floating />}
@@ -521,15 +628,13 @@ export function AppShell(props: AppShellProps): ReactElement {
       {/* M4-D: Background Activity Center. Floats
           above the chat panel; closing returns focus
           to the trigger. See spec §8.5. */}
-      {props.activityOpen && (
-        <BackgroundActivityCenter
-          id={activityPanelId}
-          anchor={activityTrigger.current}
-          open={props.activityOpen}
-          items={props.activityItems ?? []}
-          onClose={() => props.onActivityOpenChange?.(false)}
-        />
-      )}
+      <BackgroundActivityCenter
+        id={activityPanelId}
+        anchor={activityTrigger.current}
+        open={Boolean(props.activityOpen)}
+        items={props.activityItems ?? []}
+        onClose={() => props.onActivityOpenChange?.(false)}
+      />
     </div>
     </WorkspaceNavigationContext.Provider>
   );

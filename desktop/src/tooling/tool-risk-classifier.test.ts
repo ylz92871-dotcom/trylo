@@ -17,6 +17,7 @@ import {
   createToolRiskClassifier,
   inputDigestOf,
   parseMcpToolName,
+  type ToolClassifyRequest,
 } from './tool-risk-classifier';
 import { OFFICECLI_TOOL_NAME } from './classifiers/officecli-classifier';
 import {
@@ -131,6 +132,7 @@ describe('routing (§6.2)', () => {
       'trylo-office',
       'trylo-browser',
       'trylo-windows',
+      'trylo-macos',
       'trylo-chrome',
       'trylo-preview',
       'trylo-software',
@@ -141,6 +143,19 @@ describe('routing (§6.2)', () => {
       'trylo-freecad',
       'trylo-blender',
     ]);
+  });
+
+  it('checks macOS permission status without auto-allowing desktop observations or input', () => {
+    const router = createToolRiskClassifier();
+    const managedPackageIds = ['macos-computer'];
+    const classify = (name: string, permissionLevel: ToolClassifyRequest['permissionLevel']) => router.classify(request({
+      toolName: `mcp__trylo-macos__${name}`, managedPackageIds, permissionLevel,
+    }));
+    expect(classify('status', 'read_only').behavior).toBe('auto_allow');
+    expect(classify('inspect', 'workspace_write').behavior).toBe('prompt');
+    expect(classify('screenshot', 'read_only').behavior).toBe('deny');
+    expect(classify('click', 'workspace_write').behavior).toBe('prompt');
+    expect(classify('shell', 'unrestricted').behavior).toBe('deny');
   });
 });
 

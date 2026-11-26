@@ -349,7 +349,7 @@ const DEFAULTS: TryloSettings = {
   workComputer: true,
   workCad: false,
   hermesWorkLearning: true,
-  workspace: 'D:/CC/trylo',
+  workspace: '',
   userLearning: { ...DEFAULT_USER_LEARNING_SETTINGS },
   workflowLearning: { ...DEFAULT_WORKFLOW_LEARNING },
   agentLearning: { ...DEFAULT_AGENT_LEARNING },

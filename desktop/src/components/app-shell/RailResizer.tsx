@@ -10,7 +10,7 @@
 // dragging right makes it wider; for the right rail the handle
 // sits on its left edge and dragging right makes it narrower.
 
-import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react';
 
 export interface RailResizerProps {
   /** Which rail this resizer controls. */
@@ -23,11 +23,16 @@ export interface RailResizerProps {
   readonly max: number;
   /** Called with the new width (px) while dragging. */
   readonly onChange: (width: number) => void;
+  /** Optional callback notifying the shell when pointer dragging starts/ends. */
+  readonly onDraggingChange?: (dragging: boolean) => void;
 }
 
 export function RailResizer(props: RailResizerProps): ReactElement {
+  const [dragging, setDragging] = useState(false);
   const start = useRef<{ x: number; w: number } | null>(null);
   const finish = useRef<() => void>();
+  const onDraggingChangeRef = useRef(props.onDraggingChange);
+  onDraggingChangeRef.current = props.onDraggingChange;
   useEffect(() => () => finish.current?.(), []);
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>): void => {
@@ -35,6 +40,8 @@ export function RailResizer(props: RailResizerProps): ReactElement {
     e.preventDefault();
     finish.current?.();
     start.current = { x: e.clientX, w: props.width };
+    setDragging(true);
+    onDraggingChangeRef.current?.(true);
     const handle = e.currentTarget, pointerId = e.pointerId;
     const previousCursor = document.body.style.cursor, previousSelection = document.body.style.userSelect;
     // Keep dragging when the pointer crosses a browser/iframe surface.
@@ -52,6 +59,8 @@ export function RailResizer(props: RailResizerProps): ReactElement {
     const onUp = (ev?: PointerEvent): void => {
       if (ev && ev.pointerId !== pointerId) return;
       start.current = null;
+      setDragging(false);
+      onDraggingChangeRef.current?.(false);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
@@ -73,7 +82,7 @@ export function RailResizer(props: RailResizerProps): ReactElement {
 
   return (
     <div
-      className={`rail-resizer rail-resizer--${props.side}`}
+      className={`rail-resizer rail-resizer--${props.side}${dragging ? ' rail-resizer--dragging' : ''}`}
       role="separator"
       aria-orientation="vertical"
       aria-label={props.side === 'left' ? 'Resize sidebar' : 'Resize file panel'}

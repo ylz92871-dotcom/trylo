@@ -283,7 +283,7 @@ mod tests {
     fn empty_files_and_the_exact_size_limit_are_supported() {
         let fixture = Fixture::new();
         fs::write(fixture.0.join(".trylo/out/empty.txt"), b"").unwrap();
-        assert!(read_remote_artifact(&fixture.0, "empty.txt").unwrap().is_empty());
+        assert_eq!(read_remote_artifact(&fixture.0, "empty.txt").unwrap(), b"");
         let file = File::create(fixture.0.join(".trylo/out/at-limit.dat")).unwrap();
         file.set_len(MAX_REMOTE_ARTIFACT_BYTES).unwrap(); drop(file);
         assert_eq!(read_remote_artifact(&fixture.0, "at-limit.dat").unwrap().len() as u64, MAX_REMOTE_ARTIFACT_BYTES);

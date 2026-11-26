@@ -1,5 +1,7 @@
 //! Private profiles are unique per native view, including repeated token use.
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(not(target_os = "macos"))]
+use std::path::PathBuf;
 
 fn remove_owned(root: &Path, profile: &Path) -> std::io::Result<()> {
     if !profile.exists() { return Ok(()); }
@@ -12,6 +14,7 @@ fn remove_owned(root: &Path, profile: &Path) -> std::io::Result<()> {
     }
     std::fs::remove_dir_all(target)
 }
+#[cfg(not(target_os = "macos"))]
 pub(super) fn retire(root: PathBuf, profile: PathBuf) {
     std::thread::spawn(move || {
         for delay in [0, 250, 1000] {

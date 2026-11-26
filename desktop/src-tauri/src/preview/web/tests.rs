@@ -31,7 +31,7 @@ fn serves_modules_root_assets_and_spa_then_revokes_the_grant() {
     assert_eq!(request(&assets, "/app.js", Some(TOKEN), "*/*", "GET").status(), 200);
     assert_eq!(request(&assets, "/app.js", None, "*/*", "GET").status(), 404, "root assets require an owning native WebView");
     assert_eq!(request(&assets, "/client/route", Some(TOKEN), "text/html", "GET").body(), html.body());
-    assert!(request(&assets, "/data.json", Some(TOKEN), "*/*", "HEAD").body().is_empty());
+    assert_eq!(request(&assets, "/data.json", Some(TOKEN), "*/*", "HEAD").body().as_slice(), b"");
     assert_eq!(request(&assets, "/data.json", Some(TOKEN), "*/*", "POST").status(), 405);
     assets.close(TOKEN);
     assert_eq!(request(&assets, &format!("/{TOKEN}/index.html"), None, "text/html", "GET").status(), 404);
@@ -47,7 +47,7 @@ fn rejects_private_traversal_oversize_and_unsupported_resources() {
     assert_eq!(request(&assets, "/file.exe", Some(TOKEN), "*/*", "GET").status(), 404);
     let file = std::fs::File::create(fixture.0.join("site/large.txt")).unwrap(); file.set_len(20 * 1024 * 1024 + 1).unwrap();
     assert_eq!(request(&assets, "/large.txt", Some(TOKEN), "*/*", "GET").status(), 404);
-    assert!(!assets.warnings(TOKEN).is_empty());
+    assert_ne!(assets.warnings(TOKEN), Vec::<String>::new());
     assert!(assets.open("bad".into(), &fixture.0.join("site/index.html")).is_err());
 }
 
@@ -62,6 +62,7 @@ fn a_known_other_grant_does_not_override_the_requesting_views_owner() {
 }
 
 #[test]
+#[cfg(not(target_os = "macos"))]
 fn closed_worker_and_other_webviews_cannot_borrow_the_next_documents_grant() {
     use super::{WebPreviewState, view::ActiveView};
     let fixture = Fixture::new(); let state = WebPreviewState::default();

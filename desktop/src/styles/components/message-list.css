@@ -38,9 +38,6 @@
  * the viewport width, re-wrap every row, change every height and shift the
  * scroll — one more jitter source during streaming. */
 .message-list [data-virtuoso-scroller] {
-  scrollbar-width: thin;
-  scrollbar-color: var(--ink-hover) transparent;
-  scrollbar-gutter: stable;
   /* Round-3 P1-7: the conversation timeline scrolls VERTICALLY, full stop.
    * A single unbreakable line deep inside a row used to widen the whole
    * column and hand the user a horizontal scrollbar (see the wrapping
@@ -51,11 +48,17 @@
   overflow-x: hidden;
 }
 
-.message-list [data-virtuoso-scroller]::-webkit-scrollbar {
+:root:not([data-platform='macos']) .message-list [data-virtuoso-scroller] {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-hover) transparent;
+  scrollbar-gutter: stable;
+}
+
+:root:not([data-platform='macos']) .message-list [data-virtuoso-scroller]::-webkit-scrollbar {
   width: 8px;
 }
 
-.message-list [data-virtuoso-scroller]::-webkit-scrollbar-thumb {
+:root:not([data-platform='macos']) .message-list [data-virtuoso-scroller]::-webkit-scrollbar-thumb {
   background: var(--ink-hover);
   border-radius: 4px;
 }
@@ -149,4 +152,7 @@
 
 /* Keep every virtualized row in the same column as the composer. */
 .conversation-row, .message-list__footer-stack { width:100%; max-width:var(--conversation-width); margin-inline:auto; }
-.message-list { padding:22px 32px 0; }
+.message-list { padding:20px 28px 0; }
+@container (max-width: 600px) {
+  .message-list { padding:16px 16px 0; }
+}

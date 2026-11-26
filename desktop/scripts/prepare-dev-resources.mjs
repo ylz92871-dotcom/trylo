@@ -2,6 +2,9 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import { join, resolve } from 'node:path';
 
 const bundleResources = JSON.parse(readFileSync(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8')).bundle.resources;
+const platformResources = process.platform === 'darwin'
+  ? JSON.parse(readFileSync(new URL('../src-tauri/tauri.macos.conf.json', import.meta.url), 'utf8')).bundle.resources
+  : {};
 
 function rejectRedirectedPath(path) {
   if (lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink()) {
@@ -23,8 +26,8 @@ export function prepareDevResources(desktopRoot) {
 
   // Tauri validates every bundle resource even in dev. Give its directory
   // mappings an empty source on a fresh checkout and retain staged files.
-  for (const source of Object.keys(bundleResources)) {
-    if (!source.startsWith('resources/') || !source.endsWith('/')) continue;
+  for (const [source, destination] of Object.entries({ ...bundleResources, ...platformResources })) {
+    if (destination === null || !source.startsWith('resources/') || !source.endsWith('/')) continue;
     let directory = resources;
     for (const part of source.slice('resources/'.length, -1).split('/')) {
       directory = join(directory, part);

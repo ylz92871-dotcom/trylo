@@ -171,6 +171,9 @@ __pycache__/
 !/desktop-services/toolchain/README.md
 !/desktop-services/toolchain/computer-control/
 /desktop-services/toolchain/computer-control/*
+!/desktop-services/toolchain/computer-control/macos-mcp/
+/desktop-services/toolchain/computer-control/macos-mcp/*
+!/desktop-services/toolchain/computer-control/macos-mcp/*.swift
 !/desktop-services/toolchain/computer-control/Windows-MCP/
 /desktop-services/toolchain/computer-control/Windows-MCP/*
 !/desktop-services/toolchain/computer-control/Windows-MCP/src/

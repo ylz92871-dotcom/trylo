@@ -136,19 +136,19 @@ export function BrowserToolSidebar(props: {
       <div className="browser-tool-sidebar__address-field"><input ref={addressRef} aria-label="网页地址" type="text" spellCheck={false} autoComplete="off" placeholder="输入网址，按 Enter 打开" value={addressDraft ?? address} disabled={!connected} onFocus={event => event.currentTarget.select()} onChange={event => setAddressDraft(event.target.value)} onBlur={() => setAddressDraft(undefined)} onKeyDown={event => { if (event.key === 'Escape') { setAddressDraft(undefined); event.currentTarget.blur() } }} /></div>
     </form>}
     {!replaying && displayOpen && preview && native && <div id="browser-display-settings" className="browser-tool-sidebar__display-settings" aria-label="页面显示设置">
-      <BrowserViewportControls key={`${native.scope}:${native.activeLabel}`} viewport={native.viewport} disabled={!connected || native.inFlight > 0 || !preview.setPageViewport} onChange={request => preview.setPageViewport!(request)} />
+      {native.cdpAvailable !== false && <BrowserViewportControls key={`${native.scope}:${native.activeLabel}`} viewport={native.viewport} disabled={!connected || native.inFlight > 0 || !preview.setPageViewport} onChange={request => preview.setPageViewport!(request)} />}
       <div className="browser-tool-sidebar__zoom-row"><span>网页缩放</span>{native.viewport?.mode === 'fixed' ? <span className="browser-viewport-controls__scale">适应展示 · 页面 100%</span> : <div className="browser-tool-sidebar__zoom"><PreviewZoom value={preview.zoom} onChange={value => { if (value !== 'fit') void run(() => preview.setZoom(value)) }} showFit={false} disabled={!connected} label="网页缩放" /></div>}</div>
     </div>}
     <div className="browser-control-frame" data-state={activity.mode}>
-      <BrowserControlNotice view={activity} control={native?.control} connected={connected} disabled={blank || popup || !!navigationError} running={props.running === true}
-        onControl={() => void run(native?.control === 'agent' ? preview!.takeControl : preview!.releaseControl)} onReturnLive={() => setSelected(undefined)} />
+      {(replaying || native?.cdpAvailable !== false) && <BrowserControlNotice view={activity} control={native?.control} connected={connected} disabled={blank || popup || !!navigationError} running={props.running === true}
+        onControl={() => void run(native?.control === 'agent' ? preview!.takeControl : preview!.releaseControl)} onReturnLive={() => setSelected(undefined)} />}
       <div className="browser-control-frame__edge" data-state={activity.mode}>
     <div className="browser-tool-sidebar__picture" ref={pictureRef} data-native={!replaying && !navigationError || undefined}>
       {navigationError ? <BrowserNavigationError failure={navigationError} onRetry={() => void run(() => preview!.navigation!('reload'))} onEdit={focusAddress} /> : replay ? <PreviewImage src={replay.entry.src} alt={`第 ${replay.action.stepIndex ?? ''} 项操作的历史画面`} empty="历史画面不可用" frameGeometry={replay.entry.geometry} />
         : !connected || blank || popup ? <div className="browser-tool-sidebar__empty">
           {phase === 'connecting' ? <LoaderCircle className="browser-tool-sidebar__empty-spinner" size={25} strokeWidth={1.4} /> : <Globe size={27} strokeWidth={1.2} />}
           <strong>{popup ? '页面已在独立窗口中打开' : empty}</strong>
-          <span>{popup ? '切回该窗口继续操作，或选择其他标签页。' : preparingPage ? '网页打开后会显示在这里。' : connected ? '输入网址，或让智能体开始浏览。' : phase === 'connecting' ? '页面将在连接完成后显示。' : '连接后可以在这里浏览和检查网页。'}</span>
+          <span>{popup ? '切回该窗口继续操作，或选择其他标签页。' : preparingPage ? '网页打开后会显示在这里。' : connected ? native?.cdpAvailable === false ? '输入网址以打开网页。' : '输入网址，或让智能体开始浏览。' : phase === 'connecting' ? '页面将在连接完成后显示。' : '连接后可以在这里浏览和检查网页。'}</span>
           {!popup && !preparingPage && phase !== 'connecting' && (connected ? <button type="button" onClick={focusAddress}>输入网址<ArrowRight size={13} /></button> : preview && <button type="button" onClick={() => void run(preview.start)}>连接浏览器<ArrowRight size={13} /></button>)}
         </div> : null}
     </div>

@@ -35,6 +35,9 @@ function json(relative) {
 }
 const layout = json('scripts/release/source-layout.json');
 for (const entry of layout?.extraFiles ?? []) requireFile(entry.source);
+for (const file of ['Computer.swift', 'Server.swift']) {
+  requireFile(`desktop-services/toolchain/computer-control/macos-mcp/${file}`);
+}
 // The CLI's maintained JS adapters are source inputs despite the general
 // src/**/*.js ignore rule. Verify their actual manifest, not only TS imports.
 try {

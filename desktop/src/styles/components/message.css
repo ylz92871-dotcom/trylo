@@ -402,11 +402,14 @@
   flex: 0 0 auto;
 }
 
-.message { margin-block: 12px; }
+.message { margin-block: 10px; }
+.message--user { margin: 20px 0 10px; }
+.conversation-row:first-child .message--user { margin-top: 4px; }
+.message--assistant { margin: 4px 0 14px; }
 .message--assistant .message__col { max-width: 100%; width: 100%; }
-.message--user .message__bubble { border-radius: 15px; padding: 10px 14px; }
+.message--assistant .message__text { font-size: 14.5px; line-height: 1.68; }
 .message__text--markdown a:not(.message__artifact-link) { color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
 .message__text--markdown a:not(.message__artifact-link):hover { background: var(--link-soft); }
 
-.message--user .message__col { max-width:90%; }
-.message--user .message__bubble { border-radius:16px; padding:13px 16px; background:var(--bg-panel); line-height:1.65; }
+.message--user .message__col { max-width: min(78%, 580px); }
+.message--user .message__bubble { border-radius: 14px; padding: 9px 14px; background: var(--bg-panel); line-height: 1.6; }

@@ -17,8 +17,8 @@
   font-size: var(--text-sm);
   line-height: var(--leading-snug);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  margin: 10px 0;
-  border-radius: 10px;
+  margin: 6px 0;
+  border-radius: 8px;
   border: 1px solid var(--border);
   overflow: hidden;
   background: var(--bg);
@@ -50,7 +50,7 @@
    * gap; the running border + pulse remain as
    * "this is currently running" indicators. */
   gap: 8px;
-  padding: 8px 14px;
+  padding: 7px 12px;
   background: transparent;
   border: none;
   text-align: left;
@@ -75,7 +75,7 @@
  * the previous head was "太胖" (too bulky) when
  * folded — this fix addresses that. */
 .tool__head--collapsed {
-  padding: 4px 16px;
+  padding: 4px 12px;
   gap: 8px;
   color: var(--ink-fog);
   font-size: 12.5px;

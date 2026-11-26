@@ -39,9 +39,9 @@
   --ice-blue-soft: var(--link-soft);
   --logo-bone-top: #f0de91;
   --logo-bone-bottom: #c6ab50;
-  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei', sans-serif;
   --font-display: var(--font-body);
-  --font-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, ui-monospace, Consolas, monospace;
   --text-xs: 12px;
   --text-sm: 13px;
   --text-base: 14px;
@@ -69,13 +69,26 @@
   --top-bar-h: 64px;
   --bottom-strip-h: 28px;
   --input-bar-h: 116px;
+  --rail-left-default: 240px;
   --rail-left-w-collapsed: 40px;
-  --rail-right-w: min(34%, 320px);
-  --conversation-width: clamp(660px, 79cqw, 800px);
+  --rail-right-files-w: 320px;
+  --rail-right-wide-w: 480px;
+  --rail-right-w: var(--rail-right-files-w);
+  --conversation-width: clamp(620px, 78cqw, 760px);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-panel: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring-subtle: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-micro: 90ms;
   --duration-fast: 120ms;
+  --duration-popover-in: 150ms;
+  --duration-popover-out: 110ms;
+  --duration-view: 160ms;
+  --duration-modal-in: 180ms;
+  --duration-modal-out: 130ms;
   --duration-base: 200ms;
+  --duration-panel: 220ms;
   --duration-slow: 360ms;
   --bg: var(--ink-deep);
   --bg-panel: var(--ink-surface);
@@ -136,11 +149,62 @@
   --brand-ambient: #b38f3720;
 }
 
+/* macOS native materials, hairline dividers, and overlay-titlebar metrics. */
+:root[data-platform='macos'] {
+  --top-bar-h: 46px;
+  --font-mono: 'SF Mono', ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+  --ink-divider: rgba(0, 0, 0, 0.08);
+  --ink-divider-strong: rgba(0, 0, 0, 0.13);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.13);
+  --border-faint: rgba(0, 0, 0, 0.05);
+  --macos-hairline: rgba(0, 0, 0, 0.08);
+  --macos-hairline-strong: rgba(0, 0, 0, 0.13);
+  --macos-popover-bg: rgba(250, 248, 243, 0.84);
+  --macos-popover-shadow:
+    0 0 0 0.5px rgba(0, 0, 0, 0.09),
+    0 8px 24px rgba(0, 0, 0, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.06);
+  --macos-focus-halo: 0 0 0 3px color-mix(in srgb, var(--brand) 34%, transparent);
+}
+
+:root[data-platform='macos'][data-theme='dark'] {
+  --ink-divider: rgba(255, 255, 255, 0.08);
+  --ink-divider-strong: rgba(255, 255, 255, 0.13);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.13);
+  --border-faint: rgba(255, 255, 255, 0.05);
+  --macos-hairline: rgba(255, 255, 255, 0.08);
+  --macos-hairline-strong: rgba(255, 255, 255, 0.13);
+  --macos-popover-bg: rgba(36, 35, 32, 0.84);
+  --macos-popover-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
+    0 12px 32px rgba(0, 0, 0, 0.48);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-platform='macos'] {
+    --macos-popover-bg: var(--bg-panel);
+  }
+
+  :root[data-platform='macos'][data-theme='dark'] {
+    --macos-popover-bg: var(--bg-elevated);
+  }
+}
+
 /* prefers-reduced-motion: turn off all transitions / animations. */
 @media (prefers-reduced-motion: reduce) {
   :root {
+    --duration-micro: 0ms;
     --duration-fast: 0ms;
+    --duration-popover-in: 0ms;
+    --duration-popover-out: 0ms;
+    --duration-view: 0ms;
+    --duration-modal-in: 0ms;
+    --duration-modal-out: 0ms;
     --duration-base: 0ms;
+    --duration-panel: 0ms;
     --duration-slow: 0ms;
   }
 

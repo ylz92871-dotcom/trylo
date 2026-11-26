@@ -13,7 +13,7 @@
  */
 
 .result-dock {
-  max-width: 720px;
+  max-width: var(--conversation-width);
   margin: var(--space-2) auto 0;
   padding: 0 var(--space-2);
   border: 1px solid var(--border);
@@ -363,3 +363,42 @@
 .artifact-preview-strip__file:hover { background: var(--ink-hover); }
 .artifact-preview-strip__file:focus-visible { outline: 2px solid var(--brand-300); outline-offset: 2px; }
 .artifact-preview-strip__more { align-self: center; flex: 0 0 auto; color: var(--fg-muted); font-size: var(--text-xs); }
+
+/* ── macOS Retina hairlines, tabular numbers & focus rings (Code & Work) ── */
+:root[data-platform='macos'] .result-dock {
+  border-color: var(--macos-hairline);
+  border-radius: 10px;
+}
+
+:root[data-platform='macos'] .result-dock__retry,
+:root[data-platform='macos'] .code-result__action,
+:root[data-platform='macos'] .work-result__diff,
+:root[data-platform='macos'] .work-result__badge,
+:root[data-platform='macos'] .work-result__verify,
+:root[data-platform='macos'] .artifact-preview-strip__file {
+  border-color: var(--macos-hairline-strong);
+  border-radius: 6px;
+}
+
+:root[data-platform='macos'] .result-dock__count,
+:root[data-platform='macos'] .code-result__stat,
+:root[data-platform='macos'] .code-result__check-status,
+:root[data-platform='macos'] .work-result__badge,
+:root[data-platform='macos'] .work-result__verify {
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-platform='macos'] .result-dock :is(button, summary):focus-visible,
+:root[data-platform='macos'] .artifact-preview-strip__file:focus-visible {
+  outline: none;
+  box-shadow: var(--macos-focus-halo);
+}
+
+@media (forced-colors: active) {
+  :root[data-platform='macos'] .result-dock :is(button, summary):focus-visible,
+  :root[data-platform='macos'] .artifact-preview-strip__file:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+}

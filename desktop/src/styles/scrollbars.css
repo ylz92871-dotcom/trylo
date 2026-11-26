@@ -1,35 +1,36 @@
-/* Keep native scrolling and a fixed gutter; reveal only the thumb on interaction.
+/* Keep native scrolling and a fixed gutter on non-macOS platforms; macOS
+   uses native fading NSScroller overlay scrollbars without reserved gutters.
    High-contrast mode keeps the operating system's scrollbar affordances. */
 @media (forced-colors: none) {
-  :is(.left-rail__section--workspaces, .left-rail__sessions, .right-rail__review, .chat-panel__home, .workspace-picker__menu, .preview__pdf-container, .preview__thumbnails-scroll, .preview__sheet-tabs, .preview__text-lines, .docx-reader__viewport) {
+  :root:not([data-platform='macos']) :is(.left-rail__section--workspaces, .left-rail__sessions, .right-rail__review, .chat-panel__home, .workspace-picker__menu, .preview__pdf-container, .preview__thumbnails-scroll, .preview__sheet-tabs, .preview__text-lines, .docx-reader__viewport) {
     --rail-scrollbar-thumb: transparent;
     scrollbar-width: thin;
     scrollbar-color: var(--rail-scrollbar-thumb) transparent;
     scrollbar-gutter: stable;
   }
 
-  :is(.left-rail__section--workspaces, .left-rail__sessions, .right-rail__review, .chat-panel__home, .workspace-picker__menu, .preview__pdf-container, .preview__thumbnails-scroll, .preview__sheet-tabs, .preview__text-lines, .docx-reader__viewport):is(:hover, :focus-within) {
+  :root:not([data-platform='macos']) :is(.left-rail__section--workspaces, .left-rail__sessions, .right-rail__review, .chat-panel__home, .workspace-picker__menu, .preview__pdf-container, .preview__thumbnails-scroll, .preview__sheet-tabs, .preview__text-lines, .docx-reader__viewport):is(:hover, :focus-within) {
     --rail-scrollbar-thumb: var(--quiet-scrollbar-thumb, var(--ink-mute));
   }
 
   @supports selector(::-webkit-scrollbar) {
     /* Non-auto standard properties override WebView2's pseudo-element styling. */
-    :is(.left-rail__section--workspaces, .left-rail__sessions, .right-rail__review, .chat-panel__home, .workspace-picker__menu, .preview__pdf-container, .preview__thumbnails-scroll, .preview__sheet-tabs, .preview__text-lines, .docx-reader__viewport) {
+    :root:not([data-platform='macos']) :is(.left-rail__section--workspaces, .left-rail__sessions, .right-rail__review, .chat-panel__home, .workspace-picker__menu, .preview__pdf-container, .preview__thumbnails-scroll, .preview__sheet-tabs, .preview__text-lines, .docx-reader__viewport) {
       scrollbar-width: auto;
       scrollbar-color: auto;
     }
 
-    :is(.left-rail__section--workspaces, .left-rail__sessions, .right-rail__review, .chat-panel__home, .workspace-picker__menu, .preview__pdf-container, .preview__thumbnails-scroll, .preview__sheet-tabs, .preview__text-lines, .docx-reader__viewport)::-webkit-scrollbar {
+    :root:not([data-platform='macos']) :is(.left-rail__section--workspaces, .left-rail__sessions, .right-rail__review, .chat-panel__home, .workspace-picker__menu, .preview__pdf-container, .preview__thumbnails-scroll, .preview__sheet-tabs, .preview__text-lines, .docx-reader__viewport)::-webkit-scrollbar {
       width: 8px;
       height: 8px;
     }
 
-    :is(.left-rail__section--workspaces, .left-rail__sessions, .right-rail__review, .chat-panel__home, .workspace-picker__menu, .preview__pdf-container, .preview__thumbnails-scroll, .preview__sheet-tabs, .preview__text-lines, .docx-reader__viewport)::-webkit-scrollbar-track,
-    :is(.left-rail__section--workspaces, .left-rail__sessions, .right-rail__review, .chat-panel__home, .workspace-picker__menu, .preview__pdf-container, .preview__thumbnails-scroll, .preview__sheet-tabs, .preview__text-lines, .docx-reader__viewport)::-webkit-scrollbar-corner {
+    :root:not([data-platform='macos']) :is(.left-rail__section--workspaces, .left-rail__sessions, .right-rail__review, .chat-panel__home, .workspace-picker__menu, .preview__pdf-container, .preview__thumbnails-scroll, .preview__sheet-tabs, .preview__text-lines, .docx-reader__viewport)::-webkit-scrollbar-track,
+    :root:not([data-platform='macos']) :is(.left-rail__section--workspaces, .left-rail__sessions, .right-rail__review, .chat-panel__home, .workspace-picker__menu, .preview__pdf-container, .preview__thumbnails-scroll, .preview__sheet-tabs, .preview__text-lines, .docx-reader__viewport)::-webkit-scrollbar-corner {
       background: transparent;
     }
 
-    :is(.left-rail__section--workspaces, .left-rail__sessions, .right-rail__review, .chat-panel__home, .workspace-picker__menu, .preview__pdf-container, .preview__thumbnails-scroll, .preview__sheet-tabs, .preview__text-lines, .docx-reader__viewport)::-webkit-scrollbar-thumb {
+    :root:not([data-platform='macos']) :is(.left-rail__section--workspaces, .left-rail__sessions, .right-rail__review, .chat-panel__home, .workspace-picker__menu, .preview__pdf-container, .preview__thumbnails-scroll, .preview__sheet-tabs, .preview__text-lines, .docx-reader__viewport)::-webkit-scrollbar-thumb {
       min-height: 32px;
       border: 2px solid transparent;
       border-radius: 8px;
@@ -37,7 +38,7 @@
       background-clip: padding-box;
     }
 
-    :is(.left-rail__section--workspaces, .left-rail__sessions, .right-rail__review, .chat-panel__home, .workspace-picker__menu, .preview__pdf-container, .preview__thumbnails-scroll, .preview__sheet-tabs, .preview__text-lines, .docx-reader__viewport)::-webkit-scrollbar-button {
+    :root:not([data-platform='macos']) :is(.left-rail__section--workspaces, .left-rail__sessions, .right-rail__review, .chat-panel__home, .workspace-picker__menu, .preview__pdf-container, .preview__thumbnails-scroll, .preview__sheet-tabs, .preview__text-lines, .docx-reader__viewport)::-webkit-scrollbar-button {
       display: none;
       width: 0;
       height: 0;
