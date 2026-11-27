@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
-import { COMPUTER_PREVIEW_WORKER } from '../../src/tooling/computer-preview-worker.mjs';
+import { COMPUTER_PREVIEW_WORKER } from '../../src/tooling/computer-control/windows/computer-preview-worker.mjs';
 
 const python = fileURLToPath(new URL('../../toolchain/computer-control/Windows-MCP/.venv/Scripts/python.exe', import.meta.url));
 const available = fs.existsSync(python);

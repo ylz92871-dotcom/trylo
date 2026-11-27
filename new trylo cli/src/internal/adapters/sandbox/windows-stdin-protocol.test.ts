@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bridgeArgv, STDIN_ACK, takeStdinHeader, validStdinToken } from "./windows-stdin-protocol.js";
+import { bridgeArgv, STDIN_ACK, takeStdinHeader, validStdinToken } from "./windows/windows-stdin-protocol.js";
 
 test("private stdin argv accepts data arguments but refuses malformed executable plans", () => {
   const plan = [process.execPath, "space 中文", "`$()&", "line\nbreak"];

@@ -9,6 +9,7 @@
 // each command lives in its own file under `src-tauri/src/commands/`.
 
 mod commands;
+mod platform;
 mod preview;
 
 use tauri::Manager;

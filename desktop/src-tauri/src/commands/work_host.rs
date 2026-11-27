@@ -38,10 +38,6 @@
 // `file_path`, `allowed_root`.
 
 use std::path::{Component, Path, PathBuf, Prefix};
-// Windows launches through ShellExecuteW FFI; only macOS /
-// Linux need the argv launcher.
-#[cfg(any(target_os = "macos", target_os = "linux"))]
-use std::process::Command;
 
 use tauri::AppHandle;
 use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -189,68 +185,15 @@ pub async fn work_host_copy_to_clipboard(text: String, app: AppHandle) -> Result
     })
 }
 
-// ── Platform-specific launchers (no shell involved) ───────────────
-
-/// Shell-free default-app open. On Windows this is a direct
-/// `ShellExecuteW` FFI call (no `cmd`, no argument string joining);
-/// on macOS/Linux it is an argv launch of `open` / `xdg-open` —
-/// `std::process::Command` never spawns a shell.
-fn open_with_default_app(path: &Path) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        shell_execute_windows(path, None)
-    }
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open")
-            .arg(path)
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| e.to_string())
-    }
-    #[cfg(target_os = "linux")]
-    {
-        Command::new("xdg-open")
-            .arg(path)
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| e.to_string())
-    }
-}
+// Target validation stays with this command; the platform only launches it.
+use crate::platform::open::open_with_default_app;
 
 fn launch_with_app(path: &Path, app_identifier: &str) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        // ShellExecuteW with the app as the "file" and the target
-        // as its parameters — still no shell, and the identifier
-        // must be a plain executable token.
-        if !is_safe_app_identifier(app_identifier) {
-            return Err(format!("unsafe app identifier: {app_identifier}"));
-        }
-        shell_execute_windows(Path::new(app_identifier), Some(path))
+    #[cfg(windows)]
+    if !is_safe_app_identifier(app_identifier) {
+        return Err(format!("unsafe app identifier: {app_identifier}"));
     }
-    #[cfg(target_os = "macos")]
-    {
-        // `open -a <app> <path>` — argv launch, no shell.
-        Command::new("open")
-            .args(["-a", app_identifier])
-            .arg(path)
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| e.to_string())
-    }
-    #[cfg(target_os = "linux")]
-    {
-        // xdg-open doesn't support specifying an app directly.
-        // The `app_identifier` is treated as the .desktop file
-        // name; if that's wrong we fall back to default-app
-        // open.
-        Command::new("xdg-open")
-            .arg(path)
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| e.to_string())
-    }
+    crate::platform::open::launch_with_app(path, app_identifier)
 }
 
 /// App identifiers reach the OS as a launch target; restrict them
@@ -262,50 +205,6 @@ fn is_safe_app_identifier(identifier: &str) -> bool {
         && identifier
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_')
-}
-
-#[cfg(target_os = "windows")]
-fn to_wide(value: &std::ffi::OsStr) -> Vec<u16> {
-    use std::os::windows::ffi::OsStrExt;
-    value.encode_wide().chain(std::iter::once(0)).collect()
-}
-
-/// Direct `ShellExecuteW` call — the §9.3 "no shell" requirement.
-/// `parameters` is used for open-with-app (app = file, target =
-/// parameters); `None` opens the file/URL with its default
-/// handler. Returns codes <= 32 as errors per the Win32 contract.
-#[cfg(target_os = "windows")]
-fn shell_execute_windows(file: &Path, parameters: Option<&Path>) -> Result<(), String> {
-    extern "system" {
-        fn ShellExecuteW(
-            hwnd: *mut core::ffi::c_void,
-            lp_operation: *const u16,
-            lp_file: *const u16,
-            lp_parameters: *const u16,
-            lp_directory: *const u16,
-            n_show_cmd: i32,
-        ) -> isize;
-    }
-
-    let file_wide = to_wide(file.as_os_str());
-    let params_wide = parameters.map(|p| to_wide(p.as_os_str()));
-    let result = unsafe {
-        ShellExecuteW(
-            core::ptr::null_mut(),
-            core::ptr::null(), // default "open" verb
-            file_wide.as_ptr(),
-            params_wide
-                .as_ref()
-                .map_or(core::ptr::null(), std::vec::Vec::as_ptr),
-            core::ptr::null(),
-            5, // SW_SHOW
-        )
-    };
-    if result > 32 {
-        Ok(())
-    } else {
-        Err(format!("ShellExecuteW failed with code {result}"))
-    }
 }
 
 #[cfg(test)]

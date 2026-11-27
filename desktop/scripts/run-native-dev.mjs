@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 import { existsSync } from 'node:fs';
-import { prepareOfficeRuntime } from './preview/prepare-office-runtime.mjs';
+import { prepareOfficeRuntime } from './build/shared/preview/prepare-office-runtime.mjs';
 import { prepareDevWgcRuntime } from './prepare-dev-wgc-runtime.mjs';
 
 const [executable, ...args] = process.argv.slice(2);
@@ -15,7 +15,7 @@ const debugExecutable = fileURLToPath(new URL('../src-tauri/target/debug/trylo-d
 if (integrity === 'H' && resolve(executable).toLowerCase() !== debugExecutable.toLowerCase()) {
   throw new Error('High development mode is limited to this checkout\'s debug Desktop executable.');
 }
-const prepare = fileURLToPath(new URL('./prepare-native-executable.ps1', import.meta.url));
+const prepare = fileURLToPath(new URL('./build/windows/prepare-native-executable.ps1', import.meta.url));
 const prepared = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass',
   '-File', prepare, '-ExecutablePath', executable, '-IntegrityLevel', integrity], {
   stdio: 'inherit', windowsHide: true,
@@ -26,7 +26,7 @@ if (prepared.status !== 0) process.exit(prepared.status ?? 1);
 // Every resource copy can inherit Low again from target/debug, including
 // terminal workers, service helpers and media converters, not only Node.
 if (process.platform === 'win32') {
-  const prepareRuntime = fileURLToPath(new URL('./prepare-native-dev-runtimes.ps1', import.meta.url));
+  const prepareRuntime = fileURLToPath(new URL('./build/windows/prepare-native-dev-runtimes.ps1', import.meta.url));
   const runtime = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass',
     '-File', prepareRuntime, '-ExecutablePath', executable, '-IntegrityLevel', integrity], {
     stdio: 'inherit', windowsHide: true,

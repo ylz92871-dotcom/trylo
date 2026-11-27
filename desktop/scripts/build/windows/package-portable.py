@@ -1,0 +1,90 @@
+from pathlib import Path
+import argparse,concurrent.futures,collections,hashlib,json,os,struct,time,zipfile
+
+
+def require_gui_executable(file):
+ with file.open('rb') as stream:
+  if stream.read(2)!=b'MZ':raise SystemExit('Not a Windows executable: '+str(file))
+  stream.seek(0x3c);offset=struct.unpack('<I',stream.read(4))[0]
+  stream.seek(offset)
+  if stream.read(4)!=b'PE\0\0':raise SystemExit('Invalid PE executable: '+str(file))
+  stream.seek(offset+24+68)
+  if struct.unpack('<H',stream.read(2))[0]!=2:
+   raise SystemExit('A portable GUI entry must not allocate a console: '+str(file))
+
+def main():
+ parser=argparse.ArgumentParser(description='Package the already-built Windows Desktop as a portable ZIP (Python 3.10+).')
+ parser.add_argument('--output',type=Path)
+ parser.add_argument('--workers',type=int,default=16)
+ parser.add_argument('--compression-level',type=int,choices=range(10),default=6)
+ parser.add_argument('--component',choices=['desktop'],default='desktop')
+ args=parser.parse_args()
+ root=Path(__file__).resolve().parents[4]
+ version=json.loads((root/'desktop/package.json').read_text(encoding='utf-8'))['version']
+ resources=root/'desktop/src-tauri/resources'
+ profile=json.loads((root/'desktop/distribution.json').read_text(encoding='utf-8'))
+ staged_profile=resources/'distribution.json'
+ if not staged_profile.is_file() or staged_profile.read_bytes()!=(root/'desktop/distribution.json').read_bytes():
+  raise SystemExit('Staged distribution profile differs from source; prepare sidecars again before packaging')
+ if (profile['distribution']!='core' or profile['components']['coworkRuntime']['bundled'] is not False
+     or profile.get('defaultCliRuntime')!='trylo-v1'):
+  raise SystemExit('This release requires a core Desktop distribution profile')
+ for relative in ['cli/dist/internal/adapters/managed-work',
+                  'cli/dist/internal/domain/managed-work.js', 'cli/dist/internal/domain/managed-work.d.ts',
+                  'cli/dist/internal/ports/managed-work.js', 'cli/dist/internal/ports/managed-work.d.ts']:
+  if (resources/relative).exists():raise SystemExit('Retired CoWork build output remains: '+relative)
+ name=f'Trylo-Desktop-{version}-windows-x64-portable-core.zip'
+ output=args.output or root/'_workspace/artifacts/result/desktop'/name
+ output=output.resolve();output.parent.mkdir(parents=True,exist_ok=True)
+ if output.exists():raise SystemExit('Refusing to overwrite an existing portable archive: '+str(output))
+ items=[]
+ # Explicit component roots: an old staged Work tree can never leak into core.
+ trees=['desktop-services','sidecars/desktop-companion/publish','sidecars/hermes-capabilities','cli','runtime']
+ for tree in trees:
+  source=resources/tree
+  if not source.is_dir():raise SystemExit('Missing staged runtime: '+tree)
+  for file in source.rglob('*'):
+   if file.is_file():
+    if file.is_symlink() or not file.resolve().is_relative_to(resources.resolve()):raise SystemExit('Redirected runtime file: '+str(file))
+    items.append((file,file.relative_to(resources).as_posix()))
+ executable=root/'desktop/src-tauri/target/release/trylo-desktop.exe'
+ if not executable.is_file():raise SystemExit('Build the native Desktop application first')
+ launcher=root/'desktop/src-tauri/target/release/Start-Trylo.exe'
+ if not launcher.is_file():raise SystemExit('Build the GUI launcher with node desktop/scripts/build/windows/build-portable-launcher.mjs first')
+ require_gui_executable(executable)
+ require_gui_executable(launcher)
+ items.extend([(executable,'trylo-desktop.exe'),(root/'desktop/distribution.json','distribution.json'),
+               (root/'desktop/scripts/Start-Trylo.ps1','Start-Trylo.ps1'),
+               (launcher,'Start-Trylo.exe')])
+ notices=['NODE-v24.14.1-LICENSE.txt','TRYLO-LICENSE.txt','README-Desktop.txt']
+ for name in notices:
+  file=(root/'desktop/README-Portable.txt' if name=='README-Desktop.txt'
+        else root/'_workspace/artifacts/result/desktop'/name)
+  if not file.is_file():raise SystemExit('Missing release notice: '+name)
+  items.append((file,name))
+ items.sort(key=lambda item:item[1]);started=time.monotonic()
+ def read(item):
+  file,name=item
+  # Large binaries stream through ZipFile.write instead of filling the read queue.
+  return file,name,None if file.stat().st_size>32*1024*1024 else file.read_bytes()
+ partial=output.with_suffix(output.suffix+'.partial')
+ if partial.exists():raise SystemExit('Review the previous partial archive first: '+str(partial))
+ with zipfile.ZipFile(partial,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=args.compression_level,allowZip64=True) as archive,concurrent.futures.ThreadPoolExecutor(max_workers=max(1,min(args.workers,32))) as pool:
+  pending=collections.deque()
+  def store(future):
+   file,name,data=future.result()
+   if data is None:archive.write(file,name)
+   else:archive.writestr(name,data)
+  for item in items:
+   pending.append(pool.submit(read,item))
+   if len(pending)>=32:store(pending.popleft())
+  while pending:store(pending.popleft())
+ os.replace(partial,output)
+ digest=hashlib.sha256()
+ with output.open('rb') as stream:
+  for block in iter(lambda:stream.read(1024*1024),b''):digest.update(block)
+ result={'component':args.component,'file':output.name,'bytes':output.stat().st_size,'files':len(items),'sha256':digest.hexdigest(),'seconds':round(time.monotonic()-started,2),'compressionLevel':args.compression_level}
+ output.with_suffix('.build.json').write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+ print(json.dumps(result,indent=2))
+
+if __name__=='__main__':main()

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { test } from 'node:test';
 import { temporaryPath } from '../../../scripts/workspace-paths.mjs';
-import { createWorkspacePagePreview } from '../../src/tooling/workspace-page-preview.mjs';
+import { createWorkspacePagePreview } from '../../src/tooling/browser/workspace-page-preview.mjs';
 
 async function temporaryRoot(t) {
   const scratch = temporaryPath('workspace-page-preview-tests');

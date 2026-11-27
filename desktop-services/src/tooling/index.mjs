@@ -21,12 +21,12 @@ import { createToolCatalog, CORE_TOOL_RUNTIME_REVISION } from './tool-catalog.mj
 import { createToolPackageManager } from './tool-package-manager.mjs';
 import { createToolHealthService } from './tool-health-service.mjs';
 import { createToolProfileService } from './tool-profile-service.mjs';
-import { createViewportBridge } from './viewport-bridge.mjs';
-import { createBrowserObserver } from './browser-observer.mjs';
-import { createNativeBrowserService } from './native-browser-service.mjs';
+import { createViewportBridge } from './browser/viewport-bridge.mjs';
+import { createBrowserObserver } from './browser/browser-observer.mjs';
+import { createNativeBrowserService } from './browser/native-browser-service.mjs';
 import { createModelPreviewService } from './model-preview-service.mjs';
 import { createSoftwareWorkspace, softwareRuntimeEntry } from './software-workspace-service.mjs';
-import { createComputerPreviewStream, resolveComputerPreviewPython } from './computer-preview-stream.mjs';
+import { createComputerPreviewStream, resolveComputerPreviewPython } from './computer-control/windows/computer-preview-stream.mjs';
 
 /**
  * @param {{ appDataDir?: string, sidecarsDir?: string,

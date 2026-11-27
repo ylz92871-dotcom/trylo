@@ -5,7 +5,7 @@ import { expect, it } from 'vitest'
 
 it('keeps the browser catalogue and profile composition aligned with the service manifests', () => {
   expect(() =>
-    execFileSync(process.execPath, ['scripts/export-tool-catalog.mjs', '--check'], {
+    execFileSync(process.execPath, ['scripts/build/shared/export-tool-catalog.mjs', '--check'], {
       cwd: fileURLToPath(new URL('../../', import.meta.url)),
       windowsHide: true,
     }),

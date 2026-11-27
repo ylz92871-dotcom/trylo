@@ -8,7 +8,7 @@ import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { containedPreviewFile } from './path-scope';
 import { OfficeQueue, runOfficeProcess } from './office-process';
-import { verifyOfficeRuntime } from '../../scripts/preview/office-engine.mjs';
+import { verifyOfficeRuntime } from '../../scripts/build/shared/preview/office-engine.mjs';
 import { allowPreviewRequest } from './request-origin';
 import { OfficeExtensionCache } from './office-profile';
 

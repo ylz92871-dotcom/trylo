@@ -3,7 +3,7 @@ export const NPM_HARNESS = String.raw`
 import {readFileSync,writeSync} from 'node:fs';
 import {spawn} from 'node:child_process';
 import path from 'node:path';
-const config=JSON.parse(readFileSync(new URL('./input.json',import.meta.url),'utf8'));
+const config=JSON.parse(readFileSync(new URL('./input.json', import.meta.url),'utf8'));
 const emit=value=>writeSync(1,JSON.stringify(value)+'\n');
 const args=['--no-warnings','--permission','--allow-fs-read='+config.packageRoot,'--disable-proto=throw',config.entrypoint];
 const env={};

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { stopViewportProcess } from '../../src/tooling/stop-viewport-process.mjs';
+import { stopViewportProcess } from '../../src/tooling/browser/stop-viewport-process.mjs';
 
 test('a late helper error accepts actual exit of its original child', async () => {
   const child = { pid: 777, exitCode: null, signalCode: null, kill() { throw new Error('direct kill forbidden'); } };

@@ -12,7 +12,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { WINDOWS_MCP_MANIFEST } from '../src/tooling/manifests/windows-mcp.mjs';
-import { verifyBuiltinTools } from '../../desktop/scripts/verify-builtin-tools.mjs';
+import { verifyBuiltinTools } from '../../desktop/scripts/build/windows/verify-builtin-tools.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(packageRoot, '..');

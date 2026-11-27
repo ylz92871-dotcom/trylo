@@ -111,3 +111,9 @@ Desktop 2.0 仅使用独立研发的新版 Trylo CLI，旧 CLI 已退役，不�
 构建入口见 [Desktop](desktop/README.md)、[CLI](new%20trylo%20cli/README.md) 与各工程依赖清单。第三方工具、字体、编解码器与其他分发组件遵循各自许可证；发布二进制的对应来源及许可材料随发布资产提供。
 
 项目许可证见 [LICENSE](LICENSE)，第三方声明见 [NOTICE](NOTICE)。
+
+## Platform development
+
+[Architecture](docs/architecture/README.md) · [Windows](docs/development/windows.md) · [macOS integration](docs/development/macos.md) · [Linux integration](docs/development/linux.md)
+
+The public repository currently provides the shared foundation and Windows integration. Complete macOS and Linux native adapters are pending integration. Existing Beta downloads retain their recorded release provenance.

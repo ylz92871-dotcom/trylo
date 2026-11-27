@@ -4,9 +4,8 @@ import type { RunScaffold } from "./run-command.js";
 import { switchEnablesTool } from "../../integration/user-learning/index.js";
 import { openWorkspaceProductionTools } from "../../learning/agent/subsystems/tool/runtime/index.js";
 import { createToolCandidateExecutor } from "../../adapters/tool-evolution/process-executor.js";
-import { createWindowsIsolation } from "../../adapters/sandbox/windows-isolation.js";
+import { createPlatformIsolation } from "../../adapters/sandbox/platform-isolation.js";
 import { hostNodeExecutable } from "../../adapters/sandbox/executable.js";
-import { windowsHelperEnvironment } from "../../adapters/sandbox/windows-helper-environment.js";
 import { tryloHome } from "./session-paths.js";
 import { composeAdditionalTools } from "./additional-tools.js";
 
@@ -27,7 +26,7 @@ export async function productionToolsForTurn(ctx: Pick<CliContext, "homeDir" | "
     ...(taskSituation === undefined ? {} : { taskSituation }),
     sessionId: scaffold.sessionId, authority: service.authority, executePlan: service.execute, now: ctx.now, newId: () => ctx.newId("tool-use"),
     warn: message => ctx.stderr(`warning: ${message}\n`), executor: { execute: (candidate, input, signal) => createToolCandidateExecutor({
-      isolation: createWindowsIsolation({ hostEnv: windowsHelperEnvironment(ctx.env) }), nodeExecutable: hostNodeExecutable(),
+      isolation: createPlatformIsolation(ctx.env), nodeExecutable: hostNodeExecutable(),
       scratchRoot: path.join(home, "learning", "tool", "quarantine"), profile: "confined_json_function_v1", timeoutMs: 5000,
     }).execute(candidate, input, signal) } });
   if (!opened.ok) {

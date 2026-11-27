@@ -30,6 +30,8 @@ src-tauri/icons/
 public/build/
 out/
 build/
+# Maintained platform build recipes.
+!/scripts/build/
 
 # Local data
 .trylo/

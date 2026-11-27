@@ -235,8 +235,8 @@ function stageHelpers(output, frozen) {
     if (sha(readFileSync(path.join(frozen.frozenSrc, row.path))) !== row.sha256) throw new Error(`candidate_vendor_closure_mismatch:${row.path}`);
   }
 
-  const bridge = ["internal/adapters/sandbox/windows-stdin-host.js", "internal/adapters/sandbox/windows-stdin-client.js",
-    "internal/adapters/sandbox/windows-stdin-protocol.js", "internal/adapters/process-session/process-tree.js"].map(name => {
+  const bridge = ["internal/adapters/sandbox/windows/windows-stdin-host.js", "internal/adapters/sandbox/windows/windows-stdin-client.js",
+    "internal/adapters/sandbox/windows/windows-stdin-protocol.js", "internal/adapters/process-session/process-tree.js"].map(name => {
     const bytes = readFileSync(path.join(dist, name));
     return { path: name, bytes: bytes.length, sha256: sha(bytes) };
   });

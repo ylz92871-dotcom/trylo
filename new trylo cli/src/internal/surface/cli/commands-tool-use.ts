@@ -6,9 +6,8 @@ import { handleRun } from "./run-command.js";
 import { openToolCandidateUse, type CandidateUseMount } from "../../learning/agent/subsystems/tool/runtime/index.js";
 import { readToolEvolutionCandidate } from "../../learning/agent/subsystems/tool/runtime/index.js";
 import { createToolCandidateExecutor } from "../../adapters/tool-evolution/process-executor.js";
-import { createWindowsIsolation } from "../../adapters/sandbox/windows-isolation.js";
+import { createPlatformIsolation } from "../../adapters/sandbox/platform-isolation.js";
 import { hostNodeExecutable } from "../../adapters/sandbox/executable.js";
-import { windowsHelperEnvironment } from "../../adapters/sandbox/windows-helper-environment.js";
 import { tryloHome } from "./session-paths.js";
 
 export async function handleToolUse(ctx: CliContext, command: Extract<ToolLabCommand, { kind: "use" }>, boardRoot: string): Promise<ExitCode> {
@@ -35,7 +34,7 @@ export async function handleToolUse(ctx: CliContext, command: Extract<ToolLabCom
         const opened = await openToolCandidateUse({ boardRoot, versionId: command.versionId, sessionId: scaffold.sessionId, workspaceId: scaffold.workspaceId,
           now: ctx.now, newId: () => ctx.newId("tool-use"), warn: message => ctx.stderr(`warning: ${message}\n`),
           executor: { execute: async (value, input, signal) => createToolCandidateExecutor({
-            isolation: createWindowsIsolation({ hostEnv: windowsHelperEnvironment(ctx.env) }), nodeExecutable: hostNodeExecutable(),
+            isolation: createPlatformIsolation(ctx.env), nodeExecutable: hostNodeExecutable(),
             scratchRoot: path.join(tryloHome(ctx.homeDir, ctx.env), "learning", "tool", "quarantine"),
           }).execute(value, input, signal) } });
         if (!opened.ok) throw new Error(`${opened.code}: ${opened.message}`);

@@ -31,7 +31,7 @@ impl ExtensionSeed {
         let root = profile.join("user/extensions");
         if is_link(&tokio::fs::symlink_metadata(&root).await?) { return Err("linked extension cache".into()); }
         let root = tokio::fs::canonicalize(root).await?;
-        let lock: serde_json::Value = serde_json::from_str(include_str!("../../../scripts/preview/office-engine.lock.json"))?;
+        let lock: serde_json::Value = serde_json::from_str(include_str!("../../../scripts/build/shared/preview/office-engine.lock.json"))?;
         let expected = lock["buildId"].as_str().ok_or("missing engine identity")?;
         let mut pending = vec![root.clone()];
         let mut files = Vec::new();
@@ -99,7 +99,7 @@ mod tests {
         let temp = TestDirectory::new();
         let root = temp.path().join("user/extensions/bundled");
         tokio::fs::create_dir_all(&root).await.unwrap();
-        let lock: serde_json::Value = serde_json::from_str(include_str!("../../../scripts/preview/office-engine.lock.json")).unwrap();
+        let lock: serde_json::Value = serde_json::from_str(include_str!("../../../scripts/build/shared/preview/office-engine.lock.json")).unwrap();
         tokio::fs::write(root.parent().unwrap().join("buildid"), lock["buildId"].as_str().unwrap()).await.unwrap();
         tokio::fs::write(root.join("dictionary.xcu"), b"$BUNDLED_EXTENSIONS/dictionary.xml").await.unwrap();
         temp

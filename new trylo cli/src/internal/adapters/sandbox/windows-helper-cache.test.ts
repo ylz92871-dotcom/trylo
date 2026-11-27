@@ -4,7 +4,7 @@ import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, sym
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { cacheWindowsBytes, cacheWindowsHelper } from "./windows-helper-cache.js";
+import { cacheWindowsBytes, cacheWindowsHelper } from "./windows/windows-helper-cache.js";
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "trylo-native-cache-"));

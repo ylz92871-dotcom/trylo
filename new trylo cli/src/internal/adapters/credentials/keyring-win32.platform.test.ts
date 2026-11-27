@@ -5,7 +5,7 @@ import test from "node:test";
 import {
   createWindowsCredentialManagerDriver,
   type SpawnSyncImpl,
-} from "./keyring-win32.js";
+} from "./windows/keyring-win32.js";
 import { sealDocument } from "../../credentials/document.js";
 
 /**

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createSoftwareWorkspace, softwareRuntimeEntry } from '../src/tooling/software-workspace-service.mjs';
 import { createToolCatalog } from '../src/tooling/tool-catalog.mjs';
 import { createToolPackageManager } from '../src/tooling/tool-package-manager.mjs';
-import { resolveComputerPreviewPython } from '../src/tooling/computer-preview-stream.mjs';
+import { resolveComputerPreviewPython } from '../src/tooling/computer-control/windows/computer-preview-stream.mjs';
 import { workspacePath } from '../../scripts/workspace-paths.mjs';
 
 const root = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));

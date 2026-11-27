@@ -4,7 +4,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFi
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { before, test } from 'node:test';
-import { buildPortableLauncher } from './build-portable-launcher.mjs';
+import { buildPortableLauncher } from './build/windows/build-portable-launcher.mjs';
 import { artifactPath } from '../../scripts/workspace-paths.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));

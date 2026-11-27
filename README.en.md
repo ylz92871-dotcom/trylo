@@ -66,3 +66,9 @@ Email **[ylz92871@gmail.com](mailto:ylz92871@gmail.com?subject=Trylo%202.0%20tes
 Core source is public: `new trylo cli/`, Windows `desktop/`, local `desktop-services/`, the mobile project and the public portion of `remote-relay/`. **Website/web source stays private.** macOS/Linux adaptation repositories stay private; their Beta binaries are distributed separately. `_workspace/`, real sessions, credentials and research checkouts are excluded.
 
 See the project [LICENSE](LICENSE) and [NOTICE](NOTICE). Third-party components retain their own licenses; required matching source and notices accompany binary releases.
+
+## Platform development
+
+[Architecture](docs/architecture/README.md) · [Windows](docs/development/windows.md) · [macOS integration](docs/development/macos.md) · [Linux integration](docs/development/linux.md)
+
+The public repository currently provides the shared foundation and Windows integration. Complete macOS and Linux native adapters are pending integration. Existing Beta downloads retain their recorded release provenance.

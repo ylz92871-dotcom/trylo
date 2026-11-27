@@ -3,7 +3,7 @@ import { MediaCompatibility } from './media-compat/service';
 import { containedPreviewFile } from './path-scope';
 import { allowPreviewRequest } from './request-origin';
 import { mediaPlaylist } from '../../src/preview/providers/media-playlist';
-import { previewCachePath } from '../../scripts/preview/cache-path.mjs';
+import { previewCachePath } from '../../scripts/build/shared/preview/cache-path.mjs';
 
 export function registerMediaCompatibility(server: ViteDevServer): void {
   const service = new MediaCompatibility(previewCachePath('media'), process.env.TRYLO_MEDIA_ENGINE_ROOT);

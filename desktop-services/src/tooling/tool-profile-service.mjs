@@ -21,11 +21,12 @@
 // reason codes the renderer can show verbatim.
 
 import fs from 'node:fs';
+import { desktopControlForPlatform } from './computer-control/platform.mjs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { browserRuntimeEnv } from './browser-runtime-env.mjs';
+import { browserRuntimeEnv } from './browser/browser-runtime-env.mjs';
 
 import { resolvePinnedWgcHelper } from './tool-package-manager.mjs';
 import { toolRuntimeIdentity } from './tool-runtime-identity.mjs';
@@ -198,6 +199,7 @@ function expandArgs(args, runtimeDir, installDir) {
 
 export function createToolProfileService(options = {}) {
   const catalog = options.catalog;
+  const desktopControl = desktopControlForPlatform(options.platform ?? process.platform);
   const packages = options.packages;
   const health = options.health;
   const hermes = options.hermes ?? null; // { mcpArgs({profile}) } — Hermes Adapter
@@ -369,11 +371,17 @@ export function createToolProfileService(options = {}) {
         version: record.version, reasonCode, detail, userMessage });
     }
 
-    for (const id of profile.packageIds) {
+    for (const packageId of profile.packageIds) {
+      const id = packageId === WINDOWS_MCP_PACKAGE_ID ? desktopControl?.packageId : packageId;
       // 电脑控制开关: when explicitly disabled, the desktop-control package is
       // dropped from the Profile. Not an "unavailable capability" (the user
       // turned it off, not a missing dependency) — the tools are simply absent.
-      if (!computerUse && id === WINDOWS_MCP_PACKAGE_ID) continue;
+      if (packageId === WINDOWS_MCP_PACKAGE_ID && !computerUse) continue;
+      if (!id) {
+        unavailableCapabilities.push({ id: packageId, type: 'package', reasonCode: 'unsupported_platform',
+          userMessage: '当前系统尚未接入电脑控制工具' });
+        continue;
+      }
       let manifest;
       try {
         manifest = catalog.get(id);

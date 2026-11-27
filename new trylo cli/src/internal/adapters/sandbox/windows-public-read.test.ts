@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { hasCommonReadExecute } from "./windows-public-read.js";
+import { hasCommonReadExecute } from "./windows/windows-public-read.js";
 
 test("public-read optimization requires all read/execute bits and never guesses through a deny", () => {
   const rule = { sid: "S-1-5-32-545", mask: 0x1200a9, deny: false, inheritOnly: false };

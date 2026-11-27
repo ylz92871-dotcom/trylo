@@ -7,7 +7,7 @@ import os from 'node:os';
 import type { ViteDevServer } from 'vite';
 const mock = vi.hoisted(() => ({ run: vi.fn(), verify: vi.fn() }));
 vi.mock('./office-process', async (original) => ({ ...await original<typeof import('./office-process')>(), runOfficeProcess: mock.run }));
-vi.mock('../../scripts/preview/office-engine.mjs', () => ({ verifyOfficeRuntime: mock.verify }));
+vi.mock('../../scripts/build/shared/preview/office-engine.mjs', () => ({ verifyOfficeRuntime: mock.verify }));
 import { officePreview } from './office';
 const cleanup: (() => Promise<unknown>)[] = [];
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); vi.unstubAllEnvs(); mock.run.mockReset(); mock.verify.mockReset(); });

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { nativeBrowserMcpArgs } from '../../src/tooling/native-browser-mcp.mjs';
+import { nativeBrowserMcpArgs } from '../../src/tooling/browser/native-browser-mcp.mjs';
 
 const gate = 'http://127.0.0.1:64430/aabbcc';
 const socket = 'ws://127.0.0.1:64430/aabbcc/cdp/browser';

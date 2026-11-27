@@ -6,7 +6,7 @@ import { expect, it } from 'vitest';
 import { MediaCompatibility } from './service';
 import { probeMedia } from './process';
 import { mediaProbeArguments } from '../../../src/preview/providers/media-playlist';
-import { verifyMediaEngine } from '../../../scripts/preview/media-engine.mjs';
+import { verifyMediaEngine } from '../../../scripts/build/shared/preview/media-engine.mjs';
 
 const fixtures = process.env.TRYLO_MEDIA_TEST_FIXTURES;
 const engineRoot = process.env.TRYLO_MEDIA_TEST_ENGINE;

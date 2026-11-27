@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { nativeDisplayInput } from '../../src/tooling/native-browser-input.mjs';
+import { nativeDisplayInput } from '../../src/tooling/browser/native-browser-input.mjs';
 test('fixed display maps CSS mouse and touch positions without changing original cursor coordinates', () => {
   const viewport = { mode: 'fixed', scale: .25 };
   const mouse = { id: 1, method: 'Input.dispatchMouseEvent', params: { type: 'mouseWheel', x: 200, y: 400, deltaY: 120, button: 'none' } };

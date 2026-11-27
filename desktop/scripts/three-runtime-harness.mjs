@@ -3,7 +3,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { probePlaywrightChromium } from '../../desktop-services/src/tooling/tool-browser-condition.mjs';
-import { createNativeBrowserService, nativeBrowserScope } from '../../desktop-services/src/tooling/native-browser-service.mjs';
+import { createNativeBrowserService, nativeBrowserScope } from '../../desktop-services/src/tooling/browser/native-browser-service.mjs';
 
 const delay = ms => new Promise(resolve => setTimeout(resolve,ms));
 async function socket(url) {

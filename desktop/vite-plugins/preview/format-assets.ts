@@ -1,6 +1,6 @@
 import type { Plugin } from 'vite';
 import { readFile } from 'node:fs/promises';
-import { previewFormatFiles } from '../../scripts/preview/codec-files.mjs';
+import { previewFormatFiles } from '../../scripts/build/shared/preview/codec-files.mjs';
 
 export function previewFormatAssets(): Plugin {
   const assets = previewFormatFiles();

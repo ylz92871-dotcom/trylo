@@ -6,7 +6,7 @@ import childProcess from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createViewportBridge } from '../../src/tooling/viewport-bridge.mjs';
+import { createViewportBridge } from '../../src/tooling/browser/viewport-bridge.mjs';
 
 for (const recovery of ['retry_stop', 'natural_exit']) {
 test(`the owned viewport preserves tree ordering and recovers through ${recovery}`, async t => {
