@@ -12,12 +12,12 @@
  */
 
 :root {
-  --logo-chip-bg: #111318;
+  --logo-chip-bg: #121211;
   --logo-chip-ink: #f3e3a6;
 }
 
 :root[data-theme='dark'] {
-  --logo-chip-bg: #111318;
+  --logo-chip-bg: #121211;
   --logo-chip-ink: #f3e3a6;
 }
 
@@ -36,7 +36,7 @@
 /* The renderer uses monochrome identity in light mode; startup keeps its own palette. */
 :root[data-theme='light'] .app-shell {
   --logo-chip-bg: transparent;
-  --logo-chip-ink: #202124;
+  --logo-chip-ink: var(--fg);
 }
 
 :root[data-theme='dark'] .app-shell { --logo-chip-bg: transparent; }

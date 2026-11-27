@@ -84,7 +84,13 @@ export function ImagePreview(props: ImagePreviewProps): ReactElement {
   }, [props.path, props.allowedRoot, props.bytes, key, page]);
 
   if (state.status === 'loading') {
-    return <div className="preview__empty">Loading image…</div>;
+    return (
+      <div className="preview__skeleton-wrap" role="status" aria-busy="true" aria-label="Loading image">
+        <span className="sr-only">Loading image…</span>
+        <div className="preview__skeleton preview__skeleton--media" aria-hidden="true" />
+        <div className="preview__skeleton preview__skeleton--line preview__skeleton--short" aria-hidden="true" />
+      </div>
+    );
   }
   if (state.status === 'error') {
     return <div className="preview__empty">Could not load image: {state.message}</div>;

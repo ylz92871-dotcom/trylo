@@ -31,6 +31,8 @@
   animation: trylo-view-enter var(--duration-view) var(--ease-out);
 }
 
+:root[data-platform='macos'] .team-surface { background: transparent; }
+@media (forced-colors: active) { :root[data-platform='macos'] .team-surface { background: Canvas; } }
 @media (prefers-reduced-motion: reduce) {
   .team-surface {
     animation: none;

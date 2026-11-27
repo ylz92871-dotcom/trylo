@@ -28,7 +28,7 @@
 }
 
 .fchange--error {
-  border-color: var(--danger, #e57373);
+  border-color: var(--danger);
 }
 
 .fchange__head {
@@ -77,8 +77,8 @@
   width: 22px;
   height: 22px;
   border-radius: 5px;
-  background: rgba(110, 191, 235, 0.18);
-  color: #6ebfeb;
+  background: var(--link-soft);
+  color: var(--link);
   flex: 0 0 auto;
 }
 
@@ -139,8 +139,8 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--success, #6ebf7b);
-  border: 1px solid color-mix(in srgb, var(--success, #6ebf7b) 45%, transparent);
+  color: var(--success);
+  border: 1px solid color-mix(in srgb, var(--success) 45%, transparent);
   border-radius: 4px;
   padding: 0 4px;
   line-height: 1.5;
@@ -160,11 +160,11 @@
 }
 
 .fchange__add {
-  color: var(--success, #56d6a0);
+  color: var(--success);
 }
 
 .fchange__del {
-  color: var(--danger, #ff6f78);
+  color: var(--danger);
 }
 
 .fchange__time {
@@ -236,13 +236,13 @@
 }
 
 .fchange__diff-line--add {
-  color: var(--success, #6ebf7b);
+  color: var(--success);
   background: var(--diff-add-bg);
 }
 
 .fchange__diff-line--del {
-  color: var(--danger, #e57373);
-  background: var(--danger-soft, rgba(229, 115, 115, 0.12));
+  color: var(--danger);
+  background: var(--diff-del-bg);
 }
 
 .fchange__diff-line--context {

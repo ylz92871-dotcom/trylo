@@ -1,12 +1,12 @@
 /* One decision surface for owner and member requests; colour marks state, not authority. */
 .approval-card {
-  --approval-bg: #fff;
-  --approval-surface: #f7f8fa;
-  --approval-edge: #e4e6e9;
-  --approval-accent: #947333;
-  --approval-seal: #fbf7ed;
-  --approval-cta: #282b2b;
-  --approval-cta-ink: #fff;
+  --approval-bg: var(--surface-card);
+  --approval-surface: var(--bg-panel);
+  --approval-edge: var(--border);
+  --approval-accent: var(--warning);
+  --approval-seal: var(--warning-soft);
+  --approval-cta: var(--fg);
+  --approval-cta-ink: var(--bg);
   position: relative;
   width: 100%;
   max-width: var(--conversation-width);
@@ -17,17 +17,17 @@
   border-radius: 14px;
   background: var(--approval-bg);
   color: var(--fg);
-  box-shadow: 0 2px 8px #20252b03;
+  box-shadow: 0 2px 8px rgba(25, 25, 24, 0.03);
   font: 13px/1.6 var(--font-body);
 }
 :root[data-theme='dark'] .approval-card {
-  --approval-bg: #242527;
-  --approval-surface: #1c1d1f;
-  --approval-edge: #393b3f;
-  --approval-accent: #d3bd86;
-  --approval-seal: #343027;
-  --approval-cta: #e0d3b2;
-  --approval-cta-ink: #28251f;
+  --approval-bg: var(--surface-card);
+  --approval-surface: var(--ink-deep);
+  --approval-edge: var(--border-strong);
+  --approval-accent: var(--warning);
+  --approval-seal: var(--warning-soft);
+  --approval-cta: var(--brand);
+  --approval-cta-ink: #161512;
   box-shadow: none;
 }
 .approval-card::before { content: ''; position: absolute; top: -1px; left: 20px; width: 34px; height: 2px; border-radius: 2px; background: var(--approval-accent); }
@@ -61,9 +61,21 @@
 .approval-card__summary-detail { min-width: 0; max-width: 100%; overflow-wrap: anywhere; color: var(--fg-muted); font: 11px/1.7 var(--font-body); }
 .approval-card__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--approval-edge); }
 .approval-card__decisions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.approval-card__btn { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 7px; min-height: 32px; padding: 5px 12px; border: 1px solid transparent; border-radius: 7px; font: 500 12px/1.5 var(--font-body); cursor: pointer; white-space: nowrap; transition: background-color 120ms ease, border-color 120ms ease; }
+.approval-card__btn { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 7px; min-height: 32px; padding: 5px 12px; border: 1px solid transparent; border-radius: 7px; font: 500 12px/1.5 var(--font-body); cursor: pointer; white-space: nowrap; transition: background-color 120ms ease, border-color 120ms ease, transform 90ms var(--ease-out); }
+.approval-card__btn[data-pressed='true'] { transform: scale(0.96); }
 .approval-card__btn:disabled { opacity: .45; cursor: default; }
-.approval-card__btn--approve { border-color: var(--approval-cta); background: var(--approval-cta); color: var(--approval-cta-ink); }
+.approval-card__btn--approve { min-width: 108px; border-color: var(--approval-cta); background: var(--approval-cta); color: var(--approval-cta-ink); }
+.approval-card[data-just-resolved='true'] { animation: approval-settle 220ms var(--ease-panel) both; }
+.approval-card[data-just-resolved='true'] .approval-card__seal { animation: approval-seal-pop 240ms var(--ease-panel) both; }
+@keyframes approval-settle {
+  from { opacity: 0.78; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes approval-seal-pop {
+  0% { transform: scale(0.84); }
+  60% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
 .approval-card__btn--approve:enabled:hover { filter: brightness(1.12); }
 .approval-card__btn--deny { border-color: var(--approval-edge); background: transparent; color: var(--fg-muted); }
 .approval-card__btn--deny:enabled:hover { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
@@ -99,7 +111,12 @@
   .approval-card__btn { padding-inline: 10px; }
   .approval-card__btn--preview { padding-inline: 0; }
 }
-@media (prefers-reduced-motion: reduce) { .approval-card__btn { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .approval-card__btn { transition: none; }
+  .approval-card__btn[data-pressed='true'] { transform: none; }
+  .approval-card[data-just-resolved='true'],
+  .approval-card[data-just-resolved='true'] .approval-card__seal { animation: none; }
+}
 @media (forced-colors: active) {
   .approval-card { border-color: CanvasText; }
   .approval-card::before { background: CanvasText; }

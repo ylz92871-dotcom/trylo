@@ -160,6 +160,16 @@
     border-color 180ms var(--ease-out);
 }
 
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-motion-state],
   [data-motion-state] > * {

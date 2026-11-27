@@ -83,6 +83,7 @@ import { isInteractiveTitlebarTarget, toggleNativeWindowZoom } from '../../host-
 import { MacosComputerSettings } from './MacosComputerSettings'
 import type { ToolingFacade } from '../../tooling/tooling-facade'
 import { formatShortcut, isMacPlatform, isWindowsPlatform } from '../../utils/platform'
+import { useLiquidIndicator } from '../../utils/use-liquid-indicator'
 
 export type SettingsTab =
   | 'connection'
@@ -349,6 +350,14 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
   // Sidebar tab state
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('connection')
   const [tabSearch, setTabSearch] = useState('')
+  const navRef = useRef<HTMLElement>(null)
+  const navIndicatorRef = useRef<HTMLSpanElement>(null)
+  useLiquidIndicator({
+    containerRef: navRef,
+    indicatorRef: navIndicatorRef,
+    activeKey: props.open ? (settingsTab === 'subconnections' ? 'connection' : settingsTab) : null,
+    axis: 'y',
+  })
   // Remote pairing QR moved to the TopBar "远程" button
   // (RemotePairingModal) — 2026-08-29. Settings keeps only
   // the gateway *configuration* (port / tunnel / URL).
@@ -1661,7 +1670,8 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
               <span>返回应用</span>
             </button>
           </div>
-          <nav className="settings-modal__sidebar settings-screen__nav" aria-label="设置分类">
+          <nav ref={navRef} className="settings-modal__sidebar settings-screen__nav" aria-label="设置分类">
+            <span ref={navIndicatorRef} className="settings-modal__sidebar-indicator" aria-hidden="true" />
             <div className="settings-screen__rail-title">设置</div>
             <div className="settings-modal__sidebar-search">
               <Search size={14} className="settings-modal__sidebar-search-icon" aria-hidden="true" />
@@ -1700,6 +1710,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
                 <button
                   key={tab.id}
                   type="button"
+                  data-liquid-key={tab.id}
                   className={`settings-modal__sidebar-item${navigationTab === tab.id ? ' settings-modal__sidebar-item--active' : ''}`}
                   aria-current={navigationTab === tab.id ? 'page' : undefined}
                   onClick={() => setSettingsTab(tab.id)}

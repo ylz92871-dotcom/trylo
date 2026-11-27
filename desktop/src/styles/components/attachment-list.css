@@ -72,6 +72,28 @@
 .attachment-chip__preview:hover { background: var(--bg-hover, rgba(128, 128, 128, 0.12)); color: var(--fg); }
 .attachment-chip__preview:focus-visible, .attachment-chip__remove:focus-visible { outline: 2px solid var(--fg-muted); outline-offset: 1px; }
 .attachment-chip--failed { width: 280px; border-color: var(--danger); }
+.attachment-chip--exiting {
+  width: 0;
+  min-width: 0;
+  padding-inline: 0;
+  border-width: 0;
+  margin-right: -8px;
+  opacity: 0;
+  transform: scale(0.92);
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    width 140ms var(--ease-out),
+    padding 140ms var(--ease-out),
+    margin 140ms var(--ease-out),
+    opacity 120ms var(--ease-out),
+    transform 140ms var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .attachment-chip--exiting {
+    transition: none;
+  }
+}
 .attachment-chip--failed .attachment-chip__thumb { color: var(--danger); background: var(--danger-soft); }
 .attachment-chip--failed .attachment-chip__size { color: var(--danger); }
 .attachment-chip--loading .attachment-chip__thumb { background: transparent; }

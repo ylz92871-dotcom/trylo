@@ -1,12 +1,12 @@
 .tool-acquisition-review {
   margin-top: 16px;
   padding-block: 16px;
-  border-top: 1px solid var(--lc-line, #eaeae7);
+  border-top: 1px solid var(--lc-line);
   min-width: 0;
 }
 .tool-acquisition-review h4 {
   margin: 0;
-  color: var(--lc-ink, #30312e);
+  color: var(--lc-ink);
   font-size: 14px;
   line-height: 1.7;
 }
@@ -18,7 +18,7 @@
 }
 .tool-acquisition-review p {
   margin: 8px 0;
-  color: var(--lc-ink, #30312e);
+  color: var(--lc-ink);
   font-size: 13px;
   line-height: 1.7;
   overflow-wrap: anywhere;
@@ -49,16 +49,16 @@
 }
 .tool-acquisition-review button {
   padding: 7px 12px;
-  border: 1px solid var(--lc-line, #eaeae7);
+  border: 1px solid var(--lc-line);
   border-radius: 6px;
   background: transparent;
-  color: var(--lc-ink, #30312e);
+  color: var(--lc-ink);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
 }
 .tool-acquisition-review button:hover:not(:disabled) {
-  background: var(--lc-soft, #fafaf9);
+  background: var(--lc-soft);
 }
 .tool-acquisition-review button:disabled {
   opacity: 0.55;
@@ -66,7 +66,7 @@
 }
 .tool-acquisition-review button:focus-visible,
 .tool-acquisition-review summary:focus-visible {
-  outline: 2px solid var(--lc-gold, #946d22);
+  outline: 2px solid var(--lc-gold);
   outline-offset: 3px;
 }
 .tool-acquisition-review dd,
@@ -75,15 +75,15 @@
   overflow-wrap: anywhere;
 }
 .tool-acquisition-review a {
-  color: var(--lc-ink, #30312e);
+  color: var(--lc-ink);
   text-underline-offset: 3px;
 }
 .tool-acquisition-review a:focus-visible {
-  outline: 2px solid var(--lc-gold, #946d22);
+  outline: 2px solid var(--lc-gold);
   outline-offset: 3px;
 }
 .tool-acquisition-review .tool-acquisition-review__muted {
-  color: var(--lc-ink, #30312e);
+  color: var(--lc-ink);
   font-size: 12px;
 }
 .tool-acquisition-review__progress {
@@ -92,11 +92,11 @@
 .tool-acquisition-review__inquiry {
   margin-block: 16px;
   padding-top: 12px;
-  border-top: 1px solid var(--lc-line, #eaeae7);
+  border-top: 1px solid var(--lc-line);
 }
 .tool-acquisition-review__inquiry h5 {
   margin: 0;
-  color: var(--lc-ink, #30312e);
+  color: var(--lc-ink);
   font-size: 13px;
   line-height: 1.7;
 }

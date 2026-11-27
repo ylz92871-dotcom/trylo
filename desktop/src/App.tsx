@@ -5115,6 +5115,14 @@ function App({
     setLeftRailCollapsed((v) => !v)
   }, [])
 
+  const handleGoHome = useCallback((): void => {
+    setLearningPanelOpen(false)
+    setCognitionViewOpen(false)
+    setActivityOpen(false)
+    setSettingsOpen(false)
+    setShowRemotePairing(false)
+  }, [])
+
   // ── File peek (base capability: shared by Code AND Work) ──
   // Text-likes are read as UTF-8 and rendered by PreviewRouter
   // (markdown / html / csv / dxf / gerber / text). Byte-backed kinds
@@ -6457,7 +6465,46 @@ function App({
         setSettingsOpen(false)
         setLearningPanelOpen(true)
       }}
+      learningOpen={learningPanelOpen}
+      onGoHome={handleGoHome}
       browserPreview={browserPreview}
+      commandPaletteContext={{
+        codeMode,
+        onCodeModeChange,
+        permissionLevel: effectivePermission.level,
+        onPermissionLevelChange,
+        configuredModel: settings.apiModel,
+        poolModel:
+          activeConversationChoice?.kind === 'pool'
+            ? activeConversationChoice.model
+            : activeConversationChoice
+              ? ''
+              : settings.poolModel,
+        savedProfiles: settings.modelProfiles.map((p) => ({
+          id: p.id,
+          label: p.name || '未命名配置',
+          hint: p.apiModel || '默认模型',
+        })),
+        activeProfileId:
+          activeConversationChoice?.kind === 'profile'
+            ? activeConversationChoice.id
+            : activeConversationChoice
+              ? ''
+              : settings.activeModelProfileId,
+        onSelectConfigured: handleSelectConfigured,
+        onSelectPool: handleSelectPool,
+        onSelectProfile: handleSelectProfile,
+        onCompact:
+          topMode === 'work'
+            ? () => {
+                if (workSessionId) void supervisor.compactCode(currentWorkspaceKey, workSessionId)
+              }
+            : onCompact,
+        compactAvailable:
+          topMode === 'work'
+            ? !!workSessionId && supervisor.canCompactCode(currentWorkspaceKey, workSessionId)
+            : !!codeSessionId && supervisor.canCompactCode(currentWorkspaceKey, codeSessionId),
+      }}
       serviceManager={serviceManager}
       toolingFacade={toolingFacadeRef.current}
       toolMessages={topMode === 'code' ? mergedMessages : workMergedMessages}

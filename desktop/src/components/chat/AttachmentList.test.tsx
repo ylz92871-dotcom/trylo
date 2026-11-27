@@ -147,4 +147,23 @@ describe('AttachmentList', () => {
     );
     expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
   });
+
+  it('transfers focus to the next remove button or fallback input when removing focused chip', () => {
+    const onRemove = vi.fn();
+    const attachments: Attachment[] = [
+      att({ id: '1', name: 'first.docx' }),
+      att({ id: '2', name: 'second.docx' }),
+    ];
+    const { rerender } = render(<AttachmentList attachments={attachments} onRemove={onRemove} />);
+    const firstBtn = screen.getByRole('button', { name: 'Remove first.docx' });
+    const secondBtn = screen.getByRole('button', { name: 'Remove second.docx' });
+    firstBtn.focus();
+    fireEvent.click(firstBtn);
+    expect(onRemove).toHaveBeenCalledTimes(1);
+    expect(onRemove).toHaveBeenCalledWith('1');
+    expect(document.activeElement).toBe(secondBtn);
+
+    rerender(<AttachmentList attachments={[attachments[1]!]} onRemove={onRemove} />);
+    expect(screen.getByRole('button', { name: 'Remove second.docx' })).toBeInTheDocument();
+  });
 });

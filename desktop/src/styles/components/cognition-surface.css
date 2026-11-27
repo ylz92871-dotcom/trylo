@@ -17,6 +17,16 @@
   font-family: var(--font-body);
 }
 
+:root[data-platform='macos'] .cognition-surface {
+  background: transparent;
+}
+
+@media (forced-colors: active) {
+  :root[data-platform='macos'] .cognition-surface {
+    background: Canvas;
+  }
+}
+
 .cognition-surface__header {
   display: flex;
   align-items: center;
@@ -75,7 +85,7 @@
 .cognition-surface__primary {
   background: var(--brand);
   border: 1px solid var(--brand);
-  color: var(--brand-inverse, #fff);
+  color: var(--mode-accent-ink);
   font-weight: 600;
 }
 

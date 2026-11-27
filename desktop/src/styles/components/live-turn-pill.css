@@ -1,0 +1,71 @@
+/* Quiet live-turn status capsule shared by Code & Work above the composer. */
+.live-turn-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 56px);
+  max-width: var(--conversation-width);
+  margin: 6px auto 0;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: var(--fg-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  animation: trylo-view-enter var(--duration-view) var(--ease-out) both;
+}
+
+.live-turn-pill__dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--brand);
+}
+
+.live-turn-pill[data-tone='ready'] .live-turn-pill__dot {
+  background: var(--success);
+}
+
+.live-turn-pill[data-tone='error'] .live-turn-pill__dot {
+  background: var(--danger);
+}
+
+.live-turn-pill__phase {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--fg);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-turn-pill__steps,
+.live-turn-pill__elapsed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  color: var(--fg-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.live-turn-pill__steps svg {
+  color: var(--success);
+}
+
+@media (max-width: 900px) {
+  .live-turn-pill {
+    width: calc(100% - 32px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-turn-pill {
+    animation: none;
+  }
+}

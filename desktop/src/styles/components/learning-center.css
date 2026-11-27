@@ -1,12 +1,12 @@
 .learning-inspector.learning-center {
-  --lc-paper: #fff;
-  --lc-soft: #fafaf9;
-  --lc-line: #eaeae7;
-  --lc-ink: #30312e;
-  --lc-muted: #777a74;
-  --lc-gold: #946d22;
-  --lc-selected: #f7f3e9;
-  --lc-button: #e1cc96;
+  --lc-paper: var(--surface-card);
+  --lc-soft: var(--bg-panel);
+  --lc-line: var(--border);
+  --lc-ink: var(--fg);
+  --lc-muted: var(--fg-muted);
+  --lc-gold: var(--brand);
+  --lc-selected: var(--brand-soft);
+  --lc-button: var(--brand-edge);
   top: 50%;
   left: 50%;
   right: auto;
@@ -26,14 +26,14 @@
   isolation: isolate;
 }
 :root[data-theme='dark'] .learning-inspector.learning-center {
-  --lc-paper: #252629;
-  --lc-soft: #222326;
-  --lc-line: #36373a;
-  --lc-ink: #e3e3df;
-  --lc-muted: #a0a19c;
-  --lc-gold: #ddc27f;
-  --lc-selected: #363227;
-  --lc-button: #d7be80;
+  --lc-paper: var(--surface-card);
+  --lc-soft: var(--bg-panel);
+  --lc-line: var(--border);
+  --lc-ink: var(--fg);
+  --lc-muted: var(--fg-muted);
+  --lc-gold: var(--brand);
+  --lc-selected: var(--brand-soft);
+  --lc-button: var(--brand-edge);
 }
 .learning-center *,
 .learning-center *::before,
@@ -261,10 +261,10 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #81917a;
+  background: var(--success);
 }
 .learning-center__footer .is-warning {
-  background: #c59b49;
+  background: var(--warning);
 }
 .learning-center .learning-inspector__section {
   padding: 0;
@@ -951,8 +951,8 @@
   gap: 8px;
 }
 .learning-center .learning-primary {
-  background: var(--lc-button);
-  color: #352b18;
+  background: var(--brand);
+  color: var(--mode-accent-ink);
   border-radius: 6px;
   padding: 8px 18px;
   font-weight: 500;

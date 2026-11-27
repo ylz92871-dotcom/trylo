@@ -382,7 +382,7 @@ fn ipc_preserves_cas_bytes_and_rejects_browser_child_callers() {
                 cmd: command.into(),
                 callback: tauri::ipc::CallbackFn(0),
                 error: tauri::ipc::CallbackFn(1),
-                url: "http://tauri.localhost".parse().unwrap(),
+                url: view.url().expect("test webview URL"),
                 body: body.into(),
                 headers: tauri::http::HeaderMap::default(),
                 invoke_key: INVOKE_KEY.into(),

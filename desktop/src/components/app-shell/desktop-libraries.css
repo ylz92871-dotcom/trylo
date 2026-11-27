@@ -19,6 +19,6 @@
 .desktop-library-recovery--floating { position: fixed; right: 24px; bottom: 24px; width: 360px; max-width: calc(100vw - 48px); max-height: calc(100dvh - 48px); overflow-y: auto; z-index: 100; }
 .desktop-libraries__switch { gap: 24px; border-bottom: 1px solid var(--border); }
 .desktop-libraries__switch > button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 4px 0 13px; font-size: 13px; background: transparent; color: var(--fg-muted); }
-.desktop-libraries__switch > button[aria-pressed='true'] { color: var(--fg); border-bottom-color: var(--accent, #946d22); }
+.desktop-libraries__switch > button[aria-pressed='true'] { color: var(--fg); border-bottom-color: var(--mode-accent, var(--accent)); }
 .desktop-libraries__switch > button:hover { background: transparent; color: var(--fg); }
 .desktop-libraries__switch > button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }

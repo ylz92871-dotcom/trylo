@@ -21,6 +21,7 @@
 
 import { type ReactElement, type ReactNode } from 'react';
 import { ChevronRight, PanelRightOpen } from 'lucide-react';
+import { PartialTextTransition } from './PartialTextTransition';
 
 export type ResultDockStatus = 'ready' | 'partial' | 'failed';
 
@@ -121,7 +122,7 @@ export function ResultDock(props: ResultDockProps): ReactElement | null {
           <span className="result-dock__fail-badge">失败</span>
         ) : (
           !panel && <span className="result-dock__count" aria-hidden="true">
-            {props.count}
+            <PartialTextTransition value={props.count} numeric />
           </span>
         )}
         {panel && <PanelRightOpen className="result-dock__panel-icon" size={15} aria-hidden="true" />}

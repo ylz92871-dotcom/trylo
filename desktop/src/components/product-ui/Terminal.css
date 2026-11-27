@@ -1,6 +1,6 @@
 /* Trylo Desktop — Integrated Terminal styles.
  *
- * Follows Trylo Light/Dark palette (`#faf8f3` / `#1c1d20`) and macOS
+ * Follows Trylo Light/Dark palette (`var(--bg-panel)`) and macOS
  * hairline divider conventions with zero-lag drag resizing. */
 
 .terminal-panel {
@@ -16,7 +16,7 @@
 }
 
 :root[data-theme='dark'] .terminal-panel {
-  background: #1c1d20;
+  background: var(--bg-panel);
 }
 
 .terminal-panel[data-dragging='true'] {

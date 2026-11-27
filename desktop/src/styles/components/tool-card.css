@@ -38,7 +38,7 @@
 }
 
 .tool--error {
-  border-color: #D96666;
+  border-color: var(--danger);
 }
 
 .tool__head {
@@ -136,15 +136,15 @@
 }
 
 .tool-tone-bash .tool__icon {
-  background: rgba(255, 199, 95, 0.18);
-  color: #ffc75f;
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 .tool-tone-fs .tool__icon {
-  background: rgba(110, 191, 235, 0.18);
-  color: #6ebfeb;
+  background: var(--link-soft);
+  color: var(--link);
 }
 .tool-tone-web .tool__icon {
-  background: rgba(201, 169, 97, 0.18);
+  background: var(--brand-soft);
   color: var(--brand);
 }
 .tool-tone-other .tool__icon {
@@ -199,9 +199,9 @@
 }
 
 .tool--error .tool__status {
-  background: var(--danger-soft, rgba(217, 102, 102, 0.18));
-  color: #D96666;
-  border-color: #D96666;
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .tool__status-icon--spin {
@@ -266,8 +266,8 @@
 }
 
 .tool__code--err {
-  color: #D96666;
-  border-color: #D96666;
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .tool__code--bash {
@@ -313,13 +313,13 @@
 }
 
 .tool__diff-line--del {
-  color: #D96666;
-  background: var(--danger-soft, rgba(217, 102, 102, 0.12));
+  color: var(--danger);
+  background: var(--diff-del-bg);
 }
 
 .tool__diff-line--add {
-  color: var(--success, #6ebf7b);
-  background: rgba(110, 191, 123, 0.12);
+  color: var(--success);
+  background: var(--diff-add-bg);
 }
 
 /* ── PR-4 (spec §7.2): structured tool-result blocks ────────────────── */
@@ -481,7 +481,7 @@
 }
 
 .tool__promote-error {
-  color: var(--danger, #D96666);
+  color: var(--danger);
   font-size: 11px;
 }
 
@@ -523,6 +523,6 @@
 
 /* Neutral output surfaces keep error/status accents readable in the dark theme. */
 :root[data-theme='dark'] :is(.tool__body, .fchange--event .fchange__body) {
-  --tool-output-bg: #191b1e;
-  --ink-mute: #969ba4;
+  --tool-output-bg: var(--bg-panel);
+  --ink-mute: var(--fg-muted);
 }

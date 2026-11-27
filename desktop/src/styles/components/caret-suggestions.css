@@ -1,0 +1,99 @@
+/* Cursor-anchored suggestion menu for `@` file references and `/` commands. */
+.caret-suggestions {
+  position: absolute;
+  z-index: 40;
+  width: min(320px, calc(100% - 8px));
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--fg);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06);
+  animation: trylo-popover-in var(--duration-popover-in) var(--ease-out) both;
+}
+
+:root[data-platform='macos'] .caret-suggestions {
+  border-color: var(--macos-hairline-strong);
+  background: var(--macos-popover-bg);
+  box-shadow: var(--macos-popover-shadow);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+}
+
+.caret-suggestions__empty {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.caret-suggestions__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+}
+
+.caret-suggestions__item--active {
+  background: var(--bg-elevated);
+}
+
+.caret-suggestions__item--disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+
+.caret-suggestions__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--bg-panel);
+  color: var(--fg-muted);
+}
+
+.caret-suggestions__item--active .caret-suggestions__icon {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.caret-suggestions__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.caret-suggestions__label {
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.caret-suggestions__detail {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caret-suggestions {
+    animation: none;
+  }
+}

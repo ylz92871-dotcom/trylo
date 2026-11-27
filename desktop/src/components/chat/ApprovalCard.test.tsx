@@ -235,3 +235,24 @@ it('retains the request caption when an incomplete command preview has no comman
   render(<ApprovalCard message={approvalMessage({ type: 'run_shell', description: 'run_shell 请求审批', preview: { kind: 'command', title: '运行命令' } })} />);
   expect(screen.getByText('run_shell 请求审批')).toBeTruthy();
 });
+
+it('tracks press-slide-cancel visual state without submitting on slide-out and marks newly resolved cards', async () => {
+  const onRespond = vi.fn(async () => true);
+  const { container, rerender } = render(<ApprovalCard message={approvalMessage()} onRespond={onRespond} />);
+  const approve = screen.getByRole('button', { name: '批准并继续' });
+  Object.defineProperty(approve, 'getBoundingClientRect', {
+    value: () => ({ left: 100, right: 200, top: 100, bottom: 132, width: 100, height: 32 }),
+  });
+
+  fireEvent.pointerDown(approve, { button: 0, clientX: 150, clientY: 116 });
+  expect(approve.getAttribute('data-pressed')).toBe('true');
+
+  // Slide outside button bounds cancels pressed appearance without calling onRespond.
+  fireEvent.pointerMove(approve, { clientX: 250, clientY: 116 });
+  expect(approve.getAttribute('data-pressed')).toBeNull();
+  expect(onRespond).not.toHaveBeenCalled();
+
+  rerender(<ApprovalCard message={approvalMessage({ status: 'approved' })} onRespond={onRespond} />);
+  const settled = container.querySelector('.approval-card');
+  expect(settled?.getAttribute('data-just-resolved')).toBe('true');
+});

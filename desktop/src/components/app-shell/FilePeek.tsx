@@ -28,6 +28,7 @@ import type { FilePath } from '../../host-adapter/types';
 import { PreviewRouter, previewKindFor, previewKindLabel } from '../preview';
 import type { PreviewKind } from '../../preview/formats';
 import { usePresenceTransition } from '../../utils/use-presence-transition';
+import { pushToast } from '../feedback/toast-store';
 
 export interface FilePeekProps {
   readonly path: FilePath;
@@ -109,7 +110,7 @@ export function FilePeek(props: FilePeekProps): ReactElement {
             <button type="button" aria-label="上一个文件" disabled={fileIndex <= 0} onClick={() => { const file = props.files?.[fileIndex - 1]; if (file) { props.onSelectFile?.(file.path); setMenuOpen(false); } }}><ChevronLeft size={15} />上一个文件</button>
             <button type="button" aria-label="下一个文件" disabled={fileIndex < 0 || fileIndex >= (props.files?.length ?? 0) - 1} onClick={() => { const file = props.files?.[fileIndex + 1]; if (file) { props.onSelectFile?.(file.path); setMenuOpen(false); } }}><ChevronRight size={15} />下一个文件</button>
           </div>}
-          <button type="button" className="file-peek__expand" title={nativeActions ? '复制文件路径' : '在桌面应用中可用'} aria-label="Copy file path" disabled={busy || !nativeActions} onClick={() => void action(() => host.copyToClipboard(props.path))}><Copy size={15} />复制文件路径</button>
+          <button type="button" className="file-peek__expand" title={nativeActions ? '复制文件路径' : '在桌面应用中可用'} aria-label="Copy file path" disabled={busy || !nativeActions} onClick={() => void action(async () => { await host.copyToClipboard(props.path); pushToast({ id: 'copy-path', tone: 'success', title: '已复制文件路径' }); })}><Copy size={15} />复制文件路径</button>
           <button type="button" className="file-peek__expand" title={nativeActions ? '在文件夹中显示' : '在桌面应用中可用'} aria-label="Show in folder" disabled={busy || !nativeActions} onClick={() => void action(() => host.showInFolder(props.path))}><FolderOpen size={15} />在文件夹中显示</button>
           <button type="button" className="file-peek__expand" title={nativeActions ? '使用外部应用打开' : '在桌面应用中可用'} aria-label="Open externally" disabled={busy || !nativeActions} onClick={() => void action(() => host.openFile(props.path))}><ExternalLink size={15} />使用外部应用打开</button>
           </div>}
@@ -137,9 +138,16 @@ export function FilePeek(props: FilePeekProps): ReactElement {
         </button>
       </header>
       {actionError && <div className="file-peek__meta" role="alert">{actionError}</div>}
-      <div className="file-peek__viewer">
-        {props.loading ? <div className="preview__empty" role="status"><span className="preview__spinner" />正在读取文件…</div>
-          : props.error ? <PreviewFailure error={props.error} />
+      <div className="file-peek__viewer" aria-busy={props.loading ? 'true' : undefined}>
+        {props.loading ? (
+          <div className="preview__skeleton-wrap" role="status" aria-label="正在读取文件">
+            <span className="sr-only">正在读取文件…</span>
+            <div className="preview__skeleton preview__skeleton--title" aria-hidden="true" />
+            <div className="preview__skeleton preview__skeleton--line" aria-hidden="true" />
+            <div className="preview__skeleton preview__skeleton--line preview__skeleton--short" aria-hidden="true" />
+            <div className="preview__skeleton preview__skeleton--block" aria-hidden="true" />
+          </div>
+        ) : props.error ? <PreviewFailure error={props.error} />
           : <PreviewBoundary key={`${props.allowedRoot ?? ''}\0${props.path}:${revision}`}><PreviewRouter path={props.path} content={props.content} resolvedKind={kind} allowedRoot={props.allowedRoot} onOpenFile={props.onSelectFile} onOpenExternal={host && nativeActions ? (url) => { void action(() => host.openFile(url)); } : undefined} /></PreviewBoundary>}
       </div>
     </aside>

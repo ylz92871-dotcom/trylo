@@ -1,0 +1,54 @@
+/* Clipped in-place transition for changing phrases or counts (SPT 11.3 / 26.2). */
+.partial-text {
+  position: relative;
+  display: inline-grid;
+  vertical-align: bottom;
+  overflow: hidden;
+}
+
+.partial-text--numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+.partial-text__current,
+.partial-text__exit {
+  grid-area: 1 / 1;
+}
+
+.partial-text--animating > .partial-text__current {
+  animation: partial-text-enter 170ms var(--ease-panel) both;
+}
+
+.partial-text__exit {
+  pointer-events: none;
+  animation: partial-text-exit 150ms var(--ease-out) both;
+}
+
+@keyframes partial-text-enter {
+  from {
+    opacity: 0;
+    transform: translateY(45%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes partial-text-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-45%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .partial-text--animating > .partial-text__current,
+  .partial-text__exit {
+    animation: none;
+  }
+}

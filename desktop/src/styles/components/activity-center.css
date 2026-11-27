@@ -44,7 +44,8 @@
 :root:not([data-platform='macos']) .activity-center__list::-webkit-scrollbar { width:6px; }
 :root:not([data-platform='macos']) .activity-center__list::-webkit-scrollbar-thumb { background:var(--border-strong); border-radius:8px; }
 :root:not([data-platform='macos']) .activity-center__list::-webkit-scrollbar-button { display:none; width:0; height:0; }
-.left-rail__nav[aria-expanded="true"] { background:color-mix(in srgb,var(--fg) 7%,transparent); color:var(--fg); }
+.left-rail__nav[aria-expanded="true"],
+.left-rail__dock-btn[aria-expanded="true"] { background:color-mix(in srgb,var(--fg) 7%,transparent); color:var(--fg); }
 @media(prefers-reduced-motion:reduce) { .activity-center,.activity-center__spinner { animation:none; } }
 :root[data-platform='macos'] .activity-center {
   border: 0;

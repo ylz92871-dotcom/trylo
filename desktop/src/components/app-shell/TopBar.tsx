@@ -1,8 +1,10 @@
-import { ChevronRight, PanelLeftOpen } from 'lucide-react';
-import type { MouseEvent, ReactElement, ReactNode } from 'react';
+import { ChevronRight, MoreHorizontal, PanelLeftOpen, Search } from 'lucide-react';
+import { useEffect, useRef, useState, type MouseEvent, type ReactElement, type ReactNode } from 'react';
 import type { TopLevelMode } from '../../host-adapter/types';
 import { isInteractiveTitlebarTarget, toggleNativeWindowZoom } from '../../host-adapter/native-shell';
 import { formatShortcut, isMacPlatform } from '../../utils/platform';
+import { useLiquidIndicator } from '../../utils/use-liquid-indicator';
+import { PartialTextTransition } from '../chat/PartialTextTransition';
 
 export interface TopBarProps {
   readonly workspaceName: string;
@@ -13,6 +15,7 @@ export interface TopBarProps {
   readonly onTopModeChange?: (mode: TopLevelMode) => void;
   readonly right?: ReactNode;
   readonly collaborationSwitch?: ReactNode;
+  readonly onOpenCommandPalette?: () => void;
 }
 
 const TOP_MODES: readonly { readonly id: TopLevelMode; readonly label: string }[] = [
@@ -24,6 +27,65 @@ export function TopBar(props: TopBarProps): ReactElement {
   const mac = isMacPlatform();
   const dragProps = mac ? { 'data-tauri-drag-region': '' } : undefined;
   const noDragProps = mac ? { 'data-tauri-drag-region': 'false' } : undefined;
+  const headerRef = useRef<HTMLElement>(null);
+  const modeSwitchRef = useRef<HTMLDivElement>(null);
+  const modeThumbRef = useRef<HTMLSpanElement>(null);
+  const overflowRef = useRef<HTMLDivElement>(null);
+  const [compactRight, setCompactRight] = useState(false);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let rafId: number | null = null;
+    const observer = new ResizeObserver(([entry]) => {
+      const width = entry?.contentRect.width ?? 0;
+      if (width <= 0) return;
+      const next = width < 680;
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        setCompactRight((prev) => (prev === next ? prev : next));
+      });
+    });
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!compactRight) setOverflowOpen(false);
+  }, [compactRight]);
+
+  useEffect(() => {
+    if (!overflowOpen) return;
+    const onPointer = (event: PointerEvent): void => {
+      if (event.target instanceof Node && !overflowRef.current?.contains(event.target)) {
+        setOverflowOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        setOverflowOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', onPointer);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [overflowOpen]);
+
+  useLiquidIndicator({
+    containerRef: modeSwitchRef,
+    indicatorRef: modeThumbRef,
+    activeKey: props.topMode,
+    axis: 'x',
+  });
 
   const onHeaderDoubleClick = (event: MouseEvent<HTMLElement>): void => {
     if (!mac || isInteractiveTitlebarTarget(event.target)) return;
@@ -32,6 +94,7 @@ export function TopBar(props: TopBarProps): ReactElement {
 
   return (
     <header
+      ref={headerRef}
       className="top-bar"
       data-rail-collapsed={props.collapsed ? 'true' : 'false'}
       onDoubleClick={onHeaderDoubleClick}
@@ -55,18 +118,20 @@ export function TopBar(props: TopBarProps): ReactElement {
         </span>
         <ChevronRight size={12} aria-hidden="true" />
         <span className="top-bar__title" title={props.conversationTitle} {...dragProps}>
-          {props.conversationTitle || '新任务'}
+          <PartialTextTransition value={props.conversationTitle || '新任务'} dragRegion={mac ? '' : undefined} />
         </span>
       </div>
 
       {props.topMode && props.onTopModeChange && (
         <div
+          ref={modeSwitchRef}
           className="top-bar__mode-switch"
           role="group"
           aria-label="工作模式"
           {...noDragProps}
         >
           <span
+            ref={modeThumbRef}
             className="top-bar__mode-thumb"
             aria-hidden="true"
             data-active-index={props.topMode === 'work' ? '1' : '0'}
@@ -80,6 +145,7 @@ export function TopBar(props: TopBarProps): ReactElement {
                 className={`top-bar__mode-btn${active ? ' top-bar__mode-btn--active' : ''}`}
                 aria-pressed={active}
                 data-mode={mode.id}
+                data-liquid-key={mode.id}
                 onClick={() => props.onTopModeChange?.(mode.id)}
                 {...noDragProps}
               >
@@ -91,8 +157,42 @@ export function TopBar(props: TopBarProps): ReactElement {
       )}
 
       <div className="top-bar__right" {...noDragProps}>
+        {props.onOpenCommandPalette && (
+          <button
+            type="button"
+            className="top-bar__rail-toggle"
+            aria-label="命令面板"
+            title={mac ? `命令面板 ${formatShortcut(['Mod', 'K'])}` : `命令面板 ${formatShortcut(['Mod', 'K'])}`}
+            onClick={props.onOpenCommandPalette}
+            {...noDragProps}
+          >
+            <Search size={15} strokeWidth={1.7} aria-hidden="true" />
+          </button>
+        )}
         {props.collaborationSwitch}
-        {props.right}
+        {compactRight && props.right ? (
+          <div ref={overflowRef} className="top-bar__overflow">
+            <button
+              type="button"
+              className={`top-bar__rail-toggle${overflowOpen ? ' top-bar__rail-toggle--active' : ''}`}
+              aria-label="更多工作台"
+              title="更多工作台"
+              aria-haspopup="menu"
+              aria-expanded={overflowOpen}
+              onClick={() => setOverflowOpen((open) => !open)}
+              {...noDragProps}
+            >
+              <MoreHorizontal size={16} aria-hidden="true" />
+            </button>
+            {overflowOpen && (
+              <div className="top-bar__overflow-menu" role="menu" aria-label="工作台面板">
+                {props.right}
+              </div>
+            )}
+          </div>
+        ) : (
+          props.right
+        )}
       </div>
     </header>
   );

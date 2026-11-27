@@ -1,6 +1,6 @@
 // Presentation of the owner's parsed preview; decisions return to its registry.
 // Retired authorities and settled requests stay readable without decision actions.
-import { useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react';
 import { ArrowRight, ChevronDown, Eye, FileText, Folder, Globe, Monitor, ShieldAlert, ShieldCheck, ShieldX, Terminal, Users } from 'lucide-react';
 import type { ApprovalMessage } from './types';
 import type { ApprovalPreview, ApprovalDiffPreview } from '../../approval/approval-preview';
@@ -46,9 +46,39 @@ export function ApprovalCard(props: ApprovalCardProps): ReactElement {
   const [submitting, setSubmitting] = useState(false);
   const [decision, setDecision] = useState<'approved' | 'denied' | 'expired' | null>(null);
   const [error, setError] = useState('');
+  const [pressedBtn, setPressedBtn] = useState<'approve' | 'deny' | null>(null);
+  const [justResolved, setJustResolved] = useState(false);
   const retired = m.authority !== 'code';
   const currentStatus = m.status === 'pending' ? decision ?? m.status : m.status;
   const resolved = currentStatus !== 'pending' || retired;
+  const wasResolvedRef = useRef(resolved);
+
+  useEffect(() => {
+    if (!wasResolvedRef.current && resolved) {
+      setJustResolved(true);
+      const timer = window.setTimeout(() => setJustResolved(false), 260);
+      wasResolvedRef.current = resolved;
+      return () => window.clearTimeout(timer);
+    }
+    wasResolvedRef.current = resolved;
+    return undefined;
+  }, [resolved]);
+
+  const handlePressStart = (kind: 'approve' | 'deny', event: ReactPointerEvent<HTMLButtonElement>): void => {
+    if (event.button !== 0 || submitting || !props.onRespond) return;
+    setPressedBtn(kind);
+  };
+
+  const handlePressMove = (kind: 'approve' | 'deny', event: ReactPointerEvent<HTMLButtonElement>): void => {
+    if (pressedBtn !== kind) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const inside =
+      event.clientX >= rect.left - 4 &&
+      event.clientX <= rect.right + 4 &&
+      event.clientY >= rect.top - 4 &&
+      event.clientY <= rect.bottom + 4;
+    if (!inside) setPressedBtn(null);
+  };
   const meta = previewMeta(m.preview);
   const title = m.preview?.title || (m.type ? TYPE_LABELS[m.type] ?? m.type : '权限请求');
   const status = currentStatus === 'approved' ? (m.autoApproved ? '已自动批准' : '已批准')
@@ -117,7 +147,12 @@ export function ApprovalCard(props: ApprovalCardProps): ReactElement {
     {description && <p className="approval-card__body">{description}</p>}
   </div>;
 
-  const attributes = { 'data-authority': m.authority, 'data-status': currentStatus, 'aria-label': `${retired ? '历史审批' : '操作审批'}：${title}` };
+  const attributes = {
+    'data-authority': m.authority,
+    'data-status': currentStatus,
+    ...(justResolved ? { 'data-just-resolved': 'true' } : {}),
+    'aria-label': `${retired ? '历史审批' : '操作审批'}：${title}`,
+  };
   if (resolved) return <details className={`approval-card approval-card--resolved ${statusClass}`} {...attributes}>
     <summary className="approval-card__head">{head}</summary>{body}
   </details>;
@@ -130,8 +165,32 @@ export function ApprovalCard(props: ApprovalCardProps): ReactElement {
         <Eye size={14} aria-hidden="true" />查看变更
       </button>}
       <div className="approval-card__decisions">
-        <button type="button" className="approval-card__btn approval-card__btn--deny" onClick={() => respond(false)} disabled={submitting || !props.onRespond}>拒绝</button>
-        <button type="button" className="approval-card__btn approval-card__btn--approve" onClick={() => respond(true)} disabled={submitting || !props.onRespond}>
+        <button
+          type="button"
+          className="approval-card__btn approval-card__btn--deny"
+          data-pressed={pressedBtn === 'deny' ? 'true' : undefined}
+          onPointerDown={(event) => handlePressStart('deny', event)}
+          onPointerMove={(event) => handlePressMove('deny', event)}
+          onPointerUp={() => setPressedBtn(null)}
+          onPointerCancel={() => setPressedBtn(null)}
+          onPointerLeave={() => setPressedBtn(null)}
+          onBlur={() => setPressedBtn(null)}
+          onClick={() => respond(false)}
+          disabled={submitting || !props.onRespond}
+        >拒绝</button>
+        <button
+          type="button"
+          className="approval-card__btn approval-card__btn--approve"
+          data-pressed={pressedBtn === 'approve' ? 'true' : undefined}
+          onPointerDown={(event) => handlePressStart('approve', event)}
+          onPointerMove={(event) => handlePressMove('approve', event)}
+          onPointerUp={() => setPressedBtn(null)}
+          onPointerCancel={() => setPressedBtn(null)}
+          onPointerLeave={() => setPressedBtn(null)}
+          onBlur={() => setPressedBtn(null)}
+          onClick={() => respond(true)}
+          disabled={submitting || !props.onRespond}
+        >
           {submitting ? '正在提交…' : '批准并继续'}<ArrowRight size={14} aria-hidden="true" />
         </button>
       </div>

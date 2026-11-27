@@ -145,13 +145,13 @@ describe('Terminal macOS native integration', () => {
 
     const instance = xtermMocks.instances[0]!;
     expect(instance.options.macOptionIsMeta).toBe(true);
-    expect((instance.options.theme as { background: string }).background).toBe('#faf8f3');
+    expect((instance.options.theme as { background: string }).background).toBe('#efede7');
 
     act(() => {
       appearance.setAppearance('dark');
     });
     await vi.waitFor(() => {
-      expect((instance.options.theme as { background: string }).background).toBe('#1c1d20');
+      expect((instance.options.theme as { background: string }).background).toBe('#191917');
     });
     // Live appearance switches must not tear down or respawn the running shell.
     expect(xtermMocks.ptySpawn).toHaveBeenCalledTimes(1);

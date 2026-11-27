@@ -99,3 +99,9 @@
 @import './styles/components/browser-control.css';
 @import './styles/components/generated-media.css';
 @import './components/product-ui/SearchPanel.css';
+@import './styles/components/toast-host.css';
+@import './styles/components/confirm-dialog.css';
+@import './styles/components/command-palette.css';
+@import './styles/components/caret-suggestions.css';
+@import './styles/components/partial-text-transition.css';
+@import './styles/components/live-turn-pill.css';

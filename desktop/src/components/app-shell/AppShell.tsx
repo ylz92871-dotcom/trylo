@@ -11,7 +11,7 @@ import { useComputerPreview } from '../../tooling/use-computer-preview';
 import { useToolWorkbenchLifecycle } from '../../tooling/use-tool-workbench-lifecycle';
 import type { ServiceManager } from '../../services-host/service-manager';
 import type { ToolingFacade } from '../../tooling/tooling-facade';
-import { LeftRail, type WorkspaceEntry } from './LeftRail';
+import { LeftRail, type LeftRailPane, type WorkspaceEntry } from './LeftRail';
 import { RightRail, type RightRailReview } from './RightRail';
 import { RailResizer } from './RailResizer';
 import { WorkspaceNavigationContext } from './WorkspaceNavigationContext';
@@ -25,8 +25,14 @@ import { RemotePairingModal } from './RemotePairingModal';
 import { useDesktopAccount } from '../../account/use-desktop-account';
 import type { FilePath, TopLevelMode } from '../../host-adapter/types';
 import { isTauri } from '../../host-adapter/tauri-detect';
-import { isMacPlatform, formatShortcut } from '../../utils/platform';
+import { isMacPlatform, isPrimaryModKey, formatShortcut } from '../../utils/platform';
 import { prefersReducedMotion, usePresenceTransition } from '../../utils/use-presence-transition';
+import { setAppearance } from '../../settings/appearance-store';
+import { CommandPalette } from '../command-palette/CommandPalette';
+import {
+  buildPaletteCommands,
+  type CommandPaletteHostContext,
+} from '../command-palette/command-registry';
 import type { ConversationSession } from '../../host-adapter/conversation-history';
 import type { SettingsSaveIntent, TryloSettings } from '../../settings/settings-store';
 import type { SettingsNotice } from '../../settings/settings-notices';
@@ -40,8 +46,10 @@ import {
   BackgroundActivityCenter,
   type ActivityItem,
 } from '../activity/BackgroundActivityCenter';
+import { ToastHost } from '../feedback/ToastHost';
+import { dismissToast, pushToast } from '../feedback/toast-store';
 
-export const DEFAULT_LEFT_RAIL_WIDTH = 240;
+export const DEFAULT_LEFT_RAIL_WIDTH = 280;
 export const DEFAULT_RIGHT_RAIL_WIDTH = 320;
 export const DEFAULT_RIGHT_RAIL_WIDE_WIDTH = 480;
 const Terminal = lazy(() => import('../product-ui/Terminal').then(({ Terminal }) => ({ default: Terminal })));
@@ -185,6 +193,8 @@ export interface AppShellProps {
   readonly onRespondLibraryApproval?: (id: string, allow: boolean) => void;
   /** Opens the Learning panel on the pending-approval tab. */
   readonly onOpenLearningPending?: () => void;
+  readonly learningOpen?: boolean;
+  readonly onGoHome?: () => void;
   /** Surface for on-demand remote pairing (QR). */
   readonly remoteController?: { pairing(): Promise<RemotePairingInfoResult> } & RelayAccountActions | null;
   /**
@@ -211,11 +221,14 @@ export interface AppShellProps {
     readonly toggleTerminal: () => void;
     readonly toggleBrowserSidebar: () => void;
   } | null>;
+  readonly commandPaletteContext?: CommandPaletteHostContext;
 }
 
 export function AppShell(props: AppShellProps): ReactElement {
-  useAppearance();
+  const appearance = useAppearance();
+  const [leftRailPane, setLeftRailPane] = useState<LeftRailPane>('projects');
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('connection');
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const activityTrigger = useRef<HTMLButtonElement>(null);
   const activityPanelId = useId();
   const terminalId = useId();
@@ -309,7 +322,13 @@ export function AppShell(props: AppShellProps): ReactElement {
   }, []);
   const setBrowserVisible = props.browserPreview?.setVisible;
   useEffect(() => { setBrowserVisible?.(browserPreviewOpen); }, [browserPreviewOpen, setBrowserVisible]);
-  const [previewError, setPreviewError] = useState('');
+  const reportPreviewError = useCallback((message: string): void => {
+    if (!message) {
+      dismissToast('preview-error');
+      return;
+    }
+    pushToast({ id: 'preview-error', tone: 'error', title: '预览不可用', detail: message });
+  }, []);
   const runActive = props.activeSessionId !== null && props.runningSessionIds.has(props.activeSessionId);
   // Dragging a rail changes geometry, not tool history. Keep that projection
   // off the resize path while retaining message/run changes as its inputs.
@@ -329,7 +348,7 @@ export function AppShell(props: AppShellProps): ReactElement {
   }, [software.open]);
   const browserReplay = useBrowserReplay(browserState, props.browserPreview, previewScope);
   const workbench = useToolWorkbenchLifecycle({ scope: previewScope, running: runActive, autoOpenComputer: !mac,
-    browser: browserState, computer: computerState, onError: setPreviewError,
+    browser: browserState, computer: computerState, onError: reportPreviewError,
     showBrowser: () => { software.setOpen(false); setModelPreviewOpen(false); if (props.rightRailOpen) props.onToggleRightRail(); setBrowserPreviewOpen(true); } });
   const macComputerPreviewState = computerState.hasTools
     ? computerState
@@ -341,7 +360,7 @@ export function AppShell(props: AppShellProps): ReactElement {
     enabled: workbench.computerVisible && (mac || (runActive && computerState.hasStarted === true)),
     pickerRequest: mac ? workbench.computerRequest : undefined, excludeWindow: mac ? undefined : workbench.computerHandle });
   const openMacPreview = (): void => {
-    setPreviewError('');
+    reportPreviewError('');
     void workbench.openComputer(props.toolingFacade?.prepareComputerPreview);
   };
   useEffect(() => { if (props.rightRailOpen) setBrowserPreviewOpen(false); }, [props.rightRailOpen]);
@@ -374,6 +393,138 @@ export function AppShell(props: AppShellProps): ReactElement {
   [props.workspaces, props.currentWorkspaceId, props.onSwitchWorkspace, props.onOpenFolder]);
 
   const { shellActionsRef, currentWorkspaceId } = props;
+  useEffect(() => {
+    const onGlobalKeyDown = (event: KeyboardEvent): void => {
+      if (event.isComposing || event.keyCode === 229) return;
+      if (isPrimaryModKey(event) && event.key.toLowerCase() === 'k' && !event.altKey && !event.shiftKey) {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', onGlobalKeyDown);
+    return () => window.removeEventListener('keydown', onGlobalKeyDown);
+  }, []);
+
+  const {
+    sessions: propSessions,
+    onArchiveSession: propOnArchiveSession,
+    onUnarchiveSession: propOnUnarchiveSession,
+    topMode: propTopMode,
+    onTopModeChange: propOnTopModeChange,
+    workspaces: propWorkspaces,
+    onSwitchWorkspace: propOnSwitchWorkspace,
+    onOpenFolder: propOnOpenFolder,
+    activeSessionId: propActiveSessionId,
+    runningSessionIds: propRunningSessionIds,
+    onSelectSession: propOnSelectSession,
+    onNewSession: propOnNewSession,
+    leftRailCollapsed: propLeftRailCollapsed,
+    onToggleLeftRail,
+    onOpenActivityCenter: propOnOpenActivityCenter,
+    activityItems: propActivityItems,
+    activeCodeRuns: propActiveCodeRuns,
+    onSettingsOpenChange: propOnSettingsOpenChange,
+    onRemotePairingOpenChange: propOnRemotePairingOpenChange,
+    commandPaletteContext: propCommandPaletteContext,
+  } = props;
+
+  const archiveWithUndo = useCallback((id: string): void => {
+    const target = propSessions.find((session) => session.id === id);
+    propOnArchiveSession(id);
+    if (target) {
+      pushToast({
+        id: `archive:${id}`,
+        tone: 'info',
+        title: `已归档「${target.title}」`,
+        action: {
+          label: '撤销',
+          onAction: () => propOnUnarchiveSession(id),
+        },
+        durationMs: 5500,
+      });
+    }
+  }, [propSessions, propOnArchiveSession, propOnUnarchiveSession]);
+
+  const paletteCommands = useMemo(
+    () =>
+      buildPaletteCommands({
+        topMode: propTopMode,
+        onTopModeChange: propOnTopModeChange,
+        workspaces: propWorkspaces,
+        currentWorkspaceId,
+        onSwitchWorkspace: propOnSwitchWorkspace,
+        onOpenFolder: propOnOpenFolder,
+        sessions: propSessions,
+        activeSessionId: propActiveSessionId,
+        runningSessionIds: propRunningSessionIds,
+        onSelectSession: propOnSelectSession,
+        onNewSession: propOnNewSession,
+        onArchiveSession: archiveWithUndo,
+        rightRailOpen,
+        onToggleRightRail,
+        leftRailCollapsed: propLeftRailCollapsed,
+        onToggleLeftRail,
+        browserOpen: browserPreviewOpen,
+        onToggleBrowser: () => {
+          hideSoftware.current();
+          setModelPreviewOpen(false);
+          setBrowserPreviewOpen((open) => {
+            const next = !open;
+            if (next && rightRailOpen) onToggleRightRail();
+            return next;
+          });
+        },
+        terminalAvailable,
+        terminalOpen,
+        onToggleTerminal: () => {
+          if (!terminalAvailable) return;
+          setTerminalWorkspace((current) => (current === currentWorkspaceId ? null : currentWorkspaceId));
+        },
+        onOpenActivityCenter: () => {
+          if (propLeftRailCollapsed) onToggleLeftRail();
+          setLeftRailPane('activity');
+        },
+        activityCount: propActivityItems?.length ?? propActiveCodeRuns ?? 0,
+        onOpenSettingsTab: (tab) => {
+          setSettingsTab(tab);
+          propOnSettingsOpenChange(true);
+        },
+        onOpenRemote: () => propOnRemotePairingOpenChange(true),
+        appearancePreference: appearance.preference,
+        onSetAppearance: (value, origin) => {
+          setAppearance(value, origin);
+        },
+        host: propCommandPaletteContext,
+      }),
+    [
+      propTopMode,
+      propOnTopModeChange,
+      propWorkspaces,
+      currentWorkspaceId,
+      propOnSwitchWorkspace,
+      propOnOpenFolder,
+      propSessions,
+      propActiveSessionId,
+      propRunningSessionIds,
+      propOnSelectSession,
+      propOnNewSession,
+      archiveWithUndo,
+      rightRailOpen,
+      onToggleRightRail,
+      propLeftRailCollapsed,
+      onToggleLeftRail,
+      browserPreviewOpen,
+      terminalAvailable,
+      terminalOpen,
+      propOnOpenActivityCenter,
+      propActivityItems,
+      propActiveCodeRuns,
+      propOnSettingsOpenChange,
+      propOnRemotePairingOpenChange,
+      appearance.preference,
+      propCommandPaletteContext,
+    ],
+  );
   useEffect(() => {
     if (!shellActionsRef) return;
     shellActionsRef.current = {
@@ -461,16 +612,34 @@ export function AppShell(props: AppShellProps): ReactElement {
               onArchiveSession={props.onArchiveSession}
               onUnarchiveSession={props.onUnarchiveSession}
               onToggleCollapse={props.onToggleLeftRail}
-              onOpenActivity={props.onOpenActivityCenter ? () => props.activityOpen ? props.onActivityOpenChange?.(false) : props.onOpenActivityCenter?.() : undefined}
+              activePane={leftRailPane}
+              onActivePaneChange={setLeftRailPane}
+              activityItems={props.activityItems ?? []}
               activityTriggerRef={activityTrigger}
               activityOpen={props.activityOpen}
               activityPanelId={activityPanelId}
               activeRuns={props.activityItems?.length ?? props.activeCodeRuns}
-              onOpenTools={() => { setSettingsTab('tools'); props.onSettingsOpenChange(true); }}
+              toolPlatform={props.toolPlatform}
+              learningPort={props.learningPort}
+              skillLearningRuntime={props.skillLearningRuntime}
+              workBrowserDebug={props.settings.workBrowserDebug}
+              workCad={props.settings.workCad}
+              onOpenToolsSettings={() => { setSettingsTab('tools'); props.onSettingsOpenChange(true); }}
               onOpenLearning={props.onOpenLearningPending}
               onOpenRemote={() => props.onRemotePairingOpenChange(true)}
               remoteRunning={props.remoteRunning}
               onOpenSettings={() => { setSettingsTab('connection'); props.onSettingsOpenChange(true); }}
+              onGoHome={() => {
+                setLeftRailPane('projects');
+                props.onActivityOpenChange?.(false);
+                props.onSettingsOpenChange(false);
+                props.onRemotePairingOpenChange(false);
+                props.onGoHome?.();
+              }}
+              toolsOpen={props.settingsOpen && settingsTab === 'tools'}
+              learningOpen={props.learningOpen}
+              remoteOpen={props.remotePairingOpen}
+              settingsOpen={props.settingsOpen && settingsTab !== 'tools'}
               account={account}
               accountOpenRequest={accountOpenRequest}
               accountRemoteActive={(props.settings.remote.connectionMode ?? 'server') === 'server' && (props.remoteEnabled ?? false)}
@@ -481,8 +650,10 @@ export function AppShell(props: AppShellProps): ReactElement {
           <RailResizer
             side="left"
             width={props.leftWidth}
-            min={mac ? 212 : 184}
-            max={360}
+            min={mac ? 256 : 240}
+            max={400}
+            snapPoints={[280]}
+            defaultWidth={DEFAULT_LEFT_RAIL_WIDTH}
             onChange={props.onLeftWidthChange}
             onDraggingChange={setResizingRail}
           />
@@ -524,10 +695,11 @@ export function AppShell(props: AppShellProps): ReactElement {
                   data-tauri-drag-region="false" onClick={openMacPreview}>
                   <Monitor size={16} strokeWidth={1.65} aria-hidden="true" />
                 </button>}
-              {!mac && <button type="button" className={`top-bar__rail-toggle${runActive && computerState.hasTools ? ' top-bar__rail-toggle--active' : ''}`} aria-label={runActive && computerState.hasTools ? '电脑悬浮窗，控制正在工作' : '电脑悬浮窗'} title={runActive && computerState.hasTools ? '电脑控制正在工作' : '电脑悬浮窗'} onClick={() => { setPreviewError(''); void workbench.openComputer(); }}><Monitor size={16} strokeWidth={1.65} aria-hidden="true" />{runActive && computerState.hasTools && <span className="top-bar__activity-dot" aria-hidden="true" />}</button>}
+              {!mac && <button type="button" className={`top-bar__rail-toggle${runActive && computerState.hasTools ? ' top-bar__rail-toggle--active' : ''}`} aria-label={runActive && computerState.hasTools ? '电脑悬浮窗，控制正在工作' : '电脑悬浮窗'} title={runActive && computerState.hasTools ? '电脑控制正在工作' : '电脑悬浮窗'} onClick={() => { reportPreviewError(''); void workbench.openComputer(); }}><Monitor size={16} strokeWidth={1.65} aria-hidden="true" />{runActive && computerState.hasTools && <span className="top-bar__activity-dot" aria-hidden="true" />}</button>}
               {props.topBarRight}
             </>}
             collaborationSwitch={props.topBarCollaborationSwitch}
+            onOpenCommandPalette={() => setPaletteOpen(true)}
             collapsed={props.leftRailCollapsed}
             onToggleLeftRail={props.onToggleLeftRail}
           />
@@ -558,6 +730,8 @@ export function AppShell(props: AppShellProps): ReactElement {
             width={effectiveRightWidth}
             min={rightRailWide ? (props.resultReview ? 320 : 360) : 260}
             max={rightRailWide ? browserMaxWidth : 420}
+            snapPoints={rightRailWide ? [320, 480, 640] : [320]}
+            defaultWidth={rightRailWide ? DEFAULT_RIGHT_RAIL_WIDE_WIDTH : DEFAULT_RIGHT_RAIL_WIDTH}
             onChange={props.onRightWidthChange}
             onDraggingChange={setResizingRail}
           />
@@ -639,16 +813,21 @@ export function AppShell(props: AppShellProps): ReactElement {
           panel serves Code and Work; floats over the main column
           below the top bar. The controller stays mounted while the
           drawer is closed, so the browser survives a re-open. */}
-      {previewError && <div role="alert" className="tool-preview-error" onClick={() => setPreviewError('')}>{previewError}</div>}
-      {/* M4-D: Background Activity Center. Floats
-          above the chat panel; closing returns focus
-          to the trigger. See spec §8.5. */}
       <BackgroundActivityCenter
         id={activityPanelId}
         anchor={activityTrigger.current}
         open={Boolean(props.activityOpen)}
         items={props.activityItems ?? []}
         onClose={() => props.onActivityOpenChange?.(false)}
+      />
+      <ToastHost />
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        commands={paletteCommands}
+        workspaceRoot={workspace?.root}
+        previewFiles={props.previewFiles}
+        onOpenFile={props.onSelectFile ? (path) => props.onSelectFile?.(path as FilePath, 'file') : undefined}
       />
     </div>
     </WorkspaceNavigationContext.Provider>

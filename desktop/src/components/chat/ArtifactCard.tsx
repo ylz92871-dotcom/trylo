@@ -4,6 +4,7 @@ import type { ArtifactHost, ExternalApplication } from '../../host-adapter/artif
 import { artifactCardCanPreview, type ArtifactCardKind } from '../../preview/formats';
 import { artifactDenialText, isHttpArtifact, relativeArtifactPath, validateArtifactTarget } from '../../results/artifact-paths';
 import { isMacPlatform } from '../../utils/platform';
+import { pushToast } from '../feedback/toast-store';
 import { ArtifactCardMenu, type ArtifactMenuAction } from './ArtifactCardMenu';
 
 export interface ArtifactCardProps {
@@ -118,7 +119,10 @@ export function ArtifactCard(props: ArtifactCardProps): JSX.Element {
   };
   const copy: ArtifactMenuAction = {
     id: 'copy', label: row ? '复制路径' : 'Copy path', icon: Clipboard,
-    run: () => perform(() => host().copyToClipboard(props.filePath)),
+    run: () => perform(async () => {
+      await host().copyToClipboard(props.filePath);
+      pushToast({ id: 'copy-path', tone: 'success', title: '已复制文件路径' });
+    }),
   };
   const mac = isMacPlatform();
   const canQuickLook = mac && !url && !denial && !!props.host?.quickLookFile;

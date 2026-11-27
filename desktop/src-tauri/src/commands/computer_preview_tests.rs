@@ -23,7 +23,7 @@ fn invoke(
             cmd: command.into(),
             callback: tauri::ipc::CallbackFn(0),
             error: tauri::ipc::CallbackFn(1),
-            url: "http://tauri.localhost".parse().expect("local URL"),
+            url: webview.url().expect("test webview URL"),
             body: body.into(),
             headers: tauri::http::HeaderMap::default(),
             invoke_key: INVOKE_KEY.into(),

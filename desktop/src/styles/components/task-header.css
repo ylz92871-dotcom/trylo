@@ -51,8 +51,8 @@
 }
 
 .task-header--error .task-header__status-pill {
-  background: var(--danger-soft, rgba(229, 115, 115, 0.18));
-  color: var(--danger, #e57373);
+  background: var(--danger-soft);
+  color: var(--danger);
   animation: none;
 }
 
@@ -100,11 +100,11 @@
 }
 
 .task-header--done .task-header__icon {
-  color: var(--success, #6ebf7b);
+  color: var(--success);
 }
 
 .task-header--error .task-header__icon {
-  color: var(--danger, #e57373);
+  color: var(--danger);
 }
 
 .task-header__status {
@@ -181,7 +181,7 @@
 }
 
 .task-header__stop:hover {
-  background: var(--danger-soft, rgba(229, 115, 115, 0.18));
-  color: var(--danger, #e57373);
-  border-color: var(--danger, #e57373);
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: var(--danger);
 }

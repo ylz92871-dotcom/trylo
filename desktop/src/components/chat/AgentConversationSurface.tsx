@@ -31,6 +31,7 @@ import { deriveConversationRunViewState, type ConversationRunViewState } from '.
 import { ComposerInputRequests } from './ComposerInputRequests'
 import { SubagentConversation } from './SubagentConversation'
 import { AgentAvatarScope } from './AgentAvatar'
+import { LiveTurnPill } from './LiveTurnPill'
 import type { SendSubagentInput } from '../../host-adapter/subagent-contract'
 
 export interface AgentConversationSurfaceProps {
@@ -263,6 +264,9 @@ export function AgentConversationSurface(props: AgentConversationSurfaceProps): 
           {props.cognitionBadgeSlot}
           {props.learningReceiptSlot}
           {!isEmpty && <>
+            {!presentation.embedded && (
+              <LiveTurnPill viewState={viewState} messages={props.messages} running={props.running} />
+            )}
             <ComposerInputRequests messages={props.messages} onRespond={props.onRespondInputRequest} />
             {props.composer}
           </>}

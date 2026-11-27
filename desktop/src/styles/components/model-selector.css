@@ -35,12 +35,12 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  --model-row-current: #fcfaf5;
-  --model-row-ring: #e2d7b4;
+  --model-row-current: color-mix(in srgb, var(--brand-soft) 55%, var(--surface-card));
+  --model-row-ring: var(--brand-edge);
 }
 
 :root[data-theme='dark'] .model-selector {
-  --model-row-current: #352d1c;
+  --model-row-current: var(--brand-soft);
   --model-row-ring: var(--brand-edge);
 }
 

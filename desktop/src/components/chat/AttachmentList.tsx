@@ -20,13 +20,14 @@
 // Pure presentational — all data flow lives in App.tsx;
 // this just renders the array.
 
-import { useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Eye, File, FileImage, FileText, RotateCw, TriangleAlert, X } from 'lucide-react';
 import type {
   Attachment,
   AttachmentKind,
   FailedAttachment,
 } from '../../host-adapter/attachment-utils';
+import { prefersReducedMotion } from '../../utils/use-presence-transition';
 
 import { quickLookFile, supportsQuickLook } from '../../host-adapter/quick-look';
 
@@ -68,7 +69,8 @@ function formatSize(n: number): string {
 
 function AttachmentChip(props: {
   readonly attachment: Attachment;
-  readonly onRemove: (id: string) => void;
+  readonly exiting?: boolean;
+  readonly onRemove: (id: string, button: HTMLButtonElement | null) => void;
 }): ReactElement {
   const a = props.attachment;
   const [previewError, setPreviewError] = useState('');
@@ -78,16 +80,12 @@ function AttachmentChip(props: {
     void quickLookFile(a.path, root).catch(error => setPreviewError(String(error)));
   };
   const KindIcon = KIND_ICON[a.kind];
-  // v1.16.2.6: image kind gets a real <img> preview if
-  // previewUrl is set (App.tsx built the blob: URL after
-  // readFileBytes). For everything else (office, text,
-  // or image without preview yet) we fall back to the
-  // kind icon.
   const isImageWithPreview = a.kind === 'image' && Boolean(a.previewUrl);
   return (
     <span
-      className={`attachment-chip attachment-chip--${a.kind}`}
-      role="listitem"
+      className={`attachment-chip attachment-chip--${a.kind}${props.exiting ? ' attachment-chip--exiting' : ''}`}
+      role={props.exiting ? undefined : 'listitem'}
+      aria-hidden={props.exiting ? true : undefined}
       title={a.path}
     >
       <span className="attachment-chip__thumb" aria-hidden="true">
@@ -110,6 +108,8 @@ function AttachmentChip(props: {
       </span>
       {allowedRoot && supportsQuickLook() && (
         <button type="button" className="attachment-chip__preview"
+          disabled={props.exiting}
+          tabIndex={props.exiting ? -1 : undefined}
           aria-label={`快速预览 ${a.name}`} title={`快速预览 ${a.name}`} onClick={() => preview(allowedRoot)}>
           <Eye size={13} aria-hidden="true" />
         </button>
@@ -117,7 +117,9 @@ function AttachmentChip(props: {
       <button
         type="button"
         className="attachment-chip__remove"
-        onClick={() => props.onRemove(a.id)}
+        disabled={props.exiting}
+        tabIndex={props.exiting ? -1 : undefined}
+        onClick={(event) => props.onRemove(a.id, event.currentTarget)}
         aria-label={`Remove ${a.name}`}
         title="Remove attachment"
       >
@@ -190,12 +192,62 @@ function FailedChip(props: {
   );
 }
 
+function isJsdomEnv(): boolean {
+  return typeof navigator === 'undefined' || /\bjsdom\b/i.test(navigator.userAgent);
+}
+
+const EXIT_MS = 140;
+
 export function AttachmentList(props: AttachmentListProps): ReactElement | null {
   const loading = props.loading ?? 0;
   const failed = props.failed ?? [];
-  if (props.attachments.length === 0 && loading === 0 && failed.length === 0) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const [exiting, setExiting] = useState<readonly Attachment[]>([]);
+  const timersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
+
+  const activeIds = new Set(props.attachments.map((a) => a.id));
+  const visibleExiting = exiting.filter((item) => !activeIds.has(item.id));
+
+  const handleRemove = (id: string, button: HTMLButtonElement | null): void => {
+    const target = props.attachments.find((item) => item.id === id);
+    if (!target) return;
+
+    // Transfer focus cleanly to the next or previous chip button, or back to the composer textarea.
+    const root = listRef.current;
+    if (root && button && document.activeElement === button) {
+      const buttons = [...root.querySelectorAll<HTMLButtonElement>('.attachment-chip:not(.attachment-chip--exiting) .attachment-chip__remove')];
+      const idx = buttons.indexOf(button);
+      const nextTarget = (idx >= 0 ? buttons[idx + 1] ?? buttons[idx - 1] : null)
+        ?? root.closest('.input-bar')?.querySelector<HTMLElement>('.input-bar__input');
+      nextTarget?.focus();
+    }
+
+    if (!prefersReducedMotion() && !isJsdomEnv()) {
+      setExiting((current) => (current.some((item) => item.id === id) ? current : [...current, target]));
+      const existingTimer = timersRef.current.get(id);
+      if (existingTimer !== undefined) clearTimeout(existingTimer);
+      const timer = setTimeout(() => {
+        timersRef.current.delete(id);
+        setExiting((current) => current.filter((item) => item.id !== id));
+      }, EXIT_MS);
+      timersRef.current.set(id, timer);
+    }
+
+    props.onRemove(id);
+  };
+
+  if (props.attachments.length === 0 && visibleExiting.length === 0 && loading === 0 && failed.length === 0) {
     return null;
   }
+
   const ariaLabel =
     props.attachments.length > 0
       ? `${props.attachments.length} attachment${props.attachments.length === 1 ? '' : 's'}`
@@ -203,9 +255,12 @@ export function AttachmentList(props: AttachmentListProps): ReactElement | null 
         ? `Reading ${loading} file${loading === 1 ? '' : 's'}`
         : `${failed.length} error${failed.length === 1 ? '' : 's'}`;
   return (
-    <div className="attachment-list" role="list" aria-label={ariaLabel}>
+    <div ref={listRef} className="attachment-list" role="list" aria-label={ariaLabel}>
       {props.attachments.map((a) => (
-        <AttachmentChip key={a.id} attachment={a} onRemove={props.onRemove} />
+        <AttachmentChip key={a.id} attachment={a} onRemove={handleRemove} />
+      ))}
+      {visibleExiting.map((a) => (
+        <AttachmentChip key={`exit-${a.id}`} attachment={a} exiting onRemove={handleRemove} />
       ))}
       {loading > 0 && <LoadingChip count={loading} />}
       {failed.map((f) => (

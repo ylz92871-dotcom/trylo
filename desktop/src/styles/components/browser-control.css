@@ -1,6 +1,6 @@
 /* Native content occupies the measured inner picture; the gutter belongs to this frame. */
-.browser-control-frame { --control-ink:#55554f; --control-glow:112,116,122; --control-seam:116,121,126; --control-wash:.085; position:relative; display:flex; flex:1; flex-direction:column; min-width:0; min-height:0; background:var(--bg); }
-[data-theme="dark"] .browser-control-frame { --control-ink:#e3d1a2; --control-glow:211,191,137; --control-seam:211,191,137; --control-wash:.13; }
+.browser-control-frame { --control-ink:var(--fg-muted); --control-glow:112,116,122; --control-seam:116,121,126; --control-wash:.085; position:relative; display:flex; flex:1; flex-direction:column; min-width:0; min-height:0; background:var(--bg); }
+[data-theme="dark"] .browser-control-frame { --control-ink:var(--brand); --control-glow:222,193,118; --control-seam:222,193,118; --control-wash:.13; }
 .browser-control { position:relative; z-index:1; display:flex; flex:none; align-items:center; gap:10px; height:52px; padding:0 14px; border-bottom:1px solid var(--browser-edge); background:var(--bg); }
 .browser-control__mark { position:relative; display:block; flex:none; width:20px; height:20px; color:var(--control-ink); }
 .browser-control__mark > svg { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:44px; height:44px; max-width:none; flex-shrink:0; }

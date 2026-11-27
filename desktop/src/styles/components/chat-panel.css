@@ -1,4 +1,6 @@
 .chat-panel { position: relative; width: 100%; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; background: var(--bg); isolation: isolate; animation: trylo-view-enter var(--duration-view) var(--ease-out); }
+:root[data-platform='macos'] .chat-panel { background: transparent; }
+@media (forced-colors: active) { :root[data-platform='macos'] .chat-panel { background: Canvas; } }
 @media (prefers-reduced-motion: reduce) { .chat-panel { animation: none; } }
 .chat-panel__home { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-block: 118px 36px; }
 .chat-panel__home .input-bar-wrapper { margin-top: 0; margin-bottom: 0; }

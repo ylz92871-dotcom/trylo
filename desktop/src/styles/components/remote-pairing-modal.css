@@ -31,7 +31,7 @@
 .remote-connect__pairing h3 small { font-size: 10px; font-weight: 400; color: var(--fg-muted); }
 .remote-connect__qr { width: 202px; height: 202px; padding: 9px; background: #fff; border: 1px solid var(--border); border-radius: 10px; margin: 20px auto 17px; display: grid; place-items: center; }
 .remote-connect__qr img { width: 100%; height: 100%; object-fit: contain; }
-.remote-connect__qr > div { width: 100%; height: 100%; background: #f6f5f1; color: #77786e; display: flex; gap: 13px; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; }
+.remote-connect__qr > div { width: 100%; height: 100%; background: var(--bg); color: var(--fg-muted); display: flex; gap: 13px; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; }
 .remote-connect__pairing p { font-size: 12px; margin: 0; }
 .remote-connect__pairing p small { display: block; color: var(--fg-muted); margin-top: 7px; font-size: 11px; }
 .remote-connect__text { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; background: none; color: var(--brand); font: inherit; font-size: 12px; padding: 10px 0; cursor: pointer; }
@@ -201,13 +201,13 @@
 }
 
 .remote-pairing-modal__status--ok::before {
-  background: var(--ok, #3fb950);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok, #3fb950) 22%, transparent);
+  background: var(--success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent);
 }
 
 .remote-pairing-modal__status--pending::before {
-  background: var(--warn, #d29922);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn, #d29922) 22%, transparent);
+  background: var(--warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 22%, transparent);
 }
 
 .remote-pairing-modal__status--off::before {
@@ -241,7 +241,7 @@
 }
 
 .remote-pairing-modal__hint--error {
-  color: var(--danger, #f85149);
+  color: var(--danger);
 }
 
 /* Enable / disable switch row. */
@@ -325,7 +325,7 @@
   border: 1px solid var(--brand);
   border-radius: var(--radius-sm);
   background: var(--brand);
-  color: var(--bg);
+  color: var(--mode-accent-ink, var(--bg));
   font-family: var(--font-body);
   font-size: var(--text-sm);
   font-weight: 600;
@@ -337,8 +337,8 @@
 }
 
 .remote-pairing-modal__btn:hover:not(:disabled) {
-  background: var(--brand-600, #b8961f);
-  border-color: var(--brand-600, #b8961f);
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
 }
 
 .remote-pairing-modal__btn:disabled {

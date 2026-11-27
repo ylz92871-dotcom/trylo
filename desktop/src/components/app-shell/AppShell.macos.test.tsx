@@ -430,6 +430,7 @@ describe('AppShell macOS capability parity (Code & Work)', () => {
       await vi.waitFor(() => {
         expect(shellMocks.invoke).toHaveBeenCalledWith('show_native_context_menu', {
           items: [
+            { id: 'pin', label: '置顶', enabled: true },
             { id: 'rename', label: '重命名', enabled: true },
             { id: 'archive', label: '归档', enabled: true },
             { id: 'sep-1', label: '', separator: true },
@@ -444,14 +445,14 @@ describe('AppShell macOS capability parity (Code & Work)', () => {
   );
 
   it.each(['code', 'work'] as const)(
-    'applies balanced 240/320 rail defaults and expands right rail to 480px for preview or review in %s mode',
+    'applies balanced 280/320 rail defaults and expands right rail to 480px for preview or review in %s mode',
     (mode) => {
       restorePlatform = mockPlatform('MacIntel');
       const originalInnerWidth = window.innerWidth;
       Object.defineProperty(window, 'innerWidth', { value: 1440, configurable: true });
 
       try {
-        expect(DEFAULT_LEFT_RAIL_WIDTH).toBe(240);
+        expect(DEFAULT_LEFT_RAIL_WIDTH).toBe(280);
         expect(DEFAULT_RIGHT_RAIL_WIDTH).toBe(320);
         expect(DEFAULT_RIGHT_RAIL_WIDE_WIDTH).toBe(480);
 
@@ -462,7 +463,7 @@ describe('AppShell macOS capability parity (Code & Work)', () => {
         });
         const filesShell = filesView.container.querySelector('.app-shell') as HTMLElement;
         const filesSlot = filesView.container.querySelector('.right-rail-slot') as HTMLElement;
-        expect(filesShell.style.getPropertyValue('--rail-left-w')).toBe('240px');
+        expect(filesShell.style.getPropertyValue('--rail-left-w')).toBe('280px');
         expect(filesShell.style.getPropertyValue('--rail-right-w')).toBe('320px');
         expect(filesSlot).toHaveAttribute('data-wide', 'false');
         filesView.unmount();
@@ -485,6 +486,87 @@ describe('AppShell macOS capability parity (Code & Work)', () => {
       } finally {
         Object.defineProperty(window, 'innerWidth', { value: originalInnerWidth, configurable: true });
       }
+    },
+  );
+
+  it.each(['code', 'work'] as const)(
+    'renders the split icon dock and switches inline panes identically in %s mode on macOS',
+    (mode) => {
+      restorePlatform = mockPlatform('MacIntel');
+      const onSettingsOpenChange = vi.fn();
+      const { container } = render(
+        <AppShell
+          workspaces={[{ id: 'ws-1', name: 'Trylo', root: '/tmp/trylo' }]}
+          currentWorkspaceId="ws-1"
+          sessions={[]}
+          activeSessionId={null}
+          runningSessionIds={new Set()}
+          leftRailCollapsed={false}
+          onToggleLeftRail={vi.fn()}
+          onSwitchWorkspace={vi.fn()}
+          onOpenFolder={vi.fn()}
+          onCloseWorkspace={vi.fn()}
+          onSelectSession={vi.fn()}
+          onNewSession={vi.fn()}
+          onDeleteSession={vi.fn()}
+          onRenameSession={vi.fn()}
+          onArchiveSession={vi.fn()}
+          onUnarchiveSession={vi.fn()}
+          topMode={mode}
+          settings={settingsDefaults}
+          fileTreeRoot="/tmp/trylo"
+          rightRailOpen={false}
+          onToggleRightRail={vi.fn()}
+          leftWidth={DEFAULT_LEFT_RAIL_WIDTH}
+          onLeftWidthChange={vi.fn()}
+          rightWidth={DEFAULT_RIGHT_RAIL_WIDTH}
+          onRightWidthChange={vi.fn()}
+          settingsOpen={false}
+          onSettingsOpenChange={onSettingsOpenChange}
+          onSettingsSave={vi.fn()}
+          remotePairingOpen={false}
+          onRemotePairingOpenChange={vi.fn()}
+          onOpenActivityCenter={vi.fn()}
+          onOpenLearningPending={vi.fn()}
+        >
+          <div>body</div>
+        </AppShell>,
+      );
+
+      const dockGroup = container.querySelector('.left-rail__dock-group')!;
+      const dockFooter = container.querySelector('.left-rail__dock-footer')!;
+      const pane = container.querySelector('.left-rail__pane')!;
+      const learningBtn = screen.getByRole('button', { name: '学习与偏好' });
+      const remoteBtn = screen.getByRole('button', { name: '远程连接' });
+      const settingsBtn = screen.getByRole('button', { name: '设置' });
+
+      expect(dockGroup).toContainElement(screen.getByRole('button', { name: '主页' }));
+      expect(dockGroup).toContainElement(screen.getByRole('button', { name: '运行中的任务' }));
+      expect(dockGroup).toContainElement(screen.getByRole('button', { name: '工具与技能' }));
+      expect(dockFooter).toContainElement(learningBtn);
+      expect(dockFooter).toContainElement(remoteBtn);
+      expect(dockFooter).toContainElement(settingsBtn);
+      expect(dockFooter).toContainElement(screen.getByRole('button', { name: '账号与个人资料' }));
+      expect(learningBtn.compareDocumentPosition(settingsBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(remoteBtn.compareDocumentPosition(settingsBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+      expect(pane).toContainElement(screen.getByRole('button', { name: '筛选分类' }));
+      expect(pane).toContainElement(screen.getByRole('button', { name: '搜索项目与任务' }));
+      expect(pane).toContainElement(screen.getByRole('button', { name: '新任务' }));
+
+      fireEvent.click(screen.getByRole('button', { name: '运行中的任务' }));
+      expect(pane).toContainElement(screen.getByText('当前没有运行中的任务'));
+      expect(screen.queryByRole('dialog', { name: '运行中的任务' })).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: '工具与技能' }));
+      expect(pane).toContainElement(screen.getByRole('list', { name: '工具目录' }));
+      expect(onSettingsOpenChange).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: '打开完整工具设置' }));
+      expect(onSettingsOpenChange).toHaveBeenCalledWith(true);
+
+      fireEvent.click(screen.getByRole('button', { name: '主页' }));
+      expect(pane).toContainElement(screen.getByRole('button', { name: '新任务' }));
     },
   );
 

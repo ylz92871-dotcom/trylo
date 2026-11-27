@@ -1,5 +1,5 @@
 /* File reading surface: file identity, contextual actions, renderer. */
-.file-peek { --ink-hover:#f0f1f3; --ink-surface:#f6f7f8; display:flex; flex-direction:column; flex:0 0 auto; width:clamp(360px,40vw,560px); height:100%; min-height:0; min-width:0; overflow:hidden; background:var(--bg); border-left:1px solid var(--border); }
+.file-peek { display:flex; flex-direction:column; flex:0 0 auto; width:clamp(360px,40vw,560px); height:100%; min-height:0; min-width:0; overflow:hidden; background:var(--bg); border-left:1px solid var(--border); }
 .file-peek__header { display:flex; align-items:center; gap:5px; height:var(--top-bar-h, 46px); min-height:var(--top-bar-h, 46px); padding:0 12px; flex-shrink:0; border-bottom:1px solid var(--border-faint); }
 .file-peek__path { display:flex; align-items:center; gap:9px; flex:1; min-width:0; }
 .file-peek__path > svg { color:var(--fg-muted); flex-shrink:0; }
@@ -56,7 +56,7 @@
   overflow-x: auto;
 }
 
-[data-theme="dark"] .file-peek { --ink-hover:#303135; --ink-surface:#242629; }
+/* Dark theme inherits global --ink-hover / --ink-surface from tokens.css. */
 
 :root[data-platform='macos'] .file-peek__menu {
   padding: 6px;

@@ -48,7 +48,7 @@
 /* ── Collapsible rail slots (220ms macOS panel choreography) ─────────── */
 .left-rail-slot {
   flex: 0 0 auto;
-  width: var(--rail-left-w, var(--rail-left-default, 240px));
+  width: var(--rail-left-w, var(--rail-left-default, 280px));
   height: 100%;
   overflow: hidden;
   display: flex;
@@ -61,8 +61,8 @@
 }
 
 .left-rail-slot > .left-rail {
-  width: var(--rail-left-w, var(--rail-left-default, 240px));
-  min-width: var(--rail-left-w, var(--rail-left-default, 240px));
+  width: var(--rail-left-w, var(--rail-left-default, 280px));
+  min-width: var(--rail-left-w, var(--rail-left-default, 280px));
   transition:
     opacity var(--duration-panel) var(--ease-panel),
     transform var(--duration-panel) var(--ease-panel);
@@ -172,8 +172,26 @@
 }
 
 .rail-resizer:hover::after,
-.rail-resizer--dragging::after {
+.rail-resizer--dragging::after,
+.rail-resizer:focus-visible::after {
   background: var(--brand);
+}
+
+.rail-resizer:focus-visible {
+  outline: none;
+}
+
+.rail-resizer[data-snapped='true']::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 7px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--brand);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 2px var(--bg);
 }
 
 .rail-resizer--right {
@@ -182,7 +200,7 @@
 }
 
 /* macOS native vibrancy split: transparent outer shell over Effect::Sidebar,
- * crisp opaque main canvas, and zero-gap left resizer overlap. */
+ * frosted main canvas that harmonizes with the sidebar, and zero-gap resizer overlap. */
 :root[data-platform='macos'] {
   --top-bar-h: 46px;
 }
@@ -194,7 +212,7 @@
 }
 
 :root[data-platform='macos'] .app-shell__body > .app-shell__main {
-  background: var(--bg);
+  background: var(--macos-canvas-bg);
   border-radius: 0;
 }
 
@@ -204,13 +222,15 @@
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  :root[data-platform='macos'] .app-shell {
+  :root[data-platform='macos'] .app-shell,
+  :root[data-platform='macos'] .app-shell__body > .app-shell__main {
     background: var(--bg);
   }
 }
 
 @media (forced-colors: active) {
-  :root[data-platform='macos'] .app-shell {
+  :root[data-platform='macos'] .app-shell,
+  :root[data-platform='macos'] .app-shell__body > .app-shell__main {
     background: Canvas;
     box-shadow: none;
   }

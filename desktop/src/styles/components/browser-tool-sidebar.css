@@ -1,6 +1,6 @@
 /* Chrome stays in the renderer; the native webview occupies only the measured page. */
-.browser-tool-sidebar { --browser-danger:#ba4c55; --browser-surface:#f5f6f7; container-type:inline-size; --browser-hover:#e9ecef; --browser-edge:#e6e8eb; display:flex; flex:0 0 auto; flex-direction:column; min-width:320px; max-width:none; min-height:0; box-shadow:none; border-left:1px solid var(--browser-edge); background:var(--bg); color:var(--fg); font:12px/1.5 var(--font-body); overflow:hidden; animation:trylo-fade-in var(--duration-base) var(--ease-out); }
-[data-theme="dark"] .browser-tool-sidebar { --browser-danger:#e58b94; --browser-surface:#26282b; --browser-hover:#303338; --browser-edge:#33363b; }
+.browser-tool-sidebar { --browser-danger:var(--danger); --browser-surface:var(--bg-panel); container-type:inline-size; --browser-hover:var(--ink-hover); --browser-edge:var(--border); display:flex; flex:0 0 auto; flex-direction:column; min-width:320px; max-width:none; min-height:0; box-shadow:none; border-left:1px solid var(--browser-edge); background:var(--bg); color:var(--fg); font:12px/1.5 var(--font-body); overflow:hidden; animation:trylo-fade-in var(--duration-base) var(--ease-out); }
+[data-theme="dark"] .browser-tool-sidebar { --browser-danger:var(--danger); --browser-surface:var(--bg-panel); --browser-hover:var(--ink-hover); --browser-edge:var(--border); }
 .browser-tool-sidebar[data-fullscreen] { position:absolute; inset:0; z-index:65; width:auto; min-width:0; border:0; }
 .browser-tool-sidebar__head { flex:none; padding:0; background:var(--bg); }
 .browser-tool-sidebar__site-row { display:flex; align-items:center; gap:6px; min-width:0; height:38px; padding:0 10px 0 14px; }

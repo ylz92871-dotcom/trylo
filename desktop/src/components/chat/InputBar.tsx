@@ -1,4 +1,4 @@
-import { useContext, useCallback, useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent, type ReactElement } from 'react';
+import { useContext, useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent, type ReactElement } from 'react';
 import type { CodeMode, TopLevelMode } from '../../host-adapter/types';
 import type { ChatMessage } from './types';
 import type { Attachment, FailedAttachment } from '../../host-adapter/attachment-utils';
@@ -21,6 +21,8 @@ import { GoalControl } from './GoalControl';
 import { ComposerActions } from './ComposerActions';
 import { isGoalSnapshot, type GoalControl as GoalAction } from '../../domain/goal';
 import { formatShortcut, isImeComposing, isMacPlatform } from '../../utils/platform';
+import { detectTriggerAtCaret, measureCaretCoords, type CaretCoords, type CaretTrigger } from './caret-position';
+import { CaretSuggestions, type SlashSuggestion } from './CaretSuggestions';
 
 const CODE_LABEL: Record<CodeMode, string> = { agent: '执行', chat: '对话', plan: '计划', cognition: '偏好' };
 const CODE_PLACEHOLDER: Record<CodeMode, string> = {
@@ -187,6 +189,9 @@ export function InputBar(props: InputBarProps): ReactElement {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const plusRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const caretKeyHandlerRef = useRef<((event: KeyboardEvent<HTMLTextAreaElement>) => boolean) | null>(null);
+  const [caretTrigger, setCaretTrigger] = useState<CaretTrigger | null>(null);
+  const [caretCoords, setCaretCoords] = useState<CaretCoords | null>(null);
   const isWork = props.conversationKind === 'work';
   const isMac = isMacPlatform();
   const enterShortcut = formatShortcut(['Enter']);
@@ -199,13 +204,143 @@ export function InputBar(props: InputBarProps): ReactElement {
     el.style.overflowY = el.scrollHeight > 160 ? 'auto' : 'hidden';
   }, []);
   useEffect(() => { resize(textareaRef.current); }, [props.text, resize]);
+
+  const syncCaretSuggestion = useCallback((el: HTMLTextAreaElement | null, value: string): void => {
+    if (!el) {
+      setCaretTrigger(null);
+      return;
+    }
+    const caret = el.selectionStart ?? value.length;
+    const next = detectTriggerAtCaret(value, caret);
+    setCaretTrigger(next);
+    if (next) {
+      setCaretCoords(measureCaretCoords(el, next.start));
+    } else {
+      setCaretCoords(null);
+    }
+  }, []);
+
+  const insertFileMention = useCallback((relativePath: string, trigger: CaretTrigger): void => {
+    const formatted = `@${relativePath} `;
+    const nextText = `${props.text.slice(0, trigger.start)}${formatted}${props.text.slice(trigger.end)}`;
+    const nextCaret = trigger.start + formatted.length;
+    props.onTextChange(nextText);
+    setCaretTrigger(null);
+    requestAnimationFrame(() => {
+      const input = textareaRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(nextCaret, nextCaret);
+    });
+  }, [props]);
+
+  const slashCommands = useMemo<readonly SlashSuggestion[]>(() => [
+    {
+      id: 'goal',
+      command: '/goal',
+      label: '开启持久化目标',
+      description: '设定连续推进的长期目标 (/goal)',
+      enabled: Boolean(props.onGoalAction),
+      reason: '当前模式暂不支持目标',
+      insertText: '/goal ',
+    },
+    {
+      id: 'plan',
+      command: '/plan',
+      label: '切换到计划模式',
+      description: '先梳理方案，再执行修改',
+      enabled: true,
+      run: () => {
+        if (isWork) props.onTopModeChange?.('code');
+        props.onCodeModeChange('plan');
+      },
+    },
+    {
+      id: 'agent',
+      command: '/agent',
+      label: '切换到执行模式',
+      description: '自主读写文件并运行命令',
+      enabled: true,
+      run: () => {
+        if (isWork) props.onTopModeChange?.('code');
+        props.onCodeModeChange('agent');
+      },
+    },
+    {
+      id: 'chat',
+      command: '/chat',
+      label: '切换到对话模式',
+      description: '仅讨论思路，不修改文件',
+      enabled: true,
+      run: () => {
+        if (isWork) props.onTopModeChange?.('code');
+        props.onCodeModeChange('chat');
+      },
+    },
+    {
+      id: 'compact',
+      command: '/compact',
+      label: '压缩上下文',
+      description: '整理当前会话上下文窗口',
+      enabled: !props.running && props.compactAvailable !== false,
+      reason: props.running ? '任务运行中暂不可压缩' : '当前无活跃对话进程可压缩',
+      run: () => props.onCompact(),
+    },
+    {
+      id: 'work',
+      command: '/work',
+      label: '切换到 Work 模式',
+      description: '进入文档、表格与成果工作台',
+      enabled: Boolean(props.onTopModeChange),
+      reason: '当前未接入模式切换',
+      run: () => props.onTopModeChange?.('work'),
+    },
+    {
+      id: 'code',
+      command: '/code',
+      label: '切换到 Code 模式',
+      description: '进入代码编辑与终端工作台',
+      enabled: Boolean(props.onTopModeChange),
+      reason: '当前未接入模式切换',
+      run: () => props.onTopModeChange?.('code'),
+    },
+  ], [isWork, props]);
+
+  const selectSlash = useCallback((item: SlashSuggestion, trigger: CaretTrigger, openGoal?: () => void): void => {
+    setCaretTrigger(null);
+    if (item.id === 'goal' && openGoal) {
+      const cleaned = `${props.text.slice(0, trigger.start)}${props.text.slice(trigger.end)}`.trim();
+      props.onTextChange(cleaned);
+      openGoal();
+      return;
+    }
+    if (item.run) {
+      const cleaned = `${props.text.slice(0, trigger.start)}${props.text.slice(trigger.end)}`;
+      props.onTextChange(cleaned);
+      item.run();
+      return;
+    }
+    const replacement = item.insertText ?? `${item.command} `;
+    const nextText = `${props.text.slice(0, trigger.start)}${replacement}${props.text.slice(trigger.end)}`;
+    const nextCaret = trigger.start + replacement.length;
+    props.onTextChange(nextText);
+    requestAnimationFrame(() => {
+      const input = textareaRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(nextCaret, nextCaret);
+    });
+  }, [props]);
+
   const send = (openGoal?: () => void): void => {
     if (!canSend) return;
+    setCaretTrigger(null);
     if (openGoal && /^\/goal(?:\s|$)/.test(props.text.trim())) { openGoal(); return; }
     props.onSend(props.text.trim());
   };
   const submit = (event: FormEvent, openGoal?: () => void): void => { event.preventDefault(); send(openGoal); };
   const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>, openGoal?: () => void): void => {
+    if (caretKeyHandlerRef.current?.(event)) return;
     if (event.key === 'Enter' && !event.shiftKey && !isImeComposing(event)) {
       event.preventDefault(); send(openGoal);
     }
@@ -249,8 +384,30 @@ export function InputBar(props: InputBarProps): ReactElement {
   const workspaceLabel = <WorkspacePicker workspace={props.workspace} />;
   const moreControl = (props.learning || props.onLearningDirectiveChange || (isWork && props.onOpenCognition)) && <button type="button" className="input-bar__more" title="学习与协作选项" aria-label="学习与协作选项" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((open) => !open)}><MoreHorizontal size={16} /></button>;
   const composer = (openGoal?: () => void): ReactElement => <form className={`input-bar${isWork ? ' input-bar--work' : ''}${props.isDragging ? ' input-bar--dragging' : ''}`} onSubmit={event => submit(event, openGoal)}>
+      <CaretSuggestions
+        trigger={caretTrigger}
+        coords={caretCoords}
+        textareaRef={textareaRef}
+        workspace={props.workspace}
+        slashCommands={slashCommands}
+        keyHandlerRef={caretKeyHandlerRef}
+        onInsertFile={insertFileMention}
+        onSelectSlash={(item, trigger) => selectSlash(item, trigger, openGoal)}
+        onDismiss={() => setCaretTrigger(null)}
+      />
       <textarea ref={textareaRef} className="input-bar__input" value={props.text}
-        onChange={(event) => props.onTextChange(event.target.value)} onKeyDown={event => keyDown(event, openGoal)} onPaste={paste}
+        onChange={(event) => {
+          const nextVal = event.target.value;
+          props.onTextChange(nextVal);
+          syncCaretSuggestion(event.currentTarget, nextVal);
+        }}
+        onClick={(event) => syncCaretSuggestion(event.currentTarget, props.text)}
+        onKeyUp={(event) => {
+          if (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Backspace', 'Delete'].includes(event.key)) {
+            syncCaretSuggestion(event.currentTarget, props.text);
+          }
+        }}
+        onKeyDown={event => keyDown(event, openGoal)} onPaste={paste}
         placeholder={props.viewState === 'awaiting_input' ? '直接回复，任务会从这里继续…'
           : props.running ? (isMac ? `输入调整方向，${enterShortcut} 发送后续消息…` : '输入调整方向，Enter 发送后续消息…')
           : isWork ? '描述你想完成的工作，或添加资料…' : CODE_PLACEHOLDER[props.codeMode]}
@@ -287,10 +444,20 @@ export function InputBar(props: InputBarProps): ReactElement {
       {(props.contextUsed > 0 || props.contextUnknown) && <ContextRing used={props.contextUsed} total={props.contextWindow} onCompact={props.onCompact}
         busy={props.compacting} unknown={props.contextUnknown} disabled={props.running || props.compactAvailable === false} />}
     </div>}
-    {detailsOpen && <div className="input-bar__details">
-      {props.learning && <LearningStatusChip {...props.learning} />}
-      {props.onLearningDirectiveChange && <LearningDirectiveMenu value={props.learningDirective} onChange={props.onLearningDirectiveChange} />}
-      {isWork && props.onOpenCognition && <button type="button" className="input-bar__cognition-entry" disabled={props.cognitionEnabled === false} onClick={props.onOpenCognition}>聊聊你怎么做报告</button>}
-    </div>}
+    {(props.learning || props.onLearningDirectiveChange || (isWork && props.onOpenCognition)) && (
+      <div
+        className={`disclosure${detailsOpen ? ' disclosure--open' : ''}`}
+        aria-hidden={!detailsOpen}
+        ref={(el) => { if (el) el.inert = !detailsOpen; }}
+      >
+        <div className="disclosure__inner">
+          <div className="input-bar__details">
+            {props.learning && <LearningStatusChip {...props.learning} />}
+            {props.onLearningDirectiveChange && <LearningDirectiveMenu value={props.learningDirective} onChange={props.onLearningDirectiveChange} />}
+            {isWork && props.onOpenCognition && <button type="button" className="input-bar__cognition-entry" disabled={props.cognitionEnabled === false} onClick={props.onOpenCognition}>聊聊你怎么做报告</button>}
+          </div>
+        </div>
+      </div>
+    )}
   </div>;
 }

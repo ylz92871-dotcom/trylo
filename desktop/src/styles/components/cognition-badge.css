@@ -158,7 +158,7 @@
 
 .cognition-popover__primary {
   background: var(--brand);
-  color: var(--fg-on-brand, #fff);
+  color: var(--mode-accent-ink);
   font-weight: 500;
   margin-right: auto;
 }

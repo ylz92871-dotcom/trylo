@@ -35,7 +35,7 @@
 }
 
 .tool-profile-chip__trigger:focus-visible {
-  outline: 2px solid var(--focus-ring, #6aa7ff);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -43,7 +43,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--brand-300, #dbc97f);
+  background: var(--mode-accent, var(--brand));
 }
 
 .tool-profile-chip__count {
