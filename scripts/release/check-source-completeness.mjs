@@ -66,7 +66,7 @@ const settingsModal=requireFile('desktop/src/components/app-shell/SettingsModal.
 if(settingsModal && /legacy-stream-json|aria-label="CLI runtime"/.test(readFileSync(settingsModal,'utf8'))) failures.push('settings must not expose the retired CLI selector');
 const catalog = createToolCatalog();
 failures.push(...catalog.rejected().map(item => `invalid tool manifest: ${item.id}`));
-const registry = loadRepositoryToolRegistry(path.join(root, 'desktop-services/toolchain/tool-sources.json'));
+const registry = loadRepositoryToolRegistry(path.join(root, 'desktop-services/toolchain/tool-sources.json'), 'win32-x64');
 failures.push(...registry.problems);
 for (const id of ['officecli', 'playwright', 'windows-mcp', 'chrome-devtools']) {
   const manifest = catalog.get(id);

@@ -19,7 +19,7 @@ struct Entry { path: String, size: u64, sha256: String }
 struct Entries { encoder: String, probe: String }
 fn verify(root: &Path) -> Result<Executables, String> {
     if !cfg!(all(windows, target_arch = "x86_64")) { return Err("当前平台尚未供给本地媒体兼容引擎".into()); }
-    let lock: Lock = serde_json::from_str(include_str!("../../../../scripts/preview/media-engine.lock.json")).map_err(|e| e.to_string())?;
+    let lock: Lock = serde_json::from_str(include_str!("../../../../scripts/build/shared/preview/media-engine.lock.json")).map_err(|e| e.to_string())?;
     let canonical = std::fs::canonicalize(root).map_err(|_| "媒体兼容引擎缺失，请修复 Trylo 安装")?;
     let mut buffer = vec![0; 64 * 1024];
     for entry in lock.files {

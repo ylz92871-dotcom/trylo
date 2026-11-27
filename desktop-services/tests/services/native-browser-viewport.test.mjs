@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createNativeViewport, viewportRequest, viewportBounds } from '../../src/tooling/native-browser-viewport.mjs';
+import { createNativeViewport, viewportRequest, viewportBounds } from '../../src/tooling/browser/native-browser-viewport.mjs';
 
 function fixture() {
   const record = { activeLabel: 'one', zoom: 2, bounds: { x: 0, y: 0, width: 480, height: 600 } };

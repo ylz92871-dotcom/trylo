@@ -10,6 +10,6 @@ ZIP/JAR/WAR/WHL/NUPKG/VSIX 继续用已有 JSZip，先做中央目录预算预�
 
 这是内容阅读器，不是归档完整性校验工具。libarchive 3.8.11 的 gzip 过滤器未验证尾部 CRC/长度，单改该校验字段而内容仍能解码时会继续显示；ZIP 当前读取也不执行全归档 CRC 检查。截断、无法解码和超预算会报错，但“能预览”不能证明整个归档无损。需要完整性检验或修复时使用专用归档工具。
 
-libarchive 并非使用旧 npm 包内的 3.7.7 二进制。本轮从固定官方 3.8.11 源码及固定 zlib、bzip2、liblzma、Zstandard 源构建，保留原始源码与通知。C shim 提供只读条目大小、普通文件判断，以及 bzip2 无 stdio 模式要求的内部错误终止回调；后者只终止所属 WASM 作业。构建与替换说明见 `scripts/preview/archive-build/README.md`。运行资源位于安装目录 `preview/codecs/archive/`，开发/浏览器由同一文件映射提供；真实 source/vendor/recipe 摘要由 `archive-engine.lock.json` 和发行门配对。
+libarchive 并非使用旧 npm 包内的 3.7.7 二进制。本轮从固定官方 3.8.11 源码及固定 zlib、bzip2、liblzma、Zstandard 源构建，保留原始源码与通知。C shim 提供只读条目大小、普通文件判断，以及 bzip2 无 stdio 模式要求的内部错误终止回调；后者只终止所属 WASM 作业。构建与替换说明见 `scripts/build/shared/preview/archive-build/README.md`。运行资源位于安装目录 `preview/codecs/archive/`，开发/浏览器由同一文件映射提供；真实 source/vendor/recipe 摘要由 `archive-engine.lock.json` 和发行门配对。
 
 当前验收状态以 `work/desktop-preview-coverage-20261104/README.md` 和实际日志为准；源码存在、类型检查和格式路由不等于真实解码通过。Windows 原生界面与安装验收受用户的“停止电脑控制”约束，不能用 Node Worker 矩阵代替。

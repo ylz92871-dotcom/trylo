@@ -55,3 +55,7 @@
 - 活动凭据、用户运行状态和外部服务不作为普通杂物处理；不得改生产权限来完成目录美化。
 - 只做与路径、完整性及受影响合同相关的本地检查。目录整理不授权付费模型、启用学习、全量回归、发布或安装。
 - 完成报告必须列出未迁项与实际阻碍；不得把临时例外说成全部完成。当前迁移与恢复入口见 `_workspace/README.md` 和 `_workspace/maintenance/PENDING-MOVES.md`。
+
+## Cross-platform ownership
+
+The current architecture is docs/architecture/README.md. Shared product behavior stays in its owning module. Cross-cutting native Desktop operations belong to desktop/src-tauri/src/platform/, CLI OS mechanics to corresponding adapters, and computer-control integration to desktop-services/src/tooling/computer-control/. Feature-specific browser and preview backends remain with their owning feature and select the appropriate platform implementation there. Build scripts belong to desktop/scripts/build/shared/ or their platform directory. Register real tools through existing manifests and health checks. Document pending integration honestly. Preserve shared permission, cancellation and recovery contracts. Code and Work use the same interface and wiring.

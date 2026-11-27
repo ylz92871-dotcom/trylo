@@ -6,9 +6,8 @@ import { permissionPattern } from "../../ports/permission.js";
 import { canonicalJson, sha256Hex } from "../../learning/control/hash.js";
 import type { ToolEvolutionVerifier } from "../../learning/agent/subsystems/tool/domain/evolution/index.js";
 import { createToolEvolutionVerifier } from "../../learning/agent/subsystems/tool/adapters/evolution/process-verifier.js";
-import { createWindowsIsolation } from "../../adapters/sandbox/windows-isolation.js";
+import { createPlatformIsolation } from "../../adapters/sandbox/platform-isolation.js";
 import { hostNodeExecutable } from "../../adapters/sandbox/executable.js";
-import { windowsHelperEnvironment } from "../../adapters/sandbox/windows-helper-environment.js";
 import { tryloHome } from "./session-paths.js";
 
 /** One approval composition for generation checks and later frozen-version trials. */
@@ -30,7 +29,7 @@ export function toolEvolutionExecution(ctx: CliContext, run: RunCommandOptions, 
         verdict: signal.aborted || answer.resolution === "cancelled" ? "cancelled" : "unavailable", candidateHash, samplesHash, checks: [],
       };
 
-      return createToolEvolutionVerifier({ isolation: createWindowsIsolation({ hostEnv: windowsHelperEnvironment(ctx.env) }),
+      return createToolEvolutionVerifier({ isolation: createPlatformIsolation(ctx.env),
         scratchRoot: path.join(tryloHome(ctx.homeDir, ctx.env), "learning", "tool", "quarantine"), nodeExecutable: hostNodeExecutable() }).verify(candidate, request, signal);
     },
   };

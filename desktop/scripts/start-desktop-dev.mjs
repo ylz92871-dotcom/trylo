@@ -103,7 +103,7 @@ foreach ($row in $running) {
   // generated executable must match the runtime labels left by the last run,
   // including when Cargo compiles a new build-script fingerprint.
   const buildPreparation = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass',
-    '-File', resolve(desktopRoot, 'scripts/prepare-native-dev-build.ps1'),
+    '-File', resolve(desktopRoot, 'scripts/build/windows/prepare-native-dev-build.ps1'),
     '-BuildDirectory', resolve(desktopRoot, 'src-tauri/target/debug/build'),
     '-IntegrityLevel', environment.TRYLO_DESKTOP_INTEGRITY ?? 'M'], {
     cwd: desktopRoot, stdio: 'inherit', windowsHide: true,

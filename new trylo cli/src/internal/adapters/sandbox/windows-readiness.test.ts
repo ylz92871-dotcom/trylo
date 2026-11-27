@@ -5,9 +5,9 @@ import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { createWindowsIsolation } from "./windows-isolation.js";
+import { createWindowsIsolation } from "./windows/windows-isolation.js";
 import type { VendorWindowsApi } from "./sandbox-vendor.js";
-import { prepareWindowsIsolation } from "./windows-readiness.js";
+import { prepareWindowsIsolation } from "./windows/windows-readiness.js";
 
 test("readiness consumes the mapped vendor contract and its successful behavioural verification", { skip: process.platform !== "win32" }, async () => {
   let verified = 0;

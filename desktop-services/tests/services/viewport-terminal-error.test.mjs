@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
-import { createViewportBridge } from '../../src/tooling/viewport-bridge.mjs';
+import { createViewportBridge } from '../../src/tooling/browser/viewport-bridge.mjs';
 
 it('exposes terminal transport failure and resets it only on a fresh start', async () => {
   const originalSocket = globalThis.WebSocket;

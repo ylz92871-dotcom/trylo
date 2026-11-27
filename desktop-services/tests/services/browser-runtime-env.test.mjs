@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { test } from 'node:test';
-import { browserRuntimeEnv } from '../../src/tooling/browser-runtime-env.mjs';
+import { browserRuntimeEnv } from '../../src/tooling/browser/browser-runtime-env.mjs';
 
 test('Windows browser registry is writable in the task, without relocating installed browser binaries', () => {
   const runtime = path.resolve('isolated-browser-task');

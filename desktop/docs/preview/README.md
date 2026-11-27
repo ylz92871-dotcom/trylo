@@ -64,13 +64,13 @@ Code 的成果文件与 Git 变更单独保存；Work 继续使用原有 artifac
 
 Low 完整性工作区复制出的测试 exe 与引擎启动文件可能继承 Low 标签，不能按正常安装环境解释其临时目录 AccessDenied。只对独立验收副本准备正常 Medium 标签；不改目录 DACL或系统安装。
 
-构建供给入口为 `scripts/preview/supply-office-engine.ps1`：复用已验证资源，或获取固定官方 MSI、校验摘要/签名、静默管理解包后生成精简配置，不要求先安装系统 Office。版本锁分别固定完整上游清单和实际分发清单摘要；改动其他 DLL 或资源并改写外部清单也不能绕过构建检查。运行时校验分发清单及固定核心，不逐次读取全部资源。嵌入式 Python 禁止在引擎目录生成字节码，私有运行库 PATH 仅作用于转换子进程。
+构建供给入口为 `scripts/build/windows/supply-office-engine.ps1`：复用已验证资源，或获取固定官方 MSI、校验摘要/签名、静默管理解包后生成精简配置，不要求先安装系统 Office。版本锁分别固定完整上游清单和实际分发清单摘要；改动其他 DLL 或资源并改写外部清单也不能绕过构建检查。运行时校验分发清单及固定核心，不逐次读取全部资源。嵌入式 Python 禁止在引擎目录生成字节码，私有运行库 PATH 仅作用于转换子进程。
 
 ## 发行与源码配对
 
-`build.beforeBundleCommand` 执行 `scripts/preview/verify-release.mjs`，在创建安装包前离线核对精简配置的全部 Office 文件、原样解码器/许可和固定源码归档。先运行 `node scripts/preview/fetch-sources.mjs --output <仓库内目录>`，再设置 `TRYLO_PREVIEW_SOURCES_DIR` 指向该目录；缺失或摘要不匹配会阻止打包，不会在应用运行时临时下载补齐。
+`build.beforeBundleCommand` 执行 `scripts/build/shared/preview/verify-release.mjs`，在创建安装包前离线核对精简配置的全部 Office 文件、原样解码器/许可和固定源码归档。先运行 `node scripts/build/shared/preview/fetch-sources.mjs --output <仓库内目录>`，再设置 `TRYLO_PREVIEW_SOURCES_DIR` 指向该目录；缺失或摘要不匹配会阻止打包，不会在应用运行时临时下载补齐。
 
-门禁在根 `_workspace/cache/desktop/preview/release`（可通过 `TRYLO_PREVIEW_RELEASE_DIR` 指定仓库内位置）生成对应源码 TAR、`preview-release.json` 和说明。开发供给与媒体临时缓存统一由 `scripts/preview/cache-path.mjs` 定位；已安装产品的运行目录不使用此开发缓存。源码包包括固定上游源码及其原始构建配方、原样许可和 Trylo Worker 适配源码；10 个上游归档的 URL、大小和 SHA256 固定于 `source-archives.lock.json`。公共发布应将对应源码包与清单和同一次安装包一同提供。此门禁验证供给一致性，不替代真实安装和原生交互验收。
+门禁在根 `_workspace/cache/desktop/preview/release`（可通过 `TRYLO_PREVIEW_RELEASE_DIR` 指定仓库内位置）生成对应源码 TAR、`preview-release.json` 和说明。开发供给与媒体临时缓存统一由 `scripts/build/shared/preview/cache-path.mjs` 定位；已安装产品的运行目录不使用此开发缓存。源码包包括固定上游源码及其原始构建配方、原样许可和 Trylo Worker 适配源码；10 个上游归档的 URL、大小和 SHA256 固定于 `source-archives.lock.json`。公共发布应将对应源码包与清单和同一次安装包一同提供。此门禁验证供给一致性，不替代真实安装和原生交互验收。
 
 ## 交互 HTML 隔离
 

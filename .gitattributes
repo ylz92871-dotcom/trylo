@@ -1,1 +1,6 @@
 result/desktop/*LICENSE.txt -text whitespace=-space-before-tab
+
+# Recipe hashes use the same source bytes on Windows, macOS and Linux.
+desktop/scripts/build/shared/preview/archive-build/** text eol=lf
+desktop/scripts/build/shared/preview/media-build/** text eol=lf
+desktop/src/tooling/tool-catalog.generated.json text eol=lf

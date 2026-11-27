@@ -25,7 +25,7 @@ import { createPetChat } from './pet-chat/index.mjs';
 import { createLearningServices } from './learning/index.mjs';
 import { createRemoteServices } from './remote/index.mjs';
 import { createToolingServices } from './tooling/index.mjs';
-import { runNativeBrowserMcp } from './tooling/native-browser-mcp.mjs';
+import { runNativeBrowserMcp } from './tooling/browser/native-browser-mcp.mjs';
 import { runModelPreviewMcp } from './tooling/model-preview-mcp.mjs';
 import { runSoftwareWorkspaceMcp } from './tooling/software-workspace-mcp.mjs';
 

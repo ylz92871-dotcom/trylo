@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { test } from 'node:test';
-import { createComputerPreviewStream, computerPreviewScope, resolveComputerPreviewPython } from '../../src/tooling/computer-preview-stream.mjs';
+import { createComputerPreviewStream, computerPreviewScope, resolveComputerPreviewPython } from '../../src/tooling/computer-control/windows/computer-preview-stream.mjs';
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const params = { projectRoot: process.cwd(), conversationId: 'one' };

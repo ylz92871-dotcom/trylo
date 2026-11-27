@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import http from 'node:http';
 import { WebSocket, WebSocketServer } from 'ws';
-import { createNativeBrowserService, nativeBrowserScope } from '../../src/tooling/native-browser-service.mjs';
+import { createNativeBrowserService, nativeBrowserScope } from '../../src/tooling/browser/native-browser-service.mjs';
 
 async function fixture(t) {
   const scope = nativeBrowserScope({ projectRoot: 'D:/native-test', conversationId: 'one' });

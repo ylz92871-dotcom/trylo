@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { main } from "./main.js";
 import type { CliContext } from "../../internal/surface/cli/context.js";
-import { isolationCleanupError } from "../../internal/adapters/sandbox/windows-isolation-error.js";
+import { isolationCleanupError } from "../../internal/adapters/sandbox/windows/windows-isolation-error.js";
 
 function context(failure: Error, errors: string[]): CliContext {
   return {

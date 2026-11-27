@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 const checkout = fileURLToPath(new URL('../../', import.meta.url));
-const preparation = fileURLToPath(new URL('./prepare-native-dev-build.ps1', import.meta.url));
+const preparation = fileURLToPath(new URL('./build/windows/prepare-native-dev-build.ps1', import.meta.url));
 const system = path.join(process.env.SystemRoot ?? 'C:/Windows', 'System32');
 const temporary = path.join(checkout, '_workspace/tmp/native-dev-build-tests');
 const hostGroups = process.platform === 'win32' ? execFileSync(path.join(system, 'whoami.exe'), ['/groups', '/fo', 'csv'], { encoding: 'utf8', windowsHide: true }) : '';

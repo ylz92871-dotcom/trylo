@@ -1,9 +1,8 @@
 import path from "node:path";
 import { createFileVerificationRegistry } from "../../internal/adapters/verification-authority-store/index.js";
 import { verifyToolProductionPlan } from "../../internal/learning/agent/subsystems/tool/adapters/evolution/production-verifier.js";
-import { createWindowsIsolation } from "../../internal/adapters/sandbox/windows-isolation.js";
+import { createPlatformIsolation } from "../../internal/adapters/sandbox/platform-isolation.js";
 import { hostNodeExecutable } from "../../internal/adapters/sandbox/executable.js";
-import { windowsHelperEnvironment } from "../../internal/adapters/sandbox/windows-helper-environment.js";
 import { createBoardReader } from "../../internal/adapters/learning-store/file-event-store.js";
 import { productionProposalId, toolProductionGenerator, toolProductionVerifier } from "../../internal/learning/agent/subsystems/tool/runtime/index.js";
 import { contentHashOf } from "../../internal/learning/control/hash.js";
@@ -22,7 +21,7 @@ export function createToolProductionService(facts: Pick<CliContext, "homeDir" | 
   const home = tryloHome(facts.homeDir, facts.env);
   const registry = createFileVerificationRegistry({ path: path.join(home, "learning", "verification", "tool-production.ndjson"),
     clock: () => new Date(facts.now()).toISOString(), idFactory: domain => facts.newId(`tool-production-receipt-${domain}`) });
-  const runtime = () => ({ isolation: createWindowsIsolation({ hostEnv: windowsHelperEnvironment(facts.env) }), scratchRoot: path.join(home, "learning", "tool", "quarantine"),
+  const runtime = () => ({ isolation: createPlatformIsolation(facts.env), scratchRoot: path.join(home, "learning", "tool", "quarantine"),
     nodeExecutable: hostNodeExecutable(), installationRoot: path.join(home, "learning", "tool", "installations"), target: hostNpmTarget() });
 
   return { authority: { verify: registry.verify }, inspectInstallation: (plan, bin, protocol, signal) => inspectInstalledNpmMcp(plan, bin, protocol, runtime(), signal),

@@ -95,9 +95,21 @@ Desktop 2.0 仅使用独立研发的新版 Trylo CLI，旧 CLI 已退役，不�
 
 [了解内测计划](https://trylocode.me/release/2.0/#beta)
 
+## 三端源码开发
+
+Windows、Mac、Linux 使用共同主线和公共功能模块。当前公库已整理平台接入口，Mac/Linux 的完整原生适配仍待合入。已有 Beta 安装包沿用原发布来源与验证范围。
+
+| 平台 | 开发说明 |
+| --- | --- |
+| Windows | [开发与构建](docs/development/windows.md) |
+| macOS | [Mac 适配接入](docs/development/macos.md) |
+| Linux | [Linux 适配接入](docs/development/linux.md) |
+
+[项目结构与模块分工](docs/architecture/README.md)
+
 ## 开发者入口与公开范围
 
-本仓库公开核心源码。**官网和网页端源码为内部代码，不开源**；macOS/Linux 平台适配仓库也保持私有，仅开放 Beta 二进制。开发过程、真实会话、凭据、研究副本与 `_workspace/` 不在公开范围内。
+本仓库公开核心源码与三端共用架构。Windows 已接入，macOS/Linux 的完整原生适配按共同主线继续整合；已有 Beta 安装包沿用原发布记录。**官网和网页端源码为内部代码，不开源**。开发过程、真实会话、凭据、研究副本与 `_workspace/` 不在公开范围内。
 
 | 目录 | 内容 |
 | --- | --- |

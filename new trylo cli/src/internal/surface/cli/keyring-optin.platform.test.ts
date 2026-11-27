@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { createWindowsCredentialManagerDriver } from "../../adapters/credentials/keyring-win32.js";
+import { createWindowsCredentialManagerDriver } from "../../adapters/credentials/windows/keyring-win32.js";
 import { keyringTarget } from "../../credentials/keyring-driver.js";
 import type { CredentialPort, CredentialProviderId } from "../../ports/credentials.js";
 import {

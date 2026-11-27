@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
-import { createScreencastStream, MAX_SCREENCAST_DATA, SCREENCAST_DIMENSIONS } from '../../src/tooling/screencast-stream.mjs';
+import { createScreencastStream, MAX_SCREENCAST_DATA, SCREENCAST_DIMENSIONS } from '../../src/tooling/browser/screencast-stream.mjs';
 
 function fixture(overrides = {}) {
   const commands = [], frames = [], acknowledgements = [], errors = [];

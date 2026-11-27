@@ -3,7 +3,7 @@ import { EventEmitter, once } from 'node:events';
 import http from 'node:http';
 import { PassThrough, Writable } from 'node:stream';
 import { test } from 'node:test';
-import { runNativeBrowserMcp } from '../../src/tooling/native-browser-mcp.mjs';
+import { runNativeBrowserMcp } from '../../src/tooling/browser/native-browser-mcp.mjs';
 
 async function fixture(t, { holdLeaseEnd = false, holdPreview = false, previewError } = {}) {
   let releaseLease;

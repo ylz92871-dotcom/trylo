@@ -15,7 +15,7 @@ test("helper protection and reuse work from a Medium caller without runtime comp
 
   copyFileSync(process.execPath, node);
   writeFileSync(target, "harmless nonexecutable security descriptor fixture");
-  const module = new URL("./windows-helper-protection.js", import.meta.url).href;
+  const module = new URL("./windows/windows-helper-protection.js", import.meta.url).href;
   const program = [
     "import {execFileSync} from 'node:child_process';",
     "const sid=execFileSync(process.env.SystemRoot+'/System32/whoami.exe',['/groups'],{encoding:'utf8',windowsHide:true}).match(/S-1-16-\\d+/)?.[0];",

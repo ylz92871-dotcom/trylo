@@ -12,7 +12,7 @@ import { slashCompleter } from "../../internal/surface/cli/slash.js";
 import type { CliContext, DirEntryInfo } from "../../internal/surface/cli/context.js";
 import { readSecretLine } from "../../internal/surface/cli/secret-prompt.js";
 import { createTerminalLineReader } from "./terminal-line-reader.js";
-import { IsolationCleanupError } from "../../internal/adapters/sandbox/windows-isolation-error.js";
+import { IsolationCleanupError } from "../../internal/adapters/sandbox/windows/windows-isolation-error.js";
 import { lazyToolProductionService } from "./lazy-tool-production-service.js";
 
 /**

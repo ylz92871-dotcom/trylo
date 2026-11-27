@@ -22,11 +22,11 @@
 
 ## 引擎供给
 
-`scripts/preview/media-engine.lock.json` 固定自建 FFmpeg 9.0.2 / commit 1e65c6cd5d3d2d12cbb374460dbf08bedf54772a 的 LGPL-2.1+ 共享变体：两个控制台程序、六个 FFmpeg DLL，共约 28 MB。关闭 GPL/nonfree/version3、网络、设备、GPU 后端，只链接 OpenH264 2.7.0、dav1d 1.5.4、zlib 三个叶子库。PE 导入核对不依赖编译器 DLL 或 PATH；Windows UCRT 由系统提供。原始广泛 BtbN 候选只作为历史试验保留，不再随产品暂存。
+`scripts/build/shared/preview/media-engine.lock.json` 固定自建 FFmpeg 9.0.2 / commit 1e65c6cd5d3d2d12cbb374460dbf08bedf54772a 的 LGPL-2.1+ 共享变体：两个控制台程序、六个 FFmpeg DLL，共约 28 MB。关闭 GPL/nonfree/version3、网络、设备、GPU 后端，只链接 OpenH264 2.7.0、dav1d 1.5.4、zlib 三个叶子库。PE 导入核对不依赖编译器 DLL 或 PATH；Windows UCRT 由系统提供。原始广泛 BtbN 候选只作为历史试验保留，不再随产品暂存。
 
 `media-sources.lock.json` 与真实 FFmpeg/OpenH264/dav1d/zlib/hls.js 五份源码归档配对；原始许可、GCC Runtime Exception、MinGW 通知已随引擎保留。`media-build/` 提供有固定工具摘要的离线构建配方和安全解包，不全局安装、不运行播放器。原样源码、完整构建配方和通知进入源码伴随包；发行门检查每项摘要和配方身份，不能单改 complete 标志绕过。当前媒体供给门已通过，新安装候选仍需整轮归档供给与构建冻结后再生成。
 
-`stage-media-engine.mjs --from <已校验的构建目录>` 只暂存固定文件；`--check` 拒绝额外资源。运行时不搜索系统 PATH、不采用系统 FFmpeg、不下载引擎。开发可显式设置 `TRYLO_MEDIA_ENGINE_ROOT`。重建说明见 `scripts/preview/media-build/README.md`。
+`stage-media-engine.mjs --from <已校验的构建目录>` 只暂存固定文件；`--check` 拒绝额外资源。运行时不搜索系统 PATH、不采用系统 FFmpeg、不下载引擎。开发可显式设置 `TRYLO_MEDIA_ENGINE_ROOT`。重建说明见 `scripts/build/shared/preview/media-build/README.md`。
 
 ## 已有证据
 

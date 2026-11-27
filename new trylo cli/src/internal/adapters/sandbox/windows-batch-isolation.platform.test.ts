@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { basename, delimiter, join } from "node:path";
 import test from "node:test";
-import { createWindowsShellBoundary } from "./windows-shell-boundary.js";
+import { createWindowsShellBoundary } from "./windows/windows-shell-boundary.js";
 import { shapeCommand } from "./executable.js";
 import { createNodeSpawner } from "../tools/mutating/shell-spawn.js";
 

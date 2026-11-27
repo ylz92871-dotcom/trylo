@@ -1,3 +1,4 @@
+import { desktopControlForPlatform } from './computer-control/platform.mjs';
 // Trylo Desktop Services — Tool Package Manager.
 //
 // Spec TRYLO-CORE-AGENT-TOOL-EXTENSION-TECHNICAL-SPEC §3 / §8.2 / §8.3.
@@ -105,7 +106,12 @@ function parseOverrides(raw) {
  */
 export const LOCAL_OVERRIDES_FILENAME = 'local-overrides.json';
 export const REPOSITORY_TOOL_REGISTRY_FILENAME = 'tool-sources.json';
-export const BUILTIN_TOOL_IDS = Object.freeze(['officecli', 'playwright', 'chrome-devtools', 'windows-mcp']);
+export function builtinToolIdsForPlatform(platform) {
+  const control = desktopControlForPlatform(platform);
+  return Object.freeze(['officecli', 'playwright', 'chrome-devtools', ...(control ? [control.packageId] : [])]);
+}
+
+export const BUILTIN_TOOL_IDS = builtinToolIdsForPlatform(process.platform);
 
 export function localOverridesPath(installRoot) {
   if (!installRoot) return null;
@@ -307,6 +313,7 @@ export async function downloadToFile(url, destPath, maxBytes = MAX_DOWNLOAD_BYTE
 }
 
 export function createToolPackageManager(options = {}) {
+  const builtinToolIds = builtinToolIdsForPlatform(options.platform ?? process.platform);
   const storageRoot = options.storageRoot ?? '';
   // Dev/CI seam only: TRYLO_TOOL_PACKAGES_DIR relocates the install root and
   // TRYLO_TOOL_PACKAGE_OVERRIDES points an id straight at an absolute exe.
@@ -330,7 +337,7 @@ export function createToolPackageManager(options = {}) {
     // Core built-ins recover from that missing inherited path. Explicit API
     // overrides and every non-core override retain their existing semantics.
     if (options.enableRepositoryTools && options.overrides === undefined) {
-      for (const id of BUILTIN_TOOL_IDS) {
+      for (const id of builtinToolIds) {
         if (usableEnvOverrides[id] && !isFileSync(usableEnvOverrides[id])) delete usableEnvOverrides[id];
       }
     }
@@ -446,7 +453,7 @@ export function createToolPackageManager(options = {}) {
   async function resolve(manifest) {
     const override = currentOverrides()[manifest.id];
     const entry = repositoryRegistry().entries[manifest.id];
-    const builtIn = options.enableRepositoryTools && BUILTIN_TOOL_IDS.includes(manifest.id);
+    const builtIn = options.enableRepositoryTools && builtinToolIds.includes(manifest.id);
     if (override) {
       const bundled = entry?.policy === 'bundled' && entry.path === override;
       const exists = isFileSync(override);
@@ -608,7 +615,7 @@ export function createToolPackageManager(options = {}) {
     if (!id) return { ok: false, reasonCode: 'missing_id', error: 'a package id is required' };
     const manifest = options.catalog?.get(id);
     if (!manifest) return { ok: false, id, reasonCode: 'unknown_package' };
-    if (options.enableRepositoryTools && BUILTIN_TOOL_IDS.includes(id)) {
+    if (options.enableRepositoryTools && builtinToolIds.includes(id)) {
       return { ok: false, id, reasonCode: 'builtin_tool', error: 'This tool ships with Trylo; repair or update the application.' };
     }
     if (!installRoot) {
@@ -1467,7 +1474,7 @@ export function createToolPackageManager(options = {}) {
     const id = String(params.id ?? '');
     const manifest = options.catalog?.get(id);
     if (!manifest) return { ok: false, id, reasonCode: 'unknown_package' };
-    if (options.enableRepositoryTools && BUILTIN_TOOL_IDS.includes(id)) return { ok: false, id, reasonCode: 'builtin_tool' };
+    if (options.enableRepositoryTools && builtinToolIds.includes(id)) return { ok: false, id, reasonCode: 'builtin_tool' };
     if (!installRoot) return { ok: false, id, reasonCode: 'no_install_root' };
     try {
       await fsp.rm(versionDir(manifest), { recursive: true, force: true });
@@ -1501,7 +1508,7 @@ export function createToolPackageManager(options = {}) {
    */
   async function installBrowser(params = {}) {
     const id = String(params.id ?? '');
-    if (options.enableRepositoryTools && BUILTIN_TOOL_IDS.includes(id)) return { ok: false, id, reasonCode: 'builtin_tool' };
+    if (options.enableRepositoryTools && builtinToolIds.includes(id)) return { ok: false, id, reasonCode: 'builtin_tool' };
     const manifest = options.catalog?.get(id);
     if (!manifest) return { ok: false, id, reasonCode: 'unknown_package' };
     if (manifest.browserCondition?.kind !== 'playwright-chromium') {

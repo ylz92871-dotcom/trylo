@@ -7,7 +7,7 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
-import { createNativeBrowserService, nativeBrowserScope } from '../src/tooling/native-browser-service.mjs';
+import { createNativeBrowserService, nativeBrowserScope } from '../src/tooling/browser/native-browser-service.mjs';
 import { probePlaywrightChromium } from '../src/tooling/tool-browser-condition.mjs';
 import { artifactPath, temporaryPath } from '../../scripts/workspace-paths.mjs';
 
@@ -20,7 +20,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const probe = probePlaywrightChromium();
 let child, browser, service, site, client;
 const proof = { kind: 'headless MCP acceptance; not native WebView2', nativeVerified: false, checks: [] };
-const sources = ['desktop-services/src/host.mjs', 'desktop-services/src/tooling/native-browser-service.mjs', 'desktop-services/src/tooling/native-browser-mcp.mjs', 'desktop-services/src/tooling/tool-profile-service.mjs', 'desktop/src-tauri/src/commands/native_browser.rs', 'desktop/src-tauri/src/lib.rs', 'desktop/src/tooling/use-browser-preview.ts', 'desktop/src/components/chat/BrowserToolSidebar.tsx'];
+const sources = ['desktop-services/src/host.mjs', 'desktop-services/src/tooling/browser/native-browser-service.mjs', 'desktop-services/src/tooling/browser/native-browser-mcp.mjs', 'desktop-services/src/tooling/tool-profile-service.mjs', 'desktop/src-tauri/src/commands/native_browser.rs', 'desktop/src-tauri/src/lib.rs', 'desktop/src/tooling/use-browser-preview.ts', 'desktop/src/components/chat/BrowserToolSidebar.tsx'];
 async function hashes() { return Object.fromEntries(await Promise.all(sources.map(async file => [file, crypto.createHash('sha256').update(await fs.readFile(path.join(workspace, file))).digest('hex')]))); }
 proof.sourcesBefore = await hashes();
 if (process.env.TRYLO_NATIVE_HOST_ENTRY) proof.bundle = { path: process.env.TRYLO_NATIVE_HOST_ENTRY, sha256: crypto.createHash('sha256').update(await fs.readFile(process.env.TRYLO_NATIVE_HOST_ENTRY)).digest('hex') };

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acquireWindowsAclLease } from "./windows-acl-lease.js";
+import { acquireWindowsAclLease } from "./windows/windows-acl-lease.js";
 import type { VendorWindowsApi } from "./sandbox-vendor.js";
 
 test("failed grant compensation preserves the native permission cause as well as cleanup failure", async () => {
