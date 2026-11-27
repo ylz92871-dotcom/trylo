@@ -287,6 +287,7 @@ export interface TryloSettings {
    *  control; loading settings normalizes it to true. Per-action consent
    *  remains separate from mounting the default tool. */
   readonly workComputer: boolean
+  readonly macosComputerUse?: boolean
   /** PR-7 (spec §4.1/§10.x): explicit 浏览器调试 capability switch. `false`
    *  (the default) keeps the default Work Profile with Playwright. `true`
    *  swaps Playwright OUT for the pinned Chrome DevTools MCP surface
@@ -553,6 +554,7 @@ function migrateSettings(value: unknown): TryloSettings | null {
     // Office/browser/desktop control are the user-requested shared defaults.
     // Keep the legacy field readable without restoring an obsolete opt-out.
     workComputer: true,
+    ...(typeof stored['macosComputerUse'] === 'boolean' ? { macosComputerUse: stored['macosComputerUse'] } : {}),
     workBrowserDebug: stored['workBrowserDebug'] === true,
     workCad: stored['workCad'] === true,
     // Whitelist: absent (= never persisted) ⇒ default `true`; an explicit

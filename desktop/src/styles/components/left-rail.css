@@ -188,9 +188,9 @@
 :root[data-platform='macos'] .left-rail__header {
   height: var(--top-bar-h, 46px);
   min-height: var(--top-bar-h, 46px);
-  padding: 0 12px 0 88px;
+  padding: 0 14px 0 84px;
   justify-content: flex-start;
-  gap: 8px;
+  gap: 10px;
   flex-shrink: 0;
   user-select: none;
   -webkit-user-select: none;
@@ -198,7 +198,7 @@
 }
 
 :root[data-platform='macos'][data-fullscreen='true'] .left-rail__header {
-  padding-left: 12px;
+  padding-left: 14px;
 }
 
 :root[data-platform='macos'] .left-rail__collapse {
@@ -212,6 +212,11 @@
   color: var(--fg-muted);
 }
 
+:root[data-platform='macos'] .left-rail__collapse > svg {
+  width: 16px;
+  height: 16px;
+}
+
 :root[data-platform='macos'] .left-rail__collapse:hover {
   background: var(--bg-elevated);
   color: var(--fg);
@@ -219,8 +224,8 @@
 
 :root[data-platform='macos'] .left-rail__brand {
   min-width: 0;
-  gap: 7px;
-  font-size: 14px;
+  gap: 8px;
+  font-size: 15.5px;
   font-weight: 600;
   letter-spacing: -0.015em;
   overflow: hidden;
@@ -232,38 +237,59 @@
 }
 
 :root[data-platform='macos'] .left-rail__navigation {
-  padding: 4px 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px 18px;
 }
 
 :root[data-platform='macos'] .left-rail__section--workspaces {
-  padding: 0 8px;
+  padding: 2px 12px 12px;
 }
 
 :root[data-platform='macos'] .left-rail__footer {
-  padding: 12px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 12px 10px;
   border-top: 1px solid var(--macos-hairline);
 }
 
 :root[data-platform='macos'] .left-rail__nav {
-  min-height: 30px;
-  padding: 5px 8px;
-  gap: 8px;
-  font-size: 13px;
-  line-height: 18px;
-  border-radius: 6px;
+  min-height: 34px;
+  padding: 7px 10px;
+  gap: 10px;
+  font-size: 13.5px;
+  line-height: 20px;
+  letter-spacing: 0;
+  border-radius: 7px;
 }
 
 :root[data-platform='macos'] .left-rail__nav > svg,
 :root[data-platform='macos'] .workspace-item__row > svg:first-child {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
+  opacity: 0.84;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+:root[data-platform='macos'] .left-rail__nav:hover > svg,
+:root[data-platform='macos'] .left-rail__new > svg,
+:root[data-platform='macos'] .workspace-item:hover .workspace-item__row > svg:first-child {
+  opacity: 1;
 }
 
 :root[data-platform='macos'] .left-rail__new {
-  min-height: 30px;
-  border-radius: 7px;
-  margin-top: 2px;
-  margin-bottom: 8px;
+  min-height: 36px;
+  padding: 7px 11px;
+  gap: 9px;
+  border-radius: 8px;
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  letter-spacing: 0;
   border-color: rgba(0, 0, 0, 0.08);
   background: rgba(255, 255, 255, 0.65);
 }
@@ -273,60 +299,95 @@
 }
 
 :root[data-platform='macos'][data-theme='dark'] .left-rail__new {
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.065);
 }
 
 :root[data-platform='macos'][data-theme='dark'] .left-rail__new:hover {
-  background: rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.115);
 }
 
 :root[data-platform='macos'] .left-rail__section-title {
-  min-height: 24px;
-  padding: 0 2px 0 8px;
-  margin-bottom: 2px;
-  font-size: 11px;
+  min-height: 26px;
+  padding: 0 2px 0 10px;
+  margin-bottom: 6px;
+  font-size: 12px;
   font-weight: 500;
+  letter-spacing: 0.015em;
+  color: color-mix(in srgb, var(--fg-muted) 88%, transparent);
 }
 
 :root[data-platform='macos'] .left-rail__project-add {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 6px;
+}
+
+:root[data-platform='macos'] .left-rail__project-add > svg {
+  width: 15px;
+  height: 15px;
+}
+
+:root[data-platform='macos'] .left-rail__workspaces {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 :root[data-platform='macos'] .workspace-item__row {
-  min-height: 30px;
-  padding: 5px 8px;
-  gap: 8px;
-  font-size: 13px;
-  line-height: 18px;
-  border-radius: 6px;
+  min-height: 34px;
+  padding: 7px 10px;
+  gap: 9px;
+  font-size: 14px;
+  line-height: 20px;
+  border-radius: 7px;
+}
+
+:root[data-platform='macos'] .workspace-item__name {
+  font-size: 14px;
+  line-height: 20px;
 }
 
 :root[data-platform='macos'] .workspace-item:hover {
-  border-radius: 6px;
+  border-radius: 7px;
+}
+
+:root[data-platform='macos'] .workspace-node__children {
+  margin-top: 4px;
+}
+
+:root[data-platform='macos'] .left-rail__sessions {
+  gap: 4px;
 }
 
 :root[data-platform='macos'] .session-row {
-  min-height: 30px;
-  padding: 5px 8px 5px 28px;
-  border-radius: 6px;
+  min-height: 34px;
+  padding: 7px 10px 7px 34px;
+  border-radius: 7px;
+}
+
+:root[data-platform='macos'] .session-row__title {
+  font-size: 13.5px;
+  line-height: 20px;
+  letter-spacing: 0;
 }
 
 :root[data-platform='macos'] .session-row--active::before {
-  inset-inline-start: 10px;
-  top: calc(50% - 6px);
-  height: 12px;
+  inset-inline-start: 16px;
+  top: calc(50% - 7px);
+  height: 14px;
 }
 
 :root[data-platform='macos'] .left-rail__empty {
-  padding: 6px 8px 6px 28px;
+  padding: 7px 10px 7px 34px;
+  font-size: 12.5px;
 }
 
 :root[data-platform='macos'] .archived-section__toggle {
-  min-height: 28px;
-  padding: 4px 8px;
+  min-height: 30px;
+  margin-top: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
   border-radius: 6px;
 }
 

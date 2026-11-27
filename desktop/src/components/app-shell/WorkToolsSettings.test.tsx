@@ -227,6 +227,7 @@ describe('macOS SettingsModal and WorkToolsSettings adaptation', () => {
     expect(screen.getByRole('article', { name: 'Chrome DevTools MCP' })).toBeVisible()
     expect(screen.queryByRole('article', { name: 'Windows-MCP' })).toBeNull()
     expect(screen.queryByRole('article', { name: 'AutoCAD 自动化' })).toBeNull()
+    expect(screen.getByRole('checkbox', { name: '启用 Code 与 Work 的原生电脑控制' })).not.toBeChecked()
     expect(screen.queryByText(/浏览器调试是 Windows-only 能力/)).toBeNull()
     expect(screen.getByText(/Playwright 与 Chrome DevTools 均支持 macOS/)).toBeVisible()
     expect(screen.getByRole('checkbox', { name: /在 Work 中启用 CAD\/EDA/ })).toBeDisabled()

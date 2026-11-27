@@ -16,6 +16,8 @@ mod window_state;
 use tauri::Manager;
 
 fn teardown_app(app_handle: &tauri::AppHandle, origin: &str) {
+    #[cfg(target_os = "macos")]
+    app_handle.state::<commands::quick_look::QuickLookState>().close();
     if let Some(preview) = app_handle.get_webview_window("computer-preview") {
         let _ = preview.close();
     }
@@ -97,6 +99,7 @@ pub fn run() {
         //                                              available locally.
         .setup(|app| {
             app.manage(commands::computer_preview::PreviewState::default());
+            app.manage(commands::quick_look::QuickLookState::default());
             #[cfg(not(target_os = "macos"))]
             app.manage(commands::native_browser::NativeBrowserState::default());
             app.manage(preview::web::WebPreviewState::default());
@@ -186,7 +189,9 @@ pub fn run() {
                 commands::watch::watch,
                 commands::watch::unwatch,
                 commands::search::search,
+                commands::quick_look::quick_look_open,
                 commands::pty::pty_spawn,
+                commands::pty::pty_status,
                 commands::pty::pty_write,
                 commands::pty::pty_resize,
                 commands::pty::pty_kill,

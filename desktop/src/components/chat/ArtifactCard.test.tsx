@@ -6,7 +6,7 @@
 // failed host action must surface user feedback instead
 // of being fire-and-forget (audit M3-P1-11).
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ArtifactCard } from './ArtifactCard';
 import type { ArtifactHost as HostAdapter } from '../../host-adapter/artifact-actions';
@@ -24,6 +24,7 @@ function mockPlatform(platform: string): () => void {
 
 let restorePlatform: (() => void) | undefined;
 afterEach(() => {
+  cleanup();
   restorePlatform?.();
   restorePlatform = undefined;
 });
@@ -341,4 +342,19 @@ describe('ArtifactCard macOS external apps and Finder labels (Code & Work)', () 
     fireEvent.click(screen.getByRole('menuitem', { name: '在访达中显示' }));
     expect(host.showInFolder).toHaveBeenCalledWith(filePath);
   });
+});
+
+it('uses Space for native Quick Look while keeping the primary action separate', () => {
+  restorePlatform = mockPlatform('MacIntel');
+  const filePath = '/tmp/work/report.pdf';
+  const host = makeHost({ quickLookFile: vi.fn().mockResolvedValue(undefined) });
+  render(<ArtifactCard filePath={filePath} kind="file" workspacePath="/tmp/work" host={host} layout="row" />);
+  const open = screen.getByRole('button', { name: '打开文件 report.pdf' });
+  fireEvent.keyDown(open, { code: 'Space', key: ' ' });
+  fireEvent.keyDown(open, { code: 'Space', key: ' ', repeat: true });
+  expect(host.quickLookFile).toHaveBeenCalledTimes(1);
+  expect(host.quickLookFile).toHaveBeenCalledWith(filePath);
+  expect(host.openFile).not.toHaveBeenCalled();
+  fireEvent.click(open);
+  expect(host.openFile).toHaveBeenCalledWith(filePath);
 });

@@ -6,6 +6,14 @@ import { MACOS_COMPUTER_EXECUTABLE, MACOS_COMPUTER_VERSION } from '../../desktop
 import { workspacePath } from '../../scripts/workspace-paths.mjs';
 
 const source = fileURLToPath(new URL('../../desktop-services/toolchain/computer-control/macos-mcp/', import.meta.url));
+const sourceFiles = [
+  'Accessibility.swift',
+  'Computer.swift',
+  'DesktopModes.swift',
+  'LiveWindowPreview.swift',
+  'Screen.swift',
+  'Server.swift',
+].map(file => path.join(source, file));
 
 export function stageMacosComputerUse(resources) {
   const executable = path.join(resources, 'desktop-services', MACOS_COMPUTER_EXECUTABLE);
@@ -17,7 +25,7 @@ export function stageMacosComputerUse(resources) {
   const candidate = path.join(staging, path.basename(executable));
   try {
     execFileSync('/usr/bin/xcrun', ['swiftc', '-target', 'arm64-apple-macos14.0', '-O', '-warnings-as-errors',
-      '-module-cache-path', cache, '-o', candidate, path.join(source, 'Computer.swift'), path.join(source, 'Server.swift')], { stdio: 'inherit' });
+      '-module-cache-path', cache, '-o', candidate, ...sourceFiles], { stdio: 'inherit' });
     const version = execFileSync(candidate, ['--version'], { encoding: 'utf8' }).trim();
     if (version !== `trylo-macos-mcp ${MACOS_COMPUTER_VERSION}`) throw new Error(`Unexpected macOS Computer Use version: ${version}`);
     renameSync(candidate, executable);

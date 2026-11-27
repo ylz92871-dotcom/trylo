@@ -148,6 +148,9 @@
   .right-rail,
   .top-bar,
   .settings-modal,
+  .settings-screen,
+  .settings-screen__rail,
+  .settings-screen__main,
   .input-bar
 ) {
   transition:
@@ -185,6 +188,9 @@
     .right-rail,
     .top-bar,
     .settings-modal,
+    .settings-screen,
+    .settings-screen__rail,
+    .settings-screen__main,
     .input-bar
   ) {
     transition: none;

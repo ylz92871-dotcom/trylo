@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -12,6 +12,8 @@ import { settingsDefaults } from '../../settings/settings-store';
 import { CollaborationSwitch } from '../../surfaces/CollaborationSwitch';
 import type { ConversationSession } from '../../host-adapter/conversation-history';
 import type { TopLevelMode } from '../../host-adapter/types';
+import { ServiceManager } from '../../services-host/service-manager';
+import { createToolingFacade } from '../../tooling/tooling-facade';
 import type { CollaborationSurface } from '../../surfaces/types';
 
 const shellMocks = vi.hoisted(() => ({
@@ -102,6 +104,10 @@ interface RenderShellOptions {
   readonly peekFile?: { readonly path: string; readonly content: string } | null;
   readonly collaborationSurface?: CollaborationSurface;
   readonly onCollaborationChange?: (surface: CollaborationSurface) => void;
+  readonly settingsOpen?: boolean;
+  readonly toolingFacade?: ReturnType<typeof createToolingFacade>;
+  readonly serviceManager?: ServiceManager;
+  readonly onSettingsOpenChange?: (open: boolean) => void;
 }
 
 function renderShell(options: RenderShellOptions) {
@@ -121,6 +127,8 @@ function renderShell(options: RenderShellOptions) {
       onNewSession={vi.fn()}
       onDeleteSession={vi.fn()}
       onRenameSession={vi.fn()}
+      toolingFacade={options.toolingFacade}
+      serviceManager={options.serviceManager}
       onArchiveSession={options.onArchiveSession ?? vi.fn()}
       onUnarchiveSession={vi.fn()}
       topMode={options.topMode}
@@ -146,8 +154,8 @@ function renderShell(options: RenderShellOptions) {
       resultReview={options.resultReview}
       peekFile={options.peekFile}
       onClosePeek={options.peekFile ? vi.fn() : undefined}
-      settingsOpen={false}
-      onSettingsOpenChange={vi.fn()}
+      settingsOpen={options.settingsOpen ?? false}
+      onSettingsOpenChange={options.onSettingsOpenChange ?? vi.fn()}
       onSettingsSave={vi.fn()}
       remotePairingOpen={false}
       onRemotePairingOpenChange={vi.fn()}
@@ -158,6 +166,23 @@ function renderShell(options: RenderShellOptions) {
 }
 
 describe('AppShell macOS capability parity (Code & Work)', () => {
+  it.each(['code', 'work'] as const)('opens the manual live-window picker from %s', async mode => {
+    restorePlatform = mockPlatform('MacIntel');
+    setTauriGlobal(true);
+    const manager = new ServiceManager({ invoke: shellMocks.invoke, listen: async () => () => {} });
+    const ensureReady = vi.fn().mockResolvedValue(undefined);
+    renderShell({
+      topMode: mode, serviceManager: manager,
+      toolingFacade: createToolingFacade(manager.client, { ensureReady }),
+      sessions: [{ id: `${mode}-preview`, kind: mode, title: 'Preview fixture',
+        mode: mode === 'code' ? 'agent' : 'office', createdAt: 100, updatedAt: 200, turnCount: 0 }],
+    });
+    expect(shellMocks.invoke).not.toHaveBeenCalledWith('computer_preview_open', expect.anything());
+    fireEvent.click(screen.getByRole('button', { name: '实时窗口预览' }));
+    await waitFor(() => expect(shellMocks.invoke).toHaveBeenCalledWith('computer_preview_open', { automatic: false }));
+    expect(ensureReady).toHaveBeenCalledTimes(1);
+  });
+
   it.each(['code', 'work'] as const)(
     'hides Windows-only 软件工作区 and 电脑悬浮窗 on macOS in %s mode while keeping 浏览器侧栏',
     (mode) => {
@@ -460,6 +485,34 @@ describe('AppShell macOS capability parity (Code & Work)', () => {
       } finally {
         Object.defineProperty(window, 'innerWidth', { value: originalInnerWidth, configurable: true });
       }
+    },
+  );
+
+  it.each(['code', 'work'] as const)(
+    'propagates data-settings-open and opens settings from the left rail identically in %s mode on macOS',
+    (mode) => {
+      restorePlatform = mockPlatform('MacIntel');
+      const onSettingsOpenChange = vi.fn();
+      const closedView = renderShell({
+        topMode: mode,
+        leftRailCollapsed: false,
+        settingsOpen: false,
+        onSettingsOpenChange,
+      });
+
+      const closedShell = closedView.container.querySelector('.app-shell') as HTMLElement;
+      expect(closedShell).not.toHaveAttribute('data-settings-open');
+      fireEvent.click(screen.getByRole('button', { name: '设置' }));
+      expect(onSettingsOpenChange).toHaveBeenCalledWith(true);
+      closedView.unmount();
+
+      const openView = renderShell({
+        topMode: mode,
+        settingsOpen: true,
+        onSettingsOpenChange,
+      });
+      const openShell = openView.container.querySelector('.app-shell') as HTMLElement;
+      expect(openShell).toHaveAttribute('data-settings-open', 'true');
     },
   );
 });

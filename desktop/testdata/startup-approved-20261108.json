@@ -1,12 +1,12 @@
 {
   "approvedOn": "2026-11-27",
   "normalization": "UTF-8 text, CRLF normalized to LF",
-  "reference": "User-approved Cinematic 3D Levitation + Rapid Pull-Open Dissolve + Optical Stream Entry (2.48s cadence, 3D tilt-and-shadow detachment, -7deg recoil, rapid 11.5x/+560px pull-open with 540ms feather dissolve, 76 curved 3D optical ribbons gliding into the workspace)",
-  "choreography": "3D surface detachment with grounded contact shadow separation (0-900ms); staggered masked text reveal ('Try your learning, Try your own.'); -7deg kinetic recoil anticipation (1000-1180ms); rapid radial pull-open past camera with 540ms feather-soft dissolve (1180-1840ms); 76 curved 3D perspective silk light streams parting open and coasting smoothly into the emerging workspace (1220-2480ms).",
+  "reference": "User-approved Cinematic 3D Levitation + Continuous Clockwise Pull-Open Dissolve + Optical Stream Entry (2.38s cadence, 3D tilt-and-shadow detachment, uninterrupted 0->120deg clockwise 11.5x/+560px pull-open with 580ms feather dissolve, 76 curved 3D optical ribbons gliding into workspace)",
+  "choreography": "3D surface detachment with grounded contact shadow separation (0-920ms); staggered masked text reveal ('Try your learning, Try your own.'); uninterrupted clockwise radial pull-open past camera with 580ms feather-soft dissolve (1020-1760ms); 76 curved 3D perspective silk light streams parting open and coasting smoothly into the emerging workspace (1040-2380ms).",
   "changePolicy": "Preserve this approved choreography and timing. Obtain user approval before changing the words, sequence, 3D detachment, pull-open dissolve, rotation, zoom, procedural optics or timing.",
   "files": {
     "public/startup/optics.js": "e2a395c7b8c93f834419d4400a48c80dfc0f0c7003733366fc87968f21e43760",
-    "public/startup/sequence.js": "cb1de74b37fbc2cced519dde862b58f8c2b5313b02a40d5bd03a28cf64e89566",
+    "public/startup/sequence.js": "11d0d97c0a487a37d981a06fd6e17603f2f2d2e020f6fc5071a268883563d57d",
     "public/startup.js": "a172ecf0ae4eeeb73c088b670e699b0a384e79183e75881e97e825e3a625b3d4",
     "src/styles/startup.css": "8959deaec55eabc07d31e6285fbc58a0ded955cefbc27914cb9a86d4da39d15a",
     "public/startup/material.js": "89126a21e7c85a6b64a2d561519f6db1ebec3a25d3a70fd4758681e6b7e6f7c8",

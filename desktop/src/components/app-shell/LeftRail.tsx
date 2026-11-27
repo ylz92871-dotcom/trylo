@@ -400,7 +400,7 @@ export function LeftRail(props: LeftRailProps): ReactElement | null {
                 className="left-rail__avatar"
                 avatar={profile.profile.avatar}
                 avatarUrl={profile.profile.avatarUrl}
-                size={28}
+                size={mac ? 30 : 28}
               />
               <span className="left-rail__profile-text">
                 {props.account ? props.account.account?.loggedIn ? profile.profile.nickname : '本地工作区' : profile.step === 'closed' ? '本地工作区' : profile.profile.nickname}

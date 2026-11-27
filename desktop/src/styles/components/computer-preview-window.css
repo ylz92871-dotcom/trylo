@@ -131,12 +131,11 @@
   line-height: 18px;
 }
 .computer-preview-window .preview-image__target {
-  background: transparent;
-  box-shadow: none;
-  animation: none;
+  background: var(--brand-soft);
+  box-shadow: 0 0 0 3px var(--brand-soft);
 }
 .computer-preview-window .preview-image__target[data-click='true'] {
-  animation: none;
+  animation: preview-click 520ms ease-out;
 }
 .computer-preview-window .computer-preview-window__notice {
   flex: none;
@@ -317,4 +316,5 @@
 @media (prefers-reduced-motion: reduce) {
   .computer-preview-window .preview-actions__spin,
   .computer-preview-window .preview-image__target { animation: none; }
+  .computer-preview-window .preview-image__agent-cursor { transition: none; }
 }

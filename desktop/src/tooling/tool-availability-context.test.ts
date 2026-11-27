@@ -81,6 +81,11 @@ describe('current built-in declaration from the immutable run snapshot', () => {
     const prompt = toolAvailabilitySystemPrompt(undefined, { runtime: runtime({ serverNames: ['trylo-macos'] }) });
     expect(prompt).toContain('server=trylo-macos');
     expect(prompt).toContain('status 检查系统授权');
+    expect(prompt).toContain('窗口 ID 和所属 PID');
+    expect(prompt).toContain('ax_find');
+    expect(prompt).toContain('ax_perform');
+    expect(prompt).toContain('ax_set_value');
+    expect(prompt).toContain('read_window_text');
     expect(prompt).toContain('全局屏幕点坐标');
     expect(prompt).not.toContain('Snapshot/Screenshot');
   });

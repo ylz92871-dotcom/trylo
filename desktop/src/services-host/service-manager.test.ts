@@ -63,6 +63,26 @@ describe('ServiceManager', () => {
     expect(manager.currentHealth).toBe('ready'); // spawn is readiness-bounded
   });
 
+  it('checks the host after macOS wake and restores only an active, missing process', async () => {
+    const h = createHarness();
+    const manager = new ServiceManager(h.deps, FAST);
+    await manager.recoverAfterWake();
+    expect(h.invokes).toHaveLength(0);
+    await manager.ensureRunning(SPAWN);
+    h.setRunning(true);
+    const invoked = () => h.invokes.map(call => call.cmd);
+    h.invokes.length = 0;
+    await manager.recoverAfterWake();
+    expect(invoked()).toEqual(['servicehost_status']);
+    h.setRunning(false);
+    await Promise.all([manager.recoverAfterWake(), manager.recoverAfterWake()]);
+    expect(invoked()).toEqual(['servicehost_status', 'servicehost_status', 'servicehost_spawn']);
+    await manager.stop();
+    h.invokes.length = 0;
+    await manager.recoverAfterWake();
+    expect(h.invokes).toHaveLength(0);
+  });
+
   it('coalesces concurrent owners into one spawn', async () => {
     const h = createHarness();
     h.setRunning(true);

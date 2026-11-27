@@ -53,7 +53,7 @@
 .attachment-chip__name, .attachment-chip__size { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attachment-chip__name { font-weight: 500; line-height: 1.4; }
 .attachment-chip__size { color: var(--fg-muted); font-size: 11px; line-height: 1.4; font-variant-numeric: tabular-nums; }
-.attachment-chip__remove {
+.attachment-chip__preview, .attachment-chip__remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -69,7 +69,8 @@
   transition: background 120ms ease-out, color 120ms ease-out;
 }
 .attachment-chip__remove:hover { background: var(--danger-soft); color: var(--danger); }
-.attachment-chip__remove:focus-visible { outline: 2px solid var(--fg-muted); outline-offset: 1px; }
+.attachment-chip__preview:hover { background: var(--bg-hover, rgba(128, 128, 128, 0.12)); color: var(--fg); }
+.attachment-chip__preview:focus-visible, .attachment-chip__remove:focus-visible { outline: 2px solid var(--fg-muted); outline-offset: 1px; }
 .attachment-chip--failed { width: 280px; border-color: var(--danger); }
 .attachment-chip--failed .attachment-chip__thumb { color: var(--danger); background: var(--danger-soft); }
 .attachment-chip--failed .attachment-chip__size { color: var(--danger); }
@@ -77,4 +78,4 @@
 .attachment-chip__spinner { width: 16px; height: 16px; border: 2px solid var(--border-strong); border-top-color: var(--fg-muted); border-radius: 50%; animation: attachment-spin .8s linear infinite; }
 @keyframes attachment-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .attachment-chip__spinner { animation: none; } }
-@media (pointer: coarse) { .attachment-chip__remove { flex-basis: 32px; width: 32px; height: 36px; } }
+@media (pointer: coarse) { .attachment-chip__preview, .attachment-chip__remove { flex-basis: 32px; width: 32px; height: 36px; } }

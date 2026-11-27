@@ -65,8 +65,46 @@ describe('tool preview projection', () => {
   it('separates browser and computer tools and ignores ordinary terminal tools', () => {
     expect(previewKind('mcp__trylo-chrome__take_screenshot')).toBe('browser')
     expect(previewKind('mcp__trylo-browser__browser_snapshot')).toBe('browser')
+    expect(previewKind('mcp__trylo-macos__ax_perform')).toBe('computer')
     expect(previewKind('Bash')).toBeNull()
     expect(toolPreviewState([screenshot], 'browser').image).toBeUndefined()
+  })
+  it('projects macOS background computer actions and normalized virtual cursor coordinates without leaking sensitive values', () => {
+    const perform: ToolMessage = {
+      ...click,
+      id: 'mac-ax',
+      tool: 'mcp__trylo-macos__ax_perform',
+      input: { pid: 55, path: [0, 1], action: 'AXPress' },
+      outputText: JSON.stringify({ performed: true, normalizedPoint: { x: 0.35, y: 0.6 } }),
+      summary: '后台点击按钮',
+    }
+    const setValue: ToolMessage = {
+      ...click,
+      id: 'mac-val',
+      createdAt: 30,
+      tool: 'mcp__trylo-macos__ax_set_value',
+      input: { pid: 55, path: [0, 2], value: 'private-secret' },
+      summary: '后台写入输入框',
+    }
+    const findControl: ToolMessage = {
+      ...click,
+      id: 'mac-find',
+      createdAt: 40,
+      tool: 'mcp__trylo-macos__ax_find',
+      input: { pid: 55, query: 'Save' },
+      summary: '查找保存按钮',
+    }
+    expect(toolPreviewState([perform], 'computer')).toMatchObject({
+      hasTools: true,
+      active: true,
+      action: { title: '后台操作控件', target: 'AXPress', status: '执行中', point: { x: 0.35, y: 0.6, space: 'normalized' } },
+    })
+    expect(toolPreviewState([setValue], 'computer')).toMatchObject({
+      action: { title: '后台写入控件', target: '' },
+    })
+    expect(toolPreviewState([findControl], 'computer')).toMatchObject({
+      action: { title: '查找后台控件' },
+    })
   })
   it('surfaces errors without inventing a new screenshot', () => {
     expect(

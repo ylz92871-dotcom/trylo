@@ -12,6 +12,7 @@ export interface ComputerStreamOptions {
   readonly excludeWindow?: number | null
   readonly turnId?: string
   readonly display?: number
+  readonly pickerRequest?: number
 }
 
 let streamSequence = 0
@@ -22,8 +23,9 @@ export function useComputerStream(options: ComputerStreamOptions, callbacks: {
   const current = useRef(callbacks)
   current.current = callbacks
   const [ready, setReady] = useState(options.manager?.currentHealth === 'ready')
+  const attemptedPicker = useRef<number>()
   const key = JSON.stringify([options.projectRoot, options.conversationId, options.turnId, options.enabled,
-    options.excludeWindow, options.display, ready])
+    options.excludeWindow, options.display, options.pickerRequest, ready])
   const desired = useRef({ key, manager: options.manager, facade: options.facade })
   desired.current = { key, manager: options.manager, facade: options.facade }
   useEffect(() => {
@@ -37,6 +39,13 @@ export function useComputerStream(options: ComputerStreamOptions, callbacks: {
     if (!manager || !facade || !ready) {
       current.current.status({ scope, streamId: '', state: 'starting', detail: '等待预览服务就绪' })
       return undefined
+    }
+    if (options.pickerRequest !== undefined) {
+      if (attemptedPicker.current === options.pickerRequest) {
+        current.current.status({ scope, streamId: '', state: 'stopped', detail: '请重新选择要预览的窗口' })
+        return undefined
+      }
+      attemptedPicker.current = options.pickerRequest
     }
     const streamId = `${scope}:${options.turnId ?? ''}:${++streamSequence}`
     let cancelled = false
@@ -78,5 +87,5 @@ export function useComputerStream(options: ComputerStreamOptions, callbacks: {
       void facade.computerPreviewStop({ scope, streamId }).catch(() => {})
     }
   }, [options.manager, options.facade, options.projectRoot, options.conversationId, options.enabled,
-    options.excludeWindow, options.turnId, options.display, ready, key])
+    options.excludeWindow, options.turnId, options.display, options.pickerRequest, ready, key])
 }

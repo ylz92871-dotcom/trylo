@@ -11,6 +11,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Eraser, Minus, Plus, Terminal as TerminalIcon, X } from 'lucide-react';
 import '@xterm/xterm/css/xterm.css';
 import { hostAdapter } from '../../host-adapter';
+import { onMacosWake } from '../../host-adapter/system-wake';
 import { copyTextToNativeClipboard } from '../../host-adapter/native-shell';
 import { useAppearance } from '../../settings/appearance-store';
 import { formatShortcut, isMacPlatform } from '../../utils/platform';
@@ -268,8 +269,26 @@ export function Terminal({ cwd, id, onReturnFocus, onClose }: TerminalProps): Re
       }
     })();
 
+    const stopWakeCheck = onMacosWake(() => {
+      const id = ptyIdRef.current;
+      if (!id || !hostAdapter.pty.isAlive) return;
+      void hostAdapter.pty.isAlive(id).then(open => {
+        if (!alive || ptyIdRef.current !== id) return;
+        if (open) {
+          handleResize();
+          return;
+        }
+        ptyIdRef.current = null;
+        setError('终端已退出。关闭面板后可重新打开终端。');
+        return hostAdapter.pty.kill(id);
+      }).catch(error => {
+        if (alive) console.warn('唤醒后检查终端失败', error);
+      });
+    });
+
     return () => {
       alive = false;
+      stopWakeCheck();
       ro.disconnect();
       const activePtyId = ptyIdRef.current;
       ptyIdRef.current = null;

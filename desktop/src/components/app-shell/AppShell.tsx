@@ -328,14 +328,22 @@ export function AppShell(props: AppShellProps): ReactElement {
     if (latestDock.current.open) latestDock.current.toggle();
   }, [software.open]);
   const browserReplay = useBrowserReplay(browserState, props.browserPreview, previewScope);
-  const workbench = useToolWorkbenchLifecycle({ scope: previewScope, running: runActive,
+  const workbench = useToolWorkbenchLifecycle({ scope: previewScope, running: runActive, autoOpenComputer: !mac,
     browser: browserState, computer: computerState, onError: setPreviewError,
     showBrowser: () => { software.setOpen(false); setModelPreviewOpen(false); if (props.rightRailOpen) props.onToggleRightRail(); setBrowserPreviewOpen(true); } });
-  useComputerPreview(computerState, previewScope, { manager: props.serviceManager, facade: props.toolingFacade,
+  const macComputerPreviewState = computerState.hasTools
+    ? computerState
+    : { title: '实时窗口预览', status: '等待工具操作', detail: '从系统面板选择一个窗口。' };
+  useComputerPreview(mac ? macComputerPreviewState : computerState, previewScope, { manager: props.serviceManager, facade: props.toolingFacade,
     projectRoot: props.workspaces.find(workspace => workspace.id === props.currentWorkspaceId)?.root,
-    conversationId: props.activeSessionId, turnId: computerState.turnId, display: computerState.display,
-    enabled: !mac && runActive && computerState.hasStarted === true && workbench.computerVisible,
-    excludeWindow: workbench.computerHandle });
+    conversationId: props.activeSessionId, turnId: mac ? undefined : computerState.turnId,
+    display: mac ? undefined : computerState.display,
+    enabled: workbench.computerVisible && (mac || (runActive && computerState.hasStarted === true)),
+    pickerRequest: mac ? workbench.computerRequest : undefined, excludeWindow: mac ? undefined : workbench.computerHandle });
+  const openMacPreview = (): void => {
+    setPreviewError('');
+    void workbench.openComputer(props.toolingFacade?.prepareComputerPreview);
+  };
   useEffect(() => { if (props.rightRailOpen) setBrowserPreviewOpen(false); }, [props.rightRailOpen]);
   useEffect(() => {
     const close = (): void => setBrowserPreviewOpen(false);
@@ -414,6 +422,7 @@ export function AppShell(props: AppShellProps): ReactElement {
       className="app-shell"
       data-mode={props.topMode}
       data-resizing={resizingRail ? 'true' : undefined}
+      data-settings-open={props.settingsOpen ? 'true' : undefined}
       style={{
         '--rail-left-w': `${props.leftWidth}px`,
         '--rail-right-w': `${effectiveRightWidth}px`,
@@ -510,6 +519,11 @@ export function AppShell(props: AppShellProps): ReactElement {
                 setBrowserPreviewOpen(open => !open);
               }}><Globe size={16} strokeWidth={1.65} aria-hidden="true" /></button>
               {!mac && <button type="button" className={`top-bar__rail-toggle${software.open ? ' top-bar__rail-toggle--active' : ''}`} aria-label="软件工作区" title="软件工作区" aria-pressed={software.open} onClick={() => software.setOpen(!software.open)}><AppWindow size={16} strokeWidth={1.65} aria-hidden="true" /></button>}
+              {mac && isTauri() && props.toolingFacade && props.serviceManager && props.activeSessionId &&
+                <button type="button" className="top-bar__rail-toggle" aria-label="实时窗口预览" title="实时窗口预览"
+                  data-tauri-drag-region="false" onClick={openMacPreview}>
+                  <Monitor size={16} strokeWidth={1.65} aria-hidden="true" />
+                </button>}
               {!mac && <button type="button" className={`top-bar__rail-toggle${runActive && computerState.hasTools ? ' top-bar__rail-toggle--active' : ''}`} aria-label={runActive && computerState.hasTools ? '电脑悬浮窗，控制正在工作' : '电脑悬浮窗'} title={runActive && computerState.hasTools ? '电脑控制正在工作' : '电脑悬浮窗'} onClick={() => { setPreviewError(''); void workbench.openComputer(); }}><Monitor size={16} strokeWidth={1.65} aria-hidden="true" />{runActive && computerState.hasTools && <span className="top-bar__activity-dot" aria-hidden="true" />}</button>}
               {props.topBarRight}
             </>}
@@ -592,6 +606,7 @@ export function AppShell(props: AppShellProps): ReactElement {
         relayAccount={props.remoteController}
         onOpenRemote={() => { props.onSettingsOpenChange(false); props.onRemotePairingOpenChange(true); }}
         toolPlatform={props.toolPlatform}
+        toolingFacade={props.toolingFacade}
         learningPort={props.learningPort}
         skillLearningRuntime={props.skillLearningRuntime}
         collaborationLearningRuntime={props.collaborationLearningRuntime}

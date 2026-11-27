@@ -1,14 +1,14 @@
 .context-window-fields {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 .context-window-fields .settings-modal__hint {
   margin: 0;
-  line-height: 1.6;
+  line-height: 1.65;
 }
 .context-window-fields__capacity summary {
-  margin: 4px 0 10px;
+  margin: 6px 0 10px;
   cursor: pointer;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 12.5px;
 }

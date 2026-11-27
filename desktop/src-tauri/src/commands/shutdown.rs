@@ -193,6 +193,7 @@ mod tests {
             map.insert(
                 "t1".to_string(),
                 crate::commands::pty::PtyProcess {
+                    stream_open: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
                     writer: Box::new(Vec::new()) as Box<dyn std::io::Write + Send>,
                     killer: spy_killer(&PTY_KILLS),
                 },

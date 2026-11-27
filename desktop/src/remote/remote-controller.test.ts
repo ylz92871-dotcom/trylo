@@ -282,6 +282,22 @@ describe('RemoteController lifecycle', () => {
     expect(h.manager.onHealth).toHaveBeenCalledTimes(2);
   });
 
+  it('after macOS wake keeps relay reconnects and restores a failed tunnel without requesting a QR', async () => {
+    const h = createHarness();
+    await h.controller.recoverAfterWake();
+    expect(h.port.enable).not.toHaveBeenCalled();
+    await h.controller.setEnabled(true);
+    h.fireHealth('ready');
+    const status = h.controller.status();
+    h.port.status.mockResolvedValueOnce({ ...status, running: false, reasonCode: 'relay_reconnecting' });
+    await h.controller.recoverAfterWake();
+    expect(h.port.enable).toHaveBeenCalledTimes(1);
+    h.port.status.mockResolvedValueOnce({ ...status, reasonCode: 'tunnel_start_failed' });
+    await h.controller.recoverAfterWake();
+    expect(h.port.enable).toHaveBeenCalledTimes(2);
+    expect(h.port.pairingInfo).not.toHaveBeenCalled();
+  });
+
   it('a QR retry restarts a failed tunnel even when the local gateway is running', async () => {
     const h = createHarness();
     await h.controller.setEnabled(true);

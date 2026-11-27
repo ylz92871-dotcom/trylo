@@ -20,13 +20,15 @@
 // Pure presentational — all data flow lives in App.tsx;
 // this just renders the array.
 
-import type { ReactElement } from 'react';
-import { File, FileImage, FileText, RotateCw, TriangleAlert, X } from 'lucide-react';
+import { useState, type ReactElement } from 'react';
+import { Eye, File, FileImage, FileText, RotateCw, TriangleAlert, X } from 'lucide-react';
 import type {
   Attachment,
   AttachmentKind,
   FailedAttachment,
 } from '../../host-adapter/attachment-utils';
+
+import { quickLookFile, supportsQuickLook } from '../../host-adapter/quick-look';
 
 export interface AttachmentListProps {
   readonly attachments: readonly Attachment[];
@@ -69,6 +71,12 @@ function AttachmentChip(props: {
   readonly onRemove: (id: string) => void;
 }): ReactElement {
   const a = props.attachment;
+  const [previewError, setPreviewError] = useState('');
+  const allowedRoot = a.path.startsWith('/') ? a.path.slice(0, a.path.lastIndexOf('/')) || '/' : undefined;
+  const preview = (root: string) => {
+    setPreviewError('');
+    void quickLookFile(a.path, root).catch(error => setPreviewError(String(error)));
+  };
   const KindIcon = KIND_ICON[a.kind];
   // v1.16.2.6: image kind gets a real <img> preview if
   // previewUrl is set (App.tsx built the blob: URL after
@@ -96,8 +104,16 @@ function AttachmentChip(props: {
       </span>
       <span className="attachment-chip__meta">
         <span className="attachment-chip__name">{a.name}</span>
-        <span className="attachment-chip__size">{formatSize(a.size)}</span>
+        <span className="attachment-chip__size" role={previewError ? 'alert' : undefined}>
+          {previewError || formatSize(a.size)}
+        </span>
       </span>
+      {allowedRoot && supportsQuickLook() && (
+        <button type="button" className="attachment-chip__preview"
+          aria-label={`快速预览 ${a.name}`} title={`快速预览 ${a.name}`} onClick={() => preview(allowedRoot)}>
+          <Eye size={13} aria-hidden="true" />
+        </button>
+      )}
       <button
         type="button"
         className="attachment-chip__remove"

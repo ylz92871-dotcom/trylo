@@ -5,6 +5,7 @@ export interface ExternalApplication {
 }
 
 export interface ArtifactHost {
+  quickLookFile?(filePath: string): Promise<void>;
   openFile(filePath: string): Promise<void>;
   openFileWithApp(filePath: string, application: ExternalApplication): Promise<void>;
   showInFolder(filePath: string): Promise<void>;

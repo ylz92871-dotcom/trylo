@@ -137,3 +137,32 @@ pub fn computer_preview_subscribe<R: tauri::Runtime>(webview: tauri::Webview<R>,
 #[cfg(all(test, feature = "preview-ipc-tests"))]
 #[path = "computer_preview_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod snapshot_tests {
+    use super::PreviewSnapshot;
+
+    #[test]
+    fn live_frame_snapshot_requires_integer_epoch_milliseconds() {
+        let valid = serde_json::json!({
+            "title": "实时窗口预览",
+            "status": "",
+            "detail": "从系统面板选择一个窗口。",
+            "dataUrl": "data:image/jpeg;base64,aGVsbG8=",
+            "streamState": "running",
+            "frameGeometry": { "width": 1000, "height": 625, "originX": 0, "originY": 0 },
+            "updatedAt": 1_795_766_860_757_u64,
+            "scope": "ws:session:code"
+        });
+        let parsed: PreviewSnapshot = serde_json::from_value(valid).expect("integer updatedAt");
+        assert_eq!(parsed.updated_at, Some(1_795_766_860_757));
+
+        let fractional = serde_json::json!({
+            "title": "实时窗口预览",
+            "status": "",
+            "detail": "",
+            "updatedAt": 1_795_766_860_757.5_f64
+        });
+        assert!(serde_json::from_value::<PreviewSnapshot>(fractional).is_err());
+    }
+}

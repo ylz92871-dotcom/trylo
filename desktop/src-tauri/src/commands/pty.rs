@@ -10,8 +10,8 @@
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::Serialize;
@@ -30,6 +30,7 @@ pub struct PtyState {
 pub struct PtyProcess {
     /// The writer half — input from the user. Send bytes here.
     pub writer: Box<dyn Write + Send>,
+    pub stream_open: Arc<AtomicBool>,
     /// A closure that kills the underlying child. We use a
     /// `FnMut` boxed closure instead of the `ChildKiller` trait
     /// because the `portable_pty` child-kill return type
@@ -118,11 +119,14 @@ pub async fn pty_spawn(
     // Tauri Channel. The channel send call returns Err only if the
     // webview has dropped the subscription; in that case the
     // thread exits. We also exit on read 0 (EOF) or any I/O error.
+    let stream_open = Arc::new(AtomicBool::new(true));
+    let reader_open = Arc::clone(&stream_open);
     let channel_for_thread = on_output.clone();
     std::thread::spawn(move || {
         let mut buf = [0u8; 4096];
         loop {
             match reader.read(&mut buf) {
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {},
                 Ok(0) | Err(_) => break,
                 Ok(n) => {
                     if channel_for_thread.send(buf[..n].to_vec()).is_err() {
@@ -131,11 +135,16 @@ pub async fn pty_spawn(
                 }
             }
         }
+        reader_open.store(false, Ordering::Release);
     });
 
     processes.insert(id.clone(), PtyProcess {
         writer: Box::new(writer),
+        stream_open,
         killer: Box::new(move || {
+            if child.try_wait().is_ok_and(|status| status.is_some()) {
+                return;
+            }
             if child.kill().is_ok() {
                 let _ = child.wait();
             }
@@ -180,6 +189,13 @@ pub async fn pty_resize(
     // ref we don't store). xterm.js will re-flow visually. We
     // log the request so debugging is possible.
     Ok(())
+}
+
+/// Check whether the existing terminal still has an output stream after wake.
+#[tauri::command]
+pub async fn pty_status(id: String, state: State<'_, PtyState>) -> Result<bool, CommandError> {
+    let processes = state.processes.lock().map_err(|error| pty_io_error("lock", error))?;
+    Ok(processes.get(&id).is_some_and(|process| process.stream_open.load(Ordering::Acquire)))
 }
 
 /// Kill a previously-spawned PTY.

@@ -36,7 +36,7 @@ if (!args.some(arg => arg === '--help' || arg === '-h') && !environment.TRYLO_CL
 // sidecar publish (or downloads) just to supply this checkout's manifest.
 if (!args.some(arg => arg === '--help' || arg === '-h')) {
   devResourceConfig = prepareDevResources(desktopRoot);
-  if (process.platform === 'darwin' && process.arch === 'arm64' && environment.TRYLO_MACOS_COMPUTER_USE === '1') {
+  if (process.platform === 'darwin' && process.arch === 'arm64') {
     stageMacosComputerUse(resolve(desktopRoot, 'src-tauri/resources'));
   }
 }

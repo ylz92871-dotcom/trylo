@@ -2,7 +2,7 @@
 .settings-modal__backdrop {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 110;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -80,11 +80,12 @@
   overflow: auto;
 }
 .settings-modal__sidebar-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 11px 12px;
+  padding: 11px 12px 11px 14px;
   border: 0;
   border-radius: 7px;
   text-align: left;
@@ -103,7 +104,25 @@
 .settings-modal__sidebar-item--active {
   background: var(--bg-elevated);
   color: var(--fg);
-  font-weight: 600;
+  font-weight: 500;
+}
+.settings-modal__sidebar-item--active::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 4px;
+  top: calc(50% - 7px);
+  width: 2px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--brand);
+  pointer-events: none;
+}
+
+/* Keep dark Settings neutral charcoal to match the main workspace and left rail. */
+:root[data-theme='dark'] .settings-modal {
+  --bg-panel: #1b1c1e;
+  --bg-elevated: #2b2c2f;
+  --ink-hover: #2d2e31;
 }
 .settings-modal__content {
   flex: 1;
@@ -420,6 +439,12 @@
   font-size: 12px;
 }
 .settings-modal__btn,
+.settings-modal__macos-permissions-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .settings-modal__button {
   min-height: 36px;
   padding: 8px 14px;
@@ -1024,8 +1049,8 @@
 }
 
 :root[data-platform='macos'] .settings-modal {
-  width: min(880px, calc(100vw - 64px));
-  height: min(680px, calc(100dvh - 80px));
+  width: min(920px, calc(100vw - 56px));
+  height: min(720px, calc(100dvh - 72px));
   border-radius: 12px;
   box-shadow:
     0 0 0 0.5px rgba(0, 0, 0, 0.12),
@@ -1055,21 +1080,34 @@
 }
 
 :root[data-platform='macos'] .settings-modal__sidebar {
-  width: 204px;
-  padding: 12px 10px;
-  gap: 2px;
+  width: 212px;
+  padding: 14px 12px;
+  gap: 4px;
   border-right-color: var(--macos-hairline);
-  background: color-mix(in srgb, var(--bg-panel) 94%, transparent);
+  background: var(--bg-panel);
+}
+
+:root[data-platform='macos'][data-theme='dark'] .settings-modal__sidebar {
+  background: #1b1c1e;
+  border-right-color: var(--macos-hairline);
 }
 
 :root[data-platform='macos'] .settings-modal__sidebar-search {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 :root[data-platform='macos'] .settings-modal__sidebar-search-input {
-  height: 28px;
-  border-color: var(--macos-hairline);
-  background: color-mix(in srgb, var(--fg) 5%, transparent);
+  height: 32px;
+  padding: 0 28px 0 30px;
+  border-radius: 7px;
+  font-size: 13px;
+  border-color: var(--macos-hairline-strong);
+  background: rgba(0, 0, 0, 0.035);
+}
+
+:root[data-platform='macos'][data-theme='dark'] .settings-modal__sidebar-search-input {
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 :root[data-platform='macos'] .settings-modal__sidebar-search-input:focus {
@@ -1077,33 +1115,61 @@
 }
 
 :root[data-platform='macos'] .settings-modal__sidebar-item {
-  min-height: 28px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 6px;
-  font-size: 13px;
-  gap: 8px;
+  min-height: 34px;
+  height: auto;
+  padding: 7px 10px 7px 14px;
+  border-radius: 7px;
+  font-size: 13.5px;
+  line-height: 20px;
+  gap: 10px;
 }
 
-:root[data-platform='macos'] .settings-modal__sidebar-item svg {
-  width: 15px;
-  height: 15px;
-  flex-shrink: 0;
-}
-
-:root[data-platform='macos'] .settings-modal__sidebar-item--active {
-  background: color-mix(in srgb, var(--brand) 16%, transparent);
+:root[data-platform='macos'] .settings-modal__sidebar-item:hover {
+  background: rgba(0, 0, 0, 0.05);
   color: var(--fg);
 }
 
+:root[data-platform='macos'][data-theme='dark'] .settings-modal__sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.065);
+  color: var(--fg);
+}
+
+:root[data-platform='macos'] .settings-modal__sidebar-item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  opacity: 0.82;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+:root[data-platform='macos'] .settings-modal__sidebar-item:hover svg,
+:root[data-platform='macos'] .settings-modal__sidebar-item--active svg {
+  opacity: 1;
+}
+
+:root[data-platform='macos'] .settings-modal__sidebar-item--active {
+  background: rgba(0, 0, 0, 0.065);
+  color: var(--fg);
+  font-weight: 500;
+}
+
+:root[data-platform='macos'][data-theme='dark'] .settings-modal__sidebar-item--active {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--fg);
+}
+
+:root[data-platform='macos'][data-theme='dark'] .settings-modal__sidebar-item--active:hover {
+  background: rgba(255, 255, 255, 0.13);
+}
+
 :root[data-platform='macos'] .settings-modal__content {
-  padding: 22px 28px 32px;
-  gap: 16px;
-  background: var(--bg-panel);
+  padding: 28px 34px 40px;
+  gap: 22px;
+  background: var(--bg);
 }
 
 :root[data-platform='macos'] .settings-modal__content > * {
-  max-width: 600px;
+  max-width: 640px;
 }
 
 :root[data-platform='macos'][data-theme='dark'] .settings-modal__content {
@@ -1111,19 +1177,25 @@
 }
 
 :root[data-platform='macos'] .settings-modal__page-heading h3 {
-  font-size: 18px;
+  font-size: 20px;
+  line-height: 1.35;
   letter-spacing: -0.015em;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+}
+
+:root[data-platform='macos'] .settings-modal__page-heading p {
+  font-size: 13.5px;
+  line-height: 1.6;
 }
 
 :root[data-platform='macos'] .settings-modal__group,
 :root[data-platform='macos'] .settings-modal__section,
 :root[data-platform='macos'] .settings-modal__advanced,
 :root[data-platform='macos'] .work-tools__package {
-  gap: 12px;
-  padding: 16px 18px;
+  gap: 18px;
+  padding: 20px 22px;
   border: 1px solid var(--macos-hairline);
-  border-radius: 10px;
+  border-radius: 11px;
   background: var(--bg);
 }
 
@@ -1131,36 +1203,72 @@
 :root[data-platform='macos'][data-theme='dark'] .settings-modal__section,
 :root[data-platform='macos'][data-theme='dark'] .settings-modal__advanced,
 :root[data-platform='macos'][data-theme='dark'] .work-tools__package {
-  background: color-mix(in srgb, var(--fg) 4%, var(--bg));
+  background: color-mix(in srgb, var(--fg) 3.5%, var(--bg));
 }
 
-:root[data-platform='macos'] .settings-modal__group > legend {
+/* WebKit ignores float on <legend> inside display:flex fieldsets; use block flow so card titles sit cleanly inside the border. */
+:root[data-platform='macos'] fieldset:is(.settings-modal__group, .settings-modal__section) {
+  display: block;
+}
+
+:root[data-platform='macos'] fieldset:is(.settings-modal__group, .settings-modal__section) > legend {
   float: left;
   width: 100%;
   padding: 0;
+  margin: 0 0 10px;
   color: var(--fg);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 14.5px;
+  line-height: 1.45;
   font-weight: 600;
+}
+
+:root[data-platform='macos'] fieldset:is(.settings-modal__group, .settings-modal__section) > legend + * {
+  clear: both;
+}
+
+:root[data-platform='macos'] fieldset:is(.settings-modal__group, .settings-modal__section) > :not(legend) + :not(legend) {
+  margin-top: 16px;
+}
+
+:root[data-platform='macos'] .settings-modal__field {
+  gap: 8px;
+}
+
+:root[data-platform='macos'] .settings-modal__columns {
+  gap: 18px;
+}
+
+:root[data-platform='macos'] .settings-modal__label {
+  font-size: 13.5px;
+  line-height: 1.45;
+  font-weight: 500;
+}
+
+:root[data-platform='macos'] .settings-modal__hint,
+:root[data-platform='macos'] .settings-modal__desc {
+  font-size: 12.5px;
+  line-height: 1.65;
 }
 
 :root[data-platform='macos'] .settings-modal__group > .settings-modal__field + .settings-modal__field,
 :root[data-platform='macos'] .settings-modal__section > .settings-modal__field + .settings-modal__field {
-  padding-top: 10px;
+  padding-top: 16px;
   border-top: 1px solid var(--macos-hairline);
 }
 
 :root[data-platform='macos'] .settings-modal__advanced > summary {
   padding: 0;
+  font-size: 14px;
 }
 
 :root[data-platform='macos'] .settings-modal__advanced[open] > summary {
-  padding-bottom: 12px;
-  margin-bottom: 12px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
   border-bottom: 1px solid var(--macos-hairline);
 }
 
 :root[data-platform='macos'] .settings-modal__advanced-body {
+  gap: 18px;
   padding: 0;
 }
 
@@ -1169,7 +1277,7 @@
   border-top: 1px solid var(--macos-hairline);
   border-radius: 0;
   background: transparent;
-  padding: 14px 0 0;
+  padding: 16px 0 0;
 }
 
 :root[data-platform='macos'] .settings-modal__advanced-body > .settings-modal__group:first-child {
@@ -1178,10 +1286,30 @@
 }
 
 :root[data-platform='macos'] .settings-modal__input {
-  min-height: 32px;
-  padding: 6px 10px;
-  border-radius: 6px;
+  min-height: 36px;
+  padding: 8px 12px;
+  font-size: 13.5px;
+  line-height: 20px;
+  border-radius: 7px;
   border-color: var(--macos-hairline-strong);
+}
+
+:root[data-platform='macos'] select.settings-modal__input {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 36px;
+  padding: 0 34px 0 12px;
+  background-color: var(--bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 16 16' fill='none' stroke='%236b6e74' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 6.5 8 10l3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  background-size: 14px 14px;
+  cursor: pointer;
+}
+
+:root[data-platform='macos'][data-theme='dark'] select.settings-modal__input {
+  background-color: var(--bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 16 16' fill='none' stroke='%239ea2a8' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 6.5 8 10l3.5-3.5'/%3E%3C/svg%3E");
 }
 
 :root[data-platform='macos'] .settings-modal__input[type='number'],
@@ -1286,9 +1414,16 @@
     min-height: 36px;
     height: auto;
   }
+  .settings-modal__sidebar-item--active::before {
+    display: none;
+  }
 }
 
 @media (forced-colors: active) {
+  .settings-modal__sidebar-item--active::before {
+    background: Highlight;
+    forced-color-adjust: none;
+  }
   :root[data-platform='macos'] .settings-modal__field--inline input[type='checkbox'] {
     appearance: auto;
     -webkit-appearance: auto;
@@ -1304,5 +1439,310 @@
     outline: 2px solid Highlight;
     outline-offset: 2px;
     box-shadow: none;
+  }
+}
+
+/* ── Standalone full-window Settings workspace (Codex / Linear layout) ── */
+.settings-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: flex;
+  background: var(--bg);
+  color: var(--fg);
+  overflow: hidden;
+  animation: trylo-fade-in var(--duration-view) var(--ease-out) both;
+}
+
+.settings-screen[data-motion-state='exiting'] {
+  animation: trylo-fade-out var(--duration-modal-out) var(--ease-in) both;
+  pointer-events: none;
+}
+
+.settings-screen__frame,
+:root[data-platform='macos'] .settings-screen__frame,
+:root[data-platform='macos'][data-theme='dark'] .settings-screen__frame {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  flex-direction: row;
+  animation: none;
+}
+
+.settings-screen__rail {
+  width: var(--rail-left-default, 240px);
+  flex: 0 0 auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.settings-screen__rail-header {
+  height: var(--top-bar-h, 52px);
+  min-height: var(--top-bar-h, 52px);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.settings-screen__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+
+.settings-screen__back:hover {
+  background: var(--ink-hover);
+  color: var(--fg);
+}
+
+.settings-screen__rail-title {
+  padding: 2px 10px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--fg-muted);
+}
+
+.settings-screen__nav,
+:root[data-platform='macos'] .settings-screen__nav,
+:root[data-platform='macos'][data-theme='dark'] .settings-screen__nav {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-right: 0;
+  background: transparent;
+  padding: 6px 12px 16px;
+  gap: 4px;
+}
+
+.settings-screen__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.settings-screen__topbar {
+  height: var(--top-bar-h, 52px);
+  min-height: var(--top-bar-h, 52px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px 0 36px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.settings-screen__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-screen__breadcrumb-root {
+  font-size: 13px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.settings-screen__breadcrumb-sep {
+  font-size: 12px;
+  color: var(--fg-muted);
+  opacity: 0.55;
+}
+
+.settings-screen__breadcrumb-current,
+:root[data-platform='macos'] .settings-screen__breadcrumb-current {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-screen__content,
+:root[data-platform='macos'] .settings-screen__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 32px 36px 48px;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.settings-screen__content > *,
+:root[data-platform='macos'] .settings-screen__content > * {
+  max-width: none;
+}
+
+.settings-screen__container {
+  width: 100%;
+  max-width: 740px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.settings-screen__footer,
+:root[data-platform='macos'] .settings-screen__footer {
+  padding: 14px 36px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.settings-screen__footer-inner {
+  width: 100%;
+  max-width: 740px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+:root[data-platform='macos'] .settings-screen {
+  background: transparent;
+}
+
+:root[data-platform='macos'] .settings-screen__rail {
+  background: rgba(250, 248, 243, 0.44);
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+:root[data-platform='macos'][data-theme='dark'] .settings-screen__rail {
+  background: rgba(33, 31, 26, 0.42);
+  border-right-color: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-platform='macos'] .settings-screen[data-motion-state='exiting'] .settings-screen__rail {
+  background: var(--ink-surface);
+}
+
+:root[data-platform='macos'][data-theme='dark'] .settings-screen[data-motion-state='exiting'] .settings-screen__rail {
+  background: #202121;
+}
+
+@media (min-resolution: 2dppx) {
+  :root[data-platform='macos'] .settings-screen__rail {
+    border-right-width: 0.5px;
+  }
+}
+
+:root[data-platform='macos'] .settings-screen__rail-header {
+  height: var(--top-bar-h, 46px);
+  min-height: var(--top-bar-h, 46px);
+  padding: 0 12px 0 84px;
+  transition: padding-left var(--duration-panel) var(--ease-panel);
+}
+
+:root[data-platform='macos'][data-fullscreen='true'] .settings-screen__rail-header {
+  padding-left: 12px;
+}
+
+:root[data-platform='macos'] .settings-screen__back:hover {
+  background: rgba(0, 0, 0, 0.055);
+}
+
+:root[data-platform='macos'][data-theme='dark'] .settings-screen__back:hover {
+  background: rgba(255, 255, 255, 0.075);
+}
+
+:root[data-platform='macos'] .settings-screen__topbar {
+  height: var(--top-bar-h, 46px);
+  min-height: var(--top-bar-h, 46px);
+  border-bottom-color: var(--macos-hairline);
+}
+
+:root[data-platform='macos'] .settings-screen__footer {
+  border-top-color: var(--macos-hairline);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-platform='macos'] .settings-screen__rail {
+    background: var(--ink-surface);
+  }
+  :root[data-platform='macos'][data-theme='dark'] .settings-screen__rail {
+    background: #202121;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-screen,
+  .settings-screen[data-motion-state='exiting'] {
+    animation: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-screen__frame,
+  :root[data-platform='macos'] .settings-screen__frame {
+    flex-direction: column;
+  }
+  .settings-screen__rail {
+    width: 100%;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-screen__rail-title {
+    display: none;
+  }
+  .settings-screen__nav,
+  :root[data-platform='macos'] .settings-screen__nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 8px 12px;
+  }
+  .settings-screen__topbar {
+    padding: 0 14px 0 18px;
+  }
+  .settings-screen__content,
+  :root[data-platform='macos'] .settings-screen__content {
+    padding: 20px 18px 32px;
+  }
+  .settings-screen__footer,
+  :root[data-platform='macos'] .settings-screen__footer {
+    padding: 12px 18px;
+  }
+  .settings-modal__sidebar-item--active::before {
+    display: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .settings-screen__rail {
+    background: Canvas;
+    border-right: 1px solid CanvasText;
   }
 }

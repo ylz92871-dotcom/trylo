@@ -83,6 +83,43 @@ pub fn set_window_theme(window: tauri::Window, theme: Option<String>) -> Result<
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
+const DEFAULT_TRAFFIC_LIGHT_SPACING: f64 = 20.0;
+#[cfg(any(target_os = "macos", test))]
+const MIN_TRAFFIC_LIGHT_SPACING: f64 = 14.0;
+#[cfg(any(target_os = "macos", test))]
+const MAX_TRAFFIC_LIGHT_SPACING: f64 = 26.0;
+
+#[cfg(any(target_os = "macos", test))]
+fn is_valid_traffic_light_spacing(spacing: f64) -> bool {
+    spacing.is_finite() && (MIN_TRAFFIC_LIGHT_SPACING..=MAX_TRAFFIC_LIGHT_SPACING).contains(&spacing)
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn resolve_traffic_light_spacing(measured: f64, cached: Option<f64>) -> (f64, Option<f64>) {
+    if let Some(spacing) = cached.filter(|&value| is_valid_traffic_light_spacing(value)) {
+        return (spacing, Some(spacing));
+    }
+    if is_valid_traffic_light_spacing(measured) {
+        return (measured, Some(measured));
+    }
+    (DEFAULT_TRAFFIC_LIGHT_SPACING, None)
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn traffic_light_button_y(
+    titlebar_height: f64,
+    button_height: f64,
+    target_center_from_top: f64,
+    is_flipped: bool,
+) -> f64 {
+    if is_flipped {
+        target_center_from_top - (button_height * 0.5)
+    } else {
+        titlebar_height - target_center_from_top - (button_height * 0.5)
+    }
+}
+
 /// Updates the native window title used by Mission Control, Stage Manager, and
 /// the macOS Window menu.
 ///
@@ -93,7 +130,15 @@ pub fn set_window_theme(window: tauri::Window, theme: Option<String>) -> Result<
 #[allow(clippy::needless_pass_by_value)]
 pub fn set_native_window_title(window: tauri::Window, title: String) -> Result<(), String> {
     let normalized = normalize_window_title(&title)?;
-    window.set_title(&normalized).map_err(|err| err.to_string())
+    #[cfg(target_os = "macos")]
+    {
+        macos::set_window_title_and_sync(&window, normalized)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        window.set_title(&normalized).map_err(|err| err.to_string())
+    }
 }
 
 /// Toggles native window zoom (`maximize` / `unmaximize`) when double-clicking
@@ -249,10 +294,11 @@ mod macos {
 
     const MENU_ACTION_EVENT: &str = "trylo://menu-action";
     const WINDOW_FULLSCREEN_EVENT: &str = "trylo://window-fullscreen";
-    // Keep AppKit traffic lights centered in the 46px header (`centerY = 23pt`)
+    // Keep AppKit traffic lights centered on the 46pt header midline (`centerY = 23pt`)
     // whenever window geometry, zoom, or appearance updates re-tile `NSThemeFrame`.
     const TRAFFIC_LIGHT_X: f64 = 16.0;
-    const TRAFFIC_LIGHT_Y: f64 = 25.0;
+    const HEADER_HEIGHT: f64 = 46.0;
+    const TRAFFIC_LIGHT_CENTER_Y: f64 = HEADER_HEIGHT * 0.5;
 
     pub(super) const HANDLED_MENU_IDS: &[&str] = &[
         "app.settings",
@@ -269,7 +315,27 @@ mod macos {
     ];
 
     static LAST_MAIN_FULLSCREEN: AtomicBool = AtomicBool::new(false);
+    static APPLYING_TRAFFIC_LIGHT_INSET: AtomicBool = AtomicBool::new(false);
+    static TRAFFIC_LIGHT_OBSERVERS_INSTALLED: AtomicBool = AtomicBool::new(false);
+    static TRAFFIC_LIGHT_SPACING_BITS: AtomicU64 = AtomicU64::new(0);
     static CONTEXT_MENU_SEQ: AtomicU64 = AtomicU64::new(1);
+
+    struct InsetApplyGuard;
+
+    impl InsetApplyGuard {
+        fn try_enter() -> Option<Self> {
+            APPLYING_TRAFFIC_LIGHT_INSET
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .ok()
+                .map(|_| Self)
+        }
+    }
+
+    impl Drop for InsetApplyGuard {
+        fn drop(&mut self) {
+            APPLYING_TRAFFIC_LIGHT_INSET.store(false, Ordering::Release);
+        }
+    }
 
     struct PendingContextMenu {
         prefix: String,
@@ -317,6 +383,7 @@ mod macos {
         }
 
         app.state::<WindowStateManager>().initialize(app);
+        observe_system_wake(app);
 
         if let Some(main) = app.get_window("main") {
             apply_traffic_light_inset_sync(&main);
@@ -327,6 +394,26 @@ mod macos {
         }
 
         Ok(())
+    }
+
+    fn observe_system_wake(app: &tauri::AppHandle) {
+        use objc2_app_kit::{NSWorkspace, NSWorkspaceDidWakeNotification};
+
+        let app = app.clone();
+        let callback = block2::RcBlock::new(move |_| {
+            let _ = app.emit_to("main", "trylo-system-wake", ());
+        });
+        let center = NSWorkspace::sharedWorkspace().notificationCenter();
+        // The workspace's notification center retains the block for the
+        // application lifetime. The callback only sends through Tauri.
+        unsafe {
+            let _observer = center.addObserverForName_object_queue_usingBlock(
+                Some(NSWorkspaceDidWakeNotification),
+                None,
+                None,
+                &callback,
+            );
+        }
     }
 
     pub(crate) fn restore_main_window(app: &tauri::AppHandle) {
@@ -368,6 +455,44 @@ mod macos {
         }
     }
 
+    pub(super) fn set_window_title_and_sync(
+        window: &tauri::Window,
+        title: String,
+    ) -> Result<(), String> {
+        let target = window.clone();
+        window
+            .run_on_main_thread(move || {
+                use objc2::{msg_send, MainThreadMarker};
+                use objc2_app_kit::NSWindow;
+                use objc2_foundation::NSString;
+
+                if MainThreadMarker::new().is_none() {
+                    return;
+                }
+                let Ok(raw_window) = target.ns_window() else {
+                    return;
+                };
+                if raw_window.is_null() {
+                    return;
+                }
+
+                // SAFETY: MainThreadMarker and non-null Tauri NSWindow pointer were verified.
+                unsafe {
+                    let ns_window = &*(raw_window.cast::<NSWindow>());
+                    let ns_title = NSString::from_str(&title);
+                    // Call NSWindow setTitle: synchronously on the main thread rather than
+                    // tao's DispatchQueue::main() async hop so NSThemeFrame re-tiles in-turn.
+                    ns_window.setTitle(&ns_title);
+                    if target.label() == "main" {
+                        let (): () = msg_send![ns_window, layoutIfNeeded];
+                        install_traffic_light_observers(ns_window);
+                        apply_traffic_light_inset_to_ns_window(ns_window);
+                    }
+                }
+            })
+            .map_err(|err| err.to_string())
+    }
+
     pub(super) fn schedule_traffic_light_sync(window: &tauri::Window) {
         if window.label() != "main" {
             return;
@@ -379,14 +504,10 @@ mod macos {
     }
 
     fn apply_traffic_light_inset_sync(window: &tauri::Window) {
-        use objc2::rc::Retained;
-        use objc2::{msg_send, MainThreadMarker};
-        use objc2_app_kit::{NSView, NSWindow, NSWindowButton};
+        use objc2::MainThreadMarker;
+        use objc2_app_kit::NSWindow;
 
-        if window.label() != "main" || window.is_fullscreen().unwrap_or(false) {
-            return;
-        }
-        if MainThreadMarker::new().is_none() {
+        if window.label() != "main" || MainThreadMarker::new().is_none() {
             return;
         }
         let Ok(raw_window) = window.ns_window() else {
@@ -399,45 +520,164 @@ mod macos {
         // SAFETY: MainThreadMarker and non-null Tauri main window NSWindow pointer were verified.
         unsafe {
             let ns_window = &*(raw_window.cast::<NSWindow>());
-            let close: Option<Retained<NSView>> =
-                msg_send![ns_window, standardWindowButton: NSWindowButton::CloseButton];
-            let miniaturize: Option<Retained<NSView>> =
-                msg_send![ns_window, standardWindowButton: NSWindowButton::MiniaturizeButton];
-            let zoom: Option<Retained<NSView>> =
-                msg_send![ns_window, standardWindowButton: NSWindowButton::ZoomButton];
-            let (Some(close), Some(miniaturize), Some(zoom)) = (close, miniaturize, zoom) else {
-                return;
-            };
-            let Some(titlebar_view) = close.superview() else {
-                return;
-            };
-            let Some(titlebar_container) = titlebar_view.superview() else {
-                return;
-            };
+            install_traffic_light_observers(ns_window);
+            apply_traffic_light_inset_to_ns_window(ns_window);
+        }
+    }
 
-            let close_rect = close.frame();
-            let target_height = close_rect.size.height + TRAFFIC_LIGHT_Y;
-            let mut titlebar_rect = titlebar_container.frame();
-            let target_y = ns_window.frame().size.height - target_height;
-            if (titlebar_rect.size.height - target_height).abs() >= 0.5
-                || (titlebar_rect.origin.y - target_y).abs() >= 0.5
+    // SAFETY: Caller must guarantee execution on the macOS main thread with a valid NSWindow.
+    unsafe fn titlebar_views(
+        ns_window: &objc2_app_kit::NSWindow,
+    ) -> Option<(
+        objc2::rc::Retained<objc2_app_kit::NSView>,
+        objc2::rc::Retained<objc2_app_kit::NSView>,
+        [objc2::rc::Retained<objc2_app_kit::NSView>; 3],
+    )> {
+        use objc2::msg_send;
+        use objc2::rc::Retained;
+        use objc2_app_kit::{NSView, NSWindowButton};
+
+        let close: Option<Retained<NSView>> =
+            msg_send![ns_window, standardWindowButton: NSWindowButton::CloseButton];
+        let miniaturize: Option<Retained<NSView>> =
+            msg_send![ns_window, standardWindowButton: NSWindowButton::MiniaturizeButton];
+        let zoom: Option<Retained<NSView>> =
+            msg_send![ns_window, standardWindowButton: NSWindowButton::ZoomButton];
+        let (Some(close), Some(miniaturize), Some(zoom)) = (close, miniaturize, zoom) else {
+            return None;
+        };
+        let titlebar_view = close.superview()?;
+        let titlebar_container = titlebar_view.superview()?;
+        Some((titlebar_container, titlebar_view, [close, miniaturize, zoom]))
+    }
+
+    // SAFETY: Caller must guarantee execution on the macOS main thread with a valid NSWindow.
+    unsafe fn install_traffic_light_observers(ns_window: &objc2_app_kit::NSWindow) {
+        use std::ptr::NonNull;
+
+        use objc2::rc::Retained;
+        use objc2::runtime::AnyObject;
+        use objc2::MainThreadMarker;
+        use objc2_app_kit::{NSView, NSViewFrameDidChangeNotification};
+        use objc2_foundation::{NSNotification, NSNotificationCenter};
+
+        if MainThreadMarker::new().is_none()
+            || TRAFFIC_LIGHT_OBSERVERS_INSTALLED.load(Ordering::Acquire)
+        {
+            return;
+        }
+        let Some((titlebar_container, titlebar_view, [close, miniaturize, zoom])) =
+            titlebar_views(ns_window)
+        else {
+            return;
+        };
+        if TRAFFIC_LIGHT_OBSERVERS_INSTALLED
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return;
+        }
+
+        let callback = block2::RcBlock::new(|notification: NonNull<NSNotification>| {
+            if APPLYING_TRAFFIC_LIGHT_INSET.load(Ordering::Acquire)
+                || MainThreadMarker::new().is_none()
             {
-                titlebar_rect.size.height = target_height;
-                titlebar_rect.origin.y = target_y;
-                titlebar_container.setFrame(titlebar_rect);
+                return;
             }
+            let Some(obj) = notification.as_ref().object() else {
+                return;
+            };
+            let Some(view) = obj.downcast_ref::<NSView>() else {
+                return;
+            };
+            let Some(window) = view.window() else {
+                return;
+            };
+            apply_traffic_light_inset_to_ns_window(&window);
+        });
 
-            let spacing = miniaturize.frame().origin.x - close_rect.origin.x;
-            if spacing > 0.0 {
-                for (idx, button) in [close, miniaturize, zoom].into_iter().enumerate() {
-                    let mut rect = button.frame();
-                    let target_x =
-                        TRAFFIC_LIGHT_X + (f64::from(u8::try_from(idx).unwrap_or(0)) * spacing);
-                    if (rect.origin.x - target_x).abs() >= 0.5 {
-                        rect.origin.x = target_x;
-                        button.setFrameOrigin(rect.origin);
-                    }
-                }
+        let center = NSNotificationCenter::defaultCenter();
+        for view in [&titlebar_container, &titlebar_view, &close, &miniaturize, &zoom] {
+            view.setPostsFrameChangedNotifications(true);
+            let view_obj = &*(Retained::as_ptr(view).cast::<AnyObject>());
+            // NSNotificationCenter retains block-based observers for the process lifetime.
+            let _observer = center.addObserverForName_object_queue_usingBlock(
+                Some(NSViewFrameDidChangeNotification),
+                Some(view_obj),
+                None,
+                &callback,
+            );
+        }
+    }
+
+    // SAFETY: Caller must guarantee execution on the macOS main thread with a valid NSWindow.
+    unsafe fn apply_traffic_light_inset_to_ns_window(ns_window: &objc2_app_kit::NSWindow) {
+        use objc2::MainThreadMarker;
+        use objc2_app_kit::NSWindowStyleMask;
+
+        if MainThreadMarker::new().is_none()
+            || ns_window.styleMask().contains(NSWindowStyleMask::FullScreen)
+        {
+            return;
+        }
+        let Some(_guard) = InsetApplyGuard::try_enter() else {
+            return;
+        };
+        let Some((titlebar_container, titlebar_view, [close, miniaturize, zoom])) =
+            titlebar_views(ns_window)
+        else {
+            return;
+        };
+
+        let mut titlebar_rect = titlebar_container.frame();
+        let target_container_y = ns_window.frame().size.height - HEADER_HEIGHT;
+        if (titlebar_rect.size.height - HEADER_HEIGHT).abs() >= 0.5
+            || (titlebar_rect.origin.y - target_container_y).abs() >= 0.5
+        {
+            titlebar_rect.size.height = HEADER_HEIGHT;
+            titlebar_rect.origin.y = target_container_y;
+            titlebar_container.setFrame(titlebar_rect);
+        }
+
+        let container_bounds = titlebar_container.bounds();
+        let current_view_frame = titlebar_view.frame();
+        if (current_view_frame.size.height - container_bounds.size.height).abs() >= 0.5
+            || (current_view_frame.origin.y - container_bounds.origin.y).abs() >= 0.5
+        {
+            titlebar_view.setFrame(container_bounds);
+        }
+
+        let close_rect = close.frame();
+        let measured = miniaturize.frame().origin.x - close_rect.origin.x;
+        let cached = match TRAFFIC_LIGHT_SPACING_BITS.load(Ordering::Acquire) {
+            0 => None,
+            bits => Some(f64::from_bits(bits)),
+        };
+        let (spacing, next_cached) = super::resolve_traffic_light_spacing(measured, cached);
+        if cached.is_none() {
+            if let Some(valid_spacing) = next_cached {
+                TRAFFIC_LIGHT_SPACING_BITS.store(valid_spacing.to_bits(), Ordering::Release);
+            }
+        }
+
+        let titlebar_height = titlebar_view.bounds().size.height;
+        let is_flipped = titlebar_view.isFlipped();
+        for (idx, button) in [close, miniaturize, zoom].into_iter().enumerate() {
+            let mut rect = button.frame();
+            let target_x =
+                TRAFFIC_LIGHT_X + (f64::from(u8::try_from(idx).unwrap_or(0)) * spacing);
+            let target_y = super::traffic_light_button_y(
+                titlebar_height,
+                rect.size.height,
+                TRAFFIC_LIGHT_CENTER_Y,
+                is_flipped,
+            );
+            if (rect.origin.x - target_x).abs() >= 0.5
+                || (rect.origin.y - target_y).abs() >= 0.5
+            {
+                rect.origin.x = target_x;
+                rect.origin.y = target_y;
+                button.setFrameOrigin(rect.origin);
             }
         }
     }
@@ -793,6 +1033,43 @@ mod tests {
             })
             .collect();
         assert!(validate_context_menu_items(&oversized).is_err());
+    }
+
+    #[test]
+    fn resolves_and_caches_traffic_light_spacing() {
+        let eps = 1e-12;
+        let (spacing, next_cached) = resolve_traffic_light_spacing(20.0, None);
+        assert!((spacing - 20.0).abs() < eps);
+        assert_eq!(next_cached, Some(20.0));
+
+        let (spacing_18, next_cached_18) = resolve_traffic_light_spacing(18.0, None);
+        assert!((spacing_18 - 18.0).abs() < eps);
+        assert_eq!(next_cached_18, Some(18.0));
+
+        for corrupted in [29.0, 11.0, -5.0, f64::NAN, f64::INFINITY] {
+            let (preserved, kept) = resolve_traffic_light_spacing(corrupted, Some(18.0));
+            assert!((preserved - 18.0).abs() < eps);
+            assert_eq!(kept, Some(18.0));
+
+            let (fallback, uncached) = resolve_traffic_light_spacing(corrupted, None);
+            assert!((fallback - DEFAULT_TRAFFIC_LIGHT_SPACING).abs() < eps);
+            assert_eq!(uncached, None);
+        }
+
+        let (recovered, recovered_cached) = resolve_traffic_light_spacing(20.0, Some(f64::NAN));
+        assert!((recovered - 20.0).abs() < eps);
+        assert_eq!(recovered_cached, Some(20.0));
+    }
+
+    #[test]
+    fn centers_traffic_light_button_y_on_46pt_header_midline() {
+        let eps = 1e-12;
+        // Both non-flipped (bottom-up) and flipped (top-down) titlebars center a 16pt button at 23pt from top.
+        assert!((traffic_light_button_y(46.0, 16.0, 23.0, false) - 15.0).abs() < eps);
+        assert!((traffic_light_button_y(46.0, 16.0, 23.0, true) - 15.0).abs() < eps);
+        // Even if AppKit reports a non-46pt container height, top-distance stays locked at 23pt.
+        assert!((traffic_light_button_y(52.0, 14.0, 23.0, false) - 22.0).abs() < eps);
+        assert!((traffic_light_button_y(52.0, 14.0, 23.0, true) - 16.0).abs() < eps);
     }
 
     #[cfg(target_os = "macos")]

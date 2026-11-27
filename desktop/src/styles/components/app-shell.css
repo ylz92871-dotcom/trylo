@@ -27,6 +27,13 @@
   flex-direction: row;
 }
 
+/* Keep the main workspace mounted while standalone Settings is open,
+ * but hide it so macOS sidebar vibrancy shows cleanly without bleed-through. */
+.app-shell[data-settings-open='true'] > .app-shell__body {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .app-shell__main {
   background: var(--bg);
   container-type: inline-size;

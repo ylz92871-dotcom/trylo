@@ -36,7 +36,7 @@ export function useComputerPreview(state: ToolPreviewState, scope: string, optio
     picture.current = undefined
     stream.current = { state: options.enabled ? 'starting' : 'stopped' }
     publish()
-  }, [scope, state.turnId, publish])
+  }, [scope, options.turnId, options.pickerRequest, publish])
   useEffect(() => {
     if (!options.enabled) { stream.current = { state: 'stopped' }; publish() }
   }, [options.enabled, publish])
@@ -49,7 +49,11 @@ export function useComputerPreview(state: ToolPreviewState, scope: string, optio
       stream.current.state = 'running'
       return publish().then(success => { if (!success) throw new Error('电脑小窗传输失败') })
     },
-    status: status => { stream.current = { state: status.state, detail: status.detail }; publish() },
+    status: status => {
+      if (current.current.options.pickerRequest !== undefined && status.state !== 'running') picture.current = undefined
+      stream.current = { state: status.state, detail: status.detail }
+      publish()
+    },
   })
 
   useEffect(() => {

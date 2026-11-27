@@ -426,6 +426,42 @@
   border-color: var(--macos-hairline);
 }
 
+:root[data-platform='macos'] .left-rail__profile-wrap {
+  margin-top: 10px;
+  padding-top: 10px;
+  gap: 4px;
+}
+
+:root[data-platform='macos'] .left-rail__profile {
+  padding: 6px 8px;
+  gap: 10px;
+  font-size: 13.5px;
+  line-height: 1.35;
+  border-radius: 7px;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+:root[data-platform='macos'] .left-rail__profile:hover {
+  background: var(--bg-elevated);
+}
+
+:root[data-platform='macos'] .left-rail__profile small {
+  font-size: 11.5px;
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+:root[data-platform='macos'] .left-rail__profile-gear {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+}
+
+:root[data-platform='macos'] .left-rail__profile-gear > svg {
+  width: 16px;
+  height: 16px;
+}
+
 :root[data-platform='macos'] .profile-account__divider {
   background: var(--macos-hairline);
 }

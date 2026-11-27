@@ -20,7 +20,7 @@ function usage(id: typeof BUILTINS[number]['id'], chrome: boolean, macos: boolea
   if (id === 'office') return 'OfficeCLI：只有 officecli 这一个 MCP 入口，command 按实际 schema 使用 string 或 argv array；load_skill、help、dump 都放在 command 内（例如 ["load_skill","pptx"]），不是独立工具，也不要虚构按 verb 拆开的字段。';
   if (id === 'desktop') {
     return macos
-      ? 'macOS 电脑控制：先调用 status 检查系统授权，再用 inspect 或 screenshot 观察当前窗口。操作使用最新观察中的 PID；点击使用全局屏幕点坐标，提交后再观察结果。'
+      ? 'macOS 电脑控制：先调用 status 检查系统授权。全程优先后台操作，不抢占用户前台窗口和物理鼠标：open_app 默认后台启动（activate=false）；用 list_apps / list_windows 取得窗口 ID 和所属 PID，再用 ax_find、ax_read_text、inspect、screenshot 或 read_window_text 在后台读取界面；操作控件优先用 ax_perform（支持 path 或后台坐标 x/y）和 ax_set_value，键盘/滚动优先后台 press_key / hotkey / type_text / scroll。click 默认走后台无障碍触发不挪动鼠标；仅当目标应用确实忽略后台无障碍操作时，再显式调用 activate_app 与 foreground=true 的 click（使用全局屏幕点坐标），提交后再观察结果。'
       : '电脑控制：先用发现到的 Snapshot/Screenshot 读取状态，再按实际动作 schema 操作；位置、坐标空间和缩放来自最新观测，不猜单位、通用 action 或参数字段。';
   }
   const pages = chrome ? 'Chrome DevTools 先 list_pages 或读取 new_page 返回目录取得真实数值 pageId，页面工具按 schema 填该 id，不猜 0/active；' : 'Playwright 使用本 server 返回的 browser_* 工具及其 schema；';

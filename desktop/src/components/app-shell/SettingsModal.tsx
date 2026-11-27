@@ -16,6 +16,7 @@ import {
 } from '../../settings/check-learning'
 import { reasoningSelectionProblem } from '../../settings/reasoning-effort'
 import {
+  ArrowLeft,
   X,
   Search,
   Plug,
@@ -42,7 +43,7 @@ import { AppearanceSettings } from './AppearanceSettings'
 // features (encrypted secret store, full HTTP test,
 // "auto-detect best model") belong in Phase 3.
 
-import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement } from 'react'
 import { usePresenceTransition } from '../../utils/use-presence-transition'
 import {
   applyProfile,
@@ -78,7 +79,10 @@ import { SkillsModal } from './SkillsModal'
 import type { LearningPort } from '../../learning/learning-port'
 import type { SkillLearningRuntime } from '../../skill-learning/cli'
 import { derivePackageView, type ToolPlatformState } from '../../tooling/use-tool-platform-state'
-import { isMacPlatform, isWindowsPlatform } from '../../utils/platform'
+import { isInteractiveTitlebarTarget, toggleNativeWindowZoom } from '../../host-adapter/native-shell'
+import { MacosComputerSettings } from './MacosComputerSettings'
+import type { ToolingFacade } from '../../tooling/tooling-facade'
+import { formatShortcut, isMacPlatform, isWindowsPlatform } from '../../utils/platform'
 
 export type SettingsTab =
   | 'connection'
@@ -183,6 +187,7 @@ export interface SettingsModalProps {
   /** P0-A (audit §3.3): the Work tool packages' health + install actions.
    *  Optional so the modal renders in tests without the Service Host. */
   readonly toolPlatform?: ToolPlatformState | null
+  readonly toolingFacade?: ToolingFacade | null
   /** Hermes learning port — powers the Skills library modal (installed
    *  skills list + SKILL.md viewer). Optional so settings still renders
    *  before the Service Host is up. */
@@ -378,6 +383,12 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.preventDefault()
+        onCloseRef.current()
+        return
+      }
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key === ',') {
+        event.preventDefault()
+        event.stopPropagation()
         onCloseRef.current()
         return
       }
@@ -1059,31 +1070,33 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
                 能力选择<span>选择后保存，用于后续 Work 任务</span>
               </summary>
               <div className="settings-modal__advanced-body">
-                {/* ── 电脑控制 (Windows Computer Use, PR-6 spec §6.6) ─── */}
-                <fieldset className="settings-modal__group">
-                  <legend className="settings-modal__legend">电脑控制 (Computer Use)</legend>
+                {isMac ? (
+                  <MacosComputerSettings facade={props.toolingFacade} value={form.macosComputerUse}
+                    onChange={value => set('macosComputerUse', value)} />
+                ) : (
+                  <fieldset className="settings-modal__group">
+                    <legend className="settings-modal__legend">电脑控制 (Computer Use)</legend>
 
-                  <label className="settings-modal__field settings-modal__field--inline">
-                    <span className="settings-modal__label">
-                      {isMac ? '当前 macOS 版本暂不支持电脑控制' : '电脑控制默认启用，无需选用'}
-                    </span>
-                  </label>
-                  <span className="settings-modal__hint">
-                    {isWindows
-                      ? '办公、浏览器和电脑控制是 Code 与 Work 的默认工具。读取屏幕、点击、键入等操作仍需遵循当前授权，不会因默认启用而自动执行。'
-                      : isMac
-                        ? '电脑控制（Windows-MCP）目前仅支持 Windows，计划在后续 macOS 版本中提供原生支持。此限制不影响办公文档、浏览器工具与常规对话。'
+                    <label className="settings-modal__field settings-modal__field--inline">
+                      <span className="settings-modal__label">
+                        电脑控制默认启用，无需选用
+                      </span>
+                    </label>
+                    <span className="settings-modal__hint">
+                      {isWindows
+                        ? '办公、浏览器和电脑控制是 Code 与 Work 的默认工具。读取屏幕、点击、键入等操作仍需遵循当前授权，不会因默认启用而自动执行。'
                         : '当前平台暂不支持电脑控制（仅 Windows 支持）。'}
-                  </span>
+                    </span>
 
-                  {/* P0-A §3.3-4: flipping the switch only selects a Profile — the
-                  REQUIRED package must exist. Surface its real state (install
-                  action when missing) so the capability is not silently
-                  pretending to be there. */}
-                  {!isMac && props.toolPlatform ? (
-                    <WorkCapabilityHint platform={props.toolPlatform} packageId="windows-mcp" />
-                  ) : null}
-                </fieldset>
+                    {/* P0-A §3.3-4: flipping the switch only selects a Profile — the
+                    REQUIRED package must exist. Surface its real state (install
+                    action when missing) so the capability is not silently
+                    pretending to be there. */}
+                    {props.toolPlatform ? (
+                      <WorkCapabilityHint platform={props.toolPlatform} packageId="windows-mcp" />
+                    ) : null}
+                  </fieldset>
+                )}
 
                 <fieldset className="settings-modal__group">
                   <legend className="settings-modal__legend">Work 工具面 (Tool Profiles)</legend>
@@ -1603,21 +1616,24 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
     return renderSection(navigationTab)
   }
 
+  const activeTabMeta = SETTINGS_TABS.find((tab) => tab.id === navigationTab)
+  const onTitlebarDoubleClick = (event: ReactMouseEvent<HTMLElement>): void => {
+    if (!isMac || isInteractiveTitlebarTarget(event.target)) return
+    void toggleNativeWindowZoom()
+  }
+
   return (
     <div
-      className="settings-modal__backdrop"
+      className="settings-screen"
       data-motion-state={presence.state}
       role={isExiting ? undefined : 'dialog'}
       aria-modal={isExiting ? undefined : true}
       aria-label={isExiting ? undefined : '设置'}
       aria-hidden={isExiting ? true : undefined}
-      onClick={(e) => {
-        if (!isExiting && e.target === e.currentTarget) props.onClose()
-      }}
     >
       <div
         ref={dialogRef}
-        className="settings-modal"
+        className="settings-modal settings-screen__frame"
         onKeyDown={(event) => {
           if (
             event.key === 'Enter' &&
@@ -1628,34 +1644,25 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
             onSave(event)
         }}
       >
-        <header className="settings-modal__header">
-          <h2 className="settings-modal__title">设置</h2>
-          <span className="settings-modal__product">Trylo</span>
-          <button
-            type="button"
-            className="settings-modal__close"
-            onClick={props.onClose}
-            aria-label="关闭设置"
+        <aside className="settings-screen__rail" aria-label="设置导航栏">
+          <div
+            className="settings-screen__rail-header"
+            data-tauri-drag-region={isMac ? '' : undefined}
+            onDoubleClick={onTitlebarDoubleClick}
           >
-            <X size={18} />
-          </button>
-        </header>
-
-        {form.settingsNotices?.includes('routing-learning-retired') && (
-          <div className="settings-modal__group" role="status">
-            <p>独立路由学习已退役，旧开关和额度配置已移除。正常执行路径与已有执行记录保持可用。</p>
             <button
               type="button"
-              className="settings-modal__button"
-              onClick={dismissRoutingRetirementNotice}
+              className="settings-screen__back"
+              onClick={props.onClose}
+              data-tauri-drag-region={isMac ? 'false' : undefined}
+              title={isMac ? `返回应用 (${formatShortcut(['Mod', ','])} / Esc)` : '返回应用 (Esc)'}
             >
-              知道了
+              <ArrowLeft size={15} aria-hidden="true" />
+              <span>返回应用</span>
             </button>
           </div>
-        )}
-
-        <div className="settings-modal__body">
-          <nav className="settings-modal__sidebar" aria-label="设置分类">
+          <nav className="settings-modal__sidebar settings-screen__nav" aria-label="设置分类">
+            <div className="settings-screen__rail-title">设置</div>
             <div className="settings-modal__sidebar-search">
               <Search size={14} className="settings-modal__sidebar-search-icon" aria-hidden="true" />
               <input
@@ -1703,41 +1710,88 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
               ))
             )}
           </nav>
-          <div className="settings-modal__content" key={navigationTab}>
-            <div className="settings-modal__page-heading">
-              <h3>{SETTINGS_TABS.find((tab) => tab.id === navigationTab)?.label}</h3>
-              <p>{SETTINGS_TABS.find((tab) => tab.id === navigationTab)?.description}</p>
-            </div>
-            {renderContent()}
-          </div>
-        </div>
-        <footer className="settings-modal__footer">
-          <span className="settings-modal__footer-note">
-            {navigationTab === 'appearance' ? '外观即时生效；其他修改需保存。' : '保存后应用修改。'}
-          </span>
-          {saveError && (
-            <p
-              role="alert"
-              className="settings-modal__test-result settings-modal__test-result--err"
+        </aside>
+
+        <div className="settings-screen__main">
+          <header
+            className="settings-screen__topbar"
+            data-tauri-drag-region={isMac ? '' : undefined}
+            onDoubleClick={onTitlebarDoubleClick}
+          >
+            <div
+              className="settings-screen__breadcrumb"
+              data-tauri-drag-region={isMac ? '' : undefined}
             >
-              {saveError}
-            </p>
-          )}
-          <button
-            type="button"
-            className="settings-modal__btn settings-modal__btn--ghost"
-            onClick={props.onClose}
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            className="settings-modal__btn settings-modal__btn--primary"
-            onClick={onSave}
-          >
-            保存设置
-          </button>
-        </footer>
+              <span className="settings-screen__breadcrumb-root">Trylo 设置</span>
+              <span className="settings-screen__breadcrumb-sep" aria-hidden="true">/</span>
+              <h2 className="settings-modal__title settings-screen__breadcrumb-current">
+                {activeTabMeta?.label ?? '设置'}
+              </h2>
+            </div>
+            <button
+              type="button"
+              className="settings-modal__close settings-screen__close"
+              onClick={props.onClose}
+              aria-label="关闭设置"
+              title="关闭设置 (Esc)"
+              data-tauri-drag-region={isMac ? 'false' : undefined}
+            >
+              <X size={16} />
+            </button>
+          </header>
+
+          <div className="settings-modal__content settings-screen__content" key={navigationTab}>
+            <div className="settings-screen__container">
+              {form.settingsNotices?.includes('routing-learning-retired') && (
+                <div className="settings-modal__group" role="status">
+                  <p>独立路由学习已退役，旧开关和额度配置已移除。正常执行路径与已有执行记录保持可用。</p>
+                  <button
+                    type="button"
+                    className="settings-modal__button"
+                    onClick={dismissRoutingRetirementNotice}
+                  >
+                    知道了
+                  </button>
+                </div>
+              )}
+              <div className="settings-modal__page-heading">
+                <h3>{activeTabMeta?.label}</h3>
+                <p>{activeTabMeta?.description}</p>
+              </div>
+              {renderContent()}
+            </div>
+          </div>
+
+          <footer className="settings-modal__footer settings-screen__footer">
+            <div className="settings-screen__footer-inner">
+              <span className="settings-modal__footer-note">
+                {navigationTab === 'appearance' ? '外观即时生效；其他修改需保存。' : '保存后应用修改。'}
+              </span>
+              {saveError && (
+                <p
+                  role="alert"
+                  className="settings-modal__test-result settings-modal__test-result--err"
+                >
+                  {saveError}
+                </p>
+              )}
+              <button
+                type="button"
+                className="settings-modal__btn settings-modal__btn--ghost"
+                onClick={props.onClose}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="settings-modal__btn settings-modal__btn--primary"
+                onClick={onSave}
+              >
+                保存设置
+              </button>
+            </div>
+          </footer>
+        </div>
       </div>
 
       {props.learningPort || props.skillLearningRuntime ? (

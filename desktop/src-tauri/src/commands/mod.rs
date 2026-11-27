@@ -43,6 +43,7 @@ pub mod process_team_guard;
 pub mod process_team_owner;
 pub mod process_termination;
 pub mod pty;
+pub mod quick_look;
 pub mod read_file;
 pub mod read_file_bytes;
 pub mod read_remote_artifact;

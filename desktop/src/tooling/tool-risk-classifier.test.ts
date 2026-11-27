@@ -148,13 +148,58 @@ describe('routing (§6.2)', () => {
   it('checks macOS permission status without auto-allowing desktop observations or input', () => {
     const router = createToolRiskClassifier();
     const managedPackageIds = ['macos-computer'];
-    const classify = (name: string, permissionLevel: ToolClassifyRequest['permissionLevel']) => router.classify(request({
-      toolName: `mcp__trylo-macos__${name}`, managedPackageIds, permissionLevel,
+    const classify = (name: string, permissionLevel: ToolClassifyRequest['permissionLevel'], input = {}) => router.classify(request({
+      toolName: `mcp__trylo-macos__${name}`, managedPackageIds, permissionLevel, input,
     }));
     expect(classify('status', 'read_only').behavior).toBe('auto_allow');
-    expect(classify('inspect', 'workspace_write').behavior).toBe('prompt');
+    expect(classify('inspect', 'workspace_write', { pid: 42 })).toMatchObject({
+      behavior: 'prompt', preview: { title: '后台观察 macOS 窗口', target: 'PID 42' },
+    });
+    expect(classify('ax_find', 'workspace_write', { pid: 42, query: 'Save' })).toMatchObject({
+      behavior: 'prompt', preview: { title: '后台观察 macOS 窗口', target: 'PID 42' },
+    });
+    expect(classify('ax_read_text', 'read_only', { pid: 42 }).behavior).toBe('deny');
     expect(classify('screenshot', 'read_only').behavior).toBe('deny');
-    expect(classify('click', 'workspace_write').behavior).toBe('prompt');
+    expect(classify('click', 'workspace_write', { expectedPid: 42 })).toMatchObject({
+      behavior: 'prompt', preview: { title: '后台操作 macOS 控件', target: 'PID 42' },
+    });
+    expect(classify('click', 'workspace_write', { expectedPid: 42, foreground: true })).toMatchObject({
+      behavior: 'prompt', preview: { title: '前台操作 macOS 桌面' },
+    });
+    expect(classify('scroll', 'workspace_write', { expectedPid: 42 })).toMatchObject({
+      behavior: 'prompt', preview: { title: '后台滚动 macOS 窗口', target: 'PID 42' },
+    });
+    expect(classify('scroll', 'workspace_write', { expectedPid: 42, background: false })).toMatchObject({
+      behavior: 'prompt', preview: { title: '前台操作 macOS 桌面' },
+    });
+    expect(classify('list_windows', 'read_only').behavior).toBe('deny');
+    expect(classify('read_window_text', 'workspace_write').behavior).toBe('prompt');
+    expect(classify('open_app', 'workspace_write', { bundleId: 'com.apple.TextEdit' })).toMatchObject({
+      behavior: 'prompt', preview: { title: '后台打开 macOS 应用', target: 'com.apple.TextEdit' },
+    });
+    expect(classify('open_app', 'workspace_write', { bundleId: 'com.apple.TextEdit', activate: true })).toMatchObject({
+      behavior: 'prompt', preview: { title: '打开并切换到 macOS 应用', target: 'com.apple.TextEdit' },
+    });
+    expect(classify('activate_app', 'workspace_write', { bundleId: 'com.apple.Notes' })).toMatchObject({
+      behavior: 'prompt', preview: { title: '切换前台 macOS 应用', target: 'com.apple.Notes' },
+    });
+    expect(classify('ax_perform', 'workspace_write', { pid: 99, path: [0], action: 'AXPress' })).toMatchObject({
+      behavior: 'prompt', preview: { title: '后台操作 macOS 控件', target: 'AXPress' },
+    });
+    const axSet = classify('ax_set_value', 'workspace_write', { pid: 99, path: [0], value: 'secret-value' });
+    expect(axSet).toMatchObject({
+      behavior: 'prompt', preview: { title: '后台操作 macOS 控件', target: 'PID 99' },
+    });
+    if (axSet.behavior === 'prompt') {
+      expect(JSON.stringify(axSet.preview)).not.toContain('secret-value');
+    }
+    expect(classify('type_text', 'workspace_write', { expectedPid: 99, text: 'hello' })).toMatchObject({
+      behavior: 'prompt', preview: { title: '后台发送键盘输入', target: 'PID 99' },
+    });
+    expect(classify('hotkey', 'workspace_write', { expectedPid: 99, modifiers: ['cmd'], key: 's', background: false })).toMatchObject({
+      behavior: 'prompt', preview: { title: '前台操作 macOS 桌面' },
+    });
+    expect(classify('ax_perform', 'read_only', { pid: 99, path: [0], action: 'AXPress' }).behavior).toBe('deny');
     expect(classify('shell', 'unrestricted').behavior).toBe('deny');
   });
 });

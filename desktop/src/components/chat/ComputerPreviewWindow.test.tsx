@@ -135,6 +135,27 @@ describe('computer observation window', () => {
     expect(screen.getByRole('button', { name: '最近操作 · 0' }).getAttribute('aria-expanded')).toBe('false')
   })
 
+  it('renders a virtual agent cursor overlay for background actions with normalized coordinates', () => {
+    render(<ComputerPreviewWindow />)
+    publish(
+      snapshot({
+        dataUrl: FRAME,
+        frameGeometry: { width: 1000, height: 600, originX: 0, originY: 0 },
+        action: {
+          id: 'bg-press',
+          title: '后台操作控件',
+          target: 'AXPress',
+          status: '执行中',
+          startedAt: Date.now(),
+          point: { x: 0.4, y: 0.6, space: 'normalized' },
+        },
+      }),
+    )
+    const virtualCursor = screen.getByLabelText('代理虚拟光标')
+    expect(virtualCursor.style.left).toBe('40%')
+    expect(virtualCursor.style.top).toBe('60%')
+  })
+
   it('unmount only unsubscribes this observer', async () => {
     const { unmount } = render(<ComputerPreviewWindow />)
     await act(async () => {})

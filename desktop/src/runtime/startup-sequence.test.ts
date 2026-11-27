@@ -145,9 +145,9 @@ it('holds a slow boot at 1000ms without an endless loop and settles cleanly on r
   expect(document.documentElement.dataset.startupReveal).toBe('preparing');
 
   tick(128);
-  expect(parseRotate(document.getElementById('trylo-startup-turn')!.style.transform)).toBeLessThan(0);
+  expect(parseRotate(document.getElementById('trylo-startup-turn')!.style.transform)).toBeGreaterThan(0);
 
-  tick(448);
+  tick(352);
   expect(parseRotate(document.getElementById('trylo-startup-turn')!.style.transform)).toBeGreaterThan(0);
   const lastOpticsState = opticsMock.draw.mock.calls.at(-1)?.[0] as { streamAlpha: number };
   expect(lastOpticsState.streamAlpha).toBeGreaterThan(0);
@@ -162,7 +162,7 @@ it('holds a slow boot at 1000ms without an endless loop and settles cleanly on r
   expect(document.documentElement.hasAttribute('data-startup-handoff')).toBe(false);
 });
 
-it('reveals staggered words, 3D levitation, rapid pull-open feather dissolve, and optical stream workspace entry', () => {
+it('reveals staggered words, 3D levitation, continuous clockwise pull-open feather dissolve, and optical stream entry', () => {
   boot();
   ready();
   tick(16);
@@ -191,7 +191,7 @@ it('reveals staggered words, 3D levitation, rapid pull-open feather dissolve, an
   expect(parseTranslateZ(position.style.transform)).toBeGreaterThan(initialZ);
   expect(parseRotateX(position.style.transform)).toBeLessThan(initialPitch);
 
-  tick(400);
+  tick(416);
   for (const id of ['learning-lead', 'learning-key', 'own-lead', 'own-key']) {
     expect(word(id).style.opacity).toBe('1');
   }
@@ -199,12 +199,7 @@ it('reveals staggered words, 3D levitation, rapid pull-open feather dissolve, an
   expect(parseScale(shadow.style.transform)).toBeGreaterThan(1);
   expect(turn.style.transform).toBe('rotate(0.00deg)');
 
-  tick(208);
-  const recoilAngle = parseRotate(turn.style.transform);
-  expect(recoilAngle).toBeLessThan(0);
-  expect(recoilAngle).toBeGreaterThanOrEqual(-7);
-
-  tick(416);
+  tick(512);
   const midAngle = parseRotate(turn.style.transform);
   const midOpacity = Number(turn.style.opacity);
   expect(midAngle).toBeGreaterThan(0);

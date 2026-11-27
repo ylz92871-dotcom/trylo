@@ -1,3 +1,4 @@
+import { onMacosWake } from './host-adapter/system-wake'
 import { projectCollaboration } from './remote/remote-collaboration'
 import { launchRemoteTeam } from './remote/remote-team-launch'
 import { buildActivityItems, type ActivityNavigation } from './components/activity/activity-items'
@@ -2235,6 +2236,19 @@ function App({
     })
   }
   const remoteController = remoteControllerRef.current
+  useEffect(() => {
+    let active = true
+    let recovering = false
+    const off = onMacosWake(() => {
+      if (recovering) return
+      recovering = true
+      void serviceManager.recoverAfterWake()
+        .then(() => active ? remoteController.recoverAfterWake() : undefined)
+        .catch(error => console.warn('唤醒后恢复桌面服务失败', error))
+        .finally(() => { recovering = false })
+    })
+    return () => { active = false; off() }
+  }, [serviceManager, remoteController])
   const remoteConversationMessages = topMode === 'work' ? workMessages : messages
   useEffect(() => { remoteController.refreshCollaboration() }, [remoteController, teamRun, teamRunsVersionTick, topMode, activeSessionId, settings.userLearning.teamAccessEnabled, remoteConversationMessages])
   const [remoteConfigurationReady, setRemoteConfigurationReady] = useState(!isTauriFn())
@@ -2344,6 +2358,7 @@ function App({
   if (!toolingBoundRef.current) {
     toolingBoundRef.current = true
     toolingFacadeRef.current = createToolingFacade(serviceManager.client, {
+      macosComputerUse: () => settingsRef.current.macosComputerUse,
       ensureReady: async () => {
         const paths = await serviceHostPathsRef.current!()
         await serviceManager.ensureRunning(paths)
@@ -6095,7 +6110,7 @@ function App({
 
   useEffect(() => {
     return subscribeNativeMenuActions({
-      'app.settings': () => nativeMenuHandlersRef.current.openSettings(),
+      'app.settings': () => setSettingsOpen((open) => !open),
       'file.new-task': () => nativeMenuHandlersRef.current.onNewSession(),
       'file.open-folder': () => nativeMenuHandlersRef.current.onOpenFolder(),
       'view.toggle-sidebar': () => nativeMenuHandlersRef.current.onToggleLeftRail(),
