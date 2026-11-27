@@ -104,4 +104,4 @@ Windows stdin 辅助模块的受保护缓存跟随 sandbox/windows 布局，缓�
 
 公共逻辑使用已有软件测试，各系统原生操作在对应环境验证。源码检查、TypeScript/Vite 构建、CLI 检查、服务测试和 Rust 检查分别留证。安装包额外验证随包 CLI、Service Host、依赖和启动。
 
-[文件迁移表](platform-migration.json) 记录新旧路径。原始证据位于 _workspace/tasks/platform-foundation-20261127/。
+[文件迁移表](platform-migration.json) 记录新旧路径。[本轮验证记录](../../new%20trylo%20cli/docs/02-%E5%88%86%E6%9C%9F%E5%B7%A5%E7%A8%8B%E4%BA%A7%E5%87%BA/P00-%E5%B7%A5%E7%A8%8B%E5%9C%B0%E5%9F%BA%E4%B8%8E%E8%B4%A8%E9%87%8F%E9%97%A8%E7%A6%81/2026-11-27-%E9%AA%8C%E6%94%B6%E6%91%98%E8%A6%81-%E8%B7%A8%E5%B9%B3%E5%8F%B0%E6%9E%B6%E6%9E%84%E6%95%B4%E7%90%86.md) 分开列出通过、原有失败与未验证项。原始证据位于 _workspace/tasks/platform-foundation-20261127/。
