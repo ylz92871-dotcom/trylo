@@ -145,65 +145,38 @@ describe('routing (§6.2)', () => {
     ]);
   });
 
-  it('checks macOS permission status without auto-allowing desktop observations or input', () => {
+  it('checks macOS status and approves only the shipped foreground computer tools', () => {
     const router = createToolRiskClassifier();
-    const managedPackageIds = ['macos-computer'];
     const classify = (name: string, permissionLevel: ToolClassifyRequest['permissionLevel'], input = {}) => router.classify(request({
-      toolName: `mcp__trylo-macos__${name}`, managedPackageIds, permissionLevel, input,
+      toolName: `mcp__trylo-macos__${name}`, managedPackageIds: ['macos-computer'], permissionLevel, input,
     }));
-    expect(classify('status', 'read_only').behavior).toBe('auto_allow');
-    expect(classify('inspect', 'workspace_write', { pid: 42 })).toMatchObject({
-      behavior: 'prompt', preview: { title: '后台观察 macOS 窗口', target: 'PID 42' },
-    });
-    expect(classify('ax_find', 'workspace_write', { pid: 42, query: 'Save' })).toMatchObject({
-      behavior: 'prompt', preview: { title: '后台观察 macOS 窗口', target: 'PID 42' },
-    });
-    expect(classify('ax_read_text', 'read_only', { pid: 42 }).behavior).toBe('deny');
-    expect(classify('screenshot', 'read_only').behavior).toBe('deny');
-    expect(classify('click', 'workspace_write', { expectedPid: 42 })).toMatchObject({
-      behavior: 'prompt', preview: { title: '后台操作 macOS 控件', target: 'PID 42' },
-    });
-    expect(classify('click', 'workspace_write', { expectedPid: 42, foreground: true })).toMatchObject({
-      behavior: 'prompt', preview: { title: '前台操作 macOS 桌面' },
-    });
-    expect(classify('scroll', 'workspace_write', { expectedPid: 42 })).toMatchObject({
-      behavior: 'prompt', preview: { title: '后台滚动 macOS 窗口', target: 'PID 42' },
-    });
-    expect(classify('scroll', 'workspace_write', { expectedPid: 42, background: false })).toMatchObject({
-      behavior: 'prompt', preview: { title: '前台操作 macOS 桌面' },
-    });
-    expect(classify('list_windows', 'read_only').behavior).toBe('deny');
-    expect(classify('read_window_text', 'workspace_write').behavior).toBe('prompt');
-    expect(classify('open_app', 'workspace_write', { bundleId: 'com.apple.TextEdit' })).toMatchObject({
-      behavior: 'prompt', preview: { title: '后台打开 macOS 应用', target: 'com.apple.TextEdit' },
-    });
-    expect(classify('open_app', 'workspace_write', { bundleId: 'com.apple.TextEdit', activate: true })).toMatchObject({
-      behavior: 'prompt', preview: { title: '打开并切换到 macOS 应用', target: 'com.apple.TextEdit' },
-    });
-    expect(classify('activate_app', 'workspace_write', { bundleId: 'com.apple.Notes' })).toMatchObject({
-      behavior: 'prompt', preview: { title: '切换前台 macOS 应用', target: 'com.apple.Notes' },
-    });
-    expect(classify('ax_perform', 'workspace_write', { pid: 99, path: [0], action: 'AXPress' })).toMatchObject({
-      behavior: 'prompt', preview: { title: '后台操作 macOS 控件', target: 'AXPress' },
-    });
-    expect(classify('ax_perform', 'workspace_write', { pid: 99, path: [], action: 'AXRaise' })).toMatchObject({
-      behavior: 'prompt', preview: { title: '将 macOS 窗口置前', target: 'PID 99' },
-    });
-    const axSet = classify('ax_set_value', 'workspace_write', { pid: 99, path: [0], value: 'secret-value' });
-    expect(axSet).toMatchObject({
-      behavior: 'prompt', preview: { title: '后台操作 macOS 控件', target: 'PID 99' },
-    });
-    if (axSet.behavior === 'prompt') {
-      expect(JSON.stringify(axSet.preview)).not.toContain('secret-value');
+    for (const level of ['read_only', 'workspace_write', 'unrestricted'] as const) {
+      expect(classify('status', level).behavior).toBe('auto_allow');
     }
-    expect(classify('type_text', 'workspace_write', { expectedPid: 99, text: 'hello' })).toMatchObject({
-      behavior: 'prompt', preview: { title: '后台发送键盘输入', target: 'PID 99' },
-    });
-    expect(classify('hotkey', 'workspace_write', { expectedPid: 99, modifiers: ['cmd'], key: 's', background: false })).toMatchObject({
-      behavior: 'prompt', preview: { title: '前台操作 macOS 桌面' },
-    });
-    expect(classify('ax_perform', 'read_only', { pid: 99, path: [0], action: 'AXPress' }).behavior).toBe('deny');
-    expect(classify('shell', 'unrestricted').behavior).toBe('deny');
+    const tools = [
+      ['inspect', '观察 macOS 前台窗口'],
+      ['click', '点击 macOS 前台应用'], ['press_key', '向 macOS 前台应用发送按键'],
+      ['type_text', '向 macOS 前台应用输入文字'],
+    ] as const;
+    for (const [name, title] of tools) {
+      expect(classify(name, 'read_only').behavior).toBe('deny');
+      for (const level of ['workspace_write', 'unrestricted'] as const) {
+        const decision = classify(name, level, { expectedPid: 42, text: 'private input' });
+        expect(decision).toMatchObject({ behavior: 'prompt', preview: { title, target: 'PID 42' } });
+        expect(JSON.stringify(decision)).not.toContain('private input');
+        expect(JSON.stringify(decision)).not.toContain('后台');
+      }
+    }
+    expect(classify('screenshot', 'read_only').behavior).toBe('deny');
+    for (const level of ['workspace_write', 'unrestricted'] as const) {
+      expect(classify('screenshot', level, { displayId: 7 })).toMatchObject({
+        behavior: 'prompt', preview: { title: '截取 macOS 屏幕' },
+      });
+    }
+    for (const name of ['ax_find', 'ax_read_text', 'ax_perform', 'ax_set_value', 'list_windows',
+      'read_window_text', 'open_app', 'activate_app', 'hotkey', 'scroll', 'shell']) {
+      expect(classify(name, 'unrestricted')).toMatchObject({ behavior: 'deny', reasonCode: 'unknown_tool' });
+    }
   });
 });
 
