@@ -51,21 +51,12 @@ export function PreviewImage({
     return () => observer.disconnect()
   }, [])
   useEffect(() => {
-    if (!action?.point || (action.status !== '执行中' && action.status !== '已完成')) {
-      setShowAction(false)
-      return
-    }
-    if (action.status === '执行中') {
-      setShowAction(true)
-      return
-    }
-    const anchor = action.completedAt ?? action.startedAt ?? Date.now()
-    const remaining = Math.max(0, 3200 - (Date.now() - anchor))
+    const remaining = action?.point && (action.status === '执行中' || action.status === '已完成') ? Math.max(0, 2000 - (Date.now() - (action.startedAt ?? Date.now()))) : 0
     setShowAction(remaining > 0)
     if (!remaining) return
     const timeout = window.setTimeout(() => setShowAction(false), remaining)
     return () => window.clearTimeout(timeout)
-  }, [action?.id, action?.status, action?.startedAt, action?.completedAt, action?.point])
+  }, [action?.id, action?.status, action?.startedAt, action?.point])
   const scale = window.devicePixelRatio || 1
   const fit = size.width > 0 && size.height > 0 ? Math.min(viewportSize.width / size.width, viewportSize.height / size.height) : 0
   const imageScale = zoom === 'fit' ? fit : zoom / scale
