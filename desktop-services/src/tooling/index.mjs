@@ -47,7 +47,9 @@ export function createToolingServices(options = {}) {
   const enableRepositoryTools = options.seam === undefined;
 
   const target = seam.target ?? `${process.platform}-${process.arch}`;
-  const nativeBrowserEnabled = Boolean(seam.nativeBrowser) || (enableRepositoryTools && (target.startsWith('win32-') || target.startsWith('darwin-')));
+  // The macOS WKWebView provides preview only (no CDP endpoint). Keep agent
+  // browser execution on Playwright there; the native execution backend is Windows-only.
+  const nativeBrowserEnabled = Boolean(seam.nativeBrowser) || (enableRepositoryTools && target.startsWith('win32-'));
   const catalog = createToolCatalog({
     ...(seam.manifests ? { manifests: seam.manifests } : {}),
     target,

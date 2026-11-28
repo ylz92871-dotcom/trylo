@@ -49,7 +49,7 @@ export function MacosComputerSettings({ facade, value, onChange }: {
           onChange={event => onChange(event.target.checked)} />
         <span className="settings-modal__label">启用 Code 与 Work 的原生电脑控制</span>
       </label>
-      <p className="settings-modal__hint">保存后用于新任务。默认优先通过辅助功能在后台无打扰操作，仅在应用不支持后台操作时提示切换前台；点击、键入和截图仍需通过任务的操作审批。</p>
+      <p className="settings-modal__hint">保存后用于新任务。操作针对当前前台应用；点击、键入和截图仍需通过任务的操作审批。</p>
       <div className="settings-modal__hint" aria-live="polite">
         <div>辅助功能：{describe(permissions?.accessibility)}</div>
         <div>鼠标与键盘事件：{describe(permissions?.postEvents)}</div>
