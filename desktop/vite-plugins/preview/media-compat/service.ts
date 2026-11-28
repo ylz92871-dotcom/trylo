@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, realpath, rmdir, stat, unlink } from 'node:fs
 import path from 'node:path';
 import policy from '../../../src/preview/providers/media-policy.json';
 import { mediaByteRanges, mediaProbeArguments, mediaSegmentCount, mediaStreamArguments, parseMediaInfo, type MediaInfo } from '../../../src/preview/providers/media-playlist';
-import { verifyMediaEngine } from '../../../scripts/preview/media-engine.mjs';
+import { verifyMediaEngine } from '../../../scripts/build/shared/preview/media-engine.mjs';
 import { probeMedia, spawnMedia } from './process';
 
 interface Worker { start: number; next: number; want: number; controller: AbortController; task: Promise<void> }

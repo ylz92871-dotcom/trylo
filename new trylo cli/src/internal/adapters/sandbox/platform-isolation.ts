@@ -1,8 +1,8 @@
 import type { IsolationPort } from "../../ports/isolation.js";
 import { hostShellEnvironment } from "./executable.js";
 import { createMacosIsolation } from "./macos-isolation.js";
-import { windowsHelperEnvironment } from "./windows-helper-environment.js";
-import { createWindowsIsolation } from "./windows-isolation.js";
+import { windowsHelperEnvironment } from "./windows/windows-helper-environment.js";
+import { createWindowsIsolation } from "./windows/windows-isolation.js";
 
 export function createPlatformIsolation(
   env: Readonly<Record<string, string | undefined>>,

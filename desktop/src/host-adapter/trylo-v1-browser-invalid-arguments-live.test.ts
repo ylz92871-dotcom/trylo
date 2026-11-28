@@ -192,9 +192,8 @@ it('a real Desktop permission reply preserves invalid browser arguments and perm
     await shutdownFixtureBrokers(home);
     provider.closeAllConnections();
     await new Promise<void>(done => provider.close(() => done()));
-    if (!root.startsWith(`${scratch}\\`) && !root.startsWith(`${scratch}/`)) {
-      throw new Error('Refusing to remove a path outside the fixture scratch directory');
-    }
+    expect(root.startsWith(`${scratch}\\`) || root.startsWith(`${scratch}/`),
+      'Refusing to remove a path outside the fixture scratch directory').toBe(true);
     // Windows releases a detached broker's cwd handle just after shutdown ACK.
     await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     h.service = null;

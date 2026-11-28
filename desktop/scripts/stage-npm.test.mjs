@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { NPM_INTEGRITY, NPM_URL, verifyNpmArchive } from './stage-npm.mjs';
+import { NPM_INTEGRITY, NPM_URL, verifyNpmArchive } from './build/shared/stage-npm.mjs';
 
 test('npm staging rejects altered archive bytes before extracting or executing them', () => {
   assert.throws(() => verifyNpmArchive(Buffer.from('untrusted bytes')), /integrity mismatch/);

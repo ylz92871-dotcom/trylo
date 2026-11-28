@@ -141,26 +141,6 @@ export interface LearningMemorySnapshotResult {
   readonly [key: string]: unknown;
 }
 
-export type WorkspaceSkillsParams = { readonly workspaceRoot: string } & (
-  { readonly op: 'list' } | { readonly op: 'view'; readonly directory: string } |
-  { readonly op: 'install'; readonly url: string }
-);
-
-export interface WorkspaceSkillSummary {
-  readonly name: string;
-  readonly directory: string;
-  readonly description: string;
-  readonly category: string;
-}
-
-export interface WorkspaceSkillsResult {
-  readonly ok: boolean;
-  readonly error?: string;
-  readonly skills?: readonly WorkspaceSkillSummary[];
-  readonly content?: string;
-  readonly installed?: Pick<WorkspaceSkillSummary, 'directory' | 'name'>;
-}
-
 export interface LearningSkillsParams {
   readonly op?: 'list' | 'view';
   readonly name?: string;
@@ -1478,7 +1458,6 @@ export interface ServiceMethodMap {
   // Tooling domain (Trylo Tool Platform, spec §12.2).
   readonly 'tooling.resolveProfile': { params: ToolingResolveProfileParams; result: ToolingResolveProfileResult | ToolingResolveProfileFailure };
   readonly 'tooling.health': { params: ToolingHealthParams; result: ToolingHealthResult };
-  readonly 'tooling.workspaceSkills': { params: WorkspaceSkillsParams; result: WorkspaceSkillsResult };
   readonly 'tooling.listProfiles': { params: undefined; result: ToolingListProfilesResult };
   readonly 'tooling.install': { params: ToolingInstallParams; result: ToolingInstallResult };
   readonly 'tooling.uninstall': { params: ToolingUninstallParams; result: ToolingUninstallResult };

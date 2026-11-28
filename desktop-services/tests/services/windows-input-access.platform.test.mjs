@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { WINDOWS_INPUT_ACCESS_PROBE } from '../../src/tooling/windows-input-access.mjs';
+import { WINDOWS_INPUT_ACCESS_PROBE } from '../../src/tooling/computer-control/windows/windows-input-access.mjs';
 
 test('a High Python token cannot hide the actual tool launcher Low label', { skip: process.platform !== 'win32' }, () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'trylo-launcher-label-'));

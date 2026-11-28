@@ -1,3 +1,4 @@
+import { desktopControlForPlatform } from './computer-control/platform.mjs';
 // Trylo Desktop Services — Tool Package Manager.
 //
 // Spec TRYLO-CORE-AGENT-TOOL-EXTENSION-TECHNICAL-SPEC §3 / §8.2 / §8.3.
@@ -105,7 +106,12 @@ function parseOverrides(raw) {
  */
 export const LOCAL_OVERRIDES_FILENAME = 'local-overrides.json';
 export const REPOSITORY_TOOL_REGISTRY_FILENAME = 'tool-sources.json';
-export const BUILTIN_TOOL_IDS = Object.freeze(['officecli', 'playwright', 'chrome-devtools', 'windows-mcp']);
+export function builtinToolIdsForPlatform(platform) {
+  const control = desktopControlForPlatform(platform);
+  return Object.freeze(['officecli', 'playwright', 'chrome-devtools', ...(control ? [control.packageId] : [])]);
+}
+
+export const BUILTIN_TOOL_IDS = builtinToolIdsForPlatform(process.platform);
 
 export function localOverridesPath(installRoot) {
   if (!installRoot) return null;
@@ -308,6 +314,7 @@ export async function downloadToFile(url, destPath, maxBytes = MAX_DOWNLOAD_BYTE
 }
 
 export function createToolPackageManager(options = {}) {
+  const builtinToolIds = builtinToolIdsForPlatform(options.platform ?? process.platform);
   const storageRoot = options.storageRoot ?? '';
   // Dev/CI seam only: TRYLO_TOOL_PACKAGES_DIR relocates the install root and
   // TRYLO_TOOL_PACKAGE_OVERRIDES points an id straight at an absolute exe.
@@ -323,7 +330,7 @@ export function createToolPackageManager(options = {}) {
   const managedDarwin = options.target?.startsWith('darwin-');
   const repositoryRegistry = () => loadRepositoryToolRegistry(repositoryRegistryPath, options.target);
   function isBuiltIn(id, entry = repositoryRegistry().entries[id]) {
-    if (!options.enableRepositoryTools || !BUILTIN_TOOL_IDS.includes(id)) return false;
+    if (!options.enableRepositoryTools || !builtinToolIds.includes(id)) return false;
     return !managedDarwin || entry?.policy === 'bundled' || entry?.available === true;
   }
   // Live merge on every read: the file is the durable local-first wiring,
@@ -342,7 +349,7 @@ export function createToolPackageManager(options = {}) {
     // Core built-ins recover from that missing inherited path. Explicit API
     // overrides and every non-core override retain their existing semantics.
     if (options.enableRepositoryTools && options.overrides === undefined) {
-      for (const id of BUILTIN_TOOL_IDS) {
+      for (const id of builtinToolIds) {
         if (usableEnvOverrides[id] && !isFileSync(usableEnvOverrides[id])) delete usableEnvOverrides[id];
       }
     }

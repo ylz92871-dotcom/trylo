@@ -30,16 +30,16 @@ export function MacosComputerSettings({ facade, value, onChange }: {
       }
     }
   }, [facade])
+  const invalidate = useCallback(() => { epoch.current++; pending.current = false }, [])
   useEffect(() => {
     const detect = () => { void refresh() }
     detect()
     window.addEventListener('focus', detect)
     return () => {
       window.removeEventListener('focus', detect)
-      epoch.current++
-      pending.current = false
+      invalidate()
     }
-  }, [refresh])
+  }, [refresh, invalidate])
   const describe = (granted?: boolean) => granted === undefined ? '尚未检测' : granted ? '已授权' : '未授权'
   return (
     <fieldset className="settings-modal__group">

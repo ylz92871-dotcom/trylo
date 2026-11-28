@@ -10,7 +10,7 @@ afterEach(async () => { for (const dir of directories.splice(0)) await fs.rm(dir
 async function profile(): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'trylo-office-seed-test-')); directories.push(dir);
   await fs.mkdir(path.join(dir, 'user/extensions/bundled'), { recursive: true });
-  const lock = JSON.parse(await fs.readFile(new URL('../../scripts/preview/office-engine.lock.json', import.meta.url), 'utf8')) as { buildId: string };
+  const lock = JSON.parse(await fs.readFile(new URL('../../scripts/build/shared/preview/office-engine.lock.json', import.meta.url), 'utf8')) as { buildId: string };
   await fs.writeFile(path.join(dir, 'user/extensions/buildid'), lock.buildId);
   await fs.writeFile(path.join(dir, 'user/extensions/bundled/dictionary.xcu'), '$BUNDLED_EXTENSIONS/dictionary.xml');
   await fs.writeFile(path.join(dir, 'user/registrymodifications.xcu'), 'document history');

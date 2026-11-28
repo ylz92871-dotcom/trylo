@@ -169,7 +169,6 @@ export interface UseToolPlatformStateOptions {
 }
 
 export interface ToolPlatformState {
-  readonly workspaceSkills?: ToolingFacade['workspaceSkills'];
   readonly needsServiceReload?: boolean;
   readonly reloadService?: () => Promise<void>;
   readonly serviceHealth: ServiceHealth;
@@ -332,7 +331,6 @@ export function useToolPlatformState(options: UseToolPlatformStateOptions): Tool
   }, [packages]);
 
   return {
-    workspaceSkills: facade?.workspaceSkills,
     serviceHealth,
     packages,
     byId,

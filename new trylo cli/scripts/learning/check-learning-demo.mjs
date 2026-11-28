@@ -39,8 +39,8 @@ const hostProcessSeam = {
 let isolation = hostProcessSeam;
 
 if (native) {
-  const { createWindowsIsolation } = await import(pathToFileURL(path.join(compiled, "internal/adapters/sandbox/windows-isolation.js")).href);
-  const { windowsHelperEnvironment } = await import(pathToFileURL(path.join(compiled, "internal/adapters/sandbox/windows-helper-environment.js")).href);
+  const { createWindowsIsolation } = await import(pathToFileURL(path.join(compiled, "internal/adapters/sandbox/windows/windows-isolation.js")).href);
+  const { windowsHelperEnvironment } = await import(pathToFileURL(path.join(compiled, "internal/adapters/sandbox/windows/windows-helper-environment.js")).href);
   isolation = createWindowsIsolation({ hostEnv: windowsHelperEnvironment(process.env) });
 }
 

@@ -96,8 +96,8 @@ struct Entry { path: String, size: u64, sha256: String }
 /// executables/core library and required resources without reopening fourteen
 /// thousand language/help files on the user's first document.
 #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
-fn verify_engine(root: &Path) -> Result<PathBuf, String> {
-    let lock: serde_json::Value = serde_json::from_str(include_str!("../../../scripts/preview/office-engine.lock.json")).map_err(|e| e.to_string())?;
+pub fn verify_engine(root: &Path) -> Result<PathBuf, String> {
+    let lock: serde_json::Value = serde_json::from_str(include_str!("../../../scripts/build/shared/preview/office-engine.lock.json")).map_err(|e| e.to_string())?;
     let critical = lock["criticalFiles"].as_object().ok_or("Office 引擎版本配置无效")?;
     let manifest_path = root.join("manifest.json");
     if std::fs::metadata(&manifest_path).map_err(|_| "Office 预览引擎资源缺失，请修复 Trylo 安装")?.len() > 5 * 1024 * 1024 {

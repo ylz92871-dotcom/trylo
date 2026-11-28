@@ -24,6 +24,7 @@ export function attachmentHistoryContent(message: AttachmentHistoryMessage): str
 }
 
 const safeSegment = (value: string): boolean => value.length > 0 && value !== '.' && value !== '..'
+  // eslint-disable-next-line no-control-regex -- Intentionally reject control bytes or strip ANSI escapes.
   && !/[\\/\x00-\x1f]/.test(value);
 
 /** Recover pre-fix Work messages from the conversation-owned staging path.
@@ -56,6 +57,7 @@ export async function recoverWorkAttachmentHistory(args: {
       } catch {
         missingIds.add(file.id);
         const { relativePath: _relative, path: _path, ...unavailable } = file;
+        void _relative; void _path; // Deliberately discard unreadable location fields.
         attachments.push(unavailable);
       }
     }

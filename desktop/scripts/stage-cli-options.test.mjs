@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import test from 'node:test';
-import { stageCliOptions } from './stage-cli-options.mjs';
+import { stageCliOptions } from './build/shared/stage-cli-options.mjs';
 
 const base = path.resolve('stage-options-test');
 const input = { cwd: base, source: path.join(base, 'cli'), resources: path.join(base, 'resources') };
@@ -27,4 +27,12 @@ test('prepared frozen inputs select verification without another build or hydrat
   const result = stageCliOptions(['--skip-build', '--prepared-closure', '--cli-dist=build-v2', '--output=candidate/cli'], input);
   assert.equal(result.preparedClosure, true);
   assert.equal(result.skipBuild, true);
+});
+
+// Platform builders supply the staged interpreter through the same staging entry.
+test("accepts an explicit platform Node interpreter without changing legacy defaults", () => {
+  const options = stageCliOptions(["--node=/staged/runtime/bin/node"], {
+    cwd: process.cwd(), source: "/source/cli", resources: "/bundle/resources",
+  });
+  assert.equal(options.node, path.resolve(process.cwd(), "/staged/runtime/bin/node"));
 });

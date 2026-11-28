@@ -19,6 +19,7 @@ export function CentralLearningStatus(props: { readonly runtime?: ToolLearningRu
       if (!controller.signal.aborted) setRead({ status: 'ready', value })
     }, () => { if (!controller.signal.aborted) setRead({ status: 'failed' }) })
     return () => controller.abort()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Process, executable and workspace fields define this read lifecycle, not its transient wrapper.
   }, [runtime?.process, runtime?.cliPath, runtime?.cwd, runtime?.nodeProgram, props.refreshKey, refresh])
   return <section className="central-learning-status" aria-label="中央学习预算" aria-busy={read.status === 'loading' && runtime !== undefined}>
     <header><h3>工作区共享预算</h3><button type="button" disabled={!runtime || read.status === 'loading'} onClick={() => setRefresh(value => value + 1)}>刷新预算</button></header>

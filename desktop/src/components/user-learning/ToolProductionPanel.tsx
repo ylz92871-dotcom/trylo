@@ -17,9 +17,10 @@ export function ToolProductionPanel({ runtime, initialVersionId }: { readonly ru
           : ['等待审核', '等待验证', '验证未通过', '验证未结束'].includes(productionLabel(item))),
     ) ?? []
   const selectedVisible = rows.some((item) => item.versionId === state.selected)
+  const { inventory, select } = state
   useEffect(() => {
-    if (initialVersionId && state.inventory?.items.some(item => item.versionId === initialVersionId)) state.select(initialVersionId)
-  }, [initialVersionId, state.inventory, state.select])
+    if (initialVersionId && inventory?.items.some(item => item.versionId === initialVersionId)) select(initialVersionId)
+  }, [initialVersionId, inventory, select])
   return (
     <section
       className="tool-production"

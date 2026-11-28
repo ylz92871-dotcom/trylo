@@ -52,7 +52,7 @@ export function GitDiffView(props: GitDiffViewProps): ReactElement {
     document.addEventListener('keydown', escape);
     return () => document.removeEventListener('keydown', escape);
   }, []);
-  useEffect(() => { setExpanded(false); setNotice(''); }, [path]);
+  useEffect(() => { setExpanded(false); setNotice(''); }, [path, setNotice]);
   useEffect(() => {
     const element = container.current;
     if (!usable || !element) return;

@@ -56,7 +56,7 @@ export function appendReceiptsForNewCommitments(input: {
   readonly existing: readonly LearningReceipt[];
   readonly now: number;
 }): readonly LearningReceipt[] {
-  let receipts = [...input.existing];
+  const receipts = [...input.existing];
   const beforeIds = new Set(input.before.map((item) => item.id));
   for (const commitment of input.after) {
     if (beforeIds.has(commitment.id) || commitment.state === 'superseded') continue;

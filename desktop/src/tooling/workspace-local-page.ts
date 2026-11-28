@@ -34,6 +34,7 @@ export function analyzeWorkspacePageUrl(raw: unknown, projectRoot: string): Work
   } catch {
     return malformed();
   }
+  // eslint-disable-next-line no-control-regex -- Deliberately reject all C0 control characters in paths and labels.
   if (/[\u0000-\u001f\u007f]/.test(pathname) || !/\.html?$/i.test(pathname)) return malformed();
   if (pathname.startsWith('//') || pathname.includes('\\')) return outside();
 

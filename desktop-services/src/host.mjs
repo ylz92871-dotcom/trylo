@@ -25,7 +25,7 @@ import { createPetChat } from './pet-chat/index.mjs';
 import { createLearningServices } from './learning/index.mjs';
 import { createRemoteServices } from './remote/index.mjs';
 import { createToolingServices } from './tooling/index.mjs';
-import { runNativeBrowserMcp } from './tooling/native-browser-mcp.mjs';
+import { runNativeBrowserMcp } from './tooling/browser/native-browser-mcp.mjs';
 import { runModelPreviewMcp } from './tooling/model-preview-mcp.mjs';
 import { runSoftwareWorkspaceMcp } from './tooling/software-workspace-mcp.mjs';
 
@@ -217,6 +217,7 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
     .register('tooling', 'modelPreviewDetach', params => tooling.modelPreviewDetach(params))
     .register('tooling', 'modelPreviewCommandResult', params => tooling.modelPreviewCommandResult(params))
     .register('tooling', 'modelPreviewClose', params => tooling.modelPreviewClose(params))
+    .register('tooling', 'macosComputerPermissions', params => tooling.macosComputerPermissions(params))
     .register('tooling', 'health', (params) => tooling.health(params))
     .register('tooling', 'listProfiles', () => tooling.listProfiles())
     .register('tooling', 'install', (params) => tooling.install(params))

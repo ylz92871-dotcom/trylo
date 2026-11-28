@@ -39,7 +39,7 @@ test('native macOS computer tools mount in both profiles only when enabled', asy
   t.after(() => rmSync(root, { force: true, recursive: true }));
   const services = join(root, 'Resources', 'desktop-services');
   const executable = join(services, MACOS_COMPUTER_EXECUTABLE);
-  const options = { storageRoot: root, hostEntrypoint: join(services, 'dist', 'host.bundle.mjs'),
+  const options = { platform: 'darwin', storageRoot: root, hostEntrypoint: join(services, 'dist', 'host.bundle.mjs'),
     catalog: { get: () => undefined, list: () => [] } };
   const service = createToolProfileService({ ...options, macosComputerEnabled: true });
   const missing = await service.resolve({ surface: 'work' });
@@ -57,6 +57,10 @@ test('native macOS computer tools mount in both profiles only when enabled', asy
     assert.equal(registry.servers[0].command, executable);
     const settings = JSON.parse(readFileSync(profile.permissionSettingsPath, 'utf8'));
     assert.ok(settings.permissions.ask.includes('mcp__trylo-macos__*'));
+    const userDisabled = await service.resolve({ surface, macosComputerUse: false });
+    assert.equal(userDisabled.serverNames.includes(MACOS_COMPUTER_SERVER), false);
+    const userEnabled = await createToolProfileService(options).resolve({ surface, macosComputerUse: true });
+    assert.equal(userEnabled.serverNames.includes(MACOS_COMPUTER_SERVER), true);
     const disabled = await service.resolve({ surface, computerUse: false });
     assert.equal(disabled.serverNames.includes(MACOS_COMPUTER_SERVER), false);
   }

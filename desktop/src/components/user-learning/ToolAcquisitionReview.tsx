@@ -28,8 +28,9 @@ export function ToolAcquisitionReview(props: {
   const displayedJobId = showingFollowup ? followup.jobId : props.jobId
   const state = useToolAcquisition(props.runtime, displayedJobId, props.workspaceId)
   useEffect(() => { setFollowup(undefined) }, [props.jobId, props.workspaceId])
-  useEffect(() => { props.onBusyChange?.(state.busy) }, [props.onBusyChange, state.busy])
-  useEffect(() => () => { props.onBusyChange?.(false) }, [props.onBusyChange])
+  const { onBusyChange } = props
+  useEffect(() => { onBusyChange?.(state.busy) }, [onBusyChange, state.busy])
+  useEffect(() => () => { onBusyChange?.(false) }, [onBusyChange])
   const review = state.review, continuation = review?.continuation
   const failure = review?.installation?.installed === true || continuation !== undefined ? undefined : review?.failure
   const failureBlocked = failure !== undefined && failure.recovery !== 'retry_explicitly'

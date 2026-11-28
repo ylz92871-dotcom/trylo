@@ -16,7 +16,7 @@ class CorePortableTest(unittest.TestCase):
         scratch.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="trylo-core-portable-", dir=scratch) as directory:
             root = Path(directory)
-            source = Path(__file__).with_name("package-portable.py")
+            source = Path(__file__).parent / "build/windows/package-portable.py"
 
             def write(relative, content):
                 target = root / relative
@@ -47,7 +47,8 @@ class CorePortableTest(unittest.TestCase):
             write("desktop/README-Portable.txt", "Core distribution")
             for name in ["NODE-v24.14.1-LICENSE.txt", "TRYLO-LICENSE.txt"]:
                 write(f"_workspace/artifacts/result/desktop/{name}", "notice")
-            script = root / "desktop/scripts/package-portable.py"
+            script = root / "desktop/scripts/build/windows/package-portable.py"
+            script.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, script)
             output = root / "portable.zip"
             result = subprocess.run(
@@ -72,7 +73,7 @@ class CorePortableTest(unittest.TestCase):
 
     def test_retired_component_is_rejected_before_packaging(self):
         result = subprocess.run(
-            [sys.executable, str(Path(__file__).with_name("package-portable.py")),
+            [sys.executable, str((Path(__file__).parent / "build/windows/package-portable.py")),
              "--component", "cowork"], capture_output=True, text=True, check=False,
         )
         self.assertEqual(result.returncode, 2, result.stderr)

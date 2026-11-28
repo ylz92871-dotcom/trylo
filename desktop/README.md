@@ -2,7 +2,7 @@
 
 Tauri 2 shell + Trylo React app + monaco-vscode-api. Long-term home for the Trylo agent system.
 
-**The full technical plan lives in `D:/CC/trylo/docs/ARCHITECTURE.md`.** Read that first. This README only covers the local dev loop.
+**The full technical plan lives in `../docs/architecture/README.md`.** Read that first. This README only covers the local dev loop.
 
 ## Stack
 
@@ -88,7 +88,7 @@ matching the native service resolvers. Packaging verifies a real Service Host
 startup, gateway startup and QR generation with an isolated test identity.
 
 For an existing standalone test executable missing only its Service Host runtime,
-`powershell -File scripts/repair-servicehost-runtime.ps1 -DesktopDirectory <directory>`
+`powershell -File scripts/build/windows/repair-servicehost-runtime.ps1 -DesktopDirectory <directory>`
 stages the service, Node and sidecars without replacing the executable or pairing
 identity. Re-enable remote access afterward. This is not a replacement for the
 full installer or a check of the phone's external network connection.
@@ -101,7 +101,7 @@ at Low integrity. Git Bash can then fail while initializing MSYS named objects
 building, prepare only the executable you intend to launch:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/prepare-native-executable.ps1 -ExecutablePath ./src-tauri/target/release/trylo-desktop.exe
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/windows/prepare-native-executable.ps1 -ExecutablePath ./src-tauri/target/release/trylo-desktop.exe
 ```
 
 The default label is Medium; the script preserves access permissions and rejects
@@ -112,7 +112,7 @@ never selected automatically. The normal application does not require High.
 
 ## Project layout
 
-See `docs/ARCHITECTURE.md` §9. One-sentence version:
+See `../docs/architecture/README.md` §9. One-sentence version:
 
 ```
 src/         — Trylo React app (UI + HostAdapter + state)
@@ -124,7 +124,7 @@ config/      — shared lint/format/typecheck config
 
 ## Code quality
 
-See `docs/ARCHITECTURE.md` §10 for the full standards. Quick rules:
+See `../docs/architecture/README.md` §10 for the full standards. Quick rules:
 
 - TypeScript strict mode, no `any`
 - `cargo clippy -- -D warnings` must pass
@@ -138,7 +138,7 @@ Early architecture contracts are indexed in `docs/spikes/README.md`. Historical 
 
 ## License
 
-Apache-2.0 (TBD — see `docs/ARCHITECTURE.md` §12).
+Apache-2.0 (TBD — see `../docs/architecture/README.md` §12).
 
 ## CLI runtime
 

@@ -12,6 +12,7 @@ export type CentralLearningStatus = {
     readonly outcome: 'qualified' | 'closed_no_result' | 'pending'; readonly sourceRef: string; readonly sequence: number }[]
 }
 const row = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
+// eslint-disable-next-line no-control-regex -- Deliberately reject all C0 control characters in paths and labels.
 const identity = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0 && value.length <= 4096 && !/[\u0000-\u001f]/.test(value)
 const count = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 const keys = ['tokens', 'calls', 'steps'] as const

@@ -10,7 +10,6 @@ import type { LearningPort } from '../../learning/learning-port';
 import type { SkillLearningRuntime } from '../../skill-learning/cli';
 import { isMacPlatform } from '../../utils/platform';
 import { selectedWorkPackages } from './WorkToolsSettings';
-import { WorkspaceSkillInstall } from './WorkspaceSkillInstall';
 import { LearnedSkillsPanel } from './LearnedSkillsPanel';
 
 export interface LeftRailToolsPaneProps {
@@ -29,7 +28,6 @@ type SkillSource = 'installed' | 'learned';
 type CatalogPackage = (typeof catalog.packages)[number];
 
 interface SkillSummary {
-  readonly workspaceDirectory?: string;
   readonly name: string;
   readonly category: string;
   readonly description: string;
@@ -103,7 +101,6 @@ export function LeftRailToolsPane(props: LeftRailToolsPaneProps): ReactElement {
   const viewReqId = useRef(0);
   const listReqId = useRef(0);
   const { workspaceRoot, learningPort } = props;
-  const workspaceSkills = props.toolPlatform?.workspaceSkills;
   const workspaceScope = useRef(workspaceRoot);
   workspaceScope.current = workspaceRoot;
 
@@ -125,30 +122,26 @@ export function LeftRailToolsPane(props: LeftRailToolsPaneProps): ReactElement {
     setSkillPhase('loading');
     setSkillError(null);
     const req = ++listReqId.current;
-    const [workspace, library] = await Promise.allSettled([
-      workspaceRoot && workspaceSkills ? workspaceSkills({ op: 'list', workspaceRoot }) : undefined,
-      learningPort?.skills({ op: 'list' }),
-    ]);
+    let shared;
+    try { shared = await learningPort?.skills({ op: 'list' }); }
+    catch (error) {
+      if (!mounted.current || req !== listReqId.current || workspaceScope.current !== workspaceRoot) return;
+      setSkillError(error instanceof Error ? error.message : String(error));
+      setSkills([]); setSkillPhase('error'); return;
+    }
     if (!mounted.current || req !== listReqId.current || workspaceScope.current !== workspaceRoot) return;
-    const local = workspace.status === 'fulfilled' ? workspace.value : undefined;
-    const shared = library.status === 'fulfilled' ? library.value : undefined;
-    if (!local?.ok && !shared?.ok) {
-      setSkillError(local?.error ?? shared?.error ?? '已安装技能服务尚未就绪。');
-      setSkills([]);
-      setSkillPhase('error');
-      return;
+    if (!shared?.ok) {
+      setSkillError(shared?.error ?? '已安装技能服务尚未就绪。');
+      setSkills([]); setSkillPhase('error'); return;
     }
     const skillsByName = new Map<string, SkillSummary>();
-    for (const raw of Array.isArray(shared?.skills) ? shared.skills : []) {
+    for (const raw of Array.isArray(shared.skills) ? shared.skills : []) {
       const skill = normalizeSkill(raw);
       if (skill) skillsByName.set(skill.name, skill);
     }
-    for (const { name, directory, category, description } of local?.skills ?? []) {
-      skillsByName.set(name, { name, category, description, workspaceDirectory: directory });
-    }
     setSkills([...skillsByName.values()]);
     setSkillPhase('ready');
-  }, [workspaceRoot, workspaceSkills, learningPort]);
+  }, [workspaceRoot, learningPort]);
 
   useEffect(() => {
     if (subTab === 'skills' && skillSource === 'installed') {
@@ -166,9 +159,7 @@ export function LeftRailToolsPane(props: LeftRailToolsPaneProps): ReactElement {
     setExpandedSkill(skill.name);
     setSkillDetail({ status: 'loading', content: '', error: null });
     try {
-      const res = skill.workspaceDirectory && workspaceSkills && workspaceRoot
-        ? await workspaceSkills({ op: 'view', workspaceRoot, directory: skill.workspaceDirectory })
-        : await port?.skills({ op: 'view', name: skill.name });
+      const res = await port?.skills({ op: 'view', name: skill.name });
       if (!mounted.current || req !== viewReqId.current || workspaceScope.current !== workspaceRoot) return;
       if (!res?.ok) {
         setSkillDetail({ status: 'error', content: '', error: res?.error ?? '已安装技能服务尚未就绪。' });
@@ -267,14 +258,7 @@ export function LeftRailToolsPane(props: LeftRailToolsPaneProps): ReactElement {
         </div>
       </div>
 
-      <WorkspaceSkillInstall key={workspaceRoot} workspaceRoot={workspaceRoot} query={workspaceSkills}
-        connected={connected} needsReload={platform?.needsServiceReload} onInstalled={() => {
-          if (!mounted.current || workspaceScope.current !== workspaceRoot) return;
-          setQuery('');
-          setSubTab('skills');
-          setSkillSource('installed');
-          if (subTab === 'skills' && skillSource === 'installed') void loadSkills();
-        }} />
+
 
       <div className="left-rail__subtabs" role="tablist" aria-label="工具与技能视图">
         <button

@@ -5,7 +5,7 @@ import {
   createWindowsCredentialManagerDriver,
   type SpawnResult,
   type SpawnSyncImpl,
-} from "./keyring-win32.js";
+} from "./windows/keyring-win32.js";
 
 /**
  * Hermetic unit tests for the Windows Credential Manager driver.

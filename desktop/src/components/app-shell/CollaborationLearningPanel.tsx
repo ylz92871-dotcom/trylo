@@ -8,7 +8,7 @@ export function CollaborationLearningPanel({ runtime }: { readonly runtime: Coll
   const [error, setError] = useState<{ readonly message: string; readonly code: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const controller = useRef<AbortController | null>(null);
-  const port = useMemo(() => createCollaborationLearningPort(runtime), [runtime.process, runtime.cliPath, runtime.nodeProgram, runtime.cwd]);
+  const port = useMemo(() => createCollaborationLearningPort({ process: runtime.process, cliPath: runtime.cliPath, nodeProgram: runtime.nodeProgram, cwd: runtime.cwd }), [runtime.process, runtime.cliPath, runtime.nodeProgram, runtime.cwd]);
   const reload = useCallback(async (signal: AbortSignal) => {
     setPhase('loading'); setError(null);
     const result = await port.status(signal);

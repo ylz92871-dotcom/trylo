@@ -44,7 +44,7 @@ function Scene({ session, bridge, visible, onClose }: {
     </header>
     <div className="agent-model-scene__status" role="status">
       <span data-state={state?.status ?? 'loading'}>{state?.status === 'ready' ? '已同步' : state?.status === 'error' ? '载入失败' : '正在更新'}</span>
-      {state?.readyVersion != null && <span>场景 v{state.readyVersion}</span>}
+      {state?.readyVersion !== null && state?.readyVersion !== undefined && <span>场景 v{state.readyVersion}</span>}
       <span>{session.autoRefresh ? '文件变化时自动更新' : '可重新加载以同步文件'}</span>
     </div>
     {actionError && <div className="file-peek__meta" role="alert">{actionError}</div>}

@@ -28,7 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { probePlaywrightChromium } from './tool-browser-condition.mjs';
 import { probeAppCondition } from './tool-app-condition.mjs';
-import { defaultProbeWindowsInputAccess } from './windows-input-access.mjs';
+import { defaultProbeWindowsInputAccess } from './computer-control/windows/windows-input-access.mjs';
 import { toolRuntimeIdentity } from './tool-runtime-identity.mjs';
 
 const VERSION_PROBE_TIMEOUT_MS = 2000;

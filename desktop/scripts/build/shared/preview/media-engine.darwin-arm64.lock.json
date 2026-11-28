@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "provider": "trylo-ffmpeg-lgpl-shared",
+  "version": "9.0.2-trylo-preview-g1e65c6cd5d",
+  "platform": "darwin-arm64",
+  "license": "LGPL-2.1-or-later",
+  "ffmpegCommit": "1e65c6cd5d3d2d12cbb374460dbf08bedf54772a",
+  "builderCommit": null,
+  "build": {
+    "kind": "source-build",
+    "recipeFiles": [
+      {
+        "path": "scripts/build/shared/preview/media-build/macos.sh",
+        "sha256": "e3cca1d69d529dc01a0417b1cfbd2638ae51398b814e3fc443d551305d245e52"
+      }
+    ],
+    "compiler": "Apple clang 21.0.0 (clang-2100.4.1.1), macOS deployment target 14.0",
+    "runtimeImports": "System frameworks and six colocated FFmpeg dylibs addressed by @loader_path"
+  },
+  "entries": {
+    "encoder": "bin/ffmpeg",
+    "probe": "bin/ffprobe"
+  },
+  "files": [
+    {
+      "path": "LICENSE.txt",
+      "size": 26517,
+      "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
+    },
+    {
+      "path": "NOTICE",
+      "size": 141,
+      "sha256": "4e143836a8adcdb330fff10751ee6192431de0dbbcee9a089c6e42cf8c9e2074"
+    },
+    {
+      "path": "bin/ffmpeg",
+      "size": 425144,
+      "sha256": "d43916514159b08e08897d1530f340a2f5db7da183842737de69b1cc60865452"
+    },
+    {
+      "path": "bin/ffprobe",
+      "size": 219336,
+      "sha256": "a0a960a8a55e04acb4b3786eabc51afa3286e49e523b8d4c9065d3c021b9c5bb"
+    },
+    {
+      "path": "bin/libavcodec.63.dylib",
+      "size": 11600872,
+      "sha256": "0b361252d18fce28cc0ebd1bdcb099aee8fb0e77ebf151af2d5b698f0813366b"
+    },
+    {
+      "path": "bin/libavfilter.12.dylib",
+      "size": 254280,
+      "sha256": "7d7baf528c820b38dc8de0d9537233ca34261cd95d3282900cd6ae22143ba26d"
+    },
+    {
+      "path": "bin/libavformat.63.dylib",
+      "size": 1140552,
+      "sha256": "e38c97446df6a8abac090ec69dc7cd09eacf9c4eee37899d613c3da60d3b8d11"
+    },
+    {
+      "path": "bin/libavutil.61.dylib",
+      "size": 742648,
+      "sha256": "0774dd76e9331ee830969aadd1a950d353f378c8d4f45dae6453209446268c44"
+    },
+    {
+      "path": "bin/libswresample.7.dylib",
+      "size": 103528,
+      "sha256": "6039e81da470614e1fb10dd84f46dbf455701bab8a72bf7b75e41d1681783a70"
+    },
+    {
+      "path": "bin/libswscale.10.dylib",
+      "size": 1217592,
+      "sha256": "6b59e440fba1dea872ba8f3fcad02d1aa57df174b676f850f04b1cffef02403f"
+    }
+  ],
+  "browser": {
+    "package": "hls.js",
+    "version": "1.7.4",
+    "license": "Apache-2.0",
+    "commit": "142fcab1fd0de99beafb0e1b07102ec674a9ddf9"
+  }
+}

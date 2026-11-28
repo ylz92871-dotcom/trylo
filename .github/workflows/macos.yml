@@ -1,0 +1,22 @@
+name: macos platform contracts
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.1
+      - name: Check checkout layout
+        run: node scripts/check-workspace-layout.mjs --strict
+      - name: Check source inputs
+        run: node scripts/release/check-source-completeness.mjs
+      - name: Check platform routing and build contracts
+        run: node --test desktop-services/tests/services/platform-profile.test.mjs desktop/scripts/build-platform.test.mjs desktop/scripts/stage-cli-options.test.mjs

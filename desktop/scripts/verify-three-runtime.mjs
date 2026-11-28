@@ -10,7 +10,7 @@ import { createThreeRuntimeHarness } from './three-runtime-harness.mjs';
 const run=`run-${Date.now()}`;
 const output=workspacePath('tasks','3d-preview-implementation-20261108','three-runtime',run);
 const scratch=temporaryPath('three-runtime-acceptance',run);
-const fixture=path.resolve(fileURLToPath(new URL('../testdata/three-runtime-acceptance/',import.meta.url)));
+const fixture=path.resolve(fileURLToPath(new URL('../testdata/three-runtime-acceptance/', import.meta.url)));
 await fs.mkdir(output,{recursive:true});await fs.mkdir(scratch,{recursive:true});
 const project=path.join(scratch,'project'),profile=path.join(scratch,'browser-profile');
 await fs.cp(fixture,project,{recursive:true});await fs.mkdir(profile);
@@ -22,7 +22,7 @@ const server=await createServer({configFile:false,root:project,cacheDir:path.joi
   optimizeDeps:{include:[]},logLevel:'warn'});
 const proof={kind:'isolated headless Three.js + Vite HMR + production browser MCP',nativeWebView2:false,
   userDesktopControlled:false,paidProviderCalls:0,result:'running',checks:[],events:[],sources:{},expectedErrors:[]};
-const sources=['desktop-services/src/tooling/native-browser-service.mjs','desktop-services/src/tooling/native-browser-mcp.mjs',
+const sources=['desktop-services/src/tooling/browser/native-browser-service.mjs','desktop-services/src/tooling/browser/native-browser-mcp.mjs',
   'desktop/scripts/three-runtime-harness.mjs','desktop/scripts/verify-three-runtime.mjs',
   'desktop/testdata/three-runtime-acceptance/scene.js'];
 for(const file of sources)proof.sources[file]=crypto.createHash('sha256').update(await fs.readFile(path.join(repositoryRoot,file))).digest('hex');

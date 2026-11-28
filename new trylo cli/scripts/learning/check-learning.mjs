@@ -2,8 +2,8 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { createCheckLearningSubsystem } from "../../dist/internal/integration/check-learning/runtime.js";
 import { createToolEvolutionVerifier } from "../../dist/internal/adapters/tool-evolution/process-verifier.js";
-import { createWindowsIsolation } from "../../dist/internal/adapters/sandbox/windows-isolation.js";
-import { windowsHelperEnvironment } from "../../dist/internal/adapters/sandbox/windows-helper-environment.js";
+import { createWindowsIsolation } from "../../dist/internal/adapters/sandbox/windows/windows-isolation.js";
+import { windowsHelperEnvironment } from "../../dist/internal/adapters/sandbox/windows/windows-helper-environment.js";
 
 // This explicit operator entry uses the existing confined checker. It never installs or falls back to host execution.
 const [boardPath, command, ...args] = process.argv.slice(2);

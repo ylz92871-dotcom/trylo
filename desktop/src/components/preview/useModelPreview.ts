@@ -133,10 +133,11 @@ export function useModelPreview(props: ModelPreviewProps) {
     // The published state owns automatic-load errors. Imperative reload retains its rejecting Promise.
     void load().then(() => undefined, () => undefined);
   }, [props.path, props.allowedRoot, props.revision, props.expectedFileSignature, load]);
+  const { onController } = props;
   useEffect(() => {
-    props.onController?.(controller);
-    return () => props.onController?.(null);
-  }, [props.onController, controller]);
+    onController?.(controller);
+    return () => onController?.(null);
+  }, [onController, controller]);
 
   return { mountRef, state, controller };
 }

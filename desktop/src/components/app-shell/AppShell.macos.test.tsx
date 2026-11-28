@@ -187,31 +187,12 @@ describe('AppShell macOS capability parity (Code & Work)', () => {
     expect(onSearchContent).not.toHaveBeenCalled();
   });
 
-  it.each(['code', 'work'] as const)('installs a URL Skill from the top of the shared tools pane in %s', async topMode => {
+  it.each(['code', 'work'] as const)('does not advertise a URL installer without a service implementation in %s', topMode => {
     restorePlatform = mockPlatform('MacIntel');
-    const skill = { directory: 'report-helper', name: 'report-helper', description: 'Format reports', category: '工作区' };
-    const workspaceSkills = vi.fn()
-      .mockResolvedValueOnce({ ok: true, installed: skill })
-      .mockResolvedValueOnce({ ok: true, skills: [skill] })
-      .mockResolvedValueOnce({ ok: true, content: 'Use the report template.' });
-    renderShell({ topMode, leftRailCollapsed: false, toolPlatform: {
-      serviceHealth: 'starting', transportError: null, packages: [], byId: {}, actions: {}, loading: false,
-      workspaceSkills, refresh: vi.fn(async () => {}),
-      install: vi.fn(async () => true), uninstall: vi.fn(async () => true), installBrowser: vi.fn(async () => true),
-    } });
+    renderShell({ topMode, leftRailCollapsed: false });
     fireEvent.click(screen.getByRole('button', { name: '工具与技能' }));
-    const form = screen.getByRole('form', { name: '从 URL 安装 Skill' });
-    expect(form.compareDocumentPosition(screen.getByRole('list', { name: '工具目录' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-
-    const url = 'https://github.com/example/skills/tree/main/report-helper';
-    const urlField = screen.getByRole('textbox', { name: '从 URL 安装 Skill' });
-    expect(urlField).toBeEnabled();
-    fireEvent.change(urlField, { target: { value: url } });
-    fireEvent.click(screen.getByRole('button', { name: /^安装$/ }));
-    expect(workspaceSkills).toHaveBeenCalledWith({ op: 'install', workspaceRoot: '/tmp/trylo', url });
-    expect(await screen.findByText('已安装 report-helper')).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole('button', { name: /report-helper/ }));
-    expect(await screen.findByText('Use the report template.')).toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: '从 URL 安装 Skill' })).not.toBeInTheDocument();
+    expect(screen.getByRole('list', { name: '工具目录' })).toBeInTheDocument();
   });
 
   it.each(['code', 'work'] as const)('opens the manual live-window picker from %s', async mode => {

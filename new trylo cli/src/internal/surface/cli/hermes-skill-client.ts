@@ -13,5 +13,4 @@ export function createCliHermesClient(ctx: Pick<CliContext, "env" | "homeDir" | 
     nextId: () => ctx.newId("hermes-request") });
 }
 
-export const hermesCapabilitiesDirectory = fileURLToPath(new URL(
-  "../../learning/agent/subsystems/skill/vendor/legacy/hermes-capabilities/", import.meta.url));
+export const hermesCapabilitiesDirectory = fileURLToPath(new URL("../../learning/agent/subsystems/skill/vendor/legacy/hermes-capabilities/", import.meta.url));

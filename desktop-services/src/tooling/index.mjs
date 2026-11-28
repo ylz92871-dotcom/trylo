@@ -12,6 +12,7 @@
 // here may block a Code or Work run — a broken tool package removes a
 // capability, never the conversation (§4.4).
 
+import { createMacosComputerPermissions } from './computer-control/macos/permissions.mjs';
 import { configureHermesEnv } from '../learning/hermes-env.mjs';
 import { createMcpArgsService } from '../learning/mcp-args-service.mjs';
 import { createArtifactPromoter } from './artifact-promoter.mjs';
@@ -21,12 +22,12 @@ import { createToolCatalog, CORE_TOOL_RUNTIME_REVISION } from './tool-catalog.mj
 import { createToolPackageManager } from './tool-package-manager.mjs';
 import { createToolHealthService } from './tool-health-service.mjs';
 import { createToolProfileService } from './tool-profile-service.mjs';
-import { createViewportBridge } from './viewport-bridge.mjs';
-import { createBrowserObserver } from './browser-observer.mjs';
-import { createNativeBrowserService } from './native-browser-service.mjs';
+import { createViewportBridge } from './browser/viewport-bridge.mjs';
+import { createBrowserObserver } from './browser/browser-observer.mjs';
+import { createNativeBrowserService } from './browser/native-browser-service.mjs';
 import { createModelPreviewService } from './model-preview-service.mjs';
 import { createSoftwareWorkspace, softwareRuntimeEntry } from './software-workspace-service.mjs';
-import { createComputerPreviewStream, resolveComputerPreviewPython } from './computer-preview-stream.mjs';
+import { createComputerPreviewStream, resolveComputerPreviewPython } from './computer-control/windows/computer-preview-stream.mjs';
 
 /**
  * @param {{ appDataDir?: string, sidecarsDir?: string,
@@ -46,7 +47,7 @@ export function createToolingServices(options = {}) {
   const enableRepositoryTools = options.seam === undefined;
 
   const target = seam.target ?? `${process.platform}-${process.arch}`;
-  const nativeBrowserEnabled = Boolean(seam.nativeBrowser) || (enableRepositoryTools && target.startsWith('win32-'));
+  const nativeBrowserEnabled = Boolean(seam.nativeBrowser) || (enableRepositoryTools && (target.startsWith('win32-') || target.startsWith('darwin-')));
   const catalog = createToolCatalog({
     ...(seam.manifests ? { manifests: seam.manifests } : {}),
     target,
@@ -116,7 +117,9 @@ export function createToolingServices(options = {}) {
     resolveExecutable: () => resolveComputerPreviewPython({ catalog, packages }),
     ...(seam.computerPreview ?? {}),
   });
+  const macosComputerPermissions = createMacosComputerPermissions({ target, hostEntrypoint: options.hostEntrypoint, ...(seam.macosComputerPermissions ?? {}) });
   const profiles = createToolProfileService({
+    platform: target.split('-')[0],
     catalog,
     packages,
     health,
@@ -219,6 +222,7 @@ export function createToolingServices(options = {}) {
 
   return {
     catalog,
+    macosComputerPermissions,
     nativeBrowserOpen: params => nativeBrowser.open(params),
     nativeBrowserState: params => nativeBrowser.snapshot(params),
     nativeBrowserControl: params => nativeBrowser.control(params),

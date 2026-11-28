@@ -46,7 +46,7 @@ export function ArchivePreview({ path, allowedRoot }: { path: string; allowedRoo
   }, [bytes, path]);
   const currentSource = bytes.status === 'ready' && loaded.source === bytes.bytes;
   const archive = currentSource ? loaded.archive : undefined;
-  const entries = archive?.entries ?? [];
+  const entries = useMemo(() => archive?.entries ?? [], [archive]);
   const filtered = useMemo(() => entries.filter((entry) => entry.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())), [entries, query]);
   const pages = Math.max(1, Math.ceil(filtered.length / 200)); const current = Math.min(page, pages - 1);
   const entry = selected === undefined ? undefined : entries[selected];

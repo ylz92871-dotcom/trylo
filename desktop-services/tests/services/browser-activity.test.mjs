@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import vm from 'node:vm';
-import { browserActivitySource, createBrowserActivity, parseBrowserActivity } from '../../src/tooling/browser-activity.mjs';
+import { browserActivitySource, createBrowserActivity, parseBrowserActivity } from '../../src/tooling/browser/browser-activity.mjs';
 
 function pageHarness() {
   const events = [];

@@ -12,8 +12,8 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { WINDOWS_MCP_MANIFEST } from '../src/tooling/manifests/windows-mcp.mjs';
-import { verifyBuiltinTools } from '../../desktop/scripts/verify-builtin-tools.mjs';
-import { macosNodePin, verifyMacosNode } from '../../desktop/scripts/macos-node-pin.mjs';
+import { verifyBuiltinTools } from '../../desktop/scripts/build/shared/verify-builtin-tools.mjs';
+import { macosNodePin, verifyMacosNode } from '../../desktop/scripts/build/macos/macos-node-pin.mjs';
 import { MACOS_COMPUTER_EXECUTABLE } from '../src/tooling/macos-computer-contract.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

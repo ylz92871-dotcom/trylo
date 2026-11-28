@@ -7,7 +7,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { WebSocket } from 'ws';
-import { createNativeBrowserService, nativeBrowserScope } from '../src/tooling/native-browser-service.mjs';
+import { createNativeBrowserService, nativeBrowserScope } from '../src/tooling/browser/native-browser-service.mjs';
 import { artifactPath } from '../../scripts/workspace-paths.mjs';
 
 const workspace = path.resolve(fileURLToPath(new URL('../../', import.meta.url)));

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { defaultProbeWindowsInputAccess } from '../src/tooling/windows-input-access.mjs';
+import { defaultProbeWindowsInputAccess } from '../src/tooling/computer-control/windows/windows-input-access.mjs';
 
 // Read-only diagnosis: inspect installations and process tokens; send no input.
 const appData = process.env.APPDATA;

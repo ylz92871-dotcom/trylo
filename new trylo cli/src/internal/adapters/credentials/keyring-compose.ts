@@ -3,7 +3,7 @@ import { createUnavailableKeyringDriver, type KeyringAvailability, type OsKeyrin
 import { createFileLedgerStore } from "./file-store.js";
 import { createPreferReadLedgerStore } from "./prefer-store.js";
 import { createOsKeyringLedgerStore } from "./keyring-store.js";
-import { createWindowsCredentialManagerDriver } from "./keyring-win32.js";
+import { createWindowsCredentialManagerDriver } from "./windows/keyring-win32.js";
 import { createDarwinKeychainDriver } from "./keyring-darwin.js";
 import { createCredentialPort, type ComposeOptions } from "./compose.js";
 

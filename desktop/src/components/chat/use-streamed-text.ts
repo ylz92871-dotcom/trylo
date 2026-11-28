@@ -55,7 +55,7 @@ export function useStreamedText(id: string, text: string, streaming: boolean): s
       current.frame = progress < 1 ? requestAnimationFrame(tick) : null;
     };
     current.frame = requestAnimationFrame(tick);
-  }, [id, text, streaming]);
+  }, [id, text, streaming, view.id]);
 
   useLayoutEffect(() => () => {
     if (state.current.frame !== null) cancelAnimationFrame(state.current.frame);

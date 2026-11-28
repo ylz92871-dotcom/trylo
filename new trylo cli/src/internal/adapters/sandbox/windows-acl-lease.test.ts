@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { requireAclRelease } from "./windows-acl-lease.js";
-import { acquireAclOwner } from "./windows-acl-owner.js";
+import { requireAclRelease } from "./windows/windows-acl-lease.js";
+import { acquireAclOwner } from "./windows/windows-acl-owner.js";
 
 test("ACL teardown rejects anomalous and malformed per-path results", () => {
   for (const result of [undefined, null, {}, [{ path: "C:/work", status: "failed" }], [{ status: "revoked" }]]) {

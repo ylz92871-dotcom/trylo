@@ -93,7 +93,7 @@ node scripts/setup-cli-native.mjs --archive C:\downloads\sandbox-runtime-0.0.73.
 | CLI JavaScript 依赖 | CLI 目录 `npm ci` | 按 package-lock；不提交 node_modules |
 | Desktop Node 运行时 | 本机 Node，或 `TRYLO_NODE_RUNTIME_DIR` 指向含 node.exe 的目录 | 打包脚本会复制实际 Node 并记录版本/摘要；尚未统一固定下载版本 |
 | Windows-MCP/WGC 捕获 helper | 公库的 C# 源码与 csproj；见下方命令 | 桌面打包还检查固定摘要；自行重建不保证与历史制品逐字节相同 |
-| 桌宠 | `desktop/scripts/build-desktop-pet.ps1`，由 prepare-sidecars 调用 | .NET 9 SDK、Windows x64；输出无需入库 |
+| 桌宠 | `desktop/scripts/build/windows/build-desktop-pet.ps1`，由 prepare-sidecars 调用 | .NET 9 SDK、Windows x64；输出无需入库 |
 | OfficeCLI / Playwright MCP / Chrome DevTools / Windows-MCP | `node scripts/setup-repository-tools.mjs --install` | 既有固定版本/摘要安装器；浏览器本体及 CAD 宿主仍分别准备 |
 | CoWork/workd | 实验性单独依赖，普通 Desktop 构建默认排除 | `-IncludeWorkd` 所需上游完整树尚未纳入公开构建闭包，不声称已补齐 |
 

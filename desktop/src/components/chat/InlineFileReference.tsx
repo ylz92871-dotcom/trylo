@@ -20,7 +20,7 @@ export function InlineFileReference(props: InlineFileReferenceProps): ReactEleme
   </> : name;
   const content = <>
     <FileText size={14} aria-hidden="true" />
-    <span className={`message__artifact-name${props.label == null ? ' message__artifact-name--file' : ''}`}>{props.label ?? filename}</span>
+    <span className={`message__artifact-name${(props.label === null || props.label === undefined) ? ' message__artifact-name--file' : ''}`}>{props.label ?? filename}</span>
     {props.directory && <span className="message__artifact-directory" aria-hidden="true">· {props.directory}</span>}
   </>;
   const attributes = {

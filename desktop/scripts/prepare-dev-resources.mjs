@@ -2,8 +2,9 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import { join, resolve } from 'node:path';
 
 const bundleResources = JSON.parse(readFileSync(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8')).bundle.resources;
-const platformResources = process.platform === 'darwin'
-  ? JSON.parse(readFileSync(new URL('../src-tauri/tauri.macos.conf.json', import.meta.url), 'utf8')).bundle.resources
+const platformName = { win32: 'windows', darwin: 'macos', linux: 'linux' }[process.platform];
+const platformResources = platformName
+  ? JSON.parse(readFileSync(new URL(`../src-tauri/tauri.${platformName}.conf.json`, import.meta.url), 'utf8')).bundle.resources ?? {}
   : {};
 
 function rejectRedirectedPath(path) {

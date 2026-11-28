@@ -44,6 +44,7 @@ function isBrowserProfileDirectory(directories: readonly string[]): boolean {
 
 export function isOutputArtifactPath(relativePath: string): boolean {
   const path = relativePath.replace(/\\/g, '/');
+  // eslint-disable-next-line no-control-regex -- Deliberately reject all C0 control characters in paths and labels.
   if (!path || path.startsWith('/') || /^[a-z]:/i.test(path) || /[\u0000-\u001f]/.test(path)) return false;
   const parts = path.toLowerCase().split('/');
   if (parts.some(part => !part || part === '.' || part === '..')) return false;

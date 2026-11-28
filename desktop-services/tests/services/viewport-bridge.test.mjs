@@ -16,7 +16,7 @@ import {
   normalizeNavigateUrl,
   viewportMetrics,
   pickPageTarget,
-} from '../../src/tooling/viewport-bridge.mjs';
+} from '../../src/tooling/browser/viewport-bridge.mjs';
 
 describe('pickPageTarget', () => {
   it('returns null for empty or malformed payloads', () => {

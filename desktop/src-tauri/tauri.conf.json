@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build:bundle",
-    "beforeBundleCommand": "node scripts/preview/verify-release.mjs",
+    "beforeBundleCommand": "node scripts/build/shared/preview/verify-release.mjs",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
@@ -39,9 +39,6 @@
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "nsis"
-    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -55,7 +52,6 @@
     "resources": {
       "resources/preview/": "preview/",
       "resources/desktop-services/": "desktop-services/",
-      "resources/sidecars/desktop-companion/publish/": "sidecars/desktop-companion/publish/",
       "resources/sidecars/hermes-capabilities/": "sidecars/hermes-capabilities/",
       "resources/cli/": "cli/",
       "resources/runtime/": "runtime/",

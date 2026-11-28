@@ -64,6 +64,19 @@ enum Server {
             print("trylo-macos-mcp \(version)")
             return
         }
+        let arguments = Array(CommandLine.arguments.dropFirst())
+        if arguments.first == "--permissions" {
+            guard arguments.count <= 2, arguments.count == 1 || ["accessibility", "screen"].contains(arguments[1]) else {
+                FileHandle.standardError.write(Data("Invalid permission request\n".utf8))
+                exit(2)
+            }
+            do {
+                let result = Computer.permissions(request: arguments.count == 2 ? arguments[1] : nil)
+                let data = try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
+                print(String(decoding: data, as: UTF8.self))
+            } catch { exit(1) }
+            return
+        }
         while let line = readLine() {
             guard !line.isEmpty else { continue }
             do {

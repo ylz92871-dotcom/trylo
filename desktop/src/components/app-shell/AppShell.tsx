@@ -361,10 +361,11 @@ export function AppShell(props: AppShellProps): ReactElement {
     display: mac ? undefined : computerState.display,
     enabled: workbench.computerVisible && (mac || (runActive && computerState.hasStarted === true)),
     pickerRequest: mac ? workbench.computerRequest : undefined, excludeWindow: workbench.computerHandle });
+  const { openComputer } = workbench;
   const openMacPreview = useCallback((): void => {
     reportPreviewError('');
-    void workbench.openComputer(props.toolingFacade?.prepareComputerPreview);
-  }, [workbench.openComputer, props.toolingFacade, reportPreviewError]);
+    void openComputer(props.toolingFacade?.prepareComputerPreview);
+  }, [openComputer, props.toolingFacade, reportPreviewError]);
   useEffect(() => { if (props.rightRailOpen) setBrowserPreviewOpen(false); }, [props.rightRailOpen]);
   useEffect(() => {
     const close = (): void => setBrowserPreviewOpen(false);
@@ -423,7 +424,6 @@ export function AppShell(props: AppShellProps): ReactElement {
     onNewSession: propOnNewSession,
     leftRailCollapsed: propLeftRailCollapsed,
     onToggleLeftRail,
-    onOpenActivityCenter: propOnOpenActivityCenter,
     activityItems: propActivityItems,
     activeCodeRuns: propActiveCodeRuns,
     onSettingsOpenChange: propOnSettingsOpenChange,
@@ -521,7 +521,6 @@ export function AppShell(props: AppShellProps): ReactElement {
       browserPreviewOpen,
       terminalAvailable,
       terminalOpen,
-      propOnOpenActivityCenter,
       propActivityItems,
       propActiveCodeRuns,
       propOnSettingsOpenChange,

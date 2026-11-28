@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createWindowsShellBoundary } from "./windows-shell-boundary.js";
+import { createWindowsShellBoundary } from "./windows/windows-shell-boundary.js";
 import { createWorkspaceSandbox } from "./index.js";
 import { createWorkspaceTools } from "../tools/index.js";
 

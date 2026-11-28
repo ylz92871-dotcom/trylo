@@ -25,7 +25,7 @@ export class OfficeExtensionCache {
       const initial = path.join(profile, 'user/extensions');
       if ((await fs.lstat(initial)).isSymbolicLink()) return;
       const root = await fs.realpath(initial);
-      const lock = JSON.parse(await fs.readFile(new URL('../../scripts/preview/office-engine.lock.json', import.meta.url), 'utf8')) as { buildId: string };
+      const lock = JSON.parse(await fs.readFile(new URL('../../scripts/build/shared/preview/office-engine.lock.json', import.meta.url), 'utf8')) as { buildId: string };
       const pending = [root];
       const files: { relative: string; bytes: Buffer }[] = [];
       let entries = 0; let total = 0;

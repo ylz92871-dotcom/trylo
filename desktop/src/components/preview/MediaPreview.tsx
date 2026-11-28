@@ -69,7 +69,7 @@ export function MediaPreview({ path, allowedRoot, kind }: { path: string; allowe
     if (element.paused) void element.play().catch((error: unknown) => { if (error instanceof Error && (error.name === 'AbortError' || error.name === 'NotSupportedError')) return; if (media.current === element && element.isConnected) setNotice('播放未能开始，请重试或切换兼容播放。'); });
     else element.pause();
   };
-  const useCompatibility = (): void => {
+  const switchToCompatibility = (): void => {
     const element = media.current;
     resume.current = { key, seconds: element?.currentTime ?? 0, playing: element ? !element.paused : false };
     setMode({ key, compatible: true });
@@ -98,7 +98,7 @@ export function MediaPreview({ path, allowedRoot, kind }: { path: string; allowe
     onVolumeChange: () => { if (media.current) { setMuted(media.current.muted); setVolume(media.current.volume); } },
     onError: () => {
       if (!current.url) return;
-      if (!compatible) useCompatibility();
+      if (!compatible) switchToCompatibility();
       else { stopPlayback.current(); setLoading(false); setSource({ key, url: '', error: '兼容播放失败，请重新加载预览。文件可能损坏，或编码暂不支持。' }); }
     },
   };
@@ -119,6 +119,6 @@ export function MediaPreview({ path, allowedRoot, kind }: { path: string; allowe
       rate={rate} loop={loop} volume={volume} muted={muted} compatible={compatible} video={kind === 'video'} fullscreen={fullscreen}
       onPlay={play} onSeek={seek} onRate={value => { setRate(value); if (media.current) media.current.playbackRate = value; }} onLoop={() => setLoop(value => !value)}
       onMute={toggleMute} onVolume={value => { if (media.current) { media.current.volume = value; media.current.muted = value === 0; setVolume(value); setMuted(value === 0); } }}
-      onCompatible={useCompatibility} onFullscreen={() => void toggleFullscreen()} />
+      onCompatible={switchToCompatibility} onFullscreen={() => void toggleFullscreen()} />
   </div>;
 }

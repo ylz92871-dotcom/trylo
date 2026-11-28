@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { windowsHelperEnvironment } from "./windows-helper-environment.js";
+import { windowsHelperEnvironment } from "./windows/windows-helper-environment.js";
 import { childEnvironment } from "../tools/mutating/shell-spawn.js";
 
 test("the broker can locate its ledger while the child overlay excludes host LOCALAPPDATA and secrets", () => {

@@ -1832,6 +1832,7 @@ function App({
   const [cognitionSessionId, setCognitionSessionId] = useState<string | null>(null)
   const [cognitionViewOpen, setCognitionViewOpen] = useState(false)
   const learningView = useMemo(() => {
+    void learningTick // Explicitly invalidate the external store projection.
     const snap = userLearning.snapshot()
     const last = snap.policyDecisions.at(-1)
     return {
@@ -2364,6 +2365,7 @@ function App({
       const paths = await serviceHostPathsRef.current!()
       await serviceManager.ensureRunning(paths)
     },
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- HMR may replace the imported facade factory while the manager remains alive.
   }), [serviceManager, createToolingFacade])
   toolingFacadeRef.current = toolingFacade
 
@@ -2968,6 +2970,40 @@ function App({
   // 2026-08-30 (routing-fix step 6): Work send idempotency. One entry
   // (last send key + timestamp); see handleWorkSend.
   const workSendIdempotencyRef = useRef<{ key: string; at: number } | null>(null)
+  const handlePersonClarify = useCallback(
+    (payload: {
+      readonly personConversationId: string
+      readonly questions: readonly string[]
+      readonly unknown: readonly string[]
+      readonly teamRunId?: string
+    }) => {
+      if (payload.questions.length === 0) return
+      const session = userLearning.enqueueTeamClarification({
+        kind: 'team_clarification',
+        teamRunId:
+          payload.teamRunId ??
+          (teamRunRef.current?.personConversationId === payload.personConversationId
+            ? teamRunRef.current.id
+            : `team-${payload.personConversationId}`),
+        questions: payload.questions,
+        unknownItems: payload.unknown,
+        blocking: true,
+        risk: 'medium',
+      })
+      if (!session) return
+      updateMessagesAt(currentWorkspace.root, payload.personConversationId, (prev) =>
+        prev.some(
+          (item) =>
+            item.kind === 'cognition_prompt' &&
+            item.sessionId === session.id &&
+            item.status === 'pending',
+        )
+          ? prev
+          : [...prev, cognitionPromptMessage(session)],
+      )
+    },
+    [currentWorkspace.root, updateMessagesAt, userLearning],
+  )
   const handleWorkSend = useCallback(
     async (
       text: string,
@@ -3492,24 +3528,7 @@ function App({
         preparation.finish()
       }
     },
-    [
-      bumpLearning,
-      consumeNextLearningDirective,
-      currentWorkspace.root,
-      effectivePermission.level,
-      workSessionId,
-      updateHistoryAt,
-      updateMessagesAt,
-      userLearning,
-      workProjector,
-      workMessages,
-      workLifecycleObserver,
-      openSettings,
-      supervisor,
-      workRunning,
-      setWorkInput,
-      pendingCognitionByConversation,
-    ],
+    [currentWorkspace.root, workSessionId, workRunning, supervisor, effectivePermission.level, consumeNextLearningDirective, setWorkInput, updateMessagesAt, updateHistoryAt, workProjector, workLifecycleObserver, userLearning, pendingCognitionByConversation, workMessages, bumpLearning, handlePersonClarify],
   )
 
   // Publish the latest Work send for the flush effect (run-controls §UI-B).
@@ -4113,16 +4132,7 @@ function App({
         ])
       }
     },
-    [
-      editingMessageId,
-      codeLifecycleObserver,
-      codeSessionId,
-      currentWorkspace.root,
-      codeMode,
-      effectivePermission.level,
-      supervisor,
-      updateMessagesAt,
-    ],
+    [editingMessageId, codeSessionId, currentWorkspace.root, supervisor, updateMessagesAt, currentWorkspaceKey, codeMode, effectivePermission.level, codeLifecycleObserver, handlePersonClarify],
   )
   // `messages` is intentionally NOT in this dep array
   // — the closure reads it through messagesRef, which
@@ -4735,40 +4745,7 @@ function App({
   // PR-12 (spec §11.2): Person `User questions` bubble into the existing
   // Cognition UI — the seat never talks to the user. blocking v0: a seat
   // question always gates the next writable spawn.
-  const handlePersonClarify = useCallback(
-    (payload: {
-      readonly personConversationId: string
-      readonly questions: readonly string[]
-      readonly unknown: readonly string[]
-      readonly teamRunId?: string
-    }) => {
-      if (payload.questions.length === 0) return
-      const session = userLearning.enqueueTeamClarification({
-        kind: 'team_clarification',
-        teamRunId:
-          payload.teamRunId ??
-          (teamRunRef.current?.personConversationId === payload.personConversationId
-            ? teamRunRef.current.id
-            : `team-${payload.personConversationId}`),
-        questions: payload.questions,
-        unknownItems: payload.unknown,
-        blocking: true,
-        risk: 'medium',
-      })
-      if (!session) return
-      updateMessagesAt(currentWorkspace.root, payload.personConversationId, (prev) =>
-        prev.some(
-          (item) =>
-            item.kind === 'cognition_prompt' &&
-            item.sessionId === session.id &&
-            item.status === 'pending',
-        )
-          ? prev
-          : [...prev, cognitionPromptMessage(session)],
-      )
-    },
-    [currentWorkspace.root, updateMessagesAt, userLearning],
-  )
+
 
   useEffect(() => {
     let cancelled = false
@@ -4888,14 +4865,7 @@ function App({
       )
     }
     return undefined
-  }, [
-    teamRunForCurrentSession,
-    handlePersonTeamStatusBarOpen,
-    teamComposerLive,
-    canSuggestTeam,
-    collaborationSurface,
-    handleComposeTeamFromPerson,
-  ])
+  }, [teamRunForCurrentSession, handlePersonTeamStatusBarOpen])
 
   const handleStartTeam = useCallback(
     (goal: string): Promise<void> => {
@@ -5109,6 +5079,7 @@ function App({
   }, [])
 
   const cognitionSession = useMemo(() => {
+    void learningTick // Cognition sessions live in the external learning store.
     if (!cognitionSessionId) return null
     return (
       userLearning.snapshot().cognitionSessions.find((s) => s.id === cognitionSessionId) ?? null
@@ -5668,24 +5639,7 @@ function App({
         })
         .finally(() => preparation.finish())
     },
-    [
-      historyReady,
-      codeLifecycleObserver,
-      codeSessionId,
-      currentWorkspace.root,
-      codeMode,
-      effectivePermission.level,
-      running,
-      activeProcessId,
-      sendingDisabled,
-      supervisor,
-      updateMessagesAt,
-      setText,
-      userLearning,
-      bumpLearning,
-      pendingCognitionByConversation,
-      consumeNextLearningDirective,
-    ],
+    [historyReady, codeSessionId, running, activeProcessId, sendingDisabled, codeMode, consumeNextLearningDirective, setText, currentWorkspaceKey, currentWorkspace.root, supervisor, updateMessagesAt, effectivePermission.level, codeLifecycleObserver, openCognitionView, userLearning, bumpLearning, pendingCognitionByConversation, handlePersonClarify],
   )
   // Publish the latest onSend for the flush effect (avoids stale closure and
   // an onSend-in-deps re-fire loop). run-controls §UI-B.

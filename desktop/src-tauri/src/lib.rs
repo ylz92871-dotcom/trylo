@@ -9,8 +9,10 @@
 // each command lives in its own file under `src-tauri/src/commands/`.
 
 mod commands;
-mod macos_shell;
+use platform::shell as macos_shell;
+mod platform;
 mod preview;
+#[cfg(target_os = "macos")]
 mod window_state;
 
 use tauri::Manager;
@@ -50,6 +52,7 @@ fn on_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
         // Keep background tasks and local services alive when closing the main window;
         // clicking the Dock icon restores it and Cmd+Q runs full teardown.
         api.prevent_close();
+        #[cfg(target_os = "macos")]
         window.app_handle().state::<window_state::WindowStateManager>().flush();
         let _ = window.hide();
     }
@@ -142,6 +145,7 @@ pub fn run() {
             // docs/TRYLO-MIGRATION-EXECUTION-SPEC-2026-08-28.md §5.
             app.manage(commands::servicehost_state::ServiceHostState::default());
             app.manage(commands::macos_companion::CompanionWindowState::default());
+            #[cfg(target_os = "macos")]
             app.manage(window_state::WindowStateManager::default());
 
             #[cfg(target_os = "macos")]
@@ -294,6 +298,7 @@ fn on_run_event(app_handle: &tauri::AppHandle, event: &tauri::RunEvent) {
         event,
         tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
     ) {
+        #[cfg(target_os = "macos")]
         app_handle.state::<window_state::WindowStateManager>().flush();
         teardown_app(app_handle, "exit");
     }

@@ -393,7 +393,7 @@
       "reason": "Nonfunctional PEM-shaped placeholder, containing an ellipsis, used to test redaction."
     },
     {
-      "source": "new trylo cli/src/internal/adapters/credentials/keyring-win32.platform.test.ts",
+      "source": "new trylo cli/src/internal/adapters/credentials/windows/keyring-win32.platform.test.ts",
       "line": 26,
       "lineSha256": "4838794869d5504e98b8bb9b1a3b83020f96eb88f93d1efe2fa54bd9e85f1f33",
       "reason": "Fixed credential-store test sentinel, with isolated trylo:test credential targets."

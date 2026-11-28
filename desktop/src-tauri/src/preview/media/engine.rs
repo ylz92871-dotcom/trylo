@@ -19,9 +19,9 @@ struct Entry { path: String, size: u64, sha256: String }
 struct Entries { encoder: String, probe: String }
 fn verify(root: &Path) -> Result<Executables, String> {
     let source = if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-        include_str!("../../../../scripts/preview/media-engine.darwin-arm64.lock.json")
+        include_str!("../../../../scripts/build/shared/preview/media-engine.darwin-arm64.lock.json")
     } else if cfg!(all(windows, target_arch = "x86_64")) {
-        include_str!("../../../../scripts/preview/media-engine.lock.json")
+        include_str!("../../../../scripts/build/shared/preview/media-engine.lock.json")
     } else {
         return Err("当前平台尚未供给本地媒体兼容引擎".into());
     };

@@ -1,210 +1,109 @@
-# Trylo 产品源码架构
+# Trylo 项目架构
 
-> 2026-10-17：同步浏览器固定视口、用户学习文档阅读、turn 全程计时、文件改动事实与 CLI 流/文件工具修复。源码所有权、v1 增量字段和本轮验证见[同步交接](<../../new trylo cli/docs/02-分期工程产出/P08-Desktop切换与Parity/2026-10-17-源码同步交接.md>)；目录迁移仍按下述目标单独推进。
+状态为已批准的三端架构整理，依据 2026-11-27 项目所有者决定。本文描述公库当前模块与接入边界。旧目录方案可在 Git 历史的 456e450 版本中查阅。
 
-> 2026-10-16：当前源码默认 trylo-v1。新增[逐请求上下文、工具历史与预算边界](context-and-budgets.md)，说明请求所有权、并行结果保护、思考续接和验证范围。发行状态见[当前源码快照](../release/CURRENT_SOURCE_CHECKPOINT.md)。
-
-> Current source decision (2026-10-15): main working-tree fixes are synchronized, trylo-v1 is the default, and legacy CLI source/engine staging are excluded. [Synchronization record](../release/MAIN_SOURCE_SYNC_2026_10_15.md). Earlier R3 artifact notes describe their historical download, not this source default.
-> 2026-10-15 source audit: the Windows-MCP fork, tool registry, Tauri icons and sandbox source inputs are now included. See [source completeness](../release/SOURCE_COMPLETENESS_2026_10_15.md). Historical migration plans and release limitations below remain distinct.
-> R3 发布边界：普通 Work 使用 CLI；CoWork 后台已从默认主包移出，仅保留独立实验依赖。[当前组件边界](OPTIONAL_COWORK_RUNTIME.md)。以下保留原架构方案记录。
-
-> 状态：待审
-> 阶段：公开源码整理，第一批
-> 负责人：Trylo 项目维护者
-> 最后更新：2026-10-15
-> 依赖决策：公开当前产品源码、新版 CLI、整理后的架构文档；先在独立副本整理；当前已授权提交源码开发快照，目录迁移仍未完成。
-
-## 1. 当前事实和本次目标
-
-Trylo 的产品入口包括原生桌面、CLI/TUI、移动端与网站。公开的 Agent 执行内核来自当前 `new trylo cli/`，目标目录名为 `trylo-cli/`。旧 `trylo cli/` 和包含官方发行件的 `runtime/` 不进入公开源码树。
-
-参考 Codex 的职责分离：核心、协议、终端入口、进程服务、执行隔离、持久化与发行脚本各自有边界。参考的是依赖方向和职责，不把 Rust workspace 的每个 crate 对应成一个新的 npm 包。本批保留一个 CLI TypeScript 包，避免一次迁移同时改变目录、模块体系和运行协议。
-
-当前 Desktop 默认使用 trylo-v1，并保留显式旧协议兼容；shadow runner 等后台调用仍需单独验收。因此“预览树中没有旧 CLI 文件”和“产品不再依赖旧 CLI”是两项不同的验收，后者尚未通过。当前没有统一 app-server；本次不把规划中的服务冒充现有能力。
-
-参考：
-- [Codex workspace](https://github.com/openai/codex/blob/main/codex-rs/Cargo.toml)
-- [Codex 发行入口](https://github.com/openai/codex/blob/main/codex-cli/package.json)
-
-## 2. 首批公开源码树
-
-```text
-trylo/
-├─ trylo-cli/                 新版 CLI，保留完整的 TS 工程
-├─ desktop/                   React + Tauri 原生桌面
-├─ desktop-services/          NDJSON 服务宿主及外围服务
-├─ mobile-app/                移动端与远程工作台
-├─ work/                      Work 工作流、交付物及托管运行适配
-├─ website/                   原 trylocode-site，独立构建和部署
-├─ native/                    Trylo 的 PTY、WGC 原生辅助程序
-├─ third_party/               审计后的上游组件、补丁和来源台账
-├─ scripts/release/           源码清单、构建、校验与发布入口
-├─ tools/release/             机器可读的公开范围与迁移清单
-├─ docs/
-│  ├─ architecture/           当前架构、所有权、协议和 ADR
-│  ├─ development/            开发、模块扩展和构建步骤
-│  ├─ release/                公开边界、提交与打包流程
-│  └─ validation/             精选、脱敏、可复核的验收结论
-└─ LICENSE / NOTICE / README  沿用公库许可政策，按实际发行闭包更新声明
-```
-
-本图是提交目标。第一批已生成目录预览和架构文档，当前源码快照沿用原目录名；LICENSE/NOTICE、构建闭包、旧运行路径清理通过前，预览树不是可发布源码包。依赖继续使用各模块现有锁文件，不在目录迁移中顺带更换包管理器。
-
-## 3. 新版 CLI 内部架构
-
-```text
-trylo-cli/
-├─ src/cmd/trylo/                 可执行入口及组装
-├─ src/internal/
-│  ├─ domain/                     状态、命令、审批、权限与 reducer
-│  ├─ ports/                      provider、存储、工具等端口
-│  ├─ loop/                       调度、流式响应、工具执行、取消恢复
-│  ├─ protocol/ + contract/       规范事件、版本与边界校验
-│  ├─ surface/cli/                参数、命令和 TUI 展示
-│  ├─ surface/protocol/           进程输入输出协议适配
-│  ├─ config/ settings/ credentials/
-│  ├─ journal/ compaction/ knowledge/
-│  ├─ learning/                   控制板、用户学习及 Agent 学习
-│  ├─ subagent/ mcp/ tooling/ hooks/
-│  ├─ adapters/                   provider、工具、存储、沙箱等 IO 实现
-│  └─ integration/ e2e/ evaluation/
-├─ scripts/                       编译、质量、合同与发行检查
-├─ testdata/                      合成且允许公开的固定夹具
-└─ package.json + package-lock.json
-```
-
-先保留现有真实模块名，避免只为图好看而重排全部 import。后续合并 config/settings、梳理 protocol/contract 等边界时，需要先确定 canonical 类型和生命周期所有者。
-
-| 职责 | 唯一所有者 | 不应承担的职责 |
-| --- | --- | --- |
-| Run/Turn 与终态 | domain + loop 中的既有状态机 | UI 卡片或服务层不能另判任务成功 |
-| 权限、授权范围与审批 | 核心权限合同与 Permission Service | 学习、provider、工具不得自行扩权 |
-| Provider 数据转换 | adapters/provider | provider SDK 类型不得进入核心状态 |
-| 工具调用和取消 | loop 的调用生命周期，经 ports 到 adapter | Desktop 不复制工具执行循环 |
-| 会话/日志/恢复 | 核心定义恢复语义，存储 adapter 写入 | UI 缓存不能成为执行事实来源 |
-| CLI/TUI/stdio | surface | 不新增独立执行状态机 |
-
-执行路径：入口组装 → CLI/协议输入 → 核心命令 → Execution Loop → 权限/工具/provider 端口 → 适配器 → canonical 事件 → 表面投影。终态、拒权、取消、协议失败必须分别可观察；模型自称完成不能替代产物验证。
-
-## 4. 学习的小架构
-
-```text
-真实任务证据（按收集与保留规则投影）
-          ├─ 用户学习：Evidence → Eligibility → Conclusion
-          │             → User Model / Latent Preference
-          │             → Policy Compiler → Runtime Resolver
-          └─ Agent 学习：能力缺口 → 候选方法/技能/工作流
-                        → 隔离验证/外部判定 → 选择/启用/回滚
-                ↑
-     Learning Control Board：调度对象、时机、预算与治理状态
-                ↓
-     执行时消费明确版本的策略/方法；权限仍由核心决定
-```
-
-用户学习、Agent 学习和执行基底在产品层面同级。学习控制板是独立调度与治理所有者，不是可有可无的记账插件，也不替用户执行生产任务。两类学习不能压成同一个“记忆列表”。学习可以形成可撤销的合作策略和经验证的方法，但不能把用户偏好编译成权限、凭沉默转正、自评通过或默认自改内核。
-
-现有 CLI 学习与 Desktop Services 中旧 Hermes 学习服务同时存在，不能仅改名就宣称统一。公开文档要标明现有接线和目标机制；本批不改学习机制、不扩大收集范围，也不宣称已经证明净收益。
-
-## 5. 桌面端的小架构
+## 项目结构
 
 ```text
 desktop/
-├─ src/
-│  ├─ App.tsx + main.tsx           当前入口；后续收缩为组装
-│  ├─ surfaces/                   Code、Work、Team 等产品表面
-│  ├─ components/                 共享呈现组件
-│  ├─ runtime/ + host-adapter/     CLI 协议、投影、会话监督和 IPC
-│  ├─ state/                      视图状态与会话索引
-│  ├─ approval/ + permission/     审批交互和权限展示
-│  ├─ tooling/                    工具与浏览器面板
-│  ├─ learning/ user-learning/ user-profile/
-│  ├─ work-chat/ managed-work/ remote/
-│  └─ settings/ recovery/ results/ result-dock/
-├─ src-tauri/src/commands/        Rust 原生桥接、进程与系统接口
-├─ sidecars/                     桌宠与既有隔离辅助组件
-└─ scripts/                      开发启动和资源组装
+  src/                       共用 React 工作台、Code / Work、设置与结果
+    host-adapter/            界面调用本机能力的接口与 Tauri 接线
+    styles/components/       共用样式
+    styles/platforms/        系统局部样式的接入约定
+  src-tauri/
+    src/commands/            IPC、参数与路径验证、现有生命周期
+    src/preview/             格式预览及所属的浏览器、媒体、Office 后端
+    src/platform/
+      windows/               Windows 启动标志、文件打开、文件夹选择
+      macos/                 Mac 文件打开；文件夹选择待接入
+      linux/                 Linux 文件打开；文件夹选择待接入
+    tauri.conf.json          公共配置
+    tauri.windows.conf.json  Windows 资源与安装包
+    tauri.macos.conf.json    Mac 窗口、资源与 APP/DMG 目标
+    tauri.linux.conf.json    Linux 打包目标，资源实现待接入
+  scripts/build/
+    prepare.mjs              按构建机器选择资源准备入口
+    shared/                  CLI、npm、工具清单导出、预览引擎与校验
+    windows/                 Windows 工具、桌宠、运行权限及打包
+    macos/                   Apple Silicon 资源准备、Node、Swift 工具与打包
+    linux/                   Linux 资源准备接入口，目前报告待接入
+new trylo cli/
+  src/internal/
+    domain/ loop/ protocol/ ports/    共用执行状态、流程、协议和接口
+    learning/                        共用学习系统
+    adapters/
+      process-session/               进程与终端
+      sandbox/platform-isolation.ts  隔离执行的平台选择入口
+      sandbox/windows/               Windows 隔离实现
+      credentials/windows/           Windows 凭据实现
+desktop-services/
+  src/
+    host.mjs                 服务入口与生命周期
+    protocol/ remote/        服务协议和远程连接
+    tooling/
+      manifests/             工具版本、来源、平台与依赖
+      browser/               浏览器会话、CDP、预览与流
+      computer-control/
+        platform.mjs         选择电脑控制包
+        windows/             Windows 权限探测与电脑预览
+        macos/               Mac 电脑控制包选择；Swift 工具由服务管理
+        linux/               Linux 包接入口，原生工具待接入
+  toolchain/                 工具源码与原生辅助程序
+mobile-app/                  手机端
+remote-relay/                远程中继
+scripts/                     全仓开发与源码检查
+docs/                        架构、开发与发布文档
 ```
 
-Desktop 当前监督会话和进程，CLI 拥有 Agent 执行循环。UI 渲染协议事实、发送用户命令和显示审批；不得根据文本“像完成了”就改终态。Rust 负责原生进程、WebView、文件与 IPC 边界。
+官网工程的公开范围遵循根 README。开发数据和候选包保存在被忽略的 _workspace/。根目录按工程划分，平台实现归各自工程。
 
-后续优先拆 App.tsx 的会话编排、工作区布局、设置入口和表面选择，按照现有所有权逐块抽取，不把几千行转移到新的“大 hook”。此项与新版 CLI 默认切换分别留证。
+## 调用与依赖
 
-普通 Work Chat 目前复用 ConversationRunSupervisor 的执行路径；托管 Work 另有适配路径，不把所有 Work 都描述为独立 workd。
+用户操作进入 React 工作台，经 host-adapter 交给原生宿主或本地服务。会话监督通过 Trylo Protocol 启动 CLI，CLI 调用模型、工具和系统适配器，将执行事实返回工作台。CLI 使用自己的 ports 与领域类型，不能依赖 React、Tauri IPC 类型或 Desktop Services 的内部实现。
 
-## 6. Desktop Services 的小架构
+原生命令先验证参数和允许的文件范围，再调用 platform 选择的实现。例如成果路径验证继续由 commands/work_host.rs 持有，platform/*/open.rs 只负责启动系统程序。IPC 名称、参数、结果和权限语义保持兼容。跨功能的系统操作归 platform；只服务于预览或浏览器的原生后端留在所属功能模块，按该功能接口选择系统实现。
 
-```text
-desktop-services/src/
-├─ host.mjs                      NDJSON stdin/stdout 与方法注册
-├─ protocol/                     帧、错误、版本和 registry
-├─ remote/                       网关、配对、身份与隧道
-├─ tooling/                      工具包、profile、浏览器和预览服务
-├─ learning/                     既有学习服务与 shadow runner
-├─ pet/                          原生桌宠通道
-└─ pet-chat/                     桌宠对话接线
-```
+Services 的 tooling 持有工具安装、健康检查和每轮工具配置。computer-control/platform.mjs 按系统选择工具包。它不把平台名称当作可用性证明，也不替代用户电脑控制开关和 CLI 审批。工具包管理器复用同一平台选择来确定内置工具归属。缺失的 Mac/Linux 工具返回局部不可用结果，其他工具和会话继续执行。
 
-服务宿主只分发方法和生命周期事件；它不是 Agent 内核，也不是当前已存在的统一 app-server。Remote 将用户请求送回 Desktop 的权威路由，不能绕过桌面端的会话、权限和取消语义。tool profile 的创建、工具安装、模型调用和学习预算分别维持各自的唯一写入口。
+## 状态所有权
 
-重点整理 tooling 的包管理、安装验证、profile/runtime registry、原生浏览器会话与预览流，防止所有职责继续堆进 tool-package-manager。shadow runner 必须作为旧协议迁移点单独核验。
+| 状态 | 所有者 |
+| --- | --- |
+| 执行、取消、恢复和任务终态 | CLI 既有执行模块 |
+| 权限与每轮授权快照 | 既有 Permission 与宿主审批链 |
+| 学习调度和资产 | CLI 既有学习控制面及所属子系统 |
+| 会话监督与视图状态 | Desktop 既有监督器、仓库与投影 |
+| 原生窗口和宿主子进程 | Tauri 既有原生状态与关闭流程 |
+| 工具安装、健康和服务连接 | Desktop Services 对应服务 |
 
-## 7. Work 的小架构
+各系统适配返回原合同中的真实结果与失败，不能另建执行或权限状态。
 
-```text
-work/
-├─ src/control-plane/            托管任务的控制命令与合同
-├─ src/host-adapter/             宿主及运行时适配
-├─ src/deliverables/             交付物生成、解析与登记
-├─ src/renderer/                 Work 的视图呈现
-├─ src/work-domain.ts            Work 领域概念
-├─ src/*reconciler / *reducer     工作流投影与核对
-├─ bin/trylo-workd.mjs            当前 workd 发行入口
-└─ tests/                        合成任务与交付物验收
-```
+## 平台构建
 
-Work 拥有任务看板、工作流和交付物语义，不另建一套核心权限或 Agent Loop。结果入库要依据实际产物，不能把运行进程退出等同于业务交付成功。
+Tauri 构建时合并公共配置与当前系统配置。正常入口仍是 desktop 中的 pnpm tauri:dev 和 pnpm tauri:build。beforeBuild 经 scripts/build/prepare.mjs 选择资源准备入口。Windows 调用 scripts/build/windows/prepare.ps1。公共预览脚本和输入清单位于 shared/preview。CLI 组装接受 --node 指定已经准备的目标平台解释器，原 Windows 调用继续使用默认路径。
 
-当前 workd 组装仍依赖本地被忽略的 CoWork vendor 完整树及补丁；只提交少量补丁不能保证新克隆可构建。先明确当前依赖和固定获取/组装方法，不因目录整理重新引入或推荐整套上游 runtime。真实任务录像与数据库不入公库；依赖它们的测试要改用可分发的合成夹具，不能靠删除测试做出绿色结果。
+现有预览引擎的锁文件和已审计重建配方整体归 shared/preview，其中 media-build/windows.sh 和相应固定工具链仍属于 Windows 引擎配方。Mac/Linux 接入时分别提供自己的已验证配方与锁文件，通过引擎接口选择；公共校验不依赖另一系统的适配目录。
 
-## 8. 移动端与网站的小架构
+共享开发启动入口继续负责选择平台及协调现有 Cargo/Tauri 生命周期。其中 Windows 关闭旧窗口、重建与完整性设置仍按原启动顺序执行，资源准备脚本已归 windows/。这次没有重写开发进程监督流程。
 
-```text
-mobile-app/
-├─ src/remote/                   远程工作台协议、客户端和视图
-├─ src/remoteConnection*         连接生命周期
-├─ src/remoteCache* + remoteOffline*
-├─ src/secureStorage*            平台凭据存储
-├─ src/DirectChatView* + directChat*
-├─ src/App* + MobileNavigation*  页面组装与导航
-├─ android/                      原生壳与可复现构建配置
-├─ scripts/                      预览、同步和签名打包
-└─ tests/                        协议与连接合同
-website/                         来自 trylocode-site
-├─ index.html + assets/
-├─ app/                          下载与产品页面
-├─ chat/ + remote/
-└─ deploy.mjs + 部署配置
-```
+Windows stdin 辅助模块的受保护缓存跟随 sandbox/windows 布局，缓存标识绑定布局和捕获内容，以区分旧布局。旧缓存按原版本保留。
 
-移动端通过网关消费协议，不直接引用桌面私有文件或取得比 Desktop 更大的执行权限。签名密钥、真实连接缓存、账号凭据和 APK 不进源码提交。
+资源布局遵循宿主 node_runtime.rs 和现有 CLI staging 的合同。修改布局时同时核对生成方、查找方和校验方。版本与摘要由组件锁文件、工具 manifest 持有。
 
-网站保留在本次范围中。站点源码随源码提交；安装包和 APK 放 GitHub Release，网站链接发行制品。部署和源码推送是分开的动作，不在整理时自动部署。
+Windows 资源准备沿用原有入口；Mac arm64 经 build/macos/prepare.mjs 事务式准备固定 Node、CLI、Service Host、Swift 电脑工具和预览引擎。共享内置工具清单与摘要校验归 build/shared，Mac 不依赖 Windows 构建实现。Linux 准备入口仍明确失败并给出开发指南。已有 Beta 安装包沿用原发布来源和验证范围。
 
-## 9. 原生组件与第三方边界
+platform/shell.rs 持有跨平台 IPC 外观桥，Mac 原生菜单、Dock 与窗口事件实现在其目标条件模块；非 Mac 保留兼容命令。菜单事件经 host-adapter 回到同一个 AppShell 操作入口，不另建会话状态。Mac PATH 补齐归 platform/macos/process.rs。Swift 电脑工具的受控源文件清单在 toolchain/computer-control/macos-mcp/SOURCES.json，编译与源码完整性检查共同读取。
 
-| 目标位置 | 内容 | 本次处理 |
-| --- | --- | --- |
-| native/pty | Trylo PTY 的 Rust 源码、Cargo 锁文件、来源说明 | 源码预览纳入；预编译 exe 不进源码包 |
-| native/wgc | Trylo WGC helper 的 C# 源码和项目 | 源码预览纳入；移动后组装脚本待接线 |
-| third_party | sandbox、Windows-MCP、既有隔离组件的固定来源与补丁 | 先写清台账及缺口，未完成审计/闭包的不假称可构建 |
-| desktop/src-tauri/resources | Node、CLI、service、sidecar 的生成资源 | 属于组装产物，不把整棵本机资源缓存上传 |
+## 双线同步
 
-第三方组件必须带精确版本/提交、来源、许可证、NOTICE、Trylo 修改、进入制品的位置和可替换边界。合法的 Anthropic API/provider 支持与开源 sandbox 归属不是 Claude Code 执行内核；要去掉的是旧内核依赖，不能删除实际依赖的版权声明来制造“零残留”。
+完整本地开发库与公库可以分别推进。本次只整理公库。同步本地旧路径的改动时，冻结共同基准，按文件迁移表做三方合并，保留公库已经建立的接口和修复。源码导出目录是待审候选，不能直接覆盖当前公库目录或推送完整私有历史。
 
-## 10. 第一批的边界和后续验收
+## 合作者接入与验证
 
-当前产物是公开目录预览、文件哈希/映射清单和本文，未改业务执行语义、权限或学习行为。
+[Windows 开发](../development/windows.md) · [Mac 接入](../development/macos.md) · [Linux 接入](../development/linux.md)
 
-后续按 [迁移顺序](../development/repository-layout.md) 和 [提交与打包](../release/source-submission.md) 执行。预览清单通过只证明选中文件已正确归位；还必须完成路径接线、旧运行依赖清理、固定第三方闭包、干净克隆构建和安装制品验收。发布阻断项保存在机器清单和本地预览报告中。
+先接系统适配和必要接口，再审界面调整。Code / Work 使用共享组件与相同接线。系统样式覆盖限定平台范围。新增接口说明调用者、状态所有者、失败与取消语义。
 
-Current source update: [formal memory and native continuation](memory-continuation-update.md).
+公共逻辑使用已有软件测试，各系统原生操作在对应环境验证。源码检查、TypeScript/Vite 构建、CLI 检查、服务测试和 Rust 检查分别留证。安装包额外验证随包 CLI、Service Host、依赖和启动。
+
+[文件迁移表](platform-migration.json) 记录新旧路径。[本轮验证记录](../../new%20trylo%20cli/docs/02-%E5%88%86%E6%9C%9F%E5%B7%A5%E7%A8%8B%E4%BA%A7%E5%87%BA/P00-%E5%B7%A5%E7%A8%8B%E5%9C%B0%E5%9F%BA%E4%B8%8E%E8%B4%A8%E9%87%8F%E9%97%A8%E7%A6%81/2026-11-27-%E9%AA%8C%E6%94%B6%E6%91%98%E8%A6%81-%E8%B7%A8%E5%B9%B3%E5%8F%B0%E6%9E%B6%E6%9E%84%E6%95%B4%E7%90%86.md) 分开列出通过、原有失败与未验证项。原始证据位于 _workspace/tasks/platform-foundation-20261127/。

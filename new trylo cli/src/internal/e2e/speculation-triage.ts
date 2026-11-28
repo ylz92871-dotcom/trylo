@@ -217,6 +217,7 @@ export function classifySourceFile(normalizedRelativePath: string): SpeculationS
   // 4. Library reachable (pure contracts, protocol codecs, shared domain primitives)
   if (
     f.startsWith("internal/contract/") ||
+    f.startsWith("internal/validation/") ||
     f.startsWith("internal/protocol/")
   ) {
     return "library_reachable";

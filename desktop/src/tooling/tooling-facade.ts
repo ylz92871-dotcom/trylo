@@ -32,7 +32,6 @@ import type {
   ToolingUninstallResult,
   ToolingValidateOfficeArtifactsParams,
   ToolingValidateOfficeArtifactsResult,
-  WorkspaceSkillsParams,
   ViewportInputParams,
   ViewportInputResult,
   ViewportNavigateResult,
@@ -166,11 +165,6 @@ export function createToolingFacade(client: ServicesClient, readiness: ToolingFa
         if (error instanceof ServiceRequestError) return null;
         throw error;
       }
-    },
-
-    async workspaceSkills(params: WorkspaceSkillsParams) {
-      if (params.op === 'install') await waitForReady(readiness.ensureReady);
-      return client.request('tooling.workspaceSkills', params, { timeoutMs: params.op === 'install' ? 120_000 : 30_000 });
     },
 
     async install(id: string, archivePath?: string): Promise<ToolingInstallResult> {

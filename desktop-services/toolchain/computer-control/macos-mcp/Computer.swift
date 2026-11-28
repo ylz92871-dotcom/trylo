@@ -54,6 +54,16 @@ enum Computer {
         ["x": rect.minX, "y": rect.minY, "width": rect.width, "height": rect.height]
     }
 
+    static func permissions(request: String? = nil) -> Object {
+        if request == "accessibility" {
+            _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+        } else if request == "screen" {
+            _ = CGRequestScreenCaptureAccess()
+        }
+        return ["accessibility": AXIsProcessTrusted(), "postEvents": CGPreflightPostEventAccess(),
+                "screenRecording": CGPreflightScreenCaptureAccess()]
+    }
+
     static func status() -> Object {
         var count: UInt32 = 0
         _ = CGGetActiveDisplayList(0, nil, &count)

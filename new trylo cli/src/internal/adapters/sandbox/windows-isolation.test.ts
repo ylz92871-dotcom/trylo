@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { createWindowsIsolation, windowsIsolationDiagnostic } from "./windows-isolation.js";
+import { createWindowsIsolation, windowsIsolationDiagnostic } from "./windows/windows-isolation.js";
 
 /**
  * WP04 — the fail-closed contract.

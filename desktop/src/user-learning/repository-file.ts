@@ -60,7 +60,7 @@ export function createLocalStorageFileIO(storage?: Storage): LearningFileIO {
       const store = getStorage();
       if (!store) throw new Error('no storage');
       const value = store.getItem(from);
-      if (value == null) throw new Error(`missing ${from}`);
+      if (value === null) throw new Error(`missing ${from}`);
       store.setItem(to, value);
       store.removeItem(from);
     },
@@ -72,13 +72,13 @@ export function atomicWrite(io: LearningFileIO, path: string, content: string): 
   const bak = `${path}.bak`;
   io.write(tmp, content);
   const previous = io.read(path);
-  if (previous != null) io.write(bak, previous);
+  if (previous !== null) io.write(bak, previous);
   io.rename(tmp, path);
 }
 
 export function readWithBackup(io: LearningFileIO, path: string): string | null {
   const primary = io.read(path);
-  if (primary != null) return primary;
+  if (primary !== null) return primary;
   return io.read(`${path}.bak`);
 }
 

@@ -1,5 +1,5 @@
 import { createNodeSpawner, type ShellSpawner } from "../../adapters/tools/mutating/shell-spawn.js";
-import { createWindowsShellBoundary } from "../../adapters/sandbox/windows-shell-boundary.js";
+import { createWindowsShellBoundary } from "../../adapters/sandbox/windows/windows-shell-boundary.js";
 import { createMacosShellBoundary } from "../../adapters/sandbox/macos-shell-boundary.js";
 import type { ProcessSessionRegistry } from "../../adapters/process-session/session-registry.js";
 import { createSessionViewForRun } from "./session-view-wiring.js";

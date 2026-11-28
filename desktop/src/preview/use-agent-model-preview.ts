@@ -8,7 +8,7 @@ export function useAgentModelPreview(manager: ServiceManager): {
   readonly sessions: readonly AgentModelSession[];
   readonly close: (scope: string) => void;
 } {
-  const bridge = useMemo(() => new AgentModelPreviewBridge(), [manager]);
+  const bridge = useMemo(() => { void manager; return new AgentModelPreviewBridge(); }, [manager]);
   const [sessions, setSessions] = useState<readonly AgentModelSession[]>([]);
   useEffect(() => {
     const unsubscribe = bridge.subscribe(() => setSessions(bridge.sessions()));

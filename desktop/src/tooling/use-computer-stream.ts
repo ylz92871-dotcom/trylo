@@ -32,22 +32,22 @@ export function useComputerStream(options: ComputerStreamOptions, callbacks: {
     setReady(options.manager?.currentHealth === 'ready')
     return options.manager?.onHealth(health => setReady(health === 'ready'))
   }, [options.manager])
+  const { manager, facade, projectRoot, conversationId, enabled, pickerRequest, turnId, display, excludeWindow } = options
   useEffect(() => {
-    const { manager, facade, projectRoot, conversationId } = options
-    if (!projectRoot || !conversationId || !options.enabled) return undefined
+    if (!projectRoot || !conversationId || !enabled) return undefined
     const scope = JSON.stringify([projectRoot.replaceAll('\\', '/').toLowerCase().replace(/\/$/, ''), conversationId])
     if (!manager || !facade || !ready) {
       current.current.status({ scope, streamId: '', state: 'starting', detail: '等待预览服务就绪' })
       return undefined
     }
-    if (options.pickerRequest !== undefined) {
-      if (attemptedPicker.current === options.pickerRequest) {
+    if (pickerRequest !== undefined) {
+      if (attemptedPicker.current === pickerRequest) {
         current.current.status({ scope, streamId: '', state: 'stopped', detail: '请重新选择要预览的窗口' })
         return undefined
       }
-      attemptedPicker.current = options.pickerRequest
+      attemptedPicker.current = pickerRequest
     }
-    const streamId = `${scope}:${options.turnId ?? ''}:${++streamSequence}`
+    const streamId = `${scope}:${turnId ?? ''}:${++streamSequence}`
     let cancelled = false
     let ended = false
     let seq = -1
@@ -75,8 +75,8 @@ export function useComputerStream(options: ComputerStreamOptions, callbacks: {
       })
     })
     const offStatus = manager.client.onEvent('tooling.computerPreviewStatus', status)
-    void facade.computerPreviewStart({ projectRoot, conversationId, streamId, display: options.display,
-      excludeWindow: options.excludeWindow ?? undefined }).then(result => {
+    void facade.computerPreviewStart({ projectRoot, conversationId, streamId, display: display,
+      excludeWindow: excludeWindow ?? undefined }).then(result => {
       if (!result.ok) status({ scope, streamId, state: 'error', detail: result.error ?? '电脑画面连接失败' })
       if (cancelled) void facade.computerPreviewStop({ scope, streamId }).catch(() => {})
     }).catch(error => status({ scope, streamId, state: 'error', detail: String(error) }))
@@ -86,6 +86,6 @@ export function useComputerStream(options: ComputerStreamOptions, callbacks: {
       offStatus()
       void facade.computerPreviewStop({ scope, streamId }).catch(() => {})
     }
-  }, [options.manager, options.facade, options.projectRoot, options.conversationId, options.enabled,
-    options.excludeWindow, options.turnId, options.display, options.pickerRequest, ready, key])
+  }, [manager, facade, projectRoot, conversationId, enabled,
+    excludeWindow, turnId, display, pickerRequest, ready, key])
 }

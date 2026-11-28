@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 const checkout = fileURLToPath(new URL('../../', import.meta.url));
-const preparation = fileURLToPath(new URL('./prepare-runtime-integrity.ps1', import.meta.url));
+const preparation = fileURLToPath(new URL('./build/windows/prepare-runtime-integrity.ps1', import.meta.url));
 test('a staged Low Node cannot write a normal directory; preparation restores its actual token and writes',
   { skip: process.platform !== 'win32' }, () => {
     const temp = path.join(checkout, 'Temp');

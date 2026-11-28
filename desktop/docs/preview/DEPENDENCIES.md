@@ -5,7 +5,7 @@
 用户于 2026-11-03 明确允许 LibreOffice 作为仓库 stars 门槛的例外，采用范围是可替换、独立管理的本地 Office 页面引擎和发行供给。该例外不适用于其他项目，也不授权其接管 Trylo 核心运行时。
 
 - 项目由 The Document Foundation 治理，有独立发布、Windows x64 官方 MSI、版本归档、官方摘要/签名和安全公告渠道。代码有企业与社区贡献；不能用基金会名称或提交总量代替维护风险判断。依据：[基金会](https://www.documentfoundation.org/)、[下载](https://www.libreoffice.org/download/)、[系统要求](https://www.libreoffice.org/system-requirements/)、[安全公告](https://www.libreoffice.org/security/)。
-- 当前锁定 26.8.2.2 / Windows x64，官方 MSI SHA256 和核心摘要见 `scripts/preview/office-engine.lock.json`。以文件到 PDF 的进程边界接入，发布配置不依赖系统 Office。核心协议、CLI、学习和成果模型不依赖 LibreOffice 类型。
+- 当前锁定 26.8.2.2 / Windows x64，官方 MSI SHA256 和核心摘要见 `scripts/build/shared/preview/office-engine.lock.json`。以文件到 PDF 的进程边界接入，发布配置不依赖系统 Office。核心协议、CLI、学习和成果模型不依赖 LibreOffice 类型。
 - 构建时 `supply-office-engine.ps1` 复用已验证资源，或获取固定官方 MSI、检查摘要/发布者、作管理镜像解包并应用固定精简配置。它不运行普通系统安装，不接管关联/用户配置；应用运行时不会下载引擎。
 - 26.8.2.2 全量暂存为 19,417 文件 / 1,583,065,349 字节。六种 DOCX/XLSX/PPTX/DOC/XLS/PPT 的正式文件到 PDF 接口已真实通过，含项目范围、原件不变及作业清理；随后原始文件全量摘要仍匹配。页面数与末尾文字检查通过，并以 Poppler 检查中文、图片与图表页面。实际原生交互和安装验收仍未完成，不能继承旧版本或离线输出的结论。
 - 许可由实际 `license.txt`、`LICENSE.html`、`NOTICE` 和对应源码供给承担，不能把整个分发包概括为单一许可。引擎和解码器的版本源码伴随包、原始构建脚本与摘要在发行工作目录保存，公共发行必须同步提供相应内容。

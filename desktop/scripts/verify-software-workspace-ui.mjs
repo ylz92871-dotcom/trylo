@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import { createSoftwareWorkspace } from '../../desktop-services/src/tooling/software-workspace-service.mjs';
 import { createToolCatalog } from '../../desktop-services/src/tooling/tool-catalog.mjs';
 import { createToolPackageManager } from '../../desktop-services/src/tooling/tool-package-manager.mjs';
-import { resolveComputerPreviewPython } from '../../desktop-services/src/tooling/computer-preview-stream.mjs';
+import { resolveComputerPreviewPython } from '../../desktop-services/src/tooling/computer-control/windows/computer-preview-stream.mjs';
 import { workspacePath } from '../../scripts/workspace-paths.mjs';
 
 const root = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));

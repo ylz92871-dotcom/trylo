@@ -318,10 +318,10 @@ export class BookshelfView {
   movingTowardPage(previous: Point | null, current: Point) {
     if (!previous || !this.openId || current.x <= previous.x + 1) return false;
     if (current.x - previous.x < Math.abs(current.y - previous.y) * 0.45) return false;
-    const page = this.findBook(this.openId)?.querySelector<HTMLElement>('.book-page')!;
+    const page = this.findBook(this.openId)?.querySelector<HTMLElement>('.book-page');
     const inkBounds = this.ink.bounds;
     if (!inkBounds && (!page || Number(getComputedStyle(page).opacity) < 0.9)) return false;
-    const rect = inkBounds ?? page.getBoundingClientRect(),
+    const rect = inkBounds ?? page!.getBoundingClientRect(),
       distance = rect.left - previous.x;
     if (distance <= 0 || current.x >= rect.left) return false;
     const fraction = (current.x - previous.x) / distance;

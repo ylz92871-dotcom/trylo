@@ -3,6 +3,7 @@
 export function localResourcePath(documentPath: string, root: string, reference: string): string | undefined {
   let ref: string;
   try { ref = decodeURIComponent(reference.split(/[?#]/)[0] ?? ''); } catch { return undefined; }
+  // eslint-disable-next-line no-control-regex -- Intentionally reject control bytes or strip ANSI escapes.
   if (!ref || /^[a-z][a-z\d+.-]*:|^[\\/]/i.test(ref) || /[\x00-\x1f]/.test(ref)) return undefined;
   const base = documentPath.replace(/\\/g, '/').split('/').slice(0, -1);
   for (const part of ref.replace(/\\/g, '/').split('/')) {
