@@ -79,6 +79,7 @@ function build(overrides = {}) {
       ...(overrides.overrides ? { overrides: overrides.overrides } : {}),
       ...(overrides.manifests ? { manifests: overrides.manifests } : {}),
       ...(overrides.resolveUv ? { resolveUv: overrides.resolveUv } : {}),
+      ...(overrides.runCommand ? { runCommand: overrides.runCommand } : {}),
     },
   });
 }
@@ -245,21 +246,20 @@ describe('tooling.install — pinned-python-env transport (§8.2, PR-6)', () => 
 
   it('a tampered source tarball is rejected with hash_mismatch and places nothing', async () => {
     const fixture = pythonFixture();
+    const installerCalls = [];
     const tooling = build({
       manifests: [OFFICECLI_MANIFEST, fixture.manifest],
       installRoot: freshRoot(),
-      // The real uv sync is not the subject here — a stub uv resolution via
-      // UV_PATH pointing at a failing script would be flaky, so the test
-      // accepts either `uv_missing` (no uv) or a late `install_failed`
-      // (uv ran). The digest gate is asserted separately below with the
-      // lock-drift case, which never reaches uv.
+      // A deterministic failing installer keeps these integrity checks independent of host uv.
+      resolveUv: () => 'fixture-uv',
+      runCommand: async (...args) => { installerCalls.push(args); throw new Error('fixture installer failure'); },
       probePythonMetadata: async () => '0.8.5',
     });
     const result = await tooling.install({ id: 'testpy', archivePath: fixture.tgz });
-    // The fixture's lock digest matches, so a real uv may complete or fail —
-    // both are acceptable in a hermetic test environment; what must NEVER
-    // happen is a hash_mismatch on a matching artefact.
-    assert.notEqual(result.reasonCode, 'hash_mismatch');
+    assert.equal(result.ok, false);
+    assert.equal(result.reasonCode, 'install_failed');
+    assert.ok(installerCalls.length > 0, 'An untampered artifact reaches the fake installer');
+    const callsBeforeTampering = installerCalls.length;
     // Tamper AFTER: a second install from a drifted artefact must fail the
     // digest gate before anything else runs.
     const drifted = path.join(tmpRoot, 'drifted-source.tgz');
@@ -267,6 +267,7 @@ describe('tooling.install — pinned-python-env transport (§8.2, PR-6)', () => 
     const second = await tooling.install({ id: 'testpy', archivePath: drifted });
     assert.equal(second.ok, false);
     assert.equal(second.reasonCode, 'hash_mismatch');
+    assert.equal(installerCalls.length, callsBeforeTampering, 'Tampering cannot reach execution');
   });
 
   it('a uv.lock drift inside the tarball is refused even when the tarball digest matches', async () => {
@@ -277,7 +278,8 @@ describe('tooling.install — pinned-python-env transport (§8.2, PR-6)', () => 
       ...fixture.manifest,
       artifact: { ...fixture.manifest.artifact, uvLockSha256: crypto.createHash('sha256').update('other-lock').digest('hex') },
     };
-    const tooling = build({ manifests: [OFFICECLI_MANIFEST, manifest], installRoot: freshRoot() });
+    const tooling = build({ manifests: [OFFICECLI_MANIFEST, manifest], installRoot: freshRoot(),
+      resolveUv: () => 'fixture-uv', runCommand: async () => { assert.fail('Lock drift must be rejected before execution'); } });
     const result = await tooling.install({ id: 'testpy', archivePath: fixture.tgz });
     assert.equal(result.ok, false);
     assert.equal(result.reasonCode, 'hash_mismatch');

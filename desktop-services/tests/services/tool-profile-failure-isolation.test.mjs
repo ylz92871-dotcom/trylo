@@ -22,6 +22,7 @@ for (const phase of ['health', 'resolution', 'browser-observer', 'runtime-direct
       await fs.writeFile(path.join(root, '.trylo/runtime/browser'), 'blocked browser directory');
     }
     const service = createToolProfileService({
+      platform: 'win32', // These fixtures exercise the Windows computer package on every host.
       storageRoot: root,
       catalog: { get: id => manifests.find(item => item.id === id), list: () => manifests },
       health: { check: async manifest => {

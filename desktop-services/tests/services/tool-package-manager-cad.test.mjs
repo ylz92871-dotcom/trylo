@@ -162,7 +162,7 @@ describe('pinned-pypi-env: wheels mode', () => {
     ]);
     const manifest = wheelManifest({ id: 'cad-test', wheels });
     const uv = fakeUvRunCommand(path.basename(manifest.artifact.executableRelativePath));
-    const packages = build(manifest, { runCommand: uv.run });
+    const packages = build(manifest, { resolveUv: () => 'fixture-uv', runCommand: uv.run });
     const result = await packages.install({ id: 'cad-test' });
     assert.equal(result.ok, true, result.error ?? '');
     assert.ok(isFile(result.executable));
@@ -184,6 +184,7 @@ describe('pinned-pypi-env: wheels mode', () => {
         // Tamper exactly one wheel (the second call would be the dep).
         fs.writeFileSync(dest, url.includes('fake-cad') ? Buffer.from('tampered') : bytes);
       },
+      resolveUv: () => 'fixture-uv',
       runCommand: fakeUvRunCommand('cad-test.exe').run,
     });
     const result = await packages.install({ id: 'cad-bad' });
@@ -204,6 +205,7 @@ describe('pinned-pypi-env: wheels mode', () => {
         const bytes = Buffer.from(`fake-wheel:${url.split('/').pop()}`);
         fs.writeFileSync(dest, url.includes('fake-dep') ? Buffer.from('tampered') : bytes);
       },
+      resolveUv: () => 'fixture-uv',
       runCommand: uv.run,
     });
     const result = await packages.install({ id: 'cad-order' });
@@ -245,6 +247,7 @@ describe('pinned-pypi-env: source mode (solidworks shape)', () => {
         writeF(path.join(dest, 'mcp-server', 'server.py'), '# fake entry\n');
         writeF(path.join(dest, 'capabilities.yaml'), 'capabilities: []\n');
       },
+      resolveUv: () => 'fixture-uv',
       runCommand: uv.run,
     });
     const result = await packages.install({ id: 'sw-test' });
@@ -447,6 +450,7 @@ describe('shipped CAD/EDA manifests + work.cad.v1 composition', () => {
       appDataDir: tmpRoot,
       sidecarsDir: tmpRoot,
       seam: {
+        target: 'win32-x64', // This fixture intentionally mounts the six Windows CAD adapters.
         installRoot: path.join(tmpRoot, 'tool-packages'),
         profilesRoot: path.join(tmpRoot, 'tool-profiles-cad'),
         // The fake binaries are not executables, so the `--version` probe
