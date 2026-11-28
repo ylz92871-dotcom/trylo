@@ -408,6 +408,7 @@ describe('work.cad.v1 profile', () => {
       appDataDir: tmpRoot,
       sidecarsDir: tmpRoot,
       seam: {
+        target: 'win32-x64',
         installRoot: path.join(tmpRoot, 'tool-packages'),
         profilesRoot: path.join(tmpRoot, 'tool-profiles-cad'),
         overrides: { 'kicad-mcp': fakeExe, 'solidworks-mcp': fakeExe },
