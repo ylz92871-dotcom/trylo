@@ -880,6 +880,46 @@
 }
 
 /* Tool cards inside sidebar pane */
+.left-rail__skill-install {
+  flex: none;
+  display: grid;
+  gap: 5px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-faint);
+  color: var(--fg);
+  font-size: 12px;
+}
+
+.left-rail__skill-install label {
+  font-weight: 600;
+}
+
+.left-rail__skill-install-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.left-rail__skill-install input {
+  min-height: 32px;
+  padding: 4px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.left-rail__skill-install p,
+.left-rail__skill-install [role='status'] {
+  margin: 0;
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+.left-rail__skill-install .left-rail__skill-install-error {
+  color: var(--danger);
+}
+
 .left-rail__tool-notice {
   display: flex;
   align-items: center;

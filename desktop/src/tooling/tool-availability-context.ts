@@ -20,7 +20,12 @@ function usage(id: typeof BUILTINS[number]['id'], chrome: boolean, macos: boolea
   if (id === 'office') return 'OfficeCLI：只有 officecli 这一个 MCP 入口，command 按实际 schema 使用 string 或 argv array；load_skill、help、dump 都放在 command 内（例如 ["load_skill","pptx"]），不是独立工具，也不要虚构按 verb 拆开的字段。';
   if (id === 'desktop') {
     return macos
-      ? 'macOS 电脑控制：先调用 status 检查系统授权。全程优先后台操作，不抢占用户前台窗口和物理鼠标：open_app 默认后台启动（activate=false）；用 list_apps / list_windows 取得窗口 ID 和所属 PID，再用 ax_find、ax_read_text、inspect、screenshot 或 read_window_text 在后台读取界面；操作控件优先用 ax_perform（支持 path 或后台坐标 x/y）和 ax_set_value，键盘/滚动优先后台 press_key / hotkey / type_text / scroll。click 默认走后台无障碍触发不挪动鼠标；仅当目标应用确实忽略后台无障碍操作时，再显式调用 activate_app 与 foreground=true 的 click（使用全局屏幕点坐标），提交后再观察结果。'
+      ? [
+          'macOS 电脑控制：网页任务优先使用本轮浏览器工具的后台会话（可用时）。需要当前桌面浏览器的登录状态或原生应用控件时，优先使用下列后台操作。',
+          '先调用 status 检查系统授权，再用 list_apps 查找已运行应用。需要启动时用 open_app（activate=false）。用 list_windows 取得窗口 ID 和所属 PID，最小化窗口可通过 list_ax_windows 查找控件。用 ax_find、ax_read_text、inspect、screenshot 或 read_window_text 在后台观察。',
+          '优先用 ax_set_value 直接填写控件，或按 ax_find 返回的 path 和支持的动作调用 ax_perform。键盘和滚动使用后台 press_key / hotkey / type_text / scroll。单次坐标点击使用控件提供的 AXPress 或 AXShowMenu，坐标取自最新观测的全局屏幕点坐标。',
+          '先验证后台操作的结果，事件已发送不代表界面已变化。后台失败时，先尝试可用的语义控件或浏览器工具。AXRaise 会将窗口置前；只有确认这一步需要前台时，才使用 activate_app 或显式的前台输入。普通网页导航、搜索、填写和点击一律走可用的后台浏览器工具，仅在任务需要这个桌面浏览器且验证后台操作不足时，才可显式指定 browserForeground=true，并遵循当前任务的操作审批。',
+        ].join('\n')
       : '电脑控制：先用发现到的 Snapshot/Screenshot 读取状态，再按实际动作 schema 操作；位置、坐标空间和缩放来自最新观测，不猜单位、通用 action 或参数字段。';
   }
   const pages = chrome ? 'Chrome DevTools 先 list_pages 或读取 new_page 返回目录取得真实数值 pageId，页面工具按 schema 填该 id，不猜 0/active；' : 'Playwright 使用本 server 返回的 browser_* 工具及其 schema；';

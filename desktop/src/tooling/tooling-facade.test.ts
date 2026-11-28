@@ -64,3 +64,17 @@ describe('createToolingFacade local tool bindings', () => {
     await expect(createToolingFacade(client).localOverrides()).resolves.toBeNull();
   });
 });
+
+it('waits for the tool service on a user-initiated URL install before sending the request', async () => {
+  let ready!: () => void;
+  const ensureReady = vi.fn(() => new Promise<void>(resolve => { ready = resolve; }));
+  const { calls, client } = fakeClient();
+  const { workspaceSkills } = createToolingFacade(client, { ensureReady });
+  const params = { op: 'install', workspaceRoot: '/fixture/project', url: 'https://example.com/SKILL.md' } as const;
+  const install = workspaceSkills(params);
+  expect(ensureReady).toHaveBeenCalledOnce();
+  expect(calls).toEqual([]);
+  ready();
+  await install;
+  expect(calls).toEqual([{ method: 'tooling.workspaceSkills', params }]);
+});

@@ -38,6 +38,12 @@ if (!args.some(arg => arg === '--help' || arg === '-h')) {
   devResourceConfig = prepareDevResources(desktopRoot);
   if (process.platform === 'darwin' && process.arch === 'arm64') {
     stageMacosComputerUse(resolve(desktopRoot, 'src-tauri/resources'));
+    // The macOS app bundles this tree separately from Tauri's resource map.
+    // An unbundled dev executable should use the prepared source tree directly.
+    const officeRoot = resolve(desktopRoot, 'src-tauri/resources/preview/office');
+    if (!environment.TRYLO_PREVIEW_ENGINE_ROOT && existsSync(resolve(officeRoot, 'LibreOffice.app'))) {
+      environment.TRYLO_PREVIEW_ENGINE_ROOT = officeRoot;
+    }
   }
 }
 

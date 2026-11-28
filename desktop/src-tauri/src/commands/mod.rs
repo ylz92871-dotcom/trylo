@@ -23,6 +23,7 @@ pub mod lsp_send;
 pub mod lsp_spawn;
 pub mod lsp_state;
 pub mod lsp_stop;
+pub mod macos_companion;
 pub mod native_browser;
 pub mod node_runtime;
 #[cfg(windows)]

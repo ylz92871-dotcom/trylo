@@ -78,16 +78,21 @@ export function ComputerPreviewWindow(): ReactElement {
       ? state.streamDetail || '画面连接已断开，暂时无法接收新画面。'
       : ''
   const timestamp = state.updatedAt ?? state.screenshotAt
-  const streamLabel =
-    streamState === 'running'
-      ? '实时'
-      : streamState === 'starting'
-        ? '连接中'
-        : streamState === 'error'
-          ? '连接失败'
-          : state.dataUrl
-            ? '画面已保留'
-            : (windowSelection ? '等待选择窗口' : '等待工具')
+  const idleLabel = windowSelection ? '等待选择窗口' : '等待工具'
+  const streamLabels = {
+    running: '实时',
+    selecting: '等待选窗',
+    starting: '连接中',
+    error: '连接失败',
+    stopped: state.dataUrl ? '画面已保留' : idleLabel,
+  }
+  const emptyLabels = {
+    running: '等待首帧画面',
+    selecting: '请选择要预览的窗口',
+    starting: '正在连接电脑画面',
+    error: '电脑画面连接失败',
+    stopped: windowSelection ? '等待选择窗口' : '等待电脑操作',
+  }
   return (
     <main className="computer-preview-window" aria-label="电脑观察窗">
       <header>
@@ -97,8 +102,7 @@ export function ComputerPreviewWindow(): ReactElement {
           status={status}
           detail={status === '失败' ? state.detail || '操作未完成，请查看目标窗口。' : undefined}
         />
-        <PreviewStreamBadge state={streamState} retained={Boolean(state.dataUrl)}
-          waitingLabel={windowSelection ? '等待选择窗口' : undefined} />
+        <PreviewStreamBadge state={streamState} retained={Boolean(state.dataUrl)} waitingLabel={idleLabel} />
         <details key={`details:${state.scope ?? ''}`} className="computer-preview-window__details">
           <summary aria-label="画面与操作详情" title="画面与操作详情">
             <Info size={16} />
@@ -106,7 +110,7 @@ export function ComputerPreviewWindow(): ReactElement {
           <div className="computer-preview-window__details-panel">
             <dl>
               <dt>画面连接</dt>
-              <dd>{streamLabel}</dd>
+              <dd>{streamLabels[streamState]}</dd>
               {(!windowSelection || Boolean(currentAction)) && <><dt>工具操作</dt><dd>{status}</dd></>}
               {state.frameGeometry && (
                 <>
@@ -145,16 +149,12 @@ export function ComputerPreviewWindow(): ReactElement {
           key={state.scope}
           src={state.dataUrl}
           alt={streamState === 'running' ? '电脑控制实时画面' : '电脑控制最后画面'}
-          empty={
-            streamState === 'starting'
-              ? '正在连接电脑画面'
-              : streamState === 'error'
-                ? '电脑画面连接失败'
-                : (windowSelection ? '等待选择窗口' : '等待电脑操作')
-          }
+          empty={emptyLabels[streamState]}
           emptyDescription={
             windowSelection
-              ? (state.streamDetail || '点击主窗口的实时窗口预览按钮选择窗口。')
+              ? (streamState === 'error'
+                ? '点击主窗口的「实时窗口预览」按钮重试。'
+                : state.streamDetail || '点击主窗口的「实时窗口预览」按钮选择窗口。')
               : streamState === 'starting'
               ? '工具已开始，收到画面后会自动显示。'
               : streamState === 'error'

@@ -567,6 +567,7 @@ export function LeftRail(props: LeftRailProps): ReactElement | null {
             />
           ) : currentPane === 'tools' ? (
             <LeftRailToolsPane
+              workspaceRoot={props.workspaces.find(workspace => workspace.id === props.currentWorkspaceId)?.root}
               toolPlatform={props.toolPlatform}
               learningPort={props.learningPort}
               skillLearningRuntime={props.skillLearningRuntime}

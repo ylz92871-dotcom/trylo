@@ -244,7 +244,7 @@ export function SearchPanel({
           className="search-panel search-panel--modal"
           role={isExiting ? undefined : 'dialog'}
           aria-modal={isExiting ? undefined : true}
-          aria-label={isExiting ? undefined : '命令面板与工作区搜索'}
+          aria-label={isExiting ? undefined : actions.length ? '命令面板与工作区搜索' : '工作区全文搜索'}
           onKeyDown={handleModalKeyDown}
         >
           <div className="search-panel-modal__input-row">
@@ -253,7 +253,7 @@ export function SearchPanel({
               ref={inputRef}
               type="text"
               role="combobox"
-              aria-label="命令或工作区搜索"
+              aria-label={actions.length ? '命令或工作区搜索' : '工作区全文搜索'}
               aria-expanded={modalItems.length > 0}
               aria-controls={listboxId}
               aria-activedescendant={activeOptionId}
@@ -264,7 +264,7 @@ export function SearchPanel({
                 setError(null);
                 setActiveIndex(0);
               }}
-              placeholder={`输入命令或搜索工作区 (${formatShortcut(['Mod', 'Shift', 'F'])})`}
+              placeholder={`${actions.length ? '输入命令或搜索工作区' : '搜索文件内容'} (${formatShortcut(['Mod', 'Shift', 'F'])})`}
               spellCheck={false}
             />
             <button

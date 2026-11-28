@@ -90,6 +90,15 @@ describe('current built-in declaration from the immutable run snapshot', () => {
     expect(prompt).not.toContain('Snapshot/Screenshot');
   });
 
+  it.each(['code', 'work'] as const)('prioritizes background browser and desktop paths in %s', surface => {
+    const prompt = toolAvailabilitySystemPrompt(undefined, { runtime: runtime({
+      surface, serverNames: ['trylo-browser', 'trylo-macos'],
+    }) });
+    expect(prompt).toContain('网页任务优先使用本轮浏览器工具的后台会话');
+    expect(prompt).toContain('先验证后台操作的结果');
+    expect(prompt).toContain('AXRaise 会将窗口置前');
+  });
+
   it('keeps unready reasons, explicit nonselection and unmounted capabilities distinct without leaking messages', () => {
     const prompt = toolAvailabilitySystemPrompt(undefined, {
       computerUse: false,

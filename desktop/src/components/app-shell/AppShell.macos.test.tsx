@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -89,6 +89,7 @@ afterEach(() => {
 });
 
 interface RenderShellOptions {
+  readonly toolPlatform?: React.ComponentProps<typeof AppShell>['toolPlatform'];
   readonly topMode: TopLevelMode;
   readonly leftRailCollapsed?: boolean;
   readonly sessions?: readonly ConversationSession[];
@@ -96,7 +97,7 @@ interface RenderShellOptions {
   readonly onToggleLeftRail?: () => void;
   readonly onArchiveSession?: (id: string) => void;
   readonly shellActionsRef?: {
-    current: { readonly toggleTerminal: () => void; readonly toggleBrowserSidebar: () => void } | null;
+    current: NonNullable<React.ComponentProps<typeof AppShell>['shellActionsRef']>['current'];
   };
   readonly rightRailOpen?: boolean;
   readonly rightWidth?: number;
@@ -108,6 +109,7 @@ interface RenderShellOptions {
   readonly toolingFacade?: ReturnType<typeof createToolingFacade>;
   readonly serviceManager?: ServiceManager;
   readonly onSettingsOpenChange?: (open: boolean) => void;
+  readonly commandPaletteContext?: React.ComponentProps<typeof AppShell>['commandPaletteContext'];
 }
 
 function renderShell(options: RenderShellOptions) {
@@ -128,12 +130,14 @@ function renderShell(options: RenderShellOptions) {
       onDeleteSession={vi.fn()}
       onRenameSession={vi.fn()}
       toolingFacade={options.toolingFacade}
+      toolPlatform={options.toolPlatform}
       serviceManager={options.serviceManager}
       onArchiveSession={options.onArchiveSession ?? vi.fn()}
       onUnarchiveSession={vi.fn()}
       topMode={options.topMode}
       onTopModeChange={options.onTopModeChange}
       shellActionsRef={options.shellActionsRef}
+      commandPaletteContext={options.commandPaletteContext}
       topBarCollaborationSwitch={
         options.onCollaborationChange ? (
           <CollaborationSwitch
@@ -166,6 +170,50 @@ function renderShell(options: RenderShellOptions) {
 }
 
 describe('AppShell macOS capability parity (Code & Work)', () => {
+  it.each(['code', 'work'] as const)('routes the macOS menu to the team and search actions in %s', async mode => {
+    restorePlatform = mockPlatform('MacIntel');
+    setTauriGlobal(true);
+    const shellActionsRef: NonNullable<RenderShellOptions['shellActionsRef']> = { current: null };
+    const onOpenTeam = vi.fn();
+    const onSearchContent = vi.fn();
+    renderShell({ topMode: mode, shellActionsRef, commandPaletteContext: { onOpenTeam, onSearchContent } });
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    act(() => shellActionsRef.current?.toggleCommandPalette?.());
+    expect(screen.getByRole('combobox')).toHaveFocus();
+    expect(screen.getByRole('option', { name: '搜索工作区内容' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('option', { name: '打开团队视图' }));
+    await waitFor(() => expect(onOpenTeam).toHaveBeenCalledTimes(1));
+    expect(onSearchContent).not.toHaveBeenCalled();
+  });
+
+  it.each(['code', 'work'] as const)('installs a URL Skill from the top of the shared tools pane in %s', async topMode => {
+    restorePlatform = mockPlatform('MacIntel');
+    const skill = { directory: 'report-helper', name: 'report-helper', description: 'Format reports', category: '工作区' };
+    const workspaceSkills = vi.fn()
+      .mockResolvedValueOnce({ ok: true, installed: skill })
+      .mockResolvedValueOnce({ ok: true, skills: [skill] })
+      .mockResolvedValueOnce({ ok: true, content: 'Use the report template.' });
+    renderShell({ topMode, leftRailCollapsed: false, toolPlatform: {
+      serviceHealth: 'starting', transportError: null, packages: [], byId: {}, actions: {}, loading: false,
+      workspaceSkills, refresh: vi.fn(async () => {}),
+      install: vi.fn(async () => true), uninstall: vi.fn(async () => true), installBrowser: vi.fn(async () => true),
+    } });
+    fireEvent.click(screen.getByRole('button', { name: '工具与技能' }));
+    const form = screen.getByRole('form', { name: '从 URL 安装 Skill' });
+    expect(form.compareDocumentPosition(screen.getByRole('list', { name: '工具目录' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const url = 'https://github.com/example/skills/tree/main/report-helper';
+    const urlField = screen.getByRole('textbox', { name: '从 URL 安装 Skill' });
+    expect(urlField).toBeEnabled();
+    fireEvent.change(urlField, { target: { value: url } });
+    fireEvent.click(screen.getByRole('button', { name: /^安装$/ }));
+    expect(workspaceSkills).toHaveBeenCalledWith({ op: 'install', workspaceRoot: '/tmp/trylo', url });
+    expect(await screen.findByText('已安装 report-helper')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: /report-helper/ }));
+    expect(await screen.findByText('Use the report template.')).toBeInTheDocument();
+  });
+
   it.each(['code', 'work'] as const)('opens the manual live-window picker from %s', async mode => {
     restorePlatform = mockPlatform('MacIntel');
     setTauriGlobal(true);

@@ -58,7 +58,7 @@ import {
 import { alertNativeDialog, confirmNativeDialog } from './host-adapter/native-dialog'
 import { refreshSystemAppearance } from './settings/appearance-store'
 import { formatShortcut, isMacPlatform } from './utils/platform'
-import { SearchPanel, type SearchPanelAction } from './components/product-ui/SearchPanel'
+import { SearchPanel } from './components/product-ui/SearchPanel'
 import { CliSessionStore } from './runtime/cli-session-store'
 import type { FilePath, CodeMode, TopLevelMode } from './host-adapter/types'
 // v1.16.6 (M4-A runtime ownership): the ConversationRunSupervisor
@@ -218,6 +218,7 @@ import { ServiceManager } from './services-host/service-manager'
 import type { PetStatusSnapshot, RemoteStatusResult } from './services-host/methods'
 import { ServicesCompanionPort, createTauriCompanionPaths } from './companion/companion-port'
 import { CompanionController, composeLifecycleObservers } from './companion/companion-controller'
+import { MacosCompanionPort } from './companion/macos-companion-port'
 import { RemoteController } from './remote/remote-controller'
 import { ServicesRemotePort } from './remote/remote-port'
 import { bindPlatformModels } from './account/platform-models'
@@ -1658,7 +1659,7 @@ function App({
   // lets any descendant trigger it.
   const [settingsOpen, setSettingsOpen] = useState(false)
   const openSettings = useCallback(() => setSettingsOpen(true), [])
-  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  const [contentSearchOpen, setContentSearchOpen] = useState(false)
   // 2026-08-29: remote pairing modal — opened by the TopBar
   // "远程" button. Holds the pairing QR + enable switch.
   const [showRemotePairing, setShowRemotePairing] = useState(false)
@@ -1869,8 +1870,10 @@ function App({
   if (!serviceHostPathsRef.current) serviceHostPathsRef.current = createTauriCompanionPaths()
   const companionPortRef = useRef<ServicesCompanionPort | null>(null)
   const companionRef = useRef<CompanionController | null>(null)
+  const nativeCompanion = isMacPlatform() && isTauri()
   if (!companionRef.current) {
-    const port = new ServicesCompanionPort(
+    const Port = nativeCompanion ? MacosCompanionPort : ServicesCompanionPort
+    const port = new Port(
       serviceManager,
       serviceHostPathsRef.current,
       () => currentWorkspace.root,
@@ -1881,6 +1884,7 @@ function App({
       port,
       supervisor,
       settings: () => settingsRef.current,
+      nativeWindow: nativeCompanion,
     })
   }
   const companion = companionRef.current
@@ -2352,19 +2356,16 @@ function App({
     })
   }
 
-  // Bind the stable client once. User sends await the existing Host owner;
-  // whole-profile failures remain visible instead of silently dropping mounts.
-  const toolingBoundRef = useRef(false)
-  if (!toolingBoundRef.current) {
-    toolingBoundRef.current = true
-    toolingFacadeRef.current = createToolingFacade(serviceManager.client, {
-      macosComputerUse: () => settingsRef.current.macosComputerUse,
-      ensureReady: async () => {
-        const paths = await serviceHostPathsRef.current!()
-        await serviceManager.ensureRunning(paths)
-      },
-    })
-  }
+  // Keep the ServiceManager alive while rebuilding the renderer's facade when
+  // its API changes during development refresh.
+  const toolingFacade = useMemo(() => createToolingFacade(serviceManager.client, {
+    macosComputerUse: () => settingsRef.current.macosComputerUse,
+    ensureReady: async () => {
+      const paths = await serviceHostPathsRef.current!()
+      await serviceManager.ensureRunning(paths)
+    },
+  }), [serviceManager, createToolingFacade])
+  toolingFacadeRef.current = toolingFacade
 
   // P0-A (audit §3.3-1): the tool platform state machine. After the Service
   // Host is ready it asks `tooling.health` once and owns the four packages'
@@ -2372,7 +2373,7 @@ function App({
   // the facade is bound synchronously above, so this always runs — the hook
   // itself no-ops until the facade + a ready host exist.
   const toolPlatform = useToolPlatformState({
-    facade: toolingFacadeRef.current,
+    facade: toolingFacade,
     serviceManager,
   })
 
@@ -2381,7 +2382,7 @@ function App({
   // connects the browser MCP to those same contents through CDP.
   const browserPreview = useBrowserPreview({
     initiallyVisible: false,
-    facade: toolingFacadeRef.current,
+    facade: toolingFacade,
     serviceManager,
     projectRoot: currentWorkspace.root,
     conversationId: topMode === 'code' ? codeSessionId : workSessionId,
@@ -2546,13 +2547,16 @@ function App({
     [codeLifecycleObserverBase, terminalNoticeObserver, turnTimingObserver],
   )
   const workLifecycleObserver = useMemo(
-    () => composeLifecycleObservers(turnTimingObserver, userLearningLifecycle),
-    [userLearningLifecycle, turnTimingObserver],
+    () => composeLifecycleObservers(
+      composeLifecycleObservers(turnTimingObserver, userLearningLifecycle), companion.lifecycle,
+    ),
+    [userLearningLifecycle, turnTimingObserver, companion],
   )
 
+  const companionEnabled = nativeCompanion ? settings.companion.macosEnabled === true : settings.companion.enabled
   useEffect(() => {
-    void companion.setEnabled(settings.companion.enabled)
-  }, [companion, settings.companion.enabled])
+    void companion.setEnabled(companionEnabled)
+  }, [companion, companionEnabled])
 
   // Remote enable follows the settings group (migration spec §8.1). The
   // controller no-ops when the platform/Tauri is unavailable or when the
@@ -6042,6 +6046,8 @@ function App({
   const shellActionsRef = useRef<{
     readonly toggleTerminal: () => void
     readonly toggleBrowserSidebar: () => void
+    readonly toggleCommandPalette: () => void
+    readonly openCommandPalette: () => void
   } | null>(null)
   const [windowFocused, setWindowFocused] = useState(true)
   const dockAttentionPrevRef = useRef({ approvals: 0, runs: 0 })
@@ -6080,12 +6086,8 @@ function App({
     },
     onToggleLeftRail,
     onToggleRightRail: toggleRightRailFromShell,
-    onToggleCommandPalette: () => {
-      setCommandPaletteOpen((open) => !open)
-    },
-    onOpenCommandPalette: () => {
-      setCommandPaletteOpen(true)
-    },
+    onToggleCommandPalette: () => shellActionsRef.current?.toggleCommandPalette(),
+    onOpenCommandPalette: () => shellActionsRef.current?.openCommandPalette(),
     onSwitchMode: onTopModeChange,
     onToggleTerminal: () => shellActionsRef.current?.toggleTerminal(),
     onToggleBrowserSidebar: () => shellActionsRef.current?.toggleBrowserSidebar(),
@@ -6098,12 +6100,8 @@ function App({
     },
     onToggleLeftRail,
     onToggleRightRail: toggleRightRailFromShell,
-    onToggleCommandPalette: () => {
-      setCommandPaletteOpen((open) => !open)
-    },
-    onOpenCommandPalette: () => {
-      setCommandPaletteOpen(true)
-    },
+    onToggleCommandPalette: () => shellActionsRef.current?.toggleCommandPalette(),
+    onOpenCommandPalette: () => shellActionsRef.current?.openCommandPalette(),
     onSwitchMode: onTopModeChange,
     onToggleTerminal: () => shellActionsRef.current?.toggleTerminal(),
     onToggleBrowserSidebar: () => shellActionsRef.current?.toggleBrowserSidebar(),
@@ -6160,12 +6158,9 @@ function App({
         : event.ctrlKey && !event.metaKey
       if (!primaryMod || event.altKey) return
 
-      if (!event.shiftKey && key === 'k' && !tauriNativeMenuActive) {
+      if (event.shiftKey && key === 'f') {
         event.preventDefault()
-        nativeMenuHandlersRef.current.onToggleCommandPalette()
-      } else if (event.shiftKey && key === 'f') {
-        event.preventDefault()
-        nativeMenuHandlersRef.current.onOpenCommandPalette()
+        setContentSearchOpen(true)
       } else if (mac && !event.shiftKey && key === 'j') {
         event.preventDefault()
         nativeMenuHandlersRef.current.onToggleTerminal()
@@ -6200,100 +6195,6 @@ function App({
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
-
-  const commandPaletteActions = useMemo<readonly SearchPanelAction[]>(
-    () => [
-      {
-        id: 'file.new-task',
-        label: '新建对话',
-        hint: '在当前工作区创建新任务对话',
-        shortcut: ['Mod', 'N'],
-        keywords: 'new task session chat conversation 新建 任务 对话',
-        onSelect: onNewSession,
-      },
-      {
-        id: 'file.open-folder',
-        label: '打开文件夹…',
-        hint: '切换或添加本地工作区目录',
-        shortcut: ['Mod', 'O'],
-        keywords: 'open folder workspace directory 打开 文件夹 工作区',
-        onSelect: () => {
-          void onOpenFolder()
-        },
-      },
-      {
-        id: 'mode.code',
-        label: '切换到 Code 模式',
-        hint: topMode === 'code' ? '当前正在使用 Code 模式' : '代码工程、调试与 Diff 工作台',
-        shortcut: ['Mod', '1'],
-        keywords: 'code mode coding developer 代码 模式',
-        onSelect: () => onTopModeChange('code'),
-      },
-      {
-        id: 'mode.work',
-        label: '切换到 Work 模式',
-        hint: topMode === 'work' ? '当前正在使用 Work 模式' : '通用协作、文档与交付工作台',
-        shortcut: ['Mod', '2'],
-        keywords: 'work mode office deliverables 工作 模式 交付',
-        onSelect: () => onTopModeChange('work'),
-      },
-      {
-        id: 'view.toggle-sidebar',
-        label: leftRailCollapsed ? '显示侧边栏' : '隐藏侧边栏',
-        hint: '切换左侧工作区与对话栏',
-        shortcut: ['Mod', 'B'],
-        keywords: 'toggle sidebar left rail 侧边栏 导航',
-        onSelect: onToggleLeftRail,
-      },
-      {
-        id: 'view.toggle-right-rail',
-        label: rightRailOpen ? '隐藏结果侧栏' : '显示结果侧栏',
-        hint: '切换右侧文件树与结果面板',
-        shortcut: ['Mod', 'Shift', 'B'],
-        keywords: 'toggle right panel rail files results 右侧栏 文件 结果',
-        onSelect: toggleRightRailFromShell,
-      },
-      ...(isMacPlatform() && isTauri()
-        ? [
-            {
-              id: 'view.toggle-terminal',
-              label: '切换集成终端',
-              hint: '在工作区底部打开或收起内置终端',
-              shortcut: ['Control', '`'] as const,
-              keywords: 'terminal shell console 终端 命令行',
-              onSelect: () => shellActionsRef.current?.toggleTerminal(),
-            },
-          ]
-        : []),
-      {
-        id: 'view.toggle-browser',
-        label: '切换浏览器侧栏',
-        hint: '展开或收起内置浏览器预览面板',
-        shortcut: ['Option', 'Mod', 'B'],
-        keywords: 'browser web preview sidebar 浏览器 侧栏',
-        onSelect: () => shellActionsRef.current?.toggleBrowserSidebar(),
-      },
-      {
-        id: 'app.settings',
-        label: '打开设置…',
-        hint: '连接、外观、模型与工具设置',
-        shortcut: ['Mod', ','],
-        keywords: 'settings preferences appearance theme 设置 偏好 外观',
-        onSelect: openSettings,
-      },
-    ],
-    [
-      topMode,
-      leftRailCollapsed,
-      rightRailOpen,
-      onNewSession,
-      onOpenFolder,
-      onTopModeChange,
-      onToggleLeftRail,
-      toggleRightRailFromShell,
-      openSettings,
-    ],
-  )
 
   return (
     <AppShell
@@ -6469,6 +6370,11 @@ function App({
       onGoHome={handleGoHome}
       browserPreview={browserPreview}
       commandPaletteContext={{
+        onSearchContent: () => setContentSearchOpen(true),
+        onOpenTeam: activeSessionId ? () => setCollaborationSurface('team') : undefined,
+        onComposeTeam: activeSessionId && teamComposerLive
+          ? (canSuggestTeam ? handleComposeTeamFromPerson : handlePersonTeamStatusBarOpen)
+          : undefined,
         codeMode,
         onCodeModeChange,
         permissionLevel: effectivePermission.level,
@@ -6506,7 +6412,7 @@ function App({
             : !!codeSessionId && supervisor.canCompactCode(currentWorkspaceKey, codeSessionId),
       }}
       serviceManager={serviceManager}
-      toolingFacade={toolingFacadeRef.current}
+      toolingFacade={toolingFacade}
       toolMessages={topMode === 'code' ? mergedMessages : workMergedMessages}
       remoteController={remoteController}
       onRemoteConfigure={handleRemoteConfigure}
@@ -7022,18 +6928,17 @@ function App({
       />
       <SearchPanel
         modal
-        open={commandPaletteOpen}
-        onClose={() => setCommandPaletteOpen(false)}
+        open={contentSearchOpen}
+        onClose={() => setContentSearchOpen(false)}
         searchRoot={currentWorkspace.root}
         onResultOpen={(path) => {
-          setCommandPaletteOpen(false)
+          setContentSearchOpen(false)
           if (/^[a-z]:[\\/]/i.test(path) || path.startsWith('/')) {
             void onSelectFile(path, 'file')
           } else {
             onOpenResultFile(path)
           }
         }}
-        actions={commandPaletteActions}
       />
     </AppShell>
   )

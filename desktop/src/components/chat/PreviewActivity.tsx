@@ -2,13 +2,22 @@ import type { ReactElement } from 'react'
 import { AlertCircle, Check, Loader2, Circle } from 'lucide-react'
 import type { PreviewAction } from '../../tooling/tool-preview-state'
 
-export type PreviewStreamState = 'starting' | 'running' | 'stopped' | 'error'
+import type { ComputerPreviewStatusEvent } from '../../services-host/methods'
+
+export type PreviewStreamState = ComputerPreviewStatusEvent['state']
+
+const streamLabels = {
+  starting: '正在连接',
+  selecting: '等待选窗',
+  running: '实时预览',
+  error: '连接失败',
+} as const
 
 export function PreviewStreamBadge({ state, retained = false, waitingLabel = '等待工具' }: {
   readonly state: PreviewStreamState; readonly retained?: boolean; readonly waitingLabel?: string
 }): ReactElement {
-  const label = state === 'running' ? '实时预览' : state === 'starting' ? '正在连接' : state === 'error' ? '连接失败' : retained ? '画面已保留' : waitingLabel
-  return <span className="tool-preview-badge" data-state={state}>{state === 'starting' ? <Loader2 size={11} className="preview-actions__spin" /> : <i />}{label}</span>
+  const label = state === 'stopped' ? (retained ? '画面已保留' : waitingLabel) : streamLabels[state]
+  return <span className="tool-preview-badge" data-state={state} aria-live="polite">{state === 'starting' ? <Loader2 size={11} className="preview-actions__spin" /> : <i />}{label}</span>
 }
 
 export function PreviewActivity({ action, title, status, detail }: {

@@ -308,3 +308,18 @@ describe('CommandPalette (Trylo Spotlight)', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 });
+
+it('never offers the previous workspace files while the new workspace is indexing', async () => {
+  listDirMock.mockImplementation((root: string) => root === '/tmp/old'
+    ? Promise.resolve([{ name: 'old-only.txt', path: '/tmp/old/old-only.txt', isDirectory: false }])
+    : new Promise(() => {}));
+  const onOpenFile = vi.fn();
+  const shell = (workspaceRoot: string) => (
+    <CommandPalette open onClose={vi.fn()} commands={[]} workspaceRoot={workspaceRoot} onOpenFile={onOpenFile} />
+  );
+  const view = render(shell('/tmp/old'));
+  expect(await screen.findByRole('option', { name: /old-only.txt/ })).toBeInTheDocument();
+  view.rerender(shell('/tmp/new'));
+  expect(screen.queryByRole('option', { name: /old-only.txt/ })).not.toBeInTheDocument();
+  expect(onOpenFile).not.toHaveBeenCalled();
+});

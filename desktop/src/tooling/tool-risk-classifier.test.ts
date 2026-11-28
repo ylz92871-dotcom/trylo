@@ -186,6 +186,9 @@ describe('routing (§6.2)', () => {
     expect(classify('ax_perform', 'workspace_write', { pid: 99, path: [0], action: 'AXPress' })).toMatchObject({
       behavior: 'prompt', preview: { title: '后台操作 macOS 控件', target: 'AXPress' },
     });
+    expect(classify('ax_perform', 'workspace_write', { pid: 99, path: [], action: 'AXRaise' })).toMatchObject({
+      behavior: 'prompt', preview: { title: '将 macOS 窗口置前', target: 'PID 99' },
+    });
     const axSet = classify('ax_set_value', 'workspace_write', { pid: 99, path: [0], value: 'secret-value' });
     expect(axSet).toMatchObject({
       behavior: 'prompt', preview: { title: '后台操作 macOS 控件', target: 'PID 99' },

@@ -237,6 +237,6 @@ describe('macOS SettingsModal and WorkToolsSettings adaptation', () => {
     restorePlatform = mockPlatform('MacIntel')
     render(<SettingsModal open initial={settingsDefaults} initialTab="behavior" onClose={vi.fn()} />)
     expect(screen.getByRole('checkbox', { name: '启用桌面伙伴' })).toBeDisabled()
-    expect(screen.getByText(/当前 macOS 版本暂不支持桌面伙伴/)).toBeVisible()
+    expect(screen.getByText(/请在受支持的 Trylo 桌面应用中启用桌面伙伴/)).toBeVisible()
   })
 })

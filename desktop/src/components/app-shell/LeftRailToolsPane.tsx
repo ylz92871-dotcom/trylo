@@ -10,9 +10,11 @@ import type { LearningPort } from '../../learning/learning-port';
 import type { SkillLearningRuntime } from '../../skill-learning/cli';
 import { isMacPlatform } from '../../utils/platform';
 import { selectedWorkPackages } from './WorkToolsSettings';
+import { WorkspaceSkillInstall } from './WorkspaceSkillInstall';
 import { LearnedSkillsPanel } from './LearnedSkillsPanel';
 
 export interface LeftRailToolsPaneProps {
+  readonly workspaceRoot?: string;
   readonly toolPlatform?: ToolPlatformState | null;
   readonly learningPort?: LearningPort | null;
   readonly skillLearningRuntime?: SkillLearningRuntime;
@@ -27,6 +29,7 @@ type SkillSource = 'installed' | 'learned';
 type CatalogPackage = (typeof catalog.packages)[number];
 
 interface SkillSummary {
+  readonly workspaceDirectory?: string;
   readonly name: string;
   readonly category: string;
   readonly description: string;
@@ -98,6 +101,18 @@ export function LeftRailToolsPane(props: LeftRailToolsPaneProps): ReactElement {
   });
   const mounted = useRef(true);
   const viewReqId = useRef(0);
+  const listReqId = useRef(0);
+  const { workspaceRoot, learningPort } = props;
+  const workspaceSkills = props.toolPlatform?.workspaceSkills;
+  const workspaceScope = useRef(workspaceRoot);
+  workspaceScope.current = workspaceRoot;
+
+  useEffect(() => {
+    viewReqId.current++;
+    setExpandedSkill(null);
+    setSkills([]);
+    setSkillPhase('idle');
+  }, [workspaceRoot]);
 
   useEffect(() => {
     mounted.current = true;
@@ -109,31 +124,31 @@ export function LeftRailToolsPane(props: LeftRailToolsPaneProps): ReactElement {
   const loadSkills = useCallback(async (): Promise<void> => {
     setSkillPhase('loading');
     setSkillError(null);
-    if (!props.learningPort) {
-      setSkillPhase('error');
-      setSkillError('已安装技能服务尚未就绪。');
+    const req = ++listReqId.current;
+    const [workspace, library] = await Promise.allSettled([
+      workspaceRoot && workspaceSkills ? workspaceSkills({ op: 'list', workspaceRoot }) : undefined,
+      learningPort?.skills({ op: 'list' }),
+    ]);
+    if (!mounted.current || req !== listReqId.current || workspaceScope.current !== workspaceRoot) return;
+    const local = workspace.status === 'fulfilled' ? workspace.value : undefined;
+    const shared = library.status === 'fulfilled' ? library.value : undefined;
+    if (!local?.ok && !shared?.ok) {
+      setSkillError(local?.error ?? shared?.error ?? '已安装技能服务尚未就绪。');
       setSkills([]);
+      setSkillPhase('error');
       return;
     }
-    try {
-      const res = await props.learningPort.skills({ op: 'list' });
-      if (!mounted.current) return;
-      if (!res.ok) {
-        setSkillPhase('error');
-        setSkillError(res.error ?? 'skills list unavailable');
-        setSkills([]);
-        return;
-      }
-      const list = Array.isArray(res.skills) ? res.skills : [];
-      setSkills(list.map(normalizeSkill).filter((x): x is SkillSummary => x !== null));
-      setSkillPhase('ready');
-    } catch (err) {
-      if (!mounted.current) return;
-      setSkillPhase('error');
-      setSkillError(err instanceof Error ? err.message : String(err));
-      setSkills([]);
+    const skillsByName = new Map<string, SkillSummary>();
+    for (const raw of Array.isArray(shared?.skills) ? shared.skills : []) {
+      const skill = normalizeSkill(raw);
+      if (skill) skillsByName.set(skill.name, skill);
     }
-  }, [props.learningPort]);
+    for (const { name, directory, category, description } of local?.skills ?? []) {
+      skillsByName.set(name, { name, category, description, workspaceDirectory: directory });
+    }
+    setSkills([...skillsByName.values()]);
+    setSkillPhase('ready');
+  }, [workspaceRoot, workspaceSkills, learningPort]);
 
   useEffect(() => {
     if (subTab === 'skills' && skillSource === 'installed') {
@@ -143,10 +158,6 @@ export function LeftRailToolsPane(props: LeftRailToolsPaneProps): ReactElement {
 
   const toggleSkillDetail = async (skill: SkillSummary): Promise<void> => {
     const port = props.learningPort;
-    if (!port) {
-      setSkillDetail({ status: 'error', content: '', error: '已安装技能服务尚未就绪。' });
-      return;
-    }
     if (expandedSkill === skill.name) {
       setExpandedSkill(null);
       return;
@@ -155,15 +166,17 @@ export function LeftRailToolsPane(props: LeftRailToolsPaneProps): ReactElement {
     setExpandedSkill(skill.name);
     setSkillDetail({ status: 'loading', content: '', error: null });
     try {
-      const res = await port.skills({ op: 'view', name: skill.name });
-      if (!mounted.current || req !== viewReqId.current) return;
-      if (!res.ok) {
-        setSkillDetail({ status: 'error', content: '', error: res.error ?? 'skill view unavailable' });
+      const res = skill.workspaceDirectory && workspaceSkills && workspaceRoot
+        ? await workspaceSkills({ op: 'view', workspaceRoot, directory: skill.workspaceDirectory })
+        : await port?.skills({ op: 'view', name: skill.name });
+      if (!mounted.current || req !== viewReqId.current || workspaceScope.current !== workspaceRoot) return;
+      if (!res?.ok) {
+        setSkillDetail({ status: 'error', content: '', error: res?.error ?? '已安装技能服务尚未就绪。' });
         return;
       }
       setSkillDetail({ status: 'ready', content: asText(res.content) || '(技能内容为空)', error: null });
     } catch (err) {
-      if (!mounted.current || req !== viewReqId.current) return;
+      if (!mounted.current || req !== viewReqId.current || workspaceScope.current !== workspaceRoot) return;
       setSkillDetail({
         status: 'error',
         content: '',
@@ -254,6 +267,15 @@ export function LeftRailToolsPane(props: LeftRailToolsPaneProps): ReactElement {
         </div>
       </div>
 
+      <WorkspaceSkillInstall key={workspaceRoot} workspaceRoot={workspaceRoot} query={workspaceSkills}
+        connected={connected} needsReload={platform?.needsServiceReload} onInstalled={() => {
+          if (!mounted.current || workspaceScope.current !== workspaceRoot) return;
+          setQuery('');
+          setSubTab('skills');
+          setSkillSource('installed');
+          if (subTab === 'skills' && skillSource === 'installed') void loadSkills();
+        }} />
+
       <div className="left-rail__subtabs" role="tablist" aria-label="工具与技能视图">
         <button
           type="button"
@@ -304,22 +326,21 @@ export function LeftRailToolsPane(props: LeftRailToolsPaneProps): ReactElement {
       )}
 
       <div className="left-rail__pane-body">
+        {platform?.needsServiceReload && (
+          <div className="left-rail__tool-notice" role="status">
+            <span>工具服务需重载以启用新版本。</span>
+            <button
+              type="button"
+              className="left-rail__tool-action"
+              disabled={platform.loading}
+              onClick={() => void platform.reloadService?.()}
+            >
+              重载服务
+            </button>
+          </div>
+        )}
         {subTab === 'tools' ? (
           <>
-            {platform?.needsServiceReload && (
-              <div className="left-rail__tool-notice" role="status">
-                <span>工具服务需重载以启用新版本。</span>
-                <button
-                  type="button"
-                  className="left-rail__tool-action"
-                  disabled={platform.loading}
-                  onClick={() => void platform.reloadService?.()}
-                >
-                  重载服务
-                </button>
-              </div>
-            )}
-
             {!connected && (
               <div className="left-rail__tool-notice" role="status">
                 <span>{platform?.transportError || '工具服务未连接，以下为支持清单。'}</span>
@@ -366,12 +387,14 @@ export function LeftRailToolsPane(props: LeftRailToolsPaneProps): ReactElement {
                     checking ||
                     !view ||
                     ['installing', 'verifying', 'installing-browser', 'checking'].includes(view.uiState);
-                  const action = busy || core ? 'none' : view.action;
+                  const action = busy || (core && view.action !== 'install-browser' && view.action !== 'repair-office') ? 'none' : view.action;
                   const actionLabel =
                     action === 'install'
                       ? '安装'
                       : action === 'install-browser'
                         ? '安装浏览器'
+                        : action === 'repair-office'
+                          ? '修复'
                         : action === 'retry'
                           ? '重试'
                           : action === 'uninstall'

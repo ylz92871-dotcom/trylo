@@ -90,6 +90,7 @@ export interface CompanionControllerOptions {
   readonly supervisor: ConversationRunSupervisor;
   readonly settings: () => TryloSettings;
   readonly isWindows?: () => boolean;
+  readonly nativeWindow?: boolean;
 }
 
 export class CompanionController {
@@ -98,6 +99,7 @@ export class CompanionController {
   private readonly supervisor: ConversationRunSupervisor;
   private readonly settingsFn: () => TryloSettings;
   private readonly isWindows: () => boolean;
+  private readonly nativeWindow: boolean;
 
   private readonly disposers: (() => void)[] = [];
   private lastPublishedState = '';
@@ -121,6 +123,7 @@ export class CompanionController {
     this.port = options.port;
     this.supervisor = options.supervisor;
     this.settingsFn = options.settings;
+    this.nativeWindow = options.nativeWindow ?? false;
     this.isWindows = options.isWindows ?? (() => /win/i.test(typeof navigator !== 'undefined' ? navigator.userAgent : ''));
 
     this.approvals = new ApprovalService({
@@ -159,10 +162,10 @@ export class CompanionController {
     },
   };
 
-  /** Settings switch (§6.5). Non-Windows is a no-op that reports status. */
+  /** Settings switch (§6.5). The native window has no sidecar launch dependency. */
   async setEnabled(enabled: boolean): Promise<void> {
     if (this.disposed) return;
-    if (!enabled || !this.isWindows()) {
+    if (!enabled || (!this.nativeWindow && !this.isWindows())) {
       this.lifecycleGeneration += 1;
       // The Service Host is shared by pet + Hermes (and later Remote).
       // Disabling one domain must not tear down the process for the others.
@@ -240,7 +243,7 @@ export class CompanionController {
     this.startupInFlight = true;
     this.watchSupervisor();
     const client = this.manager.client;
-    this.disposers.push(
+    if (!this.nativeWindow) this.disposers.push(
       // S→D status push: the sidecar emits on every bind/enable/disable.
       client.onEvent('pet.status', (payload: PetStatusSnapshot) => {
         this.setPetStatus(normalizePetStatus(payload));
@@ -313,6 +316,7 @@ export class CompanionController {
       this.channelEnabled = true;
       this.setPetStatus(status);
       this.needsChannelReenable = false;
+      if (this.nativeWindow) this.publishSupervisorState();
       if (!this.petStatusValue.launched && this.petStatusValue.reasonCode) {
         // Observability only: the reason code, never a private path.
         console.warn(`[companion] pet not launched reason=${this.petStatusValue.reasonCode}`);
@@ -351,21 +355,7 @@ export class CompanionController {
    *  startup) keeps binding-state + Code permission changes flowing. */
   private watchSupervisor(): void {
     this.disposers.push(
-      this.supervisor.subscribe(() => {
-        // Several conversations may run at once. Publish ONE coarse state —
-        // a busy run wins over a spawning one, which wins over idle; loop
-        // events refine the detail, and publishState adds the light "+N"
-        // suffix for the sibling tasks.
-        const runs = this.supervisor.activeCodeRuns();
-        const primary =
-          runs.find((r) => r.bindingState === 'busy') ??
-          runs.find((r) => r.bindingState === 'spawning') ??
-          runs[0];
-        if (primary) {
-          this.publishState(projectCodeBindingState(primary.bindingState));
-        }
-        this.publishPermissions();
-      }),
+      this.supervisor.subscribe(() => this.publishSupervisorState()),
     );
     // When desktop becomes visible/foreground, suppress pet approvals (desktop handles them);
     // when desktop goes background/minimized, republish pending to pet.
@@ -384,6 +374,15 @@ export class CompanionController {
     } catch {
       // never block companion startup
     }
+  }
+
+  private publishSupervisorState(): void {
+    const runs = this.supervisor.activeCodeRuns();
+    const primary = runs.find(run => run.bindingState === 'busy')
+      ?? runs.find(run => run.bindingState === 'spawning')
+      ?? runs[0];
+    if (primary) this.publishState(projectCodeBindingState(primary.bindingState));
+    this.publishPermissions();
   }
 
   private publishState(state: string, detail = ''): void {
@@ -447,13 +446,14 @@ export class CompanionController {
     // in that case to avoid duplicate approvals and the "only pet works" bug.
     // When desktop is minimized/hidden/background, pet becomes the fallback.
     const desktopForeground = isDesktopForeground();
-    const effectiveRequests = desktopForeground ? [] : requests;
+    const effectiveRequests = desktopForeground && !this.nativeWindow ? [] : requests;
     // Use a key that includes foreground state so a visibility change that
     // hides/shows approvals is not deduped away.
     const key = `${desktopForeground ? 'fg:' : 'bg:'}${requests.map((r) => r.requestId).join(',')}`;
     if (key === this.lastPublishedPermissionKey) return;
     this.lastPublishedPermissionKey = key;
     this.publish(permissionRequestStatePayload(effectiveRequests));
+    if (this.nativeWindow) return;
     if (effectiveRequests.length > 0) {
       this.publishState(AGENT_STATES.stalled, effectiveRequests[0]?.title ?? '');
     } else if (this.lastPublishedState === AGENT_STATES.stalled) {

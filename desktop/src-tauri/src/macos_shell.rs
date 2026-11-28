@@ -525,14 +525,11 @@ mod macos {
         }
     }
 
+    type TitlebarView = objc2::rc::Retained<objc2_app_kit::NSView>;
+    type TitlebarViews = (TitlebarView, TitlebarView, [TitlebarView; 3]);
+
     // SAFETY: Caller must guarantee execution on the macOS main thread with a valid NSWindow.
-    unsafe fn titlebar_views(
-        ns_window: &objc2_app_kit::NSWindow,
-    ) -> Option<(
-        objc2::rc::Retained<objc2_app_kit::NSView>,
-        objc2::rc::Retained<objc2_app_kit::NSView>,
-        [objc2::rc::Retained<objc2_app_kit::NSView>; 3],
-    )> {
+    unsafe fn titlebar_views(ns_window: &objc2_app_kit::NSWindow) -> Option<TitlebarViews> {
         use objc2::msg_send;
         use objc2::rc::Retained;
         use objc2_app_kit::{NSView, NSWindowButton};

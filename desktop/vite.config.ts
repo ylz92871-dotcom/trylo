@@ -91,6 +91,7 @@ export default defineConfig({
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         computerPreview: fileURLToPath(new URL('./computer-preview.html', import.meta.url)),
+        macosCompanion: fileURLToPath(new URL('./macos-companion.html', import.meta.url)),
       },
       output: {
         manualChunks: {

@@ -123,7 +123,7 @@ describe('SearchPanel Spotlight command palette modal', () => {
       />,
     );
 
-    const input = screen.getByRole('combobox', { name: '命令或工作区搜索' });
+    const input = screen.getByRole('combobox', { name: '工作区全文搜索' });
     fireEvent.change(input, { target: { value: 'hello' } });
     fireEvent.click(screen.getByRole('button', { name: '搜索工作区' }));
 

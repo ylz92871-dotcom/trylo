@@ -83,6 +83,7 @@ import { isInteractiveTitlebarTarget, toggleNativeWindowZoom } from '../../host-
 import { MacosComputerSettings } from './MacosComputerSettings'
 import type { ToolingFacade } from '../../tooling/tooling-facade'
 import { formatShortcut, isMacPlatform, isWindowsPlatform } from '../../utils/platform'
+import { isTauri } from '../../host-adapter/tauri-detect'
 import { useLiquidIndicator } from '../../utils/use-liquid-indicator'
 
 export type SettingsTab =
@@ -308,6 +309,7 @@ function WorkCapabilityHint(props: {
 export function SettingsModal(props: SettingsModalProps): ReactElement | null {
   const isWindows = isWindowsPlatform()
   const isMac = isMacPlatform()
+  const macosCompanion = isMac && isTauri()
   const [form, setForm] = useState<FormState>(() => toFormState(props.initial))
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null)
   const centralThoughtEdited = useRef(false)
@@ -995,10 +997,10 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
               <label className="settings-modal__field settings-modal__field--inline">
                 <input
                   type="checkbox"
-                  checked={form.companion.enabled}
-                  disabled={isMac}
+                  checked={isMac ? form.companion.macosEnabled === true : form.companion.enabled}
+                  disabled={!isWindows && !macosCompanion}
                   onChange={(e) =>
-                    set('companion', { ...form.companion, enabled: e.target.checked })
+                    set('companion', { ...form.companion, [isMac ? 'macosEnabled' : 'enabled']: e.target.checked })
                   }
                 />
                 <span className="settings-modal__label">启用桌面伙伴</span>
@@ -1006,12 +1008,12 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
               <span className="settings-modal__hint">
                 {isWindows
                   ? '保存设置后启停桌面伙伴；下方显示实际运行状态。显示时机可在桌宠托盘菜单中调整。'
-                  : isMac
-                    ? '当前 macOS 版本暂不支持桌面伙伴，计划在后续版本支持。'
-                    : '当前平台暂不支持桌面伙伴（仅 Windows 支持）。'}
+                  : macosCompanion
+                    ? '保存后打开悬浮伙伴，查看任务进度和审批等待状态。'
+                    : '请在受支持的 Trylo 桌面应用中启用桌面伙伴。'}
               </span>
 
-              {isWindows && props.petStatus ? (
+              {(isWindows || macosCompanion) && props.petStatus ? (
                 <div
                   className={`settings-modal__pet-status settings-modal__pet-status--${petStatusTone(props.petStatus)}`}
                   role="status"

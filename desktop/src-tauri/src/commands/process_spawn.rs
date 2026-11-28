@@ -510,7 +510,7 @@ mod tests {
     use super::{redact_args, redact_env};
     use std::collections::HashMap;
 
-    #[cfg(all(windows, feature = "preview-ipc-tests"))]
+    #[cfg(all(any(windows, target_os = "macos"), feature = "preview-ipc-tests"))]
     #[test]
     fn retained_team_output_survives_disconnected_channels_and_actual_exit() {
         use crate::commands::process_recovery::{process_read_output, RecoveryIdentity};
@@ -537,61 +537,45 @@ mod tests {
                 )))
             })
         };
-        let node = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("resources/runtime/node/win-x64/node.exe");
+        let node_entry = if cfg!(target_os = "macos") {
+            "resources/runtime/node/darwin-arm64/bin/node"
+        } else {
+            "resources/runtime/node/win-x64/node.exe"
+        };
+        let node = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(node_entry);
+        let start = |script: &str, team: &str, turn: &str| {
+            tauri::async_runtime::block_on(super::process_spawn(
+                node.to_string_lossy().into_owned(),
+                vec!["-e".into(), script.into()],
+                team.into(),
+                Some(workspace.to_string_lossy().into_owned()),
+                None,
+                Some("proof-workspace".into()),
+                Some("proof-chat".into()),
+                Some("runtime-owner".into()),
+                Some(RecoveryIdentity::legacy_team(team, turn)),
+                disconnected(), disconnected(), Some(true), app.state(),
+            ))
+        };
         let occupied =
             crate::commands::process_team_owner::acquire(workspace.to_str().unwrap(), "proof-chat")
                 .unwrap();
-        let blocked = tauri::async_runtime::block_on(super::process_spawn(
-            node.to_string_lossy().into_owned(),
-            vec!["-e".into(), "process.exit(0)".into()],
-            "duplicate-root-must-not-spawn".into(),
-            Some(workspace.to_string_lossy().into_owned()),
-            None,
-            Some("proof-workspace".into()),
-            Some("proof-chat".into()),
-            Some("denied-runtime-owner".into()),
-            Some(RecoveryIdentity::legacy_team(
-                "blocked-team",
-                "blocked-turn",
-            )),
-            disconnected(),
-            disconnected(),
-            Some(true),
-            app.state(),
-        ));
+        let blocked = start("process.exit(0)", "blocked-team", "blocked-turn");
         drop(occupied);
-        assert!(
-            matches!(
-                blocked,
-                Err(crate::commands::error::CommandError::Validation { .. })
-            ),
-            "a duplicate root escaped its OS lease"
-        );
-        assert!(app
-            .state::<ProcessState>()
-            .processes
-            .lock()
-            .unwrap()
-            .is_empty());
-        let handle = tauri::async_runtime::block_on(super::process_spawn(
-            node.to_string_lossy().into_owned(),
-            vec!["-e".into(), "process.stdout.write('retained one\\nretained two\\n');process.stderr.write('retained diagnostic\\n');".into()],
-            "retained-output-proof".into(), Some(workspace.to_string_lossy().into_owned()), None, Some("proof-workspace".into()), Some("proof-chat".into()),
-            Some("runtime-owner".into()), Some(RecoveryIdentity::legacy_team("proof-team", "proof-turn")),
-            disconnected(), disconnected(), Some(true), app.state(),
-        )).unwrap();
+        assert!(matches!(blocked, Err(crate::commands::error::CommandError::Validation { .. })),
+            "a duplicate root escaped its OS lease");
+        assert!(app.state::<ProcessState>().processes.lock().unwrap().is_empty());
+
+        let handle = start(
+            r"process.stdout.write('retained one\nretained two\n');process.stderr.write('retained diagnostic\n');",
+            "proof-team", "proof-turn",
+        ).unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         let snapshot = loop {
             let output = process_read_output(&handle.id, 0, app.state()).unwrap();
             let json = serde_json::to_value(output).unwrap();
-            if json["finished"] == true {
-                break json;
-            }
-            assert!(
-                std::time::Instant::now() < deadline,
-                "owned fixture did not exit"
-            );
+            if json["finished"] == true { break json; }
+            assert!(std::time::Instant::now() < deadline, "owned fixture did not exit");
             std::thread::sleep(std::time::Duration::from_millis(10));
         };
         assert_eq!(snapshot["process"]["identity"]["teamRunId"], "proof-team");
@@ -615,19 +599,7 @@ mod tests {
             .lock()
             .unwrap()
             .contains_key(&handle.id));
-        let release_deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
-        while crate::commands::process_team_owner::process_team_owner_status(
-            workspace.to_str().unwrap(),
-            "proof-chat",
-        )
-        .unwrap()
-        {
-            assert!(
-                std::time::Instant::now() < release_deadline,
-                "exited root retained its lease"
-            );
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
+        wait_for_team_lease_release(&workspace);
         let actual = std::fs::canonicalize(&workspace).unwrap();
         assert!(actual.starts_with(std::fs::canonicalize(std::env::temp_dir()).unwrap()));
         assert!(actual
@@ -636,6 +608,23 @@ mod tests {
             .to_string_lossy()
             .starts_with("trylo-output-recovery-"));
         std::fs::remove_dir_all(actual).unwrap();
+    }
+
+    #[cfg(all(any(windows, target_os = "macos"), feature = "preview-ipc-tests"))]
+    fn wait_for_team_lease_release(workspace: &std::path::Path) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while crate::commands::process_team_owner::process_team_owner_status(
+            workspace.to_str().unwrap(),
+            "proof-chat",
+        )
+        .unwrap()
+        {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "exited root retained its lease"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
     }
 
     #[cfg(all(windows, feature = "preview-ipc-tests"))]

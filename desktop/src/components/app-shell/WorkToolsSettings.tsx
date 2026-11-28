@@ -90,12 +90,14 @@ function PackageRow({
     checking ||
     !view ||
     ['installing', 'verifying', 'installing-browser', 'checking'].includes(view.uiState)
-  const action = busy || core ? 'none' : view.action
+  const action = busy || (core && view.action !== 'install-browser' && view.action !== 'repair-office') ? 'none' : view.action
   const actionLabel =
     action === 'install'
       ? '安装'
       : action === 'install-browser'
         ? '安装浏览器'
+        : action === 'repair-office'
+          ? '修复'
         : action === 'retry'
           ? '重试'
           : action === 'uninstall'

@@ -71,7 +71,7 @@ export function CommandPalette(props: CommandPaletteProps): ReactElement | null 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [files, setFiles] = useState<readonly WorkspaceFileEntry[]>([]);
+  const [fileIndex, setFileIndex] = useState<{ root: string; files: readonly WorkspaceFileEntry[] }>();
   const [filesLoading, setFilesLoading] = useState(false);
   const [filesError, setFilesError] = useState('');
 
@@ -113,12 +113,12 @@ export function CommandPalette(props: CommandPaletteProps): ReactElement | null 
     listWorkspaceFiles(workspaceRoot, { signal: controller.signal })
       .then((loaded) => {
         if (seq !== querySeqRef.current || controller.signal.aborted) return;
-        setFiles(loaded);
+        setFileIndex({ root: workspaceRoot, files: loaded });
         setFilesLoading(false);
       })
       .catch((err: unknown) => {
         if (seq !== querySeqRef.current || controller.signal.aborted) return;
-        setFiles([]);
+        setFileIndex(undefined);
         setFilesError(err instanceof Error ? err.message : '读取工作区文件失败');
         setFilesLoading(false);
       });
@@ -171,7 +171,7 @@ export function CommandPalette(props: CommandPaletteProps): ReactElement | null 
       const name = pf.name ?? normalized.split('/').pop() ?? pf.path;
       mergedFiles.set(normalized, { path: pf.path, relativePath: name, name });
     }
-    for (const wf of files) {
+    for (const wf of (fileIndex?.root === workspaceRoot ? fileIndex?.files ?? [] : [])) {
       mergedFiles.set(wf.path.replace(/\\/g, '/'), wf);
     }
 
@@ -194,7 +194,7 @@ export function CommandPalette(props: CommandPaletteProps): ReactElement | null 
     ];
     const actionItems = commandEntries.filter((entry) => entry.group === 'action');
     return [...contentItems, ...actionItems];
-  }, [stepSource, stepQuery, commands, rootQuery, onOpenFile, previewFiles, files]);
+  }, [stepSource, stepQuery, commands, rootQuery, onOpenFile, previewFiles, fileIndex, workspaceRoot]);
 
   // Keep active highlight valid when results change; never hold a stale/disappeared item.
   useEffect(() => {
@@ -438,6 +438,7 @@ export function CommandPalette(props: CommandPaletteProps): ReactElement | null 
               type="text"
               className="command-palette__input"
               role="combobox"
+              aria-labelledby={titleId}
               aria-autocomplete="list"
               aria-expanded={true}
               aria-controls={listId}

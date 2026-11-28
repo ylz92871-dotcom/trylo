@@ -255,13 +255,24 @@ mod tests {
     async fn staged_darwin_engine_renders_office_formats() {
         let fixtures = PathBuf::from(std::env::var_os("TRYLO_OFFICE_TEST_FIXTURES").expect("Office fixture directory"));
         let engine = PathBuf::from(std::env::var_os("TRYLO_OFFICE_TEST_ENGINE").expect("verified Office engine"));
-        let state = OfficePreviewState::bundled(fixtures.join("native-cache"), engine);
+        let retry_engine = fixtures.join("retry-engine");
+        std::fs::create_dir_all(retry_engine.join("LibreOffice.app")).unwrap();
+        let state = OfficePreviewState::bundled(fixtures.join("native-cache"), retry_engine.clone());
+        let failure = render_office(fixtures.join("source.docx").to_string_lossy().into_owned(),
+            fixtures.to_string_lossy().into_owned(), None, &state).await.unwrap_err();
+        assert!(failure.contains("Office 引擎"), "{failure}");
+        std::fs::remove_dir(retry_engine.join("LibreOffice.app")).unwrap();
+        std::fs::remove_dir(&retry_engine).unwrap();
+        std::os::unix::fs::symlink(engine, &retry_engine).unwrap();
+
+        // Reuse the same app state exactly as the user's Retry action does.
         for file in ["source.docx", "source.xlsx", "source.pptx"] {
             let pdf = render_office(fixtures.join(file).to_string_lossy().into_owned(),
                 fixtures.to_string_lossy().into_owned(), None, &state).await
                 .unwrap_or_else(|error| panic!("{file}: {error}"));
             assert!(pdf.starts_with(b"%PDF-"), "{file}");
         }
+        std::fs::remove_file(retry_engine).unwrap();
     }
 
     #[tokio::test]

@@ -21,6 +21,9 @@ fn teardown_app(app_handle: &tauri::AppHandle, origin: &str) {
     if let Some(preview) = app_handle.get_webview_window("computer-preview") {
         let _ = preview.close();
     }
+    if let Some(companion) = app_handle.get_webview_window(commands::macos_companion::LABEL) {
+        let _ = companion.close();
+    }
     commands::native_browser::close_owned_popups(app_handle);
     let report = commands::shutdown::shutdown_all(app_handle);
     if !report.was_clean() {
@@ -138,6 +141,7 @@ pub fn run() {
             // renderer via servicehost_spawn. See
             // docs/TRYLO-MIGRATION-EXECUTION-SPEC-2026-08-28.md §5.
             app.manage(commands::servicehost_state::ServiceHostState::default());
+            app.manage(commands::macos_companion::CompanionWindowState::default());
             app.manage(window_state::WindowStateManager::default());
 
             #[cfg(target_os = "macos")]
@@ -155,7 +159,17 @@ pub fn run() {
                 invoke.resolver.reject("浏览器网页无权调用应用接口");
                 return true;
             }
+            if !commands::macos_companion::allows_command(
+                invoke.message.webview_ref().label(), invoke.message.command(),
+            ) {
+                invoke.resolver.reject("桌面伙伴只能订阅状态和打开主窗口");
+                return true;
+            }
             let handler: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
+                commands::macos_companion::macos_companion_window,
+                commands::macos_companion::macos_companion_publish,
+                commands::macos_companion::macos_companion_subscribe,
+                commands::macos_companion::macos_companion_return,
                 commands::native_browser::native_browser_command,
                 commands::computer_preview::computer_preview_open,
                 commands::computer_preview::computer_preview_publish,

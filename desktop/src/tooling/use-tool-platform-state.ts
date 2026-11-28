@@ -25,6 +25,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toolCatalog from './tool-catalog.generated.json';
+import { isMacPlatform } from '../utils/platform';
 import type { ServiceManager, ServiceHealth } from '../services-host/service-manager';
 import { ServiceRequestError } from '../services-host/services-client';
 import type {
@@ -47,7 +48,14 @@ export type ToolPackageUiState =
 /** Fixed, UI-ready text per failure shape (§3.3: 固定错误文案 — the raw
  *  `detail` may carry absolute paths and is never rendered verbatim). */
 export function fixedStateMessage(pkg: ToolPackageHealth): string {
-  if (pkg.builtIn && !pkg.available) return '内置工具文件缺失或运行检查失败，请修复或更新 Trylo 后重新检测。';
+  if (pkg.builtIn && !pkg.available) {
+    if (canRepairOffice(pkg)) return 'OfficeCLI 文件缺失或校验失败，可重新下载固定版本修复。';
+    if (pkg.state === 'hash-mismatch') return '内置工具文件校验失败。请修复或更新 Trylo 后重新检测。';
+    if (pkg.id === 'playwright' && pkg.state === 'condition-missing' && isMacPlatform()) {
+      return '缺少可用的浏览器。可在此安装 Chromium，或安装 Chrome 后重新检测。';
+    }
+    return '内置工具文件缺失或运行检查失败，请修复或更新 Trylo 后重新检测。';
+  }
   if (pkg.reasonCode === 'input_runtime_low_integrity') return '电脑控制进程权限不匹配，请修复工具运行环境后重新检测。';
   if (pkg.reasonCode === 'input_permission_probe_failed') return '无法验证电脑控制进程的输入权限，请重新检测工具运行环境。';
   switch (pkg.state) {
@@ -86,10 +94,18 @@ export function isHealthAvailable(pkg: ToolPackageHealth): boolean {
 }
 
 /** The action the UI offers for one package right now. */
-export type ToolPackageAction = 'install' | 'install-browser' | 'retry' | 'uninstall' | 'none';
+export type ToolPackageAction = 'install' | 'install-browser' | 'repair-office' | 'retry' | 'uninstall' | 'none';
+
+function canRepairOffice(pkg: ToolPackageHealth): boolean {
+  return isMacPlatform() && pkg.id === 'officecli' && pkg.reasonCode === 'bundled_office_integrity_failed';
+}
 
 export function actionFor(pkg: ToolPackageHealth, uiState: ToolPackageUiState): ToolPackageAction {
-  if (pkg.builtIn) return 'none';
+  if (pkg.builtIn) {
+    if ((uiState === 'unusable' || uiState === 'install-failed') && canRepairOffice(pkg)) return 'repair-office';
+    return isMacPlatform() && (uiState === 'unusable' || uiState === 'install-failed') && pkg.id === 'playwright' &&
+      pkg.state === 'condition-missing' && pkg.condition?.ok === false ? 'install-browser' : 'none';
+  }
   switch (uiState) {
     case 'unknown':
     case 'checking':
@@ -153,6 +169,7 @@ export interface UseToolPlatformStateOptions {
 }
 
 export interface ToolPlatformState {
+  readonly workspaceSkills?: ToolingFacade['workspaceSkills'];
   readonly needsServiceReload?: boolean;
   readonly reloadService?: () => Promise<void>;
   readonly serviceHealth: ServiceHealth;
@@ -315,6 +332,7 @@ export function useToolPlatformState(options: UseToolPlatformStateOptions): Tool
   }, [packages]);
 
   return {
+    workspaceSkills: facade?.workspaceSkills,
     serviceHealth,
     packages,
     byId,

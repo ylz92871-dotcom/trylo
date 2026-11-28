@@ -63,6 +63,19 @@ describe('computer observation window', () => {
     expect(screen.getByText('正在连接电脑画面')).toBeTruthy()
   })
 
+  it('distinguishes a visible window chooser from a connection in progress', () => {
+    render(<ComputerPreviewWindow />)
+    publish(snapshot({
+      streamState: 'selecting',
+      streamDetail: '在已打开的选窗面板中选择窗口，再点「开始预览」。',
+    }))
+    const badge = screen.getByText('等待选窗', { selector: '.tool-preview-badge' })
+    expect(badge.getAttribute('aria-live')).toBe('polite')
+    expect(badge.querySelector('.preview-actions__spin')).toBeNull()
+    expect(screen.getByText('请选择要预览的窗口')).toBeTruthy()
+    expect(screen.queryByText('正在连接电脑画面')).toBeNull()
+  })
+
   it('running consumes successive frames from the existing channel', () => {
     const { container } = render(<ComputerPreviewWindow />)
     publish(snapshot({ dataUrl: FRAME }))

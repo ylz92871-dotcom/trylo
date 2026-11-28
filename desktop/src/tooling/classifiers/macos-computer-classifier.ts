@@ -2,7 +2,7 @@ import { MACOS_COMPUTER_ID, MACOS_COMPUTER_SERVER, MACOS_COMPUTER_TOOLS } from '
 import { inputDigestOf } from '../input-digest';
 import type { PackageRiskClassifier, SafeAudit, ToolRiskContext, ToolRiskDecision } from '../tool-risk-classifier';
 
-const OBSERVATION_TOOLS = new Set(['list_apps', 'list_windows', 'inspect', 'ax_find', 'ax_read_text', 'screenshot', 'read_window_text']);
+const OBSERVATION_TOOLS = new Set(['list_apps', 'list_windows', 'list_ax_windows', 'inspect', 'ax_find', 'ax_read_text', 'screenshot', 'read_window_text']);
 const BACKGROUND_AX_TOOLS = new Set(['ax_perform', 'ax_set_value']);
 const KEYBOARD_TOOLS = new Set(['press_key', 'hotkey', 'type_text']);
 
@@ -69,6 +69,19 @@ function classify(context: ToolRiskContext): ToolRiskDecision {
       audit,
     };
   }
+  if (shortName === 'ax_perform' && context.input.action === 'AXRaise') {
+    const target = safePidLabel(context.input.pid);
+    return {
+      behavior: 'prompt', risk: 'sensitive', reasonCode: audit.reasonCode,
+      preview: {
+        kind: 'summary',
+        title: '将 macOS 窗口置前',
+        reason: '此辅助功能操作会将目标窗口置前，可能改变当前焦点。',
+        ...(target === undefined ? {} : { target }),
+      },
+      audit,
+    };
+  }
   if (BACKGROUND_AX_TOOLS.has(shortName) || (shortName === 'click' && context.input.foreground !== true)) {
     const action = typeof context.input.action === 'string' && /^[A-Za-z]+$/.test(context.input.action) ? context.input.action : undefined;
     const target = action ?? safePidLabel(context.input.pid ?? context.input.expectedPid);
@@ -77,7 +90,7 @@ function classify(context: ToolRiskContext): ToolRiskDecision {
       preview: {
         kind: 'summary',
         title: '后台操作 macOS 控件',
-        reason: '此工具通过辅助功能在后台操作目标窗口控件，不会移动鼠标或抢占焦点。',
+        reason: '此工具通过辅助功能在后台向目标控件提交操作，保留鼠标位置。',
         ...(target === undefined ? {} : { target }),
       },
       audit,

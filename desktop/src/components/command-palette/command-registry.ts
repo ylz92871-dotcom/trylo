@@ -61,6 +61,9 @@ export interface CommandPaletteHostContext {
   readonly onSelectPool?: (model: string) => void;
   readonly onSelectProfile?: (id: string) => void;
   readonly onCompact?: () => void;
+  readonly onSearchContent?: () => void;
+  readonly onOpenTeam?: () => void;
+  readonly onComposeTeam?: () => void;
   readonly compactAvailable?: boolean;
 }
 
@@ -90,6 +93,7 @@ export interface PaletteBuilderInput {
   readonly activityCount: number;
   readonly onOpenSettingsTab: (tab: SettingsTab) => void;
   readonly onOpenRemote: () => void;
+  readonly onOpenComputerPreview?: () => void;
   readonly appearancePreference: Appearance;
   readonly onSetAppearance: (value: Appearance, origin?: CommandExecutionOrigin) => void;
   readonly host?: CommandPaletteHostContext;
@@ -407,6 +411,15 @@ export function buildPaletteCommands(input: PaletteBuilderInput): readonly Palet
     },
   ];
 
+  const workspaceActions = [
+    { id: 'search-content', label: '搜索工作区内容', keywords: ['search', 'find', '全文', '搜索'], run: input.host?.onSearchContent },
+    { id: 'open-team', label: '打开团队视图', keywords: ['team', 'collaboration', '团队', '协作'], run: input.host?.onOpenTeam },
+    { id: 'compose-team', label: '组建团队', keywords: ['team', 'compose', '组建', '团队'], run: input.host?.onComposeTeam },
+    { id: 'window-preview', label: '实时窗口预览', keywords: ['computer', 'screen', 'preview', '窗口', '录屏'], run: input.onOpenComputerPreview },
+  ];
+  for (const action of workspaceActions) {
+    if (action.run) actionCommands.push({ ...action, run: action.run, group: 'action', availability: () => AVAILABLE });
+  }
   return [...workspaceCommands, ...sessionCommands, ...actionCommands];
 }
 

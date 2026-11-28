@@ -88,10 +88,10 @@ import {
   type UserLearningSettings,
 } from '../user-learning/types'
 
-/** Desktop pet (companion) settings, migration spec §6.5. Effective on
- *  Windows only; other platforms show "unsupported" in the UI. */
+/** The native macOS companion has its own opt-in, independent of the Windows setting. */
 export interface CompanionSettings {
   readonly enabled: boolean
+  readonly macosEnabled?: boolean
 }
 
 /** Remote access (migration spec §8.1, arch §7). Effective on Windows /
@@ -549,6 +549,7 @@ function migrateSettings(value: unknown): TryloSettings | null {
         typeof companion?.['enabled'] === 'boolean'
           ? companion['enabled']
           : DEFAULTS.companion.enabled,
+      ...(typeof companion?.['macosEnabled'] === 'boolean' ? { macosEnabled: companion['macosEnabled'] } : {}),
     },
     remote: migrateRemoteSettings(stored['remote'], DEFAULTS.remote),
     // Office/browser/desktop control are the user-requested shared defaults.

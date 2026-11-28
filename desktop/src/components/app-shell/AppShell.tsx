@@ -220,6 +220,8 @@ export interface AppShellProps {
   readonly shellActionsRef?: MutableRefObject<{
     readonly toggleTerminal: () => void;
     readonly toggleBrowserSidebar: () => void;
+    readonly toggleCommandPalette?: () => void;
+    readonly openCommandPalette?: () => void;
   } | null>;
   readonly commandPaletteContext?: CommandPaletteHostContext;
 }
@@ -352,17 +354,17 @@ export function AppShell(props: AppShellProps): ReactElement {
     showBrowser: () => { software.setOpen(false); setModelPreviewOpen(false); if (props.rightRailOpen) props.onToggleRightRail(); setBrowserPreviewOpen(true); } });
   const macComputerPreviewState = computerState.hasTools
     ? computerState
-    : { title: '实时窗口预览', status: '等待工具操作', detail: '从系统面板选择一个窗口。' };
+    : { title: '实时窗口预览', status: '等待工具操作', detail: '选择一个窗口开始实时预览。' };
   useComputerPreview(mac ? macComputerPreviewState : computerState, previewScope, { manager: props.serviceManager, facade: props.toolingFacade,
     projectRoot: props.workspaces.find(workspace => workspace.id === props.currentWorkspaceId)?.root,
     conversationId: props.activeSessionId, turnId: mac ? undefined : computerState.turnId,
     display: mac ? undefined : computerState.display,
     enabled: workbench.computerVisible && (mac || (runActive && computerState.hasStarted === true)),
-    pickerRequest: mac ? workbench.computerRequest : undefined, excludeWindow: mac ? undefined : workbench.computerHandle });
-  const openMacPreview = (): void => {
+    pickerRequest: mac ? workbench.computerRequest : undefined, excludeWindow: workbench.computerHandle });
+  const openMacPreview = useCallback((): void => {
     reportPreviewError('');
     void workbench.openComputer(props.toolingFacade?.prepareComputerPreview);
-  };
+  }, [workbench.openComputer, props.toolingFacade, reportPreviewError]);
   useEffect(() => { if (props.rightRailOpen) setBrowserPreviewOpen(false); }, [props.rightRailOpen]);
   useEffect(() => {
     const close = (): void => setBrowserPreviewOpen(false);
@@ -394,8 +396,9 @@ export function AppShell(props: AppShellProps): ReactElement {
 
   const { shellActionsRef, currentWorkspaceId } = props;
   useEffect(() => {
+    if (mac && isTauri()) return;
     const onGlobalKeyDown = (event: KeyboardEvent): void => {
-      if (event.isComposing || event.keyCode === 229) return;
+      if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
       if (isPrimaryModKey(event) && event.key.toLowerCase() === 'k' && !event.altKey && !event.shiftKey) {
         event.preventDefault();
         setPaletteOpen((open) => !open);
@@ -403,7 +406,7 @@ export function AppShell(props: AppShellProps): ReactElement {
     };
     window.addEventListener('keydown', onGlobalKeyDown);
     return () => window.removeEventListener('keydown', onGlobalKeyDown);
-  }, []);
+  }, [mac]);
 
   const {
     sessions: propSessions,
@@ -494,6 +497,8 @@ export function AppShell(props: AppShellProps): ReactElement {
         onSetAppearance: (value, origin) => {
           setAppearance(value, origin);
         },
+        onOpenComputerPreview: mac && isTauri() && props.toolingFacade && props.serviceManager && props.activeSessionId
+          ? openMacPreview : undefined,
         host: propCommandPaletteContext,
       }),
     [
@@ -523,11 +528,18 @@ export function AppShell(props: AppShellProps): ReactElement {
       propOnRemotePairingOpenChange,
       appearance.preference,
       propCommandPaletteContext,
+      mac,
+      props.toolingFacade,
+      props.serviceManager,
+      props.activeSessionId,
+      openMacPreview,
     ],
   );
   useEffect(() => {
     if (!shellActionsRef) return;
     shellActionsRef.current = {
+      toggleCommandPalette: () => setPaletteOpen(open => !open),
+      openCommandPalette: () => setPaletteOpen(true),
       toggleTerminal: () => {
         if (!terminalAvailable) return;
         setTerminalWorkspace((current) => (current === currentWorkspaceId ? null : currentWorkspaceId));
