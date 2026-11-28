@@ -18,6 +18,8 @@ jobs:
   frontend:
     runs-on: xcode-27
     timeout-minutes: 15
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -43,6 +45,7 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: '14.0'
       DEVELOPER_DIR: /Library/Developer/CommandLineTools
       RUSTUP_TOOLCHAIN: '1.97.1'
+      NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - uses: actions/checkout@v5
         with:
