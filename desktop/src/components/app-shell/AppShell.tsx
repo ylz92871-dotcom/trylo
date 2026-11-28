@@ -361,11 +361,6 @@ export function AppShell(props: AppShellProps): ReactElement {
     display: mac ? undefined : computerState.display,
     enabled: workbench.computerVisible && (mac || (runActive && computerState.hasStarted === true)),
     pickerRequest: mac ? workbench.computerRequest : undefined, excludeWindow: workbench.computerHandle });
-  const { openComputer } = workbench;
-  const openMacPreview = useCallback((): void => {
-    reportPreviewError('');
-    void openComputer(props.toolingFacade?.prepareComputerPreview);
-  }, [openComputer, props.toolingFacade, reportPreviewError]);
   useEffect(() => { if (props.rightRailOpen) setBrowserPreviewOpen(false); }, [props.rightRailOpen]);
   useEffect(() => {
     const close = (): void => setBrowserPreviewOpen(false);
@@ -497,8 +492,6 @@ export function AppShell(props: AppShellProps): ReactElement {
         onSetAppearance: (value, origin) => {
           setAppearance(value, origin);
         },
-        onOpenComputerPreview: mac && isTauri() && props.toolingFacade && props.serviceManager && props.activeSessionId
-          ? openMacPreview : undefined,
         host: propCommandPaletteContext,
       }),
     [
@@ -527,11 +520,6 @@ export function AppShell(props: AppShellProps): ReactElement {
       propOnRemotePairingOpenChange,
       appearance.preference,
       propCommandPaletteContext,
-      mac,
-      props.toolingFacade,
-      props.serviceManager,
-      props.activeSessionId,
-      openMacPreview,
     ],
   );
   useEffect(() => {
@@ -701,11 +689,6 @@ export function AppShell(props: AppShellProps): ReactElement {
                 setBrowserPreviewOpen(open => !open);
               }}><Globe size={16} strokeWidth={1.65} aria-hidden="true" /></button>
               {!mac && <button type="button" className={`top-bar__rail-toggle${software.open ? ' top-bar__rail-toggle--active' : ''}`} aria-label="软件工作区" title="软件工作区" aria-pressed={software.open} onClick={() => software.setOpen(!software.open)}><AppWindow size={16} strokeWidth={1.65} aria-hidden="true" /></button>}
-              {mac && isTauri() && props.toolingFacade && props.serviceManager && props.activeSessionId &&
-                <button type="button" className="top-bar__rail-toggle" aria-label="实时窗口预览" title="实时窗口预览"
-                  data-tauri-drag-region="false" onClick={openMacPreview}>
-                  <Monitor size={16} strokeWidth={1.65} aria-hidden="true" />
-                </button>}
               {!mac && <button type="button" className={`top-bar__rail-toggle${runActive && computerState.hasTools ? ' top-bar__rail-toggle--active' : ''}`} aria-label={runActive && computerState.hasTools ? '电脑悬浮窗，控制正在工作' : '电脑悬浮窗'} title={runActive && computerState.hasTools ? '电脑控制正在工作' : '电脑悬浮窗'} onClick={() => { reportPreviewError(''); void workbench.openComputer(); }}><Monitor size={16} strokeWidth={1.65} aria-hidden="true" />{runActive && computerState.hasTools && <span className="top-bar__activity-dot" aria-hidden="true" />}</button>}
               {props.topBarRight}
             </>}

@@ -47,7 +47,7 @@ fn opened_path(file: &File) -> io::Result<PathBuf> {
     extern "system" { fn GetFinalPathNameByHandleW(handle: *mut std::ffi::c_void, buffer: *mut u16, length: u32, flags: u32) -> u32; }
     let mut buffer = vec![0_u16; 32768];
     // The file handle is live and buffer points to length writable u16s.
-    let length = unsafe { GetFinalPathNameByHandleW(file.as_raw_handle(), buffer.as_mut_ptr(), buffer.len() as u32, 0) };
+    let length = unsafe { GetFinalPathNameByHandleW(file.as_raw_handle(), buffer.as_mut_ptr(), u32::try_from(buffer.len()).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "path buffer exceeds Windows API limit"))?, 0) };
     if length == 0 { return Err(io::Error::last_os_error()); }
     if length as usize >= buffer.len() { return Err(denied()); }
     Ok(PathBuf::from(std::ffi::OsString::from_wide(&buffer[..length as usize])))
@@ -126,7 +126,7 @@ impl HeldDirectory {
             #[cfg(windows)] {
                 use std::os::windows::fs::OpenOptionsExt;
                 // Keep every ancestor open without DELETE sharing.
-                options.share_mode(3).custom_flags(0x02000000 | 0x00200000); // BACKUP_SEMANTICS | OPEN_REPARSE_POINT.
+                options.share_mode(3).custom_flags(0x0200_0000 | 0x0020_0000); // BACKUP_SEMANTICS | OPEN_REPARSE_POINT.
             }
             options.open(path)?
         };
@@ -169,7 +169,7 @@ fn open_regular_file(directory: &HeldDirectory, name: &str, output: &Path) -> io
         let mut options = OpenOptions::new(); options.read(true);
         #[cfg(windows)] {
             use std::os::windows::fs::OpenOptionsExt;
-            options.share_mode(1).custom_flags(0x00200000); // READ share only; OPEN_REPARSE_POINT.
+            options.share_mode(1).custom_flags(0x0020_0000); // READ share only; OPEN_REPARSE_POINT.
         }
         options.open(&target)?
     };
@@ -253,7 +253,7 @@ mod tests {
             .args(["/D", "/C", "mklink", "/J"])
             .arg(link.to_string_lossy().replace('/', "\\"))
             .arg(target.to_string_lossy().replace('/', "\\"))
-            .creation_flags(0x08000000)
+            .creation_flags(0x0800_0000)
             .output().unwrap();
         assert!(result.status.success(), "Could not create junction fixture: {}", String::from_utf8_lossy(&result.stderr));
     }

@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: xcode-27
@@ -38,6 +42,21 @@ jobs:
           (cd 'new trylo cli' && npm ci)
           (cd desktop-services && npm ci)
           (cd desktop && pnpm install --frozen-lockfile)
+      - name: Build desktop frontend
+        id: frontend
+        if: ${{ !cancelled() }}
+        run: cd desktop && pnpm build
+      - name: Check native macOS build
+        if: ${{ !cancelled() && steps.frontend.outcome == 'success' }}
+        run: |
+          cd desktop
+          node --input-type=module -e "import { prepareDevResources } from './scripts/prepare-dev-resources.mjs'; prepareDevResources(process.cwd())"
+          cd src-tauri
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked
+          cd ../../..
+          node --input-type=module -e "import { stageMacosComputerUse } from './desktop/scripts/build/macos/stage-macos-computer-use.mjs'; stageMacosComputerUse('_workspace/checks/macos-native')"
+          _workspace/checks/macos-native/desktop-services/macos-mcp/bin/trylo-macos-mcp --permissions
       - name: Build and verify CLI
         id: cli
         run: |
@@ -56,18 +75,6 @@ jobs:
       - name: Check desktop behavior
         if: ${{ !cancelled() }}
         run: cd desktop && pnpm test
-      - name: Build desktop frontend
-        id: frontend
-        if: ${{ !cancelled() }}
-        run: cd desktop && pnpm build
-      - name: Check native macOS build
-        if: ${{ !cancelled() && steps.frontend.outcome == 'success' }}
-        run: |
-          cd desktop
-          node --input-type=module -e "import { prepareDevResources } from './scripts/prepare-dev-resources.mjs'; prepareDevResources(process.cwd())"
-          cd src-tauri
-          cargo clippy --locked --all-targets -- -D warnings
-          cargo test --locked
       - name: Fetch locked preview sources and build FFmpeg
         run: |
           release_dir="$GITHUB_WORKSPACE/_workspace/artifacts/macos-release"

@@ -1,5 +1,5 @@
 //! Windows folder selection through Shell COM, with UTF-8 output.
-//! BrowseForFolder exposes drives and editable paths without extra dependencies.
+//! `BrowseForFolder` exposes drives and editable paths without extra dependencies.
 
 const PS_SCRIPT: &str = r#"
 $OutputEncoding = [System.Text.Encoding]::UTF8

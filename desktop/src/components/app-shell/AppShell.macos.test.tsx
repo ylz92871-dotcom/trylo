@@ -195,21 +195,11 @@ describe('AppShell macOS capability parity (Code & Work)', () => {
     expect(screen.getByRole('list', { name: '工具目录' })).toBeInTheDocument();
   });
 
-  it.each(['code', 'work'] as const)('opens the manual live-window picker from %s', async mode => {
+  it.each(['code', 'work'] as const)('does not route Mac live preview into the Windows-only stream in %s', mode => {
     restorePlatform = mockPlatform('MacIntel');
-    setTauriGlobal(true);
-    const manager = new ServiceManager({ invoke: shellMocks.invoke, listen: async () => () => {} });
-    const ensureReady = vi.fn().mockResolvedValue(undefined);
-    renderShell({
-      topMode: mode, serviceManager: manager,
-      toolingFacade: createToolingFacade(manager.client, { ensureReady }),
-      sessions: [{ id: `${mode}-preview`, kind: mode, title: 'Preview fixture',
-        mode: mode === 'code' ? 'agent' : 'office', createdAt: 100, updatedAt: 200, turnCount: 0 }],
-    });
+    renderShell({ topMode: mode });
+    expect(screen.queryByRole('button', { name: '实时窗口预览' })).not.toBeInTheDocument();
     expect(shellMocks.invoke).not.toHaveBeenCalledWith('computer_preview_open', expect.anything());
-    fireEvent.click(screen.getByRole('button', { name: '实时窗口预览' }));
-    await waitFor(() => expect(shellMocks.invoke).toHaveBeenCalledWith('computer_preview_open', { automatic: false }));
-    expect(ensureReady).toHaveBeenCalledTimes(1);
   });
 
   it.each(['code', 'work'] as const)(

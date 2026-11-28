@@ -151,6 +151,7 @@ pub fn set_native_window_title(window: tauri::Window, title: String) -> Result<(
 /// Returns an error if querying or updating the window zoom state fails.
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(not(target_os = "macos"), allow(clippy::unnecessary_wraps))] // Shared IPC result contract.
 pub fn toggle_window_zoom(window: tauri::Window) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
@@ -182,6 +183,7 @@ pub fn toggle_window_zoom(window: tauri::Window) -> Result<(), String> {
 /// Returns an error if updating the Dock badge or requesting attention fails.
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(not(target_os = "macos"), allow(clippy::unnecessary_wraps))] // Shared IPC result contract.
 pub fn set_dock_attention(
     window: tauri::Window,
     badge_count: Option<u32>,

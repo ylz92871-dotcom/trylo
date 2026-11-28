@@ -33,3 +33,9 @@ Mac PR #8 接入 Apple Silicon / macOS 14.0 构建路径、原生窗口菜单、
 最低系统版本配置取合作者的 macOS 14.0 目标，尚未获得 macOS 14 真机验收。首批以 Apple Silicon 为目标。资源闭包、原生运行、批准/拒绝、停止后续跑及安装包分别验证。
 
 .github/workflows/macos.yml 运行公共源码与平台合同检查；macos-build.yml 在 Apple Silicon 构建机运行 CLI、Services、Desktop、Rust 与 APP/DMG 构建，资源准备由 build/macos/prepare.mjs 进入。公共检查通过不能证明 DMG 可用，构建产物也需单独进行安装、系统权限与真实任务验收。
+
+## 当前明确边界
+
+工作区 Skill 的 URL 安装界面未接通服务方法，因此不对外显示。既有学习库的 Skill 列表与查看继续可用。Mac 原生电脑工具提供状态、辅助功能检查、截图、点击和键盘；权限设置调用同一 Swift 工具的显式查询/请求入口。每轮明确开关优先于环境默认。
+
+Mac 窗口直播尚无 Services 流适配，不能调用 Windows Python 捕获流程；工具截图仍通过任务消息显示。完成 Mac 流实现与真实窗口选择验证后再启用直播按钮。源码/平台合同通过不等于这项能力已具备。
