@@ -168,10 +168,7 @@ pub async fn work_host_show_in_folder(
         ));
     }
     let target = validate_target(&file_path, &allowed_root)?;
-    #[cfg(target_os = "macos")]
-    let result = macos_open(&["-R"], &target);
-    #[cfg(not(target_os = "macos"))]
-    let result = open_with_default_app(target.parent().unwrap_or(&target));
+    let result = crate::platform::open::reveal_in_folder(&target);
     result.map_err(|e| io_error("(work_host_show_in_folder)", std::io::Error::other(e)))
 }
 

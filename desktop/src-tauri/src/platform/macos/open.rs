@@ -15,3 +15,7 @@ fn macos_open(options: &[&str], path: &Path) -> Result<(), String> {
     if output.status.success() { Ok(()) }
     else { Err(String::from_utf8_lossy(&output.stderr).trim().to_string()) }
 }
+
+pub(crate) fn reveal_in_folder(path: &Path) -> Result<(), String> {
+    macos_open(&["-R"], path)
+}

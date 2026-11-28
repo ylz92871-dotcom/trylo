@@ -51,3 +51,7 @@ fn shell_execute_windows(file: &Path, parameters: Option<&Path>) -> Result<(), S
         Err(format!("ShellExecuteW failed with code {result}"))
     }
 }
+
+pub(crate) fn reveal_in_folder(path: &Path) -> Result<(), String> {
+    open_with_default_app(path.parent().unwrap_or(path))
+}

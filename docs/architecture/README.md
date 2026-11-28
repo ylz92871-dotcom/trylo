@@ -15,7 +15,7 @@ desktop/
     src/preview/             格式预览及所属的浏览器、媒体、Office 后端
     src/platform/
       windows/               Windows 启动标志、文件打开、文件夹选择
-      macos/                 Mac 文件打开；文件夹选择待接入
+      macos/                 Mac 文件打开与后台 PATH；主界面选择沿用 Tauri dialog 插件
       linux/                 Linux 文件打开；文件夹选择待接入
     tauri.conf.json          公共配置
     tauri.windows.conf.json  Windows 资源与安装包
@@ -107,3 +107,5 @@ platform/shell.rs 持有跨平台 IPC 外观桥，Mac 原生菜单、Dock 与窗
 公共逻辑使用已有软件测试，各系统原生操作在对应环境验证。源码检查、TypeScript/Vite 构建、CLI 检查、服务测试和 Rust 检查分别留证。安装包额外验证随包 CLI、Service Host、依赖和启动。
 
 [文件迁移表](platform-migration.json) 记录新旧路径。[本轮验证记录](../../new%20trylo%20cli/docs/02-%E5%88%86%E6%9C%9F%E5%B7%A5%E7%A8%8B%E4%BA%A7%E5%87%BA/P00-%E5%B7%A5%E7%A8%8B%E5%9C%B0%E5%9F%BA%E4%B8%8E%E8%B4%A8%E9%87%8F%E9%97%A8%E7%A6%81/2026-11-27-%E9%AA%8C%E6%94%B6%E6%91%98%E8%A6%81-%E8%B7%A8%E5%B9%B3%E5%8F%B0%E6%9E%B6%E6%9E%84%E6%95%B4%E7%90%86.md) 分开列出通过、原有失败与未验证项。原始证据位于 _workspace/tasks/platform-foundation-20261127/。
+
+Mac 主界面使用已有 Tauri dialog 插件选择文件夹。未被 Mac IPC 注册消费的临时 pick_folder 占位文件已移除，Windows legacy pick_folder 命令保持原有注册与实现。成果定位由 commands 验证路径后交给 platform/*/open.rs 的 reveal_in_folder，Mac 使用 Finder 选中文件，其他系统沿用打开父目录的行为。

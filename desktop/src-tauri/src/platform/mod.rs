@@ -12,7 +12,7 @@ mod windows;
 #[cfg(target_os = "linux")]
 pub(crate) use linux::{open, pick_folder};
 #[cfg(target_os = "macos")]
-pub(crate) use macos::{open, pick_folder};
+pub(crate) use macos::open;
 #[cfg(target_os = "windows")]
 pub(crate) use windows::{open, pick_folder};
 

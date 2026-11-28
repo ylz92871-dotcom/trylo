@@ -13,7 +13,7 @@ struct Lock {
 }
 
 pub(super) fn verify_engine(root: &Path) -> Result<PathBuf, String> {
-    let lock: Lock = serde_json::from_str(include_str!("../../../../scripts/preview/office-engine.darwin-arm64.lock.json"))
+    let lock: Lock = serde_json::from_str(include_str!("../../../../scripts/build/shared/preview/office-engine.darwin-arm64.lock.json"))
         .map_err(|error| error.to_string())?;
     let canonical = root.canonicalize().map_err(|_| "Office 预览引擎资源缺失，请修复 Trylo 安装")?;
     let bundle = canonical.join(lock.bundle);
