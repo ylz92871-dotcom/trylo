@@ -15,7 +15,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  frontend:
+    runs-on: xcode-27
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.22.2'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.33.2'
+      - name: Install locked frontend dependencies
+        run: cd desktop && pnpm install --frozen-lockfile
+      - name: Build desktop frontend
+        run: cd desktop && pnpm build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-frontend
+          if-no-files-found: error
+          path: desktop/dist/
   build:
+    needs: frontend
     runs-on: xcode-27
     timeout-minutes: 45
     env:
@@ -42,12 +63,12 @@ jobs:
           (cd 'new trylo cli' && npm ci)
           (cd desktop-services && npm ci)
           (cd desktop && pnpm install --frozen-lockfile)
-      - name: Build desktop frontend
-        id: frontend
-        if: ${{ !cancelled() }}
-        run: cd desktop && pnpm build
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-frontend
+          path: desktop/dist/
       - name: Check native macOS build
-        if: ${{ !cancelled() && steps.frontend.outcome == 'success' }}
+        if: ${{ !cancelled() }}
         run: |
           cd desktop
           node --input-type=module -e "import { prepareDevResources } from './scripts/prepare-dev-resources.mjs'; prepareDevResources(process.cwd())"
@@ -58,6 +79,7 @@ jobs:
           node --input-type=module -e "import { stageMacosComputerUse } from './desktop/scripts/build/macos/stage-macos-computer-use.mjs'; stageMacosComputerUse('_workspace/checks/macos-native')"
           _workspace/checks/macos-native/desktop-services/macos-mcp/bin/trylo-macos-mcp --permissions
       - name: Build and verify CLI
+        if: ${{ !cancelled() }}
         id: cli
         run: |
           cd 'new trylo cli'
