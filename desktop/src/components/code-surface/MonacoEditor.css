@@ -36,8 +36,8 @@
   white-space: pre-wrap;
   text-align: left;
   font-size: 0.8rem;
-  color: #d96666;
-  background: rgba(217, 102, 102, 0.08);
+  color: var(--danger);
+  background: var(--danger-soft);
   padding: 0.5rem 0.75rem;
   border-radius: 4px;
   pointer-events: auto;

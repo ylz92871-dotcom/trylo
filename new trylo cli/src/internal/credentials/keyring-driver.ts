@@ -104,8 +104,8 @@ export type OsKeyringDriver = {
 /**
  * The driver a platform with no implemented keyring gets: permanently
  * unavailable, with the honest reason. `prefer-keyring` selection then degrades
- * to the file ledger + warning exactly as acceptance #1 asks; darwin (`security`)
- * and linux (`secret-tool`) drivers are deferred, registered as OPEN-T3-3.
+ * to the file ledger + warning exactly as acceptance #1 asks. The Linux
+ * driver remains deferred in OPEN-T3-3.
  */
 export function createUnavailableKeyringDriver(reason: string): OsKeyringDriver {
   return {

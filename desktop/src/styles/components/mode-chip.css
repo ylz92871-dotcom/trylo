@@ -20,7 +20,7 @@
   align-items: center;
   gap: 6px;
   padding: 3px 8px 3px 6px;
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+  border: 1px solid var(--border);
   border-radius: var(--radius-pill, 999px);
   background: transparent;
   font-size: var(--text-xs, 12px);
@@ -31,7 +31,7 @@
 }
 
 .mode-chip:hover {
-  background: var(--brand-soft, rgba(219, 201, 127, 0.08));
+  background: var(--mode-accent-soft, var(--brand-soft));
 }
 
 .mode-chip__icon {
@@ -45,34 +45,34 @@
 }
 
 .mode-chip__hint {
-  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
+  color: var(--text-secondary);
   font-weight: 400;
 }
 
 .mode-chip__caret {
   font-size: 10px;
-  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
+  color: var(--text-secondary);
   margin-left: 2px;
 }
 
-/* Color tiers — brand-gold for agent, blue for plan,
+/* Color tiers — brand-gold for agent, slate-cobalt for plan,
    muted for chat. The icon + label pick up the color
    so the chip is glanceable. */
 .mode-chip--agent .mode-chip__label,
 .mode-chip--agent .mode-chip__icon {
-  color: var(--brand-300, #DBC97F);
+  color: var(--brand);
 }
 .mode-chip--plan .mode-chip__label,
 .mode-chip--plan .mode-chip__icon {
-  color: var(--accent, #8AB4F8);
+  color: var(--link);
 }
 .mode-chip--chat .mode-chip__label,
 .mode-chip--chat .mode-chip__icon {
-  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+  color: var(--text-secondary);
 }
 .mode-chip--cognition .mode-chip__label,
 .mode-chip--cognition .mode-chip__icon {
-  color: var(--brand-100, #ECE0A8);
+  color: var(--brand);
 }
 
 /* v1.16.1: apply-plan button (plan mode only). Sits
@@ -84,10 +84,10 @@
   align-items: center;
   gap: 4px;
   padding: 3px 10px;
-  border: 1px solid var(--brand-500, #9F9054);
+  border: 1px solid var(--brand-edge);
   border-radius: var(--radius-pill, 999px);
-  background: var(--brand-soft, rgba(219, 201, 127, 0.12));
-  color: var(--brand-200, #E3D493);
+  background: var(--brand-soft);
+  color: var(--brand);
   font-size: var(--text-xs, 12px);
   font-weight: 500;
   cursor: pointer;
@@ -95,7 +95,7 @@
 }
 
 .mode-chip__apply:hover {
-  background: var(--brand-soft-strong, rgba(219, 201, 127, 0.22));
+  background: var(--brand-soft-strong);
 }
 
 .mode-chip__apply-icon {

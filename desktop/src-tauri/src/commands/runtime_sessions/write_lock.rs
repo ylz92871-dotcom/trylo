@@ -4,8 +4,11 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 /// The persistent lock file is only a rendezvous point. The OS handle owns the
-/// lock and releases it on close or process exit; never unlink this file.
+/// lock and releases it on process exit. Never unlink this file.
 pub(crate) struct WorkspaceWriteLock {
+    #[cfg(unix)]
+    file: File,
+    #[cfg(not(unix))]
     _file: File,
 }
 
@@ -14,7 +17,12 @@ impl WorkspaceWriteLock {
         let started = Instant::now();
         loop {
             match try_acquire(path) {
-                Ok(file) => return Ok(Self { _file: file }),
+                Ok(file) => return Ok(Self {
+                    #[cfg(unix)]
+                    file,
+                    #[cfg(not(unix))]
+                    _file: file,
+                }),
                 Err(error) if contended(&error) => {
                     let Some(remaining) = timeout.checked_sub(started.elapsed()) else {
                         return Err(io::Error::new(io::ErrorKind::TimedOut,
@@ -25,6 +33,16 @@ impl WorkspaceWriteLock {
                 Err(error) => return Err(error),
             }
         }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for WorkspaceWriteLock {
+    fn drop(&mut self) {
+        use std::os::fd::AsRawFd;
+        // A concurrent fork can briefly inherit the descriptor before exec.
+        // Unlock the open description before closing this process's handle.
+        let _ = unsafe { libc::flock(self.file.as_raw_fd(), libc::LOCK_UN) };
     }
 }
 

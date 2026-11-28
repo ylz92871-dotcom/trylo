@@ -168,11 +168,8 @@ pub async fn work_host_show_in_folder(
         ));
     }
     let target = validate_target(&file_path, &allowed_root)?;
-    // The parent of a contained path is either contained or the
-    // root itself — both are inside the allowed boundary.
-    let parent = target.parent().unwrap_or(&target);
-    open_with_default_app(parent)
-        .map_err(|e| io_error("(work_host_show_in_folder)", std::io::Error::other(e)))
+    let result = crate::platform::open::reveal_in_folder(&target);
+    result.map_err(|e| io_error("(work_host_show_in_folder)", std::io::Error::other(e)))
 }
 
 #[tauri::command]
@@ -189,22 +186,24 @@ pub async fn work_host_copy_to_clipboard(text: String, app: AppHandle) -> Result
 use crate::platform::open::open_with_default_app;
 
 fn launch_with_app(path: &Path, app_identifier: &str) -> Result<(), String> {
-    #[cfg(windows)]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     if !is_safe_app_identifier(app_identifier) {
         return Err(format!("unsafe app identifier: {app_identifier}"));
     }
     crate::platform::open::launch_with_app(path, app_identifier)
 }
 
-/// App identifiers reach the OS as a launch target; restrict them
-/// to plain filename tokens (no separators, no dots-leading
-/// escapes beyond a normal extension).
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn is_safe_app_identifier(identifier: &str) -> bool {
-    !identifier.is_empty()
-        && identifier.len() <= 64
-        && identifier
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_')
+    let starts_with_name = if cfg!(target_os = "macos") {
+        identifier.starts_with(char::is_alphanumeric) && identifier.trim() == identifier
+    } else {
+        !identifier.is_empty()
+    };
+    starts_with_name && identifier.len() <= 64
+        && identifier.chars().all(|c| c.is_ascii_alphanumeric()
+            || matches!(c, '.' | '-' | '_')
+            || (cfg!(target_os = "macos") && (c == ' ' || c.is_alphanumeric())))
 }
 
 #[cfg(test)]
@@ -222,6 +221,7 @@ mod tests {
         assert!(!is_http_url("http"));
     }
 
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     #[test]
     fn app_identifier_allowlist() {
         assert!(is_safe_app_identifier("winword"));
@@ -232,6 +232,8 @@ mod tests {
         assert!(!is_safe_app_identifier("a\\b"));
         assert!(!is_safe_app_identifier("../evil"));
         assert!(!is_safe_app_identifier(&"x".repeat(65)));
+        assert_eq!(is_safe_app_identifier("Microsoft Word"), cfg!(target_os = "macos"));
+        assert_eq!(is_safe_app_identifier("预览"), cfg!(target_os = "macos"));
     }
 
     #[cfg(target_os = "windows")]

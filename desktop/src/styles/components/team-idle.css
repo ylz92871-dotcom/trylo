@@ -6,7 +6,7 @@
  */
 
 .team-idle {
-  max-width: 640px;
+  max-width: var(--conversation-width, 760px);
   display: flex;
   flex-direction: column;
   gap: 2px;

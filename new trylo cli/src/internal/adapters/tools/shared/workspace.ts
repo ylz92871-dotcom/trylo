@@ -63,7 +63,7 @@ function rejectsDevicePath(candidate: string): boolean {
   const first = normalized.split("\\")[0] ?? "";
   const stem = first.includes(":") ? first.slice(first.indexOf(":") + 1) : first;
 
-  return WINDOWS_DEVICE_NAMES.has(stem.toLowerCase());
+  return process.platform === "win32" && WINDOWS_DEVICE_NAMES.has(stem.toLowerCase());
 }
 
 export function isInside(parent: string, child: string): boolean {

@@ -41,20 +41,26 @@
   transition: stroke-dasharray 300ms ease-out;
 }
 
-.context-ring__arc--safe,
+.context-ring__arc--safe {
+  color: var(--fg-muted);
+}
+
 .context-ring__arc--warm,
 .context-ring__arc--hot {
-  color: var(--brand-300, #DBC97F);
+  color: var(--mode-accent, var(--brand));
 }
 
 .context-ring__arc--danger {
-  color: var(--danger, #D96666);
+  color: var(--danger);
 }
 
-.context-ring--safe .context-ring__label,
+.context-ring--safe .context-ring__label {
+  color: var(--fg-muted);
+}
+
 .context-ring--warm .context-ring__label,
 .context-ring--hot .context-ring__label {
-  color: var(--brand-300, #DBC97F);
+  color: var(--mode-accent, var(--brand));
 }
 
 /* Subtle darkening for "hot" only — the brand gold
@@ -65,7 +71,7 @@
 }
 
 .context-ring--danger .context-ring__label {
-  color: var(--danger, #D96666);
+  color: var(--danger);
   font-weight: 600;
 }
 

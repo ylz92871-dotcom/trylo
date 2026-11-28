@@ -24,7 +24,7 @@ export const OFFICECLI_MANIFEST = Object.freeze({
 
   source: Object.freeze({
     repository: 'https://github.com/iOfficeAI/OfficeCLI',
-    license: 'SEE-LICENSE-FILE',
+    license: 'Apache-2.0',
     releaseUrl: 'https://github.com/iOfficeAI/OfficeCLI/releases/tag/v1.0.145',
   }),
 
@@ -43,6 +43,14 @@ export const OFFICECLI_MANIFEST = Object.freeze({
     downloadUrl:
       'https://github.com/iOfficeAI/OfficeCLI/releases/download/v1.0.145/officecli-win-x64.exe',
   }),
+
+  platformArtifacts: Object.freeze([Object.freeze({
+    platform: 'darwin-arm64',
+    archiveSha256: 'd66763a563bc844c3cc67036ebc7c4a9caa9319b9592814d9acd3706da231fc1',
+    executableRelativePath: 'officecli-mac-arm64',
+    installStrategy: 'release-archive',
+    downloadUrl: 'https://github.com/iOfficeAI/OfficeCLI/releases/download/v1.0.145/officecli-mac-arm64',
+  })]),
 
   mcp: Object.freeze({
     serverName: 'trylo-office',

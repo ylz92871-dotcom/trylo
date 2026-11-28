@@ -1,5 +1,10 @@
 # Trylo Desktop Services — 复制来源清单（Provenance）
 
+## OfficeCLI 1.0.145 Apple Silicon
+
+- [Upstream v1.0.145 release](https://github.com/iOfficeAI/OfficeCLI/releases/tag/v1.0.145), asset `officecli-mac-arm64`, 33,764,912 bytes, SHA-256 `d66763a563bc844c3cc67036ebc7c4a9caa9319b9592814d9acd3706da231fc1`.
+- `licenses/officecli/` preserves the upstream `LICENSE`, `NOTICE` and `THIRD-PARTY-NOTICES.txt` from the matching tag. The tool catalog pins the download and installation verifies its digest.
+
 > 复制日期：2026-08-28
 > 来源（只读老仓库）：`D:/CC/claude-code-v-2.1.88-main/claude-code-v-2.1.88-main/package/mini-vscode-agent - 85% - 主板`
 > 这些文件逐字节复制，未经修改。任何修改必须记录在 `desktop-services/vendor/PATCHES.md`。

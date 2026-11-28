@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { Copy, CornerDownLeft, ListOrdered, LockKeyhole, Search, WrapText } from 'lucide-react';
+import { formatShortcut } from '../../utils/platform';
 
 export function useReaderNotice() {
   const [notice, setNotice] = useState('');
@@ -41,7 +42,7 @@ export function SourceReaderTools({ children, lines, position, wrap, onWrap, onF
       </div>
       <div className="source-reader__actions">
         <button type="button" aria-label="自动换行" title="自动换行" aria-pressed={wrap} onClick={onWrap}><WrapText size={15} /></button>
-        <button type="button" aria-label="查找" title="查找 · Ctrl+F" disabled={!ready} onClick={onFind}><Search size={15} /></button>
+        <button type="button" aria-label="查找" title={`查找 · ${formatShortcut(['Mod', 'F'])}`} disabled={!ready} onClick={onFind}><Search size={15} /></button>
         {onGoTo && <div ref={popup} className="source-reader__goto-anchor">
           <button ref={trigger} type="button" aria-label="跳至行" title="跳至行" aria-expanded={goOpen} disabled={!ready}
             onClick={() => { setLine(String(position?.lineNumber ?? 1)); setGoOpen(!goOpen); }}><ListOrdered size={15} /></button>

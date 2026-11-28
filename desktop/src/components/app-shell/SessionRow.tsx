@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type ReactElement, type MouseEvent as ReactMouseEvent } from 'react';
-import { Archive, ArchiveRestore, PanelsTopLeft, Code2, Pencil, X } from 'lucide-react';
+import { Archive, ArchiveRestore, PanelsTopLeft, Code2, Pencil, Pin, PinOff, X } from 'lucide-react';
 import type { ConversationSession } from '../../host-adapter/conversation-history';
+import { showNativeContextMenu } from '../../host-adapter/native-shell';
+import { isTauri } from '../../host-adapter/tauri-detect';
+import { isImeComposing, isMacPlatform } from '../../utils/platform';
 
 // ── SessionRow ────────────────────────────────────────────────────────
 // One row per session. Pulled out of the parent JSX so the rename-input
@@ -30,11 +33,12 @@ interface SessionRowProps {
   /** If true, swap the row's hover-actions for an Unarchive button. */
   readonly archived?: boolean;
   readonly onUnarchive?: (id: string) => void;
+  readonly isPinned?: boolean;
+  readonly onTogglePin?: (id: string) => void;
 }
 
 export function SessionRow(props: SessionRowProps): ReactElement {
   const { session: s } = props;
-  const hovered = props.hoverSessionId === s.id;
   const KindIcon = s.kind === 'code' ? Code2 : PanelsTopLeft;
 
   const onRowClick = (): void => {
@@ -48,6 +52,40 @@ export function SessionRow(props: SessionRowProps): ReactElement {
     props.onStartEdit(s.id);
   };
 
+  const onRowContextMenu = (e: ReactMouseEvent): void => {
+    if (!isMacPlatform() || !isTauri() || props.isEditing) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const items = props.archived
+      ? [
+          {
+            id: 'unarchive',
+            label: '从归档恢复',
+            enabled: Boolean(props.onUnarchive) && !props.isRunning,
+          },
+          { id: 'sep-1', label: '', separator: true },
+          { id: 'delete', label: '删除', enabled: !props.isRunning },
+        ]
+      : [
+          ...(props.onTogglePin
+            ? [{ id: 'pin', label: props.isPinned ? '取消置顶' : '置顶', enabled: !props.isRunning }]
+            : []),
+          { id: 'rename', label: '重命名', enabled: !props.isRunning },
+          { id: 'archive', label: '归档', enabled: !props.isRunning },
+          { id: 'sep-1', label: '', separator: true },
+          { id: 'delete', label: '删除', enabled: !props.isRunning },
+        ];
+
+    void showNativeContextMenu(items).then((choice) => {
+      if (choice === 'pin') props.onTogglePin?.(s.id);
+      else if (choice === 'rename') props.onStartEdit(s.id);
+      else if (choice === 'archive') props.onArchive(s.id);
+      else if (choice === 'unarchive') props.onUnarchive?.(s.id);
+      else if (choice === 'delete') props.onDelete(s.id);
+    });
+  };
+
   return (
     <li
       role="listitem"
@@ -56,6 +94,7 @@ export function SessionRow(props: SessionRowProps): ReactElement {
         + `${props.archived ? ' session-row--archived' : ''}`
       }
       onClick={onRowClick}
+      onContextMenu={onRowContextMenu}
       onMouseEnter={() => props.setHoverSessionId(s.id)}
       onMouseLeave={() => props.setHoverSessionId(null)}
       title={s.title}
@@ -96,26 +135,44 @@ export function SessionRow(props: SessionRowProps): ReactElement {
           <span className="session-row__running-label" aria-hidden="true">运行中</span>
         </span>
       )}
-      {/* Action cluster — hover-revealed. Archived rows expose the
-         archive-restore button only; live rows show delete + archive. */}
-      {hovered && !props.isRunning && (
-        props.archived && props.onUnarchive ? (
-          <button
-            type="button"
-            className="session-row__action session-row__action--unarchive"
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onUnarchive!(s.id);
-            }}
-            title="Restore from archive"
-            aria-label={`Restore ${s.title}`}
-          >
-            <ArchiveRestore size={11} strokeWidth={2.2} aria-hidden="true" />
-          </button>
-        ) : (
-          <>
-            {!props.isEditing && !props.archived && (
+      {/* Action cluster — mounted whenever idle so keyboard Tab and touch users
+         can reach Rename / Archive / Restore / Delete without relying on hover. */}
+      {!props.isRunning && !props.isEditing && (
+        <span className="session-row__actions">
+          {props.archived && props.onUnarchive ? (
+            <button
+              type="button"
+              className="session-row__action session-row__action--unarchive"
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onUnarchive!(s.id);
+              }}
+              title="Restore from archive"
+              aria-label={`Restore ${s.title}`}
+            >
+              <ArchiveRestore size={11} strokeWidth={2.2} aria-hidden="true" />
+            </button>
+          ) : (
+            !props.archived && (
               <>
+                {props.onTogglePin && (
+                  <button
+                    type="button"
+                    className={`session-row__action session-row__action--pin${props.isPinned ? ' session-row__action--pinned' : ''}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      props.onTogglePin!(s.id);
+                    }}
+                    title={props.isPinned ? '取消置顶' : '置顶'}
+                    aria-label={`${props.isPinned ? 'Unpin' : 'Pin'} ${s.title}`}
+                  >
+                    {props.isPinned ? (
+                      <PinOff size={11} strokeWidth={2.2} aria-hidden="true" />
+                    ) : (
+                      <Pin size={11} strokeWidth={2.2} aria-hidden="true" />
+                    )}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="session-row__action session-row__action--rename"
@@ -153,9 +210,9 @@ export function SessionRow(props: SessionRowProps): ReactElement {
                   <X size={11} strokeWidth={2.2} aria-hidden="true" />
                 </button>
               </>
-            )}
-          </>
-        )
+            )
+          )}
+        </span>
       )}
     </li>
   );
@@ -202,7 +259,7 @@ function RenameInput(props: RenameInputProps): ReactElement {
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !isImeComposing(e)) {
           e.preventDefault();
           commit();
         } else if (e.key === 'Escape') {

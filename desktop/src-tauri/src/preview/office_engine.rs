@@ -1,33 +1,64 @@
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use std::io::Read;
-use std::path::{Component, Path, PathBuf};
+use std::path::PathBuf;
 
-/// Verification is shared independently of any one document request. A view
-/// can cancel while it runs without starting another digest job on reopening.
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+mod darwin;
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+use darwin::verify_engine;
+#[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+use {serde::{Deserialize, Serialize}, sha2::{Digest, Sha256}, std::io::Read, std::path::{Component, Path}};
+
+type Verification = tokio::sync::watch::Receiver<Option<Result<PathBuf, String>>>;
+
+/// A cancelled view leaves verification available to other document requests.
 pub struct OfficeEngine {
     root: Option<PathBuf>,
-    ready: std::sync::OnceLock<tokio::sync::watch::Receiver<Option<Result<PathBuf, String>>>>,
+    verification: std::sync::Mutex<Option<Verification>>,
 }
+
 impl OfficeEngine {
-    pub fn new(root: Option<PathBuf>) -> Self { Self { root, ready: std::sync::OnceLock::new() } }
+    pub fn new(root: Option<PathBuf>) -> Self {
+        Self { root, verification: std::sync::Mutex::new(None) }
+    }
+
     pub async fn converter(&self) -> Result<PathBuf, String> {
-        let mut ready = self.ready.get_or_init(|| {
-            let (sender, receiver) = tokio::sync::watch::channel(None);
-            let root = self.root.clone();
-            tokio::task::spawn_blocking(move || {
-                let result = root.map_or_else(
-                    || installed_converter().ok_or_else(|| "页面预览引擎未准备，请运行 preview 引擎准备脚本".into()),
-                    |root| verify_engine(&root),
-                );
-                let _ = sender.send(Some(result));
-            });
-            receiver
-        }).clone();
+        let mut ready = self.verification()?;
         loop {
-            if let Some(result) = { ready.borrow().clone() } { return result; }
-            ready.changed().await.map_err(|_| "页面引擎校验任务未完成".to_string())?;
+            let current = ready.borrow().clone();
+            if let Some(result) = current { return result; }
+            if ready.changed().await.is_err() {
+                // The worker may have completed between borrow() and changed().
+                return ready.borrow().clone().unwrap_or_else(|| Err("页面引擎校验任务未完成".into()));
+            }
         }
+    }
+
+    fn verification(&self) -> Result<Verification, String> {
+        let mut slot = self.verification.lock().map_err(|_| "无法读取页面引擎状态".to_string())?;
+        if let Some(current) = slot.as_ref() {
+            let reusable = match &*current.borrow() {
+                Some(result) => result.is_ok(),
+                None => current.has_changed().is_ok(),
+            };
+            if reusable { return Ok(current.clone()); }
+        }
+
+        // Reuse successes, but let an explicit retry discover an engine prepared
+        // or repaired after a failed request.
+        let (sender, receiver) = tokio::sync::watch::channel(None);
+        *slot = Some(receiver.clone());
+        let root = self.root.clone();
+        tokio::task::spawn_blocking(move || {
+            let result = root.filter(|root| {
+                !(cfg!(all(debug_assertions, target_os = "macos", target_arch = "aarch64"))
+                    && std::env::var_os("TRYLO_PREVIEW_ENGINE_ROOT").is_none()
+                    && root.join("LibreOffice.app").symlink_metadata().is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound))
+            }).map_or_else(
+                || installed_converter().ok_or_else(|| "页面预览引擎未准备，请运行 preview 引擎准备脚本".into()),
+                |root| verify_engine(&root),
+            );
+            let _ = sender.send(Some(result));
+        });
+        Ok(receiver)
     }
 }
 
@@ -37,12 +68,15 @@ fn installed_converter() -> Option<PathBuf> {
         for key in ["ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"] {
             if let Some(root) = std::env::var_os(key) { candidates.push(PathBuf::from(root).join("LibreOffice/program/soffice.com")); }
         }
+    } else if cfg!(target_os = "macos") {
+        candidates.push(PathBuf::from("/Applications/LibreOffice.app/Contents/MacOS/soffice"));
     } else {
-        candidates.extend(["/usr/bin/libreoffice", "/Applications/LibreOffice.app/Contents/MacOS/soffice"].map(PathBuf::from));
+        candidates.push(PathBuf::from("/usr/bin/libreoffice"));
     }
     candidates.into_iter().find(|path| path.is_file())
 }
 
+#[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
 #[derive(Deserialize)]
 struct Manifest {
     #[serde(rename = "schemaVersion")]
@@ -54,12 +88,14 @@ struct Manifest {
     entry: String,
     files: Vec<Entry>,
 }
+#[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
 #[derive(Deserialize, Serialize)]
 struct Entry { path: String, size: u64, sha256: String }
 
 /// Packaging verifies every payload file. At first use, verify the pinned
 /// executables/core library and required resources without reopening fourteen
 /// thousand language/help files on the user's first document.
+#[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
 pub fn verify_engine(root: &Path) -> Result<PathBuf, String> {
     let lock: serde_json::Value = serde_json::from_str(include_str!("../../../scripts/build/shared/preview/office-engine.lock.json")).map_err(|e| e.to_string())?;
     let critical = lock["criticalFiles"].as_object().ok_or("Office 引擎版本配置无效")?;

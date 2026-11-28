@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+use tokio::io::AsyncReadExt;
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 use super::office_engine::OfficeEngine;
@@ -75,6 +76,7 @@ impl Drop for ConversionChild<'_> {
     }
 }
 
+#[allow(clippy::too_many_lines)] // Own the profile, child, and cleanup through a single job.
 async fn convert(
     target: &Path,
     converter: &Path,
@@ -120,7 +122,6 @@ async fn convert(
     }
     let input = temp.0.join(format!("source.{ext}"));
     // Bound the snapshot even if a producer is still appending after stat.
-    use tokio::io::AsyncReadExt;
     let source = tokio::fs::File::open(target).await.map_err(|e| e.to_string())?;
     let mut snapshot = tokio::fs::OpenOptions::new().create_new(true).write(true).open(&input).await.map_err(|e| e.to_string())?;
     let copied = tokio::io::copy(&mut source.take(MAX_INPUT + 1), &mut snapshot).await.map_err(|e| format!("复制预览输入失败：{e}"))?;
@@ -170,17 +171,8 @@ async fn convert(
         .stderr(std::process::Stdio::from(diagnostic));
     #[cfg(windows)]
     command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    let mut child = command
-        .spawn()
+    let (child, tree) = crate::commands::process_termination::OwnedTreeTerminator::spawn(&mut command)
         .map_err(|e| format!("页面转换器无法启动：{e}"))?;
-    let tree = match crate::commands::process_termination::OwnedTreeTerminator::capture(&child) {
-        Ok(tree) => tree,
-        Err(e) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(e.to_string());
-        }
-    };
     let mut owned = ConversionChild {
         child,
         tree,
@@ -257,6 +249,32 @@ pub async fn render_office(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    #[ignore = "requires the verified LibreOffice arm64 staging output and Office fixture files"]
+    async fn staged_darwin_engine_renders_office_formats() {
+        let fixtures = PathBuf::from(std::env::var_os("TRYLO_OFFICE_TEST_FIXTURES").expect("Office fixture directory"));
+        let engine = PathBuf::from(std::env::var_os("TRYLO_OFFICE_TEST_ENGINE").expect("verified Office engine"));
+        let retry_engine = fixtures.join("retry-engine");
+        std::fs::create_dir_all(retry_engine.join("LibreOffice.app")).unwrap();
+        let state = OfficePreviewState::bundled(fixtures.join("native-cache"), retry_engine.clone());
+        let failure = render_office(fixtures.join("source.docx").to_string_lossy().into_owned(),
+            fixtures.to_string_lossy().into_owned(), None, &state).await.unwrap_err();
+        assert!(failure.contains("Office 引擎"), "{failure}");
+        std::fs::remove_dir(retry_engine.join("LibreOffice.app")).unwrap();
+        std::fs::remove_dir(&retry_engine).unwrap();
+        std::os::unix::fs::symlink(engine, &retry_engine).unwrap();
+
+        // Reuse the same app state exactly as the user's Retry action does.
+        for file in ["source.docx", "source.xlsx", "source.pptx"] {
+            let pdf = render_office(fixtures.join(file).to_string_lossy().into_owned(),
+                fixtures.to_string_lossy().into_owned(), None, &state).await
+                .unwrap_or_else(|error| panic!("{file}: {error}"));
+            assert!(pdf.starts_with(b"%PDF-"), "{file}");
+        }
+        std::fs::remove_file(retry_engine).unwrap();
+    }
+
     #[tokio::test]
     #[cfg(windows)]
     async fn shutdown_reaps_the_owned_conversion() {

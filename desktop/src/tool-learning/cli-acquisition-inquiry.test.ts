@@ -44,6 +44,7 @@ it('starts only after explicit exact confirmation and never adds execution or ac
 it('uses an independent recovery fence and refuses a pending native owner without another spawn', async () => {
   const original = failedAcquisitionFixture(), owner = acquisitionTestOwner(), spawn = vi.fn(), signal = new AbortController().signal
   const { reviewId: _startReview, ...base } = acquisitionInquiryFixture(original)
+  void _startReview; // This fixture intentionally has no review starter.
   const review = { ...base, state: 'running' as const, attempt: 1, ready: false, next: 'inspect_or_wait' as const,
     code: 'inquiry_running_requires_inspection', recovery: { recoverable: true, attempt: 1, expiresAt: '2026-11-04T00:00:00.000Z', reviewId: `acquisition-inquiry-review_v1_${'8'.repeat(64)}` } }
   const runtime = { ...paths, ...owner, process: { spawn, stop: async () => {} } }

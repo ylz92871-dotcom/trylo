@@ -21,12 +21,22 @@
   position: relative;
   height: 100%;
   width: 100%;
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   min-height: 0;
   background: var(--bg);
   /* Reuse the lamp-glow signature from chat-panel. */
   isolation: isolate;
+  animation: trylo-view-enter var(--duration-view) var(--ease-out);
+}
+
+:root[data-platform='macos'] .team-surface { background: transparent; }
+@media (forced-colors: active) { :root[data-platform='macos'] .team-surface { background: Canvas; } }
+@media (prefers-reduced-motion: reduce) {
+  .team-surface {
+    animation: none;
+  }
 }
 
 .team-surface::before {
@@ -61,6 +71,6 @@
   }
 }
 
-.team-surface__body:not(.team-surface__body--run)>:is(.team-idle,.team-composer) { width:100%; max-width:760px; margin:clamp(28px,8vh,80px) auto; }
-.team-surface__body { scrollbar-width:thin; scrollbar-color:var(--border-strong) transparent; }
+.team-surface__body:not(.team-surface__body--run)>:is(.team-idle,.team-composer) { width:100%; max-width:var(--conversation-width,760px); margin:clamp(24px,7vh,64px) auto; }
+:root:not([data-platform='macos']) .team-surface__body { scrollbar-width:thin; scrollbar-color:var(--border-strong) transparent; }
 .team-surface :is(button,summary,input,textarea,select):focus-visible { outline-color:var(--fg-muted); }

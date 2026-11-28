@@ -4,6 +4,7 @@ import { createFileLedgerStore } from "./file-store.js";
 import { createPreferReadLedgerStore } from "./prefer-store.js";
 import { createOsKeyringLedgerStore } from "./keyring-store.js";
 import { createWindowsCredentialManagerDriver } from "./windows/keyring-win32.js";
+import { createDarwinKeychainDriver } from "./keyring-darwin.js";
 import { createCredentialPort, type ComposeOptions } from "./compose.js";
 
 /**
@@ -44,7 +45,7 @@ export type KeyringBackendReport =
   | { readonly backend: "file"; readonly fallback: true; readonly reason: string };
 
 export type PreferKeyringOptions = Omit<ComposeOptions, "keyring"> & {
-  /** Injected for tests; defaults to the platform driver (win32 only, OPEN-T3-3). */
+  /** Injected for tests. Defaults to the platform driver. */
   readonly driver?: OsKeyringDriver | undefined;
 };
 
@@ -85,17 +86,11 @@ export function createCredentialPortPreferringKeyring(options: PreferKeyringOpti
   };
 }
 
-/**
- * The platform default. Only Windows has an implemented driver this wave
- * (WP §5 names Credential Manager as the requirement); every other platform
- * gets the honest "unavailable" driver, so prefer-keyring there degrades to
- * the file ledger with a stated reason instead of guessing at `security` or
- * `secret-tool`. Deferred, registered as OPEN-T3-3.
- */
 function defaultDriverForPlatform(): OsKeyringDriver {
   if (process.platform === "win32") {
     return createWindowsCredentialManagerDriver();
   }
+  if (process.platform === "darwin") return createDarwinKeychainDriver();
   return createUnavailableKeyringDriver(noDriverReason(process.platform));
 }
 

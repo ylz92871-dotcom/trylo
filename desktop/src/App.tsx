@@ -1,3 +1,4 @@
+import { onMacosWake } from './host-adapter/system-wake'
 import { projectCollaboration } from './remote/remote-collaboration'
 import { launchRemoteTeam } from './remote/remote-team-launch'
 import { buildActivityItems, type ActivityNavigation } from './components/activity/activity-items'
@@ -48,6 +49,16 @@ import {
 import { PanelRight } from 'lucide-react'
 import { createTryloContext, hostAdapter } from './host-adapter'
 import { isTauri } from './host-adapter/tauri-detect'
+import {
+  subscribeNativeMenuActions,
+  subscribeNativeShellState,
+  syncNativeDockAttention,
+  syncNativeWindowTitle,
+} from './host-adapter/native-shell'
+import { alertNativeDialog, confirmNativeDialog } from './host-adapter/native-dialog'
+import { refreshSystemAppearance } from './settings/appearance-store'
+import { formatShortcut, isMacPlatform } from './utils/platform'
+import { SearchPanel } from './components/product-ui/SearchPanel'
 import { CliSessionStore } from './runtime/cli-session-store'
 import type { FilePath, CodeMode, TopLevelMode } from './host-adapter/types'
 // v1.16.6 (M4-A runtime ownership): the ConversationRunSupervisor
@@ -207,6 +218,7 @@ import { ServiceManager } from './services-host/service-manager'
 import type { PetStatusSnapshot, RemoteStatusResult } from './services-host/methods'
 import { ServicesCompanionPort, createTauriCompanionPaths } from './companion/companion-port'
 import { CompanionController, composeLifecycleObservers } from './companion/companion-controller'
+import { MacosCompanionPort } from './companion/macos-companion-port'
 import { RemoteController } from './remote/remote-controller'
 import { ServicesRemotePort } from './remote/remote-port'
 import { bindPlatformModels } from './account/platform-models'
@@ -409,7 +421,7 @@ import {
   type WorkspaceIndex,
 } from './host-adapter/conversation-history'
 
-const DEFAULT_WORKSPACE_ROOT = 'D:/CC/trylo' as const
+const DEFAULT_WORKSPACE_ROOT = '' as const
 const isTauriFn = isTauri
 const EMPTY_CHAT_MESSAGES: readonly ChatMessage[] = []
 
@@ -663,8 +675,8 @@ function App({
       root: initialWorkspaceRoot,
       name:
         initialWorkspaceRoot === DEFAULT_WORKSPACE_ROOT
-          ? basenameOf(initialWorkspaceRoot)
-          : '本地工作区',
+          ? '本地工作区'
+          : basenameOf(initialWorkspaceRoot) || '本地工作区',
     })
   }
   const initialWorkspaceIndex = initialWorkspaceIndexRef.current
@@ -1359,7 +1371,7 @@ function App({
       : undefined
   }, [teamRun])
   useEffect(() => {
-    if (!historyReady) return
+    if (!historyReady || !isTauriFn()) return
     const root = currentWorkspace.root
     const sessions = [
       ...new Set([codeSessionId, workSessionId].filter((id): id is string => Boolean(id))),
@@ -1647,6 +1659,7 @@ function App({
   // lets any descendant trigger it.
   const [settingsOpen, setSettingsOpen] = useState(false)
   const openSettings = useCallback(() => setSettingsOpen(true), [])
+  const [contentSearchOpen, setContentSearchOpen] = useState(false)
   // 2026-08-29: remote pairing modal — opened by the TopBar
   // "远程" button. Holds the pairing QR + enable switch.
   const [showRemotePairing, setShowRemotePairing] = useState(false)
@@ -1819,6 +1832,7 @@ function App({
   const [cognitionSessionId, setCognitionSessionId] = useState<string | null>(null)
   const [cognitionViewOpen, setCognitionViewOpen] = useState(false)
   const learningView = useMemo(() => {
+    void learningTick // Explicitly invalidate the external store projection.
     const snap = userLearning.snapshot()
     const last = snap.policyDecisions.at(-1)
     return {
@@ -1857,8 +1871,10 @@ function App({
   if (!serviceHostPathsRef.current) serviceHostPathsRef.current = createTauriCompanionPaths()
   const companionPortRef = useRef<ServicesCompanionPort | null>(null)
   const companionRef = useRef<CompanionController | null>(null)
+  const nativeCompanion = isMacPlatform() && isTauri()
   if (!companionRef.current) {
-    const port = new ServicesCompanionPort(
+    const Port = nativeCompanion ? MacosCompanionPort : ServicesCompanionPort
+    const port = new Port(
       serviceManager,
       serviceHostPathsRef.current,
       () => currentWorkspace.root,
@@ -1869,6 +1885,7 @@ function App({
       port,
       supervisor,
       settings: () => settingsRef.current,
+      nativeWindow: nativeCompanion,
     })
   }
   const companion = companionRef.current
@@ -2224,6 +2241,19 @@ function App({
     })
   }
   const remoteController = remoteControllerRef.current
+  useEffect(() => {
+    let active = true
+    let recovering = false
+    const off = onMacosWake(() => {
+      if (recovering) return
+      recovering = true
+      void serviceManager.recoverAfterWake()
+        .then(() => active ? remoteController.recoverAfterWake() : undefined)
+        .catch(error => console.warn('唤醒后恢复桌面服务失败', error))
+        .finally(() => { recovering = false })
+    })
+    return () => { active = false; off() }
+  }, [serviceManager, remoteController])
   const remoteConversationMessages = topMode === 'work' ? workMessages : messages
   useEffect(() => { remoteController.refreshCollaboration() }, [remoteController, teamRun, teamRunsVersionTick, topMode, activeSessionId, settings.userLearning.teamAccessEnabled, remoteConversationMessages])
   const [remoteConfigurationReady, setRemoteConfigurationReady] = useState(!isTauriFn())
@@ -2327,18 +2357,17 @@ function App({
     })
   }
 
-  // Bind the stable client once. User sends await the existing Host owner;
-  // whole-profile failures remain visible instead of silently dropping mounts.
-  const toolingBoundRef = useRef(false)
-  if (!toolingBoundRef.current) {
-    toolingBoundRef.current = true
-    toolingFacadeRef.current = createToolingFacade(serviceManager.client, {
-      ensureReady: async () => {
-        const paths = await serviceHostPathsRef.current!()
-        await serviceManager.ensureRunning(paths)
-      },
-    })
-  }
+  // Keep the ServiceManager alive while rebuilding the renderer's facade when
+  // its API changes during development refresh.
+  const toolingFacade = useMemo(() => createToolingFacade(serviceManager.client, {
+    macosComputerUse: () => settingsRef.current.macosComputerUse,
+    ensureReady: async () => {
+      const paths = await serviceHostPathsRef.current!()
+      await serviceManager.ensureRunning(paths)
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- HMR may replace the imported facade factory while the manager remains alive.
+  }), [serviceManager, createToolingFacade])
+  toolingFacadeRef.current = toolingFacade
 
   // P0-A (audit §3.3-1): the tool platform state machine. After the Service
   // Host is ready it asks `tooling.health` once and owns the four packages'
@@ -2346,7 +2375,7 @@ function App({
   // the facade is bound synchronously above, so this always runs — the hook
   // itself no-ops until the facade + a ready host exist.
   const toolPlatform = useToolPlatformState({
-    facade: toolingFacadeRef.current,
+    facade: toolingFacade,
     serviceManager,
   })
 
@@ -2355,7 +2384,7 @@ function App({
   // connects the browser MCP to those same contents through CDP.
   const browserPreview = useBrowserPreview({
     initiallyVisible: false,
-    facade: toolingFacadeRef.current,
+    facade: toolingFacade,
     serviceManager,
     projectRoot: currentWorkspace.root,
     conversationId: topMode === 'code' ? codeSessionId : workSessionId,
@@ -2520,13 +2549,16 @@ function App({
     [codeLifecycleObserverBase, terminalNoticeObserver, turnTimingObserver],
   )
   const workLifecycleObserver = useMemo(
-    () => composeLifecycleObservers(turnTimingObserver, userLearningLifecycle),
-    [userLearningLifecycle, turnTimingObserver],
+    () => composeLifecycleObservers(
+      composeLifecycleObservers(turnTimingObserver, userLearningLifecycle), companion.lifecycle,
+    ),
+    [userLearningLifecycle, turnTimingObserver, companion],
   )
 
+  const companionEnabled = nativeCompanion ? settings.companion.macosEnabled === true : settings.companion.enabled
   useEffect(() => {
-    void companion.setEnabled(settings.companion.enabled)
-  }, [companion, settings.companion.enabled])
+    void companion.setEnabled(companionEnabled)
+  }, [companion, companionEnabled])
 
   // Remote enable follows the settings group (migration spec §8.1). The
   // controller no-ops when the platform/Tauri is unavailable or when the
@@ -2938,6 +2970,40 @@ function App({
   // 2026-08-30 (routing-fix step 6): Work send idempotency. One entry
   // (last send key + timestamp); see handleWorkSend.
   const workSendIdempotencyRef = useRef<{ key: string; at: number } | null>(null)
+  const handlePersonClarify = useCallback(
+    (payload: {
+      readonly personConversationId: string
+      readonly questions: readonly string[]
+      readonly unknown: readonly string[]
+      readonly teamRunId?: string
+    }) => {
+      if (payload.questions.length === 0) return
+      const session = userLearning.enqueueTeamClarification({
+        kind: 'team_clarification',
+        teamRunId:
+          payload.teamRunId ??
+          (teamRunRef.current?.personConversationId === payload.personConversationId
+            ? teamRunRef.current.id
+            : `team-${payload.personConversationId}`),
+        questions: payload.questions,
+        unknownItems: payload.unknown,
+        blocking: true,
+        risk: 'medium',
+      })
+      if (!session) return
+      updateMessagesAt(currentWorkspace.root, payload.personConversationId, (prev) =>
+        prev.some(
+          (item) =>
+            item.kind === 'cognition_prompt' &&
+            item.sessionId === session.id &&
+            item.status === 'pending',
+        )
+          ? prev
+          : [...prev, cognitionPromptMessage(session)],
+      )
+    },
+    [currentWorkspace.root, updateMessagesAt, userLearning],
+  )
   const handleWorkSend = useCallback(
     async (
       text: string,
@@ -3462,24 +3528,7 @@ function App({
         preparation.finish()
       }
     },
-    [
-      bumpLearning,
-      consumeNextLearningDirective,
-      currentWorkspace.root,
-      effectivePermission.level,
-      workSessionId,
-      updateHistoryAt,
-      updateMessagesAt,
-      userLearning,
-      workProjector,
-      workMessages,
-      workLifecycleObserver,
-      openSettings,
-      supervisor,
-      workRunning,
-      setWorkInput,
-      pendingCognitionByConversation,
-    ],
+    [currentWorkspace.root, workSessionId, workRunning, supervisor, effectivePermission.level, consumeNextLearningDirective, setWorkInput, updateMessagesAt, updateHistoryAt, workProjector, workLifecycleObserver, userLearning, pendingCognitionByConversation, workMessages, bumpLearning, handlePersonClarify],
   )
 
   // Publish the latest Work send for the flush effect (run-controls §UI-B).
@@ -4083,16 +4132,7 @@ function App({
         ])
       }
     },
-    [
-      editingMessageId,
-      codeLifecycleObserver,
-      codeSessionId,
-      currentWorkspace.root,
-      codeMode,
-      effectivePermission.level,
-      supervisor,
-      updateMessagesAt,
-    ],
+    [editingMessageId, codeSessionId, currentWorkspace.root, supervisor, updateMessagesAt, currentWorkspaceKey, codeMode, effectivePermission.level, codeLifecycleObserver, handlePersonClarify],
   )
   // `messages` is intentionally NOT in this dep array
   // — the closure reads it through messagesRef, which
@@ -4705,40 +4745,7 @@ function App({
   // PR-12 (spec §11.2): Person `User questions` bubble into the existing
   // Cognition UI — the seat never talks to the user. blocking v0: a seat
   // question always gates the next writable spawn.
-  const handlePersonClarify = useCallback(
-    (payload: {
-      readonly personConversationId: string
-      readonly questions: readonly string[]
-      readonly unknown: readonly string[]
-      readonly teamRunId?: string
-    }) => {
-      if (payload.questions.length === 0) return
-      const session = userLearning.enqueueTeamClarification({
-        kind: 'team_clarification',
-        teamRunId:
-          payload.teamRunId ??
-          (teamRunRef.current?.personConversationId === payload.personConversationId
-            ? teamRunRef.current.id
-            : `team-${payload.personConversationId}`),
-        questions: payload.questions,
-        unknownItems: payload.unknown,
-        blocking: true,
-        risk: 'medium',
-      })
-      if (!session) return
-      updateMessagesAt(currentWorkspace.root, payload.personConversationId, (prev) =>
-        prev.some(
-          (item) =>
-            item.kind === 'cognition_prompt' &&
-            item.sessionId === session.id &&
-            item.status === 'pending',
-        )
-          ? prev
-          : [...prev, cognitionPromptMessage(session)],
-      )
-    },
-    [currentWorkspace.root, updateMessagesAt, userLearning],
-  )
+
 
   useEffect(() => {
     let cancelled = false
@@ -4858,14 +4865,7 @@ function App({
       )
     }
     return undefined
-  }, [
-    teamRunForCurrentSession,
-    handlePersonTeamStatusBarOpen,
-    teamComposerLive,
-    canSuggestTeam,
-    collaborationSurface,
-    handleComposeTeamFromPerson,
-  ])
+  }, [teamRunForCurrentSession, handlePersonTeamStatusBarOpen])
 
   const handleStartTeam = useCallback(
     (goal: string): Promise<void> => {
@@ -5079,6 +5079,7 @@ function App({
   }, [])
 
   const cognitionSession = useMemo(() => {
+    void learningTick // Cognition sessions live in the external learning store.
     if (!cognitionSessionId) return null
     return (
       userLearning.snapshot().cognitionSessions.find((s) => s.id === cognitionSessionId) ?? null
@@ -5087,6 +5088,14 @@ function App({
 
   const onToggleLeftRail = useCallback((): void => {
     setLeftRailCollapsed((v) => !v)
+  }, [])
+
+  const handleGoHome = useCallback((): void => {
+    setLearningPanelOpen(false)
+    setCognitionViewOpen(false)
+    setActivityOpen(false)
+    setSettingsOpen(false)
+    setShowRemotePairing(false)
   }, [])
 
   // ── File peek (base capability: shared by Code AND Work) ──
@@ -5630,24 +5639,7 @@ function App({
         })
         .finally(() => preparation.finish())
     },
-    [
-      historyReady,
-      codeLifecycleObserver,
-      codeSessionId,
-      currentWorkspace.root,
-      codeMode,
-      effectivePermission.level,
-      running,
-      activeProcessId,
-      sendingDisabled,
-      supervisor,
-      updateMessagesAt,
-      setText,
-      userLearning,
-      bumpLearning,
-      pendingCognitionByConversation,
-      consumeNextLearningDirective,
-    ],
+    [historyReady, codeSessionId, running, activeProcessId, sendingDisabled, codeMode, consumeNextLearningDirective, setText, currentWorkspaceKey, currentWorkspace.root, supervisor, updateMessagesAt, effectivePermission.level, codeLifecycleObserver, openCognitionView, userLearning, bumpLearning, pendingCognitionByConversation, handlePersonClarify],
   )
   // Publish the latest onSend for the flush effect (avoids stale closure and
   // an onSend-in-deps re-fire loop). run-controls §UI-B.
@@ -5999,8 +5991,168 @@ function App({
     ],
   )
 
+  const toggleRightRailFromShell = useCallback((): void => {
+    window.dispatchEvent(new Event('trylo:close-browser-preview'))
+    if (rightRailOpen) (topMode === 'code' ? selectCodeReview : selectWorkReview)(false)
+    onToggleRightRail()
+  }, [rightRailOpen, topMode, selectCodeReview, selectWorkReview, onToggleRightRail])
+
+  const shellActionsRef = useRef<{
+    readonly toggleTerminal: () => void
+    readonly toggleBrowserSidebar: () => void
+    readonly toggleCommandPalette: () => void
+    readonly openCommandPalette: () => void
+  } | null>(null)
+  const [windowFocused, setWindowFocused] = useState(true)
+  const dockAttentionPrevRef = useRef({ approvals: 0, runs: 0 })
+
+  const totalPendingApprovals =
+    codeApprovals.length + workApprovals.length + libraryApprovals.length
+  const totalActiveRuns = activeCodeRuns.length + (workRunning ? 1 : 0)
+
+  const nativeWindowTitle = currentActiveSession?.title
+    ? `${currentActiveSession.title} — ${currentWorkspace.name} — Trylo`
+    : `${currentWorkspace.name} — Trylo`
+
+  useEffect(() => {
+    void syncNativeWindowTitle(nativeWindowTitle)
+  }, [nativeWindowTitle])
+
+  useEffect(() => {
+    const prev = dockAttentionPrevRef.current
+    const approvalsIncreased = totalPendingApprovals > prev.approvals
+    const runCompleted = prev.runs > 0 && totalActiveRuns === 0
+    dockAttentionPrevRef.current = {
+      approvals: totalPendingApprovals,
+      runs: totalActiveRuns,
+    }
+    void syncNativeDockAttention({
+      badgeCount: totalPendingApprovals,
+      bounce: !windowFocused && (approvalsIncreased || runCompleted),
+    })
+  }, [totalPendingApprovals, totalActiveRuns, windowFocused])
+
+  const nativeMenuHandlersRef = useRef({
+    openSettings,
+    onNewSession,
+    onOpenFolder: () => {
+      void onOpenFolder()
+    },
+    onToggleLeftRail,
+    onToggleRightRail: toggleRightRailFromShell,
+    onToggleCommandPalette: () => shellActionsRef.current?.toggleCommandPalette(),
+    onOpenCommandPalette: () => shellActionsRef.current?.openCommandPalette(),
+    onSwitchMode: onTopModeChange,
+    onToggleTerminal: () => shellActionsRef.current?.toggleTerminal(),
+    onToggleBrowserSidebar: () => shellActionsRef.current?.toggleBrowserSidebar(),
+  })
+  nativeMenuHandlersRef.current = {
+    openSettings,
+    onNewSession,
+    onOpenFolder: () => {
+      void onOpenFolder()
+    },
+    onToggleLeftRail,
+    onToggleRightRail: toggleRightRailFromShell,
+    onToggleCommandPalette: () => shellActionsRef.current?.toggleCommandPalette(),
+    onOpenCommandPalette: () => shellActionsRef.current?.openCommandPalette(),
+    onSwitchMode: onTopModeChange,
+    onToggleTerminal: () => shellActionsRef.current?.toggleTerminal(),
+    onToggleBrowserSidebar: () => shellActionsRef.current?.toggleBrowserSidebar(),
+  }
+
+  useEffect(() => {
+    return subscribeNativeShellState({
+      onSystemThemeChange: refreshSystemAppearance,
+      onWindowFocusChange: setWindowFocused,
+    })
+  }, [])
+
+  useEffect(() => {
+    return subscribeNativeMenuActions({
+      'app.settings': () => setSettingsOpen((open) => !open),
+      'file.new-task': () => nativeMenuHandlersRef.current.onNewSession(),
+      'file.open-folder': () => nativeMenuHandlersRef.current.onOpenFolder(),
+      'view.toggle-sidebar': () => nativeMenuHandlersRef.current.onToggleLeftRail(),
+      'view.toggle-right-rail': () => nativeMenuHandlersRef.current.onToggleRightRail(),
+      'view.command-palette': () => nativeMenuHandlersRef.current.onToggleCommandPalette(),
+      'view.mode-code': () => nativeMenuHandlersRef.current.onSwitchMode('code'),
+      'view.mode-work': () => nativeMenuHandlersRef.current.onSwitchMode('work'),
+      'view.toggle-terminal': () => nativeMenuHandlersRef.current.onToggleTerminal(),
+      'view.toggle-browser': () => nativeMenuHandlersRef.current.onToggleBrowserSidebar(),
+      'help.shortcuts': () => nativeMenuHandlersRef.current.onOpenCommandPalette(),
+    })
+  }, [])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return
+      const mac = isMacPlatform()
+      const tauriNativeMenuActive = mac && isTauri()
+      const key = event.key.toLowerCase()
+
+      if (mac && event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+        if (!tauriNativeMenuActive && (event.code === 'Backquote' || key === '`')) {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onToggleTerminal()
+        }
+        return
+      }
+
+      if (mac && event.metaKey && event.altKey && !event.ctrlKey && !event.shiftKey) {
+        if (!tauriNativeMenuActive && key === 'b') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onToggleBrowserSidebar()
+        }
+        return
+      }
+
+      const primaryMod = mac
+        ? event.metaKey && !event.ctrlKey
+        : event.ctrlKey && !event.metaKey
+      if (!primaryMod || event.altKey) return
+
+      if (event.shiftKey && key === 'f') {
+        event.preventDefault()
+        setContentSearchOpen(true)
+      } else if (mac && !event.shiftKey && key === 'j') {
+        event.preventDefault()
+        nativeMenuHandlersRef.current.onToggleTerminal()
+      } else if (!tauriNativeMenuActive) {
+        if (!event.shiftKey && key === '1') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onSwitchMode('code')
+        } else if (!event.shiftKey && key === '2') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onSwitchMode('work')
+        } else if (!event.shiftKey && key === '/') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onOpenCommandPalette()
+        } else if (!event.shiftKey && key === 'n') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onNewSession()
+        } else if (!event.shiftKey && key === 'o') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onOpenFolder()
+        } else if (!event.shiftKey && key === 'b') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onToggleLeftRail()
+        } else if (event.shiftKey && key === 'b') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.onToggleRightRail()
+        } else if (!event.shiftKey && key === ',') {
+          event.preventDefault()
+          nativeMenuHandlersRef.current.openSettings()
+        }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   return (
     <AppShell
+      shellActionsRef={shellActionsRef}
       modelPreview={(onAvailable, shown) => (
         <AgentModelPreviewWorkspace
           manager={serviceManager}
@@ -6078,6 +6230,7 @@ function App({
       onArchiveSession={onArchiveSession}
       onUnarchiveSession={onUnarchiveSession}
       topMode={topMode}
+      onTopModeChange={onTopModeChange}
       // Person | Team surface (spec §1.2). A second segmented
       // control on the right of the TopBar; visually quieter than
       // the Code | Work tab so it doesn't read as a third product
@@ -6167,9 +6320,53 @@ function App({
         setSettingsOpen(false)
         setLearningPanelOpen(true)
       }}
+      learningOpen={learningPanelOpen}
+      onGoHome={handleGoHome}
       browserPreview={browserPreview}
+      commandPaletteContext={{
+        onSearchContent: () => setContentSearchOpen(true),
+        onOpenTeam: activeSessionId ? () => setCollaborationSurface('team') : undefined,
+        onComposeTeam: activeSessionId && teamComposerLive
+          ? (canSuggestTeam ? handleComposeTeamFromPerson : handlePersonTeamStatusBarOpen)
+          : undefined,
+        codeMode,
+        onCodeModeChange,
+        permissionLevel: effectivePermission.level,
+        onPermissionLevelChange,
+        configuredModel: settings.apiModel,
+        poolModel:
+          activeConversationChoice?.kind === 'pool'
+            ? activeConversationChoice.model
+            : activeConversationChoice
+              ? ''
+              : settings.poolModel,
+        savedProfiles: settings.modelProfiles.map((p) => ({
+          id: p.id,
+          label: p.name || '未命名配置',
+          hint: p.apiModel || '默认模型',
+        })),
+        activeProfileId:
+          activeConversationChoice?.kind === 'profile'
+            ? activeConversationChoice.id
+            : activeConversationChoice
+              ? ''
+              : settings.activeModelProfileId,
+        onSelectConfigured: handleSelectConfigured,
+        onSelectPool: handleSelectPool,
+        onSelectProfile: handleSelectProfile,
+        onCompact:
+          topMode === 'work'
+            ? () => {
+                if (workSessionId) void supervisor.compactCode(currentWorkspaceKey, workSessionId)
+              }
+            : onCompact,
+        compactAvailable:
+          topMode === 'work'
+            ? !!workSessionId && supervisor.canCompactCode(currentWorkspaceKey, workSessionId)
+            : !!codeSessionId && supervisor.canCompactCode(currentWorkspaceKey, codeSessionId),
+      }}
       serviceManager={serviceManager}
-      toolingFacade={toolingFacadeRef.current}
+      toolingFacade={toolingFacade}
       toolMessages={topMode === 'code' ? mergedMessages : workMergedMessages}
       remoteController={remoteController}
       onRemoteConfigure={handleRemoteConfigure}
@@ -6202,7 +6399,7 @@ function App({
               window.dispatchEvent(new Event('trylo:close-browser-preview'))
               onToggleRightRail()
             }}
-            title="结果侧栏"
+            title={isMacPlatform() ? `结果侧栏 ${formatShortcut(['Mod', 'Shift', 'B'])}` : '结果侧栏'}
             aria-label="结果侧栏"
             aria-pressed={rightRailOpen}
           >
@@ -6648,27 +6845,53 @@ function App({
           URL.revokeObjectURL(url)
         }}
         onDeleteUserData={() => {
-          if (!window.confirm('删除全部 User Learning 数据？此操作不能恢复。')) return
-          // WP-CL / B20: the formal ledger lives in the CLI's home, not in this
-          // store. Clear it first and only then clear the panel — the other
-          // order lets the UI say "deleted" while `facts.ndjson` still holds
-          // who the user is.
-          const resolved = settingsForCodeRun(settings, currentWorkspace.root)
-          void deleteCliUserMemory({
-            process: hostAdapter.process,
-            cliPath: resolved.cliPath,
-            ...(resolved.cliNodeProgram === undefined
-              ? {}
-              : { nodeProgram: resolved.cliNodeProgram }),
-            cwd: currentWorkspace.root,
-          }).then((result) => {
+          void (async () => {
+            const confirmed = await confirmNativeDialog({
+              title: '删除 User Learning 数据',
+              message: '删除全部 User Learning 数据？此操作不能恢复。',
+              kind: 'warning',
+              okLabel: '删除',
+              cancelLabel: '取消',
+            })
+            if (!confirmed) return
+            // WP-CL / B20: the formal ledger lives in the CLI's home, not in this
+            // store. Clear it first and only then clear the panel — the other
+            // order lets the UI say "deleted" while `facts.ndjson` still holds
+            // who the user is.
+            const resolved = settingsForCodeRun(settings, currentWorkspace.root)
+            const result = await deleteCliUserMemory({
+              process: hostAdapter.process,
+              cliPath: resolved.cliPath,
+              ...(resolved.cliNodeProgram === undefined
+                ? {}
+                : { nodeProgram: resolved.cliNodeProgram }),
+              cwd: currentWorkspace.root,
+            })
             if (!result.ok) {
-              window.alert(`本机记忆没有删干净：${result.reason}`)
+              await alertNativeDialog({
+                title: '删除未完成',
+                message: `本机记忆没有删干净：${result.reason}`,
+                kind: 'error',
+              })
               return
             }
             userLearning.deleteUserData()
             bumpLearning()
-          })
+          })()
+        }}
+      />
+      <SearchPanel
+        modal
+        open={contentSearchOpen}
+        onClose={() => setContentSearchOpen(false)}
+        searchRoot={currentWorkspace.root}
+        onResultOpen={(path) => {
+          setContentSearchOpen(false)
+          if (/^[a-z]:[\\/]/i.test(path) || path.startsWith('/')) {
+            void onSelectFile(path, 'file')
+          } else {
+            onOpenResultFile(path)
+          }
         }}
       />
     </AppShell>

@@ -20,10 +20,25 @@ impl Control {
         self.check()?; *process = Some(tree); Ok(())
     }
 }
+pub(super) fn increment_below(counter: &AtomicUsize, limit: usize) -> bool {
+    let mut count = counter.load(Ordering::Acquire);
+    loop {
+        if count >= limit {
+            return false;
+        }
+        match counter.compare_exchange_weak(count, count + 1, Ordering::AcqRel, Ordering::Acquire) {
+            Ok(_) => return true,
+            Err(actual) => count = actual,
+        }
+    }
+}
+
 pub struct Slot(Arc<AtomicUsize>);
 impl Slot {
     pub fn acquire(slots: &Arc<AtomicUsize>) -> Result<Self, String> {
-        slots.fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| (count < policy().max_concurrent_jobs).then_some(count + 1)).map_err(|_| "媒体兼容引擎繁忙，请稍后重试")?;
+        if !increment_below(slots, policy().max_concurrent_jobs) {
+            return Err("媒体兼容引擎繁忙，请稍后重试".into());
+        }
         Ok(Self(Arc::clone(slots)))
     }
 }
@@ -44,8 +59,8 @@ impl MediaProcess {
         if let Some(cwd) = cwd { command.current_dir(cwd); }
         #[cfg(windows)]
         { use std::os::windows::process::CommandExt; command.creation_flags(0x0800_0000); }
-        let mut child = command.spawn().map_err(|e| format!("媒体引擎启动失败：{e}"))?;
-        let attached = OwnedTreeTerminator::capture(&child).map_err(|e| e.to_string()).and_then(|tree| control.attach(tree));
+        let (mut child, tree) = OwnedTreeTerminator::spawn(&mut command).map_err(|e| format!("媒体引擎启动失败：{e}"))?;
+        let attached = control.attach(tree);
         if let Err(error) = attached { let _ = child.kill(); let _ = child.wait(); return Err(error); }
         let mut stdout = child.stdout.take().ok_or("媒体进程没有输出流")?;
         let mut stderr = child.stderr.take().ok_or("媒体进程没有诊断流")?;
@@ -90,9 +105,9 @@ impl Drop for MediaProcess {
         if let Ok(mut process) = self.control.process.lock() { *process = None; }
     }
 }
-pub fn probe(executable: &Path, args: &[String], source: &Path, control: Arc<Control>) -> Result<Vec<u8>, String> {
+pub fn probe(executable: &Path, args: &[String], source: &Path, control: &Arc<Control>) -> Result<Vec<u8>, String> {
     let deadline = Instant::now() + Duration::from_millis(policy().probe_timeout_ms);
-    let mut process = MediaProcess::spawn(executable, args, source, None, Arc::clone(&control))?;
+    let mut process = MediaProcess::spawn(executable, args, source, None, Arc::clone(control))?;
     let output = process.output.take().ok_or("媒体探测输出不可用")?;
     let mut bytes = Vec::new();
     loop {

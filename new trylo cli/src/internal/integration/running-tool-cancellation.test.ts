@@ -7,8 +7,8 @@ import { createNdjsonSessionStore } from "../adapters/session-store/ndjson.js";
 import { SESSION_FORMAT_VERSION } from "../ports/session.js";
 import { testScratchPath } from "../testing/scratch.js";
 import { createTurnRecorder } from "../surface/cli/turn-recorder.js";
-import { createFakePermission, createFakeProvider, echoBinding, emptyProfileLoader } from "./fakes.js";
-import { runTurn } from "./runner.js";
+import { createFakePermission, createFakeProvider, echoBinding, emptyProfileLoader } from "../loop/fakes.js";
+import { runTurn } from "../loop/runner.js";
 
 for (const count of [1, 2]) {
   test(`caller cancellation reaches ${count} running tools and leaves the durable session resumable`, async () => {

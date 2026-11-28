@@ -13,6 +13,7 @@ pub async fn preview_office(
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // Owned values from Tauri IPC.
 pub fn preview_office_cancel(job_id: String, state: tauri::State<'_, OfficePreviewState>) -> Result<bool, String> {
     state.cancel(&job_id)
 }

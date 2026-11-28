@@ -1,13 +1,22 @@
+#[cfg(not(target_os = "macos"))]
 use std::{path::PathBuf, sync::{Mutex, atomic::{AtomicU64, Ordering}}};
 use serde::Deserialize;
+#[cfg(not(target_os = "macos"))]
 use tauri::{Emitter, Manager, WebviewBuilder, WebviewUrl};
 use super::WebAssets;
 
+#[cfg(not(target_os = "macos"))]
 static NEXT_VIEW: AtomicU64 = AtomicU64::new(0);
+#[cfg(not(target_os = "macos"))]
 #[derive(Clone)]
 pub(super) struct ActiveView { pub token: String, pub label: String, pub profile_root: PathBuf, pub profile: PathBuf }
 #[derive(Default)]
-pub struct WebPreviewState { pub assets: WebAssets, pub(super) active: Mutex<Option<ActiveView>> }
+pub struct WebPreviewState {
+    pub assets: WebAssets,
+    #[cfg(not(target_os = "macos"))]
+    pub(super) active: Mutex<Option<ActiveView>>,
+}
+#[cfg(not(target_os = "macos"))]
 impl WebPreviewState {
     pub fn serve(&self, request: &tauri::http::Request<Vec<u8>>, label: &str) -> tauri::http::Response<Vec<u8>> {
         let active = self.active.lock().ok().and_then(|active| active.clone()).filter(|active| active.label == label);
@@ -16,6 +25,7 @@ impl WebPreviewState {
     }
 }
 
+#[cfg(not(target_os = "macos"))]
 fn retire(app: &tauri::AppHandle, state: &WebPreviewState, active: &mut Option<ActiveView>) -> Result<(), String> {
     if let Some(owned) = active.as_ref() {
         if let Some(view) = app.get_webview(&owned.label) { view.close().map_err(|e| e.to_string())?; }
@@ -26,11 +36,22 @@ fn retire(app: &tauri::AppHandle, state: &WebPreviewState, active: &mut Option<A
     }
     Ok(())
 }
-#[derive(Deserialize)]
+#[derive(Clone, Copy, Deserialize)]
 pub struct WebBounds { pub x: f64, pub y: f64, pub width: f64, pub height: f64 }
 
-pub fn layout(app: &tauri::AppHandle, state: &WebPreviewState, token: &str, bounds: WebBounds, visible: bool) -> Result<(), String> {
+#[cfg_attr(not(target_os = "macos"), allow(clippy::unused_async))] // Same IPC contract for both native views.
+pub async fn layout(app: &tauri::AppHandle, token: &str, bounds: WebBounds, visible: bool) -> Result<(), String> {
     if [bounds.x, bounds.y, bounds.width, bounds.height].iter().any(|value| !value.is_finite()) || bounds.x < 0.0 || bounds.y < 0.0 || bounds.width < 1.0 || bounds.height < 1.0 || bounds.width > 16384.0 || bounds.height > 16384.0 { return Err("网页预览区域无效".into()); }
+    #[cfg(target_os = "macos")]
+    {
+        super::darwin::layout(app, token, bounds, visible).await
+    }
+    #[cfg(not(target_os = "macos"))]
+    layout_tauri(app, &app.state::<WebPreviewState>(), token, bounds, visible)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn layout_tauri(app: &tauri::AppHandle, state: &WebPreviewState, token: &str, bounds: WebBounds, visible: bool) -> Result<(), String> {
     let url = state.assets.url(token)?;
     let mut active = state.active.lock().map_err(|_| "网页预览窗口状态不可用")?;
     let current = active.as_ref().is_some_and(|owned| owned.token == token);
@@ -83,7 +104,18 @@ pub fn layout(app: &tauri::AppHandle, state: &WebPreviewState, token: &str, boun
     if visible { view.show() } else { view.hide() }.map_err(|e| e.to_string())
 }
 
-pub fn close(app: &tauri::AppHandle, state: &WebPreviewState, token: &str) -> Result<(), String> {
+#[cfg_attr(not(target_os = "macos"), allow(clippy::unused_async))] // Same IPC contract for both native views.
+pub async fn close(app: &tauri::AppHandle, token: &str) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        super::darwin::close(app, token).await
+    }
+    #[cfg(not(target_os = "macos"))]
+    close_tauri(app, &app.state::<WebPreviewState>(), token)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn close_tauri(app: &tauri::AppHandle, state: &WebPreviewState, token: &str) -> Result<(), String> {
     let mut active = state.active.lock().map_err(|_| "网页预览窗口状态不可用")?;
     let result = if active.as_ref().is_some_and(|owned| owned.token == token) { retire(app, state, &mut active) } else { Ok(()) };
     state.assets.close(token);

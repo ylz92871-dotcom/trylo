@@ -88,10 +88,10 @@ import {
   type UserLearningSettings,
 } from '../user-learning/types'
 
-/** Desktop pet (companion) settings, migration spec §6.5. Effective on
- *  Windows only; other platforms show "unsupported" in the UI. */
+/** The native macOS companion has its own opt-in, independent of the Windows setting. */
 export interface CompanionSettings {
   readonly enabled: boolean
+  readonly macosEnabled?: boolean
 }
 
 /** Remote access (migration spec §8.1, arch §7). Effective on Windows /
@@ -287,6 +287,7 @@ export interface TryloSettings {
    *  control; loading settings normalizes it to true. Per-action consent
    *  remains separate from mounting the default tool. */
   readonly workComputer: boolean
+  readonly macosComputerUse?: boolean
   /** PR-7 (spec §4.1/§10.x): explicit 浏览器调试 capability switch. `false`
    *  (the default) keeps the default Work Profile with Playwright. `true`
    *  swaps Playwright OUT for the pinned Chrome DevTools MCP surface
@@ -349,7 +350,7 @@ const DEFAULTS: TryloSettings = {
   workComputer: true,
   workCad: false,
   hermesWorkLearning: true,
-  workspace: 'D:/CC/trylo',
+  workspace: '',
   userLearning: { ...DEFAULT_USER_LEARNING_SETTINGS },
   workflowLearning: { ...DEFAULT_WORKFLOW_LEARNING },
   agentLearning: { ...DEFAULT_AGENT_LEARNING },
@@ -548,11 +549,13 @@ function migrateSettings(value: unknown): TryloSettings | null {
         typeof companion?.['enabled'] === 'boolean'
           ? companion['enabled']
           : DEFAULTS.companion.enabled,
+      ...(typeof companion?.['macosEnabled'] === 'boolean' ? { macosEnabled: companion['macosEnabled'] } : {}),
     },
     remote: migrateRemoteSettings(stored['remote'], DEFAULTS.remote),
     // Office/browser/desktop control are the user-requested shared defaults.
     // Keep the legacy field readable without restoring an obsolete opt-out.
     workComputer: true,
+    ...(typeof stored['macosComputerUse'] === 'boolean' ? { macosComputerUse: stored['macosComputerUse'] } : {}),
     workBrowserDebug: stored['workBrowserDebug'] === true,
     workCad: stored['workCad'] === true,
     // Whitelist: absent (= never persisted) ⇒ default `true`; an explicit

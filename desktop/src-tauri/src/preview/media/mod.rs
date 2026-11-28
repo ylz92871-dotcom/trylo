@@ -30,23 +30,23 @@ pub struct MediaOpenResult { pub url: String, #[serde(flatten)] pub info: MediaI
 fn valid_token(token: &str) -> bool { (32..=64).contains(&token.len()) && token.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-') }
 impl MediaState {
     pub fn new(cache: PathBuf, engine: PathBuf) -> Self { Self(Arc::new(Inner { registry: Mutex::new(Registry::default()), engine: Engine::new(engine), cache, slots: Arc::new(AtomicUsize::new(0)), requests: AtomicUsize::new(0) })) }
-    pub fn open(&self, token: String, file_path: String, allowed_root: String, owner: &str) -> Result<MediaOpenResult, String> {
-        if owner != "main" || !valid_token(&token) { return Err("媒体预览请求无效".into()); }
+    pub fn open(&self, token: &str, file_path: &str, allowed_root: &str, owner: &str) -> Result<MediaOpenResult, String> {
+        if owner != "main" || !valid_token(token) { return Err("媒体预览请求无效".into()); }
         let session = {
             let mut registry = self.0.registry.lock().map_err(|_| "媒体状态不可用")?;
             if registry.stopping { return Err("应用正在关闭".into()); }
-            if registry.sessions.contains_key(&token) { return Err("媒体预览标识已在使用".into()); }
+            if registry.sessions.contains_key(token) { return Err("媒体预览标识已在使用".into()); }
             if registry.sessions.len() >= policy().max_sessions { return Err("打开的媒体过多，请关闭部分预览".into()); }
-            if registry.early_cancels.iter().any(|item| item == &token) { registry.early_cancels.retain(|item| item != &token); return Err("媒体预览已取消".into()); }
-            let session = Arc::new(Session::new(owner.to_string())); registry.sessions.insert(token.clone(), Arc::clone(&session)); session
+            if registry.early_cancels.iter().any(|item| item == token) { registry.early_cancels.retain(|item| item != token); return Err("媒体预览已取消".into()); }
+            let session = Arc::new(Session::new(owner.to_string())); registry.sessions.insert(token.to_owned(), Arc::clone(&session)); session
         };
         let result = (|| {
             session.opening.check()?;
             let _slot = Slot::acquire(&self.0.slots)?;
             let engine = self.0.engine.get()?; session.opening.check()?;
-            let target = crate::commands::work_host::validate_target(&file_path, &allowed_root).map_err(|e| e.to_string())?;
+            let target = crate::commands::work_host::validate_target(file_path, allowed_root).map_err(|e| e.to_string())?;
             let source = Source::new(target)?; source.unchanged()?;
-            let bytes = process::probe(&engine.probe, &policy::probe_arguments(), &source.target, Arc::clone(&session.opening))?;
+            let bytes = process::probe(&engine.probe, &policy::probe_arguments(), &source.target, &session.opening)?;
             let info = policy::parse_info(&bytes)?; session.opening.check()?;
             let playback = session.playback.lock().map_err(|_| "媒体状态不可用")?;
             if playback.closed { return Err("媒体预览已关闭".into()); }
@@ -54,7 +54,7 @@ impl MediaState {
             let prefix = if cfg!(windows) { "http://trylo-media.localhost" } else { "trylo-media://localhost" };
             Ok(MediaOpenResult { url: format!("{prefix}/{token}/index.m3u8"), info })
         })();
-        if result.is_err() { self.close(&token, owner); } result
+        if result.is_err() { self.close(token, owner); } result
     }
     fn session(&self, token: &str, owner: &str) -> Result<Arc<Session>, String> {
         if owner != "main" { return Err("网页无权访问媒体预览".into()); }
@@ -98,10 +98,14 @@ impl MediaState {
         generation
     }
     pub fn segment(&self, token: &str, index: usize, owner: &str) -> Result<Arc<Vec<u8>>, String> {
+        struct RequestCount<'a>(&'a AtomicUsize);
+        impl Drop for RequestCount<'_> { fn drop(&mut self) { self.0.fetch_sub(1, Ordering::AcqRel); } }
+
         let session = self.session(token, owner)?; let count = segment_count(session.info()?.duration)?;
         if index >= count { return Err("媒体片段不存在".into()); }
-        self.0.requests.fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| (count < policy().max_queued_jobs).then_some(count + 1)).map_err(|_| "待加载的媒体片段过多")?;
-        struct RequestCount<'a>(&'a AtomicUsize); impl Drop for RequestCount<'_> { fn drop(&mut self) { self.0.fetch_sub(1, Ordering::AcqRel); } }
+        if !process::increment_below(&self.0.requests, policy().max_queued_jobs) {
+            return Err("待加载的媒体片段过多".into());
+        }
         let _request = RequestCount(&self.0.requests);
         let version = {
             let mut playback = session.playback.lock().map_err(|_| "媒体状态不可用")?;

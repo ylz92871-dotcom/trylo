@@ -907,11 +907,21 @@ export interface ToolUnavailableCapability {
   readonly userMessage: string;
 }
 
+export type MacosComputerPermission = 'accessibility' | 'screen';
+
+export interface MacosComputerPermissions {
+  readonly accessibility: boolean;
+  readonly postEvents: boolean;
+  readonly screenRecording: boolean;
+  readonly enabledByEnvironment: boolean;
+}
+
 export interface ToolingResolveProfileParams {
   readonly surface: ToolSurface;
   readonly requestedProfileId?: string;
   /** Explicitly false removes desktop-control tools from this run. */
   readonly computerUse?: boolean;
+  readonly macosComputerUse?: boolean;
   readonly projectKey?: string;
   readonly projectRoot?: string;
   readonly conversationId?: string;
@@ -1312,7 +1322,7 @@ export interface ComputerPreviewFrameEvent {
 export interface ComputerPreviewStatusEvent {
   readonly scope: string;
   readonly streamId: string;
-  readonly state: 'starting' | 'running' | 'stopped' | 'error';
+  readonly state: 'starting' | 'selecting' | 'running' | 'stopped' | 'error';
   readonly detail?: string;
 }
 
@@ -1374,6 +1384,7 @@ export type ServiceEventTopic = keyof ServiceEventMap;
 
 export interface NativeBrowserState {
   readonly nativeLayout?: 'direct';
+  readonly cdpAvailable?: boolean;
   readonly revision?: number;
   readonly ok: boolean;
   readonly scope: string;
@@ -1476,6 +1487,7 @@ export interface ServiceMethodMap {
   readonly 'tooling.viewportNavigate': { params: { readonly url: string }; result: ViewportNavigateResult };
   readonly 'tooling.viewportInput': { params: ViewportInputParams; result: ViewportInputResult };
   readonly 'tooling.viewportStop': { params: undefined; result: ViewportStopResult };
+  readonly 'tooling.macosComputerPermissions': { params: { readonly request?: MacosComputerPermission }; result: MacosComputerPermissions };
   readonly 'tooling.computerPreviewStart': { params: ComputerPreviewStartParams; result: ComputerPreviewResult };
   readonly 'tooling.computerPreviewStop': { params: { readonly scope?: string; readonly streamId?: string } | undefined; result: ComputerPreviewResult };
   readonly 'tooling.computerPreviewAck': { params: { readonly scope: string; readonly streamId: string; readonly seq: number }; result: ComputerPreviewResult };

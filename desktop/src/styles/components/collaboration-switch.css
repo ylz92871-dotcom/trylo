@@ -2,7 +2,117 @@
 .collaboration-switch__trigger { display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:7px; color:var(--fg-muted); font-size:12px; }
 .collaboration-switch__trigger:hover { background:var(--bg-elevated); }
 .collaboration-switch__trigger:disabled { opacity:.4; cursor:default; }
-.collaboration-switch__menu { position:absolute; z-index:30; right:0; top:36px; width:174px; padding:5px; border:1px solid var(--border); border-radius:9px; background:var(--bg); box-shadow:0 8px 24px #00000012; }
+.collaboration-switch__menu { --popover-origin-y: -4px; position:absolute; z-index:30; right:0; top:36px; width:174px; padding:5px; border:1px solid var(--border); border-radius:9px; background:var(--bg); box-shadow:0 8px 24px #00000012; transform-origin:top right; animation:trylo-popover-in var(--duration-popover-in) var(--ease-out) both; }
+.collaboration-switch__menu[data-motion-state='exiting'] { animation:trylo-popover-out var(--duration-popover-out) var(--ease-in) both; }
 .collaboration-switch__menu button { display:flex; align-items:center; gap:8px; padding:8px; width:100%; border-radius:5px; font-size:12px; text-align:left; }
 .collaboration-switch__menu button span { flex:1; }
 .collaboration-switch__menu button:hover { background:var(--bg-elevated); }
+
+/* macOS native 26px toolbar control and frosted glass popover menu. */
+:root[data-platform='macos'] .collaboration-switch__trigger {
+  height: 26px;
+  padding: 0 9px;
+  gap: 5px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg);
+  background: rgba(0, 0, 0, 0.045);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+:root[data-platform='macos'] .collaboration-switch__trigger:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+:root[data-platform='macos'] .collaboration-switch__trigger[aria-expanded='true'] {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+:root[data-platform='macos'][data-theme='dark'] .collaboration-switch__trigger {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-platform='macos'][data-theme='dark'] .collaboration-switch__trigger:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+:root[data-platform='macos'][data-theme='dark'] .collaboration-switch__trigger[aria-expanded='true'] {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+:root[data-platform='macos'] .collaboration-switch__trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 34%, transparent);
+}
+
+:root[data-platform='macos'] .collaboration-switch__menu {
+  top: 32px;
+  padding: 5px;
+  border-radius: 12px;
+  background: rgba(250, 248, 243, 0.84);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 0 0 0.5px rgba(0, 0, 0, 0.09),
+    0 8px 24px rgba(0, 0, 0, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+:root[data-platform='macos'][data-theme='dark'] .collaboration-switch__menu {
+  background: rgba(36, 35, 32, 0.84);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
+    0 12px 32px rgba(0, 0, 0, 0.48);
+}
+
+:root[data-platform='macos'] .collaboration-switch__menu button {
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+:root[data-platform='macos'] .collaboration-switch__menu button:hover,
+:root[data-platform='macos'] .collaboration-switch__menu button:focus-visible {
+  background: rgba(0, 0, 0, 0.06);
+  outline: none;
+}
+
+:root[data-platform='macos'][data-theme='dark'] .collaboration-switch__menu button:hover,
+:root[data-platform='macos'][data-theme='dark'] .collaboration-switch__menu button:focus-visible {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-platform='macos'] .collaboration-switch__menu {
+    background: var(--bg);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (forced-colors: active) {
+  :root[data-platform='macos'] .collaboration-switch__trigger {
+    border-color: ButtonText;
+    background: Canvas;
+  }
+  :root[data-platform='macos'] .collaboration-switch__menu {
+    background: Canvas;
+    border-color: CanvasText;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  :root[data-platform='macos'] .collaboration-switch__trigger:focus-visible,
+  :root[data-platform='macos'] .collaboration-switch__menu button:focus-visible {
+    outline: 2px solid Highlight;
+    box-shadow: none;
+  }
+}

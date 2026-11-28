@@ -6,8 +6,8 @@
   flex: 0 0 240px;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.15);
+  border-right: 1px solid var(--border);
+  background: var(--bg-panel);
   overflow-y: auto;
   font-size: 0.85rem;
 }
@@ -16,7 +16,7 @@
   padding: 0.4rem 0.6rem;
   color: var(--fg-muted);
   font-size: 0.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--border-faint);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -80,5 +80,5 @@
 }
 
 .file-tree-error {
-  color: #d96666;
+  color: var(--danger);
 }

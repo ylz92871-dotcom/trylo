@@ -35,7 +35,9 @@ const bundledResources = path.join(desktop, 'src-tauri/resources');
 const options = stageCliOptions(process.argv.slice(2), { cwd: process.cwd(), source, resources: bundledResources });
 const target = options.target;
 const resources = path.dirname(target);
-const node = options.node ?? path.join(bundledResources, 'runtime/node/win-x64/node.exe');
+const windows = process.platform === 'win32';
+const nodePath = windows ? 'win-x64/node.exe' : `${process.platform}-${process.arch}/bin/node`;
+const node = options.node ?? path.join(bundledResources, 'runtime/node', nodePath);
 const entry = 'dist/cmd/trylo/main.js';
 if (options.isolatedOutput) assert.ok(!existsSync(target), 'Candidate output already exists; choose a fresh --output');
 mkdirSync(resources, { recursive: true });
@@ -178,17 +180,18 @@ try {
   const isolated = mkdtempSync(path.join(tmpdir(), 'trylo-cli-bundle-'));
   try {
     cpSync(staged, path.join(isolated, 'cli'), { recursive: true });
-    cpSync(node, path.join(isolated, 'node.exe'));
+    const isolatedNode = path.join(isolated, windows ? 'node.exe' : 'node');
+    cpSync(node, isolatedNode);
     // The smoke runs with the build host's authority. A copied executable must
     // not silently downgrade that process through an inherited integrity label.
     // Only this owned temporary copy changes; the packaged runtime stays intact.
     let smokeIntegrity;
-    if (process.platform === 'win32') {
+    if (windows) {
       assert.equal(path.dirname(isolated), path.resolve(tmpdir()));
       const system = path.join(process.env.SystemRoot, 'System32');
       const groups = execFileSync(path.join(system, 'whoami.exe'), ['/groups'], { encoding: 'utf8', windowsHide: true });
       smokeIntegrity = groups.includes('S-1-16-12288') ? 'H' : 'M';
-      execFileSync(path.join(system, 'icacls.exe'), [path.join(isolated, 'node.exe'), '/setintegritylevel', smokeIntegrity], { windowsHide: true });
+      execFileSync(path.join(system, 'icacls.exe'), [isolatedNode, '/setintegritylevel', smokeIntegrity], { windowsHide: true });
     }
     const workspace = path.join(isolated, 'workspace');
     const home = path.join(isolated, 'home');
@@ -208,14 +211,14 @@ try {
     // Resolve every direct dependency from the copied tree, with system Node absent.
     const resolutionScript = `const requireFromCli = require('node:module').createRequire(${JSON.stringify(path.join(isolated, 'cli/package.json'))});
     for (const name of ${JSON.stringify(Object.keys(manifest.dependencies))}) requireFromCli.resolve(name);`;
-    execFileSync(path.join(isolated, 'node.exe'), ['-e', resolutionScript], {
+    execFileSync(isolatedNode, ['-e', resolutionScript], {
       cwd: workspace,
       env: isolatedEnv,
       timeout: 60_000,
     });
     writeFileSync(path.join(workspace, 'package.json'), '{"name":"installed-cli-proof"}');
     const child = spawn(
-      path.join(isolated, 'node.exe'),
+      isolatedNode,
       [
         path.join(isolated, 'cli', entry),
         'run',

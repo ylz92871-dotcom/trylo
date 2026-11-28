@@ -8,6 +8,7 @@ import { isCentralRuntimeConfiguration } from "../../internal/surface/cli/centra
 import { pendingRuntimeWake } from "../../internal/adapters/central-learning-runtime/startup-wake.js";
 import { isCentralRuntimeActivation, isRuntimeActivationFailure, runtimeActivationFailure } from "../../internal/adapters/central-learning-runtime/launch.js";
 import { isCentralRuntimeWorkspaceLocation, runtimeWorkspaceLocationMatches } from "../../internal/adapters/central-learning-runtime/workspace-location.js";
+import { isProcessEntry } from "./is-process-entry.js";
 
 /** Managed child entry. Only non-secret configuration references cross the startup pipe. */
 async function start() {
@@ -102,7 +103,7 @@ async function start() {
   }
 }
 
-if (process.argv[1]?.replaceAll("\\", "/").endsWith("/cmd/trylo/central-runtime-main.js")) {
+if (isProcessEntry(process.argv[1], import.meta.url)) {
   try { await start(); }
   catch (error) {
     if (error instanceof Error && isRuntimeActivationFailure(error.message)) {

@@ -4,13 +4,16 @@ import { resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { expect, it, vi } from 'vitest';
 
+interface Material { draw(time: number, phase: number): boolean; resize(width: number, height: number): void; dispose(): void }
+type MaterialFactory = (...args: unknown[]) => Material;
+
 const source = readFileSync(resolve('public/startup/material.js'), 'utf8');
 
 it('reuses an unchanged material frame while retaining redraws after a resize', () => {
-  const gl = new Proxy({} as Record<string, any>, { get(target, key: string) {
+  const gl = new Proxy({} as Record<string, unknown>, { get(target, key: string) {
     return target[key] ??= /^[A-Z_0-9]+$/.test(key) ? key : vi.fn(() => true);
   } });
-  const scope: Record<string, any> = {};
+  const scope = {} as { TryloStartupMaterial: MaterialFactory };
   runInNewContext(source, scope);
   const canvas = { width: 400, height: 400, getContext: () => gl };
   const material = scope.TryloStartupMaterial(canvas, {}, {});
@@ -24,22 +27,22 @@ it('reuses an unchanged material frame while retaining redraws after a resize', 
 });
 
 function documentMaterial() {
-  const workers: any[] = [];
+  const workers: Worker[] = [];
   class Worker {
-    onmessage?: (event: any) => void;
-    onerror?: (event: any) => void;
+    onmessage!: (event: { data: { type: string } }) => void;
+    onerror!: (event: unknown) => void;
     postMessage = vi.fn();
     terminate = vi.fn();
     constructor() { workers.push(this); }
   }
-  const window: Record<string, any> = {};
+  const window = {} as { TryloStartupMaterial: MaterialFactory };
   const bitmaps = [{ close: vi.fn() }, { close: vi.fn() }];
   let index = 0;
   runInNewContext(source, { window, Worker, createImageBitmap: async () => bitmaps[index++] });
   const canvas = { width: 400, height: 400, getContext: vi.fn(), transferControlToOffscreen: vi.fn(() => ({})) };
   const ready = vi.fn(), failed = vi.fn();
   const material = window.TryloStartupMaterial(canvas, {}, {}, ready, failed);
-  return { canvas, material, worker: workers[0], ready, failed, bitmaps };
+  return { canvas, material, worker: workers[0]!, ready, failed, bitmaps };
 }
 
 it('initializes graphics off the document thread and submits only changing frames', async () => {

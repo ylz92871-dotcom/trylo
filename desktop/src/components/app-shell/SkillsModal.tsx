@@ -113,14 +113,15 @@ export function SkillsModal(props: SkillsModalProps): ReactElement | null {
   }, [props.open, load])
 
   // Escape closes.
+  const { onClose } = props
   useEffect(() => {
     if (!props.open) return
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') props.onClose()
+      if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [props.open, props.onClose])
+  }, [props.open, onClose])
 
   const toggle = async (skill: SkillSummary): Promise<void> => {
     const port = props.port

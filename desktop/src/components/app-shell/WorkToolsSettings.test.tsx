@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { WorkToolsSettings } from './WorkToolsSettings'
@@ -8,7 +8,22 @@ import { settingsDefaults } from '../../settings/settings-store'
 import type { ToolPlatformState } from '../../tooling/use-tool-platform-state'
 import type { ToolPackageHealth } from '../../services-host/methods'
 
-afterEach(cleanup)
+function mockPlatform(platformValue: string): () => void {
+  const original = Object.getOwnPropertyDescriptor(window.navigator, 'platform')
+  Object.defineProperty(window.navigator, 'platform', { value: platformValue, configurable: true })
+  return () => {
+    if (original) Object.defineProperty(window.navigator, 'platform', original)
+    else delete (window.navigator as { platform?: string }).platform
+  }
+}
+
+let restorePlatform: (() => void) | undefined
+
+afterEach(() => {
+  cleanup()
+  restorePlatform?.()
+  restorePlatform = undefined
+})
 const selected = { computer: true, browserDebug: false, cad: false }
 function platform(overrides: Partial<ToolPlatformState> = {}): ToolPlatformState {
   const packages: ToolPackageHealth[] = catalog.packages.map((item) => ({
@@ -193,4 +208,35 @@ it('permits retrying a failed health request and preserves the catalogue while l
   expect(
     screen.getAllByRole('status').filter((node) => node.textContent === '检测中…'),
   ).toHaveLength(catalog.packages.length)
+})
+
+describe('macOS SettingsModal and WorkToolsSettings adaptation', () => {
+  it('shows only macOS-supported tools and allows Chrome DevTools without false Windows-only copy', () => {
+    restorePlatform = mockPlatform('MacIntel')
+    render(
+      <SettingsModal
+        open
+        initial={{ ...settingsDefaults, workBrowserDebug: true, workCad: true }}
+        initialTab="tools"
+        toolPlatform={platform()}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('article', { name: 'OfficeCLI' })).toBeVisible()
+    expect(screen.getByRole('article', { name: 'Playwright MCP' })).toBeVisible()
+    expect(screen.getByRole('article', { name: 'Chrome DevTools MCP' })).toBeVisible()
+    expect(screen.queryByRole('article', { name: 'Windows-MCP' })).toBeNull()
+    expect(screen.queryByRole('article', { name: 'AutoCAD 自动化' })).toBeNull()
+    expect(screen.getByRole('checkbox', { name: '启用 Code 与 Work 的原生电脑控制' })).not.toBeChecked()
+    expect(screen.queryByText(/浏览器调试是 Windows-only 能力/)).toBeNull()
+    expect(screen.getByText(/Playwright 与 Chrome DevTools 均支持 macOS/)).toBeVisible()
+    expect(screen.getByRole('checkbox', { name: /在 Work 中启用 CAD\/EDA/ })).toBeDisabled()
+  })
+
+  it('disables the Windows-only companion switch on macOS behavior tab', () => {
+    restorePlatform = mockPlatform('MacIntel')
+    render(<SettingsModal open initial={settingsDefaults} initialTab="behavior" onClose={vi.fn()} />)
+    expect(screen.getByRole('checkbox', { name: '启用桌面伙伴' })).toBeDisabled()
+    expect(screen.getByText(/请在受支持的 Trylo 桌面应用中启用桌面伙伴/)).toBeVisible()
+  })
 })

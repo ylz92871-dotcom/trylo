@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { observeDarwinProcess } from "../process-session/darwin-process.js";
 
 import {
   verifyIdentity,
@@ -18,23 +19,7 @@ import {
  *  - **win32**: `Win32_Process.CreationDate` via PowerShell. Verified to work,
  *    ~200–600 ms per call. `wmic` does not work on this host, so it is not a
  *    fallback.
- *  - **darwin/linux**: `ps -o lstart= -p <pid>` gives a start time. Not exercised
- *    on this machine — see the caveat below.
- *
- * ## The honesty rule, and why POSIX is *not* implemented here
- *
- * A probe that cannot answer must throw, not return a plausible number. The win32
- * implementation is therefore the only one, and {@link createProcessIdentityProbe}
- * throws for POSIX with a message naming what is missing.
- *
- * That looks like leaving POSIX unsupported, and it is a deliberate choice: the
- * alternative is writing `ps -o lstart=` **without having run it**, and the
- * timestamp formats differ (BSD `lstart` is a fixed layout, GNU `lstart` is
- * locale-dependent, and a container's `ps` may not support `-o lstart` at all).
- * A wrong start time is worse than no start time, because `identityMatches` would
- * then reject a live daemon as a stranger — turning a missing feature into a
- * broken one. POSIX is recorded as unverified platform work, not silently
- * approximated.
+ *  - **darwin**: BSD `ps` reports the process start time and group in one query.
  *
  * ## Why the probe is a seam and not an import
  *
@@ -124,12 +109,8 @@ export function createProcessIdentityProbe(platform: string): DaemonIdentityProb
   if (platform === "win32") {
     return createWin32IdentityProbe();
   }
-  throw new Error(
-    `no process start-time reader for platform '${platform}'. ` +
-      "POSIX needs `ps -o lstart=`, whose output format differs between BSD and GNU " +
-      "and is absent in many container images; it has not been run on this host and " +
-      "is recorded as unverified rather than approximated with a wrong timestamp.",
-  );
+  if (platform === "darwin") return { observe: observeDarwinProcess };
+  throw new Error(`no process start-time reader for platform '${platform}'`);
 }
 
 /**

@@ -31,7 +31,7 @@
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -265,12 +265,7 @@ pub async fn servicehost_spawn(
     // installed app must use the bundled interpreter, never PATH `node`.
     let node = node_runtime::resolve_node(resource_dir.as_deref());
 
-    let mut cmd = Command::new(&node.program);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW: startup/recovery must not steal focus.
-    }
+    let mut cmd = super::background_command::command(&node.program);
     cmd.arg(node_runtime::node_script_argument(&script));
     cmd.env(
         "TRYLO_SIDECARS_DIR",
@@ -291,7 +286,7 @@ pub async fn servicehost_spawn(
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 
-    let mut child = cmd.spawn().map_err(|e| {
+    let spawn_error = |e| {
         io_error(
             "(servicehost)",
             std::io::Error::other(format!(
@@ -299,8 +294,15 @@ pub async fn servicehost_spawn(
                 node_runtime::describe(&node)
             )),
         )
-    })?;
+    };
+    #[cfg(unix)]
+    let (mut child, process_tree) = HostProcessTree::spawn(&mut cmd).map_err(spawn_error)?;
+    #[cfg(not(unix))]
+    let mut child = cmd.spawn().map_err(spawn_error)?;
     let pid = child.id();
+    #[cfg(unix)]
+    let process_tree = Arc::new(process_tree);
+    #[cfg(not(unix))]
     let process_tree = match HostProcessTree::capture(&child) {
         Ok(tree) => Arc::new(tree),
         Err(error) => {
@@ -385,6 +387,8 @@ pub async fn servicehost_spawn(
     let heartbeat = Heartbeat::new();
     let heartbeat_for_thread = heartbeat.clone();
     let generation_for_thread = generation;
+    #[cfg(unix)]
+    let exit_tree = Arc::clone(&process_tree);
 
     std::thread::spawn(move || {
         let mut child = child;
@@ -416,6 +420,10 @@ pub async fn servicehost_spawn(
             let _ = app_handle.emit("servicehost://frame", text);
         }
         let status = child.wait().ok();
+        #[cfg(unix)]
+        if let Err(error) = exit_tree.terminate() {
+            eprintln!("[servicehost] exit cleanup failed: {error}");
+        }
         exited_for_thread.store(true, Ordering::Release);
         if !announced_ready {
             // SH-P0-1: EOF before a real ready frame is a spawn failure.
@@ -520,8 +528,12 @@ pub async fn servicehost_spawn(
             if since_ping >= interval {
                 since_ping = Duration::ZERO;
                 if stdin_handle.write_frame(&ping_frame()).is_err() {
-                    // Broken pipe: the host is gone. The exit reaper owns
-                    // the cleanup, so just retire this watchdog.
+                    // On POSIX a descendant may still hold stdout open and
+                    // prevent the reaper from observing the root's exit.
+                    #[cfg(unix)]
+                    if let Err(error) = process_tree.terminate() {
+                        eprintln!("[servicehost] broken-pipe cleanup failed: {error}");
+                    }
                     return;
                 }
             }

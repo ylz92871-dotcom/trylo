@@ -76,6 +76,7 @@ export function useToolAcquisition(runtime: ToolLearningRuntime | undefined, job
     }
     timer = setTimeout(() => { void poll() }, 3000)
     return () => { clearTimeout(timer); controller.abort() }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Poll the captured failure attempt; replacing its read projection must not restart its timer.
   }, [runtime, busy, operation, review?.failure?.ref])
 
   async function approve() {

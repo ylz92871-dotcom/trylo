@@ -222,3 +222,18 @@ it('keeps the composer stop control without the retired Turn/tools status row', 
   expect(view.container.querySelector('.process-header')).toBeNull();
   expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
 });
+
+it('uses macOS Return glyph in send hint and steering placeholder when running on macOS', () => {
+  const original = Object.getOwnPropertyDescriptor(window.navigator, 'platform');
+  Object.defineProperty(window.navigator, 'platform', { value: 'MacIntel', configurable: true });
+  try {
+    const view = render(<InputBar {...props({ running: true, canSend: true })} />);
+    expect(view.container.querySelector('.input-bar__hint')?.textContent).toBe('↩ 发送');
+    expect(
+      screen.getByRole('textbox', { name: 'Message' }).getAttribute('placeholder'),
+    ).toBe('输入调整方向，↩ 发送后续消息…');
+  } finally {
+    if (original) Object.defineProperty(window.navigator, 'platform', original);
+    else delete (window.navigator as { platform?: string }).platform;
+  }
+});

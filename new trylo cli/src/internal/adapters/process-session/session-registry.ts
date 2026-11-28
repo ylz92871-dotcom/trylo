@@ -16,7 +16,7 @@ import {
 } from "../../ports/process-session.js";
 import { type BoundedBuffer, createBoundedBuffer } from "./output-buffer.js";
 import { attachSessionOutput } from "./session-output.js";
-import { type TreeTermination, terminateProcessTree } from "./process-tree.js";
+import { supportsPosixProcessGroups, type TreeTermination, terminateProcessTree } from "./process-tree.js";
 import { isProcessSessionIdShape, newProcessSessionId } from "./session-id.js";
 import { assertSessionStartAllowed, type SessionLifecycle } from "./session-start-admission.js";
 import { SessionStopRequests } from "./session-stop-requests.js";
@@ -260,6 +260,8 @@ export function createProcessSessionRegistry(
         env: { ...start.env },
         stdio: ["pipe", "pipe", "pipe"],
         windowsHide: true,
+        // POSIX stop targets the group whose leader is this child.
+        detached: supportsPosixProcessGroups(),
       });
       const record: SessionRecord = {
         ...(start.ownerId === undefined ? {} : { ownerId: start.ownerId }),

@@ -171,6 +171,10 @@ __pycache__/
 !/desktop-services/toolchain/README.md
 !/desktop-services/toolchain/computer-control/
 /desktop-services/toolchain/computer-control/*
+!/desktop-services/toolchain/computer-control/macos-mcp/
+/desktop-services/toolchain/computer-control/macos-mcp/*
+!/desktop-services/toolchain/computer-control/macos-mcp/*.swift
+!/desktop-services/toolchain/computer-control/macos-mcp/SOURCES.json
 !/desktop-services/toolchain/computer-control/Windows-MCP/
 /desktop-services/toolchain/computer-control/Windows-MCP/*
 !/desktop-services/toolchain/computer-control/Windows-MCP/src/
@@ -217,9 +221,13 @@ new trylo cli/src/**/*.js
 # 隔离复验/影响面构建输出（tsc 变体产物，非源）
 new trylo cli/dist-*/
 new trylo cli/.wp07iso/
-# 供应商二进制与 cargo 构建树（rlib/pdb/exe 共 ~60MB）：入库即永久占历史，
-# 需随发行分发时再用 git add -f 显式点名（沿用上面对 vendor 源的同一条策略）
-new trylo cli/vendor-bin/
+# Exclude downloaded vendor files and Cargo output. The pinned macOS PTY is a build input.
+new trylo cli/vendor-bin/*
+!new trylo cli/vendor-bin/pty/
+new trylo cli/vendor-bin/pty/*
+!new trylo cli/vendor-bin/pty/darwin-arm64/
+new trylo cli/vendor-bin/pty/darwin-arm64/*
+!new trylo cli/vendor-bin/pty/darwin-arm64/trylo-pty
 # 一次性排查/审计输出与探针
 /wp20-audit-fullsuite.txt
 /testfiles.txt

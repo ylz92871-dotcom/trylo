@@ -260,7 +260,11 @@ function createDesktopCompanionBridge(options = {}) {
   };
 
   const enable = () => {
-    if (enabled || process.platform !== 'win32') return;
+    if (enabled) return;
+    if (process.platform !== 'win32') {
+      launchCompanion();
+      return;
+    }
     enabled = true;
     launchCompanion();
     announce();
@@ -276,7 +280,7 @@ function createDesktopCompanionBridge(options = {}) {
   };
 
   const disable = () => {
-    if (!enabled && !socket) return;
+    if (!enabled && !socket && lastLaunch.reasonCode !== 'unsupported_platform') return;
     enabled = false;
     // Detach retires this client; the shared exe may still serve other clients.
     // `launched` describes this bridge's active launch, not global liveness.

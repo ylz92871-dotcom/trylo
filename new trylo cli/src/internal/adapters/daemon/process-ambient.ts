@@ -53,6 +53,7 @@ export function readProcessAmbient(ambient: {
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly homeDir: string;
   readonly now: () => number;
+  readonly startedAtMs?: number;
   readonly pid: number;
   readonly installSignals: (signals: ReadonlyArray<NodeJS.Signals>, handler: () => void) => () => void;
   readonly report: (code: number) => void;
@@ -65,7 +66,7 @@ export function readProcessAmbient(ambient: {
     homeDir: ambient.homeDir,
     home,
     pid: ambient.pid,
-    startedAtMs: ambient.now(),
+    startedAtMs: ambient.startedAtMs ?? ambient.now(),
     onSignal: (signals, handler) => ambient.installSignals(signals, handler),
     setExitCode: (code) => ambient.report(code),
   };

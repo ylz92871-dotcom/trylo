@@ -20,11 +20,11 @@
 // The SHA-256 of every staged binary is checked against PROVENANCE.json before
 // it is copied, so a truncated or tampered helper fails the build loudly rather
 // than shipping. Nothing here invents a path at runtime: the loader and this
-// script agree on `dist/internal/vendor/pty/<platform>-<arch>/trylo-pty.exe`,
+// script agree on `dist/internal/vendor/pty/<platform>-<arch>/trylo-pty[.exe]`,
 // and the test suite asserts the two agree.
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -43,12 +43,15 @@ const PROVENANCE_PATH = join(root, "vendor-bin", "pty", "PROVENANCE.json");
  * honest arrangement is a test that reads this file and compares — see
  * `pty-loader.test.ts`, "agrees with the copy script about where the artifact goes".
  */
-export const PTY_DIST_SUBDIR = "internal/vendor/pty";
+const PTY_DIST_SUBDIR = "internal/vendor/pty";
 
 /** What Node reports as its platform, mapped onto the artifact directory name. */
-function currentArtifactDir() {
-  const platform = process.platform === "win32" ? "win" : process.platform;
-  return `${platform}-${process.arch}`;
+export function ptyArtifactDirectory(platform, arch) {
+  return `${platform === "win32" ? "win" : platform}-${arch}`;
+}
+
+export function ptyStagedPath(platform, arch) {
+  return `${PTY_DIST_SUBDIR}/${ptyArtifactDirectory(platform, arch)}/${platform === "win32" ? "trylo-pty.exe" : "trylo-pty"}`;
 }
 
 function sha256Of(bytes) {
@@ -57,8 +60,6 @@ function sha256Of(bytes) {
 
 /** A copied Low label would cap every terminal child, even a normal shell. */
 function prepareWindowsPtyCopy(executable) {
-  if (process.platform !== "win32") return;
-
   const systemRoot = process.env.SystemRoot ?? process.env.SYSTEMROOT;
   if (!systemRoot) throw new Error("copy-pty-vendor: Windows SystemRoot is missing");
 
@@ -95,7 +96,7 @@ export function stagePtySidecar({ log = () => {}, outputDir = join(root, "dist")
 
   const provenance = JSON.parse(readFileSync(PROVENANCE_PATH, "utf8"));
   const artifacts = provenance.artifacts ?? {};
-  const wanted = currentArtifactDir();
+  const wanted = ptyArtifactDirectory(process.platform, process.arch);
   const entry = artifacts[`trylo-pty-${wanted}`];
 
   if (entry === undefined) {
@@ -106,7 +107,7 @@ export function stagePtySidecar({ log = () => {}, outputDir = join(root, "dist")
     throw new Error(
       `copy-pty-vendor: no PTY sidecar artifact for ${wanted}. ` +
         `Built artifacts: ${built.length === 0 ? "(none)" : built.join(", ")}. ` +
-        `Build one with: cargo build --release --offline (in vendor-bin/pty), then record it in PROVENANCE.json.`,
+        `Build one with: cargo build --release --locked (in vendor-bin/pty), then record it in PROVENANCE.json.`,
     );
   }
 
@@ -129,7 +130,7 @@ export function stagePtySidecar({ log = () => {}, outputDir = join(root, "dist")
     );
   }
 
-  const dest = join(resolve(outputDir), PTY_DIST_SUBDIR, wanted, "trylo-pty.exe");
+  const dest = join(resolve(outputDir), ptyStagedPath(process.platform, process.arch));
 
   mkdirSync(dirname(dest), { recursive: true });
   const existing = existsSync(dest) ? readFileSync(dest) : undefined;
@@ -137,7 +138,8 @@ export function stagePtySidecar({ log = () => {}, outputDir = join(root, "dist")
     copyFileSync(from, dest);
   }
 
-  prepareWindowsPtyCopy(dest);
+  if (process.platform === "win32") prepareWindowsPtyCopy(dest);
+  else chmodSync(dest, 0o755);
 
   log(
     `copy-pty-vendor: staged trylo-pty ${provenance.helper.version} ` +

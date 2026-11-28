@@ -12,12 +12,12 @@
   padding: var(--space-3) var(--space-4);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-left: 3px solid var(--brand-300, #DBC97F);
+  border-left: 3px solid var(--brand);
   border-radius: var(--radius-md);
 }
 
 .cognition-card--impact {
-  border-left-color: var(--mode-accent, var(--brand-300));
+  border-left-color: var(--mode-accent, var(--brand));
 }
 
 .cognition-card--answered,
@@ -35,7 +35,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--brand-200, #ECE0A8);
+  color: var(--brand);
   font-family: var(--font-body);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -163,8 +163,8 @@
 }
 
 .cognition-card__primary {
-  background: var(--brand-300, #DBC97F);
-  color: #101210;
+  background: var(--brand);
+  color: var(--mode-accent-ink, var(--bg));
 }
 
 .cognition-card__primary:disabled {
@@ -191,9 +191,9 @@
   height: 28px;
   padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid var(--chip-border, rgba(255, 255, 255, 0.08));
-  background: var(--chip-bg, rgba(255, 255, 255, 0.03));
-  color: var(--chip-fg, rgba(255, 255, 255, 0.92));
+  border: 1px solid var(--chip-border);
+  background: var(--chip-bg);
+  color: var(--chip-fg);
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.02em;
@@ -202,11 +202,11 @@
 }
 
 .learning-chip:hover {
-  background: var(--chip-bg-hover, rgba(255, 255, 255, 0.08));
+  background: var(--chip-bg-hover);
 }
 
 .learning-chip:focus-visible {
-  outline: 2px solid var(--focus-ring, #6aa7ff);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -214,11 +214,11 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--brand-300, #DBC97F);
+  background: var(--brand);
 }
 
 .learning-chip--enforced .learning-chip__dot {
-  background: var(--success, #6ec882);
+  background: var(--success);
 }
 
 .learning-chip--off .learning-chip__dot {
@@ -226,7 +226,7 @@
 }
 
 .learning-chip--enforced.is-injected {
-  border-color: rgba(110, 200, 130, 0.45);
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
 }
 
 .learning-chip__count {
@@ -236,12 +236,12 @@
 }
 
 .input-bar--cognition {
-  border-color: var(--brand-300, #DBC97F);
+  border-color: var(--brand);
 }
 
 .input-bar--cognition:focus-within {
-  border-color: var(--brand-300, #DBC97F);
-  box-shadow: 0 0 0 1px var(--brand-300, #DBC97F) inset;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand) inset;
 }
 
 .learning-inspector-backdrop {
@@ -529,21 +529,21 @@
 }
 
 .learning-inspector__notice--success {
-  background: rgba(72, 168, 112, 0.14);
-  border: 1px solid rgba(72, 168, 112, 0.5);
-  color: #88d0a0;
+  background: var(--success-soft);
+  border: 1px solid color-mix(in srgb, var(--success) 45%, transparent);
+  color: var(--success);
 }
 
 .learning-inspector__notice--warn {
-  background: rgba(210, 160, 60, 0.14);
-  border: 1px solid rgba(210, 160, 60, 0.5);
-  color: #e0b860;
+  background: var(--warning-soft);
+  border: 1px solid var(--warning-edge);
+  color: var(--warning);
 }
 
 .learning-inspector__notice--error {
-  background: rgba(212, 74, 58, 0.12);
-  border: 1px solid rgba(212, 74, 58, 0.5);
-  color: var(--brand-200, #d44a3a);
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  color: var(--danger);
 }
 
 .learning-inspector__notice-close {
@@ -720,8 +720,8 @@
   margin-left: 6px;
   padding: 0 5px;
   border-radius: 999px;
-  background: var(--brand-400, #d44a3a);
-  color: #fff;
+  background: var(--danger);
+  color: #ffffff;
   font-size: 11px;
   line-height: 16px;
   text-align: center;
@@ -737,13 +737,13 @@
 }
 
 .pending-proposal__badge--skills {
-  background: var(--brand-300, rgba(212, 74, 58, 0.18));
-  color: var(--brand-200, #d44a3a);
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 
 .pending-proposal__badge--memory {
-  background: rgba(80, 140, 220, 0.18);
-  color: #508cdc;
+  background: var(--link-soft);
+  color: var(--link);
 }
 
 .pending-proposal__detail {

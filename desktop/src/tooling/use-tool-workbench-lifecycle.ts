@@ -6,6 +6,7 @@ import type { ToolPreviewState } from './tool-preview-state'
 export function useToolWorkbenchLifecycle(options: {
   readonly scope: string
   readonly running: boolean
+  readonly autoOpenComputer?: boolean
   readonly browser: ToolPreviewState
   readonly computer: ToolPreviewState
   readonly showBrowser: () => void
@@ -15,14 +16,18 @@ export function useToolWorkbenchLifecycle(options: {
   current.current = options
   const shown = useRef(new Set<string>())
   const openEpoch = useRef(0)
-  const [observer, setObserver] = useState<{ scope: string; handle: number | null }>()
-  const open = useCallback(async (automatic = false): Promise<void> => {
+  const [observer, setObserver] = useState<{ scope: string; handle: number | null; request: number }>()
+  const open = useCallback(async (automatic = false, prepare?: () => Promise<void>): Promise<void> => {
     const scope = current.current.scope
     const epoch = ++openEpoch.current
     try {
+      if (prepare) await prepare()
+      if (current.current.scope !== scope || openEpoch.current !== epoch) return
       const handle = await openComputerPreview(automatic)
-      if (current.current.scope === scope && openEpoch.current === epoch) setObserver({ scope, handle })
-    } catch (error) { current.current.onError(String(error)) }
+      if (current.current.scope === scope && openEpoch.current === epoch) setObserver({ scope, handle, request: epoch })
+    } catch (error) {
+      if (current.current.scope === scope && openEpoch.current === epoch) current.current.onError(String(error))
+    }
   }, [])
   useEffect(() => {
     let disposed = false
@@ -32,23 +37,28 @@ export function useToolWorkbenchLifecycle(options: {
     }).then(unsubscribe => { if (disposed) unsubscribe(); else off = unsubscribe })
     return () => { disposed = true; off?.() }
   }, [])
+  const { scope, running, autoOpenComputer, browser, computer } = options
   useEffect(() => {
-    if (!options.running) return
+    if (!running) return
     for (const kind of ['browser', 'computer'] as const) {
-      const state = options[kind]
+      if (kind === 'computer' && autoOpenComputer === false) continue
+      const state = kind === 'browser' ? browser : computer
       if ((!state.active && !state.hasStarted) || !state.turnId) continue
-      const key = `${options.scope}:${state.turnId}:${kind}`
+      const key = `${scope}:${state.turnId}:${kind}`
       if (shown.current.has(key)) continue
       shown.current.add(key)
       if (shown.current.size > 128) { const oldest = shown.current.values().next().value; if (oldest) shown.current.delete(oldest) }
       if (kind === 'browser') current.current.showBrowser()
       else void open(true)
     }
-  }, [options.scope, options.running, options.browser.active, options.browser.hasStarted, options.browser.turnId,
-    options.computer.active, options.computer.hasStarted, options.computer.turnId, open])
+  }, [scope, running, autoOpenComputer, browser, computer, open])
+  useEffect(() => {
+    setObserver(previous => previous?.scope === options.scope ? previous : undefined)
+  }, [options.scope])
   return {
-    openComputer: () => open(false),
+    openComputer: (prepare?: () => Promise<void>) => open(false, prepare),
     computerVisible: observer?.scope === options.scope,
+    computerRequest: observer?.scope === options.scope ? observer.request : undefined,
     computerHandle: observer?.scope === options.scope ? observer.handle : null,
   }
 }

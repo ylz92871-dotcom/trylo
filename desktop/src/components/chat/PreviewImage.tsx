@@ -97,7 +97,12 @@ export function PreviewImage({
             }} />
           {end && point && <svg className="preview-image__drag" aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1={point.x * 100} y1={point.y * 100} x2={end.x * 100} y2={end.y * 100} /></svg>}
           {cursor && <span className="preview-image__cursor" aria-label="电脑指针位置" style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%` }}><svg width="17" height="21" viewBox="0 0 17 21" aria-hidden="true"><path d="M2 1v16l4-4 3 6 3-1-3-6h6Z" /></svg></span>}
-          {point && <span key={`${action?.id}-${action?.startedAt}`} className="preview-image__target" title={action?.target || action?.title} data-click={action?.title.includes('点击')} aria-label={action?.point?.space === 'screen' ? '操作目标位置' : action?.title.includes('点击') ? '点击位置' : '操作位置'} style={{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }} />}
+          {point && !cursor && (
+            <span className="preview-image__agent-cursor" aria-label="代理虚拟光标" style={{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }}>
+              <svg width="17" height="21" viewBox="0 0 17 21" aria-hidden="true"><path d="M2 1v16l4-4 3 6 3-1-3-6h6Z" /></svg>
+            </span>
+          )}
+          {point && <span key={`${action?.id}-${action?.startedAt}`} className="preview-image__target" title={action?.target || action?.title} data-click={action?.title.includes('点击') || action?.title.includes('后台操作控件') || action?.title.includes('后台写入控件')} aria-label={action?.point?.space === 'screen' ? '操作目标位置' : action?.title.includes('点击') ? '点击位置' : '操作位置'} style={{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }} />}
         </div> : <div className="preview-image__empty"><ImageIcon size={28} strokeWidth={1} /><strong>{empty}</strong><p>{emptyDescription}</p></div>}
       </div>
       {toolbarPosition === 'bottom' && toolbarContent}

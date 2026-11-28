@@ -242,6 +242,23 @@ export class RemoteController {
     return this.remoteStatusValue;
   }
 
+  async recoverAfterWake(): Promise<void> {
+    if (!this.enabled || this.disposed || this.options.manager.currentHealth !== 'ready') return;
+    if (this.gatewayStart) return this.gatewayStart;
+    if (!this.started) {
+      await this.setEnabled(true);
+      return;
+    }
+    const generation = this.lifecycleGeneration;
+    await this.startOnce(async () => {
+      const status = await this.options.port.status().catch(() => EMPTY_REMOTE_STATUS);
+      if (!this.enabled || this.disposed || generation !== this.lifecycleGeneration) return;
+      this.setStatus(status);
+      if (status.reasonCode === 'relay_reconnecting' || status.reasonCode === 'relay_login_required') return;
+      if (!status.running || status.reasonCode === 'tunnel_start_failed') await this.reenable(generation);
+    });
+  }
+
   async pairing(): Promise<RemotePairingInfoResult> {
     if (!this.enabled || this.disposed) throw new Error('请先启用远程访问。');
     // A QR request may arrive before startup finishes, or after a failed

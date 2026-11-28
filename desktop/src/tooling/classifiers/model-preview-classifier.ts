@@ -5,6 +5,7 @@ export const MODEL_PREVIEW_TOOLS = ['preview_open', 'preview_view', 'preview_sna
 
 /** Lexical preflight only; the service additionally checks real paths before reading. */
 function insideWorkspace(input: string, root: string): boolean {
+  // eslint-disable-next-line no-control-regex -- Deliberately reject all C0 control characters in paths and labels.
   if (!root || /[\u0000-\u001f]/.test(input) || /^[a-z]:[^/\\]/i.test(input)) return false;
   const normalize = (value: string): string => {
     const parts: string[] = [];

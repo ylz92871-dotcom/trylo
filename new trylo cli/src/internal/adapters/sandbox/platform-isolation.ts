@@ -1,16 +1,17 @@
 import type { IsolationPort } from "../../ports/isolation.js";
 import { hostShellEnvironment } from "./executable.js";
+import { createMacosIsolation } from "./macos-isolation.js";
 import { windowsHelperEnvironment } from "./windows/windows-helper-environment.js";
 import { createWindowsIsolation } from "./windows/windows-isolation.js";
 
-/** Select OS mechanics here. Callers keep their existing permission and task state. */
 export function createPlatformIsolation(
   env: Readonly<Record<string, string | undefined>>,
   platform = hostShellEnvironment().platform,
 ): IsolationPort {
   if (platform === "win32") return createWindowsIsolation({ hostEnv: windowsHelperEnvironment(env) });
+  if (platform === "darwin") return createMacosIsolation(env);
 
-  const reason = "OS isolation has not been integrated for " + platform;
+  const reason = `OS isolation is unavailable on ${platform}`;
   return {
     async probe() { return { state: "unavailable", reason }; },
     async run(request) {

@@ -2,6 +2,7 @@ import type { CliContext } from "./context.js";
 import { scheduleHome } from "./schedule-paths.js";
 import { createProcessIdentityProbe } from "../../adapters/daemon/identity-probe.js";
 import { createFileDaemon } from "../../adapters/daemon/file-daemon.js";
+import { terminatePidTree } from "../../adapters/process-session/terminate-by-pid.js";
 import { describeDaemon, type DaemonFailureCode } from "../../ports/daemon.js";
 import { EXIT_CODES, type ExitCode } from "../../protocol/cli-stream.js";
 
@@ -112,8 +113,13 @@ export async function handleDaemon(ctx: CliContext, parsed: DaemonParse): Promis
     platform: ctx.platform ?? "win32",
     probe,
 
-    kill: async (pid, options) => {
+    kill: async (pid, options, identity) => {
       ctx.stderr(options.force ? `killing pid ${pid}\n` : `stopping pid ${pid}\n`);
+      if (ctx.platform === "darwin") {
+        const outcome = await terminatePidTree(pid, undefined, identity);
+        if (!outcome.ok) throw new Error(outcome.message);
+        return;
+      }
       process.kill(pid, options.force ? "SIGKILL" : "SIGTERM");
     },
 

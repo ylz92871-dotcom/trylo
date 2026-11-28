@@ -13,7 +13,9 @@ import type { CliContext, DirEntryInfo } from "../../internal/surface/cli/contex
 import { readSecretLine } from "../../internal/surface/cli/secret-prompt.js";
 import { createTerminalLineReader } from "./terminal-line-reader.js";
 import { IsolationCleanupError } from "../../internal/adapters/sandbox/windows/windows-isolation-error.js";
+import { tokenizeCommand } from "../../internal/adapters/sandbox/command.js";
 import { lazyToolProductionService } from "./lazy-tool-production-service.js";
+import { isProcessEntry } from "./is-process-entry.js";
 
 /**
  * Process entry point.
@@ -93,13 +95,15 @@ async function editInEditor(text: string): Promise<string | undefined> {
   if (editor === undefined || editor.trim().length === 0) {
     return undefined;
   }
+  const windows = process.platform === "win32";
+  const [command, ...args] = windows ? [editor] : (tokenizeCommand(editor)?.map(token => token.text) ?? []);
+  if (!command) return undefined;
 
   const file = path.join(tmpdir(), `trylo-edit-${randomUUID()}.md`);
 
-  writeFileSync(file, text, "utf8");
-
   try {
-    const result = spawnSync(editor, [file], { stdio: "inherit", shell: process.platform === "win32" });
+    writeFileSync(file, text, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    const result = spawnSync(command, [...args, file], { stdio: "inherit", shell: windows });
     if (result.error !== undefined || result.status !== 0) {
       return undefined;
     }
@@ -378,8 +382,7 @@ export async function main(argv: readonly string[], ctx?: CliContext): Promise<n
   finally { owned.close(); }
 }
 
-const entry = process.argv[1]?.replaceAll("\\", "/");
-if (entry !== undefined && entry.endsWith("/cmd/trylo/main.js")) {
+if (isProcessEntry(process.argv[1], import.meta.url)) {
   const code = await main(process.argv.slice(2));
   process.exitCode = code;
 }

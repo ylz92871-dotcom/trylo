@@ -10,7 +10,7 @@
 // to a plain message — never to a wall of binary garbage.
 
 import type { ReactElement } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Minus, Plus, RotateCw, Scan } from 'lucide-react';
 import { readPreviewBinary } from '../../host-adapter/preview/resources';
 import { previewExtOf } from './previewKind';
@@ -32,7 +32,7 @@ export function ImagePreview(props: ImagePreviewProps): ReactElement {
   const key = `${props.allowedRoot ?? ''}\0${props.path}`;
   const [loaded, setLoaded] = useState<{ key: string; bytes?: Uint8Array; state: ImageState }>({ key: '', state: { status: 'loading' } });
   const state: ImageState = loaded.key === key && loaded.bytes === props.bytes ? loaded.state : { status: 'loading' };
-  const setState = (state: ImageState): void => setLoaded({ key, bytes: props.bytes, state });
+  const setState = useCallback((state: ImageState): void => setLoaded({ key, bytes: props.bytes, state }), [key, props.bytes]);
   const [zoom, setZoom] = useState<number | undefined>();
   const [rotation, setRotation] = useState(0);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -81,10 +81,16 @@ export function ImagePreview(props: ImagePreviewProps): ReactElement {
       abort.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [props.path, props.allowedRoot, props.bytes, key, page]);
+  }, [props.path, props.allowedRoot, props.bytes, key, page, setState]);
 
   if (state.status === 'loading') {
-    return <div className="preview__empty">Loading image…</div>;
+    return (
+      <div className="preview__skeleton-wrap" role="status" aria-busy="true" aria-label="Loading image">
+        <span className="sr-only">Loading image…</span>
+        <div className="preview__skeleton preview__skeleton--media" aria-hidden="true" />
+        <div className="preview__skeleton preview__skeleton--line preview__skeleton--short" aria-hidden="true" />
+      </div>
+    );
   }
   if (state.status === 'error') {
     return <div className="preview__empty">Could not load image: {state.message}</div>;

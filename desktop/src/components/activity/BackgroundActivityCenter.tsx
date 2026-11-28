@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpRight, PanelsTopLeft, Code2, Layers2, LoaderCircle, Square, X } from 'lucide-react';
 import { useActivityPosition } from './use-activity-position';
+import { usePresenceTransition } from '../../utils/use-presence-transition';
 
 export type ActivityKind = 'code' | 'work' | 'unknown';
 export interface ActivityItem {
@@ -88,8 +89,10 @@ export function BackgroundActivityCenter(props: BackgroundActivityCenterProps): 
       if (mounted.current) setPending(current => { const next = new Set(current); next.delete(item.id); return next; });
     }
   };
-  if (!props.open) return null;
-  return createPortal(<div ref={panel} id={id} className="activity-center" role="dialog" aria-label="运行中的任务">
+  const presence = usePresenceTransition(props.open, 110);
+  if (!presence.mounted) return null;
+  const isExiting = presence.state === 'exiting';
+  return createPortal(<div ref={panel} id={id} className="activity-center" data-motion-state={presence.state} role={isExiting ? undefined : 'dialog'} aria-label={isExiting ? undefined : '运行中的任务'} aria-hidden={isExiting ? true : undefined}>
     <header className="activity-center__header">
       <div><h2>运行中的任务{hasItems && <span className="activity-center__count" aria-label={`${props.items.length}项任务`}>{props.items.length}</span>}</h2><p>查看进展，随时返回会话</p></div>
       <button type="button" className="activity-center__close" onClick={props.onClose} aria-label="关闭任务面板" title="关闭" data-activity-close><X size={16} strokeWidth={1.6} /></button>

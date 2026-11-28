@@ -58,7 +58,11 @@ pub async fn search(
     }
     let output = cmd.output().map_err(|e| CommandError::Io {
         path: p.clone(),
-        source: std::io::Error::other(e.to_string()),
+        source: if e.kind() == std::io::ErrorKind::NotFound {
+            std::io::Error::new(e.kind(), "rg was not found. Install ripgrep or add it to PATH.")
+        } else {
+            e
+        },
     })?;
 
     // rg exits 1 when there are no matches. That's a successful run

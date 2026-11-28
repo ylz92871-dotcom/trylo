@@ -45,7 +45,8 @@ button.collaboration__member:hover,button.collaboration__member[aria-pressed=tru
 .subagent-conversation__header>button:hover{background:var(--ink-hover)}
 .subagent-conversation__parent{padding:8px 22px 12px;border-bottom:1px solid var(--ink-hover);display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--ink-fog)}
 .subagent-conversation__parent button{padding:0;text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
-.subagent-conversation__body{flex:1;min-height:0;overflow:auto;padding:24px;scrollbar-width:thin;overflow-wrap:anywhere;overscroll-behavior:contain}
+.subagent-conversation__body{flex:1;min-height:0;overflow:auto;padding:24px;overflow-wrap:anywhere;overscroll-behavior:contain}
+:root:not([data-platform='macos']) .subagent-conversation__body{scrollbar-width:thin}
 .subagent-conversation__round+.subagent-conversation__round{margin-top:26px}
 .subagent-conversation__instruction{background:var(--collaboration-surface);padding:12px 15px;border-radius:12px;font-size:13px;line-height:1.85;white-space:pre-wrap}
 .subagent-conversation__answer{font-size:14px;line-height:1.9;margin-top:23px}

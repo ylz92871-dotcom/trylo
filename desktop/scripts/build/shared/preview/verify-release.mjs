@@ -9,12 +9,14 @@ import { previewFormatFiles } from './codec-files.mjs';
 import { verifyMediaRelease } from './verify-media-release.mjs';
 import { verifyArchiveRelease } from './verify-archive-engine.mjs';
 import { previewCachePath } from './cache-path.mjs';
+import { officeEngineDarwinLock, verifyMacosOfficeEngine } from './office-engine-darwin.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const desktop = path.resolve(here, '../../../..');
 const repository = path.dirname(desktop);
-const resources = path.join(desktop, 'src-tauri/resources');
-const office = JSON.parse(await readFile(path.join(here, 'office-engine.lock.json'), 'utf8'));
+const resources = path.resolve(process.env.TRYLO_RESOURCE_DIR ?? path.join(desktop, 'src-tauri/resources'));
+const appleSilicon = process.platform === 'darwin' && process.arch === 'arm64';
+const office = appleSilicon ? officeEngineDarwinLock : JSON.parse(await readFile(path.join(here, 'office-engine.lock.json'), 'utf8'));
 const sources = JSON.parse(await readFile(path.join(here, 'source-archives.lock.json'), 'utf8'));
 const pkg = JSON.parse(await readFile(path.join(desktop, 'package.json'), 'utf8'));
 const media = await verifyMediaRelease();
@@ -48,7 +50,8 @@ for (const file of sources.files) {
   if (!supplied || supplied.url !== file.url || supplied.sha256 !== file.sha256 || (await stat(target)).size !== file.bytes || await digest(target) !== file.sha256) throw new Error(`Source archive mismatch: ${file.name}`);
 }
 // This checks the pinned conversion profile and rejects extra/missing files.
-execFileSync(process.execPath, [path.join(here, 'stage-office-engine.mjs'), '--check'], { windowsHide: true, stdio: 'inherit' });
+if (appleSilicon) await verifyMacosOfficeEngine(path.join(resources, 'preview/office'));
+else execFileSync(process.execPath, [path.join(here, 'stage-office-engine.mjs'), '--check'], { windowsHide: true, stdio: 'inherit' });
 
 const notices = [];
 notices.push(...media.notices);
@@ -60,7 +63,9 @@ for (const [name, original] of previewFormatFiles()) {
   if (sha256 !== await digest(original)) throw new Error(`Staged preview codec/notice differs from supply: ${relative}`);
   notices.push({ path: relative, sha256 });
 }
-const officeNotices = ['preview/office/license.txt', 'preview/office/LICENSE.html', 'preview/office/NOTICE'];
+const officeNotices = appleSilicon
+  ? ['LICENSE', 'LICENSE.html', 'NOTICE'].map(name => `preview/office/${office.bundle}/Contents/Resources/${name}`)
+  : ['preview/office/license.txt', 'preview/office/LICENSE.html', 'preview/office/NOTICE'];
 for (const relative of officeNotices) notices.push({ path: relative, sha256: await digest(await regularFile(resources, relative)) });
 const ownSources = [
   'docs/preview/README.md', 'docs/preview/DEPENDENCIES.md', 'docs/preview/codecs.md',
@@ -75,6 +80,11 @@ const ownSources = [
   'src-tauri/src/preview/media/mod.rs', 'src-tauri/src/preview/media/engine.rs',
   'src-tauri/src/preview/media/policy.rs', 'src-tauri/src/preview/media/process.rs',
   'src-tauri/src/preview/media/session.rs', 'src-tauri/src/preview/media/producer.rs',
+  ...(appleSilicon ? [
+    'scripts/build/shared/preview/office-engine.darwin-arm64.lock.json', 'scripts/build/shared/preview/supply-office-engine.mjs',
+    'scripts/build/shared/preview/office-engine-darwin.mjs', 'scripts/build/shared/preview/media-engine.darwin-arm64.lock.json',
+    'src-tauri/src/preview/office_engine/darwin.rs',
+  ] : []),
   ...media.recipes,
   'src/preview/workers/archive-worker.js', 'src/preview/providers/archive.ts', 'src/preview/providers/archive-types.ts',
   'scripts/build/shared/preview/archive-engine.lock.json', ...archive.lock.recipes.map((file) => file.path),
@@ -111,11 +121,17 @@ if (prior?.identity === identity && prior.sourceCompanion?.file === companionNam
 }
 const manifest = {
   schemaVersion: 1, productVersion: pkg.version, identity,
-  office: { version: office.version, buildId: office.buildId, runtimeProfile: office.runtimeProfile, upstreamDistributionFilesSha256: office.upstreamDistributionFilesSha256, distributionFilesSha256: office.distributionFilesSha256 },
+  office: { version: office.version, buildId: office.buildId, runtimeProfile: office.runtimeProfile,
+    ...(appleSilicon ? { packageSha256: office.packageSha256 } : {
+      upstreamDistributionFilesSha256: office.upstreamDistributionFilesSha256,
+      distributionFilesSha256: office.distributionFilesSha256,
+    }) },
   sourceCompanion: { file: companionName, sha256: companionSha256, bytes: (await stat(companion)).size },
   sources: [...sources.files, ...media.lock.files, ...archive.lock.sources], archive: { version: archive.lock.version }, media: { version: media.lock.engineVersion, ffmpegCommit: media.lock.ffmpegCommit, builderCommit: media.lock.builderCommit }, suppliedFiles: notices, applicationAdapters: ownFiles,
 };
 await writeFile(`${manifestPath}.partial-${process.pid}`, `${JSON.stringify(manifest, null, 2)}\n`);
 await rename(`${manifestPath}.partial-${process.pid}`, manifestPath);
-await writeFile(path.join(output, 'README.txt'), `Trylo preview release companion\n\nDistribute preview-release.json and ${companionName} alongside the matching installer.\nLibreOffice uses the ${office.runtimeProfile} conversion profile. Its binaries are unchanged; unused UI languages, editing dictionaries/help/gallery are omitted, and dictionaries.xcu retains hyphenation registrations only.\nThe companion includes matching upstream sources/build recipes, license notices, Trylo adapters, and the exact profile/staging scripts needed to reproduce these changes.\nSHA256 ${companionName}: ${companionSha256}\n\nThis gate verifies supply consistency. Native UI and installer acceptance are separate.\n`);
+const officeNote = appleSilicon ? 'The upstream signed LibreOffice bundle retains its resource tree and original notices.'
+  : 'Unused UI languages, editing dictionaries/help/gallery are omitted, and dictionaries.xcu retains hyphenation registrations only.';
+await writeFile(path.join(output, 'README.txt'), `Trylo preview release companion\n\nDistribute preview-release.json and ${companionName} alongside the matching installer.\nLibreOffice uses the ${office.runtimeProfile} conversion profile. ${officeNote}\nThe companion includes matching upstream sources/build recipes, license notices and Trylo adapters.\nSHA256 ${companionName}: ${companionSha256}\n\nThis gate verifies supply consistency. Native UI and installer acceptance are separate.\n`);
 console.log(`Preview release verified: Office ${office.version}; ${sources.files.length} source archives; companion ${companion}`);

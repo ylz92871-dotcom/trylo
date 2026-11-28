@@ -18,7 +18,7 @@ import { createPtySessionRegistry } from "./pty-session.js";
  */
 
 const resolution = resolvePtyHelper();
-const canRun = resolution.ok;
+const canRun = process.platform === "win32" && resolution.ok;
 
 function commandInterpreter(): string | undefined {
   const root = process.env["SystemRoot"];

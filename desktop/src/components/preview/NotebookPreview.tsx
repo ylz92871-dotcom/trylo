@@ -21,12 +21,13 @@ function NotebookImage({ mime, value }: { mime: string; value: string }): ReactE
 }
 function NotebookSavedOutput({ output }: { output: NotebookOutput }): ReactElement {
   const [source, setSource] = useState(false);
-  const data = output.data ?? {};
+  const data = useMemo(() => output.data ?? {}, [output.data]);
   const pdf = useMemo(() => {
     const encoded = notebookText(data['application/pdf']);
     if (!encoded || encoded.length > 12 * 1024 * 1024) return undefined;
     try { return Uint8Array.from(atob(encoded.replace(/\s/g, '')), (char) => char.charCodeAt(0)); } catch { return undefined; }
   }, [data]);
+  // eslint-disable-next-line no-control-regex -- Intentionally reject control bytes or strip ANSI escapes.
   if (output.kind === 'text') return <pre className="preview__notebook-output">{(output.text ?? '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')}</pre>;
   for (const mime of ['image/png', 'image/jpeg', 'image/svg+xml', 'image/gif', 'image/webp']) {
     const value = notebookText(data[mime]); if (value) return <NotebookImage mime={mime} value={value} />;
@@ -50,7 +51,7 @@ function SavedOutputs({ outputs }: { outputs: readonly NotebookOutput[] }): Reac
 export function NotebookPreview(props: MarkdownPreviewProps & { content: string }): ReactElement {
   const parsed = useMemo(() => { try { return { notebook: parseNotebook(props.content), error: '' }; } catch (error) { return { notebook: undefined, error: String(error) }; } }, [props.content]);
   const [source, setSource] = useState(false); const [page, setPage] = useState(0); const [query, setQuery] = useState(''); const [highlight, setHighlight] = useState(-1);
-  const cells = parsed.notebook?.cells ?? [];
+  const cells = useMemo(() => parsed.notebook?.cells ?? [], [parsed.notebook]);
   const matches = useMemo(() => cells.flatMap((cell, index) => !query || `${cell.source}\n${cell.outputs.map((output) => output.text ?? notebookText(output.data?.['text/plain'])).join('\n')}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()) ? [index] : []), [cells, query]);
   const pages = Math.max(1, Math.ceil(matches.length / 10)); const current = Math.min(page, pages - 1);
   const language = parsed.notebook?.language.toLowerCase() ?? 'python';

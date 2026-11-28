@@ -31,3 +31,34 @@ it('has no runtime selector or CLI entry and still saves ordinary preferences', 
   expect(connectionFields(loadSettings())).toEqual(connectionFields(initial))
   expect(loadSettings()).not.toHaveProperty('cliRuntimeProtocol')
 })
+
+it('renders as a standalone full-window settings view with macOS drag regions, back button, and Cmd+, close toggle', () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(window.navigator, 'platform')
+  Object.defineProperty(window.navigator, 'platform', { value: 'MacIntel', configurable: true })
+  try {
+    const onClose = vi.fn()
+    const { container } = render(
+      <SettingsModal
+        open
+        initialTab="connection"
+        initial={settingsDefaults}
+        onClose={onClose}
+      />,
+    )
+    expect(container.querySelector('.settings-screen')).toBeTruthy()
+    expect(container.querySelector('.settings-modal__backdrop')).toBeNull()
+    expect(container.querySelector('.settings-screen__rail-header')).toHaveAttribute('data-tauri-drag-region', '')
+    expect(container.querySelector('.settings-screen__topbar')).toHaveAttribute('data-tauri-drag-region', '')
+    const backBtn = screen.getByRole('button', { name: '返回应用' })
+    expect(backBtn).toHaveAttribute('data-tauri-drag-region', 'false')
+
+    fireEvent.click(backBtn)
+    expect(onClose).toHaveBeenCalledTimes(1)
+
+    fireEvent.keyDown(document, { key: ',', metaKey: true })
+    expect(onClose).toHaveBeenCalledTimes(2)
+  } finally {
+    if (originalPlatform) Object.defineProperty(window.navigator, 'platform', originalPlatform)
+    else delete (window.navigator as { platform?: string }).platform
+  }
+})

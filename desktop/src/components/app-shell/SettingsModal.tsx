@@ -16,7 +16,9 @@ import {
 } from '../../settings/check-learning'
 import { reasoningSelectionProblem } from '../../settings/reasoning-effort'
 import {
+  ArrowLeft,
   X,
+  Search,
   Plug,
   Palette,
   SlidersHorizontal,
@@ -41,7 +43,8 @@ import { AppearanceSettings } from './AppearanceSettings'
 // features (encrypted secret store, full HTTP test,
 // "auto-detect best model") belong in Phase 3.
 
-import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement } from 'react'
+import { usePresenceTransition } from '../../utils/use-presence-transition'
 import {
   applyProfile,
   dismissSettingsNotice,
@@ -76,6 +79,12 @@ import { SkillsModal } from './SkillsModal'
 import type { LearningPort } from '../../learning/learning-port'
 import type { SkillLearningRuntime } from '../../skill-learning/cli'
 import { derivePackageView, type ToolPlatformState } from '../../tooling/use-tool-platform-state'
+import { isInteractiveTitlebarTarget, toggleNativeWindowZoom } from '../../host-adapter/native-shell'
+import { MacosComputerSettings } from './MacosComputerSettings'
+import type { ToolingFacade } from '../../tooling/tooling-facade'
+import { formatShortcut, isMacPlatform, isWindowsPlatform } from '../../utils/platform'
+import { isTauri } from '../../host-adapter/tauri-detect'
+import { useLiquidIndicator } from '../../utils/use-liquid-indicator'
 
 export type SettingsTab =
   | 'connection'
@@ -92,26 +101,65 @@ const SETTINGS_TABS: readonly {
   id: SettingsTab
   label: string
   description: string
+  keywords: string
   Icon: LucideIcon
 }[] = [
-  { id: 'connection', label: '模型连接', description: '管理模型服务和常用连接配置。', Icon: Plug },
-  { id: 'media', label: '图片与视频', description: '配置生成 API 与网页创作方式。', Icon: Plug },
-  { id: 'appearance', label: '外观', description: '调整界面主题，让工作更舒适。', Icon: Palette },
+  {
+    id: 'connection',
+    label: '模型连接',
+    description: '管理模型服务和常用连接配置。',
+    keywords: 'api key endpoint host provider anthropic openai 协议 模型 密钥 连接 配置 推理 上下文 视觉 摘要',
+    Icon: Plug,
+  },
+  {
+    id: 'media',
+    label: '图片与视频',
+    description: '配置生成 API 与网页创作方式。',
+    keywords: 'image video replicate 生成 图像 视频 网页创作',
+    Icon: Plug,
+  },
+  {
+    id: 'appearance',
+    label: '外观',
+    description: '调整界面主题，让工作更舒适。',
+    keywords: 'theme light dark system 主题 浅色 深色 跟随系统 字体',
+    Icon: Palette,
+  },
   {
     id: 'behavior',
     label: '行为与运行',
     description: '设置任务权限与运行方式。',
+    keywords: 'permission level system prompt companion pet 权限 系统提示词 桌面伙伴 桌宠',
     Icon: SlidersHorizontal,
   },
-  { id: 'tools', label: '工具与控制', description: '管理工具能力与依赖包。', Icon: Wrench },
+  {
+    id: 'tools',
+    label: '工具与控制',
+    description: '管理工具能力与依赖包。',
+    keywords: 'office playwright chrome devtools browser computer cad eda mcp 办公 浏览器 电脑控制',
+    Icon: Wrench,
+  },
   {
     id: 'libraries',
     label: '能力库',
     description: '查询工具与专家，审核和维护专项配置。',
+    keywords: 'tool expert library 工具库 专家库 审批',
     Icon: Library,
   },
-  { id: 'remote', label: '远程', description: '连接手机与远程工作环境。', Icon: Smartphone },
-  { id: 'learning', label: '学习', description: '管理学习偏好与已安装技能。', Icon: BookOpen },
+  {
+    id: 'remote',
+    label: '远程',
+    description: '连接手机与远程工作环境。',
+    keywords: 'remote pairing tunnel mobile 手机 配对 隧道 连接',
+    Icon: Smartphone,
+  },
+  {
+    id: 'learning',
+    label: '学习',
+    description: '管理学习偏好与已安装技能。',
+    keywords: 'learning skills hermes user collaboration workflow check central team cognition 技能 团队 学习',
+    Icon: BookOpen,
+  },
 ]
 
 export interface RelayAccountActions extends DesktopAccountPort {
@@ -141,6 +189,7 @@ export interface SettingsModalProps {
   /** P0-A (audit §3.3): the Work tool packages' health + install actions.
    *  Optional so the modal renders in tests without the Service Host. */
   readonly toolPlatform?: ToolPlatformState | null
+  readonly toolingFacade?: ToolingFacade | null
   /** Hermes learning port — powers the Skills library modal (installed
    *  skills list + SKILL.md viewer). Optional so settings still renders
    *  before the Service Host is up. */
@@ -209,10 +258,6 @@ const PERMISSION_MODES: readonly {
 ]
 void PERMISSION_MODES // legacy list kept for back-compat; see permission-policy.legacyPermissionMigration.
 
-/** The pet is a WPF (net9.0-windows) sidecar — Windows only (spec §6.5). */
-const IS_WINDOWS: boolean =
-  typeof navigator !== 'undefined' && /win/i.test(navigator.platform || navigator.userAgent)
-
 /** P0-A §3.3-4: a capability switch without its package is a lie. This hint
  *  shows the required package's REAL state inline and offers the install
  *  action directly, so enabling 电脑控制/浏览器调试 surfaces what is missing
@@ -262,6 +307,9 @@ function WorkCapabilityHint(props: {
 }
 
 export function SettingsModal(props: SettingsModalProps): ReactElement | null {
+  const isWindows = isWindowsPlatform()
+  const isMac = isMacPlatform()
+  const macosCompanion = isMac && isTauri()
   const [form, setForm] = useState<FormState>(() => toFormState(props.initial))
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null)
   const centralThoughtEdited = useRef(false)
@@ -303,6 +351,15 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
   onCloseRef.current = props.onClose
   // Sidebar tab state
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('connection')
+  const [tabSearch, setTabSearch] = useState('')
+  const navRef = useRef<HTMLElement>(null)
+  const navIndicatorRef = useRef<HTMLSpanElement>(null)
+  useLiquidIndicator({
+    containerRef: navRef,
+    indicatorRef: navIndicatorRef,
+    activeKey: props.open ? (settingsTab === 'subconnections' ? 'connection' : settingsTab) : null,
+    axis: 'y',
+  })
   // Remote pairing QR moved to the TopBar "远程" button
   // (RemotePairingModal) — 2026-08-29. Settings keeps only
   // the gateway *configuration* (port / tunnel / URL).
@@ -312,6 +369,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
     setTesting(false)
     if (props.open) {
       setSettingsTab(props.initialTab ?? 'connection')
+      setTabSearch('')
       setForm(toFormState(formInitial))
       centralThoughtEdited.current = false
       setTestResult(null)
@@ -339,6 +397,12 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
         onCloseRef.current()
         return
       }
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key === ',') {
+        event.preventDefault()
+        event.stopPropagation()
+        onCloseRef.current()
+        return
+      }
       if (event.key !== 'Tab' || !dialog) return
       const focusable = Array.from(
         dialog.querySelectorAll<HTMLElement>(
@@ -362,7 +426,10 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
     }
   }, [props.open, skillsOpen])
 
-  if (!props.open) return null
+  const presence = usePresenceTransition(props.open, 130)
+
+  if (!presence.mounted) return null
+  const isExiting = presence.state === 'exiting'
 
   const set = <K extends keyof TryloSettings>(k: K, v: TryloSettings[K]): void => {
     testGeneration.current += 1
@@ -930,20 +997,23 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
               <label className="settings-modal__field settings-modal__field--inline">
                 <input
                   type="checkbox"
-                  checked={form.companion.enabled}
+                  checked={isMac ? form.companion.macosEnabled === true : form.companion.enabled}
+                  disabled={!isWindows && !macosCompanion}
                   onChange={(e) =>
-                    set('companion', { ...form.companion, enabled: e.target.checked })
+                    set('companion', { ...form.companion, [isMac ? 'macosEnabled' : 'enabled']: e.target.checked })
                   }
                 />
                 <span className="settings-modal__label">启用桌面伙伴</span>
               </label>
               <span className="settings-modal__hint">
-                {IS_WINDOWS
+                {isWindows
                   ? '保存设置后启停桌面伙伴；下方显示实际运行状态。显示时机可在桌宠托盘菜单中调整。'
-                  : '不支持此平台 — the desktop pet is Windows-only.'}
+                  : macosCompanion
+                    ? '保存后打开悬浮伙伴，查看任务进度和审批等待状态。'
+                    : '请在受支持的 Trylo 桌面应用中启用桌面伙伴。'}
               </span>
 
-              {IS_WINDOWS && props.petStatus ? (
+              {(isWindows || macosCompanion) && props.petStatus ? (
                 <div
                   className={`settings-modal__pet-status settings-modal__pet-status--${petStatusTone(props.petStatus)}`}
                   role="status"
@@ -1011,39 +1081,47 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
                 能力选择<span>选择后保存，用于后续 Work 任务</span>
               </summary>
               <div className="settings-modal__advanced-body">
-                {/* ── 电脑控制 (Windows Computer Use, PR-6 spec §6.6) ─── */}
-                <fieldset className="settings-modal__group">
-                  <legend className="settings-modal__legend">电脑控制 (Computer Use)</legend>
+                {isMac ? (
+                  <MacosComputerSettings facade={props.toolingFacade} value={form.macosComputerUse}
+                    onChange={value => set('macosComputerUse', value)} />
+                ) : (
+                  <fieldset className="settings-modal__group">
+                    <legend className="settings-modal__legend">电脑控制 (Computer Use)</legend>
 
-                  <label className="settings-modal__field settings-modal__field--inline">
-                    <span className="settings-modal__label">电脑控制默认启用，无需选用</span>
-                  </label>
-                  <span className="settings-modal__hint">
-                    {IS_WINDOWS
-                      ? '办公、浏览器和电脑控制是 Code 与 Work 的默认工具。读取屏幕、点击、键入等操作仍需遵循当前授权，不会因默认启用而自动执行。'
-                      : '不支持此平台 — 电脑控制是 Windows-only 能力。'}
-                  </span>
+                    <label className="settings-modal__field settings-modal__field--inline">
+                      <span className="settings-modal__label">
+                        电脑控制默认启用，无需选用
+                      </span>
+                    </label>
+                    <span className="settings-modal__hint">
+                      {isWindows
+                        ? '办公、浏览器和电脑控制是 Code 与 Work 的默认工具。读取屏幕、点击、键入等操作仍需遵循当前授权，不会因默认启用而自动执行。'
+                        : '当前平台暂不支持电脑控制（仅 Windows 支持）。'}
+                    </span>
 
-                  {/* P0-A §3.3-4: flipping the switch only selects a Profile — the
-                  REQUIRED package must exist. Surface its real state (install
-                  action when missing) so the capability is not silently
-                  pretending to be there. */}
-                  {props.toolPlatform ? (
-                    <WorkCapabilityHint platform={props.toolPlatform} packageId="windows-mcp" />
-                  ) : null}
-                </fieldset>
+                    {/* P0-A §3.3-4: flipping the switch only selects a Profile — the
+                    REQUIRED package must exist. Surface its real state (install
+                    action when missing) so the capability is not silently
+                    pretending to be there. */}
+                    {props.toolPlatform ? (
+                      <WorkCapabilityHint platform={props.toolPlatform} packageId="windows-mcp" />
+                    ) : null}
+                  </fieldset>
+                )}
 
                 <fieldset className="settings-modal__group">
                   <legend className="settings-modal__legend">Work 工具面 (Tool Profiles)</legend>
 
                   <span className="settings-modal__hint">
-                    办公文档、浏览器与电脑控制默认挂载。浏览器方案在列表顶部切换，下面只需配置可选扩展。
+                    {isMac
+                      ? '办公文档与浏览器工具默认挂载。浏览器方案在列表顶部切换。'
+                      : '办公文档、浏览器与电脑控制默认挂载。浏览器方案在列表顶部切换，下面只需配置可选扩展。'}
                   </span>
 
                   <span className="settings-modal__hint">
-                    {IS_WINDOWS
-                      ? '浏览器方案在工具列表顶部选择。Playwright 与 Chrome DevTools 二选一，未使用的方案显示为备用；CAD/EDA 可以同时启用。'
-                      : '不支持此平台 — 浏览器调试是 Windows-only 能力。'}
+                    {isMac
+                      ? 'Playwright 与 Chrome DevTools 均支持 macOS，可在工具列表顶部二选一，未使用的方案显示为备用。'
+                      : '浏览器方案在工具列表顶部选择。Playwright 与 Chrome DevTools 二选一，未使用的方案显示为备用；CAD/EDA 可以同时启用。'}
                   </span>
 
                   {form.workBrowserDebug && props.toolPlatform ? (
@@ -1054,6 +1132,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
                     <input
                       type="checkbox"
                       checked={form.workCad}
+                      disabled={isMac}
                       onChange={(e) => set('workCad', e.target.checked)}
                     />
                     <span className="settings-modal__label">
@@ -1062,12 +1141,14 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
                     </span>
                   </label>
                   <span className="settings-modal__hint">
-                    {IS_WINDOWS
+                    {isWindows
                       ? '开启后为后续任务选用 CAD/EDA 适配器；还需要对应的软件与连接环境就绪。可以同时启用浏览器调试。工具包安装、实际可用与本次配置是否选用是不同状态，可在上方逐项查看。'
-                      : '不支持此平台 — CAD/EDA 适配器是 Windows-only 能力。'}
+                      : isMac
+                        ? '当前 macOS 版本暂不支持 CAD/EDA 适配器，计划在后续版本支持。'
+                        : '当前平台暂不支持 CAD/EDA 适配器（仅 Windows 支持）。'}
                   </span>
 
-                  {form.workCad && props.toolPlatform ? (
+                  {!isMac && form.workCad && props.toolPlatform ? (
                     <>
                       {(
                         [
@@ -1518,6 +1599,14 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
   }
 
   const navigationTab = settingsTab === 'subconnections' ? 'connection' : settingsTab
+  const normalizedTabSearch = tabSearch.trim().toLocaleLowerCase()
+  const visibleTabs = normalizedTabSearch
+    ? SETTINGS_TABS.filter((tab) =>
+        `${tab.label} ${tab.description} ${tab.keywords}`
+          .toLocaleLowerCase()
+          .includes(normalizedTabSearch),
+      )
+    : SETTINGS_TABS
   const renderContent = (): ReactElement => {
     if (navigationTab === 'connection') {
       return (
@@ -1538,104 +1627,184 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
     return renderSection(navigationTab)
   }
 
+  const activeTabMeta = SETTINGS_TABS.find((tab) => tab.id === navigationTab)
+  const onTitlebarDoubleClick = (event: ReactMouseEvent<HTMLElement>): void => {
+    if (!isMac || isInteractiveTitlebarTarget(event.target)) return
+    void toggleNativeWindowZoom()
+  }
+
   return (
     <div
-      className="settings-modal__backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-label="设置"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) props.onClose()
-      }}
+      className="settings-screen"
+      data-motion-state={presence.state}
+      role={isExiting ? undefined : 'dialog'}
+      aria-modal={isExiting ? undefined : true}
+      aria-label={isExiting ? undefined : '设置'}
+      aria-hidden={isExiting ? true : undefined}
     >
       <div
         ref={dialogRef}
-        className="settings-modal"
+        className="settings-modal settings-screen__frame"
         onKeyDown={(event) => {
           if (
             event.key === 'Enter' &&
             event.target instanceof HTMLInputElement &&
-            event.target.form === null
+            event.target.form === null &&
+            event.target.dataset.settingsSearch !== 'true'
           )
             onSave(event)
         }}
       >
-        <header className="settings-modal__header">
-          <h2 className="settings-modal__title">设置</h2>
-          <span className="settings-modal__product">Trylo</span>
-          <button
-            type="button"
-            className="settings-modal__close"
-            onClick={props.onClose}
-            aria-label="关闭设置"
+        <aside className="settings-screen__rail" aria-label="设置导航栏">
+          <div
+            className="settings-screen__rail-header"
+            data-tauri-drag-region={isMac ? '' : undefined}
+            onDoubleClick={onTitlebarDoubleClick}
           >
-            <X size={18} />
-          </button>
-        </header>
-
-        {form.settingsNotices?.includes('routing-learning-retired') && (
-          <div className="settings-modal__group" role="status">
-            <p>独立路由学习已退役，旧开关和额度配置已移除。正常执行路径与已有执行记录保持可用。</p>
             <button
               type="button"
-              className="settings-modal__button"
-              onClick={dismissRoutingRetirementNotice}
+              className="settings-screen__back"
+              onClick={props.onClose}
+              data-tauri-drag-region={isMac ? 'false' : undefined}
+              title={isMac ? `返回应用 (${formatShortcut(['Mod', ','])} / Esc)` : '返回应用 (Esc)'}
             >
-              知道了
+              <ArrowLeft size={15} aria-hidden="true" />
+              <span>返回应用</span>
             </button>
           </div>
-        )}
-
-        <div className="settings-modal__body">
-          <nav className="settings-modal__sidebar" aria-label="设置分类">
-            {SETTINGS_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                className={`settings-modal__sidebar-item${navigationTab === tab.id ? ' settings-modal__sidebar-item--active' : ''}`}
-                aria-current={navigationTab === tab.id ? 'page' : undefined}
-                onClick={() => setSettingsTab(tab.id)}
-              >
-                <tab.Icon size={17} aria-hidden="true" />
-                {tab.label}
-              </button>
-            ))}
-          </nav>
-          <div className="settings-modal__content" key={navigationTab}>
-            <div className="settings-modal__page-heading">
-              <h3>{SETTINGS_TABS.find((tab) => tab.id === navigationTab)?.label}</h3>
-              <p>{SETTINGS_TABS.find((tab) => tab.id === navigationTab)?.description}</p>
+          <nav ref={navRef} className="settings-modal__sidebar settings-screen__nav" aria-label="设置分类">
+            <span ref={navIndicatorRef} className="settings-modal__sidebar-indicator" aria-hidden="true" />
+            <div className="settings-screen__rail-title">设置</div>
+            <div className="settings-modal__sidebar-search">
+              <Search size={14} className="settings-modal__sidebar-search-icon" aria-hidden="true" />
+              <input
+                type="search"
+                data-settings-search="true"
+                className="settings-modal__sidebar-search-input"
+                aria-label="搜索设置"
+                placeholder="搜索设置"
+                value={tabSearch}
+                onChange={(event) => setTabSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && visibleTabs.length > 0 && !visibleTabs.some((tab) => tab.id === navigationTab)) {
+                    event.preventDefault()
+                    setSettingsTab(visibleTabs[0]!.id)
+                  }
+                }}
+              />
+              {tabSearch ? (
+                <button
+                  type="button"
+                  className="settings-modal__sidebar-search-clear"
+                  aria-label="清除搜索"
+                  onClick={() => setTabSearch('')}
+                >
+                  <X size={12} aria-hidden="true" />
+                </button>
+              ) : null}
             </div>
-            {renderContent()}
-          </div>
-        </div>
-        <footer className="settings-modal__footer">
-          <span className="settings-modal__footer-note">
-            {navigationTab === 'appearance' ? '外观即时生效；其他修改需保存。' : '保存后应用修改。'}
-          </span>
-          {saveError && (
-            <p
-              role="alert"
-              className="settings-modal__test-result settings-modal__test-result--err"
+            {visibleTabs.length === 0 ? (
+              <p className="settings-modal__sidebar-empty" role="status">
+                没有匹配的设置项
+              </p>
+            ) : (
+              visibleTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  data-liquid-key={tab.id}
+                  className={`settings-modal__sidebar-item${navigationTab === tab.id ? ' settings-modal__sidebar-item--active' : ''}`}
+                  aria-current={navigationTab === tab.id ? 'page' : undefined}
+                  onClick={() => setSettingsTab(tab.id)}
+                >
+                  <tab.Icon size={17} aria-hidden="true" />
+                  {tab.label}
+                </button>
+              ))
+            )}
+          </nav>
+        </aside>
+
+        <div className="settings-screen__main">
+          <header
+            className="settings-screen__topbar"
+            data-tauri-drag-region={isMac ? '' : undefined}
+            onDoubleClick={onTitlebarDoubleClick}
+          >
+            <div
+              className="settings-screen__breadcrumb"
+              data-tauri-drag-region={isMac ? '' : undefined}
             >
-              {saveError}
-            </p>
-          )}
-          <button
-            type="button"
-            className="settings-modal__btn settings-modal__btn--ghost"
-            onClick={props.onClose}
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            className="settings-modal__btn settings-modal__btn--primary"
-            onClick={onSave}
-          >
-            保存设置
-          </button>
-        </footer>
+              <span className="settings-screen__breadcrumb-root">Trylo 设置</span>
+              <span className="settings-screen__breadcrumb-sep" aria-hidden="true">/</span>
+              <h2 className="settings-modal__title settings-screen__breadcrumb-current">
+                {activeTabMeta?.label ?? '设置'}
+              </h2>
+            </div>
+            <button
+              type="button"
+              className="settings-modal__close settings-screen__close"
+              onClick={props.onClose}
+              aria-label="关闭设置"
+              title="关闭设置 (Esc)"
+              data-tauri-drag-region={isMac ? 'false' : undefined}
+            >
+              <X size={16} />
+            </button>
+          </header>
+
+          <div className="settings-modal__content settings-screen__content" key={navigationTab}>
+            <div className="settings-screen__container">
+              {form.settingsNotices?.includes('routing-learning-retired') && (
+                <div className="settings-modal__group" role="status">
+                  <p>独立路由学习已退役，旧开关和额度配置已移除。正常执行路径与已有执行记录保持可用。</p>
+                  <button
+                    type="button"
+                    className="settings-modal__button"
+                    onClick={dismissRoutingRetirementNotice}
+                  >
+                    知道了
+                  </button>
+                </div>
+              )}
+              <div className="settings-modal__page-heading">
+                <h3>{activeTabMeta?.label}</h3>
+                <p>{activeTabMeta?.description}</p>
+              </div>
+              {renderContent()}
+            </div>
+          </div>
+
+          <footer className="settings-modal__footer settings-screen__footer">
+            <div className="settings-screen__footer-inner">
+              <span className="settings-modal__footer-note">
+                {navigationTab === 'appearance' ? '外观即时生效；其他修改需保存。' : '保存后应用修改。'}
+              </span>
+              {saveError && (
+                <p
+                  role="alert"
+                  className="settings-modal__test-result settings-modal__test-result--err"
+                >
+                  {saveError}
+                </p>
+              )}
+              <button
+                type="button"
+                className="settings-modal__btn settings-modal__btn--ghost"
+                onClick={props.onClose}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="settings-modal__btn settings-modal__btn--primary"
+                onClick={onSave}
+              >
+                保存设置
+              </button>
+            </div>
+          </footer>
+        </div>
       </div>
 
       {props.learningPort || props.skillLearningRuntime ? (

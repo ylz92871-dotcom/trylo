@@ -118,6 +118,15 @@ export class ServiceManager {
     }
   }
 
+  /** Probe the existing process after wake. Crash backoff still owns pending restarts. */
+  async recoverAfterWake(): Promise<void> {
+    if (!this.active || !this.spawnOptions || this.health === 'restarting') return;
+    if (this.health === 'down' && this.restartTimestamps.filter(
+      timestamp => Date.now() - timestamp < this.restartWindowMs,
+    ).length >= this.maxRestartsPerWindow) return;
+    await this.ensureRunning(this.spawnOptions);
+  }
+
   private isCurrent(lifecycle: number): boolean {
     return this.active && this.lifecycle === lifecycle;
   }

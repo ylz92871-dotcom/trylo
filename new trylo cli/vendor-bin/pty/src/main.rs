@@ -1,4 +1,4 @@
-//! trylo-pty — a narrow ConPTY sidecar for the Trylo CLI.
+//! trylo-pty — a native pseudo-terminal sidecar for the Trylo CLI.
 //!
 //! # Why this exists
 //!
@@ -7,14 +7,14 @@
 //! watching. A program that changes behaviour when it believes it has a
 //! terminal — line editing, progress redraw, colour, `isatty` gating — runs
 //! differently under pipes than it would for a human at a keyboard. That is not
-//! cosmetic, so real terminal sessions need ConPTY, which is a Win32 API with
-//! no Node binding.
+//! cosmetic. `portable-pty` gives the CLI ConPTY on Windows and a POSIX PTY
+//! on macOS.
 //!
 //! # Why a sidecar rather than a native addon
 //!
 //! `portable-pty` is Rust. The alternative to a helper process is a compiled
 //! addon, which puts a C++ toolchain between a user and `npm install`. A helper
-//! keeps the shipped artifact one `.exe` that `copy-vendor` stages and
+//! keeps the shipped artifact a single executable that staging
 //! hash-verifies like every other vendored helper here.
 //!
 //! # Protocol
@@ -85,7 +85,11 @@ const MAX_FRAME_BYTES: usize = 64 * 1024 * 1024;
 /// The minimum a Windows loader needs to start anything at all. Not a
 /// convenience list: without these, `CreateProcessW` rejects the environment
 /// block outright.
-const WINDOWS_LOADER_FLOOR: [&str; 4] = ["SystemRoot", "COMSPEC", "PATH", "TEMP"];
+#[cfg(windows)]
+const TERMINAL_ENVIRONMENT: &[&str] = &["SystemRoot", "COMSPEC", "PATH", "TEMP"];
+
+#[cfg(unix)]
+const TERMINAL_ENVIRONMENT: &[&str] = &["TERM", "HOME", "TMPDIR", "LANG", "LC_ALL", "PATH"];
 
 // ---------------------------------------------------------------------------
 // Payloads
@@ -324,12 +328,16 @@ fn spawn_session(
     // profile directory. They carry no credential: each names a directory, not
     // a secret, and any variable that could hold one was dropped by the clear
     // above and is not re-added.
-    for key in WINDOWS_LOADER_FLOOR {
+    for &key in TERMINAL_ENVIRONMENT {
         if command.get_env(key).is_none() {
-            if let Ok(value) = std::env::var(key) {
+            if let Some(value) = std::env::var_os(key) {
                 command.env(key, value);
             }
         }
+    }
+    #[cfg(unix)]
+    if command.get_env("TERM").is_none() {
+        command.env("TERM", "xterm-256color");
     }
 
     let mut child: Box<dyn Child + Send + Sync> = match pair.slave.spawn_command(command) {

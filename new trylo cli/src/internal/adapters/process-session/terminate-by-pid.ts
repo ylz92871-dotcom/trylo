@@ -1,10 +1,13 @@
 import {
   describeFailure,
+  terminateProcessTree,
   terminateWindowsTree,
   type TreeKillDeps,
   type TreeTermination,
 } from "./process-tree.js";
 import { defaultTreeKillDeps } from "./process-tree.js";
+import { identityMatches, type DaemonIdentity } from "../../domain/daemon-identity.js";
+import { observeDarwinProcess } from "./darwin-process.js";
 
 /**
  * End a process that **another** process started, given only its pid
@@ -19,22 +22,31 @@ import { defaultTreeKillDeps } from "./process-tree.js";
  * function** the in-process path calls. A second implementation of "kill the tree"
  * is how one of them drifts.
  *
- * ## POSIX — refused, not guessed
- *
- * The group path signals `-pid`, which is only correct when the target is a
- * process-group leader. A job started by another process may not be one, and
- * signalling a group this process belongs to would kill unrelated work. So POSIX
- * says no, and the record is left for a person. Not measured on a POSIX host.
+ * Darwin requires a recorded identity and a live process-group leader before
+ * delegating to the same group terminator as in-process jobs.
  */
 export async function terminatePidTree(
   pid: number,
   deps: TreeKillDeps = defaultTreeKillDeps(),
+  recorded?: DaemonIdentity,
 ): Promise<TreeTermination> {
   if (deps.platform === "win32") {
     // `exitCode: null` is the honest value: nobody here waited on this process, so
     // nothing is known about an ending. The walk goes ahead, and taskkill's own
     // "no such process" exit is what turns the answer into `already_gone`.
     return await terminateWindowsTree({ pid, exitCode: null, kill: () => false }, deps);
+  }
+  if (deps.platform === "darwin" && recorded !== undefined && pid > 1) {
+    try {
+      const live = await observeDarwinProcess(pid);
+      if (live === undefined || !identityMatches(recorded, live)) return { ok: true, how: "already_gone" };
+      if (live.processGroup !== pid) {
+        return { ok: false, code: "tree_kill_unobservable", message: describeFailure("tree_kill_unobservable", `pid ${pid} is not the recorded process group's leader`) };
+      }
+      return terminateProcessTree({ pid, exitCode: null, kill: () => false }, deps);
+    } catch (error) {
+      return { ok: false, code: "tree_kill_unobservable", message: describeFailure("tree_kill_unobservable", error instanceof Error ? error.message : String(error)) };
+    }
   }
   return {
     ok: false,

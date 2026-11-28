@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import path from "node:path";
 import {
   consumeApproval,
@@ -37,8 +38,14 @@ export type AcquireFailure =
   | "illegal_catalog_transition";
 
 export function isForbiddenQuarantineRoot(root: string): boolean {
-  const normalized = path.resolve(root).replaceAll("\\", "/").toLowerCase();
-  const parts = normalized.split("/");
+  const normalize = (candidate: string): string => {
+    let resolved = path.resolve(candidate);
+    try { resolved = realpathSync.native(resolved); } catch { /* The root can be new. */ }
+    if (process.platform === "win32") return resolved.replaceAll("\\", "/").toLowerCase();
+    return process.platform === "darwin" ? resolved.normalize("NFC").toLowerCase() : resolved;
+  };
+  const normalized = normalize(root);
+  const parts = normalized.toLowerCase().split("/");
   const ownerIndex = parts.lastIndexOf("internal");
   const owner = ownerIndex >= 0 ? parts[ownerIndex + 1] : undefined;
   const coreOwners: ReadonlySet<string> = new Set(["loop", "domain", "protocol", "ports"]);
@@ -46,20 +53,23 @@ export function isForbiddenQuarantineRoot(root: string): boolean {
     return true;
   }
 
-  const home = process.env.USERPROFILE ?? process.env.HOME ?? "";
-  if (home.length > 0 && path.resolve(root) === path.resolve(home, ".trylo")) {
+  const home = (process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME) ?? "";
+  if (home && normalized === normalize(path.join(home, ".trylo"))) {
+    return true;
+  }
+  if (process.platform === "darwin" && home && normalized === normalize(path.join(home, "Library", "Application Support"))) {
     return true;
   }
 
-  const roaming = process.env.APPDATA ?? "";
-  if (roaming.length > 0 && path.resolve(root) === path.resolve(roaming)) {
+  const roaming = process.platform === "win32" ? process.env.APPDATA : undefined;
+  if (roaming && normalized === normalize(roaming)) {
     return true;
   }
 
   const pathEnv = process.env.PATH ?? "";
 
   for (const part of pathEnv.split(path.delimiter)) {
-    if (part.length > 0 && path.resolve(part) === path.resolve(root)) {
+    if (part.length > 0 && normalize(part) === normalized) {
       return true;
     }
   }

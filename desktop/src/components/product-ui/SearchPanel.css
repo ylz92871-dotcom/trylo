@@ -1,69 +1,73 @@
-/* Trylo Desktop — SearchPanel styles. See ARCHITECTURE.md §3 Phase 1
-   Week 2 Day 2. */
+/* Trylo Desktop — SearchPanel & Spotlight Command Palette styles. */
 
 .search-panel {
   width: 360px;
   flex: 0 0 360px;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.15);
+  border-left: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--fg);
   overflow: hidden;
+  font-family: var(--font-body);
 }
 
 .search-panel-input {
   display: flex;
-  gap: 0.4rem;
-  padding: 0.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
 }
 
 .search-panel-input input {
   flex: 1 1 auto;
+  min-width: 0;
   font: inherit;
-  font-size: 0.85rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+  font-size: 13px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
   color: var(--fg);
-  padding: 0.25rem 0.5rem;
+  padding: 5px 8px;
 }
 
 .search-panel-input input:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--brand);
 }
 
 .search-panel-input button {
   font: inherit;
-  font-size: 0.8rem;
-  background: var(--accent);
-  color: #1a1a1a;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--fg);
+  color: var(--bg);
   border: none;
-  border-radius: 3px;
-  padding: 0.25rem 0.75rem;
+  border-radius: 6px;
+  padding: 5px 12px;
   cursor: pointer;
 }
 
 .search-panel-input button:disabled {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-elevated);
   color: var(--fg-muted);
   cursor: not-allowed;
 }
 
 .search-panel-toggles {
   display: flex;
-  gap: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  font-size: 0.75rem;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
   color: var(--fg-muted);
 }
 
 .search-panel-toggles label {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 5px;
   cursor: pointer;
 }
 
@@ -73,22 +77,24 @@
 }
 
 .search-panel-error {
-  padding: 0.5rem 0.75rem;
-  color: #d96666;
-  font-size: 0.8rem;
+  padding: 8px 12px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  font-size: 12px;
 }
 
 .search-panel-meta {
-  padding: 0.4rem 0.75rem;
+  padding: 6px 12px;
   color: var(--fg-muted);
-  font-size: 0.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid var(--border);
 }
 
 .search-panel-results {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 4px;
   overflow-y: auto;
   flex: 1 1 auto;
 }
@@ -96,29 +102,30 @@
 .search-panel-result {
   display: grid;
   grid-template-columns: 4ch 1fr;
-  gap: 0.25rem 0.5rem;
-  padding: 0.35rem 0.5rem;
-  font-size: 0.8rem;
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  gap: 2px 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: var(--font-mono);
   cursor: pointer;
 }
 
 .search-panel-result:hover,
 .search-panel-result:focus-visible {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-elevated);
   outline: none;
 }
 
 .search-panel-line {
   color: var(--fg-muted);
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .search-panel-path {
   grid-column: 1 / span 2;
-  color: var(--accent);
-  font-size: 0.7rem;
+  color: var(--brand);
+  font-size: 11px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -130,4 +137,231 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ── Spotlight / Command Palette modal ───────────────────────────── */
+
+.search-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: min(14vh, 116px);
+  background: rgb(0 0 0 / 28%);
+  animation: trylo-fade-in 140ms var(--ease-out) both;
+}
+
+.search-panel-backdrop[data-motion-state='exiting'] {
+  animation: trylo-fade-out 100ms var(--ease-in) both;
+}
+
+.search-panel--modal {
+  width: min(580px, calc(100vw - 48px));
+  flex: 0 1 auto;
+  max-height: min(480px, 68dvh);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 24%);
+  animation: trylo-spotlight-in 140ms var(--ease-out) both;
+}
+
+.search-panel-backdrop[data-motion-state='exiting'] .search-panel--modal {
+  animation: trylo-spotlight-out 100ms var(--ease-in) both;
+}
+
+.search-panel-modal__input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.search-panel-modal__search-icon {
+  flex-shrink: 0;
+  color: var(--fg-muted);
+}
+
+.search-panel-modal__input-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.search-panel-modal__input-row input::placeholder {
+  color: var(--fg-muted);
+  opacity: 1;
+}
+
+.search-panel-modal__search-btn {
+  flex-shrink: 0;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.search-panel-modal__search-btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  color: var(--fg);
+}
+
+.search-panel-modal__search-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.search-panel-toggles--modal {
+  padding: 6px 14px;
+  font-size: 11px;
+}
+
+.search-panel-modal__nav-hint {
+  margin-left: auto;
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.search-panel-results--modal {
+  padding: 6px;
+  max-height: 400px;
+}
+
+.search-panel-modal__item,
+.search-panel-result--modal {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: background-color var(--duration-micro) var(--ease-out);
+}
+
+.search-panel-modal__item--active {
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+}
+
+.search-panel-modal__item-icon {
+  flex-shrink: 0;
+  color: var(--fg-muted);
+}
+
+.search-panel-modal__item-text,
+.search-panel-result__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.search-panel-modal__item-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-panel-modal__item-hint {
+  font-size: 11px;
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-panel-result--modal .search-panel-content {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.search-panel-modal__shortcut {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  color: var(--fg-muted);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+.search-panel-modal__empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+/* ── macOS frosted Spotlight / Raycast appearance ────────────────── */
+
+:root[data-platform='macos'] .search-panel-backdrop {
+  background: rgb(0 0 0 / 20%);
+}
+
+:root[data-platform='macos'][data-theme='dark'] .search-panel-backdrop {
+  background: rgb(0 0 0 / 38%);
+}
+
+:root[data-platform='macos'] .search-panel--modal {
+  border: 0;
+  border-radius: 12px;
+  background: var(--macos-popover-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: var(--macos-popover-shadow);
+}
+
+:root[data-platform='macos'] .search-panel-modal__input-row,
+:root[data-platform='macos'] .search-panel-toggles--modal,
+:root[data-platform='macos'] .search-panel-meta {
+  border-bottom-color: var(--macos-hairline);
+}
+
+:root[data-platform='macos'] .search-panel-modal__item--active {
+  background: color-mix(in srgb, var(--brand) 14%, transparent);
+}
+
+:root[data-platform='macos'] .search-panel-modal__search-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--macos-focus-halo);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-platform='macos'] .search-panel--modal {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (forced-colors: active) {
+  :root[data-platform='macos'] .search-panel--modal {
+    border: 1px solid CanvasText;
+  }
+  :root[data-platform='macos'] .search-panel-modal__search-btn:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
 }

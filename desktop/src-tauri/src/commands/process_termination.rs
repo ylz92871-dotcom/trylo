@@ -14,9 +14,34 @@ pub struct OwnedTreeTerminator {
     identity: std::sync::Arc<std::os::windows::io::OwnedHandle>,
     #[cfg(not(windows))]
     pid: u32,
+    #[cfg(unix)]
+    group: Option<std::sync::Arc<super::posix_process_group::PosixProcessGroup>>,
 }
 
 impl OwnedTreeTerminator {
+    pub fn spawn(command: &mut Command) -> io::Result<(std::process::Child, Self)> {
+        #[cfg(unix)]
+        {
+            let (child, group) = super::posix_process_group::PosixProcessGroup::spawn(command)?;
+            let terminator = Self { pid: child.id(), group: Some(std::sync::Arc::new(group)) };
+            Ok((child, terminator))
+        }
+        #[cfg(not(unix))]
+        {
+            let mut child = command.spawn()?;
+            match Self::capture(&child) {
+                Ok(terminator) => Ok((child, terminator)),
+                Err(error) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    Err(error)
+                }
+            }
+        }
+    }
+
+    #[cfg(any(not(unix), test))]
+    #[cfg_attr(not(windows), allow(clippy::unnecessary_wraps))]
     pub fn capture(child: &std::process::Child) -> io::Result<Self> {
         #[cfg(windows)]
         {
@@ -27,10 +52,15 @@ impl OwnedTreeTerminator {
         }
         #[cfg(not(windows))]
         {
-            Ok(Self { pid: child.id() })
+            Ok(Self {
+                pid: child.id(),
+                #[cfg(unix)]
+                group: None,
+            })
         }
     }
 
+    #[cfg_attr(not(windows), allow(clippy::unnecessary_wraps))]
     fn pid(&self) -> io::Result<u32> {
         #[cfg(windows)]
         {
@@ -52,6 +82,10 @@ impl OwnedTreeTerminator {
     }
 
     pub fn terminate(&self) -> io::Result<()> {
+        #[cfg(unix)]
+        if let Some(group) = &self.group {
+            return group.terminate();
+        }
         #[cfg(windows)]
         if self.has_exited()? {
             return Ok(());
@@ -104,6 +138,7 @@ impl OwnedTreeTerminator {
 
 /// Send termination only to the tree this shell owns. An executed helper is
 /// not evidence of success: taskkill/kill may have returned Access denied.
+#[cfg_attr(not(windows), allow(clippy::unnecessary_wraps))]
 fn termination_command(pid: u32) -> io::Result<Command> {
     #[cfg(windows)]
     let command = {

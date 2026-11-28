@@ -44,6 +44,7 @@ export function CentralRuntimeBudgetPanel(props: { readonly runtime?: ToolLearni
       if (!pending.current && value.budget) setDraft(asDraft(value.budget.limits))
     }, failure => { if (!controller.signal.aborted) setRead({ state: 'failed', message: errorMessage(failure) }) })
     return () => controller.abort()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Process, executable and workspace fields define this read lifecycle, not its transient wrapper.
   }, [runtime?.cwd, runtime?.cliPath, runtime?.process, runtime?.nodeProgram, props.refreshKey, refresh])
   const value = read.state === 'ready' ? read.value : undefined
   const budget = value?.budget

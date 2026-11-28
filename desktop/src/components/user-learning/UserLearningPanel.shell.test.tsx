@@ -23,6 +23,7 @@ vi.mock('./AgentLearningWorkspace', () => ({
     useEffect(() => {
       tracked.mounts += 1
       props.onPendingCountChange?.(3)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- This fixture measures mount, not subsequent prop updates.
     }, [])
     return <section aria-label="Connected agent workspace">
       <output aria-label="当前学习分区">{props.section}</output>

@@ -1,7 +1,15 @@
-import { useEffect, useState, type KeyboardEvent, type ReactElement } from 'react';
+import { useEffect, useState, type KeyboardEvent, type MouseEvent, type ReactElement } from 'react';
 import { ChevronRight, ChevronsDownUp, Folder, FolderOpen, LoaderCircle, RefreshCw } from 'lucide-react';
 import { hostAdapter } from '../../host-adapter';
+import {
+  copyTextToNativeClipboard,
+  openWorkspaceEntryWithDefaultApp,
+  showNativeContextMenu,
+  showWorkspaceEntryInFinder,
+} from '../../host-adapter/native-shell';
+import { isTauri } from '../../host-adapter/tauri-detect';
 import type { FilePath } from '../../host-adapter/types';
+import { isMacPlatform } from '../../utils/platform';
 import { WorkspaceFileIcon } from './WorkspaceFileIcon';
 
 export interface WorkspaceTreeProps {
@@ -73,11 +81,21 @@ function handleTreeKey(event: KeyboardEvent<HTMLUListElement>): void {
 }
 
 interface TreeState {
+  readonly root: FilePath;
   readonly selected: FilePath | null;
   readonly focused: FilePath | null;
   readonly collapse: number;
   readonly select: (entry: Entry) => void;
   readonly focus: (path: FilePath) => void;
+}
+
+function toRelativeEntryPath(root: string, target: string): string {
+  const cleanRoot = root.replace(/[\\/]+$/, '');
+  if (target === cleanRoot) return '.';
+  if (target.startsWith(`${cleanRoot}/`) || target.startsWith(`${cleanRoot}\\`)) {
+    return target.slice(cleanRoot.length + 1);
+  }
+  return target;
 }
 
 function DirectoryStatus({ result, refresh }: { readonly result: ListResult | null; readonly refresh: () => void }): ReactElement | null {
@@ -100,6 +118,7 @@ function WorkspaceDirectory({ root, onSelect }: WorkspaceTreeProps): ReactElemen
   const [focused, setFocused] = useState<FilePath | null>(null);
   const rootName = root.replace(/[\\/]+$/, '').split(/[\\/]/).at(-1) || root;
   const state: TreeState = {
+    root,
     selected, focused, collapse, focus: setFocused,
     select: entry => {
       setSelected(entry.path);
@@ -145,10 +164,51 @@ function TreeNode({ entry, depth, first, state }: TreeNodeProps): ReactElement {
     state.focus(entry.path);
     if (isDir) { setExpanded(value => !value); setOpened(true); }
   };
+  const handleContextMenu = (event: MouseEvent<HTMLButtonElement>): void => {
+    if (!isMacPlatform() || !isTauri()) return;
+    event.preventDefault();
+    event.stopPropagation();
+    state.select(entry);
+    state.focus(entry.path);
+
+    const items = isDir
+      ? [
+          { id: 'toggle', label: expanded ? '折叠文件夹' : '展开文件夹' },
+          { id: 'reveal', label: '在 Finder 中显示' },
+          { id: 'sep-1', label: '', separator: true },
+          { id: 'copy-rel', label: '复制相对路径' },
+          { id: 'copy-abs', label: '复制绝对路径' },
+        ]
+      : [
+          { id: 'preview', label: '预览文件' },
+          { id: 'reveal', label: '在 Finder 中显示' },
+          { id: 'open-default', label: '用默认应用打开' },
+          { id: 'sep-1', label: '', separator: true },
+          { id: 'copy-rel', label: '复制相对路径' },
+          { id: 'copy-abs', label: '复制绝对路径' },
+        ];
+
+    void showNativeContextMenu(items).then((choice) => {
+      if (choice === 'preview') {
+        state.select(entry);
+      } else if (choice === 'toggle') {
+        setExpanded((value) => !value);
+        setOpened(true);
+      } else if (choice === 'reveal') {
+        void showWorkspaceEntryInFinder(entry.path, state.root);
+      } else if (choice === 'open-default') {
+        void openWorkspaceEntryWithDefaultApp(entry.path, state.root);
+      } else if (choice === 'copy-rel') {
+        void copyTextToNativeClipboard(toRelativeEntryPath(state.root, entry.path));
+      } else if (choice === 'copy-abs') {
+        void copyTextToNativeClipboard(entry.path);
+      }
+    });
+  };
   return <li className="tree-node" role="none">
     <button type="button" className="tree-node__row" role="treeitem" aria-level={depth} aria-expanded={isDir ? expanded : undefined} aria-selected={state.selected === entry.path}
       tabIndex={state.focused === entry.path || state.focused === null && first ? 0 : -1}
-      data-hidden-file={entry.name.startsWith('.') || undefined} onClick={activate} onFocus={() => state.focus(entry.path)} title={entry.path}>
+      data-hidden-file={entry.name.startsWith('.') || undefined} onClick={activate} onContextMenu={handleContextMenu} onFocus={() => state.focus(entry.path)} title={entry.path}>
       <span className="tree-node__chevron" aria-hidden="true">{isDir && <ChevronRight size={12} strokeWidth={1.8} />}</span>
       {isDir ? <FolderIcon className="tree-node__icon tree-node__icon--dir" size={16} strokeWidth={1.5} aria-hidden="true" /> : <WorkspaceFileIcon name={entry.name} />}
       <span className="tree-node__name">{entry.name}</span>

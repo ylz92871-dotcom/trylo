@@ -234,6 +234,7 @@ function normalizeProducedFile(value: unknown): StoredProducedFile | null {
   const raw = value as Record<string, unknown>;
   const path = typeof raw.path === 'string' ? raw.path.replace(/\\/g, '/') : '';
   if (!path || path.length > BOUNDS.pathLen || path.startsWith('/') || /^[a-z]:/i.test(path)
+    // eslint-disable-next-line no-control-regex -- Deliberately reject all C0 control characters in paths and labels.
     || /[\u0000-\u001f]/.test(path) || path.split('/').some((part) => !part || part === '.' || part === '..')) return null;
   if (!isOutputArtifactPath(path)) return null;
   if (raw.change !== 'created' && raw.change !== 'updated') return null;

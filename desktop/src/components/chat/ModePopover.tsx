@@ -38,6 +38,7 @@ export function ModePopover(props: ModePopoverProps): ReactElement {
       const down = below >= menu.scrollHeight || below > above;
       const maxHeight = Math.max(96, down ? below : above);
       const height = Math.min(menu.scrollHeight, maxHeight);
+      menu.dataset.placement = down ? 'below' : 'above';
       Object.assign(menu.style, {
         left: `${Math.max(8, Math.min(rect.left, window.innerWidth - 268))}px`,
         top: `${down ? rect.bottom + 8 : Math.max(8, rect.top - height - 8)}px`,

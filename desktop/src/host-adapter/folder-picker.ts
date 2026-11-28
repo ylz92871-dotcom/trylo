@@ -19,7 +19,7 @@ import type { FilePath } from './types';
 export async function pickFolder(): Promise<FilePath | null> {
   const picked = window.prompt(
     'Open folder — enter an absolute path:',
-    'D:/CC/trylo',
+    '',
   );
   return picked && picked.trim() !== '' ? (picked.trim() as FilePath) : null;
 }

@@ -7,6 +7,7 @@ import { isRetiredManagedWork } from './retired-work';
 import { MessageList } from './MessageList';
 import { memberTranscript } from './member-transcript';
 import type { SendSubagentInput, SubagentInputMode } from '../../host-adapter/subagent-contract';
+import { isImeComposing } from '../../utils/platform';
 
 export interface SubagentConversationProps {
   readonly variant?: 'panel' | 'inline' | 'team';
@@ -77,7 +78,7 @@ export function SubagentConversation({ agent, onClose, drafts, onSend, variant =
         <label className="subagent-conversation__input-label" htmlFor={`subagent-input-${agent.id}`}>向{agentLabel(agent)}补充要求</label>
         <textarea className={variant === 'team' ? 'input-bar__input' : undefined} id={`subagent-input-${agent.id}`} value={text} disabled={pending} maxLength={16000}
           onChange={event => { const value = event.target.value; setText(value); drafts.set(agent.id, value); }} rows={3}
-          onKeyDown={event => { if (variant === 'team' && event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(); } }}
+          onKeyDown={event => { if (variant === 'team' && event.key === 'Enter' && !event.shiftKey && !isImeComposing(event)) { event.preventDefault(); void submit(); } }}
           placeholder={`向${agentLabel(agent)}补充要求…`} />
         <div className={variant === 'team' ? 'input-bar__toolbar' : undefined}>{variant === 'team' && modeControl}<span>{pending ? '正在发送…' : mode === 'restart' ? '停止当前执行，接着已记录进度继续' : mode === 'replace_queued' ? '替换尚未开始的要求' : variant === 'team' ? `${agentLabel(agent)} · 仅当前任务` : '沿用当前任务的工具授权'}</span><button className={variant === 'team' ? 'input-bar__send' : undefined} type="submit" disabled={pending || !text.trim()} aria-label="发送给该智能体"><ArrowUp size={17} /></button></div>
       </form> : <p>{retired ? 'CoWork 执行器已退役，历史答复与交付物仍可查看。' : '此任务当前不接收补充要求，可回到主对话继续指派。'}</p>}

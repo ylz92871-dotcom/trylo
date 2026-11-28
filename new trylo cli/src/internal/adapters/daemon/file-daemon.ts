@@ -11,7 +11,7 @@ import {
   requestStop as leaveStopRequest,
   type DaemonHeartbeat,
 } from "./record.js";
-import { verifyIdentity, type DaemonIdentityProbe } from "../../domain/daemon-identity.js";
+import { verifyIdentity, type DaemonIdentity, type DaemonIdentityProbe } from "../../domain/daemon-identity.js";
 import {
   startRefusal,
   stopRefusal,
@@ -84,7 +84,7 @@ export type FileDaemonOptions = {
   /** Verifies a discovered identity against the live system. */
   readonly probe: DaemonIdentityProbe;
   /** Kills a process; separate so a test can observe the request. */
-  readonly kill: (pid: number, options: { readonly force: boolean }) => Promise<void>;
+  readonly kill: (pid: number, options: { readonly force: boolean }, identity: DaemonIdentity) => Promise<void>;
   /** Asks a process to stop politely; resolves when it has been asked. */
   readonly requestStop?: (pid: number) => Promise<void>;
   /**
@@ -338,6 +338,9 @@ export function createFileDaemon(options: FileDaemonOptions): DaemonPort {
       if (current.status === "stopped") {
         return { ok: false, code: "not_running", message: "the daemon is already stopped" };
       }
+      if (current.status === "unhealthy") {
+        return { ok: false, code: "identity_unverifiable", message: current.reason };
+      }
 
       const pid = current.pid;
 
@@ -376,7 +379,10 @@ export function createFileDaemon(options: FileDaemonOptions): DaemonPort {
         }
       }
 
-      await options.kill(pid, { force: stopOptions.force === true });
+      try { await options.kill(pid, { force: stopOptions.force === true }, { pid, startedAtMs: current.startedAtMs }); }
+      catch (error) {
+        return { ok: false, code: "identity_unverifiable", message: error instanceof Error ? error.message : String(error) };
+      }
       clearDiscovery(options.home);
 
       return { ok: true, value: "stopped" };

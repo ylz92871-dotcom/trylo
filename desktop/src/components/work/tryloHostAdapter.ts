@@ -29,6 +29,8 @@ import {
 } from "../../results/artifact-paths";
 import type { ArtifactHost, ExternalApplication } from '../../host-adapter/artifact-actions';
 
+import { quickLookFile, supportsQuickLook } from '../../host-adapter/quick-look';
+
 async function call<T>(cmd: string, args: Record<string, unknown>): Promise<T> {
   return await invoke<T>(cmd, args);
 }
@@ -59,6 +61,17 @@ export function createTryloHostAdapter(
   };
 
   return {
+    ...(supportsQuickLook() ? {
+      async quickLookFile(filePath: string) {
+        try {
+          if (isHttpArtifact(filePath)) throw new Error('快速预览需要一个本地文件。');
+          assertFileActionAllowed(filePath, allowedRoot);
+          await quickLookFile(filePath, allowedRoot);
+        } catch (err) {
+          report(err, filePath);
+        }
+      },
+    } : {}),
     async openFile(filePath) {
       try {
         assertFileActionAllowed(filePath, allowedRoot);

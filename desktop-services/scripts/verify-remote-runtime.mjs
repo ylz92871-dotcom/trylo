@@ -15,7 +15,9 @@ const server = createServer();
 await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
 const port = live ? 49380 : server.address().port;
 await new Promise(resolve => server.close(resolve));
-const child = spawn(path.join(root, 'runtime/node/win-x64/node.exe'), [path.join(root, 'desktop-services/dist/host.bundle.mjs')], {
+const nodeRelative = process.platform === 'win32' ? 'win-x64/node.exe'
+  : `${process.platform}-${process.arch}/bin/node`;
+const child = spawn(path.join(root, 'runtime/node', nodeRelative), [path.join(root, 'desktop-services/dist/host.bundle.mjs')], {
   cwd: root,
   env: { ...process.env, TRYLO_APP_DATA_DIR: appData, TRYLO_SIDECARS_DIR: path.join(root, 'sidecars') },
   stdio: ['pipe', 'pipe', 'pipe'],

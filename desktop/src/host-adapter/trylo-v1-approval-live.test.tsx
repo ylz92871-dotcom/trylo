@@ -206,7 +206,7 @@ it('stops a real pending request, expires its old card and continues with a fres
     const newRequest = supervisor.pendingCodePermissions()[0]!
     expect(newRequest.processId).not.toBe(oldRequest.processId)
     expect(newRequest.requestId).not.toBe(oldRequest.requestId)
-    function View() {
+    const View = () => {
       const live = useCodeApprovals(supervisor, 'p', 'continue')
       return (
         <>

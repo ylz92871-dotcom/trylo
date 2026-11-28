@@ -4,6 +4,37 @@ import http from 'node:http';
 import { WebSocket, WebSocketServer } from 'ws';
 import { createNativeBrowserService, nativeBrowserScope } from '../../src/tooling/browser/native-browser-service.mjs';
 
+test('WKWebView sessions browse without exposing a CDP endpoint or MCP gate', async t => {
+  const params = { projectRoot: '/tmp/trylo-native', conversationId: 'manual' };
+  const scope = nativeBrowserScope(params);
+  const operations = [];
+  const tabs = [{ label: 'first', marker: 'about:blank', url: 'https://example.test/', title: 'First page' }];
+  let activeLabel = 'first';
+  const service = createNativeBrowserService({ requestNative: async (key, operation, payload) => {
+    assert.equal(key, scope);
+    operations.push(operation);
+    if (operation === 'create') {
+      activeLabel = 'second';
+      tabs.push({ label: activeLabel, marker: 'about:blank' });
+    }
+    if (operation === 'activate') activeLabel = payload.label;
+    return { scope, cdpAvailable: false, activeLabel, tabs: [...tabs] };
+  } });
+  t.after(() => service.dispose());
+
+  const opened = await service.open(params);
+  assert.equal(opened.cdpAvailable, false);
+  assert.equal(opened.endpoint, undefined);
+  assert.equal(opened.tabs[0].url, 'https://example.test/');
+  assert.equal(opened.control, 'user');
+  assert.equal((await service.create({ scope })).activeLabel, 'second');
+  assert.equal((await service.select({ scope, label: 'first' })).activeLabel, 'first');
+  await service.layout({ scope, visible: true });
+  await service.layout({ scope, visible: false, nativeApplied: true });
+  assert.deepEqual(operations, ['ensure', 'ensure', 'create', 'activate', 'layout']);
+  await assert.rejects(service.configure({ ...params, packageId: 'playwright' }), /独立浏览器 MCP/);
+});
+
 async function fixture(t) {
   const scope = nativeBrowserScope({ projectRoot: 'D:/native-test', conversationId: 'one' });
   const tabs = [{ id: 'root', label: 'native-root', marker: 'about:blank#trylo-native-native-root' }];

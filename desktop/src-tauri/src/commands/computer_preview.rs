@@ -104,7 +104,24 @@ fn observer_handle<R: tauri::Runtime>(preview: &tauri::WebviewWindow<R>) -> Resu
     unsafe { SetWindowDisplayAffinity(hwnd.0.cast(), 0x0000_0011); }
     Ok(Some(hwnd.0 as usize as u64))
 }
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+fn observer_handle<R: tauri::Runtime>(preview: &tauri::WebviewWindow<R>) -> Result<Option<u64>, String> {
+    let (send, receive) = std::sync::mpsc::sync_channel(1);
+    let window = preview.clone();
+    preview.run_on_main_thread(move || {
+        let id = window.ns_window().ok().filter(|window| !window.is_null()).and_then(|pointer| {
+            // Tauri owns this NSWindow and the callback runs on the AppKit thread.
+            let window = unsafe { &*pointer.cast::<objc2_app_kit::NSWindow>() };
+            u32::try_from(window.windowNumber()).ok().filter(|id| *id > 0)
+        });
+        let _ = send.send(id.map(u64::from));
+    }).map_err(|error| error.to_string())?;
+    receive.recv().map_err(|error| error.to_string())
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+// Match the fallible Windows handle lookup at the common call site.
+#[allow(clippy::unnecessary_wraps)]
 fn observer_handle<R: tauri::Runtime>(_preview: &tauri::WebviewWindow<R>) -> Result<Option<u64>, String> { Ok(None) }
 
 #[tauri::command]
@@ -135,3 +152,32 @@ pub fn computer_preview_subscribe<R: tauri::Runtime>(webview: tauri::Webview<R>,
 #[cfg(all(test, feature = "preview-ipc-tests"))]
 #[path = "computer_preview_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod snapshot_tests {
+    use super::PreviewSnapshot;
+
+    #[test]
+    fn live_frame_snapshot_requires_integer_epoch_milliseconds() {
+        let valid = serde_json::json!({
+            "title": "实时窗口预览",
+            "status": "",
+            "detail": "从系统面板选择一个窗口。",
+            "dataUrl": "data:image/jpeg;base64,aGVsbG8=",
+            "streamState": "running",
+            "frameGeometry": { "width": 1000, "height": 625, "originX": 0, "originY": 0 },
+            "updatedAt": 1_795_766_860_757_u64,
+            "scope": "ws:session:code"
+        });
+        let parsed: PreviewSnapshot = serde_json::from_value(valid).expect("integer updatedAt");
+        assert_eq!(parsed.updated_at, Some(1_795_766_860_757));
+
+        let fractional = serde_json::json!({
+            "title": "实时窗口预览",
+            "status": "",
+            "detail": "",
+            "updatedAt": 1_795_766_860_757.5_f64
+        });
+        assert!(serde_json::from_value::<PreviewSnapshot>(fractional).is_err());
+    }
+}

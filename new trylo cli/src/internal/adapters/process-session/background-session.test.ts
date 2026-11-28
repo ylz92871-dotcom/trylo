@@ -202,6 +202,12 @@ test("kill ends a waiting session, and the process really goes", async () => {
 
   assert.equal(killed.value.alreadyGone, false);
 
+  if (process.platform === "darwin" || process.platform === "linux") {
+    const pid = started.pid;
+    assert.ok(pid !== undefined);
+    assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
+  }
+
   // The assertion a mock could not make: the session is terminal afterwards, and
   // asking about it is still a valid answer rather than a refusal — "how did it
   // end" is exactly what a person needs next.

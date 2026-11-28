@@ -13,7 +13,7 @@ export interface PtySpawnResult {
 
 export interface PtyService {
   spawn(opts: {
-    shell: string;
+    shell?: string;
     cols: number;
     rows: number;
     cwd: string | null;
@@ -21,5 +21,6 @@ export interface PtyService {
   }): Promise<PtySpawnResult>;
   write(id: string, data: Uint8Array): Promise<void>;
   resize(id: string, cols: number, rows: number): Promise<void>;
+  isAlive?(id: string): Promise<boolean>;
   kill(id: string): Promise<void>;
 }

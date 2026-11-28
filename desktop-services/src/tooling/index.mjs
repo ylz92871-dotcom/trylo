@@ -12,6 +12,7 @@
 // here may block a Code or Work run — a broken tool package removes a
 // capability, never the conversation (§4.4).
 
+import { createMacosComputerPermissions } from './computer-control/macos/permissions.mjs';
 import { configureHermesEnv } from '../learning/hermes-env.mjs';
 import { createMcpArgsService } from '../learning/mcp-args-service.mjs';
 import { createArtifactPromoter } from './artifact-promoter.mjs';
@@ -45,7 +46,15 @@ export function createToolingServices(options = {}) {
   const seam = options.seam ?? {};
   const enableRepositoryTools = options.seam === undefined;
 
-  const catalog = createToolCatalog(seam.manifests ? { manifests: seam.manifests } : {});
+  const target = seam.target ?? `${process.platform}-${process.arch}`;
+  // The macOS WKWebView provides preview only (no CDP endpoint). Keep agent
+  // browser execution on Playwright there; the native execution backend is Windows-only.
+  const nativeBrowserEnabled = Boolean(seam.nativeBrowser) || (enableRepositoryTools && target.startsWith('win32-'));
+  const catalog = createToolCatalog({
+    ...(seam.manifests ? { manifests: seam.manifests } : {}),
+    target,
+    supportedOnly: enableRepositoryTools && target.startsWith('darwin-'),
+  });
 
   const rejected = catalog.rejected();
   if (rejected.length > 0 && log) {
@@ -64,9 +73,11 @@ export function createToolingServices(options = {}) {
     ...(seam.download ? { download: seam.download } : {}),
     // Test seam: replaces the browser-body install child process (§3.3-7).
     ...(seam.runCommand ? { runCommand: seam.runCommand } : {}),
+    ...(seam.resolveUv ? { resolveUv: seam.resolveUv } : {}),
     // A real source-checkout host reads this service's toolchain registry. Test
     // seams and packaged installs remain hermetic unless explicitly wired.
     enableRepositoryTools,
+    target,
     ...(options.localToolRegistryPath
       ? { localToolRegistryPath: options.localToolRegistryPath }
       : {}),
@@ -75,7 +86,7 @@ export function createToolingServices(options = {}) {
   const health = createToolHealthService({
     packages,
     catalog,
-    browserBackend: enableRepositoryTools || seam.nativeBrowser ? 'native' : 'screencast',
+    browserBackend: nativeBrowserEnabled ? 'native' : 'screencast',
     // Test seam: replaces the `--version` child-process probe so health can
     // be exercised without a real binary.
     ...(seam.probe ? { probe: seam.probe } : {}),
@@ -108,7 +119,9 @@ export function createToolingServices(options = {}) {
     resolveExecutable: () => resolveComputerPreviewPython({ catalog, packages }),
     ...(seam.computerPreview ?? {}),
   });
+  const macosComputerPermissions = createMacosComputerPermissions({ target, hostEntrypoint: options.hostEntrypoint, ...(seam.macosComputerPermissions ?? {}) });
   const profiles = createToolProfileService({
+    platform: target.split('-')[0],
     catalog,
     packages,
     health,
@@ -116,9 +129,11 @@ export function createToolingServices(options = {}) {
     storageRoot,
     browserObserver,
     modelPreview,
-    softwareWorkspace,
+    // This implementation owns Win32 desktops; unsupported hosts must not advertise it.
+    ...(target.startsWith('win32-') ? { softwareWorkspace } : {}),
+    macosComputerEnabled: enableRepositoryTools && target === 'darwin-arm64' && process.env.TRYLO_MACOS_COMPUTER_USE === '1',
     ...(options.hostEntrypoint ? { hostEntrypoint: options.hostEntrypoint } : {}),
-    ...(enableRepositoryTools || seam.nativeBrowser ? { nativeBrowser } : {}),
+    ...(nativeBrowserEnabled ? { nativeBrowser } : {}),
     ...(seam.profilesRoot ? { profilesRoot: seam.profilesRoot } : {}),
   });
 
@@ -210,6 +225,7 @@ export function createToolingServices(options = {}) {
 
   return {
     catalog,
+    macosComputerPermissions,
     nativeBrowserOpen: params => nativeBrowser.open(params),
     nativeBrowserState: params => nativeBrowser.snapshot(params),
     nativeBrowserControl: params => nativeBrowser.control(params),
@@ -403,9 +419,9 @@ export function createToolingServices(options = {}) {
       void softwareWorkspace.dispose();
       toolResultCache.stop();
       health.clearCache();
-      void viewport.stop();
       void browserObserver.stop();
       computerPreview.dispose();
+      return viewport.stop();
     },
   };
 }

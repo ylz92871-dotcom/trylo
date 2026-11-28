@@ -7,9 +7,14 @@
   var root = document.getElementById('root');
   if (!screen || !status || !reload || !root) return;
 
-  // Match appearance-store.ts, including its light default and restricted-storage fallback.
-  var preference = 'light';
-  try { preference = localStorage.getItem('trylo.appearance.v1') || 'light'; } catch (_) { /* Session fallback. */ }
+  // Match appearance-store.ts: macOS defaults to 'system', others default to 'light', with restricted-storage fallback.
+  var isMac = /mac/i.test(navigator.platform || '') || /macintosh|mac os x/i.test(navigator.userAgent || '');
+  var defaultPreference = isMac ? 'system' : 'light';
+  var preference = defaultPreference;
+  try {
+    var saved = localStorage.getItem('trylo.appearance.v1');
+    if (saved === 'light' || saved === 'dark' || saved === 'system') preference = saved;
+  } catch (_) { /* Session fallback. */ }
   var dark = preference === 'dark' || (preference === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
   root.inert = true;
@@ -54,9 +59,13 @@
     window.removeEventListener('keydown', skip, true);
     window.removeEventListener('pagehide', remove);
     root.inert = false;
+    screen.removeEventListener('pointerdown', accelerateOnPointer);
     screen.removeEventListener('animationend', onExit);
     reload.removeEventListener('click', retry);
     screen.remove();
+  }
+  function accelerateOnPointer() {
+    if (leaving && !removed && screen.dataset.interactive !== 'true') sequence?.accelerate?.();
   }
   function skip(event) { if (leaving && event.key === 'Escape') remove(); }
   function playbackStarted(remainingMs) {
@@ -81,12 +90,12 @@
     screen.dataset.phase = 'leaving';
     if (sequence) {
       // Real readiness releases interaction immediately. Brand presentation
-      // runs over the live app. Only an explicit Escape skips it; keyboard
-      // input associated with launching the app must not delete the shot.
+      // runs over the live app; pointer input gently accelerates the dive,
+      // while Escape skips immediately.
       window.addEventListener('keydown', skip, true);
-      // Keep the original 2.48-second shot intact. The sequence immediately
-      // supplies its actual remaining time, including the word/turn stages.
-      removalTimer = window.setTimeout(remove, 2680);
+      screen.addEventListener('pointerdown', accelerateOnPointer);
+      // Guard against dropped animation frames beyond the 2.48s dive sequence.
+      removalTimer = window.setTimeout(remove, 2750);
       sequence.ready();
       return;
     }

@@ -43,7 +43,7 @@ button {
 }
 
 button:focus-visible {
-  outline: 2px solid var(--link);
+  outline: 2px solid var(--mode-accent, var(--link));
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
@@ -68,6 +68,37 @@ a {
 }
 
 ::selection {
-  background: var(--accent);
-  color: var(--bg);
+  background: color-mix(in srgb, var(--mode-accent, var(--brand)) 24%, transparent);
+  color: var(--fg);
+}
+
+/* macOS WKWebView reveals native window vibrancy behind transparent chrome,
+ * restores native Retina font smoothing, and uses soft accent focus halos. */
+:root[data-platform='macos'],
+:root[data-platform='macos'] body,
+:root[data-platform='macos'] #root {
+  background: transparent;
+}
+
+:root[data-platform='macos'] body {
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+  font-optical-sizing: auto;
+}
+
+:root[data-platform='macos'] button:focus-visible,
+:root[data-platform='macos'] summary:focus-visible,
+:root[data-platform='macos'] select:focus-visible {
+  outline: none;
+  box-shadow: var(--macos-focus-halo, 0 0 0 3px color-mix(in srgb, var(--mode-accent, var(--brand)) 32%, transparent));
+}
+
+@media (forced-colors: active) {
+  :root[data-platform='macos'] button:focus-visible,
+  :root[data-platform='macos'] summary:focus-visible,
+  :root[data-platform='macos'] select:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
 }

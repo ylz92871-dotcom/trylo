@@ -1,6 +1,6 @@
 /* Word reflow and media transports are renderer UI; source lifetime stays with the host adapter. */
-.docx-reader { background:var(--reader-canvas,#f0f1f3); }
-[data-theme="dark"] .docx-reader { --reader-canvas:#191a1c; }
+.docx-reader { background: var(--reader-canvas, var(--bg-panel)); }
+[data-theme="dark"] .docx-reader { --reader-canvas: #171715; }
 .docx-reader__stage { display:flex; position:relative; flex:1; min-height:0; overflow:hidden; }
 .docx-reader__viewport { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; padding:20px; }
 .docx-reader__viewport[hidden] { display:none; }
@@ -13,10 +13,10 @@
 .docx-reader__state { display:flex; flex:1; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:28px; color:var(--fg-muted); text-align:center; font:12px/1.7 var(--font-body); }
 .docx-reader__state strong { color:var(--fg); font-weight:500; }
 .docx-reader__state button { padding:6px 12px; margin-top:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--fg); cursor:pointer; }
-.media-reader { --media-progress:#4d535d; --media-track:#dde1e6; display:flex; flex:1; min-height:0; min-width:0; flex-direction:column; overflow:hidden; background:var(--bg); color:var(--fg); outline:none; container-type:inline-size; }
-[data-theme="dark"] .media-reader { --media-progress:#c3c9d2; --media-track:#3a3d43; }
+.media-reader { --media-progress: var(--fg-muted); --media-track: var(--border-strong); display:flex; flex:1; min-height:0; min-width:0; flex-direction:column; overflow:hidden; background:var(--bg); color:var(--fg); outline:none; container-type:inline-size; }
+[data-theme="dark"] .media-reader { --media-progress: var(--fg-muted); --media-track: var(--border-strong); }
 .media-reader:focus-visible { outline:2px solid var(--fg-muted); outline-offset:-2px; }
-.media-reader__stage { display:flex; position:relative; flex:1; min-height:0; min-width:0; align-items:center; justify-content:center; overflow:hidden; background:#151618; }
+.media-reader__stage { display:flex; position:relative; flex:1; min-height:0; min-width:0; align-items:center; justify-content:center; overflow:hidden; background:#121211; }
 .media-reader--audio .media-reader__stage { background:var(--bg); }
 .media-reader video { width:100%; height:100%; min-height:0; object-fit:contain; }
 .media-reader video[hidden], .media-reader__audio-info[hidden] { display:none; }

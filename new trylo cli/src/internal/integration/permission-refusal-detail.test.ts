@@ -4,9 +4,9 @@ import { isPermissionDecision, type PermissionPort } from "../ports/permission.j
 import type { ProviderRequest } from "../ports/provider.js";
 import { stdioAnswer } from "../surface/cli/stdio-control.js";
 import { projectEnvelopeSequence } from "../surface/cli/stream-projection.js";
-import { createPermissionGrantCache } from "./permission-grants.js";
-import { echoBinding, emptyProfileLoader, toolResult } from "./fakes.js";
-import { runTurn } from "./runner.js";
+import { createPermissionGrantCache } from "../loop/permission-grants.js";
+import { echoBinding, emptyProfileLoader, toolResult } from "../loop/fakes.js";
+import { runTurn } from "../loop/runner.js";
 
 const detail = "浏览器地址需要完整协议；请使用 http://localhost:3000/index.html。";
 const response = (reason: string, message = detail) => JSON.stringify({

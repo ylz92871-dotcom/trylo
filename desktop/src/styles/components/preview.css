@@ -149,9 +149,10 @@
 .preview__page-input { width: 38px; text-align: center; }
 .preview__toolbar-spacer { flex: 1; }
 .preview__search input { flex: 1; }
-.preview__pdf-stage { position: relative; min-height: 0; flex: 1; background:var(--reader-canvas, #f0f1f3); }
+.preview__pdf-stage { position: relative; min-height: 0; flex: 1; background: var(--reader-canvas, var(--bg-panel)); }
 .preview__pdf-stage[hidden] { display: none; }
-.preview__pdf-container { position: absolute; inset: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.preview__pdf-container { position: absolute; inset: 0; overflow: auto; overscroll-behavior: contain; }
+:root:not([data-platform='macos']) .preview__pdf-container { scrollbar-gutter: stable; }
 .preview__loading { position: absolute; inset: 0; z-index: 2; display:flex; align-items:center; justify-content:center; gap:10px; background:var(--bg); color: var(--fg-muted); font-size: var(--text-sm); }
 .preview__pdf .pdfViewer .page { border: none; margin: 12px auto; box-shadow: 0 2px 8px #0002; }
 
@@ -195,6 +196,72 @@
 
 .preview__sep {
   color: var(--ink-mute);
+}
+
+.preview__skeleton-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: var(--space-4);
+}
+
+.preview__skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+
+.preview__skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--fg) 7%, transparent) 50%,
+    transparent 100%
+  );
+  animation: preview-shimmer 1.5s var(--ease-in-out) infinite;
+}
+
+.preview__skeleton--title {
+  width: 46%;
+  height: 18px;
+}
+
+.preview__skeleton--line {
+  width: 92%;
+  height: 12px;
+}
+
+.preview__skeleton--short {
+  width: 64%;
+}
+
+.preview__skeleton--block {
+  width: 100%;
+  height: 180px;
+}
+
+.preview__skeleton--media {
+  width: 100%;
+  height: 220px;
+  border-radius: var(--radius-md);
+}
+
+@keyframes preview-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview__skeleton::after {
+    animation: none;
+    display: none;
+  }
 }
 
 .preview__page-label {
@@ -267,6 +334,7 @@
   color: var(--fg-muted);
   font-size: var(--text-xs);
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   padding-top: 2px;
 }
 
@@ -367,8 +435,8 @@
 .preview__archive-directory button { text-align: left; word-break: break-word; }
 
 /* Shared reading chrome. Actual file renderers keep their own data ownership. */
-.preview__pdf, .preview__office { --reader-canvas:#f0f1f3; --reader-sidebar:#fafafa; }
-[data-theme="dark"] :is(.preview__pdf,.preview__office) { --reader-canvas:#191a1c; --reader-sidebar:#202123; }
+.preview__pdf, .preview__office { --reader-canvas: var(--bg-panel); --reader-sidebar: var(--bg); }
+[data-theme="dark"] :is(.preview__pdf,.preview__office) { --reader-canvas: #171715; --reader-sidebar: var(--bg-panel); }
 .preview__reader-toolbar, .preview__reader-status { display:flex; flex:0 0 auto; align-items:center; gap:6px; min-height:42px; padding:5px 10px; background:var(--bg); color:var(--fg-muted); font:12px var(--font-body); font-variant-numeric:tabular-nums; }
 .preview__reader-toolbar { border-bottom:1px solid var(--border-faint); }
 .preview__reader-toolbar button, .preview__reader-status button { display:inline-flex; align-items:center; justify-content:center; height:28px; min-width:28px; padding:0 6px; border:0; border-radius:5px; background:transparent; color:var(--fg-muted); cursor:pointer; }
@@ -383,7 +451,7 @@
 .preview__reader-status .preview__page-input { width:32px; height:25px; padding:0 2px; border:1px solid transparent; border-radius:4px; background:transparent; color:var(--fg); font:12px var(--font-body); }
 .preview__reader-status .preview__page-input:hover, .preview__reader-status .preview__page-input:focus { border-color:var(--border); background:var(--ink-hover); }
 .preview__reader-status .preview__page-label { min-width:39px; font-size:11px; }
-.preview__pdf-container { scrollbar-gutter:auto; }
+:root:not([data-platform='macos']) .preview__pdf-container { scrollbar-gutter:auto; }
 .preview__pdf-container .pdfViewer { --page-margin:18px auto; --page-border:0; --page-border-image:none; padding:18px 16px; }
 .preview__pdf-container .pdfViewer .page { border:0; box-shadow:0 2px 12px #00000018; }
 .preview__pdf--slides .pdfViewer { display:flex; align-items:center; justify-content:center; min-width:100%; min-height:100%; padding:16px; box-sizing:border-box; }
@@ -419,11 +487,29 @@
 
 .file-peek .preview__toolbar { min-height:40px; padding:6px 10px; gap:6px; background:var(--bg); border-bottom:1px solid var(--border-faint); font:12px var(--font-body); }
 .file-peek .preview__toolbar button { height:28px; border-color:transparent; font:12px var(--font-body); }
-.file-peek .preview__image-wrap { background:var(--reader-canvas,#f0f1f3); }
-[data-theme="dark"] .file-peek .preview__image-wrap { background:#191a1c; }
+.file-peek .preview__image-wrap { background: var(--reader-canvas, var(--bg-panel)); }
+[data-theme="dark"] .file-peek .preview__image-wrap { background: #171715; }
 
 
 
 .preview__canvas--fit { max-width:none; }
 
 @media (prefers-reduced-motion:reduce) { .preview__spinner { animation:none; } }
+
+:root[data-platform='macos'] :is(.preview__toolbar, .preview__pdf) :is(button, input, select):focus-visible {
+  outline: none;
+  box-shadow: var(--macos-focus-halo);
+}
+
+:root[data-platform='macos'] .preview__workbook .preview__table tbody th,
+:root[data-platform='macos'] .preview__archive-directory td:last-child {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (forced-colors: active) {
+  :root[data-platform='macos'] :is(.preview__toolbar, .preview__pdf) :is(button, input, select):focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+}

@@ -35,6 +35,15 @@ function json(relative) {
 }
 const layout = json('scripts/release/source-layout.json');
 for (const entry of layout?.extraFiles ?? []) requireFile(entry.source);
+const macosComputerSources = json('desktop-services/toolchain/computer-control/macos-mcp/SOURCES.json');
+if (macosComputerSources?.schemaVersion !== 1 || !Array.isArray(macosComputerSources.files)
+    || macosComputerSources.files.length === 0
+    || macosComputerSources.files.some(file => typeof file !== 'string' || !/^[A-Za-z0-9_-]+\.swift$/.test(file))
+    || new Set(macosComputerSources.files).size !== macosComputerSources.files.length) {
+  failures.push('invalid macOS computer source manifest');
+} else {
+  for (const file of macosComputerSources.files) requireFile(`desktop-services/toolchain/computer-control/macos-mcp/${file}`);
+}
 // The CLI's maintained JS adapters are source inputs despite the general
 // src/**/*.js ignore rule. Verify their actual manifest, not only TS imports.
 try {
@@ -45,11 +54,16 @@ try {
 // The source checkout includes this exact first-party helper. Downloaded sandbox
 // helpers stay outside Git and are checked by setup-cli-native.mjs instead.
 const ptyProvenance = json('new trylo cli/vendor-bin/pty/PROVENANCE.json');
-const ptyArtifact = ptyProvenance?.artifacts?.['trylo-pty-win-x64'];
-const ptyRelative = 'new trylo cli/vendor-bin/pty/win-x64/trylo-pty.exe';
-if (ptyArtifact?.path !== 'vendor-bin/pty/win-x64/trylo-pty.exe') failures.push('invalid PTY artifact path');
-else {
-  const helper = requireFile(ptyRelative);
+for (const [id, relative] of [
+  ['trylo-pty-win-x64', 'vendor-bin/pty/win-x64/trylo-pty.exe'],
+  ['trylo-pty-darwin-arm64', 'vendor-bin/pty/darwin-arm64/trylo-pty'],
+]) {
+  const ptyArtifact = ptyProvenance?.artifacts?.[id];
+  if (ptyArtifact?.path !== relative) {
+    failures.push(`invalid PTY artifact path: ${id}`);
+    continue;
+  }
+  const helper = requireFile(`new trylo cli/${relative}`);
   if (helper) {
     const bytes = readFileSync(helper);
     if (bytes.length !== ptyArtifact.bytes || createHash('sha256').update(bytes).digest('hex') !== ptyArtifact.sha256) failures.push('PTY helper differs from provenance');

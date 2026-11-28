@@ -3,6 +3,7 @@ use tauri::Manager;
 /// Read vendor codecs from external installation resources. Keeping them
 /// outside embedded frontend assets lets users replace LGPL providers.
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // Owned values from Tauri IPC.
 pub fn preview_codec_paths(app: tauri::AppHandle, provider: String) -> Result<std::collections::HashMap<&'static str, String>, String> {
     let root = std::fs::canonicalize(app.path().resource_dir().map_err(|e| e.to_string())?.join("preview/codecs"))
         .map_err(|_| "预览解码器资源缺失，请修复 Trylo 安装")?;

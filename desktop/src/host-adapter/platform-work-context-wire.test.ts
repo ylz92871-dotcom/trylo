@@ -99,6 +99,7 @@ it('Work adapter → controller → actual CLI sends pool effort and clamps cont
         text: 'Reply WORK_CONTEXT_WIRE_OK, without any tools.',
         settings: {
           ...settingsForCodeRun(configured, workspace),
+          cliPath: settings.cliPath,
           cliNodeProgram: process.execPath,
         },
         permissionLevel: 'read_only',

@@ -1,6 +1,6 @@
 /* Chrome stays in the renderer; the native webview occupies only the measured page. */
-.browser-tool-sidebar { --browser-danger:#ba4c55; --browser-surface:#f5f6f7; container-type:inline-size; --browser-hover:#e9ecef; --browser-edge:#e6e8eb; display:flex; flex:0 0 auto; flex-direction:column; min-width:320px; max-width:none; min-height:0; box-shadow:none; border-left:1px solid var(--browser-edge); background:var(--bg); color:var(--fg); font:12px/1.5 var(--font-body); overflow:hidden; }
-[data-theme="dark"] .browser-tool-sidebar { --browser-danger:#e58b94; --browser-surface:#26282b; --browser-hover:#303338; --browser-edge:#33363b; }
+.browser-tool-sidebar { --browser-danger:var(--danger); --browser-surface:var(--bg-panel); container-type:inline-size; --browser-hover:var(--ink-hover); --browser-edge:var(--border); display:flex; flex:0 0 auto; flex-direction:column; min-width:320px; max-width:none; min-height:0; box-shadow:none; border-left:1px solid var(--browser-edge); background:var(--bg); color:var(--fg); font:12px/1.5 var(--font-body); overflow:hidden; animation:trylo-fade-in var(--duration-base) var(--ease-out); }
+[data-theme="dark"] .browser-tool-sidebar { --browser-danger:var(--danger); --browser-surface:var(--bg-panel); --browser-hover:var(--ink-hover); --browser-edge:var(--border); }
 .browser-tool-sidebar[data-fullscreen] { position:absolute; inset:0; z-index:65; width:auto; min-width:0; border:0; }
 .browser-tool-sidebar__head { flex:none; padding:0; background:var(--bg); }
 .browser-tool-sidebar__site-row { display:flex; align-items:center; gap:6px; min-width:0; height:38px; padding:0 10px 0 14px; }
@@ -10,7 +10,8 @@
 .browser-tool-sidebar__phase[data-phase="failed"],.browser-tool-sidebar__phase[data-phase="disconnected"] { color:var(--browser-danger); }
 .browser-tool-sidebar__icon-button { display:grid; place-items:center; flex:none; width:26px; height:26px; padding:0; border:0; border-radius:5px; background:transparent; color:var(--fg-muted); cursor:pointer; }
 .browser-tool-sidebar__icon-button:hover:enabled,.browser-tool-sidebar__icon-button[aria-expanded="true"] { color:var(--fg); background:var(--browser-hover); }
-.browser-tool-sidebar__tabs { display:flex; flex:none; align-items:center; gap:4px; height:34px; overflow:auto; padding:3px 8px 0; background:var(--browser-surface); border-bottom:1px solid var(--browser-edge); scrollbar-width:thin; }
+.browser-tool-sidebar__tabs { display:flex; flex:none; align-items:center; gap:4px; height:34px; overflow:auto; padding:3px 8px 0; background:var(--browser-surface); border-bottom:1px solid var(--browser-edge); }
+:root:not([data-platform='macos']) .browser-tool-sidebar__tabs { scrollbar-width:thin; }
 .browser-tool-sidebar__tab { display:flex; flex:0 1 174px; min-width:88px; max-width:190px; align-items:center; height:30px; border-radius:7px 7px 0 0; color:var(--fg-muted); border:1px solid transparent; border-bottom:0; }
 .browser-tool-sidebar__tab[data-selected] { background:var(--bg); color:var(--fg); border-color:var(--browser-edge); }
 .browser-tool-sidebar__tab:hover { background:var(--browser-hover); }
@@ -55,6 +56,6 @@
 .browser-tool-sidebar :is(button,select,input):focus-visible { outline:2px solid var(--fg-muted); outline-offset:2px; }
 .browser-tool-sidebar .browser-tool-sidebar__address input:focus-visible { outline:none; }
 @keyframes browser-activity-spin { to { transform:rotate(360deg); } }
-@media (prefers-reduced-motion:reduce) { .browser-tool-sidebar__empty-spinner { animation:none !important; } }
+@media (prefers-reduced-motion:reduce) { .browser-tool-sidebar, .browser-tool-sidebar__empty-spinner { animation:none !important; } }
 
 .browser-tool-sidebar .preview-image__toolbar button[aria-pressed="true"] { color:var(--fg); background:var(--browser-surface); }

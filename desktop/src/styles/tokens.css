@@ -1,33 +1,46 @@
-/* Shared conversation palette. The logo owns the gold gradient;
-   legacy accent aliases keep existing tool/settings surfaces neutral. */
+/* Shared conversation palette — Scheme A (Warm Stone & Obsidian Gold).
+   The logo owns the gold gradient; legacy accent aliases keep existing
+   tool/settings surfaces aligned to one unified warm neutral ramp. */
 :root {
   color-scheme: light;
-  --ink-deep: #ffffff;
-  --ink-surface: #faf8f3;
-  --ink-elevated: #f3f0e7;
-  --ink-hover: #eee8d8;
-  --ink-paper: #262725;
-  --ink-fog: #71736e;
-  --ink-mute: #73766e;
-  --ink-divider: #e9e9e5;
-  --ink-divider-strong: #dcdedb;
-  --border-faint: #f0f0ed;
-  --link: #286597;
-  --link-soft: #e9f1ff;
-  --danger: #bc414a;
-  --danger-soft: #fff0f1;
-  --success: #27854c;
-  --diff-add-bg: #eef8f0;
-  --diff-del-bg: #fff0ef;
-  --brand: #946d22;
-  --brand-hover: #77521a;
-  --brand-soft: #f7efd9;
-  --brand-glow: #d7b35126;
-  --brand-edge: #d8bd7b;
-  --brand-ambient: #dcc68330;
+  --ink-deep: #f7f6f2;
+  --ink-surface: #efede7;
+  --ink-elevated: #e7e4dc;
+  --ink-hover: #dfdcd2;
+  --surface-card: #ffffff;
+  --rail-selected-bg: #e5e2d9;
+  --rail-selected-hover: #dcd8cd;
+  --composer-bg: #ffffff;
+  --composer-border: #dfdcd4;
+  --composer-shadow: 0 4px 18px rgba(25, 25, 24, 0.05), 0 1px 2px rgba(25, 25, 24, 0.04);
+  --ink-paper: #191918;
+  --ink-fog: #5c5b57;
+  --ink-mute: #7a7872;
+  --ink-divider: #e4e1d9;
+  --ink-divider-strong: #d3cfc4;
+  --border-faint: #ece9e2;
+  --link: #235d90;
+  --link-soft: #e8f0fa;
+  --link-edge: #adc7e6;
+  --danger: #bc3e44;
+  --danger-soft: #fceeef;
+  --success: #23784c;
+  --success-soft: #e9f5ee;
+  --warning: #ad6a13;
+  --warning-soft: #fbf2e3;
+  --warning-edge: #e4c188;
+  --diff-add-bg: #e9f5ee;
+  --diff-del-bg: #fceeef;
+  --brand: #966816;
+  --brand-hover: #7a520e;
+  --brand-soft: #f5ecd7;
+  --brand-soft-strong: #ebdcb7;
+  --brand-glow: rgba(150, 104, 22, 0.16);
+  --brand-edge: #d9c082;
+  --brand-ambient: rgba(217, 192, 130, 0.22);
   --brand-100: var(--ink-paper);
   --brand-200: var(--ink-paper);
-  --brand-300: var(--ink-paper);
+  --brand-300: var(--brand);
   --brand-400: var(--ink-fog);
   --brand-500: var(--ink-mute);
   --lamp-warm: var(--brand);
@@ -39,9 +52,9 @@
   --ice-blue-soft: var(--link-soft);
   --logo-bone-top: #f0de91;
   --logo-bone-bottom: #c6ab50;
-  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei', sans-serif;
   --font-display: var(--font-body);
-  --font-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, ui-monospace, Consolas, monospace;
   --text-xs: 12px;
   --text-sm: 13px;
   --text-base: 14px;
@@ -69,13 +82,29 @@
   --top-bar-h: 64px;
   --bottom-strip-h: 28px;
   --input-bar-h: 116px;
+  --rail-left-default: 280px;
   --rail-left-w-collapsed: 40px;
-  --rail-right-w: min(34%, 320px);
-  --conversation-width: clamp(660px, 79cqw, 800px);
+  --rail-dock-w: 52px;
+  --rail-dock-active-bg: rgba(25, 25, 24, 0.08);
+  --rail-dock-hover-bg: rgba(25, 25, 24, 0.055);
+  --rail-right-files-w: 320px;
+  --rail-right-wide-w: 480px;
+  --rail-right-w: var(--rail-right-files-w);
+  --conversation-width: clamp(620px, 78cqw, 760px);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-panel: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring-subtle: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-micro: 90ms;
   --duration-fast: 120ms;
+  --duration-popover-in: 150ms;
+  --duration-popover-out: 110ms;
+  --duration-view: 160ms;
+  --duration-modal-in: 180ms;
+  --duration-modal-out: 130ms;
   --duration-base: 200ms;
+  --duration-panel: 220ms;
   --duration-slow: 360ms;
   --bg: var(--ink-deep);
   --bg-panel: var(--ink-surface);
@@ -93,15 +122,15 @@
   --menu-border: var(--border-strong);
   --menu-fg: var(--fg);
   --menu-fg-muted: var(--fg-muted);
-  --focus-ring: var(--brand);
+  --focus-ring: var(--mode-accent, var(--brand));
   --accent: var(--brand);
   --border: var(--ink-divider);
   --border-strong: var(--ink-divider-strong);
   --mode-accent: var(--brand);
   --mode-accent-soft: var(--brand-soft);
-  --mode-accent-edge: var(--border-strong);
-  --mode-accent-strong: var(--fg);
-  --mode-accent-ink: var(--bg);
+  --mode-accent-edge: var(--brand-edge);
+  --mode-accent-strong: var(--brand-hover);
+  --mode-accent-ink: #ffffff;
   --mode-surface-detail: var(--bg-panel);
   --mode-icon-color: var(--fg-muted);
   --mode-label-font: var(--font-body);
@@ -110,37 +139,151 @@
   --mode-edge-width: 1px;
   --mode-fill-alpha: 0.08;
 }
+
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --ink-deep: #202123;
-  --ink-surface: #211f1a;
-  --ink-elevated: #302c24;
-  --ink-hover: #3b3529;
-  --ink-paper: #e8e9eb;
-  --ink-fog: #999da4;
-  --ink-mute: #747981;
-  --ink-divider: #303236;
-  --ink-divider-strong: #42454b;
-  --border-faint: #282a2e;
-  --link: #91b8f5;
-  --link-soft: #253349;
-  --danger: #ee8990;
-  --danger-soft: #39252a;
-  --success: #8dcea0;
-  --diff-add-bg: #25372d;
-  --diff-del-bg: #3d282c;
-  --brand: #ddc27f;
-  --brand-hover: #ead6a5;
-  --brand-soft: #352d1c;
-  --brand-edge: #6d5b31;
-  --brand-ambient: #b38f3720;
+  --ink-deep: #121211;
+  --ink-surface: #191917;
+  --ink-elevated: #222220;
+  --ink-hover: #2c2c29;
+  --surface-card: #1d1d1b;
+  --rail-selected-bg: #262623;
+  --rail-selected-hover: #2f2f2b;
+  --rail-dock-active-bg: rgba(239, 236, 230, 0.105);
+  --rail-dock-hover-bg: rgba(239, 236, 230, 0.075);
+  --composer-bg: #1c1c1a;
+  --composer-border: #2e2e2a;
+  --composer-shadow: 0 6px 24px rgba(0, 0, 0, 0.36);
+  --ink-paper: #efece6;
+  --ink-fog: #9e9c96;
+  --ink-mute: #74726c;
+  --ink-divider: #2a2a27;
+  --ink-divider-strong: #3c3b37;
+  --border-faint: #20201d;
+  --link: #7eaeeb;
+  --link-soft: #1a2738;
+  --link-edge: #355275;
+  --danger: #eb7e84;
+  --danger-soft: #351f22;
+  --success: #7bc696;
+  --success-soft: #1b2d22;
+  --warning: #e6b465;
+  --warning-soft: #312718;
+  --warning-edge: #6b522a;
+  --diff-add-bg: #1b2d22;
+  --diff-del-bg: #351f22;
+  --brand: #dec176;
+  --brand-hover: #ecd69b;
+  --brand-soft: #2e2819;
+  --brand-soft-strong: #3f3620;
+  --brand-glow: rgba(222, 193, 118, 0.16);
+  --brand-edge: #6b592e;
+  --brand-ambient: rgba(222, 193, 118, 0.14);
+  --mode-accent-ink: #161512;
+}
+
+/* Subtle mode differentiation: Work keeps warm brass gold, Code shifts accent
+   cues to slate-cobalt while sharing every neutral surface and layout rule. */
+[data-mode='work'] {
+  --mode-accent: var(--brand);
+  --mode-accent-soft: var(--brand-soft);
+  --mode-accent-edge: var(--brand-edge);
+  --mode-accent-strong: var(--brand-hover);
+  --mode-accent-ink: #ffffff;
+}
+
+[data-mode='code'] {
+  --mode-accent: var(--link);
+  --mode-accent-soft: var(--link-soft);
+  --mode-accent-edge: var(--link-edge);
+  --mode-accent-strong: #1a4770;
+  --mode-accent-ink: #ffffff;
+}
+
+:root[data-theme='dark'] [data-mode='work'] {
+  --mode-accent: var(--brand);
+  --mode-accent-soft: var(--brand-soft);
+  --mode-accent-edge: var(--brand-edge);
+  --mode-accent-strong: var(--brand-hover);
+  --mode-accent-ink: #161512;
+}
+
+:root[data-theme='dark'] [data-mode='code'] {
+  --mode-accent: var(--link);
+  --mode-accent-soft: var(--link-soft);
+  --mode-accent-edge: var(--link-edge);
+  --mode-accent-strong: #a3c6f2;
+  --mode-accent-ink: #101720;
+}
+
+/* macOS native materials, hairline dividers, and overlay-titlebar metrics. */
+:root[data-platform='macos'] {
+  --top-bar-h: 46px;
+  --font-mono: 'SF Mono', ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+  --ink-divider: rgba(25, 25, 24, 0.08);
+  --ink-divider-strong: rgba(25, 25, 24, 0.14);
+  --border: rgba(25, 25, 24, 0.08);
+  --border-strong: rgba(25, 25, 24, 0.14);
+  --border-faint: rgba(25, 25, 24, 0.05);
+  --macos-hairline: rgba(25, 25, 24, 0.08);
+  --macos-hairline-strong: rgba(25, 25, 24, 0.14);
+  --macos-rail-bg: rgba(239, 237, 231, 0.56);
+  --macos-canvas-bg: rgba(247, 246, 242, 0.84);
+  --composer-bg: rgba(255, 255, 255, 0.88);
+  --macos-popover-bg: rgba(247, 246, 242, 0.86);
+  --macos-popover-shadow:
+    0 0 0 0.5px rgba(25, 25, 24, 0.09),
+    0 8px 24px rgba(25, 25, 24, 0.1),
+    0 2px 6px rgba(25, 25, 24, 0.05);
+  --macos-focus-halo: 0 0 0 3px color-mix(in srgb, var(--mode-accent, var(--brand)) 32%, transparent);
+}
+
+:root[data-platform='macos'][data-theme='dark'] {
+  --ink-divider: rgba(239, 236, 230, 0.08);
+  --ink-divider-strong: rgba(239, 236, 230, 0.14);
+  --border: rgba(239, 236, 230, 0.08);
+  --border-strong: rgba(239, 236, 230, 0.14);
+  --border-faint: rgba(239, 236, 230, 0.05);
+  --macos-hairline: rgba(239, 236, 230, 0.08);
+  --macos-hairline-strong: rgba(239, 236, 230, 0.14);
+  --macos-rail-bg: rgba(24, 24, 22, 0.56);
+  --macos-canvas-bg: rgba(18, 18, 17, 0.8);
+  --composer-bg: rgba(30, 30, 28, 0.78);
+  --macos-popover-bg: rgba(25, 25, 23, 0.86);
+  --macos-popover-shadow:
+    inset 0 0.5px 0 rgba(239, 236, 230, 0.12),
+    inset 0 0 0 0.5px rgba(239, 236, 230, 0.08),
+    0 12px 32px rgba(0, 0, 0, 0.52);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-platform='macos'] {
+    --macos-rail-bg: var(--ink-surface);
+    --macos-canvas-bg: var(--bg);
+    --composer-bg: var(--surface-card);
+    --macos-popover-bg: var(--bg-panel);
+  }
+
+  :root[data-platform='macos'][data-theme='dark'] {
+    --macos-rail-bg: var(--ink-surface);
+    --macos-canvas-bg: var(--bg);
+    --composer-bg: #1c1c1a;
+    --macos-popover-bg: var(--bg-elevated);
+  }
 }
 
 /* prefers-reduced-motion: turn off all transitions / animations. */
 @media (prefers-reduced-motion: reduce) {
   :root {
+    --duration-micro: 0ms;
     --duration-fast: 0ms;
+    --duration-popover-in: 0ms;
+    --duration-popover-out: 0ms;
+    --duration-view: 0ms;
+    --duration-modal-in: 0ms;
+    --duration-modal-out: 0ms;
     --duration-base: 0ms;
+    --duration-panel: 0ms;
     --duration-slow: 0ms;
   }
 

@@ -57,7 +57,7 @@ describe('browserCacheRoots', () => {
   });
 
   it('falls back to the platform cache roots', () => {
-    const roots = browserCacheRoots({ LOCALAPPDATA: 'C:\\u\\AppData\\Local' });
+    const roots = browserCacheRoots({ LOCALAPPDATA: 'C:\\u\\AppData\\Local' }, 'win32');
     assert.ok(roots.length >= 1);
     assert.ok(roots[0].includes('ms-playwright'));
   });
@@ -81,7 +81,7 @@ describe('probePlaywrightChromium', () => {
 
   it('finds a complete build and reports it', () => {
     fs.writeFileSync(path.join(cacheRoot, 'chromium-9999', 'chrome-win', 'chrome.exe'), 'pe');
-    const result = probePlaywrightChromium({ env: { PLAYWRIGHT_BROWSERS_PATH: cacheRoot } });
+    const result = probePlaywrightChromium({ platform: 'win32', env: { PLAYWRIGHT_BROWSERS_PATH: cacheRoot } });
     assert.equal(result.ok, true);
     assert.equal(result.reasonCode, 'browser_ok');
     assert.equal(result.build, 'chromium-9999');
@@ -94,7 +94,7 @@ describe('probePlaywrightChromium', () => {
     const root64 = path.join(tmpRoot, 'ms-playwright-64');
     fs.mkdirSync(path.join(root64, 'chromium-1237', 'chrome-win64'), { recursive: true });
     fs.writeFileSync(path.join(root64, 'chromium-1237', 'chrome-win64', 'chrome.exe'), 'pe');
-    const result = probePlaywrightChromium({ env: { PLAYWRIGHT_BROWSERS_PATH: root64 } });
+    const result = probePlaywrightChromium({ platform: 'win32', env: { PLAYWRIGHT_BROWSERS_PATH: root64 } });
     assert.equal(result.ok, true);
     assert.equal(result.build, 'chromium-1237');
     assert.ok(result.detail.includes('chrome-win64'));
@@ -103,8 +103,21 @@ describe('probePlaywrightChromium', () => {
   it('prefers the newest complete build', () => {
     fs.mkdirSync(path.join(cacheRoot, 'chromium-10000', 'chrome-win'), { recursive: true });
     fs.writeFileSync(path.join(cacheRoot, 'chromium-10000', 'chrome-win', 'chrome.exe'), 'pe');
-    const result = probePlaywrightChromium({ env: { PLAYWRIGHT_BROWSERS_PATH: cacheRoot } });
+    const result = probePlaywrightChromium({ platform: 'win32', env: { PLAYWRIGHT_BROWSERS_PATH: cacheRoot } });
     assert.equal(result.build, 'chromium-10000');
+  });
+
+  it('requires an executable in the Apple Silicon user cache', { skip: process.platform === 'win32' }, () => {
+    const options = { platform: 'darwin', arch: 'arm64', env: { HOME: tmpRoot } };
+    const [root] = browserCacheRoots(options.env, options.platform);
+    assert.equal(root, path.join(tmpRoot, 'Library', 'Caches', 'ms-playwright'));
+    const executable = path.join(root, 'chromium-1237', 'chrome-mac-arm64',
+      'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing');
+    fs.mkdirSync(path.dirname(executable), { recursive: true });
+    fs.writeFileSync(executable, 'browser fixture', { mode: 0o600 });
+    assert.equal(probePlaywrightChromium(options).ok, false);
+    fs.chmodSync(executable, 0o700);
+    assert.equal(probePlaywrightChromium(options).build, 'chromium-1237');
   });
 });
 

@@ -63,6 +63,19 @@ describe('computer observation window', () => {
     expect(screen.getByText('正在连接电脑画面')).toBeTruthy()
   })
 
+  it('distinguishes a visible window chooser from a connection in progress', () => {
+    render(<ComputerPreviewWindow />)
+    publish(snapshot({
+      streamState: 'selecting',
+      streamDetail: '在已打开的选窗面板中选择窗口，再点「开始预览」。',
+    }))
+    const badge = screen.getByText('等待选窗', { selector: '.tool-preview-badge' })
+    expect(badge.getAttribute('aria-live')).toBe('polite')
+    expect(badge.querySelector('.preview-actions__spin')).toBeNull()
+    expect(screen.getByText('请选择要预览的窗口')).toBeTruthy()
+    expect(screen.queryByText('正在连接电脑画面')).toBeNull()
+  })
+
   it('running consumes successive frames from the existing channel', () => {
     const { container } = render(<ComputerPreviewWindow />)
     publish(snapshot({ dataUrl: FRAME }))
@@ -133,6 +146,27 @@ describe('computer observation window', () => {
     expect(screen.queryByRole('list')).toBeNull()
     expect(screen.getByText('最近操作 · 0')).toBeTruthy()
     expect(screen.getByRole('button', { name: '最近操作 · 0' }).getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('renders a virtual agent cursor overlay for background actions with normalized coordinates', () => {
+    render(<ComputerPreviewWindow />)
+    publish(
+      snapshot({
+        dataUrl: FRAME,
+        frameGeometry: { width: 1000, height: 600, originX: 0, originY: 0 },
+        action: {
+          id: 'bg-press',
+          title: '后台操作控件',
+          target: 'AXPress',
+          status: '执行中',
+          startedAt: Date.now(),
+          point: { x: 0.4, y: 0.6, space: 'normalized' },
+        },
+      }),
+    )
+    const virtualCursor = screen.getByLabelText('代理虚拟光标')
+    expect(virtualCursor.style.left).toBe('40%')
+    expect(virtualCursor.style.top).toBe('60%')
   })
 
   it('unmount only unsubscribes this observer', async () => {

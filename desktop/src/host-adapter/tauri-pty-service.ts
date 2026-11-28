@@ -22,5 +22,6 @@ export const tauriPtyService: PtyService = {
   },
   write: (id, data) => invoke<void>('pty_write', { id, data: Array.from(data) }),
   resize: (id, cols, rows) => invoke<void>('pty_resize', { id, cols, rows }),
+  isAlive: (id) => invoke<boolean>('pty_status', { id }),
   kill: (id) => invoke<void>('pty_kill', { id }),
 };

@@ -93,6 +93,7 @@
 }
 .generated-media__viewer::backdrop {
   background: rgb(0 0 0 / 65%);
+  animation: trylo-fade-in var(--duration-modal-in) var(--ease-out) both;
 }
 .generated-media__viewer > img {
   display: block;
@@ -118,5 +119,8 @@
 @media (prefers-reduced-motion: reduce) {
   .generated-media__chevron {
     transition: none;
+  }
+  .generated-media__viewer::backdrop {
+    animation: none;
   }
 }

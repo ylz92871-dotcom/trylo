@@ -1,0 +1,181 @@
+name: Trylo macOS arm64
+
+on:
+  push:
+    branches: [MacOS]
+  pull_request:
+    branches: [MacOS]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TRYLO_CI_NODE_VERSION: '22.22.2'
+  TRYLO_CI_PNPM_VERSION: '10.33.2'
+  MACOSX_DEPLOYMENT_TARGET: '14.0'
+  DEVELOPER_DIR: /Library/Developer/CommandLineTools
+  RUSTUP_TOOLCHAIN: '1.97.1'
+  NODE_OPTIONS: --max-old-space-size=4096
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: xcode-27
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.TRYLO_CI_NODE_VERSION }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.TRYLO_CI_PNPM_VERSION }}
+      - name: Install locked frontend dependencies
+        run: cd desktop && pnpm install --frozen-lockfile
+      - name: Build desktop frontend
+        run: cd desktop && pnpm build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-frontend
+          if-no-files-found: error
+          path: desktop/dist/
+  native:
+    needs: frontend
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.TRYLO_CI_NODE_VERSION }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.TRYLO_CI_PNPM_VERSION }}
+      - name: Verify checkout and install locked dependencies
+        run: |
+          test "$(uname -m)" = arm64
+          node scripts/check-workspace-layout.mjs
+          node scripts/release/check-source-completeness.mjs
+          node scripts/setup-cli-native.mjs --check
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component clippy
+          (cd 'new trylo cli' && npm ci)
+          (cd desktop-services && npm ci)
+          (cd desktop && pnpm install --frozen-lockfile)
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-frontend
+          path: desktop/dist/
+      - name: Build CLI required by native integration checks
+        run: cd 'new trylo cli' && npm run build
+      - name: Prepare native resources
+        if: ${{ !cancelled() }}
+        working-directory: desktop
+        run: node --input-type=module -e "import { prepareDevResources } from './scripts/prepare-dev-resources.mjs'; prepareDevResources(process.cwd())"
+      - name: Check Rust Clippy
+        if: ${{ !cancelled() }}
+        working-directory: desktop/src-tauri
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Test native Rust behavior
+        if: ${{ !cancelled() }}
+        working-directory: desktop/src-tauri
+        run: cargo test --locked
+      - name: Compile Swift helper and query permissions
+        if: ${{ !cancelled() }}
+        run: |
+          node --input-type=module -e "import { stageMacosComputerUse } from './desktop/scripts/build/macos/stage-macos-computer-use.mjs'; stageMacosComputerUse('_workspace/checks/macos-native')"
+          _workspace/checks/macos-native/desktop-services/macos-mcp/bin/trylo-macos-mcp --permissions
+  services:
+    runs-on: xcode-27
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.TRYLO_CI_NODE_VERSION }}
+      - name: Install locked service dependencies
+        working-directory: desktop-services
+        run: npm ci
+      - name: Check sidecar
+        working-directory: desktop-services
+        run: npm test
+  build:
+    needs: [frontend, native, services]
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.TRYLO_CI_NODE_VERSION }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.TRYLO_CI_PNPM_VERSION }}
+      - name: Verify checkout and install locked dependencies
+        run: |
+          test "$(uname -m)" = arm64
+          node scripts/check-workspace-layout.mjs
+          node scripts/release/check-source-completeness.mjs
+          node scripts/setup-cli-native.mjs --check
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component clippy
+          (cd 'new trylo cli' && npm ci)
+          (cd desktop-services && npm ci)
+          (cd desktop && pnpm install --frozen-lockfile)
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-frontend
+          path: desktop/dist/
+      - name: Build and verify CLI
+        if: ${{ !cancelled() }}
+        id: cli
+        run: |
+          cd 'new trylo cli'
+          npm run build
+          npm run verify
+      - name: Check desktop types and lint
+        if: ${{ !cancelled() }}
+        run: |
+          cd desktop
+          pnpm typecheck
+          pnpm lint
+      - name: Check desktop behavior
+        if: ${{ !cancelled() }}
+        run: cd desktop && pnpm test
+      - name: Fetch locked preview sources and build FFmpeg
+        run: |
+          release_dir="$GITHUB_WORKSPACE/_workspace/artifacts/macos-release"
+          mkdir -p "$release_dir"
+          node desktop/scripts/build/shared/preview/fetch-sources.mjs --output "$release_dir/preview-sources"
+          node desktop/scripts/build/shared/preview/fetch-macos-engine-sources.mjs "$release_dir"
+          bash desktop/scripts/build/shared/preview/media-build/macos.sh "$release_dir/media-sources/ffmpeg-source.tar.gz" "$release_dir/media"
+          {
+            printf 'TRYLO_MACOS_MEDIA_ENGINE_DIR=%s\n' "$release_dir/media"
+            printf 'TRYLO_PREVIEW_SOURCES_DIR=%s\n' "$release_dir/preview-sources"
+            printf 'TRYLO_MEDIA_SOURCES_DIR=%s\n' "$release_dir/media-sources"
+            printf 'TRYLO_ARCHIVE_SOURCES_DIR=%s\n' "$release_dir/archive-sources"
+            printf 'TRYLO_PREVIEW_RELEASE_DIR=%s\n' "$release_dir/preview-release"
+          } >> "$GITHUB_ENV"
+      - name: Build the internal installer and record its digest
+        run: |
+          (cd desktop && pnpm exec tauri build --debug --bundles app,dmg)
+          node --input-type=module -e "import { verifyMacosOfficeEngine } from './desktop/scripts/build/shared/preview/office-engine-darwin.mjs'; await verifyMacosOfficeEngine('desktop/src-tauri/target/debug/bundle/macos/Trylo.app/Contents/Resources/preview/office')"
+          cd desktop/src-tauri/target/debug/bundle/dmg
+          for image in ./*.dmg; do /usr/bin/hdiutil verify "$image"; done
+          shasum -a 256 ./*.dmg > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Trylo-macOS-arm64-internal
+          if-no-files-found: error
+          path: |
+            desktop/src-tauri/target/debug/bundle/dmg/*.dmg
+            desktop/src-tauri/target/debug/bundle/dmg/SHA256SUMS.txt
+            _workspace/artifacts/macos-release/preview-release/

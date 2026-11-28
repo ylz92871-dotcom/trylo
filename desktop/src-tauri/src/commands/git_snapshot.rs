@@ -592,7 +592,7 @@ mod tests {
     #[test]
     fn handles_unsafe_paths_and_empty_repo() {
         // No records at all -> empty (empty repository).
-        assert!(parse_status_v1_z(b"").is_empty());
+        assert_eq!(parse_status_v1_z(b""), Vec::<PorcelainEntry>::new());
         // Spaces and a quoted marker: porcelain v1 -z disables quoting, so a
         // path with a space is a single token; no panic.
         let raw = b"M  has space.rb\0";

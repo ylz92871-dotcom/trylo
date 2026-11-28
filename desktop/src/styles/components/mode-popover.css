@@ -1,5 +1,7 @@
-.mode-popover { position: absolute; bottom: calc(100% + 12px); left: 0; width: 260px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--bg); box-shadow: 0 10px 35px #00000015; padding: 6px; z-index: 40; }
-.mode-popover button { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; padding: 9px; border-radius: 6px; font-size: 13px; }
+.mode-popover { --popover-origin-y: 4px; position: absolute; bottom: calc(100% + 12px); left: 0; width: 260px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--bg); box-shadow: 0 10px 35px #00000015; padding: 6px; z-index: 40; transform-origin: bottom left; animation: trylo-popover-in var(--duration-popover-in) var(--ease-out) both; }
+.mode-popover[data-placement='below'] { --popover-origin-y: -4px; transform-origin: top left; }
+.mode-popover[data-motion-state='exiting'] { animation: trylo-popover-out var(--duration-popover-out) var(--ease-in) both; }
+.mode-popover button { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; padding: 9px; border-radius: 6px; font-size: 13px; transition: background var(--duration-micro) var(--ease-out); }
 .mode-popover button:hover, .mode-popover button:focus-visible { background: var(--bg-elevated); }
 .mode-popover button > span { flex: 1; }
 .mode-popover small { display: block; font-size: 11px; color: var(--fg-muted); margin-top: 3px; }
@@ -7,3 +9,45 @@
 .mode-popover__heading { display: block; padding: 5px 9px; font-size: 11px; color: var(--fg-muted); }
 
 .mode-popover--anchored { position:fixed; bottom:auto; overflow-y:auto; z-index:60; }
+
+:root[data-platform='macos'] .mode-popover {
+  border: 0;
+  border-radius: 12px;
+  padding: 6px;
+  background: var(--macos-popover-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: var(--macos-popover-shadow);
+}
+
+:root[data-platform='macos'] .mode-popover button {
+  border-radius: 6px;
+}
+
+:root[data-platform='macos'] .mode-popover button:hover,
+:root[data-platform='macos'] .mode-popover button:focus-visible {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
+:root[data-platform='macos'] .mode-popover__intents {
+  border-top-color: var(--macos-hairline);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-platform='macos'] .mode-popover {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mode-popover {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  :root[data-platform='macos'] .mode-popover {
+    border: 1px solid CanvasText;
+  }
+}

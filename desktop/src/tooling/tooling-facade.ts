@@ -17,6 +17,7 @@ import { ServiceRequestError } from '../services-host/services-client';
 import type {
   ComputerPreviewStartParams,
   ComputerPreviewResult,
+  MacosComputerPermission,
   ResolvedToolRuntime,
   ToolingHealthResult,
   ToolingInstallBrowserResult,
@@ -68,6 +69,7 @@ function profileFailureMessage(code: string): string {
 export interface ToolingFacadeOptions {
   /** Uses Desktop's existing ServiceManager; it owns startup and coalescing. */
   readonly ensureReady?: () => Promise<void>;
+  readonly macosComputerUse?: () => boolean | undefined;
 }
 
 async function waitForReady(ensureReady: ToolingFacadeOptions['ensureReady'], signal?: AbortSignal): Promise<void> {
@@ -114,6 +116,7 @@ export function createToolingFacade(client: ServicesClient, readiness: ToolingFa
       request: ResolveToolRuntimeRequest,
       options?: { readonly required?: boolean; readonly signal?: AbortSignal },
     ): Promise<ResolvedToolRuntime | null> {
+      const macosComputerUse = readiness.macosComputerUse?.();
       try {
         await waitForReady(readiness.ensureReady, options?.signal);
         options?.signal?.throwIfAborted();
@@ -125,6 +128,7 @@ export function createToolingFacade(client: ServicesClient, readiness: ToolingFa
           ...(request.computerUse !== undefined
             ? { computerUse: request.computerUse }
             : {}),
+          ...(macosComputerUse === undefined ? {} : { macosComputerUse }),
           projectKey: request.projectKey,
           projectRoot: request.projectRoot,
           conversationId: request.conversationId,
@@ -233,6 +237,13 @@ export function createToolingFacade(client: ServicesClient, readiness: ToolingFa
     async viewportStop(): Promise<ViewportStopResult> {
       return client.request('tooling.viewportStop');
     },
+
+    async macosComputerPermissions(request?: MacosComputerPermission) {
+      await waitForReady(readiness.ensureReady);
+      return client.request('tooling.macosComputerPermissions', request ? { request } : {});
+    },
+
+    prepareComputerPreview: () => waitForReady(readiness.ensureReady),
 
     async computerPreviewStart(params: ComputerPreviewStartParams): Promise<ComputerPreviewResult> {
       return client.request('tooling.computerPreviewStart', params);

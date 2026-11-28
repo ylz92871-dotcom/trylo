@@ -1,6 +1,6 @@
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
-import { hostProcessEnvironment } from "./executable.js";
+import { hostProcessEnvironment, hostShellEnvironment, isExecutableFile } from "./executable.js";
 
 /**
  * Turning a program name into the file that will actually be started.
@@ -94,7 +94,7 @@ function isRegularFile(candidate: string): boolean {
  * not this function's decision to make, but the sidecar's error for it would be
  * about its own environment, which is a different and less useful fact.
  */
-export function resolveExecutablePath(executable: string): ResolvedExecutable {
+export function resolveExecutablePath(executable: string, cwd?: string): ResolvedExecutable {
   if (executable.length === 0) {
     return {
       ok: false,
@@ -103,9 +103,10 @@ export function resolveExecutablePath(executable: string): ResolvedExecutable {
     };
   }
 
-  const hasDirectoryPart = executable.includes("/") || executable.includes("\\");
+  const windows = hostShellEnvironment().platform === "win32";
+  const hasDirectoryPart = executable.includes("/") || (windows && executable.includes("\\"));
   if (hasDirectoryPart || path.isAbsolute(executable)) {
-    const absolute = path.resolve(executable);
+    const absolute = cwd === undefined ? path.resolve(executable) : path.resolve(cwd, executable);
     if (!existsSync(absolute)) {
       return {
         ok: false,
@@ -122,12 +123,16 @@ export function resolveExecutablePath(executable: string): ResolvedExecutable {
       };
     }
 
+    if (!windows && !isExecutableFile(absolute)) {
+      return { ok: false, code: "executable_not_a_file", message: `${executable} is not executable` };
+    }
+
     const extension = path.extname(absolute).toLowerCase();
 
     return {
       ok: true,
       absolutePath: absolute,
-      needsShell: SCRIPT_EXTENSIONS.has(extension),
+      needsShell: windows && SCRIPT_EXTENSIONS.has(extension),
     };
   }
 
@@ -135,12 +140,12 @@ export function resolveExecutablePath(executable: string): ResolvedExecutable {
   // A name that already carries an extension is not given another one. Adding
   // `.EXE` to `tool.exe` would search for a program nobody asked for.
   const candidates: readonly string[] =
-    extension.length > 0 ? [executable] : [executable, ...pathExtensions().map((ext) => executable + ext)];
+    !windows || extension.length > 0 ? [executable] : [executable, ...pathExtensions().map((ext) => executable + ext)];
 
   for (const directory of searchPath()) {
     for (const candidate of candidates) {
-      const full = path.join(directory, candidate);
-      if (!isRegularFile(full)) {
+      const full = cwd === undefined ? path.resolve(directory, candidate) : path.resolve(cwd, directory, candidate);
+      if (!(windows ? isRegularFile(full) : isExecutableFile(full))) {
         continue;
       }
 
@@ -149,7 +154,7 @@ export function resolveExecutablePath(executable: string): ResolvedExecutable {
       return {
         ok: true,
         absolutePath: full,
-        needsShell: SCRIPT_EXTENSIONS.has(candidateExtension),
+        needsShell: windows && SCRIPT_EXTENSIONS.has(candidateExtension),
       };
     }
   }

@@ -1,0 +1,208 @@
+/* Trylo Desktop — shared one-shot motion primitives & theme cross-fade.
+ *
+ * Rules:
+ *   - Strictly one-shot state transitions only (no infinite loops here;
+ *     loop animations are governed by motion-policy.ts & tokens.css).
+ *   - Compositor-friendly opacity + transform transitions only.
+ *   - Every animated surface respects `prefers-reduced-motion: reduce`.
+ */
+
+@keyframes trylo-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes trylo-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes trylo-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes trylo-modal-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+}
+
+@keyframes trylo-spotlight-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes trylo-spotlight-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.99);
+  }
+}
+
+@keyframes trylo-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--popover-origin-y, -4px)) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes trylo-popover-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(var(--popover-origin-y, -4px)) scale(0.98);
+  }
+}
+
+@keyframes trylo-view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Exiting layers never capture pointer events during unmount frames. */
+[data-motion-state='exiting'] {
+  pointer-events: none;
+}
+
+/* Tactile macOS-native press feedback on primary chrome buttons. */
+:is(
+  .top-bar__icon,
+  .top-bar__rail-toggle,
+  .left-rail__collapse,
+  .left-rail__new,
+  .right-rail__close,
+  .input-bar__send,
+  .input-bar__stop,
+  .settings-modal__btn,
+  .remote-pairing-modal__btn
+) {
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out),
+    transform var(--duration-micro) var(--ease-out);
+}
+
+:is(
+  .top-bar__icon,
+  .top-bar__rail-toggle,
+  .left-rail__collapse,
+  .right-rail__close,
+  .input-bar__send,
+  .input-bar__stop
+):active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+:is(
+  .left-rail__new,
+  .settings-modal__btn,
+  .remote-pairing-modal__btn
+):active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Scoped Light <-> Dark theme cross-fade (applied transiently for 180ms).
+ * Never targets `*` so virtualized message lists and code views stay 60fps. */
+:root[data-theme-transition='true'] :is(
+  .app-shell,
+  .app-shell__main,
+  .left-rail,
+  .right-rail,
+  .top-bar,
+  .settings-modal,
+  .settings-screen,
+  .settings-screen__rail,
+  .settings-screen__main,
+  .input-bar
+) {
+  transition:
+    background-color 180ms var(--ease-out),
+    background 180ms var(--ease-out),
+    color 180ms var(--ease-out),
+    border-color 180ms var(--ease-out);
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-motion-state],
+  [data-motion-state] > * {
+    animation: none;
+    transition: none;
+  }
+
+  :is(
+    .top-bar__icon,
+    .top-bar__rail-toggle,
+    .left-rail__collapse,
+    .left-rail__new,
+    .right-rail__close,
+    .input-bar__send,
+    .input-bar__stop,
+    .settings-modal__btn,
+    .remote-pairing-modal__btn
+  ):active:not(:disabled) {
+    transform: none;
+  }
+
+  :root[data-theme-transition='true'] :is(
+    .app-shell,
+    .app-shell__main,
+    .left-rail,
+    .right-rail,
+    .top-bar,
+    .settings-modal,
+    .settings-screen,
+    .settings-screen__rail,
+    .settings-screen__main,
+    .input-bar
+  ) {
+    transition: none;
+  }
+}

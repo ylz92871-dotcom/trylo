@@ -1,4 +1,5 @@
 import type { ResolvedToolRuntime, ToolUnavailableCapability } from '../services-host/methods';
+import { MACOS_COMPUTER_ID, MACOS_COMPUTER_SERVER } from '../../../desktop-services/src/tooling/macos-computer-contract.mjs';
 
 export interface BuiltinToolRunContext {
   readonly runtime: ResolvedToolRuntime | null;
@@ -12,12 +13,21 @@ const DISCOVERY = 'mcp_search_tools({}) 列当前状态；mcp_search_tools({"que
 const BUILTINS = [
   { id: 'office', label: 'OfficeCLI', packages: ['officecli'], servers: ['trylo-office'] },
   { id: 'browser', label: '浏览器', packages: ['playwright', 'chrome-devtools'], servers: ['trylo-browser', 'trylo-chrome'] },
-  { id: 'windows', label: '电脑控制', packages: ['windows-mcp'], servers: ['trylo-windows'] },
+  { id: 'desktop', label: '电脑控制', packages: ['windows-mcp', MACOS_COMPUTER_ID], servers: ['trylo-windows', MACOS_COMPUTER_SERVER] },
 ] as const;
 
-function usage(id: typeof BUILTINS[number]['id'], chrome: boolean): string {
+function usage(id: typeof BUILTINS[number]['id'], chrome: boolean, macos: boolean): string {
   if (id === 'office') return 'OfficeCLI：只有 officecli 这一个 MCP 入口，command 按实际 schema 使用 string 或 argv array；load_skill、help、dump 都放在 command 内（例如 ["load_skill","pptx"]），不是独立工具，也不要虚构按 verb 拆开的字段。';
-  if (id === 'windows') return '电脑控制：先用发现到的 Snapshot/Screenshot 读取状态，再按实际动作 schema 操作；位置、坐标空间和缩放来自最新观测，不猜单位、通用 action 或参数字段。';
+  if (id === 'desktop') {
+    return macos
+      ? [
+          'macOS 电脑控制：网页任务优先使用本轮浏览器工具的后台会话（可用时）。需要当前桌面浏览器的登录状态或原生应用控件时，优先使用下列后台操作。',
+          '先调用 status 检查系统授权，再用 list_apps 查找已运行应用。需要启动时用 open_app（activate=false）。用 list_windows 取得窗口 ID 和所属 PID，最小化窗口可通过 list_ax_windows 查找控件。用 ax_find、ax_read_text、inspect、screenshot 或 read_window_text 在后台观察。',
+          '优先用 ax_set_value 直接填写控件，或按 ax_find 返回的 path 和支持的动作调用 ax_perform。键盘和滚动使用后台 press_key / hotkey / type_text / scroll。单次坐标点击使用控件提供的 AXPress 或 AXShowMenu，坐标取自最新观测的全局屏幕点坐标。',
+          '先验证后台操作的结果，事件已发送不代表界面已变化。后台失败时，先尝试可用的语义控件或浏览器工具。AXRaise 会将窗口置前；只有确认这一步需要前台时，才使用 activate_app 或显式的前台输入。普通网页导航、搜索、填写和点击一律走可用的后台浏览器工具，仅在任务需要这个桌面浏览器且验证后台操作不足时，才可显式指定 browserForeground=true，并遵循当前任务的操作审批。',
+        ].join('\n')
+      : '电脑控制：先用发现到的 Snapshot/Screenshot 读取状态，再按实际动作 schema 操作；位置、坐标空间和缩放来自最新观测，不猜单位、通用 action 或参数字段。';
+  }
   const pages = chrome ? 'Chrome DevTools 先 list_pages 或读取 new_page 返回目录取得真实数值 pageId，页面工具按 schema 填该 id，不猜 0/active；' : 'Playwright 使用本 server 返回的 browser_* 工具及其 schema；';
   return `浏览器：${pages}工作区 file:/// HTML（含 .trylo/out）由 Trylo 转为受控 HTTP 预览，不是一律禁用 file。只需看图可用 inline 返回；落盘按当前 schema 使用 filePath/filename（Chrome filePath 支持相对或绝对），写入仍受当前权限约束。`;
 }
@@ -81,7 +91,7 @@ export function toolAvailabilitySystemPrompt(
   const guidance: string[] = [];
   let unready = false;
   for (const builtin of BUILTINS) {
-    if (builtin.id === 'windows' && context.computerUse === false) {
+    if (builtin.id === 'desktop' && context.computerUse === false) {
       lines.push(`${builtin.label}：本轮明确未选用（computerUse=false），不推断是谁关闭。`);
       continue;
     }
@@ -103,7 +113,8 @@ export function toolAvailabilitySystemPrompt(
       continue;
     }
     lines.push(`${builtin.label}：本轮已配置（${configured.map(server => `server=${server}`).join('，')}），按需发现连接。`);
-    guidance.push(usage(builtin.id, configured.includes('trylo-chrome') || runtime.packageHealth.some(item => item.id === 'chrome-devtools' && configured.includes(item.serverName))));
+    const chrome = configured.includes('trylo-chrome') || runtime.packageHealth.some(item => item.id === 'chrome-devtools' && configured.includes(item.serverName));
+    guidance.push(usage(builtin.id, chrome, configured.includes(MACOS_COMPUTER_SERVER)));
   }
   const optionalFailures = runtime.unavailableCapabilities.filter(item => item.type === 'package'
     && !BUILTINS.some(builtin => builtin.packages.some(id => id === item.id)));

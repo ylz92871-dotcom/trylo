@@ -17,6 +17,7 @@ import {
   createToolRiskClassifier,
   inputDigestOf,
   parseMcpToolName,
+  type ToolClassifyRequest,
 } from './tool-risk-classifier';
 import { OFFICECLI_TOOL_NAME } from './classifiers/officecli-classifier';
 import {
@@ -131,6 +132,7 @@ describe('routing (§6.2)', () => {
       'trylo-office',
       'trylo-browser',
       'trylo-windows',
+      'trylo-macos',
       'trylo-chrome',
       'trylo-preview',
       'trylo-software',
@@ -141,6 +143,40 @@ describe('routing (§6.2)', () => {
       'trylo-freecad',
       'trylo-blender',
     ]);
+  });
+
+  it('checks macOS status and approves only the shipped foreground computer tools', () => {
+    const router = createToolRiskClassifier();
+    const classify = (name: string, permissionLevel: ToolClassifyRequest['permissionLevel'], input = {}) => router.classify(request({
+      toolName: `mcp__trylo-macos__${name}`, managedPackageIds: ['macos-computer'], permissionLevel, input,
+    }));
+    for (const level of ['read_only', 'workspace_write', 'unrestricted'] as const) {
+      expect(classify('status', level).behavior).toBe('auto_allow');
+    }
+    const tools = [
+      ['inspect', '观察 macOS 前台窗口'],
+      ['click', '点击 macOS 前台应用'], ['press_key', '向 macOS 前台应用发送按键'],
+      ['type_text', '向 macOS 前台应用输入文字'],
+    ] as const;
+    for (const [name, title] of tools) {
+      expect(classify(name, 'read_only').behavior).toBe('deny');
+      for (const level of ['workspace_write', 'unrestricted'] as const) {
+        const decision = classify(name, level, { expectedPid: 42, text: 'private input' });
+        expect(decision).toMatchObject({ behavior: 'prompt', preview: { title, target: 'PID 42' } });
+        expect(JSON.stringify(decision)).not.toContain('private input');
+        expect(JSON.stringify(decision)).not.toContain('后台');
+      }
+    }
+    expect(classify('screenshot', 'read_only').behavior).toBe('deny');
+    for (const level of ['workspace_write', 'unrestricted'] as const) {
+      expect(classify('screenshot', level, { displayId: 7 })).toMatchObject({
+        behavior: 'prompt', preview: { title: '截取 macOS 屏幕' },
+      });
+    }
+    for (const name of ['ax_find', 'ax_read_text', 'ax_perform', 'ax_set_value', 'list_windows',
+      'read_window_text', 'open_app', 'activate_app', 'hotkey', 'scroll', 'shell']) {
+      expect(classify(name, 'unrestricted')).toMatchObject({ behavior: 'deny', reasonCode: 'unknown_tool' });
+    }
   });
 });
 

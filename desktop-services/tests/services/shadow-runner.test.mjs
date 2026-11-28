@@ -63,7 +63,7 @@ test('runs the CLI with the learning MCP args and returns the collected answer',
   const result = await runner.run('review this task');
   assert.equal(result.answer, '{"candidates":[]}');
 
-  assert.equal(calls[0].command, 'node'); // .js CLI is spawned through node
+  assert.equal(calls[0].command, process.execPath);
   assert.equal(calls[0].args[0], CLI.cliPath);
   assert.ok(calls[0].args.includes('--mcp-config'));
   assert.notEqual(calls[0].opts.cwd, 'd:/repo');

@@ -43,7 +43,7 @@ export async function resolveNpmLearningLock(input: { readonly scope: string; re
       "--lockfile-version=3", "--install-strategy=hoisted", "--fetch-retries=0", `--registry=${registry.url}`,
       `--userconfig=${path.join(directory, "user.npmrc")}`, `--globalconfig=${path.join(directory, "global.npmrc")}`,
       `--cache=${path.join(directory, "cache")}`], cwd: directory, signal: input.signal,
-      env: { HOME: directory, USERPROFILE: directory, TEMP: directory, TMP: directory,
+      env: { HOME: directory, USERPROFILE: directory, TEMP: directory, TMP: directory, TMPDIR: directory,
         ...(host.systemRoot === undefined ? {} : { SystemRoot: host.systemRoot }) } });
     if (!execution.ok) {
       cleanup = execution.cleanup;
@@ -90,12 +90,13 @@ export async function resolveNpmLearningLock(input: { readonly scope: string; re
 
 export async function locateNpmCli(nodeExecutable: string, searchPath: string): Promise<string | undefined> {
   for (const directory of new Set([path.dirname(nodeExecutable), ...searchPath.split(path.delimiter).filter(Boolean)])) {
-    const candidate = path.resolve(directory, "node_modules/npm/bin/npm-cli.js");
-    try {
-      await access(candidate);
-      return candidate;
+    for (const prefix of [directory, path.resolve(directory, "../lib")]) {
+      const candidate = path.join(prefix, "node_modules/npm/bin/npm-cli.js");
+      try {
+        await access(candidate);
+        return candidate;
+      } catch { /* This installation does not contain npm; inspect the next explicit location. */ }
     }
-    catch { /* This installation does not contain npm; inspect the next explicit PATH entry. */ }
   }
   return undefined;
 }

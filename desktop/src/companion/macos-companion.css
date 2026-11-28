@@ -1,0 +1,27 @@
+:root { color-scheme: light dark; }
+body {
+  margin: 0;
+  background: Canvas;
+  color: CanvasText;
+  font: 12px -apple-system, BlinkMacSystemFont, sans-serif;
+}
+.companion-window {
+  box-sizing: border-box;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 86px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, CanvasText 20%, Canvas);
+}
+.companion-window__status { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.companion-window button {
+  color: ButtonText;
+  background: ButtonFace;
+  border: 1px solid color-mix(in srgb, ButtonText 30%, ButtonFace);
+  border-radius: 6px;
+  padding: 7px 8px;
+  cursor: pointer;
+}
+.companion-window button:hover { background: color-mix(in srgb, ButtonFace 90%, ButtonText); }
+.companion-window button:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }

@@ -1,6 +1,7 @@
 import { Channel, invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { isTauri } from './tauri-detect'
+import type { ComputerPreviewStatusEvent } from '../services-host/methods'
 import type { PreviewAction, PreviewFrameGeometry } from '../tooling/tool-preview-state'
 
 export interface ComputerPreviewSnapshot {
@@ -11,7 +12,7 @@ export interface ComputerPreviewSnapshot {
   readonly screenshotAt?: number
   readonly actions?: readonly PreviewAction[]
   readonly action?: PreviewAction
-  readonly streamState?: 'starting' | 'running' | 'stopped' | 'error'
+  readonly streamState?: ComputerPreviewStatusEvent['state']
   readonly streamDetail?: string
   readonly frameGeometry?: PreviewFrameGeometry
   readonly updatedAt?: number

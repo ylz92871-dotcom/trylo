@@ -15,17 +15,17 @@ desktop/
     src/preview/             格式预览及所属的浏览器、媒体、Office 后端
     src/platform/
       windows/               Windows 启动标志、文件打开、文件夹选择
-      macos/                 Mac 文件打开；文件夹选择待接入
+      macos/                 Mac 文件打开与后台 PATH；主界面选择沿用 Tauri dialog 插件
       linux/                 Linux 文件打开；文件夹选择待接入
     tauri.conf.json          公共配置
     tauri.windows.conf.json  Windows 资源与安装包
-    tauri.macos.conf.json    Mac 打包目标，资源实现待接入
+    tauri.macos.conf.json    Mac 窗口、资源与 APP/DMG 目标
     tauri.linux.conf.json    Linux 打包目标，资源实现待接入
   scripts/build/
     prepare.mjs              按构建机器选择资源准备入口
     shared/                  CLI、npm、工具清单导出、预览引擎与校验
     windows/                 Windows 工具、桌宠、运行权限及打包
-    macos/                   Mac 资源准备接入口，目前报告待接入
+    macos/                   Apple Silicon 资源准备、Node、Swift 工具与打包
     linux/                   Linux 资源准备接入口，目前报告待接入
 new trylo cli/
   src/internal/
@@ -46,7 +46,7 @@ desktop-services/
       computer-control/
         platform.mjs         选择电脑控制包
         windows/             Windows 权限探测与电脑预览
-        macos/               Mac 包接入口，原生工具待接入
+        macos/               Mac 电脑控制包选择；Swift 工具由服务管理
         linux/               Linux 包接入口，原生工具待接入
   toolchain/                 工具源码与原生辅助程序
 mobile-app/                  手机端
@@ -90,7 +90,9 @@ Windows stdin 辅助模块的受保护缓存跟随 sandbox/windows 布局，缓�
 
 资源布局遵循宿主 node_runtime.rs 和现有 CLI staging 的合同。修改布局时同时核对生成方、查找方和校验方。版本与摘要由组件锁文件、工具 manifest 持有。
 
-当前公库只完成 Windows 资源准备接线。Mac/Linux 准备入口明确失败并给出开发指南，避免生成错误平台的安装包。已有 Beta 安装包沿用原发布来源和验证范围。
+Windows 资源准备沿用原有入口；Mac arm64 经 build/macos/prepare.mjs 事务式准备固定 Node、CLI、Service Host、Swift 电脑工具和预览引擎。共享内置工具清单与摘要校验归 build/shared，Mac 不依赖 Windows 构建实现。Linux 准备入口仍明确失败并给出开发指南。已有 Beta 安装包沿用原发布来源和验证范围。
+
+platform/shell.rs 持有跨平台 IPC 外观桥，Mac 原生菜单、Dock 与窗口事件实现在其目标条件模块；非 Mac 保留兼容命令。菜单事件经 host-adapter 回到同一个 AppShell 操作入口，不另建会话状态。Mac PATH 补齐归 platform/macos/process.rs。Swift 电脑工具的受控源文件清单在 toolchain/computer-control/macos-mcp/SOURCES.json，编译与源码完整性检查共同读取。
 
 ## 双线同步
 
@@ -105,3 +107,5 @@ Windows stdin 辅助模块的受保护缓存跟随 sandbox/windows 布局，缓�
 公共逻辑使用已有软件测试，各系统原生操作在对应环境验证。源码检查、TypeScript/Vite 构建、CLI 检查、服务测试和 Rust 检查分别留证。安装包额外验证随包 CLI、Service Host、依赖和启动。
 
 [文件迁移表](platform-migration.json) 记录新旧路径。[本轮验证记录](../../new%20trylo%20cli/docs/02-%E5%88%86%E6%9C%9F%E5%B7%A5%E7%A8%8B%E4%BA%A7%E5%87%BA/P00-%E5%B7%A5%E7%A8%8B%E5%9C%B0%E5%9F%BA%E4%B8%8E%E8%B4%A8%E9%87%8F%E9%97%A8%E7%A6%81/2026-11-27-%E9%AA%8C%E6%94%B6%E6%91%98%E8%A6%81-%E8%B7%A8%E5%B9%B3%E5%8F%B0%E6%9E%B6%E6%9E%84%E6%95%B4%E7%90%86.md) 分开列出通过、原有失败与未验证项。原始证据位于 _workspace/tasks/platform-foundation-20261127/。
+
+Mac 主界面使用已有 Tauri dialog 插件选择文件夹。未被 Mac IPC 注册消费的临时 pick_folder 占位文件已移除，Windows legacy pick_folder 命令保持原有注册与实现。成果定位由 commands 验证路径后交给 platform/*/open.rs 的 reveal_in_folder，Mac 使用 Finder 选中文件，其他系统沿用打开父目录的行为。

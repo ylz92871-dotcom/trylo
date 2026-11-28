@@ -12,19 +12,23 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- Approved v9 composition over the real application, before React loads. -->
+    <!-- Approved Cinematic 3D Levitation + Procedural Optical Dive over the real application, before React loads. -->
     <div id="trylo-startup" class="startup-screen" data-phase="loading">
       <div id="trylo-startup-veil" class="startup-screen__veil" aria-hidden="true"></div>
-      <div id="trylo-startup-position" class="startup-screen__position" aria-hidden="true">
-        <div id="trylo-startup-turn" class="startup-screen__turn">
-          <canvas id="trylo-startup-material" width="800" height="800"></canvas>
-          <img id="trylo-startup-fallback" class="startup-screen__identity" src="/startup/approved-facet.png" width="400" height="400" fetchpriority="high" decoding="sync" alt="" />
+      <canvas id="trylo-startup-optics" class="startup-screen__optics" aria-hidden="true"></canvas>
+      <div id="trylo-startup-stage" class="startup-screen__stage" aria-hidden="true">
+        <div id="trylo-startup-shadow" class="startup-screen__shadow"></div>
+        <div id="trylo-startup-position" class="startup-screen__position">
+          <div id="trylo-startup-turn" class="startup-screen__turn">
+            <canvas id="trylo-startup-material" width="800" height="800"></canvas>
+            <img id="trylo-startup-fallback" class="startup-screen__identity" src="/startup/approved-facet.png" width="400" height="400" fetchpriority="high" decoding="sync" alt="" />
+          </div>
         </div>
       </div>
-      <div id="trylo-startup-signature" class="startup-screen__signature" role="img" aria-label="Try your dream. Try your best.">
+      <div id="trylo-startup-signature" class="startup-screen__signature" role="img" aria-label="Try your learning, Try your own.">
         <div class="startup-screen__lockup" aria-hidden="true">
-          <p><span class="startup-screen__clip"><span class="startup-screen__word startup-screen__lead" id="trylo-dream-lead">Try your</span></span><span class="startup-screen__clip"><span class="startup-screen__word startup-screen__key" id="trylo-dream-key">dream.</span></span></p>
-          <p><span class="startup-screen__clip"><span class="startup-screen__word startup-screen__lead" id="trylo-best-lead">Try your</span></span><span class="startup-screen__clip"><span class="startup-screen__word startup-screen__key" id="trylo-best-key">best.</span></span></p>
+          <p><span class="startup-screen__clip"><span class="startup-screen__word startup-screen__lead" id="trylo-learning-lead">Try your</span></span><span class="startup-screen__clip"><span class="startup-screen__word startup-screen__key" id="trylo-learning-key">learning,</span></span></p>
+          <p><span class="startup-screen__clip"><span class="startup-screen__word startup-screen__lead" id="trylo-own-lead">Try your</span></span><span class="startup-screen__clip"><span class="startup-screen__word startup-screen__key" id="trylo-own-key">own.</span></span></p>
         </div>
       </div>
       <div id="trylo-startup-tile" class="startup-screen__tile" aria-hidden="true"></div>
@@ -39,6 +43,7 @@
         </div>
     </div>
     <script src="/startup/material.js"></script>
+    <script src="/startup/optics.js"></script>
     <script src="/startup/sequence.js"></script>
     <script src="/startup.js"></script>
     <script type="module" src="/src/main.tsx"></script>

@@ -10,7 +10,13 @@ const desktop = path.resolve(here, '../../../..');
 /** Reject incomplete supply before NSIS/portable packaging. Runtime codec
  * hashes alone cannot establish the matching source/notice distribution. */
 export async function verifyMediaRelease() {
-  const lock = JSON.parse(await readFile(path.join(here, 'media-sources.lock.json'), 'utf8'));
+  const sourceLock = JSON.parse(await readFile(path.join(here, 'media-sources.lock.json'), 'utf8'));
+  const lock = mediaEngineLock.platform === 'darwin-arm64' ? {
+    ...sourceLock,
+    files: sourceLock.files.filter(file => ['ffmpeg-source.tar.gz', 'hls-js-source.tar.gz'].includes(file.name)),
+    notices: mediaEngineLock.files.filter(file => ['LICENSE.txt', 'NOTICE'].includes(file.path))
+      .map(file => ({ path: `preview/media/${file.path}`, bytes: file.size, sha256: file.sha256 })),
+  } : sourceLock;
   const pkg = JSON.parse(await readFile(path.join(desktop, 'package.json'), 'utf8'));
   if (lock.schemaVersion !== 1 || lock.engineVersion !== mediaEngineLock.version || lock.ffmpegCommit !== mediaEngineLock.ffmpegCommit || lock.builderCommit !== mediaEngineLock.builderCommit || pkg.dependencies['hls.js'] !== mediaEngineLock.browser.version) throw new Error('Media engine/browser/source version pins do not match');
   if (lock.complete !== true || !lock.files?.length || !lock.notices?.length) throw new Error(`Media source/notice supply is not complete; do not bundle this engine. ${lock.pending ?? ''}`);
@@ -33,7 +39,7 @@ export async function verifyMediaRelease() {
     if (!original || original.sha256 !== file.sha256 || (await stat(target)).size !== file.bytes || await mediaFileDigest(target) !== file.sha256) throw new Error(`Media source mismatch: ${file.name}`);
   }
   const notices = [];
-  const resources = path.join(desktop, 'src-tauri/resources');
+  const resources = path.resolve(process.env.TRYLO_RESOURCE_DIR ?? path.join(desktop, 'src-tauri/resources'));
   for (const file of lock.notices) {
     if (!file.path.startsWith('preview/media/')) throw new Error('Media notice is outside its resource owner');
     const target = await within(resources, file.path);

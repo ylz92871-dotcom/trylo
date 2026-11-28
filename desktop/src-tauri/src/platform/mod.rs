@@ -12,7 +12,7 @@ mod windows;
 #[cfg(target_os = "linux")]
 pub(crate) use linux::{open, pick_folder};
 #[cfg(target_os = "macos")]
-pub(crate) use macos::{open, pick_folder};
+pub(crate) use macos::open;
 #[cfg(target_os = "windows")]
 pub(crate) use windows::{open, pick_folder};
 
@@ -21,5 +21,9 @@ pub(crate) fn background_command(program: impl AsRef<OsStr>) -> Command {
     let mut command = Command::new(program);
     #[cfg(windows)]
     windows::process::configure_background(&mut command);
+    #[cfg(target_os = "macos")]
+    macos::process::configure_background(&mut command);
     command
 }
+
+pub(crate) mod shell;

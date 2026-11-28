@@ -1,26 +1,172 @@
-/* Trylo Desktop — Terminal styles. See ARCHITECTURE.md §3 Phase 1
-   Week 2. */
+/* Trylo Desktop — Integrated Terminal styles.
+ *
+ * Follows Trylo Light/Dark palette (`var(--bg-panel)`) and macOS
+ * hairline divider conventions with zero-lag drag resizing. */
 
 .terminal-panel {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  background: #0d1117;
+  flex: 0 0 auto;
+  min-height: 140px;
+  max-height: 60vh;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
   position: relative;
+  animation: trylo-view-enter var(--duration-panel) var(--ease-panel) both;
+}
+
+:root[data-theme='dark'] .terminal-panel {
+  background: var(--bg-panel);
+}
+
+.terminal-panel[data-dragging='true'] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.terminal-resizer {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: row-resize;
+  z-index: 4;
+}
+
+.terminal-resizer::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  width: 32px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.terminal-resizer:hover::after,
+.terminal-resizer:focus-visible::after,
+.terminal-panel[data-dragging='true'] .terminal-resizer::after {
+  opacity: 1;
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-panel) 92%, var(--fg) 4%);
+  color: var(--fg-muted);
+  font-size: 12px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+:root[data-theme='dark'] .terminal-header {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.terminal-header__meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.terminal-header__cwd {
+  color: var(--fg);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-header__shell {
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--fg-muted);
+}
+
+.terminal-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.terminal-header__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+
+.terminal-header__btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  color: var(--fg);
+}
+
+.terminal-header__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.terminal-header__font-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
 }
 
 .terminal-container {
   flex: 1 1 auto;
   width: 100%;
-  height: 100%;
-  padding: 0.25rem;
+  min-height: 0;
+  padding: 4px 8px 6px;
   overflow: hidden;
 }
 
 .terminal-error {
-  padding: 0.25rem 0.5rem;
-  background: rgba(217, 102, 102, 0.15);
-  color: #d96666;
-  font-size: 0.75rem;
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  padding: 4px 12px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+:root[data-platform='macos'] .terminal-header button:focus-visible,
+:root[data-platform='macos'] .terminal-resizer:focus-visible {
+  outline: none;
+  box-shadow: var(--macos-focus-halo);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-panel {
+    animation: none;
+  }
+
+  .terminal-resizer::after,
+  .terminal-header__btn {
+    transition: none;
+  }
 }

@@ -6,7 +6,7 @@
  */
 
 .team-composer {
-  max-width: 640px;
+  max-width: var(--conversation-width, 760px);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -383,3 +383,17 @@
 .team-composer__member-row { min-height:44px; border-radius:7px; }
 .team-composer__member-name { padding:8px 12px; }
 .team-composer__body { margin-top:20px; }
+
+@container (min-width: 680px) {
+  .team-composer__body {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+  }
+
+  .team-composer__inspector {
+    border-left: 1px solid var(--border);
+    padding-left: 24px;
+  }
+}

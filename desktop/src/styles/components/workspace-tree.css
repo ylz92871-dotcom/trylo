@@ -1,14 +1,14 @@
 /* The tree owns row presentation; filesystem and preview routing stay upstream. */
 .workspace-tree {
-  --tree-hover:#f4f5f6; --tree-selected:#e9edf1; --tree-guide:#e7eaed;
-  --tree-icon:#92989e; --tree-code:#6685a4; --tree-config:#91856f;
-  --tree-media:#9280a0; --tree-sheet:#718d80; --tree-document:#8592a1;
+  --tree-hover: var(--bg-elevated); --tree-selected: var(--rail-selected-bg); --tree-guide: var(--border);
+  --tree-icon: var(--ink-mute); --tree-code: var(--link); --tree-config: var(--brand);
+  --tree-media: #8a6ca8; --tree-sheet: var(--success); --tree-document: var(--fg-muted);
   min-width:0; padding:0 6px 12px; color:var(--fg); font:13px/20px var(--font-body);
 }
 [data-theme="dark"] .workspace-tree {
-  --tree-hover:#282a2d; --tree-selected:#32363b; --tree-guide:#34373b;
-  --tree-icon:#858c95; --tree-code:#91aac5; --tree-config:#ada18a;
-  --tree-media:#b4a1c2; --tree-sheet:#93b0a1; --tree-document:#9aa9ba;
+  --tree-hover: var(--bg-elevated); --tree-selected: var(--rail-selected-bg); --tree-guide: var(--border);
+  --tree-icon: var(--ink-mute); --tree-code: var(--link); --tree-config: var(--brand);
+  --tree-media: #b49cd0; --tree-sheet: var(--success); --tree-document: var(--fg-muted);
 }
 .workspace-tree__root { position:sticky; top:0; z-index:1; display:flex; align-items:center; gap:8px; height:42px; padding:0 6px; background:var(--bg); }
 .workspace-tree__root-toggle { display:flex; align-items:center; flex:1; min-width:0; gap:6px; height:28px; border:0; border-radius:5px; padding:0 2px; background:transparent; color:var(--fg); font:500 12px/20px var(--font-body); text-align:left; cursor:pointer; }
@@ -47,11 +47,14 @@
 .workspace-tree__error button { display:inline-flex; align-items:center; gap:5px; padding:3px 7px; border:1px solid var(--border); border-radius:5px; background:var(--bg); color:var(--fg); font:inherit; cursor:pointer; }
 .workspace-tree__spinner { animation:workspace-tree-spin 1s linear infinite; }
 @keyframes workspace-tree-spin { to { transform:rotate(360deg); } }
-#result-files { overflow-x:hidden; scrollbar-gutter:stable; scrollbar-color:transparent transparent; }
-#result-files:hover,#result-files:focus-within { scrollbar-color:var(--border-strong) transparent; }
-#result-files::-webkit-scrollbar { width:6px; height:6px; }
-#result-files::-webkit-scrollbar-track { background:transparent; }
-#result-files::-webkit-scrollbar-thumb { background:transparent; border:0; border-radius:8px; }
-#result-files:hover::-webkit-scrollbar-thumb,#result-files:focus-within::-webkit-scrollbar-thumb { background:var(--border-strong); }
-#result-files::-webkit-scrollbar-button { display:none; width:0; height:0; }
+#result-files { overflow-x:hidden; }
+:root:not([data-platform='macos']) #result-files { scrollbar-gutter:stable; scrollbar-color:transparent transparent; }
+:root:not([data-platform='macos']) #result-files:hover,
+:root:not([data-platform='macos']) #result-files:focus-within { scrollbar-color:var(--border-strong) transparent; }
+:root:not([data-platform='macos']) #result-files::-webkit-scrollbar { width:6px; height:6px; }
+:root:not([data-platform='macos']) #result-files::-webkit-scrollbar-track { background:transparent; }
+:root:not([data-platform='macos']) #result-files::-webkit-scrollbar-thumb { background:transparent; border:0; border-radius:8px; }
+:root:not([data-platform='macos']) #result-files:hover::-webkit-scrollbar-thumb,
+:root:not([data-platform='macos']) #result-files:focus-within::-webkit-scrollbar-thumb { background:var(--border-strong); }
+:root:not([data-platform='macos']) #result-files::-webkit-scrollbar-button { display:none; width:0; height:0; }
 @media(prefers-reduced-motion:reduce) { .workspace-tree__spinner { animation:none; }.workspace-tree__root-chev,.tree-node__chevron > svg { transition:none; } }

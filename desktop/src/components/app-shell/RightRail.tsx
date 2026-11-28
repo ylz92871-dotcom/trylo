@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 import { Maximize2, X } from 'lucide-react';
 import type { FilePath } from '../../host-adapter/types';
+import { useLiquidIndicator } from '../../utils/use-liquid-indicator';
 import { WorkspaceTree } from './WorkspaceTree';
 
 export interface RightRailReview {
@@ -44,9 +45,17 @@ export function RightRail(props: RightRailProps): ReactElement | null {
   const previousPreview = useRef(props.previewKey);
   const previewFromReview = useRef<string | null>(null);
   const panelRef = useRef<HTMLElement>(null);
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const tabIndicatorRef = useRef<HTMLSpanElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const activeTab = props.review?.open ? 'review' : tab;
+  useLiquidIndicator({
+    containerRef: tabsRef,
+    indicatorRef: tabIndicatorRef,
+    activeKey: props.open ? activeTab : null,
+    axis: 'x',
+  });
   useEffect(() => {
     if (props.previewKey && props.previewKey !== previousPreview.current) {
       previewFromReview.current = props.review?.open ? props.review.id : null;
@@ -101,10 +110,11 @@ export function RightRail(props: RightRailProps): ReactElement | null {
         }
       }}>
       <div className="right-rail__header">
-      <div className="right-rail__tabs" role="tablist" aria-label="结果视图" onKeyDown={handleTabKey}>
-        {props.review && <button id={`${props.review.id}-tab`} type="button" role="tab" tabIndex={activeTab === 'review' ? 0 : -1} aria-selected={activeTab === 'review'} aria-controls={props.review.id} onClick={() => selectTab('review')}>{props.review.label ?? '变更'}</button>}
-        <button id="result-preview-tab" type="button" role="tab" tabIndex={activeTab === 'preview' ? 0 : -1} aria-selected={activeTab === 'preview'} aria-controls="result-preview" onClick={() => selectTab('preview')}>预览</button>
-        <button id="result-files-tab" type="button" role="tab" tabIndex={activeTab === 'files' ? 0 : -1} aria-selected={activeTab === 'files'} aria-controls="result-files" onClick={() => selectTab('files')}>文件</button>
+      <div ref={tabsRef} className="right-rail__tabs" role="tablist" aria-label="结果视图" onKeyDown={handleTabKey}>
+        {props.review && <button id={`${props.review.id}-tab`} type="button" role="tab" data-liquid-key="review" tabIndex={activeTab === 'review' ? 0 : -1} aria-selected={activeTab === 'review'} aria-controls={props.review.id} onClick={() => selectTab('review')}>{props.review.label ?? '变更'}</button>}
+        <button id="result-preview-tab" type="button" role="tab" data-liquid-key="preview" tabIndex={activeTab === 'preview' ? 0 : -1} aria-selected={activeTab === 'preview'} aria-controls="result-preview" onClick={() => selectTab('preview')}>预览</button>
+        <button id="result-files-tab" type="button" role="tab" data-liquid-key="files" tabIndex={activeTab === 'files' ? 0 : -1} aria-selected={activeTab === 'files'} aria-controls="result-files" onClick={() => selectTab('files')}>文件</button>
+        <span ref={tabIndicatorRef} className="right-rail__tab-indicator" aria-hidden="true" />
       </div>
         {props.onExpandPreview && activeTab === 'preview' && <button type="button" className="right-rail__close" aria-label="放大文件预览" title="放大文件预览" onClick={props.onExpandPreview}><Maximize2 size={15} /></button>}
         <button

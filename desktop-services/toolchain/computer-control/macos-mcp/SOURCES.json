@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "files": [
+    "Computer.swift",
+    "Server.swift"
+  ]
+}

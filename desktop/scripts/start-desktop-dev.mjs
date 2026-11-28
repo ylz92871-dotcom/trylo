@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { prepareDevResources } from './prepare-dev-resources.mjs';
 import { ensureDevelopmentCli } from './ensure-dev-cli.mjs';
+import { stageMacosComputerUse } from './build/macos/stage-macos-computer-use.mjs';
 
 const desktopRoot = fileURLToPath(new URL('../', import.meta.url));
 const args = process.argv.slice(2);
@@ -35,6 +36,15 @@ if (!args.some(arg => arg === '--help' || arg === '-h') && !environment.TRYLO_CL
 // sidecar publish (or downloads) just to supply this checkout's manifest.
 if (!args.some(arg => arg === '--help' || arg === '-h')) {
   devResourceConfig = prepareDevResources(desktopRoot);
+  if (process.platform === 'darwin' && process.arch === 'arm64') {
+    stageMacosComputerUse(resolve(desktopRoot, 'src-tauri/resources'));
+    // The macOS app bundles this tree separately from Tauri's resource map.
+    // An unbundled dev executable should use the prepared source tree directly.
+    const officeRoot = resolve(desktopRoot, 'src-tauri/resources/preview/office');
+    if (!environment.TRYLO_PREVIEW_ENGINE_ROOT && existsSync(resolve(officeRoot, 'LibreOffice.app'))) {
+      environment.TRYLO_PREVIEW_ENGINE_ROOT = officeRoot;
+    }
+  }
 }
 
 // Windows cannot replace an executable still mapped by an old Desktop window.

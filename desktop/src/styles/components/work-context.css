@@ -63,15 +63,15 @@
 }
 
 .compaction-card[data-state="running"] {
-  border-color: var(--brand-500, rgba(219, 201, 127, 0.5));
+  border-color: var(--brand-edge);
 }
 .compaction-card[data-state="failed"] {
-  border-color: var(--danger, #D96666);
-  color: var(--danger, #D96666);
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .compaction-card__glyph {
-  color: var(--brand-300, #DBC97F);
+  color: var(--brand);
   font-size: 13px;
   line-height: 1;
 }

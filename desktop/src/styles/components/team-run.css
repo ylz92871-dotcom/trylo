@@ -37,7 +37,7 @@
 .team-run__recovery { flex-shrink:0; margin:0; padding:9px 24px; background:var(--team-surface); color:var(--fg-muted); font-size:12px; line-height:1.7; border-bottom:1px solid var(--border); overflow-wrap:anywhere; }
 .team-run__approvals { flex:0 1 auto; max-height:35%; overflow:auto; }
 .team-run__approvals:empty { display:none; }
-.team-workspace { display:grid; grid-template-columns:var(--team-left,36%) 8px minmax(0,1fr); flex:1; min-height:0; min-width:0; overflow:hidden; }
+.team-workspace { display:grid; grid-template-columns:clamp(300px,var(--team-left,38%),480px) 8px minmax(0,1fr); flex:1; min-height:0; min-width:0; overflow:hidden; }
 .team-workspace[data-split=false] { grid-template-columns:minmax(0,1fr); }
 .team-workspace__person { display:flex; flex-direction:column; grid-column:1; min-height:0; min-width:0; overflow:hidden; }
 .team-workspace__person>.agent-conversation-layout { flex:1; min-height:0; }
@@ -47,7 +47,7 @@
 .team-workspace__person .chat-panel { isolation:auto; background:var(--bg); }
 .team-workspace__person .chat-panel::before { display:none; }
 .team-workspace__person .input-bar-wrapper { width:calc(100% - 48px); margin:10px auto 12px; }
-.team-workspace[data-view=feed] .team-workspace__person .input-bar-wrapper { max-width:800px; }
+.team-workspace[data-view=feed] .team-workspace__person .input-bar-wrapper { max-width:var(--conversation-width,760px); }
 .team-workspace[data-view=map] .team-workspace__person .conversation-width { max-width:100%; }
 .team-splitter { grid-column:2; position:relative; width:8px; height:100%; cursor:col-resize; touch-action:none; z-index:5; outline-offset:-2px!important; }
 .team-splitter::before { content:''; position:absolute; top:0; bottom:0; left:3px; width:1px; background:var(--ink-divider); }
@@ -56,7 +56,8 @@
 .team-splitter:hover>span,.team-splitter:focus-visible>span { opacity:1; }
 .team-workspace__team { grid-column:3; display:flex; flex-direction:column; min-height:0; min-width:0; overflow:auto; overscroll-behavior:contain; }
 .team-feed { display:flex; flex-direction:column; flex:1; min-height:0; min-width:0; }
-.team-feed__scroll { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; padding:28px max(24px,calc((100% - 800px)/2)) 12px; scrollbar-gutter:stable; }
+.team-feed__scroll { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; padding:24px max(24px,calc((100% - var(--conversation-width,760px))/2)) 12px; }
+:root:not([data-platform='macos']) .team-feed__scroll { scrollbar-gutter:stable; }
 .team-feed__content { position:relative; }
 .team-feed__event { margin:0 0 25px 40px; min-width:0; }
 .team-feed__empty { color:var(--ink-mute); font-size:14px; line-height:1.9; margin:20px 0; }
@@ -86,7 +87,7 @@
 .team-report__body th,.team-report__body td { padding:7px 10px; border:1px solid var(--border); text-align:left; }
 .team-report__body th { background:var(--team-surface); font-weight:500; }
 .team-report__streaming { display:block; font-size:11px; color:var(--ink-mute); margin-top:7px; }
-.team-feed__activity { display:flex; flex-wrap:wrap; align-items:center; gap:5px 14px; width:calc(100% - 52px); max-width:800px; margin:0 auto; padding:8px 0 2px; color:var(--ink-mute); font-size:11px; flex-shrink:0; }
+.team-feed__activity { display:flex; flex-wrap:wrap; align-items:center; gap:5px 14px; width:calc(100% - 52px); max-width:var(--conversation-width,760px); margin:0 auto; padding:8px 0 2px; color:var(--ink-mute); font-size:11px; flex-shrink:0; }
 .team-feed__activity>button { border:0; padding:0; background:transparent; color:inherit; font-size:11px; }
 .team-feed__activity>button:hover { color:var(--fg); }
 .team-feed__latest { display:block; position:sticky; bottom:5px; margin:0 auto; border:1px solid var(--border); border-radius:18px; background:var(--team-surface); color:var(--fg); padding:6px 13px; font-size:12px!important; }
@@ -168,7 +169,8 @@
 @media (prefers-reduced-motion:reduce) { .team-run * { scroll-behavior:auto!important; transition:none!important; } }
 
 /* The members are landmarks in a relationship drawing, not content cards. */
-.team-constellation { width:100%; flex:0 0 auto; min-height:0; overflow-x:auto; overflow-y:hidden; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:var(--ink-mute) transparent; }
+.team-constellation { width:100%; flex:0 0 auto; min-height:0; overflow-x:auto; overflow-y:hidden; overscroll-behavior:contain; }
+:root:not([data-platform='macos']) .team-constellation { scrollbar-width:thin; scrollbar-color:var(--ink-mute) transparent; }
 .team-constellation__canvas { position:relative; margin:0 auto; }
 .team-constellation__links { position:absolute; inset:0; pointer-events:none; }
 .team-constellation__links path { fill:none; stroke:var(--border); stroke-width:1; }
@@ -205,12 +207,12 @@
 .team-run__state--failed::before { background:var(--danger); }
 .team-menu__popup { max-width:calc(100cqw - 32px); }
 .team-feed__scroll:focus-visible { outline:1px solid var(--border-strong); outline-offset:-1px; }
-.team-run :is(.team-feed__scroll,.team-workspace__team,.team-constellation,.team-menu__popup) { scrollbar-width:thin; scrollbar-color:transparent transparent; }
-.team-run :is(.team-feed__scroll,.team-workspace__team,.team-constellation,.team-menu__popup):is(:hover,:focus-within) { scrollbar-color:var(--border-strong) transparent; }
-.team-run ::-webkit-scrollbar { width:6px; height:6px; }
-.team-run ::-webkit-scrollbar-track { background:transparent; }
-.team-run ::-webkit-scrollbar-thumb { background:var(--border-strong); border:0; border-radius:8px; }
-.team-run ::-webkit-scrollbar-button { display:none; width:0; height:0; }
+:root:not([data-platform='macos']) .team-run :is(.team-feed__scroll,.team-workspace__team,.team-constellation,.team-menu__popup) { scrollbar-width:thin; scrollbar-color:transparent transparent; }
+:root:not([data-platform='macos']) .team-run :is(.team-feed__scroll,.team-workspace__team,.team-constellation,.team-menu__popup):is(:hover,:focus-within) { scrollbar-color:var(--border-strong) transparent; }
+:root:not([data-platform='macos']) .team-run ::-webkit-scrollbar { width:6px; height:6px; }
+:root:not([data-platform='macos']) .team-run ::-webkit-scrollbar-track { background:transparent; }
+:root:not([data-platform='macos']) .team-run ::-webkit-scrollbar-thumb { background:var(--border-strong); border:0; border-radius:8px; }
+:root:not([data-platform='macos']) .team-run ::-webkit-scrollbar-button { display:none; width:0; height:0; }
 @container team-run (max-width:480px) {
   .team-run__head { padding:0 14px; gap:10px; flex-wrap:wrap; }
   .team-run__head-actions { gap:10px; margin-left:auto; }
@@ -229,3 +231,41 @@
 .team-mark .agent-avatar__ink { fill:var(--fg); }
 .team-mark .agent-avatar__fold { fill:color-mix(in srgb,var(--fg) 18%,var(--bg)); }
 .team-mark .agent-avatar__seam { fill:var(--brand); }
+
+:root[data-platform='macos'] .team-menu__popup {
+  border: 0;
+  border-radius: 12px;
+  padding: 6px;
+  background: var(--macos-popover-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: var(--macos-popover-shadow);
+}
+:root[data-platform='macos'] .team-menu__actions > button,
+:root[data-platform='macos'] .team-menu__popup > button:not(.team-roster-member),
+:root[data-platform='macos'] .team-roster-member {
+  border-radius: 6px;
+}
+:root[data-platform='macos'] :is(.team-handoff__top small, .team-execution-events .tool__time, .team-execution-events .tool__body time, .team-feed__activity, .team-member-head__actions small) {
+  font-variant-numeric: tabular-nums;
+}
+:root[data-platform='macos'] .team-run :is(button, summary):focus-visible {
+  outline: none;
+  box-shadow: var(--macos-focus-halo);
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-platform='macos'] .team-menu__popup {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media (forced-colors: active) {
+  :root[data-platform='macos'] .team-menu__popup {
+    border: 1px solid CanvasText;
+  }
+  :root[data-platform='macos'] .team-run :is(button, summary):focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+}

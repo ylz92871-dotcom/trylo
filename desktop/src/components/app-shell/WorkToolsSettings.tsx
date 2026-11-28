@@ -6,6 +6,17 @@ import {
   UI_STATE_LABEL,
   type ToolPlatformState,
 } from '../../tooling/use-tool-platform-state'
+import { isMacPlatform } from '../../utils/platform'
+
+const WINDOWS_ONLY_PACKAGE_IDS = new Set([
+  'windows-mcp',
+  'solidworks-mcp',
+  'autocad-mcp',
+  'kicad-mcp',
+  'jlceda-mcp',
+  'freecad-mcp',
+  'blender-mcp',
+])
 
 export interface WorkToolsSettingsProps {
   readonly platform?: ToolPlatformState | null
@@ -79,12 +90,14 @@ function PackageRow({
     checking ||
     !view ||
     ['installing', 'verifying', 'installing-browser', 'checking'].includes(view.uiState)
-  const action = busy || core ? 'none' : view.action
+  const action = busy || (core && view.action !== 'install-browser' && view.action !== 'repair-office') ? 'none' : view.action
   const actionLabel =
     action === 'install'
       ? '安装'
       : action === 'install-browser'
         ? '安装浏览器'
+        : action === 'repair-office'
+          ? '修复'
         : action === 'retry'
           ? '重试'
           : action === 'uninstall'
@@ -169,16 +182,29 @@ export function WorkToolsSettings({
 }: WorkToolsSettingsProps): ReactElement {
   const [query, setQuery] = useState('')
   const [group, setGroup] = useState<Group>('全部')
-  const packages: CatalogPackage[] = [...catalog.packages]
+  const mac = isMacPlatform()
+  const allPackages: CatalogPackage[] = [...catalog.packages]
   for (const pkg of platform?.packages ?? []) {
-    if (!packages.some((item) => item.id === pkg.id))
-      packages.push({
+    if (!allPackages.some((item) => item.id === pkg.id))
+      allPackages.push({
         id: pkg.id,
         displayName: pkg.displayName,
         version: pkg.version,
         expectedTools: [...pkg.expectedTools],
       })
   }
+  const packages = mac
+    ? allPackages.filter(
+        (item) =>
+          !WINDOWS_ONLY_PACKAGE_IDS.has(item.id) ||
+          platform?.packages.some((pkg) => pkg.id === item.id && pkg.available === true),
+      )
+    : allPackages
+  const visibleGroups = GROUPS.filter((name) => {
+    if (name === '全部') return true
+    if (name === '其他工具') return packages.some((item) => !INFO[item.id])
+    return !mac || packages.some((item) => INFO[item.id]?.group === name)
+  })
   const selected = selection ? selectedWorkPackages(selection) : undefined
   const normalized = query.trim().toLocaleLowerCase()
   const shown = packages.filter(
@@ -216,7 +242,9 @@ export function WorkToolsSettings({
         )}
       </div>
       <p className="settings-modal__desc">
-        办公文档、浏览器和电脑控制默认启用。Work 的浏览器方案可在这里切换，保存后用于后续任务；操作授权规则保持不变。
+        {mac
+          ? '办公文档与浏览器工具默认启用。Work 的浏览器方案可在这里切换，保存后用于后续任务；操作授权规则保持不变。'
+          : '办公文档、浏览器和电脑控制默认启用。Work 的浏览器方案可在这里切换，保存后用于后续任务；操作授权规则保持不变。'}
       </p>
       {selection && onSelectBrowser && (
         <fieldset className="settings-modal__group">
@@ -262,9 +290,7 @@ export function WorkToolsSettings({
           value={group}
           onChange={(event) => setGroup(event.target.value as Group)}
         >
-          {GROUPS.filter(
-            (name) => name !== '其他工具' || packages.some((item) => !INFO[item.id]),
-          ).map((name) => (
+          {visibleGroups.map((name) => (
             <option key={name}>{name}</option>
           ))}
         </select>

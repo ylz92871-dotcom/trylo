@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from 'react'
 import { AppWindow, ArrowUpRight, Box, X } from 'lucide-react'
 import type { SoftwareApplication } from '../../tooling/software-workspace-types'
+import { isMacPlatform } from '../../utils/platform'
 
 export function SoftwareLauncher({
   installed,
@@ -61,7 +62,7 @@ export function SoftwareLauncher({
         <div>
           <input
             id="software-executable"
-            placeholder="C:\…\application.exe"
+            placeholder={isMacPlatform() ? '/Applications/App.app' : 'C:\\…\\application.exe'}
             value={path}
             onChange={(event) => setPath(event.target.value)}
           />

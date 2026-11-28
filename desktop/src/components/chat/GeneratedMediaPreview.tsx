@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ChevronRight, Image as ImageIcon, X } from 'lucide-react'
 import type { ToolMessage } from './types'
 import type { BinaryRef, ToolResultContent } from '../../tooling/tool-result-content'
 import { useGeneratedMediaUrl } from '../../tooling/use-generated-media-url'
+import { animateCollapseToSource, animateExpandFromSource } from '../../utils/shared-element-expand'
 
 export function isImageGenerationTool(message: ToolMessage): boolean {
   const name = `${message.tool} ${typeof message.input?.name === 'string' ? message.input.name : ''}`
@@ -19,18 +20,49 @@ function GeneratedImage({ reference, workspacePath }: { readonly reference: Bina
   const { url, failed } = useGeneratedMediaUrl(reference, workspacePath)
   const [enlarged, setEnlarged] = useState(false)
   const dialog = useRef<HTMLDialogElement>(null)
+  const thumbRef = useRef<HTMLButtonElement>(null)
+  const viewerImgRef = useRef<HTMLImageElement>(null)
+  const closingRef = useRef(false)
+
   useEffect(() => {
     const element = dialog.current
-    if (enlarged) element?.showModal()
-    else if (element?.open) element.close()
+    if (enlarged) {
+      closingRef.current = false
+      element?.showModal()
+    } else if (element?.open) {
+      element.close()
+    }
   }, [enlarged])
+
+  useLayoutEffect(() => {
+    if (!enlarged || !url) return
+    animateExpandFromSource(thumbRef.current, viewerImgRef.current)
+  }, [enlarged, url])
+
+  const requestClose = (): void => {
+    if (!enlarged || closingRef.current) return
+    closingRef.current = true
+    animateCollapseToSource(thumbRef.current, viewerImgRef.current, () => {
+      closingRef.current = false
+      setEnlarged(false)
+      thumbRef.current?.focus()
+    })
+  }
+
   return <figure className="generated-media__image">
-    {url ? <button type="button" className="generated-media__thumbnail" onClick={() => setEnlarged(true)} aria-label="查看图片">
+    {url ? <button ref={thumbRef} type="button" className="generated-media__thumbnail" onClick={() => setEnlarged(true)} aria-label="查看图片">
       <img src={url} alt="生成的图片" loading="lazy" />
     </button> : <div className="generated-media__unavailable"><ImageIcon size={22} /><span>{failed ? '图片预览暂不可用，原文件信息已保留' : '正在载入图片…'}</span></div>}
-    <dialog className="generated-media__viewer" ref={dialog} onClose={() => setEnlarged(false)} onCancel={() => setEnlarged(false)} aria-label="生成图片原图">
-      <button type="button" onClick={() => setEnlarged(false)} aria-label="关闭图片预览"><X size={20} /></button>
-      {enlarged && url && <img src={url} alt="生成的图片原图" />}
+    <dialog
+      className="generated-media__viewer"
+      ref={dialog}
+      onClose={() => { closingRef.current = false; setEnlarged(false); thumbRef.current?.focus() }}
+      onCancel={(event) => { event.preventDefault(); requestClose() }}
+      onClick={(event) => { if (event.target === event.currentTarget) requestClose() }}
+      aria-label="生成图片原图"
+    >
+      <button type="button" onClick={requestClose} aria-label="关闭图片预览"><X size={20} /></button>
+      {enlarged && url && <img ref={viewerImgRef} src={url} alt="生成的图片原图" />}
     </dialog>
   </figure>
 }

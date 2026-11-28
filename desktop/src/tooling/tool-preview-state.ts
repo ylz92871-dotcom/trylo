@@ -54,16 +54,37 @@ const ACTIONS: Readonly<Record<string, string>> = {
   shortcut: '按键', wait: '等待', waitfor: '等待界面', clipboard: '使用剪贴板',
   displayinventory: '查看显示器', ocr: '识别屏幕文字', multiselect: '选择多个目标',
   fill: '填写表单', fill_form: '填写表单', press_key: '按键', hover: '悬停',
+  status: '检查权限', list_apps: '查看应用', open_app: '打开应用', activate_app: '切换前台应用',
+  list_windows: '查看窗口', inspect: '检查控件', ax_find: '查找后台控件', ax_read_text: '读取窗口文本',
+  read_window_text: '识别窗口文字', ax_perform: '后台操作控件', ax_set_value: '后台写入控件',
+  type_text: '输入文字', hotkey: '快捷键',
 }
 function actionTitle(tool: string): string {
   return ACTIONS[tool.split('__').at(-1)?.toLowerCase() ?? ''] ?? toolEventVerb(tool)
 }
 function actionTarget(message: ToolMessage): string {
   const input = message.input ?? {}
-  const target = input.url ?? input.element ?? input.target ?? input.window ?? input.app_name ?? input.selector ?? input.key
+  const target = input.url ?? input.element ?? input.target ?? input.window ?? input.app_name ?? input.bundleId ?? input.action ?? input.selector ?? input.key
   return typeof target === 'string' ? target.slice(0, 180) : ''
 }
+function parseMacosNormalizedPoint(outputText?: string): PreviewAction['point'] {
+  if (!outputText || !outputText.includes('normalizedPoint')) return undefined
+  try {
+    const parsed = JSON.parse(outputText) as { normalizedPoint?: { x?: unknown; y?: unknown } }
+    const x = parsed?.normalizedPoint?.x
+    const y = parsed?.normalizedPoint?.y
+    if (typeof x === 'number' && typeof y === 'number' && Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 1 && y >= 0 && y <= 1) {
+      return { x, y, space: 'normalized' }
+    }
+  } catch {
+    return undefined
+  }
+  return undefined
+}
 function actionPoint(message: ToolMessage): PreviewAction['point'] {
+  if (/^mcp__trylo-macos__/i.test(message.tool)) {
+    return parseMacosNormalizedPoint(message.outputText)
+  }
   if (!/^mcp__trylo-windows__/i.test(message.tool)) return undefined
   let loc: unknown = message.input?.loc
   if (typeof loc === 'string') { try { loc = JSON.parse(loc) as unknown } catch { return undefined } }
@@ -79,7 +100,7 @@ function selectedDisplay(input: unknown): number | undefined {
   return typeof first === 'number' && Number.isInteger(first) && first >= 0 ? first : undefined
 }
 export function previewKind(tool: string): PreviewKind | null {
-  if (/^mcp__trylo-windows__/i.test(tool)) return 'computer'
+  if (/^mcp__trylo-(windows|macos)__/i.test(tool)) return 'computer'
   if (/^mcp__trylo-(browser|playwright|chrome)__/i.test(tool)) return 'browser'
   return null
 }

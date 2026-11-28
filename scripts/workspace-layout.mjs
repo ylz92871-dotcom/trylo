@@ -15,7 +15,7 @@ const projectDirectories = {
 };
 const commonFiles = /^(?:AGENTS\.md|README(?:[-.][\w-]+)?\.(?:md|txt)|CHANGELOG\.md|LICENSE(?:\.md|\.txt)?|NOTICE(?:\.txt)?|PROVENANCE\.md|package(?:-lock)?\.json|pnpm-(?:lock\.yaml|workspace\.yaml)|tsconfig(?:\.[\w-]+)?\.json|tsconfig\.tsbuildinfo|vite\.config\.ts|vitest\.config\.[cm]?[jt]s|index\.html|\.gitignore|\.gitattributes|\.env(?:\.[\w.-]+)?|\.eslintrc\.json|\.prettierrc\.json)$/;
 const projectFiles = {
-  desktop: ['distribution.json', 'computer-preview.html'],
+  desktop: ['distribution.json', 'computer-preview.html', 'macos-companion.html'],
   'remote-relay': ['ACCOUNT-SERVICE.md', 'SCHEDULED-SECURITY-BACKUP.md', 'SECURITY-BACKUP.md', 'SECURITY-DEFENSE-ACCEPTANCE.md', 'SECURITY.md', 'TRANSPORT-DEFENSE.md'],
   'mobile-app': ['capacitor.config.ts'],
   'trylocode-site': ['_headers', '_redirects', 'DEPLOY.md', 'deploy.mjs', 'desktop-release.json', 'REDESIGN-PLAN.md'],

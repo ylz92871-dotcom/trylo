@@ -43,6 +43,7 @@ export function mergeCodeApprovals(history: readonly ChatMessage[], live: readon
     changed = true;
     if (current) return { ...current, id: message.id };
     const { pendingRequest: _pending, ...historical } = message;
+    void _pending; // Historical cards must not retain live approval authority.
     return { ...historical, status: 'expired' as const };
   });
   if (pending.size) return [...merged, ...pending.values()];

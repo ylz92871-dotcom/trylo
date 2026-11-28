@@ -6,12 +6,28 @@
 // failed host action must surface user feedback instead
 // of being fire-and-forget (audit M3-P1-11).
 
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ArtifactCard } from './ArtifactCard';
 import type { ArtifactHost as HostAdapter } from '../../host-adapter/artifact-actions';
 
 const ROOT = 'D:/CC/trylo';
+
+function mockPlatform(platform: string): () => void {
+  const original = Object.getOwnPropertyDescriptor(window.navigator, 'platform');
+  Object.defineProperty(window.navigator, 'platform', { value: platform, configurable: true });
+  return () => {
+    if (original) Object.defineProperty(window.navigator, 'platform', original);
+    else delete (window.navigator as { platform?: string }).platform;
+  };
+}
+
+let restorePlatform: (() => void) | undefined;
+afterEach(() => {
+  cleanup();
+  restorePlatform?.();
+  restorePlatform = undefined;
+});
 
 function makeHost(overrides?: Partial<HostAdapter>): HostAdapter {
   return {
@@ -286,4 +302,59 @@ describe('ArtifactCard shared review rows', () => {
     expect(host.openFile).toHaveBeenLastCalledWith(filePath);
     expect(onOpenViewer).not.toHaveBeenCalled();
   });
+});
+
+describe('ArtifactCard macOS external apps and Finder labels (Code & Work)', () => {
+  it('offers macOS application identifiers and Reveal in Finder in card layout', () => {
+    restorePlatform = mockPlatform('MacIntel');
+    const host = makeHost();
+    const filePath = `${ROOT}/deck.pptx`;
+    render(<ArtifactCard filePath={filePath} kind="presentation" workspacePath={ROOT} host={host} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open options' }));
+    expect(screen.getByRole('menuitem', { name: 'Keynote' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'LibreOffice' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Preview' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Reveal in Finder' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Microsoft PowerPoint' }));
+    expect(host.openFileWithApp).toHaveBeenCalledWith(filePath, {
+      name: 'Microsoft PowerPoint',
+      identifier: 'Microsoft PowerPoint',
+    });
+  });
+
+  it('offers macOS spreadsheet/document apps and 在访达中显示 in row layout', () => {
+    restorePlatform = mockPlatform('MacIntel');
+    const host = makeHost();
+    const filePath = `${ROOT}/sheet.xlsx`;
+    render(
+      <ArtifactCard
+        filePath={filePath}
+        kind="spreadsheet"
+        layout="row"
+        workspacePath={ROOT}
+        host={host}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'sheet.xlsx 的更多操作' }));
+    expect(screen.getByRole('menuitem', { name: 'Numbers' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: '在访达中显示' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Microsoft Outlook' })).toBeNull();
+    fireEvent.click(screen.getByRole('menuitem', { name: '在访达中显示' }));
+    expect(host.showInFolder).toHaveBeenCalledWith(filePath);
+  });
+});
+
+it('uses Space for native Quick Look while keeping the primary action separate', () => {
+  restorePlatform = mockPlatform('MacIntel');
+  const filePath = '/tmp/work/report.pdf';
+  const host = makeHost({ quickLookFile: vi.fn().mockResolvedValue(undefined) });
+  render(<ArtifactCard filePath={filePath} kind="file" workspacePath="/tmp/work" host={host} layout="row" />);
+  const open = screen.getByRole('button', { name: '打开文件 report.pdf' });
+  fireEvent.keyDown(open, { code: 'Space', key: ' ' });
+  fireEvent.keyDown(open, { code: 'Space', key: ' ', repeat: true });
+  expect(host.quickLookFile).toHaveBeenCalledTimes(1);
+  expect(host.quickLookFile).toHaveBeenCalledWith(filePath);
+  expect(host.openFile).not.toHaveBeenCalled();
+  fireEvent.click(open);
+  expect(host.openFile).toHaveBeenCalledWith(filePath);
 });

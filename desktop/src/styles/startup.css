@@ -1,11 +1,50 @@
-/* Early, dependency-free presentation of the approved v9 startup. */
+/* Early, dependency-free presentation of the Cinematic 3D Levitation + Optical Dive startup. */
 @font-face { font-family: TryloStartup; src: url('/startup/manrope.woff') format('woff'); font-display: swap; font-weight: 200 800; }
-:root { --startup-ground: #fff; --startup-ink: #292a27; --startup-muted: #62655e; --startup-gold: #946d22; --logo-chip-bg: #111318; --logo-chip-ink: #f3e3a6; }
-:root[data-theme='dark'] { --startup-ground: #202123; --startup-ink: #ebece8; --startup-muted: #afb1ab; --startup-gold: #ddc27f; }
-.startup-screen { position: fixed; inset: 0; z-index: 10000; overflow: hidden; isolation: isolate; color: var(--startup-ink); font-family: TryloStartup, 'Segoe UI', 'Microsoft YaHei', sans-serif; --startup-unit: calc(100vw / 1280); }
+:root {
+  --startup-ground: #fff;
+  --startup-ink: #292a27;
+  --startup-muted: #62655e;
+  --startup-gold: #946d22;
+  --startup-shadow-core: rgba(20, 22, 26, 0.24);
+  --startup-shadow-ambient: rgba(24, 24, 28, 0.11);
+  --logo-chip-bg: #111318;
+  --logo-chip-ink: #f3e3a6;
+}
+:root[data-theme='dark'] {
+  --startup-ground: #202123;
+  --startup-ink: #ebece8;
+  --startup-muted: #afb1ab;
+  --startup-gold: #ddc27f;
+  --startup-shadow-core: rgba(4, 5, 7, 0.62);
+  --startup-shadow-ambient: rgba(0, 0, 0, 0.34);
+}
+.startup-screen { position: fixed; inset: 0; z-index: 10000; overflow: hidden; isolation: isolate; color: var(--startup-ink); font-family: TryloStartup, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei', sans-serif; --startup-unit: calc(100vw / 1280); }
 .startup-screen__veil { position: absolute; inset: 0; background: var(--startup-ground); pointer-events: none; }
-.startup-screen__position { position: absolute; left: 50%; top: 42.5%; width: 31.25vw; height: 31.25vw; transform: translate(-50%,-50%); transform-origin: center; pointer-events: none; }
-.startup-screen__turn { position: absolute; inset: 0; opacity: 0; transform-origin: 50% 50%; }
+.startup-screen__optics { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; will-change: opacity; }
+.startup-screen__stage {
+  position: absolute;
+  inset: 0;
+  perspective: 1100px;
+  perspective-origin: 50% 42.5%;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+.startup-screen__shadow {
+  position: absolute;
+  left: 50%;
+  top: 42.5%;
+  width: 24vw;
+  height: 6.5vw;
+  border-radius: 50%;
+  opacity: 0;
+  transform: translate3d(-50%, 8.8vw, 0) scale(0.75);
+  background:
+    radial-gradient(closest-side, var(--startup-shadow-core) 0%, transparent 62%),
+    radial-gradient(closest-side, var(--startup-shadow-ambient) 0%, rgba(16, 17, 20, 0.04) 56%, transparent 95%);
+  pointer-events: none;
+}
+.startup-screen__position { position: absolute; left: 50%; top: 42.5%; width: 31.25vw; height: 31.25vw; transform: translate(-50%,-50%); transform-origin: center; transform-style: preserve-3d; pointer-events: none; }
+.startup-screen__turn { position: absolute; inset: 0; opacity: 0; transform-origin: 50% 50%; transform-style: preserve-3d; }
 #trylo-startup-material { display: block; position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
 .startup-screen__identity { position: absolute; inset: 0; display: block; width: 100%; height: 100%; mask: url('/startup/approved-contour.png') center / 100% 100% no-repeat; mask-mode: luminance; }
 .startup-screen__signature { position: absolute; left: 0; top: calc(42.5% + 13.671875vw); width: 100%; text-align: center; pointer-events: none; }
@@ -18,6 +57,18 @@
 .startup-screen__flat { position: absolute; left: 0; top: 0; color: #f3e3a6; opacity: 0; transform-origin: 50% 50%; pointer-events: none; }
 .startup-screen__tile { position: absolute; left: 0; top: 0; width: 40px; aspect-ratio: 1; border-radius: 27.5%; background: #111318; opacity: 0; pointer-events: none; }
 :root[data-startup-handoff] [data-startup-logo] .trilo-mark--chip { visibility: hidden; }
+:root[data-startup-reveal='preparing'] .app-shell__body {
+  opacity: 0.2;
+  transform: scale(0.92);
+  transform-origin: 50% 42.5%;
+  will-change: transform, opacity;
+}
+:root[data-startup-reveal='settling'] .app-shell__body {
+  opacity: 1;
+  transform: scale(1);
+  transform-origin: 50% 42.5%;
+  transition: transform 760ms cubic-bezier(0.16, 1, 0.3, 1), opacity 580ms cubic-bezier(0.16, 1, 0.3, 1);
+}
 .startup-screen__feedback { position: absolute; top: calc(42.5% + 20.3125vw); left: 50%; width: min(360px,calc(100vw - 48px)); transform: translateX(-50%); text-align: center; }
 .startup-screen__status { margin: 0; color: var(--startup-muted); font-size: 13px; line-height: 1.7; }
 .startup-screen[data-phase='loading']:not([data-slow]) .startup-screen__feedback { opacity: 0; }
@@ -26,8 +77,12 @@
 .startup-screen__reload { margin-top: 20px; border: 1px solid var(--startup-muted); border-radius: 6px; padding: 8px 16px; background: var(--startup-ground); color: var(--startup-ink); font: inherit; font-size: 13px; cursor: pointer; }
 .startup-screen__reload[hidden] { display: none; }
 .startup-screen__reload:focus-visible { outline: 2px solid var(--startup-gold); outline-offset: 4px; }
-.startup-screen[data-phase='leaving'] { pointer-events: none; }
+.startup-screen[data-phase='leaving']:not([data-motion='approved']),
+.startup-screen[data-interactive='true'] { pointer-events: none; }
 .startup-screen[data-phase='leaving'] .startup-screen__feedback { display: none; }
 .startup-screen[data-phase='leaving']:not([data-motion='approved']) { animation: startup-exit 180ms ease-in both; }
 @keyframes startup-exit { to { opacity: 0; transform: translateY(-4px); } }
-@media (prefers-reduced-motion: reduce) { .startup-screen[data-phase='leaving'] { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .startup-screen[data-phase='leaving'] { animation: none; }
+  :root[data-startup-reveal] .app-shell__body { opacity: 1; transform: none; transition: none; }
+}

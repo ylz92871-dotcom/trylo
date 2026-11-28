@@ -77,6 +77,28 @@ describe('current built-in declaration from the immutable run snapshot', () => {
     expect(prompt).not.toMatch(/只能.*绝对|必须.*绝对/);
   });
 
+  it('describes macOS desktop tools with their actual permission and coordinate contract', () => {
+    const prompt = toolAvailabilitySystemPrompt(undefined, { runtime: runtime({ serverNames: ['trylo-macos'] }) });
+    expect(prompt).toContain('server=trylo-macos');
+    expect(prompt).toContain('status 检查系统授权');
+    expect(prompt).toContain('窗口 ID 和所属 PID');
+    expect(prompt).toContain('ax_find');
+    expect(prompt).toContain('ax_perform');
+    expect(prompt).toContain('ax_set_value');
+    expect(prompt).toContain('read_window_text');
+    expect(prompt).toContain('全局屏幕点坐标');
+    expect(prompt).not.toContain('Snapshot/Screenshot');
+  });
+
+  it.each(['code', 'work'] as const)('prioritizes background browser and desktop paths in %s', surface => {
+    const prompt = toolAvailabilitySystemPrompt(undefined, { runtime: runtime({
+      surface, serverNames: ['trylo-browser', 'trylo-macos'],
+    }) });
+    expect(prompt).toContain('网页任务优先使用本轮浏览器工具的后台会话');
+    expect(prompt).toContain('先验证后台操作的结果');
+    expect(prompt).toContain('AXRaise 会将窗口置前');
+  });
+
   it('keeps unready reasons, explicit nonselection and unmounted capabilities distinct without leaking messages', () => {
     const prompt = toolAvailabilitySystemPrompt(undefined, {
       computerUse: false,

@@ -1,14 +1,14 @@
 .library-reader-boundary {
-  --library-control: var(--border-strong, color-mix(in srgb, var(--fg, #30312e) 22%, var(--bg, #fff)));
-  --lc-paper: var(--bg, #fff);
-  --lc-soft: var(--bg-panel, #fafaf9);
-  --lc-line: var(--border, #eaeae7);
-  --lc-ink: var(--fg, #30312e);
-  --lc-muted: var(--fg-muted, #6e726b);
-  --lc-gold: var(--accent, #946d22);
-  --lc-selected: var(--bg-elevated, #f7f3e9);
-  --lc-button: var(--fg, #30312e);
-  color: var(--fg, #30312e);
+  --library-control: var(--border-strong);
+  --lc-paper: var(--surface-card);
+  --lc-soft: var(--bg-panel);
+  --lc-line: var(--border);
+  --lc-ink: var(--fg);
+  --lc-muted: var(--fg-muted);
+  --lc-gold: var(--brand);
+  --lc-selected: var(--brand-soft);
+  --lc-button: var(--fg);
+  color: var(--fg);
   position: relative;
   min-height: 640px;
 }

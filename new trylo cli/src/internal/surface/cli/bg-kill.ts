@@ -37,7 +37,7 @@ export async function handleKill(
     return refuseUnverifiedKill(ctx, record.pid);
   }
 
-  const killPid = deps.killPid ?? ((pid: number) => terminatePidTree(pid));
+  const killPid = deps.killPid ?? ((pid: number) => terminatePidTree(pid, undefined, { pid: record.pid, startedAtMs: record.startedAtMs }));
   const killed = await killPid(record.pid);
   if (!killed.ok) {
     ctx.stderr(`${killed.message}\n`);

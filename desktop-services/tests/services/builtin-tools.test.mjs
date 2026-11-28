@@ -90,7 +90,7 @@ test('portable Python launch arguments are included in the actual MCP registry',
   await fs.mkdir(parent, { recursive: true });
   const root = await fs.mkdtemp(path.join(parent, 'case-'));
   const packages = { resolve: async () => ({ executable: path.join(root, 'python.exe'), installDir: root, state: 'installed', argsPrefix: ['-B', '-m', 'windows_mcp'] }) };
-  const profiles = createToolProfileService({ profilesRoot: root, storageRoot: root, packages,
+  const profiles = createToolProfileService({ platform: 'win32', profilesRoot: root, storageRoot: root, packages,
     catalog: { get: id => id === 'windows-mcp' ? WINDOWS_MCP_MANIFEST : null, list: () => [WINDOWS_MCP_MANIFEST] },
     health: { check: async manifest => ({ id: manifest.id, available: true }) },
     hermes: { mcpArgs: () => ({ ok: true, arg: [], warning: null }) } });

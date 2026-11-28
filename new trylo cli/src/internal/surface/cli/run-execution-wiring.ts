@@ -1,5 +1,6 @@
 import { createNodeSpawner, type ShellSpawner } from "../../adapters/tools/mutating/shell-spawn.js";
 import { createWindowsShellBoundary } from "../../adapters/sandbox/windows/windows-shell-boundary.js";
+import { createMacosShellBoundary } from "../../adapters/sandbox/macos-shell-boundary.js";
 import type { ProcessSessionRegistry } from "../../adapters/process-session/session-registry.js";
 import { createSessionViewForRun } from "./session-view-wiring.js";
 import { hostProcessEnvironment } from "../../adapters/sandbox/executable.js";
@@ -32,8 +33,11 @@ export function createRunExecution(workspaceRoot: string, options: {
   const imageReferences = options.fileAccess === undefined || options.fileAccess === "workspace" ? undefined : createImageReferenceRegistry();
   // Desktop supplies host explicitly: its permission service owns every command
   // approval. Standalone callers retain strict isolation and never fall back on failure.
-  const boundary = platform === "win32" && options.shellIsolation !== "host"
-    ? createWindowsShellBoundary(workspaceRoot, options.env ?? hostProcessEnvironment()) : undefined;
+  const hostEnv = options.env ?? hostProcessEnvironment();
+  const boundary = options.shellIsolation === "host" ? undefined
+    : platform === "win32" ? createWindowsShellBoundary(workspaceRoot, hostEnv)
+    : platform === "darwin" ? createMacosShellBoundary(workspaceRoot, hostEnv)
+    : undefined;
   const spawner = boundary === undefined ? createNodeSpawner() : boundary.spawner(createNodeSpawner(boundary.helperEnvironment));
 
   return {
@@ -44,7 +48,7 @@ export function createRunExecution(workspaceRoot: string, options: {
 
       start: async (request, signal) => {
         assertSessionStartAllowed(lifecycle, signal);
-        const argv = await (request.tty ? boundary.wrap(request.argv) : boundary.wrapPipeSession(request.argv));
+        const argv = await boundary.wrapSession(request);
         assertSessionStartAllowed(lifecycle, signal);
         return sessions.start({ ...request, argv, env: boundary.helperEnvironment() }, signal);
       },

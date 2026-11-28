@@ -1,5 +1,7 @@
 //! The remote read boundary is narrower than the local preview filesystem API.
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File};
+#[cfg(not(target_os = "macos"))]
+use std::fs::OpenOptions;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -45,7 +47,7 @@ fn opened_path(file: &File) -> io::Result<PathBuf> {
     extern "system" { fn GetFinalPathNameByHandleW(handle: *mut std::ffi::c_void, buffer: *mut u16, length: u32, flags: u32) -> u32; }
     let mut buffer = vec![0_u16; 32768];
     // The file handle is live and buffer points to length writable u16s.
-    let length = unsafe { GetFinalPathNameByHandleW(file.as_raw_handle(), buffer.as_mut_ptr(), buffer.len() as u32, 0) };
+    let length = unsafe { GetFinalPathNameByHandleW(file.as_raw_handle(), buffer.as_mut_ptr(), u32::try_from(buffer.len()).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "path buffer exceeds Windows API limit"))?, 0) };
     if length == 0 { return Err(io::Error::last_os_error()); }
     if length as usize >= buffer.len() { return Err(denied()); }
     Ok(PathBuf::from(std::ffi::OsString::from_wide(&buffer[..length as usize])))
@@ -57,7 +59,21 @@ fn opened_path(file: &File) -> io::Result<PathBuf> {
     fs::canonicalize(format!("/proc/self/fd/{}", file.as_raw_fd()))
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(target_os = "macos")]
+fn opened_path(file: &File) -> io::Result<PathBuf> {
+    use std::os::fd::AsRawFd;
+    use std::os::unix::ffi::OsStrExt;
+
+    let mut buffer = [0_u8; libc::PATH_MAX as usize];
+    // F_GETPATH writes at most PATH_MAX bytes for this live descriptor.
+    if unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETPATH, buffer.as_mut_ptr()) } == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    let end = buffer.iter().position(|byte| *byte == 0).ok_or_else(denied)?;
+    Ok(PathBuf::from(std::ffi::OsStr::from_bytes(&buffer[..end])))
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 fn opened_path(_file: &File) -> io::Result<PathBuf> {
     Err(io::Error::new(io::ErrorKind::Unsupported, "Remote artifact handle verification is unavailable on this platform"))
 }
@@ -73,27 +89,56 @@ fn regular_metadata(file: &File, directory: bool) -> io::Result<fs::Metadata> {
     Ok(metadata)
 }
 
-struct HeldDirectory { _file: File, path: PathBuf }
+struct HeldDirectory {
+    // On Windows this handle pins the directory against rename until the operation ends.
+    #[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
+    file: File,
+    path: PathBuf,
+}
+
+#[cfg(target_os = "macos")]
+fn open_macos_path(path: &Path, parent: Option<&HeldDirectory>, flags: libc::c_int) -> io::Result<File> {
+    use std::ffi::CString;
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::ffi::OsStrExt;
+
+    let directory_fd = parent.map_or(libc::AT_FDCWD, |parent| parent.file.as_raw_fd());
+    let target = if parent.is_some() { path.file_name().ok_or_else(denied)? } else { path.as_os_str() };
+    let target = CString::new(target.as_bytes())?;
+    // Resolve each descendant from its already checked parent handle. Never
+    // follow a symlink substituted after the preliminary metadata check.
+    let fd = unsafe { libc::openat(directory_fd, target.as_ptr(), libc::O_RDONLY | libc::O_CLOEXEC | libc::O_NOFOLLOW | flags) };
+    if fd == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    // A successful openat transfers ownership of the new descriptor.
+    Ok(unsafe { File::from_raw_fd(fd) })
+}
+
 impl HeldDirectory {
     fn open(path: &Path, parent: Option<&Self>) -> io::Result<Self> {
         if !reject_link(path)?.is_dir() { return Err(denied()); }
-        let mut options = OpenOptions::new(); options.read(true);
-        #[cfg(windows)] {
-            use std::os::windows::fs::OpenOptionsExt;
-            // Keep every ancestor open without DELETE sharing, preventing
-            // renames while a read/list operation validates its descendants.
-            options.share_mode(3).custom_flags(0x02000000 | 0x00200000); // BACKUP_SEMANTICS | OPEN_REPARSE_POINT.
-        }
-        let file = options.open(path)?;
+        #[cfg(target_os = "macos")]
+        let file = open_macos_path(path, parent, libc::O_DIRECTORY)?;
+        #[cfg(not(target_os = "macos"))]
+        let file = {
+            let mut options = OpenOptions::new(); options.read(true);
+            #[cfg(windows)] {
+                use std::os::windows::fs::OpenOptionsExt;
+                // Keep every ancestor open without DELETE sharing.
+                options.share_mode(3).custom_flags(0x0200_0000 | 0x0020_0000); // BACKUP_SEMANTICS | OPEN_REPARSE_POINT.
+            }
+            options.open(path)?
+        };
         regular_metadata(&file, true)?;
         let actual = opened_path(&file)?;
         if parent.is_some_and(|parent| actual.parent() != Some(parent.path.as_path())) { return Err(denied()); }
-        Ok(Self { _file: file, path: actual })
+        Ok(Self { file, path: actual })
     }
     fn io_path(&self) -> PathBuf {
         #[cfg(target_os = "linux")] {
             use std::os::fd::AsRawFd;
-            return PathBuf::from(format!("/proc/self/fd/{}", self._file.as_raw_fd()));
+            return PathBuf::from(format!("/proc/self/fd/{}", self.file.as_raw_fd()));
         }
         #[cfg(not(target_os = "linux"))] self.path.clone()
     }
@@ -117,12 +162,17 @@ impl ArtifactRoot {
 fn open_regular_file(directory: &HeldDirectory, name: &str, output: &Path) -> io::Result<(File, fs::Metadata)> {
     let target = directory.io_path().join(name);
     if !reject_link(&target)?.is_file() { return Err(denied()); }
-    let mut options = OpenOptions::new(); options.read(true);
-    #[cfg(windows)] {
-        use std::os::windows::fs::OpenOptionsExt;
-        options.share_mode(1).custom_flags(0x00200000); // READ share only; OPEN_REPARSE_POINT.
-    }
-    let file = options.open(&target)?;
+    #[cfg(target_os = "macos")]
+    let file = open_macos_path(&target, Some(directory), libc::O_NONBLOCK)?;
+    #[cfg(not(target_os = "macos"))]
+    let file = {
+        let mut options = OpenOptions::new(); options.read(true);
+        #[cfg(windows)] {
+            use std::os::windows::fs::OpenOptionsExt;
+            options.share_mode(1).custom_flags(0x0020_0000); // READ share only; OPEN_REPARSE_POINT.
+        }
+        options.open(&target)?
+    };
     let actual = opened_path(&file)?;
     if !actual.starts_with(output) || actual.parent() != Some(directory.path.as_path()) { return Err(denied()); }
     let metadata = regular_metadata(&file, false)?;
@@ -140,16 +190,14 @@ pub fn read_remote_artifact(workspace: &Path, relative: &str) -> io::Result<Vec<
     }
     let directory = ancestors.last().unwrap_or(root.output());
     let (file, metadata) = open_regular_file(directory, parts[parts.len() - 1], &root.output().path)?;
-    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    let capacity = usize::try_from(metadata.len()).map_err(io::Error::other)?;
+    let mut bytes = Vec::with_capacity(capacity);
     file.take(MAX_REMOTE_ARTIFACT_BYTES + 1).read_to_end(&mut bytes)?;
     if bytes.len() as u64 > MAX_REMOTE_ARTIFACT_BYTES { return Err(io::Error::new(io::ErrorKind::InvalidData, "Remote artifact exceeds 12 MiB")); }
     Ok(bytes)
 }
 
 pub fn list_remote_artifacts(workspace: &Path) -> io::Result<Vec<RemoteArtifactFile>> {
-    let root = ArtifactRoot::open(workspace)?;
-    let mut files = Vec::new();
-    let mut visited = 0;
     fn walk(directory: &HeldDirectory, output: &Path, prefix: &str, depth: usize, files: &mut Vec<RemoteArtifactFile>, visited: &mut usize) -> io::Result<()> {
         for entry in fs::read_dir(directory.io_path())? {
             if files.len() >= MAX_REMOTE_ARTIFACT_FILES || *visited >= MAX_REMOTE_ARTIFACT_ENTRIES { break; }
@@ -171,6 +219,9 @@ pub fn list_remote_artifacts(workspace: &Path) -> io::Result<Vec<RemoteArtifactF
         }
         Ok(())
     }
+    let root = ArtifactRoot::open(workspace)?;
+    let mut files = Vec::new();
+    let mut visited = 0;
     walk(root.output(), &root.output().path, "", 0, &mut files, &mut visited)?;
     Ok(files)
 }
@@ -178,11 +229,13 @@ pub fn list_remote_artifacts(workspace: &Path) -> io::Result<Vec<RemoteArtifactF
 #[cfg(test)]
 mod tests {
     use super::*;
+    static NEXT_FIXTURE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     struct Fixture(PathBuf);
     impl Fixture {
         fn new() -> Self {
             let base = std::env::var_os("TRYLO_SECURITY_TEST_ROOT").map_or_else(std::env::temp_dir, PathBuf::from);
-            let root = base.join(format!("trylo-remote-artifact-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+            let serial = NEXT_FIXTURE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let root = base.join(format!("trylo-remote-artifact-{}-{}-{serial}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
             fs::create_dir_all(root.join(".trylo/out/nested")).unwrap(); Self(root)
         }
     }
@@ -200,7 +253,7 @@ mod tests {
             .args(["/D", "/C", "mklink", "/J"])
             .arg(link.to_string_lossy().replace('/', "\\"))
             .arg(target.to_string_lossy().replace('/', "\\"))
-            .creation_flags(0x08000000)
+            .creation_flags(0x0800_0000)
             .output().unwrap();
         assert!(result.status.success(), "Could not create junction fixture: {}", String::from_utf8_lossy(&result.stderr));
     }
@@ -230,7 +283,7 @@ mod tests {
     fn empty_files_and_the_exact_size_limit_are_supported() {
         let fixture = Fixture::new();
         fs::write(fixture.0.join(".trylo/out/empty.txt"), b"").unwrap();
-        assert!(read_remote_artifact(&fixture.0, "empty.txt").unwrap().is_empty());
+        assert_eq!(read_remote_artifact(&fixture.0, "empty.txt").unwrap(), b"");
         let file = File::create(fixture.0.join(".trylo/out/at-limit.dat")).unwrap();
         file.set_len(MAX_REMOTE_ARTIFACT_BYTES).unwrap(); drop(file);
         assert_eq!(read_remote_artifact(&fixture.0, "at-limit.dat").unwrap().len() as u64, MAX_REMOTE_ARTIFACT_BYTES);

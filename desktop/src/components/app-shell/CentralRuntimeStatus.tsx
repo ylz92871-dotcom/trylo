@@ -133,7 +133,7 @@ export function CentralRuntimeStatus(props: {
       </p>
       {firstUse && (
         <p className="settings-modal__hint">
-          开启并保存中央学习系统（测试功能）后，在下次普通任务中首次启动后台。当前没有可恢复配置。
+          勾选并保存中央学习系统（测试功能）后，在下次普通任务中首次启动后台。当前没有可恢复配置。
         </p>
       )}
       {value?.enabled && (

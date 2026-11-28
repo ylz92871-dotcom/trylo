@@ -23,6 +23,8 @@ pub struct MediaInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_index: Option<u64>,
 }
+// The compiled duration policy caps this conversion at 100,800 segments.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub fn segment_count(duration: f64) -> Result<usize, String> {
     if !duration.is_finite() || duration <= 0.0 || duration > policy().max_duration_seconds { return Err("媒体时长无法用于兼容播放".into()); }
     Ok((((duration - policy().merge_tail_seconds) / policy().segment_seconds).ceil() as usize).max(1))
@@ -45,11 +47,21 @@ pub fn probe_arguments() -> Vec<String> {
     let mut args = strings(&["-v", "error", "-protocol_whitelist", &policy().input_protocols, "-format_whitelist", &policy().input_formats]);
     args.extend(strings(&["-show_entries", "format=duration:stream=index,codec_type,codec_name,width,height,duration:stream_disposition=attached_pic", "-of", "json", "-i", "fd:"])); args
 }
+// Segment indices accepted from the protocol are bounded by segment_count.
+#[allow(clippy::cast_precision_loss)]
+fn segment_start(index: usize) -> f64 { index as f64 * policy().segment_seconds }
+
 pub fn stream_arguments(index: usize, info: &MediaInfo, playlist: &std::path::Path) -> Vec<String> {
-    let start = index as f64 * policy().segment_seconds;
+    let start = segment_start(index);
     let mut args = strings(&["-hide_banner", "-v", "error", "-nostdin", "-protocol_whitelist", &policy().input_protocols, "-format_whitelist", &policy().input_formats, "-ss", &start.to_string(), "-i", "fd:", "-sn", "-dn"]);
     if let Some(track) = info.video_index {
-        args.extend(strings(&["-map", &format!("0:{track}"), "-vf", "scale=w=min(1280\\,iw):h=min(720\\,ih):force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1,setpts=PTS-STARTPTS", "-c:v", "libopenh264", "-b:v", "1600k", "-pix_fmt", "yuv420p", "-r", "30", "-g", "60"]));
+        args.extend(strings(&["-map", &format!("0:{track}"), "-vf", "scale=w=min(1280\\,iw):h=min(720\\,ih):force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1,setpts=PTS-STARTPTS"]));
+        if cfg!(target_os = "macos") {
+            args.extend(strings(&["-c:v", "h264_videotoolbox", "-allow_sw", "1"]));
+        } else {
+            args.extend(strings(&["-c:v", "libopenh264"]));
+        }
+        args.extend(strings(&["-b:v", "1600k", "-pix_fmt", "yuv420p", "-r", "30", "-g", "60"]));
     } else { args.push("-vn".into()); }
     if let Some(track) = info.audio_index {
         args.extend(strings(&["-map", &format!("0:{track}"), "-af", "asetpts=PTS-STARTPTS", "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2"]));
@@ -59,10 +71,10 @@ pub fn stream_arguments(index: usize, info: &MediaInfo, playlist: &std::path::Pa
 pub fn playlist(info: &MediaInfo) -> Result<Vec<u8>, String> {
     use std::fmt::Write;
     let count = segment_count(info.duration)?;
-    let target = policy().segment_seconds.max(info.duration - (count - 1) as f64 * policy().segment_seconds).ceil();
+    let target = policy().segment_seconds.max(info.duration - segment_start(count - 1)).ceil();
     let mut text = format!("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXT-X-TARGETDURATION:{target}\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-INDEPENDENT-SEGMENTS\n");
     for index in 0..count {
-        let seconds = if index == count - 1 { info.duration - index as f64 * policy().segment_seconds } else { policy().segment_seconds };
+        let seconds = if index == count - 1 { info.duration - segment_start(index) } else { policy().segment_seconds };
         let _ = writeln!(text, "#EXTINF:{seconds:.6},\nsegments/{index}.ts");
     }
     text.push_str("#EXT-X-ENDLIST\n"); Ok(text.into_bytes())

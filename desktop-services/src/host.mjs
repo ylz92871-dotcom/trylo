@@ -217,6 +217,7 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
     .register('tooling', 'modelPreviewDetach', params => tooling.modelPreviewDetach(params))
     .register('tooling', 'modelPreviewCommandResult', params => tooling.modelPreviewCommandResult(params))
     .register('tooling', 'modelPreviewClose', params => tooling.modelPreviewClose(params))
+    .register('tooling', 'macosComputerPermissions', params => tooling.macosComputerPermissions(params))
     .register('tooling', 'health', (params) => tooling.health(params))
     .register('tooling', 'listProfiles', () => tooling.listProfiles())
     .register('tooling', 'install', (params) => tooling.install(params))
@@ -316,8 +317,8 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
       pet.disable();
       // Bounded flush of the Hermes session queue (spec §7.4: 退出有界 flush).
       // Best effort — a slow adapter must not hold the process open.
-      tooling.dispose();
       void Promise.allSettled([
+        tooling.dispose(),
         remote.dispose(),
         learning.stopMaintenance(),
         learning.sessionFlush(),
@@ -328,7 +329,7 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
     return this;
   }
 
-  return { start, registry, pet, learning, remote, tooling };
+  return { start, stop: () => rl?.close(), registry, pet, learning, remote, tooling };
 }
 
 // Direct `node src/host.mjs` entry: build a listener with the real stdio.
@@ -342,5 +343,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     await runNativeBrowserMcp({ gate: process.argv[3], entry: process.argv[4], args: process.argv.slice(5) });
   } else if (process.argv[2] === '--model-preview-mcp') {
     await runModelPreviewMcp({ gate: process.argv[3] });
-  } else { createHost().start(); }
+  } else {
+    const host = createHost();
+    host.start();
+    if (process.platform === 'darwin') process.once('SIGTERM', host.stop);
+  }
 }

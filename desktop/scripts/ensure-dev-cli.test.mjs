@@ -5,6 +5,12 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ensureDevelopmentCli } from './ensure-dev-cli.mjs';
+import { ptyArtifactDirectory, ptyStagedPath } from '../../new trylo cli/scripts/pty/copy-pty-vendor.mjs';
+
+const windows = process.platform === 'win32';
+const ptyName = `trylo-pty-${ptyArtifactDirectory(process.platform, process.arch)}`;
+const ptyOutput = ptyStagedPath(process.platform, process.arch);
+const sandboxOutput = 'internal/adapters/sandbox/vendor/sandbox-runtime/srt-win/x64/srt-win.exe';
 
 const current = 'trylo - learning agent CLI\n  --context-window <tokens>\n  --model-context-window <tokens>\n';
 const tools = ['status', 'production-list', 'production-show', 'production-verify', 'production-activate']
@@ -139,15 +145,16 @@ function closureFixture() {
   };
   for (const [name, text] of sources) put('src', name, text);
   const helpers = new Map([
-    ['srt-win-x64', { output: 'internal/adapters/sandbox/vendor/sandbox-runtime/srt-win/x64/srt-win.exe', bytes: Buffer.from('sandbox fixture') }],
-    ['trylo-pty-win-x64', { output: 'internal/vendor/pty/win-x64/trylo-pty.exe', bytes: Buffer.from('pty fixture') }],
+    ['srt-win-x64', { output: sandboxOutput, bytes: Buffer.from('sandbox fixture') }],
+    [ptyName, { output: ptyOutput, bytes: Buffer.from('pty fixture') }],
   ]);
   const metadata = name => ({ bytes: helpers.get(name).bytes.length,
     sha256: createHash('sha256').update(helpers.get(name).bytes).digest('hex') });
   put('src', 'internal/adapters/sandbox/vendor/sandbox-runtime/PROVENANCE.json',
     JSON.stringify({ artifacts: { 'srt-win-x64': metadata('srt-win-x64') } }));
   put('vendor-bin', 'pty/PROVENANCE.json',
-    JSON.stringify({ artifacts: { 'trylo-pty-win-x64': metadata('trylo-pty-win-x64') } }));
+    JSON.stringify({ artifacts: { [ptyName]: metadata(ptyName) } }));
+  if (!windows) helpers.delete('srt-win-x64');
   const repair = () => {
     for (const [name, text] of sources) {
       if (name.endsWith('.test.ts') || name.includes('/tests/')) continue;
@@ -168,7 +175,7 @@ function closureFixture() {
 }
 
 for (const defect of ['child', 'dynamic-sibling', 'stale-source', 'missing-native', 'changed-native',
-  'missing-sandbox', 'changed-sandbox', 'missing-pty', 'changed-pty']) {
+  ...(windows ? ['missing-sandbox', 'changed-sandbox'] : []), 'missing-pty', 'changed-pty']) {
   test(`current help cannot hide a ${defect} closure defect`, () => {
     const fixture = closureFixture();
     try {
@@ -180,8 +187,7 @@ for (const defect of ['child', 'dynamic-sibling', 'stale-source', 'missing-nativ
       }
       if (defect === 'missing-native') rmSync(path.join(fixture.root, 'dist', fixture.skill, 'host/worker.mjs'));
       if (defect === 'changed-native') fixture.put('dist', `${fixture.skill}/vendor/legacy/server.py`, '# altered native capability');
-      for (const [component, relative] of [['sandbox', 'internal/adapters/sandbox/vendor/sandbox-runtime/srt-win/x64/srt-win.exe'],
-        ['pty', 'internal/vendor/pty/win-x64/trylo-pty.exe']]) {
+      for (const [component, relative] of [['sandbox', sandboxOutput], ['pty', ptyOutput]]) {
         if (defect === `missing-${component}`) rmSync(path.join(fixture.root, 'dist', relative));
         if (defect === `changed-${component}`) fixture.put('dist', relative, 'changed helper');
       }

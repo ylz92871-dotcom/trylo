@@ -387,7 +387,7 @@ export function MessageList(props: MessageListProps): ReactElement {
     flushTurn();
     return result;
     // A terminal without a message delta must still settle the active phase.
-  }, [props.messages, props.running, turnMetaByTurnId, hostedApprovals]);
+  }, [props.messages, turnMetaByTurnId, hostedApprovals]);
 
   // Sending a new turn resumes follow. Reader input can pause it again.
 

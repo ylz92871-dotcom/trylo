@@ -202,7 +202,9 @@ export function resolveShell(surface: ShellEnvironment, kind: ShellKind): ShellL
     }
   }
 
-  const fallback = firstExisting(surface, FALLBACK_PATHS[kind]);
+  const fallbackPaths = surface.platform === "darwin" && kind === "powershell"
+    ? ["/opt/homebrew/bin/pwsh", "/usr/local/bin/pwsh"] : FALLBACK_PATHS[kind];
+  const fallback = firstExisting(surface, fallbackPaths);
   if (fallback !== undefined) {
     return { ok: true, shell: { kind, path: fallback } };
   }
