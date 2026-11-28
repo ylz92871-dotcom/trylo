@@ -32,14 +32,14 @@ export function useComputerPreview(state: ToolPreviewState, scope: string, optio
       streamState: stream.current.state, streamDetail: stream.current.detail })
   }, [publisher])
 
+  // Only a new capture owner discards its picture. Stopping keeps the last frame.
   useEffect(() => {
     picture.current = undefined
+  }, [scope, state.turnId, options.turnId, options.pickerRequest])
+  useEffect(() => {
     stream.current = { state: options.enabled ? 'starting' : 'stopped' }
     publish()
-  }, [scope, options.turnId, options.pickerRequest, options.enabled, publish])
-  useEffect(() => {
-    if (!options.enabled) { stream.current = { state: 'stopped' }; publish() }
-  }, [options.enabled, publish])
+  }, [scope, state.turnId, options.turnId, options.pickerRequest, options.enabled, publish])
 
   useComputerStream(options, {
     frame: frame => {
