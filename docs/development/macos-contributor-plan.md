@@ -6,7 +6,7 @@
 - **基线版本**：Trylo Desktop `2.1.0` / Trylo CLI（`new trylo cli/`） / Desktop Services（`desktop-services/`）
 - **目标平台**：macOS Apple Silicon（`darwin-arm64`），最低系统版本 **macOS 14 Sonoma**
 - **适用范围**：全仓跨平台适配（`desktop/`、`new trylo cli/`、`desktop-services/`、`scripts/`、`.github/workflows/`、`docs/`）
-- **遵守规范**：仓库根 [`AGENTS.md`](../../../AGENTS.md)、[`desktop/AGENTS.md`](../../../desktop/AGENTS.md)、[`desktop-services/AGENTS.md`](../../../desktop-services/AGENTS.md)、[`new trylo cli/AGENTS.md`](../../../new%20trylo%20cli/AGENTS.md)、[`trylo-code-quality`](../../../new%20trylo%20cli/.agents/skills/trylo-code-quality/SKILL.md) 与 [`ui-maintainability.md`](../../../new%20trylo%20cli/.agents/skills/trylo-code-quality/references/ui-maintainability.md)
+- **遵守规范**：仓库根 [`AGENTS.md`](../../AGENTS.md)、[`desktop/AGENTS.md`](../../desktop/AGENTS.md)、[`desktop-services/AGENTS.md`](../../desktop-services/AGENTS.md)、[`new trylo cli/AGENTS.md`](../../new%20trylo%20cli/AGENTS.md)、[`trylo-code-quality`](../../new%20trylo%20cli/.agents/skills/trylo-code-quality/SKILL.md) 与 [`ui-maintainability.md`](../../new%20trylo%20cli/.agents/skills/trylo-code-quality/references/ui-maintainability.md)
 
 ---
 
