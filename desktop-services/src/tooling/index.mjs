@@ -129,7 +129,8 @@ export function createToolingServices(options = {}) {
     storageRoot,
     browserObserver,
     modelPreview,
-    softwareWorkspace,
+    // This implementation owns Win32 desktops; unsupported hosts must not advertise it.
+    ...(target.startsWith('win32-') ? { softwareWorkspace } : {}),
     macosComputerEnabled: enableRepositoryTools && target === 'darwin-arm64' && process.env.TRYLO_MACOS_COMPUTER_USE === '1',
     ...(options.hostEntrypoint ? { hostEntrypoint: options.hostEntrypoint } : {}),
     ...(nativeBrowserEnabled ? { nativeBrowser } : {}),

@@ -41,3 +41,5 @@ Mac PR #8 接入 Apple Silicon / macOS 14.0 构建路径、原生窗口菜单、
 Mac 窗口直播尚无 Services 流适配，不能调用 Windows Python 捕获流程；工具截图仍通过任务消息显示。完成 Mac 流实现与真实窗口选择验证后再启用直播按钮。源码/平台合同通过不等于这项能力已具备。
 
 Mac WKWebView 只负责内置浏览和预览，不提供 CDP 端口；Agent 网页自动化继续使用 Playwright / Chrome DevTools MCP。原生电脑操作针对当前前台应用，不能据辅助功能接入宣称支持后台无打扰操作。
+
+Win32 软件工作区只在 Windows 的服务装配中提供给 Agent，Mac 不注册此 MCP 能力；原生电脑控制不依赖该 Windows 实现。
