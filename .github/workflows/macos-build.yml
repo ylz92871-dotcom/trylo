@@ -10,6 +10,14 @@ on:
 permissions:
   contents: read
 
+env:
+  TRYLO_CI_NODE_VERSION: '22.22.2'
+  TRYLO_CI_PNPM_VERSION: '10.33.2'
+  MACOSX_DEPLOYMENT_TARGET: '14.0'
+  DEVELOPER_DIR: /Library/Developer/CommandLineTools
+  RUSTUP_TOOLCHAIN: '1.97.1'
+  NODE_OPTIONS: --max-old-space-size=4096
+
 concurrency:
   group: macos-${{ github.ref }}
   cancel-in-progress: true
@@ -18,16 +26,14 @@ jobs:
   frontend:
     runs-on: xcode-27
     timeout-minutes: 15
-    env:
-      NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: '22.22.2'
+          node-version: ${{ env.TRYLO_CI_NODE_VERSION }}
       - uses: pnpm/action-setup@v4
         with:
-          version: '10.33.2'
+          version: ${{ env.TRYLO_CI_PNPM_VERSION }}
       - name: Install locked frontend dependencies
         run: cd desktop && pnpm install --frozen-lockfile
       - name: Build desktop frontend
@@ -37,32 +43,27 @@ jobs:
           name: macos-frontend
           if-no-files-found: error
           path: desktop/dist/
-  build:
+  native:
     needs: frontend
     runs-on: xcode-27
     timeout-minutes: 45
-    env:
-      MACOSX_DEPLOYMENT_TARGET: '14.0'
-      DEVELOPER_DIR: /Library/Developer/CommandLineTools
-      RUSTUP_TOOLCHAIN: '1.97.1'
-      NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
       - uses: actions/setup-node@v5
         with:
-          node-version: '22.22.2'
+          node-version: ${{ env.TRYLO_CI_NODE_VERSION }}
       - uses: pnpm/action-setup@v4
         with:
-          version: '10.33.2'
+          version: ${{ env.TRYLO_CI_PNPM_VERSION }}
       - name: Verify checkout and install locked dependencies
         run: |
           test "$(uname -m)" = arm64
           node scripts/check-workspace-layout.mjs
           node scripts/release/check-source-completeness.mjs
           node scripts/setup-cli-native.mjs --check
-          rustup toolchain install 1.97.1 --profile minimal --component clippy
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component clippy
           (cd 'new trylo cli' && npm ci)
           (cd desktop-services && npm ci)
           (cd desktop && pnpm install --frozen-lockfile)
@@ -70,6 +71,8 @@ jobs:
         with:
           name: macos-frontend
           path: desktop/dist/
+      - name: Build CLI required by native integration checks
+        run: cd 'new trylo cli' && npm run build
       - name: Check native macOS build
         if: ${{ !cancelled() }}
         run: |
@@ -81,6 +84,34 @@ jobs:
           cd ../../..
           node --input-type=module -e "import { stageMacosComputerUse } from './desktop/scripts/build/macos/stage-macos-computer-use.mjs'; stageMacosComputerUse('_workspace/checks/macos-native')"
           _workspace/checks/macos-native/desktop-services/macos-mcp/bin/trylo-macos-mcp --permissions
+  build:
+    needs: [frontend, native]
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.TRYLO_CI_NODE_VERSION }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.TRYLO_CI_PNPM_VERSION }}
+      - name: Verify checkout and install locked dependencies
+        run: |
+          test "$(uname -m)" = arm64
+          node scripts/check-workspace-layout.mjs
+          node scripts/release/check-source-completeness.mjs
+          node scripts/setup-cli-native.mjs --check
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component clippy
+          (cd 'new trylo cli' && npm ci)
+          (cd desktop-services && npm ci)
+          (cd desktop && pnpm install --frozen-lockfile)
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-frontend
+          path: desktop/dist/
       - name: Build and verify CLI
         if: ${{ !cancelled() }}
         id: cli
