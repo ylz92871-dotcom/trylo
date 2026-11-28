@@ -1371,7 +1371,7 @@ function App({
       : undefined
   }, [teamRun])
   useEffect(() => {
-    if (!historyReady) return
+    if (!historyReady || !isTauriFn()) return
     const root = currentWorkspace.root
     const sessions = [
       ...new Set([codeSessionId, workSessionId].filter((id): id is string => Boolean(id))),

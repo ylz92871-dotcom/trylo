@@ -220,6 +220,12 @@ export function InputBar(props: InputBarProps): ReactElement {
     }
   }, []);
 
+  // Host draft/session reconciliation may replace the controlled value after focus.
+  useEffect(() => {
+    const field = textareaRef.current;
+    if (field && document.activeElement === field) syncCaretSuggestion(field, props.text);
+  }, [props.text, syncCaretSuggestion]);
+
   const insertFileMention = useCallback((relativePath: string, trigger: CaretTrigger): void => {
     const formatted = `@${relativePath} `;
     const nextText = `${props.text.slice(0, trigger.start)}${formatted}${props.text.slice(trigger.end)}`;
@@ -401,10 +407,13 @@ export function InputBar(props: InputBarProps): ReactElement {
           props.onTextChange(nextVal);
           syncCaretSuggestion(event.currentTarget, nextVal);
         }}
+        onFocus={(event) => syncCaretSuggestion(event.currentTarget, props.text)}
         onClick={(event) => syncCaretSuggestion(event.currentTarget, props.text)}
         onKeyUp={(event) => {
-          if (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Backspace', 'Delete'].includes(event.key)) {
-            syncCaretSuggestion(event.currentTarget, props.text);
+          const typed = event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
+          if (!isImeComposing(event) && document.activeElement === event.currentTarget
+            && (typed || ['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Backspace', 'Delete'].includes(event.key))) {
+            syncCaretSuggestion(event.currentTarget, event.currentTarget.value);
           }
         }}
         onKeyDown={event => keyDown(event, openGoal)} onPaste={paste}

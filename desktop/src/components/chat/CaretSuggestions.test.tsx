@@ -32,6 +32,7 @@ afterEach(() => {
 
 function ComposerHarness(props: {
   readonly kind: 'code' | 'work';
+  readonly draft?: string;
   readonly onCompact?: () => void;
   readonly onCodeModeChange?: (mode: 'agent' | 'chat' | 'plan' | 'cognition') => void;
 }): ReactElement {
@@ -41,7 +42,7 @@ function ComposerHarness(props: {
       conversationKind={props.kind}
       codeMode="agent"
       onCodeModeChange={props.onCodeModeChange ?? vi.fn()}
-      text={text}
+      text={props.draft ?? text}
       onTextChange={setText}
       onSend={vi.fn()}
       messages={[]}
@@ -74,6 +75,26 @@ describe('detectTriggerAtCaret', () => {
 });
 
 describe('CaretSuggestions in Code & Work InputBar', () => {
+  it.each(['code', 'work'] as const)('uses the settled caret after typing in %s', kind => {
+    render(<ComposerHarness kind={kind} draft="/" />);
+    const field = screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement;
+    act(() => { field.setSelectionRange(0, 0); field.focus(); });
+    expect(screen.queryByRole('listbox', { name: '快捷斜杠指令' })).not.toBeInTheDocument();
+    field.setSelectionRange(1, 1);
+    fireEvent.keyUp(field, { key: '/' });
+    expect(screen.getByRole('option', { name: /\/goal/ })).toBeInTheDocument();
+    expect(field.value).toBe('/');
+  });
+
+  it.each(['code', 'work'] as const)('reconciles a focused draft supplied by the host in %s', async kind => {
+    const view = render(<ComposerHarness kind={kind} draft="" />);
+    const field = screen.getByRole('textbox', { name: 'Message' });
+    act(() => field.focus());
+    view.rerender(<ComposerHarness kind={kind} draft="/" />);
+    await waitFor(() => expect(screen.getByRole('option', { name: /\/goal/ })).toBeInTheDocument());
+    expect(field).toHaveFocus();
+  });
+
   it.each(['code', 'work'] as const)(
     'inserts @ file reference in %s mode while preserving IME and filtering stale scans',
     async (kind) => {
